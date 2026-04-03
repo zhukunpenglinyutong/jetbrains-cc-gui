@@ -20,11 +20,12 @@ import com.intellij.openapi.vfs.VirtualFile;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 
 /**
  * Handles non-interactive diff display requests.
+ * This handler is thin: it parses JSON, delegates reconstruction to
+ * {@link DiffReconstructionService}, and shows the diff.
  */
 public class SimpleDiffDisplayHandler implements DiffActionHandler {
 
@@ -89,10 +90,17 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
                     String fileName = new File(filePath).getName();
                     FileType fileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName);
 
+                    // Delegate reconstruction to the service (no replaceAll for show_diff)
+                    DiffReconstructionResult result = DiffReconstructionService.reconstruct(
+                            filePath, oldContent, newContent, false);
+
+                    String beforeContent = result.getBeforeContent();
+                    String afterContent = result.getAfterContent();
+
                     DiffContent leftContent = DiffContentFactory.getInstance()
-                            .create(context.getProject(), oldContent, fileType);
+                            .create(context.getProject(), beforeContent, fileType);
                     DiffContent rightContent = DiffContentFactory.getInstance()
-                            .create(context.getProject(), newContent, fileType);
+                            .create(context.getProject(), afterContent, fileType);
 
                     String diffTitle = title != null ? title : ClaudeCodeGuiBundle.message("diff.fileChange", fileName);
                     SimpleDiffRequest diffRequest = new SimpleDiffRequest(
@@ -104,7 +112,8 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
                     );
 
                     DiffManager.getInstance().showDiff(context.getProject(), diffRequest);
-                    LOG.info("Diff view opened for: " + filePath);
+                    LOG.info("Diff view opened for: " + filePath
+                            + (result.isFullFile() ? " (full file)" : " (fragment fallback)"));
                 } catch (Exception e) {
                     LOG.error("Failed to show diff: " + e.getMessage(), e);
                 }
@@ -200,11 +209,10 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
                     }
 
                     String currentContent = "";
-                    Charset charset = StandardCharsets.UTF_8;
                     if (file != null) {
                         file.refresh(false, false);
-                        charset = file.getCharset() != null ? file.getCharset() : StandardCharsets.UTF_8;
                         try {
+                            var charset = file.getCharset() != null ? file.getCharset() : StandardCharsets.UTF_8;
                             currentContent = new String(file.contentsToByteArray(), charset);
                         } catch (IOException e) {
                             LOG.error("Failed to read file content: " + filePath, e);
@@ -218,6 +226,15 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
                         String oldString = edit.has("oldString") ? edit.get("oldString").getAsString() : "";
                         String newString = edit.has("newString") ? edit.get("newString").getAsString() : "";
                         boolean replaceAll = edit.has("replaceAll") && edit.get("replaceAll").getAsBoolean();
+
+                        if (oldString.isEmpty()) {
+                            // Pure insertion without position info, or replaceAll with empty old.
+                            // Both are unsafe to apply — skip silently.
+                            if (!newString.isEmpty()) {
+                                LOG.info("Preview: skipping pure insertion edit (no position info)");
+                            }
+                            continue;
+                        }
 
                         if (replaceAll) {
                             afterContent = afterContent.replace(oldString, newString);
@@ -289,36 +306,12 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
                     String fileName = new File(filePath).getName();
                     FileType fileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName);
 
-                    String beforeContent;
-                    String afterContent;
+                    // Delegate reconstruction to the service
+                    DiffReconstructionResult result = DiffReconstructionService.reconstruct(
+                            filePath, oldString, newString, replaceAll, originalContent);
 
-                    if (originalContent != null && !originalContent.isEmpty()) {
-                        LOG.info("Using cached original content for full file diff");
-                        beforeContent = originalContent;
-
-                        if (replaceAll) {
-                            afterContent = beforeContent.replace(oldString, newString);
-                        } else {
-                            int index = beforeContent.indexOf(oldString);
-                            if (index >= 0) {
-                                afterContent = beforeContent.substring(0, index)
-                                        + newString
-                                        + beforeContent.substring(index + oldString.length());
-                            } else if (file != null) {
-                                try {
-                                    afterContent = new String(file.contentsToByteArray(), file.getCharset());
-                                } catch (IOException e) {
-                                    afterContent = "";
-                                }
-                            } else {
-                                afterContent = "";
-                            }
-                        }
-                    } else {
-                        LOG.info("No cached content, showing edit-only diff");
-                        beforeContent = oldString;
-                        afterContent = newString;
-                    }
+                    String beforeContent = result.getBeforeContent();
+                    String afterContent = result.getAfterContent();
 
                     DiffContent leftContent = DiffContentFactory.getInstance()
                             .create(context.getProject(), beforeContent, fileType);
@@ -329,7 +322,7 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
                     String leftLabel;
                     String rightLabel;
 
-                    if (originalContent == null || originalContent.isEmpty()) {
+                    if (!result.isFullFile()) {
                         diffTitle = (title != null ? title : ClaudeCodeGuiBundle.message("diff.edit", fileName))
                                 + " " + ClaudeCodeGuiBundle.message("diff.editOnly");
                         leftLabel = "old_string";
@@ -349,7 +342,8 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
                     );
 
                     DiffManager.getInstance().showDiff(context.getProject(), diffRequest);
-                    LOG.info("Edit full diff view opened for: " + filePath);
+                    LOG.info("Edit full diff view opened for: " + filePath
+                            + (result.isFullFile() ? " (full file)" : " (fragment fallback)"));
                 } catch (Exception e) {
                     LOG.error("Failed to show edit full diff: " + e.getMessage(), e);
                 }
