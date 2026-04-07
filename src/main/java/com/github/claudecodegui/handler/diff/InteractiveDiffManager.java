@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler.diff;
 
+import com.github.claudecodegui.permission.DiffApprovalQueueService;
 import com.intellij.diff.DiffContentFactory;
 import com.intellij.diff.DiffDialogHints;
 import com.intellij.diff.DiffManagerEx;
@@ -74,18 +75,31 @@ public class InteractiveDiffManager {
             @NotNull InteractiveDiffRequest request
     ) {
         CompletableFuture<DiffResult> resultFuture = new CompletableFuture<>();
+        DiffApprovalQueueService.Registration registration = null;
 
         if (project.isDisposed()) {
             resultFuture.complete(DiffResult.reject());
             return resultFuture;
         }
 
+        if (request.isReadOnly()) {
+            registration = DiffApprovalQueueService.getInstance(project).registerReview(request, resultFuture);
+            request = request.withReviewId(registration.getReviewId());
+        }
+
+        final InteractiveDiffRequest requestToShow = request;
+        final DiffApprovalQueueService.Registration finalRegistration = registration;
+
         ApplicationManager.getApplication().invokeLater(() -> {
             try {
-                showInteractiveDiffInternal(project, request, resultFuture);
+                showInteractiveDiffInternal(project, requestToShow, resultFuture, finalRegistration);
             } catch (Exception e) {
                 LOG.error("Failed to show interactive diff", e);
-                resultFuture.complete(DiffResult.reject());
+                if (requestToShow.isReadOnly() && requestToShow.getReviewId() != null) {
+                    DiffApprovalQueueService.getInstance(project).rejectReview(requestToShow.getReviewId());
+                } else {
+                    resultFuture.complete(DiffResult.reject());
+                }
             }
         });
 
@@ -96,7 +110,8 @@ public class InteractiveDiffManager {
     private static void showInteractiveDiffInternal(
             @NotNull Project project,
             @NotNull InteractiveDiffRequest request,
-            @NotNull CompletableFuture<DiffResult> resultFuture
+            @NotNull CompletableFuture<DiffResult> resultFuture,
+            @Nullable DiffApprovalQueueService.Registration registration
     ) {
         // Use the original content from the request (before modifications)
         String originalContent = request.getOriginalContent();
@@ -177,21 +192,34 @@ public class InteractiveDiffManager {
         // Create state tracking
         AtomicBoolean actionApplied = new AtomicBoolean(false);
         AtomicReference<ScheduledFuture<?>> rejectFutureRef = new AtomicReference<>();
+        boolean isPermissionReview = request.isReadOnly();
+        String reviewId = request.getReviewId();
+        DiffApprovalQueueService queueService = isPermissionReview ? DiffApprovalQueueService.getInstance(project) : null;
 
         // Set up window event listener first (before creating buttons that reference connection)
         MessageBusConnection connection = project.getMessageBus().connect();
+        if (queueService != null && reviewId != null) {
+            queueService.attachConnection(reviewId, connection);
+        }
 
         // Create Apply/Reject actions for toolbar (ApplyAlways only for permission review)
         final DocumentContent finalProposedContent = proposedDiffContent;
-        boolean isPermissionReview = request.isReadOnly();
-        AnAction rejectAction = createRejectAction(actionApplied, resultFuture, connection);
-        AnAction applyAction = createApplyAction(actionApplied, resultFuture, finalProposedContent, proposedFile, connection);
+        AnAction rejectAction = createRejectAction(
+                actionApplied, resultFuture, connection, project, diffRequestChain, queueService, reviewId);
+        AnAction applyAction = createApplyAction(
+                actionApplied, resultFuture, finalProposedContent, proposedFile, connection,
+                project, diffRequestChain, queueService, reviewId);
 
         // Add actions to toolbar
         List<AnAction> actions = new ArrayList<>();
+        if (isPermissionReview && reviewId != null) {
+            actions.add(createPendingCountAction(project, reviewId));
+        }
         actions.add(rejectAction);
         if (isPermissionReview) {
-            actions.add(createApplyAlwaysAction(actionApplied, resultFuture, finalProposedContent, proposedFile, connection, rejectFutureRef, project, diffRequestChain));
+            actions.add(createApplyAlwaysAction(
+                    actionApplied, resultFuture, finalProposedContent, proposedFile, connection,
+                    rejectFutureRef, project, diffRequestChain, queueService, reviewId));
         }
         actions.add(applyAction);
         diffRequest.putUserData(DiffUserDataKeysEx.CONTEXT_ACTIONS, actions);
@@ -201,6 +229,13 @@ public class InteractiveDiffManager {
         rejectButton.setIcon(AllIcons.Actions.Cancel);
         rejectButton.setMaximumSize(rejectButton.getPreferredSize());
         rejectButton.addActionListener(e -> {
+            if (isPermissionReview && queueService != null && reviewId != null) {
+                if (actionApplied.compareAndSet(false, true)) {
+                    cancelPendingRejectTask(rejectFutureRef);
+                    queueService.rejectReview(reviewId);
+                }
+                return;
+            }
             if (actionApplied.compareAndSet(false, true)) {
                 connection.disconnect();
                 cancelPendingRejectTask(rejectFutureRef);
@@ -213,6 +248,13 @@ public class InteractiveDiffManager {
         applyButton.setIcon(AllIcons.Actions.Checked);
         applyButton.setMaximumSize(applyButton.getPreferredSize());
         applyButton.addActionListener(e -> {
+            if (isPermissionReview && queueService != null && reviewId != null) {
+                if (actionApplied.compareAndSet(false, true)) {
+                    cancelPendingRejectTask(rejectFutureRef);
+                    queueService.approveReview(reviewId);
+                }
+                return;
+            }
             if (actionApplied.compareAndSet(false, true)) {
                 connection.disconnect();
                 cancelPendingRejectTask(rejectFutureRef);
@@ -230,12 +272,9 @@ public class InteractiveDiffManager {
             applyAlwaysButton.setIcon(AllIcons.Actions.Checked_selected);
             applyAlwaysButton.setMaximumSize(applyAlwaysButton.getPreferredSize());
             applyAlwaysButton.addActionListener(e -> {
-                if (actionApplied.compareAndSet(false, true)) {
-                    connection.disconnect();
+                if (queueService != null && reviewId != null && actionApplied.compareAndSet(false, true)) {
                     cancelPendingRejectTask(rejectFutureRef);
-                    String content = getEditedContent(finalProposedContent, proposedFile);
-                    resultFuture.complete(DiffResult.applyAlways(content));
-                    closeDiffView(project, diffRequestChain);
+                    queueService.approveReviewAlways(reviewId);
                 }
             });
             buttonsPanel.add(applyAlwaysButton);
@@ -259,6 +298,9 @@ public class InteractiveDiffManager {
                 if (file instanceof ChainDiffVirtualFile) {
                     ChainDiffVirtualFile diffFile = (ChainDiffVirtualFile) file;
                     if (diffFile.getChain() == diffRequestChain) {
+                        if (queueService != null && reviewId != null) {
+                            queueService.attachDiffVirtualFile(reviewId, file);
+                        }
                         // Cancel any pending reject task
                         cancelPendingRejectTask(rejectFutureRef);
 
@@ -283,6 +325,12 @@ public class InteractiveDiffManager {
                 if (file instanceof ChainDiffVirtualFile) {
                     ChainDiffVirtualFile diffFile = (ChainDiffVirtualFile) file;
                     if (diffFile.getChain() == diffRequestChain) {
+                        if (queueService != null && reviewId != null) {
+                            queueService.detachDiffVirtualFile(reviewId, file);
+                        }
+                        if (isPermissionReview) {
+                            return;
+                        }
                         // Schedule delayed dismiss (user closed without action, not rejection)
                         ScheduledFuture<?> future = AppExecutorUtil.getAppScheduledExecutorService()
                                 .schedule(() -> {
@@ -306,9 +354,16 @@ public class InteractiveDiffManager {
         });
 
         // Show the diff
-        DiffManagerEx.getInstance().showDiffBuiltin(project, diffRequestChain, DiffDialogHints.DEFAULT);
-
-        LOG.info("Interactive diff opened for: " + request.getFilePath());
+        boolean showImmediately = registration == null || registration.isOpenImmediately();
+        if (queueService != null && reviewId != null) {
+            queueService.attachDiffChain(reviewId, diffRequestChain);
+        }
+        if (showImmediately) {
+            DiffManagerEx.getInstance().showDiffBuiltin(project, diffRequestChain, DiffDialogHints.DEFAULT);
+            LOG.info("Interactive diff opened for: " + request.getFilePath());
+        } else {
+            LOG.info("Interactive diff queued for later review: " + request.getFilePath());
+        }
     }
 
     /**
@@ -324,15 +379,26 @@ public class InteractiveDiffManager {
     private static AnAction createRejectAction(
             AtomicBoolean actionApplied,
             CompletableFuture<DiffResult> resultFuture,
-            MessageBusConnection connection
+            MessageBusConnection connection,
+            Project project,
+            SimpleDiffRequestChain diffRequestChain,
+            @Nullable DiffApprovalQueueService queueService,
+            @Nullable String reviewId
     ) {
         return new AnAction(ClaudeCodeGuiBundle.message("diff.reject"), ClaudeCodeGuiBundle.message("diff.reject.description"), AllIcons.Actions.Cancel) {
             @Override
             @RequiresEdt
             public void actionPerformed(@NotNull AnActionEvent e) {
+                if (queueService != null && reviewId != null) {
+                    if (actionApplied.compareAndSet(false, true)) {
+                        queueService.rejectReview(reviewId);
+                    }
+                    return;
+                }
                 if (actionApplied.compareAndSet(false, true)) {
                     connection.disconnect();
                     resultFuture.complete(DiffResult.reject());
+                    closeDiffView(project, diffRequestChain);
                 }
             }
 
@@ -351,12 +417,21 @@ public class InteractiveDiffManager {
             MessageBusConnection connection,
             AtomicReference<ScheduledFuture<?>> rejectFutureRef,
             Project project,
-            SimpleDiffRequestChain diffRequestChain
+            SimpleDiffRequestChain diffRequestChain,
+            @Nullable DiffApprovalQueueService queueService,
+            @Nullable String reviewId
     ) {
         return new AnAction(ClaudeCodeGuiBundle.message("diff.applyAlways"), ClaudeCodeGuiBundle.message("diff.applyAlways.description"), AllIcons.Actions.Checked_selected) {
             @Override
             @RequiresEdt
             public void actionPerformed(@NotNull AnActionEvent e) {
+                if (queueService != null && reviewId != null) {
+                    if (actionApplied.compareAndSet(false, true)) {
+                        cancelPendingRejectTask(rejectFutureRef);
+                        queueService.approveReviewAlways(reviewId);
+                    }
+                    return;
+                }
                 if (actionApplied.compareAndSet(false, true)) {
                     connection.disconnect();
                     cancelPendingRejectTask(rejectFutureRef);
@@ -378,17 +453,59 @@ public class InteractiveDiffManager {
             CompletableFuture<DiffResult> resultFuture,
             DocumentContent proposedContent,
             LightVirtualFile proposedFile,
-            MessageBusConnection connection
+            MessageBusConnection connection,
+            Project project,
+            SimpleDiffRequestChain diffRequestChain,
+            @Nullable DiffApprovalQueueService queueService,
+            @Nullable String reviewId
     ) {
         return new AnAction(ClaudeCodeGuiBundle.message("diff.apply"), ClaudeCodeGuiBundle.message("diff.apply.description"), AllIcons.Actions.Checked) {
             @Override
             @RequiresEdt
             public void actionPerformed(@NotNull AnActionEvent e) {
+                if (queueService != null && reviewId != null) {
+                    if (actionApplied.compareAndSet(false, true)) {
+                        queueService.approveReview(reviewId);
+                    }
+                    return;
+                }
                 if (actionApplied.compareAndSet(false, true)) {
                     connection.disconnect();
                     String content = getEditedContent(proposedContent, proposedFile);
                     resultFuture.complete(DiffResult.apply(content));
+                    closeDiffView(project, diffRequestChain);
                 }
+            }
+
+            @Override
+            public @NotNull ActionUpdateThread getActionUpdateThread() {
+                return ActionUpdateThread.EDT;
+            }
+        };
+    }
+
+    private static AnAction createPendingCountAction(@NotNull Project project, @NotNull String reviewId) {
+        return new AnAction() {
+            @Override
+            @RequiresEdt
+            public void actionPerformed(@NotNull AnActionEvent e) {
+                DiffApprovalQueueService.getInstance(project).activateNextPendingReview(reviewId);
+            }
+
+            @Override
+            public void update(@NotNull AnActionEvent e) {
+                DiffApprovalQueueService queueService = DiffApprovalQueueService.getInstance(project);
+                int remaining = queueService.getRemainingCount(reviewId);
+                String nextFileName = queueService.getNextPendingFileName(reviewId);
+
+                e.getPresentation().setText(
+                        ClaudeCodeGuiBundle.message("diff.pendingReview.remainingAction", remaining));
+                e.getPresentation().setDescription(nextFileName == null
+                        ? ClaudeCodeGuiBundle.message("diff.pendingReview.remainingDescription")
+                        : ClaudeCodeGuiBundle.message("diff.pendingReview.remainingDescriptionWithFile", nextFileName));
+                e.getPresentation().setEnabled(remaining > 0);
+                e.getPresentation().setVisible(true);
+                e.getPresentation().setIcon(AllIcons.Actions.NextOccurence);
             }
 
             @Override

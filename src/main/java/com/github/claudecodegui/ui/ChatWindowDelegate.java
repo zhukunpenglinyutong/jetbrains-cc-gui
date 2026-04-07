@@ -24,6 +24,7 @@ import com.github.claudecodegui.handler.TabHandler;
 import com.github.claudecodegui.handler.WindowEventHandler;
 import com.github.claudecodegui.handler.file.FileExportHandler;
 import com.github.claudecodegui.handler.file.FileHandler;
+import com.github.claudecodegui.handler.file.PendingFileChangeSyncHandler;
 import com.github.claudecodegui.handler.file.UndoFileHandler;
 import com.github.claudecodegui.permission.PermissionService;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
@@ -248,6 +249,7 @@ public class ChatWindowDelegate {
         messageDispatcher.registerHandler(new CodexMcpServerHandler(handlerContext, settingsService.getCodexMcpServerManager()));
         messageDispatcher.registerHandler(new SkillHandler(handlerContext));
         messageDispatcher.registerHandler(new FileHandler(handlerContext));
+        messageDispatcher.registerHandler(new PendingFileChangeSyncHandler(handlerContext));
         messageDispatcher.registerHandler(new SettingsHandler(handlerContext));
         messageDispatcher.registerHandler(new SessionHandler(handlerContext));
         messageDispatcher.registerHandler(new FileExportHandler(handlerContext));

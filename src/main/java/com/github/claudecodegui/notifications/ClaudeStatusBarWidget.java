@@ -1,6 +1,8 @@
 package com.github.claudecodegui.notifications;
 
+import com.github.claudecodegui.approval.PendingFileChangeApprovalService;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
+import com.github.claudecodegui.permission.DiffApprovalQueueService;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.project.Project;
@@ -18,6 +20,7 @@ import com.intellij.openapi.application.ApplicationManager;
 import javax.swing.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -38,6 +41,7 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
     private final AtomicReference<String> currentModel = new AtomicReference<>("");
     private final AtomicReference<String> currentMode = new AtomicReference<>("default");
     private final AtomicReference<String> currentAgent = new AtomicReference<>("");
+    private final AtomicInteger pendingReviewCount = new AtomicInteger(0);
 
     // Timer management for proper resource cleanup
     private Timer hideTimer;
@@ -81,6 +85,16 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
                 @Override
                 public void mouseClicked(MouseEvent e) {
                     if (project.isDisposed()) return;
+                    PendingFileChangeApprovalService pendingFileService =
+                            PendingFileChangeApprovalService.getInstance(project);
+                    if (pendingFileService.getPendingCount() > 0) {
+                        pendingFileService.activateNextPendingFile(null);
+                        return;
+                    }
+                    if (pendingReviewCount.get() > 0) {
+                        DiffApprovalQueueService.getInstance(project).activateNextPendingReview(null);
+                        return;
+                    }
                     var toolWindow = ToolWindowManager.getInstance(project).getToolWindow("CCG");
                     if (toolWindow != null) {
                         toolWindow.activate(null);
@@ -128,6 +142,11 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
 
     public void setAgent(String agent) {
         this.currentAgent.set(agent);
+        refreshDisplay(null);
+    }
+
+    public void setPendingReviewCount(int count) {
+        this.pendingReviewCount.set(Math.max(0, count));
         refreshDisplay(null);
     }
 
@@ -188,6 +207,11 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
         if (tokenInfo != null && !tokenInfo.isEmpty()) {
             text.append(" ").append(tokenInfo);
         }
+        int reviews = pendingReviewCount.get();
+        if (reviews > 0) {
+            text.append(" ")
+                    .append(ClaudeCodeGuiBundle.message("status.pendingReviews", reviews));
+        }
 
         StringBuilder tooltip = new StringBuilder(ClaudeCodeGuiBundle.message("status.tooltip.status", status));
         if (model != null && !model.isEmpty()) {
@@ -201,6 +225,9 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
         }
         if (details != null) {
             tooltip.append(ClaudeCodeGuiBundle.message("status.tooltip.details", details));
+        }
+        if (reviews > 0) {
+            tooltip.append(ClaudeCodeGuiBundle.message("status.tooltip.pendingReviews", reviews));
         }
 
         updateLabel(text.toString(), tooltip.toString());

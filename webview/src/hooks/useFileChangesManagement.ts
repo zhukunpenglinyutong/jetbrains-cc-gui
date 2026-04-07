@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState, type RefObject } from 'react';
 import type { ClaudeMessage, ToolResultBlock } from '../types';
+import type { FileChangeSummary } from '../types/fileChanges';
 
 export interface UseFileChangesManagementOptions {
   currentSessionId: string | null;
   currentSessionIdRef: RefObject<string | null>;
+  currentFileChangesRef: RefObject<Map<string, FileChangeSummary>>;
   messages: ClaudeMessage[];
   getContentBlocks: (message: ClaudeMessage) => any[];
   findToolResult: (toolUseId?: string, messageIndex?: number) => ToolResultBlock | null;
@@ -21,87 +23,77 @@ export interface FileChange {
 export function useFileChangesManagement({
   currentSessionId,
   currentSessionIdRef,
+  currentFileChangesRef,
   messages,
 }: UseFileChangesManagementOptions) {
-  // List of processed file paths (filtered from fileChanges after Apply/Reject, persisted to localStorage)
-  const [processedFiles, setProcessedFiles] = useState<string[]>([]);
+  // List of processed tool_use ids (filtered from fileChanges after Apply/Reject, persisted to localStorage)
+  const [processedOperationIds, setProcessedOperationIds] = useState<string[]>([]);
   // Base message index (for Keep All feature, only counts changes after this index)
   const [baseMessageIndex, setBaseMessageIndex] = useState(0);
 
-  // Callback after file undo success (triggered from StatusPanel)
-  const handleUndoFile = useCallback((filePath: string) => {
-    setProcessedFiles(prev => {
-      if (prev.includes(filePath)) return prev;
-      const newList = [...prev, filePath];
+  const addOperationIdsToProcessed = useCallback((operationIds: string[]) => {
+    if (operationIds.length === 0) return;
 
-      // Persist to localStorage
-      if (currentSessionId) {
-        try {
-          localStorage.setItem(
-            `processed-files-${currentSessionId}`,
-            JSON.stringify(newList)
-          );
-        } catch (e) {
-          console.error('Failed to persist processed files:', e);
-        }
+    setProcessedOperationIds(prev => {
+      const existing = new Set(prev);
+      let changed = false;
+      for (const operationId of operationIds) {
+        if (!operationId || existing.has(operationId)) continue;
+        existing.add(operationId);
+        changed = true;
       }
+      if (!changed) return prev;
 
-      return newList;
-    });
-  }, [currentSessionId]);
-
-  // Helper to add a file to the processed list with localStorage persistence
-  const addFileToProcessed = useCallback((filePath: string) => {
-    setProcessedFiles(prev => {
-      if (prev.includes(filePath)) return prev;
-      const newList = [...prev, filePath];
-
+      const next = Array.from(existing);
       const sessionId = currentSessionIdRef.current;
       if (sessionId) {
         try {
           localStorage.setItem(
-            `processed-files-${sessionId}`,
-            JSON.stringify(newList)
+            `processed-operation-ids-${sessionId}`,
+            JSON.stringify(next)
           );
         } catch (e) {
-          console.error('Failed to persist processed files:', e);
+          console.error('Failed to persist processed operation ids:', e);
         }
       }
-
-      return newList;
+      return next;
     });
   }, [currentSessionIdRef]);
 
+  const getOperationIdsForFile = useCallback((filePath: string): string[] => {
+    // Try exact match first, then normalized (forward-slash) match.
+    // Java sends paths with forward slashes, but tool_use inputs from the AI
+    // may use backslashes on Windows, causing a key mismatch.
+    const fileChange = currentFileChangesRef.current.get(filePath)
+      ?? currentFileChangesRef.current.get(filePath.replace(/\//g, '\\'))
+      ?? currentFileChangesRef.current.get(filePath.replace(/\\/g, '/'));
+    if (!fileChange) return [];
+    return fileChange.operations.map(op => op.operationId).filter(Boolean);
+  }, [currentFileChangesRef]);
+
+  // Callback after file undo success (triggered from StatusPanel)
+  const handleUndoFile = useCallback((filePath: string) => {
+    addOperationIdsToProcessed(getOperationIdsForFile(filePath));
+  }, [addOperationIdsToProcessed, getOperationIdsForFile]);
+
   // Callback after batch undo success (Discard All)
   const handleDiscardAll = useCallback((filteredFileChanges: FileChange[]) => {
-    setProcessedFiles(prev => {
-      const filesToAdd = filteredFileChanges.map(fc => fc.filePath);
-      const newList = [...prev, ...filesToAdd.filter(f => !prev.includes(f))];
-
-      if (currentSessionId) {
-        try {
-          localStorage.setItem(
-            `processed-files-${currentSessionId}`,
-            JSON.stringify(newList)
-          );
-        } catch (e) {
-          console.error('Failed to persist processed files:', e);
-        }
-      }
-
-      return newList;
-    });
-  }, [currentSessionId]);
+    const operationIds = filteredFileChanges.flatMap(fc =>
+      Array.isArray(fc.operations) ? fc.operations.map(op => op.operationId).filter(Boolean) : []
+    );
+    addOperationIdsToProcessed(operationIds);
+  }, [addOperationIdsToProcessed]);
 
   // Callback for Keep All - set current changes as the new baseline
   const handleKeepAll = useCallback(() => {
     const newBaseIndex = messages.length;
     setBaseMessageIndex(newBaseIndex);
-    setProcessedFiles([]);
+    setProcessedOperationIds([]);
 
     if (currentSessionId) {
       try {
         localStorage.setItem(`keep-all-base-${currentSessionId}`, String(newBaseIndex));
+        localStorage.removeItem(`processed-operation-ids-${currentSessionId}`);
         localStorage.removeItem(`processed-files-${currentSessionId}`);
       } catch (e) {
         console.error('Failed to persist Keep All state:', e);
@@ -117,7 +109,7 @@ export function useFileChangesManagement({
         const data = JSON.parse(jsonStr);
         const filePath = data.filePath;
         if (filePath) {
-          addFileToProcessed(filePath);
+          addOperationIdsToProcessed(getOperationIdsForFile(filePath));
         }
       } catch {
         // JSON parse failed, ignore
@@ -136,7 +128,7 @@ export function useFileChangesManagement({
         }
 
         if (action === 'APPLY' || action === 'REJECT') {
-          addFileToProcessed(filePath);
+          addOperationIdsToProcessed(getOperationIdsForFile(filePath));
           console.log(`[InteractiveDiff] ${action} changes to:`, filePath);
         }
       } catch {
@@ -148,11 +140,11 @@ export function useFileChangesManagement({
       delete window.handleRemoveFileFromEdits;
       delete window.handleDiffResult;
     };
-  }, [addFileToProcessed]);
+  }, [addOperationIdsToProcessed, getOperationIdsForFile]);
 
   // Restore/reset state on session switch
   useEffect(() => {
-    setProcessedFiles([]);
+    setProcessedOperationIds([]);
 
     if (!currentSessionId) {
       setBaseMessageIndex(0);
@@ -163,7 +155,11 @@ export function useFileChangesManagement({
     const MAX_STORED_SESSIONS = 50;
     try {
       const keysToCheck = Object.keys(localStorage)
-        .filter(k => k.startsWith('processed-files-') || k.startsWith('keep-all-base-'));
+        .filter(k =>
+          k.startsWith('processed-files-')
+          || k.startsWith('processed-operation-ids-')
+          || k.startsWith('keep-all-base-')
+        );
       if (keysToCheck.length > MAX_STORED_SESSIONS) {
         const toRemove = keysToCheck.slice(0, keysToCheck.length - MAX_STORED_SESSIONS);
         toRemove.forEach(k => localStorage.removeItem(k));
@@ -172,19 +168,19 @@ export function useFileChangesManagement({
       // Ignore cleanup errors
     }
 
-    // Restore processed files from localStorage
+    // Restore processed operation ids from localStorage
     try {
-      const savedProcessedFiles = localStorage.getItem(
-        `processed-files-${currentSessionId}`
+      const savedProcessedOperationIds = localStorage.getItem(
+        `processed-operation-ids-${currentSessionId}`
       );
-      if (savedProcessedFiles) {
-        const files = JSON.parse(savedProcessedFiles);
-        if (Array.isArray(files)) {
-          setProcessedFiles(files);
+      if (savedProcessedOperationIds) {
+        const operationIds = JSON.parse(savedProcessedOperationIds);
+        if (Array.isArray(operationIds)) {
+          setProcessedOperationIds(operationIds.filter((value): value is string => typeof value === 'string'));
         }
       }
     } catch (e) {
-      console.error('Failed to load processed files:', e);
+      console.error('Failed to load processed operation ids:', e);
     }
 
     // Restore Keep All base index
@@ -205,7 +201,7 @@ export function useFileChangesManagement({
   }, [currentSessionId]);
 
   return {
-    processedFiles,
+    processedOperationIds,
     baseMessageIndex,
     handleUndoFile,
     handleDiscardAll,

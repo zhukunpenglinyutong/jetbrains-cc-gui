@@ -61,6 +61,10 @@ export const sendToJava = (message: string, payload: any = {}) => {
   sendBridgeEvent(message, payloadStr);
 };
 
+export const syncPendingFileChanges = (files: any[]) => {
+  sendToJava('sync_pending_file_changes', { files });
+};
+
 export const refreshFile = (filePath: string) => {
   if (!filePath) return;
   sendToJava('refresh_file', { filePath });

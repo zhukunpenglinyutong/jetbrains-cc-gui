@@ -21,6 +21,10 @@ const LCS_MAX_LINES = 100;
 const diffCache = new Map<string, { additions: number; deletions: number }>();
 const DIFF_CACHE_MAX_SIZE = 100;
 
+function normalizeForComparison(value: string): string {
+  return value.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
+
 /**
  * Generate cache key from strings (using hash-like approach for large strings)
  */
@@ -82,6 +86,19 @@ function computeDiffStats(oldString: string, newString: string): { additions: nu
   diffCache.set(cacheKey, result);
 
   return result;
+}
+
+function isMeaningfulOperation(
+  oldString: string,
+  newString: string,
+  additions: number,
+  deletions: number
+): boolean {
+  if (additions > 0 || deletions > 0) {
+    return true;
+  }
+
+  return normalizeForComparison(oldString) !== normalizeForComparison(newString);
 }
 
 /**
@@ -195,6 +212,8 @@ interface UseFileChangesParams {
   findToolResult: (toolUseId?: string, messageIndex?: number) => ToolResultBlock | null;
   /** Start processing messages from this index (for Keep All feature) */
   startFromIndex?: number;
+  /** Tool-use ids that have already been handled/accepted/rejected locally */
+  processedOperationIds?: string[];
 }
 
 /**
@@ -205,8 +224,10 @@ export function useFileChanges({
   getContentBlocks,
   findToolResult,
   startFromIndex = 0,
+  processedOperationIds = [],
 }: UseFileChangesParams): FileChangeSummary[] {
   return useMemo(() => {
+    const processedIds = new Set(processedOperationIds);
     // Map to collect operations by file path
     const fileOperationsMap = new Map<string, EditOperation[]>();
 
@@ -238,24 +259,39 @@ export function useFileChanges({
         const result = findToolResult(block.id, messageIndex);
         if (!isSuccessfulResult(result)) return;
 
-        const { oldString, newString, replaceAll } = extractStrings(input);
-        const { additions, deletions } = computeDiffStats(oldString, newString);
-        const lineInfo = getToolLineInfo(input, undefined, result);
+        // MultiEdit has an edits[] array — expand into individual operations
+        const rawEdits = toolName === 'multiedit' && Array.isArray(input.edits) ? input.edits : null;
+        const editEntries: Array<{ oldString: string; newString: string; replaceAll?: boolean; index: number }> =
+          rawEdits
+            ? rawEdits
+                .filter((e): e is Record<string, unknown> => typeof e === 'object' && e !== null)
+                .map((e, idx) => ({ ...extractStrings(e), index: idx }))
+            : [{ ...extractStrings(input), index: 0 }];
 
-        const operation: EditOperation = {
-          toolName,
-          oldString,
-          newString,
-          additions,
-          deletions,
-          replaceAll,
-          lineStart: lineInfo.start,
-          lineEnd: lineInfo.end,
-        };
+        const lineInfo = rawEdits ? undefined : getToolLineInfo(input, undefined, result);
 
-        // Group by file path
         const existing = fileOperationsMap.get(filePath) ?? [];
-        existing.push(operation);
+        for (const entry of editEntries) {
+          const operationId = rawEdits
+            ? `${block.id ?? `msg-${messageIndex}-${toolName}-${filePath}`}_${entry.index}`
+            : (block.id ?? `msg-${messageIndex}-${toolName}-${filePath}-${existing.length}`);
+          if (processedIds.has(operationId)) continue;
+
+          const { additions, deletions } = computeDiffStats(entry.oldString, entry.newString);
+          if (!isMeaningfulOperation(entry.oldString, entry.newString, additions, deletions)) continue;
+
+          existing.push({
+            operationId,
+            toolName,
+            oldString: entry.oldString,
+            newString: entry.newString,
+            additions,
+            deletions,
+            replaceAll: entry.replaceAll,
+            lineStart: lineInfo?.start,
+            lineEnd: lineInfo?.end,
+          });
+        }
         fileOperationsMap.set(filePath, existing);
       });
     });
@@ -264,6 +300,10 @@ export function useFileChanges({
     const summaries: FileChangeSummary[] = [];
 
     fileOperationsMap.forEach((operations, filePath) => {
+      if (operations.length === 0) {
+        return;
+      }
+
       // Calculate totals
       const totalAdditions = operations.reduce((sum, op) => sum + (op.additions || 0), 0);
       const totalDeletions = operations.reduce((sum, op) => sum + (op.deletions || 0), 0);
@@ -295,5 +335,5 @@ export function useFileChanges({
     });
 
     return summaries;
-  }, [messages, getContentBlocks, findToolResult, startFromIndex]);
+  }, [messages, getContentBlocks, findToolResult, startFromIndex, processedOperationIds]);
 }

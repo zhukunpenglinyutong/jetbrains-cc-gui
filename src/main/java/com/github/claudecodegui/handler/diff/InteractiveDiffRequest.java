@@ -13,6 +13,7 @@ public class InteractiveDiffRequest {
     private final String tabName;
     private final boolean isNewFile;
     private final boolean readOnly;
+    private final String reviewId;
 
     /**
      * Creates a new InteractiveDiffRequest.
@@ -30,7 +31,8 @@ public class InteractiveDiffRequest {
             @NotNull String newFileContents,
             @NotNull String tabName,
             boolean isNewFile,
-            boolean readOnly
+            boolean readOnly,
+            @Nullable String reviewId
     ) {
         this.filePath = filePath;
         this.originalContent = originalContent;
@@ -38,6 +40,7 @@ public class InteractiveDiffRequest {
         this.tabName = tabName;
         this.isNewFile = isNewFile;
         this.readOnly = readOnly;
+        this.reviewId = reviewId;
     }
 
     /**
@@ -54,7 +57,7 @@ public class InteractiveDiffRequest {
             @NotNull String newFileContents,
             @NotNull String tabName
     ) {
-        return new InteractiveDiffRequest(filePath, originalContent, newFileContents, tabName, false, false);
+        return new InteractiveDiffRequest(filePath, originalContent, newFileContents, tabName, false, false, null);
     }
 
     /**
@@ -69,7 +72,7 @@ public class InteractiveDiffRequest {
             @NotNull String newFileContents,
             @NotNull String tabName
     ) {
-        return new InteractiveDiffRequest(filePath, "", newFileContents, tabName, true, false);
+        return new InteractiveDiffRequest(filePath, "", newFileContents, tabName, true, false, null);
     }
 
     @NotNull
@@ -114,6 +117,11 @@ public class InteractiveDiffRequest {
         return readOnly;
     }
 
+    @Nullable
+    public String getReviewId() {
+        return reviewId;
+    }
+
     /**
      * Creates a request for a modified file with read-only mode.
      */
@@ -123,7 +131,7 @@ public class InteractiveDiffRequest {
             @NotNull String newFileContents,
             @NotNull String tabName
     ) {
-        return new InteractiveDiffRequest(filePath, originalContent, newFileContents, tabName, false, true);
+        return new InteractiveDiffRequest(filePath, originalContent, newFileContents, tabName, false, true, null);
     }
 
     /**
@@ -134,7 +142,20 @@ public class InteractiveDiffRequest {
             @NotNull String newFileContents,
             @NotNull String tabName
     ) {
-        return new InteractiveDiffRequest(filePath, "", newFileContents, tabName, true, true);
+        return new InteractiveDiffRequest(filePath, "", newFileContents, tabName, true, true, null);
+    }
+
+    @NotNull
+    public InteractiveDiffRequest withReviewId(@NotNull String newReviewId) {
+        return new InteractiveDiffRequest(
+                filePath,
+                originalContent,
+                newFileContents,
+                tabName,
+                isNewFile,
+                readOnly,
+                newReviewId
+        );
     }
 
     @Override
@@ -146,6 +167,7 @@ public class InteractiveDiffRequest {
                 ", originalContentLength=" + getOriginalContent().length() +
                 ", newContentLength=" + newFileContents.length() +
                 ", readOnly=" + readOnly +
+                ", reviewId='" + reviewId + '\'' +
                 '}';
     }
 }

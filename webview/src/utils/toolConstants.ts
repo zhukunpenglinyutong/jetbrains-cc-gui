@@ -30,6 +30,7 @@ export const FILE_MODIFY_TOOL_NAMES = new Set([
   'write',
   'write_file',
   'edit',
+  'multiedit',
   'edit_file',
   'replace_string',
   'write_to_file',

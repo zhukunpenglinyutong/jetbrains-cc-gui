@@ -85,6 +85,9 @@
         <statusBarWidgetFactory id="ClaudeStatusBarWidget"
                                 implementation="com.github.claudecodegui.notifications.ClaudeStatusBarWidget$Factory"/>
 
+        <!-- Pending AI diff approvals inside source editors -->
+        <editorNotificationProvider implementation="com.github.claudecodegui.permission.DiffApprovalNotificationProvider"/>
+
         <!-- Notification group for DevTools and other balloon notifications -->
         <notificationGroup id="CC GUI Notifications" displayType="BALLOON"/>
     </extensions>

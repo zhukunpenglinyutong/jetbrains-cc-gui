@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import HistoryView from './components/history/HistoryView';
 import SettingsView from './components/settings';
 import type { SettingsTab } from './components/settings/SettingsSidebar';
-import { sendBridgeEvent } from './utils/bridge';
+import { sendBridgeEvent, syncPendingFileChanges } from './utils/bridge';
 import { ChatInputBox } from './components/ChatInputBox';
 import { preloadSlashCommands, forceRefreshPrompts } from './components/ChatInputBox/providers';
 import {
@@ -54,6 +54,39 @@ import type {
 
 const DEFAULT_STATUS = 'ready';
 
+function hashString(value: string): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = ((hash * 31) + value.charCodeAt(i)) | 0;
+  }
+  return hash >>> 0;
+}
+
+function buildPendingFileChangeSignature(
+  fileChanges: Array<{
+    filePath: string;
+    fileName: string;
+    status: string;
+    additions: number;
+    deletions: number;
+    operations: Array<{ oldString: string; newString: string; replaceAll?: boolean }>;
+  }>
+): string {
+  return fileChanges.map((fileChange) => {
+    const operationsSignature = fileChange.operations
+      .map((op) => `${hashString(op.oldString)}:${hashString(op.newString)}:${op.replaceAll ? 1 : 0}`)
+      .join(',');
+    return [
+      fileChange.filePath,
+      fileChange.fileName,
+      fileChange.status,
+      fileChange.additions,
+      fileChange.deletions,
+      operationsSignature,
+    ].join('|');
+  }).join('||');
+}
+
 const App = () => {
   const { t } = useTranslation();
 
@@ -86,6 +119,23 @@ const App = () => {
   const [customSessionTitle, setCustomSessionTitle] = useState<string | null>(null);
   const chatInputRef = useRef<ChatInputBoxHandle>(null);
   const [draftInput, setDraftInput] = useState('');
+  const lastSyncedPendingFileChangesRef = useRef<string | null>(null);
+  const currentFileChangesRef = useRef(new Map<string, {
+    filePath: string;
+    fileName: string;
+    status: 'A' | 'M';
+    additions: number;
+    deletions: number;
+    operations: Array<{
+      operationId: string;
+      toolName: string;
+      oldString: string;
+      newString: string;
+      additions: number;
+      deletions: number;
+      replaceAll?: boolean;
+    }>;
+  }>());
 
   // StatusPanel collapse state
   const userCollapsedRef = useRef(false);
@@ -337,9 +387,10 @@ const App = () => {
 
   // ── File changes management ──
   const {
-    processedFiles, baseMessageIndex,
+    processedOperationIds, baseMessageIndex,
     handleUndoFile, handleDiscardAll: handleDiscardAllRaw, handleKeepAll,
   } = useFileChangesManagement({
+    currentFileChangesRef,
     currentSessionId, currentSessionIdRef, messages,
     getContentBlocks, findToolResult,
   });
@@ -347,18 +398,62 @@ const App = () => {
   const fileChanges = useFileChanges({
     messages, getContentBlocks, findToolResult,
     startFromIndex: baseMessageIndex,
+    processedOperationIds,
   });
 
-  const filteredFileChanges = useMemo(() => {
-    if (processedFiles.length === 0) return fileChanges;
-    return fileChanges.filter(fc => !processedFiles.includes(fc.filePath));
-  }, [fileChanges, processedFiles]);
+  const filteredFileChanges = fileChanges;
+
+  useEffect(() => {
+    currentFileChangesRef.current = new Map(filteredFileChanges.map((fileChange) => [fileChange.filePath, fileChange]));
+  }, [filteredFileChanges]);
+
+  const nativePendingFileChanges = useMemo(() => filteredFileChanges
+    .map((fileChange) => ({
+      filePath: fileChange.filePath,
+      fileName: fileChange.fileName,
+      status: fileChange.status,
+      additions: fileChange.additions,
+      deletions: fileChange.deletions,
+      operations: fileChange.operations.map((op) => ({
+        oldString: op.oldString,
+        newString: op.newString,
+        replaceAll: op.replaceAll,
+      })),
+    }))
+    .filter((fileChange) => {
+      if (fileChange.operations.length === 0) {
+        return false;
+      }
+
+      return fileChange.additions > 0
+        || fileChange.deletions > 0
+        || fileChange.operations.some((op) => op.oldString !== op.newString);
+    }), [filteredFileChanges]);
+
+  const nativePendingFileChangesSignature = useMemo(
+    () => buildPendingFileChangeSignature(nativePendingFileChanges),
+    [nativePendingFileChanges]
+  );
 
   const onDiscardAll = useCallback(() => {
     handleDiscardAllRaw(filteredFileChanges);
   }, [handleDiscardAllRaw, filteredFileChanges]);
 
   const latestTurnMessages = useMemo(() => sliceLatestConversationTurn(messages), [messages]);
+
+  useEffect(() => {
+    lastSyncedPendingFileChangesRef.current = null;
+  }, [currentSessionId, currentView]);
+
+  useEffect(() => {
+    if (currentView !== 'chat' || loading || streamingActive) return;
+    if (lastSyncedPendingFileChangesRef.current === nativePendingFileChangesSignature) {
+      return;
+    }
+
+    lastSyncedPendingFileChangesRef.current = nativePendingFileChangesSignature;
+    syncPendingFileChanges(nativePendingFileChanges);
+  }, [currentView, loading, streamingActive, nativePendingFileChanges, nativePendingFileChangesSignature]);
 
   // ── Subagents ──
   const latestTurnSubagents = useSubagents({ messages: latestTurnMessages, getContentBlocks, findToolResult });

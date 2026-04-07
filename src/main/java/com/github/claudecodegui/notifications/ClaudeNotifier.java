@@ -83,6 +83,15 @@ public class ClaudeNotifier {
         });
     }
 
+    public static void setPendingReviews(@NotNull Project project, int count) {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            ClaudeStatusBarWidget widget = ClaudeStatusBarWidget.Factory.getWidget(project);
+            if (widget != null) {
+                widget.setPendingReviewCount(count);
+            }
+        });
+    }
+
     private static String formatNumber(int num) {
         if (num < 1000) return String.valueOf(num);
         if (num < 1000000) return String.format("%.1fk", num / 1000.0);

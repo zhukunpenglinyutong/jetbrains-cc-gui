@@ -4,6 +4,7 @@ import com.github.claudecodegui.handler.diff.DiffResult;
 import com.github.claudecodegui.handler.diff.InteractiveDiffManager;
 import com.github.claudecodegui.handler.diff.InteractiveDiffRequest;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonArray;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.LocalFileSystem;
@@ -23,7 +24,8 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Service for reviewing file-modifying tool calls (Edit, Write) via an interactive diff view.
+ * Service for reviewing file-modifying tool calls (Edit, MultiEdit, Write)
+ * via an interactive diff view.
  * Integrates with the permission system to provide "review-before-write" capability.
  *
  * This service computes the proposed file content from tool inputs, opens an interactive
@@ -35,7 +37,7 @@ public class DiffReviewService {
     private static final Logger LOG = Logger.getInstance(DiffReviewService.class);
 
     /** Tool names that modify files and should trigger diff review */
-    private static final Set<String> FILE_MODIFYING_TOOLS = Set.of("Edit", "Write");
+    private static final Set<String> FILE_MODIFYING_TOOLS = Set.of("Edit", "MultiEdit", "Write");
 
     /**
      * Check if a tool is a file-modifying tool that should trigger diff review.
@@ -132,7 +134,8 @@ public class DiffReviewService {
 
     /**
      * Extract the file path from tool inputs.
-     * Supports Edit (file_path), Write (file_path), and NotebookEdit (notebook_path).
+     * Supports Edit (file_path), MultiEdit (file_path), Write (file_path),
+     * and NotebookEdit (notebook_path).
      */
     @Nullable
     private static String extractFilePath(@NotNull JsonObject inputs) {
@@ -186,6 +189,8 @@ public class DiffReviewService {
         switch (toolName) {
             case "Edit":
                 return computeEditProposedContent(inputs, originalContent, filePath);
+            case "MultiEdit":
+                return computeMultiEditProposedContent(inputs, originalContent, filePath);
             case "Write":
                 return computeWriteProposedContent(inputs);
             default:
@@ -208,74 +213,147 @@ public class DiffReviewService {
             return null;
         }
 
-        String oldString = inputs.has("old_string") && !inputs.get("old_string").isJsonNull()
-                ? inputs.get("old_string").getAsString() : null;
-        String newString = inputs.has("new_string") && !inputs.get("new_string").isJsonNull()
-                ? inputs.get("new_string").getAsString() : null;
-
+        String oldString = extractString(inputs, "old_string", "oldString");
+        String newString = extractString(inputs, "new_string", "newString");
         if (oldString == null || newString == null) {
             LOG.warn("DiffReview: Edit tool missing old_string or new_string for " + filePath);
             return null;
         }
 
-        // No-op edit: old and new are identical
-        if (oldString.equals(newString)) {
-            return originalContent;
+        boolean replaceAll = extractBoolean(inputs, "replace_all", "replaceAll");
+        return applySingleEdit(originalContent, oldString, newString, replaceAll, filePath, "Edit");
+    }
+
+    /**
+     * Compute proposed content for the MultiEdit tool.
+     * Applies multiple old_string/new_string replacements in order.
+     */
+    @Nullable
+    private static String computeMultiEditProposedContent(
+            @NotNull JsonObject inputs,
+            @Nullable String originalContent,
+            @NotNull String filePath
+    ) {
+        if (originalContent == null) {
+            LOG.warn("DiffReview: MultiEdit tool called on non-existent file: " + filePath);
+            return null;
         }
 
-        boolean replaceAll = inputs.has("replace_all") && inputs.get("replace_all").getAsBoolean();
+        if (!inputs.has("edits") || !inputs.get("edits").isJsonArray()) {
+            LOG.warn("DiffReview: MultiEdit tool missing edits array for " + filePath);
+            return null;
+        }
+
+        JsonArray edits = inputs.getAsJsonArray("edits");
+        String content = originalContent;
+        for (int i = 0; i < edits.size(); i++) {
+            if (!edits.get(i).isJsonObject()) {
+                LOG.warn("DiffReview: MultiEdit edit[" + i + "] is not an object for " + filePath);
+                return null;
+            }
+
+            JsonObject edit = edits.get(i).getAsJsonObject();
+            String oldString = extractString(edit, "old_string", "oldString");
+            String newString = extractString(edit, "new_string", "newString");
+            if (oldString == null || newString == null) {
+                LOG.warn("DiffReview: MultiEdit edit[" + i + "] missing old/new string for " + filePath);
+                return null;
+            }
+
+            boolean replaceAll = extractBoolean(edit, "replace_all", "replaceAll");
+            String nextContent = applySingleEdit(
+                    content, oldString, newString, replaceAll, filePath, "MultiEdit[" + i + "]");
+            if (nextContent == null) {
+                return null;
+            }
+            content = nextContent;
+        }
+        return content;
+    }
+
+    @Nullable
+    private static String applySingleEdit(
+            @NotNull String content,
+            @NotNull String oldString,
+            @NotNull String newString,
+            boolean replaceAll,
+            @NotNull String filePath,
+            @NotNull String operationLabel
+    ) {
+        // No-op edit: old and new are identical
+        if (oldString.equals(newString)) {
+            return content;
+        }
 
         if (!replaceAll) {
             // Try exact match first
-            int index = originalContent.indexOf(oldString);
+            int index = content.indexOf(oldString);
             String effectiveOld = oldString;
             String effectiveNew = newString;
 
             // Fallback: try line-ending variants (Windows CRLF/LF mismatch)
             if (index < 0) {
-                String[] variant = findLineEndingVariant(originalContent, oldString, newString);
+                String[] variant = findLineEndingVariant(content, oldString, newString);
                 if (variant != null) {
                     effectiveOld = variant[0];
                     effectiveNew = variant[1];
-                    index = originalContent.indexOf(effectiveOld);
+                    index = content.indexOf(effectiveOld);
                     LOG.info("DiffReview: Matched old_string after normalizing " + variant[2]
-                            + " for " + filePath);
+                            + " for " + operationLabel + " on " + filePath);
                 }
             }
 
             if (index >= 0) {
-                return originalContent.substring(0, index)
+                return content.substring(0, index)
                         + effectiveNew
-                        + originalContent.substring(index + effectiveOld.length());
+                        + content.substring(index + effectiveOld.length());
             }
 
-            LOG.warn("DiffReview: old_string not found in file content for " + filePath
-                    + " (fileLength=" + originalContent.length()
+            LOG.warn("DiffReview: old_string not found in file content for " + operationLabel
+                    + " on " + filePath + " (fileLength=" + content.length()
                     + ", oldStringLength=" + oldString.length() + ")");
             return null;
         }
 
         // For replace_all: try exact match first
-        String result = originalContent.replace(oldString, newString);
-        if (!result.equals(originalContent)) {
+        String result = content.replace(oldString, newString);
+        if (!result.equals(content)) {
             return result;
         }
 
         // Fallback: try line-ending variants to avoid silent no-ops
-        String[] variant = findLineEndingVariant(originalContent, oldString, newString);
+        String[] variant = findLineEndingVariant(content, oldString, newString);
         if (variant != null) {
-            result = originalContent.replace(variant[0], variant[1]);
-            if (!result.equals(originalContent)) {
+            result = content.replace(variant[0], variant[1]);
+            if (!result.equals(content)) {
                 LOG.info("DiffReview: Matched old_string after normalizing " + variant[2]
-                        + " (replace_all) for " + filePath);
+                        + " (replace_all) for " + operationLabel + " on " + filePath);
                 return result;
             }
         }
 
-        LOG.warn("DiffReview: old_string not found in file content for " + filePath
-                + " (replace_all, fileLength=" + originalContent.length()
+        LOG.warn("DiffReview: old_string not found in file content for " + operationLabel
+                + " on " + filePath + " (replace_all, fileLength=" + content.length()
                 + ", oldStringLength=" + oldString.length() + ")");
         return null;
+    }
+
+    @Nullable
+    private static String extractString(@NotNull JsonObject json, @NotNull String primaryKey, @NotNull String fallbackKey) {
+        if (json.has(primaryKey) && !json.get(primaryKey).isJsonNull()) {
+            return json.get(primaryKey).getAsString();
+        }
+        if (json.has(fallbackKey) && !json.get(fallbackKey).isJsonNull()) {
+            return json.get(fallbackKey).getAsString();
+        }
+        return null;
+    }
+
+    private static boolean extractBoolean(@NotNull JsonObject json, @NotNull String primaryKey, @NotNull String fallbackKey) {
+        if (json.has(primaryKey) && !json.get(primaryKey).isJsonNull()) {
+            return json.get(primaryKey).getAsBoolean();
+        }
+        return json.has(fallbackKey) && !json.get(fallbackKey).isJsonNull() && json.get(fallbackKey).getAsBoolean();
     }
 
     /**

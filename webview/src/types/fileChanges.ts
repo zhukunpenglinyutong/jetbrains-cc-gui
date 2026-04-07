@@ -7,6 +7,7 @@ export type FileChangeStatus = 'A' | 'M';
 
 /** Single edit operation record */
 export interface EditOperation {
+  operationId: string;
   toolName: string;
   oldString: string;
   newString: string;
