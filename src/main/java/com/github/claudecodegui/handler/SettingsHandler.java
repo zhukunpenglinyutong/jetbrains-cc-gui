@@ -44,6 +44,8 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_send_shortcut",
         "get_auto_open_file_enabled",
         "set_auto_open_file_enabled",
+        "get_experimental_inline_diff_enabled",
+        "set_experimental_inline_diff_enabled",
         "get_commit_generation_enabled",
         "set_commit_generation_enabled",
         "get_status_bar_widget_enabled",
@@ -157,6 +159,12 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_auto_open_file_enabled":
                 projectConfigHandler.handleSetAutoOpenFileEnabled(content);
+                return true;
+            case "get_experimental_inline_diff_enabled":
+                projectConfigHandler.handleGetExperimentalInlineDiffEnabled();
+                return true;
+            case "set_experimental_inline_diff_enabled":
+                projectConfigHandler.handleSetExperimentalInlineDiffEnabled(content);
                 return true;
             case "get_commit_generation_enabled":
                 projectConfigHandler.handleGetCommitGenerationEnabled();

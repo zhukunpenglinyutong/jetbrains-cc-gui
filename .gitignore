@@ -59,6 +59,8 @@ src/main/resources/html/*
 .claude
 specs
 CLAUDE.md
+LOCAL_DEV_GUIDE.md
+local.properties
 .idea/copilot*
 **/.nvmrc
 .github/*.md

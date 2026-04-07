@@ -34,6 +34,7 @@ export interface SettingsWindowCallbacksDeps {
   // AI feature toggle setters
   setCommitGenerationEnabled?: (enabled: boolean) => void;
   setStatusBarWidgetEnabled?: (enabled: boolean) => void;
+  setExperimentalInlineDiffEnabled?: (enabled: boolean) => void;
   // Sound notification setters
   setSoundNotificationEnabled?: (enabled: boolean) => void;
   setSoundOnlyWhenUnfocused?: (enabled: boolean) => void;
@@ -255,6 +256,16 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
     };
 
+    // Experimental inline diff review config callback
+    window.updateExperimentalInlineDiffEnabled = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        d().setExperimentalInlineDiffEnabled?.(data.experimentalInlineDiffEnabled ?? false);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse experimental inline diff config:', error);
+      }
+    };
+
     // Sound notification config callback
     window.updateSoundNotificationConfig = (jsonStr: string) => {
       try {
@@ -409,6 +420,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     sendToJava('get_sound_notification_config:');
     sendToJava('get_commit_generation_enabled:');
     sendToJava('get_status_bar_widget_enabled:');
+    sendToJava('get_experimental_inline_diff_enabled:');
 
     return () => {
       d().cleanupAgentsTimeout();
@@ -435,6 +447,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.updateSoundNotificationConfig = undefined;
       window.updateCommitGenerationEnabled = undefined;
       window.updateStatusBarWidgetEnabled = undefined;
+      window.updateExperimentalInlineDiffEnabled = undefined;
       window.updateAgents = previousUpdateAgents;
       window.agentOperationResult = undefined;
       window.agentImportPreviewResult = undefined;

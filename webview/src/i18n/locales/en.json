@@ -159,6 +159,12 @@
         "disabled": "Disabled",
         "hint": "When enabled, selecting a file in the project tree will automatically send its file path to AI (note: only the file path is sent, not the file content). When disabled, manual action is required."
       },
+      "experimentalInlineDiff": {
+        "label": "Inline Diff Review (Experimental)",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "When enabled, AI file edits appear as inline change blocks in the source editor. You can accept or reject changes at the hunk level. This feature is experimental."
+      },
       "diffExpanded": {
         "label": "Expand Diffs by Default",
         "enabled": "Expanded",

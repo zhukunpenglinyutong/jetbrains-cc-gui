@@ -43,6 +43,8 @@ export interface UseSettingsBasicActionsReturn {
   /** Auto open file state (prefers prop over local state) */
   autoOpenFileEnabled: boolean;
   localAutoOpenFileEnabled: boolean;
+  /** Experimental inline diff review state */
+  experimentalInlineDiffEnabled: boolean;
   commitPrompt: string;
   savingCommitPrompt: boolean;
   soundNotificationEnabled: boolean;
@@ -63,6 +65,7 @@ export interface UseSettingsBasicActionsReturn {
   handleCodexSandboxModeChange: (mode: 'workspace-write' | 'danger-full-access') => void;
   handleSendShortcutChange: (shortcut: 'enter' | 'cmdEnter') => void;
   handleAutoOpenFileEnabledChange: (enabled: boolean) => void;
+  handleExperimentalInlineDiffEnabledChange: (enabled: boolean) => void;
   handleSoundNotificationEnabledChange: (enabled: boolean) => void;
   handleSoundOnlyWhenUnfocusedChange: (enabled: boolean) => void;
   handleSelectedSoundChange: (soundId: string) => void;
@@ -97,6 +100,7 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setCodexSandboxMode: (mode: 'workspace-write' | 'danger-full-access') => void;
   /** @internal */ setLocalSendShortcut: (shortcut: 'enter' | 'cmdEnter') => void;
   /** @internal */ setLocalAutoOpenFileEnabled: (enabled: boolean) => void;
+  /** @internal */ setExperimentalInlineDiffEnabled: (enabled: boolean) => void;
   /** @internal */ setCommitPrompt: (prompt: string) => void;
   /** @internal */ setSavingCommitPrompt: (saving: boolean) => void;
   /** @internal */ setSoundNotificationEnabled: (enabled: boolean) => void;
@@ -152,6 +156,9 @@ export function useSettingsBasicActions({
   // Auto open file configuration - prefer props, fallback to local state
   const [localAutoOpenFileEnabled, setLocalAutoOpenFileEnabled] = useState<boolean>(false);
   const autoOpenFileEnabled = autoOpenFileEnabledProp ?? localAutoOpenFileEnabled;
+
+  // Experimental inline diff review configuration
+  const [experimentalInlineDiffEnabled, setExperimentalInlineDiffEnabled] = useState<boolean>(false);
 
   // Commit AI prompt configuration
   const [commitPrompt, setCommitPrompt] = useState('');
@@ -252,6 +259,13 @@ export function useSettingsBasicActions({
     }
   }, [onAutoOpenFileEnabledChangeProp]);
 
+  // Experimental inline diff review toggle change handler
+  const handleExperimentalInlineDiffEnabledChange = useCallback((enabled: boolean) => {
+    setExperimentalInlineDiffEnabled(enabled);
+    const payload = { experimentalInlineDiffEnabled: enabled };
+    sendToJava(`set_experimental_inline_diff_enabled:${JSON.stringify(payload)}`);
+  }, []);
+
   // Sound notification toggle change handler
   const handleSoundNotificationEnabledChange = useCallback((enabled: boolean) => {
     setSoundNotificationEnabled(enabled);
@@ -342,6 +356,8 @@ export function useSettingsBasicActions({
     localAutoOpenFileEnabled,
     setLocalAutoOpenFileEnabled,
     autoOpenFileEnabled,
+    experimentalInlineDiffEnabled,
+    setExperimentalInlineDiffEnabled,
     commitPrompt,
     setCommitPrompt,
     savingCommitPrompt,
@@ -364,6 +380,7 @@ export function useSettingsBasicActions({
     handleCodexSandboxModeChange,
     handleSendShortcutChange,
     handleAutoOpenFileEnabledChange,
+    handleExperimentalInlineDiffEnabledChange,
     handleSoundNotificationEnabledChange,
     handleSoundOnlyWhenUnfocusedChange,
     handleSelectedSoundChange,

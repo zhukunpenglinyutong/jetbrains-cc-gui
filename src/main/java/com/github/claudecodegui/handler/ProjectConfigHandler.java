@@ -237,6 +237,60 @@ public class ProjectConfigHandler {
         }
     }
 
+    public void handleGetExperimentalInlineDiffEnabled() {
+        try {
+            String projectPath = context.getProject().getBasePath();
+            if (projectPath == null) {
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    JsonObject r = new JsonObject();
+                    r.addProperty("experimentalInlineDiffEnabled", false);
+                    context.callJavaScript("window.updateExperimentalInlineDiffEnabled", context.escapeJs(gson.toJson(r)));
+                });
+                return;
+            }
+            boolean enabled = new CodemossSettingsService().getExperimentalInlineDiffEnabled(projectPath);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject r = new JsonObject();
+                r.addProperty("experimentalInlineDiffEnabled", enabled);
+                context.callJavaScript("window.updateExperimentalInlineDiffEnabled", context.escapeJs(gson.toJson(r)));
+            });
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to get experimental inline diff enabled: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject r = new JsonObject();
+                r.addProperty("experimentalInlineDiffEnabled", false);
+                context.callJavaScript("window.updateExperimentalInlineDiffEnabled", context.escapeJs(gson.toJson(r)));
+            });
+        }
+    }
+
+    public void handleSetExperimentalInlineDiffEnabled(String content) {
+        try {
+            String projectPath = context.getProject().getBasePath();
+            if (projectPath == null) {
+                ApplicationManager.getApplication().invokeLater(() ->
+                    context.callJavaScript("window.showError", context.escapeJs("Cannot get project path")));
+                return;
+            }
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            boolean enabled = json != null && json.has("experimentalInlineDiffEnabled")
+                && !json.get("experimentalInlineDiffEnabled").isJsonNull()
+                && json.get("experimentalInlineDiffEnabled").getAsBoolean();
+            new CodemossSettingsService().setExperimentalInlineDiffEnabled(projectPath, enabled);
+            LOG.info("[ProjectConfigHandler] Set experimental inline diff enabled: " + enabled);
+            final boolean finalVal = enabled;
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject r = new JsonObject();
+                r.addProperty("experimentalInlineDiffEnabled", finalVal);
+                context.callJavaScript("window.updateExperimentalInlineDiffEnabled", context.escapeJs(gson.toJson(r)));
+            });
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set experimental inline diff enabled: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() ->
+                context.callJavaScript("window.showError", context.escapeJs("Failed to save experimental inline diff config: " + e.getMessage())));
+        }
+    }
+
     public void handleGetSendShortcut() {
         try {
             String sendShortcut = PropertiesComponent.getInstance().getValue(SEND_SHORTCUT_PROPERTY_KEY, "enter");

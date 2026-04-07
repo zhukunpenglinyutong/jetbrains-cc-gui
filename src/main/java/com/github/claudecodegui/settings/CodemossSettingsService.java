@@ -486,6 +486,60 @@ public class CodemossSettingsService {
         LOG.info("[CodemossSettings] Set auto open file enabled to " + enabled + " for project: " + projectPath);
     }
 
+    // ==================== Experimental Inline Diff Review Config Management ====================
+
+    /**
+     * Get experimental inline diff review configuration.
+     *
+     * @param projectPath project path
+     * @return whether inline diff review is enabled
+     */
+    public boolean getExperimentalInlineDiffEnabled(String projectPath) throws IOException {
+        JsonObject config = readConfig();
+
+        if (!config.has("experimentalInlineDiff")) {
+            return false;
+        }
+
+        JsonObject experimentalInlineDiff = config.getAsJsonObject("experimentalInlineDiff");
+
+        if (projectPath != null && experimentalInlineDiff.has(projectPath)) {
+            return experimentalInlineDiff.get(projectPath).getAsBoolean();
+        }
+
+        if (experimentalInlineDiff.has("default")) {
+            return experimentalInlineDiff.get("default").getAsBoolean();
+        }
+
+        return false;
+    }
+
+    /**
+     * Set experimental inline diff review configuration.
+     *
+     * @param projectPath project path
+     * @param enabled     whether to enable
+     */
+    public void setExperimentalInlineDiffEnabled(String projectPath, boolean enabled) throws IOException {
+        JsonObject config = readConfig();
+
+        JsonObject experimentalInlineDiff;
+        if (config.has("experimentalInlineDiff")) {
+            experimentalInlineDiff = config.getAsJsonObject("experimentalInlineDiff");
+        } else {
+            experimentalInlineDiff = new JsonObject();
+            config.add("experimentalInlineDiff", experimentalInlineDiff);
+        }
+
+        if (projectPath != null) {
+            experimentalInlineDiff.addProperty(projectPath, enabled);
+        }
+        experimentalInlineDiff.addProperty("default", enabled);
+
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set experimental inline diff enabled to " + enabled + " for project: " + projectPath);
+    }
+
     // ==================== Codex Sandbox Mode Config Management ====================
 
     /**

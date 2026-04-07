@@ -261,6 +261,11 @@ interface Window {
   updateStatusBarWidgetEnabled?: (json: string) => void;
 
   /**
+   * Update experimental inline diff review enabled state
+   */
+  updateExperimentalInlineDiffEnabled?: (json: string) => void;
+
+  /**
    * Update current Claude config
    */
   updateCurrentClaudeConfig?: (json: string) => void;

@@ -119,6 +119,8 @@ const SettingsView = ({
     setLocalSendShortcut,
     sendShortcut,
     autoOpenFileEnabled,
+    experimentalInlineDiffEnabled,
+    setExperimentalInlineDiffEnabled,
     commitPrompt,
     setCommitPrompt,
     savingCommitPrompt,
@@ -141,6 +143,7 @@ const SettingsView = ({
     handleCodexSandboxModeChange,
     handleSendShortcutChange,
     handleAutoOpenFileEnabledChange,
+    handleExperimentalInlineDiffEnabledChange,
     handleSoundNotificationEnabledChange,
     handleSoundOnlyWhenUnfocusedChange,
     handleSelectedSoundChange,
@@ -287,6 +290,7 @@ const SettingsView = ({
     setCustomSoundPath,
     setCommitGenerationEnabled,
     setStatusBarWidgetEnabled,
+    setExperimentalInlineDiffEnabled,
   });
 
   // Save provider (wrapper function with validation logic)
@@ -415,6 +419,8 @@ const SettingsView = ({
               onSendShortcutChange={handleSendShortcutChange}
               autoOpenFileEnabled={autoOpenFileEnabled}
               onAutoOpenFileEnabledChange={handleAutoOpenFileEnabledChange}
+              experimentalInlineDiffEnabled={experimentalInlineDiffEnabled}
+              onExperimentalInlineDiffEnabledChange={handleExperimentalInlineDiffEnabledChange}
               chatBgColor={chatBgColor}
               onChatBgColorChange={setChatBgColor}
               userMsgColor={userMsgColor}

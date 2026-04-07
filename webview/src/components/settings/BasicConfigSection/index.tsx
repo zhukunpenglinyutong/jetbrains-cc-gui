@@ -40,6 +40,9 @@ interface BasicConfigSectionProps {
   // Auto open file configuration
   autoOpenFileEnabled?: boolean;
   onAutoOpenFileEnabledChange?: (enabled: boolean) => void;
+  // Experimental inline diff review configuration
+  experimentalInlineDiffEnabled?: boolean;
+  onExperimentalInlineDiffEnabledChange?: (enabled: boolean) => void;
   // Send shortcut configuration
   sendShortcut?: 'enter' | 'cmdEnter';
   onSendShortcutChange?: (shortcut: 'enter' | 'cmdEnter') => void;
@@ -123,6 +126,8 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onStreamingEnabledChange={props.onStreamingEnabledChange}
           autoOpenFileEnabled={props.autoOpenFileEnabled}
           onAutoOpenFileEnabledChange={props.onAutoOpenFileEnabledChange}
+          experimentalInlineDiffEnabled={props.experimentalInlineDiffEnabled}
+          onExperimentalInlineDiffEnabledChange={props.onExperimentalInlineDiffEnabledChange}
           diffExpandedByDefault={props.diffExpandedByDefault}
           onDiffExpandedByDefaultChange={props.onDiffExpandedByDefaultChange}
           commitGenerationEnabled={props.commitGenerationEnabled}

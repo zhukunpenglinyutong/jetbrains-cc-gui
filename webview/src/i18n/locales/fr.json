@@ -159,6 +159,12 @@
         "disabled": "Désactivé",
         "hint": "Lorsqu'activé, sélectionner un fichier dans l'arborescence du projet enverra automatiquement son chemin à l'AI (note : seul le chemin du fichier est envoyé, pas son contenu). Lorsque désactivé, une action manuelle est requise."
       },
+      "experimentalInlineDiff": {
+        "label": "Revue de diff en ligne (Expérimental)",
+        "enabled": "Activé",
+        "disabled": "Désactivé",
+        "hint": "Lorsqu'activé, les modifications de fichiers par l'IA apparaissent sous forme de blocs de changements en ligne dans l'éditeur de code. Vous pouvez accepter ou rejeter les modifications par bloc. Cette fonctionnalité est expérimentale."
+      },
       "diffExpanded": {
         "label": "Développer les différences par défaut",
         "enabled": "Développé",

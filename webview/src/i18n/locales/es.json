@@ -159,6 +159,12 @@
         "disabled": "Desactivado",
         "hint": "Al activar, seleccionar un archivo en el árbol del proyecto enviará automáticamente su ruta al AI (nota: solo se envía la ruta del archivo, no su contenido). Al desactivar, se requiere acción manual."
       },
+      "experimentalInlineDiff": {
+        "label": "Revisión de diff en línea (Experimental)",
+        "enabled": "Habilitado",
+        "disabled": "Deshabilitado",
+        "hint": "Cuando está habilitado, las ediciones de archivos de la IA aparecen como bloques de cambios en línea en el editor de código. Puede aceptar o rechazar cambios a nivel de fragmento. Esta función es experimental."
+      },
       "diffExpanded": {
         "label": "Expandir diferencias por defecto",
         "enabled": "Expandido",

@@ -79,6 +79,8 @@ export interface BehaviorTabProps {
   onStreamingEnabledChange?: (enabled: boolean) => void;
   autoOpenFileEnabled?: boolean;
   onAutoOpenFileEnabledChange?: (enabled: boolean) => void;
+  experimentalInlineDiffEnabled?: boolean;
+  onExperimentalInlineDiffEnabledChange?: (enabled: boolean) => void;
   diffExpandedByDefault?: boolean;
   onDiffExpandedByDefaultChange?: (enabled: boolean) => void;
   commitGenerationEnabled?: boolean;
@@ -105,6 +107,8 @@ const BehaviorTab = ({
   onStreamingEnabledChange = () => {},
   autoOpenFileEnabled = true,
   onAutoOpenFileEnabledChange = () => {},
+  experimentalInlineDiffEnabled = false,
+  onExperimentalInlineDiffEnabledChange = () => {},
   diffExpandedByDefault = false,
   onDiffExpandedByDefaultChange = () => {},
   commitGenerationEnabled = true,
@@ -220,6 +224,32 @@ const BehaviorTab = ({
         <small className={styles.formHint}>
           <span className="codicon codicon-info" />
           <span>{t('settings.basic.autoOpenFile.hint')}</span>
+        </small>
+      </div>
+
+      {/* Experimental: Inline diff review configuration */}
+      <div className={styles.streamingSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-beaker" />
+          <span className={styles.fieldLabel}>{t('settings.basic.experimentalInlineDiff.label')}</span>
+        </div>
+        <label className={styles.toggleWrapper}>
+          <input
+            type="checkbox"
+            className={styles.toggleInput}
+            checked={experimentalInlineDiffEnabled}
+            onChange={(e) => onExperimentalInlineDiffEnabledChange(e.target.checked)}
+          />
+          <span className={styles.toggleSlider} />
+          <span className={styles.toggleLabel}>
+            {experimentalInlineDiffEnabled
+              ? t('settings.basic.experimentalInlineDiff.enabled')
+              : t('settings.basic.experimentalInlineDiff.disabled')}
+          </span>
+        </label>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>{t('settings.basic.experimentalInlineDiff.hint')}</span>
         </small>
       </div>
 
