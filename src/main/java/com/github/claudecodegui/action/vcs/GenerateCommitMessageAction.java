@@ -88,6 +88,7 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
                 service.generateCommitMessage(finalChanges, new GitCommitMessageService.CommitMessageCallback() {
                     @Override
                     public void onSuccess(String commitMessage) {
+                        LOG.info("Commit message generation succeeded");
                         ApplicationManager.getApplication().invokeLater(() -> {
                             // Set the generated commit message
                             finalCommitMessagePanel.setCommitMessage(commitMessage);
@@ -97,6 +98,7 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
 
                     @Override
                     public void onError(String error) {
+                        LOG.warn("Commit message generation failed: " + error);
                         ApplicationManager.getApplication().invokeLater(() -> {
                             // Clear placeholder text
                             finalCommitMessagePanel.setCommitMessage("");

@@ -6,6 +6,7 @@ import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
+import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vcs.changes.Change;
@@ -28,17 +29,8 @@ public class GitCommitMessageService {
 
     private static final int MAX_DIFF_LENGTH = 4000; // Limit diff length to avoid exceeding token limits
 
-    /**
-     * Default model used for commit message generation.
-     * Uses the Sonnet model for a balance between cost and quality.
-     */
-    private static final String COMMIT_MESSAGE_MODEL = "claude-sonnet-4-20250514";
-
-    /**
-     * Default AI provider.
-     * Currently defaults to Claude; may be extended to read from user settings in the future.
-     */
-    private static final String DEFAULT_PROVIDER = "claude";
+    private static final String PROVIDER_CLAUDE = "claude";
+    private static final String PROVIDER_CODEX = "codex";
 
     /**
      * Built-in commit prompt (based on CCG Commits specification).
@@ -135,6 +127,17 @@ Footer 包含：
 
     private final Project project;
     private final CodemossSettingsService settingsService;
+
+    /**
+     * Provider availability snapshot for commit generation.
+     */
+    private record ProviderAvailability(
+            boolean claudeAvailable,
+            boolean codexAvailable,
+            String preferredProvider,
+            String unavailableReason
+    ) {
+    }
 
     /**
      * Commit message generation callback interface.
@@ -332,32 +335,108 @@ Footer 包含：
      * Call the AI service.
      */
     private void callAIService(String prompt, CommitMessageCallback callback) {
-        // Get the current provider
-        String currentProvider = getCurrentProvider();
+        ProviderAvailability availability = resolveProviderAvailability();
+        LOG.info("Commit generation provider availability: claudeAvailable=" + availability.claudeAvailable()
+                + ", codexAvailable=" + availability.codexAvailable()
+                + ", preferredProvider=" + availability.preferredProvider());
+        if (availability.preferredProvider() == null) {
+            LOG.warn("Commit generation aborted: " + availability.unavailableReason());
+            callback.onError(availability.unavailableReason());
+            return;
+        }
 
-        if ("codex".equals(currentProvider)) {
+        if (PROVIDER_CODEX.equals(availability.preferredProvider())) {
             callCodexAPI(prompt, callback);
         } else {
-            callClaudeAPI(prompt, callback);
+            callClaudeAPI(prompt, callback, availability.codexAvailable());
         }
     }
 
     /**
-     * Get the current provider.
+     * Resolve the provider that can actually execute the commit-generation request.
      *
-     * Note: Currently always returns the default provider (claude).
-     * In the future, this can be extended to read the user's preferred provider from settings or session state.
+     * Why:
+     * - commit generation is triggered outside the chat session, so it cannot rely on tab-local provider state
+     * - Claude and Codex can be configured independently, so we must look at their real runtime availability
      */
-    private String getCurrentProvider() {
-        // Future extension: read the user's default provider from CodemossSettingsService
-        // e.g.: return settingsService.getDefaultProvider();
-        return DEFAULT_PROVIDER;
+    private ProviderAvailability resolveProviderAvailability() {
+        boolean claudeAvailable = isClaudeAvailable();
+        boolean codexAvailable = isCodexAvailable();
+
+        if (claudeAvailable) {
+            return new ProviderAvailability(true, codexAvailable, PROVIDER_CLAUDE, null);
+        }
+
+        if (codexAvailable) {
+            return new ProviderAvailability(false, true, PROVIDER_CODEX, null);
+        }
+
+        return new ProviderAvailability(
+                false,
+                false,
+                null,
+                "未检测到可用的提交信息生成 Provider。Claude 当前未登录或未配置密钥，Codex 当前未启用。"
+        );
+    }
+
+    private boolean isClaudeAvailable() {
+        try {
+            JsonObject activeProvider = settingsService.getActiveClaudeProvider();
+            if (activeProvider == null) {
+                LOG.info("Claude is unavailable for commit generation: no active Claude provider");
+                return false;
+            }
+
+            JsonObject settings = settingsService.readClaudeSettings();
+            if (settings == null || !settings.has("env") || !settings.get("env").isJsonObject()) {
+                LOG.info("Claude is unavailable for commit generation: missing ~/.claude/settings.json env");
+                return false;
+            }
+
+            JsonObject env = settings.getAsJsonObject("env");
+            boolean available = hasEnabledCliLogin(env)
+                    || hasNonBlankValue(env, "ANTHROPIC_AUTH_TOKEN")
+                    || hasNonBlankValue(env, "ANTHROPIC_API_KEY");
+            if (!available) {
+                LOG.info("Claude is unavailable for commit generation: no CLI login or API credentials configured");
+            }
+            return available;
+        } catch (Exception e) {
+            LOG.warn("Failed to resolve Claude availability for commit generation", e);
+            return false;
+        }
+    }
+
+    private boolean isCodexAvailable() {
+        try {
+            String runtimeAccessMode = settingsService.getCodexRuntimeAccessMode();
+            boolean available = !CodemossSettingsService.CODEX_RUNTIME_ACCESS_INACTIVE.equals(runtimeAccessMode);
+            if (!available) {
+                LOG.info("Codex is unavailable for commit generation: runtime access mode=" + runtimeAccessMode);
+            }
+            return available;
+        } catch (Exception e) {
+            LOG.warn("Failed to resolve Codex availability for commit generation", e);
+            return false;
+        }
+    }
+
+    private boolean hasEnabledCliLogin(JsonObject env) {
+        return env.has("CCGUI_CLI_LOGIN_AUTHORIZED")
+                && !env.get("CCGUI_CLI_LOGIN_AUTHORIZED").isJsonNull()
+                && "1".equals(env.get("CCGUI_CLI_LOGIN_AUTHORIZED").getAsString().trim());
+    }
+
+    private boolean hasNonBlankValue(JsonObject env, String key) {
+        return env.has(key)
+                && !env.get(key).isJsonNull()
+                && !env.get(key).getAsString().trim().isEmpty();
     }
 
     /**
      * Call the Claude API.
      */
-    private void callClaudeAPI(String prompt, CommitMessageCallback callback) {
+    private void callClaudeAPI(String prompt, CommitMessageCallback callback, boolean codexFallbackAvailable) {
         ClaudeSDKBridge bridge = new ClaudeSDKBridge();
         try {
             // Simple callback handler
@@ -374,7 +453,7 @@ Footer 包含：
                 project.getBasePath(),      // cwd
                 null,                       // attachments (not needed)
                 null,                       // permissionMode (use default)
-                COMMIT_MESSAGE_MODEL,       // model (Sonnet)
+                null,                       // model (use current provider default to avoid unsupported hardcoded IDs)
                 null,                       // openedFiles
                 null,                       // agentPrompt
                 false,                      // streaming (non-streaming mode)
@@ -394,6 +473,11 @@ Footer 包含：
                     @Override
                     public void onError(String error) {
                         bridge.shutdownDaemon();
+                        if (codexFallbackAvailable && shouldFallbackToCodex(error)) {
+                            LOG.warn("Claude commit generation failed, falling back to Codex: " + error);
+                            callCodexAPI(prompt, callback);
+                            return;
+                        }
                         callback.onError(error);
                     }
 
@@ -404,10 +488,23 @@ Footer 包含：
                                 ? result.toString().trim()
                                 : sdkResult.finalResult.trim();
 
-                        if (commitMessage.isEmpty()) {
+                        String commitError = extractCommitGenerationError(commitMessage);
+                        if (commitError != null) {
+                            if (codexFallbackAvailable && shouldFallbackToCodex(commitError)) {
+                                LOG.warn("Claude commit generation returned provider error, falling back to Codex: "
+                                        + commitError);
+                                callCodexAPI(prompt, callback);
+                                return;
+                            }
+                            callback.onError(commitError);
+                            return;
+                        }
+
+                        String cleanedCommitMessage = cleanupCommitMessage(commitMessage);
+                        if (cleanedCommitMessage.isEmpty()) {
                             callback.onError(ClaudeCodeGuiBundle.message("commit.emptyMessage"));
                         } else {
-                            callback.onSuccess(cleanupCommitMessage(commitMessage));
+                            callback.onSuccess(cleanedCommitMessage);
                         }
                     }
                 }
@@ -465,10 +562,17 @@ Footer 包含：
                                 ? result.toString().trim()
                                 : sdkResult.finalResult.trim();
 
-                        if (commitMessage.isEmpty()) {
+                        String commitError = extractCommitGenerationError(commitMessage);
+                        if (commitError != null) {
+                            callback.onError(commitError);
+                            return;
+                        }
+
+                        String cleanedCommitMessage = cleanupCommitMessage(commitMessage);
+                        if (cleanedCommitMessage.isEmpty()) {
                             callback.onError(ClaudeCodeGuiBundle.message("commit.emptyMessage"));
                         } else {
-                            callback.onSuccess(cleanupCommitMessage(commitMessage));
+                            callback.onSuccess(cleanedCommitMessage);
                         }
                     }
                 }
@@ -478,6 +582,46 @@ Footer 包含：
             LOG.error("Failed to call Codex API", e);
             callback.onError(ClaudeCodeGuiBundle.message("commit.callApiFailed") + ": " + e.getMessage());
         }
+    }
+
+    /**
+     * Detect provider-side failures that may be returned as plain assistant text instead of SEND_ERROR.
+     */
+    private String extractCommitGenerationError(String message) {
+        if (message == null || message.trim().isEmpty()) {
+            return ClaudeCodeGuiBundle.message("commit.emptyMessage");
+        }
+
+        String normalized = message.trim();
+        String lower = normalized.toLowerCase();
+        if (lower.startsWith("api error:")
+                || lower.contains("please run /login")
+                || lower.contains("authentication failed")
+                || lower.contains("authentication_failed")
+                || lower.contains("invalid api key")
+                || normalized.contains("无效的API Key")
+                || normalized.contains("未配置模型")
+                || lower.contains("not configured model")
+                || lower.contains("request not allowed")) {
+            return normalized;
+        }
+
+        return null;
+    }
+
+    private boolean shouldFallbackToCodex(String error) {
+        if (error == null || error.trim().isEmpty()) {
+            return false;
+        }
+
+        String normalized = error.trim().toLowerCase();
+        return normalized.contains("please run /login")
+                || normalized.contains("authentication")
+                || normalized.contains("api key")
+                || normalized.contains("not configured model")
+                || normalized.contains("request not allowed")
+                || error.contains("无效的API Key")
+                || error.contains("未配置模型");
     }
 
     /**
