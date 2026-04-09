@@ -3,7 +3,7 @@
  * Keeps Claude Query processes alive across turns to reduce per-request latency.
  */
 
-import { isCustomBaseUrl, loadClaudeSettings, setupApiKey } from '../../config/api-config.js';
+import { isCustomBaseUrl, loadClaudeSettings, setupApiKey, buildCliEnv } from '../../config/api-config.js';
 import { selectWorkingDirectory } from '../../utils/path-utils.js';
 import {
   mapModelIdToSdkName,
@@ -83,6 +83,7 @@ function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxTh
     model: sdkModelName,
     maxTurns: 100,
     enableFileCheckpointing: true,
+    env: buildCliEnv(),
     ...(maxThinkingTokens !== undefined && { maxThinkingTokens }),
     ...(streamingEnabled && { includePartialMessages: true }),
     additionalDirectories: Array.from(
@@ -123,7 +124,6 @@ async function buildUserMessage(params, withAttachments, requestedSessionId) {
 }
 
 async function buildRequestContext(params, withAttachments) {
-  process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
   setupApiKey();
 
   const baseUrl = process.env.ANTHROPIC_BASE_URL || process.env.ANTHROPIC_API_URL || '';

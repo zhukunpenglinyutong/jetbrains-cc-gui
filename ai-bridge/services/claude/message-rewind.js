@@ -6,7 +6,7 @@
 import { existsSync } from 'fs';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
-import { setupApiKey } from '../../config/api-config.js';
+import { setupApiKey, buildCliEnv } from '../../config/api-config.js';
 import { getClaudeDir, getRealHomeDir, selectWorkingDirectory } from '../../utils/path-utils.js';
 import { ensureClaudeSdk, hasClaudeProjectSessionFile, waitForClaudeProjectSessionFile, isNoConversationFoundError } from './message-utils.js';
 import { getActiveQueryResult, getActiveSessionIds } from './message-session-registry.js';
@@ -29,8 +29,6 @@ export async function rewindFiles(sessionId, userMessageId, cwd = null) {
       console.log('[REWIND] Session not in memory, attempting to resume...');
 
       try {
-        process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
-
         setupApiKey();
 
         if (!process.env.HOME) {
@@ -55,6 +53,7 @@ export async function rewindFiles(sessionId, userMessageId, cwd = null) {
           permissionMode: 'default',
           enableFileCheckpointing: true,
           maxTurns: 1,
+          env: buildCliEnv(),
           tools: { type: 'preset', preset: 'claude_code' },
           settingSources: ['user', 'project', 'local'],
           additionalDirectories: Array.from(

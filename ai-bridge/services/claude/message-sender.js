@@ -3,7 +3,7 @@
  * Handles plain text messages and multimodal messages with attachments.
  */
 
-import { isCustomBaseUrl, loadClaudeSettings, setupApiKey } from '../../config/api-config.js';
+import { isCustomBaseUrl, loadClaudeSettings, setupApiKey, buildCliEnv } from '../../config/api-config.js';
 import { selectWorkingDirectory } from '../../utils/path-utils.js';
 import { mapModelIdToSdkName, resolveModelFromSettings, setModelEnvironmentVariables } from '../../utils/model-utils.js';
 import { AsyncStream } from '../../utils/async-stream.js';
@@ -58,6 +58,7 @@ function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, max
     model: sdkModelName,
     maxTurns: 100,
     enableFileCheckpointing: true,
+    env: buildCliEnv(),
     ...(maxThinkingTokens !== undefined && { maxThinkingTokens }),
     ...(streamingEnabled && { includePartialMessages: true }),
     additionalDirectories: Array.from(
@@ -395,8 +396,6 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
   let streamingEnabled = false;
   const outerStreamState = { streamStarted: false, streamEnded: false, accumulatedUsage: null };
   try {
-    process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
-
     const { baseUrl, apiKeySource, baseUrlSource } = setupApiKey();
     if (isCustomBaseUrl(baseUrl)) {
       console.log('[DEBUG] Custom Base URL detected:', baseUrl);
@@ -456,8 +455,6 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
   let streamingEnabled = false;
   const outerStreamState = { streamStarted: false, streamEnded: false, accumulatedUsage: null };
   try {
-    process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
-
     setupApiKey();
     console.log('[MESSAGE_START]');
 

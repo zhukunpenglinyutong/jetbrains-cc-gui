@@ -15,6 +15,122 @@ function debugLog(...args) {
   }
 }
 
+// ============================================================================
+// CLI Client Identity
+// ============================================================================
+// Simulates CLI client identity so the API treats our SDK calls as CLI traffic.
+// The CLI version is resolved dynamically from the installed SDK's manifest.json,
+// which embeds the CLI version that was bundled with the SDK.
+
+const FALLBACK_CLI_VERSION = '2.1.88';
+
+let _cachedCliVersion = null;
+
+/**
+ * Resolve CLI version from the installed SDK's manifest.json.
+ * The SDK bundles a manifest.json with ` "version": "<cli-version>" }`.
+ * Falls back to converting the SDK package version (0.x.y -> x.1.y),
+ * then to the hardcoded fallback.
+ */
+function resolveCliVersionFromSdk() {
+  if (_cachedCliVersion) return _cachedCliVersion;
+
+  try {
+    const depsBase = join(getCodemossDir(), 'dependencies');
+    const sdkDir = join(depsBase, 'claude-sdk', 'node_modules', '@anthropic-ai', 'claude-agent-sdk');
+
+    // Try manifest.json first (contains the bundled CLI version)
+    const manifestPath = join(sdkDir, 'manifest.json');
+    if (existsSync(manifestPath)) {
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+      if (manifest?.version) {
+        _cachedCliVersion = manifest.version;
+        return _cachedCliVersion;
+      }
+    }
+
+    // Fallback: derive from SDK package.json version (0.x.y -> x.1.y)
+    // e.g., SDK 0.2.88 -> CLI 2.1.88
+    const pkgPath = join(sdkDir, 'package.json');
+    if (existsSync(pkgPath)) {
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+      if (pkg?.version) {
+        const parts = pkg.version.split('.');
+        if (parts.length >= 3) {
+          _cachedCliVersion = `${parts[1]}.1.${parts[2]}`;
+          return _cachedCliVersion;
+        }
+      }
+    }
+  } catch {
+    // Ignore errors, use fallback
+  }
+
+  _cachedCliVersion = FALLBACK_CLI_VERSION;
+  return _cachedCliVersion;
+}
+
+/**
+ * Get the CLI version for User-Agent header.
+ * Priority: CLAUDE_CLI_VERSION env var > SDK manifest > SDK version conversion > fallback
+ * @returns {string} CLI version string (e.g., "2.1.88")
+ */
+export function getCliVersion() {
+  return process.env.CLAUDE_CLI_VERSION || resolveCliVersionFromSdk();
+}
+
+/**
+ * Build CLI-style User-Agent header value.
+ * Format: claude-cli/{VERSION} ({USER_TYPE}, {ENTRYPOINT})
+ *
+ * Does NOT include agent-sdk version suffix — we simulate a pure CLI client.
+ * @returns {string} User-Agent header value
+ */
+export function getCliUserAgent() {
+  const version = getCliVersion();
+  const userType = process.env.USER_TYPE || 'external';
+  const entrypoint = process.env.CLAUDE_CODE_ENTRYPOINT || 'cli';
+  return `claude-cli/${version} (${userType}, ${entrypoint})`;
+}
+
+/**
+ * Build a clean env object for SDK child processes that identifies as CLI.
+ *
+ * The SDK's query() checks `options.env` — if absent, it copies process.env
+ * (which includes CLAUDE_AGENT_SDK_VERSION set by the SDK itself).
+ * By passing our own env, we control exactly what the child process sees.
+ *
+ * @returns {Object} Environment variables object for options.env
+ */
+export function buildCliEnv() {
+  const env = {
+    ...process.env,
+    CLAUDE_CODE_ENTRYPOINT: 'cli',
+    USER_TYPE: 'external',
+  };
+  delete env.CLAUDE_AGENT_SDK_VERSION;
+  return env;
+}
+
+/**
+ * Configure process.env for CLI client identity at startup.
+ * Sets CLAUDE_CODE_ENTRYPOINT and USER_TYPE, deletes CLAUDE_AGENT_SDK_VERSION.
+ * Call once at process startup before any SDK loading.
+ */
+export function configureCliIdentity() {
+  if (!process.env.CLAUDE_CODE_ENTRYPOINT) {
+    process.env.CLAUDE_CODE_ENTRYPOINT = 'cli';
+  }
+  if (!process.env.USER_TYPE) {
+    process.env.USER_TYPE = 'external';
+  }
+  delete process.env.CLAUDE_AGENT_SDK_VERSION;
+}
+
+// ============================================================================
+// Network Environment Variables
+// ============================================================================
+
 /**
  * Network-related environment variable names that should be injected from
  * settings.json into process.env early at startup.

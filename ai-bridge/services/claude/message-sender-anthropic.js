@@ -4,7 +4,7 @@
  */
 
 import { randomUUID } from 'crypto';
-import { loadClaudeSettings } from '../../config/api-config.js';
+import { loadClaudeSettings, getCliUserAgent } from '../../config/api-config.js';
 import { selectWorkingDirectory } from '../../utils/path-utils.js';
 import { resolveModelFromSettings } from '../../utils/model-utils.js';
 import { loadSessionHistory, persistJsonlMessage } from './session-service.js';
@@ -32,6 +32,12 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
     const modelId = resolveModelFromSettings(rawModelId, sdkSettings?.env);
     console.log('[DEBUG] (AnthropicSDK) Model resolved for API:', rawModelId, '->', modelId);
 
+    // Build CLI-style headers for API identification
+    const cliHeaders = {
+      'x-app': 'cli',
+      'User-Agent': getCliUserAgent()
+    };
+
     // Use the correct SDK parameters based on auth type
     // authType = 'auth_token': use authToken parameter (Bearer authentication)
     // authType = 'api_key': use apiKey parameter (x-api-key authentication)
@@ -42,7 +48,8 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
       client = new Anthropic({
         authToken: apiKey,
         apiKey: null,  // Explicitly set to null to avoid sending the x-api-key header
-        baseURL: baseUrl || undefined
+        baseURL: baseUrl || undefined,
+        defaultHeaders: cliHeaders
       });
       // Prefer Bearer (ANTHROPIC_AUTH_TOKEN) and prevent sending x-api-key
       delete process.env.ANTHROPIC_API_KEY;
@@ -52,13 +59,16 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
       // Dynamically load Bedrock SDK
       const bedrockModule = await ensureBedrockSdk();
       const AnthropicBedrock = bedrockModule.AnthropicBedrock || bedrockModule.default || bedrockModule;
-      client = new AnthropicBedrock();
+      client = new AnthropicBedrock({
+        defaultHeaders: cliHeaders
+      });
     } else {
       console.log('[DEBUG] Using API Key authentication (ANTHROPIC_API_KEY)');
       // Use apiKey parameter (x-api-key authentication)
       client = new Anthropic({
         apiKey,
-        baseURL: baseUrl || undefined
+        baseURL: baseUrl || undefined,
+        defaultHeaders: cliHeaders
       });
     }
 

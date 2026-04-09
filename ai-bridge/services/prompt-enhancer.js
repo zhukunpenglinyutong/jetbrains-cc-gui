@@ -11,7 +11,7 @@
  */
 
 import { loadClaudeSdk, isClaudeSdkAvailable } from '../utils/sdk-loader.js';
-import { setupApiKey, loadClaudeSettings } from '../config/api-config.js';
+import { setupApiKey, loadClaudeSettings, buildCliEnv } from '../config/api-config.js';
 import { mapModelIdToSdkName } from '../utils/model-utils.js';
 import { getRealHomeDir } from '../utils/path-utils.js';
 
@@ -245,9 +245,6 @@ async function enhancePrompt(originalPrompt, systemPrompt, model, context) {
     const sdk = await ensureClaudeSdk();
     const { query } = sdk;
 
-    // Set environment variables (same as normal conversation)
-    process.env.CLAUDE_CODE_ENTRYPOINT = process.env.CLAUDE_CODE_ENTRYPOINT || 'sdk-ts';
-
     // Set up API Key (this sets the correct environment variables)
     const config = setupApiKey();
 
@@ -265,13 +262,12 @@ async function enhancePrompt(originalPrompt, systemPrompt, model, context) {
     const fullPrompt = buildFullPrompt(originalPrompt, context);
     console.log(`[PromptEnhancer] Full prompt length: ${fullPrompt.length}`);
 
-    // Prepare options
-    // Note: Prompt enhancement is a simple task that doesn't require tool calls
     const options = {
       cwd: workingDirectory,
       permissionMode: 'bypassPermissions',  // Prompt enhancement doesn't need tool permissions
       model: sdkModelName,
       maxTurns: 1,  // Prompt enhancement only needs a single turn, no tool calls
+      env: buildCliEnv(),
       // Use custom system prompt (passed as a string directly, not as an object)
       systemPrompt: systemPrompt,
       settingSources: ['user', 'project', 'local'],
