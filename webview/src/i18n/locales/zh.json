@@ -307,6 +307,11 @@
         "placeholder": "在此添加您的额外要求，例如：使用中文生成 commit、包含 issue 编号，使用表情符号等等...",
         "hint": "插件已内置完整的 CCG Commits 规范提示词。您在此处添加的内容将作为附加要求，AI 会优先遵循您的要求。"
       },
+      "projectPrompt": {
+        "label": "项目级附加提示词",
+        "placeholder": "在此添加当前项目的专属要求，例如：scope 必须使用模块名、commit body 需包含影响范围等...",
+        "hint": "此提示词仅对当前项目生效，与全局附加提示词同时拼接。当两者内容矛盾时，以项目提示词为准。不同项目可独立配置。"
+      },
       "codeReview": {
         "comingSoon": "即将推出",
         "label": "Code Review AI 附加提示词",

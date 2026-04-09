@@ -277,9 +277,18 @@ public class ProjectConfigHandler {
     public void handleGetCommitPrompt() {
         try {
             String commitPrompt = new CodemossSettingsService().getCommitPrompt();
+
+            String projectPath = context.getProject().getBasePath();
+            String projectCommitPrompt = "";
+            if (null != projectPath) {
+                projectCommitPrompt = settingsService.getProjectCommitPrompt(projectPath);
+            }
+
+            final String finalProjectPrompt = projectCommitPrompt;
             ApplicationManager.getApplication().invokeLater(() -> {
                 JsonObject r = new JsonObject();
                 r.addProperty("commitPrompt", commitPrompt);
+                r.addProperty("projectCommitPrompt", finalProjectPrompt);
                 context.callJavaScript("window.updateCommitPrompt", context.escapeJs(gson.toJson(r)));
             });
         } catch (Exception e) {
@@ -321,6 +330,95 @@ public class ProjectConfigHandler {
             LOG.error("[ProjectConfigHandler] Failed to set commit prompt: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() ->
                 context.callJavaScript("window.showError", context.escapeJs("保存 Commit 提示词失败: " + e.getMessage())));
+        }
+    }
+
+    /**
+     * Get project-level Commit AI prompt.
+     */
+    public void handleGetProjectCommitPrompt() {
+        try {
+            String projectPath = context.getProject().getBasePath();
+            if (null == projectPath) {
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    JsonObject response = new JsonObject();
+                    response.addProperty("projectCommitPrompt", "");
+                    context.callJavaScript("window.updateProjectCommitPrompt", context.escapeJs(gson.toJson(response)));
+                });
+                return;
+            }
+
+            CodemossSettingsService settingsService = new CodemossSettingsService();
+            String projectCommitPrompt = settingsService.getProjectCommitPrompt(projectPath);
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject response = new JsonObject();
+                response.addProperty("projectCommitPrompt", projectCommitPrompt);
+                context.callJavaScript("window.updateProjectCommitPrompt", context.escapeJs(gson.toJson(response)));
+            });
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] get project commit prompt fail: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Set project-level Commit AI prompt.
+     */
+    public void handleSetProjectCommitPrompt(String content) {
+        try {
+            String projectPath = context.getProject().getBasePath();
+            if (null == projectPath) {
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    context.callJavaScript("window.showError", context.escapeJs("无法获取项目路径"));
+                });
+                return;
+            }
+
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+
+            if (null == json || !json.has("prompt")) {
+                LOG.warn("[SettingsHandler] invalid project commit prompt request: missing prompt field");
+                return;
+            }
+
+            String prompt = json.get("prompt").getAsString();
+
+            if (null == prompt) {
+                LOG.warn("[SettingsHandler] invalid project commit prompt: prompt is null");
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    context.callJavaScript("window.showError", context.escapeJs("提示词不能为空"));
+                });
+                return;
+            }
+
+            prompt = prompt.trim();
+
+            final int MAX_PROMPT_LENGTH = 10000;
+            if (prompt.length() > MAX_PROMPT_LENGTH) {
+                LOG.warn("[SettingsHandler] project commit prompt too long: " + prompt.length() + " characters");
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    context.callJavaScript("window.showError", context.escapeJs("提示词长度不能超过 " + MAX_PROMPT_LENGTH + " 字符"));
+                });
+                return;
+            }
+
+            final String validatedPrompt = prompt;
+            CodemossSettingsService settingsService = new CodemossSettingsService();
+            settingsService.setProjectCommitPrompt(projectPath, validatedPrompt);
+
+            LOG.info("[SettingsHandler] set project commit prompt, length: " + validatedPrompt.length() + ", project: " + projectPath);
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject response = new JsonObject();
+                response.addProperty("projectCommitPrompt", validatedPrompt);
+                response.addProperty("saved", true);
+                context.callJavaScript("window.updateProjectCommitPrompt", context.escapeJs(gson.toJson(response)));
+            });
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] set project commit prompt fail: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                context.callJavaScript("window.showError", context.escapeJs("保存项目级 Commit 提示词失败: " + e.getMessage()));
+            });
         }
     }
 

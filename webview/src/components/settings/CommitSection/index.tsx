@@ -3,16 +3,24 @@ import { useTranslation } from 'react-i18next';
 
 interface CommitSectionProps {
   commitPrompt: string;
+  projectCommitPrompt: string;
   onCommitPromptChange: (prompt: string) => void;
+  onProjectCommitPromptChange: (prompt: string) => void;
   onSaveCommitPrompt: () => void;
+  onSaveProjectCommitPrompt: () => void;
   savingCommitPrompt: boolean;
+  savingProjectCommitPrompt: boolean;
 }
 
 const CommitSection = ({
   commitPrompt,
+  projectCommitPrompt,
   onCommitPromptChange,
+  onProjectCommitPromptChange,
   onSaveCommitPrompt,
+  onSaveProjectCommitPrompt,
   savingCommitPrompt,
+  savingProjectCommitPrompt,
 }: CommitSectionProps) => {
   const { t } = useTranslation();
 
@@ -49,6 +57,37 @@ const CommitSection = ({
         <small className={styles.formHint}>
           <span className="codicon codicon-info" />
           <span>{t('settings.commit.prompt.hint')}</span>
+        </small>
+      </div>
+
+      {/* Project-level commit prompt configuration */}
+      <div className={styles.promptSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-folder" />
+          <span className={styles.fieldLabel}>{t('settings.commit.projectPrompt.label')}</span>
+        </div>
+        <div className={styles.promptInputWrapper}>
+          <textarea
+            className={styles.promptTextarea}
+            placeholder={t('settings.commit.projectPrompt.placeholder')}
+            value={projectCommitPrompt}
+            onChange={(e) => onProjectCommitPromptChange(e.target.value)}
+            rows={6}
+          />
+          <button
+            className={styles.saveBtn}
+            onClick={onSaveProjectCommitPrompt}
+            disabled={savingProjectCommitPrompt}
+          >
+            {savingProjectCommitPrompt && (
+              <span className="codicon codicon-loading codicon-modifier-spin" />
+            )}
+            {t('common.save')}
+          </button>
+        </div>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>{t('settings.commit.projectPrompt.hint')}</span>
         </small>
       </div>
 

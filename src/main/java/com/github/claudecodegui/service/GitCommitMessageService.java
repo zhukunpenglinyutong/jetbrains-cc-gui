@@ -289,8 +289,28 @@ Footer 包含：
     }
 
     /**
+     * Get the project-level additional prompt (optional).
+     */
+    private String getProjectAdditionalPrompt() {
+        try {
+            String projectPath = project.getBasePath();
+            if (null == projectPath) {
+                return "";
+            }
+            String projectPrompt = settingsService.getProjectCommitPrompt(projectPath);
+            if (null == projectPrompt || projectPrompt.trim().isEmpty()) {
+                return "";
+            }
+            return projectPrompt.trim();
+        } catch (Exception e) {
+            LOG.warn("get project additional prompt fail:", e);
+            return "";
+        }
+    }
+
+    /**
      * Build the full prompt.
-     * Logic: built-in prompt + user's additional prompt (takes priority) + git diff.
+     * Logic: built-in prompt + user's additional prompt + project-level additional prompt (highest priority) + git diff.
      */
     private String buildFullPrompt(String diff) {
         StringBuilder prompt = new StringBuilder();
@@ -298,7 +318,7 @@ Footer 包含：
         // 1. Built-in commit prompt
         prompt.append(BUILTIN_COMMIT_PROMPT);
 
-        // 2. User's additional prompt (if any, takes priority)
+        // 2. User's global additional prompt (if any)
         String userAdditionalPrompt = getUserAdditionalPrompt();
         if (!userAdditionalPrompt.isEmpty()) {
             prompt.append("\n\n## 用户附加要求（优先遵循）\n\n");
@@ -306,7 +326,15 @@ Footer 包含：
             prompt.append(userAdditionalPrompt);
         }
 
-        // 3. Git diff content
+        // 3. Project-level additional prompt (highest priority)
+        String projectAdditionalPrompt = getProjectAdditionalPrompt();
+        if (!projectAdditionalPrompt.isEmpty()) {
+            prompt.append("\n\n## 项目专属要求\n\n");
+            prompt.append("以下是当前项目的专属要求，与上述用户附加要求同时生效。当两者矛盾时，以此处项目要求为准：\n\n");
+            prompt.append(projectAdditionalPrompt);
+        }
+
+        // 4. Git diff content
         prompt.append("\n\n---\n\n");
         prompt.append("以下是 git diff 信息，请根据以上规则生成 commit message：\n\n");
         prompt.append("```diff\n");

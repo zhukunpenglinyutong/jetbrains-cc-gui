@@ -51,6 +51,8 @@ public class SettingsHandler extends BaseMessageHandler {
         "get_ide_theme",
         "get_commit_prompt",
         "set_commit_prompt",
+        "get_project_commit_prompt",
+        "set_project_commit_prompt",
         "get_input_history",
         "record_input_history",
         "delete_input_history_item",
@@ -178,6 +180,12 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_commit_prompt":
                 projectConfigHandler.handleSetCommitPrompt(content);
+                return true;
+            case "get_project_commit_prompt":
+                projectConfigHandler.handleGetProjectCommitPrompt();
+                return true;
+            case "set_project_commit_prompt":
+                projectConfigHandler.handleSetProjectCommitPrompt(content);
                 return true;
             // Input history
             case "get_input_history":
