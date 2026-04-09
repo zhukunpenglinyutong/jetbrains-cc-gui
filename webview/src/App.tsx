@@ -43,6 +43,7 @@ import { WelcomeScreen } from './components/WelcomeScreen';
 import { MessageList } from './components/MessageList';
 import { MessageAnchorRail } from './components/MessageAnchorRail';
 import { FILE_MODIFY_TOOL_NAMES, isToolName } from './utils/toolConstants';
+import { getRawUuid } from './hooks/windowCallbacks/messageSync';
 import type { RewindableMessage } from './components/RewindSelectDialog';
 import { AppDialogs } from './components/AppDialogs';
 import { APP_VERSION } from './version/version';
@@ -427,17 +428,19 @@ const App = () => {
 
   const rewindableMessages = useMemo((): RewindableMessage[] => {
     if (currentProvider !== 'claude') return [];
+    if (!currentSessionId) return [];
     const result: RewindableMessage[] = [];
     for (let i = 0; i < mergedMessages.length - 1; i++) {
       if (!canRewindFromMessageIndex(i)) continue;
       const message = mergedMessages[i];
+      if (!getRawUuid(message)) continue;
       const content = message.content || getMessageText(message);
       const timestamp = message.timestamp ? formatTime(message.timestamp) : undefined;
       const messagesAfterCount = mergedMessages.length - i - 1;
       result.push({ messageIndex: i, message, displayContent: content, timestamp, messagesAfterCount });
     }
     return result;
-  }, [mergedMessages, currentProvider]);
+  }, [mergedMessages, currentProvider, currentSessionId]);
 
   const statusPanelExpanded = !userCollapsedRef.current;
 
