@@ -2,6 +2,7 @@ package com.github.claudecodegui.handler.diff;
 
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.util.LineSeparatorUtil;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
@@ -111,12 +112,16 @@ public class InteractiveDiffMessageHandler implements DiffActionHandler {
                 }
             }
 
+            // Snapshot disk content for stale-check on Apply
+            // For new files, originalContent is "" and the file may not exist yet — skip stale-check
+            String diskSnapshot = isNewFile ? null : originalContent;
+
             InteractiveDiffRequest request = isNewFile
                     ? InteractiveDiffRequest.forNewFile(filePath, newFileContents, tabName)
                     : InteractiveDiffRequest.forModifiedFile(filePath, originalContent, newFileContents, tabName);
 
             InteractiveDiffManager.showInteractiveDiff(context.getProject(), request)
-                    .thenAccept(result -> handleDiffResult(result, filePath))
+                    .thenAccept(result -> handleDiffResult(result, filePath, diskSnapshot))
                     .exceptionally(e -> {
                         LOG.error("Error in interactive diff: " + e.getMessage(), e);
                         browserBridge.sendDiffResult(filePath, "REJECT", null, e.getMessage());
@@ -128,8 +133,15 @@ public class InteractiveDiffMessageHandler implements DiffActionHandler {
         }
     }
 
-    private void handleDiffResult(DiffResult result, String filePath) {
+    private void handleDiffResult(DiffResult result, String filePath, String diskSnapshot) {
         if (result.isApplied()) {
+            if (diskSnapshot != null && isStale(filePath, diskSnapshot)) {
+                browserBridge.showErrorToast(
+                        ClaudeCodeGuiBundle.message("diff.adjustable.fileChanged"));
+                browserBridge.sendDiffResult(filePath, "REJECT", null,
+                        "File changed externally");
+                return;
+            }
             fileOperations.writeContentToFile(filePath, result.getFinalContent());
             browserBridge.sendDiffResult(filePath, "APPLY", result.getFinalContent(), null);
             return;
@@ -142,5 +154,20 @@ public class InteractiveDiffMessageHandler implements DiffActionHandler {
 
         LOG.info("Diff dismissed for: " + filePath);
         browserBridge.sendDiffResult(filePath, "DISMISS", null, null);
+    }
+
+    private boolean isStale(String filePath, String diskSnapshot) {
+        String currentDisk = DiffReconstructionService.readFileContent(filePath);
+        if (currentDisk == null) {
+            LOG.warn("File deleted externally during interactive diff session: " + filePath);
+            return true;
+        }
+        String normalizedSnapshot = LineSeparatorUtil.normalizeToLF(diskSnapshot);
+        String normalizedCurrent = LineSeparatorUtil.normalizeToLF(currentDisk);
+        if (!normalizedSnapshot.equals(normalizedCurrent)) {
+            LOG.warn("File modified externally during interactive diff session: " + filePath);
+            return true;
+        }
+        return false;
     }
 }
