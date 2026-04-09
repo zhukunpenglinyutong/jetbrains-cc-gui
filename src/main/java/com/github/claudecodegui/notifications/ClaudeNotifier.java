@@ -2,6 +2,8 @@ package com.github.claudecodegui.notifications;
 
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.util.SoundNotificationService;
+import com.intellij.notification.NotificationGroupManager;
+import com.intellij.notification.NotificationType;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import org.jetbrains.annotations.NotNull;
@@ -103,7 +105,20 @@ public class ClaudeNotifier {
             ClaudeStatusBarWidget widget = ClaudeStatusBarWidget.Factory.getWidget(project);
             if (widget != null) {
                 widget.show(text, tooltip, duration);
+                return;
             }
+
+            NotificationType notificationType = NotificationType.INFORMATION;
+            if (text.contains("✗")) {
+                notificationType = NotificationType.ERROR;
+            } else if (text.contains("⚠")) {
+                notificationType = NotificationType.WARNING;
+            }
+
+            NotificationGroupManager.getInstance()
+                    .getNotificationGroup("CC GUI Notifications")
+                    .createNotification(tooltip, notificationType)
+                    .notify(project);
         });
     }
 }
