@@ -144,11 +144,38 @@ public class CodexHistoryReaderRefactorTest {
             assertEquals(3000, stats.totalUsage.inputTokens);
             assertEquals(750, stats.totalUsage.outputTokens);
             assertEquals(150, stats.totalUsage.cacheReadTokens);
-            assertEquals(3900, stats.totalUsage.totalTokens);
+            assertEquals(3750, stats.totalUsage.totalTokens);
             assertEquals(2, stats.sessions.size());
             assertEquals(2, stats.byModel.get(0).sessionCount);
             assertFalse(stats.dailyUsage.isEmpty());
-            assertTrue(stats.estimatedCost > 0);
+            assertEquals(0.01108125, stats.estimatedCost, 0.0000001);
+        } finally {
+            deleteDirectory(sessionsDir);
+        }
+    }
+
+    @Test
+    public void usageAggregatorUsesModelSpecificPricingForNewerModels() throws IOException {
+        Path sessionsDir = Files.createTempDirectory("codex-history-pricing");
+        try {
+            writeSessionFile(
+                    sessionsDir.resolve("2026/03/10"),
+                    "session-8",
+                    line("2026-03-10T10:00:00Z", "turn_context", "{\"model\":\"gpt-5.4\"}"),
+                    line("2026-03-10T10:01:00Z", "event_msg", "{\"type\":\"user_message\",\"message\":\"Summarize test results\"}"),
+                    line("2026-03-10T10:02:00Z", "event_msg", "{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"input_tokens\":3500,\"output_tokens\":250,\"cached_input_tokens\":1500,\"total_tokens\":3750}}}")
+            );
+
+            CodexUsageAggregator aggregator = new CodexUsageAggregator(sessionsDir, new CodexHistoryParser(new Gson()), new Gson());
+
+            ProjectStatistics stats = aggregator.getProjectStatistics("all", 0);
+
+            assertEquals(1, stats.totalSessions);
+            assertEquals(3500, stats.totalUsage.inputTokens);
+            assertEquals(250, stats.totalUsage.outputTokens);
+            assertEquals(1500, stats.totalUsage.cacheReadTokens);
+            assertEquals(3750, stats.totalUsage.totalTokens);
+            assertEquals(0.009125, stats.estimatedCost, 0.0000001);
         } finally {
             deleteDirectory(sessionsDir);
         }
