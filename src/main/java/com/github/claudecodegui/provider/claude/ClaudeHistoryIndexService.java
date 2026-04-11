@@ -241,19 +241,7 @@ class ClaudeHistoryIndexService {
 
             String summary = parser.generateSummary(messages);
 
-            long lastTimestamp = 0;
-            for (ClaudeHistoryReader.ConversationMessage msg : messages) {
-                if (msg.timestamp != null) {
-                    try {
-                        long ts = parser.parseTimestamp(msg.timestamp);
-                        if (ts > lastTimestamp) {
-                            lastTimestamp = ts;
-                        }
-                    } catch (Exception e) {
-                        // Ignore invalid timestamp
-                    }
-                }
-            }
+            ClaudeHistoryParser.TimestampBounds timestampBounds = parser.extractTimestampBounds(messages);
 
             if (!parser.isValidSession(sessionId, summary, messages.size())) {
                 continue;
@@ -263,8 +251,8 @@ class ClaudeHistoryIndexService {
             session.sessionId = sessionId;
             session.title = summary;
             session.messageCount = messages.size();
-            session.lastTimestamp = lastTimestamp;
-            session.firstTimestamp = lastTimestamp;
+            session.lastTimestamp = timestampBounds.lastTimestamp;
+            session.firstTimestamp = timestampBounds.firstTimestamp;
 
             sessions.add(session);
         }
