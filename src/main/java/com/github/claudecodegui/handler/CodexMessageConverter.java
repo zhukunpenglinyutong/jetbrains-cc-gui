@@ -465,7 +465,15 @@ public class CodexMessageConverter {
         toolResult.addProperty("type", "tool_result");
         toolResult.addProperty("tool_use_id", payload.has("call_id") ? payload.get("call_id").getAsString() : "unknown");
 
-        String output = payload.has("output") ? payload.get("output").getAsString() : "";
+        JsonElement outputElem = payload.get("output");
+        String output;
+        if (outputElem == null || outputElem.isJsonNull()) {
+            output = "";
+        } else if (outputElem.isJsonPrimitive()) {
+            output = outputElem.getAsString();
+        } else {
+            output = outputElem.toString();
+        }
         toolResult.addProperty("content", output);
 
         JsonArray content = new JsonArray();
