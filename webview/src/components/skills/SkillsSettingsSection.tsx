@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Skill, SkillsConfig, SkillScope, SkillFilter, SkillEnabledFilter } from '../../types/skill';
+import type { Skill, SkillsConfig, SkillScope, SkillFilter, SkillEnabledFilter, RemoteSkillUpdateInterval } from '../../types/skill';
 import { sendToJava } from '../../utils/bridge';
 import { SkillHelpDialog } from './SkillHelpDialog';
 import { SkillConfirmDialog } from './SkillConfirmDialog';
+import { RemoteSkillDialog } from './RemoteSkillDialog';
 import { ToastContainer, type ToastMessage } from '../Toast';
 
 interface SkillsSettingsSectionProps {
@@ -34,6 +35,8 @@ export function SkillsSettingsSection({ currentProvider = 'claude' }: SkillsSett
   const [showHelpDialog, setShowHelpDialog] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [deletingSkill, setDeletingSkill] = useState<Skill | null>(null);
+  const [showRemoteDialog, setShowRemoteDialog] = useState(false);
+  const [remoteDialogScope, setRemoteDialogScope] = useState<SkillScope>('global');
 
   // Skills currently being toggled (used to disable buttons and prevent duplicate clicks)
   const [togglingSkills, setTogglingSkills] = useState<Set<string>>(new Set());
@@ -166,6 +169,31 @@ export function SkillsSettingsSection({ currentProvider = 'claude' }: SkillsSett
       }
     };
 
+    // Register callback: batch import result from navigation directory
+    window.skillBatchImportResult = (jsonStr: string) => {
+      try {
+        const result = JSON.parse(jsonStr);
+        if (result.success) {
+          const { succeeded, failed, total, failureList, errorMessages } = result;
+          if (failed === 0) {
+            addToast(t('skills.remote.batchImportSuccess', { count: succeeded, total }), 'success');
+          } else if (succeeded > 0) {
+            addToast(t('skills.remote.batchImportPartial', { succeeded, failed, total }), 'warning');
+            console.warn('[SkillsSettings] Batch import failures:', failureList, errorMessages);
+          } else {
+            addToast(t('skills.remote.batchImportFailed', { total }), 'error');
+            console.error('[SkillsSettings] Batch import errors:', errorMessages);
+          }
+          // Reload
+          loadSkills();
+        } else {
+          addToast(result.error || t('skills.remote.batchImportError'), 'error');
+        }
+      } catch (error) {
+        console.error('[SkillsSettings] Failed to parse batch import result:', error);
+      }
+    };
+
     // Register callback: delete result
     window.skillDeleteResult = (jsonStr: string) => {
       try {
@@ -265,6 +293,55 @@ export function SkillsSettingsSection({ currentProvider = 'claude' }: SkillsSett
   const handleImport = (scope: SkillScope) => {
     setShowDropdown(false);
     sendToJava('import_skill', { scope });
+  };
+
+  // Import Remote Skill
+  const handleImportRemote = (scope: SkillScope) => {
+    setShowDropdown(false);
+    setRemoteDialogScope(scope);
+    setShowRemoteDialog(true);
+  };
+
+  // Confirm Remote Import
+  const handleConfirmRemoteImport = (url: string, updateInterval: RemoteSkillUpdateInterval, isBatch?: boolean) => {
+    setShowRemoteDialog(false);
+
+    if (isBatch) {
+      // Batch import from navigation directory
+      sendToJava('import_from_navigation_directory', {
+        url,
+        scope: remoteDialogScope,
+        updateInterval
+      });
+    } else {
+      // Single skill import
+      sendToJava('import_remote_skill', {
+        url,
+        scope: remoteDialogScope,
+        updateInterval
+      });
+    }
+  };
+
+  // Update Remote Skill
+  const handleUpdateRemoteSkill = (skill: Skill) => {
+    if (!skill.remote) return;
+    sendToJava('update_remote_skill', {
+      name: skill.name,
+      scope: skill.scope,
+      url: skill.remote.url
+    });
+    addToast(t('skills.remote.updating'), 'info');
+  };
+
+  // Update Remote Skill Interval
+  const handleUpdateRemoteInterval = (skill: Skill, newInterval: RemoteSkillUpdateInterval) => {
+    if (!skill.remote) return;
+    sendToJava('update_remote_skill_interval', {
+      name: skill.name,
+      scope: skill.scope,
+      updateInterval: newInterval
+    });
   };
 
   // Get the primary/secondary scope values based on provider
@@ -428,12 +505,21 @@ export function SkillsSettingsSection({ currentProvider = 'claude' }: SkillsSett
             {showDropdown && (
               <div className="dropdown-menu">
                 <div className="dropdown-item" onClick={() => handleImport(primaryScope)}>
-                  <span className="codicon codicon-globe"></span>
+                  <span className="codicon codicon-file"></span>
                   {isCodex ? t('skills.importUserSkill') : t('skills.importGlobalSkill')}
                 </div>
                 <div className="dropdown-item" onClick={() => handleImport(secondaryScope)}>
-                  <span className="codicon codicon-desktop-download"></span>
+                  <span className="codicon codicon-file"></span>
                   {isCodex ? t('skills.importRepoSkill') : t('skills.importLocalSkill')}
+                </div>
+                <div className="dropdown-separator"></div>
+                <div className="dropdown-item" onClick={() => handleImportRemote(primaryScope)}>
+                  <span className="codicon codicon-cloud-download"></span>
+                  {isCodex ? t('skills.remote.importUserRemote') : t('skills.remote.importGlobalRemote')}
+                </div>
+                <div className="dropdown-item" onClick={() => handleImportRemote(secondaryScope)}>
+                  <span className="codicon codicon-cloud-download"></span>
+                  {isCodex ? t('skills.remote.importRepoRemote') : t('skills.remote.importLocalRemote')}
                 </div>
               </div>
             )}
@@ -513,9 +599,60 @@ export function SkillsSettingsSection({ currentProvider = 'claude' }: SkillsSett
                   ) : (
                     <div className="description-placeholder">{t('skills.noDescription')}</div>
                   )}
+
+                  {/* Remote skill info */}
+                  {skill.remote && (
+                    <div className="remote-info-section">
+                      <div className="remote-info-header">
+                        <span className="codicon codicon-cloud"></span>
+                        <span className="remote-label">{t('skills.remote.remoteSkill')}</span>
+                      </div>
+                      <div className="remote-info-row">
+                        <span className="remote-field-label">{t('skills.remote.url')}:</span>
+                        <a href={skill.remote.url} target="_blank" rel="noopener noreferrer" className="remote-url">
+                          {skill.remote.url}
+                        </a>
+                      </div>
+                      <div className="remote-info-row">
+                        <span className="remote-field-label">{t('skills.remote.updateInterval')}:</span>
+                        <select
+                          className="remote-interval-select"
+                          value={skill.remote.updateInterval}
+                          onChange={(e) => handleUpdateRemoteInterval(skill, e.target.value as RemoteSkillUpdateInterval)}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <option value="manual">{t('skills.remote.manual')}</option>
+                          <option value="hourly">{t('skills.remote.hourly')}</option>
+                          <option value="daily">{t('skills.remote.daily')}</option>
+                          <option value="weekly">{t('skills.remote.weekly')}</option>
+                        </select>
+                      </div>
+                      {skill.remote.lastUpdated && (
+                        <div className="remote-info-row">
+                          <span className="remote-field-label">{t('skills.remote.lastUpdated')}:</span>
+                          <span className="remote-time">
+                            {new Date(skill.remote.lastUpdated).toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                      {skill.remote.updateInterval !== 'manual' && skill.remote.nextUpdate && (
+                        <div className="remote-info-row">
+                          <span className="remote-field-label">{t('skills.remote.nextUpdate')}:</span>
+                          <span className="remote-time">
+                            {new Date(skill.remote.nextUpdate).toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="actions-section">
+                  {skill.remote && (
+                    <button className="action-btn update-btn" onClick={() => handleUpdateRemoteSkill(skill)}>
+                      <span className="codicon codicon-sync"></span> {t('skills.remote.updateNow')}
+                    </button>
+                  )}
                   <button className="action-btn edit-btn" onClick={() => handleOpen(skill)}>
                     <span className="codicon codicon-edit"></span> {t('common.edit')}
                   </button>
@@ -564,6 +701,14 @@ export function SkillsSettingsSection({ currentProvider = 'claude' }: SkillsSett
           cancelText={t('common.cancel')}
           onConfirm={confirmDelete}
           onCancel={cancelDelete}
+        />
+      )}
+
+      {showRemoteDialog && (
+        <RemoteSkillDialog
+          scope={remoteDialogScope}
+          onClose={() => setShowRemoteDialog(false)}
+          onConfirm={handleConfirmRemoteImport}
         />
       )}
 
