@@ -560,12 +560,13 @@ export function mergeConsecutiveAssistantMessages(
       break;
     }
 
-    const group = messages.slice(i, j);
     if (assistantGroup.length <= 1) {
       result.push(msg);
-      i = j;
+      i += 1;
       continue;
     }
+
+    const group = messages.slice(i, j);
 
     const groupKey = `${getStableId(group[0], i)}..${getStableId(group[group.length - 1], j - 1)}#${group.length}`;
 

@@ -57,6 +57,14 @@ public class ClaudeMessageHandler implements MessageCallback {
     private volatile int syncedContentOffset = 0;
     private volatile int syncedThinkingOffset = 0;
 
+    // Delta stream position tracking for precise catch-up detection.
+    // These track the cumulative length of all deltas received this turn.
+    // When syncedContentOffset > 0, we compare deltaStreamLength <= syncedContentOffset
+    // to determine if a delta is catch-up (already in sync'd content) or novel.
+    // Volatile for cross-thread visibility (SDK callbacks vs EDT).
+    private volatile int deltaStreamLength = 0;
+    private volatile int thinkingDeltaStreamLength = 0;
+
     /**
      * Constructor.
      */
@@ -158,6 +166,8 @@ public class ClaudeMessageHandler implements MessageCallback {
         thinkingSegmentActive = false;
         syncedContentOffset = 0;
         syncedThinkingOffset = 0;
+        deltaStreamLength = 0;
+        thinkingDeltaStreamLength = 0;
 
         // Reset thinking state if still active — same as onComplete() and handleStreamEnd()
         if (isThinking) {
@@ -213,6 +223,8 @@ public class ClaudeMessageHandler implements MessageCallback {
         thinkingSegmentActive = false;
         syncedContentOffset = 0;
         syncedThinkingOffset = 0;
+        deltaStreamLength = 0;
+        thinkingDeltaStreamLength = 0;
 
         // Reset thinking state if still active
         if (isThinking) {
@@ -274,6 +286,16 @@ public class ClaudeMessageHandler implements MessageCallback {
                 assistantContent.append(aggregatedText);
                 currentAssistantMessage.content = assistantContent.toString();
                 syncedContentOffset = assistantContent.length();
+                // Sync position counter to match the sync'd content length.
+                // This handles the edge case where delta stream is delayed/lagging behind
+                // and the snapshot arrives first. Without this, subsequent catch-up deltas
+                // would fail the position check (deltaStreamLength < syncedContentOffset)
+                // and be incorrectly treated as novel content, causing duplication.
+                if (deltaStreamLength < syncedContentOffset) {
+                    LOG.debug("Syncing deltaStreamLength to syncedContentOffset (was "
+                            + deltaStreamLength + ", now " + syncedContentOffset + ")");
+                    deltaStreamLength = syncedContentOffset;
+                }
             }
             currentAssistantMessage.raw = mergedRaw;
 
@@ -384,8 +406,8 @@ public class ClaudeMessageHandler implements MessageCallback {
     /**
      * Handle incremental content delta in streaming mode.
      */
-    private void handleContentDelta(String content) {
-        if (content == null || content.isEmpty()) {
+    private void handleContentDelta(String delta) {
+        if (delta == null || delta.isEmpty()) {
             return;
         }
         // If previously thinking, content output means thinking is complete
@@ -400,33 +422,67 @@ public class ClaudeMessageHandler implements MessageCallback {
         // Content output means the current thinking segment has ended
         thinkingSegmentActive = false;
 
-        // Dedup: skip if delta was already included via conservative sync.
-        // Heuristic: checks if assistantContent ends with the delta. This may produce
-        // false positives for very short deltas (1-2 chars) that coincidentally match
-        // the suffix, but the SDK sends deltas in token-level chunks (typically whole
-        // words) making this extremely rare in practice.
-        // CRITICAL: Do NOT notify frontend when dedup triggers - frontend has no dedup
-        // and will accumulate the delta, causing content duplication.
-        if (syncedContentOffset > 0
-                && assistantContent.length() >= content.length()
-                && assistantContent.substring(assistantContent.length() - content.length()).equals(content)) {
-            LOG.debug("Skipping duplicate content delta (len=" + content.length() + ")");
+        // Track cumulative delta length for position-based dedup
+        deltaStreamLength += delta.length();
+
+        // Position-based dedup: after conservative sync, check if delta is catch-up or novel.
+        // Step 1: Quick position check - if entirely within sync'd range, skip
+        if (syncedContentOffset > 0 && deltaStreamLength <= syncedContentOffset) {
+            LOG.debug("Skipping catch-up content delta by position (streamPos=" + deltaStreamLength
+                    + ", syncPos=" + syncedContentOffset + ")");
             if (!isStreaming) {
                 callbackHandler.notifyMessageUpdate(state.getMessages());
             }
             return;
         }
 
+        // Step 2: Content check for edge cases (delta spanning boundary or delayed stream)
+        // If assistantContent already contains this delta, it's duplicate.
+        // Known trade-off: for single-character deltas, contains() may match at multiple positions,
+        // potentially causing false positives. This is acceptable because:
+        // - Position check handles most catch-up cases
+        // - SDK sends deltas in token chunks (typically whole words), single-char deltas are rare
+        // - If a false positive occurs, next updateMessages will correct
+        if (syncedContentOffset > 0 && assistantContent.toString().contains(delta)) {
+            LOG.debug("Skipping duplicate content delta by content check (len=" + delta.length() + ")");
+            if (!isStreaming) {
+                callbackHandler.notifyMessageUpdate(state.getMessages());
+            }
+            return;
+        }
+
+        // Determine the novel portion of the delta to apply
+        String novelContent = delta;
+
+        // Step 3: Delta spans sync boundary - trim catch-up portion
+        // Only trim if we have overflow AND the trimmed content would be novel
+        if (syncedContentOffset > 0 && deltaStreamLength > syncedContentOffset) {
+            int overflow = deltaStreamLength - syncedContentOffset;
+            if (overflow < delta.length()) {
+                // Check if catch-up portion matches assistantContent suffix
+                int catchupLength = delta.length() - overflow;
+                String catchupPortion = delta.substring(0, catchupLength);
+                String assistantSuffix = assistantContent.substring(
+                        assistantContent.length() - catchupLength);
+                if (catchupPortion.equals(assistantSuffix)) {
+                    // Catch-up portion matches - trim it
+                    novelContent = delta.substring(catchupLength);
+                    LOG.debug("Trimmed catch-up portion from delta (catchupLength=" + catchupLength
+                            + ", novelLength=" + novelContent.length() + ")");
+                }
+            }
+        }
+
         // Accumulate content for the final message
-        assistantContent.append(content);
+        assistantContent.append(novelContent);
 
         ensureCurrentAssistantMessageExists();
         currentAssistantMessage.content = assistantContent.toString();
-        applyTextDeltaToRaw(content);
+        applyTextDeltaToRaw(novelContent);
         syncedContentOffset = assistantContent.length();
         textSegmentActive = true;
 
-        callbackHandler.notifyContentDelta(content);
+        callbackHandler.notifyContentDelta(novelContent);
         if (!isStreaming) {
             callbackHandler.notifyMessageUpdate(state.getMessages());
         }
@@ -654,6 +710,8 @@ public class ClaudeMessageHandler implements MessageCallback {
         thinkingSegmentActive = false;
         syncedContentOffset = 0;
         syncedThinkingOffset = 0;
+        deltaStreamLength = 0;
+        thinkingDeltaStreamLength = 0;
         callbackHandler.notifyStreamStart();
     }
 
@@ -668,6 +726,8 @@ public class ClaudeMessageHandler implements MessageCallback {
         thinkingSegmentActive = false;
         syncedContentOffset = 0;
         syncedThinkingOffset = 0;
+        deltaStreamLength = 0;
+        thinkingDeltaStreamLength = 0;
 
         // Reset thinking state — stream end is the definitive boundary for a turn.
         // If thinking was active when the stream ended (e.g., extended thinking without
@@ -690,8 +750,8 @@ public class ClaudeMessageHandler implements MessageCallback {
     /**
      * Handle an incremental thinking delta. Forwards it to the frontend for real-time display.
      */
-    private void handleThinkingDelta(String content) {
-        if (content == null || content.isEmpty()) {
+    private void handleThinkingDelta(String delta) {
+        if (delta == null || delta.isEmpty()) {
             return;
         }
         // Ensure thinking state is enabled
@@ -699,23 +759,91 @@ public class ClaudeMessageHandler implements MessageCallback {
             isThinking = true;
             callbackHandler.notifyThinkingStatusChanged(true);
         }
+
+        // Track cumulative delta length for position-based dedup
+        thinkingDeltaStreamLength += delta.length();
+
+        // Position-based dedup: quick check if entirely within sync'd range
+        if (syncedThinkingOffset > 0 && thinkingDeltaStreamLength <= syncedThinkingOffset) {
+            LOG.debug("Skipping catch-up thinking delta by position (streamPos=" + thinkingDeltaStreamLength
+                    + ", syncPos=" + syncedThinkingOffset + ")");
+            return;
+        }
+
+        // Get existing thinking content once for reuse in multiple checks
+        String existingThinking = syncedThinkingOffset > 0 ? getExistingThinkingContent() : null;
+
+        // Content check for edge cases - check if already in existing thinking block.
+        // Known trade-off: for single-character deltas, contains() may match at multiple positions.
+        // This is acceptable for the same reasons as handleContentDelta.
+        if (existingThinking != null && existingThinking.contains(delta)) {
+            LOG.debug("Skipping duplicate thinking delta by content check (len=" + delta.length() + ")");
+            return;
+        }
+
+        // Determine the novel portion of the delta to apply
+        String novelContent = delta;
+
+        // Trim catch-up portion if delta spans sync boundary
+        if (syncedThinkingOffset > 0 && thinkingDeltaStreamLength > syncedThinkingOffset) {
+            int overflow = thinkingDeltaStreamLength - syncedThinkingOffset;
+            if (overflow < delta.length() && existingThinking != null) {
+                int catchupLength = delta.length() - overflow;
+                String catchupPortion = delta.substring(0, catchupLength);
+                String thinkingSuffix = existingThinking.substring(
+                        Math.max(0, existingThinking.length() - catchupLength));
+                if (catchupPortion.equals(thinkingSuffix)) {
+                    novelContent = delta.substring(catchupLength);
+                    LOG.debug("Trimmed catch-up portion from thinking delta (catchupLength=" + catchupLength
+                            + ", novelLength=" + novelContent.length() + ")");
+                }
+            }
+        }
+
         // Write thinking delta to raw to prevent data loss after stream ends
         ensureCurrentAssistantMessageExists();
-        boolean applied = applyThinkingDeltaToRaw(content);
+        boolean applied = applyThinkingDeltaToRaw(novelContent);
         if (applied) {
             // Note: uses += (not absolute assignment like syncedContentOffset)
             // because there is no thinkingContent StringBuilder to take length from
-            syncedThinkingOffset += content.length();
+            syncedThinkingOffset += novelContent.length();
             thinkingSegmentActive = true;
             // CRITICAL: Only notify frontend when delta was actually applied.
             // Frontend has no dedup and will accumulate, causing duplication.
-            callbackHandler.notifyThinkingDelta(content);
+            callbackHandler.notifyThinkingDelta(novelContent);
             if (!isStreaming) {
                 callbackHandler.notifyMessageUpdate(state.getMessages());
             }
         } else {
-            LOG.debug("Skipping duplicate thinking delta (len=" + content.length() + ")");
+            LOG.debug("Thinking delta not applied (raw block dedup)");
         }
+    }
+
+    /**
+     * Get existing thinking content from raw blocks.
+     */
+    private String getExistingThinkingContent() {
+        if (currentAssistantMessage == null || currentAssistantMessage.raw == null) {
+            return null;
+        }
+        JsonObject raw = currentAssistantMessage.raw;
+        if (!raw.has("message") || !raw.get("message").isJsonObject()) {
+            return null;
+        }
+        JsonObject message = raw.getAsJsonObject("message");
+        if (!message.has("content") || !message.get("content").isJsonArray()) {
+            return null;
+        }
+        JsonArray content = message.getAsJsonArray("content");
+        for (int i = content.size() - 1; i >= 0; i--) {
+            if (!content.get(i).isJsonObject()) continue;
+            JsonObject block = content.get(i).getAsJsonObject();
+            if (block.has("type") && "thinking".equals(block.get("type").getAsString())) {
+                return block.has("thinking") && !block.get("thinking").isJsonNull()
+                        ? block.get("thinking").getAsString() : "";
+            }
+        }
+        return null;
     }
 
     private void ensureCurrentAssistantMessageExists() {
@@ -784,11 +912,9 @@ public class ClaudeMessageHandler implements MessageCallback {
                 ? target.get("text").getAsString()
                 : "";
 
-        // Dedup: skip if delta was already included after the last conservative sync
-        if (syncedContentOffset > 0 && existing.endsWith(delta)) {
-            return false;
-        }
-
+        // Append delta to existing text.
+        // Note: dedup is handled by position-based check in handleContentDelta,
+        // so we don't need suffix matching here.
         target.addProperty("text", existing + delta);
         return true;
     }
@@ -867,11 +993,9 @@ public class ClaudeMessageHandler implements MessageCallback {
                 ? target.get("thinking").getAsString()
                 : "";
 
-        // Dedup: skip if delta was already included after the last conservative sync
-        if (syncedThinkingOffset > 0 && existing.endsWith(delta)) {
-            return false;
-        }
-
+        // Append delta to existing thinking.
+        // Note: dedup is handled by position-based check in handleThinkingDelta,
+        // so we don't need suffix matching here.
         target.addProperty("thinking", existing + delta);
         return true;
     }
