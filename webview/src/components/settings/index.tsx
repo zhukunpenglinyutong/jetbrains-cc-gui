@@ -149,6 +149,11 @@ const SettingsView = ({
     handleTestSound,
     handleBrowseSound,
     handleSaveCommitPrompt,
+    projectCommitPrompt,
+    setProjectCommitPrompt,
+    savingProjectCommitPrompt,
+    setSavingProjectCommitPrompt,
+    handleSaveProjectCommitPrompt,
     commitGenerationEnabled,
     setCommitGenerationEnabled,
     handleCommitGenerationEnabledChange,
@@ -255,6 +260,8 @@ const SettingsView = ({
     setSavingWorkingDirectory,
     setCommitPrompt,
     setSavingCommitPrompt,
+    setProjectCommitPrompt,
+    setSavingProjectCommitPrompt,
     setEditorFontConfig,
     setIdeTheme,
     setLocalStreamingEnabled,
@@ -499,9 +506,13 @@ const SettingsView = ({
           <div style={{ display: currentTab === 'commit' ? 'block' : 'none' }}>
             <CommitSection
               commitPrompt={commitPrompt}
+              projectCommitPrompt={projectCommitPrompt}
               onCommitPromptChange={setCommitPrompt}
+              onProjectCommitPromptChange={setProjectCommitPrompt}
               onSaveCommitPrompt={handleSaveCommitPrompt}
+              onSaveProjectCommitPrompt={handleSaveProjectCommitPrompt}
               savingCommitPrompt={savingCommitPrompt}
+              savingProjectCommitPrompt={savingProjectCommitPrompt}
             />
           </div>
 

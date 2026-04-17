@@ -240,6 +240,11 @@
         "placeholder": "Add your extra requirements here, e.g., generate commit in English, include issue number, etc...",
         "hint": "The plugin has built-in CCG Commits specification prompts. Content you add here will be used as additional requirements, and AI will prioritize your instructions."
       },
+      "projectPrompt": {
+        "label": "Prompt adicional específico del proyecto",
+        "placeholder": "Añade aquí requisitos específicos del proyecto, por ejemplo: el scope debe usar el nombre del módulo, el body del commit debe incluir el alcance del impacto, etc...",
+        "hint": "Este prompt solo se aplica al proyecto actual y se combina con el prompt adicional global. Cuando hay conflicto, el prompt del proyecto prevalece. Se pueden configurar proyectos diferentes de forma independiente."
+      },
       "codeReview": {
         "comingSoon": "Coming Soon",
         "label": "Code Review AI Additional Prompt",

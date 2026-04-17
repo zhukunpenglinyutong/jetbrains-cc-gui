@@ -45,6 +45,8 @@ export interface UseSettingsBasicActionsReturn {
   localAutoOpenFileEnabled: boolean;
   commitPrompt: string;
   savingCommitPrompt: boolean;
+  projectCommitPrompt: string;
+  savingProjectCommitPrompt: boolean;
   soundNotificationEnabled: boolean;
   soundOnlyWhenUnfocused: boolean;
   selectedSound: string;
@@ -71,6 +73,7 @@ export interface UseSettingsBasicActionsReturn {
   handleTestSound: () => void;
   handleBrowseSound: () => void;
   handleSaveCommitPrompt: () => void;
+  handleSaveProjectCommitPrompt: () => void;
   handleCommitGenerationEnabledChange: (enabled: boolean) => void;
   handleStatusBarWidgetEnabledChange: (enabled: boolean) => void;
 
@@ -99,6 +102,8 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setLocalAutoOpenFileEnabled: (enabled: boolean) => void;
   /** @internal */ setCommitPrompt: (prompt: string) => void;
   /** @internal */ setSavingCommitPrompt: (saving: boolean) => void;
+  /** @internal */ setProjectCommitPrompt: (prompt: string) => void;
+  /** @internal */ setSavingProjectCommitPrompt: (saving: boolean) => void;
   /** @internal */ setSoundNotificationEnabled: (enabled: boolean) => void;
   /** @internal */ setSoundOnlyWhenUnfocused: (enabled: boolean) => void;
   /** @internal */ setSelectedSound: (soundId: string) => void;
@@ -156,6 +161,10 @@ export function useSettingsBasicActions({
   // Commit AI prompt configuration
   const [commitPrompt, setCommitPrompt] = useState('');
   const [savingCommitPrompt, setSavingCommitPrompt] = useState(false);
+
+  // Project-level commit AI prompt configuration
+  const [projectCommitPrompt, setProjectCommitPrompt] = useState('');
+  const [savingProjectCommitPrompt, setSavingProjectCommitPrompt] = useState(false);
 
   // Sound notification configuration
   const [soundNotificationEnabled, setSoundNotificationEnabled] = useState<boolean>(false);
@@ -316,6 +325,13 @@ export function useSettingsBasicActions({
     sendToJava(`set_commit_prompt:${JSON.stringify(payload)}`);
   }, [commitPrompt]);
 
+  // Project-level commit AI prompt save handler
+  const handleSaveProjectCommitPrompt = useCallback(() => {
+    setSavingProjectCommitPrompt(true);
+    const payload = { prompt: projectCommitPrompt };
+    sendToJava(`set_project_commit_prompt:${JSON.stringify(payload)}`);
+  }, [projectCommitPrompt]);
+
   return {
     nodePath,
     setNodePath,
@@ -372,6 +388,11 @@ export function useSettingsBasicActions({
     handleTestSound,
     handleBrowseSound,
     handleSaveCommitPrompt,
+    projectCommitPrompt,
+    setProjectCommitPrompt,
+    savingProjectCommitPrompt,
+    setSavingProjectCommitPrompt,
+    handleSaveProjectCommitPrompt,
     commitGenerationEnabled,
     setCommitGenerationEnabled,
     handleCommitGenerationEnabledChange,
