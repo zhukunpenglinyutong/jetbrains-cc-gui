@@ -22,6 +22,16 @@ class ClaudeHistoryParser {
 
     private final Gson gson = new Gson();
 
+    static final class TimestampBounds {
+        final long firstTimestamp;
+        final long lastTimestamp;
+
+        private TimestampBounds(long firstTimestamp, long lastTimestamp) {
+            this.firstTimestamp = firstTimestamp;
+            this.lastTimestamp = lastTimestamp;
+        }
+    }
+
     /**
      * Scan a single session file and return a SessionInfo.
      */
@@ -52,19 +62,7 @@ class ClaudeHistoryParser {
 
             String summary = generateSummary(messages);
 
-            long lastTimestamp = 0;
-            for (ClaudeHistoryReader.ConversationMessage msg : messages) {
-                if (msg.timestamp != null) {
-                    try {
-                        long ts = parseTimestamp(msg.timestamp);
-                        if (ts > lastTimestamp) {
-                            lastTimestamp = ts;
-                        }
-                    } catch (Exception e) {
-                        // Ignore
-                    }
-                }
-            }
+            TimestampBounds timestampBounds = extractTimestampBounds(messages);
 
             if (!isValidSession(sessionId, summary, messages.size())) {
                 return null;
@@ -74,8 +72,8 @@ class ClaudeHistoryParser {
             session.sessionId = sessionId;
             session.title = summary;
             session.messageCount = messages.size();
-            session.lastTimestamp = lastTimestamp;
-            session.firstTimestamp = lastTimestamp;
+            session.lastTimestamp = timestampBounds.lastTimestamp;
+            session.firstTimestamp = timestampBounds.firstTimestamp;
 
             return session;
         } catch (Exception e) {
@@ -181,6 +179,31 @@ class ClaudeHistoryParser {
         }
 
         return null;
+    }
+
+    TimestampBounds extractTimestampBounds(List<ClaudeHistoryReader.ConversationMessage> messages) {
+        long firstTimestamp = 0;
+        long lastTimestamp = 0;
+
+        for (ClaudeHistoryReader.ConversationMessage msg : messages) {
+            if (msg == null || msg.timestamp == null) {
+                continue;
+            }
+
+            long ts = parseTimestamp(msg.timestamp);
+            if (ts <= 0) {
+                continue;
+            }
+
+            if (firstTimestamp == 0 || ts < firstTimestamp) {
+                firstTimestamp = ts;
+            }
+            if (ts > lastTimestamp) {
+                lastTimestamp = ts;
+            }
+        }
+
+        return new TimestampBounds(firstTimestamp, lastTimestamp);
     }
 
     /**
