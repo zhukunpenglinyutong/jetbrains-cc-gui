@@ -623,6 +623,8 @@
     "cancelEditButton": "取消",
     "titleTooLong": "標題過長（最多50個字元）",
     "titleUpdated": "標題已更新",
+    "copySessionId": "複製會話ID用於CLI恢復",
+    "sessionIdCopied": "會話ID已複製",
     "timeAgo": {
       "yearsAgo": "年前",
       "monthsAgo": "個月前",

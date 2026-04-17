@@ -618,6 +618,8 @@
     "cancelEditButton": "रद्द करें",
     "titleTooLong": "शीर्षक बहुत लंबा (अधिकतम 50 वर्ण)",
     "titleUpdated": "शीर्षक अपडेट किया गया",
+    "copySessionId": "CLI resume के लिए सेशन ID कॉपी करें",
+    "sessionIdCopied": "सेशन ID कॉपी किया गया",
     "timeAgo": {
       "yearsAgo": "साल पहले",
       "monthsAgo": "महीने पहले",

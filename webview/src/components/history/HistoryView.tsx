@@ -5,6 +5,7 @@ import VirtualList from './VirtualList';
 import { extractCommandMessageContent } from '../../utils/messageUtils';
 import { sendBridgeEvent } from '../../utils/bridge';
 import { ProviderModelIcon } from '../shared/ProviderModelIcon';
+import { copyToClipboard } from '../../utils/copyUtils';
 
 // Deep search timeout (milliseconds)
 const DEEP_SEARCH_TIMEOUT_MS = 30000;
@@ -91,13 +92,19 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
   const [editingTitle, setEditingTitle] = useState(''); // Title content being edited
   const [isDeepSearching, setIsDeepSearching] = useState(false); // Deep search in-progress state
   const deepSearchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Deep search timeout timer
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Copy status timeout timer
+  const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null); // Track which session ID was copied
 
-  // Clean up deep search timeout timer
+  // Clean up all timeout timers on unmount
   useEffect(() => {
     return () => {
       if (deepSearchTimeoutRef.current) {
         clearTimeout(deepSearchTimeoutRef.current);
         deepSearchTimeoutRef.current = null;
+      }
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+        copyTimeoutRef.current = null;
       }
     };
   }, []);
@@ -289,6 +296,25 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
     setEditingTitle('');
   };
 
+  // Handle copy session ID
+  const handleCopySessionId = async (e: React.MouseEvent, sessionId: string) => {
+    e.stopPropagation(); // Prevent click event from bubbling to parent
+    const success = await copyToClipboard(sessionId);
+    if (success) {
+      // Clear previous timeout if exists (handles rapid clicking)
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+        copyTimeoutRef.current = null;
+      }
+      setCopiedSessionId(sessionId);
+      // Clear the copied status after 2 seconds
+      copyTimeoutRef.current = setTimeout(() => {
+        setCopiedSessionId(null);
+        copyTimeoutRef.current = null;
+      }, 2000);
+    }
+  };
+
   // Deep search: clear cache and reload history
   const handleDeepSearch = () => {
     if (isDeepSearching) return;
@@ -441,7 +467,22 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
         </div>
         <div className="history-item-meta">
           <span>{t('history.messageCount', { count: session.messageCount })}</span>
-          <span style={{ fontFamily: 'var(--idea-editor-font-family, monospace)', color: '#666' }}>{session.sessionId.slice(0, 8)}</span>
+          <div className="history-session-id-container">
+            <span
+              className="history-session-id"
+              title={session.sessionId}
+            >
+              {session.sessionId.slice(0, 8)}
+            </span>
+            <button
+              className={`history-copy-id-btn ${copiedSessionId === session.sessionId ? 'copied' : ''}`}
+              onClick={(e) => handleCopySessionId(e, session.sessionId)}
+              title={t('history.copySessionId')}
+              aria-label={t('history.copySessionId')}
+            >
+              <span className={`codicon ${copiedSessionId === session.sessionId ? 'codicon-check' : 'codicon-copy'}`}></span>
+            </button>
+          </div>
         </div>
       </div>
     );

@@ -630,6 +630,8 @@
     "cancelEditButton": "Отмена",
     "titleTooLong": "Название слишком длинное (максимум 50 символов)",
     "titleUpdated": "Название обновлено",
+    "copySessionId": "Копировать ID сессии для CLI resume",
+    "sessionIdCopied": "ID сессии скопирован",
     "timeAgo": {
       "yearsAgo_one": "{{count}} год назад",
       "yearsAgo_other": "{{count}} лет назад",

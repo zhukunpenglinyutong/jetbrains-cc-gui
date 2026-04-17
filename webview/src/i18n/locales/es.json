@@ -618,6 +618,8 @@
     "cancelEditButton": "Cancelar",
     "titleTooLong": "Título demasiado largo (máximo 50 caracteres)",
     "titleUpdated": "Título actualizado",
+    "copySessionId": "Copiar ID de sesión para CLI resume",
+    "sessionIdCopied": "ID de sesión copiado",
     "timeAgo": {
       "yearsAgo": "hace años",
       "monthsAgo": "hace meses",

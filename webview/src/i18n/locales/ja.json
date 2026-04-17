@@ -623,6 +623,8 @@
     "cancelEditButton": "キャンセル",
     "titleTooLong": "タイトルが長すぎます(最大50文字)",
     "titleUpdated": "タイトルが更新されました",
+    "copySessionId": "CLI resume用にセッションIDをコピー",
+    "sessionIdCopied": "セッションIDをコピーしました",
     "timeAgo": {
       "yearsAgo": "年前",
       "monthsAgo": "ヶ月前",

@@ -797,6 +797,8 @@
     "cancelEditButton": "取消",
     "titleTooLong": "标题过长（最多50个字符）",
     "titleUpdated": "标题已更新",
+    "copySessionId": "复制会话ID用于CLI恢复",
+    "sessionIdCopied": "会话ID已复制",
     "timeAgo": {
       "yearsAgo": "年前",
       "monthsAgo": "个月前",

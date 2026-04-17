@@ -739,6 +739,8 @@
     "cancelEditButton": "취소",
     "titleTooLong": "제목이 너무 깁니다 (최대 50자)",
     "titleUpdated": "제목 업데이트됨",
+    "copySessionId": "CLI resume용 세션 ID 복사",
+    "sessionIdCopied": "세션 ID 복사됨",
     "timeAgo": {
       "yearsAgo": "년 전",
       "monthsAgo": "개월 전",
