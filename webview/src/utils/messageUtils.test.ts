@@ -239,4 +239,44 @@ describe('mergeConsecutiveAssistantMessages', () => {
     // (user tool_result is skipped, but assistant blocks stay separated)
     expect(result.filter((m) => m.type === 'assistant')).toHaveLength(2);
   });
+
+  // ---------------------------------------------------------------------------
+  // Regression: single assistant + trailing tool_result user must not be dropped
+  // Bug: i = j skipped intermediate tool_result-only user messages when
+  // assistantGroup.length <= 1, causing mergedMessages to shrink and
+  // preserveLatestMessagesOnShrink to re-append them as duplicates.
+  // ---------------------------------------------------------------------------
+
+  it('preserves tool_result user message when no second assistant follows (regression)', () => {
+    const toolResultUser = makeMsg('user', '[tool_result]', {
+      raw: { content: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'ok' }] } as any,
+    });
+    const messages: ClaudeMessage[] = [
+      makeMsg('assistant', 'hello'),
+      toolResultUser,
+      makeMsg('user', 'follow-up'),
+    ];
+
+    const result = mergeConsecutiveAssistantMessages(messages, normalizeBlocks);
+
+    expect(result).toHaveLength(3);
+    expect(result[1]).toBe(toolResultUser);
+    expect(result[2].type).toBe('user');
+    expect(result[2].content).toBe('follow-up');
+  });
+
+  it('preserves tool_result user message at end of list when no second assistant follows', () => {
+    const toolResultUser = makeMsg('user', '[tool_result]', {
+      raw: { content: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'ok' }] } as any,
+    });
+    const messages: ClaudeMessage[] = [
+      makeMsg('assistant', 'hello'),
+      toolResultUser,
+    ];
+
+    const result = mergeConsecutiveAssistantMessages(messages, normalizeBlocks);
+
+    expect(result).toHaveLength(2);
+    expect(result[1]).toBe(toolResultUser);
+  });
 });
