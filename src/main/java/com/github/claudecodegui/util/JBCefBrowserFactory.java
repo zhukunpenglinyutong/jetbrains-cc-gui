@@ -3,8 +3,15 @@ package com.github.claudecodegui.util;
 import com.intellij.openapi.application.ApplicationInfo;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.util.SystemInfo;
+import com.intellij.ui.jcef.JBCefApp;
 import com.intellij.ui.jcef.JBCefBrowser;
 import com.intellij.ui.jcef.JBCefBrowserBase;
+import com.intellij.ui.jcef.JBCefBrowserBuilder;
+import com.intellij.ui.jcef.JBCefClient;
+import org.cef.browser.CefBrowser;
+import org.cef.handler.CefKeyboardHandler;
+import org.cef.handler.CefKeyboardHandlerAdapter;
+import org.cef.misc.BoolRef;
 
 /**
  * JBCefBrowser factory.
@@ -19,6 +26,7 @@ import com.intellij.ui.jcef.JBCefBrowserBase;
 public final class JBCefBrowserFactory {
 
     private static final Logger LOG = Logger.getInstance(JBCefBrowserFactory.class);
+    private static final int CONTROL_CHAR_MAX = 0x1F;
 
     private JBCefBrowserFactory() {
         // Utility class, do not instantiate
@@ -38,18 +46,20 @@ public final class JBCefBrowserFactory {
                 + ", devMode=" + isDevMode + ")");
 
         try {
-            JBCefBrowser browser = JBCefBrowser.createBuilder()
+            JBCefBrowserBuilder builder = JBCefBrowser.createBuilder()
                     .setOffScreenRendering(isOffScreenRendering)
-                    .setEnableOpenDevToolsMenuItem(isDevMode)
+                    .setEnableOpenDevToolsMenuItem(isDevMode);
                     // .setCreateImmediately(true) // Causes new tabs to permanently stall on "Checking SDK status..." - commented out; using default lazy-load mode instead
-                    .build();
+            configureKeyboardWorkaround(builder);
+            JBCefBrowser browser = builder.build();
             configureContextMenu(browser, isDevMode);
             LOG.info("JBCefBrowser created successfully using builder");
             return browser;
         } catch (Exception e) {
-            LOG.warn("JBCefBrowser builder failed, falling back to default constructor: " + e.getMessage());
+            LOG.warn("JBCefBrowser builder failed, falling back to default constructor (missing OSR and dev-tools config)", e);
             JBCefBrowser browser = new JBCefBrowser();
             configureContextMenu(browser, isDevMode);
+            configureKeyboardWorkaround(browser);
             return browser;
         }
     }
@@ -66,22 +76,24 @@ public final class JBCefBrowserFactory {
         LOG.info("Creating JBCefBrowser with URL and OSR=" + isOffScreenRendering + ", devMode=" + isDevMode);
 
         try {
-            JBCefBrowser browser = JBCefBrowser.createBuilder()
+            JBCefBrowserBuilder builder = JBCefBrowser.createBuilder()
                     .setOffScreenRendering(isOffScreenRendering)
                     .setEnableOpenDevToolsMenuItem(isDevMode)
                     .setCreateImmediately(true)
-                    .setUrl(url)
-                    .build();
+                    .setUrl(url);
+            configureKeyboardWorkaround(builder);
+            JBCefBrowser browser = builder.build();
             configureContextMenu(browser, isDevMode);
             LOG.info("JBCefBrowser created successfully with URL");
             return browser;
         } catch (Exception e) {
-            LOG.warn("JBCefBrowser builder failed, falling back to default constructor: " + e.getMessage());
+            LOG.warn("JBCefBrowser builder failed, falling back to default constructor (missing OSR and dev-tools config)", e);
             JBCefBrowser browser = new JBCefBrowser();
             if (url != null && !url.isEmpty()) {
                 browser.loadURL(url);
             }
             configureContextMenu(browser, isDevMode);
+            configureKeyboardWorkaround(browser);
             return browser;
         }
     }
@@ -165,5 +177,55 @@ public final class JBCefBrowserFactory {
     private static void configureContextMenu(JBCefBrowser browser, boolean isDevMode) {
         browser.setProperty(JBCefBrowserBase.Properties.NO_CONTEXT_MENU, !isDevMode);
         LOG.info("Context menu " + (isDevMode ? "enabled" : "disabled") + " (devMode=" + isDevMode + ")");
+    }
+
+    /**
+     * Workaround for Windows JCEF issue where IME composition and certain key combinations
+     * generate control character events on non-editable fields, causing unwanted input in the chat area.
+     */
+    private static void configureKeyboardWorkaround(JBCefBrowserBuilder builder) {
+        if (!SystemInfo.isWindows) {
+            return;
+        }
+        JBCefClient client = JBCefApp.getInstance().createClient();
+        client.getCefClient().addKeyboardHandler(createKeyboardWorkaroundHandler());
+        builder.setClient(client);
+        LOG.info("[JCEF] Installed pre-build keyboard workaround client");
+    }
+
+    private static void configureKeyboardWorkaround(JBCefBrowser browser) {
+        if (!SystemInfo.isWindows) {
+            return;
+        }
+        browser.getJBCefClient().addKeyboardHandler(createKeyboardWorkaroundHandler(), browser.getCefBrowser());
+    }
+
+    private static CefKeyboardHandler createKeyboardWorkaroundHandler() {
+        return new CefKeyboardHandlerAdapter() {
+            @Override
+            public boolean onPreKeyEvent(CefBrowser cefBrowser, CefKeyboardHandler.CefKeyEvent event, BoolRef isKeyboardShortcut) {
+                if (shouldSuppressProblematicCharEvent(event)) {
+                    LOG.debug("[JCEF] Suppressed problematic key event before platform conversion: " + event);
+                    return true;
+                }
+                return false;
+            }
+        };
+    }
+
+    static boolean shouldSuppressProblematicCharEvent(CefKeyboardHandler.CefKeyEvent event) {
+        if (event == null) {
+            return false;
+        }
+        if (event.type != CefKeyboardHandler.CefKeyEvent.EventType.KEYEVENT_CHAR) {
+            return false;
+        }
+        if (event.focus_on_editable_field) {
+            return false;
+        }
+        if (event.windows_key_code == 0) {
+            return false;
+        }
+        return event.character == 0 || event.character <= CONTROL_CHAR_MAX;
     }
 }
