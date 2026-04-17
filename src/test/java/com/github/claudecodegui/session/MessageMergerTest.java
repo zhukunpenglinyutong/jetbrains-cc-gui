@@ -229,7 +229,7 @@ public class MessageMergerTest {
     }
 
     @Test
-    public void mergeAssistantMessageKeepsMoreCompleteThinkingBlock() {
+    public void mergeAssistantMessageKeepsMoreCompleteThinkingBlockFromSnapshot() {
         MessageMerger merger = new MessageMerger();
 
         JsonObject existingRaw = assistantMessage(
