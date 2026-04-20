@@ -620,6 +620,7 @@
     "titleUpdated": "Titre mis à jour",
     "copySessionId": "Copier l'ID de session pour CLI resume",
     "sessionIdCopied": "ID de session copié",
+    "copyFailed": "Échec de la copie",
     "timeAgo": {
       "yearsAgo": "il y a des années",
       "monthsAgo": "il y a des mois",

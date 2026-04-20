@@ -404,26 +404,32 @@
     }
 }
 
-.history-item:hover .history-copy-id-btn {
-    opacity: 1; /* Show on hover */
-}
-
 .history-copy-id-btn:hover {
-    background-color: rgba(10, 132, 255, 0.15);
-    color: #0a84ff;
+    background-color: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+    color: var(--accent-primary);
 }
 
 .history-copy-id-btn:active {
     transform: scale(0.92);
-    background-color: rgba(10, 132, 255, 0.25);
+    background-color: color-mix(in srgb, var(--accent-primary) 25%, transparent);
 }
 
 /* Copied state styles */
 .history-copy-id-btn.copied {
     opacity: 1;
-    color: #30d158; /* Green color for success */
+    color: var(--color-success);
 }
 
 .history-copy-id-btn.copied:hover {
-    background-color: rgba(48, 209, 88, 0.15);
+    background-color: color-mix(in srgb, var(--color-success) 15%, transparent);
+}
+
+/* Failed state styles */
+.history-copy-id-btn.failed {
+    opacity: 1;
+    color: var(--color-error);
+}
+
+.history-copy-id-btn.failed:hover {
+    background-color: color-mix(in srgb, var(--color-error) 15%, transparent);
 }

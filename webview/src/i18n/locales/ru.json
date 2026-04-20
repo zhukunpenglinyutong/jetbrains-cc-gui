@@ -632,6 +632,7 @@
     "titleUpdated": "Название обновлено",
     "copySessionId": "Копировать ID сессии для CLI resume",
     "sessionIdCopied": "ID сессии скопирован",
+    "copyFailed": "Не удалось скопировать",
     "timeAgo": {
       "yearsAgo_one": "{{count}} год назад",
       "yearsAgo_other": "{{count}} лет назад",

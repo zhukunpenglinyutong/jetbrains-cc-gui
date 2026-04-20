@@ -741,6 +741,7 @@
     "titleUpdated": "제목 업데이트됨",
     "copySessionId": "CLI resume용 세션 ID 복사",
     "sessionIdCopied": "세션 ID 복사됨",
+    "copyFailed": "복사 실패",
     "timeAgo": {
       "yearsAgo": "년 전",
       "monthsAgo": "개월 전",

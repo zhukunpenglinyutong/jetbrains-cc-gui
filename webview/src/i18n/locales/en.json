@@ -794,6 +794,7 @@
     "titleUpdated": "Title updated",
     "copySessionId": "Copy session ID for CLI resume",
     "sessionIdCopied": "Session ID copied",
+    "copyFailed": "Copy failed",
     "timeAgo": {
       "yearsAgo": "years ago",
       "monthsAgo": "months ago",

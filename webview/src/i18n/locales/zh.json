@@ -799,6 +799,7 @@
     "titleUpdated": "标题已更新",
     "copySessionId": "复制会话ID用于CLI恢复",
     "sessionIdCopied": "会话ID已复制",
+    "copyFailed": "复制失败",
     "timeAgo": {
       "yearsAgo": "年前",
       "monthsAgo": "个月前",

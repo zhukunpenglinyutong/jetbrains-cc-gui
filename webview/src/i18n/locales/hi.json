@@ -620,6 +620,7 @@
     "titleUpdated": "शीर्षक अपडेट किया गया",
     "copySessionId": "CLI resume के लिए सेशन ID कॉपी करें",
     "sessionIdCopied": "सेशन ID कॉपी किया गया",
+    "copyFailed": "कॉपी विफल",
     "timeAgo": {
       "yearsAgo": "साल पहले",
       "monthsAgo": "महीने पहले",

@@ -94,6 +94,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
   const deepSearchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Deep search timeout timer
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Copy status timeout timer
   const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null); // Track which session ID was copied
+  const [copyFailedSessionId, setCopyFailedSessionId] = useState<string | null>(null); // Track which session ID copy failed
 
   // Clean up all timeout timers on unmount
   useEffect(() => {
@@ -299,20 +300,25 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
   // Handle copy session ID
   const handleCopySessionId = async (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation(); // Prevent click event from bubbling to parent
+    // Clear previous timeout if exists (handles rapid clicking)
+    if (copyTimeoutRef.current) {
+      clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = null;
+    }
     const success = await copyToClipboard(sessionId);
     if (success) {
-      // Clear previous timeout if exists (handles rapid clicking)
-      if (copyTimeoutRef.current) {
-        clearTimeout(copyTimeoutRef.current);
-        copyTimeoutRef.current = null;
-      }
       setCopiedSessionId(sessionId);
-      // Clear the copied status after 2 seconds
-      copyTimeoutRef.current = setTimeout(() => {
-        setCopiedSessionId(null);
-        copyTimeoutRef.current = null;
-      }, 2000);
+      setCopyFailedSessionId(null);
+    } else {
+      setCopyFailedSessionId(sessionId);
+      setCopiedSessionId(null);
     }
+    // Clear the status after 2 seconds
+    copyTimeoutRef.current = setTimeout(() => {
+      setCopiedSessionId(null);
+      setCopyFailedSessionId(null);
+      copyTimeoutRef.current = null;
+    }, 2000);
   };
 
   // Deep search: clear cache and reload history
@@ -475,12 +481,12 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
               {session.sessionId.slice(0, 8)}
             </span>
             <button
-              className={`history-copy-id-btn ${copiedSessionId === session.sessionId ? 'copied' : ''}`}
+              className={`history-copy-id-btn ${copiedSessionId === session.sessionId ? 'copied' : ''} ${copyFailedSessionId === session.sessionId ? 'failed' : ''}`}
               onClick={(e) => handleCopySessionId(e, session.sessionId)}
-              title={t('history.copySessionId')}
+              title={copiedSessionId === session.sessionId ? t('history.sessionIdCopied') : copyFailedSessionId === session.sessionId ? t('history.copyFailed') : t('history.copySessionId')}
               aria-label={t('history.copySessionId')}
             >
-              <span className={`codicon ${copiedSessionId === session.sessionId ? 'codicon-check' : 'codicon-copy'}`}></span>
+              <span className={`codicon ${copiedSessionId === session.sessionId ? 'codicon-check' : copyFailedSessionId === session.sessionId ? 'codicon-error' : 'codicon-copy'}`}></span>
             </button>
           </div>
         </div>

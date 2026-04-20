@@ -625,6 +625,7 @@
     "titleUpdated": "タイトルが更新されました",
     "copySessionId": "CLI resume用にセッションIDをコピー",
     "sessionIdCopied": "セッションIDをコピーしました",
+    "copyFailed": "コピーに失敗しました",
     "timeAgo": {
       "yearsAgo": "年前",
       "monthsAgo": "ヶ月前",
