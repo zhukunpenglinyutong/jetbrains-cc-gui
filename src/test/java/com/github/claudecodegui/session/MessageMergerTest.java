@@ -6,7 +6,6 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertTrue;
 
 public class MessageMergerTest {
 
@@ -108,7 +107,7 @@ public class MessageMergerTest {
     }
 
     @Test
-    public void mergeAssistantMessageKeepsMoreCompleteThinkingBlock() {
+    public void mergeAssistantMessageKeepsMoreCompleteThinkingBlockTextMirror() {
         MessageMerger merger = new MessageMerger();
 
         JsonObject existingRaw = assistantMessage(

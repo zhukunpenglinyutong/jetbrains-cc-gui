@@ -141,6 +141,13 @@
             <add-to-group group-id="ProjectViewPopupMenu" anchor="first"/>
         </action>
 
+        <!-- Action to send the selected console text to CC GUI -->
+        <action id="ClaudeCodeGUI.SendConsoleSelectionToInputAction"
+                class="com.github.claudecodegui.action.console.SendConsoleSelectionToInputAction"
+                icon="/icons/cc-gui-icon.svg">
+            <add-to-group group-id="ConsoleView.PopupMenu" anchor="last"/>
+        </action>
+
         <!-- Generate Commit Message with AI Action -->
         <action id="ClaudeCodeGUI.GenerateCommitMessageAction"
                 class="com.github.claudecodegui.action.vcs.GenerateCommitMessageAction"
