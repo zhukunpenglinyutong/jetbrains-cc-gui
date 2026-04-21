@@ -174,6 +174,56 @@ export interface CodexCustomModel {
 }
 
 /**
+ * Single environment variable entry
+ */
+export interface EnvVarEntry {
+  /** Environment variable name */
+  key: string;
+  /** Environment variable value */
+  value: string;
+}
+
+/**
+ * Codex protected environment variable names that cannot be overridden by custom env vars.
+ */
+export const CODEX_PROTECTED_ENV_KEYS: ReadonlySet<string> = new Set([
+  'CODEX_USE_STDIN',
+  'CODEX_MODEL',
+  'CODEX_SANDBOX_MODE',
+  'CODEX_SANDBOX',
+  'CODEX_APPROVAL_POLICY',
+  'CODEX_CI',
+  'CODEX_SANDBOX_NETWORK_DISABLED',
+  'CODEX_HOME',
+  'CLAUDE_SESSION_ID',
+  'CLAUDE_PERMISSION_DIR',
+  'HOME',
+  'PATH',
+  'TMPDIR',
+  'TEMP',
+  'TMP',
+  'IDEA_PROJECT_PATH',
+  'PROJECT_PATH',
+  'CLAUDE_USE_STDIN',
+]);
+
+/**
+ * Validate whether an env var key name is valid.
+ * Must start with letter or underscore, followed by letters, digits, or underscores.
+ */
+export function isValidEnvVarKey(key: string): boolean {
+  if (!key || typeof key !== 'string') return false;
+  return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key);
+}
+
+/**
+ * Check if an env var key is a protected Codex built-in variable.
+ */
+export function isProtectedEnvVarKey(key: string): boolean {
+  return CODEX_PROTECTED_ENV_KEYS.has(key.toUpperCase());
+}
+
+/**
  * Codex provider configuration
  */
 export interface CodexProviderConfig {
@@ -193,6 +243,10 @@ export interface CodexProviderConfig {
   authJson?: string;
   /** Custom model list */
   customModels?: CodexCustomModel[];
+  /** Environment variables for sendMessage subprocess */
+  messageEnvVars?: EnvVarEntry[];
+  /** Environment variables for getMcpServerTools subprocess */
+  mcpEnvVars?: EnvVarEntry[];
 }
 
 // ============ Provider Presets ============

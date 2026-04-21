@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { CodexProviderConfig } from '../types/provider';
+import type { CodexProviderConfig, EnvVarEntry } from '../types/provider';
+import EnvVarEditor from './EnvVarEditor';
 
 interface CodexProviderDialogProps {
   isOpen: boolean;
@@ -23,6 +24,8 @@ export default function CodexProviderDialog({
   const [providerName, setProviderName] = useState('');
   const [configTomlJson, setConfigTomlJson] = useState('');
   const [authJson, setAuthJson] = useState('');
+  const [messageEnvVars, setMessageEnvVars] = useState<EnvVarEntry[]>([]);
+  const [mcpEnvVars, setMcpEnvVars] = useState<EnvVarEntry[]>([]);
 
   // Initialize form
   useEffect(() => {
@@ -32,6 +35,8 @@ export default function CodexProviderDialog({
         setProviderName(provider.name || '');
         setConfigTomlJson(provider.configToml || '');
         setAuthJson(provider.authJson || '');
+        setMessageEnvVars(provider.messageEnvVars || []);
+        setMcpEnvVars(provider.mcpEnvVars || []);
       } else {
         // Add mode - reset with default template
         setProviderName('');
@@ -48,6 +53,8 @@ wire_api = "responses"`);
         setAuthJson(`{
   "OPENAI_API_KEY": ""
 }`);
+        setMessageEnvVars([]);
+        setMcpEnvVars([]);
       }
     }
   }, [isOpen, provider]);
@@ -108,6 +115,8 @@ wire_api = "responses"`);
       createdAt: provider?.createdAt,
       configToml: configTomlJson.trim(),
       authJson: authJson.trim(),
+      messageEnvVars: messageEnvVars.filter(e => e.key.trim() !== ''),
+      mcpEnvVars: mcpEnvVars.filter(e => e.key.trim() !== ''),
     };
 
     onSave(providerData);
@@ -217,6 +226,34 @@ wire_api = "responses"`);
             />
             <small className="form-hint">{t('settings.codexProvider.dialog.authJsonHint')}</small>
           </div>
+
+          {/* Environment Variables */}
+          <details className="advanced-section">
+            <summary className="advanced-toggle">
+              <span className="codicon codicon-chevron-right" />
+              {t('settings.codexProvider.dialog.envVarsTitle')}
+            </summary>
+
+            {/* Message Environment Variables */}
+            <div className="form-group" style={{ marginTop: '16px' }}>
+              <label>{t('settings.codexProvider.dialog.messageEnvLabel')}</label>
+              <small className="form-hint">{t('settings.codexProvider.dialog.messageEnvHint')}</small>
+              <EnvVarEditor
+                entries={messageEnvVars}
+                onChange={setMessageEnvVars}
+              />
+            </div>
+
+            {/* MCP Environment Variables */}
+            <div className="form-group">
+              <label>{t('settings.codexProvider.dialog.mcpEnvLabel')}</label>
+              <small className="form-hint">{t('settings.codexProvider.dialog.mcpEnvHint')}</small>
+              <EnvVarEditor
+                entries={mcpEnvVars}
+                onChange={setMcpEnvVars}
+              />
+            </div>
+          </details>
 
         </div>
 
