@@ -20,6 +20,24 @@ const LCS_MAX_LINES = 100;
 /** Cache for diff calculations to avoid redundant computations */
 const diffCache = new Map<string, { additions: number; deletions: number }>();
 const DIFF_CACHE_MAX_SIZE = 100;
+const KNOWN_EXTENSIONLESS_FILE_NAMES = new Set([
+  'authors',
+  'changelog',
+  'cname',
+  'contributors',
+  'dockerfile',
+  'gemfile',
+  'gradlew',
+  'guardfile',
+  'jenkinsfile',
+  'license',
+  'licence',
+  'makefile',
+  'procfile',
+  'rakefile',
+  'readme',
+  'vagrantfile',
+]);
 
 /**
  * Generate cache key from strings (using hash-like approach for large strings)
@@ -31,6 +49,47 @@ function getDiffCacheKey(oldString: string, newString: string): string {
   }
   // For larger strings, use length + first/last chars as key
   return `${oldString.length}:${newString.length}:${oldString.slice(0, 30)}:${oldString.slice(-20)}:${newString.slice(0, 30)}:${newString.slice(-20)}`;
+}
+
+function stripLineSuffix(filePath: string): string {
+  return filePath.replace(/:\d+(?:-\d+)?$/, '');
+}
+
+/**
+ * Filter out malformed "file paths" that are actually code snippets or
+ * streamed terminal text. This prevents the status panel from showing bogus
+ * edits such as `JSON.parse(...)` or template fragments.
+ */
+export function isLikelyFileChangePath(filePath: string | null | undefined): boolean {
+  if (typeof filePath !== 'string') {
+    return false;
+  }
+
+  const trimmed = filePath.trim();
+  if (!trimmed || /[\r\n\t]/.test(trimmed)) {
+    return false;
+  }
+
+  const normalizedPath = stripLineSuffix(trimmed);
+  const fileName = getFileName(normalizedPath) || normalizedPath;
+  const lowerFileName = fileName.toLowerCase();
+  const hasSeparator = /[\\/]/.test(normalizedPath);
+  const isAbsoluteWindowsPath = /^[A-Za-z]:[\\/]/.test(normalizedPath);
+  const isAbsoluteUnixPath = normalizedPath.startsWith('/');
+  const hasExtension = /\.[A-Za-z0-9][A-Za-z0-9._-]*$/.test(fileName) || fileName.startsWith('.');
+  const isKnownExtensionlessFile = KNOWN_EXTENSIONLESS_FILE_NAMES.has(lowerFileName);
+
+  if (!hasSeparator && !isAbsoluteWindowsPath && !isAbsoluteUnixPath && !hasExtension && !isKnownExtensionlessFile) {
+    return false;
+  }
+
+  // Reject obvious code/template fragments that can leak through malformed
+  // write events when no real path was attached.
+  if (!hasSeparator && !hasExtension && !isKnownExtensionlessFile && /[`$(){}]/.test(normalizedPath)) {
+    return false;
+  }
+
+  return true;
 }
 
 /**
@@ -232,7 +291,7 @@ export function useFileChanges({
         if (!input) return;
 
         const filePath = extractFilePath(input);
-        if (!filePath) return;
+        if (!filePath || !isLikelyFileChangePath(filePath)) return;
 
         // Check if operation completed successfully
         const result = findToolResult(block.id, messageIndex);

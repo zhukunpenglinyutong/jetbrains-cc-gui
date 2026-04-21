@@ -144,6 +144,7 @@ class HistoryMessageInjector {
      * 只统一前端注入协议，不改变 Codex 历史文件格式与标题数据来源。
      */
     static List<JsonObject> convertCodexMessagesToFrontendBatch(JsonArray messages) {
+        CodexMessageConverter.clearSessionState();
         List<JsonObject> frontendMessages = new ArrayList<>();
         for (int i = 0; i < messages.size(); i++) {
             JsonObject msg = messages.get(i).getAsJsonObject();
