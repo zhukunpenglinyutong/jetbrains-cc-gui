@@ -450,6 +450,9 @@ def pluginName = project.name
 
 tasks.matching { it.name.startsWith('prepareSandbox') }.configureEach {
     dependsOn('buildWebview', 'packageAiBridge')
+    // Declare ai-bridge files as task inputs so changes to JS source
+    // invalidate the UP-TO-DATE check and ensure doLast (copy/cleanup) runs.
+    inputs.files(aiBridgeArchive, aiBridgeHashFile)
     def sandboxRootProvider = layout.buildDirectory.dir('idea-sandbox')
     // Capture needed file references during configuration phase
     def archiveSource = aiBridgeArchive
@@ -517,6 +520,8 @@ tasks.matching { it.name == 'preparePluginForDistribution' || it.name == 'compos
 
 tasks.named('buildPlugin') {
     dependsOn('packageAiBridge', 'checkstyleMain')
+    // Invalidate UP-TO-DATE when ai-bridge.zip content changes.
+    inputs.files(aiBridgeArchive, aiBridgeHashFile)
 
     doLast {
         // Unzip the plugin zip, add ai-bridge.zip and ai-bridge.hash, then repackage
