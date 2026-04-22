@@ -49,6 +49,7 @@ import {
   processToolResultMessages,
   shouldOutputMessage,
 } from './stream-event-processor.js';
+import { generateSessionTitle } from '../session-title-service.js';
 
 function resolveThinkingTokens(params, settings) {
   const alwaysThinkingEnabled = settings?.alwaysThinkingEnabled ?? true;
@@ -65,6 +66,22 @@ function resolveStreamingEnabled(params, settings) {
   return params.streaming != null
     ? !!params.streaming
     : (settings?.streamingEnabled ?? false);
+}
+
+/**
+ * Extract text content from a user message object.
+ * @param {object} userMessage - User message object from buildUserMessage()
+ * @returns {string|null} Extracted text or null
+ */
+function extractUserMessageText(userMessage) {
+  if (!userMessage?.message?.content) return null;
+  const content = userMessage.message.content;
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    const textBlock = content.find(b => b.type === 'text');
+    return textBlock?.text || null;
+  }
+  return null;
 }
 
 function buildSystemPromptAppend(params) {
@@ -285,6 +302,14 @@ async function executeTurn(runtime, requestContext, turnMeta) {
       success: true,
       sessionId: finalSessionId
     }));
+
+    // Fire-and-forget: generate AI title for new sessions (not resumes)
+    if (!requestContext.requestedSessionId && finalSessionId) {
+      const userMessageText = extractUserMessageText(requestContext.userMessage);
+      if (userMessageText) {
+        void generateSessionTitle(userMessageText, finalSessionId, requestContext.options.cwd);
+      }
+    }
   } finally {
     endRuntimeTurn(runtime);
     // Only clear if this runtime still owns the pointer (not cleared by abort)

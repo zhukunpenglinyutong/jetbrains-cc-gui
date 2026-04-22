@@ -29,6 +29,7 @@ import {
 } from './message-utils.js';
 import { createPreToolUseHook } from './permission-mode.js';
 import { setActiveQueryResult } from './message-session-registry.js';
+import { generateSessionTitle } from '../session-title-service.js';
 
 // ========== Internal helpers for deduplication ==========
 
@@ -254,7 +255,7 @@ function emitThinkingDelta(thinkingText, state) {
 /**
  * Execute a query call with auto-retry logic for transient API errors.
  */
-async function executeWithRetry({ createQueryResult, streamingEnabled, resumeSessionId, workingDirectory, logPrefix, outerStreamState }) {
+async function executeWithRetry({ createQueryResult, streamingEnabled, resumeSessionId, workingDirectory, logPrefix, outerStreamState, userMessage }) {
   let retryAttempt = 0;
   let lastRetryError = null;
   const lp = logPrefix ? ` ${logPrefix}` : '';
@@ -311,6 +312,12 @@ async function executeWithRetry({ createQueryResult, streamingEnabled, resumeSes
       outerStreamState.streamStarted = state.streamStarted;
       console.log('[MESSAGE_END]');
       console.log(JSON.stringify({ success: true, sessionId: state.currentSessionId }));
+
+      // Fire-and-forget: generate AI title for new sessions (not resumes)
+      if (userMessage && state.currentSessionId && !resumeSessionId) {
+        void generateSessionTitle(userMessage, state.currentSessionId, workingDirectory);
+      }
+
       break;
 
     } catch (retryError) {
@@ -433,7 +440,8 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
       resumeSessionId,
       workingDirectory,
       logPrefix: '',
-      outerStreamState
+      outerStreamState,
+      userMessage: message
     });
 
   } catch (error) {
@@ -505,7 +513,8 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
       resumeSessionId,
       workingDirectory,
       logPrefix: '(withAttachments)',
-      outerStreamState
+      outerStreamState,
+      userMessage: message
     });
 
   } catch (error) {

@@ -549,6 +549,17 @@ public class DaemonBridge {
                 LOG.info("[DaemonBridge] Daemon shutting down");
                 break;
 
+            case "title_log": {
+                String titleLevel = obj.has("level") ? obj.get("level").getAsString() : "info";
+                String titleMsg = obj.has("message") ? obj.get("message").getAsString() : "";
+                if ("error".equals(titleLevel) || "warn".equals(titleLevel)) {
+                    LOG.warn("[TitleService] " + titleMsg);
+                } else {
+                    LOG.info("[TitleService] " + titleMsg);
+                }
+                break;
+            }
+
             default:
                 LOG.debug("[DaemonBridge] Unhandled daemon event: " + event);
         }
