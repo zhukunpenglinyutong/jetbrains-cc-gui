@@ -55,6 +55,28 @@ export function processStreamEvent(msg, turnState) {
   }
 }
 
+// FIX (defensive): Flag suspiciously large first-emission deltas in a
+// streaming-enabled turn where no stream_event has arrived yet. In normal
+// streaming this shouldn't happen — content_block_delta events should
+// populate lastAssistantContent incrementally. A large initial jump from ''
+// suggests the iterator leaked a full-text `assistant` message from a
+// previous turn. Only logs; does not alter behavior.
+const SUSPICIOUS_INITIAL_DELTA_CHARS = 2000;
+
+function warnOnSuspiciousInitialDelta(turnState, delta, kind) {
+  if (
+    turnState.streamingEnabled &&
+    !turnState.hasStreamEvents &&
+    delta.length > SUSPICIOUS_INITIAL_DELTA_CHARS &&
+    turnState.lastAssistantContent.length === 0 &&
+    turnState.lastThinkingContent.length === 0
+  ) {
+    console.warn('[DEFENSIVE] Large initial ' + kind + ' delta without prior stream events ('
+      + delta.length + ' chars). Possible stale content leak from previous turn. Preview='
+      + JSON.stringify(delta.slice(0, 120)));
+  }
+}
+
 export function processMessageContent(msg, turnState) {
   if (msg.type !== 'assistant') return;
   const content = msg.message?.content;
@@ -66,6 +88,7 @@ export function processMessageContent(msg, turnState) {
         if (turnState.streamingEnabled && !turnState.hasStreamEvents && currentText.length > turnState.lastAssistantContent.length) {
           const delta = currentText.substring(turnState.lastAssistantContent.length);
           if (delta) {
+            warnOnSuspiciousInitialDelta(turnState, delta, 'text');
             process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(delta)}\n`);
           }
           turnState.lastAssistantContent = currentText;
@@ -81,6 +104,7 @@ export function processMessageContent(msg, turnState) {
         if (turnState.streamingEnabled && !turnState.hasStreamEvents && thinkingText.length > turnState.lastThinkingContent.length) {
           const delta = thinkingText.substring(turnState.lastThinkingContent.length);
           if (delta) {
+            warnOnSuspiciousInitialDelta(turnState, delta, 'thinking');
             process.stdout.write(`[THINKING_DELTA] ${JSON.stringify(delta)}\n`);
           }
           turnState.lastThinkingContent = thinkingText;

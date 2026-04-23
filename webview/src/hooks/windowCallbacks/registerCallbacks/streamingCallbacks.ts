@@ -123,9 +123,31 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     setMessages((prev) => {
       const last = prev[prev.length - 1];
       if (last?.type === 'assistant' && last?.isStreaming) {
+        // FIX: If the last streaming assistant belongs to an OLDER turn,
+        // its onStreamEnd was likely dropped (e.g., JCEF async chain
+        // breakage). Finalize it (isStreaming=false) and start a fresh
+        // assistant for the new turn, so new deltas are not appended
+        // to the previous turn's bubble.
+        const lastTurnId = (last as { __turnId?: number }).__turnId;
+        const currentTurnId = streamingTurnIdRef.current;
+        if (typeof lastTurnId === 'number' && lastTurnId > 0 && lastTurnId < currentTurnId) {
+          const finalized = [...prev];
+          finalized[prev.length - 1] = { ...last, isStreaming: false };
+          streamingMessageIndexRef.current = finalized.length;
+          return [
+            ...finalized,
+            {
+              type: 'assistant',
+              content: '',
+              isStreaming: true,
+              timestamp: new Date().toISOString(),
+              __turnId: currentTurnId,
+            },
+          ];
+        }
         streamingMessageIndexRef.current = prev.length - 1;
         const updated = [...prev];
-        updated[prev.length - 1] = { ...updated[prev.length - 1], __turnId: streamingTurnIdRef.current };
+        updated[prev.length - 1] = { ...updated[prev.length - 1], __turnId: currentTurnId };
         return updated;
       }
       streamingMessageIndexRef.current = prev.length;

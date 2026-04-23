@@ -299,6 +299,139 @@ test('executeTurn refreshes lastUsedAt while processing query events', async () 
   assert.ok(runtime.lastUsedAt > 1);
 });
 
+test('drainPendingEvents consumes all buffered events before a timeout', async () => {
+  const calls = [];
+  const runtime = {
+    closed: false,
+    query: {
+      async next() {
+        calls.push(Date.now());
+        if (calls.length <= 3) {
+          return { done: false, value: { type: 'stream_event', event: { type: 'content_block_delta' } } };
+        }
+        // After draining 3 buffered events, simulate no more events by hanging.
+        return new Promise(() => {});
+      }
+    }
+  };
+
+  const drained = await __testing.drainPendingEvents(runtime, 50);
+  assert.equal(drained, 3);
+  assert.ok(calls.length >= 4); // 3 drained + 1 hanging call that triggered the timeout
+});
+
+test('drainPendingEvents returns 0 for a closed runtime', async () => {
+  const runtime = { closed: true, query: { async next() { throw new Error('must not be called'); } } };
+  const drained = await __testing.drainPendingEvents(runtime, 50);
+  assert.equal(drained, 0);
+});
+
+test('drainPendingEvents stops at done:true', async () => {
+  let i = 0;
+  const runtime = {
+    closed: false,
+    query: {
+      async next() {
+        i++;
+        if (i === 1) return { done: false, value: { type: 'assistant' } };
+        return { done: true, value: undefined };
+      }
+    }
+  };
+  const drained = await __testing.drainPendingEvents(runtime, 1000);
+  assert.equal(drained, 1);
+  assert.equal(i, 2);
+});
+
+test('executeTurn drains stale previous-turn events before processing new turn', async () => {
+  // Scenario: previous turn left 2 straggling events in the iterator.
+  // With hasCompletedTurn=true, these must be drained BEFORE the main loop
+  // starts processing the new turn, so they don't pollute turnState.
+  const staleAssistant1 = { type: 'assistant', message: { content: [{ type: 'text', text: 'STALE PREVIOUS ANSWER' }] } };
+  const staleAssistant2 = { type: 'assistant', message: { content: [{ type: 'text', text: 'STALE PREVIOUS ANSWER continued' }] } };
+  const newAssistant = { type: 'assistant', message: { content: [{ type: 'text', text: 'fresh reply' }] } };
+  const resultMsg = { type: 'result', is_error: false };
+
+  // Custom factory: first 2 calls return stale events immediately, call 3
+  // hangs forever (simulating the SDK with no more buffered events — drain
+  // times out here), then calls 4+ return new-turn events to the main loop.
+  let callCount = 0;
+  const queryFn = ({ prompt, options }) => {
+    const q = {
+      prompt,
+      options,
+      closed: false,
+      setPermissionMode: async () => {},
+      setModel: async () => {},
+      setMaxThinkingTokens: async () => {},
+      close() { this.closed = true; },
+      async next() {
+        callCount++;
+        if (callCount === 1) return { done: false, value: staleAssistant1 };
+        if (callCount === 2) return { done: false, value: staleAssistant2 };
+        if (callCount === 3) return new Promise(() => {}); // hangs; drain times out
+        if (callCount === 4) return { done: false, value: newAssistant };
+        return { done: false, value: resultMsg };
+      }
+    };
+    return q;
+  };
+  __testing.setQueryFn(queryFn);
+
+  const context = await __testing.buildRequestContext({
+    sessionId: 'session-drain',
+    runtimeSessionEpoch: 'epoch-drain',
+    cwd: process.cwd(),
+    message: 'new question',
+    streaming: true
+  }, false);
+  const runtime = await __testing.acquireRuntime(context);
+  // Simulate that this runtime has already completed one turn.
+  runtime.hasCompletedTurn = true;
+
+  const turnMeta = { state: null };
+  await __testing.executeTurn(runtime, context, turnMeta);
+
+  // After drain, the main loop should have only seen newAssistant + result.
+  // turnState.lastAssistantContent should contain only 'fresh reply',
+  // never the stale previous-turn text.
+  assert.equal(turnMeta.state.lastAssistantContent, 'fresh reply');
+  assert.ok(!turnMeta.state.lastAssistantContent.includes('STALE'));
+  // Drain took calls 1-3 (3rd hung until timeout), main loop took calls 4-5.
+  assert.equal(callCount, 5);
+});
+
+test('executeTurn skips drain on a first-turn runtime (hasCompletedTurn=false)', async () => {
+  // Scenario: a brand-new runtime has not completed any turn yet.
+  // Drain must NOT run — there's nothing to drain, and calling next()
+  // before enqueueing the user message would hang the iterator.
+  const newAssistant = { type: 'assistant', message: { content: [{ type: 'text', text: 'first reply' }] } };
+  const resultMsg = { type: 'result', is_error: false };
+
+  const factory = createSequencedQueryFactory([
+    { done: false, value: newAssistant },
+    { done: false, value: resultMsg }
+  ]);
+  __testing.setQueryFn(factory.queryFn);
+
+  const context = await __testing.buildRequestContext({
+    sessionId: 'session-first',
+    runtimeSessionEpoch: 'epoch-first',
+    cwd: process.cwd(),
+    message: 'first message',
+    streaming: true
+  }, false);
+  const runtime = await __testing.acquireRuntime(context);
+  assert.equal(runtime.hasCompletedTurn, undefined, 'new runtime should not have hasCompletedTurn set');
+
+  const turnMeta = { state: null };
+  await __testing.executeTurn(runtime, context, turnMeta);
+
+  assert.equal(turnMeta.state.lastAssistantContent, 'first reply');
+  // After a successful turn, runtime should be flagged.
+  assert.equal(runtime.hasCompletedTurn, true);
+});
+
 test('abortCurrentTurn still disposes an active runtime explicitly', async () => {
   const nextDeferred = createDeferred();
   const enteredDeferred = createDeferred();

@@ -189,6 +189,60 @@ const _sessionCleanupTimer = setInterval(async () => {
 // unref() so the timer does not prevent natural process exit
 _sessionCleanupTimer.unref();
 
+/**
+ * Drain any events still buffered in the SDK iterator from a previous turn.
+ *
+ * When a persistent runtime is reused across turns, the SDK's async iterator
+ * may still hold events emitted after the previous turn's `result` message
+ * (late `content_block_delta`, trailing `assistant` snapshots, stream cleanup
+ * events). Without draining, the first `query.next()` of the NEW turn returns
+ * those stale events — and because `turnState.lastAssistantContent` is reset
+ * to '' at turn start, the full previous-turn text is re-emitted as a delta
+ * for the new turn, producing the "AI answered the previous question" bug.
+ *
+ * Uses Promise.race with a short timeout. Any promise abandoned via the race
+ * would, in the worst case, consume a single future SDK value — but this
+ * function is only called BEFORE the next user message is enqueued, so any
+ * such value is guaranteed to be a previous-turn straggler (nothing new can
+ * be produced by the SDK without new input). Losing it is therefore safe.
+ */
+async function drainPendingEvents(runtime, budgetMs = 50) {
+  if (!runtime || runtime.closed) return 0;
+  const deadline = Date.now() + budgetMs;
+  let drained = 0;
+  const timeoutSentinel = Symbol('drain-timeout');
+
+  while (true) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+
+    let timeoutHandle;
+    const timeoutPromise = new Promise((resolve) => {
+      timeoutHandle = setTimeout(() => resolve(timeoutSentinel), remaining);
+    });
+
+    let result;
+    try {
+      result = await Promise.race([runtime.query.next(), timeoutPromise]);
+    } catch (error) {
+      clearTimeout(timeoutHandle);
+      console.warn('[LIFECYCLE] drainPendingEvents encountered error: ' + (error?.message || error));
+      break;
+    }
+    clearTimeout(timeoutHandle);
+
+    if (result === timeoutSentinel) break;
+    if (result?.done) break;
+    drained++;
+    console.log('[LIFECYCLE] Drained stale event type=' + (result?.value?.type || 'unknown'));
+  }
+
+  if (drained > 0) {
+    console.log('[LIFECYCLE] Cleared ' + drained + ' carry-over event(s) before new turn');
+  }
+  return drained;
+}
+
 async function executeTurn(runtime, requestContext, turnMeta) {
   if (!runtime || runtime.closed) {
     const err = new Error('Runtime is closed');
@@ -207,6 +261,14 @@ async function executeTurn(runtime, requestContext, turnMeta) {
 
   try {
     beginRuntimeTurn(runtime);
+
+    // FIX: Clear any leftover events from a previous turn on this runtime
+    // before enqueueing the new user message. Prevents stale previous-turn
+    // content from being misattributed to the new turn.
+    if (runtime.hasCompletedTurn) {
+      await drainPendingEvents(runtime, 50);
+    }
+
     console.log('[MESSAGE_START]');
     runtime.inputStream.enqueue(requestContext.userMessage);
 
@@ -263,6 +325,10 @@ async function executeTurn(runtime, requestContext, turnMeta) {
         if (msg.is_error) {
           throw new Error(msg.result || msg.message || 'API request failed');
         }
+        // FIX: Mark this runtime as having completed a turn so that the NEXT
+        // turn's executeTurn drains any straggling events before enqueueing
+        // its user message.
+        runtime.hasCompletedTurn = true;
         break;
       }
     }
@@ -417,6 +483,9 @@ export const __testing = {
   },
   async executeTurn(runtime, requestContext, turnMeta = null) {
     return executeTurn(runtime, requestContext, turnMeta);
+  },
+  async drainPendingEvents(runtime, budgetMs = 50) {
+    return drainPendingEvents(runtime, budgetMs);
   },
   async cleanupAnonymousRuntimes() {
     return cleanupStaleAnonymousRuntimes({ registerActiveQueryResult, removeSession });
