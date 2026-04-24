@@ -626,7 +626,18 @@
         "cliLoginDisableMessage": "插件将停止读取 ~/.codex/config.toml 和 auth.json。",
         "modelIdRequired": "请输入模型 ID",
         "modelIdInvalid": "模型 ID 格式无效（仅允许字母、数字、点、连字符、下划线、斜杠和冒号）",
-        "modelIdDuplicate": "模型 ID 已存在"
+        "modelIdDuplicate": "模型 ID 已存在",
+        "envVarsTitle": "环境变量",
+        "messageEnvLabel": "消息环境变量",
+        "messageEnvHint": "注入到 Codex 消息子进程的自定义环境变量",
+        "mcpEnvLabel": "MCP 环境变量",
+        "mcpEnvHint": "注入到 MCP 工具发现子进程的自定义环境变量",
+        "envKeyPlaceholder": "环境变量名",
+        "envValuePlaceholder": "值",
+        "addEnvVar": "添加变量",
+        "envKeyInvalid": "无效的变量名（必须以字母或下划线开头，仅允许字母数字和下划线）",
+        "envKeyProtected": "无法设置内置变量：{{key}}",
+        "envKeyDuplicate": "重复的变量名：{{key}}"
       }
     },
     "agent": {
