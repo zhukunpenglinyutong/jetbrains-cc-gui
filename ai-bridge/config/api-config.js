@@ -175,7 +175,11 @@ function readJsonFile(filePath) {
     if (!existsSync(filePath)) {
       return null;
     }
-    return JSON.parse(readFileSync(filePath, 'utf8'));
+    const raw = readFileSync(filePath, 'utf8');
+    // PowerShell commonly writes UTF-8 with BOM on Windows. Strip the BOM
+    // before parsing so provider state files remain readable across tools.
+    const normalized = raw.charCodeAt(0) === 0xFEFF ? raw.slice(1) : raw;
+    return JSON.parse(normalized);
   } catch (error) {
     debugLog('[DEBUG] Failed to read JSON file:', filePath, error.message);
     return null;
@@ -335,18 +339,10 @@ export function loadClaudeSettings() {
  * @returns {Object} Contains apiKey, baseUrl, authType and their sources
  */
 export function setupApiKey() {
-  debugLog('[DIAG-CONFIG] ========== setupApiKey() START ==========');
-
   const runtimeState = getClaudeRuntimeState();
   const settings = loadClaudeSettings();
   injectNetworkEnvVars(settings);
   clearRuntimeAuthEnv();
-
-  debugLog('[DIAG-CONFIG] Runtime provider access:', runtimeState.access, runtimeState.currentId || '(none)');
-  debugLog('[DIAG-CONFIG] Settings loaded:', settings ? 'yes' : 'no');
-  if (settings?.env) {
-    debugLog('[DIAG-CONFIG] Settings env keys:', Object.keys(settings.env));
-  }
 
   let apiKey;
   let baseUrl;
@@ -367,8 +363,6 @@ export function setupApiKey() {
   // strictly use SDK native OAuth flow. No fallback to other auth methods.
   const cliLoginAuthorized = settings?.env?.CCGUI_CLI_LOGIN_AUTHORIZED === '1';
   if (cliLoginAuthorized) {
-    debugLog('[INFO] CLI login authorized by user - delegating auth to Claude SDK native OAuth flow');
-
     // Use empty string assignment instead of delete so the SDK falls through to
     // its native OAuth flow without inheriting stale values from prior requests.
     process.env.ANTHROPIC_API_KEY = '';
@@ -406,7 +400,6 @@ export function setupApiKey() {
     const hasApiKeyHelper = managedSettings?.apiKeyHelper || settings?.apiKeyHelper;
 
     if (hasApiKeyHelper) {
-      debugLog('[INFO] Using apiKeyHelper authentication (SDK will handle execution)');
       authType = 'api_key_helper';
       apiKeySource = managedSettings?.apiKeyHelper
         ? 'managed-settings.json (apiKeyHelper)'
@@ -441,13 +434,6 @@ export function setupApiKey() {
   }
 
   debugLog('[DEBUG] Auth type:', authType);
-
-  debugLog('[DIAG-CONFIG] ========== setupApiKey() RESULT ==========');
-  debugLog('[DIAG-CONFIG] authType:', authType);
-  debugLog('[DIAG-CONFIG] apiKeySource:', apiKeySource);
-  debugLog('[DIAG-CONFIG] baseUrl:', baseUrl || '(not set)');
-  debugLog('[DIAG-CONFIG] baseUrlSource:', baseUrlSource);
-  debugLog('[DIAG-CONFIG] apiKey configured:', apiKey ? 'YES' : 'NO');
 
   return { apiKey, baseUrl, authType, apiKeySource, baseUrlSource };
 }
