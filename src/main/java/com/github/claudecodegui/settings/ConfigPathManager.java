@@ -20,6 +20,7 @@ public class ConfigPathManager {
     private static final String BACKUP_FILE_NAME = "config.json.bak";
     private static final String AGENT_FILE_NAME = "agent.json";
     private static final String PROMPT_FILE_NAME = "prompt.json";
+    private static final String CUSTOM_MODELS_FILE_NAME = "custom-models.json";
     private static final String CLAUDE_DIR_NAME = ".claude";
     private static final String CLAUDE_SETTINGS_FILE_NAME = "settings.json";
     private static final String MANAGED_SETTINGS_FILE_NAME = "managed-settings.json";
@@ -67,6 +68,14 @@ public class ConfigPathManager {
      */
     public Path getPromptFilePath() {
         return getConfigDir().resolve(PROMPT_FILE_NAME);
+    }
+
+    /**
+     * Get the custom-models.json file path for plugin-level custom models.
+     * This stores custom models that are not provider-specific.
+     */
+    public Path getCustomModelsFilePath() {
+        return getConfigDir().resolve(CUSTOM_MODELS_FILE_NAME);
     }
 
     /**

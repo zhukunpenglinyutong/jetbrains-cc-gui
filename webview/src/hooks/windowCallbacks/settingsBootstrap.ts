@@ -7,8 +7,42 @@
  */
 
 import { sendBridgeEvent } from '../../utils/bridge';
+import { STORAGE_KEYS } from '../../types/provider';
 
 const MAX_RETRIES = 30;
+
+/**
+ * Sync existing custom models from localStorage to backend configuration.
+ * This should be called on app startup to ensure git dialog has access to custom models.
+ */
+export const syncCustomModelsToBackend = (): void => {
+  let retryCount = 0;
+  const syncModels = () => {
+    if (window.sendToJava) {
+      try {
+        const claudeModels = JSON.parse(localStorage.getItem(STORAGE_KEYS.CLAUDE_CUSTOM_MODELS) || '[]');
+        const codexModels = JSON.parse(localStorage.getItem(STORAGE_KEYS.CODEX_CUSTOM_MODELS) || '[]');
+
+        if (claudeModels.length > 0 || codexModels.length > 0) {
+          const payload = {
+            claude: claudeModels,
+            codex: codexModels,
+          };
+          console.debug('[settingsBootstrap] Syncing existing custom models to backend:', payload);
+          sendBridgeEvent('save_custom_models', JSON.stringify(payload));
+        }
+      } catch (e) {
+        console.debug('[settingsBootstrap] Failed to sync custom models:', e);
+      }
+    } else {
+      retryCount++;
+      if (retryCount < MAX_RETRIES) {
+        setTimeout(syncModels, 100);
+      }
+    }
+  };
+  setTimeout(syncModels, 500); // Slightly longer delay to ensure localStorage is ready
+};
 
 /**
  * Fire the three settings queries to the backend.  Retries up to MAX_RETRIES

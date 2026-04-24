@@ -6,6 +6,7 @@ import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.handler.AgentHandler;
 import com.github.claudecodegui.handler.ClipboardHandler;
 import com.github.claudecodegui.handler.CodexMcpServerHandler;
+import com.github.claudecodegui.handler.CustomModelsHandler;
 import com.github.claudecodegui.handler.DependencyHandler;
 import com.github.claudecodegui.handler.DiffHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
@@ -244,6 +245,7 @@ public class ChatWindowDelegate {
         host.setMessageDispatcher(messageDispatcher);
 
         messageDispatcher.registerHandler(new ProviderHandler(handlerContext));
+        messageDispatcher.registerHandler(new CustomModelsHandler(handlerContext));
         messageDispatcher.registerHandler(new McpServerHandler(handlerContext));
         messageDispatcher.registerHandler(new CodexMcpServerHandler(handlerContext, settingsService.getCodexMcpServerManager()));
         messageDispatcher.registerHandler(new SkillHandler(handlerContext));

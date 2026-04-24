@@ -46,7 +46,9 @@ public class BridgeDirectoryResolver {
     private static final String BRIDGE_PATH_PROPERTY = "claude.bridge.path";
     private static final String BRIDGE_PATH_ENV = "CLAUDE_BRIDGE_PATH";
     private static final String PLUGIN_DIR_NAME = "idea-claude-code-gui";
-
+    private final Object bridgeExtractionLock = new Object();
+    private final AtomicReference<ExtractionState> extractionState = new AtomicReference<>(ExtractionState.NOT_STARTED);
+    private final AtomicReference<CompletableFuture<File>> extractionFutureRef = new AtomicReference<>();
     private volatile File cachedSdkDir = null;
     /**
      * Directory path manually set via setSdkDir(), with the highest priority.
@@ -55,18 +57,6 @@ public class BridgeDirectoryResolver {
      * - cachedSdkDir: Cached directory found through any means (manual or automatic)
      */
     private volatile File manuallySdkDir = null;
-    private final Object bridgeExtractionLock = new Object();
-
-    // Extraction state management
-    private enum ExtractionState {
-        NOT_STARTED,    // Initial state
-        IN_PROGRESS,    // Extraction is running
-        COMPLETED,      // Extraction finished successfully
-        FAILED          // Extraction failed
-    }
-
-    private final AtomicReference<ExtractionState> extractionState = new AtomicReference<>(ExtractionState.NOT_STARTED);
-    private final AtomicReference<CompletableFuture<File>> extractionFutureRef = new AtomicReference<>();
     private volatile CompletableFuture<Boolean> extractionReadyFuture = new CompletableFuture<>();
 
     /**
@@ -203,15 +193,15 @@ public class BridgeDirectoryResolver {
      */
     private File resolveConfiguredBridgeDir() {
         File fromProperty = tryResolveConfiguredPath(
-            System.getProperty(BRIDGE_PATH_PROPERTY),
-            "system property " + BRIDGE_PATH_PROPERTY
+                System.getProperty(BRIDGE_PATH_PROPERTY),
+                "system property " + BRIDGE_PATH_PROPERTY
         );
         if (fromProperty != null) {
             return fromProperty;
         }
         return tryResolveConfiguredPath(
-            System.getenv(BRIDGE_PATH_ENV),
-            "environment variable " + BRIDGE_PATH_ENV
+                System.getenv(BRIDGE_PATH_ENV),
+                "environment variable " + BRIDGE_PATH_ENV
         );
     }
 
@@ -286,7 +276,7 @@ public class BridgeDirectoryResolver {
     /**
      * Validate whether a directory is a valid bridge directory.
      * Checks for the existence of the core script and node_modules.
-     *
+     * <p>
      * Note: AI SDKs such as @anthropic-ai/claude-agent-sdk are not bundled in ai-bridge.
      * They are loaded dynamically from ~/.codemoss/dependencies/, so SDK presence is not checked here.
      */
@@ -364,7 +354,7 @@ public class BridgeDirectoryResolver {
                     String name = plugin.getName();
                     // Match by plugin ID or name
                     if (id.contains("claude") || id.contains("Claude") ||
-                        (name != null && (name.contains("Claude") || name.contains("claude")))) {
+                            (name != null && (name.contains("Claude") || name.contains("claude")))) {
                         LOG.debug("[BridgeResolver] Found candidate plugin: id=" + id + ", name=" + name + ", path=" + plugin.getPluginPath());
                         File candidateDir = plugin.getPluginPath().toFile();
                         File candidateArchive = new File(candidateDir, SDK_ARCHIVE_NAME);
@@ -529,7 +519,7 @@ public class BridgeDirectoryResolver {
                 // Mark as in progress BEFORE checking EDT thread
                 // Also initialize extractionFutureRef to ensure waitForExtraction() works
                 if (!this.extractionState.compareAndSet(ExtractionState.NOT_STARTED, ExtractionState.IN_PROGRESS) &&
-                    !this.extractionState.compareAndSet(ExtractionState.FAILED, ExtractionState.IN_PROGRESS)) {
+                        !this.extractionState.compareAndSet(ExtractionState.FAILED, ExtractionState.IN_PROGRESS)) {
                     // Another thread just started extraction, wait for it
                     LOG.debug("[BridgeResolver] Another thread just started extraction, waiting...");
                     return waitForExtraction();
@@ -627,8 +617,8 @@ public class BridgeDirectoryResolver {
      * Wait for bridge directory to become valid with retry mechanism.
      * This fixes race condition where filesystem hasn't fully synced after extraction.
      *
-     * @param dir The directory to validate
-     * @param maxRetries Maximum number of retry attempts
+     * @param dir            The directory to validate
+     * @param maxRetries     Maximum number of retry attempts
      * @param initialDelayMs Initial delay in milliseconds (doubles with each retry)
      * @return The validated directory, or null if validation fails after all retries
      */
@@ -837,9 +827,10 @@ public class BridgeDirectoryResolver {
 
     /**
      * Core implementation for system unzip extraction.
+     *
      * @param archiveFile The archive to extract
-     * @param targetDir The target directory
-     * @param indicator Optional progress indicator (can be null)
+     * @param targetDir   The target directory
+     * @param indicator   Optional progress indicator (can be null)
      * @return true if extraction succeeded, false otherwise
      */
     private boolean executeSystemUnzip(File archiveFile, File targetDir, ProgressIndicator indicator) {
@@ -990,6 +981,16 @@ public class BridgeDirectoryResolver {
     }
 
     /**
+     * Gets the currently used claude-bridge directory.
+     */
+    public File getSdkDir() {
+        if (this.cachedSdkDir == null) {
+            return this.findSdkDir();
+        }
+        return this.cachedSdkDir;
+    }
+
+    /**
      * Manually sets the claude-bridge directory path.
      * This path has the highest priority and overrides configured and embedded paths.
      * Once set, findSdkDir() will preferentially return this path.
@@ -1000,16 +1001,6 @@ public class BridgeDirectoryResolver {
         this.manuallySdkDir = new File(path);
         this.cachedSdkDir = this.manuallySdkDir;
         LOG.debug("[BridgeResolver] Manually set SDK directory to: " + path);
-    }
-
-    /**
-     * Gets the currently used claude-bridge directory.
-     */
-    public File getSdkDir() {
-        if (this.cachedSdkDir == null) {
-            return this.findSdkDir();
-        }
-        return this.cachedSdkDir;
     }
 
     /**
@@ -1137,6 +1128,14 @@ public class BridgeDirectoryResolver {
             LOG.warn("[BridgeResolver] Failed to calculate file hash: " + e.getMessage());
             return null;
         }
+    }
+
+    // Extraction state management
+    private enum ExtractionState {
+        NOT_STARTED,    // Initial state
+        IN_PROGRESS,    // Extraction is running
+        COMPLETED,      // Extraction finished successfully
+        FAILED          // Extraction failed
     }
 }
 

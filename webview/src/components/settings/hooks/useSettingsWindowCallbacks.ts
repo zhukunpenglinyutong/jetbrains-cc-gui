@@ -105,6 +105,8 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       try {
         const activeProvider: ProviderConfig = JSON.parse(jsonStr);
         if (activeProvider) {
+          // Store active provider in localStorage for use by other hooks (e.g., usePluginModels)
+          localStorage.setItem('activeProvider', jsonStr);
           d().updateActiveProvider(activeProvider);
         }
       } catch (error) {
