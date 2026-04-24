@@ -340,6 +340,11 @@ export const CLAUDE_MODELS: ModelInfo[] = [
  */
 export const CODEX_MODELS: ModelInfo[] = [
   {
+    id: 'gpt-5.5',
+    label: 'GPT-5.5',
+    description: 'Latest frontier model with stronger capabilities.',
+  },
+  {
     id: 'gpt-5.4',
     label: 'GPT-5.4',
     description: 'Latest frontier model with enhanced capabilities.',
@@ -368,11 +373,6 @@ export const CODEX_MODELS: ModelInfo[] = [
     id: 'gpt-5.3-codex-spark',
     label: 'GPT-5.3-Codex-Spark',
     description: 'Ultra-fast coding model.',
-  },
-  {
-    id: 'gpt-5.2',
-    label: 'GPT-5.2',
-    description: 'Optimized for professional work and long-running agents.',
   },
   {
     id: 'gpt-5.1-codex-mini',

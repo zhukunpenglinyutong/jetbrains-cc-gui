@@ -1162,6 +1162,10 @@
         "label": "GPT-5.3-Codex",
         "description": "Dernier modèle de codage agentique avec des capacités améliorées."
       },
+      "gpt55": {
+        "label": "GPT-5.5",
+        "description": "Modèle frontier le plus récent aux capacités renforcées."
+      },
       "gpt54": {
         "label": "GPT-5.4",
         "description": "Dernier modèle de pointe avec des capacités améliorées."
@@ -1181,10 +1185,6 @@
       "gpt53codexSpark": {
         "label": "GPT-5.3-Codex-Spark",
         "description": "Modèle de codage ultra-rapide."
-      },
-      "gpt52": {
-        "label": "GPT-5.2",
-        "description": "Optimisé pour le travail professionnel et les agents longue durée."
       },
       "gpt51codexMini": {
         "label": "GPT-5.1-Codex-Mini",

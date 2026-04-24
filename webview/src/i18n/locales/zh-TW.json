@@ -1167,6 +1167,10 @@
         "label": "GPT-5.3-Codex",
         "description": "最新前沿智慧編程模型，能力全面增強"
       },
+      "gpt55": {
+        "label": "GPT-5.5",
+        "description": "最新前沿模型，能力進一步增強"
+      },
       "gpt54": {
         "label": "GPT-5.4",
         "description": "最新前沿模型，能力進一步增強"
@@ -1186,10 +1190,6 @@
       "gpt53codexSpark": {
         "label": "GPT-5.3-Codex-Spark",
         "description": "超高速編程模型"
-      },
-      "gpt52": {
-        "label": "GPT-5.2",
-        "description": "針對專業工作與長程代理任務優化"
       },
       "gpt51codexMini": {
         "label": "GPT-5.1-Codex-Mini",

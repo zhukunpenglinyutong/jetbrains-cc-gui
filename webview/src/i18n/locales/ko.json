@@ -1284,6 +1284,10 @@
         "label": "GPT-5.3-Codex",
         "description": "향상된 기능의 최신 프론티어 에이전트 코딩 모델."
       },
+      "gpt55": {
+        "label": "GPT-5.5",
+        "description": "최신 프런티어 모델, 성능이 한층 강화되었습니다"
+      },
       "gpt54": {
         "label": "GPT-5.4",
         "description": "향상된 기능의 최신 프론티어 모델."
@@ -1303,10 +1307,6 @@
       "gpt53codexSpark": {
         "label": "GPT-5.3-Codex-Spark",
         "description": "초고속 코딩 모델."
-      },
-      "gpt52": {
-        "label": "GPT-5.2",
-        "description": "전문 작업과 장시간 에이전트 작업에 최적화."
       },
       "gpt51codexMini": {
         "label": "GPT-5.1-Codex-Mini",

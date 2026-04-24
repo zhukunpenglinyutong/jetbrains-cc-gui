@@ -1167,6 +1167,10 @@
         "label": "GPT-5.3-Codex",
         "description": "最新の最先端エージェントコーディングモデル（機能強化版）"
       },
+      "gpt55": {
+        "label": "GPT-5.5",
+        "description": "最新のフロンティアモデル。能力がさらに向上"
+      },
       "gpt54": {
         "label": "GPT-5.4",
         "description": "拡張された能力を備えた最新の最先端モデル"
@@ -1186,10 +1190,6 @@
       "gpt53codexSpark": {
         "label": "GPT-5.3-Codex-Spark",
         "description": "超高速コーディングモデル"
-      },
-      "gpt52": {
-        "label": "GPT-5.2",
-        "description": "プロ向け作業と長時間エージェント向けに最適化"
       },
       "gpt51codexMini": {
         "label": "GPT-5.1-Codex-Mini",
