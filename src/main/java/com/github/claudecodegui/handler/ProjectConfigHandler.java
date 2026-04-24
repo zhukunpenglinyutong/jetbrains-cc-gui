@@ -13,6 +13,10 @@ import com.google.gson.JsonObject;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.fileChooser.FileChooser;
+import com.intellij.openapi.fileChooser.FileChooserDescriptor;
+import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.openapi.vfs.VirtualFile;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -344,6 +348,94 @@ public class ProjectConfigHandler {
         }
     }
 
+    public void handleGetUiFontConfig() {
+        dispatchUiFontConfigUpdate();
+    }
+
+    public void handleSetUiFontConfig(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            String mode = json != null && json.has("mode") && !json.get("mode").isJsonNull()
+                ? json.get("mode").getAsString()
+                : FontConfigService.UI_FONT_MODE_FOLLOW_EDITOR;
+            String customFontPath = json != null && json.has("customFontPath") && !json.get("customFontPath").isJsonNull()
+                ? json.get("customFontPath").getAsString()
+                : null;
+
+            if (FontConfigService.UI_FONT_MODE_CUSTOM_FILE.equals(mode)) {
+                FontConfigService.ValidationResult validation = FontConfigService.validateCustomUiFontFile(customFontPath);
+                if (!validation.valid()) {
+                    final String errorMessage = validation.errorMessage();
+                    ApplicationManager.getApplication().invokeLater(() ->
+                        context.callJavaScript("window.showError", context.escapeJs("Invalid font file: " + errorMessage)));
+                    return;
+                }
+            }
+
+            settingsService.setUiFontConfig(mode, customFontPath);
+            dispatchUiFontConfigUpdate();
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set UI font config: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() ->
+                context.callJavaScript("window.showError", context.escapeJs("Failed to save font config: " + e.getMessage())));
+        }
+    }
+
+    public void handleBrowseUiFontFile() {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            try {
+                FileChooserDescriptor descriptor = new FileChooserDescriptor(
+                    true, false, false, false, false, false
+                )
+                    .withFileFilter(file -> {
+                        String extension = file.getExtension();
+                        return extension != null && (
+                            extension.equalsIgnoreCase("ttf") ||
+                            extension.equalsIgnoreCase("otf")
+                        );
+                    })
+                    .withTitle("Select Font File")
+                    .withDescription("Select a TTF or OTF font file");
+
+                VirtualFile initialFile = null;
+                try {
+                    JsonObject persistedUiFont = settingsService.getUiFontConfig();
+                    if (persistedUiFont.has("customFontPath") && !persistedUiFont.get("customFontPath").isJsonNull()) {
+                        initialFile = LocalFileSystem.getInstance()
+                            .findFileByPath(persistedUiFont.get("customFontPath").getAsString());
+                    }
+                } catch (Exception e) {
+                    LOG.warn("[ProjectConfigHandler] Failed to resolve current custom font path: " + e.getMessage());
+                }
+
+                FileChooser.chooseFile(descriptor, context.getProject(), initialFile, file -> {
+                    if (file == null) {
+                        return;
+                    }
+
+                    String path = file.getPath();
+                    FontConfigService.ValidationResult validation = FontConfigService.validateCustomUiFontFile(path);
+                    if (!validation.valid()) {
+                        context.callJavaScript("window.showError",
+                            context.escapeJs("Invalid font file: " + validation.errorMessage()));
+                        return;
+                    }
+
+                    try {
+                        settingsService.setUiFontConfig(FontConfigService.UI_FONT_MODE_CUSTOM_FILE, path);
+                        dispatchUiFontConfigUpdate();
+                        context.callJavaScript("window.showSuccessI18n", context.escapeJs("toast.saveSuccess"));
+                    } catch (Exception e) {
+                        LOG.error("[ProjectConfigHandler] Failed to save selected font file: " + e.getMessage(), e);
+                        context.callJavaScript("window.showError", context.escapeJs("Failed to save font config: " + e.getMessage()));
+                    }
+                });
+            } catch (Exception e) {
+                LOG.error("[ProjectConfigHandler] Failed to open font file chooser: " + e.getMessage(), e);
+            }
+        });
+    }
+
     // ==================== AI Feature Toggle ====================
 
     public void handleGetCommitGenerationEnabled() {
@@ -419,6 +511,18 @@ public class ProjectConfigHandler {
             LOG.error("[ProjectConfigHandler] Failed to set status bar widget enabled: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() ->
                 context.callJavaScript("window.showError", context.escapeJs("保存状态栏配置失败")));
+        }
+    }
+
+    private void dispatchUiFontConfigUpdate() {
+        try {
+            String uiFontConfigJson = FontConfigService.getResolvedUiFontConfigJson(settingsService);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                context.callJavaScript("window.onUiFontConfigReceived", context.escapeJs(uiFontConfigJson));
+                context.callJavaScript("window.applyUiFontConfig", context.escapeJs(uiFontConfigJson));
+            });
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to dispatch UI font config: " + e.getMessage(), e);
         }
     }
 

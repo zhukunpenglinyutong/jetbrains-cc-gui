@@ -19,6 +19,7 @@ describe('useSettingsWindowCallbacks', () => {
     setCommitPrompt: vi.fn(),
     setSavingCommitPrompt: vi.fn(),
     setEditorFontConfig: vi.fn(),
+    setUiFontConfig: vi.fn(),
     setIdeTheme: vi.fn(),
     setLocalStreamingEnabled: vi.fn(),
     setCodexSandboxMode: vi.fn(),
@@ -49,6 +50,7 @@ describe('useSettingsWindowCallbacks', () => {
 
   beforeEach(() => {
     window.sendToJava = vi.fn();
+    window.applyUiFontConfig = vi.fn();
   });
 
   it('does not auto-request current Claude config on mount', () => {
@@ -67,5 +69,53 @@ describe('useSettingsWindowCallbacks', () => {
     expect(window.sendToJava).toHaveBeenCalledWith('get_codex_sandbox_mode:');
     expect(window.sendToJava).toHaveBeenCalledWith('get_commit_prompt:');
     expect(window.sendToJava).toHaveBeenCalledWith('get_sound_notification_config:');
+    expect(window.sendToJava).toHaveBeenCalledWith('get_ui_font_config:');
+  });
+
+  it('registers ui font callback and updates ui font state from backend payload', () => {
+    const deps = createDeps();
+
+    renderHook(() => useSettingsWindowCallbacks(deps));
+
+    (window as any).onUiFontConfigReceived?.(JSON.stringify({
+      mode: 'customFile',
+      effectiveMode: 'customFile',
+      customFontPath: '/tmp/MapleMono.ttf',
+      fontFamily: 'Codemoss UI Custom',
+      fontSize: 14,
+      lineSpacing: 1.35,
+    }));
+
+    expect((deps as any).setUiFontConfig).toHaveBeenCalledWith(expect.objectContaining({
+      mode: 'customFile',
+      customFontPath: '/tmp/MapleMono.ttf',
+      fontFamily: 'Codemoss UI Custom',
+    }));
+  });
+
+  it('applies ui font immediately when backend pushes updated config', () => {
+    const deps = createDeps();
+
+    renderHook(() => useSettingsWindowCallbacks(deps));
+
+    const payload = {
+      mode: 'customFile',
+      effectiveMode: 'customFile',
+      customFontPath: '/tmp/MapleMono.ttf',
+      fontFamily: 'Codemoss UI Custom',
+      fontSize: 14,
+      lineSpacing: 1.35,
+      fontBase64: 'AAECA',
+      fontFormat: 'truetype',
+    };
+
+    (window as any).onUiFontConfigReceived?.(JSON.stringify(payload));
+
+    expect(window.applyUiFontConfig).toHaveBeenCalledWith(expect.objectContaining({
+      mode: 'customFile',
+      customFontPath: '/tmp/MapleMono.ttf',
+      fontBase64: 'AAECA',
+      fontFormat: 'truetype',
+    }));
   });
 });

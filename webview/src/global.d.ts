@@ -372,6 +372,16 @@ interface Window {
   };
 
   /**
+   * Apply effective plugin UI font configuration (called from Java backend)
+   */
+  applyUiFontConfig?: (config: import('./types/uiFontConfig').UiFontConfig | string) => void;
+
+  /**
+   * Pending effective UI font config before applyUiFontConfig is registered
+   */
+  __pendingUiFontConfig?: import('./types/uiFontConfig').UiFontConfig;
+
+  /**
    * Apply IDEA language configuration (called from Java backend)
    * @param config Language configuration object containing language code and IDEA locale
    */
@@ -402,6 +412,11 @@ interface Window {
    * Editor font config received callback - receives IDEA editor font configuration
    */
   onEditorFontConfigReceived?: (json: string) => void;
+
+  /**
+   * Effective UI font config received callback
+   */
+  onUiFontConfigReceived?: (json: string) => void;
 
   /**
    * IDE theme received callback - receives IDE theme configuration
@@ -578,9 +593,19 @@ interface Window {
    * Used with __lastStreamEndedTurnId to implement a time-based cleanup.
    * @default undefined (no stream end recorded)
    */
-  __lastStreamEndedAt?: number;
+   __lastStreamEndedAt?: number;
 
-  /**
+   /**
+    * Turn ID for which onStreamEnd has already been processed.
+    * Used as an idempotency guard: when dual-path delivery sends onStreamEnd
+    * twice (primary via flush callback + fallback via Alarm), only the first
+    * arrival takes effect; the second is a no-op.
+    * Cleared in onStreamStart to allow the next turn.
+    * @default undefined (no processed turn)
+    */
+   __streamEndProcessedTurnId?: number;
+
+   /**
    * Timestamp when the current streaming turn started.
    * Used to calculate durationMs on the assistant message when the stream ends.
    */

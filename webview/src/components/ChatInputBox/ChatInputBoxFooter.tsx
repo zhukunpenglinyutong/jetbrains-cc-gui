@@ -41,6 +41,8 @@ export function ChatInputBoxFooter({
   onOpenAgentSettings,
   onAddModel,
   onClearAgent,
+  longContextEnabled = true,
+  onLongContextChange,
   fileCompletion,
   commandCompletion,
   agentCompletion,
@@ -74,6 +76,8 @@ export function ChatInputBoxFooter({
   onOpenAgentSettings?: () => void;
   onAddModel?: () => void;
   onClearAgent: () => void;
+  longContextEnabled?: boolean;
+  onLongContextChange?: (enabled: boolean) => void;
   fileCompletion: CompletionController;
   commandCompletion: CompletionController;
   agentCompletion: CompletionController;
@@ -119,6 +123,8 @@ export function ChatInputBoxFooter({
         onOpenAgentSettings={onOpenAgentSettings}
         onAddModel={onAddModel}
         onClearAgent={onClearAgent}
+        longContextEnabled={longContextEnabled}
+        onLongContextChange={onLongContextChange}
       />
 
       {/* @ file reference dropdown menu */}

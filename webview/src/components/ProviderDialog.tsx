@@ -586,8 +586,8 @@ export default function ProviderDialog({
           {showModelMappingSection && (
             <div className="form-group">
               <label>{t('settings.provider.dialog.modelMapping')}</label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
+              <div className="model-mapping-grid">
+                <div className="model-mapping-field">
                   <label htmlFor="sonnetModel">{t('settings.provider.dialog.sonnetModel')}</label>
                   <input
                     id="sonnetModel"
@@ -598,7 +598,7 @@ export default function ProviderDialog({
                     onChange={handleSonnetModelChange}
                   />
                 </div>
-                <div>
+                <div className="model-mapping-field">
                   <label htmlFor="opusModel">{t('settings.provider.dialog.opusModel')}</label>
                   <input
                     id="opusModel"
@@ -609,7 +609,7 @@ export default function ProviderDialog({
                     onChange={handleOpusModelChange}
                   />
                 </div>
-                <div>
+                <div className="model-mapping-field">
                   <label htmlFor="haikuModel">{t('settings.provider.dialog.haikuModel')}</label>
                   <input
                     id="haikuModel"

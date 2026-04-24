@@ -146,8 +146,16 @@
         "level6": "Максимальный (140%)"
       },
       "editorFont": {
-        "label": "Шрифт (берётся из редактора)",
-        "hint": "Изменить можно в IDEA Settings → Editor → Font. Перезапустите IDEA для применения."
+        "label": "Шрифт",
+        "hint": "Здесь меняется шрифт интерфейса плагина; размер и межстрочный интервал по-прежнему берутся из редактора.",
+        "followOption": "Следовать шрифту редактора ({{font}})",
+        "customOption": "Пользовательский файл шрифта",
+        "customPathLabel": "Путь к файлу шрифта",
+        "customPathPlaceholder": "Выберите или введите путь к файлу .ttf / .otf",
+        "browse": "Обзор",
+        "warningUnavailable": "Шрифт недоступен, сейчас используется шрифт редактора",
+        "statusFollowEditor": "Сейчас используется шрифт редактора: {{font}}",
+        "statusCustom": "Сейчас используется пользовательский шрифт: {{font}}"
       },
       "streaming": {
         "label": "Потоковый вывод",
@@ -641,6 +649,9 @@
     "cancelEditButton": "Отмена",
     "titleTooLong": "Название слишком длинное (максимум 50 символов)",
     "titleUpdated": "Название обновлено",
+    "copySessionId": "Копировать ID сессии для CLI resume",
+    "sessionIdCopied": "ID сессии скопирован",
+    "copyFailed": "Не удалось скопировать",
     "timeAgo": {
       "yearsAgo_one": "{{count}} год назад",
       "yearsAgo_other": "{{count}} лет назад",
@@ -1161,15 +1172,15 @@
     "addModel": "Добавить модель",
     "claude": {
       "sonnet46": {
-        "label": "Sonnet 4.6 (1M контекст)",
+        "label": "Sonnet 4.6",
         "description": "Sonnet 4.6 · Модель по умолчанию"
       },
       "opus46": {
-        "label": "Opus 4.7 (1M контекст)",
+        "label": "Opus 4.7",
         "description": "Opus 4.7 · Новейшая и самая мощная"
       },
       "opus46_1m": {
-        "label": "Opus 4.6 (1M контекст)",
+        "label": "Opus 4.6",
         "description": "Opus 4.6 для длинных чатов"
       },
       "haiku45": {
@@ -1177,10 +1188,20 @@
         "description": "Haiku 4.5 · Самая быстрая для быстрых ответов"
       }
     },
+    "longContext": {
+      "label": "1M",
+      "shortLabel": "1M контекст",
+      "tooltipEnabled": "Включить/выключить 1M контекст",
+      "tooltipDisabled": "1M контекст недоступен для Haiku"
+    },
     "codex": {
       "gpt53codex": {
         "label": "GPT-5.3-Codex",
         "description": "Новейшая агентная модель для кодинга с улучшенными возможностями."
+      },
+      "gpt55": {
+        "label": "GPT-5.5",
+        "description": "Новейшая передовая модель с усиленными возможностями."
       },
       "gpt54": {
         "label": "GPT-5.4",

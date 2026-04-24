@@ -2,6 +2,7 @@ import { useState } from 'react';
 import styles from './style.module.less';
 import { useTranslation } from 'react-i18next';
 import type { DiffThemeMode } from '../../../utils/diffTheme';
+import type { UiFontConfig } from '../hooks/useSettingsBasicActions';
 import AppearanceTab from './AppearanceTab';
 import BehaviorTab from './BehaviorTab';
 import EnvironmentTab from './EnvironmentTab';
@@ -34,6 +35,10 @@ interface BasicConfigSectionProps {
     fontSize: number;
     lineSpacing: number;
   };
+  uiFontConfig?: UiFontConfig;
+  onUiFontSelectionChange?: (selection: string) => void;
+  onSaveUiFontCustomPath?: (path: string) => void;
+  onBrowseUiFontFile?: () => void;
   // Streaming configuration
   streamingEnabled?: boolean;
   onStreamingEnabledChange?: (enabled: boolean) => void;
@@ -106,6 +111,10 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           fontSizeLevel={props.fontSizeLevel}
           onFontSizeLevelChange={props.onFontSizeLevelChange}
           editorFontConfig={props.editorFontConfig}
+          uiFontConfig={props.uiFontConfig}
+          onUiFontSelectionChange={props.onUiFontSelectionChange}
+          onSaveUiFontCustomPath={props.onSaveUiFontCustomPath}
+          onBrowseUiFontFile={props.onBrowseUiFontFile}
           chatBgColor={props.chatBgColor}
           onChatBgColorChange={props.onChatBgColorChange}
           userMsgColor={props.userMsgColor}

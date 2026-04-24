@@ -16,6 +16,8 @@ export function getMessageKey(message: ClaudeMessage, index: number): string {
  * Extract content from <command-message> and <command-args> tags if present.
  * Returns the combined content: "command-message content command-args content"
  *
+ * @deprecated Use {@link formatCommandForDisplay} instead. Kept as fallback only.
+ *
  * Example:
  *   Input: "<command-message>aimax:auto</command-message>\n<command-name>/aimax:auto</command-name>\n<command-args>hello there</command-args>"
  *   Output: "aimax:auto hello there"
@@ -52,12 +54,258 @@ export function extractCommandMessageContent(text: string): string {
   return text;
 }
 
+// ---------------------------------------------------------------------------
+// Constants - avoid magic strings throughout the codebase
+// ---------------------------------------------------------------------------
+
+export const MESSAGE_TYPES = {
+  USER: 'user',
+  ASSISTANT: 'assistant',
+  TASK_NOTIFICATION: 'task_notification',
+  NOTIFICATION: 'notification',
+  ERROR: 'error',
+} as const;
+
+export const ORIGIN_KINDS = {
+  HUMAN: 'human',
+  TASK_NOTIFICATION: 'task-notification',
+  HOOK: 'hook',
+  AGENT: 'agent',
+  QUEUE: 'queue',
+  CHANNEL: 'channel',
+} as const;
+
+// ---------------------------------------------------------------------------
+// Optimized regex patterns - single pattern instead of multiple matches
+// NOTE: These regexes assume SDK outputs tags in a fixed order
+// (command-message → command-name → command-args → skill-format).
+// If SDK changes tag order, these must be updated.
+// ---------------------------------------------------------------------------
+
+// Regex to extract command-message and related tags (supports multiline content)
+const COMMAND_TAGS_REGEX = /<command-message>([\s\S]*?)<\/command-message>(?:[\s\n]*<command-name>([\s\S]*?)<\/command-name>)?(?:[\s\n]*<command-args>([\s\S]*?)<\/command-args>)?(?:[\s\n]*<skill-format>([\s\S]*?)<\/skill-format>)?/;
+
+// Regex for resubmit format - only needs command-name and command-args (no command-message required)
+const COMMAND_NAME_REGEX = /<command-name>([\s\S]*?)<\/command-name>(?:[\s\n]*<command-args>([\s\S]*?)<\/command-args>)?/;
+
+// Regex to extract task-notification tags (supports multiline content)
+// Actual SDK format: <task-notification><task-id>...<status>...<summary>...<result>...<usage>...</task-notification>
+// We only need status and summary, so match them regardless of position
+// Two regexes: one for full format (with status), one for minimal format (only summary)
+const TASK_NOTIFICATION_REGEX_WITH_STATUS = /<task-notification>[\s\S]*?<status>([\s\S]*?)<\/status>[\s\S]*?<summary>([\s\S]*?)<\/summary>[\s\S]*?<\/task-notification>/;
+const TASK_NOTIFICATION_REGEX_NO_STATUS = /<task-notification>[\s\S]*?<summary>([\s\S]*?)<\/summary>[\s\S]*?<\/task-notification>/;
+
+// ---------------------------------------------------------------------------
+// Internal XML tags that should be hidden (not rendered as user messages)
+// ---------------------------------------------------------------------------
+
+/** Tags that represent hidden terminal output */
+export const HIDDEN_OUTPUT_TAGS = ['<local-command-stdout>', '<local-command-stderr>'] as const;
+
+/** Tags that represent internal command metadata (no <command-message>) */
+export const INTERNAL_METADATA_TAGS = ['<command-name>', '<command-args>', '<skill-format>', '<local-command-caveat>'] as const;
+
+/** All tags that should be filtered out in normalizeBlocks text entries.
+ *  Composed from INTERNAL_METADATA_TAGS + HIDDEN_OUTPUT_TAGS to stay in sync. */
+export const FILTERED_NORMALIZE_TAGS = [...INTERNAL_METADATA_TAGS, ...HIDDEN_OUTPUT_TAGS] as const;
+
+/** Check if text contains any tag from the given array */
+export function containsAnyTag(text: string, tags: readonly string[]): boolean {
+  return tags.some(tag => text.includes(tag));
+}
+
 /**
  * Check if text contains a <command-message> tag
  */
 export function hasCommandMessageTag(text: string): boolean {
   if (!text) return false;
   return text.includes('<command-message>') && text.includes('</command-message>');
+}
+
+/**
+ * Format command message for display, matching CLI's UserCommandMessage behavior.
+ * - If <skill-format>true</skill-format>: return "Skill(name)"
+ * - Otherwise: return "/name args" (prepend / to command-message)
+ *
+ * @param text - Raw text containing XML tags
+ * @returns Formatted display string, or null if no command-message tag
+ */
+export function formatCommandForDisplay(text: string): string | null {
+  if (!text) return null;
+
+  // Single regex match extracts all tags at once (performance optimization)
+  const match = COMMAND_TAGS_REGEX.exec(text);
+  if (!match?.[1]) return null;
+
+  const commandMessage = match[1].trim();
+  if (!commandMessage) return null;
+
+  const args = match[3]?.trim() ?? '';
+  const isSkillFormat = match[4]?.trim() === 'true';
+
+  if (isSkillFormat) {
+    // Skill loading message: "Skill(name)"
+    // CLI's UserCommandMessage ignores args in skill-format mode
+    return `Skill(${commandMessage})`;
+  }
+
+  // Slash command format: "/name args" (no prefix symbol for GUI)
+  return args ? `/${commandMessage} ${args}` : `/${commandMessage}`;
+}
+
+/**
+ * Format command message for copy/resubmit, matching CLI's textForResubmit behavior.
+ * Uses <command-name> tag which already contains the / prefix.
+ *
+ * @param text - Raw text containing XML tags
+ * @returns Formatted resubmit string, or null if no command-name tag
+ */
+export function formatCommandForResubmit(text: string): string | null {
+  if (!text) return null;
+
+  // Use dedicated regex that matches command-name without requiring command-message
+  const match = COMMAND_NAME_REGEX.exec(text);
+  if (!match?.[1]) return null;
+
+  const commandName = match[1].trim();
+  if (!commandName) return null;
+
+  const args = match[2]?.trim() ?? '';
+  return args ? `${commandName} ${args}` : commandName;
+}
+
+/**
+ * Check if text contains a <task-notification> tag
+ */
+export function hasTaskNotificationTag(text: string): boolean {
+  if (!text) return false;
+  return text.includes('<task-notification>');
+}
+
+// ---------------------------------------------------------------------------
+// Type guards - safer than type assertions
+// ---------------------------------------------------------------------------
+
+/**
+ * Type guard: check if raw message has valid origin field
+ */
+function hasOriginField(raw: unknown): raw is { origin: { kind: string } } {
+  if (!raw || typeof raw !== 'object') return false;
+  const r = raw as Record<string, unknown>;
+  const origin = r.origin;
+  if (!origin || typeof origin !== 'object') return false;
+  const o = origin as Record<string, unknown>;
+  return typeof o.kind === 'string';
+}
+
+/**
+ * Check if a message has non-human origin (should be rendered as system notification, not user message).
+ * CLI uses origin.kind to distinguish synthetic messages from human input.
+ */
+export function hasNonHumanOrigin(message: ClaudeMessage): boolean {
+  if (message.type !== MESSAGE_TYPES.USER) return false;
+
+  const raw = message.raw;
+  if (!hasOriginField(raw)) return false;
+
+  // If origin.kind exists and is not 'human', this is a synthetic message
+  return raw.origin.kind !== ORIGIN_KINDS.HUMAN;
+}
+
+/**
+ * Extract all text strings from a raw message's content (handles various structures).
+ * Shared helper to avoid duplicating traversal logic.
+ */
+function extractTextsFromRaw(raw: ClaudeRawMessage | string | undefined): string[] {
+  if (!raw || typeof raw !== 'object') return [];
+  const texts: string[] = [];
+  const extractFromContent = (content: unknown) => {
+    if (typeof content === 'string') {
+      texts.push(content);
+    } else if (Array.isArray(content)) {
+      for (const block of content) {
+        if (block && typeof block === 'object') {
+          const b = block as Record<string, unknown>;
+          if (b.type === 'text' && typeof b.text === 'string') {
+            texts.push(b.text);
+          }
+        }
+      }
+    }
+  };
+  const rawObj = raw as Record<string, unknown>;
+  extractFromContent(rawObj.content);
+  if (rawObj.message && typeof rawObj.message === 'object') {
+    extractFromContent((rawObj.message as Record<string, unknown>).content);
+  }
+  return texts;
+}
+
+/**
+ * Check if a message is a task_notification only message (should be rendered as system notification, not user message).
+ * This is used to change message type from 'user' to 'task_notification' for proper rendering.
+ */
+export function isTaskNotificationOnlyMessage(message: ClaudeMessage): boolean {
+  if (message.type !== 'user') return false;
+
+  // Check raw content structures for task-notification tag
+  const rawTexts = extractTextsFromRaw(message.raw);
+  if (rawTexts.some(hasTaskNotificationTag)) return true;
+
+  // Fallback: check message.content (may differ from raw when set independently)
+  return typeof message.content === 'string' && hasTaskNotificationTag(message.content);
+}
+
+/**
+ * Task notification status color mapping, matching CLI behavior.
+ */
+export const TASK_STATUS_COLORS: Record<string, string> = {
+  completed: 'success',
+  failed: 'error',
+  killed: 'warning',
+  stopped: 'text',
+};
+
+/**
+ * Format task-notification for display, matching CLI's UserAgentNotificationMessage behavior.
+ * Returns "● summary" with status-based color (no status text prefix).
+ *
+ * @param text - Raw text containing <task-notification> tags
+ * @returns Object with icon, summary, and status, or null if no summary
+ */
+export function formatTaskNotificationForDisplay(
+  text: string
+): { icon: string; summary: string; status: string } | null {
+  if (!text) return null;
+
+  // Try full format first (with status)
+  const matchWithStatus = TASK_NOTIFICATION_REGEX_WITH_STATUS.exec(text);
+  if (matchWithStatus?.[2]) {
+    const summary = matchWithStatus[2].trim();
+    if (!summary) return null;
+    const status = matchWithStatus[1]?.trim() ?? 'completed';
+    return { icon: '●', summary, status };
+  }
+
+  // Fallback: minimal format (only summary)
+  const matchNoStatus = TASK_NOTIFICATION_REGEX_NO_STATUS.exec(text);
+  if (matchNoStatus?.[1]) {
+    const summary = matchNoStatus[1].trim();
+    if (!summary) return null;
+    return { icon: '●', summary, status: 'completed' };
+  }
+
+  return null;
+}
+
+/**
+ * Create a task_notification content block from raw text.
+ * Shared helper to avoid duplicating creation logic across normalizeBlocks/getContentBlocks.
+ */
+function createTaskNotificationBlock(text: string): ClaudeContentBlock | null {
+  const n = formatTaskNotificationForDisplay(text);
+  if (!n) return null;
+  return { type: 'task_notification' as const, icon: n.icon, summary: n.summary, status: n.status };
 }
 
 // Performance optimization constants
@@ -98,6 +346,32 @@ export function normalizeBlocks(
         if (rawText.trim() === '(no content)') {
           return;
         }
+
+        // Check for XML tags and format accordingly
+        if (hasTaskNotificationTag(rawText)) {
+          const block = createTaskNotificationBlock(rawText);
+          if (block) {
+            blocks.push(block);
+            return;
+          }
+        }
+
+        if (hasCommandMessageTag(rawText)) {
+          const displayContent = formatCommandForDisplay(rawText);
+          if (displayContent) {
+            blocks.push({
+              type: 'text',
+              text: localizeMessage(displayContent),
+            });
+            return;
+          }
+        }
+
+        // Filter out messages that only contain command tags without command-message
+        if (containsAnyTag(rawText, FILTERED_NORMALIZE_TAGS)) {
+          return;
+        }
+
         blocks.push({
           type: 'text',
           text: localizeMessage(rawText),
@@ -164,16 +438,26 @@ export function normalizeBlocks(
       return null;
     }
     if (typeof content === 'string') {
-      // If has <command-message>, extract and show content
+      // Handle <task-notification> messages - create special block type
+      if (hasTaskNotificationTag(content)) {
+        const block = createTaskNotificationBlock(content);
+        if (block) return [block];
+        return null;
+      }
+
+      // If has <command-message>, format for display
       if (hasCommandMessageTag(content)) {
+        const displayContent = formatCommandForDisplay(content);
+        if (displayContent) {
+          return [{ type: 'text' as const, text: localizeMessage(displayContent) }];
+        }
+        // Fallback to old extraction if formatCommandForDisplay returned null
         const processedContent = extractCommandMessageContent(content);
         return [{ type: 'text' as const, text: localizeMessage(processedContent) }];
       }
 
-      // Filter empty strings and command messages (without <command-message>)
-      if (!content.trim() ||
-          content.includes('<command-name>') ||
-          content.includes('<local-command-stdout>')) {
+      // Filter empty strings and command tags (without <command-message>)
+      if (!content.trim() || containsAnyTag(content, FILTERED_NORMALIZE_TAGS)) {
         return null;
       }
       return [{ type: 'text' as const, text: localizeMessage(content) }];
@@ -242,9 +526,23 @@ export function getMessageText(
   // Apply localization
   let result = localizeMessage(text);
 
-  // Extract <command-message> content if present
+  // Format <command-message> content using formatCommandForDisplay
   if (hasCommandMessageTag(result)) {
-    result = extractCommandMessageContent(result);
+    const displayContent = formatCommandForDisplay(result);
+    if (displayContent) {
+      result = displayContent;
+    } else {
+      // Fallback to old extraction
+      result = extractCommandMessageContent(result);
+    }
+  }
+
+  // Format <task-notification> for copy/resubmit purposes
+  if (hasTaskNotificationTag(result)) {
+    const notification = formatTaskNotificationForDisplay(result);
+    if (notification) {
+      result = `${notification.icon} ${notification.summary}`;
+    }
   }
 
   return result;
@@ -260,8 +558,23 @@ export function shouldShowMessage(
   t: TFunction
 ): boolean {
   // Filter isMeta messages (like "Caveat: The messages below were generated...")
+  // CLI: isMeta messages are hidden in normal transcript (except channel messages)
   if (message.raw && typeof message.raw === 'object' && 'isMeta' in message.raw && message.raw.isMeta === true) {
     return false;
+  }
+
+  // Note: origin.kind filtering is ONLY for title extraction (extractTitleText, sessionTitle),
+  // NOT for hiding messages in the main chat. CLI displays these messages with different formats.
+  // See CLI's wrapCommandText() and isVisibleInTranscript() functions.
+
+  // Filter toolUseResult and isCompactSummary messages (CLI filters these in extractTitleText)
+  if (message.raw && typeof message.raw === 'object') {
+    if ('toolUseResult' in message.raw && message.raw.toolUseResult) {
+      return false;
+    }
+    if ('isCompactSummary' in message.raw && message.raw.isCompactSummary) {
+      return false;
+    }
   }
 
   // Filter command messages (containing <command-name> or <local-command-stdout> tags)
@@ -294,26 +607,36 @@ export function shouldShowMessage(
 
   const rawText = getRawTextContent();
 
+  // CLI renders these messages with specific components:
+  // - <command-message> → UserCommandMessage (skill/slash command)
+  // - <local-command-stdout/stderr> → UserLocalCommandOutputMessage
+  // - <task-notification> → UserAgentNotificationMessage
+  // - Plain text (like "Unknown skill: xxx") → UserPromptMessage (displayed with ❯ prefix)
+  // So we should NOT filter these messages, just handle their rendering.
+
   // If message has <command-message>, allow it to be shown
-  // (the content will be extracted by extractCommandMessageContent)
+  // (the content will be extracted by formatCommandForDisplay)
   if (rawText && hasCommandMessageTag(rawText)) {
-    // Only filter if it has stdout/stderr output (which should be hidden)
-    const hasOutputTags =
-      rawText.includes('<local-command-stdout>') ||
-      rawText.includes('<local-command-stderr>');
-    if (!hasOutputTags) {
-      return true;
-    }
+    return true;
   }
 
-  // Filter messages with command tags but no <command-message>
-  if (rawText && (
-    rawText.includes('<command-name>') ||
-    rawText.includes('<local-command-stdout>') ||
-    rawText.includes('<local-command-stderr>') ||
-    rawText.includes('<command-args>')
-  )) {
+  // Messages with <local-command-stdout> or <local-command-stderr> should be shown
+  // CLI renders them with UserLocalCommandOutputMessage component
+  // But for GUI, we filter these as they are internal terminal output
+  if (rawText && containsAnyTag(rawText, HIDDEN_OUTPUT_TAGS)) {
     return false;
+  }
+
+  // Filter messages with command tags (internal metadata, not user input)
+  // BUT keep "Unknown skill: xxx" messages which are plain text user-visible messages
+  if (rawText && containsAnyTag(rawText, INTERNAL_METADATA_TAGS)) {
+    return false;
+  }
+
+  // Task-notification messages are always shown — normalizeBlocks converts them
+  // to task_notification blocks, no need to re-parse here (performance optimization).
+  if (rawText && hasTaskNotificationTag(rawText)) {
+    return true;
   }
 
   const text = getMessageTextFn(message);
@@ -336,6 +659,9 @@ export function shouldShowMessage(
         if (block.type === 'text') {
           return block.text && block.text.trim().length > 0;
         }
+        if (block.type === 'task_notification') {
+          return block.summary && block.summary.trim().length > 0;
+        }
         // Images, tool_use and other block types should be shown
         return true;
       });
@@ -356,16 +682,37 @@ export function getContentBlocks(
 ): ClaudeContentBlock[] {
   const rawBlocks = normalizeBlocksFn(message.raw);
   if (rawBlocks && rawBlocks.length > 0) {
+    // Don't add message.content if we have task_notification blocks
+    // (those are formatted from the raw XML content).
+    // Note: command-message text blocks are already formatted by normalizeBlocks
+    // (e.g., "/opsx:ff hello") and no longer contain raw XML tags.
+    const hasSpecialBlock = rawBlocks.some((block) => block.type === 'task_notification');
+    if (hasSpecialBlock) {
+      return rawBlocks;
+    }
     // Streaming/tool scenario: if raw doesn't have text but message.content has text, still need to show text
     const hasTextBlock = rawBlocks.some(
-      (block) => block.type === 'text' && typeof (block as any).text === 'string' && String((block as any).text).trim().length > 0,
+      (block) => block.type === 'text' && typeof block.text === 'string' && String(block.text).trim().length > 0,
     );
     if (!hasTextBlock && message.content && message.content.trim()) {
       return [...rawBlocks, { type: 'text', text: localizeMessage(message.content) }];
     }
     return rawBlocks;
   }
+  // If no raw blocks, check if content needs special handling
   if (message.content && message.content.trim()) {
+    // Handle task-notification in message.content directly
+    if (hasTaskNotificationTag(message.content)) {
+      const block = createTaskNotificationBlock(message.content);
+      if (block) return [block];
+    }
+    // Handle command-message in message.content directly
+    if (hasCommandMessageTag(message.content)) {
+      const displayContent = formatCommandForDisplay(message.content);
+      if (displayContent) {
+        return [{ type: 'text' as const, text: localizeMessage(displayContent) }];
+      }
+    }
     return [{ type: 'text', text: localizeMessage(message.content) }];
   }
   // If no content at all, return empty array instead of showing "(empty message)"

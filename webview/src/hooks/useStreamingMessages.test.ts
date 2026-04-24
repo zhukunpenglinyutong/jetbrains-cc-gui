@@ -382,4 +382,83 @@ describe('useStreamingMessages', () => {
     expect(thinking1Idx).toBeLessThan(textIdx);
     expect(toolIdx).toBeLessThan(thinking2Idx);
   });
+
+  it('trims suffix-prefix overlap when markdown code block fence is duplicated', () => {
+    const { result } = renderHook(() => useStreamingMessages());
+
+    result.current.streamingContentRef.current =
+      "Here's code:\n```python\nprint('hello')\n```\n\nMore text";
+    result.current.streamingTextSegmentsRef.current = [
+      "Here's code:\n```python\nprint('hello')\n```",
+      "\n\nMore text",
+    ];
+
+    const assistant: ClaudeMessage = {
+      type: 'assistant',
+      content: result.current.streamingContentRef.current,
+      isStreaming: true,
+      raw: {
+        message: {
+          content: [
+            {
+              type: 'text',
+              text: "Here's code:\n```python\nprint('hello')\n```",
+            },
+          ],
+        },
+      },
+    };
+
+    const patched = result.current.patchAssistantForStreaming(assistant);
+    const content = ((patched.raw as any).message?.content ?? []) as Array<Record<string, unknown>>;
+
+    const textBlocks = content.filter((b) => b.type === 'text');
+    expect(textBlocks).toHaveLength(1);
+    expect(textBlocks[0]).toMatchObject({
+      type: 'text',
+      text: "Here's code:\n```python\nprint('hello')\n```\n\nMore text",
+    });
+  });
+
+  it('trims suffix-prefix overlap when code block body overlaps between blocks', () => {
+    const { result } = renderHook(() => useStreamingMessages());
+
+    // Scenario: Conservative sync pushed a backend snapshot, then subsequent
+    // deltas arrived that partially duplicated the backend content due to
+    // timing issues. The streamingTextSegments show the raw delta accumulation,
+    // while the backend raw contains the synced portion.
+    // This tests that trimDuplicateTextLikeContent correctly removes the overlap.
+    result.current.streamingTextSegmentsRef.current = [
+      "Here's code:\n```python\nprint('hello')\n```",
+      "print('hello')\n```\n\nMore text", // Overlaps with tail of segment 0
+    ];
+
+    const assistant: ClaudeMessage = {
+      type: 'assistant',
+      // Backend snapshot content (the synced portion before overlap)
+      content: "Here's code:\n```python\nprint('hello')\n```",
+      isStreaming: true,
+      raw: {
+        message: {
+          content: [
+            {
+              type: 'text',
+              text: "Here's code:\n```python\nprint('hello')\n```",
+            },
+          ],
+        },
+      },
+    };
+
+    const patched = result.current.patchAssistantForStreaming(assistant);
+    const content = ((patched.raw as any).message?.content ?? []) as Array<Record<string, unknown>>;
+
+    const textBlocks = content.filter((b) => b.type === 'text');
+    expect(textBlocks).toHaveLength(1);
+    const merged = textBlocks[0].text as string;
+    // Should not have duplicated "print('hello')\n```"
+    expect(merged).not.toMatch(/print\('hello'\)\n```\n.*print\('hello'\)\n```/);
+    // After trimming overlap, the novel content "\n\nMore text" is appended
+    expect(merged).toBe("Here's code:\n```python\nprint('hello')\n```\n\nMore text");
+  });
 });

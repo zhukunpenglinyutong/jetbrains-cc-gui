@@ -144,11 +144,11 @@ public class MessageMerger {
      * Get the unique key for a content block.
      */
     private String getContentBlockKey(JsonObject block) {
-        if (block.has("id") && !block.get("id").isJsonNull()) {
+        if (block.has("id") && block.get("id").isJsonPrimitive()) {
             return block.get("id").getAsString();
         }
 
-        if (block.has("tool_use_id") && !block.get("tool_use_id").isJsonNull()) {
+        if (block.has("tool_use_id") && block.get("tool_use_id").isJsonPrimitive()) {
             return "tool_result:" + block.get("tool_use_id").getAsString();
         }
 
@@ -229,7 +229,14 @@ public class MessageMerger {
         }
 
         if ("thinking".equals(type)) {
-            return textLooksRelated(getThinkingContent(existingBlock), getThinkingContent(incomingBlock));
+            String existingThinking = getThinkingContent(existingBlock);
+            String incomingThinking = getThinkingContent(incomingBlock);
+            // During early streaming, thinking content may not yet be populated,
+            // so type-based matching alone determines block identity.
+            if (existingThinking.isEmpty() || incomingThinking.isEmpty()) {
+                return true;
+            }
+            return textLooksRelated(existingThinking, incomingThinking);
         }
 
         return existingBlock.equals(incomingBlock);
@@ -296,8 +303,9 @@ public class MessageMerger {
         // Check suffix-prefix overlap (streaming may produce partial overlaps)
         int maxOverlap = Math.min(existing.length(), incoming.length());
         maxOverlap = Math.min(maxOverlap, 200);
+        int eLen = existing.length();
         for (int overlap = maxOverlap; overlap > 0; overlap--) {
-            if (existing.endsWith(incoming.substring(0, overlap))) {
+            if (existing.regionMatches(eLen - overlap, incoming, 0, overlap)) {
                 return true;
             }
         }

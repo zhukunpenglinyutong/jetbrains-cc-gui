@@ -112,6 +112,8 @@ const SettingsView = ({
     setSavingWorkingDirectory,
     editorFontConfig,
     setEditorFontConfig,
+    uiFontConfig,
+    setUiFontConfig,
     setLocalStreamingEnabled,
     streamingEnabled,
     codexSandboxMode,
@@ -137,6 +139,9 @@ const SettingsView = ({
     setHistoryCompletionEnabled,
     handleSaveNodePath,
     handleSaveWorkingDirectory,
+    handleUiFontSelectionChange,
+    handleSaveUiFontCustomPath,
+    handleBrowseUiFontFile,
     handleStreamingEnabledChange,
     handleCodexSandboxModeChange,
     handleSendShortcutChange,
@@ -256,6 +261,7 @@ const SettingsView = ({
     setCommitPrompt,
     setSavingCommitPrompt,
     setEditorFontConfig,
+    setUiFontConfig,
     setIdeTheme,
     setLocalStreamingEnabled,
     setCodexSandboxMode,
@@ -409,6 +415,10 @@ const SettingsView = ({
               onSaveWorkingDirectory={handleSaveWorkingDirectory}
               savingWorkingDirectory={savingWorkingDirectory}
               editorFontConfig={editorFontConfig}
+              uiFontConfig={uiFontConfig}
+              onUiFontSelectionChange={handleUiFontSelectionChange}
+              onSaveUiFontCustomPath={handleSaveUiFontCustomPath}
+              onBrowseUiFontFile={handleBrowseUiFontFile}
               streamingEnabled={streamingEnabled}
               onStreamingEnabledChange={handleStreamingEnabledChange}
               sendShortcut={sendShortcut}

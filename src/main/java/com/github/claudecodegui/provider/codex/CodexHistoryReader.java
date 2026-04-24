@@ -53,6 +53,7 @@ public class CodexHistoryReader {
         public long lastTimestamp;
         public long firstTimestamp;
         public String cwd;
+        public long fileSize;
     }
 
     /**

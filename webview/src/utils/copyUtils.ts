@@ -1,4 +1,11 @@
 import type { ClaudeMessage, ClaudeContentBlock, ClaudeRawMessage } from '../types';
+import {
+  hasCommandMessageTag,
+  formatCommandForDisplay,
+  formatCommandForResubmit,
+  hasTaskNotificationTag,
+  formatTaskNotificationForDisplay,
+} from './messageUtils';
 
 /**
  * Normalize raw message blocks to ClaudeContentBlock array
@@ -11,6 +18,8 @@ function normalizeBlocks(raw: ClaudeRawMessage | string | undefined): ClaudeCont
   }
 
   // Check raw.content
+  // Note: task_notification blocks only exist after messageUtils.normalizeBlocks processing,
+  // not in raw SDK data. Raw text blocks with <task-notification> tags are handled by formatTextForCopy.
   if (Array.isArray(raw.content)) {
     return raw.content.filter(
       (block): block is ClaudeContentBlock =>
@@ -39,6 +48,37 @@ function normalizeBlocks(raw: ClaudeRawMessage | string | undefined): ClaudeCont
 }
 
 /**
+ * Format text content for copy/export, converting XML tags to readable format
+ */
+function formatTextForCopy(text: string): string {
+  if (!text) return text;
+
+  // Format command messages: use formatCommandForResubmit for copy (uses <command-name>)
+  // which already contains the / prefix, matching CLI's textForResubmit behavior
+  if (hasCommandMessageTag(text)) {
+    const resubmitContent = formatCommandForResubmit(text);
+    if (resubmitContent) {
+      return resubmitContent;
+    }
+    // Fallback to display format if no command-name tag
+    const displayContent = formatCommandForDisplay(text);
+    if (displayContent) {
+      return displayContent;
+    }
+  }
+
+  // Format task-notification for copy
+  if (hasTaskNotificationTag(text)) {
+    const notification = formatTaskNotificationForDisplay(text);
+    if (notification) {
+      return `${notification.icon} ${notification.summary}`;
+    }
+  }
+
+  return text;
+}
+
+/**
  * Extract Markdown content from a message for copying
  * @param message - The ClaudeMessage to extract content from
  * @param includeThinking - Whether to include thinking blocks (default: false)
@@ -51,7 +91,8 @@ export function extractMarkdownContent(message: ClaudeMessage, includeThinking =
   if (rawBlocks && rawBlocks.length > 0) {
     for (const block of rawBlocks) {
       if (block.type === 'text' && block.text) {
-        parts.push(block.text);
+        // Format command/notification messages for copy
+        parts.push(formatTextForCopy(block.text));
       } else if (includeThinking && block.type === 'thinking') {
         const thinkingText = (block as { thinking?: string; text?: string }).thinking ||
                             (block as { thinking?: string; text?: string }).text;
@@ -65,7 +106,7 @@ export function extractMarkdownContent(message: ClaudeMessage, includeThinking =
 
   // Fallback to message.content if no text blocks found
   if (parts.length === 0 && message.content && message.content.trim()) {
-    parts.push(message.content);
+    parts.push(formatTextForCopy(message.content));
   }
 
   return parts.join('\n\n');

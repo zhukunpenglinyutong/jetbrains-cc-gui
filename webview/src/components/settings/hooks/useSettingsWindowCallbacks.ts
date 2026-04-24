@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { ProviderConfig, CodexProviderConfig } from '../../../types/provider';
 import type { AgentConfig } from '../../../types/agent';
 import type { PromptConfig } from '../../../types/prompt';
+import type { UiFontConfig } from './useSettingsBasicActions';
 import type { AlertType } from '../../AlertDialog';
 import type { ToastMessage } from '../../Toast';
 
@@ -24,6 +25,7 @@ export interface SettingsWindowCallbacksDeps {
   setCommitPrompt: (prompt: string) => void;
   setSavingCommitPrompt: (saving: boolean) => void;
   setEditorFontConfig: (config: { fontFamily: string; fontSize: number; lineSpacing: number } | undefined) => void;
+  setUiFontConfig: (config: UiFontConfig | undefined) => void;
   setIdeTheme: (theme: 'light' | 'dark' | null) => void;
   setLocalStreamingEnabled: (enabled: boolean) => void;
   setCodexSandboxMode?: (mode: 'workspace-write' | 'danger-full-access') => void;
@@ -164,6 +166,16 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
         d().setEditorFontConfig(config);
       } catch (error) {
         console.error('[SettingsView] Failed to parse editor font config:', error);
+      }
+    };
+
+    window.onUiFontConfigReceived = (jsonStr: string) => {
+      try {
+        const config = JSON.parse(jsonStr);
+        d().setUiFontConfig(config);
+        window.applyUiFontConfig?.(config);
+      } catch {
+        // Silently ignore malformed UI font config from backend
       }
     };
 
@@ -403,6 +415,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     sendToJava('get_node_path:');
     sendToJava('get_working_directory:');
     sendToJava('get_editor_font_config:');
+    sendToJava('get_ui_font_config:');
     sendToJava('get_streaming_enabled:');
     sendToJava('get_codex_sandbox_mode:');
     sendToJava('get_commit_prompt:');
@@ -423,6 +436,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.showSuccess = undefined;
       window.showSuccessI18n = undefined;
       window.onEditorFontConfigReceived = undefined;
+      window.onUiFontConfigReceived = undefined;
       window.onIdeThemeReceived = previousOnIdeThemeReceived;
       if (!d().onStreamingEnabledChangeProp) {
         window.updateStreamingEnabled = previousUpdateStreamingEnabled;

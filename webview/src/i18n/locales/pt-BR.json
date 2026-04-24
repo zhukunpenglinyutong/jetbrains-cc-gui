@@ -146,8 +146,16 @@
         "level6": "Muito Grande (140%)"
       },
       "editorFont": {
-        "label": "Fonte (segue a fonte do editor)",
-        "hint": "Não editável aqui. Para modificar, vá em Configurações do IDEA → Editor → Fonte (reinicie o IDEA para que a fonte do plugin entre em vigor)"
+        "label": "Fonte",
+        "hint": "Aqui você altera a fonte da interface do plugin; o tamanho e o espaçamento entre linhas continuam seguindo o editor.",
+        "followOption": "Seguir editor ({{font}})",
+        "customOption": "Arquivo de fonte personalizado",
+        "customPathLabel": "Caminho do arquivo de fonte",
+        "customPathPlaceholder": "Escolha ou digite o caminho de um arquivo .ttf / .otf",
+        "browse": "Procurar",
+        "warningUnavailable": "A fonte está indisponível, usando a fonte do editor",
+        "statusFollowEditor": "Usando atualmente a fonte do editor: {{font}}",
+        "statusCustom": "Usando atualmente a fonte personalizada: {{font}}"
       },
       "streaming": {
         "label": "Streaming",
@@ -803,6 +811,9 @@
     "cancelEditButton": "Cancelar",
     "titleTooLong": "Título muito longo (máx. 50 caracteres)",
     "titleUpdated": "Título atualizado",
+    "copySessionId": "Copiar ID da sessão para CLI resume",
+    "sessionIdCopied": "ID da sessão copiado",
+    "copyFailed": "Falha ao copiar",
     "timeAgo": {
       "yearsAgo": "anos atrás",
       "monthsAgo": "meses atrás",
@@ -1312,15 +1323,15 @@
     "addModel": "Adicionar Modelo",
     "claude": {
       "sonnet46": {
-        "label": "Sonnet 4.6 (contexto 1M)",
+        "label": "Sonnet 4.6",
         "description": "Sonnet 4.6 · Usar o modelo padrão"
       },
       "opus46": {
-        "label": "Opus 4.7 (contexto 1M)",
+        "label": "Opus 4.7",
         "description": "Opus 4.7 · O mais recente e capaz"
       },
       "opus46_1m": {
-        "label": "Opus 4.6 (contexto 1M)",
+        "label": "Opus 4.6",
         "description": "Opus 4.6 para sessões longas"
       },
       "haiku45": {
@@ -1328,10 +1339,20 @@
         "description": "Haiku 4.5 · Mais rápido para respostas rápidas"
       }
     },
+    "longContext": {
+      "label": "1M",
+      "shortLabel": "1M contexto",
+      "tooltipEnabled": "Ativar/desativar contexto 1M",
+      "tooltipDisabled": "1M contexto não disponível para Haiku"
+    },
     "codex": {
       "gpt53codex": {
         "label": "GPT-5.3-Codex",
         "description": "Modelo de codificação agêntico de fronteira mais recente com capacidades aprimoradas."
+      },
+      "gpt55": {
+        "label": "GPT-5.5",
+        "description": "Modelo de fronteira mais recente com capacidades reforçadas."
       },
       "gpt54": {
         "label": "GPT-5.4",

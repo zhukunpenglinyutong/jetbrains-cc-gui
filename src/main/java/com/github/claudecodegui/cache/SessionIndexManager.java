@@ -10,17 +10,8 @@ import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.nio.file.*;
+import java.util.*;
 import java.util.stream.Stream;
 
 /**
@@ -37,7 +28,11 @@ public class SessionIndexManager {
     private static final String CLAUDE_INDEX_FILE = "claude-session-index.json";
     private static final String CODEX_INDEX_FILE = "codex-session-index.json";
 
-    private static final int INDEX_VERSION = 2;
+    // v3 (2026-04): SessionIndexEntry.fileLastModified now populated and used by incremental
+    // scan for mtime-driven re-read of already indexed sessions. Bumping forces rebuild of any
+    // v2 index, which was produced by the legacy full-parser and has different metadata semantics
+    // (title/messageCount/lastTimestamp) than the lite-read pipeline.
+    private static final int INDEX_VERSION = 3;
 
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
@@ -105,6 +100,11 @@ public class SessionIndexManager {
 
         // Used to detect whether the file has changed
         public long fileLastModified;
+
+        // Path relative to the provider's root dir (Claude: projectDir; Codex: sessionsDir).
+        // Enables sessionId -> file lookup during incremental rescan even when the session ID
+        // does not equal the file basename (e.g. Codex session_meta.id overrides).
+        public String fileRelativePath;
     }
 
     /**
@@ -319,9 +319,9 @@ public class SessionIndexManager {
             long currentFileCount;
             try (Stream<Path> paths = Files.walk(sessionsDir)) {
                 currentFileCount = paths
-                    .filter(Files::isRegularFile)
-                    .filter(p -> p.toString().endsWith(".jsonl"))
-                    .count();
+                        .filter(Files::isRegularFile)
+                        .filter(p -> p.toString().endsWith(".jsonl"))
+                        .count();
             }
 
             if (currentFileCount == projectIndex.fileCount) {

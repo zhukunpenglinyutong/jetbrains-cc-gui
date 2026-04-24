@@ -125,11 +125,15 @@
       },
       "nodePath": {
         "label": "Node.js Path",
-        "placeholder": "e.g. C:\\Program Files\\nodejs\\node.exe or /usr/local/bin/node",
+        "placeholder": "Windows: C:\\Program Files\\nodejs\\node.exe (must end with .exe) | macOS/Linux: /usr/local/bin/node",
         "hint": "Run in terminal",
         "hintCommand": "node -p \"process.execPath\"",
-        "hintText": "to get the actual Node.js executable path. Leave empty to auto-detect.",
-        "versionTooLow": "Node.js version is too low. The plugin requires v{{minVersion}} or higher to run properly"
+        "hintText": "to get the actual Node.js executable path. Leave empty to auto-detect. ⚠️ Windows users: Path must point to the full executable file (node.exe), not just the directory.",
+        "versionTooLow": "Node.js version is too low. The plugin requires v{{minVersion}} or higher to run properly",
+        "invalidPath": "Invalid path: {{reason}}",
+        "pathNotFound": "File does not exist, please check the path",
+        "invalidFileName": "Path must end with node.exe on Windows, or node on macOS/Linux",
+        "cannotExecute": "File exists but cannot be executed, please check file permissions"
       },
       "workingDirectory": {
         "label": "Working Directory",
@@ -146,8 +150,16 @@
         "level6": "Largest (140%)"
       },
       "editorFont": {
-        "label": "Font (follows editor font)",
-        "hint": "Not editable here. To modify, go to IDEA Settings → Editor → Font (restart IDEA for plugin font to take effect)"
+        "label": "Font",
+        "hint": "Font family changes apply immediately here. Font size and line spacing still follow the editor.",
+        "followOption": "Follow editor ({{font}})",
+        "customOption": "Custom font file",
+        "customPathLabel": "Font file path",
+        "customPathPlaceholder": "Choose or enter a .ttf / .otf font file path",
+        "browse": "Browse",
+        "warningUnavailable": "Font unavailable, currently using editor font",
+        "statusFollowEditor": "Currently following editor font: {{font}}",
+        "statusCustom": "Currently using custom font: {{font}}"
       },
       "streaming": {
         "label": "Streaming",
@@ -803,6 +815,9 @@
     "cancelEditButton": "Cancel",
     "titleTooLong": "Title too long (max 50 characters)",
     "titleUpdated": "Title updated",
+    "copySessionId": "Copy session ID for CLI resume",
+    "sessionIdCopied": "Session ID copied",
+    "copyFailed": "Copy failed",
     "timeAgo": {
       "yearsAgo": "years ago",
       "monthsAgo": "months ago",
@@ -1311,17 +1326,23 @@
   },
   "models": {
     "addModel": "Add Model",
+    "longContext": {
+      "label": "1M",
+      "shortLabel": "1M context",
+      "tooltipEnabled": "Toggle 1M context window on/off",
+      "tooltipDisabled": "1M context not available for Haiku"
+    },
     "claude": {
       "sonnet46": {
-        "label": "Sonnet 4.6 (1M context)",
+        "label": "Sonnet 4.6",
         "description": "Sonnet 4.6 · Use the default model"
       },
       "opus46": {
-        "label": "Opus 4.7 (1M context)",
+        "label": "Opus 4.7",
         "description": "Opus 4.7 · Latest and most capable"
       },
       "opus46_1m": {
-        "label": "Opus 4.6 (1M context)",
+        "label": "Opus 4.6",
         "description": "Opus 4.6 for long sessions"
       },
       "haiku45": {
@@ -1333,6 +1354,10 @@
       "gpt53codex": {
         "label": "GPT-5.3-Codex",
         "description": "Latest frontier agentic coding model with enhanced capabilities."
+      },
+      "gpt55": {
+        "label": "GPT-5.5",
+        "description": "Latest frontier model with stronger capabilities."
       },
       "gpt54": {
         "label": "GPT-5.4",

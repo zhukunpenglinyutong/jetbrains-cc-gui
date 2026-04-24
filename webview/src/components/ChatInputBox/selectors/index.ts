@@ -3,3 +3,4 @@ export { ModelSelect } from './ModelSelect';
 export { ProviderSelect } from './ProviderSelect';
 export { ConfigSelect } from './ConfigSelect';
 export { ReasoningSelect } from './ReasoningSelect';
+export { LongContextToggle } from './LongContextToggle';

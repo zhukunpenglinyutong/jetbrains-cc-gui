@@ -125,11 +125,15 @@
       },
       "nodePath": {
         "label": "Node.js 路径",
-        "placeholder": "例如 C:\\Program Files\\nodejs\\node.exe 或 /usr/local/bin/node",
+        "placeholder": "Windows: C:\\Program Files\\nodejs\\node.exe (必须以 .exe 结尾) | macOS/Linux: /usr/local/bin/node",
         "hint": "在终端中运行",
         "hintCommand": "node -p \"process.execPath\"",
-        "hintText": "获取实际的 Node.js 可执行文件路径。为空时插件会自动尝试检测 Node.js。",
-        "versionTooLow": "Node.js 版本过低，插件需要 v{{minVersion}} 或更高版本才能正常运行"
+        "hintText": "获取实际的 Node.js 可执行文件路径。为空时插件会自动尝试检测 Node.js。⚠️ Windows 用户注意：路径必须指向完整的可执行文件（node.exe），不能只填写目录。",
+        "versionTooLow": "Node.js 版本过低，插件需要 v{{minVersion}} 或更高版本才能正常运行",
+        "invalidPath": "路径无效：{{reason}}",
+        "pathNotFound": "文件不存在，请检查路径是否正确",
+        "invalidFileName": "Windows 下路径必须以 node.exe 结尾，macOS/Linux 下必须以 node 结尾",
+        "cannotExecute": "文件存在但无法执行，请检查文件权限"
       },
       "workingDirectory": {
         "label": "工作目录",
@@ -146,8 +150,16 @@
         "level6": "最大（140%）"
       },
       "editorFont": {
-        "label": "字体（跟随编辑器字体）",
-        "hint": "此处暂时不可修改，如需修改，请在 IDEA 设置 → 编辑器 → 字体 中调整（重启 IDEA 后本插件字体生效）"
+        "label": "字体",
+        "hint": "这里修改的是插件界面字体；字号和行高仍跟随编辑器。",
+        "followOption": "跟随编辑器（{{font}}）",
+        "customOption": "自定义字体文件",
+        "customPathLabel": "字体文件路径",
+        "customPathPlaceholder": "选择或输入 .ttf / .otf 字体文件路径",
+        "browse": "浏览",
+        "warningUnavailable": "字体不可用，当前已回退到编辑器字体",
+        "statusFollowEditor": "当前跟随编辑器字体：{{font}}",
+        "statusCustom": "当前使用自定义字体：{{font}}"
       },
       "streaming": {
         "label": "流式传输",
@@ -808,6 +820,9 @@
     "cancelEditButton": "取消",
     "titleTooLong": "标题过长（最多50个字符）",
     "titleUpdated": "标题已更新",
+    "copySessionId": "复制会话ID用于CLI恢复",
+    "sessionIdCopied": "会话ID已复制",
+    "copyFailed": "复制失败",
     "timeAgo": {
       "yearsAgo": "年前",
       "monthsAgo": "个月前",
@@ -1316,17 +1331,23 @@
   },
   "models": {
     "addModel": "添加模型",
+    "longContext": {
+      "label": "1M",
+      "shortLabel": "1M上下文",
+      "tooltipEnabled": "开启/关闭1M上下文窗口",
+      "tooltipDisabled": "Haiku不支持1M上下文"
+    },
     "claude": {
       "sonnet46": {
-        "label": "Sonnet 4.6（1M 上下文）",
+        "label": "Sonnet 4.6",
         "description": "Sonnet 4.6 · 默认推荐模型"
       },
       "opus46": {
-        "label": "Opus 4.7（1M 上下文）",
+        "label": "Opus 4.7",
         "description": "Opus 4.7 · 最新最强大的模型"
       },
       "opus46_1m": {
-        "label": "Opus 4.6（1M 上下文）",
+        "label": "Opus 4.6",
         "description": "Opus 4.6 长会话模式"
       },
       "haiku45": {
@@ -1338,6 +1359,10 @@
       "gpt53codex": {
         "label": "GPT-5.3-Codex",
         "description": "最新前沿智能编程模型，能力全面增强"
+      },
+      "gpt55": {
+        "label": "GPT-5.5",
+        "description": "最新前沿模型，能力进一步增强"
       },
       "gpt54": {
         "label": "GPT-5.4",

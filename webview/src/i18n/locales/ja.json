@@ -146,8 +146,16 @@
         "level6": "最大 (140%)"
       },
       "editorFont": {
-        "label": "フォント (エディタフォントに従う)",
-        "hint": "ここでは編集できません。変更するには、IDEA設定 → エディタ → フォントに移動してください(プラグインフォントを有効にするにはIDEAを再起動してください)"
+        "label": "フォント",
+        "hint": "ここではプラグインUIのフォントを変更します。文字サイズと行間は引き続きエディタに従います。",
+        "followOption": "エディタに従う ({{font}})",
+        "customOption": "カスタムフォントファイル",
+        "customPathLabel": "フォントファイルのパス",
+        "customPathPlaceholder": ".ttf / .otf フォントファイルのパスを選択または入力",
+        "browse": "参照",
+        "warningUnavailable": "フォントを利用できないため、現在はエディタフォントを使用しています",
+        "statusFollowEditor": "現在はエディタフォントを使用中: {{font}}",
+        "statusCustom": "現在はカスタムフォントを使用中: {{font}}"
       },
       "streaming": {
         "label": "Streaming",
@@ -634,6 +642,9 @@
     "cancelEditButton": "キャンセル",
     "titleTooLong": "タイトルが長すぎます(最大50文字)",
     "titleUpdated": "タイトルが更新されました",
+    "copySessionId": "CLI resume用にセッションIDをコピー",
+    "sessionIdCopied": "セッションIDをコピーしました",
+    "copyFailed": "コピーに失敗しました",
     "timeAgo": {
       "yearsAgo": "年前",
       "monthsAgo": "ヶ月前",
@@ -1138,17 +1149,23 @@
   },
   "models": {
     "addModel": "モデル追加",
+    "longContext": {
+      "label": "1M",
+      "shortLabel": "1Mコンテキスト",
+      "tooltipEnabled": "1Mコンテキストウィンドウをオン/オフ",
+      "tooltipDisabled": "Haikuでは1Mコンテキストは利用できません"
+    },
     "claude": {
       "sonnet46": {
-        "label": "Sonnet 4.6 (1M コンテキスト)",
+        "label": "Sonnet 4.6",
         "description": "Sonnet 4.6 · デフォルトモデルを使用"
       },
       "opus46": {
-        "label": "Opus 4.7 (1M コンテキスト)",
+        "label": "Opus 4.7",
         "description": "Opus 4.7 · 最新かつ最も優れたモデル"
       },
       "opus46_1m": {
-        "label": "Opus 4.6 (1M コンテキスト)",
+        "label": "Opus 4.6",
         "description": "Opus 4.6 長時間セッション向け"
       },
       "haiku45": {
@@ -1160,6 +1177,10 @@
       "gpt53codex": {
         "label": "GPT-5.3-Codex",
         "description": "最新の最先端エージェントコーディングモデル（機能強化版）"
+      },
+      "gpt55": {
+        "label": "GPT-5.5",
+        "description": "最新のフロンティアモデル。能力がさらに向上"
       },
       "gpt54": {
         "label": "GPT-5.4",

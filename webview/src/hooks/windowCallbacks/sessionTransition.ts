@@ -62,6 +62,8 @@ export const buildResetTransientUiState = (opts: ResetTransientUiStateOptions) =
     // increasing across sessions so that stale messages from an old session can never
     // collide with a new session's turn IDs (and React keys like "turn-N" stay unique).
     opts.streamingTurnIdRef.current = -1;
+    // Clear stream-end idempotency guard to avoid stale state across sessions.
+    window.__streamEndProcessedTurnId = undefined;
     if (opts.contentUpdateTimeoutRef.current) {
       clearTimeout(opts.contentUpdateTimeoutRef.current);
       opts.contentUpdateTimeoutRef.current = null;

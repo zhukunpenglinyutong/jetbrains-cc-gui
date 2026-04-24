@@ -60,8 +60,23 @@ public class ModelProviderHandlerTest {
     }
 
     @Test
-    public void shouldTreatBothOpus46IdsAsOneMillionContext() {
-        assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-opus-4-6"));
+    public void shouldReturnCorrectContextLimitsForClaudeModels() {
+        // Base IDs without [1m] suffix - 200k context by default
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-sonnet-4-6"));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-opus-4-7"));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-opus-4-6"));
+        // IDs with [1m] suffix - 1M context
+        assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-sonnet-4-6[1m]"));
+        assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-opus-4-7[1m]"));
         assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-opus-4-6[1m]"));
+        // Haiku - no 1M context available
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-haiku-4-5"));
+    }
+
+    @Test
+    public void shouldParseCapacitySuffixForCustomContextLimits() {
+        assertEquals(500_000, ModelProviderHandler.getModelContextLimit("custom-model[500k]"));
+        assertEquals(2_000_000, ModelProviderHandler.getModelContextLimit("custom-model[2m]"));
+        assertEquals(100_000, ModelProviderHandler.getModelContextLimit("custom-model[100K]"));
     }
 }

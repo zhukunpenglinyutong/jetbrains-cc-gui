@@ -146,8 +146,16 @@
         "level6": "Maximale (140%)"
       },
       "editorFont": {
-        "label": "Police (suit la police de l'éditeur)",
-        "hint": "Non modifiable ici. Pour modifier, allez dans Paramètres IDEA → Éditeur → Police (redémarrez IDEA pour que la police du plugin prenne effet)"
+        "label": "Police",
+        "hint": "Ici vous changez la police de l'interface du plugin ; la taille et l'interligne suivent toujours l'éditeur.",
+        "followOption": "Suivre l'éditeur ({{font}})",
+        "customOption": "Fichier de police personnalisé",
+        "customPathLabel": "Chemin du fichier de police",
+        "customPathPlaceholder": "Choisissez ou saisissez le chemin d'un fichier .ttf / .otf",
+        "browse": "Parcourir",
+        "warningUnavailable": "La police est indisponible, la police de l'éditeur est utilisée",
+        "statusFollowEditor": "Police actuelle de l'éditeur : {{font}}",
+        "statusCustom": "Police personnalisée actuellement utilisée : {{font}}"
       },
       "streaming": {
         "label": "Streaming",
@@ -629,6 +637,9 @@
     "cancelEditButton": "Annuler",
     "titleTooLong": "Titre trop long (maximum 50 caractères)",
     "titleUpdated": "Titre mis à jour",
+    "copySessionId": "Copier l'ID de session pour CLI resume",
+    "sessionIdCopied": "ID de session copié",
+    "copyFailed": "Échec de la copie",
     "timeAgo": {
       "yearsAgo": "il y a des années",
       "monthsAgo": "il y a des mois",
@@ -1135,15 +1146,15 @@
     "addModel": "Ajouter un modèle",
     "claude": {
       "sonnet46": {
-        "label": "Sonnet 4.6 (1M contexte)",
+        "label": "Sonnet 4.6",
         "description": "Sonnet 4.6 · Modèle recommandé par défaut"
       },
       "opus46": {
-        "label": "Opus 4.7 (1M contexte)",
+        "label": "Opus 4.7",
         "description": "Opus 4.7 · Le plus récent et le plus performant"
       },
       "opus46_1m": {
-        "label": "Opus 4.6 (1M contexte)",
+        "label": "Opus 4.6",
         "description": "Opus 4.6 pour les longues sessions"
       },
       "haiku45": {
@@ -1151,10 +1162,20 @@
         "description": "Haiku 4.5 · Le plus rapide pour des réponses rapides"
       }
     },
+    "longContext": {
+      "label": "1M",
+      "shortLabel": "1M contexte",
+      "tooltipEnabled": "Activer/désactiver le contexte 1M",
+      "tooltipDisabled": "1M contexte non disponible pour Haiku"
+    },
     "codex": {
       "gpt53codex": {
         "label": "GPT-5.3-Codex",
         "description": "Dernier modèle de codage agentique avec des capacités améliorées."
+      },
+      "gpt55": {
+        "label": "GPT-5.5",
+        "description": "Modèle frontier le plus récent aux capacités renforcées."
       },
       "gpt54": {
         "label": "GPT-5.4",

@@ -10,6 +10,7 @@ import {
   TaskExecutionBlock,
 } from '../toolBlocks';
 import { EDIT_TOOL_NAMES, BASH_TOOL_NAMES, isToolName, isTransientInternalToolName, normalizeToolName } from '../../utils/toolConstants';
+import { TASK_STATUS_COLORS } from '../../utils/messageUtils';
 
 /**
  * Get file icon class (consistent with AttachmentList)
@@ -216,6 +217,18 @@ export function ContentBlockRenderer({
         result={findToolResult(block.id, messageIndex)}
         toolId={block.id}
       />
+    );
+  }
+
+  // Task notification block - renders as "● summary" with status color
+  if (block.type === 'task_notification') {
+    // TypeScript narrows block to { type: 'task_notification'; icon: string; summary: string; status: string }
+    const statusColor = TASK_STATUS_COLORS[block.status] || 'text';
+    return (
+      <div className={`task-notification-block task-notification-${statusColor}`}>
+        <span className="task-notification-icon">{block.icon}</span>
+        <span className="task-notification-summary">{block.summary}</span>
+      </div>
     );
   }
 

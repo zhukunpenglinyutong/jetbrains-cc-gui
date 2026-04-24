@@ -146,8 +146,16 @@
         "level6": "सबसे बड़ा (140%)"
       },
       "editorFont": {
-        "label": "फ़ॉन्ट (संपादक फ़ॉन्ट का अनुसरण करता है)",
-        "hint": "यहाँ संपादन योग्य नहीं है। संशोधित करने के लिए, IDEA सेटिंग्स → संपादक → फ़ॉन्ट पर जाएं (प्लगइन फ़ॉन्ट प्रभावी होने के लिए IDEA पुनः आरंभ करें)"
+        "label": "फ़ॉन्ट",
+        "hint": "यहाँ प्लगइन UI का फ़ॉन्ट बदला जाता है; फ़ॉन्ट आकार और लाइन स्पेसिंग अभी भी एडिटर का अनुसरण करते हैं।",
+        "followOption": "एडिटर का अनुसरण करें ({{font}})",
+        "customOption": "कस्टम फ़ॉन्ट फ़ाइल",
+        "customPathLabel": "फ़ॉन्ट फ़ाइल पथ",
+        "customPathPlaceholder": ".ttf / .otf फ़ॉन्ट फ़ाइल का पथ चुनें या दर्ज करें",
+        "browse": "ब्राउज़ करें",
+        "warningUnavailable": "फ़ॉन्ट उपलब्ध नहीं है, अभी एडिटर फ़ॉन्ट उपयोग में है",
+        "statusFollowEditor": "अभी एडिटर फ़ॉन्ट उपयोग में है: {{font}}",
+        "statusCustom": "अभी कस्टम फ़ॉन्ट उपयोग में है: {{font}}"
       },
       "streaming": {
         "label": "Streaming",
@@ -629,6 +637,9 @@
     "cancelEditButton": "रद्द करें",
     "titleTooLong": "शीर्षक बहुत लंबा (अधिकतम 50 वर्ण)",
     "titleUpdated": "शीर्षक अपडेट किया गया",
+    "copySessionId": "CLI resume के लिए सेशन ID कॉपी करें",
+    "sessionIdCopied": "सेशन ID कॉपी किया गया",
+    "copyFailed": "कॉपी विफल",
     "timeAgo": {
       "yearsAgo": "साल पहले",
       "monthsAgo": "महीने पहले",
@@ -1134,15 +1145,15 @@
     "addModel": "मॉडल जोड़ें",
     "claude": {
       "sonnet46": {
-        "label": "Sonnet 4.6 (1M संदर्भ)",
+        "label": "Sonnet 4.6",
         "description": "Sonnet 4.6 · डिफ़ॉल्ट अनुशंसित मॉडल"
       },
       "opus46": {
-        "label": "Opus 4.7 (1M संदर्भ)",
+        "label": "Opus 4.7",
         "description": "Opus 4.7 · नवीनतम और सबसे सक्षम"
       },
       "opus46_1m": {
-        "label": "Opus 4.6 (1M संदर्भ)",
+        "label": "Opus 4.6",
         "description": "Opus 4.6 लंबे सत्रों के लिए"
       },
       "haiku45": {
@@ -1150,10 +1161,20 @@
         "description": "Haiku 4.5 · सबसे तेज़, त्वरित उत्तरों के लिए उपयुक्त"
       }
     },
+    "longContext": {
+      "label": "1M",
+      "shortLabel": "1M संदर्भ",
+      "tooltipEnabled": "1M संदर्भ चालू/बंद करें",
+      "tooltipDisabled": "Haiku के लिए 1M संदर्भ उपलब्ध नहीं है"
+    },
     "codex": {
       "gpt53codex": {
         "label": "GPT-5.3-Codex",
         "description": "नवीनतम फ्रंटियर एजेंटिक कोडिंग मॉडल, उन्नत क्षमताओं के साथ।"
+      },
+      "gpt55": {
+        "label": "GPT-5.5",
+        "description": "और अधिक सक्षम नवीनतम फ्रंटियर मॉडल।"
       },
       "gpt54": {
         "label": "GPT-5.4",

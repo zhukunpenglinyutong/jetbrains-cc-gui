@@ -63,47 +63,40 @@ export function processMessageContent(msg, turnState) {
     for (const block of content) {
       if (block.type === 'text') {
         const currentText = block.text || '';
-        if (turnState.streamingEnabled && !turnState.hasStreamEvents && currentText.length > turnState.lastAssistantContent.length) {
+        // Send delta if content grew, regardless of hasStreamEvents
+        // This ensures conservative sync works correctly and prevents content loss
+        // (especially important for markdown tables which need complete row structures)
+        if (turnState.streamingEnabled && currentText.length > turnState.lastAssistantContent.length) {
           const delta = currentText.substring(turnState.lastAssistantContent.length);
           if (delta) {
             process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(delta)}\n`);
           }
           turnState.lastAssistantContent = currentText;
-        } else if (turnState.streamingEnabled && turnState.hasStreamEvents) {
-          if (currentText.length > turnState.lastAssistantContent.length) {
-            turnState.lastAssistantContent = currentText;
-          }
         } else if (!turnState.streamingEnabled) {
           console.log('[CONTENT]', truncateErrorContent(currentText));
         }
       } else if (block.type === 'thinking') {
         const thinkingText = block.thinking || block.text || '';
-        if (turnState.streamingEnabled && !turnState.hasStreamEvents && thinkingText.length > turnState.lastThinkingContent.length) {
+        // Send delta if thinking grew, regardless of hasStreamEvents
+        if (turnState.streamingEnabled && thinkingText.length > turnState.lastThinkingContent.length) {
           const delta = thinkingText.substring(turnState.lastThinkingContent.length);
           if (delta) {
             process.stdout.write(`[THINKING_DELTA] ${JSON.stringify(delta)}\n`);
           }
           turnState.lastThinkingContent = thinkingText;
-        } else if (turnState.streamingEnabled && turnState.hasStreamEvents) {
-          if (thinkingText.length > turnState.lastThinkingContent.length) {
-            turnState.lastThinkingContent = thinkingText;
-          }
         } else if (!turnState.streamingEnabled) {
           console.log('[THINKING]', thinkingText);
         }
       }
     }
   } else if (typeof content === 'string') {
-    if (turnState.streamingEnabled && !turnState.hasStreamEvents && content.length > turnState.lastAssistantContent.length) {
+    // Send delta if content grew, regardless of hasStreamEvents
+    if (turnState.streamingEnabled && content.length > turnState.lastAssistantContent.length) {
       const delta = content.substring(turnState.lastAssistantContent.length);
       if (delta) {
         process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(delta)}\n`);
       }
       turnState.lastAssistantContent = content;
-    } else if (turnState.streamingEnabled && turnState.hasStreamEvents) {
-      if (content.length > turnState.lastAssistantContent.length) {
-        turnState.lastAssistantContent = content;
-      }
     } else if (!turnState.streamingEnabled) {
       console.log('[CONTENT]', truncateErrorContent(content));
     }
@@ -122,10 +115,21 @@ export function processToolResultMessages(msg) {
 }
 
 export function shouldOutputMessage(msg, turnState) {
-  if (!(turnState.streamingEnabled && msg.type === 'assistant')) {
+  // Always output non-assistant messages
+  if (msg.type !== 'assistant') {
     return true;
   }
-  const msgContent = msg.message?.content;
-  const hasToolUse = Array.isArray(msgContent) && msgContent.some(block => block.type === 'tool_use');
-  return !!hasToolUse;
+
+  // For assistant messages:
+  // - In streaming mode: output if has tool_use OR always output for conservative sync
+  //   (needed to prevent content loss - Java layer's handleAssistantMessage performs
+  //   conservative sync which catches any missed deltas)
+  // - In non-streaming mode: always output
+  if (!turnState.streamingEnabled) {
+    return true;
+  }
+
+  // Always output assistant messages for conservative sync (prevents delta loss)
+  // The Java layer uses the full assistant JSON to fill any gaps in streaming content
+  return true;
 }

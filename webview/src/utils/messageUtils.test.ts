@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import type { ClaudeMessage } from '../types';
-import { getMessageKey, mergeConsecutiveAssistantMessages } from './messageUtils';
+import {
+  getMessageKey,
+  mergeConsecutiveAssistantMessages,
+  formatCommandForDisplay,
+  formatCommandForResubmit,
+  formatTaskNotificationForDisplay,
+  hasCommandMessageTag,
+  hasTaskNotificationTag,
+  isTaskNotificationOnlyMessage,
+  hasNonHumanOrigin,
+  shouldShowMessage,
+  TASK_STATUS_COLORS,
+} from './messageUtils';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -240,3 +252,419 @@ describe('mergeConsecutiveAssistantMessages', () => {
     expect(result.filter((m) => m.type === 'assistant')).toHaveLength(2);
   });
 });
+
+// ---------------------------------------------------------------------------
+// formatCommandForDisplay — CLI-aligned command message rendering
+// ---------------------------------------------------------------------------
+
+describe('formatCommandForDisplay', () => {
+  it('returns null for text without command-message tag', () => {
+    expect(formatCommandForDisplay('hello world')).toBeNull();
+    expect(formatCommandForDisplay('<command-name>/clear</command-name>')).toBeNull();
+  });
+
+  it('returns Skill format when skill-format=true', () => {
+    const text = '<command-message>opsx:ff</command-message><skill-format>true</skill-format>';
+    expect(formatCommandForDisplay(text)).toBe('Skill(opsx:ff)');
+  });
+
+  it('returns Skill format with skill-format and no args', () => {
+    const text = '<command-message>init</command-message>\n<skill-format>true</skill-format>';
+    expect(formatCommandForDisplay(text)).toBe('Skill(init)');
+  });
+
+  it('returns slash format without skill-format', () => {
+    const text = '<command-message>opsx:ff</command-message>';
+    expect(formatCommandForDisplay(text)).toBe('/opsx:ff');
+  });
+
+  it('returns slash format with args', () => {
+    const text = '<command-message>opsx:ff</command-message><command-args>hello there</command-args>';
+    expect(formatCommandForDisplay(text)).toBe('/opsx:ff hello there');
+  });
+
+  it('returns slash format without args when command-args is empty', () => {
+    const text = '<command-message>clear</command-message><command-args></command-args>';
+    expect(formatCommandForDisplay(text)).toBe('/clear');
+  });
+
+  it('handles multiline XML content', () => {
+    const text = `<command-message>opsx:ff</command-message>
+<command-args>hello world</command-args>`;
+    expect(formatCommandForDisplay(text)).toBe('/opsx:ff hello world');
+  });
+
+  it('trims whitespace from extracted content', () => {
+    const text = '<command-message>  opsx:ff  </command-message><command-args>  hello  </command-args>';
+    expect(formatCommandForDisplay(text)).toBe('/opsx:ff hello');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatCommandForResubmit — CLI-aligned copy/resubmit behavior
+// ---------------------------------------------------------------------------
+
+describe('formatCommandForResubmit', () => {
+  it('returns null for text without command-name tag', () => {
+    expect(formatCommandForResubmit('hello world')).toBeNull();
+    expect(formatCommandForResubmit('<command-message>opsx:ff</command-message>')).toBeNull();
+  });
+
+  it('returns command-name with args', () => {
+    const text = '<command-name>/opsx:ff</command-name><command-args>hello</command-args>';
+    expect(formatCommandForResubmit(text)).toBe('/opsx:ff hello');
+  });
+
+  it('returns command-name without args', () => {
+    const text = '<command-name>/clear</command-name>';
+    expect(formatCommandForResubmit(text)).toBe('/clear');
+  });
+
+  it('command-name already contains the / prefix', () => {
+    const text = '<command-name>/review</command-name><command-args>code</command-args>';
+    expect(formatCommandForResubmit(text)).toBe('/review code');
+  });
+
+  it('handles multiline XML content', () => {
+    const text = `<command-name>/opsx:ff</command-name>
+<command-args>hello world</command-args>`;
+    expect(formatCommandForResubmit(text)).toBe('/opsx:ff hello world');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatTaskNotificationForDisplay — CLI-aligned task notification rendering
+// ---------------------------------------------------------------------------
+
+describe('formatTaskNotificationForDisplay', () => {
+  it('returns null for text without summary tag', () => {
+    expect(formatTaskNotificationForDisplay('<task-notification><status>completed</status></task-notification>')).toBeNull();
+    expect(formatTaskNotificationForDisplay('hello world')).toBeNull();
+  });
+
+  it('returns ● summary with completed status', () => {
+    const text = '<task-notification><status>completed</status><summary>Review finished</summary></task-notification>';
+    const result = formatTaskNotificationForDisplay(text);
+    expect(result).toEqual({
+      icon: '●',
+      summary: 'Review finished',
+      status: 'completed',
+    });
+  });
+
+  it('returns ● summary with failed status', () => {
+    const text = '<task-notification><status>failed</status><summary>Connection error</summary></task-notification>';
+    const result = formatTaskNotificationForDisplay(text);
+    expect(result).toEqual({
+      icon: '●',
+      summary: 'Connection error',
+      status: 'failed',
+    });
+  });
+
+  it('returns ● summary with killed status', () => {
+    const text = '<task-notification><status>killed</status><summary>User cancelled</summary></task-notification>';
+    const result = formatTaskNotificationForDisplay(text);
+    expect(result).toEqual({
+      icon: '●',
+      summary: 'User cancelled',
+      status: 'killed',
+    });
+  });
+
+  it('defaults to completed status when status tag missing', () => {
+    const text = '<task-notification><summary>Task done</summary></task-notification>';
+    const result = formatTaskNotificationForDisplay(text);
+    expect(result).toEqual({
+      icon: '●',
+      summary: 'Task done',
+      status: 'completed',
+    });
+  });
+
+  it('trims whitespace from summary', () => {
+    const text = '<task-notification><status>completed</status><summary>  Task done  </summary></task-notification>';
+    const result = formatTaskNotificationForDisplay(text);
+    expect(result?.summary).toBe('Task done');
+  });
+
+  it('handles actual SDK format with task-id, result, usage tags', () => {
+    // Actual SDK format from JSONL: task-id, tool-use-id, output-file, status, summary, result, usage
+    const text = `<task-notification>
+<task-id>a31e69ffd788b2055</task-id>
+<tool-use-id>toolu_tool-62921666a9104a878d13f7aa038f05af</tool-use-id>
+<output-file>C:\\Users\\test\\output.file</output-file>
+<status>completed</status>
+<summary>Agent "分析仓库结构" completed</summary>
+<result>## 仓库分析报告\n\n详细内容...</result>
+<usage><total_tokens>19874</total_tokens><tool_uses>12</tool_uses><duration_ms>19665</duration_ms></usage>
+</task-notification>`;
+    const result = formatTaskNotificationForDisplay(text);
+    expect(result).toEqual({
+      icon: '●',
+      summary: 'Agent "分析仓库结构" completed',
+      status: 'completed',
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TASK_STATUS_COLORS — status color mapping
+// ---------------------------------------------------------------------------
+
+describe('TASK_STATUS_COLORS', () => {
+  it('maps completed to success', () => {
+    expect(TASK_STATUS_COLORS['completed']).toBe('success');
+  });
+
+  it('maps failed to error', () => {
+    expect(TASK_STATUS_COLORS['failed']).toBe('error');
+  });
+
+  it('maps killed to warning', () => {
+    expect(TASK_STATUS_COLORS['killed']).toBe('warning');
+  });
+
+  it('maps stopped to text', () => {
+    expect(TASK_STATUS_COLORS['stopped']).toBe('text');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tag detection helpers
+// ---------------------------------------------------------------------------
+
+describe('hasCommandMessageTag', () => {
+  it('returns true for text with command-message tag', () => {
+    expect(hasCommandMessageTag('<command-message>test</command-message>')).toBe(true);
+  });
+
+  it('returns false for text without command-message tag', () => {
+    expect(hasCommandMessageTag('<command-name>/test</command-name>')).toBe(false);
+    expect(hasCommandMessageTag('hello world')).toBe(false);
+  });
+
+  it('returns false for empty text', () => {
+    expect(hasCommandMessageTag('')).toBe(false);
+    expect(hasCommandMessageTag(null as any)).toBe(false);
+  });
+});
+
+describe('hasTaskNotificationTag', () => {
+  it('returns true for text with task-notification tag', () => {
+    expect(hasTaskNotificationTag('<task-notification><status>completed</status></task-notification>')).toBe(true);
+  });
+
+  it('returns false for text without task-notification tag', () => {
+    expect(hasTaskNotificationTag('hello world')).toBe(false);
+  });
+
+  it('returns false for empty text', () => {
+    expect(hasTaskNotificationTag('')).toBe(false);
+    expect(hasTaskNotificationTag(null as any)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isTaskNotificationOnlyMessage — detect task-notification user messages
+// ---------------------------------------------------------------------------
+
+describe('isTaskNotificationOnlyMessage', () => {
+  it('returns false for non-user messages', () => {
+    const msg: ClaudeMessage = {
+      type: 'assistant',
+      content: '<task-notification><summary>done</summary></task-notification>',
+      timestamp: '1',
+    };
+    expect(isTaskNotificationOnlyMessage(msg)).toBe(false);
+  });
+
+  it('returns true when message.content has task-notification tag', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: '<task-notification><status>completed</status><summary>done</summary></task-notification>',
+      timestamp: '1',
+    };
+    expect(isTaskNotificationOnlyMessage(msg)).toBe(true);
+  });
+
+  it('returns true when raw.content array has task-notification text block', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: '',
+      timestamp: '1',
+      raw: {
+        content: [
+          { type: 'text', text: '<task-notification><summary>task done</summary></task-notification>' },
+        ],
+      },
+    };
+    expect(isTaskNotificationOnlyMessage(msg)).toBe(true);
+  });
+
+  it('returns true when raw.message.content string has task-notification', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: '',
+      timestamp: '1',
+      raw: {
+        message: {
+          content: '<task-notification><summary>hello</summary></task-notification>',
+        },
+      },
+    };
+    expect(isTaskNotificationOnlyMessage(msg)).toBe(true);
+  });
+
+  it('returns true when raw.message.content array has task-notification', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: '',
+      timestamp: '1',
+      raw: {
+        message: {
+          content: [
+            { type: 'text', text: '<task-notification><summary>hey</summary></task-notification>' },
+          ],
+        },
+      },
+    };
+    expect(isTaskNotificationOnlyMessage(msg)).toBe(true);
+  });
+
+  it('returns false when no task-notification tag found', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: 'hello world',
+      timestamp: '1',
+    };
+    expect(isTaskNotificationOnlyMessage(msg)).toBe(false);
+  });
+
+  it('returns false when raw is undefined', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: 'normal message',
+      timestamp: '1',
+      raw: undefined,
+    };
+    expect(isTaskNotificationOnlyMessage(msg)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hasNonHumanOrigin — detect synthetic messages via origin.kind
+// ---------------------------------------------------------------------------
+
+describe('hasNonHumanOrigin', () => {
+  it('returns false for non-user messages', () => {
+    const msg: ClaudeMessage = {
+      type: 'assistant',
+      content: 'hello',
+      timestamp: '1',
+      raw: { origin: { kind: 'task-notification' } },
+    };
+    expect(hasNonHumanOrigin(msg)).toBe(false);
+  });
+
+  it('returns true for user message with origin.kind = task-notification', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: 'notification',
+      timestamp: '1',
+      raw: { origin: { kind: 'task-notification' } },
+    };
+    expect(hasNonHumanOrigin(msg)).toBe(true);
+  });
+
+  it('returns true for user message with origin.kind = hook', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: 'hook msg',
+      timestamp: '1',
+      raw: { origin: { kind: 'hook' } },
+    };
+    expect(hasNonHumanOrigin(msg)).toBe(true);
+  });
+
+  it('returns false for user message with origin.kind = human', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: 'hi',
+      timestamp: '1',
+      raw: { origin: { kind: 'human' } },
+    };
+    expect(hasNonHumanOrigin(msg)).toBe(false);
+  });
+
+  it('returns false when raw has no origin field', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: 'hi',
+      timestamp: '1',
+      raw: { content: 'hi' },
+    };
+    expect(hasNonHumanOrigin(msg)).toBe(false);
+  });
+
+  it('returns false when raw is undefined', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: 'hi',
+      timestamp: '1',
+      raw: undefined,
+    };
+    expect(hasNonHumanOrigin(msg)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// shouldShowMessage — message visibility filtering
+// ---------------------------------------------------------------------------
+
+describe('shouldShowMessage', () => {
+  const mockGetMessageText = (msg: ClaudeMessage) => msg.content || '';
+  const mockNormalizeBlocks = () => null;
+  const mockT = ((key: string) => key) as any;
+
+  it('filters toolUseResult messages', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: 'some content',
+      timestamp: '1',
+      raw: { toolUseResult: true },
+    };
+    expect(shouldShowMessage(msg, mockGetMessageText, mockNormalizeBlocks, mockT)).toBe(false);
+  });
+
+  it('filters isCompactSummary messages', () => {
+    const msg: ClaudeMessage = {
+      type: 'assistant',
+      content: 'summary content',
+      timestamp: '1',
+      raw: { isCompactSummary: true },
+    };
+    expect(shouldShowMessage(msg, mockGetMessageText, mockNormalizeBlocks, mockT)).toBe(false);
+  });
+
+  it('does not filter messages without toolUseResult or isCompactSummary', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: 'normal message',
+      timestamp: '1',
+      raw: { content: 'normal message' },
+    };
+    expect(shouldShowMessage(msg, mockGetMessageText, mockNormalizeBlocks, mockT)).toBe(true);
+  });
+
+  it('filters isMeta messages', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: 'meta content',
+      timestamp: '1',
+      raw: { isMeta: true },
+    };
+    expect(shouldShowMessage(msg, mockGetMessageText, mockNormalizeBlocks, mockT)).toBe(false);
+  });
+});
+

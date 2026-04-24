@@ -20,6 +20,7 @@ describe('useSessionManagement', () => {
     setStreamingActive: vi.fn(),
     clearToasts: vi.fn(),
     addToast: vi.fn(),
+    setBackgroundTasks: vi.fn(),
   });
 
   beforeEach(() => {

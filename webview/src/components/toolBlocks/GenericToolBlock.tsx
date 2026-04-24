@@ -6,6 +6,7 @@ import { openFile } from '../../utils/bridge';
 import { formatParamValue, truncate } from '../../utils/helpers';
 import { getFileIcon, getFolderIcon } from '../../utils/fileIcons';
 import { isCommandToolName, parseCommandType } from '../../utils/toolCommandPath';
+import { SEARCH_TOOL_NAMES, isToolName } from '../../utils/toolConstants';
 import { getToolLineInfo, resolveToolTarget, summarizeToolCommand, extractPathsFromPatch } from '../../utils/toolPresentation';
 
 const CODICON_MAP: Record<string, string> = {
@@ -205,6 +206,11 @@ const GenericToolBlock = ({ name, input, result, toolId }: GenericToolBlockProps
   );
 
   const hasExpandableContent = otherParams.length > 0;
+  const isCommandSearch = isCommandToolName(lowerName) && commandStr
+    ? parseCommandType(commandStr).type === 'search'
+    : false;
+  const isSearchTool = isToolName(name, SEARCH_TOOL_NAMES) || isCommandSearch;
+  const showExpandIcon = hasExpandableContent && !isSearchTool;
 
   const isDirectoryPath = target?.isDirectory ?? false;
   const isFilePath = target?.isFile ?? false;
@@ -250,7 +256,7 @@ const GenericToolBlock = ({ name, input, result, toolId }: GenericToolBlockProps
         }}
       >
         <div className="task-title-section">
-          {hasExpandableContent && (
+          {showExpandIcon && (
             <span className={`codicon ${expanded ? 'codicon-chevron-down' : 'codicon-chevron-right'} tool-chevron`} />
           )}
           <span className={`codicon ${codicon} tool-title-icon`} />

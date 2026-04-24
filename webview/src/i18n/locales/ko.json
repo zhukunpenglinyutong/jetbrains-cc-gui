@@ -146,8 +146,16 @@
         "level6": "매우 크게 (140%)"
       },
       "editorFont": {
-        "label": "글꼴 (에디터 글꼴 따라감)",
-        "hint": "여기서 수정할 수 없습니다. 변경하려면 IDEA 설정 → Editor → Font로 이동하세요 (플러그인 글꼴 적용을 위해 IDEA 재시작 필요)"
+        "label": "글꼴",
+        "hint": "여기서는 플러그인 UI 글꼴을 변경합니다. 글자 크기와 줄 간격은 계속 에디터를 따릅니다.",
+        "followOption": "에디터 따라가기 ({{font}})",
+        "customOption": "사용자 지정 글꼴 파일",
+        "customPathLabel": "글꼴 파일 경로",
+        "customPathPlaceholder": ".ttf / .otf 글꼴 파일 경로를 선택하거나 입력하세요",
+        "browse": "찾아보기",
+        "warningUnavailable": "글꼴을 사용할 수 없어 현재 에디터 글꼴을 사용 중입니다",
+        "statusFollowEditor": "현재 에디터 글꼴 사용 중: {{font}}",
+        "statusCustom": "현재 사용자 지정 글꼴 사용 중: {{font}}"
       },
       "streaming": {
         "label": "스트리밍",
@@ -750,6 +758,9 @@
     "cancelEditButton": "취소",
     "titleTooLong": "제목이 너무 깁니다 (최대 50자)",
     "titleUpdated": "제목 업데이트됨",
+    "copySessionId": "CLI resume용 세션 ID 복사",
+    "sessionIdCopied": "세션 ID 복사됨",
+    "copyFailed": "복사 실패",
     "timeAgo": {
       "yearsAgo": "년 전",
       "monthsAgo": "개월 전",
@@ -1257,15 +1268,15 @@
     "addModel": "모델 추가",
     "claude": {
       "sonnet46": {
-        "label": "Sonnet 4.6 (1M 컨텍스트)",
+        "label": "Sonnet 4.6",
         "description": "Sonnet 4.6 · 기본 모델 사용"
       },
       "opus46": {
-        "label": "Opus 4.7 (1M 컨텍스트)",
+        "label": "Opus 4.7",
         "description": "Opus 4.7 · 최신 및 가장 강력한 모델"
       },
       "opus46_1m": {
-        "label": "Opus 4.6 (1M 컨텍스트)",
+        "label": "Opus 4.6",
         "description": "긴 세션을 위한 Opus 4.6"
       },
       "haiku45": {
@@ -1273,10 +1284,20 @@
         "description": "Haiku 4.5 · 빠른 응답에 최적"
       }
     },
+    "longContext": {
+      "label": "1M",
+      "shortLabel": "1M 컨텍스트",
+      "tooltipEnabled": "1M 컨텍스트 켜기/끄기",
+      "tooltipDisabled": "Haiku에서는 1M 컨텍스트를 사용할 수 없습니다"
+    },
     "codex": {
       "gpt53codex": {
         "label": "GPT-5.3-Codex",
         "description": "향상된 기능의 최신 프론티어 에이전트 코딩 모델."
+      },
+      "gpt55": {
+        "label": "GPT-5.5",
+        "description": "최신 프런티어 모델, 성능이 한층 강화되었습니다"
       },
       "gpt54": {
         "label": "GPT-5.4",

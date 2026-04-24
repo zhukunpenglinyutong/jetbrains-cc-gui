@@ -747,6 +747,17 @@ public class NodeDetector {
             clearCache();
             return NodeDetectionResult.failure("未指定 Node.js 路径");
         }
+        // Check binary name before attempting execution
+        if (!isValidNodeBinaryName(path)) {
+            String hint = PlatformUtils.isWindows()
+                    ? "Windows 下路径必须以 node.exe 结尾，例如：C:\\Program Files\\nodejs\\node.exe"
+                    : "路径必须以 node 结尾，例如：/usr/local/bin/node";
+            return NodeDetectionResult.failure("路径格式无效：" + hint);
+        }
+        // Check file existence before attempting execution
+        if (!"node".equals(path) && !new File(path).exists()) {
+            return NodeDetectionResult.failure("文件不存在，请检查路径是否正确：" + path);
+        }
         String version = verifyNodePath(path);
         NodeDetectionResult result;
         if (version != null) {

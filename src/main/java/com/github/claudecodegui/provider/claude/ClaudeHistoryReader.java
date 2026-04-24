@@ -190,6 +190,7 @@ public class ClaudeHistoryReader {
         public int messageCount;
         public long lastTimestamp;
         public long firstTimestamp;
+        public long fileSize;
     }
 
     /**

@@ -678,6 +678,11 @@ public class ClaudeMessageHandler implements MessageCallback {
             callbackHandler.notifyThinkingStatusChanged(false);
         }
 
+        // Ensure raw blocks are consistent with the accumulated content before sending the final update.
+        // Conservative sync may leave raw text/thinking blocks shorter than assistantContent
+        // if deltas arrived after the sync but before stream end.
+        ensureRawBlocksConsistency();
+
         // After streaming ends, send a final message update to ensure the message list is in sync
         callbackHandler.notifyMessageUpdate(state.getMessages());
         callbackHandler.notifyStreamEnd();
@@ -791,6 +796,84 @@ public class ClaudeMessageHandler implements MessageCallback {
 
         target.addProperty("text", existing + delta);
         return true;
+    }
+
+    /**
+     * Ensure raw text blocks are consistent with the accumulated assistantContent.
+     * Conservative sync may leave the last raw text block shorter than the actual
+     * streamed content when deltas arrive after the sync. This safety net runs
+     * before the final notifyMessageUpdate to guarantee the frontend receives complete data.
+     *
+     * <p>Since assistantContent accumulates ALL text deltas (concatenation of all text blocks),
+     * we calculate the total length of preceding text blocks and use only the tail portion
+     * of assistantContent to fix the last block. This prevents incorrectly overwriting
+     * the last block with the full concatenated content when multiple text blocks exist.</p>
+     *
+     * <p>Note: Only text blocks are fixed here because assistantContent is the
+     * authoritative accumulator for text. Thinking content has no separate
+     * accumulator — it is written directly to raw blocks — so there is no
+     * external source of truth to compare against.</p>
+     */
+    private void ensureRawBlocksConsistency() {
+        if (this.currentAssistantMessage == null || this.currentAssistantMessage.raw == null) {
+            return;
+        }
+        JsonObject raw = this.currentAssistantMessage.raw;
+        JsonObject message = raw.has("message") && raw.get("message").isJsonObject()
+                ? raw.getAsJsonObject("message") : null;
+        if (message == null || !message.has("content") || !message.get("content").isJsonArray()) {
+            return;
+        }
+        JsonArray contentArray = message.getAsJsonArray("content");
+
+        String accumulatedText = this.assistantContent.toString();
+        if (accumulatedText.isEmpty()) {
+            return;
+        }
+
+        // Find the last text block and calculate total text length from all preceding text blocks.
+        // We need this because assistantContent is the concatenation of ALL text deltas,
+        // but each text block should only contain its respective portion.
+        JsonObject lastTextBlock = null;
+        int precedingTextLength = 0;
+        for (int i = 0; i < contentArray.size(); i++) {
+            if (!contentArray.get(i).isJsonObject()) {
+                continue;
+            }
+            JsonObject block = contentArray.get(i).getAsJsonObject();
+            String blockType = block.has("type") && !block.get("type").isJsonNull()
+                    ? block.get("type").getAsString() : "";
+            if ("text".equals(blockType)) {
+                lastTextBlock = block;
+                precedingTextLength += block.has("text") && !block.get("text").isJsonNull()
+                        ? block.get("text").getAsString().length() : 0;
+            }
+        }
+
+        // The last iteration added the last block's length to precedingTextLength,
+        // so subtract it to get the actual preceding length.
+        if (lastTextBlock != null) {
+            String lastBlockText = lastTextBlock.has("text") && !lastTextBlock.get("text").isJsonNull()
+                    ? lastTextBlock.get("text").getAsString() : "";
+            precedingTextLength -= lastBlockText.length();
+
+            // Invariant: assistantContent must cover all preceding text blocks.
+            // A violation indicates raw blocks and the accumulator drifted, which is
+            // worth surfacing for diagnosis rather than silently producing an empty tail.
+            if (accumulatedText.length() < precedingTextLength) {
+                LOG.warn("ensureRawBlocksConsistency: accumulatedText (" + accumulatedText.length()
+                        + ") shorter than precedingTextLength (" + precedingTextLength
+                        + "); raw blocks may be out of sync with assistantContent");
+                return;
+            }
+
+            // The expected content for the last block is the tail of assistantContent
+            // starting from the end of all preceding text blocks.
+            String expectedLastBlockText = accumulatedText.substring(precedingTextLength);
+            if (lastBlockText.length() < expectedLastBlockText.length()) {
+                lastTextBlock.addProperty("text", expectedLastBlockText);
+            }
+        }
     }
 
     /**

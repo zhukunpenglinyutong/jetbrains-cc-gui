@@ -47,6 +47,21 @@ public class CodexMessageConverter {
     }
 
     /**
+     * Safely extract a string from a JsonElement, handling null, primitives, and structured types.
+     * Returns the primitive string value when possible, falls back to {@code toString()} for
+     * arrays/objects, and returns the given default for null or missing elements.
+     */
+    private static String safeGetAsString(JsonElement elem, String defaultValue) {
+        if (elem == null || elem.isJsonNull()) {
+            return defaultValue;
+        }
+        if (elem.isJsonPrimitive()) {
+            return elem.getAsString();
+        }
+        return elem.toString();
+    }
+
+    /**
      * Clear session tracking state. Should be called when a new conversation starts
      * to avoid stale session-to-file mappings.
      */
@@ -465,7 +480,7 @@ public class CodexMessageConverter {
         toolResult.addProperty("type", "tool_result");
         toolResult.addProperty("tool_use_id", payload.has("call_id") ? payload.get("call_id").getAsString() : "unknown");
 
-        String output = payload.has("output") ? payload.get("output").getAsString() : "";
+        String output = safeGetAsString(payload.get("output"), "");
         toolResult.addProperty("content", output);
 
         JsonArray content = new JsonArray();
@@ -495,15 +510,7 @@ public class CodexMessageConverter {
 
         String toolName = payload.has("name") ? payload.get("name").getAsString() : "unknown";
 
-        // Safely extract tool input as string, handling non-primitive types
-        String toolInput;
-        if (payload.has("input") && payload.get("input").isJsonPrimitive()) {
-            toolInput = payload.get("input").getAsString();
-        } else if (payload.has("input")) {
-            toolInput = payload.get("input").toString();
-        } else {
-            toolInput = "";
-        }
+        String toolInput = safeGetAsString(payload.get("input"), "");
 
         JsonObject toolUse = new JsonObject();
         toolUse.addProperty("type", "tool_use");

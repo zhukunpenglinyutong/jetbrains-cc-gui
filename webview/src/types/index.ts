@@ -1,4 +1,4 @@
-export type ClaudeRole = 'user' | 'assistant' | 'error' | string;
+export type ClaudeRole = 'user' | 'assistant' | 'error' | 'task_notification' | 'notification' | string;
 
 export type ToolInput = Record<string, unknown>;
 
@@ -7,7 +7,8 @@ export type ClaudeContentBlock =
   | { type: 'thinking'; thinking?: string; text?: string }
   | { type: 'tool_use'; id?: string; name?: string; input?: ToolInput }
   | { type: 'image'; src?: string; mediaType?: string; alt?: string }
-  | { type: 'attachment'; fileName?: string; mediaType?: string };
+  | { type: 'attachment'; fileName?: string; mediaType?: string }
+  | { type: 'task_notification'; icon: string; summary: string; status: string };
 
 export interface ToolResultBlock {
   type: 'tool_result';
@@ -23,6 +24,11 @@ export interface ClaudeRawMessage {
   content?: string | ClaudeContentOrResultBlock[];
   message?: { content?: string | ClaudeContentOrResultBlock[] };
   type?: string;
+  /** Origin indicates message source - used to filter synthetic messages */
+  origin?: { kind: string };
+  isMeta?: boolean;
+  toolUseResult?: unknown;
+  isCompactSummary?: boolean;
   [key: string]: unknown;
 }
 
@@ -58,6 +64,7 @@ export interface HistorySessionSummary {
   isFavorited?: boolean;
   favoritedAt?: number;
   provider?: string; // 'claude' or 'codex'
+  fileSize?: number;
 }
 
 export interface HistoryData {

@@ -64,6 +64,24 @@
     white-space: pre-wrap;
 }
 
+/* System notification messages: left-aligned, no bubble (task_notification + non-human origin) */
+.message.task_notification,
+.message.notification {
+    background-color: transparent;
+    border-left: none;
+    align-items: flex-start;
+    padding: 8px 20px;
+}
+
+.message.task_notification .message-content,
+.message.notification .message-content {
+    background-color: transparent;
+    padding: 0;
+    border-radius: 0;
+    border: none;
+    max-width: 100%;
+}
+
 .message-header-row {
     display: flex;
     align-items: center;
@@ -1011,5 +1029,48 @@
 
     .message-duration-value {
         font-family: var(--idea-editor-font-family, monospace);
+    }
+}
+
+/* Task Notification Block - matching CLI's UserAgentNotificationMessage */
+.task-notification-block {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    font-size: 13px;
+}
+
+.task-notification-icon {
+    font-size: 12px;
+}
+
+.task-notification-summary {
+    color: var(--text-primary);
+    line-height: 1.5;
+}
+
+/* Status-based colors - matching CLI behavior */
+.task-notification-success {
+    .task-notification-icon {
+        color: var(--color-success, #22c55e);
+    }
+}
+
+.task-notification-error {
+    .task-notification-icon {
+        color: var(--color-error, #ef4444);
+    }
+}
+
+.task-notification-warning {
+    .task-notification-icon {
+        color: var(--color-warning, #f59e0b);
+    }
+}
+
+.task-notification-text {
+    .task-notification-icon {
+        color: var(--text-tertiary);
     }
 }

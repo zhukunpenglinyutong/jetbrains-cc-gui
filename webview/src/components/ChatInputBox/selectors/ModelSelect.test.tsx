@@ -81,6 +81,7 @@ describe('ModelSelect', () => {
 
   it('Codex 内置模型列表应与目标设计一致', () => {
     expect(CODEX_MODELS.map((model) => model.id)).toEqual([
+      'gpt-5.5',
       'gpt-5.4',
       'gpt-5.2-codex',
       'gpt-5.1-codex-max',

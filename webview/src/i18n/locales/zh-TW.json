@@ -146,8 +146,16 @@
         "level6": "最大（140%）"
       },
       "editorFont": {
-        "label": "字體（跟隨編輯器字體）",
-        "hint": "此處暫時不可修改，如需修改，請在 IDEA 設定 → 編輯器 → 字體 中調整（重啟 IDEA 後本外掛字體生效）"
+        "label": "字體",
+        "hint": "這裡修改的是外掛介面字體；字級和行高仍跟隨編輯器。",
+        "followOption": "跟隨編輯器（{{font}}）",
+        "customOption": "自訂字體檔案",
+        "customPathLabel": "字體檔案路徑",
+        "customPathPlaceholder": "選擇或輸入 .ttf / .otf 字體檔案路徑",
+        "browse": "瀏覽",
+        "warningUnavailable": "字體不可用，目前已回退到編輯器字體",
+        "statusFollowEditor": "目前跟隨編輯器字體：{{font}}",
+        "statusCustom": "目前使用自訂字體：{{font}}"
       },
       "streaming": {
         "label": "Streaming",
@@ -634,6 +642,9 @@
     "cancelEditButton": "取消",
     "titleTooLong": "標題過長（最多50個字元）",
     "titleUpdated": "標題已更新",
+    "copySessionId": "複製會話ID用於CLI恢復",
+    "sessionIdCopied": "會話ID已複製",
+    "copyFailed": "複製失敗",
     "timeAgo": {
       "yearsAgo": "年前",
       "monthsAgo": "個月前",
@@ -1140,15 +1151,15 @@
     "addModel": "新增模型",
     "claude": {
       "sonnet46": {
-        "label": "Sonnet 4.6（1M 上下文）",
+        "label": "Sonnet 4.6",
         "description": "Sonnet 4.6 · 預設推薦模型"
       },
       "opus46": {
-        "label": "Opus 4.7（1M 上下文）",
+        "label": "Opus 4.7",
         "description": "Opus 4.7 · 最新最強大的模型"
       },
       "opus46_1m": {
-        "label": "Opus 4.6（1M 上下文）",
+        "label": "Opus 4.6",
         "description": "Opus 4.6 長對話模式"
       },
       "haiku45": {
@@ -1156,10 +1167,20 @@
         "description": "Haiku 4.5 · 速度最快，適合快速回覆"
       }
     },
+    "longContext": {
+      "label": "1M",
+      "shortLabel": "1M上下文",
+      "tooltipEnabled": "開啟/關閉1M上下文",
+      "tooltipDisabled": "Haiku不支援1M上下文"
+    },
     "codex": {
       "gpt53codex": {
         "label": "GPT-5.3-Codex",
         "description": "最新前沿智慧編程模型，能力全面增強"
+      },
+      "gpt55": {
+        "label": "GPT-5.5",
+        "description": "最新前沿模型，能力進一步增強"
       },
       "gpt54": {
         "label": "GPT-5.4",

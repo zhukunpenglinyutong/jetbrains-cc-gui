@@ -195,6 +195,31 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
         if (!remaining) {
           return '';
         }
+      } else {
+        // Suffix-prefix overlap detection for markdown fences/code blocks that
+        // the earlier startsWith/includes checks miss (e.g. trailing "```"
+        // repeated in the next segment).
+        //
+        // MIN_OVERLAP=10: shorter matches (e.g. "```python") are ambiguous and
+        //   frequently appear as legitimate repeated tokens inside prose. Ten
+        //   characters is long enough to make an accidental collision unlikely
+        //   while still catching a closing fence followed by a newline.
+        // MAX_OVERLAP=200: the overlap only arises from the tail of one flush
+        //   reappearing at the head of the next; in practice this spans a few
+        //   lines of code. Capping the probe keeps the scan O(n) on short
+        //   strings and bounds worst-case work on large buffers.
+        const MIN_OVERLAP = 10;
+        const MAX_OVERLAP = 200;
+        const maxLen = Math.min(existing.length, remaining.length, MAX_OVERLAP);
+        for (let n = maxLen; n >= MIN_OVERLAP; n -= 1) {
+          if (existing.slice(-n) === remaining.slice(0, n)) {
+            remaining = remaining.slice(n);
+            break;
+          }
+        }
+        if (!remaining) {
+          return '';
+        }
       }
     }
 

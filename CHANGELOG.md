@@ -1,3 +1,57 @@
+##### **2026年4月24日（v0.4）**
+
+English:
+
+✨ Features
+- Add console and Terminal selection sending: send selected Run/Debug console text or Terminal text directly into the chat input, with IntelliJ 2024.3+ terminal compatibility and localized action labels
+- Add editor tab file-path sending: quickly send the current editor tab path to CC GUI from tab actions
+- Add UI font configuration: configure chat/webview font family and size from settings, with IDE font fallback and persisted appearance preferences
+- Improve history browsing: add session ID copy controls, file size display, and lite-read / mtime-driven incremental scanning for faster Claude and Codex session loading
+- Update model options: add GPT-5.5 support, restore GPT-5.2 as a selectable option, and refine search-style tool expansion affordances
+
+🐛 Fixes
+- Fix streaming message duplication, content loss, and stream-end race conditions by hardening raw-block consistency, always forwarding assistant deltas, and coordinating `onStreamEnd` with message updates
+- Fix XML tag rendering to match CLI behavior and handle structured MCP output correctly in Codex tool results
+- Fix custom Node.js executable validation so invalid saved paths are rejected before bridge startup
+- Fix history lite-read edge cases including batch indexing, thread safety, UUID normalization, and session index schema handling
+- Fix build cache invalidation by declaring ai-bridge files as Gradle task inputs
+- Fix provider model mapping persistence by constraining saved mapping fields to supported values
+
+⚡ Performance
+- Speed up session list loading with shared lite readers, indexed metadata, file mtime checks, and incremental refresh paths for Claude and Codex histories
+
+🔧 Improvements
+- Add regression coverage for console/terminal selection sending, streaming callbacks, raw block consistency, lite readers, font settings, provider mapping, and Node path validation
+- Extract shared helpers for Codex JSON string handling, selection text normalization, JCEF browser font injection, and UI font resolution
+- Refresh related i18n strings across supported locales for new actions, settings, history labels, and model/provider UI copy
+
+中文：
+
+✨ Features
+- 新增控制台与 Terminal 选中文本发送能力：可将 Run/Debug 控制台或 Terminal 中的选中文本直接发送到聊天输入框，并兼容 IntelliJ 2024.3+ 新版 Terminal，同时补齐本地化动作文案
+- 新增编辑器标签页发送文件路径动作：可从标签页操作中快速把当前文件路径发送到 CC GUI
+- 新增 UI 字体配置：支持在设置中配置聊天/webview 字体族与字号，自动回退 IDE 字体并持久化外观偏好
+- 优化历史记录浏览：新增会话 ID 复制、文件大小展示，以及基于 lite-read 和 mtime 的增量扫描，加快 Claude 与 Codex 会话加载
+- 更新模型选项：新增 GPT-5.5 支持，恢复 GPT-5.2 可选项，并优化搜索类工具的展开视觉表现
+
+🐛 Fixes
+- 修复流式消息重复、内容丢失和流结束竞态：强化 raw block 一致性，始终转发 assistant 增量，并协调 `onStreamEnd` 与消息更新时序
+- 修复 XML 标签渲染与 CLI 行为不一致的问题，并正确处理 Codex 工具结果中的结构化 MCP 输出
+- 修复自定义 Node.js 可执行文件校验，避免无效的已保存路径进入 bridge 启动流程
+- 修复历史 lite-read 的批量索引、线程安全、UUID 规范化和会话索引 schema 边界问题
+- 修复构建缓存失效问题，将 ai-bridge 文件声明为 Gradle 任务输入
+- 修复 Provider 模型映射持久化，只保存受支持的映射字段值
+
+⚡ Performance
+- 通过共享 lite reader、索引元数据、文件 mtime 检查和增量刷新路径，加快 Claude 与 Codex 历史会话列表加载
+
+🔧 Improvements
+- 补充控制台/Terminal 选中文本发送、流式回调、raw block 一致性、lite reader、字体设置、Provider 映射和 Node 路径校验等回归测试
+- 抽取 Codex JSON 字符串处理、选中文本规范化、JCEF 浏览器字体注入和 UI 字体解析等共享工具
+- 更新新动作、设置项、历史标签以及模型/Provider UI 文案在多语言中的翻译
+
+---
+
 ##### **2026年4月17日（v0.3.5）**
 
 English:

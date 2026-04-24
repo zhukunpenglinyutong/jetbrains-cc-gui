@@ -504,4 +504,58 @@ describe('useWindowCallbacks integration', () => {
     });
     expect(nextMessages[0].__turnId).toBe(7);
   });
+
+  // ===== onStreamEnd idempotency (dual-path delivery) =====
+
+  describe('onStreamEnd idempotency', () => {
+    it('second onStreamEnd for same turn is ignored', () => {
+      const opts = createOptions();
+      // Simulate streaming state
+      opts.streamingTurnIdRef.current = 5;
+      opts.isStreamingRef.current = true;
+      opts.streamingMessageIndexRef.current = 0;
+      opts.turnIdCounterRef.current = 5;
+
+      renderHook(() => useWindowCallbacks(opts));
+
+      // Simulate onStreamStart to set up streaming state
+      act(() => {
+        (window as any).onStreamStart();
+      });
+
+      const turnId = opts.streamingTurnIdRef.current;
+
+      // First onStreamEnd — should process
+      act(() => {
+        (window as any).onStreamEnd('10');
+      });
+      expect(window.__streamEndProcessedTurnId).toBe(turnId);
+
+      // Record call count after first onStreamEnd
+      const callsAfterFirstEnd = (opts.setStreamingActive as any).mock.calls.length;
+
+      // Second onStreamEnd with same turn — should be no-op
+      act(() => {
+        (window as any).onStreamEnd('10');
+      });
+
+      // setStreamingActive should not have been called again (idempotency)
+      expect((opts.setStreamingActive as any).mock.calls.length).toBe(callsAfterFirstEnd);
+    });
+
+    it('onStreamStart clears __streamEndProcessedTurnId for next turn', () => {
+      const opts = createOptions();
+      renderHook(() => useWindowCallbacks(opts));
+
+      // Simulate a completed turn
+      window.__streamEndProcessedTurnId = 3;
+
+      // New turn starts
+      act(() => {
+        (window as any).onStreamStart();
+      });
+
+      expect(window.__streamEndProcessedTurnId).toBeUndefined();
+    });
+  });
 });

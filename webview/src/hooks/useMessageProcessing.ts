@@ -7,6 +7,9 @@ import {
   shouldShowMessage as shouldShowMessageUtil,
   getContentBlocks as getContentBlocksUtil,
   mergeConsecutiveAssistantMessages,
+  isTaskNotificationOnlyMessage,
+  hasNonHumanOrigin,
+  MESSAGE_TYPES,
 } from '../utils/messageUtils';
 import type { ClaudeContentBlock, ClaudeMessage, ClaudeRawMessage } from '../types';
 
@@ -103,6 +106,9 @@ export function useMessageProcessing({ messages, currentSessionId, t }: UseMessa
 
   // Merge assistant fragments before visibility filtering so hidden boundary
   // messages still separate distinct turns in the rendered timeline.
+  // Also transform non-human origin messages to have 'notification' type
+  // instead of 'user' type so they render correctly (left-aligned, no bubble).
+  // This includes task_notification, hook, agent, queue, channel, etc.
   const mergedMessages = useMemo(() => {
     const merged = mergeConsecutiveAssistantMessages(
       messages,
@@ -113,10 +119,23 @@ export function useMessageProcessing({ messages, currentSessionId, t }: UseMessa
     const visible: ClaudeMessage[] = [];
     for (const message of merged) {
       if (shouldShowMessageCached(message)) {
-        visible.push(message);
+        // Transform task_notification messages to have specific type
+        if (message.type === MESSAGE_TYPES.USER && isTaskNotificationOnlyMessage(message)) {
+          visible.push({ ...message, type: MESSAGE_TYPES.TASK_NOTIFICATION });
+        }
+        // Transform other non-human origin messages
+        // to 'notification' type for left-aligned display
+        else if (message.type === MESSAGE_TYPES.USER && hasNonHumanOrigin(message)) {
+          visible.push({ ...message, type: MESSAGE_TYPES.NOTIFICATION });
+        } else {
+          visible.push(message);
+        }
       }
     }
     return visible;
+    // Note: isTaskNotificationOnlyMessage and hasNonHumanOrigin are stable module-level
+    // pure functions imported from messageUtils — their references never change,
+    // so they don't need to be in the dependency array.
   }, [messages, shouldShowMessageCached, normalizeBlocks]);
 
   return {

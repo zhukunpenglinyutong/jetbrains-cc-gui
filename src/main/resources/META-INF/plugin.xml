@@ -137,8 +137,16 @@
         <action id="ClaudeCodeGUI.SendFilePathToInputAction"
                 class="com.github.claudecodegui.action.editor.SendFilePathToInputAction"
                 icon="/icons/cc-gui-icon.svg">
-            <!-- Add to project file tree context menu -->
+            <!-- Add to project file tree and editor tab context menus -->
             <add-to-group group-id="ProjectViewPopupMenu" anchor="first"/>
+            <add-to-group group-id="EditorTabPopupMenu" anchor="first"/>
+        </action>
+
+        <!-- Action to send the selected console text to CC GUI -->
+        <action id="ClaudeCodeGUI.SendConsoleSelectionToInputAction"
+                class="com.github.claudecodegui.action.console.SendConsoleSelectionToInputAction"
+                icon="/icons/cc-gui-icon.svg">
+            <add-to-group group-id="ConsoleView.PopupMenu" anchor="last"/>
         </action>
 
         <!-- Generate Commit Message with AI Action -->

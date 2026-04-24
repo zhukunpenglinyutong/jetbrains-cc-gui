@@ -170,6 +170,7 @@ const App = () => {
     currentProviderRef,
     activeProviderConfig, claudeSettingsAlwaysThinkingEnabled,
     reasoningEffort, streamingEnabledSetting, sendShortcut, autoOpenFileEnabled,
+    longContextEnabled,
     usagePercentage, usageUsedTokens, usageMaxTokens,
     setPermissionMode,
     setClaudePermissionMode, setCodexPermissionMode,
@@ -183,7 +184,7 @@ const App = () => {
     handleModeSelect, handleModelSelect, handleProviderSelect,
     handleReasoningChange, handleAgentSelect, handleToggleThinking,
     handleStreamingEnabledChange, handleSendShortcutChange,
-    handleAutoOpenFileEnabledChange,
+    handleAutoOpenFileEnabledChange, handleLongContextChange,
   } = useModelProviderState({ addToast, t });
 
   // ── Global drag event interception ──
@@ -641,6 +642,8 @@ const App = () => {
               onRemoveFromQueue={dequeueMessage}
               autoOpenFileEnabled={autoOpenFileEnabled}
               onAutoOpenFileEnabledChange={handleAutoOpenFileEnabledChange}
+              longContextEnabled={longContextEnabled}
+              onLongContextChange={handleLongContextChange}
             />
           </div>
         </>

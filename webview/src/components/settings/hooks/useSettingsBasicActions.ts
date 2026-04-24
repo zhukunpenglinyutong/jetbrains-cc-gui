@@ -1,5 +1,7 @@
 // hooks/useSettingsBasicActions.ts
 import { useState, useEffect, useCallback } from 'react';
+export type { UiFontConfig } from '../../../types/uiFontConfig';
+import type { UiFontConfig } from '../../../types/uiFontConfig';
 
 const sendToJava = (message: string) => {
   if (window.sendToJava) {
@@ -33,6 +35,7 @@ export interface UseSettingsBasicActionsReturn {
         lineSpacing: number;
       }
     | undefined;
+  uiFontConfig: UiFontConfig | undefined;
   /** Streaming enabled state (prefers prop over local state) */
   streamingEnabled: boolean;
   localStreamingEnabled: boolean;
@@ -59,6 +62,9 @@ export interface UseSettingsBasicActionsReturn {
   // =========================================================================
   handleSaveNodePath: () => void;
   handleSaveWorkingDirectory: () => void;
+  handleUiFontSelectionChange: (selection: string) => void;
+  handleSaveUiFontCustomPath: (path: string) => void;
+  handleBrowseUiFontFile: () => void;
   handleStreamingEnabledChange: (enabled: boolean) => void;
   handleCodexSandboxModeChange: (mode: 'workspace-write' | 'danger-full-access') => void;
   handleSendShortcutChange: (shortcut: 'enter' | 'cmdEnter') => void;
@@ -90,9 +96,10 @@ export interface UseSettingsBasicActionsReturn {
           fontFamily: string;
           fontSize: number;
           lineSpacing: number;
-        }
+      }
       | undefined
   ) => void;
+  /** @internal */ setUiFontConfig: (config: UiFontConfig | undefined) => void;
   /** @internal */ setLocalStreamingEnabled: (enabled: boolean) => void;
   /** @internal */ setCodexSandboxMode: (mode: 'workspace-write' | 'danger-full-access') => void;
   /** @internal */ setLocalSendShortcut: (shortcut: 'enter' | 'cmdEnter') => void;
@@ -136,6 +143,7 @@ export function useSettingsBasicActions({
       }
     | undefined
   >();
+  const [uiFontConfig, setUiFontConfig] = useState<UiFontConfig | undefined>();
 
   // Streaming configuration - prefer props, fallback to local state
   const [localStreamingEnabled, setLocalStreamingEnabled] = useState<boolean>(false);
@@ -206,6 +214,31 @@ export function useSettingsBasicActions({
     const payload = { customWorkingDir: (workingDirectory || '').trim() };
     sendToJava(`set_working_directory:${JSON.stringify(payload)}`);
   }, [workingDirectory]);
+
+  const handleUiFontSelectionChange = useCallback((selection: string) => {
+    if (selection === 'followEditor') {
+      sendToJava(`set_ui_font_config:${JSON.stringify({ mode: 'followEditor' })}`);
+      return;
+    }
+
+    if (selection === 'customFile' && uiFontConfig?.customFontPath) {
+      sendToJava(`set_ui_font_config:${JSON.stringify({
+        mode: 'customFile',
+        customFontPath: uiFontConfig.customFontPath,
+      })}`);
+    }
+  }, [uiFontConfig?.customFontPath]);
+
+  const handleSaveUiFontCustomPath = useCallback((path: string) => {
+    sendToJava(`set_ui_font_config:${JSON.stringify({
+      mode: 'customFile',
+      customFontPath: path,
+    })}`);
+  }, []);
+
+  const handleBrowseUiFontFile = useCallback(() => {
+    sendToJava('browse_ui_font_file:');
+  }, []);
 
   // Streaming toggle change handler
   const handleStreamingEnabledChange = useCallback((enabled: boolean) => {
@@ -331,6 +364,8 @@ export function useSettingsBasicActions({
     setSavingWorkingDirectory,
     editorFontConfig,
     setEditorFontConfig,
+    uiFontConfig,
+    setUiFontConfig,
     localStreamingEnabled,
     setLocalStreamingEnabled,
     streamingEnabled,
@@ -360,6 +395,9 @@ export function useSettingsBasicActions({
     setHistoryCompletionEnabled,
     handleSaveNodePath,
     handleSaveWorkingDirectory,
+    handleUiFontSelectionChange,
+    handleSaveUiFontCustomPath,
+    handleBrowseUiFontFile,
     handleStreamingEnabledChange,
     handleCodexSandboxModeChange,
     handleSendShortcutChange,

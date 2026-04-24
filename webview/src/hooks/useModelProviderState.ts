@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { sendBridgeEvent } from '../utils/bridge';
-import { CLAUDE_MODELS, CODEX_MODELS, isValidPermissionMode, normalizeClaudeModelId } from '../components/ChatInputBox/types';
+import { CLAUDE_MODELS, CODEX_MODELS, isValidPermissionMode, normalizeClaudeModelId, apply1MContextSuffix, strip1MContextSuffix } from '../components/ChatInputBox/types';
 import type { PermissionMode, ReasoningEffort, SelectedAgent } from '../components/ChatInputBox/types';
 import type { ProviderConfig } from '../types/provider';
 import { isSpecialProviderId } from '../types/provider';
@@ -48,6 +48,8 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
   const [sendShortcut, setSendShortcut] = useState<'enter' | 'cmdEnter'>('enter');
   // Auto-open file setting
   const [autoOpenFileEnabled, setAutoOpenFileEnabled] = useState(false);
+  // Long context (1M) toggle state - default enabled, persisted with model selection
+  const [longContextEnabled, setLongContextEnabled] = useState(true);
 
   // SDK installation status
   const [sdkStatus, setSdkStatus] = useState<Record<string, { installed?: boolean; status?: string }>>({});
@@ -56,8 +58,12 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
   // Refs for stale closure prevention
   const currentProviderRef = useRef(currentProvider);
   const activeProviderConfigRef = useRef(activeProviderConfig);
+  const selectedClaudeModelRef = useRef(selectedClaudeModel);
+  const longContextEnabledRef = useRef(longContextEnabled);
   useEffect(() => { currentProviderRef.current = currentProvider; }, [currentProvider]);
   useEffect(() => { activeProviderConfigRef.current = activeProviderConfig; }, [activeProviderConfig]);
+  useEffect(() => { selectedClaudeModelRef.current = selectedClaudeModel; }, [selectedClaudeModel]);
+  useEffect(() => { longContextEnabledRef.current = longContextEnabled; }, [longContextEnabled]);
 
   // Select the displayed model based on the current provider
   const selectedModel = currentProvider === 'codex' ? selectedCodexModel : selectedClaudeModel;
@@ -102,6 +108,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
       let restoredClaudePermissionMode: PermissionMode = 'bypassPermissions';
       let restoredCodexPermissionMode: PermissionMode = 'default';
       let initialPermissionMode: PermissionMode = 'bypassPermissions';
+      let restoredLongContextEnabled = true;  // Default enabled
 
       if (saved) {
         const state = JSON.parse(saved);
@@ -120,8 +127,16 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
             : state.codexPermissionMode;
         }
 
+        // Load long context setting (default true if not present)
+        if (typeof state.longContextEnabled === 'boolean') {
+          restoredLongContextEnabled = state.longContextEnabled;
+          setLongContextEnabled(state.longContextEnabled);
+        }
+
         const savedClaudeCustomModels = getCustomModels('claude-custom-models');
-        const normalizedClaudeModel = normalizeClaudeModelId(state.claudeModel);
+        // Strip [1m] suffix for internal state
+        const strippedClaudeModel = strip1MContextSuffix(state.claudeModel);
+        const normalizedClaudeModel = normalizeClaudeModelId(strippedClaudeModel);
         if (
           CLAUDE_MODELS.find(m => m.id === normalizedClaudeModel) ||
           savedClaudeCustomModels.find((m: { id: string }) => m.id === normalizedClaudeModel)
@@ -153,7 +168,10 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
       const syncToBackend = () => {
         if (window.sendToJava) {
           sendBridgeEvent('set_provider', restoredProvider);
-          const modelToSync = restoredProvider === 'codex' ? restoredCodexModel : restoredClaudeModel;
+          // For Claude, apply [1m] suffix if long context is enabled and model supports it
+          const modelToSync = restoredProvider === 'codex'
+            ? restoredCodexModel
+            : apply1MContextSuffix(restoredClaudeModel, restoredLongContextEnabled);
           sendBridgeEvent('set_model', modelToSync);
           sendBridgeEvent('set_mode', initialPermissionMode);
         } else {
@@ -178,11 +196,12 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
         codexModel: selectedCodexModel,
         claudePermissionMode,
         codexPermissionMode,
+        longContextEnabled,
       }));
     } catch {
       // Failed to save model selection state
     }
-  }, [currentProvider, selectedClaudeModel, selectedCodexModel, claudePermissionMode, codexPermissionMode]);
+  }, [currentProvider, selectedClaudeModel, selectedCodexModel, claudePermissionMode, codexPermissionMode, longContextEnabled]);
 
   // Load selected agent
   useEffect(() => {
@@ -226,9 +245,11 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
 
   const handleModelSelect = useCallback((modelId: string) => {
     if (currentProviderRef.current === 'claude') {
-      const normalizedModelId = normalizeClaudeModelId(modelId);
+      const strippedModelId = strip1MContextSuffix(modelId);
+      const normalizedModelId = normalizeClaudeModelId(strippedModelId);
       setSelectedClaudeModel(normalizedModelId);
-      sendBridgeEvent('set_model', normalizedModelId);
+      const modelToSync = apply1MContextSuffix(normalizedModelId, longContextEnabledRef.current);
+      sendBridgeEvent('set_model', modelToSync);
     } else if (currentProviderRef.current === 'codex') {
       setSelectedCodexModel(modelId);
       sendBridgeEvent('set_model', modelId);
@@ -244,7 +265,9 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     setPermissionMode(modeToSet);
     sendBridgeEvent('set_mode', modeToSet);
 
-    const newModel = providerId === 'codex' ? selectedCodexModel : selectedClaudeModel;
+    const newModel = providerId === 'codex'
+      ? selectedCodexModel
+      : apply1MContextSuffix(selectedClaudeModel, longContextEnabledRef.current);
     sendBridgeEvent('set_model', newModel);
   }, [claudePermissionMode, codexPermissionMode, selectedCodexModel, selectedClaudeModel]);
 
@@ -326,6 +349,14 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     addToast(enabled ? t('settings.basic.autoOpenFile.enabled') : t('settings.basic.autoOpenFile.disabled'), 'success');
   }, [t, addToast]);
 
+  const handleLongContextChange = useCallback((enabled: boolean) => {
+    setLongContextEnabled(enabled);
+    if (currentProviderRef.current === 'claude') {
+      const modelToSync = apply1MContextSuffix(selectedClaudeModelRef.current, enabled);
+      sendBridgeEvent('set_model', modelToSync);
+    }
+  }, []);
+
   return {
     // States
     currentProvider, setCurrentProvider,
@@ -345,6 +376,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     streamingEnabledSetting, setStreamingEnabledSetting,
     sendShortcut, setSendShortcut,
     autoOpenFileEnabled, setAutoOpenFileEnabled,
+    longContextEnabled, setLongContextEnabled,
     sdkStatus, setSdkStatus,
     sdkStatusLoaded, setSdkStatusLoaded,
     // Computed
@@ -365,5 +397,6 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     handleStreamingEnabledChange,
     handleSendShortcutChange,
     handleAutoOpenFileEnabledChange,
+    handleLongContextChange,
   };
 }

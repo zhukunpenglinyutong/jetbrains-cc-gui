@@ -1,5 +1,6 @@
 package com.github.claudecodegui.settings;
 
+import com.github.claudecodegui.util.FontConfigService;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.model.ConflictStrategy;
 import com.github.claudecodegui.model.DeleteResult;
@@ -22,6 +23,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Codemoss configuration service (Facade pattern).
@@ -33,6 +35,13 @@ public class CodemossSettingsService {
     private static final int CONFIG_VERSION = 2;
     private static final String CODEX_SANDBOX_MODE_WORKSPACE_WRITE = "workspace-write";
     private static final String CODEX_SANDBOX_MODE_DANGER_FULL_ACCESS = "danger-full-access";
+    private static final String UI_FONT_CONFIG_KEY = "uiFont";
+    private static final String UI_FONT_MODE_KEY = "mode";
+    private static final String UI_FONT_CUSTOM_PATH_KEY = "customFontPath";
+    private static final Set<String> VALID_UI_FONT_MODES = Set.of(
+            FontConfigService.UI_FONT_MODE_FOLLOW_EDITOR,
+            FontConfigService.UI_FONT_MODE_CUSTOM_FILE
+    );
     public static final String CODEX_RUNTIME_ACCESS_INACTIVE = "inactive";
     public static final String CODEX_RUNTIME_ACCESS_MANAGED = "managed";
     public static final String CODEX_RUNTIME_ACCESS_CLI_LOGIN = "cli_login";
@@ -368,6 +377,35 @@ public class CodemossSettingsService {
         LOG.info("[CodemossSettings] Set commit prompt: " + prompt);
     }
 
+    // ==================== UI Font Config Management ====================
+
+    /**
+     * Get persisted UI font configuration.
+     *
+     * @return normalized UI font configuration
+     */
+    public JsonObject getUiFontConfig() throws IOException {
+        JsonObject config = readConfig();
+        if (!config.has(UI_FONT_CONFIG_KEY) || !config.get(UI_FONT_CONFIG_KEY).isJsonObject()) {
+            return createDefaultUiFontConfig();
+        }
+        return normalizeUiFontConfig(config.getAsJsonObject(UI_FONT_CONFIG_KEY));
+    }
+
+    /**
+     * Persist UI font configuration.
+     *
+     * @param mode requested mode
+     * @param customFontPath custom font path for custom file mode
+     */
+    public void setUiFontConfig(String mode, String customFontPath) throws IOException {
+        JsonObject config = readConfig();
+        config.add(UI_FONT_CONFIG_KEY, createUiFontConfig(mode, customFontPath));
+        writeConfig(config);
+        LOG.debug("[CodemossSettings] Set UI font config: mode=" + mode
+                + ", customFontPath=" + customFontPath);
+    }
+
     // ==================== Streaming Config Management ====================
 
     /**
@@ -397,6 +435,41 @@ public class CodemossSettingsService {
         }
 
         return true;
+    }
+
+    private JsonObject createDefaultUiFontConfig() {
+        JsonObject uiFont = new JsonObject();
+        uiFont.addProperty(UI_FONT_MODE_KEY, FontConfigService.UI_FONT_MODE_FOLLOW_EDITOR);
+        return uiFont;
+    }
+
+    private JsonObject normalizeUiFontConfig(JsonObject rawConfig) {
+        if (rawConfig == null) {
+            return createDefaultUiFontConfig();
+        }
+        String requestedMode = rawConfig.has(UI_FONT_MODE_KEY) && !rawConfig.get(UI_FONT_MODE_KEY).isJsonNull()
+                ? rawConfig.get(UI_FONT_MODE_KEY).getAsString()
+                : FontConfigService.UI_FONT_MODE_FOLLOW_EDITOR;
+        String customFontPath = rawConfig.has(UI_FONT_CUSTOM_PATH_KEY) && !rawConfig.get(UI_FONT_CUSTOM_PATH_KEY).isJsonNull()
+                ? rawConfig.get(UI_FONT_CUSTOM_PATH_KEY).getAsString()
+                : null;
+        return createUiFontConfig(requestedMode, customFontPath);
+    }
+
+    private JsonObject createUiFontConfig(String mode, String customFontPath) {
+        String normalizedMode = VALID_UI_FONT_MODES.contains(mode)
+                ? mode
+                : FontConfigService.UI_FONT_MODE_FOLLOW_EDITOR;
+        JsonObject uiFont = new JsonObject();
+        uiFont.addProperty(UI_FONT_MODE_KEY, normalizedMode);
+
+        if (FontConfigService.UI_FONT_MODE_CUSTOM_FILE.equals(normalizedMode)
+                && customFontPath != null
+                && !customFontPath.trim().isEmpty()) {
+            uiFont.addProperty(UI_FONT_CUSTOM_PATH_KEY, customFontPath.trim());
+        }
+
+        return uiFont;
     }
 
     /**
