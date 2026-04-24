@@ -8,6 +8,7 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.actionSystem.ActionGroup;
 import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.openapi.actionSystem.AnAction;
+import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.Project;
@@ -673,14 +674,24 @@ public class TerminalMonitorService implements ProjectActivity {
             return;
         }
 
-        ActionGroup group = (ActionGroup) groupAction;
-        List<String> childIds = Arrays.stream(group.getChildren(null))
+        List<String> childIds = Arrays.stream(resolveActionGroupChildren((ActionGroup) groupAction))
                 .map(child -> actionManager.getId(child))
                 .collect(Collectors.toList());
         LOG.debug("[TerminalSend] group=" + groupId
                 + ", containsSendAction=" + childIds.contains(SendTerminalSelectionToInputAction.ACTION_ID)
                 + ", childCount=" + childIds.size()
                 + ", sampleChildren=" + childIds.stream().limit(12).collect(Collectors.toList()));
+    }
+
+    private static AnAction[] resolveActionGroupChildren(@NotNull ActionGroup group) {
+        try {
+            Method getChildren = group.getClass().getMethod("getChildren", AnActionEvent.class);
+            Object children = getChildren.invoke(group, new Object[]{null});
+            return children instanceof AnAction[] ? (AnAction[]) children : new AnAction[0];
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            LOG.debug("[TerminalSend] Failed to resolve action group children", e);
+            return new AnAction[0];
+        }
     }
 
     private static void installLegacySendAction(@NotNull Object widget) {
