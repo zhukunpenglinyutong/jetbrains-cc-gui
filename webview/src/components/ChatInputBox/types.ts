@@ -375,6 +375,11 @@ export const CODEX_MODELS: ModelInfo[] = [
     description: 'Ultra-fast coding model.',
   },
   {
+    id: 'gpt-5.2',
+    label: 'GPT-5.2',
+    description: 'Optimized for professional work and long-running agents.',
+  },
+  {
     id: 'gpt-5.1-codex-mini',
     label: 'GPT-5.1-Codex-Mini',
     description: 'Optimized for Codex. Cheaper, faster, but less capable.',

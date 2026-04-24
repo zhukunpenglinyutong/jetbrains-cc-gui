@@ -1185,6 +1185,10 @@
         "label": "GPT-5.3-Codex-Spark",
         "description": "अत्यंत तेज़ कोडिंग मॉडल।"
       },
+      "gpt52": {
+        "label": "GPT-5.2",
+        "description": "पेशेवर काम और लंबे समय तक चलने वाले एजेंटों के लिए अनुकूलित।"
+      },
       "gpt51codexMini": {
         "label": "GPT-5.1-Codex-Mini",
         "description": "Codex के लिए अनुकूलित। सस्ता और तेज़, लेकिन कम सक्षम।"

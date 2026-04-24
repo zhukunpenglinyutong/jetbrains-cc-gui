@@ -1308,6 +1308,10 @@
         "label": "GPT-5.3-Codex-Spark",
         "description": "초고속 코딩 모델."
       },
+      "gpt52": {
+        "label": "GPT-5.2",
+        "description": "전문 작업과 장시간 에이전트 작업에 최적화."
+      },
       "gpt51codexMini": {
         "label": "GPT-5.1-Codex-Mini",
         "description": "Codex에 최적화. 저렴하고 빠르지만 성능이 낮음."

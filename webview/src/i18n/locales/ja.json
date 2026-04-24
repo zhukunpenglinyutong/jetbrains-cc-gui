@@ -1191,6 +1191,10 @@
         "label": "GPT-5.3-Codex-Spark",
         "description": "超高速コーディングモデル"
       },
+      "gpt52": {
+        "label": "GPT-5.2",
+        "description": "プロ向け作業と長時間エージェント向けに最適化"
+      },
       "gpt51codexMini": {
         "label": "GPT-5.1-Codex-Mini",
         "description": "Codex用に最適化。より安価で高速ですが、性能は低下"

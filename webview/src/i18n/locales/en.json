@@ -1364,6 +1364,10 @@
         "label": "GPT-5.3-Codex-Spark",
         "description": "Ultra-fast coding model."
       },
+      "gpt52": {
+        "label": "GPT-5.2",
+        "description": "Optimized for professional work and long-running agents."
+      },
       "gpt51codexMini": {
         "label": "GPT-5.1-Codex-Mini",
         "description": "Optimized for Codex. Cheaper, faster, but less capable."
