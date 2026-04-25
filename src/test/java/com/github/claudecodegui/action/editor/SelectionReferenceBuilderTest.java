@@ -15,6 +15,9 @@ import java.lang.reflect.Proxy;
 
 public class SelectionReferenceBuilderTest {
 
+    private static final int SELECTION_START_OFFSET = 10;
+    private static final int SELECTION_END_OFFSET = 20;
+
     private final SelectionReferenceBuilder builder = new SelectionReferenceBuilder();
 
     @Test
@@ -78,11 +81,14 @@ public class SelectionReferenceBuilderTest {
     }
 
     @Test
-    public void nullEditorAndFileFailFast() {
-        SelectionReferenceBuilder.Result editorResult = builder.build(null, null);
+    public void nullEditorFailsFast() {
+        SelectionReferenceBuilder.Result editorResult = builder.build(null, createFile("D:\\Code\\demo\\Foo.java"));
         Assert.assertFalse(editorResult.isSuccess());
         Assert.assertEquals("send.cannotGetEditor", editorResult.getMessageKey());
+    }
 
+    @Test
+    public void nullFileFailsFast() {
         SelectionReferenceBuilder.Result fileResult = builder.build(createEditor("selected", 11, 11), null);
         Assert.assertFalse(fileResult.isSuccess());
         Assert.assertEquals("send.cannotGetFile", fileResult.getMessageKey());
@@ -92,12 +98,12 @@ public class SelectionReferenceBuilderTest {
         SelectionModel selectionModel = (SelectionModel) Proxy.newProxyInstance(
                 SelectionModel.class.getClassLoader(),
                 new Class[]{SelectionModel.class},
-                new SelectionModelHandler(selectedText, 10, 20)
+                new SelectionModelHandler(selectedText, SELECTION_START_OFFSET, SELECTION_END_OFFSET)
         );
         Document document = (Document) Proxy.newProxyInstance(
                 Document.class.getClassLoader(),
                 new Class[]{Document.class},
-                new DocumentHandler(startLineNumber - 1, endLineNumber - 1)
+                new DocumentHandler(startLineNumber - 1, endLineNumber - 1, SELECTION_START_OFFSET, SELECTION_END_OFFSET)
         );
         return (Editor) Proxy.newProxyInstance(
                 Editor.class.getClassLoader(),
@@ -197,10 +203,14 @@ public class SelectionReferenceBuilderTest {
     private static final class DocumentHandler implements InvocationHandler {
         private final int startLineNumber;
         private final int endLineNumber;
+        private final int startOffset;
+        private final int endOffset;
 
-        private DocumentHandler(int startLineNumber, int endLineNumber) {
+        private DocumentHandler(int startLineNumber, int endLineNumber, int startOffset, int endOffset) {
             this.startLineNumber = startLineNumber;
             this.endLineNumber = endLineNumber;
+            this.startOffset = startOffset;
+            this.endOffset = endOffset;
         }
 
         @Override
@@ -208,8 +218,11 @@ public class SelectionReferenceBuilderTest {
             String name = method.getName();
             if ("getLineNumber".equals(name)) {
                 int offset = (Integer) args[0];
-                if (offset <= 10) {
+                if (offset == startOffset) {
                     return startLineNumber;
+                }
+                if (offset == endOffset) {
+                    return endLineNumber;
                 }
                 return endLineNumber;
             }

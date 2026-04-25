@@ -5,11 +5,12 @@ import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.LogicalPosition;
 import com.intellij.openapi.editor.SelectionModel;
 import com.intellij.openapi.vfs.VirtualFile;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 public class SelectionReferenceBuilder {
 
-    public Result build(@Nullable Editor editor, @Nullable VirtualFile file) {
+    public @NotNull Result build(@Nullable Editor editor, @Nullable VirtualFile file) {
         if (editor == null) {
             return Result.failure("send.cannotGetEditor");
         }
@@ -35,7 +36,7 @@ public class SelectionReferenceBuilder {
         return buildFromRawSelection(selectedText, file.getPath(), startLine, endLine);
     }
 
-    Result buildFromRawSelection(@Nullable String selectedText, @Nullable String absolutePath, int startLine, int endLine) {
+    @NotNull Result buildFromRawSelection(@Nullable String selectedText, @Nullable String absolutePath, int startLine, int endLine) {
         if (selectedText == null || selectedText.trim().isEmpty()) {
             return Result.failure("send.selectCodeFirst");
         }
@@ -50,7 +51,7 @@ public class SelectionReferenceBuilder {
         return Result.success(reference);
     }
 
-    static final class Result {
+    public static final class Result {
         private final boolean success;
         private final String reference;
         private final String messageKey;
@@ -61,23 +62,23 @@ public class SelectionReferenceBuilder {
             this.messageKey = messageKey;
         }
 
-        static Result success(String reference) {
+        public static Result success(String reference) {
             return new Result(true, reference, null);
         }
 
-        static Result failure(String messageKey) {
+        public static Result failure(String messageKey) {
             return new Result(false, null, messageKey);
         }
 
-        boolean isSuccess() {
+        public boolean isSuccess() {
             return success;
         }
 
-        String getReference() {
+        public String getReference() {
             return reference;
         }
 
-        String getMessageKey() {
+        public String getMessageKey() {
             return messageKey;
         }
     }
