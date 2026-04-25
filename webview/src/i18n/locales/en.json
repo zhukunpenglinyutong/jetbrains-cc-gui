@@ -205,6 +205,12 @@
         "disabled": "Disabled",
         "hint": "When enabled, shows current model and mode info in the IDE status bar (e.g. GUI [Opus] {Auto}). When disabled, the widget is hidden."
       },
+      "taskCompletionNotification": {
+        "label": "Task Completion Notification",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "When enabled, shows a system notification when AI task completes. When disabled, no notification appears."
+      },
       "sendShortcut": {
         "label": "Send Shortcut",
         "enter": "Enter to Send",

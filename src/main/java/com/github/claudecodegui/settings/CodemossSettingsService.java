@@ -1130,6 +1130,35 @@ public class CodemossSettingsService {
         LOG.info("[CodemossSettings] Set selected sound: " + soundId);
     }
 
+    // ==================== Task Completion Notification Management ====================
+
+    /**
+     * Get whether task completion balloon notification is enabled.
+     *
+     * @return whether task completion notification is enabled, default is true
+     */
+    public boolean getTaskCompletionNotificationEnabled() throws IOException {
+        JsonObject config = readConfig();
+
+        if (config.has("taskCompletionNotificationEnabled") && !config.get("taskCompletionNotificationEnabled").isJsonNull()) {
+            return config.get("taskCompletionNotificationEnabled").getAsBoolean();
+        }
+
+        return true;
+    }
+
+    /**
+     * Set whether task completion balloon notification is enabled.
+     *
+     * @param enabled whether to enable
+     */
+    public void setTaskCompletionNotificationEnabled(boolean enabled) throws IOException {
+        JsonObject config = readConfig();
+        config.addProperty("taskCompletionNotificationEnabled", enabled);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set task completion notification enabled: " + enabled);
+    }
+
     // ==================== AI Feature Toggle Management ====================
 
     /**

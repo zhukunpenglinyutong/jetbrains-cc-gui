@@ -201,6 +201,12 @@
         "disabled": "Desativado",
         "hint": "Quando ativado, exibe informações do modelo e modo atual na barra de status da IDE (ex: GUI [Opus] {Auto}). Quando desativado, o widget fica oculto."
       },
+      "taskCompletionNotification": {
+        "label": "Notificação de Conclusão de Tarefa",
+        "enabled": "Ativado",
+        "disabled": "Desativado",
+        "hint": "Quando ativado, exibe uma notificação do sistema quando a tarefa AI é concluída. Quando desativado, nenhuma notificação aparece."
+      },
       "sendShortcut": {
         "label": "Atalho de Envio",
         "enter": "Enter para Enviar",

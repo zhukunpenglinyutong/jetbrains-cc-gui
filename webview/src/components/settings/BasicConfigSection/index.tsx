@@ -78,6 +78,9 @@ interface BasicConfigSectionProps {
   onSaveCustomSoundPath?: () => void;
   onTestSound?: () => void;
   onBrowseSound?: () => void;
+  // Task completion notification configuration
+  taskCompletionNotificationEnabled?: boolean;
+  onTaskCompletionNotificationEnabledChange?: (enabled: boolean) => void;
 }
 
 const BasicConfigSection = (props: BasicConfigSectionProps) => {
@@ -149,6 +152,8 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onSaveCustomSoundPath={props.onSaveCustomSoundPath}
           onTestSound={props.onTestSound}
           onBrowseSound={props.onBrowseSound}
+          taskCompletionNotificationEnabled={props.taskCompletionNotificationEnabled}
+          onTaskCompletionNotificationEnabledChange={props.onTaskCompletionNotificationEnabledChange}
         />
       )}
 
