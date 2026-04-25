@@ -30,15 +30,22 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
 
     private static final Logger LOG = Logger.getInstance(SendSelectionToTerminalAction.class);
 
+    private final SelectionReferenceBuilder selectionReferenceBuilder;
+
     /**
      * Constructor - sets up localized action text and description.
      */
     public SendSelectionToTerminalAction() {
+        this(new SelectionReferenceBuilder());
+    }
+
+    SendSelectionToTerminalAction(@NotNull SelectionReferenceBuilder selectionReferenceBuilder) {
         super(
             ClaudeCodeGuiBundle.message("action.sendToGui.text"),
             ClaudeCodeGuiBundle.message("action.sendToGui.description"),
             null
         );
+        this.selectionReferenceBuilder = selectionReferenceBuilder;
     }
 
     @Override
@@ -60,17 +67,17 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
             // Use ReadAction.nonBlocking() to safely retrieve file information on a background thread
             ReadAction
                 .nonBlocking(() -> {
-                    // Retrieve selected code and file information on the background thread
-                    return getSelectionInfo(e);
+                    return buildSelectionReference(e);
                 })
                 .finishOnUiThread(com.intellij.openapi.application.ModalityState.defaultModalityState(), selectionInfo -> {
-                    if (selectionInfo == null) {
-                        return; // Error message already shown within the method
+                    if (!selectionInfo.isSuccess()) {
+                        showBuildFailure(project, selectionInfo.getMessageKey());
+                        return;
                     }
 
                     // Send to the plugin chat window (executed on the UI thread)
-                    sendToChatWindow(project, selectionInfo);
-                    LOG.info("已添加到待发送: " + selectionInfo);
+                    sendToChatWindow(project, selectionInfo.getReference());
+                    LOG.info("已添加到待发送: " + selectionInfo.getReference());
                 })
                 .submit(AppExecutorUtil.getAppExecutorService());
 
@@ -108,70 +115,32 @@ public class SendSelectionToTerminalAction extends AnAction implements DumbAware
     /**
      * Retrieves selected code information and formats it into the specified format.
      */
-    private @Nullable String getSelectionInfo(@NotNull AnActionEvent e) {
+    private @NotNull SelectionReferenceBuilder.Result buildSelectionReference(@NotNull AnActionEvent e) {
         Project project = e.getProject();
         Editor editor = e.getData(CommonDataKeys.EDITOR);
-
-        if (project == null || editor == null) {
-            showError(project, ClaudeCodeGuiBundle.message("send.cannotGetEditor"));
-            return null;
-        }
-
-        SelectionModel selectionModel = editor.getSelectionModel();
-        String selectedText = selectionModel.getSelectedText();
-
-        // Check if there is any selected text
-        if (selectedText == null || selectedText.trim().isEmpty()) {
-            showInfo(project, ClaudeCodeGuiBundle.message("send.selectCodeFirst"));
-            return null;
-        }
-
-        // Get the current file
-        VirtualFile[] selectedFiles = FileEditorManager.getInstance(project).getSelectedFiles();
-        if (selectedFiles.length == 0) {
-            showError(project, ClaudeCodeGuiBundle.message("send.cannotGetFile"));
-            return null;
-        }
-        VirtualFile virtualFile = selectedFiles[0];
-
-        // Get the project-relative path
-        String relativePath = getRelativePath(project, virtualFile);
-        if (relativePath == null) {
-            showError(project, ClaudeCodeGuiBundle.message("send.cannotGetFilePath"));
-            return null;
-        }
-
-        // Get the line numbers for the selection range
-        int startOffset = selectionModel.getSelectionStart();
-        int endOffset = selectionModel.getSelectionEnd();
-
-        int startLine = editor.getDocument().getLineNumber(startOffset) + 1; // +1 because line numbers are 1-based
-        int endLine = editor.getDocument().getLineNumber(endOffset) + 1;
-
-        // Format the output: @path#Lstart-Lend
-        // For a single line, show only one line number
-        String formattedPath;
-        if (startLine == endLine) {
-            formattedPath = "@" + relativePath + "#L" + startLine;
-        } else {
-            formattedPath = "@" + relativePath + "#L" + startLine + "-" + endLine;
-        }
-
-        return formattedPath;
+        VirtualFile virtualFile = project == null ? null : getSelectedFile(project);
+        return selectionReferenceBuilder.build(editor, virtualFile);
     }
 
-    /**
-     * Gets the absolute path of the file (from the filesystem root).
-     */
-    private @Nullable String getRelativePath(@NotNull Project project, @NotNull VirtualFile file) {
-        try {
-            // Get the absolute path of the file
-            String absolutePath = file.getPath();
-            LOG.debug("文件绝对路径: " + absolutePath);
-            return absolutePath;
-        } catch (Exception ex) {
-            LOG.error("获取文件路径异常: " + ex.getMessage(), ex);
+    private @Nullable VirtualFile getSelectedFile(@NotNull Project project) {
+        VirtualFile[] selectedFiles = FileEditorManager.getInstance(project).getSelectedFiles();
+        if (selectedFiles.length == 0) {
             return null;
+        }
+        return selectedFiles[0];
+    }
+
+    private void showBuildFailure(@Nullable Project project, @Nullable String messageKey) {
+        if (messageKey == null) {
+            showError(project, ClaudeCodeGuiBundle.message("send.failed", "Unknown error"));
+            return;
+        }
+
+        String message = ClaudeCodeGuiBundle.message(messageKey);
+        if ("send.selectCodeFirst".equals(messageKey)) {
+            showInfo(project, message);
+        } else {
+            showError(project, message);
         }
     }
 
