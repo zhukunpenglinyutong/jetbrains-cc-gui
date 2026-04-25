@@ -113,6 +113,7 @@
             <keyboard-shortcut keymap="macOS" first-keystroke="meta shift Q"/>
         </action>
 
+        <!-- Copy AI Reference Action -->
         <action id="ClaudeCodeGUI.CopySelectionReferenceAction"
                 class="com.github.claudecodegui.action.editor.CopySelectionReferenceAction"
                 icon="/icons/cc-gui-icon.svg">

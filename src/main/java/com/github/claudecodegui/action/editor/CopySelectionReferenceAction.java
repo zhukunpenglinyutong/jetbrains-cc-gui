@@ -113,7 +113,7 @@ public class CopySelectionReferenceAction extends AnAction implements DumbAware 
             clipboardWriter.accept(result.getReference());
         } catch (RuntimeException ex) {
             LOG.warn("Failed to write selection reference to clipboard", ex);
-            showClipboardWriteFailure(project, ClaudeCodeGuiBundle.message("send.failed", ex.getMessage()));
+            showClipboardWriteFailure(project, ClaudeCodeGuiBundle.message("action.copyAiReference.copyFailed"));
         }
     }
 
