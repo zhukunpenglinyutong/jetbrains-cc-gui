@@ -189,6 +189,12 @@
         "disabled": "已折疊",
         "hint": "開啟後，聊天中的程式碼差異將預設展開顯示。關閉後，差異預設摺疊，可點擊展開。"
       },
+      "taskCompletionNotification": {
+        "label": "任務完成通知",
+        "enabled": "已開啟",
+        "disabled": "已關閉",
+        "hint": "開啟後，當 AI 任務完成時顯示系統通知。關閉後不顯示系統通知。"
+      },
       "sendShortcut": {
         "label": "發送快捷鍵",
         "enter": "Enter 發送",

@@ -58,6 +58,7 @@ export interface UseSettingsBasicActionsReturn {
   historyCompletionEnabled: boolean;
   commitGenerationEnabled: boolean;
   statusBarWidgetEnabled: boolean;
+  taskCompletionNotificationEnabled: boolean;
   promptEnhancerConfig: PromptEnhancerConfig;
 
   // =========================================================================
@@ -82,6 +83,7 @@ export interface UseSettingsBasicActionsReturn {
   handleSaveCommitPrompt: () => void;
   handleCommitGenerationEnabledChange: (enabled: boolean) => void;
   handleStatusBarWidgetEnabledChange: (enabled: boolean) => void;
+  handleTaskCompletionNotificationEnabledChange: (enabled: boolean) => void;
   handlePromptEnhancerProviderChange: (provider: PromptEnhancerProvider) => void;
   handlePromptEnhancerModelChange: (model: string) => void;
   handlePromptEnhancerResetToDefault: () => void;
@@ -120,6 +122,7 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setHistoryCompletionEnabled: (enabled: boolean) => void;
   /** @internal */ setCommitGenerationEnabled: (enabled: boolean) => void;
   /** @internal */ setStatusBarWidgetEnabled: (enabled: boolean) => void;
+  /** @internal */ setTaskCompletionNotificationEnabled: (enabled: boolean) => void;
   /** @internal */ setPromptEnhancerConfig: (config: PromptEnhancerConfig) => void;
 }
 
@@ -198,6 +201,10 @@ export function useSettingsBasicActions({
 
   // Status bar widget toggle (default: true)
   const [statusBarWidgetEnabled, setStatusBarWidgetEnabled] = useState<boolean>(true);
+
+  // Task completion notification toggle (default: true)
+  const [taskCompletionNotificationEnabled, setTaskCompletionNotificationEnabled] = useState<boolean>(true);
+
   const [promptEnhancerConfig, setPromptEnhancerConfig] = useState<PromptEnhancerConfig>(
     DEFAULT_PROMPT_ENHANCER_CONFIG
   );
@@ -352,6 +359,13 @@ export function useSettingsBasicActions({
     sendToJava(`set_status_bar_widget_enabled:${JSON.stringify(payload)}`);
   }, []);
 
+  // Task completion notification toggle change handler
+  const handleTaskCompletionNotificationEnabledChange = useCallback((enabled: boolean) => {
+    setTaskCompletionNotificationEnabled(enabled);
+    const payload = { taskCompletionNotificationEnabled: enabled };
+    sendToJava(`set_task_completion_notification_enabled:${JSON.stringify(payload)}`);
+  }, []);
+
   const handlePromptEnhancerProviderChange = useCallback((provider: PromptEnhancerProvider) => {
     const providerAvailable = promptEnhancerConfig.availability[provider];
     const nextConfig: PromptEnhancerConfig = {
@@ -475,6 +489,9 @@ export function useSettingsBasicActions({
     statusBarWidgetEnabled,
     setStatusBarWidgetEnabled,
     handleStatusBarWidgetEnabledChange,
+    taskCompletionNotificationEnabled,
+    setTaskCompletionNotificationEnabled,
+    handleTaskCompletionNotificationEnabledChange,
     promptEnhancerConfig,
     setPromptEnhancerConfig,
     handlePromptEnhancerProviderChange,

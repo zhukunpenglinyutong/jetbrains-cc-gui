@@ -189,6 +189,12 @@
         "disabled": "Colapsado",
         "hint": "Cuando está habilitado, las diferencias de código en el chat se expandirán por defecto. Cuando está deshabilitado, las diferencias comienzan colapsadas."
       },
+      "taskCompletionNotification": {
+        "label": "Notificación de tarea completada",
+        "enabled": "Activado",
+        "disabled": "Desactivado",
+        "hint": "Cuando está activado, muestra una notificación del sistema cuando la tarea AI se completa. Cuando está desactivado, no aparece ninguna notificación."
+      },
       "sendShortcut": {
         "label": "Atajo de envío",
         "enter": "Enter para enviar",

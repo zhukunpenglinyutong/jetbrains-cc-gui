@@ -266,6 +266,11 @@ interface Window {
   updateStatusBarWidgetEnabled?: (json: string) => void;
 
   /**
+   * Update task completion notification enabled state
+   */
+  updateTaskCompletionNotificationEnabled?: (json: string) => void;
+
+  /**
    * Update current Claude config
    */
   updateCurrentClaudeConfig?: (json: string) => void;

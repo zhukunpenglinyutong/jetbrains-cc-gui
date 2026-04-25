@@ -2,12 +2,13 @@ package com.github.claudecodegui.notifications;
 
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.util.SoundNotificationService;
+import com.github.claudecodegui.util.SystemNotificationService;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Simple utility to update the Claude Status Bar Widget.
+ * Simple utility to update the Claude Status Bar Widget and show notifications.
  */
 public class ClaudeNotifier {
 
@@ -25,9 +26,11 @@ public class ClaudeNotifier {
 
     public static void showSuccess(@NotNull Project project, String message) {
         show(project, "Claude ✓", message, 5000);
-
+        // Play the task completion notification toast
+        SystemNotificationService.getInstance().showVisualNotificationToast(project, message);
         // Play the task completion notification sound
         SoundNotificationService.getInstance().playTaskCompleteSound();
+
     }
 
     public static void showError(@NotNull Project project, String message) {

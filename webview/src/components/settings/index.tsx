@@ -163,6 +163,9 @@ const SettingsView = ({
     statusBarWidgetEnabled,
     setStatusBarWidgetEnabled,
     handleStatusBarWidgetEnabledChange,
+    taskCompletionNotificationEnabled,
+    setTaskCompletionNotificationEnabled,
+    handleTaskCompletionNotificationEnabledChange,
     handlePromptEnhancerProviderChange,
     handlePromptEnhancerModelChange,
     handlePromptEnhancerResetToDefault,
@@ -300,6 +303,7 @@ const SettingsView = ({
     setCustomSoundPath,
     setCommitGenerationEnabled,
     setStatusBarWidgetEnabled,
+    setTaskCompletionNotificationEnabled,
   });
 
   // Save provider (wrapper function with validation logic)
@@ -461,6 +465,8 @@ const SettingsView = ({
               onSaveCustomSoundPath={handleSaveCustomSoundPath}
               onTestSound={handleTestSound}
               onBrowseSound={handleBrowseSound}
+              taskCompletionNotificationEnabled={taskCompletionNotificationEnabled}
+              onTaskCompletionNotificationEnabledChange={handleTaskCompletionNotificationEnabledChange}
             />
           </div>
 
