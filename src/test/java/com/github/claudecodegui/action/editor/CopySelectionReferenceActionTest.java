@@ -79,8 +79,18 @@ public class CopySelectionReferenceActionTest {
     }
 
     @Test
-    public void updateHidesActionForBlankSelection() {
+    public void updateShowsActionForWhitespaceSelection() {
         AnActionEvent event = createEvent(createDataContext(createEditor("   "), null));
+
+        action.update(event);
+
+        Assert.assertTrue(event.getPresentation().isVisible());
+        Assert.assertTrue(event.getPresentation().isEnabled());
+    }
+
+    @Test
+    public void updateHidesActionForEmptySelection() {
+        AnActionEvent event = createEvent(createDataContext(createEditor(""), null));
 
         action.update(event);
 

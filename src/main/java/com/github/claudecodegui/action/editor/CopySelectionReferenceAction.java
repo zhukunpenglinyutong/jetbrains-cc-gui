@@ -75,7 +75,7 @@ public class CopySelectionReferenceAction extends AnAction implements DumbAware 
                     )
                     .submit(AppExecutorUtil.getAppExecutorService());
         } catch (RuntimeException ex) {
-            showError(project, ClaudeCodeGuiBundle.message("send.failed", ex.getMessage()));
+            showError(project, ClaudeCodeGuiBundle.message("action.copyAiReference.copyFailed"));
             LOG.error("Failed to copy selection reference", ex);
         }
     }
@@ -90,7 +90,7 @@ public class CopySelectionReferenceAction extends AnAction implements DumbAware 
 
         SelectionModel selectionModel = editor.getSelectionModel();
         String selectedText = selectionModel.getSelectedText();
-        boolean hasSelection = selectedText != null && !selectedText.trim().isEmpty();
+        boolean hasSelection = selectedText != null && !selectedText.isEmpty();
         e.getPresentation().setEnabledAndVisible(hasSelection);
     }
 
