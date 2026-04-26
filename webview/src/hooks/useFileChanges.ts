@@ -5,9 +5,71 @@ import { getFileName } from '../utils/helpers';
 import { FILE_MODIFY_TOOL_NAMES, isToolName, normalizeToolName } from '../utils/toolConstants';
 import { normalizeToolInput } from '../utils/toolInputNormalization';
 import { getToolLineInfo } from '../utils/toolPresentation';
+import { getFileChangeStatusFromOperations } from '../utils/fileChangeProcessing';
 
-/** Write tool names that indicate a new file */
-const WRITE_TOOL_NAMES = new Set(['write', 'write_file', 'create_file']);
+
+const SOURCE_PRIORITY: Record<string, number> = {
+  codex_session_patch: 3,
+  main: 2,
+  subagent: 1,
+};
+
+function getOperationIdentityKey(operation: EditOperation): string | undefined {
+  if (operation.operationId) {
+    return `op:${operation.operationId}`;
+  }
+  if (operation.toolUseId) {
+    return `tool:${operation.toolUseId}`;
+  }
+  return undefined;
+}
+
+function getOperationDedupeKey(filePath: string, operation: EditOperation): string {
+  return [
+    filePath,
+    operation.toolName,
+    operation.oldString,
+    operation.newString,
+    operation.lineStart ?? '',
+    operation.lineEnd ?? '',
+    operation.existedBefore ?? '',
+  ].join('\u0000');
+}
+
+function normalizedSource(operation: EditOperation): string {
+  return operation.source ?? 'main';
+}
+
+function shouldDedupeOperation(existing: EditOperation, next: EditOperation, filePath: string): boolean {
+  const existingIdentity = getOperationIdentityKey(existing);
+  const nextIdentity = getOperationIdentityKey(next);
+  if (existingIdentity && nextIdentity && existingIdentity === nextIdentity) {
+    return true;
+  }
+  if (normalizedSource(existing) === normalizedSource(next)) {
+    return false;
+  }
+  return getOperationDedupeKey(filePath, existing) === getOperationDedupeKey(filePath, next);
+}
+
+function shouldReplaceOperation(existing: EditOperation, next: EditOperation): boolean {
+  const existingPriority = existing.source ? SOURCE_PRIORITY[existing.source] ?? 0 : 0;
+  const nextPriority = next.source ? SOURCE_PRIORITY[next.source] ?? 0 : 0;
+  return nextPriority > existingPriority;
+}
+
+function addDedupedOperation(operations: EditOperation[], filePath: string, operation: EditOperation): EditOperation[] {
+  const existingIndex = operations.findIndex((existing) => shouldDedupeOperation(existing, operation, filePath));
+  if (existingIndex < 0) {
+    return [...operations, operation];
+  }
+  if (!shouldReplaceOperation(operations[existingIndex], operation)) {
+    return operations;
+  }
+  const next = [...operations];
+  next[existingIndex] = operation;
+  return next;
+}
 
 /**
  * Maximum lines to use LCS algorithm.
@@ -168,18 +230,7 @@ function extractStrings(input: Record<string, unknown>): { oldString: string; ne
  * Determine file status (A = Added, M = Modified)
  */
 function determineFileStatus(operations: EditOperation[]): FileChangeStatus {
-  if (operations.length === 0) return 'M';
-
-  const firstOp = operations[0];
-  // Write/create_file tools indicate a new file
-  if (WRITE_TOOL_NAMES.has(normalizeToolName(firstOp.toolName))) {
-    return 'A';
-  }
-  // If first operation has empty oldString, it's likely a new file
-  if (firstOp.oldString === '' && firstOp.newString !== '') {
-    return 'A';
-  }
-  return 'M';
+  return getFileChangeStatusFromOperations(operations);
 }
 
 /**
@@ -193,7 +244,7 @@ interface UseFileChangesParams {
   messages: ClaudeMessage[];
   getContentBlocks: (message: ClaudeMessage) => ClaudeContentBlock[];
   findToolResult: (toolUseId?: string, messageIndex?: number) => ToolResultBlock | null;
-  /** Start processing messages from this index (for Keep All feature) */
+  /** Start processing messages from this index (legacy Keep All fallback) */
   startFromIndex?: number;
 }
 
@@ -219,7 +270,7 @@ export function useFileChanges({
 
       const blocks = getContentBlocks(message);
 
-      blocks.forEach((block) => {
+      blocks.forEach((block, blockIndex) => {
         if (block.type !== 'tool_use') return;
 
         const toolName = normalizeToolName(block.name ?? '');
@@ -251,12 +302,25 @@ export function useFileChanges({
           replaceAll,
           lineStart: lineInfo.start,
           lineEnd: lineInfo.end,
+          source: input.source === 'subagent' || input.source === 'codex_session_patch' || input.source === 'main'
+            ? input.source
+            : 'main',
+          scopeId: typeof input.scope_id === 'string' ? input.scope_id : (typeof input.scopeId === 'string' ? input.scopeId : undefined),
+          agentHandle: typeof input.agent_handle === 'string' ? input.agent_handle : (typeof input.agentHandle === 'string' ? input.agentHandle : undefined),
+          parentToolUseId: typeof input.parent_tool_use_id === 'string' ? input.parent_tool_use_id : (typeof input.parentToolUseId === 'string' ? input.parentToolUseId : undefined),
+          operationId: typeof input.operation_id === 'string' ? input.operation_id : (typeof input.operationId === 'string' ? input.operationId : undefined),
+          safeToRollback: typeof input.safe_to_rollback === 'boolean' ? input.safe_to_rollback : (typeof input.safeToRollback === 'boolean' ? input.safeToRollback : undefined),
+          editSequence: typeof input.edit_sequence === 'number' ? input.edit_sequence : (typeof input.editSequence === 'number' ? input.editSequence : undefined),
+          existedBefore: typeof input.existed_before === 'boolean' ? input.existed_before : (typeof input.existedBefore === 'boolean' ? input.existedBefore : undefined),
+          toolUseId: typeof block.id === 'string' ? block.id : undefined,
+          messageIndex,
+          blockIndex,
+          occurrenceId: typeof block.id === 'string' ? `${messageIndex}:${block.id}` : `${messageIndex}:${blockIndex}`,
         };
 
-        // Group by file path
+        // Group by file path with defensive operation dedupe
         const existing = fileOperationsMap.get(filePath) ?? [];
-        existing.push(operation);
-        fileOperationsMap.set(filePath, existing);
+        fileOperationsMap.set(filePath, addDedupedOperation(existing, filePath, operation));
       });
     });
 

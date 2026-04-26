@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { FileChangeSummary } from '../../types';
-import { undoFileChanges, sendToJava } from '../../utils/bridge';
+import { showEditableDiff, undoFileChanges, sendToJava } from '../../utils/bridge';
 import { getFileName } from '../../utils/helpers';
 import TodoList from './TodoList';
 import SubagentList from './SubagentList';
@@ -9,9 +9,10 @@ import FileChangesList from './FileChangesList';
 import UndoConfirmDialog from './UndoConfirmDialog';
 import DiscardAllDialog from './DiscardAllDialog';
 import type { TabType, StatusPanelProps } from './types';
+import { getFilesToDiscardAfterUndoAll, getSucceededFilesFromUndoAllResult, getUndoAllFailureMessage, toBridgeOperations } from './fileChangeActions';
 import './StatusPanel.less';
 
-const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, currentSessionId, expanded = true, isStreaming = false, onUndoFile, onDiscardAll, onKeepAll }: StatusPanelProps) => {
+const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, currentSessionId, expanded = true, isStreaming = false, onUndoFile, onKeepAll, onRegisterFileChangeAction, onClearFileChangeAction }: StatusPanelProps) => {
   const { t } = useTranslation();
   const [openPopover, setOpenPopover] = useState<TabType | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -23,6 +24,9 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
   // Discard All confirmation state
   const [confirmDiscardAll, setConfirmDiscardAll] = useState(false);
   const [isDiscardingAll, setIsDiscardingAll] = useState(false);
+  const discardAllRequestFilesRef = useRef<string[]>([]);
+  const undoRequestByFilePathRef = useRef(new Map<string, FileChangeSummary>());
+  const discardAllRequestByFilePathRef = useRef(new Map<string, FileChangeSummary>());
 
   const hasTodos = todos.length > 0;
   const hasFileChanges = fileChanges.length > 0;
@@ -37,7 +41,7 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
 
   // Calculate subagent stats
   const { subagentCompletedCount, subagentTotalCount, hasRunningSubagent } = useMemo(() => {
-    const completed = subagents.filter((s) => s.status === 'completed').length;
+    const completed = subagents.filter((s) => s.status === 'completed' || s.status === 'error').length;
     const running = subagents.some((s) => s.status === 'running');
     return { subagentCompletedCount: completed, subagentTotalCount: subagents.length, hasRunningSubagent: running };
   }, [subagents]);
@@ -90,15 +94,10 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
     const safeStatus = confirmUndoFile.status === 'A' ? 'A' : 'M';
 
     setUndoingFile(filePath);
+    undoRequestByFilePathRef.current.set(filePath, confirmUndoFile);
     setConfirmUndoFile(null);
 
-    const ops = operations.map((op) => ({
-      oldString: op.oldString,
-      newString: op.newString,
-      replaceAll: op.replaceAll,
-    }));
-
-    undoFileChanges(filePath, safeStatus, ops);
+    undoFileChanges(filePath, safeStatus, toBridgeOperations(operations));
   }, [confirmUndoFile]);
 
   const handleCancelUndo = useCallback(() => {
@@ -119,12 +118,10 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
     const files = fileChanges.map((fc) => ({
       filePath: fc.filePath,
       status: fc.status === 'A' ? 'A' : 'M',
-      operations: fc.operations.map((op) => ({
-        oldString: op.oldString,
-        newString: op.newString,
-        replaceAll: op.replaceAll,
-      })),
+      operations: toBridgeOperations(fc.operations),
     }));
+    discardAllRequestFilesRef.current = files.map((file) => file.filePath);
+    discardAllRequestByFilePathRef.current = new Map(fileChanges.map((fileChange) => [fileChange.filePath, fileChange]));
 
     sendToJava('undo_all_file_changes', { files });
   }, [fileChanges]);
@@ -132,6 +129,15 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
   const handleCancelDiscardAll = useCallback(() => {
     setConfirmDiscardAll(false);
   }, []);
+
+  const handleShowDiff = useCallback((fileChange: FileChangeSummary) => {
+    const status = fileChange.status === 'A' ? 'A' : 'M';
+    const requestId = onRegisterFileChangeAction?.(fileChange);
+    const dispatched = showEditableDiff(fileChange.filePath, toBridgeOperations(fileChange.operations), status, requestId);
+    if (!dispatched) {
+      onClearFileChangeAction?.(requestId);
+    }
+  }, [onRegisterFileChangeAction, onClearFileChangeAction]);
 
   // Keep All handler
   const handleKeepAllClick = useCallback(() => {
@@ -147,12 +153,15 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
         setUndoingFile(null);
 
         if (result.success) {
-          onUndoFile?.(result.filePath);
+          const requested = undoRequestByFilePathRef.current.get(result.filePath);
+          undoRequestByFilePathRef.current.delete(result.filePath);
+          onUndoFile?.(result.filePath, requested?.operations);
           window.addToast?.(
             t('statusPanel.undoSuccess', { fileName: getFileName(result.filePath) }),
             'success'
           );
         } else {
+          undoRequestByFilePathRef.current.delete(result.filePath);
           window.addToast?.(
             t('statusPanel.undoFailed', { error: result.error || 'Unknown error' }),
             'error'
@@ -177,12 +186,35 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
         const result = JSON.parse(resultJson);
         setIsDiscardingAll(false);
 
+        const succeededFiles = getSucceededFilesFromUndoAllResult(result);
+
         if (result.success) {
-          onDiscardAll?.();
+          getFilesToDiscardAfterUndoAll(result, discardAllRequestFilesRef.current).forEach((filePath) => {
+            const requested = discardAllRequestByFilePathRef.current.get(filePath);
+            onUndoFile?.(filePath, requested?.operations);
+          });
+          discardAllRequestFilesRef.current = [];
+          discardAllRequestByFilePathRef.current.clear();
           window.addToast?.(t('statusPanel.discardAllSuccess'), 'success');
-        } else {
+        } else if (result.partial && succeededFiles.length > 0) {
+          succeededFiles.forEach((filePath) => {
+            const requested = discardAllRequestByFilePathRef.current.get(filePath);
+            onUndoFile?.(filePath, requested?.operations);
+          });
+          discardAllRequestFilesRef.current = [];
+          discardAllRequestByFilePathRef.current.clear();
           window.addToast?.(
-            t('statusPanel.discardAllFailed', { error: result.error || 'Unknown error' }),
+            t('statusPanel.discardAllFailed', {
+              error: getUndoAllFailureMessage(result, 'Some files could not be discarded'),
+            }),
+            'error'
+          );
+        } else {
+          discardAllRequestByFilePathRef.current.clear();
+          window.addToast?.(
+            t('statusPanel.discardAllFailed', {
+              error: getUndoAllFailureMessage(result, 'Unknown error'),
+            }),
             'error'
           );
         }
@@ -196,7 +228,7 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
     return () => {
       delete window.onUndoAllFileResult;
     };
-  }, [onDiscardAll, t]);
+  }, [onUndoFile, t]);
 
   if (!expanded) {
     return null;
@@ -215,8 +247,10 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
             undoingFile={undoingFile}
             isDiscardingAll={isDiscardingAll}
             onUndoClick={handleUndoClick}
+            onShowDiff={handleShowDiff}
             onDiscardAllClick={handleDiscardAllClick}
             onKeepAllClick={handleKeepAllClick}
+            keepAllDisabled={false}
           />
         );
       default:

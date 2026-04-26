@@ -49,6 +49,7 @@ import { MessageList } from './components/MessageList';
 import { MessageAnchorRail } from './components/MessageAnchorRail';
 import { SubagentHistoryContext, SessionIdContext, ToolResultRawContext, useSubagentContextValues } from './contexts/SubagentContext';
 import { FILE_MODIFY_TOOL_NAMES, isToolName } from './utils/toolConstants';
+import { filterProcessedFileChanges } from './utils/fileChangeProcessing';
 import type { RewindableMessage } from './components/RewindSelectDialog';
 import { AppDialogs } from './components/AppDialogs';
 import { APP_VERSION } from './version/version';
@@ -386,8 +387,8 @@ const App = () => {
 
   // ── File changes management ──
   const {
-    processedFiles, baseMessageIndex,
-    handleUndoFile, handleDiscardAll: handleDiscardAllRaw, handleKeepAll,
+    processedOperationKeys, baseMessageIndex,
+    handleUndoFile, handleKeepAll, registerPendingFileChangeAction, clearPendingFileChangeAction,
   } = useFileChangesManagement({
     currentSessionId, currentSessionIdRef, messages,
     getContentBlocks, findToolResult,
@@ -399,21 +400,21 @@ const App = () => {
   });
 
   const filteredFileChanges = useMemo(() => {
-    if (processedFiles.length === 0) return fileChanges;
-    return fileChanges.filter(fc => !processedFiles.includes(fc.filePath));
-  }, [fileChanges, processedFiles]);
-
-  const onDiscardAll = useCallback(() => {
-    handleDiscardAllRaw(filteredFileChanges);
-  }, [handleDiscardAllRaw, filteredFileChanges]);
+    return filterProcessedFileChanges(fileChanges, processedOperationKeys);
+  }, [fileChanges, processedOperationKeys]);
 
   const latestTurnMessages = useMemo(() => sliceLatestConversationTurn(messages), [messages]);
 
   // ── Subagents ──
   const latestTurnSubagents = useSubagents({ messages: latestTurnMessages, getContentBlocks, findToolResult, getToolResultRaw });
+  const sessionSubagents = useSubagents({ messages, getContentBlocks, findToolResult, getToolResultRaw });
   const subagents = useMemo(
     () => finalizeSubagentsForSettledTurn(latestTurnSubagents, streamingActive),
     [latestTurnSubagents, streamingActive],
+  );
+  const hasPendingSubagent = useMemo(
+    () => finalizeSubagentsForSettledTurn(sessionSubagents, streamingActive).some((subagent) => subagent.status === 'running'),
+    [sessionSubagents, streamingActive],
   );
 
   // Stabilize context value references — prevents consumers from re-rendering
@@ -619,9 +620,11 @@ const App = () => {
               currentSessionId={currentSessionId}
               expanded={statusPanelExpanded}
               isStreaming={streamingActive}
+              hasPendingSubagent={hasPendingSubagent}
               onUndoFile={handleUndoFile}
-              onDiscardAll={onDiscardAll}
-              onKeepAll={handleKeepAll}
+              onKeepAll={() => handleKeepAll(filteredFileChanges)}
+              onRegisterFileChangeAction={registerPendingFileChangeAction}
+              onClearFileChangeAction={clearPendingFileChangeAction}
             />
           </StatusPanelErrorBoundary>
           <div className="input-area" ref={inputAreaRef}>

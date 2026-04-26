@@ -30,6 +30,8 @@ public class SessionSendService {
     private final ClaudeSDKBridge claudeSDKBridge;
     private final CodexSDKBridge codexSDKBridge;
     private final SessionContextService contextService;
+    private final SubagentLifecycleDetector subagentLifecycleDetector;
+    private final SubagentEditScopeTracker subagentEditScopeTracker;
 
     public SessionSendService(
             Project project,
@@ -51,6 +53,9 @@ public class SessionSendService {
         this.claudeSDKBridge = claudeSDKBridge;
         this.codexSDKBridge = codexSDKBridge;
         this.contextService = contextService;
+        EditOperationRegistry editOperationRegistry = new EditOperationRegistry();
+        this.subagentLifecycleDetector = new SubagentLifecycleDetector();
+        this.subagentEditScopeTracker = new SubagentEditScopeTracker(project, editOperationRegistry);
     }
 
     public void prepareContextCollector(EditorContextCollector contextCollector) {
@@ -174,7 +179,12 @@ public class SessionSendService {
             List<String> fileTagPaths,
             String effectivePermissionMode
     ) {
-        CodexMessageHandler handler = new CodexMessageHandler(state, callbackFacade.getCallbackHandler());
+        CodexMessageHandler handler = new CodexMessageHandler(
+                state,
+                callbackFacade.getCallbackHandler(),
+                subagentLifecycleDetector,
+                subagentEditScopeTracker
+        );
         String accessMode = CodemossSettingsService.CODEX_RUNTIME_ACCESS_INACTIVE;
         try {
             accessMode = new CodemossSettingsService().getCodexRuntimeAccessMode();
@@ -219,7 +229,9 @@ public class SessionSendService {
                 callbackFacade.getCallbackHandler(),
                 messageParser,
                 messageMerger,
-                gson
+                gson,
+                subagentLifecycleDetector,
+                subagentEditScopeTracker
         );
 
         Boolean streaming = readStreamingEnabled();

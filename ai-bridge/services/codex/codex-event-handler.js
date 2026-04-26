@@ -17,6 +17,7 @@ import { readFile, unlink, writeFile } from 'fs/promises';
 import { requestPermissionFromJava } from '../../permission-handler.js';
 import { findSessionFileByThreadId } from './codex-agents-loader.js';
 import { extractPatchFromResponseItemPayload, parseApplyPatchToOperations } from './codex-patch-parser.js';
+import { captureWorkspaceSnapshot, diffWorkspaceSnapshots } from './codex-workspace-snapshot.js';
 import {
   truncateForDisplay, getStableItemId, extractCommand,
   smartToolName, smartDescription, mapCommandToolNameToPermissionToolName,
@@ -31,10 +32,95 @@ import {
 import {
   normalizeMcpToolName, normalizeMcpToolInput,
   parseFunctionCallArguments, normalizeFunctionCallTool,
-  rememberToolInvocation, findMatchingToolUseId,
+  rememberToolInvocation, buildToolInvocationSignature,
 } from './codex-tool-normalization.js';
 
 const COMMAND_DENIED_ABORT_ERROR = '__CODEX_COMMAND_DENIED_ABORT__';
+
+const LIFECYCLE_TOOL_NAMES = new Set(['spawn_agent', 'wait_agent', 'close_agent', 'send_input', 'resume_agent']);
+
+function isLifecycleTool(toolName) {
+  return typeof toolName === 'string' && LIFECYCLE_TOOL_NAMES.has(toolName);
+}
+
+function nextLifecycleToolUseId(state, toolName, stableHint = '') {
+  state.lifecycleToolSequence = (state.lifecycleToolSequence || 0) + 1;
+  const prefix = state.eventStateId || 'state';
+  const suffix = stableHint ? String(stableHint).replace(/[^a-zA-Z0-9_.:-]/g, '_') : state.lifecycleToolSequence;
+  return `codex_lifecycle_${toolName}_${prefix}_${suffix}`;
+}
+
+function rememberPendingFunctionCall(state, toolUseId) {
+  if (!toolUseId || state.emittedToolResultIds.has(toolUseId)) return;
+  if (!Array.isArray(state.pendingFunctionCallToolUseIds)) {
+    state.pendingFunctionCallToolUseIds = [];
+  }
+  if (!state.pendingFunctionCallToolUseIds.includes(toolUseId)) {
+    state.pendingFunctionCallToolUseIds.push(toolUseId);
+  }
+}
+
+function resolveFunctionCallOutputToolUseId(payload, state) {
+  const rawCallId = typeof payload.call_id === 'string' && payload.call_id ? payload.call_id : '';
+  if (rawCallId) return rawCallId;
+  const rawPayloadId = typeof payload.id === 'string' && payload.id ? payload.id : '';
+  if (rawPayloadId && state.emittedToolUseIds.has(rawPayloadId)) {
+    return state.emittedToolResultIds.has(rawPayloadId) ? '' : rawPayloadId;
+  }
+
+  const pending = (Array.isArray(state.pendingFunctionCallToolUseIds) ? state.pendingFunctionCallToolUseIds : [])
+    .filter((toolUseId) => state.emittedToolUseIds.has(toolUseId) && !state.emittedToolResultIds.has(toolUseId));
+  state.pendingFunctionCallToolUseIds = pending;
+  return pending.length > 0 ? pending[0] : '';
+}
+
+function markFunctionCallOutputCompleted(state, toolUseId) {
+  if (!Array.isArray(state.pendingFunctionCallToolUseIds)) return;
+  state.pendingFunctionCallToolUseIds = state.pendingFunctionCallToolUseIds.filter((pendingId) => pendingId !== toolUseId);
+}
+
+
+function sanitizeIdPart(value) {
+  return String(value || '').replace(/[^a-zA-Z0-9_.:-]/g, '_');
+}
+
+function generatedFunctionToolUseId(state, stableHint = '') {
+  if (stableHint) {
+    return `codex_function_${state.eventStateId || 'state'}_${sanitizeIdPart(stableHint)}`;
+  }
+  return randomUUID();
+}
+
+function rememberPendingMcpToolUseId(state, signature, toolUseId) {
+  if (!signature || !toolUseId) return;
+  if (!(state.pendingMcpToolUseIdsBySignature instanceof Map)) {
+    state.pendingMcpToolUseIdsBySignature = new Map();
+  }
+  const queue = state.pendingMcpToolUseIdsBySignature.get(signature) ?? [];
+  queue.push(toolUseId);
+  state.pendingMcpToolUseIdsBySignature.set(signature, queue);
+}
+
+function consumePendingMcpToolUseId(state, signature) {
+  if (!signature || !(state.pendingMcpToolUseIdsBySignature instanceof Map)) return null;
+  const queue = state.pendingMcpToolUseIdsBySignature.get(signature);
+  if (!Array.isArray(queue) || queue.length === 0) return null;
+  while (queue.length > 0) {
+    const candidate = queue.shift();
+    if (candidate && state.emittedToolUseIds.has(candidate) && !state.emittedToolResultIds.has(candidate)) {
+      if (queue.length === 0) state.pendingMcpToolUseIdsBySignature.delete(signature);
+      return candidate;
+    }
+  }
+  state.pendingMcpToolUseIdsBySignature.delete(signature);
+  return null;
+}
+
+function syntheticPatchSafeToRollback(operation, rollbackResult = null, deniedByUser = false) {
+  if (!operation || typeof operation.newString !== 'string' || operation.newString.length === 0) return false;
+  if (deniedByUser && rollbackResult?.success === false) return false;
+  return true;
+}
 
 function toolUseMsg(id, name, input) {
   return { type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id, name, input }] } };
@@ -48,7 +134,7 @@ function textMsg(text) {
   return { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text }] } };
 }
 
-function handleFunctionCallPayload(payload, state) {
+export function handleFunctionCallPayload(payload, state, options = {}) {
   if (!payload || payload.type !== 'function_call') return false;
 
   const rawToolName = typeof payload.name === 'string' ? payload.name : '';
@@ -58,24 +144,26 @@ function handleFunctionCallPayload(payload, state) {
   const normalizedTool = normalizeFunctionCallTool(rawToolName, parsedArguments);
   const toolName = normalizedTool.name;
   const toolInput = normalizedTool.input;
-  const matchedToolUseId = findMatchingToolUseId(state, toolName, toolInput);
-  const toolUseId = matchedToolUseId || (typeof payload.call_id === 'string' && payload.call_id ? payload.call_id : randomUUID());
+  const rawCallId = typeof payload.call_id === 'string' && payload.call_id ? payload.call_id : null;
+  const rawPayloadId = typeof payload.id === 'string' && payload.id ? payload.id : null;
+  const stableHint = options.stableHint || rawPayloadId || '';
+  const lifecycleTool = isLifecycleTool(toolName);
+  const toolUseId = rawCallId || rawPayloadId || (lifecycleTool
+    ? nextLifecycleToolUseId(state, toolName, stableHint)
+    : generatedFunctionToolUseId(state, stableHint));
 
   if (!state.emittedToolUseIds.has(toolUseId)) {
     state.emitMessage(toolUseMsg(toolUseId, toolName, toolInput));
     state.emittedToolUseIds.add(toolUseId);
   }
   rememberToolInvocation(state, toolUseId, toolName, toolInput);
-  state.lastFunctionCallToolUseId = toolUseId;
+  rememberPendingFunctionCall(state, toolUseId);
   return true;
 }
 
-function handleFunctionCallOutputPayload(payload, state) {
+export function handleFunctionCallOutputPayload(payload, state) {
   if (!payload || payload.type !== 'function_call_output') return false;
-  let toolUseId = typeof payload.call_id === 'string' ? payload.call_id : '';
-  if ((!toolUseId || !state.emittedToolUseIds.has(toolUseId)) && state.lastFunctionCallToolUseId) {
-    toolUseId = state.lastFunctionCallToolUseId;
-  }
+  const toolUseId = resolveFunctionCallOutputToolUseId(payload, state);
   if (!toolUseId || state.emittedToolResultIds.has(toolUseId) || !state.emittedToolUseIds.has(toolUseId)) return false;
 
   const output = typeof payload.output === 'string' ? payload.output : JSON.stringify(payload.output ?? '(no output)');
@@ -84,6 +172,7 @@ function handleFunctionCallOutputPayload(payload, state) {
   const truncatedResult = truncateForDisplay(output, MAX_TOOL_RESULT_CHARS);
   state.emitMessage(toolResultMsg(toolUseId, isError, truncatedResult && truncatedResult.trim() ? truncatedResult : '(no output)'));
   state.emittedToolResultIds.add(toolUseId);
+  markFunctionCallOutputCompleted(state, toolUseId);
   return true;
 }
 
@@ -96,7 +185,13 @@ export function createInitialEventState(emitMessage) {
     emittedToolResultIds: new Set(),
     toolCallSignatureById: new Map(),
     toolUseIdBySignature: new Map(),
-    lastFunctionCallToolUseId: null,
+    pendingFunctionCallToolUseIds: [],
+    pendingMcpToolUseIdsBySignature: new Map(),
+    lifecycleToolSequence: 0,
+    eventStateId: randomUUID(),
+    syntheticEditSequence: 0,
+    turnWorkspaceSnapshot: null,
+    emittedFileChangePaths: new Set(),
     deniedCommandToolUseIds: new Set(),
     emittedDeniedCommandToolResultIds: new Set(),
     sessionFilePath: null,
@@ -149,8 +244,9 @@ function ensureToolUseId(state, phase, item) {
 
 function ensureSessionFilePath(state, threadId) {
   if (state.sessionFilePath && existsSync(state.sessionFilePath)) return state.sessionFilePath;
-  if (!threadId) return null;
-  state.sessionFilePath = findSessionFileByThreadId(threadId);
+  const effectiveThreadId = threadId || state.currentThreadId;
+  if (!effectiveThreadId) return null;
+  state.sessionFilePath = findSessionFileByThreadId(effectiveThreadId);
   return state.sessionFilePath;
 }
 
@@ -218,7 +314,7 @@ async function collectPatchOperationsFromSession(state, config) {
 
     const operations = parseApplyPatchToOperations(patchText)
       .map((op) => ({ ...op, filePath: resolveFilePath(op.filePath, config.cwd) }))
-      .filter((op) => op.filePath && (op.oldString !== '' || op.newString !== ''));
+      .filter((op) => op.filePath && (op.kind === 'delete' || op.oldString !== '' || op.newString !== ''));
     state.processedPatchCallIds.add(callId);
     if (operations.length === 0) continue;
     batches.push({ callId, operations });
@@ -262,17 +358,17 @@ async function replayMissingFunctionCallsFromSession(state, config) {
     const payload = parsed.payload;
     const payloadType = payload.type;
     if (payloadType === 'function_call') {
-      const callId = typeof payload.call_id === 'string' && payload.call_id ? payload.call_id : `line_${i}`;
+      const callId = typeof payload.call_id === 'string' && payload.call_id ? payload.call_id : (typeof payload.id === 'string' && payload.id ? payload.id : `line_${i}`);
       if (state.processedSessionFunctionCallIds.has(callId)) continue;
       state.processedSessionFunctionCallIds.add(callId);
-      if (handleFunctionCallPayload(payload, state)) {
+      if (handleFunctionCallPayload(payload, state, { stableHint: callId })) {
         toolUses += 1;
       }
       continue;
     }
 
     if (payloadType === 'function_call_output') {
-      const callId = typeof payload.call_id === 'string' && payload.call_id ? payload.call_id : `line_${i}`;
+      const callId = typeof payload.call_id === 'string' && payload.call_id ? payload.call_id : (typeof payload.id === 'string' && payload.id ? payload.id : `line_${i}`);
       if (state.processedSessionFunctionOutputIds.has(callId)) continue;
       state.processedSessionFunctionOutputIds.add(callId);
       if (handleFunctionCallOutputPayload(payload, state)) {
@@ -322,6 +418,43 @@ async function requestPatchApprovalsViaBridge(patchBatches) {
   return deniedCallIds;
 }
 
+function normalizeLineRange(startLine, endLine, content) {
+  const lines = content.split('\n');
+  const start = Number.isInteger(startLine) && startLine > 0 ? startLine : 1;
+  const end = Number.isInteger(endLine) && endLine >= start ? endLine : start;
+  const offsets = [0];
+  for (let i = 0; i < lines.length - 1; i++) {
+    offsets.push(offsets[offsets.length - 1] + lines[i].length + 1);
+  }
+  const startOffset = offsets[Math.min(start - 1, offsets.length - 1)] ?? 0;
+  const endLineIndex = Math.min(end - 1, lines.length - 1);
+  const endOffset = (offsets[endLineIndex] ?? content.length) + (lines[endLineIndex]?.length ?? 0);
+  return { startOffset, endOffset: Math.min(endOffset, content.length) };
+}
+
+export function findUniqueRollbackIndex(currentContent, newString, operation) {
+  if (!newString) return -1;
+  if (Number.isInteger(operation.startLine) && operation.startLine > 0) {
+    const { startOffset, endOffset } = normalizeLineRange(operation.startLine, operation.endLine, currentContent);
+    const exactWindow = currentContent.slice(startOffset, endOffset);
+    const exactIndex = exactWindow.indexOf(newString);
+    if (exactIndex >= 0 && exactWindow.indexOf(newString, exactIndex + 1) < 0) {
+      return startOffset + exactIndex;
+    }
+    const expansion = Math.max(newString.length, 256);
+    const windowStart = Math.max(0, startOffset - expansion);
+    const windowEnd = Math.min(currentContent.length, endOffset + expansion);
+    const local = currentContent.slice(windowStart, windowEnd);
+    const localIndex = local.indexOf(newString);
+    if (localIndex >= 0 && local.indexOf(newString, localIndex + 1) < 0) {
+      return windowStart + localIndex;
+    }
+  }
+  const first = currentContent.indexOf(newString);
+  if (first < 0) return -1;
+  return currentContent.indexOf(newString, first + 1) < 0 ? first : -1;
+}
+
 async function rollbackSinglePatchOperation(operation) {
   if (!operation || typeof operation !== 'object' || !operation.filePath) {
     return { ok: false, reason: 'invalid-operation' };
@@ -342,8 +475,8 @@ async function rollbackSinglePatchOperation(operation) {
   catch (error) { return { ok: false, reason: error?.message || String(error) }; }
   if (newString === oldString) return { ok: true, reason: 'noop' };
   if (!newString) return { ok: false, reason: 'unsupported-empty-new-string' };
-  const index = currentContent.indexOf(newString);
-  if (index < 0) return { ok: false, reason: 'new-string-not-found' };
+  const index = findUniqueRollbackIndex(currentContent, newString, operation);
+  if (index < 0) return { ok: false, reason: 'new-string-not-found-or-ambiguous' };
   const revertedContent = currentContent.slice(0, index) + oldString + currentContent.slice(index + newString.length);
   try { await writeFile(filePath, revertedContent, 'utf8'); return { ok: true, reason: 'replaced' }; }
   catch (error) { return { ok: false, reason: error?.message || String(error) }; }
@@ -366,7 +499,7 @@ async function rollbackDeniedPatchBatches(patchBatches, deniedCallIds) {
   return resultByCallId;
 }
 
-function emitSyntheticPatchOperations(state, patchBatches, isError, deniedCallIds = new Set(), rollbackByCallId = new Map()) {
+export function emitSyntheticPatchOperations(state, patchBatches, isError, deniedCallIds = new Set(), rollbackByCallId = new Map()) {
   if (!Array.isArray(patchBatches) || patchBatches.length === 0) return 0;
   let emittedCount = 0;
   for (const batch of patchBatches) {
@@ -375,6 +508,8 @@ function emitSyntheticPatchOperations(state, patchBatches, isError, deniedCallId
       const toolUseId = `codex_patch_${batch.callId}_${index}`;
       const toolName = op.toolName === 'write' ? 'write' : 'edit';
       if (!state.emittedToolUseIds.has(toolUseId)) {
+        state.syntheticEditSequence = (state.syntheticEditSequence || 0) + 1;
+        const editSequence = state.syntheticEditSequence;
         state.emitMessage(toolUseMsg(toolUseId, toolName, {
           file_path: op.filePath,
           old_string: op.oldString,
@@ -382,14 +517,19 @@ function emitSyntheticPatchOperations(state, patchBatches, isError, deniedCallId
           start_line: op.startLine,
           end_line: op.endLine,
           replace_all: false,
-          source: 'codex_session_patch'
+          source: 'codex_session_patch',
+          operation_id: toolUseId,
+          safe_to_rollback: syntheticPatchSafeToRollback(op, rollbackByCallId instanceof Map ? rollbackByCallId.get(batch.callId) : null, deniedCallIds instanceof Set && deniedCallIds.has(batch.callId)),
+          edit_sequence: editSequence,
+          existed_before: op.kind !== 'add'
         }));
         state.emittedToolUseIds.add(toolUseId);
       }
+      if (op.filePath) state.emittedFileChangePaths.add(op.filePath);
       const deniedByUser = deniedCallIds instanceof Set && deniedCallIds.has(batch.callId);
       const rollbackResult = rollbackByCallId instanceof Map ? rollbackByCallId.get(batch.callId) : null;
       const rollbackSucceeded = !deniedByUser || rollbackResult?.success !== false;
-      const opIsError = !!isError || deniedByUser;
+      const opIsError = !!isError || (deniedByUser && rollbackSucceeded);
       let resultText = 'Patch applied';
       if (isError) resultText = 'Patch apply failed';
       else if (deniedByUser) {
@@ -400,6 +540,70 @@ function emitSyntheticPatchOperations(state, patchBatches, isError, deniedCallId
     });
   }
   return emittedCount;
+}
+
+async function captureTurnWorkspaceSnapshot(state, config) {
+  if (state.turnWorkspaceSnapshot || !config?.cwd) return;
+  state.turnWorkspaceSnapshot = await captureWorkspaceSnapshot(config.cwd);
+  if (state.turnWorkspaceSnapshot?.truncated) {
+    logWarn('PERM_DEBUG', `Codex workspace snapshot truncated for cwd=${config.cwd}`);
+  }
+}
+
+function emitSyntheticWorkspaceSnapshotOperations(state, operations) {
+  if (!Array.isArray(operations) || operations.length === 0) return 0;
+
+  const operationsByPath = new Map();
+  for (const operation of operations) {
+    if (!operation?.filePath) continue;
+    const list = operationsByPath.get(operation.filePath) ?? [];
+    list.push(operation);
+    operationsByPath.set(operation.filePath, list);
+  }
+
+  let emittedCount = 0;
+  for (const [filePath, fileOperations] of operationsByPath.entries()) {
+    if (state.emittedFileChangePaths.has(filePath)) continue;
+
+    fileOperations.forEach((operation) => {
+      state.syntheticEditSequence = (state.syntheticEditSequence || 0) + 1;
+      const editSequence = state.syntheticEditSequence;
+      const toolUseId = `codex_fs_${state.eventStateId || 'state'}_${editSequence}`;
+      const toolName = operation.toolName === 'write' ? 'write' : 'edit';
+
+      if (!state.emittedToolUseIds.has(toolUseId)) {
+        state.emitMessage(toolUseMsg(toolUseId, toolName, {
+          file_path: operation.filePath,
+          old_string: operation.oldString,
+          new_string: operation.newString,
+          start_line: operation.startLine,
+          end_line: operation.endLine,
+          replace_all: operation.replaceAll === true,
+          source: 'codex_session_patch',
+          operation_id: toolUseId,
+          safe_to_rollback: operation.safeToRollback === true,
+          edit_sequence: editSequence,
+          existed_before: operation.existedBefore !== false
+        }));
+        state.emittedToolUseIds.add(toolUseId);
+      }
+      state.emitMessage(toolResultMsg(toolUseId, false, 'Filesystem change detected'));
+      state.emittedToolResultIds.add(toolUseId);
+      emittedCount += 1;
+    });
+
+    state.emittedFileChangePaths.add(filePath);
+  }
+  return emittedCount;
+}
+
+async function emitTurnWorkspaceDiff(state, config) {
+  if (!state.turnWorkspaceSnapshot || !config?.cwd) return 0;
+  const afterSnapshot = await captureWorkspaceSnapshot(config.cwd);
+  const operations = diffWorkspaceSnapshots(state.turnWorkspaceSnapshot, afterSnapshot);
+  const emitted = emitSyntheticWorkspaceSnapshotOperations(state, operations);
+  if (emitted > 0) console.log('[DEBUG] workspace snapshot synthesized operations:', emitted);
+  return emitted;
 }
 
 function emitDeniedCommandToolResultOnce(state, toolUseId, messageText = 'Command denied by user') {
@@ -593,8 +797,9 @@ async function handleFileChange(item, state, config) {
 function handleMcpToolCall(item, state) {
   const toolName = normalizeMcpToolName(item.server, item.tool);
   const toolInput = normalizeMcpToolInput(item.server, item.tool, item.arguments || {});
-  const matchedToolUseId = findMatchingToolUseId(state, toolName, toolInput);
-  const toolUseId = matchedToolUseId || item.id || randomUUID();
+  const rawItemId = typeof item.id === 'string' && item.id ? item.id : null;
+  const signature = buildToolInvocationSignature(toolName, toolInput);
+  const toolUseId = rawItemId || consumePendingMcpToolUseId(state, signature) || randomUUID();
   const isError = item.status === 'failed' || !!item.error;
   console.log('[DEBUG] MCP tool call completed:', toolName, 'id:', toolUseId, 'error:', isError);
   if (!state.emittedToolUseIds.has(toolUseId)) {
@@ -615,6 +820,7 @@ function handleMcpToolCall(item, state) {
       resultContent = JSON.stringify(item.result);
     }
   }
+  if (state.emittedToolResultIds.has(toolUseId)) return;
   const truncatedResult = truncateForDisplay(resultContent, MAX_TOOL_RESULT_CHARS);
   state.emitMessage(toolResultMsg(toolUseId, isError, truncatedResult && truncatedResult.trim() ? truncatedResult : '(no output)'));
   state.emittedToolResultIds.add(toolUseId);
@@ -642,6 +848,9 @@ export async function processCodexEventStream(events, state, config) {
       switch (event.type) {
       case 'thread.started': {
         state.currentThreadId = event.thread_id;
+        if (state.currentThreadId && !config.threadId) {
+          config.threadId = state.currentThreadId;
+        }
         state.sessionFilePath = null;
         state.sessionLineCursor = 0;
         state.sessionFunctionCursor = 0;
@@ -654,6 +863,8 @@ export async function processCodexEventStream(events, state, config) {
       }
 
       case 'turn.started': {
+        state.turnWorkspaceSnapshot = null;
+        state.emittedFileChangePaths.clear();
         const sessionPath = ensureSessionFilePath(state, config.threadId);
         if (sessionPath && existsSync(sessionPath)) {
           try {
@@ -665,6 +876,7 @@ export async function processCodexEventStream(events, state, config) {
         } else {
           state.sessionTurnStartCursor = state.sessionFunctionCursor;
         }
+        await captureTurnWorkspaceSnapshot(state, config);
         console.log('[DEBUG] Turn started');
         break;
       }
@@ -677,6 +889,7 @@ export async function processCodexEventStream(events, state, config) {
       case 'item.started': {
         maybeEmitReasoning(state, event.item);
         if (event.item && event.item.type === 'command_execution') {
+          await captureTurnWorkspaceSnapshot(state, config);
           const toolUseId = ensureToolUseId(state, 'started', event.item);
           const command = extractCommand(event.item);
           const toolName = smartToolName(command);
@@ -694,14 +907,17 @@ export async function processCodexEventStream(events, state, config) {
         } else if (event.item && event.item.type === 'mcp_tool_call') {
           const toolName = normalizeMcpToolName(event.item.server, event.item.tool);
           const toolInput = normalizeMcpToolInput(event.item.server, event.item.tool, event.item.arguments || {});
-          const matchedToolUseId = findMatchingToolUseId(state, toolName, toolInput);
-          const toolUseId = matchedToolUseId || event.item.id || randomUUID();
+          const rawItemId = typeof event.item.id === 'string' && event.item.id ? event.item.id : null;
+          const toolUseId = rawItemId || randomUUID();
           console.log('[DEBUG] MCP tool call started:', toolName, 'id:', toolUseId);
           if (!state.emittedToolUseIds.has(toolUseId)) {
             state.emitMessage(toolUseMsg(toolUseId, toolName, toolInput));
             state.emittedToolUseIds.add(toolUseId);
           }
           rememberToolInvocation(state, toolUseId, toolName, toolInput);
+          if (!rawItemId) {
+            rememberPendingMcpToolUseId(state, buildToolInvocationSignature(toolName, toolInput), toolUseId);
+          }
         }
         await replayMissingFunctionCallsDuringStream(state, config);
         break;
@@ -725,6 +941,7 @@ export async function processCodexEventStream(events, state, config) {
         if (replayed.toolUses > 0 || replayed.toolResults > 0) {
           console.log('[DEBUG] Replayed session function calls:', JSON.stringify(replayed));
         }
+        await emitTurnWorkspaceDiff(state, config);
         if (event.usage) {
           console.log('[DEBUG] Token usage:', event.usage);
           const claudeUsage = {
@@ -781,15 +998,17 @@ export async function processCodexEventStream(events, state, config) {
           const payloadCallId = typeof payload?.call_id === 'string' && payload.call_id
             ? payload.call_id
             : null;
-          if (handleFunctionCallPayload(payload, state)) {
-            if (payloadCallId) {
-              state.processedSessionFunctionCallIds.add(payloadCallId);
+          const payloadStableId = typeof payload?.id === 'string' && payload.id ? payload.id : null;
+          const payloadKey = payloadCallId || payloadStableId;
+          if (handleFunctionCallPayload(payload, state, { stableHint: payloadKey || `stream_${rawEventIndex}` })) {
+            if (payloadKey) {
+              state.processedSessionFunctionCallIds.add(payloadKey);
             }
             break;
           }
           if (handleFunctionCallOutputPayload(payload, state)) {
-            if (payloadCallId) {
-              state.processedSessionFunctionOutputIds.add(payloadCallId);
+            if (payloadKey) {
+              state.processedSessionFunctionOutputIds.add(payloadKey);
             }
             break;
           }

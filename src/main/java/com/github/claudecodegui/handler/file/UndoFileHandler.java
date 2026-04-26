@@ -2,6 +2,7 @@ package com.github.claudecodegui.handler.file;
 
 import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.util.UndoOperationApplier;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -15,6 +16,8 @@ import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 /**
  * Handler for undoing single file changes.
@@ -122,7 +125,11 @@ public class UndoFileHandler extends BaseMessageHandler {
             ApplicationManager.getApplication().invokeLater(() -> {
                 try {
                     if ("A".equals(status)) {
-                        // Added file: delete it
+                        // Added file: delete it only when every operation is rollback-safe
+                        if (hasUnsafeOperation(operations)) {
+                            sendError(filePath, "Operation is marked unsafe to rollback");
+                            return;
+                        }
                         deleteFile(filePath);
                     } else if ("M".equals(status)) {
                         // Modified file: reverse the edits
@@ -166,6 +173,8 @@ public class UndoFileHandler extends BaseMessageHandler {
             ApplicationManager.getApplication().invokeLater(() -> {
                 int successCount = 0;
                 int failCount = 0;
+                JsonArray succeededFiles = new JsonArray();
+                JsonArray failedFiles = new JsonArray();
                 StringBuilder errors = new StringBuilder();
 
                 for (int i = 0; i < files.size(); i++) {
@@ -176,43 +185,55 @@ public class UndoFileHandler extends BaseMessageHandler {
 
                     if (filePath == null || filePath.isEmpty()) {
                         failCount++;
-                        errors.append("File ").append(i).append(": Missing path; ");
+                        String message = "Missing path";
+                        errors.append("File ").append(i).append(": ").append(message).append("; ");
+                        failedFiles.add(failureObject(filePath, "missing_path", message));
                         continue;
                     }
 
                     // Security: Validate file path
                     if (!isValidFilePath(filePath)) {
                         failCount++;
-                        errors.append(filePath).append(": Invalid path (outside project); ");
+                        String message = "Invalid path (outside project)";
+                        errors.append(filePath).append(": ").append(message).append("; ");
+                        failedFiles.add(failureObject(filePath, "invalid_path", message));
                         continue;
                     }
 
                     try {
                         if ("A".equals(status)) {
-                            // Added file: delete it
+                            // Added file: delete it only when every operation is rollback-safe
+                            if (hasUnsafeOperation(operations)) {
+                                throw new UnsafeRollbackException("Operation is marked unsafe to rollback");
+                            }
                             deleteFile(filePath);
                         } else if ("M".equals(status)) {
                             // Modified file: reverse the edits
-                            if (operations != null && !operations.isEmpty()) {
-                                reverseEdits(filePath, operations);
+                            if (operations == null || operations.isEmpty()) {
+                                throw new Exception("No operations to undo");
                             }
+                            reverseEdits(filePath, operations);
+                        } else {
+                            throw new Exception("Unknown file status: " + status);
                         }
                         successCount++;
+                        succeededFiles.add(filePath);
                         LOG.info("[UndoFileHandler] Successfully undone: " + filePath);
                     } catch (Exception e) {
                         failCount++;
+                        String reason = e instanceof UnsafeRollbackException ? "unsafe_to_rollback" : "undo_failed";
                         errors.append(filePath).append(": ").append(e.getMessage()).append("; ");
+                        failedFiles.add(failureObject(filePath, reason, e.getMessage()));
                         LOG.error("[UndoFileHandler] Failed to undo " + filePath + ": " + e.getMessage(), e);
                     }
                 }
 
                 if (failCount == 0) {
-                    sendAllSuccess(successCount);
+                    sendAllResult(true, false, successCount, succeededFiles, failedFiles, null);
                 } else if (successCount > 0) {
-                    // Partial success
-                    sendAllSuccess(successCount);
+                    sendAllResult(false, true, successCount, succeededFiles, failedFiles, errors.toString());
                 } else {
-                    sendAllError(errors.toString());
+                    sendAllResult(false, false, successCount, succeededFiles, failedFiles, errors.toString());
                 }
             });
 
@@ -222,15 +243,69 @@ public class UndoFileHandler extends BaseMessageHandler {
         }
     }
 
+    static boolean hasUnsafeOperation(JsonArray operations) {
+        if (operations == null || operations.isEmpty()) {
+            return false;
+        }
+        for (int i = 0; i < operations.size(); i++) {
+            if (!operations.get(i).isJsonObject()) {
+                continue;
+            }
+            JsonObject operation = operations.get(i).getAsJsonObject();
+            Boolean safeToRollback = getOptionalBoolean(operation, "safeToRollback", "safe_to_rollback");
+            if (Boolean.FALSE.equals(safeToRollback)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static Boolean getOptionalBoolean(JsonObject object, String camelName, String snakeName) {
+        if (object == null) {
+            return null;
+        }
+        try {
+            if (object.has(camelName) && !object.get(camelName).isJsonNull()) {
+                return object.get(camelName).getAsBoolean();
+            }
+            if (object.has(snakeName) && !object.get(snakeName).isJsonNull()) {
+                return object.get(snakeName).getAsBoolean();
+            }
+        } catch (Exception ignored) {
+            return null;
+        }
+        return null;
+    }
+
+    private static final class UnsafeRollbackException extends Exception {
+        private UnsafeRollbackException(String message) {
+            super(message);
+        }
+    }
+
     private void deleteFile(String filePath) throws Exception {
-        VirtualFile file = LocalFileSystem.getInstance().findFileByPath(filePath);
+        String normalizedPath = filePath.replace('\\', '/');
+        LocalFileSystem localFileSystem = LocalFileSystem.getInstance();
+        VirtualFile file = localFileSystem.refreshAndFindFileByPath(normalizedPath);
+        Path nioPath = Path.of(filePath);
         if (file == null || !file.exists()) {
-            LOG.warn("[UndoFileHandler] File not found for deletion: " + filePath);
-            // File already doesn't exist, treat as success
-            return;
+            if (!Files.exists(nioPath)) {
+                LOG.warn("[UndoFileHandler] File not found for deletion: " + filePath);
+                return;
+            }
+            try {
+                Files.delete(nioPath);
+                localFileSystem.refreshAndFindFileByPath(normalizedPath);
+                if (Files.exists(nioPath)) {
+                    throw new IOException("File still exists after delete");
+                }
+                LOG.info("[UndoFileHandler] Successfully deleted file via filesystem fallback: " + filePath);
+                return;
+            } catch (IOException e) {
+                throw new Exception("Failed to delete file: " + e.getMessage(), e);
+            }
         }
 
-        // Use AtomicReference to capture exception from lambda
         final java.util.concurrent.atomic.AtomicReference<Exception> exceptionRef = new java.util.concurrent.atomic.AtomicReference<>();
 
         WriteCommandAction.runWriteCommandAction(context.getProject(), "Undo Claude: Delete File", null, () -> {
@@ -242,10 +317,12 @@ public class UndoFileHandler extends BaseMessageHandler {
             }
         });
 
-        // Check if exception occurred during write action
         Exception ex = exceptionRef.get();
         if (ex != null) {
             throw new Exception("Failed to delete file: " + ex.getMessage(), ex);
+        }
+        if (Files.exists(nioPath)) {
+            throw new Exception("Failed to delete file: file still exists after deletion");
         }
     }
 
@@ -260,45 +337,14 @@ public class UndoFileHandler extends BaseMessageHandler {
             throw new Exception("Cannot get document for: " + filePath);
         }
 
+        String content = document.getText();
+        UndoOperationApplier.Result result = UndoOperationApplier.reverseEdits(content, operations);
+        if (!result.isSuccess()) {
+            throw new Exception(result.toErrorMessage());
+        }
+
         WriteCommandAction.runWriteCommandAction(context.getProject(), "Undo Claude Changes", null, () -> {
-            String content = document.getText();
-
-            // Reverse iterate through operations to undo in correct order
-            // Each operation: replace newString back to oldString
-            for (int i = operations.size() - 1; i >= 0; i--) {
-                JsonObject op = operations.get(i).getAsJsonObject();
-                String oldString = op.has("oldString") && !op.get("oldString").isJsonNull()
-                    ? op.get("oldString").getAsString()
-                    : "";
-                String newString = op.has("newString") && !op.get("newString").isJsonNull()
-                    ? op.get("newString").getAsString()
-                    : "";
-                boolean replaceAll = op.has("replaceAll") && op.get("replaceAll").getAsBoolean();
-
-                if (newString.isEmpty()) {
-                    // newString is empty means content was deleted, we need to restore oldString
-                    // This case is tricky - we'd need position info which we don't have
-                    // For now, skip these cases as they're rare in typical edit operations
-                    LOG.warn("[UndoFileHandler] Skipping operation with empty newString (deletion case)");
-                    continue;
-                }
-
-                if (replaceAll) {
-                    // Replace all occurrences
-                    content = content.replace(newString, oldString);
-                } else {
-                    // Replace first occurrence only
-                    int index = content.indexOf(newString);
-                    if (index != -1) {
-                        content = content.substring(0, index) + oldString + content.substring(index + newString.length());
-                    } else {
-                        LOG.warn("[UndoFileHandler] Could not find newString to replace: " +
-                            newString.substring(0, Math.min(50, newString.length())) + "...");
-                    }
-                }
-            }
-
-            document.setText(content);
+            document.setText(result.getContent());
         });
 
         // Save the document
@@ -337,13 +383,34 @@ public class UndoFileHandler extends BaseMessageHandler {
         });
     }
 
-    private void sendAllSuccess(int count) {
+    private JsonObject failureObject(String filePath, String reason, String message) {
+        JsonObject failure = new JsonObject();
+        failure.addProperty("filePath", filePath != null ? filePath : "");
+        failure.addProperty("reason", reason);
+        failure.addProperty("message", message);
+        return failure;
+    }
+
+    private void sendAllResult(
+        boolean success,
+        boolean partial,
+        int count,
+        JsonArray succeededFiles,
+        JsonArray failedFiles,
+        String error
+    ) {
         JsonObject result = new JsonObject();
-        result.addProperty("success", true);
+        result.addProperty("success", success);
+        result.addProperty("partial", partial);
         result.addProperty("count", count);
+        result.add("succeededFiles", succeededFiles);
+        result.add("failedFiles", failedFiles);
+        if (error != null && !error.isEmpty()) {
+            result.addProperty("error", error);
+        }
 
         String json = gson.toJson(result);
-        LOG.info("[UndoFileHandler] Sending batch success callback: " + json);
+        LOG.info("[UndoFileHandler] Sending batch undo callback: " + json);
 
         ApplicationManager.getApplication().invokeLater(() -> {
             callJavaScript("onUndoAllFileResult", escapeJs(json));
@@ -351,15 +418,6 @@ public class UndoFileHandler extends BaseMessageHandler {
     }
 
     private void sendAllError(String error) {
-        JsonObject result = new JsonObject();
-        result.addProperty("success", false);
-        result.addProperty("error", error);
-
-        String json = gson.toJson(result);
-        LOG.warn("[UndoFileHandler] Sending batch error callback: " + json);
-
-        ApplicationManager.getApplication().invokeLater(() -> {
-            callJavaScript("onUndoAllFileResult", escapeJs(json));
-        });
+        sendAllResult(false, false, 0, new JsonArray(), new JsonArray(), error);
     }
 }

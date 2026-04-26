@@ -11,6 +11,9 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Shared file-system operations for diff handlers.
@@ -53,13 +56,15 @@ public class DiffFileOperations {
      * Delete a file and refresh VFS.
      * Used when rejecting a newly created file to fully undo the creation.
      */
-    public void deleteFile(String filePath) {
+    public boolean deleteFile(String filePath) {
         if (!isPathWithinProject(filePath)) {
             LOG.warn("Security: Attempted to delete file outside project directory: " + filePath);
-            return;
+            return false;
         }
 
-        ApplicationManager.getApplication().invokeLater(() -> {
+        AtomicBoolean success = new AtomicBoolean(false);
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        runOnDispatchThreadAndWait(() -> {
             try {
                 VirtualFile file = LocalFileSystem.getInstance()
                         .refreshAndFindFileByPath(filePath.replace('\\', '/'));
@@ -67,38 +72,80 @@ public class DiffFileOperations {
                     ApplicationManager.getApplication().runWriteAction(() -> {
                         try {
                             file.delete(this);
+                            success.set(true);
                             LOG.info("File deleted (reject new file): " + filePath);
                         } catch (IOException e) {
-                            LOG.error("Failed to delete file: " + filePath, e);
+                            failure.set(e);
                         }
                     });
                 } else {
                     File javaFile = new File(filePath);
-                    if (javaFile.exists() && javaFile.delete()) {
+                    if (!javaFile.exists()) {
+                        success.set(true);
+                    } else if (javaFile.delete()) {
+                        success.set(true);
                         LOG.info("File deleted via fallback (reject new file): " + filePath);
+                    } else {
+                        failure.set(new IOException("Failed to delete file"));
                     }
                 }
             } catch (Exception e) {
-                LOG.error("Failed to delete file: " + filePath, e);
+                failure.set(e);
             }
         });
+
+        if (failure.get() != null) {
+            LOG.error("Failed to delete file: " + filePath, failure.get());
+        }
+        return success.get() && failure.get() == null;
+    }
+
+
+    public Optional<String> readContentFromFile(String filePath) {
+        if (!isPathWithinProject(filePath)) {
+            LOG.warn("Security: Attempted to read file outside project directory: " + filePath);
+            return Optional.empty();
+        }
+        try {
+            VirtualFile file = LocalFileSystem.getInstance()
+                    .refreshAndFindFileByPath(filePath.replace('\\', '/'));
+            if (file != null) {
+                Charset charset = file.getCharset() != null ? file.getCharset() : StandardCharsets.UTF_8;
+                return Optional.of(new String(file.contentsToByteArray(), charset));
+            }
+            File javaFile = new File(filePath);
+            if (!javaFile.exists()) {
+                return Optional.empty();
+            }
+            return Optional.of(Files.readString(javaFile.toPath(), StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            LOG.error("Failed to read content from file: " + filePath, e);
+            return Optional.empty();
+        }
+    }
+
+    public boolean contentEquals(String filePath, String expectedContent) {
+        Optional<String> current = readContentFromFile(filePath);
+        return current.isPresent() && current.get().equals(expectedContent != null ? expectedContent : "");
     }
 
     /**
      * Write content to file and refresh VFS.
      * Validates that the file path is within the project directory for security.
      */
-    public void writeContentToFile(String filePath, String content) {
+    public boolean writeContentToFile(String filePath, String content) {
         if (content == null) {
-            return;
+            return false;
         }
 
         if (!isPathWithinProject(filePath)) {
             LOG.warn("Security: Attempted to write file outside project directory: " + filePath);
-            return;
+            return false;
         }
 
-        ApplicationManager.getApplication().invokeLater(() -> {
+        AtomicBoolean success = new AtomicBoolean(false);
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        runOnDispatchThreadAndWait(() -> {
             try {
                 VirtualFile file = LocalFileSystem.getInstance()
                         .refreshAndFindFileByPath(filePath.replace('\\', '/'));
@@ -110,25 +157,40 @@ public class DiffFileOperations {
                         try {
                             file.setBinaryContent(content.getBytes(charset));
                             file.refresh(false, false);
+                            success.set(true);
                             LOG.info("File content written successfully: " + filePath);
                         } catch (IOException e) {
-                            LOG.error("Failed to write file content: " + filePath, e);
+                            failure.set(e);
                         }
                     });
                 } else {
                     File javaFile = new File(filePath);
                     File parentDir = javaFile.getParentFile();
                     if (parentDir != null && !parentDir.exists() && !parentDir.mkdirs()) {
-                        LOG.error("Failed to create parent directories: " + parentDir.getAbsolutePath());
+                        failure.set(new IOException("Failed to create parent directories: " + parentDir.getAbsolutePath()));
                         return;
                     }
                     Files.write(javaFile.toPath(), content.getBytes(StandardCharsets.UTF_8));
                     LocalFileSystem.getInstance().refreshAndFindFileByPath(filePath.replace('\\', '/'));
+                    success.set(true);
                     LOG.info("New file created: " + filePath);
                 }
             } catch (Exception e) {
-                LOG.error("Failed to write content to file: " + filePath, e);
+                failure.set(e);
             }
         });
+
+        if (failure.get() != null) {
+            LOG.error("Failed to write content to file: " + filePath, failure.get());
+        }
+        return success.get() && failure.get() == null;
+    }
+
+    private void runOnDispatchThreadAndWait(Runnable runnable) {
+        if (ApplicationManager.getApplication().isDispatchThread()) {
+            runnable.run();
+        } else {
+            ApplicationManager.getApplication().invokeAndWait(runnable);
+        }
     }
 }

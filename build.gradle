@@ -1,3 +1,5 @@
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+
 plugins {
     id 'java'
     id 'checkstyle'
@@ -33,12 +35,12 @@ group = 'com.github.idea-claude-code-gui'
 version = '0.4.1'
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
 
     // Use Java Toolchain for consistent JDK across all tasks
     toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
+        languageVersion = JavaLanguageVersion.of(21)
     }
 }
 
@@ -58,7 +60,7 @@ if (localJavaHome) {
             // Skip runIde task to use JBR for JCEF support
             if (it.name != 'runIde') {
                 javaLauncher = javaToolchains.launcherFor {
-                    languageVersion = JavaLanguageVersion.of(17)
+                    languageVersion = JavaLanguageVersion.of(21)
                 }
             }
         }
@@ -106,6 +108,15 @@ dependencies {
     }
 }
 
+
+intellijPlatform {
+    pluginVerification {
+        ides {
+            create(IntelliJPlatformType.IntellijIdeaCommunity, '2024.3.1')
+        }
+    }
+}
+
 sourceSets {
     main {
         java {
@@ -128,14 +139,13 @@ sourceSets {
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
     // Ensure consistent source/target compatibility
-    options.release.set(17)
+    options.release.set(21)
 }
 
 // Ensure plugin.xml is patched with the correct since/until build and change notes
 patchPluginXml {
     // plugin compatibility range
-    sinceBuild = '233'
-    untilBuild = '263.*'
+    sinceBuild = '243'
 
     // Release notes shown in plugin repositories
     // Dynamically load the latest changelog entry from CHANGELOG.md and convert to simple HTML.
@@ -347,8 +357,64 @@ tasks.named('processResources') {
     mustRunAfter('buildWebview')
 }
 
+// Install runtime dependencies needed by the embedded bridge before packaging it.
+tasks.register('installAiBridgeDependencies', Exec) {
+    onlyIf { aiBridgeDir.exists() }
+    workingDir aiBridgeDir
+
+    inputs.files(new File(aiBridgeDir, 'package.json'), new File(aiBridgeDir, 'package-lock.json'))
+    outputs.dir(new File(aiBridgeDir, 'node_modules'))
+
+    def npmCommand = 'npm'
+    if (localNodePath) {
+        def nodeFile = file(localNodePath)
+        def npmExecutable = null
+        def pathToAdd = null
+
+        if (nodeFile.isFile()) {
+            def binDir = nodeFile.parentFile
+            def npmInSameDir = new File(binDir, 'npm')
+            if (npmInSameDir.exists()) {
+                npmExecutable = npmInSameDir
+                pathToAdd = binDir.absolutePath
+            }
+        } else if (nodeFile.isDirectory()) {
+            def npmInBin = new File(nodeFile, 'bin/npm')
+            def npmInDir = new File(nodeFile, 'npm')
+
+            if (npmInBin.exists()) {
+                npmExecutable = npmInBin
+                pathToAdd = new File(nodeFile, 'bin').absolutePath
+            } else if (npmInDir.exists()) {
+                npmExecutable = npmInDir
+                pathToAdd = nodeFile.absolutePath
+            }
+        }
+
+        if (npmExecutable != null) {
+            npmCommand = npmExecutable.absolutePath
+            println "Using npm executable for ai-bridge: ${npmCommand}"
+        }
+
+        if (pathToAdd != null) {
+            def currentPath = System.getenv('PATH') ?: ''
+            environment 'PATH', "${pathToAdd}${File.pathSeparator}${currentPath}"
+        }
+    }
+
+    if (System.getProperty('os.name').toLowerCase().contains('windows')) {
+        commandLine 'cmd', '/c', npmCommand, 'ci', '--omit=dev'
+    } else {
+        commandLine npmCommand, 'ci', '--omit=dev'
+    }
+
+    doFirst { println 'Installing ai-bridge runtime dependencies...' }
+    doLast { println 'ai-bridge runtime dependencies are ready.' }
+}
+
 // Use system zip command to package ai-bridge, preserving file permissions
 tasks.register('packageAiBridge', Exec) {
+    dependsOn('installAiBridgeDependencies')
     onlyIf { aiBridgeDir.exists() }
 
     // Switch to ai-bridge directory for packaging, avoiding inclusion of top-level directory
@@ -356,6 +422,11 @@ tasks.register('packageAiBridge', Exec) {
 
     // Ensure output directory exists
     doFirst {
+        def nodeModules = new File(aiBridgeDir, 'node_modules')
+        if (!nodeModules.isDirectory()) {
+            throw new GradleException('ai-bridge node_modules is missing. Run ./gradlew installAiBridgeDependencies or cd ai-bridge && npm ci --omit=dev.')
+        }
+
         aiBridgePackDir.mkdirs()
         // Delete old zip file
         if (aiBridgeArchive.exists()) {

@@ -1,7 +1,7 @@
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { FileChangeSummary } from '../../types';
-import { showEditableDiff, openFile } from '../../utils/bridge';
+import { openFile } from '../../utils/bridge';
 import FileIcon from './FileIcon';
 
 interface FileChangesListProps {
@@ -9,8 +9,10 @@ interface FileChangesListProps {
   undoingFile: string | null;
   isDiscardingAll: boolean;
   onUndoClick: (fileChange: FileChangeSummary) => void;
+  onShowDiff: (fileChange: FileChangeSummary) => void;
   onDiscardAllClick: () => void;
   onKeepAllClick: () => void;
+  keepAllDisabled?: boolean;
 }
 
 const FileChangesList = memo(({
@@ -18,24 +20,15 @@ const FileChangesList = memo(({
   undoingFile,
   isDiscardingAll,
   onUndoClick,
+  onShowDiff,
   onDiscardAllClick,
   onKeepAllClick,
+  keepAllDisabled = false,
 }: FileChangesListProps) => {
   const { t } = useTranslation();
 
   const handleOpenFile = useCallback((filePath: string, lineStart?: number, lineEnd?: number) => {
     openFile(filePath, lineStart, lineEnd);
-  }, []);
-
-  const handleShowDiff = useCallback((fileChange: FileChangeSummary) => {
-    const operations = fileChange.operations.map((op) => ({
-      oldString: op.oldString,
-      newString: op.newString,
-      replaceAll: op.replaceAll,
-    }));
-    // Use editable diff view for selective accept/reject of changes
-    const status = fileChange.status === 'A' ? 'A' : 'M';
-    showEditableDiff(fileChange.filePath, operations, status);
   }, []);
 
   if (fileChanges.length === 0) {
@@ -49,7 +42,7 @@ const FileChangesList = memo(({
         <button
           className="file-changes-action-btn discard-all-btn"
           onClick={onDiscardAllClick}
-          disabled={isDiscardingAll}
+          disabled={isDiscardingAll || fileChanges.some((fileChange) => fileChange.operations.some((operation) => operation.safeToRollback === false))}
           title={t('statusPanel.discardAll')}
         >
           {isDiscardingAll ? (
@@ -63,6 +56,7 @@ const FileChangesList = memo(({
           className="file-changes-action-btn keep-all-btn"
           onClick={onKeepAllClick}
           title={t('statusPanel.keepAll')}
+          disabled={keepAllDisabled}
         >
           <span className="codicon codicon-check-all" />
           <span>{t('statusPanel.keepAll')}</span>
@@ -74,6 +68,7 @@ const FileChangesList = memo(({
         {fileChanges.map((fileChange) => {
           const status = String(fileChange.status || 'M');
           const statusClass = status === 'A' ? 'added' : 'modified';
+          const unsafe = fileChange.operations.some((operation) => operation.safeToRollback === false);
 
           return (
             <div key={fileChange.filePath} className="file-change-item">
@@ -106,8 +101,9 @@ const FileChangesList = memo(({
               <div className="file-change-actions">
                 <button
                   className="file-change-action-btn diff-btn"
-                  onClick={() => handleShowDiff(fileChange)}
+                  onClick={() => onShowDiff(fileChange)}
                   title={t('statusPanel.showDiff')}
+                  disabled={isDiscardingAll || unsafe}
                 >
                   <span className="codicon codicon-diff" />
                 </button>
@@ -115,7 +111,7 @@ const FileChangesList = memo(({
                   className="file-change-action-btn undo-btn"
                   onClick={() => onUndoClick(fileChange)}
                   title={t('statusPanel.undoChanges')}
-                  disabled={undoingFile === fileChange.filePath}
+                  disabled={isDiscardingAll || undoingFile === fileChange.filePath || unsafe}
                 >
                   {undoingFile === fileChange.filePath ? (
                     <span className="codicon codicon-loading codicon-modifier-spin" />

@@ -16,6 +16,8 @@ public class CodexMessageHandler implements MessageCallback {
 
     private final SessionState state;
     private final CallbackHandler callbackHandler;
+    private final SubagentLifecycleDetector subagentLifecycleDetector;
+    private final SubagentEditScopeTracker subagentEditScopeTracker;
 
     // Content accumulator for the current assistant message
     private final StringBuilder assistantContent = new StringBuilder();
@@ -27,8 +29,19 @@ public class CodexMessageHandler implements MessageCallback {
      * Constructor.
      */
     public CodexMessageHandler(SessionState state, CallbackHandler callbackHandler) {
+        this(state, callbackHandler, new SubagentLifecycleDetector(), new SubagentEditScopeTracker(null, new EditOperationRegistry()));
+    }
+
+    public CodexMessageHandler(
+            SessionState state,
+            CallbackHandler callbackHandler,
+            SubagentLifecycleDetector subagentLifecycleDetector,
+            SubagentEditScopeTracker subagentEditScopeTracker
+    ) {
         this.state = state;
         this.callbackHandler = callbackHandler;
+        this.subagentLifecycleDetector = subagentLifecycleDetector;
+        this.subagentEditScopeTracker = subagentEditScopeTracker;
     }
 
     /**
@@ -83,6 +96,7 @@ public class CodexMessageHandler implements MessageCallback {
 
         Message errorMessage = new Message(Message.Type.ERROR, error);
         state.addMessage(errorMessage);
+        subagentEditScopeTracker.cancelAll();
         callbackHandler.notifyMessageUpdate(state.getMessages());
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
     }
@@ -117,6 +131,8 @@ public class CodexMessageHandler implements MessageCallback {
             }
 
             state.addMessage(parsed);
+            subagentEditScopeTracker.registerExternalOperations(msgJson);
+            processSubagentLifecycleEvents(subagentLifecycleDetector.handleAssistant("codex", msgJson));
             callbackHandler.notifyMessageUpdate(state.getMessages());
 
             LOG.debug("Codex assistant message added with raw JSON");
@@ -141,11 +157,39 @@ public class CodexMessageHandler implements MessageCallback {
             }
 
             state.addMessage(parsed);
+            subagentEditScopeTracker.registerExternalResults(msgJson);
+            processSubagentLifecycleEvents(subagentLifecycleDetector.handleUser("codex", msgJson));
             callbackHandler.notifyMessageUpdate(state.getMessages());
 
             LOG.debug("Codex user message (tool_result) added");
         } catch (Exception e) {
             LOG.warn("Failed to parse user message: " + e.getMessage());
+        }
+    }
+
+    private void processSubagentLifecycleEvents(java.util.List<SubagentLifecycleEvent> events) {
+        for (SubagentLifecycleEvent event : events) {
+            if (event.kind() == SubagentLifecycleEvent.Kind.STARTED) {
+                subagentEditScopeTracker.startScope(event.provider(), event.parentToolUseId(), event.agentHandle());
+            } else if (event.kind() == SubagentLifecycleEvent.Kind.SPAWN_RESOLVED) {
+                subagentEditScopeTracker.resolveAgentHandle(event.parentToolUseId(), event.agentHandle());
+            } else if (event.kind() == SubagentLifecycleEvent.Kind.CANCELLED) {
+                if (event.agentHandle() != null) {
+                    subagentEditScopeTracker.cancelByAgentHandle(event.agentHandle());
+                } else {
+                    subagentEditScopeTracker.cancelByParentToolUseId(event.parentToolUseId());
+                }
+            } else if (event.kind() == SubagentLifecycleEvent.Kind.COMPLETED) {
+                java.util.List<Message> syntheticMessages;
+                if (event.agentHandle() != null) {
+                    syntheticMessages = subagentEditScopeTracker.completeByAgentHandle(event.agentHandle(), event.completionToken());
+                } else {
+                    syntheticMessages = subagentEditScopeTracker.completeByParentToolUseId(event.parentToolUseId(), event.completionToken());
+                }
+                for (Message syntheticMessage : syntheticMessages) {
+                    state.addMessage(syntheticMessage);
+                }
+            }
         }
     }
 

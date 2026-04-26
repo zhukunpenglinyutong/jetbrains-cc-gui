@@ -13,7 +13,9 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Claude message callback handler.
@@ -29,6 +31,8 @@ public class ClaudeMessageHandler implements MessageCallback {
     private final MessageMerger messageMerger;
     private final ReplayDeduplicator replayDedup = new ReplayDeduplicator();
     private final Gson gson;
+    private final SubagentLifecycleDetector subagentLifecycleDetector;
+    private final SubagentEditScopeTracker subagentEditScopeTracker;
 
     // Content accumulator for the current assistant message
     private final StringBuilder assistantContent = new StringBuilder();
@@ -54,6 +58,17 @@ public class ClaudeMessageHandler implements MessageCallback {
     private volatile boolean textSegmentActive = false;
     private volatile boolean thinkingSegmentActive = false;
 
+    // Offset tracking for deduplication after conservative sync.
+    // Volatile: same threading pattern as textSegmentActive/thinkingSegmentActive
+    // (read/written across SDK callback threads and EDT).
+    private volatile int syncedContentOffset = 0;
+    private volatile int syncedThinkingOffset = 0;
+
+    // Claude bridge can deliver the same tool_result via both a full user message and a
+    // standalone tool_result tag. Keep this idempotent so downstream edit/lifecycle handling
+    // does not see duplicate completion signals.
+    private final Set<String> processedToolResultIds = new HashSet<>();
+
     /**
      * Constructor.
      */
@@ -65,12 +80,28 @@ public class ClaudeMessageHandler implements MessageCallback {
             MessageMerger messageMerger,
             Gson gson
     ) {
+        this(project, state, callbackHandler, messageParser, messageMerger, gson,
+                new SubagentLifecycleDetector(), new SubagentEditScopeTracker(project, new EditOperationRegistry()));
+    }
+
+    public ClaudeMessageHandler(
+            Project project,
+            SessionState state,
+            CallbackHandler callbackHandler,
+            MessageParser messageParser,
+            MessageMerger messageMerger,
+            Gson gson,
+            SubagentLifecycleDetector subagentLifecycleDetector,
+            SubagentEditScopeTracker subagentEditScopeTracker
+    ) {
         this.project = project;
         this.state = state;
         this.callbackHandler = callbackHandler;
         this.messageParser = messageParser;
         this.messageMerger = messageMerger;
         this.gson = gson;
+        this.subagentLifecycleDetector = subagentLifecycleDetector;
+        this.subagentEditScopeTracker = subagentEditScopeTracker;
     }
 
     /**
@@ -167,6 +198,7 @@ public class ClaudeMessageHandler implements MessageCallback {
 
         Message errorMessage = new Message(Message.Type.ERROR, error);
         state.addMessage(errorMessage);
+        subagentEditScopeTracker.cancelAll();
         callbackHandler.notifyMessageUpdate(state.getMessages());
         if (wasStreaming) {
             callbackHandler.notifyStreamEnd();
@@ -275,6 +307,8 @@ public class ClaudeMessageHandler implements MessageCallback {
                 replayDedup.beginContentReplay(streamingText, ReplayDeduplicator.replayOffset(previousAssistantContent.length(), replayDedup.contentOffset()));
             }
             currentAssistantMessage.raw = mergedRaw;
+            subagentEditScopeTracker.registerExternalOperations(messageJson);
+            processSubagentLifecycleEvents(subagentLifecycleDetector.handleAssistant("claude", messageJson));
 
             if (isStreaming) {
                 String mergedThinkingContent = ReplayDeduplicator.extractThinkingContent(mergedRaw);
@@ -457,9 +491,16 @@ public class ClaudeMessageHandler implements MessageCallback {
 
             // Check if the message contains a tool_result
             if (messageParser.hasToolResult(userMsg)) {
+                JsonObject filteredUserMsg = filterUnprocessedToolResults(userMsg);
+                if (filteredUserMsg == null) {
+                    LOG.debug("Skipping duplicate tool_result user message");
+                    return;
+                }
                 // This is a user message with tool_result; add it to the message list
-                Message toolResultMessage = new Message(Message.Type.USER, "[tool_result]", userMsg);
+                Message toolResultMessage = new Message(Message.Type.USER, "[tool_result]", filteredUserMsg);
                 state.addMessage(toolResultMessage);
+                subagentEditScopeTracker.registerExternalResults(filteredUserMsg);
+                processSubagentLifecycleEvents(subagentLifecycleDetector.handleUser("claude", filteredUserMsg));
                 LOG.debug("Added tool_result user message to state");
                 callbackHandler.notifyMessageUpdate(state.getMessages());
                 return;
@@ -519,6 +560,10 @@ public class ClaudeMessageHandler implements MessageCallback {
                     : null;
 
             if (toolUseId != null) {
+                if (!markToolResultProcessed(toolUseId)) {
+                    LOG.debug("Skipping duplicate tool_result for tool_use_id: " + toolUseId);
+                    return;
+                }
                 // Build a user message containing the tool_result
                 JsonArray contentArray = new JsonArray();
                 contentArray.add(toolResultBlock);
@@ -533,12 +578,100 @@ public class ClaudeMessageHandler implements MessageCallback {
                 // Create the user message and add it to the message list
                 Message toolResultMessage = new Message(Message.Type.USER, "[tool_result]", rawUser);
                 state.addMessage(toolResultMessage);
+                subagentEditScopeTracker.registerExternalResults(rawUser);
+                processSubagentLifecycleEvents(subagentLifecycleDetector.handleUser("claude", rawUser));
 
                 LOG.debug("Tool result received for tool_use_id: " + toolUseId);
                 callbackHandler.notifyMessageUpdate(state.getMessages());
             }
         } catch (Exception e) {
             LOG.warn("Failed to parse tool_result JSON: " + e.getMessage());
+        }
+    }
+
+
+    private void processSubagentLifecycleEvents(List<SubagentLifecycleEvent> events) {
+        for (SubagentLifecycleEvent event : events) {
+            if (event.kind() == SubagentLifecycleEvent.Kind.STARTED) {
+                subagentEditScopeTracker.startScope(event.provider(), event.parentToolUseId(), event.agentHandle());
+            } else if (event.kind() == SubagentLifecycleEvent.Kind.SPAWN_RESOLVED) {
+                subagentEditScopeTracker.resolveAgentHandle(event.parentToolUseId(), event.agentHandle());
+            } else if (event.kind() == SubagentLifecycleEvent.Kind.CANCELLED) {
+                if (event.agentHandle() != null) {
+                    subagentEditScopeTracker.cancelByAgentHandle(event.agentHandle());
+                } else {
+                    subagentEditScopeTracker.cancelByParentToolUseId(event.parentToolUseId());
+                }
+            } else if (event.kind() == SubagentLifecycleEvent.Kind.COMPLETED) {
+                List<Message> syntheticMessages = subagentEditScopeTracker.completeByParentToolUseId(
+                        event.parentToolUseId(), event.completionToken());
+                for (Message syntheticMessage : syntheticMessages) {
+                    state.addMessage(syntheticMessage);
+                }
+            }
+        }
+    }
+
+
+    private JsonObject filterUnprocessedToolResults(JsonObject userMsg) {
+        if (!userMsg.has("message") || !userMsg.get("message").isJsonObject()) {
+            return userMsg;
+        }
+        JsonObject message = userMsg.getAsJsonObject("message");
+        if (!message.has("content") || !message.get("content").isJsonArray()) {
+            return userMsg;
+        }
+
+        JsonArray originalContent = message.getAsJsonArray("content");
+        JsonArray filteredContent = new JsonArray();
+        boolean sawToolResult = false;
+        boolean keptAnyToolResult = false;
+
+        for (int i = 0; i < originalContent.size(); i++) {
+            if (!originalContent.get(i).isJsonObject()) {
+                filteredContent.add(originalContent.get(i).deepCopy());
+                continue;
+            }
+            JsonObject block = originalContent.get(i).getAsJsonObject();
+            if (!block.has("type") || !"tool_result".equals(block.get("type").getAsString())) {
+                filteredContent.add(block.deepCopy());
+                continue;
+            }
+
+            sawToolResult = true;
+            if (!block.has("tool_use_id") || block.get("tool_use_id").isJsonNull()) {
+                filteredContent.add(block.deepCopy());
+                keptAnyToolResult = true;
+                continue;
+            }
+
+            String toolUseId = block.get("tool_use_id").getAsString();
+            if (markToolResultProcessed(toolUseId)) {
+                filteredContent.add(block.deepCopy());
+                keptAnyToolResult = true;
+            }
+        }
+
+        if (!sawToolResult) {
+            return userMsg;
+        }
+        if (!keptAnyToolResult && filteredContent.size() == 0) {
+            return null;
+        }
+
+        JsonObject filtered = userMsg.deepCopy();
+        JsonObject filteredMessage = filtered.getAsJsonObject("message");
+        filteredMessage.add("content", filteredContent);
+        return filtered;
+    }
+
+    private boolean markToolResultProcessed(String toolUseId) {
+        synchronized (processedToolResultIds) {
+            if (processedToolResultIds.contains(toolUseId)) {
+                return false;
+            }
+            processedToolResultIds.add(toolUseId);
+            return true;
         }
     }
 
