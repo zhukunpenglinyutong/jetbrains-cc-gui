@@ -1,28 +1,56 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
-import type { FileChangeSummary } from '../../types';
-import { undoFileChanges, sendToJava } from '../../utils/bridge';
-import { getFileName } from '../../utils/helpers';
-import TodoList from './TodoList';
-import SubagentList from './SubagentList';
-import FileChangesList from './FileChangesList';
-import UndoConfirmDialog from './UndoConfirmDialog';
-import DiscardAllDialog from './DiscardAllDialog';
-import type { TabType, StatusPanelProps } from './types';
-import './StatusPanel.less';
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import type { FileChangeSummary } from "../../types";
+import {
+  showEditableDiff,
+  undoFileChanges,
+  sendToJava,
+} from "../../utils/bridge";
+import { getFileName } from "../../utils/helpers";
+import TodoList from "./TodoList";
+import SubagentList from "./SubagentList";
+import FileChangesList from "./FileChangesList";
+import UndoConfirmDialog from "./UndoConfirmDialog";
+import DiscardAllDialog from "./DiscardAllDialog";
+import type { TabType, StatusPanelProps } from "./types";
+import {
+  getFilesToDiscardAfterUndoAll,
+  getSucceededFilesFromUndoAllResult,
+  getUndoAllFailureMessage,
+  toBridgeOperations,
+} from "./fileChangeActions";
+import "./StatusPanel.less";
 
-const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, currentSessionId, expanded = true, isStreaming = false, onUndoFile, onDiscardAll, onKeepAll }: StatusPanelProps) => {
+const StatusPanel = ({
+  todos,
+  fileChanges,
+  subagents,
+  subagentHistories,
+  currentSessionId,
+  expanded = true,
+  isStreaming = false,
+  onUndoFile,
+  onKeepAll,
+  onRegisterFileChangeAction,
+  onClearFileChangeAction,
+}: StatusPanelProps) => {
   const { t } = useTranslation();
   const [openPopover, setOpenPopover] = useState<TabType | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
   // Undo related state
   const [undoingFile, setUndoingFile] = useState<string | null>(null);
-  const [confirmUndoFile, setConfirmUndoFile] = useState<FileChangeSummary | null>(null);
+  const [confirmUndoFile, setConfirmUndoFile] =
+    useState<FileChangeSummary | null>(null);
 
   // Discard All confirmation state
   const [confirmDiscardAll, setConfirmDiscardAll] = useState(false);
   const [isDiscardingAll, setIsDiscardingAll] = useState(false);
+  const discardAllRequestFilesRef = useRef<string[]>([]);
+  const undoRequestByFilePathRef = useRef(new Map<string, FileChangeSummary>());
+  const discardAllRequestByFilePathRef = useRef(
+    new Map<string, FileChangeSummary>(),
+  );
 
   const hasTodos = todos.length > 0;
   const hasFileChanges = fileChanges.length > 0;
@@ -30,17 +58,30 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
 
   // Calculate todo stats
   const { completedCount, totalCount, hasInProgressTodo } = useMemo(() => {
-    const completed = todos.filter((todo) => todo.status === 'completed').length;
-    const inProgress = todos.some((todo) => todo.status === 'in_progress');
-    return { completedCount: completed, totalCount: todos.length, hasInProgressTodo: inProgress };
+    const completed = todos.filter(
+      (todo) => todo.status === "completed",
+    ).length;
+    const inProgress = todos.some((todo) => todo.status === "in_progress");
+    return {
+      completedCount: completed,
+      totalCount: todos.length,
+      hasInProgressTodo: inProgress,
+    };
   }, [todos]);
 
   // Calculate subagent stats
-  const { subagentCompletedCount, subagentTotalCount, hasRunningSubagent } = useMemo(() => {
-    const completed = subagents.filter((s) => s.status === 'completed').length;
-    const running = subagents.some((s) => s.status === 'running');
-    return { subagentCompletedCount: completed, subagentTotalCount: subagents.length, hasRunningSubagent: running };
-  }, [subagents]);
+  const { subagentCompletedCount, subagentTotalCount, hasRunningSubagent } =
+    useMemo(() => {
+      const completed = subagents.filter(
+        (s) => s.status === "completed" || s.status === "error",
+      ).length;
+      const running = subagents.some((s) => s.status === "running");
+      return {
+        subagentCompletedCount: completed,
+        subagentTotalCount: subagents.length,
+        hasRunningSubagent: running,
+      };
+    }, [subagents]);
 
   // Calculate total file changes stats
   const { totalAdditions, totalDeletions } = useMemo(() => {
@@ -49,7 +90,7 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
         totalAdditions: acc.totalAdditions + file.additions,
         totalDeletions: acc.totalDeletions + file.deletions,
       }),
-      { totalAdditions: 0, totalDeletions: 0 }
+      { totalAdditions: 0, totalDeletions: 0 },
     );
   }, [fileChanges]);
 
@@ -63,14 +104,18 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
   // Close popover when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
+      if (
+        popoverRef.current &&
+        !popoverRef.current.contains(event.target as Node)
+      ) {
         setOpenPopover(null);
       }
     };
 
     if (openPopover) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
+      document.addEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [openPopover]);
 
@@ -87,18 +132,13 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
     if (!confirmUndoFile) return;
 
     const { filePath, operations } = confirmUndoFile;
-    const safeStatus = confirmUndoFile.status === 'A' ? 'A' : 'M';
+    const safeStatus = confirmUndoFile.status === "A" ? "A" : "M";
 
     setUndoingFile(filePath);
+    undoRequestByFilePathRef.current.set(filePath, confirmUndoFile);
     setConfirmUndoFile(null);
 
-    const ops = operations.map((op) => ({
-      oldString: op.oldString,
-      newString: op.newString,
-      replaceAll: op.replaceAll,
-    }));
-
-    undoFileChanges(filePath, safeStatus, ops);
+    undoFileChanges(filePath, safeStatus, toBridgeOperations(operations));
   }, [confirmUndoFile]);
 
   const handleCancelUndo = useCallback(() => {
@@ -118,25 +158,42 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
 
     const files = fileChanges.map((fc) => ({
       filePath: fc.filePath,
-      status: fc.status === 'A' ? 'A' : 'M',
-      operations: fc.operations.map((op) => ({
-        oldString: op.oldString,
-        newString: op.newString,
-        replaceAll: op.replaceAll,
-      })),
+      status: fc.status === "A" ? "A" : "M",
+      operations: toBridgeOperations(fc.operations),
     }));
+    discardAllRequestFilesRef.current = files.map((file) => file.filePath);
+    discardAllRequestByFilePathRef.current = new Map(
+      fileChanges.map((fileChange) => [fileChange.filePath, fileChange]),
+    );
 
-    sendToJava('undo_all_file_changes', { files });
+    sendToJava("undo_all_file_changes", { files });
   }, [fileChanges]);
 
   const handleCancelDiscardAll = useCallback(() => {
     setConfirmDiscardAll(false);
   }, []);
 
+  const handleShowDiff = useCallback(
+    (fileChange: FileChangeSummary) => {
+      const status = fileChange.status === "A" ? "A" : "M";
+      const requestId = onRegisterFileChangeAction?.(fileChange);
+      const dispatched = showEditableDiff(
+        fileChange.filePath,
+        toBridgeOperations(fileChange.operations),
+        status,
+        requestId,
+      );
+      if (!dispatched) {
+        onClearFileChangeAction?.(requestId);
+      }
+    },
+    [onRegisterFileChangeAction, onClearFileChangeAction],
+  );
+
   // Keep All handler
   const handleKeepAllClick = useCallback(() => {
     onKeepAll?.();
-    window.addToast?.(t('statusPanel.keepAllSuccess'), 'success');
+    window.addToast?.(t("statusPanel.keepAllSuccess"), "success");
   }, [onKeepAll, t]);
 
   // Register undo result callback
@@ -147,15 +204,24 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
         setUndoingFile(null);
 
         if (result.success) {
-          onUndoFile?.(result.filePath);
+          const requested = undoRequestByFilePathRef.current.get(
+            result.filePath,
+          );
+          undoRequestByFilePathRef.current.delete(result.filePath);
+          onUndoFile?.(result.filePath, requested?.operations);
           window.addToast?.(
-            t('statusPanel.undoSuccess', { fileName: getFileName(result.filePath) }),
-            'success'
+            t("statusPanel.undoSuccess", {
+              fileName: getFileName(result.filePath),
+            }),
+            "success",
           );
         } else {
+          undoRequestByFilePathRef.current.delete(result.filePath);
           window.addToast?.(
-            t('statusPanel.undoFailed', { error: result.error || 'Unknown error' }),
-            'error'
+            t("statusPanel.undoFailed", {
+              error: result.error || "Unknown error",
+            }),
+            "error",
           );
         }
       } catch {
@@ -177,13 +243,44 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
         const result = JSON.parse(resultJson);
         setIsDiscardingAll(false);
 
+        const succeededFiles = getSucceededFilesFromUndoAllResult(result);
+
         if (result.success) {
-          onDiscardAll?.();
-          window.addToast?.(t('statusPanel.discardAllSuccess'), 'success');
-        } else {
+          getFilesToDiscardAfterUndoAll(
+            result,
+            discardAllRequestFilesRef.current,
+          ).forEach((filePath) => {
+            const requested =
+              discardAllRequestByFilePathRef.current.get(filePath);
+            onUndoFile?.(filePath, requested?.operations);
+          });
+          discardAllRequestFilesRef.current = [];
+          discardAllRequestByFilePathRef.current.clear();
+          window.addToast?.(t("statusPanel.discardAllSuccess"), "success");
+        } else if (result.partial && succeededFiles.length > 0) {
+          succeededFiles.forEach((filePath) => {
+            const requested =
+              discardAllRequestByFilePathRef.current.get(filePath);
+            onUndoFile?.(filePath, requested?.operations);
+          });
+          discardAllRequestFilesRef.current = [];
+          discardAllRequestByFilePathRef.current.clear();
           window.addToast?.(
-            t('statusPanel.discardAllFailed', { error: result.error || 'Unknown error' }),
-            'error'
+            t("statusPanel.discardAllFailed", {
+              error: getUndoAllFailureMessage(
+                result,
+                "Some files could not be discarded",
+              ),
+            }),
+            "error",
+          );
+        } else {
+          discardAllRequestByFilePathRef.current.clear();
+          window.addToast?.(
+            t("statusPanel.discardAllFailed", {
+              error: getUndoAllFailureMessage(result, "Unknown error"),
+            }),
+            "error",
           );
         }
       } catch {
@@ -196,7 +293,7 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
     return () => {
       delete window.onUndoAllFileResult;
     };
-  }, [onDiscardAll, t]);
+  }, [onUndoFile, t]);
 
   if (!expanded) {
     return null;
@@ -204,17 +301,25 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
 
   const renderPopoverContent = () => {
     switch (openPopover) {
-      case 'todo':
+      case "todo":
         return <TodoList todos={todos} />;
-      case 'subagent':
-        return <SubagentList subagents={subagents} histories={subagentHistories} currentSessionId={currentSessionId} isStreaming={isStreaming} />;
-      case 'files':
+      case "subagent":
+        return (
+          <SubagentList
+            subagents={subagents}
+            histories={subagentHistories}
+            currentSessionId={currentSessionId}
+            isStreaming={isStreaming}
+          />
+        );
+      case "files":
         return (
           <FileChangesList
             fileChanges={fileChanges}
             undoingFile={undoingFile}
             isDiscardingAll={isDiscardingAll}
             onUndoClick={handleUndoClick}
+            onShowDiff={handleShowDiff}
             onDiscardAllClick={handleDiscardAllClick}
             onKeepAllClick={handleKeepAllClick}
           />
@@ -230,11 +335,11 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
       <div className="status-panel-tabs">
         {/* Todo Tab */}
         <div
-          className={`status-panel-tab ${openPopover === 'todo' ? 'active' : ''}`}
-          onClick={() => handleTabClick('todo')}
+          className={`status-panel-tab ${openPopover === "todo" ? "active" : ""}`}
+          onClick={() => handleTabClick("todo")}
         >
           <span className="codicon codicon-checklist" />
-          <span className="tab-label">{t('statusPanel.tasksTab')}</span>
+          <span className="tab-label">{t("statusPanel.tasksTab")}</span>
           {hasTodos && (
             <span className="tab-progress">
               {completedCount}/{totalCount}
@@ -247,11 +352,11 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
 
         {/* Subagent Tab */}
         <div
-          className={`status-panel-tab ${openPopover === 'subagent' ? 'active' : ''}`}
-          onClick={() => handleTabClick('subagent')}
+          className={`status-panel-tab ${openPopover === "subagent" ? "active" : ""}`}
+          onClick={() => handleTabClick("subagent")}
         >
           <span className="codicon codicon-hubot" />
-          <span className="tab-label">{t('statusPanel.subagentTab')}</span>
+          <span className="tab-label">{t("statusPanel.subagentTab")}</span>
           {hasSubagents && (
             <span className="tab-progress">
               {subagentCompletedCount}/{subagentTotalCount}
@@ -264,11 +369,11 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
 
         {/* File Changes Tab */}
         <div
-          className={`status-panel-tab ${openPopover === 'files' ? 'active' : ''}`}
-          onClick={() => handleTabClick('files')}
+          className={`status-panel-tab ${openPopover === "files" ? "active" : ""}`}
+          onClick={() => handleTabClick("files")}
         >
           <span className="codicon codicon-edit" />
-          <span className="tab-label">{t('statusPanel.editsTab')}</span>
+          <span className="tab-label">{t("statusPanel.editsTab")}</span>
           {hasFileChanges && (
             <span className="tab-stats">
               <span className="stat-additions">+{totalAdditions}</span>
@@ -280,9 +385,7 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
 
       {/* Popover Content */}
       {openPopover && (
-        <div className="status-panel-popover">
-          {renderPopoverContent()}
-        </div>
+        <div className="status-panel-popover">{renderPopoverContent()}</div>
       )}
 
       {/* Dialogs */}

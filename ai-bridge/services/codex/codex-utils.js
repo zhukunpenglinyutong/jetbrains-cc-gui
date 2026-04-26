@@ -32,11 +32,24 @@ export const logDebug = (tag, ...args) => debugLog(4, tag, ...args);
 export const VALID_SANDBOX_MODES = new Set(['read-only', 'workspace-write', 'danger-full-access']);
 export const VALID_APPROVAL_POLICIES = new Set(['never', 'on-request', 'on-failure', 'untrusted']);
 export const CODEX_CLI_ENV_BLOCKLIST = new Set([
+  // Runtime behavior is mapped explicitly from plugin permission settings.
   'CODEX_APPROVAL_POLICY',
   'CODEX_SANDBOX_MODE',
   'CODEX_SANDBOX',
   'CODEX_SANDBOX_NETWORK_DISABLED',
-  'CODEX_CI'
+  'CODEX_CI',
+
+  // Authentication and endpoint settings must come from the active plugin
+  // provider / ~/.codex files, not from the IDE launcher environment.
+  'CODEX_API_KEY',
+  'CODEX_API_BASE',
+  'CODEX_BASE_URL',
+  'OPENAI_API_KEY',
+  'OPENAI_API_BASE',
+  'OPENAI_BASE_URL',
+  'OPENAI_ORG_ID',
+  'OPENAI_ORGANIZATION',
+  'OPENAI_PROJECT'
 ]);
 
 /**

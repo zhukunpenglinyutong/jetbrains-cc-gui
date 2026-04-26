@@ -33,11 +33,17 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
     private final HandlerContext context;
     private final Gson gson;
     private final DiffFileOperations fileOperations;
+    private final DiffBrowserBridge browserBridge;
 
     public SimpleDiffDisplayHandler(HandlerContext context, Gson gson, DiffFileOperations fileOperations) {
+        this(context, gson, fileOperations, new DiffBrowserBridge(context, gson));
+    }
+
+    public SimpleDiffDisplayHandler(HandlerContext context, Gson gson, DiffFileOperations fileOperations, DiffBrowserBridge browserBridge) {
         this.context = context;
         this.gson = gson;
         this.fileOperations = fileOperations;
+        this.browserBridge = browserBridge;
     }
 
     private static final String[] TYPES = {
@@ -66,6 +72,13 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
                 break;
             default:
                 break;
+        }
+    }
+
+    private void notifyDiffFailure(String filePath, String message) {
+        LOG.warn(message + (filePath == null || filePath.isBlank() ? "" : ": " + filePath));
+        if (browserBridge != null) {
+            browserBridge.showErrorToast(message);
         }
     }
 
@@ -143,11 +156,16 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
                     }
 
                     if (afterContent == null) {
-                        LOG.warn("Could not read file content: " + filePath);
+                        notifyDiffFailure(filePath, "Could not read file content for diff");
                         return;
                     }
 
-                    String beforeContent = ContentRebuildUtil.rebuildBeforeContent(afterContent, edits);
+                    ContentRebuildUtil.RebuildResult rebuildResult = ContentRebuildUtil.rebuildBeforeContentResult(afterContent, edits);
+                    if (!rebuildResult.success()) {
+                        notifyDiffFailure(filePath, "Could not safely rebuild before content for diff");
+                        return;
+                    }
+                    String beforeContent = rebuildResult.content();
 
                     String fileName = new File(filePath).getName();
                     FileType fileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName);
@@ -212,26 +230,12 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
                         }
                     }
 
-                    String afterContent = currentContent;
-                    for (int i = 0; i < edits.size(); i++) {
-                        JsonObject edit = edits.get(i).getAsJsonObject();
-                        String oldString = edit.has("oldString") ? edit.get("oldString").getAsString() : "";
-                        String newString = edit.has("newString") ? edit.get("newString").getAsString() : "";
-                        boolean replaceAll = edit.has("replaceAll") && edit.get("replaceAll").getAsBoolean();
-
-                        if (replaceAll) {
-                            afterContent = afterContent.replace(oldString, newString);
-                        } else {
-                            int index = afterContent.indexOf(oldString);
-                            if (index >= 0) {
-                                afterContent = afterContent.substring(0, index)
-                                        + newString
-                                        + afterContent.substring(index + oldString.length());
-                            } else {
-                                LOG.warn("oldString not found in file, skipping edit");
-                            }
-                        }
+                    ForwardApplyResult applyResult = applyForwardEditsForPreview(currentContent, edits);
+                    if (!applyResult.success()) {
+                        notifyDiffFailure(filePath, "Could not safely build edit preview diff: " + applyResult.reason());
+                        return;
                     }
+                    String afterContent = applyResult.content();
 
                     String fileName = new File(filePath).getName();
                     FileType fileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName);
@@ -259,6 +263,47 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
         } catch (Exception e) {
             LOG.error("Failed to parse show_edit_preview_diff request: " + e.getMessage(), e);
         }
+    }
+
+    static ForwardApplyResult applyForwardEditsForPreview(String originalContent, JsonArray edits) {
+        String content = originalContent != null ? originalContent : "";
+        if (edits == null || edits.isEmpty()) {
+            return new ForwardApplyResult(true, content, null);
+        }
+        for (int i = 0; i < edits.size(); i++) {
+            JsonObject edit = edits.get(i).getAsJsonObject();
+            String oldString = edit.has("oldString") && !edit.get("oldString").isJsonNull()
+                    ? edit.get("oldString").getAsString()
+                    : "";
+            String newString = edit.has("newString") && !edit.get("newString").isJsonNull()
+                    ? edit.get("newString").getAsString()
+                    : "";
+            boolean replaceAll = edit.has("replaceAll") && !edit.get("replaceAll").isJsonNull()
+                    && edit.get("replaceAll").getAsBoolean();
+            if (oldString.isEmpty()) {
+                return new ForwardApplyResult(false, content, "empty_old_string");
+            }
+            if (replaceAll) {
+                if (!content.contains(oldString)) {
+                    return new ForwardApplyResult(false, content, "old_string_not_found");
+                }
+                content = content.replace(oldString, newString);
+                continue;
+            }
+            int first = content.indexOf(oldString);
+            if (first < 0) {
+                return new ForwardApplyResult(false, content, "old_string_not_found");
+            }
+            int second = content.indexOf(oldString, first + Math.max(1, oldString.length()));
+            if (second >= 0) {
+                return new ForwardApplyResult(false, content, "ambiguous_old_string");
+            }
+            content = content.substring(0, first) + newString + content.substring(first + oldString.length());
+        }
+        return new ForwardApplyResult(true, content, null);
+    }
+
+    record ForwardApplyResult(boolean success, String content, String reason) {
     }
 
     private void handleShowEditFullDiff(String content) {
@@ -296,24 +341,18 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
                         LOG.info("Using cached original content for full file diff");
                         beforeContent = originalContent;
 
-                        if (replaceAll) {
-                            afterContent = beforeContent.replace(oldString, newString);
-                        } else {
-                            int index = beforeContent.indexOf(oldString);
-                            if (index >= 0) {
-                                afterContent = beforeContent.substring(0, index)
-                                        + newString
-                                        + beforeContent.substring(index + oldString.length());
-                            } else if (file != null) {
-                                try {
-                                    afterContent = new String(file.contentsToByteArray(), file.getCharset());
-                                } catch (IOException e) {
-                                    afterContent = "";
-                                }
-                            } else {
-                                afterContent = "";
-                            }
+                        JsonArray singleEdit = new JsonArray();
+                        JsonObject edit = new JsonObject();
+                        edit.addProperty("oldString", oldString);
+                        edit.addProperty("newString", newString);
+                        edit.addProperty("replaceAll", replaceAll);
+                        singleEdit.add(edit);
+                        ForwardApplyResult applyResult = applyForwardEditsForPreview(beforeContent, singleEdit);
+                        if (!applyResult.success()) {
+                            notifyDiffFailure(filePath, "Could not safely build full edit diff: " + applyResult.reason());
+                            return;
                         }
+                        afterContent = applyResult.content();
                     } else {
                         LOG.info("No cached content, showing edit-only diff");
                         beforeContent = oldString;

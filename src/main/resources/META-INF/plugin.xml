@@ -1,6 +1,6 @@
 <idea-plugin>
     <id>com.github.idea-claude-code-gui</id>
-    <name>CC GUI（Claude or Codex）</name>
+    <name>CC GUI (Claude or Codex)</name>
     <vendor>MossX</vendor>
 
     <!-- Resource bundle for i18n -->

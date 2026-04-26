@@ -100,7 +100,7 @@ public class CodexMessageConverterTest {
         JsonObject result = CodexMessageConverter.convertFunctionCallOutputToToolResult(payload, null);
 
         JsonObject toolResult = extractFirstToolResult(result);
-        assertEquals("unknown", toolResult.get("tool_use_id").getAsString());
+        assertTrue(toolResult.get("tool_use_id").getAsString().startsWith("codex_history_"));
     }
 
     @Test
@@ -233,7 +233,7 @@ public class CodexMessageConverterTest {
 
         JsonObject toolUse = extractFirstBlock(result);
         assertEquals("unknown", toolUse.get("name").getAsString());
-        assertEquals("unknown", toolUse.get("id").getAsString());
+        assertTrue(toolUse.get("id").getAsString().startsWith("codex_history_"));
     }
 
     // ---- helpers ----

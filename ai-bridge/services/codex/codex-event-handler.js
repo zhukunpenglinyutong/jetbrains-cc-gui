@@ -13,14 +13,13 @@
 
 import { randomUUID } from 'crypto';
 import { existsSync } from 'fs';
-import { readFile, unlink, writeFile } from 'fs/promises';
+import { readFile } from 'fs/promises';
 import { requestPermissionFromJava } from '../../permission-handler.js';
 import { findSessionFileByThreadId } from './codex-agents-loader.js';
-import { extractPatchFromResponseItemPayload, parseApplyPatchToOperations } from './codex-patch-parser.js';
 import {
   truncateForDisplay, getStableItemId, extractCommand,
   smartToolName, smartDescription, mapCommandToolNameToPermissionToolName,
-  resolveFilePath, stringifyRawEvent, isApprovalRelatedRawEvent
+  stringifyRawEvent, isApprovalRelatedRawEvent
 } from './codex-command-utils.js';
 import {
   DEBUG_LEVEL, MAX_TOOL_RESULT_CHARS,
@@ -31,10 +30,105 @@ import {
 import {
   normalizeMcpToolName, normalizeMcpToolInput,
   parseFunctionCallArguments, normalizeFunctionCallTool,
-  rememberToolInvocation, findMatchingToolUseId,
+  rememberToolInvocation, buildToolInvocationSignature,
 } from './codex-tool-normalization.js';
+import {
+  captureTurnWorkspaceSnapshot,
+  collectPatchOperationsFromSession,
+  emitSyntheticPatchOperations,
+  emitTurnWorkspaceDiff,
+  findUniqueRollbackIndex,
+  requestPatchApprovalsViaBridge,
+  rollbackDeniedPatchBatches,
+} from './codex-event-patch-tracking.js';
+
+export { emitSyntheticPatchOperations, findUniqueRollbackIndex };
 
 const COMMAND_DENIED_ABORT_ERROR = '__CODEX_COMMAND_DENIED_ABORT__';
+
+const LIFECYCLE_TOOL_NAMES = new Set(['spawn_agent', 'wait_agent', 'close_agent', 'send_input', 'resume_agent']);
+
+function isLifecycleTool(toolName) {
+  return typeof toolName === 'string' && LIFECYCLE_TOOL_NAMES.has(toolName);
+}
+
+function nextLifecycleToolUseId(state, toolName, stableHint = '') {
+  state.lifecycleToolSequence = (state.lifecycleToolSequence || 0) + 1;
+  const prefix = state.eventStateId || 'state';
+  const suffix = stableHint ? String(stableHint).replace(/[^a-zA-Z0-9_.:-]/g, '_') : state.lifecycleToolSequence;
+  return `codex_lifecycle_${toolName}_${prefix}_${suffix}`;
+}
+
+function rememberPendingFunctionCall(state, toolUseId) {
+  if (!toolUseId || state.emittedToolResultIds.has(toolUseId)) return;
+  if (!Array.isArray(state.pendingFunctionCallToolUseIds)) {
+    state.pendingFunctionCallToolUseIds = [];
+  }
+  if (!state.pendingFunctionCallToolUseIds.includes(toolUseId)) {
+    state.pendingFunctionCallToolUseIds.push(toolUseId);
+  }
+}
+
+function resolveFunctionCallOutputToolUseId(payload, state) {
+  const rawCallId = typeof payload.call_id === 'string' && payload.call_id ? payload.call_id : '';
+  if (rawCallId) return rawCallId;
+  const rawPayloadId = typeof payload.id === 'string' && payload.id ? payload.id : '';
+  if (rawPayloadId && state.emittedToolUseIds.has(rawPayloadId)) {
+    return state.emittedToolResultIds.has(rawPayloadId) ? '' : rawPayloadId;
+  }
+
+  const pending = (Array.isArray(state.pendingFunctionCallToolUseIds) ? state.pendingFunctionCallToolUseIds : [])
+    .filter((toolUseId) => state.emittedToolUseIds.has(toolUseId) && !state.emittedToolResultIds.has(toolUseId));
+  state.pendingFunctionCallToolUseIds = pending;
+  return pending.length > 0 ? pending[0] : '';
+}
+
+function markFunctionCallOutputCompleted(state, toolUseId) {
+  if (!Array.isArray(state.pendingFunctionCallToolUseIds)) return;
+  state.pendingFunctionCallToolUseIds = state.pendingFunctionCallToolUseIds.filter((pendingId) => pendingId !== toolUseId);
+}
+
+function sanitizeIdPart(value) {
+  return String(value || '').replace(/[^a-zA-Z0-9_.:-]/g, '_');
+}
+
+function generatedFunctionToolUseId(state, stableHint = '') {
+  if (stableHint) {
+    return `codex_function_${state.eventStateId || 'state'}_${sanitizeIdPart(stableHint)}`;
+  }
+  return randomUUID();
+}
+
+function rememberPendingMcpToolUseId(state, signature, toolUseId) {
+  if (!signature || !toolUseId) return;
+  if (!(state.pendingMcpToolUseIdsBySignature instanceof Map)) {
+    state.pendingMcpToolUseIdsBySignature = new Map();
+  }
+  const queue = state.pendingMcpToolUseIdsBySignature.get(signature) ?? [];
+  queue.push(toolUseId);
+  state.pendingMcpToolUseIdsBySignature.set(signature, queue);
+}
+
+function consumePendingMcpToolUseId(state, signature) {
+  if (!signature || !(state.pendingMcpToolUseIdsBySignature instanceof Map)) return null;
+  const queue = state.pendingMcpToolUseIdsBySignature.get(signature);
+  if (!Array.isArray(queue) || queue.length === 0) return null;
+  while (queue.length > 0) {
+    const candidate = queue.shift();
+    if (candidate && state.emittedToolUseIds.has(candidate) && !state.emittedToolResultIds.has(candidate)) {
+      if (queue.length === 0) state.pendingMcpToolUseIdsBySignature.delete(signature);
+      return candidate;
+    }
+  }
+  state.pendingMcpToolUseIdsBySignature.delete(signature);
+  return null;
+}
+
+function syntheticPatchSafeToRollback(operation, rollbackResult = null, deniedByUser = false) {
+  if (!operation || typeof operation.newString !== 'string' || operation.newString.length === 0) return false;
+  if (deniedByUser && rollbackResult?.success === false) return false;
+  return true;
+}
 
 function toolUseMsg(id, name, input) {
   return { type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id, name, input }] } };
@@ -48,7 +142,7 @@ function textMsg(text) {
   return { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text }] } };
 }
 
-function handleFunctionCallPayload(payload, state) {
+export function handleFunctionCallPayload(payload, state, options = {}) {
   if (!payload || payload.type !== 'function_call') return false;
 
   const rawToolName = typeof payload.name === 'string' ? payload.name : '';
@@ -58,24 +152,26 @@ function handleFunctionCallPayload(payload, state) {
   const normalizedTool = normalizeFunctionCallTool(rawToolName, parsedArguments);
   const toolName = normalizedTool.name;
   const toolInput = normalizedTool.input;
-  const matchedToolUseId = findMatchingToolUseId(state, toolName, toolInput);
-  const toolUseId = matchedToolUseId || (typeof payload.call_id === 'string' && payload.call_id ? payload.call_id : randomUUID());
+  const rawCallId = typeof payload.call_id === 'string' && payload.call_id ? payload.call_id : null;
+  const rawPayloadId = typeof payload.id === 'string' && payload.id ? payload.id : null;
+  const stableHint = options.stableHint || rawPayloadId || '';
+  const lifecycleTool = isLifecycleTool(toolName);
+  const toolUseId = rawCallId || rawPayloadId || (lifecycleTool
+    ? nextLifecycleToolUseId(state, toolName, stableHint)
+    : generatedFunctionToolUseId(state, stableHint));
 
   if (!state.emittedToolUseIds.has(toolUseId)) {
     state.emitMessage(toolUseMsg(toolUseId, toolName, toolInput));
     state.emittedToolUseIds.add(toolUseId);
   }
   rememberToolInvocation(state, toolUseId, toolName, toolInput);
-  state.lastFunctionCallToolUseId = toolUseId;
+  rememberPendingFunctionCall(state, toolUseId);
   return true;
 }
 
-function handleFunctionCallOutputPayload(payload, state) {
+export function handleFunctionCallOutputPayload(payload, state) {
   if (!payload || payload.type !== 'function_call_output') return false;
-  let toolUseId = typeof payload.call_id === 'string' ? payload.call_id : '';
-  if ((!toolUseId || !state.emittedToolUseIds.has(toolUseId)) && state.lastFunctionCallToolUseId) {
-    toolUseId = state.lastFunctionCallToolUseId;
-  }
+  const toolUseId = resolveFunctionCallOutputToolUseId(payload, state);
   if (!toolUseId || state.emittedToolResultIds.has(toolUseId) || !state.emittedToolUseIds.has(toolUseId)) return false;
 
   const output = typeof payload.output === 'string' ? payload.output : JSON.stringify(payload.output ?? '(no output)');
@@ -84,6 +180,7 @@ function handleFunctionCallOutputPayload(payload, state) {
   const truncatedResult = truncateForDisplay(output, MAX_TOOL_RESULT_CHARS);
   state.emitMessage(toolResultMsg(toolUseId, isError, truncatedResult && truncatedResult.trim() ? truncatedResult : '(no output)'));
   state.emittedToolResultIds.add(toolUseId);
+  markFunctionCallOutputCompleted(state, toolUseId);
   return true;
 }
 
@@ -96,7 +193,13 @@ export function createInitialEventState(emitMessage) {
     emittedToolResultIds: new Set(),
     toolCallSignatureById: new Map(),
     toolUseIdBySignature: new Map(),
-    lastFunctionCallToolUseId: null,
+    pendingFunctionCallToolUseIds: [],
+    pendingMcpToolUseIdsBySignature: new Map(),
+    lifecycleToolSequence: 0,
+    eventStateId: randomUUID(),
+    syntheticEditSequence: 0,
+    turnWorkspaceSnapshot: null,
+    emittedFileChangePaths: new Set(),
     deniedCommandToolUseIds: new Set(),
     emittedDeniedCommandToolResultIds: new Set(),
     sessionFilePath: null,
@@ -149,8 +252,9 @@ function ensureToolUseId(state, phase, item) {
 
 function ensureSessionFilePath(state, threadId) {
   if (state.sessionFilePath && existsSync(state.sessionFilePath)) return state.sessionFilePath;
-  if (!threadId) return null;
-  state.sessionFilePath = findSessionFileByThreadId(threadId);
+  const effectiveThreadId = threadId || state.currentThreadId;
+  if (!effectiveThreadId) return null;
+  state.sessionFilePath = findSessionFileByThreadId(effectiveThreadId);
   return state.sessionFilePath;
 }
 
@@ -184,47 +288,6 @@ async function readLatestTurnContextFromSession(state, threadId) {
     }
   }
   return null;
-}
-
-async function collectPatchOperationsFromSession(state, config) {
-  const sessionPath = ensureSessionFilePath(state, config.threadId);
-  if (!sessionPath) return [];
-  let content = '';
-  try { content = await readFile(sessionPath, 'utf8'); } catch (error) {
-    console.warn('[DEBUG] Failed to read session file:', sessionPath, error?.message || error);
-    return [];
-  }
-  if (!content.trim()) return [];
-
-  const lines = splitSessionJsonlEntries(content);
-  const startIndex = state.sessionLineCursor > 0
-    ? state.sessionLineCursor
-    : Math.max(0, lines.length - SESSION_PATCH_SCAN_MAX_LINES);
-  const batches = [];
-
-  for (let i = startIndex; i < lines.length; i++) {
-    const line = lines[i];
-    if (!line || !line.trim()) continue;
-    let parsed;
-    try { parsed = JSON.parse(line); } catch { continue; }
-    if (parsed?.type !== 'response_item' || !parsed.payload) continue;
-
-    const payload = parsed.payload;
-    const callId = String(payload.call_id ?? payload.id ?? `line_${i}`);
-    if (state.processedPatchCallIds.has(callId)) continue;
-
-    const patchText = extractPatchFromResponseItemPayload(payload);
-    if (!patchText) continue;
-
-    const operations = parseApplyPatchToOperations(patchText)
-      .map((op) => ({ ...op, filePath: resolveFilePath(op.filePath, config.cwd) }))
-      .filter((op) => op.filePath && (op.oldString !== '' || op.newString !== ''));
-    state.processedPatchCallIds.add(callId);
-    if (operations.length === 0) continue;
-    batches.push({ callId, operations });
-  }
-  state.sessionLineCursor = lines.length;
-  return batches;
 }
 
 async function replayMissingFunctionCallsFromSession(state, config) {
@@ -262,17 +325,17 @@ async function replayMissingFunctionCallsFromSession(state, config) {
     const payload = parsed.payload;
     const payloadType = payload.type;
     if (payloadType === 'function_call') {
-      const callId = typeof payload.call_id === 'string' && payload.call_id ? payload.call_id : `line_${i}`;
+      const callId = typeof payload.call_id === 'string' && payload.call_id ? payload.call_id : (typeof payload.id === 'string' && payload.id ? payload.id : `line_${i}`);
       if (state.processedSessionFunctionCallIds.has(callId)) continue;
       state.processedSessionFunctionCallIds.add(callId);
-      if (handleFunctionCallPayload(payload, state)) {
+      if (handleFunctionCallPayload(payload, state, { stableHint: callId })) {
         toolUses += 1;
       }
       continue;
     }
 
     if (payloadType === 'function_call_output') {
-      const callId = typeof payload.call_id === 'string' && payload.call_id ? payload.call_id : `line_${i}`;
+      const callId = typeof payload.call_id === 'string' && payload.call_id ? payload.call_id : (typeof payload.id === 'string' && payload.id ? payload.id : `line_${i}`);
       if (state.processedSessionFunctionOutputIds.has(callId)) continue;
       state.processedSessionFunctionOutputIds.add(callId);
       if (handleFunctionCallOutputPayload(payload, state)) {
@@ -287,119 +350,6 @@ async function replayMissingFunctionCallsFromSession(state, config) {
 
 async function replayMissingFunctionCallsDuringStream(state, config) {
   await replayMissingFunctionCallsFromSession(state, config);
-}
-
-function buildPermissionInputForPatchOperation(operation) {
-  if (!operation || typeof operation !== 'object') return null;
-  const isWrite = operation.toolName === 'write' || operation.kind === 'add';
-  if (isWrite) {
-    return { toolName: 'Write', input: { file_path: operation.filePath, content: operation.newString ?? '' } };
-  }
-  return {
-    toolName: 'Edit',
-    input: { file_path: operation.filePath, old_string: operation.oldString ?? '', new_string: operation.newString ?? '', replace_all: false }
-  };
-}
-
-async function requestPatchApprovalsViaBridge(patchBatches) {
-  const deniedCallIds = new Set();
-  if (!Array.isArray(patchBatches) || patchBatches.length === 0) return deniedCallIds;
-  for (const batch of patchBatches) {
-    if (!batch || !Array.isArray(batch.operations) || batch.operations.length === 0) continue;
-    const previewOp = batch.operations[0];
-    const requestPayload = buildPermissionInputForPatchOperation(previewOp);
-    if (!requestPayload) continue;
-    try {
-      logInfo('PERM_DEBUG', `Patch approval request: callId=${batch.callId}, tool=${requestPayload.toolName}, file=${previewOp?.filePath || ''}`);
-      const allowed = await requestPermissionFromJava(requestPayload.toolName, requestPayload.input);
-      logInfo('PERM_DEBUG', `Patch approval decision: callId=${batch.callId}, allowed=${allowed ? 'true' : 'false'}`);
-      if (!allowed) deniedCallIds.add(batch.callId);
-    } catch (error) {
-      logWarn('PERM_DEBUG', `Patch approval bridge failed (callId=${batch.callId}): ${error?.message || error}`);
-      deniedCallIds.add(batch.callId);
-    }
-  }
-  return deniedCallIds;
-}
-
-async function rollbackSinglePatchOperation(operation) {
-  if (!operation || typeof operation !== 'object' || !operation.filePath) {
-    return { ok: false, reason: 'invalid-operation' };
-  }
-  const { filePath } = operation;
-  const oldString = typeof operation.oldString === 'string' ? operation.oldString : '';
-  const newString = typeof operation.newString === 'string' ? operation.newString : '';
-  const isAddedFile = operation.kind === 'add' || (operation.toolName === 'write' && oldString === '');
-
-  if (isAddedFile) {
-    if (!existsSync(filePath)) return { ok: true, reason: 'file-already-missing' };
-    try { await unlink(filePath); return { ok: true, reason: 'file-deleted' }; }
-    catch (error) { return { ok: false, reason: error?.message || String(error) }; }
-  }
-  if (!existsSync(filePath)) return { ok: false, reason: 'file-missing' };
-  let currentContent = '';
-  try { currentContent = await readFile(filePath, 'utf8'); }
-  catch (error) { return { ok: false, reason: error?.message || String(error) }; }
-  if (newString === oldString) return { ok: true, reason: 'noop' };
-  if (!newString) return { ok: false, reason: 'unsupported-empty-new-string' };
-  const index = currentContent.indexOf(newString);
-  if (index < 0) return { ok: false, reason: 'new-string-not-found' };
-  const revertedContent = currentContent.slice(0, index) + oldString + currentContent.slice(index + newString.length);
-  try { await writeFile(filePath, revertedContent, 'utf8'); return { ok: true, reason: 'replaced' }; }
-  catch (error) { return { ok: false, reason: error?.message || String(error) }; }
-}
-
-async function rollbackDeniedPatchBatches(patchBatches, deniedCallIds) {
-  const resultByCallId = new Map();
-  if (!Array.isArray(patchBatches) || patchBatches.length === 0) return resultByCallId;
-  if (!(deniedCallIds instanceof Set) || deniedCallIds.size === 0) return resultByCallId;
-  for (const batch of patchBatches) {
-    if (!batch || !deniedCallIds.has(batch.callId)) continue;
-    const operations = Array.isArray(batch.operations) ? [...batch.operations].reverse() : [];
-    const failures = [];
-    for (const op of operations) {
-      const result = await rollbackSinglePatchOperation(op);
-      if (!result.ok) failures.push({ filePath: op?.filePath || '', reason: result.reason });
-    }
-    resultByCallId.set(batch.callId, { success: failures.length === 0, failures });
-  }
-  return resultByCallId;
-}
-
-function emitSyntheticPatchOperations(state, patchBatches, isError, deniedCallIds = new Set(), rollbackByCallId = new Map()) {
-  if (!Array.isArray(patchBatches) || patchBatches.length === 0) return 0;
-  let emittedCount = 0;
-  for (const batch of patchBatches) {
-    if (!batch || !Array.isArray(batch.operations)) continue;
-    batch.operations.forEach((op, index) => {
-      const toolUseId = `codex_patch_${batch.callId}_${index}`;
-      const toolName = op.toolName === 'write' ? 'write' : 'edit';
-      if (!state.emittedToolUseIds.has(toolUseId)) {
-        state.emitMessage(toolUseMsg(toolUseId, toolName, {
-          file_path: op.filePath,
-          old_string: op.oldString,
-          new_string: op.newString,
-          start_line: op.startLine,
-          end_line: op.endLine,
-          replace_all: false,
-          source: 'codex_session_patch'
-        }));
-        state.emittedToolUseIds.add(toolUseId);
-      }
-      const deniedByUser = deniedCallIds instanceof Set && deniedCallIds.has(batch.callId);
-      const rollbackResult = rollbackByCallId instanceof Map ? rollbackByCallId.get(batch.callId) : null;
-      const rollbackSucceeded = !deniedByUser || rollbackResult?.success !== false;
-      const opIsError = !!isError || deniedByUser;
-      let resultText = 'Patch applied';
-      if (isError) resultText = 'Patch apply failed';
-      else if (deniedByUser) {
-        resultText = rollbackSucceeded ? 'Patch denied by user and rolled back' : 'Patch denied by user but rollback failed';
-      }
-      state.emitMessage(toolResultMsg(toolUseId, opIsError, resultText));
-      emittedCount += 1;
-    });
-  }
-  return emittedCount;
 }
 
 function emitDeniedCommandToolResultOnce(state, toolUseId, messageText = 'Command denied by user') {
@@ -451,7 +401,7 @@ function extractAppendedDelta(previousText, nextText) {
 }
 
 function emitThinkingBlock(state, text) {
-  console.log('[THINKING]', text);
+  logDebug('CODEX_EVENT', `Thinking: ${text}`);
   state.emitMessage({
     type: 'assistant',
     message: { role: 'assistant', content: [{ type: 'thinking', thinking: text, text }] }
@@ -500,9 +450,9 @@ async function maybeLogRuntimePolicy(state, config) {
  * file_change, and mcp_tool_call.
  */
 async function handleItemCompleted(item, state, config) {
-  console.log('[DEBUG] item.completed - type:', item.type);
-  console.log('[DEBUG] item.completed - has text:', !!item.text);
-  console.log('[DEBUG] item.completed - has agent_message:', !!item.agent_message);
+  logDebug('CODEX_EVENT', `item.completed type=${item.type}`);
+  logDebug('CODEX_EVENT', `item.completed hasText=${!!item.text}`);
+  logDebug('CODEX_EVENT', `item.completed hasAgentMessage=${!!item.agent_message}`);
   maybeEmitReasoning(state, item);
 
   if (item.type === 'agent_message') {
@@ -514,14 +464,14 @@ async function handleItemCompleted(item, state, config) {
   } else if (item.type === 'mcp_tool_call') {
     handleMcpToolCall(item, state);
   } else {
-    console.log('[DEBUG] Unhandled item.completed item type:', item.type);
+    logDebug('CODEX_EVENT', `Unhandled item.completed item type=${item.type}`);
   }
 }
 
 function handleAgentMessage(item, state, { emitSnapshot = true } = {}) {
   const text = item.text || '';
-  console.log('[DEBUG] agent_message text length:', text.length);
-  console.log('[DEBUG] agent_message text (first 100 chars):', text.substring(0, 100));
+  logDebug('CODEX_EVENT', `agent_message text length=${text.length}`);
+  logDebug('CODEX_EVENT', `agent_message text=${text.substring(0, 100)}`);
   const stableId = getStableItemId(item) ?? 'agent_message';
   const previousText = state.assistantTextCache.get(stableId) ?? '';
   const delta = extractAppendedDelta(previousText, text);
@@ -541,7 +491,7 @@ function handleCommandExecution(item, state) {
   const command = extractCommand(item);
   if (state.deniedCommandToolUseIds.has(toolUseId)) {
     emitDeniedCommandToolResultOnce(state, toolUseId);
-    console.log('[DEBUG] Skip command output because approval denied:', command);
+    logDebug('CODEX_EVENT', `Skip command output because approval denied: ${command}`);
     return;
   }
   const output = item.aggregated_output ?? item.output ?? item.stdout ?? item.result ?? '';
@@ -561,10 +511,15 @@ function handleCommandExecution(item, state) {
 async function handleFileChange(item, state, config) {
   const status = item.status || 'completed';
   const isError = status !== 'completed';
-  try { console.log('[DEBUG] file_change raw item:', JSON.stringify(item)); }
-  catch (error) { console.log('[DEBUG] file_change raw item stringify failed:', error?.message || error); }
+  try { logDebug('CODEX_EVENT', `file_change raw item: ${JSON.stringify(item)}`); }
+  catch (error) { logDebug('CODEX_EVENT', `file_change raw item stringify failed: ${error?.message || error}`); }
 
-  const patchBatches = await collectPatchOperationsFromSession(state, config);
+  const patchBatches = await collectPatchOperationsFromSession(
+    state,
+    config,
+    ensureSessionFilePath,
+    splitSessionJsonlEntries
+  );
   let deniedCallIds = new Set();
   let rollbackByCallId = new Map();
 
@@ -586,17 +541,18 @@ async function handleFileChange(item, state, config) {
     }
   }
   const emitted = emitSyntheticPatchOperations(state, patchBatches, isError, deniedCallIds, rollbackByCallId);
-  if (emitted > 0) console.log('[DEBUG] file_change synthesized operations:', emitted);
-  else console.log('[DEBUG] file_change: no patch operations found in session log');
+  if (emitted > 0) logDebug('CODEX_EVENT', `file_change synthesized operations=${emitted}`);
+  else logDebug('CODEX_EVENT', 'file_change: no patch operations found in session log');
 }
 
 function handleMcpToolCall(item, state) {
   const toolName = normalizeMcpToolName(item.server, item.tool);
   const toolInput = normalizeMcpToolInput(item.server, item.tool, item.arguments || {});
-  const matchedToolUseId = findMatchingToolUseId(state, toolName, toolInput);
-  const toolUseId = matchedToolUseId || item.id || randomUUID();
+  const rawItemId = typeof item.id === 'string' && item.id ? item.id : null;
+  const signature = buildToolInvocationSignature(toolName, toolInput);
+  const toolUseId = rawItemId || consumePendingMcpToolUseId(state, signature) || randomUUID();
   const isError = item.status === 'failed' || !!item.error;
-  console.log('[DEBUG] MCP tool call completed:', toolName, 'id:', toolUseId, 'error:', isError);
+  logDebug('CODEX_EVENT', `MCP tool call completed tool=${toolName} id=${toolUseId} error=${isError}`);
   if (!state.emittedToolUseIds.has(toolUseId)) {
     state.emitMessage(toolUseMsg(toolUseId, toolName, toolInput));
     state.emittedToolUseIds.add(toolUseId);
@@ -615,6 +571,7 @@ function handleMcpToolCall(item, state) {
       resultContent = JSON.stringify(item.result);
     }
   }
+  if (state.emittedToolResultIds.has(toolUseId)) return;
   const truncatedResult = truncateForDisplay(resultContent, MAX_TOOL_RESULT_CHARS);
   state.emitMessage(toolResultMsg(toolUseId, isError, truncatedResult && truncatedResult.trim() ? truncatedResult : '(no output)'));
   state.emittedToolResultIds.add(toolUseId);
@@ -632,28 +589,35 @@ export async function processCodexEventStream(events, state, config) {
     for await (const event of events) {
       rawEventIndex += 1;
       const rawEventJson = stringifyRawEvent(event);
-      if (rawEventJson && DEBUG_LEVEL >= 5) console.log(`[RAW_EVENT][${rawEventIndex}]`, rawEventJson);
+      if (rawEventJson && DEBUG_LEVEL >= 5) logDebug('CODEX_RAW_EVENT', `[${rawEventIndex}] ${rawEventJson}`);
       if (rawEventJson && DEBUG_LEVEL >= 4 && isApprovalRelatedRawEvent(rawEventJson)) {
-        console.log(`[RAW_EVENT_APPROVAL_HINT][${rawEventIndex}]`, rawEventJson);
+        logDebug('CODEX_RAW_EVENT', `[APPROVAL_HINT][${rawEventIndex}] ${rawEventJson}`);
       }
       await maybeLogRuntimePolicy(state, config);
-      console.log('[DEBUG] Codex event:', event.type);
+      logDebug('CODEX_EVENT', `Codex event=${event.type}`);
 
       switch (event.type) {
       case 'thread.started': {
         state.currentThreadId = event.thread_id;
+        if (state.currentThreadId && !config.threadId) {
+          config.threadId = state.currentThreadId;
+        }
         state.sessionFilePath = null;
         state.sessionLineCursor = 0;
         state.sessionFunctionCursor = 0;
         state.sessionTurnStartCursor = 0;
+        state.turnWorkspaceSnapshot = null;
+        state.emittedFileChangePaths.clear();
         state.processedPatchCallIds.clear();
         state.processedSessionFunctionCallIds.clear();
         state.processedSessionFunctionOutputIds.clear();
-        console.log('[THREAD_ID]', state.currentThreadId);
+        logInfo('CODEX_EVENT', `Thread id=${state.currentThreadId}`);
         break;
       }
 
       case 'turn.started': {
+        state.turnWorkspaceSnapshot = null;
+        state.emittedFileChangePaths.clear();
         const sessionPath = ensureSessionFilePath(state, config.threadId);
         if (sessionPath && existsSync(sessionPath)) {
           try {
@@ -665,7 +629,8 @@ export async function processCodexEventStream(events, state, config) {
         } else {
           state.sessionTurnStartCursor = state.sessionFunctionCursor;
         }
-        console.log('[DEBUG] Turn started');
+        await captureTurnWorkspaceSnapshot(state, config);
+        logDebug('CODEX_EVENT', 'Turn started');
         break;
       }
 
@@ -677,6 +642,7 @@ export async function processCodexEventStream(events, state, config) {
       case 'item.started': {
         maybeEmitReasoning(state, event.item);
         if (event.item && event.item.type === 'command_execution') {
+          await captureTurnWorkspaceSnapshot(state, config);
           const toolUseId = ensureToolUseId(state, 'started', event.item);
           const command = extractCommand(event.item);
           const toolName = smartToolName(command);
@@ -694,14 +660,17 @@ export async function processCodexEventStream(events, state, config) {
         } else if (event.item && event.item.type === 'mcp_tool_call') {
           const toolName = normalizeMcpToolName(event.item.server, event.item.tool);
           const toolInput = normalizeMcpToolInput(event.item.server, event.item.tool, event.item.arguments || {});
-          const matchedToolUseId = findMatchingToolUseId(state, toolName, toolInput);
-          const toolUseId = matchedToolUseId || event.item.id || randomUUID();
-          console.log('[DEBUG] MCP tool call started:', toolName, 'id:', toolUseId);
+          const rawItemId = typeof event.item.id === 'string' && event.item.id ? event.item.id : null;
+          const toolUseId = rawItemId || randomUUID();
+          logDebug('CODEX_EVENT', `MCP tool call started tool=${toolName} id=${toolUseId}`);
           if (!state.emittedToolUseIds.has(toolUseId)) {
             state.emitMessage(toolUseMsg(toolUseId, toolName, toolInput));
             state.emittedToolUseIds.add(toolUseId);
           }
           rememberToolInvocation(state, toolUseId, toolName, toolInput);
+          if (!rawItemId) {
+            rememberPendingMcpToolUseId(state, buildToolInvocationSignature(toolName, toolInput), toolUseId);
+          }
         }
         await replayMissingFunctionCallsDuringStream(state, config);
         break;
@@ -723,13 +692,14 @@ export async function processCodexEventStream(events, state, config) {
       }
 
       case 'turn.completed': {
-        console.log('[DEBUG] Turn completed');
+        logDebug('CODEX_EVENT', 'Turn completed');
         const replayed = await replayMissingFunctionCallsFromSession(state, config);
         if (replayed.toolUses > 0 || replayed.toolResults > 0) {
-          console.log('[DEBUG] Replayed session function calls:', JSON.stringify(replayed));
+          logDebug('CODEX_EVENT', `Replayed session function calls: ${JSON.stringify(replayed)}`);
         }
+        await emitTurnWorkspaceDiff(state, config);
         if (event.usage) {
-          console.log('[DEBUG] Token usage:', event.usage);
+          logDebug('CODEX_EVENT', `Token usage: ${JSON.stringify(event.usage)}`);
           const claudeUsage = {
             input_tokens: event.usage.input_tokens || 0,
             output_tokens: event.usage.output_tokens || 0,
@@ -740,7 +710,7 @@ export async function processCodexEventStream(events, state, config) {
             type: 'result', subtype: 'usage', is_error: false,
             usage: claudeUsage, session_id: state.currentThreadId, uuid: randomUUID()
           });
-          console.log('[DEBUG] Emitted usage statistics (Claude-compatible format):', claudeUsage);
+          logDebug('CODEX_EVENT', `Emitted usage statistics: ${JSON.stringify(claudeUsage)}`);
         }
         if (typeof config.onTurnCompleted === 'function') {
           config.onTurnCompleted(event, state);
@@ -751,7 +721,7 @@ export async function processCodexEventStream(events, state, config) {
       case 'turn.failed': {
         const errorMsg = event.error?.message || 'Turn failed';
         if (isReconnectNotice(errorMsg)) {
-          console.warn('[DEBUG] Codex reconnect notice:', errorMsg);
+          logWarn('CODEX_EVENT', `Codex reconnect notice: ${errorMsg}`);
           emitStatusMessage(state.emitMessage, errorMsg);
           break;
         }
@@ -762,14 +732,14 @@ export async function processCodexEventStream(events, state, config) {
         if (typeof config.onTurnFailed === 'function') {
           config.onTurnFailed(event, state);
         }
-        console.error('[DEBUG] Turn failed:', errorMsg);
+        logWarn('CODEX_EVENT', `Turn failed: ${errorMsg}`);
         throw new Error(errorMsg);
       }
 
       case 'error': {
         const generalError = event.message || 'Unknown error';
         if (isReconnectNotice(generalError)) {
-          console.warn('[DEBUG] Codex reconnect notice:', generalError);
+          logWarn('CODEX_EVENT', `Codex reconnect notice: ${generalError}`);
           emitStatusMessage(state.emitMessage, generalError);
           break;
         }
@@ -780,35 +750,37 @@ export async function processCodexEventStream(events, state, config) {
         if (typeof config.onTurnFailed === 'function') {
           config.onTurnFailed(event, state);
         }
-        console.error('[DEBUG] Codex error:', generalError);
+        logWarn('CODEX_EVENT', `Codex error: ${generalError}`);
         throw new Error(generalError);
       }
 
       default: {
         const payloadType = event.payload?.type;
-        console.log('[DEBUG] Unknown event type:', event.type, 'payload.type:', payloadType);
+        logDebug('CODEX_EVENT', `Unknown event type=${event.type} payload.type=${payloadType}`);
 
         if (event.type === 'response_item') {
           const payload = event.payload;
           const payloadCallId = typeof payload?.call_id === 'string' && payload.call_id
             ? payload.call_id
             : null;
-          if (handleFunctionCallPayload(payload, state)) {
-            if (payloadCallId) {
-              state.processedSessionFunctionCallIds.add(payloadCallId);
+          const payloadStableId = typeof payload?.id === 'string' && payload.id ? payload.id : null;
+          const payloadKey = payloadCallId || payloadStableId;
+          if (handleFunctionCallPayload(payload, state, { stableHint: payloadKey || `stream_${rawEventIndex}` })) {
+            if (payloadKey) {
+              state.processedSessionFunctionCallIds.add(payloadKey);
             }
             break;
           }
           if (handleFunctionCallOutputPayload(payload, state)) {
-            if (payloadCallId) {
-              state.processedSessionFunctionOutputIds.add(payloadCallId);
+            if (payloadKey) {
+              state.processedSessionFunctionOutputIds.add(payloadKey);
             }
             break;
           }
         }
 
         if (event.type === 'event_msg' || payloadType === 'function_call' || payloadType === 'function_call_output') {
-          console.log('[DEBUG] Full event:', JSON.stringify(event).substring(0, 500));
+          logDebug('CODEX_EVENT', `Full event: ${JSON.stringify(event).substring(0, 500)}`);
         }
       }
       }

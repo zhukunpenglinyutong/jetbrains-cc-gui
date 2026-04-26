@@ -42,7 +42,7 @@ export function finalizeTodosForSettledTurn(todos: TodoItem[], isStreaming: bool
 export function finalizeSubagentsForSettledTurn(subagents: SubagentInfo[], isStreaming: boolean): SubagentInfo[] {
   if (isStreaming) return subagents;
   return subagents.map((subagent) => (
-    subagent.status === 'running'
+    subagent.status === 'running' && subagent.provider !== 'codex'
       ? { ...subagent, status: 'completed' }
       : subagent
   ));
