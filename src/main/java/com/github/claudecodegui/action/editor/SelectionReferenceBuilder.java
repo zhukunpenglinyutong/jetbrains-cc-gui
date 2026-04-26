@@ -45,9 +45,7 @@ public class SelectionReferenceBuilder {
         }
 
         String normalizedPath = absolutePath.trim();
-        String reference = startLine == endLine
-                ? "@" + normalizedPath + "#L" + startLine
-                : "@" + normalizedPath + "#L" + startLine + "-" + endLine;
+        String reference = startLine == endLine ? "@" + normalizedPath + "#L" + startLine : "@" + normalizedPath + "#L" + startLine + "-" + endLine;
         return Result.success(reference);
     }
 
