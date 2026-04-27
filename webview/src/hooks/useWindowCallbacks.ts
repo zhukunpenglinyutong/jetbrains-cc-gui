@@ -101,6 +101,9 @@ export interface UseWindowCallbacksOptions {
   customSessionTitleRef: MutableRefObject<string | null>;
   currentSessionIdRef: MutableRefObject<string | null>;
   updateHistoryTitle: (sessionId: string, newTitle: string) => void;
+
+  // AI title generation: update the displayed session title when backend generates one
+  setCustomSessionTitle: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
 export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {

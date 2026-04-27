@@ -27,6 +27,7 @@ class ClaudeDaemonCoordinator {
     private final Object daemonLock = new Object();
     private volatile long daemonRetryAfter = 0;
     private volatile CompletableFuture<?> prewarmFuture;
+    private volatile DaemonBridge.DaemonEventListener daemonEventListener;
 
     ClaudeDaemonCoordinator(
             Logger log,
@@ -38,6 +39,18 @@ class ClaudeDaemonCoordinator {
         this.nodeDetector = nodeDetector;
         this.directoryResolverSupplier = directoryResolverSupplier;
         this.envConfigurator = envConfigurator;
+    }
+
+    /**
+     * Set a listener for custom daemon events. Applied to new daemon bridges
+     * as they are created, and to the current bridge if alive.
+     */
+    void setDaemonEventListener(DaemonBridge.DaemonEventListener listener) {
+        this.daemonEventListener = listener;
+        DaemonBridge current = daemonBridge;
+        if (current != null && current.isAlive()) {
+            current.setEventListener(listener);
+        }
     }
 
     DaemonBridge getDaemonBridge() {
@@ -69,6 +82,9 @@ class ClaudeDaemonCoordinator {
                 if (newBridge.start()) {
                     daemonBridge = newBridge;
                     daemonRetryAfter = 0;
+                    if (this.daemonEventListener != null) {
+                        newBridge.setEventListener(this.daemonEventListener);
+                    }
                     log.info("[DaemonCoordinator] Daemon bridge started successfully");
                     return newBridge;
                 }

@@ -264,6 +264,7 @@ const App = () => {
     syncActiveProviderModelMapping,
     openPermissionDialog, openAskUserQuestionDialog, openPlanApprovalDialog,
     customSessionTitleRef, currentSessionIdRef, updateHistoryTitle,
+    setCustomSessionTitle,
   });
 
   // ── Message processing ──

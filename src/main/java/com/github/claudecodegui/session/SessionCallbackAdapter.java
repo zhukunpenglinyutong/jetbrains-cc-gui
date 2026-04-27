@@ -355,6 +355,20 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
         jsTarget.callJavaScript("patchMessageUuid", JsUtils.escapeJs(content), JsUtils.escapeJs(uuid));
     }
 
+    @Override
+    public void onAiTitleGenerated(String sessionId, String title) {
+        if (isInactive()) {
+            return;
+        }
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (isInactive()) {
+                return;
+            }
+            jsTarget.callJavaScript("updateSessionTitle", JsUtils.escapeJs(sessionId), JsUtils.escapeJs(title));
+            LOG.info("AI title forwarded to frontend: " + title + " (sessionId=" + sessionId + ")");
+        });
+    }
+
     /**
      * Dispose internal resources. Call when the parent window is disposed.
      */
