@@ -8,27 +8,25 @@
  * - BlinkingLogo/index.tsx
  * - HistoryView.tsx
  */
-import {
-  Claude,
-  OpenAI,
-  Gemini,
-  Qwen,
-  DeepSeek,
-  Kimi,
-  Moonshot,
-  Zhipu,
-  Minimax,
-  Doubao,
-  Spark,
-  Hunyuan,
-  Baichuan,
-  Mistral,
-  Meta,
-  Cohere,
-  Grok,
-  OpenRouter,
-  Yi,
-} from '@lobehub/icons';
+import Claude from '@lobehub/icons/es/Claude';
+import OpenAI from '@lobehub/icons/es/OpenAI';
+import Gemini from '@lobehub/icons/es/Gemini';
+import Qwen from '@lobehub/icons/es/Qwen';
+import DeepSeek from '@lobehub/icons/es/DeepSeek';
+import Kimi from '@lobehub/icons/es/Kimi';
+import Moonshot from '@lobehub/icons/es/Moonshot';
+import Zhipu from '@lobehub/icons/es/Zhipu';
+import Minimax from '@lobehub/icons/es/Minimax';
+import Doubao from '@lobehub/icons/es/Doubao';
+import Spark from '@lobehub/icons/es/Spark';
+import Hunyuan from '@lobehub/icons/es/Hunyuan';
+import Baichuan from '@lobehub/icons/es/Baichuan';
+import Mistral from '@lobehub/icons/es/Mistral';
+import Meta from '@lobehub/icons/es/Meta';
+import Cohere from '@lobehub/icons/es/Cohere';
+import Grok from '@lobehub/icons/es/Grok';
+import OpenRouter from '@lobehub/icons/es/OpenRouter';
+import Yi from '@lobehub/icons/es/Yi';
 import type { ReactElement } from 'react';
 import { resolveIconVendor, type ModelVendor } from '../../utils/modelIconMapping';
 
