@@ -32,6 +32,20 @@ import { registerUsageModeCallbacks } from './registerCallbacks/usageModeCallbac
 import { registerPermissionCallbacks } from './registerCallbacks/permissionCallbacks';
 import { registerAgentAndSelectionCallbacks } from './registerCallbacks/agentCallbacks';
 
+function areSubagentMessagesEquivalent(previousMessages?: unknown[], nextMessages?: unknown[]): boolean {
+  if (previousMessages === nextMessages) return true;
+  if (!Array.isArray(previousMessages) || !Array.isArray(nextMessages)) {
+    return previousMessages === nextMessages;
+  }
+  if (previousMessages.length !== nextMessages.length) return false;
+
+  try {
+    return JSON.stringify(previousMessages) === JSON.stringify(nextMessages);
+  } catch {
+    return false;
+  }
+}
+
 export function registerWindowCallbacks(
   options: UseWindowCallbacksOptions,
   tRef: MutableRefObject<UseWindowCallbacksOptions['t']>,
@@ -84,10 +98,21 @@ export function registerWindowCallbacks(
       const result = JSON.parse(json);
       const key = result.toolUseId || result.agentId;
       if (!key) return;
-      options.setSubagentHistories((prev) => ({
-        ...prev,
-        [key]: result,
-      }));
+      options.setSubagentHistories((prev) => {
+        const existing = prev[key];
+        // Skip state update when the payload is structurally identical.
+        // This prevents cascading re-renders and scroll jumps caused by
+        // periodic subagent polling (every 2 s) returning unchanged data.
+        if (existing && existing.success === result.success
+          && existing.error === result.error
+          && existing.sessionId === result.sessionId
+          && existing.toolUseId === result.toolUseId
+          && existing.agentId === result.agentId
+          && areSubagentMessagesEquivalent(existing.messages, result.messages)) {
+          return prev;
+        }
+        return { ...prev, [key]: result };
+      });
     } catch {
       // Ignore malformed callback payloads; the request can be retried by reopening the Agent row.
     }

@@ -30,6 +30,7 @@ describe('useWindowCallbacks integration', () => {
     setUsagePercentage: vi.fn(),
     setUsageUsedTokens: vi.fn(),
     setUsageMaxTokens: vi.fn(),
+    setSubagentHistories: vi.fn(),
     setPermissionMode: vi.fn(),
     setClaudePermissionMode: vi.fn(),
     setCodexPermissionMode: vi.fn(),
@@ -87,6 +88,7 @@ describe('useWindowCallbacks integration', () => {
     customSessionTitleRef: { current: null },
     currentSessionIdRef: { current: null },
     updateHistoryTitle: vi.fn(),
+    setCustomSessionTitle: vi.fn(),
 
     ...overrides,
   });
@@ -503,6 +505,45 @@ describe('useWindowCallbacks integration', () => {
       id: 'spawn-1',
     });
     expect(nextMessages[0].__turnId).toBe(7);
+  });
+
+  it('onSubagentHistoryLoaded skips updates only when history payload is truly unchanged', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    const firstPayload = {
+      success: true,
+      toolUseId: 'task-1',
+      sessionId: 'session-1',
+      messages: [{ type: 'assistant', content: [{ type: 'text', text: 'draft result' }] }],
+    };
+
+    act(() => {
+      window.onSubagentHistoryLoaded?.(JSON.stringify(firstPayload));
+    });
+
+    expect(opts.setSubagentHistories).toHaveBeenCalledTimes(1);
+    const firstUpdater = (opts.setSubagentHistories as any).mock.calls[0][0] as (prev: Record<string, unknown>) => Record<string, unknown>;
+    const initialState = firstUpdater({});
+
+    act(() => {
+      window.onSubagentHistoryLoaded?.(JSON.stringify(firstPayload));
+    });
+
+    const secondUpdater = (opts.setSubagentHistories as any).mock.calls[1][0] as (prev: Record<string, unknown>) => Record<string, unknown>;
+    expect(secondUpdater(initialState)).toBe(initialState);
+
+    act(() => {
+      window.onSubagentHistoryLoaded?.(JSON.stringify({
+        ...firstPayload,
+        messages: [{ type: 'assistant', content: [{ type: 'text', text: 'final result' }] }],
+      }));
+    });
+
+    const thirdUpdater = (opts.setSubagentHistories as any).mock.calls[2][0] as (prev: Record<string, any>) => Record<string, any>;
+    const updatedState = thirdUpdater(initialState);
+    expect(updatedState).not.toBe(initialState);
+    expect(updatedState['task-1'].messages[0].content[0].text).toBe('final result');
   });
 
   // ===== onStreamEnd idempotency (dual-path delivery) =====

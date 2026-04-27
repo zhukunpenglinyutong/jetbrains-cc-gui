@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { SubagentHistoryResponse } from '../../types';
 import { buildSubagentProcessModel, formatSubagentDuration } from './subagentProcess';
 
@@ -18,7 +19,7 @@ function firstMeaningfulLine(text?: string): string | undefined {
   return text.split('\n').map((line) => line.trim()).find(Boolean)?.slice(0, 180);
 }
 
-const SubagentProcessDetails = ({
+const SubagentProcessDetails = memo(function SubagentProcessDetails({
   agentId,
   totalDurationMs,
   totalTokens,
@@ -26,7 +27,7 @@ const SubagentProcessDetails = ({
   resultText,
   history,
   canLoad,
-}: SubagentProcessDetailsProps) => {
+}: SubagentProcessDetailsProps) {
   const duration = formatSubagentDuration(totalDurationMs);
   const stats = [
     duration,
@@ -117,6 +118,6 @@ const SubagentProcessDetails = ({
       )}
     </div>
   );
-};
+});
 
 export default SubagentProcessDetails;

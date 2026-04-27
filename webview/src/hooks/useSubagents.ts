@@ -1,12 +1,15 @@
 import { useMemo } from 'react';
-import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock, SubagentInfo, SubagentStatus } from '../types';
+import type { ClaudeMessage, ClaudeRawMessage, ClaudeContentBlock, ToolResultBlock, SubagentInfo, SubagentStatus } from '../types';
 import { normalizeToolInput } from '../utils/toolInputNormalization';
 import { normalizeToolName } from '../utils/toolConstants';
+
+type GetToolResultRawFn = (toolUseId: string) => ClaudeRawMessage | null;
 
 interface UseSubagentsParams {
   messages: ClaudeMessage[];
   getContentBlocks: (message: ClaudeMessage) => ClaudeContentBlock[];
   findToolResult: (toolUseId?: string, messageIndex?: number) => ToolResultBlock | null;
+  getToolResultRaw: GetToolResultRawFn;
 }
 
 /**
@@ -33,8 +36,12 @@ function extractResultText(result: ToolResultBlock | null): string | undefined {
   return text || undefined;
 }
 
-function extractResultMetadata(result: ToolResultBlock | null): Partial<SubagentInfo> {
-  const rawMessage = (result as unknown as { __rawMessage?: { toolUseResult?: unknown } } | null)?.__rawMessage;
+function extractResultMetadata(
+  result: ToolResultBlock | null,
+  getToolResultRaw: GetToolResultRawFn,
+  toolUseId: string,
+): Partial<SubagentInfo> {
+  const rawMessage = getToolResultRaw(toolUseId);
   const metadata = rawMessage?.toolUseResult;
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
     return { resultText: extractResultText(result) };
@@ -64,6 +71,7 @@ export function extractSubagentsFromMessages(
   messages: ClaudeMessage[],
   getContentBlocks: (message: ClaudeMessage) => ClaudeContentBlock[],
   findToolResult: (toolUseId?: string, messageIndex?: number) => ToolResultBlock | null,
+  getToolResultRaw: GetToolResultRawFn,
 ): SubagentInfo[] {
   const subagents: SubagentInfo[] = [];
 
@@ -91,9 +99,10 @@ export function extractSubagentsFromMessages(
       const prompt = String((input.prompt as string) ?? '');
 
       // Check tool result to determine status
-      const result = findToolResult(block.id, messageIndex);
+      const toolUseId = block.id ?? '';
+      const result = findToolResult(toolUseId, messageIndex);
       const status = determineStatus(result);
-      const resultMetadata = extractResultMetadata(result);
+      const resultMetadata = extractResultMetadata(result, getToolResultRaw, toolUseId);
 
       subagents.push({
         id,
@@ -117,9 +126,10 @@ export function useSubagents({
   messages,
   getContentBlocks,
   findToolResult,
+  getToolResultRaw,
 }: UseSubagentsParams): SubagentInfo[] {
   return useMemo(
-    () => extractSubagentsFromMessages(messages, getContentBlocks, findToolResult),
-    [messages, getContentBlocks, findToolResult],
+    () => extractSubagentsFromMessages(messages, getContentBlocks, findToolResult, getToolResultRaw),
+    [messages, getContentBlocks, findToolResult, getToolResultRaw],
   );
 }

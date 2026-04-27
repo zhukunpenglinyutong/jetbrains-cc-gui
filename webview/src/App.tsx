@@ -47,13 +47,14 @@ import { ChatHeader } from './components/ChatHeader';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { MessageList } from './components/MessageList';
 import { MessageAnchorRail } from './components/MessageAnchorRail';
-import { SubagentHistoryContext, SessionIdContext } from './contexts/SubagentContext';
+import { SubagentHistoryContext, SessionIdContext, ToolResultRawContext, useSubagentContextValues } from './contexts/SubagentContext';
 import { FILE_MODIFY_TOOL_NAMES, isToolName } from './utils/toolConstants';
 import type { RewindableMessage } from './components/RewindSelectDialog';
 import { AppDialogs } from './components/AppDialogs';
 import { APP_VERSION } from './version/version';
 import type {
   ClaudeMessage,
+  ClaudeRawMessage,
   HistoryData,
   SubagentHistoryResponse,
   ToolResultBlock,
@@ -273,12 +274,28 @@ const App = () => {
     mergedMessages, sentAttachmentsRef,
   } = useMessageProcessing({ messages, currentSessionId, t });
 
-  // Find tool result (stable ref to avoid re-renders)
+  // Find tool result (stable ref to avoid re-renders).
+  // Also populates toolResultRawMap so downstream code can look up the
+  // enclosing raw message without carrying it on every result object.
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
+  const toolResultRawMapRef = useRef<Map<string, ClaudeRawMessage>>(new Map());
   const findToolResult = useCallback((toolUseId?: string, messageIndex?: number): ToolResultBlock | null => {
     if (!toolUseId || typeof messageIndex !== 'number') return null;
     const currentMessages = messagesRef.current;
+    // Check the cache first — the raw message for a given tool_use_id never
+    // changes once written, so a cache hit avoids a full scan.
+    const cachedRaw = toolResultRawMapRef.current.get(toolUseId);
+    if (cachedRaw != null) {
+      const content = cachedRaw.content ?? cachedRaw.message?.content;
+      if (Array.isArray(content)) {
+        const hit = content.find(
+          (block): block is ToolResultBlock =>
+            Boolean(block) && block.type === 'tool_result' && block.tool_use_id === toolUseId,
+        );
+        if (hit) return hit;
+      }
+    }
     for (let i = 0; i < currentMessages.length; i += 1) {
       const candidate = currentMessages[i];
       const raw = candidate.raw;
@@ -289,10 +306,15 @@ const App = () => {
         (block): block is ToolResultBlock =>
           Boolean(block) && block.type === 'tool_result' && block.tool_use_id === toolUseId,
       );
-      if (resultBlock) return { ...resultBlock, __rawMessage: raw } as ToolResultBlock;
+      if (resultBlock) {
+        toolResultRawMapRef.current.set(toolUseId, raw);
+        return resultBlock;
+      }
     }
     return null;
   }, []);
+  const getToolResultRaw = useCallback((toolUseId: string): ClaudeRawMessage | null =>
+    toolResultRawMapRef.current.get(toolUseId) ?? null, []);
 
   // ── Message sender ──
   // Wrap handleProviderSelect to also clear messages and input (like creating a new session)
@@ -388,7 +410,7 @@ const App = () => {
   const latestTurnMessages = useMemo(() => sliceLatestConversationTurn(messages), [messages]);
 
   // ── Subagents ──
-  const latestTurnSubagents = useSubagents({ messages: latestTurnMessages, getContentBlocks, findToolResult });
+  const latestTurnSubagents = useSubagents({ messages: latestTurnMessages, getContentBlocks, findToolResult, getToolResultRaw });
   const subagents = useMemo(
     () => finalizeSubagentsForSettledTurn(latestTurnSubagents, streamingActive),
     [latestTurnSubagents, streamingActive],
@@ -396,16 +418,15 @@ const App = () => {
 
   // Stabilize context value references — prevents consumers from re-rendering
   // when App re-renders for unrelated reasons (e.g. streaming messages change).
-  // Each context gets its own memo so a change to subagentHistories does not
-  // cause useSessionId consumers to re-render, and vice versa.
-  const subagentHistoryCtxValue = useMemo(
-    () => ({ subagentHistories }),
-    [subagentHistories],
-  );
-  const sessionIdCtxValue = useMemo(
-    () => ({ currentSessionId }),
-    [currentSessionId],
-  );
+  // subagentHistoryCtxValue is a getter function backed by a ref, so its
+  // reference never changes even when individual histories are updated.
+  const { subagentHistoryCtxValue, sessionIdCtxValue } = useSubagentContextValues(subagentHistories, currentSessionId);
+
+  // Stable callback to avoid defeating MessageList memo on every App render.
+  const handleNavigateToProviderSettings = useCallback(() => {
+    setSettingsInitialTab('providers');
+    setCurrentView('settings');
+  }, []);
 
   // ── Rewind handlers ──
   const {
@@ -549,6 +570,7 @@ const App = () => {
 
               <SessionIdContext.Provider value={sessionIdCtxValue}>
                 <SubagentHistoryContext.Provider value={subagentHistoryCtxValue}>
+                <ToolResultRawContext.Provider value={getToolResultRaw}>
                 <MessageList
                   messages={mergedMessages}
                   streamingActive={streamingActive}
@@ -563,11 +585,9 @@ const App = () => {
                   messagesEndRef={messagesEndRef}
                   onMessageNodeRef={handleMessageNodeRef}
                   onCollapsedCountChange={setAnchorCollapsedCount}
-                  onNavigateToProviderSettings={() => {
-                    setSettingsInitialTab('providers');
-                    setCurrentView('settings');
-                  }}
+                  onNavigateToProviderSettings={handleNavigateToProviderSettings}
                 />
+                </ToolResultRawContext.Provider>
                 </SubagentHistoryContext.Provider>
               </SessionIdContext.Provider>
             </div>

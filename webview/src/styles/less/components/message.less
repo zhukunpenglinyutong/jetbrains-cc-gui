@@ -5,8 +5,13 @@
     overflow-y: auto;
     overflow-x: hidden; /* 防止横向滚动 */
     overscroll-behavior-y: contain;
+    overflow-anchor: none; /* 手动跟随到底时禁用锚定，避免和程序滚动抢控制权 */
     padding: 0;
     background: var(--bg-chat);
+}
+
+.messages-container.scroll-anchor-enabled {
+    overflow-anchor: auto; /* 用户离开底部后，交还给浏览器维持当前可见位置 */
 }
 
 /* Collapsed messages indicator */
@@ -39,6 +44,13 @@
     @supports (content-visibility: auto) {
         content-visibility: auto;
         contain-intrinsic-size: 0 160px;
+    }
+}
+
+.message.is-last-message {
+    @supports (content-visibility: auto) {
+        content-visibility: visible;
+        contain-intrinsic-size: auto;
     }
 }
 

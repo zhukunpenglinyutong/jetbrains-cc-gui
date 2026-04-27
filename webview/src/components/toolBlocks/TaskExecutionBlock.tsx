@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolInput, ToolResultBlock } from '../../types';
 import { normalizeToolName } from '../../utils/toolConstants';
 import { sendBridgeEvent } from '../../utils/bridge';
-import { useSubagentHistory, useSessionId } from '../../contexts/SubagentContext';
+import { useSubagentHistoryGetter, useSessionId, useGetToolResultRaw } from '../../contexts/SubagentContext';
 import SubagentProcessDetails from '../StatusPanel/SubagentProcessDetails';
 
 interface TaskExecutionBlockProps {
@@ -87,13 +87,17 @@ function parseSpawnAgentMeta(input: ToolInput, result?: ToolResultBlock | null):
   return { agentId, nickname, model, reasoningEffort };
 }
 
-function parseAgentToolMeta(result?: ToolResultBlock | null): {
+function parseAgentToolMeta(
+  getToolResultRaw: (toolUseId: string) => Record<string, unknown> | null,
+  toolUseId?: string,
+): {
   agentId?: string;
   totalDurationMs?: number;
   totalTokens?: number;
   totalToolUseCount?: number;
 } {
-  const rawMessage = (result as unknown as { __rawMessage?: { toolUseResult?: unknown } } | null)?.__rawMessage;
+  if (!toolUseId) return {};
+  const rawMessage = getToolResultRaw(toolUseId);
   const metadata = rawMessage?.toolUseResult;
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return {};
   const record = metadata as Record<string, unknown>;
@@ -112,11 +116,12 @@ function shortenAgentId(agentId?: string): string | undefined {
   return agentId.length > 8 ? `${agentId.slice(0, 8)}…` : agentId;
 }
 
-const TaskExecutionBlock = ({ name, input, result, toolId, isStreaming = false }: TaskExecutionBlockProps) => {
+const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, result, toolId, isStreaming = false }: TaskExecutionBlockProps) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
-  const { subagentHistories } = useSubagentHistory();
-  const { currentSessionId } = useSessionId();
+  const getSubagentHistory = useSubagentHistoryGetter();
+  const currentSessionId = useSessionId();
+  const getToolResultRaw = useGetToolResultRaw();
 
   if (!input) {
     return null;
@@ -141,7 +146,7 @@ const TaskExecutionBlock = ({ name, input, result, toolId, isStreaming = false }
     ...rest
   } = input;
   const spawnMeta = isSpawnAgent ? parseSpawnAgentMeta(input, result) : {};
-  const agentToolMeta = !isSpawnAgent ? parseAgentToolMeta(result) : {};
+  const agentToolMeta = !isSpawnAgent ? parseAgentToolMeta(getToolResultRaw, toolId) : {};
   const agentId = spawnMeta.agentId ?? agentToolMeta.agentId;
   const identityLabel = spawnMeta.nickname || (typeof subagentType === 'string' && subagentType ? subagentType : undefined);
   const modelSummary = [spawnMeta.model, spawnMeta.reasoningEffort].filter(Boolean).join(' ');
@@ -150,7 +155,7 @@ const TaskExecutionBlock = ({ name, input, result, toolId, isStreaming = false }
   // Determine status based on result
   const isCompleted = result !== undefined && result !== null;
   const isError = isCompleted && result?.is_error === true;
-  const history = (toolId ? subagentHistories[toolId] : undefined) ?? (agentId ? subagentHistories[agentId] : undefined);
+  const history = (toolId ? getSubagentHistory(toolId) : undefined) ?? (agentId ? getSubagentHistory(agentId) : undefined);
 
   useEffect(() => {
     if (!expanded || !isAgentTool || !currentSessionId || !toolId || history) return;
@@ -162,8 +167,18 @@ const TaskExecutionBlock = ({ name, input, result, toolId, isStreaming = false }
     }));
   }, [agentId, currentSessionId, description, expanded, history, isAgentTool, toolId]);
 
+  const shouldPollHistory = expanded
+    && isAgentTool
+    && Boolean(currentSessionId)
+    && Boolean(toolId)
+    && isStreaming
+    && !isCompleted
+    && !history;
+
+  // Poll subagent history only while the tool is still actively streaming and
+  // we have not received history yet. Avoid keeping idle intervals alive.
   useEffect(() => {
-    if (!expanded || !isAgentTool || !isStreaming || isCompleted || !currentSessionId || !toolId) return;
+    if (!shouldPollHistory || !currentSessionId || !toolId) return;
     const timer = window.setInterval(() => {
       sendBridgeEvent('load_subagent_session', JSON.stringify({
         sessionId: currentSessionId,
@@ -173,7 +188,7 @@ const TaskExecutionBlock = ({ name, input, result, toolId, isStreaming = false }
       }));
     }, 2_000);
     return () => window.clearInterval(timer);
-  }, [agentId, currentSessionId, description, expanded, isAgentTool, isCompleted, isStreaming, toolId]);
+  }, [agentId, currentSessionId, description, shouldPollHistory, toolId]);
 
   return (
     <div className="task-container">
@@ -280,6 +295,6 @@ const TaskExecutionBlock = ({ name, input, result, toolId, isStreaming = false }
       )}
     </div>
   );
-};
+});
 
 export default TaskExecutionBlock;
