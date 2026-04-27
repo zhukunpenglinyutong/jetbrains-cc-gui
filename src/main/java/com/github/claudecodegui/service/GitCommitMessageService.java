@@ -1,19 +1,20 @@
 package com.github.claudecodegui.service;
 
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
-import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
+import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.vcs.changes.Change;
-import com.intellij.openapi.vcs.changes.ContentRevision;
 import com.intellij.openapi.vcs.FilePath;
 import com.intellij.openapi.vcs.VcsException;
+import com.intellij.openapi.vcs.changes.Change;
 import com.intellij.openapi.vcs.changes.ChangesUtil;
+import com.intellij.openapi.vcs.changes.ContentRevision;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
@@ -28,7 +29,15 @@ public class GitCommitMessageService {
     private static final Logger LOG = Logger.getInstance(GitCommitMessageService.class);
 
     private static final int MAX_DIFF_LENGTH = 4000; // Limit diff length to avoid exceeding token limits
-
+    /**
+     * Default AI provider.
+     * Currently defaults to Claude; may be extended to read from user settings in the future.
+     */
+    private static final String PROVIDER_CLAUDE = "claude";
+    /**
+     * Codex provider.
+     */
+    private static final String PROVIDER_CODEX = "codex";
     /**
      * Default model used for commit message generation.
      * Uses the Sonnet model for a balance between cost and quality.
@@ -36,16 +45,10 @@ public class GitCommitMessageService {
     private static final String COMMIT_MESSAGE_MODEL = "claude-sonnet-4-20250514";
 
     /**
-     * Default AI provider.
-     * Currently defaults to Claude; may be extended to read from user settings in the future.
-     */
-    private static final String DEFAULT_PROVIDER = "claude";
-
-    /**
      * Prefixes that identify Codex/GPT models.
      */
     private static final String[] CODEX_MODEL_PREFIXES = {
-        "gpt-", "o1-", "o3-"
+            "gpt-", "o1-", "o3-"
     };
 
     /**
@@ -53,89 +56,89 @@ public class GitCommitMessageService {
      * Users can append additional prompts via the settings page, which take priority.
      */
     private static final String BUILTIN_COMMIT_PROMPT = """
-你是一个专门负责 GitHub commit 的高级程序员，请你遵循下面内容，生成高质量 commit
-
-## 核心规则
-
-### 基本格式
-```
-<type>[scope]: <description>
-
-[body]
-
-[footer]
-```
-
-### 输出要求
-- 只输出提交消息，不添加签名、标记或元信息
-- 不要包含 "Generated with Claude Code"、"Co-Authored-By" 等内容
-- 不使用 emoji（除非项目规范明确要求）
-- 使用祈使语气、现在时（"add" 而非 "added"）
-- 主题行不超过 72 字符
-- 保持简洁专业
-- **必须用 `<commit></commit>` 标签包裹，标签外不要有任何内容**
-- 语言默认使用英文
-
-## 提交类型映射
-
-| Type | 描述 | 使用场景 |
-|------|------|---------|
-| `feat` | 新功能 | 添加新功能 |
-| `fix` | Bug修复 | 修复问题 |
-| `docs` | 文档 | 仅文档变更 |
-| `style` | 代码风格 | 格式化、缺少分号等 |
-| `refactor` | 重构 | 既不修复bug也不添加功能 |
-| `perf` | 性能优化 | 性能改进 |
-| `test` | 测试 | 添加或修改测试 |
-| `chore` | 构建/工具 | 构建过程或工具变更 |
-| `ci` | CI/CD | CI配置变更 |
-| `build` | 构建系统 | 影响构建系统的变更 |
-| `revert` | 回滚 | 回滚之前的提交 |
-
-## Scope（范围）指南
-
-Scope 应该是一个描述代码库部分的名词，在整个项目中保持一致，简短且有意义。
-
-常见 Scope 示例：
-- 模块级别：api, auth, ui, db, config, deps
-- 组件级别：button, modal, header, footer
-- 功能级别：parser, compiler, validator, router
-
-## Body（正文）编写指南
-
-Body 应该：
-- 解释**是什么**变更和**为什么**变更（而不是如何变更）
-- 使用项目符号列出多个变更
-- 包含变更的动机
-- 对比新旧行为
-- 引用相关问题或决策
-- 每行不超过 72 个字符
-
-## Footer（页脚）编写指南
-
-Footer 包含：
-- Breaking Changes：BREAKING CHANGE: rename config.auth to config.authentication
-- Issue 引用：Closes: #123, #124 / Fixes: #125 / Refs: #126
-
-## 最佳实践
-
-### 应该做的
-- 使用现在时、祈使语气（"add" 而不是 "added"）
-- 第一行保持在 50 个字符以内（最多 72）
-- 描述的首字母大写
-- 主题行末尾不加句号
-- 主题和正文之间用空行分隔
-- 使用正文解释是什么和为什么（而不是如何）
-- 引用相关 issue 和破坏性变更
-
-### 不应该做的
-- 在一个提交中混合多个逻辑变更
-- 在主题中包含实现细节
-- 使用过去时（"added" 而不是 "add"）
-- 创建过大的提交（难以审查）
-- 提交损坏的代码（除非是 WIP）
-- 包含敏感信息
-""";
+            你是一个专门负责 GitHub commit 的高级程序员，请你遵循下面内容，生成高质量 commit
+            
+            ## 核心规则
+            
+            ### 基本格式
+            ```
+            <type>[scope]: <description>
+            
+            [body]
+            
+            [footer]
+            ```
+            
+            ### 输出要求
+            - 只输出提交消息，不添加签名、标记或元信息
+            - 不要包含 "Generated with Claude Code"、"Co-Authored-By" 等内容
+            - 不使用 emoji（除非项目规范明确要求）
+            - 使用祈使语气、现在时（"add" 而非 "added"）
+            - 主题行不超过 72 字符
+            - 保持简洁专业
+            - **必须用 `<commit></commit>` 标签包裹，标签外不要有任何内容**
+            - 语言默认使用英文
+            
+            ## 提交类型映射
+            
+            | Type | 描述 | 使用场景 |
+            |------|------|---------|
+            | `feat` | 新功能 | 添加新功能 |
+            | `fix` | Bug修复 | 修复问题 |
+            | `docs` | 文档 | 仅文档变更 |
+            | `style` | 代码风格 | 格式化、缺少分号等 |
+            | `refactor` | 重构 | 既不修复bug也不添加功能 |
+            | `perf` | 性能优化 | 性能改进 |
+            | `test` | 测试 | 添加或修改测试 |
+            | `chore` | 构建/工具 | 构建过程或工具变更 |
+            | `ci` | CI/CD | CI配置变更 |
+            | `build` | 构建系统 | 影响构建系统的变更 |
+            | `revert` | 回滚 | 回滚之前的提交 |
+            
+            ## Scope（范围）指南
+            
+            Scope 应该是一个描述代码库部分的名词，在整个项目中保持一致，简短且有意义。
+            
+            常见 Scope 示例：
+            - 模块级别：api, auth, ui, db, config, deps
+            - 组件级别：button, modal, header, footer
+            - 功能级别：parser, compiler, validator, router
+            
+            ## Body（正文）编写指南
+            
+            Body 应该：
+            - 解释**是什么**变更和**为什么**变更（而不是如何变更）
+            - 使用项目符号列出多个变更
+            - 包含变更的动机
+            - 对比新旧行为
+            - 引用相关问题或决策
+            - 每行不超过 72 个字符
+            
+            ## Footer（页脚）编写指南
+            
+            Footer 包含：
+            - Breaking Changes：BREAKING CHANGE: rename config.auth to config.authentication
+            - Issue 引用：Closes: #123, #124 / Fixes: #125 / Refs: #126
+            
+            ## 最佳实践
+            
+            ### 应该做的
+            - 使用现在时、祈使语气（"add" 而不是 "added"）
+            - 第一行保持在 50 个字符以内（最多 72）
+            - 描述的首字母大写
+            - 主题行末尾不加句号
+            - 主题和正文之间用空行分隔
+            - 使用正文解释是什么和为什么（而不是如何）
+            - 引用相关 issue 和破坏性变更
+            
+            ### 不应该做的
+            - 在一个提交中混合多个逻辑变更
+            - 在主题中包含实现细节
+            - 使用过去时（"added" 而不是 "add"）
+            - 创建过大的提交（难以审查）
+            - 提交损坏的代码（除非是 WIP）
+            - 包含敏感信息
+            """;
 
     // XML tags used to extract the commit message
     private static final String COMMIT_TAG_START = "<commit>";
@@ -143,16 +146,6 @@ Footer 包含：
 
     private final Project project;
     private final CodemossSettingsService settingsService;
-
-    /**
-     * Commit message generation callback interface.
-     */
-    public interface CommitMessageCallback {
-        void onSuccess(String commitMessage);
-        void onError(String error);
-        void onProgress(String partialMessage); // Real-time streaming updates
-        void onProgressWithModel(String partialMessage, String model); // Update with model info
-    }
 
     public GitCommitMessageService(@NotNull Project project) {
         this.project = project;
@@ -345,14 +338,58 @@ Footer 包含：
      * Automatically detects the appropriate provider based on the model name.
      */
     private void callAIService(String prompt, String model, CommitMessageCallback callback) {
+//        JsonObject commitAiConfig = getCommitAiConfig();
+//        String effectiveProvider = getResolvedCommitAiProvider(commitAiConfig);
+//
+//        if (effectiveProvider == null) {
+//            callback.onError(ClaudeCodeGuiBundle.message("commit.noAvailableProvider"));
+//            return;
+//        }
+//
+//        if (PROVIDER_CODEX.equals(effectiveProvider)) {
+//            callCodexAPI(prompt, getResolvedCommitAiModel(commitAiConfig, PROVIDER_CODEX), callback);
+//            return;
+//        }
+//
+//        callClaudeAPI(prompt, getResolvedCommitAiModel(commitAiConfig, PROVIDER_CLAUDE), callback);
+
+
         // Detect provider based on model name
         String provider = detectProviderForModel(model);
 
-        if ("codex".equals(provider)) {
+        if (PROVIDER_CODEX.equals(provider)) {
             callCodexAPI(prompt, model, callback);
         } else {
             callClaudeAPI(prompt, model, callback);
         }
+    }
+
+    protected JsonObject getCommitAiConfig() throws IOException {
+        return settingsService.getCommitAiConfig();
+    }
+
+    private String getResolvedCommitAiProvider(JsonObject commitAiConfig) {
+        if (commitAiConfig == null
+                || !commitAiConfig.has("effectiveProvider")
+                || commitAiConfig.get("effectiveProvider").isJsonNull()) {
+            return null;
+        }
+        String provider = commitAiConfig.get("effectiveProvider").getAsString().trim();
+        return provider.isEmpty() ? null : provider;
+    }
+
+    private String getResolvedCommitAiModel(JsonObject commitAiConfig, String provider) {
+        if (commitAiConfig == null
+                || !commitAiConfig.has("models")
+                || !commitAiConfig.get("models").isJsonObject()) {
+            return null;
+        }
+        JsonObject models = commitAiConfig.getAsJsonObject("models");
+        if (!models.has(provider) || models.get(provider).isJsonNull()) {
+            return null;
+        }
+        String model = models.get(provider).getAsString().trim();
+        return model.isEmpty() ? null : model;
     }
 
     /**
@@ -363,29 +400,29 @@ Footer 包含：
      */
     private String detectProviderForModel(String model) {
         if (model == null || model.isEmpty()) {
-            return DEFAULT_PROVIDER;
+            return PROVIDER_CLAUDE;
         }
 
         String lowerModel = model.toLowerCase();
         for (String prefix : CODEX_MODEL_PREFIXES) {
             if (lowerModel.startsWith(prefix)) {
-                return "codex";
+                return PROVIDER_CODEX;
             }
         }
 
-        return DEFAULT_PROVIDER;
+        return PROVIDER_CLAUDE;
     }
 
     /**
      * Get the current provider.
-     *
+     * <p>
      * Note: Currently always returns the default provider (claude).
      * In the future, this can be extended to read the user's preferred provider from settings or session state.
      */
     private String getCurrentProvider() {
         // Future extension: read the user's default provider from CodemossSettingsService
         // e.g.: return settingsService.getDefaultProvider();
-        return DEFAULT_PROVIDER;
+        return PROVIDER_CLAUDE;
     }
 
     /**
@@ -404,7 +441,7 @@ Footer 包含：
             ApplicationManager.getApplication().invokeLater(() -> {
                 String modelDisplay = getShortModelName(model);
                 String status = ClaudeCodeGuiBundle.message("commit.progress.connecting") + "\n" +
-                                ClaudeCodeGuiBundle.message("commit.progress.model") + ": " + modelDisplay;
+                        ClaudeCodeGuiBundle.message("commit.progress.model") + ": " + modelDisplay;
                 callback.onProgressWithModel(status, model);
                 hasShownModel[0] = true;
             });
@@ -414,71 +451,76 @@ Footer 包含：
             // - streaming: true (streaming mode for real-time updates)
             // - disableThinking: true (disable thinking mode to avoid verbose reasoning output)
             bridge.sendMessage(
-                "git-commit-message",      // channelId
-                prompt,                     // message
-                null,                       // sessionId (null = new session)
-                project.getBasePath(),      // cwd
-                null,                       // attachments (not needed)
-                null,                       // permissionMode (use default)
-                model,                      // model (user-selected)
-                null,                       // openedFiles
-                null,                       // agentPrompt
-                true,                       // streaming (streaming mode for real-time updates)
-                true,                       // disableThinking (disable thinking mode)
-                new MessageCallback() {
-                    @Override
-                    public void onMessage(String type, String content) {
-                        // Process all content types for progress updates
-                        if ("content".equals(type) || "assistant".equals(type) || "text".equals(type)) {
-                            // Always collect content for result
-                            result.append(content);
-                            displayedContent.append(content);
+                    "git-commit-message",      // channelId
+                    prompt,                     // message
+                    null,                       // sessionId (null = new session)
+                    project.getBasePath(),      // cwd
+                    null,                       // attachments (not needed)
+                    null,                       // permissionMode (use default)
+                    model,                      // model (user-selected)
+                    null,                       // openedFiles
+                    null,                       // agentPrompt
+                    true,                       // streaming (streaming mode for real-time updates)
+                    true,                       // disableThinking (disable thinking mode)
+                    new MessageCallback() {
+                        @Override
+                        public void onMessage(String type, String content) {
+                            // Process all content types for progress updates
+                            if ("content".equals(type) || "assistant".equals(type) || "text".equals(type)) {
+                                // Skip thinking content (typically starts with specific markers)
+//                            if (!isThinkingContent(content)) {
+//                                result.append(content);
+//                            }
 
-                            // Update progress in real-time (on EDT thread)
-                            ApplicationManager.getApplication().invokeLater(() -> {
-                                String currentResult = displayedContent.toString();
+                                // Always collect content for result
+                                result.append(content);
+                                displayedContent.append(content);
 
-                                // Try to extract and display commit message
-                                String cleaned = extractPartialCommitMessage(currentResult);
+                                // Update progress in real-time (on EDT thread)
+                                ApplicationManager.getApplication().invokeLater(() -> {
+                                    String currentResult = displayedContent.toString();
 
-                                if (!cleaned.isEmpty()) {
-                                    // We have valid commit message content
-                                    hasValidContent[0] = true;
-                                    String modelDisplay = getShortModelName(model);
-                                    String status = cleaned + "\n\n---\n" +
-                                                   ClaudeCodeGuiBundle.message("commit.progress.model") + ": " + modelDisplay;
-                                    callback.onProgressWithModel(status, model);
-                                } else if (!hasValidContent[0] && hasShownModel[0]) {
-                                    // Still waiting for valid content, show processing status
-                                    String status = getProcessingStatus(currentResult);
-                                    String modelDisplay = getShortModelName(model);
-                                    status += "\n" + ClaudeCodeGuiBundle.message("commit.progress.model") + ": " + modelDisplay;
-                                    callback.onProgressWithModel(status, model);
-                                }
-                            });
+                                    // Try to extract and display commit message
+                                    String cleaned = extractPartialCommitMessage(currentResult);
+
+                                    if (!cleaned.isEmpty()) {
+                                        // We have valid commit message content
+                                        hasValidContent[0] = true;
+                                        String modelDisplay = getShortModelName(model);
+                                        String status = cleaned + "\n\n---\n" +
+                                                ClaudeCodeGuiBundle.message("commit.progress.model") + ": " + modelDisplay;
+                                        callback.onProgressWithModel(status, model);
+                                    } else if (!hasValidContent[0] && hasShownModel[0]) {
+                                        // Still waiting for valid content, show processing status
+                                        String status = getProcessingStatus(currentResult);
+                                        String modelDisplay = getShortModelName(model);
+                                        status += "\n" + ClaudeCodeGuiBundle.message("commit.progress.model") + ": " + modelDisplay;
+                                        callback.onProgressWithModel(status, model);
+                                    }
+                                });
+                            }
+                        }
+
+                        @Override
+                        public void onError(String error) {
+                            bridge.shutdownDaemon();
+                            callback.onError(error);
+                        }
+
+                        @Override
+                        public void onComplete(SDKResult sdkResult) {
+                            bridge.shutdownDaemon();
+                            String commitMessage = result.length() > 0
+                                    ? result.toString().trim()
+                                    : sdkResult.finalResult.trim();
+
+                            if (commitMessage.isEmpty()) {
+                                callback.onError(ClaudeCodeGuiBundle.message("commit.emptyMessage"));
+                            } else {
+                                callback.onSuccess(cleanupCommitMessage(commitMessage));
+                            }
                         }
                     }
-
-                    @Override
-                    public void onError(String error) {
-                        bridge.shutdownDaemon();
-                        callback.onError(error);
-                    }
-
-                    @Override
-                    public void onComplete(SDKResult sdkResult) {
-                        bridge.shutdownDaemon();
-                        String commitMessage = result.length() > 0
-                                ? result.toString().trim()
-                                : sdkResult.finalResult.trim();
-
-                        if (commitMessage.isEmpty()) {
-                            callback.onError(ClaudeCodeGuiBundle.message("commit.emptyMessage"));
-                        } else {
-                            callback.onSuccess(cleanupCommitMessage(commitMessage));
-                        }
-                    }
-                }
             );
         } catch (Exception e) {
             bridge.shutdownDaemon();
@@ -503,7 +545,7 @@ Footer 包含：
             ApplicationManager.getApplication().invokeLater(() -> {
                 String modelDisplay = getShortModelName(model);
                 String status = ClaudeCodeGuiBundle.message("commit.progress.connecting") + "\n" +
-                                ClaudeCodeGuiBundle.message("commit.progress.model") + ": " + modelDisplay;
+                        ClaudeCodeGuiBundle.message("commit.progress.model") + ": " + modelDisplay;
                 callback.onProgressWithModel(status, model);
                 hasShownModel[0] = true;
             });
@@ -511,69 +553,73 @@ Footer 包含：
             // CodexSDKBridge.sendMessage requires 10 parameters:
             // (channelId, message, threadId, cwd, attachments, permissionMode, model, agentPrompt, reasoningEffort, callback)
             bridge.sendMessage(
-                "git-commit-message",      // channelId
-                prompt,                     // message
-                null,                       // threadId (null = new session)
-                project.getBasePath(),      // cwd
-                null,                       // attachments (not needed)
-                null,                       // permissionMode (use default)
-                model,                      // model (user-selected)
-                null,                       // agentPrompt (not needed)
-                null,                       // reasoningEffort (use default)
-                new MessageCallback() {
-                    @Override
-                    public void onMessage(String type, String content) {
-                        // Process all content types for progress updates
-                        if ("content".equals(type) || "assistant".equals(type) || "text".equals(type)) {
-                            // Always collect content for result
-                            result.append(content);
-                            displayedContent.append(content);
+                    "git-commit-message",      // channelId
+                    prompt,                     // message
+                    null,                       // threadId (null = new session)
+                    project.getBasePath(),      // cwd
+                    null,                       // attachments (not needed)
+                    null,                       // permissionMode (use default)
+                    model,                      // model (user-selected)
+                    null,                       // agentPrompt (not needed)
+                    null,                       // reasoningEffort (use default)
+                    new MessageCallback() {
+                        @Override
+                        public void onMessage(String type, String content) {
+                            // Process all content types for progress updates
+                            if ("content".equals(type) || "assistant".equals(type) || "text".equals(type)) {
+                                // Skip thinking content
+//                            if (!isThinkingContent(content)) {
+//                                result.append(content);
+//                            }
+                                // Always collect content for result
+                                result.append(content);
+                                displayedContent.append(content);
 
-                            // Update progress in real-time (on EDT thread)
-                            ApplicationManager.getApplication().invokeLater(() -> {
-                                String currentResult = displayedContent.toString();
+                                // Update progress in real-time (on EDT thread)
+                                ApplicationManager.getApplication().invokeLater(() -> {
+                                    String currentResult = displayedContent.toString();
 
-                                // Try to extract and display commit message
-                                String cleaned = extractPartialCommitMessage(currentResult);
+                                    // Try to extract and display commit message
+                                    String cleaned = extractPartialCommitMessage(currentResult);
 
-                                if (!cleaned.isEmpty()) {
-                                    // We have valid commit message content
-                                    hasValidContent[0] = true;
-                                    String modelDisplay = getShortModelName(model);
-                                    String status = cleaned + "\n\n---\n" +
-                                                   ClaudeCodeGuiBundle.message("commit.progress.model") + ": " + modelDisplay;
-                                    callback.onProgressWithModel(status, model);
-                                } else if (!hasValidContent[0] && hasShownModel[0]) {
-                                    // Still waiting for valid content, show processing status
-                                    String status = getProcessingStatus(currentResult);
-                                    String modelDisplay = getShortModelName(model);
-                                    status += "\n" + ClaudeCodeGuiBundle.message("commit.progress.model") + ": " + modelDisplay;
-                                    callback.onProgressWithModel(status, model);
-                                }
-                            });
+                                    if (!cleaned.isEmpty()) {
+                                        // We have valid commit message content
+                                        hasValidContent[0] = true;
+                                        String modelDisplay = getShortModelName(model);
+                                        String status = cleaned + "\n\n---\n" +
+                                                ClaudeCodeGuiBundle.message("commit.progress.model") + ": " + modelDisplay;
+                                        callback.onProgressWithModel(status, model);
+                                    } else if (!hasValidContent[0] && hasShownModel[0]) {
+                                        // Still waiting for valid content, show processing status
+                                        String status = getProcessingStatus(currentResult);
+                                        String modelDisplay = getShortModelName(model);
+                                        status += "\n" + ClaudeCodeGuiBundle.message("commit.progress.model") + ": " + modelDisplay;
+                                        callback.onProgressWithModel(status, model);
+                                    }
+                                });
+                            }
+                        }
+
+                        @Override
+                        public void onError(String error) {
+                            bridge.cleanupAllProcesses();
+                            callback.onError(error);
+                        }
+
+                        @Override
+                        public void onComplete(SDKResult sdkResult) {
+                            bridge.cleanupAllProcesses();
+                            String commitMessage = result.length() > 0
+                                    ? result.toString().trim()
+                                    : sdkResult.finalResult.trim();
+
+                            if (commitMessage.isEmpty()) {
+                                callback.onError(ClaudeCodeGuiBundle.message("commit.emptyMessage"));
+                            } else {
+                                callback.onSuccess(cleanupCommitMessage(commitMessage));
+                            }
                         }
                     }
-
-                    @Override
-                    public void onError(String error) {
-                        bridge.cleanupAllProcesses();
-                        callback.onError(error);
-                    }
-
-                    @Override
-                    public void onComplete(SDKResult sdkResult) {
-                        bridge.cleanupAllProcesses();
-                        String commitMessage = result.length() > 0
-                                ? result.toString().trim()
-                                : sdkResult.finalResult.trim();
-
-                        if (commitMessage.isEmpty()) {
-                            callback.onError(ClaudeCodeGuiBundle.message("commit.emptyMessage"));
-                        } else {
-                            callback.onSuccess(cleanupCommitMessage(commitMessage));
-                        }
-                    }
-                }
             );
         } catch (Exception e) {
             bridge.cleanupAllProcesses();
@@ -718,10 +764,10 @@ Footer 包含：
             return false;
         }
         String[] analysisKeywords = {
-            "分析说明", "变更特征", "分析：", "说明：", "解释：", "备注：",
-            "Analysis:", "Explanation:", "Note:", "---", "===",
-            "1. 类型", "2. Scope", "3. 描述", "4. Body",
-            "• ", "- 无需", "- 不涉及"
+                "分析说明", "变更特征", "分析：", "说明：", "解释：", "备注：",
+                "Analysis:", "Explanation:", "Note:", "---", "===",
+                "1. 类型", "2. Scope", "3. 描述", "4. Body",
+                "• ", "- 无需", "- 不涉及"
         };
         for (String keyword : analysisKeywords) {
             if (line.contains(keyword)) {
@@ -744,9 +790,9 @@ Footer 包含：
         }
         // Common markers for thinking/reasoning content
         String[] thinkingMarkers = {
-            "思考", "thinking", "Thinking", "<thinking>", "</thinking>",
-            "让我分析", "让我思考", "我来分析", "首先分析",
-            "Let me think", "Let me analyze"
+                "思考", "thinking", "Thinking", "<thinking>", "</thinking>",
+                "让我分析", "让我思考", "我来分析", "首先分析",
+                "Let me think", "Let me analyze"
         };
         String trimmed = content.trim();
         for (String marker : thinkingMarkers) {
@@ -912,5 +958,18 @@ Footer 包含：
             // Custom models - just show the ID
             return model;
         }
+    }
+
+    /**
+     * Commit message generation callback interface.
+     */
+    public interface CommitMessageCallback {
+        void onSuccess(String commitMessage);
+
+        void onError(String error);
+
+        void onProgress(String partialMessage); // Real-time streaming updates
+
+        void onProgressWithModel(String partialMessage, String model); // Update with model info
     }
 }
