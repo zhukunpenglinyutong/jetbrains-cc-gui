@@ -419,9 +419,11 @@ interface Window {
   updateCommitAiConfig?: (json: string) => void;
 
   /**
-   * Update session title (called when session title changes)
+   * Update session title (called when AI generates a title).
+   * @param sessionId - The session ID the title belongs to
+   * @param title - The generated title text
    */
-  updateSessionTitle?: (title: string) => void;
+  updateSessionTitle?: (sessionId: string, title: string) => void;
 
   /**
    * Editor font config received callback - receives IDEA editor font configuration

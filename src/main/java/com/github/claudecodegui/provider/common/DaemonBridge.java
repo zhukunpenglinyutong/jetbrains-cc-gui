@@ -66,6 +66,9 @@ public class DaemonBridge {
     // Lifecycle listener
     private volatile DaemonLifecycleListener lifecycleListener;
 
+    // Event listener for custom daemon events
+    private volatile DaemonEventListener eventListener;
+
     public DaemonBridge(
             NodeDetector nodeDetector,
             BridgeDirectoryResolver directoryResolver,
@@ -560,6 +563,17 @@ public class DaemonBridge {
                 break;
             }
 
+            case "title_generated": {
+                LOG.info("[DaemonBridge] AI title generated: sessionId="
+                        + (obj.has("sessionId") ? obj.get("sessionId").getAsString() : "?")
+                        + ", title=" + (obj.has("title") ? obj.get("title").getAsString() : "?"));
+                DaemonEventListener listener = this.eventListener;
+                if (listener != null) {
+                    listener.onDaemonEvent(event, obj);
+                }
+                break;
+            }
+
             default:
                 LOG.debug("[DaemonBridge] Unhandled daemon event: " + event);
         }
@@ -622,6 +636,13 @@ public class DaemonBridge {
         this.lifecycleListener = listener;
     }
 
+    /**
+     * Set a listener for custom daemon events (e.g., title_generated).
+     */
+    public void setEventListener(DaemonEventListener listener) {
+        this.eventListener = listener;
+    }
+
     public boolean isSdkPreloaded() {
         return sdkPreloaded.get();
     }
@@ -658,6 +679,13 @@ public class DaemonBridge {
     public interface DaemonLifecycleListener {
         void onDaemonReady();
         void onDaemonDied();
+    }
+
+    /**
+     * Listener for custom daemon events (e.g., title_generated).
+     */
+    public interface DaemonEventListener {
+        void onDaemonEvent(String event, JsonObject data);
     }
 
     /**

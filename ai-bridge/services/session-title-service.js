@@ -4,7 +4,7 @@
  * Follows CLI's generate_session_title flow but runs independently in ai-bridge.
  */
 
-import { appendFile, mkdir } from 'fs/promises';
+import { appendFile, mkdir, access, open as fsOpen, stat as fsStat } from 'fs/promises';
 import { join } from 'path';
 import { setupApiKey, loadClaudeSettings, getCliUserAgent } from '../config/api-config.js';
 import { ensureAnthropicSdk, ensureBedrockSdk } from './claude/message-utils.js';
@@ -44,6 +44,47 @@ function logTitleEvent(level, message) {
     message
   }) + '\n';
   process.stdout.write(line);
+}
+
+/**
+ * Emit a title_generated daemon event so the Java layer can forward the
+ * AI title to the frontend for immediate display in the chat header.
+ */
+function emitTitleGenerated(sessionId, title) {
+  const line = JSON.stringify({
+    type: 'daemon',
+    event: 'title_generated',
+    sessionId,
+    title
+  }) + '\n';
+  process.stdout.write(line);
+}
+
+/**
+ * Check whether the JSONL session file already contains an ai-title entry.
+ * Reads the tail of the file to avoid loading the entire session history.
+ * @param {string} sessionFile - Path to the JSONL session file
+ * @returns {Promise<boolean>} True if an ai-title entry already exists
+ */
+async function hasExistingAiTitle(sessionFile) {
+  try {
+    await access(sessionFile);
+    const stat = await fsStat(sessionFile);
+    if (stat.size === 0) {
+      return false;
+    }
+    const tailSize = Math.min(stat.size, 4096);
+    const fd = await fsOpen(sessionFile, 'r');
+    try {
+      const buf = Buffer.alloc(tailSize);
+      await fd.read(buf, 0, tailSize, stat.size - tailSize);
+      return buf.toString('utf8').includes('"type":"ai-title"');
+    } finally {
+      await fd.close();
+    }
+  } catch {
+    return false;
+  }
 }
 
 // --- Path utilities (matching CLI's sanitizePath logic) ---
@@ -206,6 +247,9 @@ async function saveAiTitle(sessionId, title, cwd) {
 
     await appendFile(sessionFile, JSON.stringify(entry) + '\n', 'utf8');
     logTitleEvent('info', 'Saved AI title: "' + title + '" for session ' + sessionId);
+
+    // Notify the Java layer so it can forward to the frontend for display
+    emitTitleGenerated(sessionId, title);
   } catch (e) {
     logTitleEvent('error', 'Failed to save AI title: ' + e.message);
   }
@@ -224,6 +268,20 @@ export async function generateSessionTitle(userMessage, sessionId, cwd) {
   if (!userMessage || !userMessage.trim() || !sessionId) {
     logTitleEvent('info', 'Skipping title generation: missing userMessage or sessionId');
     return;
+  }
+
+  // Defensive: skip if the session already has an AI title (prevents overwrite).
+  // The caller guards (!resumeSessionId / !requestedSessionId) normally prevent
+  // duplicate calls, but this check protects against edge cases where the guard
+  // fails or the session file already has a title from another source.
+  try {
+    const sessionFile = getSessionFilePath(sessionId, cwd);
+    if (await hasExistingAiTitle(sessionFile)) {
+      logTitleEvent('info', 'Skipping title generation: session already has an AI title');
+      return;
+    }
+  } catch (e) {
+    logTitleEvent('warn', 'Failed to check existing AI title, proceeding: ' + e.message);
   }
 
   try {
