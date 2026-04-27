@@ -317,8 +317,11 @@ async function executeTurn(runtime, requestContext, turnMeta) {
       sessionId: finalSessionId
     }));
 
-    // Fire-and-forget: generate AI title for new sessions (not resumes)
-    if (!requestContext.requestedSessionId && finalSessionId) {
+    // Fire-and-forget: generate AI title for new sessions (not resumes).
+    // titleGenerationAttempted prevents duplicate calls when a second message
+    // arrives before the first Haiku API response completes.
+    if (!requestContext.requestedSessionId && finalSessionId && !runtime.titleGenerationAttempted) {
+      runtime.titleGenerationAttempted = true;
       const userMessageText = extractUserMessageText(requestContext.userMessage);
       if (userMessageText) {
         void generateSessionTitle(userMessageText, finalSessionId, requestContext.options.cwd);

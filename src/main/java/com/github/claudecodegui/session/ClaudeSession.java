@@ -120,6 +120,15 @@ public class ClaudeSession {
 
         default void onUserMessageUuidPatched(String content, String uuid) {
         }
+
+        /**
+         * Called when an AI-generated session title has been saved to the JSONL file.
+         *
+         * @param sessionId the session ID
+         * @param title the generated title
+         */
+        default void onAiTitleGenerated(String sessionId, String title) {
+        }
     }
 
     public ClaudeSession(Project project, ClaudeSDKBridge claudeSDKBridge, CodexSDKBridge codexSDKBridge) {

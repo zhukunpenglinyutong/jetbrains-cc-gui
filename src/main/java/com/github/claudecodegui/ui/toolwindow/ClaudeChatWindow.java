@@ -8,6 +8,7 @@ import com.github.claudecodegui.handler.PermissionHandler;
 import com.github.claudecodegui.permission.PermissionService;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.provider.common.DaemonBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.session.SessionCallbackAdapter;
@@ -554,6 +555,26 @@ public class ClaudeChatWindow {
             }
         };
         session.setCallback(sessionCallbackAdapter);
+
+        // Wire daemon events directly to frontend (bypasses adapter lifecycle).
+        // Calling through sessionCallbackAdapter would silently drop the event
+        // if setupSessionCallbacks() is invoked again before the title arrives
+        // (adapter.deactivate() → isInactive() → event discarded).
+        this.claudeSDKBridge.setDaemonEventListener((event, data) -> {
+            if ("title_generated".equals(event)) {
+                String genSessionId = data.has("sessionId") ? data.get("sessionId").getAsString() : null;
+                String title = data.has("title") ? data.get("title").getAsString() : null;
+                if (genSessionId != null && title != null) {
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        if (!disposed) {
+                            callJavaScript("updateSessionTitle",
+                                    JsUtils.escapeJs(genSessionId), JsUtils.escapeJs(title));
+                        }
+                    });
+                }
+            }
+        });
+
         persistTabSessionState();
     }
 
