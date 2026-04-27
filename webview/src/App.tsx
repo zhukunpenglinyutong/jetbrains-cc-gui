@@ -47,6 +47,7 @@ import { ChatHeader } from './components/ChatHeader';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { MessageList } from './components/MessageList';
 import { MessageAnchorRail } from './components/MessageAnchorRail';
+import { SubagentHistoryContext, SessionIdContext } from './contexts/SubagentContext';
 import { FILE_MODIFY_TOOL_NAMES, isToolName } from './utils/toolConstants';
 import type { RewindableMessage } from './components/RewindSelectDialog';
 import { AppDialogs } from './components/AppDialogs';
@@ -393,6 +394,19 @@ const App = () => {
     [latestTurnSubagents, streamingActive],
   );
 
+  // Stabilize context value references — prevents consumers from re-rendering
+  // when App re-renders for unrelated reasons (e.g. streaming messages change).
+  // Each context gets its own memo so a change to subagentHistories does not
+  // cause useSessionId consumers to re-render, and vice versa.
+  const subagentHistoryCtxValue = useMemo(
+    () => ({ subagentHistories }),
+    [subagentHistories],
+  );
+  const sessionIdCtxValue = useMemo(
+    () => ({ currentSessionId }),
+    [currentSessionId],
+  );
+
   // ── Rewind handlers ──
   const {
     handleRewindConfirm, handleRewindCancel,
@@ -533,27 +547,29 @@ const App = () => {
                 />
               )}
 
-              <MessageList
-                messages={mergedMessages}
-                streamingActive={streamingActive}
-                isThinking={isThinking}
-                loading={loading}
-                loadingStartTime={loadingStartTime}
-                t={t}
-                getMessageText={getMessageText}
-                getContentBlocks={getContentBlocks}
-                findToolResult={findToolResult}
-                extractMarkdownContent={extractMarkdownContent}
-                messagesEndRef={messagesEndRef}
-                onMessageNodeRef={handleMessageNodeRef}
-                onCollapsedCountChange={setAnchorCollapsedCount}
-                onNavigateToProviderSettings={() => {
-                  setSettingsInitialTab('providers');
-                  setCurrentView('settings');
-                }}
-                currentSessionId={currentSessionId}
-                subagentHistories={subagentHistories}
-              />
+              <SessionIdContext.Provider value={sessionIdCtxValue}>
+                <SubagentHistoryContext.Provider value={subagentHistoryCtxValue}>
+                <MessageList
+                  messages={mergedMessages}
+                  streamingActive={streamingActive}
+                  isThinking={isThinking}
+                  loading={loading}
+                  loadingStartTime={loadingStartTime}
+                  t={t}
+                  getMessageText={getMessageText}
+                  getContentBlocks={getContentBlocks}
+                  findToolResult={findToolResult}
+                  extractMarkdownContent={extractMarkdownContent}
+                  messagesEndRef={messagesEndRef}
+                  onMessageNodeRef={handleMessageNodeRef}
+                  onCollapsedCountChange={setAnchorCollapsedCount}
+                  onNavigateToProviderSettings={() => {
+                    setSettingsInitialTab('providers');
+                    setCurrentView('settings');
+                  }}
+                />
+                </SubagentHistoryContext.Provider>
+              </SessionIdContext.Provider>
             </div>
           </div>
 

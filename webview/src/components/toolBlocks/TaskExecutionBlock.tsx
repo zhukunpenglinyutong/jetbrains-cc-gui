@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { SubagentHistoryResponse, ToolInput, ToolResultBlock } from '../../types';
+import type { ToolInput, ToolResultBlock } from '../../types';
 import { normalizeToolName } from '../../utils/toolConstants';
 import { sendBridgeEvent } from '../../utils/bridge';
+import { useSubagentHistory, useSessionId } from '../../contexts/SubagentContext';
 import SubagentProcessDetails from '../StatusPanel/SubagentProcessDetails';
 
 interface TaskExecutionBlockProps {
@@ -10,8 +11,6 @@ interface TaskExecutionBlockProps {
   input?: ToolInput;
   result?: ToolResultBlock | null;
   toolId?: string;
-  currentSessionId?: string | null;
-  subagentHistories?: Record<string, SubagentHistoryResponse>;
   isStreaming?: boolean;
 }
 
@@ -113,9 +112,11 @@ function shortenAgentId(agentId?: string): string | undefined {
   return agentId.length > 8 ? `${agentId.slice(0, 8)}…` : agentId;
 }
 
-const TaskExecutionBlock = ({ name, input, result, toolId, currentSessionId, subagentHistories = {}, isStreaming = false }: TaskExecutionBlockProps) => {
+const TaskExecutionBlock = ({ name, input, result, toolId, isStreaming = false }: TaskExecutionBlockProps) => {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
+  const { subagentHistories } = useSubagentHistory();
+  const { currentSessionId } = useSessionId();
 
   if (!input) {
     return null;

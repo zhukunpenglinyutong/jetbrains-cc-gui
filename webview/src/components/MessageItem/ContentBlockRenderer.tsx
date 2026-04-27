@@ -1,5 +1,5 @@
 import type { TFunction } from 'i18next';
-import type { ClaudeContentBlock, SubagentHistoryResponse, ToolResultBlock } from '../../types';
+import type { ClaudeContentBlock, ToolResultBlock } from '../../types';
 
 import MarkdownBlock from '../MarkdownBlock';
 import CollapsibleTextBlock from '../CollapsibleTextBlock';
@@ -45,8 +45,6 @@ export interface ContentBlockRendererProps {
   t: TFunction;
   onToggleThinking: () => void;
   findToolResult: (toolId: string | undefined, messageIndex: number) => ToolResultBlock | null | undefined;
-  currentSessionId?: string | null;
-  subagentHistories?: Record<string, SubagentHistoryResponse>;
 }
 
 export function ContentBlockRenderer({
@@ -61,8 +59,6 @@ export function ContentBlockRenderer({
   t,
   onToggleThinking,
   findToolResult,
-  currentSessionId,
-  subagentHistories,
 }: ContentBlockRendererProps): React.ReactElement | null {
   if (block.type === 'text') {
     return messageType === 'user' ? (
@@ -189,8 +185,6 @@ export function ContentBlockRenderer({
           input={block.input}
           result={findToolResult(block.id, messageIndex)}
           toolId={block.id}
-          currentSessionId={currentSessionId}
-          subagentHistories={subagentHistories}
           isStreaming={isStreaming}
         />
       );
