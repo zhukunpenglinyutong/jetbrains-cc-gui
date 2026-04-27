@@ -163,6 +163,11 @@ const SettingsView = ({
     statusBarWidgetEnabled,
     setStatusBarWidgetEnabled,
     handleStatusBarWidgetEnabledChange,
+    commitAiConfig,
+    setCommitAiConfig,
+    handleCommitAiProviderChange,
+    handleCommitAiModelChange,
+    handleCommitAiResetToDefault,
     handlePromptEnhancerProviderChange,
     handlePromptEnhancerModelChange,
     handlePromptEnhancerResetToDefault,
@@ -266,6 +271,7 @@ const SettingsView = ({
     setSavingWorkingDirectory,
     setCommitPrompt,
     setSavingCommitPrompt,
+    setCommitAiConfig,
     setPromptEnhancerConfig,
     setEditorFontConfig,
     setUiFontConfig,
@@ -525,6 +531,10 @@ const SettingsView = ({
           {/* Commit AI configuration */}
           <div style={{ display: currentTab === 'commit' ? 'block' : 'none' }}>
             <CommitSection
+              commitAiConfig={commitAiConfig}
+              onCommitAiProviderChange={handleCommitAiProviderChange}
+              onCommitAiModelChange={handleCommitAiModelChange}
+              onCommitAiResetToDefault={handleCommitAiResetToDefault}
               commitPrompt={commitPrompt}
               onCommitPromptChange={setCommitPrompt}
               onSaveCommitPrompt={handleSaveCommitPrompt}

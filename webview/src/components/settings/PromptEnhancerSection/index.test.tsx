@@ -36,9 +36,9 @@ describe('PromptEnhancerSection', () => {
 
     expect(screen.getByText('settings.promptEnhancer.title')).toBeTruthy();
     expect(screen.getByText('settings.promptEnhancer.description')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'settings.basic.promptEnhancer.provider.claude' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'settings.basic.promptEnhancer.provider.codex' })).toBeTruthy();
-    expect(screen.getByRole('combobox')).toBeTruthy();
+    expect(screen.getByTestId('prompt-enhancer-provider-card')).toBeTruthy();
+    expect(screen.getAllByRole('combobox')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'settings.basic.promptEnhancer.resetToDefault' })).toBeTruthy();
   });
 
   it('calls reset callback from standalone prompt enhancer section', () => {

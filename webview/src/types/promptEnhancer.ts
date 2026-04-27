@@ -1,19 +1,8 @@
-export type PromptEnhancerProvider = 'claude' | 'codex';
-export type PromptEnhancerResolutionSource = 'manual' | 'auto' | 'unavailable';
+import type { AiFeatureConfig, AiFeatureProvider, AiFeatureResolutionSource } from './aiFeatureConfig';
 
-export interface PromptEnhancerConfig {
-  provider: PromptEnhancerProvider | null;
-  effectiveProvider: PromptEnhancerProvider | null;
-  resolutionSource: PromptEnhancerResolutionSource;
-  models: {
-    claude: string;
-    codex: string;
-  };
-  availability: {
-    claude: boolean;
-    codex: boolean;
-  };
-}
+export type PromptEnhancerProvider = AiFeatureProvider;
+export type PromptEnhancerResolutionSource = AiFeatureResolutionSource;
+export interface PromptEnhancerConfig extends AiFeatureConfig {}
 
 export const DEFAULT_PROMPT_ENHANCER_CONFIG: PromptEnhancerConfig = {
   provider: null,

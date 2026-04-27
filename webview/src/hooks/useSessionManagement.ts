@@ -15,7 +15,7 @@ interface UseSessionManagementOptions {
   loading: boolean;
   historyData: HistoryData | null;
   currentSessionId: string | null;
-  setHistoryData: (data: HistoryData | null) => void;
+  setHistoryData: React.Dispatch<React.SetStateAction<HistoryData | null>>;
   setMessages: React.Dispatch<React.SetStateAction<ClaudeMessage[]>>;
   setCurrentView: (view: ViewMode) => void;
   setCurrentSessionId: (id: string | null) => void;
@@ -205,14 +205,17 @@ export function useSessionManagement({
 
     // Immediately update frontend state, remove session from history list
     if (historyData && historyData.sessions) {
-      const updatedSessions = historyData.sessions.filter(s => s.sessionId !== sessionId);
-      const deletedSession = historyData.sessions.find(s => s.sessionId === sessionId);
-      const updatedTotal = (historyData.total || 0) - (deletedSession?.messageCount || 0);
+      setHistoryData(prevHistoryData => {
+        if (!prevHistoryData?.sessions) {
+          return prevHistoryData;
+        }
 
-      setHistoryData({
-        ...historyData,
-        sessions: updatedSessions,
-        total: updatedTotal
+        const deletedSession = prevHistoryData.sessions.find(s => s.sessionId === sessionId);
+        return {
+          ...prevHistoryData,
+          sessions: prevHistoryData.sessions.filter(s => s.sessionId !== sessionId),
+          total: Math.max(0, (prevHistoryData.total || 0) - (deletedSession?.messageCount || 0))
+        };
       });
 
       // If deleted session is current session, clear messages and reset state

@@ -414,6 +414,11 @@ interface Window {
   updatePromptEnhancerConfig?: (json: string) => void;
 
   /**
+   * Update commit AI settings config from backend
+   */
+  updateCommitAiConfig?: (json: string) => void;
+
+  /**
    * Update session title (called when session title changes)
    */
   updateSessionTitle?: (title: string) => void;

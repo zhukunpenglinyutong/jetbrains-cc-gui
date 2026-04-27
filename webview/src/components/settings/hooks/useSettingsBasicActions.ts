@@ -2,6 +2,8 @@
 import { useState, useEffect, useCallback } from 'react';
 export type { UiFontConfig } from '../../../types/uiFontConfig';
 import type { UiFontConfig } from '../../../types/uiFontConfig';
+import type { CommitAiConfig, CommitAiProvider } from '../../../types/aiFeatureConfig';
+import { DEFAULT_COMMIT_AI_CONFIG } from '../../../types/aiFeatureConfig';
 import type { PromptEnhancerConfig, PromptEnhancerProvider } from '../../../types/promptEnhancer';
 import { DEFAULT_PROMPT_ENHANCER_CONFIG } from '../../../types/promptEnhancer';
 
@@ -58,6 +60,7 @@ export interface UseSettingsBasicActionsReturn {
   historyCompletionEnabled: boolean;
   commitGenerationEnabled: boolean;
   statusBarWidgetEnabled: boolean;
+  commitAiConfig: CommitAiConfig;
   promptEnhancerConfig: PromptEnhancerConfig;
 
   // =========================================================================
@@ -82,6 +85,9 @@ export interface UseSettingsBasicActionsReturn {
   handleSaveCommitPrompt: () => void;
   handleCommitGenerationEnabledChange: (enabled: boolean) => void;
   handleStatusBarWidgetEnabledChange: (enabled: boolean) => void;
+  handleCommitAiProviderChange: (provider: CommitAiProvider) => void;
+  handleCommitAiModelChange: (model: string) => void;
+  handleCommitAiResetToDefault: () => void;
   handlePromptEnhancerProviderChange: (provider: PromptEnhancerProvider) => void;
   handlePromptEnhancerModelChange: (model: string) => void;
   handlePromptEnhancerResetToDefault: () => void;
@@ -120,6 +126,7 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setHistoryCompletionEnabled: (enabled: boolean) => void;
   /** @internal */ setCommitGenerationEnabled: (enabled: boolean) => void;
   /** @internal */ setStatusBarWidgetEnabled: (enabled: boolean) => void;
+  /** @internal */ setCommitAiConfig: (config: CommitAiConfig) => void;
   /** @internal */ setPromptEnhancerConfig: (config: PromptEnhancerConfig) => void;
 }
 
@@ -198,6 +205,9 @@ export function useSettingsBasicActions({
 
   // Status bar widget toggle (default: true)
   const [statusBarWidgetEnabled, setStatusBarWidgetEnabled] = useState<boolean>(true);
+  const [commitAiConfig, setCommitAiConfig] = useState<CommitAiConfig>(
+    DEFAULT_COMMIT_AI_CONFIG
+  );
   const [promptEnhancerConfig, setPromptEnhancerConfig] = useState<PromptEnhancerConfig>(
     DEFAULT_PROMPT_ENHANCER_CONFIG
   );
@@ -352,6 +362,55 @@ export function useSettingsBasicActions({
     sendToJava(`set_status_bar_widget_enabled:${JSON.stringify(payload)}`);
   }, []);
 
+  const handleCommitAiProviderChange = useCallback((provider: CommitAiProvider) => {
+    const providerAvailable = commitAiConfig.availability[provider];
+    const nextConfig: CommitAiConfig = {
+      ...commitAiConfig,
+      provider,
+      effectiveProvider: providerAvailable ? provider : null,
+      resolutionSource: providerAvailable ? 'manual' : 'unavailable',
+    };
+    setCommitAiConfig(nextConfig);
+    sendToJava(`set_commit_ai_config:${JSON.stringify({
+      provider,
+      models: nextConfig.models,
+    })}`);
+  }, [commitAiConfig]);
+
+  const handleCommitAiModelChange = useCallback((model: string) => {
+    const activeProvider = commitAiConfig.provider ?? commitAiConfig.effectiveProvider ?? 'codex';
+    const nextConfig: CommitAiConfig = {
+      ...commitAiConfig,
+      models: {
+        ...commitAiConfig.models,
+        [activeProvider]: model,
+      },
+    };
+    setCommitAiConfig(nextConfig);
+    sendToJava(`set_commit_ai_config:${JSON.stringify({
+      provider: commitAiConfig.provider,
+      models: nextConfig.models,
+    })}`);
+  }, [commitAiConfig]);
+
+  const handleCommitAiResetToDefault = useCallback(() => {
+    const nextConfig: CommitAiConfig = {
+      ...commitAiConfig,
+      provider: null,
+      effectiveProvider: commitAiConfig.availability.codex
+        ? 'codex'
+        : (commitAiConfig.availability.claude ? 'claude' : null),
+      resolutionSource: commitAiConfig.availability.codex || commitAiConfig.availability.claude
+        ? 'auto'
+        : 'unavailable',
+    };
+    setCommitAiConfig(nextConfig);
+    sendToJava(`set_commit_ai_config:${JSON.stringify({
+      provider: null,
+      models: nextConfig.models,
+    })}`);
+  }, [commitAiConfig]);
+
   const handlePromptEnhancerProviderChange = useCallback((provider: PromptEnhancerProvider) => {
     const providerAvailable = promptEnhancerConfig.availability[provider];
     const nextConfig: PromptEnhancerConfig = {
@@ -475,6 +534,11 @@ export function useSettingsBasicActions({
     statusBarWidgetEnabled,
     setStatusBarWidgetEnabled,
     handleStatusBarWidgetEnabledChange,
+    commitAiConfig,
+    setCommitAiConfig,
+    handleCommitAiProviderChange,
+    handleCommitAiModelChange,
+    handleCommitAiResetToDefault,
     promptEnhancerConfig,
     setPromptEnhancerConfig,
     handlePromptEnhancerProviderChange,

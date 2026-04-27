@@ -47,19 +47,22 @@ public class CodemossSettingsService {
     public static final String CODEX_RUNTIME_ACCESS_INACTIVE = "inactive";
     public static final String CODEX_RUNTIME_ACCESS_MANAGED = "managed";
     public static final String CODEX_RUNTIME_ACCESS_CLI_LOGIN = "cli_login";
+    private static final String COMMIT_AI_KEY = "commitAi";
     private static final String PROMPT_ENHANCER_KEY = "promptEnhancer";
-    private static final String PROMPT_ENHANCER_PROVIDER_KEY = "provider";
-    private static final String PROMPT_ENHANCER_MODELS_KEY = "models";
-    private static final String PROMPT_ENHANCER_EFFECTIVE_PROVIDER_KEY = "effectiveProvider";
-    private static final String PROMPT_ENHANCER_RESOLUTION_SOURCE_KEY = "resolutionSource";
-    private static final String PROMPT_ENHANCER_AVAILABILITY_KEY = "availability";
-    private static final String PROMPT_ENHANCER_PROVIDER_CLAUDE = "claude";
-    private static final String PROMPT_ENHANCER_PROVIDER_CODEX = "codex";
-    private static final String PROMPT_ENHANCER_RESOLUTION_MANUAL = "manual";
-    private static final String PROMPT_ENHANCER_RESOLUTION_AUTO = "auto";
-    private static final String PROMPT_ENHANCER_RESOLUTION_UNAVAILABLE = "unavailable";
+    private static final String AI_FEATURE_PROVIDER_KEY = "provider";
+    private static final String AI_FEATURE_MODELS_KEY = "models";
+    private static final String AI_FEATURE_EFFECTIVE_PROVIDER_KEY = "effectiveProvider";
+    private static final String AI_FEATURE_RESOLUTION_SOURCE_KEY = "resolutionSource";
+    private static final String AI_FEATURE_AVAILABILITY_KEY = "availability";
+    private static final String AI_FEATURE_PROVIDER_CLAUDE = "claude";
+    private static final String AI_FEATURE_PROVIDER_CODEX = "codex";
+    private static final String AI_FEATURE_RESOLUTION_MANUAL = "manual";
+    private static final String AI_FEATURE_RESOLUTION_AUTO = "auto";
+    private static final String AI_FEATURE_RESOLUTION_UNAVAILABLE = "unavailable";
     private static final String DEFAULT_PROMPT_ENHANCER_CLAUDE_MODEL = "claude-sonnet-4-6";
     private static final String DEFAULT_PROMPT_ENHANCER_CODEX_MODEL = "gpt-5.5";
+    private static final String DEFAULT_COMMIT_AI_CLAUDE_MODEL = "claude-sonnet-4-6";
+    private static final String DEFAULT_COMMIT_AI_CODEX_MODEL = "gpt-5.5";
 
     private final Gson gson;
 
@@ -1201,61 +1204,11 @@ public class CodemossSettingsService {
      * </ul>
      */
     public JsonObject getPromptEnhancerConfig() throws IOException {
-        JsonObject rootConfig = readConfig();
-        JsonObject promptEnhancer = rootConfig.has(PROMPT_ENHANCER_KEY) && rootConfig.get(PROMPT_ENHANCER_KEY).isJsonObject()
-                ? rootConfig.getAsJsonObject(PROMPT_ENHANCER_KEY)
-                : new JsonObject();
-
-        String manualProvider = normalizePromptEnhancerProvider(
-                promptEnhancer.has(PROMPT_ENHANCER_PROVIDER_KEY) && !promptEnhancer.get(PROMPT_ENHANCER_PROVIDER_KEY).isJsonNull()
-                        ? promptEnhancer.get(PROMPT_ENHANCER_PROVIDER_KEY).getAsString()
-                        : null
+        return getAiFeatureConfig(
+                PROMPT_ENHANCER_KEY,
+                DEFAULT_PROMPT_ENHANCER_CLAUDE_MODEL,
+                DEFAULT_PROMPT_ENHANCER_CODEX_MODEL
         );
-
-        JsonObject models = getNormalizedPromptEnhancerModels(promptEnhancer);
-        JsonObject availability = buildPromptEnhancerAvailability();
-        boolean claudeAvailable = availability.get(PROMPT_ENHANCER_PROVIDER_CLAUDE).getAsBoolean();
-        boolean codexAvailable = availability.get(PROMPT_ENHANCER_PROVIDER_CODEX).getAsBoolean();
-
-        String effectiveProvider;
-        String resolutionSource;
-        if (manualProvider != null) {
-            boolean manualProviderAvailable = PROMPT_ENHANCER_PROVIDER_CODEX.equals(manualProvider)
-                    ? codexAvailable
-                    : claudeAvailable;
-            if (manualProviderAvailable) {
-                effectiveProvider = manualProvider;
-                resolutionSource = PROMPT_ENHANCER_RESOLUTION_MANUAL;
-            } else {
-                effectiveProvider = null;
-                resolutionSource = PROMPT_ENHANCER_RESOLUTION_UNAVAILABLE;
-            }
-        } else if (codexAvailable) {
-            effectiveProvider = PROMPT_ENHANCER_PROVIDER_CODEX;
-            resolutionSource = PROMPT_ENHANCER_RESOLUTION_AUTO;
-        } else if (claudeAvailable) {
-            effectiveProvider = PROMPT_ENHANCER_PROVIDER_CLAUDE;
-            resolutionSource = PROMPT_ENHANCER_RESOLUTION_AUTO;
-        } else {
-            effectiveProvider = null;
-            resolutionSource = PROMPT_ENHANCER_RESOLUTION_UNAVAILABLE;
-        }
-
-        JsonObject response = new JsonObject();
-        if (manualProvider == null) {
-            response.add(PROMPT_ENHANCER_PROVIDER_KEY, JsonNull.INSTANCE);
-        } else {
-            response.addProperty(PROMPT_ENHANCER_PROVIDER_KEY, manualProvider);
-        }
-        response.add(PROMPT_ENHANCER_MODELS_KEY, models);
-        if (effectiveProvider == null) {
-            response.add(PROMPT_ENHANCER_EFFECTIVE_PROVIDER_KEY, JsonNull.INSTANCE);
-        } else {
-            response.addProperty(PROMPT_ENHANCER_EFFECTIVE_PROVIDER_KEY, effectiveProvider);
-        }
-        response.addProperty(PROMPT_ENHANCER_RESOLUTION_SOURCE_KEY, resolutionSource);
-        response.add(PROMPT_ENHANCER_AVAILABILITY_KEY, availability);
-        return response;
     }
 
     /**
@@ -1266,74 +1219,192 @@ public class CodemossSettingsService {
      * @param codexModel remembered Codex enhancer model
      */
     public void setPromptEnhancerConfig(String provider, String claudeModel, String codexModel) throws IOException {
-        JsonObject config = readConfig();
-        JsonObject promptEnhancer = config.has(PROMPT_ENHANCER_KEY) && config.get(PROMPT_ENHANCER_KEY).isJsonObject()
-                ? config.getAsJsonObject(PROMPT_ENHANCER_KEY)
-                : new JsonObject();
-
-        String normalizedProvider = normalizePromptEnhancerProvider(provider);
-        if (normalizedProvider == null) {
-            promptEnhancer.add(PROMPT_ENHANCER_PROVIDER_KEY, JsonNull.INSTANCE);
-        } else {
-            promptEnhancer.addProperty(PROMPT_ENHANCER_PROVIDER_KEY, normalizedProvider);
-        }
-        promptEnhancer.add(PROMPT_ENHANCER_MODELS_KEY, createPromptEnhancerModels(claudeModel, codexModel));
-
-        config.add(PROMPT_ENHANCER_KEY, promptEnhancer);
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Set prompt enhancer config: provider=" + normalizedProvider);
+        setAiFeatureConfig(
+                PROMPT_ENHANCER_KEY,
+                provider,
+                claudeModel,
+                codexModel,
+                DEFAULT_PROMPT_ENHANCER_CLAUDE_MODEL,
+                DEFAULT_PROMPT_ENHANCER_CODEX_MODEL,
+                "prompt enhancer"
+        );
     }
 
-    private JsonObject buildPromptEnhancerAvailability() {
+    public JsonObject getCommitAiConfig() throws IOException {
+        return getAiFeatureConfig(
+                COMMIT_AI_KEY,
+                DEFAULT_COMMIT_AI_CLAUDE_MODEL,
+                DEFAULT_COMMIT_AI_CODEX_MODEL
+        );
+    }
+
+    public void setCommitAiConfig(String provider, String claudeModel, String codexModel) throws IOException {
+        setAiFeatureConfig(
+                COMMIT_AI_KEY,
+                provider,
+                claudeModel,
+                codexModel,
+                DEFAULT_COMMIT_AI_CLAUDE_MODEL,
+                DEFAULT_COMMIT_AI_CODEX_MODEL,
+                "commit AI"
+        );
+    }
+
+    private JsonObject getAiFeatureConfig(
+            String featureKey,
+            String defaultClaudeModel,
+            String defaultCodexModel
+    ) throws IOException {
+        JsonObject rootConfig = readConfig();
+        JsonObject featureConfig = getAiFeatureRootObject(rootConfig, featureKey);
+        String manualProvider = normalizeAiFeatureProvider(
+                featureConfig.has(AI_FEATURE_PROVIDER_KEY) && !featureConfig.get(AI_FEATURE_PROVIDER_KEY).isJsonNull()
+                        ? featureConfig.get(AI_FEATURE_PROVIDER_KEY).getAsString()
+                        : null
+        );
+        JsonObject models = getNormalizedAiFeatureModels(featureConfig, defaultClaudeModel, defaultCodexModel);
+        JsonObject availability = buildAiFeatureAvailability();
+        boolean claudeAvailable = availability.get(AI_FEATURE_PROVIDER_CLAUDE).getAsBoolean();
+        boolean codexAvailable = availability.get(AI_FEATURE_PROVIDER_CODEX).getAsBoolean();
+        ResolvedAiFeatureProvider resolvedProvider = resolveAiFeatureProvider(
+                manualProvider,
+                claudeAvailable,
+                codexAvailable
+        );
+
+        JsonObject response = new JsonObject();
+        if (manualProvider == null) {
+            response.add(AI_FEATURE_PROVIDER_KEY, JsonNull.INSTANCE);
+        } else {
+            response.addProperty(AI_FEATURE_PROVIDER_KEY, manualProvider);
+        }
+        response.add(AI_FEATURE_MODELS_KEY, models);
+        if (resolvedProvider.effectiveProvider == null) {
+            response.add(AI_FEATURE_EFFECTIVE_PROVIDER_KEY, JsonNull.INSTANCE);
+        } else {
+            response.addProperty(AI_FEATURE_EFFECTIVE_PROVIDER_KEY, resolvedProvider.effectiveProvider);
+        }
+        response.addProperty(AI_FEATURE_RESOLUTION_SOURCE_KEY, resolvedProvider.resolutionSource);
+        response.add(AI_FEATURE_AVAILABILITY_KEY, availability);
+        return response;
+    }
+
+    private void setAiFeatureConfig(
+            String featureKey,
+            String provider,
+            String claudeModel,
+            String codexModel,
+            String defaultClaudeModel,
+            String defaultCodexModel,
+            String featureLabel
+    ) throws IOException {
+        JsonObject config = readConfig();
+        JsonObject featureConfig = getAiFeatureRootObject(config, featureKey);
+        String normalizedProvider = normalizeAiFeatureProvider(provider);
+        if (normalizedProvider == null) {
+            featureConfig.add(AI_FEATURE_PROVIDER_KEY, JsonNull.INSTANCE);
+        } else {
+            featureConfig.addProperty(AI_FEATURE_PROVIDER_KEY, normalizedProvider);
+        }
+        featureConfig.add(
+                AI_FEATURE_MODELS_KEY,
+                createAiFeatureModels(claudeModel, codexModel, defaultClaudeModel, defaultCodexModel)
+        );
+
+        config.add(featureKey, featureConfig);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set " + featureLabel + " config: provider=" + normalizedProvider);
+    }
+
+    private JsonObject getAiFeatureRootObject(JsonObject rootConfig, String featureKey) {
+        if (rootConfig.has(featureKey) && rootConfig.get(featureKey).isJsonObject()) {
+            return rootConfig.getAsJsonObject(featureKey);
+        }
+        return new JsonObject();
+    }
+
+    private JsonObject buildAiFeatureAvailability() {
         JsonObject availability = new JsonObject();
-        availability.addProperty(PROMPT_ENHANCER_PROVIDER_CLAUDE, isPromptEnhancerProviderAvailable(PROMPT_ENHANCER_PROVIDER_CLAUDE));
-        availability.addProperty(PROMPT_ENHANCER_PROVIDER_CODEX, isPromptEnhancerProviderAvailable(PROMPT_ENHANCER_PROVIDER_CODEX));
+        availability.addProperty(AI_FEATURE_PROVIDER_CLAUDE, isAiFeatureProviderAvailable(AI_FEATURE_PROVIDER_CLAUDE));
+        availability.addProperty(AI_FEATURE_PROVIDER_CODEX, isAiFeatureProviderAvailable(AI_FEATURE_PROVIDER_CODEX));
         return availability;
     }
 
-    private boolean isPromptEnhancerProviderAvailable(String provider) {
+    private boolean isAiFeatureProviderAvailable(String provider) {
         try {
             DependencyManager dependencyManager = new DependencyManager();
-            if (PROMPT_ENHANCER_PROVIDER_CODEX.equals(provider)) {
+            if (AI_FEATURE_PROVIDER_CODEX.equals(provider)) {
                 return getActiveCodexProvider() != null && dependencyManager.isInstalled("codex-sdk");
             }
             return getActiveClaudeProvider() != null && dependencyManager.isInstalled("claude-sdk");
         } catch (Exception e) {
-            LOG.warn("[CodemossSettings] Failed to resolve prompt enhancer availability for " + provider + ": " + e.getMessage());
+            LOG.warn("[CodemossSettings] Failed to resolve AI feature availability for " + provider + ": " + e.getMessage());
             return false;
         }
     }
 
-    private JsonObject getNormalizedPromptEnhancerModels(JsonObject promptEnhancer) {
-        if (promptEnhancer != null
-                && promptEnhancer.has(PROMPT_ENHANCER_MODELS_KEY)
-                && promptEnhancer.get(PROMPT_ENHANCER_MODELS_KEY).isJsonObject()) {
-            JsonObject rawModels = promptEnhancer.getAsJsonObject(PROMPT_ENHANCER_MODELS_KEY);
-            String claudeModel = rawModels.has(PROMPT_ENHANCER_PROVIDER_CLAUDE) && !rawModels.get(PROMPT_ENHANCER_PROVIDER_CLAUDE).isJsonNull()
-                    ? rawModels.get(PROMPT_ENHANCER_PROVIDER_CLAUDE).getAsString()
+    private JsonObject getNormalizedAiFeatureModels(
+            JsonObject featureConfig,
+            String defaultClaudeModel,
+            String defaultCodexModel
+    ) {
+        if (featureConfig != null
+                && featureConfig.has(AI_FEATURE_MODELS_KEY)
+                && featureConfig.get(AI_FEATURE_MODELS_KEY).isJsonObject()) {
+            JsonObject rawModels = featureConfig.getAsJsonObject(AI_FEATURE_MODELS_KEY);
+            String claudeModel = rawModels.has(AI_FEATURE_PROVIDER_CLAUDE) && !rawModels.get(AI_FEATURE_PROVIDER_CLAUDE).isJsonNull()
+                    ? rawModels.get(AI_FEATURE_PROVIDER_CLAUDE).getAsString()
                     : null;
-            String codexModel = rawModels.has(PROMPT_ENHANCER_PROVIDER_CODEX) && !rawModels.get(PROMPT_ENHANCER_PROVIDER_CODEX).isJsonNull()
-                    ? rawModels.get(PROMPT_ENHANCER_PROVIDER_CODEX).getAsString()
+            String codexModel = rawModels.has(AI_FEATURE_PROVIDER_CODEX) && !rawModels.get(AI_FEATURE_PROVIDER_CODEX).isJsonNull()
+                    ? rawModels.get(AI_FEATURE_PROVIDER_CODEX).getAsString()
                     : null;
-            return createPromptEnhancerModels(claudeModel, codexModel);
+            return createAiFeatureModels(claudeModel, codexModel, defaultClaudeModel, defaultCodexModel);
         }
-        return createPromptEnhancerModels(null, null);
+        return createAiFeatureModels(null, null, defaultClaudeModel, defaultCodexModel);
     }
 
-    private JsonObject createPromptEnhancerModels(String claudeModel, String codexModel) {
+    private JsonObject createAiFeatureModels(
+            String claudeModel,
+            String codexModel,
+            String defaultClaudeModel,
+            String defaultCodexModel
+    ) {
         JsonObject models = new JsonObject();
         models.addProperty(
-                PROMPT_ENHANCER_PROVIDER_CLAUDE,
-                normalizePromptEnhancerModel(claudeModel, DEFAULT_PROMPT_ENHANCER_CLAUDE_MODEL)
+                AI_FEATURE_PROVIDER_CLAUDE,
+                normalizeAiFeatureModel(claudeModel, defaultClaudeModel)
         );
         models.addProperty(
-                PROMPT_ENHANCER_PROVIDER_CODEX,
-                normalizePromptEnhancerModel(codexModel, DEFAULT_PROMPT_ENHANCER_CODEX_MODEL)
+                AI_FEATURE_PROVIDER_CODEX,
+                normalizeAiFeatureModel(codexModel, defaultCodexModel)
         );
         return models;
     }
 
-    private String normalizePromptEnhancerProvider(String provider) {
+    private ResolvedAiFeatureProvider resolveAiFeatureProvider(
+            String manualProvider,
+            boolean claudeAvailable,
+            boolean codexAvailable
+    ) {
+        if (manualProvider != null) {
+            boolean manualProviderAvailable = AI_FEATURE_PROVIDER_CODEX.equals(manualProvider)
+                    ? codexAvailable
+                    : claudeAvailable;
+            if (manualProviderAvailable) {
+                return new ResolvedAiFeatureProvider(manualProvider, AI_FEATURE_RESOLUTION_MANUAL);
+            }
+            return new ResolvedAiFeatureProvider(null, AI_FEATURE_RESOLUTION_UNAVAILABLE);
+        }
+        if (codexAvailable) {
+            return new ResolvedAiFeatureProvider(AI_FEATURE_PROVIDER_CODEX, AI_FEATURE_RESOLUTION_AUTO);
+        }
+        if (claudeAvailable) {
+            return new ResolvedAiFeatureProvider(AI_FEATURE_PROVIDER_CLAUDE, AI_FEATURE_RESOLUTION_AUTO);
+        }
+        return new ResolvedAiFeatureProvider(null, AI_FEATURE_RESOLUTION_UNAVAILABLE);
+    }
+
+    private String normalizeAiFeatureProvider(String provider) {
         if (provider == null) {
             return null;
         }
@@ -1341,18 +1412,28 @@ public class CodemossSettingsService {
         if (normalized.isEmpty()) {
             return null;
         }
-        if (PROMPT_ENHANCER_PROVIDER_CLAUDE.equals(normalized) || PROMPT_ENHANCER_PROVIDER_CODEX.equals(normalized)) {
+        if (AI_FEATURE_PROVIDER_CLAUDE.equals(normalized) || AI_FEATURE_PROVIDER_CODEX.equals(normalized)) {
             return normalized;
         }
         return null;
     }
 
-    private String normalizePromptEnhancerModel(String model, String defaultValue) {
+    private String normalizeAiFeatureModel(String model, String defaultValue) {
         if (model == null) {
             return defaultValue;
         }
         String normalized = model.trim();
         return normalized.isEmpty() ? defaultValue : normalized;
+    }
+
+    private static class ResolvedAiFeatureProvider {
+        private final String effectiveProvider;
+        private final String resolutionSource;
+
+        private ResolvedAiFeatureProvider(String effectiveProvider, String resolutionSource) {
+            this.effectiveProvider = effectiveProvider;
+            this.resolutionSource = resolutionSource;
+        }
     }
 
     // ==================== Codex Provider Management ====================

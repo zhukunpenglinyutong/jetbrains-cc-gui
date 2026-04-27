@@ -368,6 +368,46 @@ public class ProjectConfigHandler {
         }
     }
 
+    public void handleGetCommitAiConfig() {
+        try {
+            JsonObject config = settingsService.getCommitAiConfig();
+            ApplicationManager.getApplication().invokeLater(() ->
+                context.callJavaScript("window.updateCommitAiConfig", context.escapeJs(gson.toJson(config))));
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to get commit AI config: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() ->
+                context.callJavaScript("window.showError", context.escapeJs("获取 Commit AI 配置失败: " + e.getMessage())));
+        }
+    }
+
+    public void handleSetCommitAiConfig(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            String provider = json != null && json.has("provider") && !json.get("provider").isJsonNull()
+                    ? json.get("provider").getAsString()
+                    : null;
+
+            JsonObject models = json != null && json.has("models") && json.get("models").isJsonObject()
+                    ? json.getAsJsonObject("models")
+                    : new JsonObject();
+            String claudeModel = models.has("claude") && !models.get("claude").isJsonNull()
+                    ? models.get("claude").getAsString()
+                    : null;
+            String codexModel = models.has("codex") && !models.get("codex").isJsonNull()
+                    ? models.get("codex").getAsString()
+                    : null;
+
+            settingsService.setCommitAiConfig(provider, claudeModel, codexModel);
+            JsonObject updatedConfig = settingsService.getCommitAiConfig();
+            ApplicationManager.getApplication().invokeLater(() ->
+                context.callJavaScript("window.updateCommitAiConfig", context.escapeJs(gson.toJson(updatedConfig))));
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set commit AI config: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() ->
+                context.callJavaScript("window.showError", context.escapeJs("保存 Commit AI 配置失败: " + e.getMessage())));
+        }
+    }
+
     public void handleGetIdeTheme() {
         try {
             String themeConfigJson = ThemeConfigService.getIdeThemeConfig().toString();

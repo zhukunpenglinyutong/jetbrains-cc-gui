@@ -1,7 +1,15 @@
 import styles from './style.module.less';
 import { useTranslation } from 'react-i18next';
+import type { CommitAiConfig, CommitAiProvider } from '../../../types/aiFeatureConfig';
+import { DEFAULT_COMMIT_AI_CONFIG } from '../../../types/aiFeatureConfig';
+import AiFeatureProviderModelPanel from '../AiFeatureProviderModelPanel';
+import AiFeatureSettingsCard from '../AiFeatureSettingsCard';
 
 interface CommitSectionProps {
+  commitAiConfig?: CommitAiConfig;
+  onCommitAiProviderChange?: (provider: CommitAiProvider) => void;
+  onCommitAiModelChange?: (model: string) => void;
+  onCommitAiResetToDefault?: () => void;
   commitPrompt: string;
   onCommitPromptChange: (prompt: string) => void;
   onSaveCommitPrompt: () => void;
@@ -9,6 +17,10 @@ interface CommitSectionProps {
 }
 
 const CommitSection = ({
+  commitAiConfig = DEFAULT_COMMIT_AI_CONFIG,
+  onCommitAiProviderChange = () => {},
+  onCommitAiModelChange = () => {},
+  onCommitAiResetToDefault = () => {},
   commitPrompt,
   onCommitPromptChange,
   onSaveCommitPrompt,
@@ -18,8 +30,21 @@ const CommitSection = ({
 
   return (
     <div className={styles.configSection}>
-      <h3 className={styles.sectionTitle}>{t('settings.commit.title')}</h3>
-      <p className={styles.sectionDesc}>{t('settings.commit.description')}</p>
+      <AiFeatureSettingsCard
+        title={t('settings.commit.title')}
+        description={t('settings.commit.description')}
+        testId="commit-ai-provider-card"
+      >
+        <AiFeatureProviderModelPanel
+          config={commitAiConfig}
+          settingsKeyPrefix="settings.commit.providerModel"
+          providerKeyPrefix="settings.basic.promptEnhancer.provider"
+          fallbackProvider="codex"
+          onProviderChange={onCommitAiProviderChange}
+          onModelChange={onCommitAiModelChange}
+          onResetToDefault={onCommitAiResetToDefault}
+        />
+      </AiFeatureSettingsCard>
 
       {/* Commit AI prompt configuration */}
       <div className={styles.promptSection}>
@@ -49,36 +74,6 @@ const CommitSection = ({
         <small className={styles.formHint}>
           <span className="codicon codicon-info" />
           <span>{t('settings.commit.prompt.hint')}</span>
-        </small>
-      </div>
-
-      {/* Code Review AI preview */}
-      <div className={styles.previewSection}>
-        <div className={styles.previewBadge}>
-          <span className="codicon codicon-sparkle" />
-          <span>{t('settings.commit.codeReview.comingSoon')}</span>
-        </div>
-        <div className={styles.fieldHeader}>
-          <span className="codicon codicon-code" />
-          <span className={styles.fieldLabel}>{t('settings.commit.codeReview.label')}</span>
-        </div>
-        <div className={styles.promptInputWrapper}>
-          <textarea
-            className={`${styles.promptTextarea} ${styles.disabled}`}
-            placeholder={t('settings.commit.codeReview.placeholder')}
-            disabled
-            rows={4}
-          />
-          <button
-            className={`${styles.saveBtn} ${styles.disabledBtn}`}
-            disabled
-          >
-            {t('common.save')}
-          </button>
-        </div>
-        <small className={styles.formHint}>
-          <span className="codicon codicon-info" />
-          <span>{t('settings.commit.codeReview.hint')}</span>
         </small>
       </div>
     </div>

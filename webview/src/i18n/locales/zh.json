@@ -332,6 +332,16 @@
     "commit": {
       "title": "Commit AI",
       "description": "配置 AI 生成 Git Commit 消息的行为",
+      "providerModel": {
+        "label": "Commit 生成 Provider",
+        "modelLabel": "Commit 生成模型",
+        "resetToDefault": "恢复默认",
+        "providerAvailable": "可用",
+        "providerUnavailable": "当前不可用",
+        "currentProviderAuto": "当前使用自动选择：{{provider}}",
+        "currentProviderManual": "当前使用手动选择的 provider：{{provider}}",
+        "currentProviderUnavailable": "当前所选 provider 不可用：{{provider}}"
+      },
       "prompt": {
         "label": "附加提示词",
         "placeholder": "在此添加您的额外要求，例如：使用中文生成 commit、包含 issue 编号，使用表情符号等等...",
@@ -805,6 +815,16 @@
     "confirmDelete": "确认删除",
     "deleteMessage": "确定要删除这个会话吗?此操作无法撤销。",
     "deleteSession": "删除此会话",
+    "selectMode": "多选",
+    "exitSelectMode": "退出多选",
+    "selectedSessions": "已选择 {{count}} 个会话",
+    "selectAll": "全选",
+    "clearSelection": "清除",
+    "deleteSelected": "删除所选",
+    "confirmDeleteSelected": "确认删除",
+    "deleteSelectedMessage": "确定要删除选中的 {{count}} 个会话吗?此操作无法撤销。",
+    "selectSession": "选择会话",
+    "selectSessionWithTitle": "选择 {{title}}",
     "exportSession": "导出会话",
     "exportSuccess": "会话已导出",
     "exportFailed": "导出失败",
@@ -1164,7 +1184,6 @@
     "bashGroupCompleted": "完成",
     "bashGroupAllCompleted": "全部完成",
     "bashGroupFailed": "失败",
-    "promptLabel": "提示词",
     "updatePlan": "更新计划",
     "applyPatch": "应用补丁"
   },
