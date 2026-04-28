@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/zhukunpenglinyutong-jetbrains-cc-gui-badge.png)](https://mseep.ai/app/zhukunpenglinyutong-jetbrains-cc-gui)
+
 <div align="center">
 
 # CC GUI（Claude or Codex）
