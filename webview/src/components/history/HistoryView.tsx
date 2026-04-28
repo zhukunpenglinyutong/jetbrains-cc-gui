@@ -535,7 +535,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div className="history-item-time">{formatTimeAgo(session.lastTimestamp, t)}</div>
             {!isEditing && !isSelectionMode && (
-              <div className="history-action-buttons">
+              <div className={`history-action-buttons ${session.isFavorited ? 'has-favorite' : ''}`}>
                 {/* Edit button */}
                 <button
                   className="history-edit-btn"

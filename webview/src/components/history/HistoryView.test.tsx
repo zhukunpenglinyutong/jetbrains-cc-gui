@@ -22,6 +22,8 @@ vi.mock('react-i18next', () => ({
         'history.selectSessionWithTitle': `Select ${String(options?.title ?? '')}`,
         'history.searchPlaceholder': 'Search session titles...',
         'history.deepSearchTooltip': 'Deep Search',
+        'history.favoriteSession': 'Favorite session',
+        'history.unfavoriteSession': 'Unfavorite session',
         'common.cancel': 'Cancel',
         'common.delete': 'Delete',
       };
@@ -95,5 +97,37 @@ describe('HistoryView multi-select', () => {
     expect(onDeleteSession).toHaveBeenNthCalledWith(1, 'session-one');
     expect(onDeleteSession).toHaveBeenNthCalledWith(2, 'session-two');
     expect(onLoadSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('HistoryView favorite visibility', () => {
+  it('marks favorited session actions for persistent display', () => {
+    render(
+      <HistoryView
+        historyData={{
+          ...historyData,
+          sessions: [
+            {
+              ...historyData.sessions![0],
+              isFavorited: true,
+              favoritedAt: Date.now(),
+            },
+            historyData.sessions![1],
+          ],
+        }}
+        currentProvider="claude"
+        onLoadSession={vi.fn()}
+        onDeleteSession={vi.fn()}
+        onExportSession={vi.fn()}
+        onToggleFavorite={vi.fn()}
+        onUpdateTitle={vi.fn()}
+      />,
+    );
+
+    const favoritedButton = screen.getByRole('button', { name: 'Unfavorite session' });
+    const unfavoritedButton = screen.getByRole('button', { name: 'Favorite session' });
+
+    expect(favoritedButton.closest('.history-action-buttons')?.classList.contains('has-favorite')).toBe(true);
+    expect(unfavoritedButton.closest('.history-action-buttons')?.classList.contains('has-favorite')).toBe(false);
   });
 });

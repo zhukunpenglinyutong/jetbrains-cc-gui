@@ -300,6 +300,16 @@
     gap: 4px;
 }
 
+.history-action-buttons.has-favorite {
+    display: flex;
+}
+
+.history-item:not(:hover) .history-action-buttons.has-favorite .history-edit-btn,
+.history-item:not(:hover) .history-action-buttons.has-favorite .history-export-btn,
+.history-item:not(:hover) .history-action-buttons.has-favorite .history-delete-btn {
+    display: none;
+}
+
 .history-item:hover .history-action-buttons {
     display: flex;
 }
