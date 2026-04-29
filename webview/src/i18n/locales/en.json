@@ -1375,6 +1375,29 @@
       }
     }
   },
+  "claudeEffort": {
+    "title": "Select effort level",
+    "low": {
+      "label": "Low",
+      "description": "Short, scoped, latency-sensitive tasks"
+    },
+    "medium": {
+      "label": "Medium",
+      "description": "Cost-sensitive work, trades off some intelligence"
+    },
+    "high": {
+      "label": "High",
+      "description": "Balanced token usage and intelligence"
+    },
+    "xhigh": {
+      "label": "XHigh",
+      "description": "Best results for most coding tasks (recommended)"
+    },
+    "max": {
+      "label": "Max",
+      "description": "Maximum reasoning for demanding tasks (session only)"
+    }
+  },
   "models": {
     "addModel": "Add Model",
     "longContext": {
@@ -1555,6 +1578,10 @@
       "description": "Deep reasoning for complex tasks"
     },
     "xhigh": {
+      "label": "XHigh",
+      "description": "Extra deep reasoning for demanding tasks"
+    },
+    "max": {
       "label": "Max",
       "description": "Maximum reasoning depth"
     }

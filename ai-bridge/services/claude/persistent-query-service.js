@@ -50,7 +50,18 @@ import {
   shouldOutputMessage,
 } from './stream-event-processor.js';
 
+const SUPPORTED_EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
+
+function resolveReasoningEffort(params) {
+  const effort = typeof params.reasoningEffort === 'string'
+    ? params.reasoningEffort.trim()
+    : '';
+  return SUPPORTED_EFFORT_LEVELS.has(effort) ? effort : undefined;
+}
+
 function resolveThinkingTokens(params, settings) {
+  if (resolveReasoningEffort(params)) return undefined;
+
   const alwaysThinkingEnabled = settings?.alwaysThinkingEnabled ?? true;
   const configuredMax = settings?.maxThinkingTokens
     || parseInt(process.env.MAX_THINKING_TOKENS || '0', 10)
@@ -76,7 +87,7 @@ function buildSystemPromptAppend(params) {
   return buildIDEContextPrompt(openedFiles, agentPrompt);
 }
 
-function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxThinkingTokens, streamingEnabled, systemPromptAppend, requestedSessionId) {
+function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId) {
   return {
     cwd: workingDirectory,
     permissionMode,
@@ -84,6 +95,7 @@ function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxTh
     maxTurns: 100,
     enableFileCheckpointing: true,
     env: buildCliEnv(),
+    ...(reasoningEffort && { effort: reasoningEffort }),
     ...(maxThinkingTokens !== undefined && { maxThinkingTokens }),
     ...(streamingEnabled && { includePartialMessages: true }),
     additionalDirectories: Array.from(
@@ -153,12 +165,13 @@ async function buildRequestContext(params, withAttachments) {
 
   const permissionMode = normalizePermissionMode(params.permissionMode);
   const streamingEnabled = resolveStreamingEnabled(params, settings);
+  const reasoningEffort = resolveReasoningEffort(params);
   const maxThinkingTokens = resolveThinkingTokens(params, settings);
   const systemPromptAppend = buildSystemPromptAppend(params);
 
   const options = buildQueryOptions(
     workingDirectory, sdkModelName, permissionMode,
-    maxThinkingTokens, streamingEnabled, systemPromptAppend, requestedSessionId
+    maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId
   );
 
   const userMessage = await buildUserMessage(params, withAttachments, requestedSessionId);
@@ -177,6 +190,7 @@ async function buildRequestContext(params, withAttachments) {
     sdkModelName,
     permissionMode,
     maxThinkingTokens,
+    reasoningEffort,
     runtimeSignature
   };
 }

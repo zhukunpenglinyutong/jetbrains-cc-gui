@@ -74,7 +74,7 @@ export const ButtonArea = ({
   selectedModel = 'claude-sonnet-4-6',
   permissionMode = 'bypassPermissions',
   currentProvider = 'claude',
-  reasoningEffort = 'medium',
+  reasoningEffort = 'high',
   onSubmit,
   onStop,
   onModeSelect,
@@ -227,7 +227,7 @@ export const ButtonArea = ({
   }, [onProviderSelect]);
 
   /**
-   * Handle reasoning depth selection (Codex only)
+   * Handle reasoning depth selection
    */
   const handleReasoningChange = useCallback((effort: ReasoningEffort) => {
     onReasoningChange?.(effort);
@@ -262,9 +262,7 @@ export const ButtonArea = ({
         />
         <ModeSelect value={permissionMode} onChange={handleModeSelect} provider={currentProvider} />
         <ModelSelect value={selectedModel} onChange={handleModelSelect} models={availableModels} currentProvider={currentProvider} onAddModel={onAddModel} longContextEnabled={longContextEnabled} onLongContextChange={onLongContextChange} />
-        {currentProvider === 'codex' && (
-          <ReasoningSelect value={reasoningEffort} onChange={handleReasoningChange} />
-        )}
+        <ReasoningSelect value={reasoningEffort} onChange={handleReasoningChange} selectedModel={selectedModel} currentProvider={currentProvider} />
       </div>
 
       {/* Right side: tool buttons */}

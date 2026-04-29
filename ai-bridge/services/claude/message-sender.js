@@ -32,6 +32,13 @@ import { setActiveQueryResult } from './message-session-registry.js';
 
 // ========== Internal helpers for deduplication ==========
 
+const SUPPORTED_EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
+
+function normalizeReasoningEffort(reasoningEffort) {
+  const effort = typeof reasoningEffort === 'string' ? reasoningEffort.trim() : '';
+  return SUPPORTED_EFFORT_LEVELS.has(effort) ? effort : null;
+}
+
 /**
  * Resolve Extended Thinking configuration from settings.
  * @param {object|null} settings - Claude settings object
@@ -388,7 +395,7 @@ function handleSendError(error, streamState, sdkStderrLines) {
  * @param {string} agentPrompt - Agent prompt (optional)
  * @param {boolean} streaming - Whether to enable streaming (optional, defaults to config value)
  */
-export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null) {
+export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null, disableThinking = false, reasoningEffort = null) {
   console.log('[DIAG] ========== sendMessage() START ==========');
   console.log('[DIAG] params:', { msgLen: message ? message.length : 0, resumeSessionId: resumeSessionId || '(new)', cwd, permissionMode, model });
 
@@ -416,12 +423,20 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     const systemPromptAppend = buildSystemPromptAppend(openedFiles, agentPrompt, message);
 
     const effectivePermissionMode = (!permissionMode || permissionMode === '') ? 'default' : permissionMode;
-    const { alwaysThinkingEnabled, maxThinkingTokens } = resolveThinkingConfig(settings);
+    const normalizedReasoningEffort = normalizeReasoningEffort(reasoningEffort);
+    const { alwaysThinkingEnabled, maxThinkingTokens: configuredMaxThinkingTokens } = resolveThinkingConfig(settings);
+    // maxThinkingTokens and reasoningEffort are mutually exclusive
+    const maxThinkingTokens = (alwaysThinkingEnabled && !normalizedReasoningEffort) ? configuredMaxThinkingTokens : undefined;
     streamingEnabled = streaming != null ? streaming : (settings?.streamingEnabled ?? false);
-    console.log('[DEBUG] Config:', { effectivePermissionMode, alwaysThinkingEnabled, maxThinkingTokens, streamingEnabled });
+    console.log('[DEBUG] Config:', { effectivePermissionMode, alwaysThinkingEnabled, maxThinkingTokens, streamingEnabled, reasoningEffort: normalizedReasoningEffort });
 
     const preToolUseHook = createPreToolUseHook(effectivePermissionMode, workingDirectory);
     const options = buildQueryOptions({ workingDirectory, permissionMode: effectivePermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines });
+
+    if (normalizedReasoningEffort) {
+      options.effort = normalizedReasoningEffort;
+      console.log('[DEBUG] Set SDK effort:', normalizedReasoningEffort);
+    }
 
     await prepareSessionResume(options, resumeSessionId, workingDirectory);
 
@@ -482,12 +497,20 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     const normalizedPermissionMode = (!permissionMode || permissionMode === '') ? 'default' : permissionMode;
     const preToolUseHook = createPreToolUseHook(normalizedPermissionMode, workingDirectory);
 
-    const { alwaysThinkingEnabled, maxThinkingTokens } = resolveThinkingConfig(settings);
+    const { alwaysThinkingEnabled, maxThinkingTokens: configuredMaxThinkingTokens } = resolveThinkingConfig(settings);
+    const reasoningEffort = normalizeReasoningEffort(stdinData?.reasoningEffort || null);
+    // maxThinkingTokens and reasoningEffort are mutually exclusive
+    const maxThinkingTokens = (alwaysThinkingEnabled && !reasoningEffort) ? configuredMaxThinkingTokens : undefined;
     const streamingParam = stdinData?.streaming;
     streamingEnabled = streamingParam != null ? streamingParam : (settings?.streamingEnabled ?? false);
-    console.log('[DEBUG] (withAttachments) Config:', { normalizedPermissionMode, alwaysThinkingEnabled, maxThinkingTokens, streamingEnabled });
+    console.log('[DEBUG] (withAttachments) Config:', { normalizedPermissionMode, alwaysThinkingEnabled, maxThinkingTokens, streamingEnabled, reasoningEffort });
 
     const options = buildQueryOptions({ workingDirectory, permissionMode: normalizedPermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines });
+
+    if (reasoningEffort) {
+      options.effort = reasoningEffort;
+      console.log('[DEBUG] (withAttachments) Set SDK effort:', reasoningEffort);
+    }
 
     await prepareSessionResume(options, resumeSessionId, workingDirectory);
 

@@ -1380,6 +1380,29 @@
       }
     }
   },
+  "claudeEffort": {
+    "title": "选择推理强度",
+    "low": {
+      "label": "low",
+      "description": "短小、范围明确、对延迟敏感的任务"
+    },
+    "medium": {
+      "label": "medium",
+      "description": "成本敏感型工作，可牺牲部分智能"
+    },
+    "high": {
+      "label": "high",
+      "description": "平衡 Token 用量与智能水平"
+    },
+    "xhigh": {
+      "label": "xhigh",
+      "description": "大多数编程任务的最佳效果（推荐）"
+    },
+    "max": {
+      "label": "max",
+      "description": "高难度任务的最大推理深度（仅当前会话）"
+    }
+  },
   "models": {
     "addModel": "添加模型",
     "longContext": {
@@ -1548,20 +1571,24 @@
   "reasoning": {
     "title": "选择思考深度",
     "low": {
-      "label": "较少",
+      "label": "low",
       "description": "快速响应，基础推理"
     },
     "medium": {
-      "label": "中等",
+      "label": "medium",
       "description": "平衡思考（默认）"
     },
     "high": {
-      "label": "较多",
+      "label": "high",
       "description": "深度推理，适合复杂任务"
     },
     "xhigh": {
-      "label": "最多",
-      "description": "最深推理，最高精度"
+      "label": "xhigh",
+      "description": "额外深度推理，适合高难度任务"
+    },
+    "max": {
+      "label": "max",
+      "description": "最大推理深度"
     }
   },
   "errorBoundary": {
