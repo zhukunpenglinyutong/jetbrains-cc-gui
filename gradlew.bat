@@ -36,6 +36,21 @@ set APP_HOME=%DIRNAME%
 @rem Resolve any "." and ".." in APP_HOME to make it shorter.
 for %%i in ("%APP_HOME%") do set APP_HOME=%%~fi
 
+@rem If JAVA_HOME is not set, try reading it from local.properties
+if not defined JAVA_HOME (
+    set "LOCAL_PROPERTIES_FILE=%APP_HOME%\local.properties"
+    if exist "%LOCAL_PROPERTIES_FILE%" (
+        for /f "usebackq tokens=1,* delims==" %%A in (`findstr /R /B /C:"java.home=" "%LOCAL_PROPERTIES_FILE%"`) do (
+            if not defined JAVA_HOME set "JAVA_HOME=%%B"
+        )
+        if not defined JAVA_HOME (
+            for /f "usebackq tokens=1,* delims==" %%A in (`findstr /R /B /C:"org.gradle.java.home=" "%LOCAL_PROPERTIES_FILE%"`) do (
+                if not defined JAVA_HOME set "JAVA_HOME=%%B"
+            )
+        )
+    )
+)
+
 @rem Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
 set DEFAULT_JVM_OPTS="-Xmx64m" "-Xms64m"
 

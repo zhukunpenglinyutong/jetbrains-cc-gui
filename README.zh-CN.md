@@ -83,6 +83,7 @@
 ```bash
 cd webview
 npm install
+npm  run build
 ```
 
 ### 2.安装ai-bridge依赖
@@ -90,6 +91,7 @@ npm install
 ```bash
 cd ai-bridge
 npm install
+npm run build
 ```
 
 ### 3.调试插件
@@ -97,7 +99,14 @@ npm install
 在 IDEA 中运行：
 ```bash
 ./gradlew clean runIde
+``` 
+``` $env:JAVA_HOME='E:\Java\Jdk17'
+$env:Path="$env:JAVA_HOME\bin;$env:Path"
+$env:GRADLE_USER_HOME='F:\IdeaFiles\jetbrains-cc-gui\.gradle-user-home'
+.\gradlew --stop
+.\gradlew runIde --no-daemon
 ```
+
 
 ### 4.构建插件
 

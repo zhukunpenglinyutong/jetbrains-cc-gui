@@ -57,7 +57,7 @@ public class SessionContextService {
                 }
             }
 
-            userDisplayText = processReferences(normalizedInput, "terminal", "Terminal Output", this::resolveTerminalContent);
+            userDisplayText = processReferences(userDisplayText, "terminal", "Terminal Output", this::resolveTerminalContent);
             userDisplayText = processReferences(userDisplayText, "service", "Service Output", this::resolveServiceContent);
 
             contentArr.add(createTextBlock(userDisplayText));

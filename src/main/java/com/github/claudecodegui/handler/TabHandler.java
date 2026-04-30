@@ -5,6 +5,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.ui.toolwindow.ClaudeChatWindow;
 import com.github.claudecodegui.ui.toolwindow.ClaudeSDKToolWindow;
+import com.github.claudecodegui.ui.toolwindow.TabSessionStateInheritor;
 import com.github.claudecodegui.settings.TabStateService;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
@@ -63,8 +64,14 @@ public class TabHandler extends BaseMessageHandler {
                     return;
                 }
 
+                TabStateService.TabSessionState inheritedState =
+                        TabSessionStateInheritor.captureForNewTab(project, toolWindow);
+
                 // Create a new chat window instance with skipRegister=true (don't replace the main instance)
                 ClaudeChatWindow newChatWindow = new ClaudeChatWindow(project, true);
+                if (inheritedState != null) {
+                    newChatWindow.restorePersistedTabSessionState(inheritedState);
+                }
 
                 // Get tab index before adding content
                 ContentManager contentManager = toolWindow.getContentManager();

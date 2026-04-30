@@ -1,8 +1,10 @@
 package com.github.claudecodegui.action.tab;
 
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
+import com.github.claudecodegui.settings.TabStateService;
 import com.github.claudecodegui.ui.toolwindow.ClaudeChatWindow;
 import com.github.claudecodegui.ui.toolwindow.ClaudeSDKToolWindow;
+import com.github.claudecodegui.ui.toolwindow.TabSessionStateInheritor;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
@@ -51,8 +53,14 @@ public class CreateNewTabAction extends AnAction {
             return;
         }
 
+        TabStateService.TabSessionState inheritedState =
+                TabSessionStateInheritor.captureForNewTab(project, toolWindow);
+
         // Create a new chat window instance with skipRegister=true (don't replace the main instance)
         ClaudeChatWindow newChatWindow = new ClaudeChatWindow(project, true);
+        if (inheritedState != null) {
+            newChatWindow.restorePersistedTabSessionState(inheritedState);
+        }
 
         // Create a tab name in the format "AIN"
         String tabName = ClaudeSDKToolWindow.getNextTabName(toolWindow);

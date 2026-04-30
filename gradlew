@@ -89,6 +89,18 @@ APP_HOME=$( cd "${APP_HOME:-./}" && pwd -P ) || exit
 APP_NAME="Gradle"
 APP_BASE_NAME=${0##*/}
 
+if [ -z "$JAVA_HOME" ] && [ -f "$APP_HOME/local.properties" ] ; then
+    local_java_home=$(
+        sed -n -e '/^[[:space:]]*java\.home[[:space:]]*=/{s/^[^=]*=[[:space:]]*//;p;q;}' \
+               -e '/^[[:space:]]*org\.gradle\.java\.home[[:space:]]*=/{s/^[^=]*=[[:space:]]*//;p;q;}' \
+            "$APP_HOME/local.properties"
+    )
+    if [ -n "$local_java_home" ] ; then
+        JAVA_HOME=$local_java_home
+        export JAVA_HOME
+    fi
+fi
+
 # Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
 DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
 
