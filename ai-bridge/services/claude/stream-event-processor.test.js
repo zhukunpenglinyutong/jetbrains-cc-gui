@@ -276,3 +276,87 @@ test('end-to-end: streaming tail-fill snapshot still triggers [CONTENT_DELTA] ev
   assert.match(deltaLines[1], /" world"/);
   assert.equal(state.lastAssistantContent, 'Hello world');
 });
+
+test('processStreamEvent: cumulative text deltas only emit the novel suffix', () => {
+  const state = makeTurnState(true);
+
+  const captured = captureStdout(() => {
+    processStreamEvent(
+      {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'text_delta', text: 'Now I need to add' },
+        },
+      },
+      state
+    );
+    processStreamEvent(
+      {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'text_delta', text: 'Now I need to add the handler' },
+        },
+      },
+      state
+    );
+  });
+
+  const deltaLines = tagLines(captured, '[CONTENT_DELTA]');
+
+  assert.equal(deltaLines.length, 2);
+  assert.match(deltaLines[0], /"Now I need to add"/);
+  assert.match(deltaLines[1], /" the handler"/);
+  assert.equal(state.lastAssistantContent, 'Now I need to add the handler');
+});
+
+test('processStreamEvent: cumulative thinking deltas are tracked per block index', () => {
+  const state = makeTurnState(true);
+
+  const captured = captureStdout(() => {
+    processStreamEvent(
+      {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'thinking_delta', thinking: 'Plan step one.' },
+        },
+      },
+      state
+    );
+    processStreamEvent(
+      {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          index: '2',
+          delta: { type: 'thinking_delta', thinking: 'Plan step two.' },
+        },
+      },
+      state
+    );
+    processStreamEvent(
+      {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          index: '2',
+          delta: { type: 'thinking_delta', thinking: 'Plan step two. Continue.' },
+        },
+      },
+      state
+    );
+  });
+
+  const deltaLines = tagLines(captured, '[THINKING_DELTA]');
+
+  assert.equal(deltaLines.length, 3);
+  assert.match(deltaLines[0], /"Plan step one\."/);
+  assert.match(deltaLines[1], /"Plan step two\."/);
+  assert.match(deltaLines[2], /" Continue\."/);
+  assert.equal(state.lastThinkingContent, 'Plan step one.Plan step two. Continue.');
+});

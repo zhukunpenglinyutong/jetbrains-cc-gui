@@ -3,14 +3,50 @@
 **初版日期**: 2026-04-28  
 **修正日期**: 2026-04-29  
 **版本**: v0.4.1  
-**状态**: 阶段 1 已完成且**对 daemon mode 用户生效**，但用户反馈"重复闪烁"未好转——2026-04-29 复盘后发现真正根因在前端 `reconcile race`，原阶段 2/3 方向需重写  
+**状态**: 阶段 1 已完成且**对 daemon mode 用户生效**；2026-04-29 追加修复第三方 Claude-compatible 模型（MiniMax / GLM / Mimo 等）更易触发的累计 delta 问题；前端 `reconcile race` 仍作为放大因素保留跟踪
 **初版 Commit**: ddaa590
+
+---
+
+## ✅ 2026-04-29 二次复盘：第三方模型累计 delta（本轮修复）
+
+用户补充新规律：Claude Code 官方模型基本不出现，但 MiniMax、GLM、Mimo 等 Claude-compatible 模型特别容易在“正常短 thinking → 超长历史 thinking → 正常短 thinking”之间反复切换。
+
+新的最小复现不在前端，而在 ai-bridge 的 `stream_event` 入口：
+
+```text
+text_delta: "Now I need to add"
+text_delta: "Now I need to add the handler"
+```
+
+标准 Anthropic SDK 语义下第二条应是纯增量 `" the handler"`；部分兼容模型实际发送的是“当前 block 累计快照”。旧实现把第二条整段当增量转发，导致 Java / 前端都看到已生成文本被重新追加，随后又被较新的 snapshot / segment 修正，于是视觉上出现图二、图三那种来回跳。
+
+本轮改动：
+
+1. 新增 `ai-bridge/services/claude/stream-delta-normalizer.js`
+   - 按 `content_block_delta.index` 分别记住 text/thinking block 当前内容。
+   - 如果新 delta 是前缀增长的累计快照，只向 Java 输出 novel suffix。
+   - 标准增量保持原样通过。
+2. `stream-event-processor.js`
+   - daemon 默认路径接入 normalizer。
+3. `message-sender.js`
+   - legacy channel-manager fallback 路径也接入同一 normalizer，避免 daemon fallback 后复发。
+4. `stream-event-processor.test.js`
+   - 新增累计 text delta 和按 block index 累计 thinking delta 回归测试。
+
+验证：
+
+- ✅ `node --test ai-bridge/services/claude/stream-event-processor.test.js`
+- ✅ `node --test ai-bridge/config/api-config.test.js ai-bridge/services/prompt-enhancer.test.js ai-bridge/services/claude/persistent-query-service.helpers.test.mjs ai-bridge/services/claude/persistent-query-service.test.mjs ai-bridge/services/claude/session-service.test.mjs ai-bridge/services/claude/stream-event-processor.test.js`
+- ✅ `node --check ai-bridge/services/claude/message-sender.js`
+- ✅ `node --check ai-bridge/services/claude/stream-delta-normalizer.js`
+- ✅ `node --check ai-bridge/services/claude/stream-event-processor.js`
 
 ---
 
 ## ⚠️ 2026-04-29 复盘修正（必读）
 
-阶段 1 上线后约 1 天，用户继续反馈"内容重复闪烁"且"并非个例"。重新做了三路深度排查（ai-bridge / Java / 前端），结论是 **原文档对场景 B 的预案错了**。要点：
+阶段 1 上线后约 1 天，用户继续反馈"内容重复闪烁"且"并非个例"。重新做了三路深度排查（ai-bridge / Java / 前端），当时结论是 **原文档对场景 B 的预案错了**。2026-04-29 用户进一步补充模型分布规律后，新增了上方“第三方模型累计 delta”根因；本节仍保留，因为前端 raw/segment 双源 race 会放大任何上游重复源。要点：
 
 1. **阶段 1 修复落点正确**：v0.4.x 默认走 **daemon mode**（`ClaudeSDKBridge.java:365-371` daemon 优先于 channel-manager），daemon → `daemon.js` → `sendMessagePersistent` → `persistent-query-service.js` → `stream-event-processor.js`。所以 `shouldOutputMessage` 修复对默认路径用户生效。channel-manager 仅作 fallback，且 `message-sender.js:171-176` 早就有等价的 `shouldOutput` 保护，本来就没回归。
 2. **阶段 2（修 Java `ReplayDeduplicator.endsWith`）的方向是错的**：阶段 1 后纯文本 turn 中 `replayContent==null`，`ReplayDeduplicator.java:75-78` 直接 inactive 返回，**根本不进 endsWith 分支**。修这条对当前用户反馈的重复闪烁完全没用。
@@ -29,7 +65,7 @@
 1. **整段重复**：Markdown 表格、代码块、段落被完整重复渲染 3+ 次
 2. **文本边界破坏**：出现诡异拼接，如 `import java.util.ArrayList;的！直接给您完整的Java...`
 
-**影响范围**：仅 Claude provider 流式模式，长 Markdown 内容（>200 字符）
+**影响范围**：Claude provider 流式模式；第三方 Claude-compatible 模型（MiniMax / GLM / Mimo 等）因为可能发送累计 delta，更容易触发
 
 ---
 

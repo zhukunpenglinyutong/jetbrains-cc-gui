@@ -1,5 +1,6 @@
 import { emitAccumulatedUsage, mergeUsage } from '../../utils/usage-utils.js';
 import { truncateErrorContent, truncateToolResultBlock } from './message-output-filter.js';
+import { normalizeStreamDelta, rememberStreamSnapshot } from './stream-delta-normalizer.js';
 
 export function emitUsageTag(msg) {
   if (msg.type === 'assistant' && msg.message?.usage) {
@@ -26,6 +27,8 @@ export function createTurnState(requestContext, runtime) {
     hasStreamEvents: false,
     lastAssistantContent: '',
     lastThinkingContent: '',
+    textBlockContentByIndex: new Map(),
+    thinkingBlockContentByIndex: new Map(),
     finalSessionId: requestContext.requestedSessionId || runtime?.sessionId || '',
     accumulatedUsage: null
   };
@@ -46,11 +49,17 @@ export function processStreamEvent(msg, turnState) {
 
   if (event.type === 'content_block_delta' && event.delta) {
     if (event.delta.type === 'text_delta' && event.delta.text) {
-      process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(event.delta.text)}\n`);
-      turnState.lastAssistantContent += event.delta.text;
+      const delta = normalizeStreamDelta(turnState, 'text', event.index, event.delta.text);
+      if (delta) {
+        process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(delta)}\n`);
+        turnState.lastAssistantContent += delta;
+      }
     } else if (event.delta.type === 'thinking_delta' && event.delta.thinking) {
-      process.stdout.write(`[THINKING_DELTA] ${JSON.stringify(event.delta.thinking)}\n`);
-      turnState.lastThinkingContent += event.delta.thinking;
+      const delta = normalizeStreamDelta(turnState, 'thinking', event.index, event.delta.thinking);
+      if (delta) {
+        process.stdout.write(`[THINKING_DELTA] ${JSON.stringify(delta)}\n`);
+        turnState.lastThinkingContent += delta;
+      }
     }
   }
 }
@@ -60,9 +69,11 @@ export function processMessageContent(msg, turnState) {
   const content = msg.message?.content;
 
   if (Array.isArray(content)) {
-    for (const block of content) {
+    for (let i = 0; i < content.length; i += 1) {
+      const block = content[i];
       if (block.type === 'text') {
         const currentText = block.text || '';
+        rememberStreamSnapshot(turnState, 'text', i, currentText);
         // Send delta if content grew, regardless of hasStreamEvents
         // This ensures conservative sync works correctly and prevents content loss
         // (especially important for markdown tables which need complete row structures)
@@ -77,6 +88,7 @@ export function processMessageContent(msg, turnState) {
         }
       } else if (block.type === 'thinking') {
         const thinkingText = block.thinking || block.text || '';
+        rememberStreamSnapshot(turnState, 'thinking', i, thinkingText);
         // Send delta if thinking grew, regardless of hasStreamEvents
         if (turnState.streamingEnabled && thinkingText.length > turnState.lastThinkingContent.length) {
           const delta = thinkingText.substring(turnState.lastThinkingContent.length);
@@ -90,6 +102,7 @@ export function processMessageContent(msg, turnState) {
       }
     }
   } else if (typeof content === 'string') {
+    rememberStreamSnapshot(turnState, 'text', 0, content);
     // Send delta if content grew, regardless of hasStreamEvents
     if (turnState.streamingEnabled && content.length > turnState.lastAssistantContent.length) {
       const delta = content.substring(turnState.lastAssistantContent.length);
