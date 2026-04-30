@@ -65,6 +65,7 @@ describe('HistoryView multi-select', () => {
   it('deletes selected sessions after confirmation without loading them', () => {
     const onLoadSession = vi.fn();
     const onDeleteSession = vi.fn();
+    const onDeleteSessions = vi.fn();
 
     render(
       <HistoryView
@@ -72,6 +73,7 @@ describe('HistoryView multi-select', () => {
         currentProvider="claude"
         onLoadSession={onLoadSession}
         onDeleteSession={onDeleteSession}
+        onDeleteSessions={onDeleteSessions}
         onExportSession={vi.fn()}
         onToggleFavorite={vi.fn()}
         onUpdateTitle={vi.fn()}
@@ -93,9 +95,9 @@ describe('HistoryView multi-select', () => {
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
 
-    expect(onDeleteSession).toHaveBeenCalledTimes(2);
-    expect(onDeleteSession).toHaveBeenNthCalledWith(1, 'session-one');
-    expect(onDeleteSession).toHaveBeenNthCalledWith(2, 'session-two');
+    expect(onDeleteSession).not.toHaveBeenCalled();
+    expect(onDeleteSessions).toHaveBeenCalledTimes(1);
+    expect(onDeleteSessions).toHaveBeenCalledWith(['session-one', 'session-two']);
     expect(onLoadSession).not.toHaveBeenCalled();
   });
 });
@@ -118,6 +120,7 @@ describe('HistoryView favorite visibility', () => {
         currentProvider="claude"
         onLoadSession={vi.fn()}
         onDeleteSession={vi.fn()}
+        onDeleteSessions={vi.fn()}
         onExportSession={vi.fn()}
         onToggleFavorite={vi.fn()}
         onUpdateTitle={vi.fn()}
