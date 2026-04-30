@@ -1,5 +1,6 @@
 package com.github.claudecodegui.session;
 
+import com.github.claudecodegui.handler.CodexMessageConverter;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.session.ClaudeSession.Message;
@@ -378,15 +379,20 @@ public class CodexMessageHandler implements MessageCallback {
                     }
                 }
 
-                // Filter out content with command tags (allow user input containing <command-message>)
+                // Filter out content with command tags (allow user input containing <command-message>).
+                // Codex prepends internal instruction blocks to user messages; strip them before
+                // checking command tags so those hidden blocks do not hide the actual user input.
                 if (contentStr != null) {
+                    String filterContent = messageType == Message.Type.USER
+                        ? CodexMessageConverter.stripSystemTags(contentStr)
+                        : contentStr;
                     boolean hasCommandMessage = contentStr.contains("<command-message>") &&
                         contentStr.contains("</command-message>");
                     if (!hasCommandMessage && (
-                        contentStr.contains("<command-name>") ||
-                        contentStr.contains("<local-command-stdout>") ||
-                        contentStr.contains("<local-command-stderr>") ||
-                        contentStr.contains("<command-args>")
+                        filterContent.contains("<command-name>") ||
+                        filterContent.contains("<local-command-stdout>") ||
+                        filterContent.contains("<local-command-stderr>") ||
+                        filterContent.contains("<command-args>")
                     )) {
                         return null;
                     }
@@ -396,27 +402,22 @@ public class CodexMessageHandler implements MessageCallback {
 
         String content = extractMessageContent(msg);
 
-        // Special handling for user messages: preserve tool_result even if content is empty
+        // Special handling for user messages: preserve tool_result even if content is empty,
+        // and remove hidden Codex instruction tags from ordinary user input.
         if (messageType == Message.Type.USER) {
+            boolean hasToolResult = containsToolResult(msg);
+            if (!hasToolResult) {
+                content = CodexMessageConverter.stripSystemTags(content);
+                if (content != null && !content.trim().isEmpty()) {
+                    rewriteUserRawContent(msg, content);
+                }
+            }
             if (content == null || content.trim().isEmpty()) {
                 // Check if it contains a tool_result
-                if (msg.has("message") && msg.get("message").isJsonObject()) {
-                    com.google.gson.JsonObject message = msg.getAsJsonObject("message");
-                    if (message.has("content") && message.get("content").isJsonArray()) {
-                        com.google.gson.JsonArray contentArray = message.getAsJsonArray("content");
-                        for (int i = 0; i < contentArray.size(); i++) {
-                            com.google.gson.JsonElement element = contentArray.get(i);
-                            if (element.isJsonObject()) {
-                                com.google.gson.JsonObject block = element.getAsJsonObject();
-                                if (block.has("type") && "tool_result".equals(block.get("type").getAsString())) {
-                                    // Contains tool_result; keep this message with placeholder content
-                                    Message result = new Message(Message.Type.USER, "[tool_result]");
-                                    result.raw = msg;
-                                    return result;
-                                }
-                            }
-                        }
-                    }
+                if (hasToolResult) {
+                    Message result = new Message(Message.Type.USER, "[tool_result]");
+                    result.raw = msg;
+                    return result;
                 }
                 return null;
             }
@@ -482,7 +483,8 @@ public class CodexMessageHandler implements MessageCallback {
                         : null;
 
                     // Handle different content block types
-                    if ("text".equals(blockType) && block.has("text") && !block.get("text").isJsonNull()) {
+                    if (("text".equals(blockType) || "input_text".equals(blockType) || "output_text".equals(blockType))
+                            && block.has("text") && !block.get("text").isJsonNull()) {
                         String text = block.get("text").getAsString();
                         if (sb.length() > 0) {
                             sb.append("\n");
@@ -526,6 +528,73 @@ public class CodexMessageHandler implements MessageCallback {
         }
 
         return "";
+    }
+
+    /**
+     * Check whether a server message contains a tool_result block.
+     *
+     * @param msg msg
+     * @return boolean
+     * @since 1.0.0
+     */
+    private boolean containsToolResult(com.google.gson.JsonObject msg) {
+        com.google.gson.JsonElement contentElement = getMessageContentElement(msg);
+        if (contentElement == null || !contentElement.isJsonArray()) {
+            return false;
+        }
+
+        com.google.gson.JsonArray contentArray = contentElement.getAsJsonArray();
+        for (int i = 0; i < contentArray.size(); i++) {
+            com.google.gson.JsonElement element = contentArray.get(i);
+            if (element.isJsonObject()) {
+                com.google.gson.JsonObject block = element.getAsJsonObject();
+                if (block.has("type") && "tool_result".equals(block.get("type").getAsString())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Replace raw user content with the visible text only.
+     *
+     * @param msg msg
+     * @param content visible content
+     * @since 1.0.0
+     */
+    private void rewriteUserRawContent(com.google.gson.JsonObject msg, String content) {
+        com.google.gson.JsonArray contentBlocks = new com.google.gson.JsonArray();
+        com.google.gson.JsonObject textBlock = new com.google.gson.JsonObject();
+        textBlock.addProperty("type", "text");
+        textBlock.addProperty("text", content);
+        contentBlocks.add(textBlock);
+
+        if (msg.has("message") && msg.get("message").isJsonObject()) {
+            msg.getAsJsonObject("message").add("content", contentBlocks);
+        } else {
+            msg.add("content", contentBlocks);
+        }
+    }
+
+    /**
+     * Get the content element from either nested or top-level Codex message shapes.
+     *
+     * @param msg msg
+     * @return element
+     * @since 1.0.0
+     */
+    private com.google.gson.JsonElement getMessageContentElement(com.google.gson.JsonObject msg) {
+        if (msg.has("message") && msg.get("message").isJsonObject()) {
+            com.google.gson.JsonObject message = msg.getAsJsonObject("message");
+            if (message.has("content") && !message.get("content").isJsonNull()) {
+                return message.get("content");
+            }
+        }
+        if (msg.has("content") && !msg.get("content").isJsonNull()) {
+            return msg.get("content");
+        }
+        return null;
     }
 
     /**

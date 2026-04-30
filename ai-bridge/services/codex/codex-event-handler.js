@@ -518,7 +518,7 @@ async function handleItemCompleted(item, state, config) {
   }
 }
 
-function handleAgentMessage(item, state) {
+function handleAgentMessage(item, state, { emitSnapshot = true } = {}) {
   const text = item.text || '';
   console.log('[DEBUG] agent_message text length:', text.length);
   console.log('[DEBUG] agent_message text (first 100 chars):', text.substring(0, 100));
@@ -531,7 +531,7 @@ function handleAgentMessage(item, state) {
     state.assistantText += delta;
     emitContentDelta(delta);
   }
-  if (text && text.trim()) {
+  if (emitSnapshot && text && text.trim()) {
     state.emitMessage(textMsg(text));
   }
 }
@@ -709,6 +709,9 @@ export async function processCodexEventStream(events, state, config) {
 
       case 'item.updated':
         maybeEmitReasoning(state, event.item);
+        if (event.item && event.item.type === 'agent_message') {
+          handleAgentMessage(event.item, state, { emitSnapshot: false });
+        }
         await replayMissingFunctionCallsDuringStream(state, config);
         break;
 

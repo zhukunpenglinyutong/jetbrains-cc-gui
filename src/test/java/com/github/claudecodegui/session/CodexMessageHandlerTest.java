@@ -137,6 +137,44 @@ public class CodexMessageHandlerTest {
     }
 
     @Test
+    public void userMessageStripsCodexInjectedInstructionsFromContentAndRawBlocks() {
+        SessionState state = new SessionState();
+
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("user", "{\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"<agents-instructions>\\n# AGENTS.md instructions\\n<INSTRUCTIONS>中文回复</INSTRUCTIONS>\\n</agents-instructions>\\n\\n测试通讯\"}]}}");
+
+        assertEquals(1, state.getMessages().size());
+        Message message = state.getMessages().get(0);
+        assertEquals("测试通讯", message.content);
+        assertEquals("测试通讯", message.raw
+                .getAsJsonObject("message")
+                .getAsJsonArray("content")
+                .get(0)
+                .getAsJsonObject()
+                .get("text")
+                .getAsString());
+    }
+
+    @Test
+    public void userMessageWithOnlyCodexInjectedInstructionsIsFiltered() {
+        SessionState state = new SessionState();
+
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("user", "{\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"<agents-instructions>\\n# AGENTS.md instructions\\n</agents-instructions>\"}]}}");
+
+        assertEquals(0, state.getMessages().size());
+        assertEquals(0, callback.messageUpdateCount);
+    }
+
+    @Test
     public void onCompleteFinalizesStreamingTurnWhenStreamEndIsMissing() {
         SessionState state = new SessionState();
         state.setBusy(true);
