@@ -80,6 +80,7 @@ describe('MessageItem copy button visibility', () => {
   it('hides the assistant copy button for tool-only messages', () => {
     const message: ClaudeMessage = {
       type: 'assistant',
+      content: 'Tool: shell_command',
       raw: {
         content: [
           {
@@ -95,6 +96,7 @@ describe('MessageItem copy button visibility', () => {
     renderMessageItem(message);
 
     expect(screen.getByTestId('bash-tool-block')).toBeTruthy();
+    expect(screen.queryByTestId('content-block-text')).toBeNull();
     expect(screen.queryByRole('button', { name: '复制消息' })).toBeNull();
   });
 
