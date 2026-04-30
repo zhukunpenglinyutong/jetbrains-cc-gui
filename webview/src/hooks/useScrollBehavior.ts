@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import type { ClaudeMessage } from '../types';
 
+const SCROLL_ANCHOR_ENABLED_CLASS = 'scroll-anchor-enabled';
+const BOTTOM_THRESHOLD_PX = 100;
+
 type ViewMode = 'chat' | 'history' | 'settings';
 
 export interface UseScrollBehaviorOptions {
@@ -49,11 +52,37 @@ export function useScrollBehavior({
   // because the viewport is still within the 100px threshold.
   const userPausedRef = useRef(false);
 
+  const syncScrollAnchoring = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const shouldEnableScrollAnchoring = userPausedRef.current || !isUserAtBottomRef.current;
+    container.classList.toggle(SCROLL_ANCHOR_ENABLED_CLASS, shouldEnableScrollAnchoring);
+  }, []);
+
+  const syncUserAtBottomState = useCallback((container: HTMLDivElement) => {
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    isUserAtBottomRef.current = distanceFromBottom < BOTTOM_THRESHOLD_PX;
+    syncScrollAnchoring();
+  }, [syncScrollAnchoring]);
+
   // Scroll to bottom function
   const scrollToBottom = useCallback(() => {
     const container = messagesContainerRef.current;
+    const endElement = messagesEndRef.current;
+
+    if (endElement) {
+      // Force the browser to resolve layout all the way to the end marker
+      // before we read scrollHeight. This avoids intermediate scroll targets
+      // when the last message uses deferred layout/content-visibility and
+      // grows in multiple phases (common for Agent tool blocks).
+      void endElement.getBoundingClientRect();
+      void endElement.offsetTop;
+    }
+
     if (container) {
       isAutoScrollingRef.current = true;
+      isUserAtBottomRef.current = true;
+      container.classList.remove(SCROLL_ANCHOR_ENABLED_CLASS);
       container.scrollTop = container.scrollHeight;
       requestAnimationFrame(() => {
         isAutoScrollingRef.current = false;
@@ -61,7 +90,6 @@ export function useScrollBehavior({
       return;
     }
 
-    const endElement = messagesEndRef.current;
     if (endElement) {
       isAutoScrollingRef.current = true;
       try {
@@ -98,6 +126,8 @@ export function useScrollBehavior({
     const container = messagesContainerRef.current;
     if (!container) return;
 
+    syncScrollAnchoring();
+
     // Throttle scroll handler via rAF — fires at most once per frame
     let scrollRafId: number | null = null;
     const handleScroll = () => {
@@ -109,9 +139,7 @@ export function useScrollBehavior({
         // If user explicitly paused via wheel-up, don't let scroll handler override
         if (userPausedRef.current) return;
         // Calculate distance from bottom
-        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-        // Consider user at bottom if within 100 pixels
-        isUserAtBottomRef.current = distanceFromBottom < 100;
+        syncUserAtBottomState(container);
       });
     };
 
@@ -124,16 +152,18 @@ export function useScrollBehavior({
         // User is scrolling UP → pause auto-scroll immediately
         userPausedRef.current = true;
         isUserAtBottomRef.current = false;
+        syncScrollAnchoring();
       } else if (e.deltaY > 0) {
         // User is scrolling DOWN → check if they reached the bottom to unpause
         if (wheelRafId !== null) cancelAnimationFrame(wheelRafId);
         wheelRafId = requestAnimationFrame(() => {
           wheelRafId = null;
           const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-          if (distanceFromBottom < 100) {
+          if (distanceFromBottom < BOTTOM_THRESHOLD_PX) {
             userPausedRef.current = false;
             isUserAtBottomRef.current = true;
           }
+          syncScrollAnchoring();
         });
       }
     };
@@ -143,10 +173,53 @@ export function useScrollBehavior({
     return () => {
       container.removeEventListener('scroll', handleScroll);
       container.removeEventListener('wheel', handleWheel);
+      container.classList.remove(SCROLL_ANCHOR_ENABLED_CLASS);
       if (scrollRafId !== null) cancelAnimationFrame(scrollRafId);
       if (wheelRafId !== null) cancelAnimationFrame(wheelRafId);
     };
-  }, [currentView]);
+  }, [currentView, syncScrollAnchoring, syncUserAtBottomState]);
+
+  // Follow content height changes that don't replace the message array, such as
+  // subagent/task detail updates inside the currently streaming assistant block.
+  // The observer should be stable across streaming ticks; only recreate on view change.
+  useEffect(() => {
+    if (currentView !== 'chat') return;
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    if (typeof ResizeObserver === 'undefined') return;
+
+    const observedElement = messagesEndRef.current?.parentElement ?? container.firstElementChild;
+    if (!(observedElement instanceof HTMLElement)) return;
+
+    let resizeRafId: number | null = null;
+    const observer = new ResizeObserver(() => {
+      if (resizeRafId !== null) {
+        cancelAnimationFrame(resizeRafId);
+      }
+      resizeRafId = requestAnimationFrame(() => {
+        resizeRafId = null;
+        // Read current state from refs — these are updated by other effects/handlers
+        const shouldStickToBottom = !userPausedRef.current && isUserAtBottomRef.current;
+        if (userPausedRef.current) {
+          syncScrollAnchoring();
+          return;
+        }
+        if (shouldStickToBottom) {
+          scrollToBottom();
+          return;
+        }
+        syncUserAtBottomState(container);
+      });
+    });
+
+    observer.observe(observedElement);
+    return () => {
+      observer.disconnect();
+      if (resizeRafId !== null) {
+        cancelAnimationFrame(resizeRafId);
+      }
+    };
+  }, [currentView, scrollToBottom, syncScrollAnchoring, syncUserAtBottomState]);
 
   // Auto-scroll: follow latest content when user is at bottom
   // Includes streaming, expanded thinking blocks, loading indicator, etc.
@@ -157,6 +230,7 @@ export function useScrollBehavior({
 
   useLayoutEffect(() => {
     if (currentView !== 'chat') return;
+    syncScrollAnchoring();
     if (userPausedRef.current) return;
     if (!isUserAtBottomRef.current) return;
 
@@ -173,7 +247,7 @@ export function useScrollBehavior({
     } else {
       scrollToBottom();
     }
-  }, [currentView, messages, expandedThinking, loading, streamingActive, scrollToBottom]);
+  }, [currentView, messages, expandedThinking, loading, streamingActive, scrollToBottom, syncScrollAnchoring]);
 
   // Cleanup scroll debounce on unmount
   useEffect(() => {

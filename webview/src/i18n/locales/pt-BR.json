@@ -169,6 +169,20 @@
         "disabled": "Desativado",
         "hint": "Quando ativado, selecionar um arquivo na árvore do projeto enviará automaticamente o caminho do arquivo para a IA (atenção: apenas o caminho é enviado, não o conteúdo). Quando desativado, é necessária ação manual."
       },
+      "promptEnhancer": {
+        "label": "Prompt Enhancer",
+        "modelLabel": "Enhancer Model",
+        "resetToDefault": "Restore Default",
+        "providerAvailable": "Available",
+        "providerUnavailable": "Currently unavailable",
+        "provider": {
+          "claude": "Claude Code",
+          "codex": "Codex"
+        },
+        "currentProviderAuto": "Currently using automatic selection: {{provider}}",
+        "currentProviderManual": "Currently using manually selected provider: {{provider}}",
+        "currentProviderUnavailable": "The selected provider is currently unavailable: {{provider}}"
+      },
       "diffExpanded": {
         "label": "Expandir Diffs por Padrão",
         "enabled": "Expandido",
@@ -242,6 +256,10 @@
     },
     "providers": "Gerenciamento de Provedores",
     "providersDesc": "Gerenciar configurações de provedores de API Claude e Codex e alternar entre diferentes provedores de serviço",
+    "promptEnhancer": {
+      "title": "Prompt Enhancer",
+      "description": "Choose which provider and model should be used when enhancing prompts before sending them."
+    },
     "providerTab": {
       "claude": "Claude Code",
       "codex": "Codex"
@@ -310,6 +328,16 @@
     "commit": {
       "title": "IA para Commits",
       "description": "Configurar o comportamento de geração de mensagens de commit Git com IA",
+      "providerModel": {
+        "label": "Provedor do modelo de commit",
+        "modelLabel": "Modelo de commit",
+        "resetToDefault": "Redefinir",
+        "providerAvailable": "Disponível",
+        "providerUnavailable": "Indisponível",
+        "currentProviderAuto": "Usando seleção automática atualmente: {{provider}}",
+        "currentProviderManual": "Usando o provedor selecionado manualmente atualmente: {{provider}}",
+        "currentProviderUnavailable": "O provedor selecionado está indisponível no momento: {{provider}}"
+      },
       "prompt": {
         "label": "Prompt Adicional",
         "placeholder": "Adicione seus requisitos extras aqui, ex: gerar commit em português, incluir número do issue, etc...",
@@ -570,6 +598,7 @@
         "deepseek": "DeepSeek",
         "minimax": "MiniMax",
         "xiaomi": "Xiaomi MiMo",
+        "xiaomiPlan": "Xiaomi MiMo Plan",
         "qwen": "Alibaba Qwen",
         "openrouter": "OpenRouter"
       }
@@ -778,6 +807,16 @@
     "confirmDelete": "Confirmar Exclusão",
     "deleteMessage": "Tem certeza que deseja excluir esta sessão? Esta ação não pode ser desfeita.",
     "deleteSession": "Excluir esta sessão",
+    "selectMode": "Select",
+    "exitSelectMode": "Exit selection",
+    "selectedSessions": "{{count}} selected",
+    "selectAll": "Select all",
+    "clearSelection": "Clear",
+    "deleteSelected": "Delete selected",
+    "confirmDeleteSelected": "Confirm Delete",
+    "deleteSelectedMessage": "Are you sure you want to delete {{count}} selected sessions? This action cannot be undone.",
+    "selectSession": "Select session",
+    "selectSessionWithTitle": "Select {{title}}",
     "exportSession": "Exportar sessão",
     "exportSuccess": "Sessão exportada",
     "exportFailed": "Falha na exportação",
@@ -887,6 +926,12 @@
     "clickToCopy": "Clique para copiar",
     "switch": "Alternar",
     "switchProvider": "Alternar provedor",
+    "runtimeProvider": {
+      "title": "Alternar provedor atual",
+      "loading": "Carregando provedores...",
+      "empty": "Nenhum provedor disponível",
+      "switched": "Alternado para {{provider}}"
+    },
     "link": "Link"
   },
   "markdown": {

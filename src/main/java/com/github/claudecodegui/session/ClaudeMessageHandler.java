@@ -22,12 +22,12 @@ import java.util.List;
  */
 public class ClaudeMessageHandler implements MessageCallback {
     private static final Logger LOG = Logger.getInstance(ClaudeMessageHandler.class);
-
     private final Project project;
     private final SessionState state;
     private final CallbackHandler callbackHandler;
     private final MessageParser messageParser;
     private final MessageMerger messageMerger;
+    private final ReplayDeduplicator replayDedup = new ReplayDeduplicator();
     private final Gson gson;
 
     // Content accumulator for the current assistant message
@@ -39,23 +39,20 @@ public class ClaudeMessageHandler implements MessageCallback {
     // Whether the AI is currently in thinking mode
     private boolean isThinking = false;
 
-    // Streaming state tracking — volatile because these fields are read/written across
-    // message callback threads and EDT, with no other happens-before guarantee.
+    // Streaming state tracking — volatile because these fields are written on the SDK
+    // callback thread and read on EDT. Visibility is guaranteed by volatile; atomicity
+    // is not required because each field is independently read/written (no compound ops).
+    // EDT reads happen inside invokeLater() Runnables submitted after the write.
     private volatile boolean isStreaming = false;
 
     private volatile boolean streamEndedThisTurn = false;
     private volatile boolean errorReportedThisTurn = false;
     private volatile String lastReportedError = null;
 
-    // Streaming segment state (used to split text/thinking around tool calls)
+    // Streaming segment state (used to split text/thinking around tool calls).
+    // Written on SDK callback thread, read on EDT via invokeLater() happens-before.
     private volatile boolean textSegmentActive = false;
     private volatile boolean thinkingSegmentActive = false;
-
-    // Offset tracking for deduplication after conservative sync.
-    // Volatile: same threading pattern as textSegmentActive/thinkingSegmentActive
-    // (read/written across SDK callback threads and EDT).
-    private volatile int syncedContentOffset = 0;
-    private volatile int syncedThinkingOffset = 0;
 
     /**
      * Constructor.
@@ -156,8 +153,7 @@ public class ClaudeMessageHandler implements MessageCallback {
         lastReportedError = error;
         textSegmentActive = false;
         thinkingSegmentActive = false;
-        syncedContentOffset = 0;
-        syncedThinkingOffset = 0;
+        replayDedup.reset();
 
         // Reset thinking state if still active — same as onComplete() and handleStreamEnd()
         if (isThinking) {
@@ -211,8 +207,7 @@ public class ClaudeMessageHandler implements MessageCallback {
         isStreaming = false;
         textSegmentActive = false;
         thinkingSegmentActive = false;
-        syncedContentOffset = 0;
-        syncedThinkingOffset = 0;
+        replayDedup.reset();
 
         // Reset thinking state if still active
         if (isThinking) {
@@ -249,6 +244,8 @@ public class ClaudeMessageHandler implements MessageCallback {
             // Parse the complete JSON message
             JsonObject messageJson = gson.fromJson(content, JsonObject.class);
             JsonObject previousRaw = currentAssistantMessage != null ? currentAssistantMessage.raw : null;
+            String previousAssistantContent = assistantContent.toString();
+            String previousThinkingContent = ReplayDeduplicator.extractThinkingContent(previousRaw);
             JsonObject mergedRaw = messageMerger.mergeAssistantMessage(previousRaw, messageJson);
 
             if (currentAssistantMessage == null) {
@@ -262,20 +259,35 @@ public class ClaudeMessageHandler implements MessageCallback {
             //   (tool call messages typically don't contain text)
             // Non-streaming mode: rebuild content from the full message text
             String aggregatedText = messageParser.extractMessageContent(mergedRaw);
+            String streamingText = ReplayDeduplicator.extractTextContent(mergedRaw);
             if (!isStreaming) {
                 assistantContent.setLength(0);
                 if (aggregatedText != null) {
                     assistantContent.append(aggregatedText);
                 }
                 currentAssistantMessage.content = assistantContent.toString();
-            } else if (aggregatedText != null && aggregatedText.length() > assistantContent.length()) {
+                replayDedup.reset();
+            } else if (streamingText.length() > assistantContent.length()) {
                 // Conservative sync: if full text is longer, update accumulator (prevents delta loss edge cases)
                 assistantContent.setLength(0);
-                assistantContent.append(aggregatedText);
+                assistantContent.append(streamingText);
                 currentAssistantMessage.content = assistantContent.toString();
-                syncedContentOffset = assistantContent.length();
+                replayDedup.beginContentReplay(streamingText, ReplayDeduplicator.replayOffset(previousAssistantContent.length(), replayDedup.contentOffset()));
             }
             currentAssistantMessage.raw = mergedRaw;
+
+            if (isStreaming) {
+                String mergedThinkingContent = ReplayDeduplicator.extractThinkingContent(mergedRaw);
+                if (mergedThinkingContent.length() > previousThinkingContent.length()) {
+                    replayDedup.beginThinkingReplay(
+                            mergedThinkingContent,
+                            ReplayDeduplicator.replayOffset(previousThinkingContent.length(), replayDedup.thinkingOffset())
+                    );
+                }
+                ReplayDeduplicator.SegmentActivity seg = ReplayDeduplicator.syncSegmentActivity(mergedRaw);
+                textSegmentActive = seg.textActive;
+                thinkingSegmentActive = seg.thinkingActive;
+            }
 
             // Streaming: check if the message contains tool calls
             // If tool_use is present, we need to update messages even in streaming mode to render tool blocks
@@ -297,8 +309,9 @@ public class ClaudeMessageHandler implements MessageCallback {
 
             // Tool calls act as segment boundaries: subsequent text/thinking should go into new blocks
             if (hasToolUse) {
-                textSegmentActive = false;
-                thinkingSegmentActive = false;
+                ReplayDeduplicator.SegmentActivity toolSeg = ReplayDeduplicator.syncSegmentActivity(mergedRaw);
+                textSegmentActive = toolSeg.textActive;
+                thinkingSegmentActive = toolSeg.thinkingActive;
             }
 
             // Streaming: skip full message update in streaming mode unless there is a tool call
@@ -323,6 +336,13 @@ public class ClaudeMessageHandler implements MessageCallback {
             //
             // DO NOT add !isStreaming check here - it was previously introduced in commit 03640408
             // and caused incorrect token display in streaming mode (see commit history for details).
+            //
+            // NOTE (v0.4.1+): In streaming text-only turns the ai-bridge layer suppresses [MESSAGE]
+            // emission (stream-event-processor.shouldOutputMessage returns false when no tool_use
+            // blocks are present), so this branch is NOT reached for those turns. In that case
+            // [USAGE] tags emitted by emitUsageTag() in persistent-query-service.executeTurn become
+            // the only authoritative source — handled by handleUsage(). Do not move the [USAGE]
+            // emission behind shouldOutputMessage without re-routing this final-usage update.
             if (mergedRaw.has("message") && mergedRaw.get("message").isJsonObject()) {
                 JsonObject messageObj = mergedRaw.getAsJsonObject("message");
                 if (messageObj.has("usage") && messageObj.get("usage").isJsonObject()) {
@@ -400,33 +420,21 @@ public class ClaudeMessageHandler implements MessageCallback {
         // Content output means the current thinking segment has ended
         thinkingSegmentActive = false;
 
-        // Dedup: skip if delta was already included via conservative sync.
-        // Heuristic: checks if assistantContent ends with the delta. This may produce
-        // false positives for very short deltas (1-2 chars) that coincidentally match
-        // the suffix, but the SDK sends deltas in token-level chunks (typically whole
-        // words) making this extremely rare in practice.
-        // CRITICAL: Do NOT notify frontend when dedup triggers - frontend has no dedup
-        // and will accumulate the delta, causing content duplication.
-        if (syncedContentOffset > 0
-                && assistantContent.length() >= content.length()
-                && assistantContent.substring(assistantContent.length() - content.length()).equals(content)) {
-            LOG.debug("Skipping duplicate content delta (len=" + content.length() + ")");
-            if (!isStreaming) {
-                callbackHandler.notifyMessageUpdate(state.getMessages());
-            }
+        String novelContent = replayDedup.consumeContentDelta(content);
+        if (novelContent.isEmpty()) {
+            LOG.debug("Skipping replayed content delta (len=" + content.length() + ")");
             return;
         }
 
         // Accumulate content for the final message
-        assistantContent.append(content);
+        assistantContent.append(novelContent);
 
         ensureCurrentAssistantMessageExists();
         currentAssistantMessage.content = assistantContent.toString();
-        applyTextDeltaToRaw(content);
-        syncedContentOffset = assistantContent.length();
+        applyTextDeltaToRaw(novelContent);
         textSegmentActive = true;
 
-        callbackHandler.notifyContentDelta(content);
+        callbackHandler.notifyContentDelta(novelContent);
         if (!isStreaming) {
             callbackHandler.notifyMessageUpdate(state.getMessages());
         }
@@ -652,8 +660,7 @@ public class ClaudeMessageHandler implements MessageCallback {
         lastReportedError = null;
         textSegmentActive = false;
         thinkingSegmentActive = false;
-        syncedContentOffset = 0;
-        syncedThinkingOffset = 0;
+        replayDedup.reset();
         callbackHandler.notifyStreamStart();
     }
 
@@ -666,8 +673,7 @@ public class ClaudeMessageHandler implements MessageCallback {
         streamEndedThisTurn = true;
         textSegmentActive = false;
         thinkingSegmentActive = false;
-        syncedContentOffset = 0;
-        syncedThinkingOffset = 0;
+        replayDedup.reset();
 
         // Reset thinking state — stream end is the definitive boundary for a turn.
         // If thinking was active when the stream ended (e.g., extended thinking without
@@ -706,15 +712,17 @@ public class ClaudeMessageHandler implements MessageCallback {
         }
         // Write thinking delta to raw to prevent data loss after stream ends
         ensureCurrentAssistantMessageExists();
-        boolean applied = applyThinkingDeltaToRaw(content);
+        String novelContent = replayDedup.consumeThinkingDelta(content);
+        if (novelContent.isEmpty()) {
+            LOG.debug("Skipping replayed thinking delta (len=" + content.length() + ")");
+            return;
+        }
+        boolean applied = applyThinkingDeltaToRaw(novelContent);
         if (applied) {
-            // Note: uses += (not absolute assignment like syncedContentOffset)
-            // because there is no thinkingContent StringBuilder to take length from
-            syncedThinkingOffset += content.length();
             thinkingSegmentActive = true;
             // CRITICAL: Only notify frontend when delta was actually applied.
             // Frontend has no dedup and will accumulate, causing duplication.
-            callbackHandler.notifyThinkingDelta(content);
+            callbackHandler.notifyThinkingDelta(novelContent);
             if (!isStreaming) {
                 callbackHandler.notifyMessageUpdate(state.getMessages());
             }
@@ -788,11 +796,6 @@ public class ClaudeMessageHandler implements MessageCallback {
         String existing = target.has("text") && !target.get("text").isJsonNull()
                 ? target.get("text").getAsString()
                 : "";
-
-        // Dedup: skip if delta was already included after the last conservative sync
-        if (syncedContentOffset > 0 && existing.endsWith(delta)) {
-            return false;
-        }
 
         target.addProperty("text", existing + delta);
         return true;
@@ -949,11 +952,6 @@ public class ClaudeMessageHandler implements MessageCallback {
         String existing = target.has("thinking") && !target.get("thinking").isJsonNull()
                 ? target.get("thinking").getAsString()
                 : "";
-
-        // Dedup: skip if delta was already included after the last conservative sync
-        if (syncedThinkingOffset > 0 && existing.endsWith(delta)) {
-            return false;
-        }
 
         target.addProperty("thinking", existing + delta);
         return true;

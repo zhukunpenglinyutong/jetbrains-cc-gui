@@ -4,7 +4,7 @@ import { AVAILABLE_MODELS, normalizeClaudeModelId, modelSupports1MContext, strip
 import type { ModelInfo } from '../types';
 import { readClaudeModelMapping } from '../../../utils/claudeModelMapping';
 import { ProviderModelIcon } from '../../shared/ProviderModelIcon';
-import { Switch } from 'antd';
+import Switch from 'antd/es/switch';
 
 interface ModelSelectProps {
   value: string;

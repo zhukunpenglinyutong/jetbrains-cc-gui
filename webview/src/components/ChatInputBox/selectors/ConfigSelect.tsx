@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Switch } from 'antd';
+import Switch from 'antd/es/switch';
 import { agentProvider, CREATE_NEW_AGENT_ID, EMPTY_STATE_ID, type AgentItem } from '../providers/agentProvider';
 import type { SelectedAgent } from '../types';
+import { RuntimeProviderSelect } from './RuntimeProviderSelect';
 
 interface ConfigSelectProps {
   alwaysThinkingEnabled?: boolean;
@@ -12,6 +14,7 @@ interface ConfigSelectProps {
   selectedAgent?: SelectedAgent | null;
   onAgentSelect?: (agent: SelectedAgent) => void;
   onOpenAgentSettings?: () => void;
+  currentProvider?: string;
 }
 
 /**
@@ -26,16 +29,20 @@ export const ConfigSelect = ({
   selectedAgent,
   onAgentSelect,
   onOpenAgentSettings,
+  currentProvider = 'claude',
 }: ConfigSelectProps) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
-  const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'agent'>('none');
+  const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'agent' | 'runtimeProvider'>('none');
   const [agentItems, setAgentItems] = useState<AgentItem[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [showToast, setShowToast] = useState(false);
 
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const agentAbortControllerRef = useRef<AbortController | null>(null);
+  const toastTimerRef = useRef<number | undefined>(undefined);
 
   const handleToggle = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -76,6 +83,17 @@ export const ConfigSelect = ({
     }
   }, []);
 
+  const showProviderToast = useCallback((providerName: string) => {
+    if (toastTimerRef.current !== undefined) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+    setToastMessage(t('config.runtimeProvider.switched', { provider: providerName }));
+    setShowToast(true);
+    toastTimerRef.current = window.setTimeout(() => {
+      setShowToast(false);
+    }, 1500);
+  }, [t]);
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -110,6 +128,9 @@ export const ConfigSelect = ({
     return () => {
       if (agentAbortControllerRef.current) {
         agentAbortControllerRef.current.abort();
+      }
+      if (toastTimerRef.current !== undefined) {
+        window.clearTimeout(toastTimerRef.current);
       }
     };
   }, []);
@@ -244,8 +265,47 @@ export const ConfigSelect = ({
             {activeSubmenu === 'agent' && renderAgentSubmenu()}
           </div>
 
+          <div className="selector-divider" />
+
+          {/* Runtime Provider Item */}
+          <div
+            className="selector-option"
+            onMouseEnter={() => setActiveSubmenu('runtimeProvider')}
+            onMouseLeave={() => setActiveSubmenu('none')}
+            style={{ position: 'relative' }}
+          >
+            <span className="codicon codicon-vm-connect" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span>{t('config.runtimeProvider.title')}</span>
+            </div>
+            <div
+              style={{
+                marginLeft: 'auto',
+                display: 'flex',
+                alignItems: 'center',
+                alignSelf: 'stretch',
+                paddingLeft: '12px',
+                cursor: 'pointer'
+              }}
+            >
+              <span className="codicon codicon-chevron-right" style={{ fontSize: '12px' }} />
+            </div>
+
+            {activeSubmenu === 'runtimeProvider' && (
+              <RuntimeProviderSelect
+                currentProvider={currentProvider}
+                embedded
+                onProviderSwitched={showProviderToast}
+                onClose={() => {
+                  setIsOpen(false);
+                  setActiveSubmenu('none');
+                }}
+              />
+            )}
+          </div>
+
           {/* Divider */}
-          <div style={{ height: 1, background: 'var(--dropdown-border)', margin: '4px 0', opacity: 0.5 }} />
+          <div className="selector-divider" />
 
           {/* Streaming Switch Item */}
           <div
@@ -298,6 +358,13 @@ export const ConfigSelect = ({
             />
           </div>
         </div>
+      )}
+
+      {showToast && createPortal(
+        <div className="selector-toast" style={{ zIndex: 20000 }}>
+          {toastMessage}
+        </div>,
+        document.body
       )}
     </div>
   );

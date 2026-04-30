@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
+import com.github.claudecodegui.handler.history.HistoryMessageInjector;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
@@ -20,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -44,9 +46,16 @@ public class CodexSDKBridge extends BaseSDKBridge {
     private static final String ENV_CODEX_CI = "CODEX_CI";
     private static final String ENV_CODEX_SANDBOX_NETWORK_DISABLED = "CODEX_SANDBOX_NETWORK_DISABLED";
     private static final long MCP_TOOLS_TIMEOUT_MS = 65_000;
+    private final CodexHistoryReader historyReader;
 
     public CodexSDKBridge() {
         super(CodexSDKBridge.class);
+        this.historyReader = new CodexHistoryReader();
+    }
+
+    CodexSDKBridge(Path sessionsDir) {
+        super(CodexSDKBridge.class);
+        this.historyReader = new CodexHistoryReader(sessionsDir, gson);
     }
 
     // ============================================================================
@@ -472,11 +481,20 @@ public class CodexSDKBridge extends BaseSDKBridge {
     }
 
     /**
-     * Get session history messages (Codex doesn't support this, returns empty list).
+     * Get persisted Codex session history messages.
      */
     public List<JsonObject> getSessionMessages(String sessionId, String cwd) {
-        LOG.info("getSessionMessages not supported by Codex SDK");
-        return new ArrayList<>();
+        try {
+            String rawMessages = historyReader.getSessionMessagesAsJson(sessionId);
+            JsonArray historyItems = gson.fromJson(rawMessages, JsonArray.class);
+            if (historyItems == null) {
+                return List.of();
+            }
+            return HistoryMessageInjector.convertCodexMessagesToFrontendBatch(historyItems);
+        } catch (Exception e) {
+            LOG.warn("Failed to load Codex session history: " + e.getMessage(), e);
+            return List.of();
+        }
     }
 
     /**

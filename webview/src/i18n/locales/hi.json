@@ -169,6 +169,20 @@
         "disabled": "अक्षम",
         "hint": "सक्षम होने पर, प्रोजेक्ट ट्री में फ़ाइल चुनने पर उसका फ़ाइल पथ स्वचालित रूप से AI को भेजा जाएगा (ध्यान दें: केवल फ़ाइल पथ भेजा जाता है, फ़ाइल सामग्री नहीं)। अक्षम होने पर मैन्युअल कार्रवाई आवश्यक है।"
       },
+      "promptEnhancer": {
+        "label": "Prompt Enhancer",
+        "modelLabel": "Enhancer Model",
+        "resetToDefault": "Restore Default",
+        "providerAvailable": "Available",
+        "providerUnavailable": "Currently unavailable",
+        "provider": {
+          "claude": "Claude Code",
+          "codex": "Codex"
+        },
+        "currentProviderAuto": "Currently using automatic selection: {{provider}}",
+        "currentProviderManual": "Currently using manually selected provider: {{provider}}",
+        "currentProviderUnavailable": "The selected provider is currently unavailable: {{provider}}"
+      },
       "diffExpanded": {
         "label": "डिफ़ॉल्ट रूप से अंतर दिखाएं",
         "enabled": "विस्तारित",
@@ -240,9 +254,23 @@
     "mcpDesc": "Model Context Protocol सर्वर कॉन्फ़िगर और प्रबंधित करें",
     "permissions": "अनुमति कॉन्फ़िगरेशन",
     "permissionsDesc": "Claude Code की फ़ाइल एक्सेस और ऑपरेशन अनुमतियां प्रबंधित करें",
+    "promptEnhancer": {
+      "title": "Prompt Enhancer",
+      "description": "Choose which provider and model should be used when enhancing prompts before sending them."
+    },
     "commit": {
       "title": "Commit AI",
       "description": "Configure AI-generated Git commit message behavior",
+      "providerModel": {
+        "label": "कमिट मॉडल प्रदाता",
+        "modelLabel": "कमिट मॉडल",
+        "resetToDefault": "रीसेट",
+        "providerAvailable": "उपलब्ध",
+        "providerUnavailable": "अनुपलब्ध",
+        "currentProviderAuto": "वर्तमान में स्वचालित चयन का उपयोग: {{provider}}",
+        "currentProviderManual": "वर्तमान में मैन्युअल रूप से चयनित प्रदाता का उपयोग: {{provider}}",
+        "currentProviderUnavailable": "चयनित प्रदाता वर्तमान में अनुपलब्ध है: {{provider}}"
+      },
       "prompt": {
         "label": "Additional Prompt",
         "placeholder": "Add your extra requirements here, e.g., generate commit in English, include issue number, etc...",
@@ -481,6 +509,7 @@
         "deepseek": "DeepSeek",
         "minimax": "MiniMax",
         "xiaomi": "Xiaomi MiMo",
+        "xiaomiPlan": "Xiaomi MiMo Plan",
         "qwen": "Alibaba Qwen",
         "openrouter": "OpenRouter"
       }
@@ -604,6 +633,16 @@
     "confirmDelete": "हटाने की पुष्टि करें",
     "deleteMessage": "क्या आप इस सत्र को हटाना चाहते हैं? यह क्रिया पूर्ववत नहीं की जा सकती।",
     "deleteSession": "इस सत्र को हटाएं",
+    "selectMode": "Select",
+    "exitSelectMode": "Exit selection",
+    "selectedSessions": "{{count}} selected",
+    "selectAll": "Select all",
+    "clearSelection": "Clear",
+    "deleteSelected": "Delete selected",
+    "confirmDeleteSelected": "Confirm Delete",
+    "deleteSelectedMessage": "Are you sure you want to delete {{count}} selected sessions? This action cannot be undone.",
+    "selectSession": "Select session",
+    "selectSessionWithTitle": "Select {{title}}",
     "exportSession": "सत्र निर्यात करें",
     "exportSuccess": "सत्र निर्यात किया गया",
     "exportFailed": "निर्यात विफल",
@@ -712,6 +751,12 @@
     "clickToCopy": "कॉपी करने के लिए क्लिक करें",
     "switch": "स्विच",
     "switchProvider": "प्रदाता स्विच करें",
+    "runtimeProvider": {
+      "title": "वर्तमान प्रदाता बदलें",
+      "loading": "प्रदाता लोड हो रहे हैं...",
+      "empty": "कोई प्रदाता उपलब्ध नहीं",
+      "switched": "{{provider}} पर स्विच किया गया"
+    },
     "link": "लिंक"
   },
   "markdown": {

@@ -2,6 +2,7 @@ package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.handler.core.HandlerContext;
 
+import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.action.SendShortcutSync;
 import com.github.claudecodegui.provider.claude.ClaudeHistoryReader;
@@ -325,6 +326,90 @@ public class ProjectConfigHandler {
             LOG.error("[ProjectConfigHandler] Failed to set commit prompt: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() ->
                 context.callJavaScript("window.showError", context.escapeJs("保存 Commit 提示词失败: " + e.getMessage())));
+        }
+    }
+
+    public void handleGetPromptEnhancerConfig() {
+        try {
+            JsonObject config = settingsService.getPromptEnhancerConfig();
+            ApplicationManager.getApplication().invokeLater(() ->
+                context.callJavaScript("window.updatePromptEnhancerConfig", context.escapeJs(gson.toJson(config))));
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to get prompt enhancer config: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() ->
+                context.callJavaScript("window.showError", context.escapeJs(
+                    ClaudeCodeGuiBundle.message("projectConfig.promptEnhancer.getFailed", e.getMessage()))));
+        }
+    }
+
+    public void handleSetPromptEnhancerConfig(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            String provider = json != null && json.has("provider") && !json.get("provider").isJsonNull()
+                    ? json.get("provider").getAsString()
+                    : null;
+
+            JsonObject models = json != null && json.has("models") && json.get("models").isJsonObject()
+                    ? json.getAsJsonObject("models")
+                    : new JsonObject();
+            String claudeModel = models.has("claude") && !models.get("claude").isJsonNull()
+                    ? models.get("claude").getAsString()
+                    : null;
+            String codexModel = models.has("codex") && !models.get("codex").isJsonNull()
+                    ? models.get("codex").getAsString()
+                    : null;
+
+            settingsService.setPromptEnhancerConfig(provider, claudeModel, codexModel);
+            JsonObject updatedConfig = settingsService.getPromptEnhancerConfig();
+            ApplicationManager.getApplication().invokeLater(() ->
+                context.callJavaScript("window.updatePromptEnhancerConfig", context.escapeJs(gson.toJson(updatedConfig))));
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set prompt enhancer config: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() ->
+                context.callJavaScript("window.showError", context.escapeJs(
+                    ClaudeCodeGuiBundle.message("projectConfig.promptEnhancer.saveFailed", e.getMessage()))));
+        }
+    }
+
+    public void handleGetCommitAiConfig() {
+        try {
+            JsonObject config = settingsService.getCommitAiConfig();
+            ApplicationManager.getApplication().invokeLater(() ->
+                context.callJavaScript("window.updateCommitAiConfig", context.escapeJs(gson.toJson(config))));
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to get commit AI config: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() ->
+                context.callJavaScript("window.showError", context.escapeJs(
+                    ClaudeCodeGuiBundle.message("projectConfig.commitAi.getFailed", e.getMessage()))));
+        }
+    }
+
+    public void handleSetCommitAiConfig(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            String provider = json != null && json.has("provider") && !json.get("provider").isJsonNull()
+                    ? json.get("provider").getAsString()
+                    : null;
+
+            JsonObject models = json != null && json.has("models") && json.get("models").isJsonObject()
+                    ? json.getAsJsonObject("models")
+                    : new JsonObject();
+            String claudeModel = models.has("claude") && !models.get("claude").isJsonNull()
+                    ? models.get("claude").getAsString()
+                    : null;
+            String codexModel = models.has("codex") && !models.get("codex").isJsonNull()
+                    ? models.get("codex").getAsString()
+                    : null;
+
+            settingsService.setCommitAiConfig(provider, claudeModel, codexModel);
+            JsonObject updatedConfig = settingsService.getCommitAiConfig();
+            ApplicationManager.getApplication().invokeLater(() ->
+                context.callJavaScript("window.updateCommitAiConfig", context.escapeJs(gson.toJson(updatedConfig))));
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set commit AI config: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() ->
+                context.callJavaScript("window.showError", context.escapeJs(
+                    ClaudeCodeGuiBundle.message("projectConfig.commitAi.saveFailed", e.getMessage()))));
         }
     }
 

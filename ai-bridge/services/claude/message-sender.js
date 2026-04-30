@@ -29,8 +29,16 @@ import {
 } from './message-utils.js';
 import { createPreToolUseHook } from './permission-mode.js';
 import { setActiveQueryResult } from './message-session-registry.js';
+import { normalizeStreamDelta, rememberStreamSnapshot } from './stream-delta-normalizer.js';
 
 // ========== Internal helpers for deduplication ==========
+
+const SUPPORTED_EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
+
+function normalizeReasoningEffort(reasoningEffort) {
+  const effort = typeof reasoningEffort === 'string' ? reasoningEffort.trim() : '';
+  return SUPPORTED_EFFORT_LEVELS.has(effort) ? effort : null;
+}
 
 /**
  * Resolve Extended Thinking configuration from settings.
@@ -152,11 +160,17 @@ function processStreamMessage(msg, state, logPrefix) {
       }
       if (event.type === 'content_block_delta' && event.delta) {
         if (event.delta.type === 'text_delta' && event.delta.text) {
-          process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(event.delta.text)}\n`);
-          state.lastAssistantContent += event.delta.text;
+          const delta = normalizeStreamDelta(state, 'text', event.index, event.delta.text);
+          if (delta) {
+            process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(delta)}\n`);
+            state.lastAssistantContent += delta;
+          }
         } else if (event.delta.type === 'thinking_delta' && event.delta.thinking) {
-          process.stdout.write(`[THINKING_DELTA] ${JSON.stringify(event.delta.thinking)}\n`);
-          state.lastThinkingContent += event.delta.thinking;
+          const delta = normalizeStreamDelta(state, 'thinking', event.index, event.delta.thinking);
+          if (delta) {
+            process.stdout.write(`[THINKING_DELTA] ${JSON.stringify(delta)}\n`);
+            state.lastThinkingContent += delta;
+          }
         }
       }
       if (event.type === 'content_block_start' && event.content_block?.type === 'thinking') {
@@ -178,11 +192,12 @@ function processStreamMessage(msg, state, logPrefix) {
   if (msg.type === 'assistant') {
     const content = msg.message?.content;
     if (Array.isArray(content)) {
-      for (const block of content) {
+      for (let i = 0; i < content.length; i += 1) {
+        const block = content[i];
         if (block.type === 'text') {
-          emitTextDelta(block.text || '', state);
+          emitTextDelta(block.text || '', state, i);
         } else if (block.type === 'thinking') {
-          emitThinkingDelta(block.thinking || block.text || '', state);
+          emitThinkingDelta(block.thinking || block.text || '', state, i);
         } else if (block.type === 'tool_use') {
           console.log('[TOOL_USE]', JSON.stringify({ id: block.id, name: block.name }));
         }
@@ -226,7 +241,8 @@ function processStreamMessage(msg, state, logPrefix) {
 }
 
 /** Emit text content delta with streaming fallback support. */
-function emitTextDelta(currentText, state) {
+function emitTextDelta(currentText, state, blockIndex = 0) {
+  rememberStreamSnapshot(state, 'text', blockIndex, currentText);
   if (state.streamingEnabled && !state.hasStreamEvents && currentText.length > state.lastAssistantContent.length) {
     const delta = currentText.substring(state.lastAssistantContent.length);
     if (delta) process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(delta)}\n`);
@@ -239,7 +255,8 @@ function emitTextDelta(currentText, state) {
 }
 
 /** Emit thinking content delta with streaming fallback support. */
-function emitThinkingDelta(thinkingText, state) {
+function emitThinkingDelta(thinkingText, state, blockIndex = 0) {
+  rememberStreamSnapshot(state, 'thinking', blockIndex, thinkingText);
   if (state.streamingEnabled && !state.hasStreamEvents && thinkingText.length > state.lastThinkingContent.length) {
     const delta = thinkingText.substring(state.lastThinkingContent.length);
     if (delta) process.stdout.write(`[THINKING_DELTA] ${JSON.stringify(delta)}\n`);
@@ -388,7 +405,7 @@ function handleSendError(error, streamState, sdkStderrLines) {
  * @param {string} agentPrompt - Agent prompt (optional)
  * @param {boolean} streaming - Whether to enable streaming (optional, defaults to config value)
  */
-export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null) {
+export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null, disableThinking = false, reasoningEffort = null) {
   console.log('[DIAG] ========== sendMessage() START ==========');
   console.log('[DIAG] params:', { msgLen: message ? message.length : 0, resumeSessionId: resumeSessionId || '(new)', cwd, permissionMode, model });
 
@@ -416,12 +433,20 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     const systemPromptAppend = buildSystemPromptAppend(openedFiles, agentPrompt, message);
 
     const effectivePermissionMode = (!permissionMode || permissionMode === '') ? 'default' : permissionMode;
-    const { alwaysThinkingEnabled, maxThinkingTokens } = resolveThinkingConfig(settings);
+    const normalizedReasoningEffort = normalizeReasoningEffort(reasoningEffort);
+    const { alwaysThinkingEnabled, maxThinkingTokens: configuredMaxThinkingTokens } = resolveThinkingConfig(settings);
+    // maxThinkingTokens and reasoningEffort are mutually exclusive
+    const maxThinkingTokens = (alwaysThinkingEnabled && !normalizedReasoningEffort) ? configuredMaxThinkingTokens : undefined;
     streamingEnabled = streaming != null ? streaming : (settings?.streamingEnabled ?? false);
-    console.log('[DEBUG] Config:', { effectivePermissionMode, alwaysThinkingEnabled, maxThinkingTokens, streamingEnabled });
+    console.log('[DEBUG] Config:', { effectivePermissionMode, alwaysThinkingEnabled, maxThinkingTokens, streamingEnabled, reasoningEffort: normalizedReasoningEffort });
 
     const preToolUseHook = createPreToolUseHook(effectivePermissionMode, workingDirectory);
     const options = buildQueryOptions({ workingDirectory, permissionMode: effectivePermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines });
+
+    if (normalizedReasoningEffort) {
+      options.effort = normalizedReasoningEffort;
+      console.log('[DEBUG] Set SDK effort:', normalizedReasoningEffort);
+    }
 
     await prepareSessionResume(options, resumeSessionId, workingDirectory);
 
@@ -482,12 +507,20 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     const normalizedPermissionMode = (!permissionMode || permissionMode === '') ? 'default' : permissionMode;
     const preToolUseHook = createPreToolUseHook(normalizedPermissionMode, workingDirectory);
 
-    const { alwaysThinkingEnabled, maxThinkingTokens } = resolveThinkingConfig(settings);
+    const { alwaysThinkingEnabled, maxThinkingTokens: configuredMaxThinkingTokens } = resolveThinkingConfig(settings);
+    const reasoningEffort = normalizeReasoningEffort(stdinData?.reasoningEffort || null);
+    // maxThinkingTokens and reasoningEffort are mutually exclusive
+    const maxThinkingTokens = (alwaysThinkingEnabled && !reasoningEffort) ? configuredMaxThinkingTokens : undefined;
     const streamingParam = stdinData?.streaming;
     streamingEnabled = streamingParam != null ? streamingParam : (settings?.streamingEnabled ?? false);
-    console.log('[DEBUG] (withAttachments) Config:', { normalizedPermissionMode, alwaysThinkingEnabled, maxThinkingTokens, streamingEnabled });
+    console.log('[DEBUG] (withAttachments) Config:', { normalizedPermissionMode, alwaysThinkingEnabled, maxThinkingTokens, streamingEnabled, reasoningEffort });
 
     const options = buildQueryOptions({ workingDirectory, permissionMode: normalizedPermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines });
+
+    if (reasoningEffort) {
+      options.effort = reasoningEffort;
+      console.log('[DEBUG] (withAttachments) Set SDK effort:', reasoningEffort);
+    }
 
     await prepareSessionResume(options, resumeSessionId, workingDirectory);
 

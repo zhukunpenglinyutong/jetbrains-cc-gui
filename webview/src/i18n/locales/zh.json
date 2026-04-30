@@ -173,6 +173,20 @@
         "disabled": "已关闭",
         "hint": "开启后，在项目树选择文件时会自动将文件路径告诉 AI（注意：只传递文件路径，不传文件内容）。关闭后需要手动操作。"
       },
+      "promptEnhancer": {
+        "label": "增强提示词",
+        "modelLabel": "增强模型",
+        "resetToDefault": "恢复默认",
+        "providerAvailable": "可用",
+        "providerUnavailable": "当前不可用",
+        "provider": {
+          "claude": "Claude Code",
+          "codex": "Codex"
+        },
+        "currentProviderAuto": "当前使用自动选择：{{provider}}",
+        "currentProviderManual": "当前使用手动选择的 provider：{{provider}}",
+        "currentProviderUnavailable": "当前所选 provider 不可用：{{provider}}"
+      },
       "diffExpanded": {
         "label": "默认展开差异",
         "enabled": "已展开",
@@ -246,6 +260,10 @@
     },
     "providers": "供应商管理",
     "providersDesc": "管理 Claude 和 Codex API 供应商配置，切换不同的 API 服务提供商",
+    "promptEnhancer": {
+      "title": "增强提示词",
+      "description": "配置增强提示词功能使用的 provider 与模型，在消息发送前对输入内容进行重写增强。"
+    },
     "providerTab": {
       "claude": "Claude Code",
       "codex": "Codex"
@@ -314,6 +332,16 @@
     "commit": {
       "title": "Commit AI",
       "description": "配置 AI 生成 Git Commit 消息的行为",
+      "providerModel": {
+        "label": "Commit 生成 Provider",
+        "modelLabel": "Commit 生成模型",
+        "resetToDefault": "恢复默认",
+        "providerAvailable": "可用",
+        "providerUnavailable": "当前不可用",
+        "currentProviderAuto": "当前使用自动选择：{{provider}}",
+        "currentProviderManual": "当前使用手动选择的 provider：{{provider}}",
+        "currentProviderUnavailable": "当前所选 provider 不可用：{{provider}}"
+      },
       "prompt": {
         "label": "附加提示词",
         "placeholder": "在此添加您的额外要求，例如：使用中文生成 commit、包含 issue 编号，使用表情符号等等...",
@@ -579,6 +607,7 @@
         "deepseek": "DeepSeek",
         "minimax": "MiniMax",
         "xiaomi": "Xiaomi MiMo",
+        "xiaomiPlan": "Xiaomi MiMo Plan",
         "qwen": "阿里千问",
         "openrouter": "OpenRouter"
       }
@@ -787,6 +816,16 @@
     "confirmDelete": "确认删除",
     "deleteMessage": "确定要删除这个会话吗?此操作无法撤销。",
     "deleteSession": "删除此会话",
+    "selectMode": "多选",
+    "exitSelectMode": "退出多选",
+    "selectedSessions": "已选择 {{count}} 个会话",
+    "selectAll": "全选",
+    "clearSelection": "清除",
+    "deleteSelected": "删除所选",
+    "confirmDeleteSelected": "确认删除",
+    "deleteSelectedMessage": "确定要删除选中的 {{count}} 个会话吗?此操作无法撤销。",
+    "selectSession": "选择会话",
+    "selectSessionWithTitle": "选择 {{title}}",
     "exportSession": "导出会话",
     "exportSuccess": "会话已导出",
     "exportFailed": "导出失败",
@@ -896,6 +935,12 @@
     "clickToCopy": "点击复制",
     "switch": "切换",
     "switchProvider": "切换供应商",
+    "runtimeProvider": {
+      "title": "切换当前供应商",
+      "loading": "正在加载供应商...",
+      "empty": "暂无可用供应商",
+      "switched": "已切换到 {{provider}}"
+    },
     "link": "链接"
   },
   "markdown": {
@@ -1140,7 +1185,6 @@
     "bashGroupCompleted": "完成",
     "bashGroupAllCompleted": "全部完成",
     "bashGroupFailed": "失败",
-    "promptLabel": "提示词",
     "updatePlan": "更新计划",
     "applyPatch": "应用补丁"
   },
@@ -1148,6 +1192,24 @@
     "inProgress": "进行中 {{completed}}/{{total}} 个任务",
     "allCompleted": "已完成 {{completed}}/{{total}} 个任务",
     "stopped": "已停止"
+  },
+  "subagent": {
+    "process": {
+      "title": "Agent 进程",
+      "thought": "思考",
+      "filesRead_one": "读取 {{count}} 个文件",
+      "filesRead_other": "读取 {{count}} 个文件",
+      "otherTools": "其他工具",
+      "result": "结果",
+      "showFullOutput": "查看完整输出",
+      "loading": "正在加载 Agent 进程…",
+      "unavailable": "本次会话未生成进程日志（需要会话 ID）。",
+      "reportGenerated": "已生成结构化分析报告",
+      "unitMs": "毫秒",
+      "unitS": "秒",
+      "unitTools": "个工具",
+      "unitTokens": "tokens"
+    }
   },
   "statusPanel": {
     "todoTab": "计划",
@@ -1318,6 +1380,29 @@
       }
     }
   },
+  "claudeEffort": {
+    "title": "选择推理强度",
+    "low": {
+      "label": "low",
+      "description": "短小、范围明确、对延迟敏感的任务"
+    },
+    "medium": {
+      "label": "medium",
+      "description": "成本敏感型工作，可牺牲部分智能"
+    },
+    "high": {
+      "label": "high",
+      "description": "平衡 Token 用量与智能水平"
+    },
+    "xhigh": {
+      "label": "xhigh",
+      "description": "大多数编程任务的最佳效果（推荐）"
+    },
+    "max": {
+      "label": "max",
+      "description": "高难度任务的最大推理深度（仅当前会话）"
+    }
+  },
   "models": {
     "addModel": "添加模型",
     "longContext": {
@@ -1486,20 +1571,24 @@
   "reasoning": {
     "title": "选择思考深度",
     "low": {
-      "label": "较少",
+      "label": "low",
       "description": "快速响应，基础推理"
     },
     "medium": {
-      "label": "中等",
+      "label": "medium",
       "description": "平衡思考（默认）"
     },
     "high": {
-      "label": "较多",
+      "label": "high",
       "description": "深度推理，适合复杂任务"
     },
     "xhigh": {
-      "label": "最多",
-      "description": "最深推理，最高精度"
+      "label": "xhigh",
+      "description": "额外深度推理，适合高难度任务"
+    },
+    "max": {
+      "label": "max",
+      "description": "最大推理深度"
     }
   },
   "errorBoundary": {

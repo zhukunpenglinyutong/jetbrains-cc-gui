@@ -79,6 +79,11 @@ interface Window {
   historyLoadComplete?: () => void;
 
   /**
+   * Subagent sidechain history callback.
+   */
+  onSubagentHistoryLoaded?: (json: string) => void;
+
+  /**
    * Add user message to chat (used for external Quick Fix feature)
    * Immediately shows the user's message in the chat UI before AI response
    */
@@ -286,6 +291,11 @@ interface Window {
   updateWorkingDirectory?: (json: string) => void;
 
   /**
+   * Update linkify/navigation capabilities used by Markdown rendering.
+   */
+  updateLinkifyCapabilities?: (json: string) => void;
+
+  /**
    * Show success message
    */
   showSuccess?: (message: string) => void;
@@ -402,6 +412,16 @@ interface Window {
    * Update enhanced prompt result (for prompt enhancer feature)
    */
   updateEnhancedPrompt?: (result: string) => void;
+
+  /**
+   * Update prompt enhancer settings config from backend
+   */
+  updatePromptEnhancerConfig?: (json: string) => void;
+
+  /**
+   * Update commit AI settings config from backend
+   */
+  updateCommitAiConfig?: (json: string) => void;
 
   /**
    * Update session title (called when session title changes)

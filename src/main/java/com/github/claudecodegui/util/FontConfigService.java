@@ -8,13 +8,9 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
-import java.awt.Font;
 import java.io.File;
-import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.util.Base64;
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -28,12 +24,7 @@ public class FontConfigService {
     public static final String UI_FONT_MODE_CUSTOM_FILE = "customFile";
     public static final String UI_FONT_WARNING_CUSTOM_UNAVAILABLE = "fontUnavailable";
 
-    private static final String UI_FONT_CUSTOM_FAMILY = "Codemoss UI Custom";
-    private static final long MAX_FONT_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-
-    /** Cached font data keyed by canonical path + lastModified to avoid re-reading large font files. */
-    private record CachedFontFace(String canonicalPath, long lastModified, String fontBase64, String fontFormat, String familyName) {}
-    private static volatile CachedFontFace cachedFontFace;
+    private static final String UI_FONT_CUSTOM_FAMILY = "CC GUI Custom";
 
     /**
      * Get the IDEA editor font configuration.
@@ -119,7 +110,7 @@ public class FontConfigService {
         String effectiveMode = UI_FONT_MODE_FOLLOW_EDITOR;
         String resolvedFontFamily = editorFontFamily;
         String resolvedDisplayName = editorFontFamily;
-        String fontBase64 = null;
+        String fontUrl = null;
         String fontFormat = null;
         String warning = null;
         String warningCode = null;
@@ -131,13 +122,14 @@ public class FontConfigService {
             ValidationResult validation = validateCustomUiFontFile(customFontPath);
             if (validation.valid()) {
                 try {
-                    CachedFontFace cached = loadOrCacheFontFace(customFontPath);
+                    UiFontResourceService.FontResource resource =
+                            UiFontResourceService.registerFontFile(new File(customFontPath));
                     resolvedFontFamily = UI_FONT_CUSTOM_FAMILY;
-                    resolvedDisplayName = cached.familyName() != null
-                            ? cached.familyName()
-                            : (validation.familyName() != null ? validation.familyName() : extractFileName(customFontPath));
-                    fontBase64 = cached.fontBase64();
-                    fontFormat = cached.fontFormat();
+                    resolvedDisplayName = validation.familyName() != null
+                            ? validation.familyName()
+                            : extractFileName(customFontPath);
+                    fontUrl = resource.url();
+                    fontFormat = resource.fontFormat();
                     effectiveMode = UI_FONT_MODE_CUSTOM_FILE;
                 } catch (Exception e) {
                     warning = "Font unavailable, currently using editor font";
@@ -153,8 +145,8 @@ public class FontConfigService {
         resolvedConfig.addProperty("effectiveMode", effectiveMode);
         resolvedConfig.addProperty("fontFamily", resolvedFontFamily);
         resolvedConfig.addProperty("displayName", resolvedDisplayName);
-        if (fontBase64 != null) {
-            resolvedConfig.addProperty("fontBase64", fontBase64);
+        if (fontUrl != null) {
+            resolvedConfig.addProperty("fontUrl", fontUrl);
             resolvedConfig.addProperty("fontFormat", fontFormat);
         }
         if (warning != null) {
@@ -231,16 +223,39 @@ public class FontConfigService {
         if (!canonicalFile.canRead()) {
             return new ValidationResult(false, "Font file is not readable", null);
         }
-        if (canonicalFile.length() > MAX_FONT_FILE_SIZE) {
-            return new ValidationResult(false, "Font file exceeds 5MB size limit", null);
+        if (canonicalFile.length() <= 0) {
+            return new ValidationResult(false, "Font file is empty", null);
+        }
+        if (!looksLikeFontFile(canonicalFile)) {
+            return new ValidationResult(false, "File does not appear to be a valid font file", null);
         }
 
-        try (InputStream inputStream = new FileInputStream(canonicalFile)) {
-            Font font = Font.createFont(Font.TRUETYPE_FONT, inputStream);
-            return new ValidationResult(true, null, font.getFontName());
-        } catch (Exception e) {
-            LOG.warn("[FontConfig] Failed to validate custom font file: " + canonicalPath, e);
-            return new ValidationResult(false, "Unable to parse font file", null);
+        return new ValidationResult(true, null, null);
+    }
+
+    /**
+     * Lightweight magic-number sniff for common font formats.
+     * Avoids the cost of {@code Font.createFont} full parsing while still rejecting
+     * obviously bogus files (random binaries, text files renamed to .ttf, etc.).
+     */
+    private static boolean looksLikeFontFile(File file) {
+        try (FileInputStream fis = new FileInputStream(file)) {
+            byte[] header = new byte[4];
+            if (fis.read(header) < 4) {
+                return false;
+            }
+            int magic = ((header[0] & 0xFF) << 24)
+                      | ((header[1] & 0xFF) << 16)
+                      | ((header[2] & 0xFF) << 8)
+                      | (header[3] & 0xFF);
+            return magic == 0x00010000  // TTF (TrueType)
+                || magic == 0x4F54544F  // 'OTTO' (OpenType with CFF)
+                || magic == 0x774F4646  // 'wOFF' (WOFF)
+                || magic == 0x774F4632  // 'wOF2' (WOFF2)
+                || magic == 0x74746366  // 'ttcf' (TrueType Collection)
+                || magic == 0x74727565; // 'true' (legacy Apple TrueType)
+        } catch (IOException e) {
+            return false;
         }
     }
 
@@ -304,33 +319,6 @@ public class FontConfigService {
         return 1.2f;
     }
 
-    private static CachedFontFace loadOrCacheFontFace(String fontPath) throws Exception {
-        File file = new File(fontPath);
-        String canonicalPath = file.getCanonicalPath();
-        long lastModified = file.lastModified();
-
-        CachedFontFace cached = cachedFontFace;
-        if (cached != null
-                && canonicalPath.equals(cached.canonicalPath())
-                && lastModified == cached.lastModified()) {
-            return cached;
-        }
-
-        byte[] fontBytes = Files.readAllBytes(file.toPath());
-        String familyName = null;
-        try (InputStream is = new java.io.ByteArrayInputStream(fontBytes)) {
-            Font font = Font.createFont(Font.TRUETYPE_FONT, is);
-            familyName = font.getFontName();
-        } catch (Exception e) {
-            LOG.debug("[FontConfig] Could not extract family name from cached read: " + e.getMessage());
-        }
-        String fontBase64 = Base64.getEncoder().encodeToString(fontBytes);
-        String fontFormat = fontFormatForPath(fontPath);
-        CachedFontFace entry = new CachedFontFace(canonicalPath, lastModified, fontBase64, fontFormat, familyName);
-        cachedFontFace = entry;
-        return entry;
-    }
-
     private static JsonObject normalizeEditorFontConfig(JsonObject config) {
         return config != null ? config.deepCopy() : getEditorFontConfig();
     }
@@ -356,10 +344,6 @@ public class FontConfigService {
             normalized.addProperty("customFontPath", persistedConfig.get("customFontPath").getAsString().trim());
         }
         return normalized;
-    }
-
-    private static String fontFormatForPath(String path) {
-        return path.toLowerCase().endsWith(".otf") ? "opentype" : "truetype";
     }
 
     private static String extractFileName(String path) {

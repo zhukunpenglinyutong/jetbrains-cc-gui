@@ -84,6 +84,34 @@ test.after(async () => {
   await __testing.resetState();
 });
 
+test('reasoningEffort is passed as SDK effort and disables fixed thinking tokens', async () => {
+  const context = await __testing.buildRequestContext({
+    sessionId: '',
+    runtimeSessionEpoch: 'epoch-effort',
+    cwd: process.cwd(),
+    message: 'use adaptive effort',
+    reasoningEffort: 'xhigh'
+  }, false);
+
+  assert.equal(context.options.effort, 'xhigh');
+  assert.equal(Object.hasOwn(context.options, 'maxThinkingTokens'), false);
+  assert.equal(context.maxThinkingTokens, undefined);
+  assert.match(context.runtimeSignature, /"effort":"xhigh"/);
+});
+
+test('fixed thinking tokens remain configured when no reasoningEffort is provided', async () => {
+  const context = await __testing.buildRequestContext({
+    sessionId: '',
+    runtimeSessionEpoch: 'epoch-thinking',
+    cwd: process.cwd(),
+    message: 'use default thinking config'
+  }, false);
+
+  assert.equal(context.options.effort, undefined);
+  assert.equal(context.options.maxThinkingTokens, 10000);
+  assert.equal(context.maxThinkingTokens, 10000);
+});
+
 test('anonymous runtime is isolated by runtimeSessionEpoch', async () => {
   const factory = createQueryFactory();
   __testing.setQueryFn(factory.queryFn);

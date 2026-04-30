@@ -168,9 +168,6 @@ const BashToolGroupBlock = ({ items, deniedToolIds }: BashToolGroupBlockProps) =
         onClick={() => setExpanded((prev) => !prev)}
       >
         <div className="task-title-section">
-          <span
-            className={`codicon ${expanded ? 'codicon-chevron-down' : 'codicon-chevron-right'} bash-group-chevron`}
-          />
           <span className="tool-title-text">
             {t('tools.bashGroupBatchRun')} ({totalCount})
           </span>

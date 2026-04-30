@@ -39,7 +39,7 @@ describe('GenericToolBlock', () => {
     expect(screen.getByText('true')).toBeTruthy();
   });
 
-  it('still shows a chevron for other expandable generic tools', () => {
+  it('keeps other expandable generic tools clickable without showing a chevron icon', () => {
     const { container } = render(
       <GenericToolBlock
         name="webfetch"
@@ -50,6 +50,12 @@ describe('GenericToolBlock', () => {
       />,
     );
 
-    expect(container.querySelector('.tool-chevron')).toBeTruthy();
+    expect(container.querySelector('.tool-chevron')).toBeNull();
+
+    fireEvent.click(container.querySelector('.task-header') as HTMLElement);
+
+    expect(container.querySelector('.task-details-accordion')?.classList.contains('expanded')).toBe(true);
+    expect(screen.getByText('prompt')).toBeTruthy();
+    expect(screen.getByText('Summarize this page')).toBeTruthy();
   });
 });

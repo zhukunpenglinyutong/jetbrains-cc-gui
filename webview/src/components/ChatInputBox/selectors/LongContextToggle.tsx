@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Switch } from 'antd';
+import Switch from 'antd/es/switch';
 import { modelSupports1MContext } from '../types';
 
 interface LongContextToggleProps {

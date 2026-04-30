@@ -2,10 +2,13 @@ package com.github.claudecodegui.terminal;
 
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.util.SelectionTextUtils;
+import com.intellij.openapi.actionSystem.ActionGroup;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
+import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.project.DumbAware;
@@ -15,6 +18,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Method;
+import java.util.Arrays;
 
 public class SendTerminalSelectionToInputAction extends AnAction implements DumbAware {
 
@@ -120,6 +124,36 @@ public class SendTerminalSelectionToInputAction extends AnAction implements Dumb
         return TERMINAL_OUTPUT_CONTEXT_MENU.equals(place)
                 || TERMINAL_PROMPT_CONTEXT_MENU.equals(place)
                 || TERMINAL_REWORKED_CONTEXT_MENU.equals(place);
+    }
+
+    static boolean registerForReworkedTerminalContextMenu(@NotNull ActionManager actionManager) {
+        synchronized (SendTerminalSelectionToInputAction.class) {
+            AnAction action = actionManager.getAction(ACTION_ID);
+            if (action == null) {
+                LOG.warn("[TerminalSend] Cannot register reworked terminal menu action because the action is missing: " + ACTION_ID);
+                return false;
+            }
+
+            AnAction groupAction = actionManager.getAction(TERMINAL_REWORKED_CONTEXT_MENU);
+            if (!(groupAction instanceof DefaultActionGroup)) {
+                if (groupAction instanceof ActionGroup) {
+                    LOG.debug("[TerminalSend] Reworked terminal context menu is not a DefaultActionGroup: "
+                            + groupAction.getClass().getName());
+                }
+                return false;
+            }
+
+            DefaultActionGroup group = (DefaultActionGroup) groupAction;
+            boolean alreadyRegistered = Arrays.stream(group.getChildren(actionManager))
+                    .map(actionManager::getId)
+                    .anyMatch(ACTION_ID::equals);
+            if (alreadyRegistered) {
+                return false;
+            }
+
+            group.add(action, actionManager);
+            return true;
+        }
     }
 
     interface TerminalSelectionProvider {

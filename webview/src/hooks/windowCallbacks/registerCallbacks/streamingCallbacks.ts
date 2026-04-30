@@ -133,10 +133,14 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     streamingTurnIdRef.current = turnIdCounterRef.current;
     setMessages((prev) => {
       const last = prev[prev.length - 1];
-      if (last?.type === 'assistant' && last?.isStreaming) {
+      if (last?.type === 'assistant') {
         streamingMessageIndexRef.current = prev.length - 1;
         const updated = [...prev];
-        updated[prev.length - 1] = { ...updated[prev.length - 1], __turnId: streamingTurnIdRef.current };
+        updated[prev.length - 1] = {
+          ...updated[prev.length - 1],
+          isStreaming: true,
+          __turnId: streamingTurnIdRef.current,
+        };
         return updated;
       }
       streamingMessageIndexRef.current = prev.length;

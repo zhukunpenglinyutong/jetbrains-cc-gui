@@ -32,7 +32,8 @@ class ClaudeRequestParamsBuilder {
             JsonObject openedFiles,
             String agentPrompt,
             Boolean streaming,
-            Boolean disableThinking
+            Boolean disableThinking,
+            String reasoningEffort
     ) {
         JsonObject params = new JsonObject();
         params.addProperty("message", message);
@@ -58,6 +59,9 @@ class ClaudeRequestParamsBuilder {
         }
         if (disableThinking != null && disableThinking) {
             params.addProperty("disableThinking", true);
+        }
+        if (reasoningEffort != null && !reasoningEffort.trim().isEmpty()) {
+            params.addProperty("reasoningEffort", reasoningEffort);
         }
 
         return params;

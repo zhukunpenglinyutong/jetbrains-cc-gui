@@ -33,7 +33,7 @@ export async function handleCodexCommand(command, args, stdinData) {
           model || '',
           baseUrl || '',
           apiKey || '',
-          reasoningEffort || 'medium',
+          (reasoningEffort === 'max' ? 'xhigh' : (reasoningEffort || 'medium')),
           attachments || []  // Pass attachments to message service
         );
       } else {

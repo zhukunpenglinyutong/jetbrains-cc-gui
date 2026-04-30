@@ -28,7 +28,7 @@ export async function handleClaudeCommand(command, args, stdinData) {
     case 'send': {
       if (stdinData && stdinData.message !== undefined) {
         // Include streaming and disableThinking when destructuring
-        const { message, sessionId, cwd, permissionMode, model, openedFiles, agentPrompt, streaming, disableThinking } = stdinData;
+        const { message, sessionId, cwd, permissionMode, model, openedFiles, agentPrompt, streaming, disableThinking, reasoningEffort } = stdinData;
         await claudeSendMessage(
           message,
           sessionId || '',
@@ -38,7 +38,8 @@ export async function handleClaudeCommand(command, args, stdinData) {
           openedFiles || null,
           agentPrompt || null,
           streaming,  // Pass streaming parameter
-          disableThinking || false  // Pass disableThinking parameter
+          disableThinking || false,  // Pass disableThinking parameter
+          reasoningEffort || null  // Pass reasoning effort level
         );
       } else {
         await claudeSendMessage(args[0], args[1], args[2], args[3], args[4]);
@@ -49,14 +50,14 @@ export async function handleClaudeCommand(command, args, stdinData) {
     case 'sendWithAttachments': {
       if (stdinData && stdinData.message !== undefined) {
         // Include streaming when destructuring
-        const { message, sessionId, cwd, permissionMode, model, attachments, openedFiles, agentPrompt, streaming } = stdinData;
+        const { message, sessionId, cwd, permissionMode, model, attachments, openedFiles, agentPrompt, streaming, reasoningEffort } = stdinData;
         await claudeSendMessageWithAttachments(
           message,
           sessionId || '',
           cwd || '',
           permissionMode || '',
           model || '',
-          attachments ? { attachments, openedFiles, agentPrompt, streaming } : { openedFiles, agentPrompt, streaming }
+          attachments ? { attachments, openedFiles, agentPrompt, streaming, reasoningEffort } : { openedFiles, agentPrompt, streaming, reasoningEffort }
         );
       } else {
         await claudeSendMessageWithAttachments(args[0], args[1], args[2], args[3], args[4], stdinData);

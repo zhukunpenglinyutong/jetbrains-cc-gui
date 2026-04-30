@@ -51,7 +51,8 @@ public class ClaudeSDKBridgeRefactorTest {
                 openedFiles,
                 "system prompt",
                 Boolean.TRUE,
-                Boolean.TRUE
+                Boolean.TRUE,
+                "xhigh"
         );
 
         assertEquals("hello", params.get("message").getAsString());
@@ -63,6 +64,7 @@ public class ClaudeSDKBridgeRefactorTest {
         assertEquals("system prompt", params.get("agentPrompt").getAsString());
         assertTrue(params.get("streaming").getAsBoolean());
         assertTrue(params.get("disableThinking").getAsBoolean());
+        assertEquals("xhigh", params.get("reasoningEffort").getAsString());
         assertTrue(params.has("attachments"));
         assertEquals(1, params.getAsJsonArray("attachments").size());
         assertEquals("image.png", params.getAsJsonArray("attachments").get(0).getAsJsonObject().get("fileName").getAsString());
@@ -83,6 +85,7 @@ public class ClaudeSDKBridgeRefactorTest {
                 null,
                 null,
                 attachments,
+                null,
                 null,
                 null,
                 null,

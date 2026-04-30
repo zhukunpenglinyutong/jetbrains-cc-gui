@@ -169,6 +169,20 @@
         "disabled": "비활성화",
         "hint": "활성화하면 프로젝트 트리에서 파일을 선택할 때 자동으로 파일 경로를 AI에 전송합니다 (참고: 파일 경로만 전송되며 파일 내용은 전송되지 않습니다). 비활성화하면 수동 조작이 필요합니다."
       },
+      "promptEnhancer": {
+        "label": "Prompt Enhancer",
+        "modelLabel": "Enhancer Model",
+        "resetToDefault": "Restore Default",
+        "providerAvailable": "Available",
+        "providerUnavailable": "Currently unavailable",
+        "provider": {
+          "claude": "Claude Code",
+          "codex": "Codex"
+        },
+        "currentProviderAuto": "Currently using automatic selection: {{provider}}",
+        "currentProviderManual": "Currently using manually selected provider: {{provider}}",
+        "currentProviderUnavailable": "The selected provider is currently unavailable: {{provider}}"
+      },
       "diffExpanded": {
         "label": "Diff 기본 펼침",
         "enabled": "펼침",
@@ -263,6 +277,10 @@
     "permissions": "권한",
     "permissionsDesc": "Claude Code 파일 접근 및 작업 권한 관리",
     "codexPermissionsDesc": "Codex 권한 및 샌드박스 정책 관리",
+    "promptEnhancer": {
+      "title": "Prompt Enhancer",
+      "description": "Choose which provider and model should be used when enhancing prompts before sending them."
+    },
     "permissionsPanel": {
       "codexSandboxTitle": "Codex 샌드박스 모드",
       "codexSandboxDesc": "Codex가 명령을 실행할 때의 시스템 접근 범위를 제어합니다. 기본값은 danger-full-access입니다. 더 엄격한 샌드박스를 위해 workspace-write로 전환하세요.",
@@ -276,6 +294,16 @@
     "commit": {
       "title": "Commit AI",
       "description": "AI 생성 Git 커밋 메시지 동작 설정",
+      "providerModel": {
+        "label": "커밋 모델 제공자",
+        "modelLabel": "커밋 모델",
+        "resetToDefault": "재설정",
+        "providerAvailable": "사용 가능",
+        "providerUnavailable": "사용 불가",
+        "currentProviderAuto": "현재 자동 선택 사용 중: {{provider}}",
+        "currentProviderManual": "현재 수동 선택된 제공자 사용 중: {{provider}}",
+        "currentProviderUnavailable": "선택된 제공자를 현재 사용할 수 없습니다: {{provider}}"
+      },
       "prompt": {
         "label": "추가 프롬프트",
         "placeholder": "추가 요구사항을 입력하세요. 예: 영어로 커밋 생성, 이슈 번호 포함 등...",
@@ -517,6 +545,7 @@
         "deepseek": "DeepSeek",
         "minimax": "MiniMax",
         "xiaomi": "Xiaomi MiMo",
+        "xiaomiPlan": "Xiaomi MiMo Plan",
         "qwen": "Alibaba Qwen",
         "openrouter": "OpenRouter"
       }
@@ -725,6 +754,16 @@
     "confirmDelete": "삭제 확인",
     "deleteMessage": "이 세션을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
     "deleteSession": "이 세션 삭제",
+    "selectMode": "Select",
+    "exitSelectMode": "Exit selection",
+    "selectedSessions": "{{count}} selected",
+    "selectAll": "Select all",
+    "clearSelection": "Clear",
+    "deleteSelected": "Delete selected",
+    "confirmDeleteSelected": "Confirm Delete",
+    "deleteSelectedMessage": "Are you sure you want to delete {{count}} selected sessions? This action cannot be undone.",
+    "selectSession": "Select session",
+    "selectSessionWithTitle": "Select {{title}}",
     "exportSession": "세션 내보내기",
     "exportSuccess": "세션 내보내기 완료",
     "exportFailed": "내보내기 실패",
@@ -833,6 +872,12 @@
     "clickToCopy": "클릭하여 복사",
     "switch": "전환",
     "switchProvider": "제공자 전환",
+    "runtimeProvider": {
+      "title": "현재 제공자 전환",
+      "loading": "제공자 로드 중...",
+      "empty": "사용 가능한 제공자 없음",
+      "switched": "{{provider}}(으)로 전환됨"
+    },
     "link": "링크"
   },
   "markdown": {

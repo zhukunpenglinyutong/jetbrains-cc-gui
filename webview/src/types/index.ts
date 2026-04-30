@@ -79,4 +79,4 @@ export interface HistoryData {
 export type { FileChangeStatus, EditOperation, FileChangeSummary } from './fileChanges';
 
 // Subagent types
-export type { SubagentStatus, SubagentInfo } from './subagent';
+export type { SubagentStatus, SubagentInfo, SubagentHistoryResponse } from './subagent';

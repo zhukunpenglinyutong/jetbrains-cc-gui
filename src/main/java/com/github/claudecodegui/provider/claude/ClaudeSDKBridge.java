@@ -339,12 +339,35 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             Boolean disableThinking,
             MessageCallback callback
     ) {
+        return sendMessage(channelId, message, sessionId, runtimeSessionEpoch, cwd, attachments, permissionMode,
+                model, openedFiles, agentPrompt, streaming, disableThinking, null, callback);
+    }
+
+    /**
+     * Send message in existing channel (streaming response, with all options including streaming flag, disableThinking, and reasoningEffort).
+     */
+    public CompletableFuture<SDKResult> sendMessage(
+            String channelId,
+            String message,
+            String sessionId,
+            String runtimeSessionEpoch,
+            String cwd,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String model,
+            JsonObject openedFiles,
+            String agentPrompt,
+            Boolean streaming,
+            Boolean disableThinking,
+            String reasoningEffort,
+            MessageCallback callback
+    ) {
         // Try daemon mode first (avoids per-request Node.js process spawning)
         DaemonBridge db = daemonCoordinator.getDaemonBridge();
         if (db != null) {
             return sendMessageViaDaemon(db, channelId, message, sessionId, runtimeSessionEpoch, cwd,
                     attachments, permissionMode, model, openedFiles, agentPrompt,
-                    streaming, disableThinking, callback);
+                    streaming, disableThinking, reasoningEffort, callback);
         }
 
         // Fallback: per-process mode (spawns a new Node.js process per request)
@@ -362,6 +385,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 agentPrompt,
                 streaming,
                 disableThinking,
+                reasoningEffort,
                 callback
         );
     }
@@ -434,6 +458,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             String agentPrompt,
             Boolean streaming,
             Boolean disableThinking,
+            String reasoningEffort,
             MessageCallback callback
     ) {
         return daemonRequestExecutor.sendMessageViaDaemon(
@@ -450,6 +475,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 agentPrompt,
                 streaming,
                 disableThinking,
+                reasoningEffort,
                 callback
         );
     }

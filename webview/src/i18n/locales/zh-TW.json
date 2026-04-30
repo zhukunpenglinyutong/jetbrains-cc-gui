@@ -169,6 +169,20 @@
         "disabled": "已停用",
         "hint": "開啟後，在專案樹選擇檔案時會自動將檔案路徑告訴 AI（注意：只傳遞檔案路徑，不傳檔案內容）。關閉後需要手動操作。"
       },
+      "promptEnhancer": {
+        "label": "增強提示詞",
+        "modelLabel": "增強模型",
+        "resetToDefault": "恢復預設",
+        "providerAvailable": "可用",
+        "providerUnavailable": "目前不可用",
+        "provider": {
+          "claude": "Claude Code",
+          "codex": "Codex"
+        },
+        "currentProviderAuto": "目前使用自動選擇：{{provider}}",
+        "currentProviderManual": "目前使用手動選擇的 provider：{{provider}}",
+        "currentProviderUnavailable": "目前所選 provider 不可用：{{provider}}"
+      },
       "diffExpanded": {
         "label": "預設展開差異",
         "enabled": "已展開",
@@ -240,9 +254,23 @@
     "mcpDesc": "配置和管理 Model Context Protocol 伺服器",
     "permissions": "權限配置",
     "permissionsDesc": "管理 Claude Code 的檔案存取和操作權限",
+    "promptEnhancer": {
+      "title": "增強提示詞",
+      "description": "設定增強提示詞功能使用的 provider 與模型，在訊息送出前先重寫並增強輸入內容。"
+    },
     "commit": {
       "title": "Commit AI",
       "description": "Configure AI-generated Git commit message behavior",
+      "providerModel": {
+        "label": "Commit 生成 Provider",
+        "modelLabel": "Commit 生成模型",
+        "resetToDefault": "恢復預設",
+        "providerAvailable": "可用",
+        "providerUnavailable": "當前不可用",
+        "currentProviderAuto": "當前使用自動選擇：{{provider}}",
+        "currentProviderManual": "當前使用手動選擇的 provider：{{provider}}",
+        "currentProviderUnavailable": "當前所選 provider 不可用：{{provider}}"
+      },
       "prompt": {
         "label": "Additional Prompt",
         "placeholder": "Add your extra requirements here, e.g., generate commit in English, include issue number, etc...",
@@ -486,6 +514,7 @@
         "deepseek": "DeepSeek",
         "minimax": "MiniMax",
         "xiaomi": "Xiaomi MiMo",
+        "xiaomiPlan": "Xiaomi MiMo Plan",
         "qwen": "阿里千問",
         "openrouter": "OpenRouter"
       }
@@ -609,6 +638,16 @@
     "confirmDelete": "確認刪除",
     "deleteMessage": "確定要刪除這個會話嗎?此操作無法撤銷。",
     "deleteSession": "刪除此會話",
+    "selectMode": "多選",
+    "exitSelectMode": "退出多選",
+    "selectedSessions": "已選擇 {{count}} 個會話",
+    "selectAll": "全選",
+    "clearSelection": "清除",
+    "deleteSelected": "刪除所選",
+    "confirmDeleteSelected": "確認刪除",
+    "deleteSelectedMessage": "確定要刪除選中的 {{count}} 個會話嗎?此操作無法撤銷。",
+    "selectSession": "選擇會話",
+    "selectSessionWithTitle": "選擇 {{title}}",
     "exportSession": "匯出會話",
     "exportSuccess": "會話已匯出",
     "exportFailed": "匯出失敗",
@@ -717,6 +756,12 @@
     "clickToCopy": "點選複製",
     "switch": "切換",
     "switchProvider": "切換供應商",
+    "runtimeProvider": {
+      "title": "切換當前供應商",
+      "loading": "正在載入供應商...",
+      "empty": "暫無可用供應商",
+      "switched": "已切換到 {{provider}}"
+    },
     "link": "連結"
   },
   "markdown": {

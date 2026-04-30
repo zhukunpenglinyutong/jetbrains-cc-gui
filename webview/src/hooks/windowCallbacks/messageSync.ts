@@ -78,18 +78,34 @@ export const appendOptimisticMessageIfMissing = (
   if (!lastPrev?.isOptimistic) return nextList;
 
   const optimisticMsg = lastPrev;
+  const optimisticText = getUserMessageComparableContent(optimisticMsg);
+  const optimisticTime = optimisticMsg.timestamp
+    ? new Date(optimisticMsg.timestamp).getTime()
+    : Number.NaN;
 
   const matchFn = (m: ClaudeMessage) =>
     m.type === 'user' &&
-    (m.content === optimisticMsg.content ||
-      m.content === (optimisticMsg.raw as any)?.message?.content?.[0]?.text) &&
+    getUserMessageComparableContent(m) === optimisticText &&
     m.timestamp &&
     optimisticMsg.timestamp &&
     Math.abs(
       new Date(m.timestamp).getTime() - new Date(optimisticMsg.timestamp).getTime(),
     ) < OPTIMISTIC_MESSAGE_TIME_WINDOW;
 
-  const matchedIndex = nextList.findIndex(matchFn);
+  let matchedIndex = nextList.findIndex(matchFn);
+  if (matchedIndex < 0 && optimisticText) {
+    for (let i = nextList.length - 1; i >= 0; i -= 1) {
+      const candidate = nextList[i];
+      if (candidate?.type !== 'user') continue;
+      if (getUserMessageComparableContent(candidate) !== optimisticText) continue;
+      const candidateTime = candidate.timestamp ? new Date(candidate.timestamp).getTime() : Number.NaN;
+      if (Number.isFinite(optimisticTime) && Number.isFinite(candidateTime) && candidateTime < optimisticTime) {
+        continue;
+      }
+      matchedIndex = i;
+      break;
+    }
+  }
   if (matchedIndex < 0) {
     return [...nextList, optimisticMsg];
   }
@@ -125,6 +141,19 @@ export const appendOptimisticMessageIfMissing = (
   return nextList;
 };
 
+const getUserMessageComparableContent = (message: ClaudeMessage): string => {
+  if (message.type !== 'user') return message.content || '';
+  const rawContent = (message.raw as any)?.message?.content ?? (message.raw as any)?.content;
+  if (!Array.isArray(rawContent)) {
+    return message.content || '';
+  }
+  const rawText = rawContent
+    .filter((block: any) => block && typeof block === 'object' && block.type === 'text' && typeof block.text === 'string')
+    .map((block: any) => block.text)
+    .join('\n');
+  return rawText || message.content || '';
+};
+
 /**
  * Preserve the identity (timestamp / uuid) of the last assistant message
  * across list updates.
@@ -154,9 +183,116 @@ export const preserveLastAssistantIdentity = (
   return copy;
 };
 
+// ---------------------------------------------------------------------------
+// Raw blocks merging during streaming
+// ---------------------------------------------------------------------------
+
+const isTextLikeBlock = (block: unknown): block is Record<string, unknown> => {
+  if (!block || typeof block !== 'object') return false;
+  const t = (block as Record<string, unknown>).type;
+  return t === 'text' || t === 'thinking';
+};
+
+const getTextLikeLength = (block: Record<string, unknown>): number => {
+  if (block.type === 'text') return typeof block.text === 'string' ? block.text.length : 0;
+  if (block.type === 'thinking') {
+    const t = typeof block.thinking === 'string' ? block.thinking : typeof block.text === 'string' ? block.text : '';
+    return t.length;
+  }
+  return 0;
+};
+
+const getTextLikeContent = (block: Record<string, unknown>): string => {
+  if (block.type === 'text') return typeof block.text === 'string' ? block.text : '';
+  if (block.type === 'thinking') {
+    return typeof block.thinking === 'string' ? block.thinking : typeof block.text === 'string' ? block.text : '';
+  }
+  return '';
+};
+
+/**
+ * Merge raw message blocks during active streaming so that the frontend's
+ * accumulated segment text/thinking always wins over a stale backend snapshot,
+ * while structural blocks (tool_use, tool_result, image, attachment) are
+ * always taken from the backend (authoritative source for message structure).
+ *
+ * Matching is positional: the i-th text/thinking block in prevRaw is compared
+ * against the i-th text/thinking block in nextRaw, mirroring buildStreamingBlocks.
+ *
+ * Returns nextRaw unchanged (same reference) when no block needs protecting.
+ */
+export const mergeRawBlocksDuringStreaming = (
+  prevRaw: unknown,
+  nextRaw: unknown,
+): unknown => {
+  if (!prevRaw || typeof prevRaw !== 'object') return nextRaw;
+  if (!nextRaw || typeof nextRaw !== 'object') return nextRaw;
+
+  const prevObj = prevRaw as Record<string, unknown>;
+  const nextObj = nextRaw as Record<string, unknown>;
+
+  const prevMsg = prevObj.message as Record<string, unknown> | undefined;
+  const nextMsg = nextObj.message as Record<string, unknown> | undefined;
+
+  const prevBlocks: unknown[] = Array.isArray(prevMsg?.content)
+    ? (prevMsg.content as unknown[])
+    : Array.isArray(prevObj.content)
+      ? (prevObj.content as unknown[])
+      : [];
+
+  const nextBlocks: unknown[] = Array.isArray(nextMsg?.content)
+    ? (nextMsg.content as unknown[])
+    : Array.isArray(nextObj.content)
+      ? (nextObj.content as unknown[])
+      : [];
+
+  if (nextBlocks.length === 0) return nextRaw;
+
+  let prevTextLikeIdx = 0;
+  let changed = false;
+
+  const mergedBlocks = nextBlocks.map((nextBlock) => {
+    if (!isTextLikeBlock(nextBlock)) return nextBlock;
+
+    // Advance to the next text-like block in prev
+    while (prevTextLikeIdx < prevBlocks.length && !isTextLikeBlock(prevBlocks[prevTextLikeIdx])) {
+      prevTextLikeIdx += 1;
+    }
+
+    const prevBlock = prevBlocks[prevTextLikeIdx] as Record<string, unknown> | undefined;
+    prevTextLikeIdx += 1;
+
+    if (!prevBlock) return nextBlock;
+
+    const prevLen = getTextLikeLength(prevBlock);
+    const nextLen = getTextLikeLength(nextBlock);
+    if (prevLen <= nextLen) return nextBlock; // next is at least as long — keep it
+
+    // prev is longer: use prev content, keep next block type and other fields
+    changed = true;
+    const prevContent = getTextLikeContent(prevBlock);
+    if (nextBlock.type === 'thinking') {
+      return { ...nextBlock, thinking: prevContent, text: prevContent };
+    }
+    return { ...nextBlock, text: prevContent };
+  });
+
+  if (!changed) return nextRaw;
+
+  if (nextMsg !== undefined) {
+    return { ...nextObj, message: { ...nextMsg, content: mergedBlocks } };
+  }
+  return { ...nextObj, content: mergedBlocks };
+};
+
 /**
  * When streaming is active, prevent the backend from replacing the streamed
  * content with a shorter (stale) snapshot.
+ *
+ * Guards both the top-level .content string AND .raw.message.content blocks:
+ * - .content: protected when prev/buffered content is longer than backend's
+ * - .raw blocks: text/thinking blocks are protected via mergeRawBlocksDuringStreaming
+ *   regardless of .content string length, since MarkdownBlock renders from blocks.
  */
 export const preserveStreamingAssistantContent = (
   prevList: ClaudeMessage[],
@@ -191,14 +327,24 @@ export const preserveStreamingAssistantContent = (
     bufferedContent.length > previousContent.length ? bufferedContent : previousContent;
   const nextContent = nextAssistant.content || '';
 
+  // Always protect raw blocks: text/thinking blocks use the longer value from prev,
+  // structural blocks (tool_use etc.) always come from backend.
+  const mergedRaw = mergeRawBlocksDuringStreaming(prevAssistant.raw, nextAssistant.raw);
+  const rawChanged = mergedRaw !== nextAssistant.raw;
+
   if (!preferredContent || preferredContent.length <= nextContent.length) {
-    return nextList;
+    // Content string doesn't need protection, but raw blocks might still be stale
+    if (!rawChanged) return nextList;
+    const copy = [...nextList];
+    copy[nextAssistantIdx] = { ...nextAssistant, raw: mergedRaw as ClaudeMessage['raw'] };
+    return copy;
   }
 
   const copy = [...nextList];
   copy[nextAssistantIdx] = patchAssistantForStreaming({
     ...nextAssistant,
     content: preferredContent,
+    raw: mergedRaw as ClaudeMessage['raw'],
     isStreaming: true,
   });
   return copy;

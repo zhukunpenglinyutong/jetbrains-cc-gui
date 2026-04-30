@@ -5,8 +5,10 @@ import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.openapi.actionSystem.ActionPopupMenu;
 import com.intellij.openapi.actionSystem.ActionToolbar;
 import com.intellij.openapi.actionSystem.ActionGroup;
+import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.DataContext;
 import com.intellij.openapi.actionSystem.DataKey;
+import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.actionSystem.KeyboardShortcut;
 import com.intellij.openapi.actionSystem.Presentation;
 import com.intellij.openapi.actionSystem.TimerListener;
@@ -20,12 +22,15 @@ import java.awt.event.InputEvent;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 public class SendTerminalSelectionToInputActionTest {
-    private static final ActionManager TEST_ACTION_MANAGER = new TestActionManager();
-
     @After
     public void tearDown() {
         SendTerminalSelectionToInputAction.resetSelectionProvider();
@@ -90,21 +95,62 @@ public class SendTerminalSelectionToInputActionTest {
     }
 
     @Test
-    public void terminalFeaturesRegisterActionForReworkedTerminalContextMenu() throws IOException {
+    public void terminalFeaturesDoNotRegisterActionForReworkedTerminalContextMenuStatically() throws IOException {
         try (InputStream stream = getClass().getClassLoader().getResourceAsStream("META-INF/terminal-features.xml")) {
             Assert.assertNotNull("terminal-features.xml should be on the test classpath", stream);
             String xml = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
-            Assert.assertTrue(xml.contains("group-id=\"Terminal.ReworkedTerminalContextMenu\""));
+            Assert.assertFalse(xml.contains("group-id=\"Terminal.ReworkedTerminalContextMenu\""));
         }
     }
 
+    @Test
+    public void reworkedTerminalContextMenuIsRegisteredOnlyWhenGroupExists() {
+        TestActionManager actionManager = new TestActionManager();
+        DefaultActionGroup group = new DefaultActionGroup();
+        actionManager.registerAction(SendTerminalSelectionToInputAction.ACTION_ID, new SendTerminalSelectionToInputAction());
+        actionManager.registerAction(SendTerminalSelectionToInputAction.TERMINAL_REWORKED_CONTEXT_MENU, group);
+
+        Assert.assertTrue(SendTerminalSelectionToInputAction.registerForReworkedTerminalContextMenu(actionManager));
+        Assert.assertEquals(
+                Collections.singletonList(SendTerminalSelectionToInputAction.ACTION_ID),
+                childIds(actionManager, group)
+        );
+    }
+
+    @Test
+    public void reworkedTerminalContextMenuRegistrationIsSkippedWhenGroupIsMissing() {
+        TestActionManager actionManager = new TestActionManager();
+        actionManager.registerAction(SendTerminalSelectionToInputAction.ACTION_ID, new SendTerminalSelectionToInputAction());
+
+        Assert.assertFalse(SendTerminalSelectionToInputAction.registerForReworkedTerminalContextMenu(actionManager));
+    }
+
+    @Test
+    public void reworkedTerminalContextMenuRegistrationAvoidsDuplicates() {
+        TestActionManager actionManager = new TestActionManager();
+        DefaultActionGroup group = new DefaultActionGroup();
+        AnAction action = new SendTerminalSelectionToInputAction();
+        actionManager.registerAction(SendTerminalSelectionToInputAction.ACTION_ID, action);
+        actionManager.registerAction(SendTerminalSelectionToInputAction.TERMINAL_REWORKED_CONTEXT_MENU, group);
+
+        Assert.assertTrue(SendTerminalSelectionToInputAction.registerForReworkedTerminalContextMenu(actionManager));
+        Assert.assertFalse(SendTerminalSelectionToInputAction.registerForReworkedTerminalContextMenu(actionManager));
+        Assert.assertEquals(Collections.singletonList(SendTerminalSelectionToInputAction.ACTION_ID), childIds(actionManager, group));
+    }
+
     private static AnActionEvent createEvent(DataContext dataContext) {
-        return new AnActionEvent(null, dataContext, "TestPlace", new Presentation(), TEST_ACTION_MANAGER, 0);
+        return new AnActionEvent(null, dataContext, "TestPlace", new Presentation(), new TestActionManager(), 0);
     }
 
     private static DataContext createTerminalViewContext(Object terminalView) {
         DataKey<Object> terminalViewKey = DataKey.create("TerminalView");
         return dataId -> terminalViewKey.getName().equals(dataId) ? terminalView : null;
+    }
+
+    private static List<String> childIds(TestActionManager actionManager, DefaultActionGroup group) {
+        return Arrays.stream(group.getChildren(actionManager))
+                .map(actionManager::getId)
+                .collect(Collectors.toList());
     }
 
     private static final class FakeTerminalView {
@@ -177,6 +223,8 @@ public class SendTerminalSelectionToInputActionTest {
     }
 
     private static final class TestActionManager extends ActionManager {
+        private final Map<String, AnAction> actionsById = new HashMap<>();
+        private final Map<AnAction, String> idsByAction = new IdentityHashMap<>();
 
         @Override
         public ActionPopupMenu createActionPopupMenu(String place, ActionGroup group) {
@@ -189,21 +237,24 @@ public class SendTerminalSelectionToInputActionTest {
         }
 
         @Override
-        public com.intellij.openapi.actionSystem.AnAction getAction(String id) {
-            return null;
+        public AnAction getAction(String id) {
+            return actionsById.get(id);
         }
 
         @Override
-        public String getId(com.intellij.openapi.actionSystem.AnAction action) {
-            return null;
+        public String getId(AnAction action) {
+            return idsByAction.get(action);
         }
 
         @Override
-        public void registerAction(String actionId, com.intellij.openapi.actionSystem.AnAction action) {
+        public void registerAction(String actionId, AnAction action) {
+            actionsById.put(actionId, action);
+            idsByAction.put(action, actionId);
         }
 
         @Override
-        public void registerAction(String actionId, com.intellij.openapi.actionSystem.AnAction action, com.intellij.openapi.extensions.PluginId pluginId) {
+        public void registerAction(String actionId, AnAction action, com.intellij.openapi.extensions.PluginId pluginId) {
+            registerAction(actionId, action);
         }
 
         @Override
@@ -226,12 +277,12 @@ public class SendTerminalSelectionToInputActionTest {
 
         @Override
         public boolean isGroup(String actionId) {
-            return false;
+            return actionsById.get(actionId) instanceof ActionGroup;
         }
 
         @Override
-        public com.intellij.openapi.actionSystem.AnAction getActionOrStub(String id) {
-            return null;
+        public AnAction getActionOrStub(String id) {
+            return getAction(id);
         }
 
         @Override
@@ -247,7 +298,7 @@ public class SendTerminalSelectionToInputActionTest {
         }
 
         @Override
-        public com.intellij.openapi.util.ActionCallback tryToExecute(com.intellij.openapi.actionSystem.AnAction action,
+        public com.intellij.openapi.util.ActionCallback tryToExecute(AnAction action,
                                                                      InputEvent inputEvent,
                                                                      Component contextComponent,
                                                                      String place,

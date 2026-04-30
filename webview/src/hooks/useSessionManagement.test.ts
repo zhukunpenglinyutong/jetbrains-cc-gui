@@ -106,6 +106,57 @@ describe('useSessionManagement', () => {
     expect(mocks.setCurrentView).toHaveBeenCalledWith('chat');
   });
 
+  it('applies repeated history deletes against the latest state', () => {
+    let historyData = {
+      success: true,
+      sessions: [
+        {
+          sessionId: 'history-1',
+          title: 'History One',
+          provider: 'claude',
+          messageCount: 3,
+          lastTimestamp: Date.now(),
+        },
+        {
+          sessionId: 'history-2',
+          title: 'History Two',
+          provider: 'codex',
+          messageCount: 5,
+          lastTimestamp: Date.now(),
+        },
+      ],
+      total: 8,
+    } as unknown as HistoryData;
+
+    const mocks = {
+      ...createMocks(),
+      setHistoryData: vi.fn((next: HistoryData | null | ((current: HistoryData | null) => HistoryData | null)) => {
+        historyData = typeof next === 'function' ? next(historyData) as HistoryData : next as HistoryData;
+      }),
+    };
+
+    const { result } = renderHook(() =>
+      useSessionManagement({
+        messages: [],
+        loading: false,
+        historyData,
+        currentSessionId: null,
+        ...mocks,
+        t,
+      })
+    );
+
+    act(() => {
+      result.current.deleteHistorySession('history-1');
+      result.current.deleteHistorySession('history-2');
+    });
+
+    expect(historyData.sessions).toEqual([]);
+    expect(historyData.total).toBe(0);
+    expect(window.sendToJava).toHaveBeenCalledWith('delete_session:history-1');
+    expect(window.sendToJava).toHaveBeenCalledWith('delete_session:history-2');
+  });
+
   it('forceCreateNewSession interrupts loading session and cleans state', () => {
     const mocks = createMocks();
 

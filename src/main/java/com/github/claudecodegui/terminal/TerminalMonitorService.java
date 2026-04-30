@@ -123,6 +123,8 @@ public class TerminalMonitorService implements ProjectActivity {
         ApplicationManager.getApplication().invokeLater(() -> {
             if (project.isDisposed() || state.listenerDisposable.isDisposed()) return;
 
+            ensureReworkedTerminalMenuRegistration();
+
             ToolWindow terminalWindow = ToolWindowManager.getInstance(project).getToolWindow("Terminal");
             if (terminalWindow == null) return;
 
@@ -661,9 +663,22 @@ public class TerminalMonitorService implements ProjectActivity {
                     + ", class=" + (action == null ? "null" : action.getClass().getName()));
             logGroupMembership(actionManager, SendTerminalSelectionToInputAction.TERMINAL_OUTPUT_CONTEXT_MENU);
             logGroupMembership(actionManager, SendTerminalSelectionToInputAction.TERMINAL_PROMPT_CONTEXT_MENU);
+            logGroupMembership(actionManager, SendTerminalSelectionToInputAction.TERMINAL_REWORKED_CONTEXT_MENU);
             logGroupMembership(actionManager, EDITOR_POPUP_MENU);
         } catch (Exception e) {
             LOG.warn("[TerminalSend] Failed to log action registration diagnostics", e);
+        }
+    }
+
+    private static void ensureReworkedTerminalMenuRegistration() {
+        try {
+            ActionManager actionManager = ActionManager.getInstance();
+            boolean added = SendTerminalSelectionToInputAction.registerForReworkedTerminalContextMenu(actionManager);
+            if (added) {
+                LOG.info("[TerminalSend] Registered send action into Terminal.ReworkedTerminalContextMenu at runtime");
+            }
+        } catch (Exception | LinkageError e) {
+            LOG.debug("[TerminalSend] Failed to register reworked terminal context menu action", e);
         }
     }
 

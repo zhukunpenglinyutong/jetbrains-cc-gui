@@ -1,7 +1,6 @@
 /**
  * Prompt Enhancement Service.
- * Uses Claude Agent SDK to call AI to optimize and rewrite user prompts.
- * Uses the same authentication method and configuration as normal conversation.
+ * Routes enhancement requests to Claude or Codex based on prompt enhancer config.
  *
  * Supports context information:
  * - User selected code snippets
@@ -10,12 +9,35 @@
  * - Related file information
  */
 
-import { loadClaudeSdk, isClaudeSdkAvailable } from '../utils/sdk-loader.js';
-import { setupApiKey, loadClaudeSettings, buildCliEnv } from '../config/api-config.js';
+import { pathToFileURL } from 'node:url';
+
+import {
+  loadClaudeSdk,
+  isClaudeSdkAvailable,
+  loadCodexSdk,
+  isCodexSdkAvailable,
+} from '../utils/sdk-loader.js';
+import { setupApiKey, buildCliEnv } from '../config/api-config.js';
 import { mapModelIdToSdkName } from '../utils/model-utils.js';
 import { getRealHomeDir } from '../utils/path-utils.js';
+import { buildCodexCliEnvironment } from './codex/codex-utils.js';
 
 let claudeSdk = null;
+let codexSdk = null;
+
+const DEFAULT_PROMPT_ENHANCER_CONFIG = {
+  provider: null,
+  effectiveProvider: 'claude',
+  resolutionSource: 'auto',
+  models: {
+    claude: 'claude-sonnet-4-6',
+    codex: 'gpt-5.5',
+  },
+  availability: {
+    claude: false,
+    codex: false,
+  },
+};
 
 async function ensureClaudeSdk() {
   if (!claudeSdk) {
@@ -29,16 +51,25 @@ async function ensureClaudeSdk() {
   return claudeSdk;
 }
 
-// Context length limits (in characters) to avoid exceeding model token limits
-const MAX_SELECTED_CODE_LENGTH = 2000;      // Max length for selected code
-const MAX_CURSOR_CONTEXT_LENGTH = 1000;     // Max length for cursor context
-const MAX_CURRENT_FILE_LENGTH = 3000;       // Max length for current file content
-const MAX_RELATED_FILES_LENGTH = 2000;      // Total length limit for related files
-const MAX_SINGLE_RELATED_FILE_LENGTH = 500; // Max length per related file
+async function ensureCodexSdk() {
+  if (!codexSdk) {
+    if (!isCodexSdkAvailable()) {
+      const error = new Error('Codex SDK not installed. Please install via Settings > Dependencies.');
+      error.code = 'SDK_NOT_INSTALLED';
+      throw error;
+    }
+    codexSdk = await loadCodexSdk();
+  }
+  return codexSdk;
+}
 
-/**
- * Read input from stdin.
- */
+// Context length limits (in characters) to avoid exceeding model token limits
+const MAX_SELECTED_CODE_LENGTH = 2000;
+const MAX_CURSOR_CONTEXT_LENGTH = 1000;
+const MAX_CURRENT_FILE_LENGTH = 3000;
+const MAX_RELATED_FILES_LENGTH = 2000;
+const MAX_SINGLE_RELATED_FILE_LENGTH = 500;
+
 async function readStdin() {
   return new Promise((resolve, reject) => {
     let data = '';
@@ -53,13 +84,6 @@ async function readStdin() {
   });
 }
 
-/**
- * Truncate text to a specified length while preserving integrity.
- * @param {string} text - Original text
- * @param {number} maxLength - Maximum length
- * @param {boolean} fromEnd - Whether to truncate from the end (defaults to truncating from the start)
- * @returns {string} - Truncated text
- */
 function truncateText(text, maxLength, fromEnd = false) {
   if (!text || text.length <= maxLength) {
     return text;
@@ -71,11 +95,6 @@ function truncateText(text, maxLength, fromEnd = false) {
   return text.slice(0, maxLength) + '\n...';
 }
 
-/**
- * Get the programming language name for a file extension.
- * @param {string} filePath - File path
- * @returns {string} - Language name
- */
 function getLanguageFromPath(filePath) {
   if (!filePath) return 'text';
 
@@ -120,36 +139,15 @@ function getLanguageFromPath(filePath) {
   return langMap[ext] || 'text';
 }
 
-/**
- * Build a complete prompt with context information.
- * Integrates context by priority: selected code > cursor position > current file > related files.
- *
- * @param {string} originalPrompt - Original prompt
- * @param {Object} context - Context information
- * @param {string} context.selectedCode - User-selected code
- * @param {Object} context.currentFile - Current file information
- * @param {string} context.currentFile.path - File path
- * @param {string} context.currentFile.content - File content
- * @param {string} context.currentFile.language - Language type
- * @param {Object} context.cursorPosition - Cursor position
- * @param {number} context.cursorPosition.line - Line number
- * @param {number} context.cursorPosition.column - Column number
- * @param {string} context.cursorContext - Code snippet around the cursor
- * @param {Array} context.relatedFiles - Related file list
- * @param {string} context.projectType - Project type
- * @returns {string} - The constructed complete prompt
- */
-function buildFullPrompt(originalPrompt, context) {
+export function buildFullPrompt(originalPrompt, context) {
   let fullPrompt = `Please optimize the following prompt:\n\n${originalPrompt}`;
 
-  // If there's no context information, return as-is
   if (!context) {
     return fullPrompt;
   }
 
   const contextParts = [];
 
-  // 1. Highest priority: user-selected code
   if (context.selectedCode && context.selectedCode.trim()) {
     const truncatedCode = truncateText(context.selectedCode, MAX_SELECTED_CODE_LENGTH);
     const language = context.currentFile?.language || getLanguageFromPath(context.currentFile?.path) || 'text';
@@ -157,7 +155,6 @@ function buildFullPrompt(originalPrompt, context) {
     console.log(`[PromptEnhancer] Added selected code context, length: ${context.selectedCode.length}`);
   }
 
-  // 2. Second priority: cursor position context (only used when no code is selected)
   if (!context.selectedCode && context.cursorContext && context.cursorContext.trim()) {
     const truncatedContext = truncateText(context.cursorContext, MAX_CURSOR_CONTEXT_LENGTH);
     const language = context.currentFile?.language || getLanguageFromPath(context.currentFile?.path) || 'text';
@@ -166,7 +163,6 @@ function buildFullPrompt(originalPrompt, context) {
     console.log(`[PromptEnhancer] Added cursor context, length: ${context.cursorContext.length}`);
   }
 
-  // 3. Current file basic info (always included when available)
   if (context.currentFile) {
     const { path, language, content } = context.currentFile;
     let fileInfo = '';
@@ -175,7 +171,6 @@ function buildFullPrompt(originalPrompt, context) {
       const lang = language || getLanguageFromPath(path);
       fileInfo = `[Current File] ${path}\n[Language Type] ${lang}`;
 
-      // If no selected code or cursor context, include a portion of the file content
       if (!context.selectedCode && !context.cursorContext && content && content.trim()) {
         const truncatedContent = truncateText(content, MAX_CURRENT_FILE_LENGTH);
         fileInfo += `\n[File Content Preview]\n\`\`\`${lang}\n${truncatedContent}\n\`\`\``;
@@ -187,14 +182,13 @@ function buildFullPrompt(originalPrompt, context) {
     }
   }
 
-  // 4. Lowest priority: related file information
   if (context.relatedFiles && Array.isArray(context.relatedFiles) && context.relatedFiles.length > 0) {
     let totalLength = 0;
     const relatedFilesInfo = [];
 
     for (const file of context.relatedFiles) {
       if (totalLength >= MAX_RELATED_FILES_LENGTH) {
-        console.log(`[PromptEnhancer] Related files total length reached limit, skipping remaining files`);
+        console.log('[PromptEnhancer] Related files total length reached limit, skipping remaining files');
         break;
       }
 
@@ -218,126 +212,263 @@ function buildFullPrompt(originalPrompt, context) {
     }
   }
 
-  // 5. Project type information
   if (context.projectType) {
     contextParts.push(`[Project Type] ${context.projectType}`);
     console.log(`[PromptEnhancer] Added project type: ${context.projectType}`);
   }
 
-  // Combine all context information
   if (contextParts.length > 0) {
-    fullPrompt += '\n\n---\nThe following is relevant context information, please refer to it when optimizing the prompt:\n\n' + contextParts.join('\n\n');
+    fullPrompt += '\n\n---\nThe following is relevant context information, please refer to it when optimizing the prompt:\n\n'
+      + contextParts.join('\n\n');
   }
 
   return fullPrompt;
 }
 
-/**
- * Enhance a prompt.
- * @param {string} originalPrompt - Original prompt
- * @param {string} systemPrompt - System prompt
- * @param {string} model - Model to use (optional, frontend model ID)
- * @param {Object} context - Context information (optional)
- * @returns {Promise<string>} - Enhanced prompt
- */
-async function enhancePrompt(originalPrompt, systemPrompt, model, context) {
-  try {
-    const sdk = await ensureClaudeSdk();
-    const { query } = sdk;
-
-    // Set up API Key (this sets the correct environment variables)
-    const config = setupApiKey();
-
-    console.log(`[PromptEnhancer] Auth type: ${config.authType}`);
-    console.log(`[PromptEnhancer] Base URL: ${config.baseUrl || 'https://api.anthropic.com'}`);
-
-    // Map model ID to the name expected by the SDK
-    const sdkModelName = mapModelIdToSdkName(model);
-    console.log(`[PromptEnhancer] Model mapping: ${model} -> ${sdkModelName}`);
-
-    // Use the user's home directory as the working directory
-    const workingDirectory = getRealHomeDir();
-
-    // Build complete prompt with context information
-    const fullPrompt = buildFullPrompt(originalPrompt, context);
-    console.log(`[PromptEnhancer] Full prompt length: ${fullPrompt.length}`);
-
-    const options = {
-      cwd: workingDirectory,
-      permissionMode: 'bypassPermissions',  // Prompt enhancement doesn't need tool permissions
-      model: sdkModelName,
-      maxTurns: 1,  // Prompt enhancement only needs a single turn, no tool calls
-      env: buildCliEnv(),
-      // Use custom system prompt (passed as a string directly, not as an object)
-      systemPrompt: systemPrompt,
-      settingSources: ['user', 'project', 'local'],
-    };
-
-    console.log(`[PromptEnhancer] Calling Claude Agent SDK...`);
-
-    // Call the query function
-    const result = query({
-      prompt: fullPrompt,
-      options
-    });
-
-    // Collect response text
-    let responseText = '';
-    let messageCount = 0;
-
-    for await (const msg of result) {
-      messageCount++;
-      console.log(`[PromptEnhancer] Received message #${messageCount}, type: ${msg.type}`);
-
-      // Process assistant messages
-      if (msg.type === 'assistant') {
-        const content = msg.message?.content;
-        if (Array.isArray(content)) {
-          for (const block of content) {
-            if (block.type === 'text') {
-              responseText += block.text;
-              console.log(`[PromptEnhancer] Received text: ${block.text.substring(0, 100)}...`);
-            }
-          }
-        } else if (typeof content === 'string') {
-          responseText += content;
-        }
-      }
-    }
-
-    console.log(`[PromptEnhancer] Total messages received: ${messageCount}`);
-    console.log(`[PromptEnhancer] Response text length: ${responseText.length}`);
-
-    if (responseText.trim()) {
-      return responseText.trim();
-    }
-
-    throw new Error('AI response is empty');
-  } catch (error) {
-    console.error('[PromptEnhancer] Enhancement failed:', error.message);
-    throw error;
+function normalizePromptEnhancerConfig(config) {
+  if (!config || typeof config !== 'object') {
+    return structuredClone(DEFAULT_PROMPT_ENHANCER_CONFIG);
   }
+
+  return {
+    provider: config.provider === 'claude' || config.provider === 'codex' ? config.provider : null,
+    effectiveProvider: config.effectiveProvider === 'claude' || config.effectiveProvider === 'codex'
+      ? config.effectiveProvider
+      : null,
+    resolutionSource: typeof config.resolutionSource === 'string' ? config.resolutionSource : 'auto',
+    models: {
+      claude: config.models?.claude || DEFAULT_PROMPT_ENHANCER_CONFIG.models.claude,
+      codex: config.models?.codex || DEFAULT_PROMPT_ENHANCER_CONFIG.models.codex,
+    },
+    availability: {
+      claude: Boolean(config.availability?.claude),
+      codex: Boolean(config.availability?.codex),
+    },
+  };
 }
 
-/**
- * Main function.
- */
+export function resolvePromptEnhancerRuntimeConfig({ promptEnhancerConfig, legacyModel } = {}) {
+  if (!promptEnhancerConfig) {
+    return {
+      provider: 'claude',
+      model: legacyModel || DEFAULT_PROMPT_ENHANCER_CONFIG.models.claude,
+      resolutionSource: 'legacy',
+    };
+  }
+
+  const config = normalizePromptEnhancerConfig(promptEnhancerConfig);
+  const claudeSdkInstalled = isClaudeSdkAvailable();
+  const codexSdkInstalled = isCodexSdkAvailable();
+
+  if (config.effectiveProvider === 'codex') {
+    return {
+      provider: 'codex',
+      model: config.models.codex || DEFAULT_PROMPT_ENHANCER_CONFIG.models.codex,
+      resolutionSource: config.resolutionSource,
+    };
+  }
+
+  if (config.effectiveProvider === 'claude') {
+    return {
+      provider: 'claude',
+      model: config.models.claude || DEFAULT_PROMPT_ENHANCER_CONFIG.models.claude,
+      resolutionSource: config.resolutionSource,
+    };
+  }
+
+  if (config.provider === 'codex') {
+    if (!codexSdkInstalled) {
+      throw new Error('Codex prompt enhancer is unavailable because the Codex SDK is not installed. Please install it in Settings > Dependencies.');
+    }
+    throw new Error('Codex prompt enhancer is unavailable because no active Codex provider is configured.');
+  }
+
+  if (config.provider === 'claude') {
+    if (!claudeSdkInstalled) {
+      throw new Error('Claude Code prompt enhancer is unavailable because the Claude Code SDK is not installed. Please install it in Settings > Dependencies.');
+    }
+    throw new Error('Claude Code prompt enhancer is unavailable because no active Claude Code provider is configured.');
+  }
+
+  if (!codexSdkInstalled && !claudeSdkInstalled) {
+    throw new Error('No available prompt enhancer provider is configured because both Claude Code and Codex SDKs are not installed.');
+  }
+
+  throw new Error('No available prompt enhancer provider is configured. Please configure Codex or Claude Code in Settings.');
+}
+
+async function enhancePromptWithClaude(originalPrompt, systemPrompt, model, context) {
+  const sdk = await ensureClaudeSdk();
+  const { query } = sdk;
+
+  const config = setupApiKey();
+  console.log(`[PromptEnhancer] Auth type: ${config.authType}`);
+  console.log(`[PromptEnhancer] Base URL: ${config.baseUrl || 'https://api.anthropic.com'}`);
+
+  const sdkModelName = mapModelIdToSdkName(model);
+  console.log(`[PromptEnhancer] Claude model mapping: ${model} -> ${sdkModelName}`);
+
+  const workingDirectory = getRealHomeDir();
+  const fullPrompt = buildFullPrompt(originalPrompt, context);
+  console.log(`[PromptEnhancer] Full prompt length: ${fullPrompt.length}`);
+
+  const options = {
+    cwd: workingDirectory,
+    permissionMode: 'bypassPermissions',
+    model: sdkModelName,
+    maxTurns: 1,
+    env: buildCliEnv(),
+    systemPrompt,
+    settingSources: ['user', 'project', 'local'],
+  };
+
+  console.log('[PromptEnhancer] Calling Claude Agent SDK...');
+
+  const result = query({
+    prompt: fullPrompt,
+    options,
+  });
+
+  let responseText = '';
+  let messageCount = 0;
+
+  for await (const msg of result) {
+    messageCount += 1;
+    console.log(`[PromptEnhancer] Claude message #${messageCount}, type: ${msg.type}`);
+
+    if (msg.type === 'assistant') {
+      const content = msg.message?.content;
+      if (Array.isArray(content)) {
+        for (const block of content) {
+          if (block.type === 'text') {
+            responseText += block.text;
+          }
+        }
+      } else if (typeof content === 'string') {
+        responseText += content;
+      }
+    }
+  }
+
+  console.log(`[PromptEnhancer] Claude response text length: ${responseText.length}`);
+  if (responseText.trim()) {
+    return responseText.trim();
+  }
+
+  throw new Error('Claude enhancement response is empty');
+}
+
+export function extractAppendedDelta(previousText, nextText) {
+  const previous = typeof previousText === 'string' ? previousText : '';
+  const next = typeof nextText === 'string' ? nextText : '';
+  if (!next.trim()) return '';
+  if (!previous) return next;
+  if (next === previous) return '';
+  if (!next.startsWith(previous)) return next;
+  return next.slice(previous.length);
+}
+
+async function enhancePromptWithCodex(originalPrompt, systemPrompt, model, context) {
+  const sdk = await ensureCodexSdk();
+  const Codex = sdk.Codex || sdk.default || sdk;
+  const { cliEnv } = buildCodexCliEnvironment(process.env);
+  const codex = new Codex({ env: cliEnv });
+
+  const workingDirectory = getRealHomeDir();
+  const systemPromptText = (systemPrompt || '').trim();
+  const fullPrompt = [
+    systemPromptText,
+    '',
+    buildFullPrompt(originalPrompt, context),
+    '',
+    'Remember: output only the optimized prompt text with no explanation.',
+  ].join('\n');
+  console.log(`[PromptEnhancer] Full prompt length: ${fullPrompt.length}`);
+
+  const thread = codex.startThread({
+    skipGitRepoCheck: true,
+    maxTurns: 1,
+    workingDirectory,
+    model,
+    sandboxMode: 'read-only',
+    approvalPolicy: 'never',
+  });
+
+  console.log(`[PromptEnhancer] Calling Codex SDK with model: ${model}`);
+
+  const { events } = await thread.runStreamed(fullPrompt);
+  let responseText = '';
+  let lastAgentMessage = '';
+
+  for await (const event of events) {
+    console.log(`[PromptEnhancer] Codex event: ${event.type}`);
+    if (event.type === 'item.updated' || event.type === 'item.completed') {
+      const item = event.item;
+      if (item?.type === 'agent_message' && typeof item.text === 'string') {
+        const delta = extractAppendedDelta(lastAgentMessage, item.text);
+        if (delta) {
+          responseText += delta;
+        }
+        lastAgentMessage = item.text;
+      }
+      continue;
+    }
+
+    if (event.type === 'turn.failed') {
+      throw new Error(event.error?.message || 'Codex enhancement turn failed');
+    }
+
+    if (event.type === 'error') {
+      throw new Error(event.message || 'Codex enhancement failed');
+    }
+  }
+
+  const finalText = responseText.trim() || lastAgentMessage.trim();
+  console.log(`[PromptEnhancer] Codex response text length: ${finalText.length}`);
+  if (finalText) {
+    return finalText;
+  }
+
+  throw new Error('Codex enhancement response is empty');
+}
+
+async function enhancePrompt(originalPrompt, systemPrompt, runtimeConfig, context) {
+  if (runtimeConfig.provider === 'codex') {
+    return enhancePromptWithCodex(originalPrompt, systemPrompt, runtimeConfig.model, context);
+  }
+  return enhancePromptWithClaude(originalPrompt, systemPrompt, runtimeConfig.model, context);
+}
+
+export async function runPromptEnhancerRequest(data) {
+  const { prompt, systemPrompt, legacyModel, context, promptEnhancerConfig } = data;
+
+  if (!prompt) {
+    return '';
+  }
+
+  const runtimeConfig = resolvePromptEnhancerRuntimeConfig({
+    promptEnhancerConfig,
+    legacyModel,
+  });
+  console.log(`[PromptEnhancer] Resolved provider: ${runtimeConfig.provider}, model: ${runtimeConfig.model}, source: ${runtimeConfig.resolutionSource}`);
+
+  return enhancePrompt(prompt, systemPrompt, runtimeConfig, context);
+}
+
 async function main() {
   try {
-    // Read stdin input
     const input = await readStdin();
     const data = JSON.parse(input);
 
-    const { prompt, systemPrompt, model, context } = data;
+    const { prompt, context } = data;
 
     if (!prompt) {
       console.log('[ENHANCED]');
       process.exit(0);
     }
 
-    // Log context information
     if (context) {
-      console.log(`[PromptEnhancer] Received context info:`);
+      console.log('[PromptEnhancer] Received context info:');
       if (context.selectedCode) {
         console.log(`  - Selected code: ${context.selectedCode.length} chars`);
       }
@@ -351,14 +482,10 @@ async function main() {
         console.log(`  - Related files: ${context.relatedFiles.length}`);
       }
     } else {
-      console.log(`[PromptEnhancer] No context info received`);
+      console.log('[PromptEnhancer] No context info received');
     }
 
-    // Enhance the prompt (passing context information)
-    const enhancedPrompt = await enhancePrompt(prompt, systemPrompt, model, context);
-
-    // Output the result
-    // Replace newlines with a special marker to prevent Java's readLine() from reading only the first line
+    const enhancedPrompt = await runPromptEnhancerRequest(data);
     const encodedPrompt = enhancedPrompt.replace(/\n/g, '{{NEWLINE}}');
     console.log(`[ENHANCED]${encodedPrompt}`);
     process.exit(0);
@@ -369,4 +496,6 @@ async function main() {
   }
 }
 
-main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main();
+}

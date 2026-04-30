@@ -123,7 +123,25 @@ public class CodexMessageConverterTest {
         assertNull(result.get("timestamp"));
     }
 
-    // ---- convertCustomToolCallToToolUse ----
+    @Test
+    public void functionCallNormalizesShellCommandToolName() {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("name", "shell_command");
+        payload.addProperty("call_id", "call-shell-1");
+        payload.addProperty("arguments", "{\"command\":\"ls src\"}");
+
+        JsonObject result = CodexMessageConverter.convertFunctionCallToToolUse(payload, null);
+
+        assertEquals("assistant", result.get("type").getAsString());
+        assertEquals("Tool: glob", result.get("content").getAsString());
+
+        JsonObject toolUse = extractFirstBlock(result);
+        assertEquals("tool_use", toolUse.get("type").getAsString());
+        assertEquals("call-shell-1", toolUse.get("id").getAsString());
+        assertEquals("glob", toolUse.get("name").getAsString());
+        assertEquals("ls src", toolUse.getAsJsonObject("input").get("command").getAsString());
+    }
+
 
     @Test
     public void customToolCallWithStringInput() {

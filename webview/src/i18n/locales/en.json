@@ -173,6 +173,20 @@
         "disabled": "Disabled",
         "hint": "When enabled, selecting a file in the project tree will automatically send its file path to AI (note: only the file path is sent, not the file content). When disabled, manual action is required."
       },
+      "promptEnhancer": {
+        "label": "Prompt Enhancer",
+        "modelLabel": "Enhancer Model",
+        "resetToDefault": "Restore Default",
+        "providerAvailable": "Available",
+        "providerUnavailable": "Currently unavailable",
+        "provider": {
+          "claude": "Claude Code",
+          "codex": "Codex"
+        },
+        "currentProviderAuto": "Currently using automatic selection: {{provider}}",
+        "currentProviderManual": "Currently using manually selected provider: {{provider}}",
+        "currentProviderUnavailable": "The selected provider is currently unavailable: {{provider}}"
+      },
       "diffExpanded": {
         "label": "Expand Diffs by Default",
         "enabled": "Expanded",
@@ -246,6 +260,10 @@
     },
     "providers": "Provider Management",
     "providersDesc": "Manage Claude and Codex API provider configurations and switch between different API service providers",
+    "promptEnhancer": {
+      "title": "Prompt Enhancer",
+      "description": "Choose which provider and model should be used when enhancing prompts before sending them."
+    },
     "providerTab": {
       "claude": "Claude Code",
       "codex": "Codex"
@@ -314,6 +332,16 @@
     "commit": {
       "title": "Commit AI",
       "description": "Configure AI-generated Git commit message behavior",
+      "providerModel": {
+        "label": "Commit Model Provider",
+        "modelLabel": "Commit Model",
+        "resetToDefault": "Reset",
+        "providerAvailable": "Available",
+        "providerUnavailable": "Unavailable",
+        "currentProviderAuto": "Currently using auto selection: {{provider}}",
+        "currentProviderManual": "Currently using the manually selected provider: {{provider}}",
+        "currentProviderUnavailable": "The selected provider is currently unavailable: {{provider}}"
+      },
       "prompt": {
         "label": "Additional Prompt",
         "placeholder": "Add your extra requirements here, e.g., generate commit in English, include issue number, etc...",
@@ -574,6 +602,7 @@
         "deepseek": "DeepSeek",
         "minimax": "MiniMax",
         "xiaomi": "Xiaomi MiMo",
+        "xiaomiPlan": "Xiaomi MiMo Plan",
         "qwen": "Alibaba Qwen",
         "openrouter": "OpenRouter"
       }
@@ -782,6 +811,16 @@
     "confirmDelete": "Confirm Delete",
     "deleteMessage": "Are you sure you want to delete this session? This action cannot be undone.",
     "deleteSession": "Delete this session",
+    "selectMode": "Select",
+    "exitSelectMode": "Exit selection",
+    "selectedSessions": "{{count}} selected",
+    "selectAll": "Select all",
+    "clearSelection": "Clear",
+    "deleteSelected": "Delete selected",
+    "confirmDeleteSelected": "Confirm Delete",
+    "deleteSelectedMessage": "Are you sure you want to delete {{count}} selected sessions? This action cannot be undone.",
+    "selectSession": "Select session",
+    "selectSessionWithTitle": "Select {{title}}",
     "exportSession": "Export session",
     "exportSuccess": "Session exported",
     "exportFailed": "Export failed",
@@ -891,6 +930,12 @@
     "clickToCopy": "Click to copy",
     "switch": "Switch",
     "switchProvider": "Switch provider",
+    "runtimeProvider": {
+      "title": "Switch Current Provider",
+      "loading": "Loading providers...",
+      "empty": "No providers available",
+      "switched": "Switched to {{provider}}"
+    },
     "link": "Link"
   },
   "markdown": {
@@ -1098,7 +1143,6 @@
     "runCommand": "Run Command",
     "contextEngine": "Context Engine",
     "task": "Task",
-    "promptLabel": "Prompt",
     "readFile": "Read File",
     "editFile": "Edit File",
     "writeFile": "Write File",
@@ -1143,6 +1187,24 @@
     "inProgress": "In Progress {{completed}}/{{total}} tasks",
     "allCompleted": "All Completed {{completed}}/{{total}} tasks",
     "stopped": "Stopped"
+  },
+  "subagent": {
+    "process": {
+      "title": "Agent process",
+      "thought": "Thought",
+      "filesRead_one": "Read {{count}} file",
+      "filesRead_other": "Read {{count}} files",
+      "otherTools": "Other tools",
+      "result": "Result",
+      "showFullOutput": "Show full output",
+      "loading": "Loading Agent process…",
+      "unavailable": "Process log is unavailable until this session has an id.",
+      "reportGenerated": "Structured analysis report generated",
+      "unitMs": "ms",
+      "unitS": "s",
+      "unitTools": "tools",
+      "unitTokens": "tokens"
+    }
   },
   "statusPanel": {
     "todoTab": "Plan",
@@ -1311,6 +1373,29 @@
           "link1": "Codex Skills Documentation"
         }
       }
+    }
+  },
+  "claudeEffort": {
+    "title": "Select effort level",
+    "low": {
+      "label": "Low",
+      "description": "Short, scoped, latency-sensitive tasks"
+    },
+    "medium": {
+      "label": "Medium",
+      "description": "Cost-sensitive work, trades off some intelligence"
+    },
+    "high": {
+      "label": "High",
+      "description": "Balanced token usage and intelligence"
+    },
+    "xhigh": {
+      "label": "XHigh",
+      "description": "Best results for most coding tasks (recommended)"
+    },
+    "max": {
+      "label": "Max",
+      "description": "Maximum reasoning for demanding tasks (session only)"
     }
   },
   "models": {
@@ -1493,6 +1578,10 @@
       "description": "Deep reasoning for complex tasks"
     },
     "xhigh": {
+      "label": "XHigh",
+      "description": "Extra deep reasoning for demanding tasks"
+    },
+    "max": {
       "label": "Max",
       "description": "Maximum reasoning depth"
     }

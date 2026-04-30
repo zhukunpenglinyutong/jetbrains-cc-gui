@@ -4,7 +4,10 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import org.junit.Test;
 
+import java.io.InputStream;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -78,6 +81,34 @@ public class FontConfigServiceUiFontResolutionTest {
         assertTrue(((String) messageMethod.invoke(result)).toLowerCase().contains("ttf"));
     }
 
+    @Test
+    public void shouldAllowReadableCustomFontFilesLargerThanLegacyFiveMbLimit() throws Exception {
+        Path largeFont = createLargeFontLikeFile();
+
+        FontConfigService.ValidationResult result =
+            FontConfigService.validateCustomUiFontFile(largeFont.toString());
+
+        assertTrue(result.errorMessage(), result.valid());
+    }
+
+    @Test
+    public void shouldResolveCustomFontUsingStreamedUrlWithoutEmbeddingBase64() throws Exception {
+        Path largeFont = createLargeFontLikeFile();
+        JsonObject persisted = new JsonObject();
+        persisted.addProperty("mode", "customFile");
+        persisted.addProperty("customFontPath", largeFont.toString());
+
+        JsonObject resolved = invokeResolveUiFontConfig(persisted, createEditorFontConfig());
+
+        assertEquals("customFile", resolved.get("mode").getAsString());
+        assertEquals("customFile", resolved.get("effectiveMode").getAsString());
+        assertEquals("CC GUI Custom", resolved.get("fontFamily").getAsString());
+        assertTrue(resolved.get("fontUrl").getAsString().startsWith("https://cc-gui-font.local/"));
+        assertEquals("truetype", resolved.get("fontFormat").getAsString());
+        assertFalse(resolved.has("fontBase64"));
+        assertFalse(resolved.has("warning"));
+    }
+
     private JsonObject invokeResolveUiFontConfig(JsonObject persistedConfig, JsonObject editorFontConfig) throws Exception {
         Method method;
         try {
@@ -99,5 +130,18 @@ public class FontConfigServiceUiFontResolutionTest {
         fallbackFonts.add("PingFang SC");
         editorConfig.add("fallbackFonts", fallbackFonts);
         return editorConfig;
+    }
+
+    private Path createLargeFontLikeFile() throws Exception {
+        Path fontFile = Files.createTempFile("large-ui-font", ".ttf");
+        try (InputStream inputStream = getClass().getResourceAsStream("/libs/codicon.ttf")) {
+            assertNotNull("Test font resource should exist", inputStream);
+            Files.write(fontFile, inputStream.readAllBytes());
+        }
+
+        byte[] padding = new byte[6 * 1024 * 1024];
+        Files.write(fontFile, padding, java.nio.file.StandardOpenOption.APPEND);
+        fontFile.toFile().deleteOnExit();
+        return fontFile;
     }
 }

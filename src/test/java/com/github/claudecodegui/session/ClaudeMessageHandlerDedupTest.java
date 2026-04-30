@@ -61,6 +61,104 @@ public class ClaudeMessageHandlerDedupTest {
     }
 
     /**
+     * Test that replayed chunks are skipped after a conservative full-message sync.
+     */
+    @Test
+    public void handleContentDelta_skipsChunkedReplayAfterConservativeSync() {
+        handler.onMessage("stream_start", "");
+        handler.onMessage("content_delta", "A");
+        callbackHandler.clear();
+
+        // Full assistant snapshot advanced the backend state from "A" to "ABC".
+        String fullMessage = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"ABC\"}]}}";
+        handler.onMessage("assistant", fullMessage);
+        callbackHandler.clear();
+
+        // The SDK can still deliver the already-synced tail as small deltas.
+        handler.onMessage("content_delta", "B");
+        handler.onMessage("content_delta", "C");
+
+        assertTrue("Chunked replay should not be notified",
+                callbackHandler.contentDeltas.isEmpty());
+
+        handler.onMessage("content_delta", "D");
+        assertEquals("Novel content after replay should still be notified",
+                List.of("D"), callbackHandler.contentDeltas);
+    }
+
+    /**
+     * Test that a delta partially covered by conservative sync only forwards its novel suffix.
+     */
+    @Test
+    public void handleContentDelta_trimsSyncedPrefixFromPartialReplay() {
+        handler.onMessage("stream_start", "");
+        handler.onMessage("content_delta", "A");
+        callbackHandler.clear();
+
+        String fullMessage = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"ABC\"}]}}";
+        handler.onMessage("assistant", fullMessage);
+        callbackHandler.clear();
+
+        handler.onMessage("content_delta", "BCD");
+
+        assertEquals("Only the unsynced suffix should be notified",
+                List.of("D"), callbackHandler.contentDeltas);
+    }
+
+    /**
+     * Test replay skipping across tool-separated text blocks.
+     */
+    @Test
+    public void handleContentDelta_skipsReplayAcrossToolSeparatedTextBlocks() {
+        handler.onMessage("stream_start", "");
+        handler.onMessage("content_delta", "Before.");
+        callbackHandler.clear();
+
+        String fullMessage = "{\"type\":\"assistant\",\"message\":{\"content\":["
+                + "{\"type\":\"text\",\"text\":\"Before.\"},"
+                + "{\"type\":\"tool_use\",\"id\":\"tool-1\",\"name\":\"Read\"},"
+                + "{\"type\":\"text\",\"text\":\"After.\"}"
+                + "]}}";
+        handler.onMessage("assistant", fullMessage);
+        callbackHandler.clear();
+
+        handler.onMessage("content_delta", "Aft");
+        handler.onMessage("content_delta", "er.");
+
+        assertTrue("Tool-separated replay should not be notified",
+                callbackHandler.contentDeltas.isEmpty());
+
+        handler.onMessage("content_delta", " Done.");
+        assertEquals("Novel text after tool-separated replay should still be notified",
+                List.of(" Done."), callbackHandler.contentDeltas);
+    }
+
+    /**
+     * Test that thinking deltas replayed after a full assistant snapshot are skipped.
+     */
+    @Test
+    public void handleThinkingDelta_skipsChunkedReplayAfterConservativeSync() {
+        handler.onMessage("stream_start", "");
+
+        String fullMessage = "{\"type\":\"assistant\",\"message\":{\"content\":["
+                + "{\"type\":\"thinking\",\"thinking\":\"Let me think\",\"text\":\"Let me think\"}"
+                + "]}}";
+        handler.onMessage("assistant", fullMessage);
+        callbackHandler.clear();
+
+        handler.onMessage("thinking_delta", "Let ");
+        handler.onMessage("thinking_delta", "me ");
+        handler.onMessage("thinking_delta", "think");
+
+        assertTrue("Chunked thinking replay should not be notified",
+                callbackHandler.thinkingDeltas.isEmpty());
+
+        handler.onMessage("thinking_delta", " more");
+        assertEquals("Novel thinking after replay should still be notified",
+                List.of(" more"), callbackHandler.thinkingDeltas);
+    }
+
+    /**
      * Test that non-duplicate delta is processed normally.
      */
     @Test

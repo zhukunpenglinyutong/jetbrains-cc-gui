@@ -169,6 +169,20 @@
         "disabled": "無効",
         "hint": "有効にすると、プロジェクトツリーでファイルを選択した際に自動的にファイルパスを AI に送信します（注意：ファイルパスのみ送信され、ファイル内容は送信されません）。無効時は手動操作が必要です。"
       },
+      "promptEnhancer": {
+        "label": "Prompt Enhancer",
+        "modelLabel": "Enhancer Model",
+        "resetToDefault": "Restore Default",
+        "providerAvailable": "Available",
+        "providerUnavailable": "Currently unavailable",
+        "provider": {
+          "claude": "Claude Code",
+          "codex": "Codex"
+        },
+        "currentProviderAuto": "Currently using automatic selection: {{provider}}",
+        "currentProviderManual": "Currently using manually selected provider: {{provider}}",
+        "currentProviderUnavailable": "The selected provider is currently unavailable: {{provider}}"
+      },
       "diffExpanded": {
         "label": "差分をデフォルトで展開",
         "enabled": "展開",
@@ -240,9 +254,23 @@
     "mcpDesc": "Model Context Protocolサーバーを設定および管理",
     "permissions": "権限",
     "permissionsDesc": "Claude Codeのファイルアクセスおよび操作権限を管理",
+    "promptEnhancer": {
+      "title": "Prompt Enhancer",
+      "description": "Choose which provider and model should be used when enhancing prompts before sending them."
+    },
     "commit": {
       "title": "Commit AI",
       "description": "Configure AI-generated Git commit message behavior",
+      "providerModel": {
+        "label": "コミットモデルプロバイダー",
+        "modelLabel": "コミットモデル",
+        "resetToDefault": "リセット",
+        "providerAvailable": "利用可能",
+        "providerUnavailable": "利用不可",
+        "currentProviderAuto": "現在自動選択を使用中：{{provider}}",
+        "currentProviderManual": "現在手動選択したプロバイダーを使用中：{{provider}}",
+        "currentProviderUnavailable": "選択したプロバイダーは現在利用できません：{{provider}}"
+      },
       "prompt": {
         "label": "Additional Prompt",
         "placeholder": "Add your extra requirements here, e.g., generate commit in English, include issue number, etc...",
@@ -486,6 +514,7 @@
         "deepseek": "DeepSeek",
         "minimax": "MiniMax",
         "xiaomi": "Xiaomi MiMo",
+        "xiaomiPlan": "Xiaomi MiMo Plan",
         "qwen": "Alibaba Qwen",
         "openrouter": "OpenRouter"
       }
@@ -609,6 +638,16 @@
     "confirmDelete": "削除を確認",
     "deleteMessage": "このセッションを削除してもよろしいですか? この操作は元に戻せません。",
     "deleteSession": "このセッションを削除",
+    "selectMode": "Select",
+    "exitSelectMode": "Exit selection",
+    "selectedSessions": "{{count}} selected",
+    "selectAll": "Select all",
+    "clearSelection": "Clear",
+    "deleteSelected": "Delete selected",
+    "confirmDeleteSelected": "Confirm Delete",
+    "deleteSelectedMessage": "Are you sure you want to delete {{count}} selected sessions? This action cannot be undone.",
+    "selectSession": "Select session",
+    "selectSessionWithTitle": "Select {{title}}",
     "exportSession": "セッションをエクスポート",
     "exportSuccess": "セッションがエクスポートされました",
     "exportFailed": "エクスポート失敗",
@@ -717,6 +756,12 @@
     "clickToCopy": "クリックしてコピー",
     "switch": "切り替え",
     "switchProvider": "プロバイダーを切り替え",
+    "runtimeProvider": {
+      "title": "現在のプロバイダーを切り替え",
+      "loading": "プロバイダーを読み込み中...",
+      "empty": "利用可能なプロバイダーがありません",
+      "switched": "{{provider}} に切り替えました"
+    },
     "link": "リンク"
   },
   "markdown": {

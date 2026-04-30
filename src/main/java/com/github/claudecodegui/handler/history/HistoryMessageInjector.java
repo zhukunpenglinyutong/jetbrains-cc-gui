@@ -21,7 +21,7 @@ import java.util.concurrent.CompletableFuture;
  * Service for loading session messages and injecting them into the frontend.
  * Handles both Claude and Codex session loading.
  */
-class HistoryMessageInjector {
+public class HistoryMessageInjector {
 
     private static final Logger LOG = Logger.getInstance(HistoryMessageInjector.class);
 
@@ -143,7 +143,7 @@ class HistoryMessageInjector {
      * 将 Codex 历史消息批量转换为前端消息列表。
      * 只统一前端注入协议，不改变 Codex 历史文件格式与标题数据来源。
      */
-    static List<JsonObject> convertCodexMessagesToFrontendBatch(JsonArray messages) {
+    public static List<JsonObject> convertCodexMessagesToFrontendBatch(JsonArray messages) {
         List<JsonObject> frontendMessages = new ArrayList<>();
         for (int i = 0; i < messages.size(); i++) {
             JsonObject msg = messages.get(i).getAsJsonObject();
@@ -208,33 +208,84 @@ class HistoryMessageInjector {
 
     /**
      * 将单条 Codex 历史消息转换为前端消息。
+     * Handles both event_msg (user messages) and response_item (assistant/tool messages).
      */
-    private static JsonObject convertCodexMessageToFrontend(JsonObject msg) {
-        if (!msg.has("type") || !"response_item".equals(msg.get("type").getAsString())) {
+    public static JsonObject convertCodexMessageToFrontend(JsonObject msg) {
+        if (!msg.has("type")) {
             return null;
         }
 
-        JsonObject payload = msg.has("payload") ? msg.getAsJsonObject("payload") : null;
-        if (payload == null || !payload.has("type")) {
+        String type = msg.get("type").getAsString();
+        JsonObject payload = msg.has("payload") && msg.get("payload").isJsonObject()
+                ? msg.getAsJsonObject("payload") : null;
+        if (payload == null) {
             return null;
         }
 
-        String payloadType = payload.get("type").getAsString();
         String timestamp = msg.has("timestamp") ? msg.get("timestamp").getAsString() : null;
 
-        if ("message".equals(payloadType)) {
-            return CodexMessageConverter.convertCodexMessageToFrontend(payload, timestamp);
+        // Handle event_msg containing user_message
+        if ("event_msg".equals(type)) {
+            return convertEventMsgToFrontend(payload, timestamp);
         }
-        if ("function_call".equals(payloadType)) {
-            return CodexMessageConverter.convertFunctionCallToToolUse(payload, timestamp);
+
+        // Handle response_item (assistant messages, function calls, etc.)
+        if ("response_item".equals(type)) {
+            if (!payload.has("type")) {
+                return null;
+            }
+            String payloadType = payload.get("type").getAsString();
+
+            if ("message".equals(payloadType)) {
+                return CodexMessageConverter.convertCodexMessageToFrontend(payload, timestamp);
+            }
+            if ("function_call".equals(payloadType)) {
+                return CodexMessageConverter.convertFunctionCallToToolUse(payload, timestamp);
+            }
+            if ("function_call_output".equals(payloadType)) {
+                return CodexMessageConverter.convertFunctionCallOutputToToolResult(payload, timestamp);
+            }
+            if ("custom_tool_call".equals(payloadType)) {
+                return CodexMessageConverter.convertCustomToolCallToToolUse(payload, timestamp);
+            }
         }
-        if ("function_call_output".equals(payloadType)) {
-            return CodexMessageConverter.convertFunctionCallOutputToToolResult(payload, timestamp);
-        }
-        if ("custom_tool_call".equals(payloadType)) {
-            return CodexMessageConverter.convertCustomToolCallToToolUse(payload, timestamp);
-        }
+
         return null;
+    }
+
+    /**
+     * Convert event_msg with user_message payload to frontend format.
+     */
+    private static JsonObject convertEventMsgToFrontend(JsonObject payload, String timestamp) {
+        if (!payload.has("type") || !"user_message".equals(payload.get("type").getAsString())) {
+            return null;
+        }
+        if (!payload.has("message") || payload.get("message").isJsonNull()) {
+            return null;
+        }
+
+        String content = payload.get("message").getAsString();
+
+        JsonObject frontendMsg = new JsonObject();
+        frontendMsg.addProperty("type", "user");
+        frontendMsg.addProperty("content", content);
+
+        // Build raw structure compatible with MessageParser
+        JsonObject rawObj = new JsonObject();
+        JsonArray contentBlocks = new JsonArray();
+        JsonObject textBlock = new JsonObject();
+        textBlock.addProperty("type", "text");
+        textBlock.addProperty("text", content);
+        contentBlocks.add(textBlock);
+        rawObj.add("content", contentBlocks);
+        rawObj.addProperty("role", "user");
+        frontendMsg.add("raw", rawObj);
+
+        if (timestamp != null) {
+            frontendMsg.addProperty("timestamp", timestamp);
+        }
+
+        return frontendMsg;
     }
 
     /**
