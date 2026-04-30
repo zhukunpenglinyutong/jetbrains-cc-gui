@@ -10,21 +10,53 @@ import com.intellij.openapi.diagnostic.Logger;
  * Processes messages returned by Codex AI.
  * Similar to ClaudeMessageHandler but handles Codex's simpler message format,
  * primarily dealing with streaming text output.
+ *
+ * @author melon
+ * @email "mailto:melon@email.com"
+ * @date 2026-04-30 16:26
+ * @version 1.0.0
+ * @since 1.0.0
  */
 public class CodexMessageHandler implements MessageCallback {
+    /**
+     * log.
+     */
     private static final Logger LOG = Logger.getInstance(CodexMessageHandler.class);
 
+    /**
+     * state.
+     */
     private final SessionState state;
+    /**
+     * callback handler.
+     */
     private final CallbackHandler callbackHandler;
 
-    // Content accumulator for the current assistant message
+    /**
+     * assistant content.
+     */ // Content accumulator for the current assistant message
     private final StringBuilder assistantContent = new StringBuilder();
 
-    // Current assistant message object being processed
+    /**
+     * current assistant message.
+     */ // Current assistant message object being processed
     private Message currentAssistantMessage = null;
 
     /**
+     * is streaming.
+     */
+    private boolean isStreaming = false;
+    /**
+     * stream ended this turn.
+     */
+    private boolean streamEndedThisTurn = false;
+
+    /**
      * Constructor.
+     *
+     * @param state state
+     * @param callbackHandler callback handler
+     * @since 1.0.0
      */
     public CodexMessageHandler(SessionState state, CallbackHandler callbackHandler) {
         this.state = state;
@@ -33,6 +65,10 @@ public class CodexMessageHandler implements MessageCallback {
 
     /**
      * Handle a received message by dispatching to the appropriate handler based on type.
+     *
+     * @param type type
+     * @param content content
+     * @since 1.0.0
      */
     @Override
     public void onMessage(String type, String content) {
@@ -56,6 +92,10 @@ public class CodexMessageHandler implements MessageCallback {
             handleSessionId(content);
         } else if ("event_msg".equals(type)) {
             handleEventMessage(content);
+        } else if ("stream_start".equals(type)) {
+            handleStreamStart();
+        } else if ("stream_end".equals(type)) {
+            handleStreamEnd();
         } else if ("content_delta".equals(type) || "content".equals(type)) {
             // Handle streaming content delta (legacy format, kept for compatibility)
             // content_delta: streaming incremental
@@ -74,9 +114,15 @@ public class CodexMessageHandler implements MessageCallback {
 
     /**
      * Handle an error from the SDK.
+     *
+     * @param error error
+     * @since 1.0.0
      */
     @Override
     public void onError(String error) {
+        boolean wasStreaming = isStreaming;
+        isStreaming = false;
+        streamEndedThisTurn = false;
         state.setError(error);
         state.setBusy(false);
         state.setLoading(false);
@@ -84,17 +130,37 @@ public class CodexMessageHandler implements MessageCallback {
         Message errorMessage = new Message(Message.Type.ERROR, error);
         state.addMessage(errorMessage);
         callbackHandler.notifyMessageUpdate(state.getMessages());
+        if (wasStreaming) {
+            callbackHandler.notifyStreamEnd();
+        }
+        resetStreamingAccumulator();
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
     }
 
     /**
      * Handle completion of a response turn.
+     *
+     * @param result result
+     * @since 1.0.0
      */
     @Override
     public void onComplete(SDKResult result) {
+        boolean streamEndedBeforeComplete = streamEndedThisTurn;
+        boolean wasStreaming = isStreaming;
+
+        isStreaming = false;
+        streamEndedThisTurn = false;
         state.setBusy(false);
         state.setLoading(false);
         state.updateLastModifiedTime();
+
+        if (wasStreaming && !streamEndedBeforeComplete) {
+            LOG.warn("Codex onComplete called without prior stream_end; forcing stream cleanup");
+            callbackHandler.notifyMessageUpdate(state.getMessages());
+            callbackHandler.notifyStreamEnd();
+        }
+
+        resetStreamingAccumulator();
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
     }
 
@@ -103,6 +169,9 @@ public class CodexMessageHandler implements MessageCallback {
     /**
      * Handle a complete assistant message in JSON format.
      * Contains thinking, tool_use, text, and other content types.
+     *
+     * @param jsonContent json content
+     * @since 1.0.0
      */
     private void handleAssistantMessage(String jsonContent) {
         try {
@@ -116,10 +185,17 @@ public class CodexMessageHandler implements MessageCallback {
                 return;
             }
 
-            state.addMessage(parsed);
+            if (currentAssistantMessage != null) {
+                currentAssistantMessage.content = parsed.content;
+                currentAssistantMessage.raw = parsed.raw;
+                assistantContent.setLength(0);
+                assistantContent.append(parsed.content != null ? parsed.content : "");
+            } else {
+                state.addMessage(parsed);
+            }
             callbackHandler.notifyMessageUpdate(state.getMessages());
 
-            LOG.debug("Codex assistant message added with raw JSON");
+            LOG.debug("Codex assistant message synchronized with raw JSON");
         } catch (Exception e) {
             LOG.warn("Failed to parse assistant message: " + e.getMessage());
         }
@@ -127,6 +203,9 @@ public class CodexMessageHandler implements MessageCallback {
 
     /**
      * Handle a user message (primarily tool_result).
+     *
+     * @param jsonContent json content
+     * @since 1.0.0
      */
     private void handleUserMessage(String jsonContent) {
         try {
@@ -151,6 +230,9 @@ public class CodexMessageHandler implements MessageCallback {
 
     /**
      * Handle the session_id (Codex thread ID) for session recovery.
+     *
+     * @param threadId thread id
+     * @since 1.0.0
      */
     private void handleSessionId(String threadId) {
         if (threadId != null && !threadId.trim().isEmpty()) {
@@ -162,6 +244,9 @@ public class CodexMessageHandler implements MessageCallback {
 
     /**
      * Handle the result message containing usage statistics.
+     *
+     * @param jsonContent json content
+     * @since 1.0.0
      */
     private void handleResultMessage(String jsonContent) {
         try {
@@ -186,6 +271,9 @@ public class CodexMessageHandler implements MessageCallback {
 
     /**
      * Handle event_msg containing token_count and other events.
+     *
+     * @param jsonContent json content
+     * @since 1.0.0
      */
     private void handleEventMessage(String jsonContent) {
         try {
@@ -234,6 +322,10 @@ public class CodexMessageHandler implements MessageCallback {
 
     /**
      * Attach usage data to the last assistant message's raw field for frontend display.
+     *
+     * @param usage usage
+     * @return boolean
+     * @since 1.0.0
      */
     private boolean attachUsageToLastAssistant(com.google.gson.JsonObject usage) {
         java.util.List<Message> messages = state.getMessagesReference();
@@ -249,6 +341,11 @@ public class CodexMessageHandler implements MessageCallback {
 
     /**
      * Parse a server message with full filtering and parsing logic (ported from v0.1.3-codex).
+     *
+     * @param msg msg
+     * @param messageType message type
+     * @return message
+     * @since 1.0.0
      */
     private Message parseServerMessage(com.google.gson.JsonObject msg, Message.Type messageType) {
         // Filter out isMeta messages (e.g., "Caveat: The messages below were generated...")
@@ -333,6 +430,10 @@ public class CodexMessageHandler implements MessageCallback {
 
     /**
      * Extract message content (ported from v0.1.3-codex).
+     *
+     * @param msg msg
+     * @return string
+     * @since 1.0.0
      */
     private String extractMessageContent(com.google.gson.JsonObject msg) {
         if (!msg.has("message")) {
@@ -355,6 +456,10 @@ public class CodexMessageHandler implements MessageCallback {
 
     /**
      * Extract content from a JsonElement (ported from v0.1.3-codex).
+     *
+     * @param contentElement content element
+     * @return string
+     * @since 1.0.0
      */
     private String extractContentFromElement(com.google.gson.JsonElement contentElement) {
         // String format
@@ -425,6 +530,9 @@ public class CodexMessageHandler implements MessageCallback {
 
     /**
      * Handle content delta in streaming mode.
+     *
+     * @param content content
+     * @since 1.0.0
      */
     private void handleContentDelta(String content) {
         // Empty content check (compatible with v0.1.3-codex)
@@ -445,12 +553,56 @@ public class CodexMessageHandler implements MessageCallback {
     }
 
     /**
-     * Handle the end of a message.
+     * Handle Stream Start
+     *
+     * @since 1.0.0
      */
-    private void handleMessageEnd() {
+    private void handleStreamStart() {
+        isStreaming = true;
+        streamEndedThisTurn = false;
+        resetStreamingAccumulator();
+        callbackHandler.notifyStreamStart();
+        LOG.debug("Codex stream started");
+    }
+
+    /**
+     * Handle Stream End
+     *
+     * @since 1.0.0
+     */
+    private void handleStreamEnd() {
+        if (!isStreaming && streamEndedThisTurn) {
+            return;
+        }
+
+        isStreaming = false;
+        streamEndedThisTurn = true;
+        callbackHandler.notifyMessageUpdate(state.getMessages());
+        callbackHandler.notifyStreamEnd();
         state.setBusy(false);
         state.setLoading(false);
+        state.updateLastModifiedTime();
+        resetStreamingAccumulator();
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
-        LOG.debug("Codex message end received");
+        LOG.debug("Codex stream ended");
+    }
+
+    /**
+     * Handle the end of a message.
+     *
+     * @since 1.0.0
+     */
+    private void handleMessageEnd() {
+        LOG.debug("Codex message_end received, deferring stream cleanup to stream_end/onComplete");
+    }
+
+    /**
+     * Reset per-turn streaming accumulator state.
+     *
+     * @since 1.0.0
+     */
+    private void resetStreamingAccumulator() {
+        assistantContent.setLength(0);
+        currentAssistantMessage = null;
     }
 }
