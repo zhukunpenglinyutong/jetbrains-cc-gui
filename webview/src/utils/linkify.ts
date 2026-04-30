@@ -44,22 +44,54 @@ const STANDALONE_FILENAME_REGEX = /[A-Za-z0-9._-]+\.[A-Za-z]{2,}(?!:\d)/g;
 
 // Common source file extensions - used to validate standalone filenames
 const SOURCE_FILE_EXTENSIONS = new Set([
-  'ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs',
-  'java', 'kt', 'kts', 'scala',
+  // TypeScript / JavaScript
+  'ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'mts', 'cts',
+  // JVM
+  'java', 'kt', 'kts', 'scala', 'groovy', 'clj', 'cljs', 'cljc',
+  // Python
   'py', 'pyw', 'pyi',
+  // Go / Rust / C / C++
   'go', 'rs', 'c', 'cpp', 'cc', 'cxx', 'h', 'hpp', 'hxx',
+  // C# / VB / F#
   'cs', 'vb', 'fs', 'fsx',
+  // Styles
   'css', 'less', 'scss', 'sass',
+  // Data / Config
   'json', 'yaml', 'yml', 'toml', 'xml', 'ini', 'conf', 'config',
-  'md', 'markdown', 'rst', 'txt',
+  'properties', 'cfg', 'rc', 'prefs',
+  // Documentation
+  'md', 'markdown', 'rst', 'txt', 'adoc', 'tex', 'latex', 'rtf',
+  // SQL
   'sql', 'ddl', 'dml',
+  // Shell
   'sh', 'bash', 'zsh', 'fish', 'ps1', 'bat', 'cmd',
-  'dockerfile', 'makefile', 'cmake', 'gradle', 'maven',
-  'html', 'htm', 'vue', 'svelte', 'astro',
-  'graphql', 'gql',
-  'proto', 'thrift',
+  // Build
+  'dockerfile', 'makefile', 'cmake', 'gradle', 'maven', 'mk',
+  // Web / Templates
+  'html', 'htm', 'jsp', 'jspx', 'vue', 'svelte', 'astro',
+  'hbs', 'ejs', 'pug', 'njk', 'twig', 'blade',
+  'php', 'phtml', 'asp', 'aspx',
+  'erb',
+  // API / Schema
+  'graphql', 'gql', 'proto', 'thrift', 'avsc',
+  // Lock / Module
   'lock', 'mod', 'sum',
+  // Misc
   'log', 'env', 'gitignore', 'dockerignore', 'editorconfig',
+  // Ruby
+  'rb', 'gemspec', 'rake',
+  // Perl / R
+  'pl', 'pm', 'r', 'R',
+  // Lua / Swift / Dart / Zig / Nim
+  'lua', 'swift', 'm', 'mm', 'dart', 'zig', 'nim',
+  // Haskell / Erlang / Elixir
+  'hs', 'erl', 'hrl', 'ex', 'exs',
+  // Assembly / Misc languages
+  'asm', 's', 'sol', 'tf', 'hcl',
+  // Template / Resource
+  'ftl', 'vm', 'mustache',
+  // Data interchange
+  'csv', 'tsv', 'svg',
 ]);
 
 // Validate standalone filename matches before linking them as file references.
