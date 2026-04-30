@@ -100,6 +100,15 @@ interface Window {
   addToast?: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 
   /**
+   * Toast deferred until a session transition finishes, because backend
+   * clearMessages resets transient UI state during new-session creation.
+   */
+  __pendingSessionTransitionToast?: {
+    message: string;
+    type?: 'success' | 'error' | 'warning' | 'info';
+  };
+
+  /**
    * Usage statistics update callback
    */
   onUsageUpdate?: (json: string) => void;

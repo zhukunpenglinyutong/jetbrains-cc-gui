@@ -44,6 +44,7 @@ interface UseSessionManagementReturn {
   handleCancelInterrupt: () => void;
   loadHistorySession: (sessionId: string) => void;
   deleteHistorySession: (sessionId: string) => void;
+  deleteHistorySessions: (sessionIds: string[]) => void;
   exportHistorySession: (sessionId: string, title: string) => void;
   toggleFavoriteSession: (sessionId: string) => void;
   updateHistoryTitle: (sessionId: string, newTitle: string) => void;
@@ -80,6 +81,14 @@ export function useSessionManagement({
   const transitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const historyDataRef = useRef(historyData);
   historyDataRef.current = historyData;
+  const showSessionDeletedToast = useCallback((afterSessionTransition = false) => {
+    const toast = { message: t('history.sessionDeleted'), type: 'success' as const };
+    if (afterSessionTransition) {
+      window.__pendingSessionTransitionToast = toast;
+      return;
+    }
+    addToast(toast.message, toast.type);
+  }, [addToast, t]);
 
   const beginSessionTransition = useCallback((nextSessionId: string | null, nextTitle: string | null) => {
     window.__sessionTransitioning = true;
@@ -202,6 +211,7 @@ export function useSessionManagement({
   const deleteHistorySession = useCallback((sessionId: string) => {
     // Send delete request to Java backend
     sendBridgeEvent('delete_session', sessionId);
+    let startedSessionTransition = false;
 
     // Immediately update frontend state, remove session from history list
     if (historyData && historyData.sessions) {
@@ -225,15 +235,57 @@ export function useSessionManagement({
           sendBridgeEvent('interrupt_session');
         }
         beginSessionTransition(null, null);
+        startedSessionTransition = true;
         // Set flag to suppress next updateStatus toast
         suppressNextStatusToastRef.current = true;
         sendBridgeEvent('create_new_session');
       }
 
-      // Show success toast
-      addToast(t('history.sessionDeleted'), 'success');
     }
-  }, [historyData, currentSessionId, loading, setHistoryData, setMessages, setCurrentSessionId, setCustomSessionTitle, setUsagePercentage, setUsageUsedTokens, addToast, t]);
+    showSessionDeletedToast(startedSessionTransition);
+  }, [historyData, currentSessionId, loading, setHistoryData, setMessages, setCurrentSessionId, setCustomSessionTitle, setUsagePercentage, setUsageUsedTokens, showSessionDeletedToast]);
+
+  // Batch delete history sessions
+  const deleteHistorySessions = useCallback((sessionIds: string[]) => {
+    const uniqueSessionIds = Array.from(new Set(sessionIds.filter(Boolean)));
+    if (uniqueSessionIds.length === 0) {
+      return;
+    }
+
+    sendBridgeEvent('delete_sessions', JSON.stringify(uniqueSessionIds));
+    let startedSessionTransition = false;
+
+    if (historyData && historyData.sessions) {
+      const deletedSessionIds = new Set(uniqueSessionIds);
+      setHistoryData(prevHistoryData => {
+        if (!prevHistoryData?.sessions) {
+          return prevHistoryData;
+        }
+
+        const deletedMessageCount = prevHistoryData.sessions.reduce((sum, session) => (
+          deletedSessionIds.has(session.sessionId) ? sum + (session.messageCount || 0) : sum
+        ), 0);
+
+        return {
+          ...prevHistoryData,
+          sessions: prevHistoryData.sessions.filter(session => !deletedSessionIds.has(session.sessionId)),
+          total: Math.max(0, (prevHistoryData.total || 0) - deletedMessageCount)
+        };
+      });
+
+      if (currentSessionId && deletedSessionIds.has(currentSessionId)) {
+        if (loading) {
+          sendBridgeEvent('interrupt_session');
+        }
+        beginSessionTransition(null, null);
+        startedSessionTransition = true;
+        suppressNextStatusToastRef.current = true;
+        sendBridgeEvent('create_new_session');
+      }
+
+    }
+    showSessionDeletedToast(startedSessionTransition);
+  }, [historyData, currentSessionId, loading, setHistoryData, beginSessionTransition, showSessionDeletedToast]);
 
   // Export history session
   const exportHistorySession = useCallback((sessionId: string, title: string) => {
@@ -315,6 +367,7 @@ export function useSessionManagement({
     handleCancelInterrupt,
     loadHistorySession,
     deleteHistorySession,
+    deleteHistorySessions,
     exportHistorySession,
     toggleFavoriteSession,
     updateHistoryTitle,

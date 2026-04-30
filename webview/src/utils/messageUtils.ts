@@ -317,6 +317,22 @@ const MESSAGE_MERGE_CACHE_LIMIT = 3000;
 
 export type LocalizeMessageFn = (text: string) => string;
 
+export function isSyntheticToolMessageContent(
+  content: string | undefined,
+  rawBlocks: readonly ClaudeContentBlock[] | null | undefined
+): boolean {
+  if (!content || !content.trim() || !rawBlocks?.some((block) => block.type === 'tool_use')) {
+    return false;
+  }
+
+  return content
+    .split(/\r?\n/)
+    .every((line) => {
+      const trimmed = line.trim();
+      return !trimmed || /^Tool:\s+[\w.-]+$/.test(trimmed);
+    });
+}
+
 /**
  * Normalize raw message content into content blocks
  */
@@ -694,7 +710,12 @@ export function getContentBlocks(
     const hasTextBlock = rawBlocks.some(
       (block) => block.type === 'text' && typeof block.text === 'string' && String(block.text).trim().length > 0,
     );
-    if (!hasTextBlock && message.content && message.content.trim()) {
+    if (
+      !hasTextBlock &&
+      message.content &&
+      message.content.trim() &&
+      !isSyntheticToolMessageContent(message.content, rawBlocks)
+    ) {
       return [...rawBlocks, { type: 'text', text: localizeMessage(message.content) }];
     }
     return rawBlocks;

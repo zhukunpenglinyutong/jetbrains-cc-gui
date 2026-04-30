@@ -593,6 +593,11 @@ export function registerMessageCallbacks(
   // Also clear stream-ended markers since history messages don't have __turnId
   window.historyLoadComplete = () => {
     releaseSessionTransition();
+    const pendingToast = window.__pendingSessionTransitionToast;
+    if (pendingToast) {
+      window.__pendingSessionTransitionToast = undefined;
+      addToast(pendingToast.message, pendingToast.type);
+    }
     window.__lastStreamEndedTurnId = undefined;
     window.__lastStreamEndedAt = undefined;
     setMessages((prev) => {

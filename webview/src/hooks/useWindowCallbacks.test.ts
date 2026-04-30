@@ -95,6 +95,7 @@ describe('useWindowCallbacks integration', () => {
   beforeEach(() => {
     (window as any).__sessionTransitioning = false;
     (window as any).__sessionTransitionToken = null;
+    (window as any).__pendingSessionTransitionToast = undefined;
     (window as any).__deniedToolIds = new Set();
     window.sendToJava = vi.fn();
   });
@@ -120,6 +121,23 @@ describe('useWindowCallbacks integration', () => {
 
     expect((window as any).__sessionTransitioning).toBe(false);
     expect((window as any).__sessionTransitionToken).toBeNull();
+  });
+
+  it('historyLoadComplete shows pending session transition toast', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    (window as any).__pendingSessionTransitionToast = {
+      message: 'history.sessionDeleted',
+      type: 'success',
+    };
+
+    act(() => {
+      (window as any).historyLoadComplete();
+    });
+
+    expect(opts.addToast).toHaveBeenCalledWith('history.sessionDeleted', 'success');
+    expect((window as any).__pendingSessionTransitionToast).toBeUndefined();
   });
 
   // ===== historyLoadComplete triggers full message re-render =====

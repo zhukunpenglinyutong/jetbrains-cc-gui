@@ -87,6 +87,10 @@ public class CodexSDKBridge extends BaseSDKBridge {
 
         if (line.startsWith("[MESSAGE_START]")) {
             callback.onMessage("message_start", "");
+        } else if (line.startsWith("[STREAM_START]")) {
+            callback.onMessage("stream_start", "");
+        } else if (line.startsWith("[STREAM_END]")) {
+            callback.onMessage("stream_end", "");
         } else if (line.startsWith("[MESSAGE_END]")) {
             callback.onMessage("message_end", "");
         } else if (line.startsWith("[THREAD_ID]")) {
@@ -130,9 +134,12 @@ public class CodexSDKBridge extends BaseSDKBridge {
             } catch (Exception ignored) {
             }
         } else if (line.startsWith("[CONTENT_DELTA]")) {
-            String delta = line.substring("[CONTENT_DELTA]".length()).trim();
+            String delta = decodeJsonStringPayload(line.substring("[CONTENT_DELTA]".length()));
             assistantContent.append(delta);
             callback.onMessage("content_delta", delta);
+        } else if (line.startsWith("[THINKING_DELTA]")) {
+            String delta = decodeJsonStringPayload(line.substring("[THINKING_DELTA]".length()));
+            callback.onMessage("thinking_delta", delta);
         } else if (line.startsWith("[CONTENT]")) {
             String content = line.substring("[CONTENT]".length()).trim();
             // Avoid duplicate
@@ -154,6 +161,15 @@ public class CodexSDKBridge extends BaseSDKBridge {
             result.success = false;
             result.error = errorMessage;
             callback.onError(errorMessage);
+        }
+    }
+
+    private String decodeJsonStringPayload(String rawPayload) {
+        String jsonStr = rawPayload.startsWith(" ") ? rawPayload.substring(1) : rawPayload;
+        try {
+            return gson.fromJson(jsonStr, String.class);
+        } catch (Exception ignored) {
+            return jsonStr;
         }
     }
 

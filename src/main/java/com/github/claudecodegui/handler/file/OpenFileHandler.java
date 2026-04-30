@@ -214,7 +214,6 @@ class OpenFileHandler {
         return ReadAction.compute(() -> {
             // Search for files with matching name in project scope
             Collection<VirtualFile> matches = FilenameIndex.getVirtualFilesByName(
-                project,
                 fileName,
                 GlobalSearchScope.projectScope(project)
             );

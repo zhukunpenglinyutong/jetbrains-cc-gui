@@ -59,6 +59,16 @@ export async function sendMessage(
   reasoningEffort = 'medium',
   attachments = []
 ) {
+  let streamStarted = false;
+  let streamEnded = false;
+  const emitStreamEndOnce = () => {
+    if (!streamStarted || streamEnded) {
+      return;
+    }
+    streamEnded = true;
+    console.log('[STREAM_END]');
+  };
+
   try {
     const normalizedPermissionMode = normalizeCodexPermissionMode(permissionMode || 'default');
 
@@ -222,6 +232,8 @@ export async function sendMessage(
     const { events } = await thread.runStreamed(runInput, {
       signal: turnAbortController.signal
     });
+    console.log('[STREAM_START]');
+    streamStarted = true;
 
     // ============================================================
     // 7. Delegate Event Processing to codex-event-handler
@@ -240,10 +252,13 @@ export async function sendMessage(
       threadId,
       threadOptions,
       normalizedPermissionMode,
-      turnAbortController
+      turnAbortController,
+      onTurnCompleted: emitStreamEndOnce,
+      onTurnFailed: emitStreamEndOnce
     };
 
     await processCodexEventStream(events, state, config);
+    emitStreamEndOnce();
 
     // ============================================================
     // 8. Completion Phase
@@ -284,6 +299,7 @@ export async function sendMessage(
     }));
 
   } catch (error) {
+    emitStreamEndOnce();
     console.error('[DEBUG] Error:', error.message);
     console.error('[DEBUG] Error stack:', error.stack);
 

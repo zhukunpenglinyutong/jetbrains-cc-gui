@@ -23,10 +23,11 @@ public class SessionIndexManager {
 
     private static final Logger LOG = Logger.getInstance(SessionIndexManager.class);
 
-    private static final String HOME_DIR = PlatformUtils.getHomeDirectory();
-    private static final Path CODEMOSS_CACHE_DIR = Paths.get(HOME_DIR, ".codemoss", "cache");
+    private static final Path DEFAULT_CODEMOSS_CACHE_DIR = Paths.get(PlatformUtils.getHomeDirectory(), ".codemoss", "cache");
     private static final String CLAUDE_INDEX_FILE = "claude-session-index.json";
     private static final String CODEX_INDEX_FILE = "codex-session-index.json";
+    private static final int INDEX_REPLACE_MAX_ATTEMPTS = 5;
+    private static final long INDEX_REPLACE_RETRY_DELAY_MS = 50L;
 
     // v3 (2026-04): SessionIndexEntry.fileLastModified now populated and used by incremental
     // scan for mtime-driven re-read of already indexed sessions. Bumping forces rebuild of any
@@ -35,12 +36,18 @@ public class SessionIndexManager {
     private static final int INDEX_VERSION = 3;
 
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
+    private final Path codemossCacheDir;
+    private final Object indexFileLock = new Object();
 
     // Singleton
     private static final SessionIndexManager INSTANCE = new SessionIndexManager();
 
     private SessionIndexManager() {
-        // Ensure cache directory exists
+        this(DEFAULT_CODEMOSS_CACHE_DIR);
+    }
+
+    SessionIndexManager(Path codemossCacheDir) {
+        this.codemossCacheDir = codemossCacheDir;
         ensureCacheDir();
     }
 
@@ -112,9 +119,9 @@ public class SessionIndexManager {
      */
     private void ensureCacheDir() {
         try {
-            if (!Files.exists(CODEMOSS_CACHE_DIR)) {
-                Files.createDirectories(CODEMOSS_CACHE_DIR);
-                LOG.info("[SessionIndexManager] Created cache directory: " + CODEMOSS_CACHE_DIR);
+            if (!Files.exists(codemossCacheDir)) {
+                Files.createDirectories(codemossCacheDir);
+                LOG.info("[SessionIndexManager] Created cache directory: " + codemossCacheDir);
             }
         } catch (IOException e) {
             LOG.error("[SessionIndexManager] Failed to create cache directory: " + e.getMessage(), e);
@@ -125,42 +132,50 @@ public class SessionIndexManager {
      * Returns the file path for the Claude index.
      */
     public Path getClaudeIndexPath() {
-        return CODEMOSS_CACHE_DIR.resolve(CLAUDE_INDEX_FILE);
+        return codemossCacheDir.resolve(CLAUDE_INDEX_FILE);
     }
 
     /**
      * Returns the file path for the Codex index.
      */
     public Path getCodexIndexPath() {
-        return CODEMOSS_CACHE_DIR.resolve(CODEX_INDEX_FILE);
+        return codemossCacheDir.resolve(CODEX_INDEX_FILE);
     }
 
     /**
      * Reads the Claude index.
      */
     public SessionIndex readClaudeIndex() {
-        return readIndex(getClaudeIndexPath());
+        synchronized (indexFileLock) {
+            return readIndex(getClaudeIndexPath());
+        }
     }
 
     /**
      * Reads the Codex index.
      */
     public SessionIndex readCodexIndex() {
-        return readIndex(getCodexIndexPath());
+        synchronized (indexFileLock) {
+            return readIndex(getCodexIndexPath());
+        }
     }
 
     /**
      * Saves the Claude index.
      */
     public void saveClaudeIndex(SessionIndex index) {
-        saveIndex(getClaudeIndexPath(), index);
+        synchronized (indexFileLock) {
+            saveIndex(getClaudeIndexPath(), index);
+        }
     }
 
     /**
      * Saves the Codex index.
      */
     public void saveCodexIndex(SessionIndex index) {
-        saveIndex(getCodexIndexPath(), index);
+        synchronized (indexFileLock) {
+            saveIndex(getCodexIndexPath(), index);
+        }
     }
 
     /**
@@ -211,11 +226,7 @@ public class SessionIndexManager {
             try (Writer writer = Files.newBufferedWriter(tmp, StandardCharsets.UTF_8)) {
                 gson.toJson(index, writer);
             }
-            try {
-                Files.move(tmp, indexPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-            } catch (AtomicMoveNotSupportedException ignored) {
-                Files.move(tmp, indexPath, StandardCopyOption.REPLACE_EXISTING);
-            }
+            replaceIndexFile(tmp, indexPath);
             LOG.info("[SessionIndexManager] Saved index to " + indexPath);
         } catch (Exception e) {
             LOG.error("[SessionIndexManager] Failed to save index: " + e.getMessage(), e);
@@ -227,6 +238,41 @@ public class SessionIndexManager {
                     LOG.debug("[SessionIndexManager] Failed to cleanup temp file: " + tmp + " (" + e.getMessage() + ")");
                 }
             }
+        }
+    }
+
+    private void replaceIndexFile(Path tmp, Path indexPath) throws IOException {
+        IOException lastFailure = null;
+        boolean atomicMoveSupported = true;
+
+        for (int attempt = 1; attempt <= INDEX_REPLACE_MAX_ATTEMPTS; attempt++) {
+            try {
+                if (atomicMoveSupported) {
+                    Files.move(tmp, indexPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                } else {
+                    Files.move(tmp, indexPath, StandardCopyOption.REPLACE_EXISTING);
+                }
+                return;
+            } catch (AtomicMoveNotSupportedException e) {
+                atomicMoveSupported = false;
+                lastFailure = e;
+            } catch (AccessDeniedException e) {
+                lastFailure = e;
+            }
+
+            if (attempt < INDEX_REPLACE_MAX_ATTEMPTS) {
+                sleepBeforeRetry(attempt);
+            }
+        }
+
+        throw lastFailure;
+    }
+
+    private void sleepBeforeRetry(int attempt) {
+        try {
+            Thread.sleep(INDEX_REPLACE_RETRY_DELAY_MS * attempt);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -382,12 +428,14 @@ public class SessionIndexManager {
      * Clears all indexes.
      */
     public void clearAllIndexes() {
-        try {
-            Files.deleteIfExists(getClaudeIndexPath());
-            Files.deleteIfExists(getCodexIndexPath());
-            LOG.info("[SessionIndexManager] All indexes cleared");
-        } catch (IOException e) {
-            LOG.error("[SessionIndexManager] Failed to clear indexes: " + e.getMessage(), e);
+        synchronized (indexFileLock) {
+            try {
+                Files.deleteIfExists(getClaudeIndexPath());
+                Files.deleteIfExists(getCodexIndexPath());
+                LOG.info("[SessionIndexManager] All indexes cleared");
+            } catch (IOException e) {
+                LOG.error("[SessionIndexManager] Failed to clear indexes: " + e.getMessage(), e);
+            }
         }
     }
 
@@ -395,14 +443,16 @@ public class SessionIndexManager {
      * Clears the index for a specific project.
      */
     public void clearProjectIndex(String provider, String projectPath) {
-        if ("claude".equals(provider)) {
-            SessionIndex index = readClaudeIndex();
-            index.projects.remove(projectPath);
-            saveClaudeIndex(index);
-        } else if ("codex".equals(provider)) {
-            SessionIndex index = readCodexIndex();
-            index.projects.remove(projectPath);
-            saveCodexIndex(index);
+        synchronized (indexFileLock) {
+            if ("claude".equals(provider)) {
+                SessionIndex index = readIndex(getClaudeIndexPath());
+                index.projects.remove(projectPath);
+                saveIndex(getClaudeIndexPath(), index);
+            } else if ("codex".equals(provider)) {
+                SessionIndex index = readIndex(getCodexIndexPath());
+                index.projects.remove(projectPath);
+                saveIndex(getCodexIndexPath(), index);
+            }
         }
         LOG.info("[SessionIndexManager] Cleared index for " + provider + " project: " + projectPath);
     }
@@ -412,8 +462,10 @@ public class SessionIndexManager {
      * Codex uses "__all__" as its index key, so deleting a session requires clearing the entire Codex index.
      */
     public void clearAllCodexIndex() {
-        SessionIndex index = new SessionIndex();
-        saveCodexIndex(index);
+        synchronized (indexFileLock) {
+            SessionIndex index = new SessionIndex();
+            saveIndex(getCodexIndexPath(), index);
+        }
         LOG.info("[SessionIndexManager] All Codex indexes cleared");
     }
 }

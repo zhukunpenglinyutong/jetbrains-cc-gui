@@ -15,6 +15,7 @@ interface HistoryViewProps {
   currentProvider?: string; // Current provider (claude or codex)
   onLoadSession: (sessionId: string) => void;
   onDeleteSession: (sessionId: string) => void; // Delete session callback
+  onDeleteSessions: (sessionIds: string[]) => void; // Batch delete sessions callback
   onExportSession: (sessionId: string, title: string) => void; // Export session callback
   onToggleFavorite: (sessionId: string) => void; // Toggle favorite callback
   onUpdateTitle: (sessionId: string, newTitle: string) => void; // Update title callback
@@ -94,7 +95,7 @@ const deduplicateHistorySessions = (sessions: HistorySessionSummary[]) => {
   return Array.from(deduplicated.values());
 };
 
-const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSession, onExportSession, onToggleFavorite, onUpdateTitle }: HistoryViewProps) => {
+const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSession, onDeleteSessions, onExportSession, onToggleFavorite, onUpdateTitle }: HistoryViewProps) => {
   const { t } = useTranslation();
   const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight || 600);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null); // Session ID pending deletion
@@ -328,7 +329,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
       return;
     }
 
-    selectedSessionIds.forEach(sessionId => onDeleteSession(sessionId));
+    onDeleteSessions(Array.from(selectedSessionIds));
     exitSelectionMode();
   };
 

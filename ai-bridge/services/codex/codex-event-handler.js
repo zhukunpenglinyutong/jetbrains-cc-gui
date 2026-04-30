@@ -433,11 +433,11 @@ async function maybeRequestCommandApprovalViaBridge(state, config, { toolUseId, 
 }
 
 function emitThinkingDelta(text) {
-  console.log('[THINKING_DELTA]', text);
+  process.stdout.write(`[THINKING_DELTA] ${JSON.stringify(text)}\n`);
 }
 
 function emitContentDelta(text) {
-  console.log('[CONTENT_DELTA]', text);
+  process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(text)}\n`);
 }
 
 function extractAppendedDelta(previousText, nextText) {
@@ -518,7 +518,7 @@ async function handleItemCompleted(item, state, config) {
   }
 }
 
-function handleAgentMessage(item, state) {
+function handleAgentMessage(item, state, { emitSnapshot = true } = {}) {
   const text = item.text || '';
   console.log('[DEBUG] agent_message text length:', text.length);
   console.log('[DEBUG] agent_message text (first 100 chars):', text.substring(0, 100));
@@ -531,7 +531,7 @@ function handleAgentMessage(item, state) {
     state.assistantText += delta;
     emitContentDelta(delta);
   }
-  if (text && text.trim()) {
+  if (emitSnapshot && text && text.trim()) {
     state.emitMessage(textMsg(text));
   }
 }
@@ -709,6 +709,9 @@ export async function processCodexEventStream(events, state, config) {
 
       case 'item.updated':
         maybeEmitReasoning(state, event.item);
+        if (event.item && event.item.type === 'agent_message') {
+          handleAgentMessage(event.item, state, { emitSnapshot: false });
+        }
         await replayMissingFunctionCallsDuringStream(state, config);
         break;
 
@@ -739,6 +742,9 @@ export async function processCodexEventStream(events, state, config) {
           });
           console.log('[DEBUG] Emitted usage statistics (Claude-compatible format):', claudeUsage);
         }
+        if (typeof config.onTurnCompleted === 'function') {
+          config.onTurnCompleted(event, state);
+        }
         break;
       }
 
@@ -752,6 +758,9 @@ export async function processCodexEventStream(events, state, config) {
         if (state.commandApprovalAbortRequested && /aborted|abort|cancel|interrupt/i.test(errorMsg)) {
           logInfo('PERM_DEBUG', `Ignore turn.failed after command denial abort: ${errorMsg}`);
           break;
+        }
+        if (typeof config.onTurnFailed === 'function') {
+          config.onTurnFailed(event, state);
         }
         console.error('[DEBUG] Turn failed:', errorMsg);
         throw new Error(errorMsg);
@@ -767,6 +776,9 @@ export async function processCodexEventStream(events, state, config) {
         if (state.commandApprovalAbortRequested && /aborted|abort|cancel|interrupt/i.test(generalError)) {
           logInfo('PERM_DEBUG', `Ignore error event after command denial abort: ${generalError}`);
           break;
+        }
+        if (typeof config.onTurnFailed === 'function') {
+          config.onTurnFailed(event, state);
         }
         console.error('[DEBUG] Codex error:', generalError);
         throw new Error(generalError);
