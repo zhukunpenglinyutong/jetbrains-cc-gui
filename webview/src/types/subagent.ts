@@ -26,6 +26,10 @@ export interface SubagentInfo {
   prompt?: string;
   /** Execution status */
   status: SubagentStatus;
+  /** Provider-specific lifecycle source */
+  provider?: 'claude' | 'codex';
+  /** Provider-specific background agent handle, when available */
+  agentHandle?: string;
   /** Message index where this subagent was invoked */
   messageIndex: number;
   /** Stable runtime agent id returned by Claude Code, used to locate sidechain logs */

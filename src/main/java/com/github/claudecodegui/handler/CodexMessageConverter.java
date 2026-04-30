@@ -296,6 +296,20 @@ public class CodexMessageConverter {
                contentStr.startsWith("<environment_context>");
     }
 
+    private static String stableCodexToolId(JsonObject payload, String timestamp) {
+        if (payload != null) {
+            if (payload.has("call_id") && !payload.get("call_id").isJsonNull()) {
+                return payload.get("call_id").getAsString();
+            }
+            if (payload.has("id") && !payload.get("id").isJsonNull()) {
+                return payload.get("id").getAsString();
+            }
+        }
+        String seed = (payload != null ? payload.toString() : "") + "|" + (timestamp != null ? timestamp : "");
+        return "codex_history_" + Integer.toHexString(seed.hashCode());
+    }
+
+
     /**
      * Convert Codex function_call to Claude tool_use format.
      */
@@ -319,7 +333,7 @@ public class CodexMessageConverter {
         // Build tool_use format
         JsonObject toolUse = new JsonObject();
         toolUse.addProperty("type", "tool_use");
-        toolUse.addProperty("id", payload.has("call_id") ? payload.get("call_id").getAsString() : "unknown");
+        toolUse.addProperty("id", stableCodexToolId(payload, timestamp));
         toolUse.addProperty("name", toolName);
 
         if (toolInput != null) {
@@ -478,7 +492,7 @@ public class CodexMessageConverter {
 
         JsonObject toolResult = new JsonObject();
         toolResult.addProperty("type", "tool_result");
-        toolResult.addProperty("tool_use_id", payload.has("call_id") ? payload.get("call_id").getAsString() : "unknown");
+        toolResult.addProperty("tool_use_id", stableCodexToolId(payload, timestamp));
 
         String output = safeGetAsString(payload.get("output"), "");
         toolResult.addProperty("content", output);
@@ -514,7 +528,7 @@ public class CodexMessageConverter {
 
         JsonObject toolUse = new JsonObject();
         toolUse.addProperty("type", "tool_use");
-        toolUse.addProperty("id", payload.has("call_id") ? payload.get("call_id").getAsString() : "unknown");
+        toolUse.addProperty("id", stableCodexToolId(payload, timestamp));
         toolUse.addProperty("name", toolName);
 
         JsonObject input = new JsonObject();

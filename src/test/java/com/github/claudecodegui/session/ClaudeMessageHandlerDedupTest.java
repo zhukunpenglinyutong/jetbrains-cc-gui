@@ -2,6 +2,8 @@ package com.github.claudecodegui.session;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -18,12 +20,13 @@ import static org.junit.Assert.assertTrue;
 public class ClaudeMessageHandlerDedupTest {
 
     private RecordingCallbackHandler callbackHandler;
+    private SessionState state;
     private ClaudeMessageHandler handler;
 
     @Before
     public void setUp() {
         callbackHandler = new RecordingCallbackHandler();
-        SessionState state = new SessionState();
+        state = new SessionState();
         MessageParser messageParser = new MessageParser();
         MessageMerger messageMerger = new MessageMerger();
         Gson gson = new GsonBuilder().create();
@@ -36,6 +39,46 @@ public class ClaudeMessageHandlerDedupTest {
                 messageMerger,
                 gson
         );
+    }
+
+
+    @Test
+    public void toolResultDeliveredThroughUserAndToolResultChannelsIsAddedOnce() {
+        String userToolResult = """
+                {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tool-1","content":"done"}]}}
+                """;
+        String toolResultBlock = """
+                {"type":"tool_result","tool_use_id":"tool-1","content":"done"}
+                """;
+
+        handler.onMessage("user", userToolResult);
+        handler.onMessage("tool_result", toolResultBlock);
+
+        assertEquals("Duplicate tool_result should only be stored once", 1, state.getMessages().size());
+        assertEquals("Only one message update should be emitted", 1, callbackHandler.messageUpdateCount);
+    }
+
+
+    @Test
+    public void mixedToolResultUserMessageKeepsOnlyUnprocessedBlocks() {
+        String standaloneToolResult = """
+                {"type":"tool_result","tool_use_id":"tool-1","content":"done"}
+                """;
+        String mixedUserMessage = """
+                {"type":"user","message":{"content":[
+                  {"type":"tool_result","tool_use_id":"tool-1","content":"done"},
+                  {"type":"tool_result","tool_use_id":"tool-2","content":"new"}
+                ]}}
+                """;
+
+        handler.onMessage("tool_result", standaloneToolResult);
+        handler.onMessage("user", mixedUserMessage);
+
+        assertEquals(2, state.getMessages().size());
+        JsonObject raw = state.getMessages().get(1).raw;
+        JsonArray blocks = raw.getAsJsonObject("message").getAsJsonArray("content");
+        assertEquals("Only the unprocessed tool_result block should remain", 1, blocks.size());
+        assertEquals("tool-2", blocks.get(0).getAsJsonObject().get("tool_use_id").getAsString());
     }
 
     /**
@@ -302,10 +345,17 @@ public class ClaudeMessageHandlerDedupTest {
         final List<String> thinkingDeltas = new ArrayList<>();
         int streamStartCount = 0;
         int streamEndCount = 0;
+        int messageUpdateCount = 0;
 
         void clear() {
             contentDeltas.clear();
             thinkingDeltas.clear();
+            messageUpdateCount = 0;
+        }
+
+        @Override
+        public void notifyMessageUpdate(List<ClaudeSession.Message> messages) {
+            messageUpdateCount++;
         }
 
         @Override

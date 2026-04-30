@@ -126,7 +126,7 @@ public class TerminalMonitorService implements ProjectActivity {
             ensureReworkedTerminalMenuRegistration();
 
             ToolWindow terminalWindow = ToolWindowManager.getInstance(project).getToolWindow("Terminal");
-            if (terminalWindow == null) return;
+            if (terminalWindow == null || !terminalWindow.isVisible()) return;
 
             ContentManager contentManager = terminalWindow.getContentManager();
             if (contentManager.isDisposed()) return;

@@ -105,7 +105,7 @@ export const openBrowser = (url?: string) => {
 
 export const sendToJava = (message: string, payload: any = {}) => {
   const payloadStr = typeof payload === 'string' ? payload : JSON.stringify(payload);
-  sendBridgeEvent(message, payloadStr);
+  return sendBridgeEvent(message, payloadStr);
 };
 
 export const refreshFile = (filePath: string) => {
@@ -140,14 +140,30 @@ export const showMultiEditDiff = (
  */
 export const showEditableDiff = (
   filePath: string,
-  operations: Array<{ oldString: string; newString: string; replaceAll?: boolean }>,
-  status: 'A' | 'M'
+  operations: Array<{
+    oldString: string;
+    newString: string;
+    replaceAll?: boolean;
+    lineStart?: number;
+    lineEnd?: number;
+    operationId?: string;
+    source?: string;
+    scopeId?: string;
+    agentHandle?: string;
+    parentToolUseId?: string;
+    safeToRollback?: boolean;
+    editSequence?: number;
+    existedBefore?: boolean;
+    toolUseId?: string;
+  }>,
+  status: 'A' | 'M',
+  requestId?: string
 ) => {
   // Security: Validate file path (defense-in-depth, backend also validates)
   if (!isValidMutatingPath(filePath)) {
-    return;
+    return false;
   }
-  sendToJava('show_editable_diff', { filePath, operations, status });
+  return sendToJava('show_editable_diff', { filePath, operations, status, requestId });
 };
 
 /**
@@ -230,7 +246,22 @@ export const rewindFiles = (sessionId: string, userMessageId: string) => {
 export const undoFileChanges = (
   filePath: string,
   status: 'A' | 'M',
-  operations: Array<{ oldString: string; newString: string; replaceAll?: boolean }>
+  operations: Array<{
+    oldString: string;
+    newString: string;
+    replaceAll?: boolean;
+    lineStart?: number;
+    lineEnd?: number;
+    operationId?: string;
+    source?: string;
+    scopeId?: string;
+    agentHandle?: string;
+    parentToolUseId?: string;
+    safeToRollback?: boolean;
+    editSequence?: number;
+    existedBefore?: boolean;
+    toolUseId?: string;
+  }>
 ) => {
   // Security: Validate file path (defense-in-depth, backend also validates)
   if (!isValidMutatingPath(filePath)) {

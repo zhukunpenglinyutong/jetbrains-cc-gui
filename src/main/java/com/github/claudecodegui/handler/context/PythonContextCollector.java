@@ -9,31 +9,38 @@ import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiNameIdentifierOwner;
 import com.intellij.psi.PsiNamedElement;
-import com.intellij.psi.util.PsiTreeUtil;
-import com.jetbrains.python.psi.*;
-import org.jetbrains.annotations.NotNull;
+
+import java.lang.reflect.Array;
+import java.lang.reflect.Method;
 
 /**
  * Python-specific context collection.
  * This class is only loaded when com.intellij.modules.python is available.
- * DO NOT import this class directly - use reflection via ContextCollector.
+ * DO NOT import Python PSI classes directly; keep this class verifier-safe for IDEs without Python.
  */
 public class PythonContextCollector {
-    
+
+    private static final String PY_FILE = "com.jetbrains.python.psi.PyFile";
+    private static final String PY_FUNCTION = "com.jetbrains.python.psi.PyFunction";
+    private static final String PY_CLASS = "com.jetbrains.python.psi.PyClass";
+    private static final String PY_EXPRESSION_STATEMENT = "com.jetbrains.python.psi.PyExpressionStatement";
+    private static final String PY_STRING_LITERAL_EXPRESSION = "com.jetbrains.python.psi.PyStringLiteralExpression";
+    private static final String PY_IMPORT_STATEMENT = "com.jetbrains.python.psi.PyImportStatement";
+    private static final String PY_FROM_IMPORT_STATEMENT = "com.jetbrains.python.psi.PyFromImportStatement";
+
     public static void collectPythonContext(
             JsonObject semanticData,
             Editor editor,
             Project project,
             PsiFile psiFile,
             Document document) {
-        
-        if (!(psiFile instanceof PyFile)) {
+
+        if (!isInstance(psiFile, PY_FILE)) {
             return;
         }
 
         int offset = editor.getCaretModel().getOffset();
-        
-        // 1. Current Scope (Function/Class)
+
         try {
             JsonObject scopeInfo = getCurrentScope(psiFile, offset);
             if (scopeInfo != null && scopeInfo.size() > 0) {
@@ -42,10 +49,9 @@ public class PythonContextCollector {
         } catch (Exception e) {
             // ignore - optional context collection
         }
-        
-        // 2. Imports
+
         try {
-            JsonArray imports = getImports((PyFile) psiFile);
+            JsonArray imports = getImports(psiFile);
             if (imports.size() > 0) {
                 semanticData.add("imports", imports);
             }
@@ -53,83 +59,41 @@ public class PythonContextCollector {
             // ignore - optional context collection
         }
     }
-    
+
     private static JsonObject getCurrentScope(PsiFile psiFile, int offset) {
         JsonObject scope = new JsonObject();
         PsiElement element = psiFile.findElementAt(offset);
-        if (element == null) return null;
+        if (element == null) {
+            return null;
+        }
 
-        PyFunction pyFunction = PsiTreeUtil.getParentOfType(element, PyFunction.class);
-        PyClass pyClass = PsiTreeUtil.getParentOfType(element, PyClass.class);
+        PsiElement pyFunction = findParentOfType(element, PY_FUNCTION);
+        PsiElement pyClass = findParentOfType(element, PY_CLASS);
 
         if (pyFunction != null) {
-            // Use stable PsiNamedElement/PsiNameIdentifierOwner interfaces
-            // to avoid experimental API warnings from PyAstFunction
-            if (pyFunction instanceof PsiNamedElement) {
-                String funcName = ((PsiNamedElement) pyFunction).getName();
-                if (funcName != null) {
-                    scope.addProperty("function", funcName);
-                }
-            } else if (pyFunction instanceof PsiNameIdentifierOwner) {
-                PsiElement nameId = ((PsiNameIdentifierOwner) pyFunction).getNameIdentifier();
-                if (nameId != null) {
-                    scope.addProperty("function", nameId.getText());
-                }
+            String functionName = getElementName(pyFunction);
+            if (functionName != null) {
+                scope.addProperty("function", functionName);
             }
 
-            // Extract docstring via PSI tree traversal to avoid experimental API
-            try {
-                PyStatementList statementList = pyFunction.getStatementList();
-                if (statementList != null) {
-                    PyStatement[] statements = statementList.getStatements();
-                    if (statements.length > 0 && statements[0] instanceof PyExpressionStatement) {
-                        PyExpression expr = ((PyExpressionStatement) statements[0]).getExpression();
-                        if (expr instanceof PyStringLiteralExpression) {
-                            String docString = ((PyStringLiteralExpression) expr).getStringValue();
-                            if (docString != null) {
-                                scope.addProperty("docstring", docString);
-                            }
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                // ignore - docstring is optional
+            String docString = getFunctionDocString(pyFunction);
+            if (docString != null) {
+                scope.addProperty("docstring", docString);
             }
 
-            // Args
-            try {
-                JsonArray args = new JsonArray();
-                for (PyParameter param : pyFunction.getParameterList().getParameters()) {
-                    if (param.getName() != null) {
-                        args.add(param.getName());
-                    }
-                }
+            JsonArray args = getFunctionArgs(pyFunction);
+            if (args.size() > 0) {
                 scope.add("args", args);
-            } catch (Exception e) {
-                // ignore - args extraction may fail with experimental API
             }
         }
 
         if (pyClass != null) {
-            // Use stable PsiNamedElement/PsiNameIdentifierOwner interfaces
-            // to avoid experimental API warnings from PyAstClass
-            if (pyClass instanceof PsiNamedElement) {
-                String className = ((PsiNamedElement) pyClass).getName();
-                if (className != null) {
-                    scope.addProperty("class", className);
-                }
-            } else if (pyClass instanceof PsiNameIdentifierOwner) {
-                PsiElement nameId = ((PsiNameIdentifierOwner) pyClass).getNameIdentifier();
-                if (nameId != null) {
-                    scope.addProperty("class", nameId.getText());
-                }
+            String className = getElementName(pyClass);
+            if (className != null) {
+                scope.addProperty("class", className);
             }
 
-            // Parent classes
-            JsonArray parents = new JsonArray();
-            for (PyExpression parent : pyClass.getSuperClassExpressions()) {
-                parents.add(parent.getText());
-            }
+            JsonArray parents = getSuperClasses(pyClass);
             if (parents.size() > 0) {
                 scope.add("superClasses", parents);
             }
@@ -137,18 +101,118 @@ public class PythonContextCollector {
 
         return scope.size() > 0 ? scope : null;
     }
-    
-    private static JsonArray getImports(PyFile pyFile) {
+
+    private static JsonArray getImports(PsiFile pyFile) {
         JsonArray imports = new JsonArray();
-        
-        for (PyImportStatement imp : PsiTreeUtil.findChildrenOfType(pyFile, PyImportStatement.class)) {
-            imports.add(imp.getText());
-        }
-        
-        for (PyFromImportStatement imp : PsiTreeUtil.findChildrenOfType(pyFile, PyFromImportStatement.class)) {
-            imports.add(imp.getText());
-        }
-        
+        collectImportTexts(pyFile, imports);
         return imports;
+    }
+
+    private static void collectImportTexts(PsiElement element, JsonArray imports) {
+        if (isInstance(element, PY_IMPORT_STATEMENT) || isInstance(element, PY_FROM_IMPORT_STATEMENT)) {
+            imports.add(element.getText());
+            return;
+        }
+        for (PsiElement child : element.getChildren()) {
+            collectImportTexts(child, imports);
+        }
+    }
+
+    private static PsiElement findParentOfType(PsiElement element, String className) {
+        PsiElement current = element;
+        while (current != null) {
+            if (isInstance(current, className)) {
+                return current;
+            }
+            current = current.getParent();
+        }
+        return null;
+    }
+
+    private static String getElementName(PsiElement element) {
+        if (element instanceof PsiNamedElement) {
+            return ((PsiNamedElement) element).getName();
+        }
+        if (element instanceof PsiNameIdentifierOwner) {
+            PsiElement nameId = ((PsiNameIdentifierOwner) element).getNameIdentifier();
+            return nameId != null ? nameId.getText() : null;
+        }
+        Object reflectedName = invokeNoArg(element, "getName");
+        return reflectedName instanceof String ? (String) reflectedName : null;
+    }
+
+    private static String getFunctionDocString(PsiElement pyFunction) {
+        Object statementList = invokeNoArg(pyFunction, "getStatementList");
+        Object statements = invokeNoArg(statementList, "getStatements");
+        if (statements == null || !statements.getClass().isArray() || Array.getLength(statements) == 0) {
+            return null;
+        }
+        Object firstStatement = Array.get(statements, 0);
+        if (!isInstance(firstStatement, PY_EXPRESSION_STATEMENT)) {
+            return null;
+        }
+        Object expression = invokeNoArg(firstStatement, "getExpression");
+        if (!isInstance(expression, PY_STRING_LITERAL_EXPRESSION)) {
+            return null;
+        }
+        Object stringValue = invokeNoArg(expression, "getStringValue");
+        return stringValue instanceof String ? (String) stringValue : null;
+    }
+
+    private static JsonArray getFunctionArgs(PsiElement pyFunction) {
+        JsonArray args = new JsonArray();
+        Object parameterList = invokeNoArg(pyFunction, "getParameterList");
+        Object parameters = invokeNoArg(parameterList, "getParameters");
+        if (parameters == null || !parameters.getClass().isArray()) {
+            return args;
+        }
+        for (int parameterIndex = 0; parameterIndex < Array.getLength(parameters); parameterIndex++) {
+            Object parameter = Array.get(parameters, parameterIndex);
+            if (parameter instanceof PsiElement) {
+                String parameterName = getElementName((PsiElement) parameter);
+                if (parameterName != null) {
+                    args.add(parameterName);
+                }
+            }
+        }
+        return args;
+    }
+
+    private static JsonArray getSuperClasses(PsiElement pyClass) {
+        JsonArray parents = new JsonArray();
+        Object expressions = invokeNoArg(pyClass, "getSuperClassExpressions");
+        if (expressions == null || !expressions.getClass().isArray()) {
+            return parents;
+        }
+        for (int expressionIndex = 0; expressionIndex < Array.getLength(expressions); expressionIndex++) {
+            Object expression = Array.get(expressions, expressionIndex);
+            if (expression instanceof PsiElement) {
+                parents.add(((PsiElement) expression).getText());
+            }
+        }
+        return parents;
+    }
+
+    private static Object invokeNoArg(Object target, String methodName) {
+        if (target == null) {
+            return null;
+        }
+        try {
+            Method method = target.getClass().getMethod(methodName);
+            return method.invoke(target);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static boolean isInstance(Object value, String className) {
+        if (value == null) {
+            return false;
+        }
+        try {
+            return Class.forName(className).isInstance(value);
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
     }
 }

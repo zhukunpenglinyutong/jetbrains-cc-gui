@@ -10,6 +10,9 @@ import { sendBridgeEvent } from '../../utils/bridge';
 
 const MAX_RETRIES = 30;
 
+const isWindowAvailable = (): boolean => typeof window !== 'undefined';
+const getSendToJava = (): typeof window.sendToJava | undefined => isWindowAvailable() ? window.sendToJava : undefined;
+
 /**
  * Fire the three settings queries to the backend.  Retries up to MAX_RETRIES
  * times (at 100 ms intervals) if window.sendToJava is not yet available.
@@ -17,11 +20,13 @@ const MAX_RETRIES = 30;
 export const startInitialSettingsRequest = (): void => {
   let settingsRetryCount = 0;
   const requestInitialSettings = () => {
-    if (window.sendToJava) {
-      window.sendToJava('get_streaming_enabled:');
-      window.sendToJava('get_send_shortcut:');
-      window.sendToJava('get_auto_open_file_enabled:');
+    const sendToJava = getSendToJava();
+    if (sendToJava) {
+      sendToJava('get_streaming_enabled:');
+      sendToJava('get_send_shortcut:');
+      sendToJava('get_auto_open_file_enabled:');
     } else {
+      if (!isWindowAvailable()) return;
       settingsRetryCount++;
       if (settingsRetryCount < MAX_RETRIES) {
         setTimeout(requestInitialSettings, 100);
@@ -38,9 +43,10 @@ export const startInitialSettingsRequest = (): void => {
 export const startActiveProviderRequest = (): void => {
   let retryCount = 0;
   const requestActiveProvider = () => {
-    if (window.sendToJava) {
+    if (getSendToJava()) {
       sendBridgeEvent('get_active_provider');
     } else {
+      if (!isWindowAvailable()) return;
       retryCount++;
       if (retryCount < MAX_RETRIES) {
         setTimeout(requestActiveProvider, 100);
@@ -56,9 +62,10 @@ export const startActiveProviderRequest = (): void => {
 export const startModeRequest = (): void => {
   let modeRetryCount = 0;
   const requestMode = () => {
-    if (window.sendToJava) {
+    if (getSendToJava()) {
       sendBridgeEvent('get_mode');
     } else {
+      if (!isWindowAvailable()) return;
       modeRetryCount++;
       if (modeRetryCount < MAX_RETRIES) {
         setTimeout(requestMode, 100);
@@ -74,9 +81,10 @@ export const startModeRequest = (): void => {
 export const startThinkingEnabledRequest = (): void => {
   let thinkingRetryCount = 0;
   const requestThinkingEnabled = () => {
-    if (window.sendToJava) {
+    if (getSendToJava()) {
       sendBridgeEvent('get_thinking_enabled');
     } else {
+      if (!isWindowAvailable()) return;
       thinkingRetryCount++;
       if (thinkingRetryCount < MAX_RETRIES) {
         setTimeout(requestThinkingEnabled, 100);
@@ -132,7 +140,8 @@ export const drainAndRequestDependencyStatus = (): void => {
     window.updateDependencyStatus?.(pending);
   }
 
-  if (window.sendToJava) {
-    window.sendToJava('get_dependency_status:');
+  const sendToJava = getSendToJava();
+  if (sendToJava) {
+    sendToJava('get_dependency_status:');
   }
 };

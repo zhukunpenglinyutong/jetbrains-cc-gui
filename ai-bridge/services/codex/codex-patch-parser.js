@@ -149,12 +149,24 @@ export function parseApplyPatchToOperations(patchText) {
     });
   };
 
+  const flushDelete = () => {
+    if (!currentPath || currentKind !== 'delete') return;
+    operations.push({
+      filePath: currentPath,
+      kind: currentKind,
+      oldString: '',
+      newString: '',
+      toolName: 'edit'
+    });
+  };
+
   for (const rawLine of lines) {
     const line = rawLine ?? '';
 
     if (line.startsWith('*** Update File: ')) {
       flushUpdate();
       flushAdd();
+      flushDelete();
       currentPath = line.slice('*** Update File: '.length).trim();
       currentKind = 'update';
       currentHunkHeader = null;
@@ -167,6 +179,7 @@ export function parseApplyPatchToOperations(patchText) {
     if (line.startsWith('*** Add File: ')) {
       flushUpdate();
       flushAdd();
+      flushDelete();
       currentPath = line.slice('*** Add File: '.length).trim();
       currentKind = 'add';
       currentHunkHeader = null;
@@ -179,6 +192,7 @@ export function parseApplyPatchToOperations(patchText) {
     if (line.startsWith('*** Delete File: ')) {
       flushUpdate();
       flushAdd();
+      flushDelete();
       currentPath = line.slice('*** Delete File: '.length).trim();
       currentKind = 'delete';
       currentHunkHeader = null;
@@ -199,6 +213,7 @@ export function parseApplyPatchToOperations(patchText) {
     if (line.startsWith('*** End Patch')) {
       flushUpdate();
       flushAdd();
+      flushDelete();
       currentPath = null;
       currentKind = null;
       currentHunkHeader = null;
@@ -249,6 +264,7 @@ export function parseApplyPatchToOperations(patchText) {
 
   flushUpdate();
   flushAdd();
+  flushDelete();
 
   return operations;
 }

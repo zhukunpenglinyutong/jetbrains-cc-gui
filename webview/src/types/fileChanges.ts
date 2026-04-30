@@ -15,6 +15,18 @@ export interface EditOperation {
   replaceAll?: boolean;
   lineStart?: number;
   lineEnd?: number;
+  source?: 'main' | 'subagent' | 'codex_session_patch';
+  scopeId?: string;
+  agentHandle?: string;
+  parentToolUseId?: string;
+  operationId?: string;
+  safeToRollback?: boolean;
+  editSequence?: number;
+  existedBefore?: boolean;
+  toolUseId?: string;
+  messageIndex?: number;
+  blockIndex?: number;
+  occurrenceId?: string;
 }
 
 /** Aggregated file change summary */
