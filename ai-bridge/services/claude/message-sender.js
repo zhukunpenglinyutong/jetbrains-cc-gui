@@ -29,6 +29,7 @@ import {
 } from './message-utils.js';
 import { createPreToolUseHook } from './permission-mode.js';
 import { setActiveQueryResult } from './message-session-registry.js';
+import { appendSnapshotDelta, appendStreamDelta } from './stream-event-processor.js';
 
 // ========== Internal helpers for deduplication ==========
 
@@ -152,11 +153,15 @@ function processStreamMessage(msg, state, logPrefix) {
       }
       if (event.type === 'content_block_delta' && event.delta) {
         if (event.delta.type === 'text_delta' && event.delta.text) {
-          process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(event.delta.text)}\n`);
-          state.lastAssistantContent += event.delta.text;
+          const delta = appendStreamDelta(state, 'text', event.index, event.delta.text);
+          if (delta) {
+            process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(delta)}\n`);
+          }
         } else if (event.delta.type === 'thinking_delta' && event.delta.thinking) {
-          process.stdout.write(`[THINKING_DELTA] ${JSON.stringify(event.delta.thinking)}\n`);
-          state.lastThinkingContent += event.delta.thinking;
+          const delta = appendStreamDelta(state, 'thinking', event.index, event.delta.thinking);
+          if (delta) {
+            process.stdout.write(`[THINKING_DELTA] ${JSON.stringify(delta)}\n`);
+          }
         }
       }
       if (event.type === 'content_block_start' && event.content_block?.type === 'thinking') {
@@ -178,11 +183,12 @@ function processStreamMessage(msg, state, logPrefix) {
   if (msg.type === 'assistant') {
     const content = msg.message?.content;
     if (Array.isArray(content)) {
-      for (const block of content) {
+      for (let i = 0; i < content.length; i += 1) {
+        const block = content[i];
         if (block.type === 'text') {
-          emitTextDelta(block.text || '', state);
+          emitTextDelta(block.text || '', state, i);
         } else if (block.type === 'thinking') {
-          emitThinkingDelta(block.thinking || block.text || '', state);
+          emitThinkingDelta(block.thinking || block.text || '', state, i);
         } else if (block.type === 'tool_use') {
           console.log('[TOOL_USE]', JSON.stringify({ id: block.id, name: block.name }));
         }
@@ -226,26 +232,20 @@ function processStreamMessage(msg, state, logPrefix) {
 }
 
 /** Emit text content delta with streaming fallback support. */
-function emitTextDelta(currentText, state) {
-  if (state.streamingEnabled && !state.hasStreamEvents && currentText.length > state.lastAssistantContent.length) {
-    const delta = currentText.substring(state.lastAssistantContent.length);
+function emitTextDelta(currentText, state, blockIndex = 0) {
+  if (state.streamingEnabled) {
+    const delta = appendSnapshotDelta(state, 'text', blockIndex, currentText);
     if (delta) process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(delta)}\n`);
-    state.lastAssistantContent = currentText;
-  } else if (state.streamingEnabled && state.hasStreamEvents) {
-    if (currentText.length > state.lastAssistantContent.length) state.lastAssistantContent = currentText;
   } else if (!state.streamingEnabled) {
     console.log('[CONTENT]', truncateErrorContent(currentText));
   }
 }
 
 /** Emit thinking content delta with streaming fallback support. */
-function emitThinkingDelta(thinkingText, state) {
-  if (state.streamingEnabled && !state.hasStreamEvents && thinkingText.length > state.lastThinkingContent.length) {
-    const delta = thinkingText.substring(state.lastThinkingContent.length);
+function emitThinkingDelta(thinkingText, state, blockIndex = 0) {
+  if (state.streamingEnabled) {
+    const delta = appendSnapshotDelta(state, 'thinking', blockIndex, thinkingText);
     if (delta) process.stdout.write(`[THINKING_DELTA] ${JSON.stringify(delta)}\n`);
-    state.lastThinkingContent = thinkingText;
-  } else if (state.streamingEnabled && state.hasStreamEvents) {
-    if (thinkingText.length > state.lastThinkingContent.length) state.lastThinkingContent = thinkingText;
   } else if (!state.streamingEnabled) {
     console.log('[THINKING]', thinkingText);
   }
