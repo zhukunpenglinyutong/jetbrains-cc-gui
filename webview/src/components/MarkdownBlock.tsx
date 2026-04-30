@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify';
 import { memo, useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { openBrowser, openFile } from '../utils/bridge';
+import { decorateFileReferences } from '../utils/fileReferenceLinks';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github-dark.css';
 import { markedHighlight } from 'marked-highlight';
@@ -481,6 +482,22 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isStreaming, html, renderMermaidDiagrams]);
 
+  useEffect(() => {
+    if (isStreaming || !containerRef.current) {
+      return;
+    }
+
+    let cleanup = () => {};
+    const timer = window.setTimeout(() => {
+      cleanup = decorateFileReferences(containerRef.current);
+    }, 120);
+
+    return () => {
+      window.clearTimeout(timer);
+      cleanup();
+    };
+  }, [html, isStreaming]);
+
   const handleClick = async (event: React.MouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
 
@@ -504,6 +521,21 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
     const img = target.closest('img');
     if (img && img.getAttribute('src')) {
       setPreviewSrc(img.getAttribute('src'));
+      return;
+    }
+
+    const fileReferenceLink = target.closest('a.file-reference-link') as HTMLAnchorElement | null;
+    if (fileReferenceLink && containerRef.current?.contains(fileReferenceLink)) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const resolvedPath = fileReferenceLink.dataset.resolvedPath;
+      const line = Number.parseInt(fileReferenceLink.dataset.line || '', 10);
+      if (resolvedPath && Number.isFinite(line) && line > 0) {
+        openFile(resolvedPath, line);
+      } else if (resolvedPath) {
+        openFile(resolvedPath);
+      }
       return;
     }
 

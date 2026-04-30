@@ -30,6 +30,7 @@ import {
 } from './codex-utils.js';
 import { collectAgentsInstructions } from './codex-agents-loader.js';
 import { createInitialEventState, processCodexEventStream } from './codex-event-handler.js';
+import { prependFileReferenceOutputPrompt } from '../file-reference-output-prompt.js';
 
 // ---------------------------------------------------------------------------
 // sendMessage
@@ -190,11 +191,11 @@ export async function sendMessage(
     // 5. Collect AGENTS.md Instructions (only for new threads)
     // ============================================================
 
-    let finalMessage = message;
+    let finalMessage = prependFileReferenceOutputPrompt(message);
     if (!isResumingThread && cwd) {
       const agentsInstructions = collectAgentsInstructions(cwd);
       if (agentsInstructions) {
-        finalMessage = `<agents-instructions>\n${agentsInstructions}\n</agents-instructions>\n\n${message}`;
+        finalMessage = `<agents-instructions>\n${agentsInstructions}\n</agents-instructions>\n\n${finalMessage}`;
         logDebug('AGENTS.md', `Prepended ${agentsInstructions.length} chars of instructions to message`);
       }
     }

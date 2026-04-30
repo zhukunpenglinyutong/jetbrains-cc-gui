@@ -162,6 +162,11 @@ interface Window {
   onFileListResult?: (json: string) => void;
 
   /**
+   * File reference resolve result callback.
+   */
+  onFileReferenceResolveResult?: (json: string) => void;
+
+  /**
    * Update MCP servers list
    */
   updateMcpServers?: (json: string) => void;
