@@ -138,6 +138,7 @@ public class SendTerminalSelectionToInputActionTest {
         Assert.assertEquals(Collections.singletonList(SendTerminalSelectionToInputAction.ACTION_ID), childIds(actionManager, group));
     }
 
+    @SuppressWarnings("removal")
     private static AnActionEvent createEvent(DataContext dataContext) {
         return new AnActionEvent(null, dataContext, "TestPlace", new Presentation(), new TestActionManager(), 0);
     }
@@ -293,6 +294,7 @@ public class SendTerminalSelectionToInputActionTest {
         public void removeTimerListener(TimerListener listener) {
         }
 
+        @SuppressWarnings("removal")
         @Override
         public void addAnActionListener(AnActionListener listener) {
         }
@@ -306,8 +308,10 @@ public class SendTerminalSelectionToInputActionTest {
             return com.intellij.openapi.util.ActionCallback.DONE;
         }
 
+        @SuppressWarnings("removal")
         @Override
-        public void addAnActionListener(AnActionListener listener, com.intellij.openapi.Disposable parentDisposable) {
+        public void addAnActionListener(AnActionListener listener,
+                                        com.intellij.openapi.Disposable parentDisposable) {
         }
 
         @Override

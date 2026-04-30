@@ -93,7 +93,7 @@
         <!-- Action to send selected code to CC GUI -->
         <action id="ClaudeCodeGUI.SendSelectionToTerminalAction"
                 class="com.github.claudecodegui.action.editor.SendSelectionToTerminalAction"
-                icon="/icons/cc-gui-icon.svg">
+                icon="/icons/send-to-terminal.svg">
             <!-- Add to editor context menu (displayed at the top) -->
             <add-to-group group-id="EditorPopupMenu" anchor="first"/>
             <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt K"/>
@@ -101,10 +101,19 @@
             <keyboard-shortcut keymap="macOS" first-keystroke="meta alt K"/>
         </action>
 
+        <!-- Copy AI Reference Action -->
+        <action id="ClaudeCodeGUI.CopySelectionReferenceAction"
+                class="com.github.claudecodegui.action.editor.CopySelectionReferenceAction"
+                icon="/icons/cc-gui-icon.svg">
+            <add-to-group group-id="EditorPopupMenu"
+                           anchor="after"
+                           relative-to-action="ClaudeCodeGUI.SendSelectionToTerminalAction"/>
+        </action>
+
         <!-- Quick Fix with Claude Action -->
         <action id="ClaudeCodeGUI.QuickFixWithClaudeAction"
                 class="com.github.claudecodegui.action.editor.QuickFixWithClaudeAction"
-                icon="/icons/cc-gui-icon.svg">
+                icon="/icons/quick-fix.svg">
             <add-to-group group-id="EditorPopupMenu"
                            anchor="after"
                            relative-to-action="ClaudeCodeGUI.SendSelectionToTerminalAction"/>
