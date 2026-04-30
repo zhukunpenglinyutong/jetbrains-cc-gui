@@ -22,6 +22,7 @@ public class CodexMessageHandlerTest {
         boolean lastLoading = false;
         boolean lastBusy = false;
         final List<String> contentDeltas = new ArrayList<>();
+        final List<String> thinkingDeltas = new ArrayList<>();
         final List<Message> lastMessages = new ArrayList<>();
 
         @Override
@@ -75,6 +76,11 @@ public class CodexMessageHandlerTest {
         @Override
         public void onContentDelta(String delta) {
             contentDeltas.add(delta);
+        }
+
+        @Override
+        public void onThinkingDelta(String delta) {
+            thinkingDeltas.add(delta);
         }
     }
 
@@ -134,6 +140,32 @@ public class CodexMessageHandlerTest {
         assertEquals(1, state.getMessages().size());
         assertEquals("收到，测试正常。", state.getMessages().get(0).content);
         assertTrue(state.getMessages().get(0).raw != null);
+    }
+
+    @Test
+    public void thinkingDeltaIsForwardedAndPreservedWhenFinalTextSnapshotArrives() {
+        SessionState state = new SessionState();
+
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("stream_start", "");
+        handler.onMessage("thinking_delta", "先分析");
+        handler.onMessage("assistant", "{\"message\":{\"content\":[{\"type\":\"thinking\",\"thinking\":\"先分析\",\"text\":\"先分析\"}]}}");
+        handler.onMessage("content_delta", "结论");
+        handler.onMessage("assistant", "{\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"结论\"}]}}");
+
+        assertEquals(List.of("先分析"), callback.thinkingDeltas);
+        assertEquals(1, state.getMessages().size());
+        Message message = state.getMessages().get(0);
+        assertEquals("结论", message.content);
+        var blocks = message.raw.getAsJsonObject("message").getAsJsonArray("content");
+        assertEquals("thinking", blocks.get(0).getAsJsonObject().get("type").getAsString());
+        assertEquals("先分析", blocks.get(0).getAsJsonObject().get("thinking").getAsString());
+        assertEquals("text", blocks.get(1).getAsJsonObject().get("type").getAsString());
+        assertEquals("结论", blocks.get(1).getAsJsonObject().get("text").getAsString());
     }
 
     @Test

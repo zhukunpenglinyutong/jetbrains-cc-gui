@@ -137,6 +137,9 @@ public class CodexSDKBridge extends BaseSDKBridge {
             String delta = decodeJsonStringPayload(line.substring("[CONTENT_DELTA]".length()));
             assistantContent.append(delta);
             callback.onMessage("content_delta", delta);
+        } else if (line.startsWith("[THINKING_DELTA]")) {
+            String delta = decodeJsonStringPayload(line.substring("[THINKING_DELTA]".length()));
+            callback.onMessage("thinking_delta", delta);
         } else if (line.startsWith("[CONTENT]")) {
             String content = line.substring("[CONTENT]".length()).trim();
             // Avoid duplicate

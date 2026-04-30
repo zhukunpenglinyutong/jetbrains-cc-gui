@@ -32,6 +32,10 @@ public class CodexMessageHandler implements MessageCallback {
      * callback handler.
      */
     private final CallbackHandler callbackHandler;
+    /**
+     * message merger.
+     */
+    private final MessageMerger messageMerger = new MessageMerger();
 
     /**
      * assistant content.
@@ -97,6 +101,8 @@ public class CodexMessageHandler implements MessageCallback {
             handleStreamStart();
         } else if ("stream_end".equals(type)) {
             handleStreamEnd();
+        } else if ("thinking_delta".equals(type)) {
+            handleThinkingDelta(content);
         } else if ("content_delta".equals(type) || "content".equals(type)) {
             // Handle streaming content delta (legacy format, kept for compatibility)
             // content_delta: streaming incremental
@@ -187,8 +193,9 @@ public class CodexMessageHandler implements MessageCallback {
             }
 
             if (currentAssistantMessage != null) {
+                com.google.gson.JsonObject mergedRaw = messageMerger.mergeAssistantMessage(currentAssistantMessage.raw, parsed.raw);
                 currentAssistantMessage.content = parsed.content;
-                currentAssistantMessage.raw = parsed.raw;
+                currentAssistantMessage.raw = mergedRaw;
                 assistantContent.setLength(0);
                 assistantContent.append(parsed.content != null ? parsed.content : "");
             } else {
@@ -620,6 +627,93 @@ public class CodexMessageHandler implements MessageCallback {
 
         callbackHandler.notifyContentDelta(content);
         callbackHandler.notifyMessageUpdate(state.getMessages());
+    }
+
+    /**
+     * Handle thinking delta in streaming mode.
+     *
+     * @param content content
+     * @since 1.0.0
+     */
+    private void handleThinkingDelta(String content) {
+        if (content == null || content.isEmpty()) {
+            return;
+        }
+
+        ensureCurrentAssistantMessageExists();
+        applyThinkingDeltaToRaw(content);
+        callbackHandler.notifyThinkingDelta(content);
+    }
+
+    /**
+     * Ensure an assistant message exists for streaming raw updates.
+     *
+     * @since 1.0.0
+     */
+    private void ensureCurrentAssistantMessageExists() {
+        if (currentAssistantMessage == null) {
+            com.google.gson.JsonObject raw = new com.google.gson.JsonObject();
+            raw.addProperty("type", "assistant");
+            com.google.gson.JsonObject messageObj = new com.google.gson.JsonObject();
+            messageObj.add("content", new com.google.gson.JsonArray());
+            raw.add("message", messageObj);
+            currentAssistantMessage = new Message(Message.Type.ASSISTANT, "", raw);
+            state.addMessage(currentAssistantMessage);
+        }
+        if (currentAssistantMessage.raw == null) {
+            com.google.gson.JsonObject raw = new com.google.gson.JsonObject();
+            raw.addProperty("type", "assistant");
+            com.google.gson.JsonObject messageObj = new com.google.gson.JsonObject();
+            messageObj.add("content", new com.google.gson.JsonArray());
+            raw.add("message", messageObj);
+            currentAssistantMessage.raw = raw;
+        }
+    }
+
+    /**
+     * Append thinking delta to the current assistant raw block.
+     *
+     * @param delta delta
+     * @since 1.0.0
+     */
+    private void applyThinkingDeltaToRaw(String delta) {
+        com.google.gson.JsonObject raw = currentAssistantMessage.raw;
+        com.google.gson.JsonObject message = raw.has("message") && raw.get("message").isJsonObject()
+                ? raw.getAsJsonObject("message")
+                : new com.google.gson.JsonObject();
+        com.google.gson.JsonArray content = message.has("content") && message.get("content").isJsonArray()
+                ? message.getAsJsonArray("content")
+                : new com.google.gson.JsonArray();
+
+        com.google.gson.JsonObject target = null;
+        if (content.size() > 0) {
+            com.google.gson.JsonElement last = content.get(content.size() - 1);
+            if (last.isJsonObject()) {
+                com.google.gson.JsonObject block = last.getAsJsonObject();
+                if (block.has("type") && "thinking".equals(block.get("type").getAsString())) {
+                    target = block;
+                }
+            }
+        }
+
+        if (target == null) {
+            target = new com.google.gson.JsonObject();
+            target.addProperty("type", "thinking");
+            target.addProperty("thinking", "");
+            target.addProperty("text", "");
+            content.add(target);
+        }
+
+        String existing = target.has("thinking") && !target.get("thinking").isJsonNull()
+                ? target.get("thinking").getAsString()
+                : "";
+        String next = existing + delta;
+        target.addProperty("thinking", next);
+        target.addProperty("text", next);
+
+        message.add("content", content);
+        raw.add("message", message);
+        currentAssistantMessage.raw = raw;
     }
 
     /**
