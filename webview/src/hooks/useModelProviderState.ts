@@ -16,6 +16,81 @@ const getCustomModels = (key: string): { id: string }[] => {
   } catch { return []; }
 };
 
+const isValidReasoningEffort = (value: unknown): value is ReasoningEffort =>
+  value === 'low' || value === 'medium' || value === 'high' || value === 'xhigh';
+
+export const normalizeSavedModelSelectionState = (saved: string | null) => {
+  let restoredProvider = 'claude';
+  let restoredClaudeModel = CLAUDE_MODELS[0].id;
+  let restoredCodexModel = CODEX_MODELS[0].id;
+  let restoredClaudePermissionMode: PermissionMode = 'bypassPermissions';
+  let restoredCodexPermissionMode: PermissionMode = 'default';
+  let restoredLongContextEnabled = true;
+  let restoredReasoningEffort: ReasoningEffort = 'medium';
+
+  if (!saved) {
+    return {
+      restoredProvider,
+      restoredClaudeModel,
+      restoredCodexModel,
+      restoredClaudePermissionMode,
+      restoredCodexPermissionMode,
+      restoredLongContextEnabled,
+      restoredReasoningEffort,
+    };
+  }
+
+  const state = JSON.parse(saved);
+
+  if (['claude', 'codex'].includes(state.provider)) {
+    restoredProvider = state.provider;
+  }
+
+  if (isValidPermissionMode(state.claudePermissionMode)) {
+    restoredClaudePermissionMode = state.claudePermissionMode;
+  }
+  if (isValidPermissionMode(state.codexPermissionMode)) {
+    restoredCodexPermissionMode = state.codexPermissionMode === 'plan'
+      ? 'default'
+      : state.codexPermissionMode;
+  }
+
+  if (typeof state.longContextEnabled === 'boolean') {
+    restoredLongContextEnabled = state.longContextEnabled;
+  }
+  if (isValidReasoningEffort(state.reasoningEffort)) {
+    restoredReasoningEffort = state.reasoningEffort;
+  }
+
+  const savedClaudeCustomModels = getCustomModels('claude-custom-models');
+  const strippedClaudeModel = strip1MContextSuffix(state.claudeModel);
+  const normalizedClaudeModel = normalizeClaudeModelId(strippedClaudeModel);
+  if (
+    CLAUDE_MODELS.find(m => m.id === normalizedClaudeModel) ||
+    savedClaudeCustomModels.find((m: { id: string }) => m.id === normalizedClaudeModel)
+  ) {
+    restoredClaudeModel = normalizedClaudeModel;
+  }
+
+  const savedCodexCustomModels = getCustomModels('codex-custom-models');
+  if (
+    CODEX_MODELS.find(m => m.id === state.codexModel) ||
+    savedCodexCustomModels.find((m: { id: string }) => m.id === state.codexModel)
+  ) {
+    restoredCodexModel = state.codexModel;
+  }
+
+  return {
+    restoredProvider,
+    restoredClaudeModel,
+    restoredCodexModel,
+    restoredClaudePermissionMode,
+    restoredCodexPermissionMode,
+    restoredLongContextEnabled,
+    restoredReasoningEffort,
+  };
+};
+
 export interface UseModelProviderStateOptions {
   addToast: (message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
   t: TFunction;
@@ -98,64 +173,28 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     writeClaudeModelMapping(mapping);
   }, []);
 
-  // Load model selection state from LocalStorage and sync to backend
+  // Load model selection state from LocalStorage for the initial UI only.
+  // The backend owns the authoritative model after startup and replays it via onModelConfirmed.
   useEffect(() => {
     try {
       const saved = localStorage.getItem('model-selection-state');
-      let restoredProvider = 'claude';
-      let restoredClaudeModel = CLAUDE_MODELS[0].id;
-      let restoredCodexModel = CODEX_MODELS[0].id;
-      let restoredClaudePermissionMode: PermissionMode = 'bypassPermissions';
-      let restoredCodexPermissionMode: PermissionMode = 'default';
-      let initialPermissionMode: PermissionMode = 'bypassPermissions';
-      let restoredLongContextEnabled = true;  // Default enabled
+      const {
+        restoredProvider,
+        restoredClaudeModel,
+        restoredCodexModel,
+        restoredClaudePermissionMode,
+        restoredCodexPermissionMode,
+        restoredLongContextEnabled,
+        restoredReasoningEffort,
+      } = normalizeSavedModelSelectionState(saved);
 
-      if (saved) {
-        const state = JSON.parse(saved);
+      setCurrentProvider(restoredProvider);
+      setSelectedClaudeModel(restoredClaudeModel);
+      setSelectedCodexModel(restoredCodexModel);
+      setLongContextEnabled(restoredLongContextEnabled);
+      setReasoningEffort(restoredReasoningEffort);
 
-        if (['claude', 'codex'].includes(state.provider)) {
-          restoredProvider = state.provider;
-          setCurrentProvider(state.provider);
-        }
-
-        if (isValidPermissionMode(state.claudePermissionMode)) {
-          restoredClaudePermissionMode = state.claudePermissionMode;
-        }
-        if (isValidPermissionMode(state.codexPermissionMode)) {
-          restoredCodexPermissionMode = state.codexPermissionMode === 'plan'
-            ? 'default'
-            : state.codexPermissionMode;
-        }
-
-        // Load long context setting (default true if not present)
-        if (typeof state.longContextEnabled === 'boolean') {
-          restoredLongContextEnabled = state.longContextEnabled;
-          setLongContextEnabled(state.longContextEnabled);
-        }
-
-        const savedClaudeCustomModels = getCustomModels('claude-custom-models');
-        // Strip [1m] suffix for internal state
-        const strippedClaudeModel = strip1MContextSuffix(state.claudeModel);
-        const normalizedClaudeModel = normalizeClaudeModelId(strippedClaudeModel);
-        if (
-          CLAUDE_MODELS.find(m => m.id === normalizedClaudeModel) ||
-          savedClaudeCustomModels.find((m: { id: string }) => m.id === normalizedClaudeModel)
-        ) {
-          restoredClaudeModel = normalizedClaudeModel;
-          setSelectedClaudeModel(normalizedClaudeModel);
-        }
-
-        const savedCodexCustomModels = getCustomModels('codex-custom-models');
-        if (
-          CODEX_MODELS.find(m => m.id === state.codexModel) ||
-          savedCodexCustomModels.find((m: { id: string }) => m.id === state.codexModel)
-        ) {
-          restoredCodexModel = state.codexModel;
-          setSelectedCodexModel(state.codexModel);
-        }
-      }
-
-      initialPermissionMode = restoredProvider === 'codex'
+      const initialPermissionMode: PermissionMode = restoredProvider === 'codex'
         ? restoredCodexPermissionMode
         : restoredClaudePermissionMode;
       setClaudePermissionMode(restoredClaudePermissionMode);
@@ -164,24 +203,22 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
 
       let syncRetryCount = 0;
       const MAX_SYNC_RETRIES = 30;
-
-      const syncToBackend = () => {
+      const bootstrapBackendSelection = () => {
         if (window.sendToJava) {
-          sendBridgeEvent('set_provider', restoredProvider);
-          // For Claude, apply [1m] suffix if long context is enabled and model supports it
-          const modelToSync = restoredProvider === 'codex'
-            ? restoredCodexModel
-            : apply1MContextSuffix(restoredClaudeModel, restoredLongContextEnabled);
-          sendBridgeEvent('set_model', modelToSync);
-          sendBridgeEvent('set_mode', initialPermissionMode);
+          sendBridgeEvent('bootstrap_model_selection', JSON.stringify({
+            provider: restoredProvider,
+            claudeModel: apply1MContextSuffix(restoredClaudeModel, restoredLongContextEnabled),
+            codexModel: restoredCodexModel,
+          }));
+          sendBridgeEvent('set_reasoning_effort', restoredReasoningEffort);
         } else {
           syncRetryCount++;
           if (syncRetryCount < MAX_SYNC_RETRIES) {
-            setTimeout(syncToBackend, 100);
+            setTimeout(bootstrapBackendSelection, 100);
           }
         }
       };
-      setTimeout(syncToBackend, 200);
+      setTimeout(bootstrapBackendSelection, 200);
     } catch {
       // Failed to load model selection state
     }
@@ -197,11 +234,12 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
         claudePermissionMode,
         codexPermissionMode,
         longContextEnabled,
+        reasoningEffort,
       }));
     } catch {
       // Failed to save model selection state
     }
-  }, [currentProvider, selectedClaudeModel, selectedCodexModel, claudePermissionMode, codexPermissionMode, longContextEnabled]);
+  }, [currentProvider, selectedClaudeModel, selectedCodexModel, claudePermissionMode, codexPermissionMode, longContextEnabled, reasoningEffort]);
 
   // Load selected agent
   useEffect(() => {
@@ -264,12 +302,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
       : claudePermissionMode;
     setPermissionMode(modeToSet);
     sendBridgeEvent('set_mode', modeToSet);
-
-    const newModel = providerId === 'codex'
-      ? selectedCodexModel
-      : apply1MContextSuffix(selectedClaudeModel, longContextEnabledRef.current);
-    sendBridgeEvent('set_model', newModel);
-  }, [claudePermissionMode, codexPermissionMode, selectedCodexModel, selectedClaudeModel]);
+  }, [claudePermissionMode, codexPermissionMode]);
 
   const handleReasoningChange = useCallback((effort: ReasoningEffort) => {
     setReasoningEffort(effort);
@@ -366,6 +399,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     codexPermissionMode, setCodexPermissionMode,
     permissionMode, setPermissionMode,
     reasoningEffort,
+    setReasoningEffort,
     usagePercentage, setUsagePercentage,
     usageUsedTokens, setUsageUsedTokens,
     usageMaxTokens, setUsageMaxTokens,

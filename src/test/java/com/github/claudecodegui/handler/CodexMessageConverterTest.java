@@ -12,6 +12,68 @@ import static org.junit.Assert.assertTrue;
 
 public class CodexMessageConverterTest {
 
+    // ---- convertCodexMessageToFrontend ----
+
+    @Test
+    public void codexMessageFiltersDeveloperRole() {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("type", "message");
+        payload.addProperty("role", "developer");
+        payload.add("content", textContent("internal developer prompt"));
+
+        JsonObject result = CodexMessageConverter.convertCodexMessageToFrontend(payload, "2026-05-01T00:00:00Z");
+        assertNull(result);
+    }
+
+    @Test
+    public void codexMessageFiltersSystemRole() {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("type", "message");
+        payload.addProperty("role", "system");
+        payload.add("content", textContent("system message"));
+
+        JsonObject result = CodexMessageConverter.convertCodexMessageToFrontend(payload, "2026-05-01T00:00:00Z");
+        assertNull(result);
+    }
+
+    @Test
+    public void codexMessageAllowsUserRole() {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("type", "message");
+        payload.addProperty("role", "user");
+        payload.add("content", textContent("hello"));
+
+        JsonObject result = CodexMessageConverter.convertCodexMessageToFrontend(payload, "2026-05-01T00:00:00Z");
+        assertNotNull(result);
+        assertEquals("user", result.get("type").getAsString());
+        assertEquals("hello", result.get("content").getAsString());
+    }
+
+    @Test
+    public void codexMessageAllowsAssistantRole() {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("type", "message");
+        payload.addProperty("role", "assistant");
+        payload.add("content", textContent("hi there"));
+
+        JsonObject result = CodexMessageConverter.convertCodexMessageToFrontend(payload, "2026-05-01T00:00:00Z");
+        assertNotNull(result);
+        assertEquals("assistant", result.get("type").getAsString());
+        assertEquals("hi there", result.get("content").getAsString());
+    }
+
+    @Test
+    public void codexMessageStripsAgentRoleSectionFromUserContent() {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("type", "message");
+        payload.addProperty("role", "user");
+        payload.add("content", textContent("hello\n\n## Agent Role and Instructions\n\ninternal instruction"));
+
+        JsonObject result = CodexMessageConverter.convertCodexMessageToFrontend(payload, "2026-05-01T00:00:00Z");
+        assertNotNull(result);
+        assertEquals("hello", result.get("content").getAsString());
+    }
+
     // ---- convertFunctionCallOutputToToolResult ----
 
     @Test
@@ -232,5 +294,14 @@ public class CodexMessageConverterTest {
                 .getAsJsonArray("content")
                 .get(0)
                 .getAsJsonObject();
+    }
+
+    private static JsonArray textContent(String text) {
+        JsonArray content = new JsonArray();
+        JsonObject block = new JsonObject();
+        block.addProperty("type", "text");
+        block.addProperty("text", text);
+        content.add(block);
+        return content;
     }
 }

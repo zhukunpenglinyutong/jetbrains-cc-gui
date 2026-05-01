@@ -15,6 +15,7 @@ import com.github.claudecodegui.session.SessionLifecycleManager;
 import com.github.claudecodegui.session.SessionLoadService;
 import com.github.claudecodegui.session.StreamMessageCoalescer;
 import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.github.claudecodegui.settings.ModelSelectionStateService;
 import com.github.claudecodegui.settings.TabStateService;
 import com.github.claudecodegui.ui.ChatWindowDelegate;
 import com.github.claudecodegui.ui.EditorContextTracker;
@@ -124,6 +125,7 @@ public class ClaudeChatWindow {
         );
 
         this.session = new ClaudeSession(project, claudeSDKBridge, codexSDKBridge);
+        ModelSelectionStateService.applyToSession(this.session);
 
         this.chatWindowDelegate = new ChatWindowDelegate(createDelegateHost());
         chatWindowDelegate.loadPermissionModeFromSettings();
@@ -355,6 +357,13 @@ public class ClaudeChatWindow {
         String restoredSessionId = isNonEmpty(savedState.sessionId) ? savedState.sessionId : null;
         String restoredCwd = isNonEmpty(savedState.cwd) ? savedState.cwd : session.getCwd();
         session.setSessionInfo(restoredSessionId, restoredCwd);
+        if (restoredSessionId != null && session.getMessages().isEmpty()) {
+            session.loadFromServer().exceptionally(ex -> {
+                LOG.warn("[TabRestore] Failed to load history for restored tab sessionId="
+                        + restoredSessionId + ": " + ex.getMessage());
+                return null;
+            });
+        }
         persistTabSessionState();
 
         LOG.info("[TabRestore] Restored tab session state: provider=" + savedState.provider

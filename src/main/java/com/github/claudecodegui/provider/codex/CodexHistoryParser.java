@@ -23,6 +23,7 @@ class CodexHistoryParser {
     private static final Logger LOG = Logger.getInstance(CodexHistoryParser.class);
 
     private final Gson gson;
+    private static final String AGENT_ROLE_SECTION_MARKER = "## Agent Role and Instructions";
 
     CodexHistoryParser() {
         this(new Gson());
@@ -161,6 +162,10 @@ class CodexHistoryParser {
         String result = text;
         for (String tag : systemTags) {
             result = removeTagBlock(result, tag);
+        }
+        int markerIndex = result.indexOf(AGENT_ROLE_SECTION_MARKER);
+        if (markerIndex >= 0) {
+            result = result.substring(0, markerIndex);
         }
         return result.trim();
     }

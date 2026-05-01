@@ -100,17 +100,46 @@ npm run build
 ```bash
 ./gradlew clean runIde
 ``` 
-``` $env:JAVA_HOME='E:\Java\Jdk17'
+```shell
+$env:JAVA_HOME='E:\Java\Jdk17'
 $env:Path="$env:JAVA_HOME\bin;$env:Path"
 $env:GRADLE_USER_HOME='F:\IdeaFiles\jetbrains-cc-gui\.gradle-user-home'
 .\gradlew --stop
 .\gradlew runIde --no-daemon
 ```
+```shell
+# 1) 继续用 JDK17
+$env:JAVA_HOME='E:\Java\Jdk17'
+$env:Path="$env:JAVA_HOME\bin;$env:Path"
+
+# 2) 用项目内 gradle user home
+$env:GRADLE_USER_HOME='F:\IdeaFiles\jetbrains-cc-gui\.gradle-user-home'
+
+# 3) 停掉 daemon
+.\gradlew --stop
+
+# 4) 删除损坏的 transforms 缓存（只删这一段即可）
+Remove-Item -LiteralPath 'F:\IdeaFiles\jetbrains-cc-gui\.gradle-user-home\caches\8.14.4\transforms' -Recurse -Force
+
+# 5) 重新下载依赖并构建
+.\gradlew --refresh-dependencies build --no-daemon
+
+# 6) 再启动 IDE
+.\gradlew runIde --no-daemon
+
+```
+```shell
+Remove-Item -LiteralPath 'F:\IdeaFiles\jetbrains-cc-gui\.gradle-user-home\caches\8.14.4' -Recurse -Force
+.\gradlew --refresh-dependencies build --no-daemon
+.\gradlew runIde --no-daemon
+
+```
+
 
 
 ### 4.构建插件
 
-```sh
+```shell
 ./gradlew clean buildPlugin
 
 # 生成的插件包会在 build/distributions/ 目录下（包体大约40MB）

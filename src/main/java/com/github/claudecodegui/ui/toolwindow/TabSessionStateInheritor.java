@@ -45,7 +45,14 @@ public final class TabSessionStateInheritor {
         if (sourceWindow == null) {
             return null;
         }
-        ClaudeSession sourceSession = sourceWindow.getSession();
+        return captureForNewTab(sourceWindow.getSession());
+    }
+
+    /**
+     * Capture inheritance state directly from a session.
+     */
+    @Nullable
+    public static TabStateService.TabSessionState captureForNewTab(@Nullable ClaudeSession sourceSession) {
         if (sourceSession == null) {
             return null;
         }

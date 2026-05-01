@@ -25,6 +25,11 @@ public class CodexMessageConverter {
 
     /** Maximum number of tracked file-writing sessions to prevent unbounded growth. */
     private static final int MAX_SESSION_ENTRIES = 256;
+    private static final String ROLE_USER = "user";
+    private static final String ROLE_ASSISTANT = "assistant";
+    private static final String ROLE_SYSTEM = "system";
+    private static final String ROLE_DEVELOPER = "developer";
+    private static final String AGENT_ROLE_SECTION_MARKER = "## Agent Role and Instructions";
 
     // Tracks file-writing sessions so later write_stdin events can display the target file.
     // Uses a bounded LRU map to prevent memory leaks over long IDE sessions.
@@ -62,6 +67,48 @@ public class CodexMessageConverter {
     }
 
     /**
+     * Strip internal prompt wrappers from persisted history text so transcript UI shows only user-visible content.
+     */
+    private static String sanitizeHistoryText(String text) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+
+        String sanitized = text;
+        sanitized = removeTagBlock(sanitized, "agents-instructions");
+        sanitized = removeTagBlock(sanitized, "system-reminder");
+        sanitized = removeTagBlock(sanitized, "system-prompt");
+
+        int markerIndex = sanitized.indexOf(AGENT_ROLE_SECTION_MARKER);
+        if (markerIndex >= 0) {
+            sanitized = sanitized.substring(0, markerIndex);
+        }
+
+        return sanitized.trim();
+    }
+
+    /**
+     * Remove all complete XML tag blocks from text.
+     */
+    private static String removeTagBlock(String text, String tagName) {
+        String result = text;
+        String openTag = "<" + tagName + ">";
+        String closeTag = "</" + tagName + ">";
+        while (true) {
+            int start = result.indexOf(openTag);
+            if (start == -1) {
+                break;
+            }
+            int end = result.indexOf(closeTag, start);
+            if (end == -1) {
+                break;
+            }
+            result = result.substring(0, start) + result.substring(end + closeTag.length());
+        }
+        return result;
+    }
+
+    /**
      * Clear session tracking state. Should be called when a new conversation starts
      * to avoid stale session-to-file mappings.
      */
@@ -83,9 +130,13 @@ public class CodexMessageConverter {
 
         // Handle string type - convert to a single text block
         if (contentElem.isJsonPrimitive()) {
+            String sanitizedText = sanitizeHistoryText(contentElem.getAsString());
+            if (sanitizedText == null || sanitizedText.isEmpty()) {
+                return claudeBlocks;
+            }
             JsonObject textBlock = new JsonObject();
             textBlock.addProperty("type", "text");
-            textBlock.addProperty("text", contentElem.getAsString());
+            textBlock.addProperty("text", sanitizedText);
             claudeBlocks.add(textBlock);
             return claudeBlocks;
         }
@@ -104,11 +155,14 @@ public class CodexMessageConverter {
 
                         // Convert Codex "input_text" and "output_text" to Claude "text"
                         if ("input_text".equals(type) || "output_text".equals(type) || "text".equals(type)) {
-                            claudeBlock.addProperty("type", "text");
                             if (itemObj.has("text")) {
-                                claudeBlock.addProperty("text", itemObj.get("text").getAsString());
+                                String sanitizedText = sanitizeHistoryText(itemObj.get("text").getAsString());
+                                if (sanitizedText != null && !sanitizedText.isEmpty()) {
+                                    claudeBlock.addProperty("type", "text");
+                                    claudeBlock.addProperty("text", sanitizedText);
+                                    claudeBlocks.add(claudeBlock);
+                                }
                             }
-                            claudeBlocks.add(claudeBlock);
                         }
                         // Handle tool use (if present in Codex)
                         else if ("tool_use".equals(type)) {
@@ -194,7 +248,7 @@ public class CodexMessageConverter {
 
         // Handle string type
         if (contentElem.isJsonPrimitive()) {
-            return contentElem.getAsString();
+            return sanitizeHistoryText(contentElem.getAsString());
         }
 
         // Handle array type
@@ -209,28 +263,37 @@ public class CodexMessageConverter {
                     // Flatten supported text-like blocks into a single preview string for the frontend.
                     if (itemObj.has("type") && "text".equals(itemObj.get("type").getAsString())) {
                         if (itemObj.has("text")) {
-                            if (sb.length() > 0) {
-                                sb.append("\n");
+                            String sanitizedText = sanitizeHistoryText(itemObj.get("text").getAsString());
+                            if (!sanitizedText.isEmpty()) {
+                                if (sb.length() > 0) {
+                                    sb.append("\n");
+                                }
+                                sb.append(sanitizedText);
                             }
-                            sb.append(itemObj.get("text").getAsString());
                         }
                     }
                     // Extract input_text type (Codex user messages)
                     else if (itemObj.has("type") && "input_text".equals(itemObj.get("type").getAsString())) {
                         if (itemObj.has("text")) {
-                            if (sb.length() > 0) {
-                                sb.append("\n");
+                            String sanitizedText = sanitizeHistoryText(itemObj.get("text").getAsString());
+                            if (!sanitizedText.isEmpty()) {
+                                if (sb.length() > 0) {
+                                    sb.append("\n");
+                                }
+                                sb.append(sanitizedText);
                             }
-                            sb.append(itemObj.get("text").getAsString());
                         }
                     }
                     // Extract output_text type (Codex AI assistant messages)
                     else if (itemObj.has("type") && "output_text".equals(itemObj.get("type").getAsString())) {
                         if (itemObj.has("text")) {
-                            if (sb.length() > 0) {
-                                sb.append("\n");
+                            String sanitizedText = sanitizeHistoryText(itemObj.get("text").getAsString());
+                            if (!sanitizedText.isEmpty()) {
+                                if (sb.length() > 0) {
+                                    sb.append("\n");
+                                }
+                                sb.append(sanitizedText);
                             }
-                            sb.append(itemObj.get("text").getAsString());
                         }
                     }
                 }
@@ -243,7 +306,7 @@ public class CodexMessageConverter {
         if (contentElem.isJsonObject()) {
             JsonObject contentObj = contentElem.getAsJsonObject();
             if (contentObj.has("text")) {
-                return contentObj.get("text").getAsString();
+                return sanitizeHistoryText(contentObj.get("text").getAsString());
             }
         }
 
@@ -254,6 +317,17 @@ public class CodexMessageConverter {
      * Convert Codex regular message to frontend format.
      */
     public static JsonObject convertCodexMessageToFrontend(JsonObject payload, String timestamp) {
+        String role = payload.has("role") ? payload.get("role").getAsString() : ROLE_USER;
+
+        // History should only surface conversation messages.
+        // Internal role prompts (developer/system) must never be rendered in the UI transcript.
+        if (ROLE_DEVELOPER.equals(role) || ROLE_SYSTEM.equals(role)) {
+            return null;
+        }
+        if (!ROLE_USER.equals(role) && !ROLE_ASSISTANT.equals(role)) {
+            return null;
+        }
+
         String contentStr = extractContentAsString(payload.get("content"));
 
         // Filter out system messages
@@ -262,7 +336,6 @@ public class CodexMessageConverter {
         }
 
         JsonObject frontendMsg = new JsonObject();
-        String role = payload.has("role") ? payload.get("role").getAsString() : "user";
         frontendMsg.addProperty("type", role);
 
         if (payload.has("content")) {
@@ -288,12 +361,18 @@ public class CodexMessageConverter {
      * Check if this is a system message (should be filtered).
      */
     public static boolean isSystemMessage(String contentStr) {
-        return contentStr.startsWith("Warning:") ||
-               contentStr.startsWith("Tool result:") ||
-               contentStr.startsWith("Exit code:") ||
-               contentStr.startsWith("# AGENTS.md instructions") ||
-               contentStr.startsWith("<INSTRUCTIONS>") ||
-               contentStr.startsWith("<environment_context>");
+        String normalized = contentStr == null ? "" : contentStr.trim();
+        return normalized.startsWith("Warning:") ||
+               normalized.startsWith("Tool result:") ||
+               normalized.startsWith("Exit code:") ||
+               normalized.startsWith("# AGENTS.md instructions") ||
+               normalized.startsWith("## Agent Role and Instructions") ||
+               normalized.startsWith("<INSTRUCTIONS>") ||
+               normalized.startsWith("<environment_context>") ||
+               normalized.startsWith("<agents-instructions>") ||
+               normalized.startsWith("<permissions instructions>") ||
+               normalized.startsWith("<skills_instructions>") ||
+               normalized.startsWith("<plugins_instructions>");
     }
 
     /**

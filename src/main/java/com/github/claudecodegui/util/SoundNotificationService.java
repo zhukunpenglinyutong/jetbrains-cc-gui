@@ -16,8 +16,10 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -32,19 +34,72 @@ public class SoundNotificationService {
     private static final Logger LOG = Logger.getInstance(SoundNotificationService.class);
 
     /**
+     * Built-in sound definition for settings dropdown and resource playback.
+     */
+    public record BuiltInSound(String id, String resourcePath, String i18nKey, String defaultLabel) {
+    }
+
+    /**
+     * Built-in sounds in display order.
+     */
+    private static final List<BuiltInSound> BUILT_IN_SOUNDS;
+
+    /**
      * Built-in sound resources: soundId -> resource path.
      * Insertion order preserved for UI display.
      */
     public static final Map<String, String> SOUND_RESOURCES;
 
     static {
+        List<BuiltInSound> sounds = new ArrayList<>();
+        sounds.add(new BuiltInSound(
+                "default",
+                "/sounds/success.wav",
+                "settings.basic.soundNotification.soundDefault",
+                "Default"
+        ));
+        sounds.add(new BuiltInSound(
+                "chime",
+                "/sounds/chime.wav",
+                "settings.basic.soundNotification.soundChime",
+                "Chime"
+        ));
+        sounds.add(new BuiltInSound(
+                "bell",
+                "/sounds/bell.wav",
+                "settings.basic.soundNotification.soundBell",
+                "Bell"
+        ));
+        sounds.add(new BuiltInSound(
+                "ding",
+                "/sounds/ding.wav",
+                "settings.basic.soundNotification.soundDing",
+                "Ding"
+        ));
+        sounds.add(new BuiltInSound(
+                "success",
+                "/sounds/task-complete.wav",
+                "settings.basic.soundNotification.soundSuccess",
+                "Success"
+        ));
+        sounds.add(new BuiltInSound("ring", "/sounds/ring.mp3", null, "Ring"));
+        sounds.add(new BuiltInSound("dindong", "/sounds/dindong.mp3", null, "Dindong"));
+        sounds.add(new BuiltInSound("rin", "/sounds/rin.mp3", null, "Rin"));
+        sounds.add(new BuiltInSound("yring", "/sounds/yring.mp3", null, "Yring"));
+        BUILT_IN_SOUNDS = Collections.unmodifiableList(sounds);
+
         Map<String, String> map = new LinkedHashMap<>();
-        map.put("default", "/sounds/success.wav");
-        map.put("chime", "/sounds/chime.wav");
-        map.put("bell", "/sounds/bell.wav");
-        map.put("ding", "/sounds/ding.wav");
-        map.put("success", "/sounds/task-complete.wav");
+        for (BuiltInSound sound : BUILT_IN_SOUNDS) {
+            map.put(sound.id(), sound.resourcePath());
+        }
         SOUND_RESOURCES = Collections.unmodifiableMap(map);
+    }
+
+    /**
+     * Get built-in sounds in display order.
+     */
+    public static List<BuiltInSound> getBuiltInSounds() {
+        return BUILT_IN_SOUNDS;
     }
 
     // Singleton pattern

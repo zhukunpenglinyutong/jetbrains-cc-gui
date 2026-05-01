@@ -523,6 +523,24 @@ if (typeof window !== 'undefined' && !window.onModeReceived) {
   };
 }
 
+// Pre-register onReasoningEffortReceived to avoid losing early backend push before React callbacks are ready.
+if (typeof window !== 'undefined' && !window.onReasoningEffortReceived) {
+  console.log('[Main] Pre-registering onReasoningEffortReceived placeholder');
+  window.onReasoningEffortReceived = (effort: string) => {
+    console.log('[Main] Storing pending reasoning effort:', effort);
+    (window as unknown as Record<string, unknown>).__pendingReasoningEffortReceived = effort;
+  };
+}
+
+// Pre-register onModelConfirmed to avoid losing the backend-restored model before React callbacks are ready.
+if (typeof window !== 'undefined' && !window.onModelConfirmed) {
+  console.log('[Main] Pre-registering onModelConfirmed placeholder');
+  window.onModelConfirmed = (modelId: string, provider: string) => {
+    console.log('[Main] Storing pending model confirmation:', provider, modelId);
+    (window as unknown as Record<string, unknown>).__pendingModelConfirmed = { modelId, provider };
+  };
+}
+
 if (typeof window !== 'undefined' && !window.showPermissionDialog) {
   console.log('[Main] Pre-registering showPermissionDialog placeholder');
   window.showPermissionDialog = (json: string) => {

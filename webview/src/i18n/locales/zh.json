@@ -713,6 +713,8 @@
       "loadFailed": "加载失败",
       "loading": "加载中...",
       "menu": "菜单",
+      "enableAutoInject": "启用自动注入",
+      "disableAutoInject": "停用自动注入",
       "addSuccess": "提示词创建成功",
       "updateSuccess": "提示词更新成功",
       "deleteSuccess": "提示词删除成功",
@@ -1562,3 +1564,4 @@
     "goToProviderSettings": "前往设置"
   }
 }
+

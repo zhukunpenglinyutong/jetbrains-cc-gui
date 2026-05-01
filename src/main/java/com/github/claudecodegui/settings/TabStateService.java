@@ -42,6 +42,9 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
         if (myState.tabSessions == null) {
             myState.tabSessions = new HashMap<>();
         }
+        if (myState.selectedTabIndex < 0) {
+            myState.selectedTabIndex = 0;
+        }
         LOG.info("[TabStateService] Loaded tab state with " + myState.tabNames.size()
                 + " tab names and " + myState.tabSessions.size() + " tab sessions");
     }
@@ -117,6 +120,7 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
     public void clearAllTabNames() {
         myState.tabNames.clear();
         myState.tabSessions.clear();
+        myState.selectedTabIndex = 0;
         LOG.info("[TabStateService] Cleared all tab names and session state");
     }
 
@@ -153,6 +157,12 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
         if (myState.tabCount > 0) {
             myState.tabCount--;
         }
+        if (myState.selectedTabIndex > removedIndex) {
+            myState.selectedTabIndex--;
+        } else if (myState.selectedTabIndex == removedIndex) {
+            myState.selectedTabIndex = Math.max(0, removedIndex - 1);
+        }
+        myState.selectedTabIndex = Math.min(myState.selectedTabIndex, Math.max(0, myState.tabCount - 1));
 
         LOG.info("[TabStateService] Updated tab indexes after removal of index: " + removedIndex
                 + ", new count: " + myState.tabCount);
@@ -173,6 +183,22 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
      */
     public int getTabCount() {
         return Math.max(1, myState.tabCount);
+    }
+
+    /**
+     * Save the currently selected tab index.
+     */
+    public void saveSelectedTabIndex(int selectedTabIndex) {
+        myState.selectedTabIndex = Math.max(0, selectedTabIndex);
+        LOG.debug("[TabStateService] Saved selected tab index: " + myState.selectedTabIndex);
+    }
+
+    /**
+     * Get the selected tab index (clamped to valid range).
+     */
+    public int getSelectedTabIndex() {
+        int maxIndex = Math.max(0, getTabCount() - 1);
+        return Math.min(Math.max(0, myState.selectedTabIndex), maxIndex);
     }
 
     /**
@@ -216,5 +242,10 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
          * Number of tabs.
          */
         public int tabCount = 1;
+
+        /**
+         * Selected tab index.
+         */
+        public int selectedTabIndex = 0;
     }
 }

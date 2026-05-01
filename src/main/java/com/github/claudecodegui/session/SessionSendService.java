@@ -11,6 +11,7 @@ import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
@@ -88,13 +89,15 @@ public class SessionSendService {
             List<String> fileTagPaths,
             String requestedPermissionMode
     ) {
-        String agentPrompt = externalAgentPrompt;
-        if (agentPrompt == null) {
-            agentPrompt = getAgentPrompt();
+        String selectedAgentPrompt = externalAgentPrompt;
+        if (selectedAgentPrompt == null) {
+            selectedAgentPrompt = getAgentPrompt();
             LOG.info("[Agent] Using agent from global setting (fallback)");
         } else {
             LOG.info("[Agent] Using agent from message (per-tab selection)");
         }
+        String messagePromptBlock = buildMessagePromptBlock(selectedAgentPrompt);
+        String finalInput = prependPromptBlockToMessage(input, messagePromptBlock);
 
         String currentProvider = state.getProvider();
         String sessionModeBeforeSend = state.getPermissionMode();
@@ -115,16 +118,16 @@ public class SessionSendService {
         if ("codex".equals(currentProvider)) {
             return sendToCodex(
                     channelId,
-                    input,
+                    finalInput,
                     attachments,
                     openedFilesJson,
-                    agentPrompt,
+                    null,
                     fileTagPaths,
                     effectivePermissionMode
             );
         }
 
-        return sendToClaude(channelId, input, attachments, openedFilesJson, agentPrompt, effectivePermissionMode);
+        return sendToClaude(channelId, finalInput, attachments, openedFilesJson, null, effectivePermissionMode);
     }
 
     public static String normalizeRequestedPermissionMode(String mode) {
@@ -302,5 +305,119 @@ public class SessionSendService {
             LOG.warn("[Agent] ✗ Failed to get agent prompt: " + e.getMessage());
         }
         return null;
+    }
+
+    private String buildMessagePromptBlock(String selectedAgentPrompt) {
+        String normalizedAgentPrompt = normalizePromptText(selectedAgentPrompt);
+        String autoInjectPrompt = state.isPromptInjected() ? null : getEnabledPromptsInstructionBlock();
+
+        if (normalizedAgentPrompt == null && autoInjectPrompt == null) {
+            return null;
+        }
+
+        StringBuilder builder = new StringBuilder();
+        if (normalizedAgentPrompt != null) {
+            builder.append("## Agent Role and Instructions\n\n");
+            builder.append(normalizedAgentPrompt);
+        }
+
+        if (autoInjectPrompt != null) {
+            if (builder.length() > 0) {
+                builder.append("\n\n");
+            }
+            builder.append(autoInjectPrompt);
+            state.setPromptInjected(true);
+        }
+
+        return builder.toString();
+    }
+
+    private String prependPromptBlockToMessage(String input, String promptBlock) {
+        String normalizedInput = input != null ? input : "";
+        if (promptBlock == null) {
+            return normalizedInput;
+        }
+        return promptBlock + "\n\n---\n\n" + normalizedInput;
+    }
+
+    private String getEnabledPromptsInstructionBlock() {
+        try {
+            CodemossSettingsService settingsService = new CodemossSettingsService();
+            List<String> enabledPromptContents = new ArrayList<>();
+
+            appendScopeEnabledPromptContents(
+                    enabledPromptContents,
+                    settingsService,
+                    com.github.claudecodegui.model.PromptScope.PROJECT
+            );
+            appendScopeEnabledPromptContents(
+                    enabledPromptContents,
+                    settingsService,
+                    com.github.claudecodegui.model.PromptScope.GLOBAL
+            );
+
+            if (enabledPromptContents.isEmpty()) {
+                return null;
+            }
+
+            StringBuilder builder = new StringBuilder();
+            builder.append("## Auto Injected Prompt Instructions\n\n");
+            builder.append("Apply all enabled prompt instructions below throughout this conversation.\n\n");
+            for (int i = 0; i < enabledPromptContents.size(); i++) {
+                builder.append(enabledPromptContents.get(i));
+                if (i < enabledPromptContents.size() - 1) {
+                    builder.append("\n\n---\n\n");
+                }
+            }
+            LOG.info("[PromptAutoInject] Enabled prompts injected: " + enabledPromptContents.size());
+            return builder.toString();
+        } catch (Exception e) {
+            LOG.warn("[PromptAutoInject] Failed to resolve enabled prompt instructions: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private void appendScopeEnabledPromptContents(
+            List<String> collector,
+            CodemossSettingsService settingsService,
+            com.github.claudecodegui.model.PromptScope scope
+    ) {
+        try {
+            appendEnabledPromptContents(collector, settingsService.getPrompts(scope, project));
+        } catch (Exception e) {
+            LOG.debug("[PromptAutoInject] Skip scope " + scope.getValue() + ": " + e.getMessage());
+        }
+    }
+
+    private void appendEnabledPromptContents(List<String> collector, List<JsonObject> prompts) {
+        if (prompts == null || prompts.isEmpty()) {
+            return;
+        }
+        for (JsonObject prompt : prompts) {
+            if (prompt == null) {
+                continue;
+            }
+            boolean autoInject = prompt.has("autoInject")
+                    && !prompt.get("autoInject").isJsonNull()
+                    && prompt.get("autoInject").getAsBoolean();
+            if (!autoInject) {
+                continue;
+            }
+            if (!prompt.has("content") || prompt.get("content").isJsonNull()) {
+                continue;
+            }
+            String content = normalizePromptText(prompt.get("content").getAsString());
+            if (content != null) {
+                collector.add(content);
+            }
+        }
+    }
+
+    private String normalizePromptText(String text) {
+        if (text == null) {
+            return null;
+        }
+        String trimmed = text.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

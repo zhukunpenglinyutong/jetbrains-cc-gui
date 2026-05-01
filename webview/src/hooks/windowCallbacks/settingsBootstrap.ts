@@ -69,6 +69,24 @@ export const startModeRequest = (): void => {
 };
 
 /**
+ * Request the current Codex reasoning effort from the backend.
+ */
+export const startReasoningEffortRequest = (): void => {
+  let reasoningRetryCount = 0;
+  const requestReasoningEffort = () => {
+    if (window.sendToJava) {
+      sendBridgeEvent('get_reasoning_effort');
+    } else {
+      reasoningRetryCount++;
+      if (reasoningRetryCount < MAX_RETRIES) {
+        setTimeout(requestReasoningEffort, 100);
+      }
+    }
+  };
+  setTimeout(requestReasoningEffort, 200);
+};
+
+/**
  * Request the thinking-enabled setting from the backend.
  */
 export const startThinkingEnabledRequest = (): void => {
@@ -116,6 +134,20 @@ export const drainPendingSettings = (): void => {
     const pending = w.__pendingModeReceived as string;
     delete w.__pendingModeReceived;
     window.onModeReceived?.(pending);
+  }
+
+  if (w.__pendingReasoningEffortReceived) {
+    const pending = w.__pendingReasoningEffortReceived as string;
+    delete w.__pendingReasoningEffortReceived;
+    window.onReasoningEffortReceived?.(pending);
+  }
+
+  if (w.__pendingModelConfirmed) {
+    const pending = w.__pendingModelConfirmed as { modelId?: string; provider?: string };
+    delete w.__pendingModelConfirmed;
+    if (pending.modelId && pending.provider) {
+      window.onModelConfirmed?.(pending.modelId, pending.provider);
+    }
   }
 };
 

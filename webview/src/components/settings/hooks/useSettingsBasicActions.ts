@@ -19,6 +19,11 @@ export interface UseSettingsBasicActionsProps {
 }
 
 export interface UseSettingsBasicActionsReturn {
+  builtInSounds: {
+    id: string;
+    i18nKey?: string;
+    defaultLabel?: string;
+  }[];
   // =========================================================================
   // Public read-only state (safe to read in components)
   // =========================================================================
@@ -109,6 +114,7 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setSoundNotificationEnabled: (enabled: boolean) => void;
   /** @internal */ setSoundOnlyWhenUnfocused: (enabled: boolean) => void;
   /** @internal */ setSelectedSound: (soundId: string) => void;
+  /** @internal */ setBuiltInSounds: (sounds: { id: string; i18nKey?: string; defaultLabel?: string }[]) => void;
   /** @internal */ setCustomSoundPath: (path: string) => void;
   /** @internal */ setDiffExpandedByDefault: (expanded: boolean) => void;
   /** @internal */ setHistoryCompletionEnabled: (enabled: boolean) => void;
@@ -169,6 +175,7 @@ export function useSettingsBasicActions({
   const [soundNotificationEnabled, setSoundNotificationEnabled] = useState<boolean>(false);
   const [soundOnlyWhenUnfocused, setSoundOnlyWhenUnfocused] = useState<boolean>(false);
   const [selectedSound, setSelectedSound] = useState<string>('default');
+  const [builtInSounds, setBuiltInSounds] = useState<{ id: string; i18nKey?: string; defaultLabel?: string }[]>([]);
   const [customSoundPath, setCustomSoundPath] = useState<string>('');
 
   // Diff expanded by default configuration (localStorage-only)
@@ -350,6 +357,8 @@ export function useSettingsBasicActions({
   }, [commitPrompt]);
 
   return {
+    builtInSounds,
+    setBuiltInSounds,
     nodePath,
     setNodePath,
     nodeVersion,

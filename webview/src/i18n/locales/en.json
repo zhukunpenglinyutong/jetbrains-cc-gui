@@ -708,6 +708,8 @@
       "loadFailed": "Load failed",
       "loading": "Loading...",
       "menu": "Menu",
+      "enableAutoInject": "Enable auto injection",
+      "disableAutoInject": "Disable auto injection",
       "addSuccess": "Prompt created successfully",
       "updateSuccess": "Prompt updated successfully",
       "deleteSuccess": "Prompt deleted successfully",
@@ -1557,3 +1559,4 @@
     "goToProviderSettings": "Go to Settings"
   }
 }
+

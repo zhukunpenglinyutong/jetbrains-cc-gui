@@ -40,6 +40,7 @@ export interface SettingsWindowCallbacksDeps {
   setSoundNotificationEnabled?: (enabled: boolean) => void;
   setSoundOnlyWhenUnfocused?: (enabled: boolean) => void;
   setSelectedSound?: (soundId: string) => void;
+  setBuiltInSounds?: (sounds: { id: string; i18nKey?: string; defaultLabel?: string }[]) => void;
   setCustomSoundPath?: (path: string) => void;
 
   // Hook functions
@@ -279,6 +280,16 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
         }
         if (data.selectedSound !== undefined) {
           d().setSelectedSound?.(data.selectedSound);
+        }
+        if (Array.isArray(data.builtInSounds)) {
+          const parsed = data.builtInSounds
+            .filter((item: any) => item && typeof item.id === 'string')
+            .map((item: any) => ({
+              id: item.id,
+              i18nKey: typeof item.i18nKey === 'string' ? item.i18nKey : '',
+              defaultLabel: typeof item.defaultLabel === 'string' ? item.defaultLabel : item.id,
+            }));
+          d().setBuiltInSounds?.(parsed);
         }
         if (data.customSoundPath !== undefined) {
           d().setCustomSoundPath?.(data.customSoundPath);

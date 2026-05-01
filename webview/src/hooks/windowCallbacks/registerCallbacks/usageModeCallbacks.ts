@@ -3,14 +3,18 @@
  *
  * Registers window bridge callbacks for usage statistics, permission modes, and
  * model/provider updates: onUsageUpdate, onModeChanged, onModeReceived,
- * onModelChanged, onModelConfirmed, updateActiveProvider, updateThinkingEnabled,
+ * onModelChanged, onModelConfirmed, onReasoningEffortReceived,
+ * updateActiveProvider, updateThinkingEnabled,
  * updateStreamingEnabled, updateSendShortcut, updateAutoOpenFileEnabled.
  */
 
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
-import type { PermissionMode } from '../../../components/ChatInputBox/types';
+import type { PermissionMode, ReasoningEffort } from '../../../components/ChatInputBox/types';
 import { isValidPermissionMode, normalizeClaudeModelId } from '../../../components/ChatInputBox/types';
 import { drainPendingSettings, startInitialSettingsRequest } from '../settingsBootstrap';
+
+const isValidReasoningEffort = (value: string): value is ReasoningEffort =>
+  value === 'low' || value === 'medium' || value === 'high' || value === 'xhigh';
 
 export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): void {
   const {
@@ -20,8 +24,10 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
     setPermissionMode,
     setClaudePermissionMode,
     setCodexPermissionMode,
+    setCurrentProvider,
     setSelectedClaudeModel,
     setSelectedCodexModel,
+    setReasoningEffort,
     setProviderConfigVersion,
     setActiveProviderConfig,
     setClaudeSettingsAlwaysThinkingEnabled,
@@ -93,9 +99,18 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
 
   window.onModelConfirmed = (modelId, provider) => {
     if (provider === 'claude') {
+      setCurrentProvider('claude');
       setSelectedClaudeModel(normalizeClaudeModelId(modelId));
     } else if (provider === 'codex') {
+      setCurrentProvider('codex');
       setSelectedCodexModel(modelId);
+    }
+  };
+
+  window.onReasoningEffortReceived = (effort) => {
+    const normalized = (effort || '').trim().toLowerCase();
+    if (isValidReasoningEffort(normalized)) {
+      setReasoningEffort(normalized);
     }
   };
 

@@ -37,6 +37,7 @@ export default function PromptSection({
     handleEditPrompt,
     handleClosePromptDialog,
     handleDeletePrompt,
+    handleToggleAutoInject,
     handleSavePrompt,
     confirmDeletePrompt,
     cancelDeletePrompt,
@@ -196,6 +197,7 @@ export default function PromptSection({
         onAdd={() => handleAddPrompt('global')}
         onEdit={(prompt) => handleEditPrompt(prompt, 'global')}
         onDelete={(prompt) => handleDeletePrompt(prompt, 'global')}
+        onToggleAutoInject={(prompt) => handleToggleAutoInject(prompt, 'global')}
         onExport={() => handleExportPrompts('global')}
         onImport={() => handleImportPromptsFile('global')}
       />
@@ -210,6 +212,7 @@ export default function PromptSection({
           onAdd={() => handleAddPrompt('project')}
           onEdit={(prompt) => handleEditPrompt(prompt, 'project')}
           onDelete={(prompt) => handleDeletePrompt(prompt, 'project')}
+          onToggleAutoInject={(prompt) => handleToggleAutoInject(prompt, 'project')}
           onExport={() => handleExportPrompts('project')}
           onImport={() => handleImportPromptsFile('project')}
         />

@@ -131,6 +131,8 @@ const SettingsView = ({
     setSoundOnlyWhenUnfocused,
     selectedSound,
     setSelectedSound,
+    builtInSounds,
+    setBuiltInSounds,
     customSoundPath,
     setCustomSoundPath,
     diffExpandedByDefault,
@@ -290,6 +292,7 @@ const SettingsView = ({
     setSoundNotificationEnabled,
     setSoundOnlyWhenUnfocused,
     setSelectedSound,
+    setBuiltInSounds,
     setCustomSoundPath,
     setCommitGenerationEnabled,
     setStatusBarWidgetEnabled,
@@ -448,6 +451,7 @@ const SettingsView = ({
               soundOnlyWhenUnfocused={soundOnlyWhenUnfocused}
               onSoundOnlyWhenUnfocusedChange={handleSoundOnlyWhenUnfocusedChange}
               selectedSound={selectedSound}
+              builtInSounds={builtInSounds}
               onSelectedSoundChange={handleSelectedSoundChange}
               customSoundPath={customSoundPath}
               onCustomSoundPathChange={handleCustomSoundPathChange}

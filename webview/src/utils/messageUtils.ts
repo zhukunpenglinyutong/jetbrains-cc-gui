@@ -66,6 +66,14 @@ export const MESSAGE_TYPES = {
   ERROR: 'error',
 } as const;
 
+const DISPLAYABLE_MESSAGE_TYPES = new Set<string>([
+  MESSAGE_TYPES.USER,
+  MESSAGE_TYPES.ASSISTANT,
+  MESSAGE_TYPES.TASK_NOTIFICATION,
+  MESSAGE_TYPES.NOTIFICATION,
+  MESSAGE_TYPES.ERROR,
+]);
+
 export const ORIGIN_KINDS = {
   HUMAN: 'human',
   TASK_NOTIFICATION: 'task-notification',
@@ -557,6 +565,12 @@ export function shouldShowMessage(
   normalizeBlocksFn: (raw?: ClaudeRawMessage | string) => ClaudeContentBlock[] | null,
   t: TFunction
 ): boolean {
+  // Defensive filtering for history restore:
+  // unknown/internal role types (e.g. developer/system) must not be rendered.
+  if (!DISPLAYABLE_MESSAGE_TYPES.has(message.type)) {
+    return false;
+  }
+
   // Filter isMeta messages (like "Caveat: The messages below were generated...")
   // CLI: isMeta messages are hidden in normal transcript (except channel messages)
   if (message.raw && typeof message.raw === 'object' && 'isMeta' in message.raw && message.raw.isMeta === true) {
@@ -842,6 +856,8 @@ export function mergeConsecutiveAssistantMessages(
 
     const combinedBlocks: ClaudeContentBlock[] = [];
     const contentParts: string[] = [];
+    let mergedDurationMs: number | undefined;
+    let mergedIsStreaming: boolean | undefined;
 
     for (const msg of group) {
       const blocks = normalizeBlocksFn(msg.raw) || [];
@@ -853,6 +869,12 @@ export function mergeConsecutiveAssistantMessages(
         if (trimmed) {
           contentParts.push(msg.content);
         }
+      }
+      if (typeof msg.durationMs === 'number') {
+        mergedDurationMs = msg.durationMs;
+      }
+      if (typeof msg.isStreaming === 'boolean') {
+        mergedIsStreaming = msg.isStreaming;
       }
     }
 
@@ -872,6 +894,8 @@ export function mergeConsecutiveAssistantMessages(
       content: mergedContent,
       raw: nextRaw,
       __turnId: first.__turnId,
+      ...(typeof mergedIsStreaming === 'boolean' ? { isStreaming: mergedIsStreaming } : {}),
+      ...(typeof mergedDurationMs === 'number' ? { durationMs: mergedDurationMs } : {}),
     };
   };
 

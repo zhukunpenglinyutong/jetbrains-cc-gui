@@ -32,6 +32,7 @@ import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.session.SessionLifecycleManager;
 import com.github.claudecodegui.session.StreamMessageCoalescer;
+import com.github.claudecodegui.settings.ModelSelectionStateService;
 import com.github.claudecodegui.util.JsUtils;
 import com.github.claudecodegui.util.MessageJsonConverter;
 import com.google.gson.JsonObject;
@@ -238,6 +239,15 @@ public class ChatWindowDelegate {
 
         HandlerContext handlerContext = new HandlerContext(project, claudeSDKBridge, codexSDKBridge, settingsService, jsCallback);
         handlerContext.setSession(host.getSession());
+        ClaudeSession currentSession = host.getSession();
+        if (currentSession != null) {
+            handlerContext.setCurrentProvider(currentSession.getProvider());
+            handlerContext.setCurrentModel(currentSession.getModel());
+        } else {
+            ModelSelectionStateService.Selection selection = ModelSelectionStateService.loadSelection();
+            handlerContext.setCurrentProvider(selection.provider);
+            handlerContext.setCurrentModel(selection.model);
+        }
         host.setHandlerContext(handlerContext);
 
         MessageDispatcher messageDispatcher = new MessageDispatcher();
@@ -485,6 +495,11 @@ public class ChatWindowDelegate {
 
             host.callJavaScript("showLoading", String.valueOf(session.isLoading()));
             host.callJavaScript("showThinkingStatus", String.valueOf(false));
+            host.callJavaScript("window.onModelConfirmed",
+                    JsUtils.escapeJs(session.getModel()),
+                    JsUtils.escapeJs(session.getProvider()));
+            host.callJavaScript("window.onReasoningEffortReceived",
+                    JsUtils.escapeJs(session.getReasoningEffort()));
 
             String summary = session.getSummary();
             if (summary != null && !summary.trim().isEmpty()) {

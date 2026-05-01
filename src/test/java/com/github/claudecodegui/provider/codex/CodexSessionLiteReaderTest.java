@@ -86,6 +86,21 @@ public class CodexSessionLiteReaderTest {
     }
 
     @Test
+    public void parseSessionInfoFromLite_stripsAgentRoleSectionMarker() {
+        String sessionId = "thread_abc123def456";
+        SessionLiteReader.LiteSessionFile lite = new SessionLiteReader.LiteSessionFile(
+                System.currentTimeMillis(), 1000,
+                "{\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\",\"message\":\"How to run this project?\\n\\n## Agent Role and Instructions\\n\\ninternal text\"}}\n",
+                ""
+        );
+
+        CodexSessionLiteReader.CodexLiteSessionInfo info = reader.parseSessionInfoFromLite(sessionId, lite);
+        assertNotNull(info);
+        assertTrue(info.summary.contains("How to run this project?"));
+        assertTrue(!info.summary.contains("Agent Role and Instructions"));
+    }
+
+    @Test
     public void readSessionLite_invalidSessionId() throws IOException {
         Path tempDir = Files.createTempDirectory("codex-lite-test");
         try {

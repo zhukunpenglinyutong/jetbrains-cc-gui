@@ -15,6 +15,8 @@ export interface PromptConfig {
   name: string;
   /** Prompt content (max 100000 characters) */
   content: string;
+  /** Whether this prompt should be auto-injected on every send */
+  autoInject?: boolean;
   /** Creation timestamp */
   createdAt?: number;
   /** Last updated timestamp */

@@ -90,6 +90,7 @@ export interface BehaviorTabProps {
   soundOnlyWhenUnfocused?: boolean;
   onSoundOnlyWhenUnfocusedChange?: (enabled: boolean) => void;
   selectedSound?: string;
+  builtInSounds?: { id: string; i18nKey?: string; defaultLabel?: string }[];
   onSelectedSoundChange?: (soundId: string) => void;
   customSoundPath?: string;
   onCustomSoundPathChange?: (path: string) => void;
@@ -116,6 +117,7 @@ const BehaviorTab = ({
   soundOnlyWhenUnfocused = false,
   onSoundOnlyWhenUnfocusedChange = () => {},
   selectedSound = 'default',
+  builtInSounds = [],
   onSelectedSoundChange = () => {},
   customSoundPath = '',
   onCustomSoundPathChange = () => {},
@@ -125,14 +127,22 @@ const BehaviorTab = ({
 }: BehaviorTabProps) => {
   const { t } = useTranslation();
 
-  const soundOptions = useMemo(() => [
-    { value: 'default', label: t('settings.basic.soundNotification.soundDefault') },
-    { value: 'chime', label: t('settings.basic.soundNotification.soundChime') },
-    { value: 'bell', label: t('settings.basic.soundNotification.soundBell') },
-    { value: 'ding', label: t('settings.basic.soundNotification.soundDing') },
-    { value: 'success', label: t('settings.basic.soundNotification.soundSuccess') },
-    { value: 'custom', label: t('settings.basic.soundNotification.soundCustom') },
-  ], [t]);
+  const soundOptions = useMemo(() => {
+    const builtInFallback = [
+      { id: 'default', i18nKey: 'settings.basic.soundNotification.soundDefault', defaultLabel: 'Default' },
+      { id: 'chime', i18nKey: 'settings.basic.soundNotification.soundChime', defaultLabel: 'Chime' },
+      { id: 'bell', i18nKey: 'settings.basic.soundNotification.soundBell', defaultLabel: 'Bell' },
+      { id: 'ding', i18nKey: 'settings.basic.soundNotification.soundDing', defaultLabel: 'Ding' },
+      { id: 'success', i18nKey: 'settings.basic.soundNotification.soundSuccess', defaultLabel: 'Success' },
+    ];
+
+    const builtIns = (builtInSounds && builtInSounds.length > 0 ? builtInSounds : builtInFallback).map((item) => ({
+      value: item.id,
+      label: item.i18nKey ? t(item.i18nKey, item.defaultLabel || item.id) : (item.defaultLabel || item.id),
+    }));
+
+    return [...builtIns, { value: 'custom', label: t('settings.basic.soundNotification.soundCustom') }];
+  }, [builtInSounds, t]);
 
   return (
     <div className={styles.tabContent}>

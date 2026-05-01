@@ -3,6 +3,7 @@ package com.github.claudecodegui.session;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.github.claudecodegui.settings.ModelSelectionStateService;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.handler.SettingsHandler;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
@@ -120,6 +121,8 @@ public class SessionLifecycleManager {
 
             host.setSession(newSession);
             host.getHandlerContext().setSession(newSession);
+            host.getHandlerContext().setCurrentProvider(previousProvider);
+            host.getHandlerContext().setCurrentModel(previousModel);
             host.setupSessionCallbacks();
 
             String workingDirectory = determineWorkingDirectory();
@@ -171,8 +174,9 @@ public class SessionLifecycleManager {
             String savedMode = props.getValue(PERMISSION_MODE_PROPERTY_KEY);
             previousPermissionMode = (savedMode != null && !savedMode.trim().isEmpty())
                                              ? savedMode.trim() : "bypassPermissions";
-            previousProvider = "claude";
-            previousModel = "claude-sonnet-4-6";
+            ModelSelectionStateService.Selection selection = ModelSelectionStateService.loadSelection();
+            previousProvider = selection.provider;
+            previousModel = selection.model;
         }
         LOG.info("Preserving session state when loading history: mode=" + previousPermissionMode
                          + ", provider=" + previousProvider + ", model=" + previousModel);
@@ -204,6 +208,8 @@ public class SessionLifecycleManager {
 
             host.setSession(newSession);
             host.getHandlerContext().setSession(newSession);
+            host.getHandlerContext().setCurrentProvider(previousProvider);
+            host.getHandlerContext().setCurrentModel(previousModel);
             host.setupSessionCallbacks();
 
             String workingDir = (projectPath != null && new File(projectPath).exists())

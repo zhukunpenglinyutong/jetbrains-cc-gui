@@ -3,6 +3,7 @@ package com.github.claudecodegui.handler.provider;
 import com.github.claudecodegui.handler.UsagePushService;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
+import com.github.claudecodegui.settings.ModelSelectionStateService;
 import com.github.claudecodegui.skill.SlashCommandRegistry;
 import com.github.claudecodegui.util.EditorFileUtils;
 import com.google.gson.Gson;
@@ -77,6 +78,7 @@ public class ModelProviderHandler {
 
             LOG.info("[ModelProviderHandler] Setting model to: " + model);
             context.setCurrentModel(model);
+            ModelSelectionStateService.saveModel(context.getCurrentProvider(), model);
 
             if (context.getSession() != null) {
                 context.getSession().setModel(model);
@@ -118,15 +120,85 @@ public class ModelProviderHandler {
 
             LOG.info("[ModelProviderHandler] Setting provider to: " + provider);
             context.setCurrentProvider(provider);
+            ModelSelectionStateService.saveProvider(provider);
 
             if (context.getSession() != null) {
                 context.getSession().setProvider(provider);
+                String persistedModel = ModelSelectionStateService.loadModelForProvider(provider);
+                context.setCurrentModel(persistedModel);
+                context.getSession().setModel(persistedModel);
+                final String confirmedModel = persistedModel;
+                final String confirmedProvider = context.getCurrentProvider();
+                ApplicationManager.getApplication().invokeLater(() ->
+                        context.callJavaScript("window.onModelConfirmed",
+                                context.escapeJs(confirmedModel),
+                                context.escapeJs(confirmedProvider)));
             }
 
             refreshSlashCommandsForProvider(provider);
             usagePushService.refreshContextBar();
         } catch (Exception e) {
             LOG.error("[ModelProviderHandler] Failed to set provider: " + e.getMessage(), e);
+        }
+    }
+
+    public void handleBootstrapModelSelection(String content) {
+        try {
+            if (ModelSelectionStateService.hasSavedSelection() || content == null || content.trim().isEmpty()) {
+                return;
+            }
+
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            if (json == null) {
+                return;
+            }
+
+            String provider = json.has("provider") ? json.get("provider").getAsString() : null;
+            String claudeModel = json.has("claudeModel") ? json.get("claudeModel").getAsString() : null;
+            String codexModel = json.has("codexModel") ? json.get("codexModel").getAsString() : null;
+            String normalizedProvider = ModelSelectionStateService.normalizeProvider(provider);
+
+            ModelSelectionStateService.saveProvider(normalizedProvider);
+            ModelSelectionStateService.saveModel(ModelSelectionStateService.PROVIDER_CLAUDE, claudeModel);
+            ModelSelectionStateService.saveModel(ModelSelectionStateService.PROVIDER_CODEX, codexModel);
+
+            String activeModel = ModelSelectionStateService.PROVIDER_CODEX.equals(normalizedProvider)
+                    ? ModelSelectionStateService.loadModelForProvider(ModelSelectionStateService.PROVIDER_CODEX)
+                    : ModelSelectionStateService.loadModelForProvider(ModelSelectionStateService.PROVIDER_CLAUDE);
+
+            context.setCurrentProvider(normalizedProvider);
+            context.setCurrentModel(activeModel);
+            if (context.getSession() != null) {
+                context.getSession().setProvider(normalizedProvider);
+                context.getSession().setModel(activeModel);
+            }
+
+            final String confirmedProvider = normalizedProvider;
+            final String confirmedModel = activeModel;
+            ApplicationManager.getApplication().invokeLater(() ->
+                    context.callJavaScript("window.onModelConfirmed",
+                            context.escapeJs(confirmedModel),
+                            context.escapeJs(confirmedProvider)));
+        } catch (Exception e) {
+            LOG.warn("[ModelProviderHandler] Failed to bootstrap model selection: " + e.getMessage());
+        }
+    }
+
+    public void handleGetReasoningEffort() {
+        try {
+            String effort = "medium";
+            if (context.getSession() != null) {
+                String sessionEffort = context.getSession().getReasoningEffort();
+                if (sessionEffort != null && !sessionEffort.trim().isEmpty()) {
+                    effort = sessionEffort.trim();
+                }
+            }
+
+            final String effortToSend = effort;
+            ApplicationManager.getApplication().invokeLater(() ->
+                    context.callJavaScript("window.onReasoningEffortReceived", context.escapeJs(effortToSend)));
+        } catch (Exception e) {
+            LOG.error("[ModelProviderHandler] Failed to get reasoning effort: " + e.getMessage(), e);
         }
     }
 

@@ -176,6 +176,20 @@ export function usePromptManagement(options: UsePromptManagementOptions = {}) {
     setDeletePromptConfirm({ isOpen: true, prompt, scope });
   }, []);
 
+  // Toggle prompt auto-inject setting
+  const handleToggleAutoInject = useCallback((prompt: PromptConfig, scope: PromptScope) => {
+    const message: UpdatePromptMessage = {
+      scope,
+      id: prompt.id,
+      updates: {
+        autoInject: !prompt.autoInject,
+        updatedAt: Date.now(),
+      },
+    };
+    sendToJava(`update_prompt:${JSON.stringify(message)}`);
+    loadPrompts(scope);
+  }, [loadPrompts]);
+
   // Save prompt
   const handleSavePrompt = useCallback(
     (data: { name: string; content: string }) => {
@@ -365,6 +379,7 @@ export function usePromptManagement(options: UsePromptManagementOptions = {}) {
     handleEditPrompt,
     handleClosePromptDialog,
     handleDeletePrompt,
+    handleToggleAutoInject,
     handleSavePrompt,
     confirmDeletePrompt,
     cancelDeletePrompt,

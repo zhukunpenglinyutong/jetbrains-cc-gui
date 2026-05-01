@@ -22,6 +22,8 @@ interface PromptScopeSectionProps {
   onExport: () => void;
   /** Handler for import */
   onImport: () => void;
+  /** Handler for toggling auto inject */
+  onToggleAutoInject: (prompt: PromptConfig) => void;
 }
 
 export default function PromptScopeSection({
@@ -35,6 +37,7 @@ export default function PromptScopeSection({
   onDelete,
   onExport,
   onImport,
+  onToggleAutoInject,
 }: PromptScopeSectionProps) {
   const { t } = useTranslation();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -132,6 +135,26 @@ export default function PromptScopeSection({
                 className={styles.promptActions}
                 ref={openMenuId === prompt.id ? menuRef : null}
               >
+                <button
+                  className={`${styles.autoInjectButton} ${prompt.autoInject ? styles.autoInjectEnabled : ''}`}
+                  onClick={() => onToggleAutoInject(prompt)}
+                  title={
+                    prompt.autoInject
+                      ? t('settings.prompt.disableAutoInject')
+                      : t('settings.prompt.enableAutoInject')
+                  }
+                  aria-label={
+                    prompt.autoInject
+                      ? t('settings.prompt.disableAutoInject')
+                      : t('settings.prompt.enableAutoInject')
+                  }
+                >
+                  <span
+                    className={`codicon ${
+                      prompt.autoInject ? 'codicon-check' : 'codicon-circle-large-outline'
+                    }`}
+                  />
+                </button>
                 <button
                   className={styles.menuButton}
                   onClick={() => handleMenuToggle(prompt.id)}

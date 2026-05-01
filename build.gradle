@@ -207,7 +207,11 @@ tasks.named('jarSearchableOptions') {
     enabled = false
 }
 
+def defaultRunIdeProjectDir = layout.buildDirectory.dir('run-ide-project')
+
 tasks.named('runIde') {
+    maxHeapSize = (findProperty('runIdeMaxHeap') ?: '4096m').toString()
+
     jvmArgumentProviders.add({
         [
             '-Djcef.sandbox.enable=false',
@@ -245,6 +249,22 @@ tasks.named('runIde') {
 
     // Copy custom configuration to sandbox
     doFirst {
+        def configuredRunIdeProject = findProperty('runIdeProject')
+        def runIdeProjectDir = configuredRunIdeProject
+                ? file(configuredRunIdeProject.toString())
+                : defaultRunIdeProjectDir.get().asFile
+        runIdeProjectDir.mkdirs()
+
+        if (!configuredRunIdeProject) {
+            def sampleFile = new File(runIdeProjectDir, 'README.md')
+            if (!sampleFile.exists()) {
+                sampleFile.text = '# Codemoss runIde sandbox\n\nThis small project keeps the sandbox IDE from indexing the plugin repository.\n'
+            }
+        }
+
+        setArgs([runIdeProjectDir.absolutePath])
+        println "runIde opening project: ${runIdeProjectDir.absolutePath}"
+
         def sandboxConfig = file('sandbox-idea.properties')
         if (sandboxConfig.exists()) {
             def sandboxDir = layout.buildDirectory.dir("idea-sandbox").get().asFile

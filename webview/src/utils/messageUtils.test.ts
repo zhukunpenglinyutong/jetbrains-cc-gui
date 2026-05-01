@@ -231,6 +231,25 @@ describe('mergeConsecutiveAssistantMessages', () => {
     expect(mergedRaw.content?.some((b) => b.type === 'text')).toBe(true);
   });
 
+  it('preserves durationMs from the latest assistant when merging across tool_result boundaries', () => {
+    const messages: ClaudeMessage[] = [
+      makeMsg('assistant', '', {
+        raw: { content: [{ type: 'tool_use', id: 'tool-1', name: 'read_file' }] } as any,
+      }),
+      makeMsg('user', '[tool_result]', {
+        raw: { content: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'file content' }] } as any,
+      }),
+      makeMsg('assistant', 'final answer', {
+        raw: { content: [{ type: 'text', text: 'final answer' }] } as any,
+        durationMs: 8200,
+      }),
+    ];
+
+    const result = mergeConsecutiveAssistantMessages(messages, normalizeBlocks);
+    expect(result).toHaveLength(1);
+    expect(result[0].durationMs).toBe(8200);
+  });
+
   it('keeps tool_use separated from final answer for streaming messages (has __turnId)', () => {
     const messages: ClaudeMessage[] = [
       makeMsg('assistant', '', {
@@ -663,6 +682,15 @@ describe('shouldShowMessage', () => {
       content: 'meta content',
       timestamp: '1',
       raw: { isMeta: true },
+    };
+    expect(shouldShowMessage(msg, mockGetMessageText, mockNormalizeBlocks, mockT)).toBe(false);
+  });
+
+  it('filters unknown/internal message types', () => {
+    const msg: ClaudeMessage = {
+      type: 'developer',
+      content: 'internal instructions',
+      timestamp: '1',
     };
     expect(shouldShowMessage(msg, mockGetMessageText, mockNormalizeBlocks, mockT)).toBe(false);
   });

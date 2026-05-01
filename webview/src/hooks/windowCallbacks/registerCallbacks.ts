@@ -23,6 +23,7 @@ import { buildResetTransientUiState } from './sessionTransition';
 import {
   startActiveProviderRequest,
   startModeRequest,
+  startReasoningEffortRequest,
   startThinkingEnabledRequest,
 } from './settingsBootstrap';
 import { registerMessageCallbacks } from './registerCallbacks/messageCallbacks';
@@ -94,5 +95,6 @@ export function registerWindowCallbacks(
 
   startActiveProviderRequest();
   startModeRequest();
+  startReasoningEffortRequest();
   startThinkingEnabledRequest();
 }

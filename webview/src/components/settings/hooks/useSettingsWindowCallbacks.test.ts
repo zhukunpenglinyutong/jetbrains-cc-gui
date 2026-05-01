@@ -30,6 +30,7 @@ describe('useSettingsWindowCallbacks', () => {
     setSoundNotificationEnabled: vi.fn(),
     setSoundOnlyWhenUnfocused: vi.fn(),
     setSelectedSound: vi.fn(),
+    setBuiltInSounds: vi.fn(),
     setCustomSoundPath: vi.fn(),
     updateProviders: vi.fn(),
     updateActiveProvider: vi.fn(),

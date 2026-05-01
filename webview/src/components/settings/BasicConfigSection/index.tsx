@@ -72,6 +72,7 @@ interface BasicConfigSectionProps {
   soundOnlyWhenUnfocused?: boolean;
   onSoundOnlyWhenUnfocusedChange?: (enabled: boolean) => void;
   selectedSound?: string;
+  builtInSounds?: { id: string; i18nKey?: string; defaultLabel?: string }[];
   onSelectedSoundChange?: (soundId: string) => void;
   customSoundPath?: string;
   onCustomSoundPathChange?: (path: string) => void;
@@ -143,6 +144,7 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           soundOnlyWhenUnfocused={props.soundOnlyWhenUnfocused}
           onSoundOnlyWhenUnfocusedChange={props.onSoundOnlyWhenUnfocusedChange}
           selectedSound={props.selectedSound}
+          builtInSounds={props.builtInSounds}
           onSelectedSoundChange={props.onSelectedSoundChange}
           customSoundPath={props.customSoundPath}
           onCustomSoundPathChange={props.onCustomSoundPathChange}

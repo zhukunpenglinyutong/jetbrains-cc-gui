@@ -28,7 +28,9 @@ public class SettingsHandler extends BaseMessageHandler {
         "get_mode",
         "set_mode",
         "set_model",
+        "bootstrap_model_selection",
         "set_provider",
+        "get_reasoning_effort",
         "set_reasoning_effort",
         "get_node_path",
         "set_node_path",
@@ -111,8 +113,14 @@ public class SettingsHandler extends BaseMessageHandler {
             case "set_model":
                 modelProviderHandler.handleSetModel(content);
                 return true;
+            case "bootstrap_model_selection":
+                modelProviderHandler.handleBootstrapModelSelection(content);
+                return true;
             case "set_provider":
                 modelProviderHandler.handleSetProvider(content);
+                return true;
+            case "get_reasoning_effort":
+                modelProviderHandler.handleGetReasoningEffort();
                 return true;
             case "set_reasoning_effort":
                 modelProviderHandler.handleSetReasoningEffort(content);

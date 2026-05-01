@@ -202,6 +202,9 @@
 
 .promptActions {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .menuButton {
@@ -220,6 +223,33 @@
   &:hover {
     background: var(--bg-hover);
   }
+}
+
+.autoInjectButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+
+  &:hover {
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+    border-color: var(--border-hover, var(--border-secondary));
+  }
+}
+
+.autoInjectEnabled {
+  color: var(--button-primary-background, #0078d4);
+  background: color-mix(in srgb, var(--button-primary-background, #0078d4) 12%, transparent);
+  border-color: color-mix(in srgb, var(--button-primary-background, #0078d4) 45%, transparent);
 }
 
 .dropdownMenu {

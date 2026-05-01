@@ -5,6 +5,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.util.SoundNotificationService;
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
@@ -41,6 +42,7 @@ public class SoundSettingsHandler {
                 response.addProperty("onlyWhenUnfocused", onlyWhenUnfocused);
                 response.addProperty("selectedSound", selectedSound);
                 response.addProperty("customSoundPath", customPath != null ? customPath : "");
+                response.add("builtInSounds", buildBuiltInSoundOptions());
                 context.callJavaScript("window.updateSoundNotificationConfig", context.escapeJs(gson.toJson(response)));
             });
         } catch (Exception e) {
@@ -51,6 +53,7 @@ public class SoundSettingsHandler {
                 response.addProperty("onlyWhenUnfocused", false);
                 response.addProperty("selectedSound", "default");
                 response.addProperty("customSoundPath", "");
+                response.add("builtInSounds", buildBuiltInSoundOptions());
                 context.callJavaScript("window.updateSoundNotificationConfig", context.escapeJs(gson.toJson(response)));
             });
         }
@@ -209,8 +212,10 @@ public class SoundSettingsHandler {
 
                             // Auto-save the selected path and set selectedSound to "custom"
                             boolean enabled = false;
+                            boolean onlyWhenUnfocused = false;
                             try {
                                 enabled = settingsService.getSoundNotificationEnabled();
+                                onlyWhenUnfocused = settingsService.getSoundOnlyWhenUnfocused();
                                 settingsService.setCustomSoundPath(path);
                                 settingsService.setSelectedSound("custom");
                             } catch (Exception e) {
@@ -219,8 +224,10 @@ public class SoundSettingsHandler {
 
                             JsonObject response = new JsonObject();
                             response.addProperty("enabled", enabled);
+                            response.addProperty("onlyWhenUnfocused", onlyWhenUnfocused);
                             response.addProperty("selectedSound", "custom");
                             response.addProperty("customSoundPath", path);
+                            response.add("builtInSounds", buildBuiltInSoundOptions());
                             context.callJavaScript("window.updateSoundNotificationConfig",
                                 context.escapeJs(gson.toJson(response)));
                             context.callJavaScript("window.showSuccessI18n",
@@ -268,7 +275,24 @@ public class SoundSettingsHandler {
             response.addProperty("onlyWhenUnfocused", finalOnlyWhenUnfocused);
             response.addProperty("selectedSound", finalSelectedSound);
             response.addProperty("customSoundPath", finalCustomPath);
+            response.add("builtInSounds", buildBuiltInSoundOptions());
             context.callJavaScript("window.updateSoundNotificationConfig", context.escapeJs(gson.toJson(response)));
         });
+    }
+
+    private JsonArray buildBuiltInSoundOptions() {
+        JsonArray arr = new JsonArray();
+        for (SoundNotificationService.BuiltInSound sound : SoundNotificationService.getBuiltInSounds()) {
+            JsonObject item = new JsonObject();
+            item.addProperty("id", sound.id());
+            if (sound.i18nKey() == null || sound.i18nKey().isEmpty()) {
+                item.addProperty("i18nKey", "");
+            } else {
+                item.addProperty("i18nKey", sound.i18nKey());
+            }
+            item.addProperty("defaultLabel", sound.defaultLabel());
+            arr.add(item);
+        }
+        return arr;
     }
 }

@@ -115,6 +115,11 @@ interface Window {
   onModelChanged?: (modelId: string) => void;
 
   /**
+   * Reasoning effort received callback.
+   */
+  onReasoningEffortReceived?: (effort: string) => void;
+
+  /**
    * Model confirmed callback - called after the backend confirms the model was set successfully
    * @param modelId The confirmed model ID
    * @param provider The current provider
@@ -732,6 +737,16 @@ interface Window {
    * Pending auto open file enabled status before React initialization
    */
   __pendingAutoOpenFileEnabled?: string;
+
+  /**
+   * Pending reasoning effort before React initialization
+   */
+  __pendingReasoningEffortReceived?: string;
+
+  __pendingModelConfirmed?: {
+    modelId?: string;
+    provider?: string;
+  };
 
   __pendingPermissionDialogRequests?: string[];
 

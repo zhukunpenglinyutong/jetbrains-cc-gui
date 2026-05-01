@@ -70,6 +70,8 @@ public class SessionState {
 
     // PSI context collection toggle
     private boolean psiContextEnabled = true;
+    // Whether prompt instructions have been injected into message text in this session
+    private boolean promptInjected = false;
 
     // Getters
     public String getSessionId() {
@@ -140,6 +142,10 @@ public class SessionState {
 
     public boolean isPsiContextEnabled() {
         return psiContextEnabled;
+    }
+
+    public boolean isPromptInjected() {
+        return promptInjected;
     }
 
     // Setters
@@ -219,6 +225,10 @@ public class SessionState {
         this.psiContextEnabled = psiContextEnabled;
     }
 
+    public void setPromptInjected(boolean promptInjected) {
+        this.promptInjected = promptInjected;
+    }
+
     /**
      * Add a message to the history.
      */
@@ -231,6 +241,7 @@ public class SessionState {
      */
     public void clearMessages() {
         messages.clear();
+        promptInjected = false;
     }
 
     /**

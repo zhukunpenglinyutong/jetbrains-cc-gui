@@ -64,8 +64,13 @@ public class TabHandler extends BaseMessageHandler {
                     return;
                 }
 
+                // Prefer inheriting from the current handler context session to ensure
+                // "new tab" clones the tab that triggered this action.
                 TabStateService.TabSessionState inheritedState =
-                        TabSessionStateInheritor.captureForNewTab(project, toolWindow);
+                        TabSessionStateInheritor.captureForNewTab(context.getSession());
+                if (inheritedState == null) {
+                    inheritedState = TabSessionStateInheritor.captureForNewTab(project, toolWindow);
+                }
 
                 // Create a new chat window instance with skipRegister=true (don't replace the main instance)
                 ClaudeChatWindow newChatWindow = new ClaudeChatWindow(project, true);
