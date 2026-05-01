@@ -131,6 +131,22 @@ Footer 包含：
      * Commit message generation callback interface.
      */
     public interface CommitMessageCallback {
+        /**
+         * Called when generation starts, with model information.
+         * @param modelInfo Formatted model info like "claude-sonnet-4.5 (Claude)"
+         */
+        default void onGenerationStart(@NotNull String modelInfo) {
+            // Default: no-op for backward compatibility
+        }
+
+        /**
+         * Called when partial progress is available during generation.
+         * Default implementation does nothing; override to receive progress updates.
+         */
+        default void onProgress(String partialMessage) {
+            // Default: no-op for backward compatibility
+        }
+
         void onSuccess(String commitMessage);
         void onError(String error);
     }
@@ -370,6 +386,69 @@ Footer 包含：
         }
         String model = models.get(provider).getAsString().trim();
         return model.isEmpty() ? null : model;
+    }
+
+    /**
+     * Get the display name for a provider.
+     * @param provider The internal provider identifier (claude/codex)
+     * @return The display name (Claude/Codex)
+     */
+    @NotNull
+    protected String getProviderDisplayName(@NotNull String provider) {
+        if (PROVIDER_CLAUDE.equals(provider)) {
+            return "Claude";
+        } else if (PROVIDER_CODEX.equals(provider)) {
+            return "Codex";
+        }
+        return provider; // Fallback to original
+    }
+
+    /**
+     * Get formatted model information (without icon).
+     * @return Format like "claude-sonnet-4.5 (Claude)"
+     * @throws IOException if reading config fails
+     */
+    @NotNull
+    public String getFormattedModelInfo() throws IOException {
+        JsonObject commitAiConfig = getCommitAiConfig();
+        String effectiveProvider = getResolvedCommitAiProvider(commitAiConfig);
+
+        if (effectiveProvider == null) {
+            return "(" + ClaudeCodeGuiBundle.message("commit.progress.unknownModel") + ")";
+        }
+
+        String model = getResolvedCommitAiModel(commitAiConfig, effectiveProvider);
+        String providerDisplayName = getProviderDisplayName(effectiveProvider);
+
+        if (model == null || model.isEmpty()) {
+            return providerDisplayName;
+        }
+
+        return model + " (" + providerDisplayName + ")";
+    }
+
+    /**
+     * Get model information text for display (with icon).
+     * @return Format like "🤖 使用模型: claude-sonnet-4.5 (Claude)"
+     * @throws IOException if reading config fails
+     */
+    @NotNull
+    public String getModelDisplayText() throws IOException {
+        JsonObject commitAiConfig = getCommitAiConfig();
+        String effectiveProvider = getResolvedCommitAiProvider(commitAiConfig);
+
+        if (effectiveProvider == null) {
+            return "🤖 " + ClaudeCodeGuiBundle.message("commit.progress.unknownModel");
+        }
+
+        String model = getResolvedCommitAiModel(commitAiConfig, effectiveProvider);
+        String providerDisplayName = getProviderDisplayName(effectiveProvider);
+
+        if (model == null || model.isEmpty()) {
+            return "🤖 " + providerDisplayName;
+        }
+
+        return "🤖 " + ClaudeCodeGuiBundle.message("commit.progress.modelInfo", model, providerDisplayName);
     }
 
     /**
