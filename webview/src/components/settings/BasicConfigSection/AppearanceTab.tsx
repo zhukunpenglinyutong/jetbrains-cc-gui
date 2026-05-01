@@ -4,6 +4,12 @@ import { useTranslation } from 'react-i18next';
 import type { DiffThemeMode } from '../../../utils/diffTheme';
 import type { UiFontConfig } from '../hooks/useSettingsBasicActions';
 
+const sendToJava = (message: string) => {
+  if (window.sendToJava) {
+    window.sendToJava(message);
+  }
+};
+
 // Preset colors (module-level constants to avoid recreating on each render)
 const DARK_PRESETS = [
   { color: '#1e1e1e', label: 'Default' },
@@ -279,7 +285,12 @@ const AppearanceTab = ({
     i18n.changeLanguage(language);
     localStorage.setItem('language', language);
     localStorage.setItem('languageManuallySet', 'true');
+    sendToJava(`set_ui_language:${JSON.stringify({ language })}`);
   };
+
+  useEffect(() => {
+    sendToJava(`set_ui_language:${JSON.stringify({ language: currentLanguage })}`);
+  }, [currentLanguage]);
 
   const handleUiFontSelectionChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const nextSelection = event.target.value;

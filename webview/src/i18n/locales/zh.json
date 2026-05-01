@@ -314,6 +314,20 @@
     "commit": {
       "title": "Commit AI",
       "description": "配置 AI 生成 Git Commit 消息的行为",
+      "autoCommit": {
+        "label": "自动提交",
+        "enabled": "已开启",
+        "disabled": "已关闭",
+        "hintEnabled": "每次 AI 任务完成后，若检测到代码变更，插件会自动执行 git add 和 git commit。",
+        "hintDisabled": "AI 只负责改代码，不会自动提交，你需要手动执行 git commit。"
+      },
+      "autoResolveConflicts": {
+        "label": "自动解决冲突",
+        "enabled": "已开启",
+        "disabled": "已关闭",
+        "hintEnabled": "提交时如果遇到同文件冲突，会优先自动合并，尽量保留两边需求。",
+        "hintDisabled": "提交时遇到冲突会暂停，等待你手动处理后再提交。"
+      },
       "prompt": {
         "label": "附加提示词",
         "placeholder": "在此添加您的额外要求，例如：使用中文生成 commit、包含 issue 编号，使用表情符号等等...",

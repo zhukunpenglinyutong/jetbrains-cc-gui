@@ -314,6 +314,20 @@
     "commit": {
       "title": "Commit AI",
       "description": "Configure AI-generated Git commit message behavior",
+      "autoCommit": {
+        "label": "Auto Commit",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hintEnabled": "After each AI task completes, the plugin will automatically run git add and git commit when there are changes.",
+        "hintDisabled": "AI will only modify files. You need to run git commit manually."
+      },
+      "autoResolveConflicts": {
+        "label": "Auto Resolve Conflicts",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hintEnabled": "If commit-time same-file conflicts happen, the plugin will try to auto-merge and preserve both intents.",
+        "hintDisabled": "If conflicts happen during commit, auto commit pauses and waits for manual resolution."
+      },
       "prompt": {
         "label": "Additional Prompt",
         "placeholder": "Add your extra requirements here, e.g., generate commit in English, include issue number, etc...",

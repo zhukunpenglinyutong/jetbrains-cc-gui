@@ -250,6 +250,9 @@ public class ClaudeMessageHandler implements MessageCallback {
             JsonObject messageJson = gson.fromJson(content, JsonObject.class);
             JsonObject previousRaw = currentAssistantMessage != null ? currentAssistantMessage.raw : null;
             JsonObject mergedRaw = messageMerger.mergeAssistantMessage(previousRaw, messageJson);
+            for (String filePath : ToolTouchedFileExtractor.extractFromMessage(mergedRaw)) {
+                state.trackTouchedFile(filePath);
+            }
 
             if (currentAssistantMessage == null) {
                 currentAssistantMessage = new Message(Message.Type.ASSISTANT, "", mergedRaw);

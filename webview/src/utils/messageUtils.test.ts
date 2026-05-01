@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ClaudeMessage } from '../types';
 import {
+  getContentBlocks,
   getMessageKey,
   mergeConsecutiveAssistantMessages,
   formatCommandForDisplay,
@@ -693,6 +694,86 @@ describe('shouldShowMessage', () => {
       timestamp: '1',
     };
     expect(shouldShowMessage(msg, mockGetMessageText, mockNormalizeBlocks, mockT)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getContentBlocks — hide attachment placeholder text when image/attachment exists
+// ---------------------------------------------------------------------------
+
+describe('getContentBlocks', () => {
+  const normalizeUsingRaw = (raw?: any) => {
+    if (!raw || typeof raw !== 'object') return null;
+    const content = Array.isArray(raw.message?.content)
+      ? raw.message.content
+      : Array.isArray(raw.content)
+        ? raw.content
+        : null;
+    if (!Array.isArray(content)) return null;
+
+    const blocks = content.map((entry: any) => {
+      if (!entry || typeof entry !== 'object') return null;
+      if (entry.type === 'image') {
+        if (entry.source?.type === 'base64' && typeof entry.source.data === 'string') {
+          const mediaType = entry.source.media_type ?? 'image/png';
+          return {
+            type: 'image',
+            src: `data:${mediaType};base64,${entry.source.data}`,
+            mediaType,
+          };
+        }
+        return { type: 'image', src: entry.src, mediaType: entry.mediaType };
+      }
+      if (entry.type === 'attachment') {
+        return { type: 'attachment', fileName: entry.fileName, mediaType: entry.mediaType };
+      }
+      if (entry.type === 'text') {
+        return { type: 'text', text: entry.text };
+      }
+      return null;
+    }).filter(Boolean);
+
+    return blocks.length > 0 ? blocks : null;
+  };
+
+  const localize = (text: string) => text;
+
+  it('does not append Uploaded Attachments placeholder when visual block already exists', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: '[Uploaded Attachments: pasted-image-1.png]',
+      timestamp: '1',
+      raw: {
+        message: {
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAA' } } as any,
+          ],
+        },
+      },
+    };
+
+    const blocks = getContentBlocks(msg, normalizeUsingRaw as any, localize);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].type).toBe('image');
+  });
+
+  it('does not append file URI text when visual block already exists', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: 'file:///C:/Users/achie/AppData/Local/PixPin/Temp/PixPin_2026-05-01_18-52-07.png',
+      timestamp: '1',
+      raw: {
+        message: {
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAA' } } as any,
+          ],
+        },
+      },
+    };
+
+    const blocks = getContentBlocks(msg, normalizeUsingRaw as any, localize);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].type).toBe('image');
   });
 });
 

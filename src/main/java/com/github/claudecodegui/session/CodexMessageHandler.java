@@ -108,6 +108,9 @@ public class CodexMessageHandler implements MessageCallback {
         try {
             com.google.gson.Gson gson = new com.google.gson.Gson();
             com.google.gson.JsonObject msgJson = gson.fromJson(jsonContent, com.google.gson.JsonObject.class);
+            for (String filePath : ToolTouchedFileExtractor.extractFromMessage(msgJson)) {
+                state.trackTouchedFile(filePath);
+            }
 
             // Apply v0.1.3-codex filtering logic
             Message parsed = parseServerMessage(msgJson, Message.Type.ASSISTANT);

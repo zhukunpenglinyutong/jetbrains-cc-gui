@@ -23,6 +23,7 @@ import org.jetbrains.annotations.NotNull;
 import javax.swing.*;
 import java.awt.*;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -135,6 +136,20 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             return savedName;
         }
         return TAB_NAME_PREFIX + (index + 1);
+    }
+
+    private static Map<Integer, TabStateService.TabSessionState> snapshotTabSessionStates(
+            @NotNull TabStateService tabStateService,
+            int tabCount
+    ) {
+        Map<Integer, TabStateService.TabSessionState> snapshots = new HashMap<>();
+        for (int i = 0; i < tabCount; i++) {
+            TabStateService.TabSessionState state = tabStateService.getTabSessionState(i);
+            if (state != null) {
+                snapshots.put(i, state);
+            }
+        }
+        return snapshots;
     }
 
     private static void cleanupWindowProcesses(@NotNull ClaudeChatWindow window) {
@@ -413,6 +428,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
     ) {
         TabStateService tabStateService = TabStateService.getInstance(project);
         int savedTabCount = tabStateService.getTabCount();
+        Map<Integer, TabStateService.TabSessionState> sessionSnapshots =
+                snapshotTabSessionStates(tabStateService, savedTabCount);
         LOG.info("[TabManager] Restoring " + savedTabCount + " tabs from storage");
 
         ClaudeChatWindow firstChatWindow = new ClaudeChatWindow(project, false);
@@ -422,7 +439,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         loadingContent.setDisplayName(firstTabName);
         firstChatWindow.setParentContent(loadingContent);
         loadingContent.setDisposer(firstChatWindow::dispose);
-        restoreTabSessionState(tabStateService, 0, firstChatWindow);
+        restoreTabSessionState(sessionSnapshots.get(0), 0, firstChatWindow);
 
         for (int i = 1; i < savedTabCount; i++) {
             ClaudeChatWindow chatWindow = new ClaudeChatWindow(project, true);
@@ -432,7 +449,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             chatWindow.setParentContent(content);
             content.setDisposer(chatWindow::dispose);
             contentManager.addContent(content);
-            restoreTabSessionState(tabStateService, i, chatWindow);
+            restoreTabSessionState(sessionSnapshots.get(i), i, chatWindow);
         }
 
         restoreSelectedTab(contentManager, tabStateService);
@@ -446,6 +463,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
     ) {
         TabStateService tabStateService = TabStateService.getInstance(project);
         int savedTabCount = tabStateService.getTabCount();
+        Map<Integer, TabStateService.TabSessionState> sessionSnapshots =
+                snapshotTabSessionStates(tabStateService, savedTabCount);
         LOG.info("[TabManager] Restoring " + savedTabCount + " tabs from storage");
 
         for (int i = 0; i < savedTabCount; i++) {
@@ -458,15 +477,18 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             chatWindow.setOriginalTabName(tabName);
             content.setDisposer(chatWindow::dispose);
             contentManager.addContent(content);
-            restoreTabSessionState(tabStateService, i, chatWindow);
+            restoreTabSessionState(sessionSnapshots.get(i), i, chatWindow);
         }
 
         restoreSelectedTab(contentManager, tabStateService);
         updateTabCloseableState(contentManager);
     }
 
-    private void restoreTabSessionState(TabStateService tabStateService, int tabIndex, ClaudeChatWindow chatWindow) {
-        TabStateService.TabSessionState savedState = tabStateService.getTabSessionState(tabIndex);
+    private void restoreTabSessionState(
+            TabStateService.TabSessionState savedState,
+            int tabIndex,
+            ClaudeChatWindow chatWindow
+    ) {
         if (savedState == null) {
             return;
         }

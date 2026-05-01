@@ -476,6 +476,98 @@ public class ProjectConfigHandler {
         }
     }
 
+    public void handleGetAutoCommitEnabled() {
+        try {
+            boolean enabled = settingsService.getAutoCommitEnabled();
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject r = new JsonObject();
+                r.addProperty("autoCommitEnabled", enabled);
+                context.callJavaScript("window.updateAutoCommitEnabled", context.escapeJs(gson.toJson(r)));
+            });
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to get auto commit enabled: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject r = new JsonObject();
+                r.addProperty("autoCommitEnabled", false);
+                context.callJavaScript("window.updateAutoCommitEnabled", context.escapeJs(gson.toJson(r)));
+            });
+        }
+    }
+
+    public void handleSetAutoCommitEnabled(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            boolean enabled = json != null
+                && json.has("autoCommitEnabled")
+                && !json.get("autoCommitEnabled").isJsonNull()
+                && json.get("autoCommitEnabled").getAsBoolean();
+            settingsService.setAutoCommitEnabled(enabled);
+            LOG.info("[ProjectConfigHandler] Set auto commit enabled: " + enabled);
+            final boolean finalVal = enabled;
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject r = new JsonObject();
+                r.addProperty("autoCommitEnabled", finalVal);
+                context.callJavaScript("window.updateAutoCommitEnabled", context.escapeJs(gson.toJson(r)));
+            });
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set auto commit enabled: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() ->
+                context.callJavaScript("window.showError", context.escapeJs("保存自动提交配置失败")));
+        }
+    }
+
+    public void handleGetAutoResolveConflictsEnabled() {
+        try {
+            boolean enabled = settingsService.getAutoResolveConflictsEnabled();
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject r = new JsonObject();
+                r.addProperty("autoResolveConflictsEnabled", enabled);
+                context.callJavaScript("window.updateAutoResolveConflictsEnabled", context.escapeJs(gson.toJson(r)));
+            });
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to get auto resolve conflicts enabled: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject r = new JsonObject();
+                r.addProperty("autoResolveConflictsEnabled", false);
+                context.callJavaScript("window.updateAutoResolveConflictsEnabled", context.escapeJs(gson.toJson(r)));
+            });
+        }
+    }
+
+    public void handleSetAutoResolveConflictsEnabled(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            boolean enabled = json != null
+                    && json.has("autoResolveConflictsEnabled")
+                    && !json.get("autoResolveConflictsEnabled").isJsonNull()
+                    && json.get("autoResolveConflictsEnabled").getAsBoolean();
+            settingsService.setAutoResolveConflictsEnabled(enabled);
+            LOG.info("[ProjectConfigHandler] Set auto resolve conflicts enabled: " + enabled);
+            final boolean finalVal = enabled;
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject r = new JsonObject();
+                r.addProperty("autoResolveConflictsEnabled", finalVal);
+                context.callJavaScript("window.updateAutoResolveConflictsEnabled", context.escapeJs(gson.toJson(r)));
+            });
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set auto resolve conflicts enabled: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() ->
+                    context.callJavaScript("window.showError", context.escapeJs("保存自动解决冲突配置失败")));
+        }
+    }
+
+    public void handleSetUiLanguage(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            String language = json != null && json.has("language") && !json.get("language").isJsonNull()
+                    ? json.get("language").getAsString()
+                    : "en";
+            settingsService.setUiLanguage(language);
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set ui language: " + e.getMessage(), e);
+        }
+    }
+
     public void handleGetStatusBarWidgetEnabled() {
         try {
             boolean enabled = settingsService.getStatusBarWidgetEnabled();

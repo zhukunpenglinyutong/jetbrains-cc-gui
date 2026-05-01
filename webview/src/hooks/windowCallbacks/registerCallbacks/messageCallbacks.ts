@@ -24,6 +24,105 @@ import { parseSequence } from '../parseSequence';
 
 const isTruthy = (v: unknown) => v === true || v === 'true';
 
+const parseTimestampMs = (timestamp: unknown): number | null => {
+  if (typeof timestamp !== 'string' || timestamp.trim().length === 0) {
+    return null;
+  }
+  const parsed = Date.parse(timestamp);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const isToolResultOnlyUserMessage = (
+  message: ClaudeMessage,
+  extractRawBlocks: (raw: ClaudeMessage['raw']) => Record<string, unknown>[],
+): boolean => {
+  if (message.type !== 'user') {
+    return false;
+  }
+
+  if ((message.content ?? '').trim() === '[tool_result]') {
+    return true;
+  }
+
+  const blocks = extractRawBlocks(message.raw);
+  if (!Array.isArray(blocks) || blocks.length === 0) {
+    return false;
+  }
+  return blocks.every((block) => block?.type === 'tool_result');
+};
+
+/**
+ * Backfill assistant durationMs for restored history messages.
+ * For each user turn, only stamp the last assistant message:
+ * durationMs = lastAssistant.timestamp - turnUser.timestamp.
+ *
+ * This keeps live-streamed behavior consistent after restart/history reload.
+ */
+function backfillHistoryDurationMs(
+  messages: ClaudeMessage[],
+  extractRawBlocks: (raw: ClaudeMessage['raw']) => Record<string, unknown>[],
+): ClaudeMessage[] {
+  let next = messages;
+  let changed = false;
+  let turnStartedAt: number | null = null;
+  let lastAssistantIndexInTurn = -1;
+
+  const finalizeTurn = () => {
+    if (lastAssistantIndexInTurn < 0 || turnStartedAt == null) {
+      return;
+    }
+    const assistant = next[lastAssistantIndexInTurn];
+    if (!assistant || assistant.type !== 'assistant') {
+      return;
+    }
+    if (typeof assistant.durationMs === 'number') {
+      return;
+    }
+
+    const assistantTimestamp = parseTimestampMs(assistant.timestamp);
+    if (assistantTimestamp == null || assistantTimestamp < turnStartedAt) {
+      return;
+    }
+
+    const durationMs = assistantTimestamp - turnStartedAt;
+    if (durationMs < 0) {
+      return;
+    }
+
+    if (!changed) {
+      next = [...messages];
+      changed = true;
+    }
+    next[lastAssistantIndexInTurn] = {
+      ...assistant,
+      durationMs,
+    };
+  };
+
+  for (let i = 0; i < messages.length; i += 1) {
+    const message = messages[i];
+    if (!message) continue;
+
+    if (message.type === 'user') {
+      if (isToolResultOnlyUserMessage(message, extractRawBlocks)) {
+        continue;
+      }
+
+      finalizeTurn();
+      turnStartedAt = parseTimestampMs(message.timestamp);
+      lastAssistantIndexInTurn = -1;
+      continue;
+    }
+
+    if (message.type === 'assistant') {
+      lastAssistantIndexInTurn = i;
+    }
+  }
+
+  finalizeTurn();
+  return next;
+}
+
 /**
  * Build a lightweight string signature from non-text raw blocks so we can
  * cheaply detect structural changes (new tool_use/tool_result blocks) without
@@ -597,7 +696,8 @@ export function registerMessageCallbacks(
     window.__lastStreamEndedAt = undefined;
     setMessages((prev) => {
       if (prev.length === 0) return prev;
-      return prev.map(m => ({ ...m }));
+      const withDuration = backfillHistoryDurationMs(prev, extractRawBlocks);
+      return withDuration.map(m => ({ ...m }));
     });
   };
 

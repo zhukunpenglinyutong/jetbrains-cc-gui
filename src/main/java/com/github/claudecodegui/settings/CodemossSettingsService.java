@@ -377,6 +377,107 @@ public class CodemossSettingsService {
         LOG.info("[CodemossSettings] Set commit prompt: " + prompt);
     }
 
+    // ==================== Auto Commit Config Management ====================
+
+    /**
+     * Get whether auto commit is enabled.
+     *
+     * @return whether auto commit is enabled, default is false
+     */
+    public boolean getAutoCommitEnabled() throws IOException {
+        JsonObject config = readConfig();
+
+        if (config.has("autoCommitEnabled") && !config.get("autoCommitEnabled").isJsonNull()) {
+            return config.get("autoCommitEnabled").getAsBoolean();
+        }
+
+        return false;
+    }
+
+    /**
+     * Set whether auto commit is enabled.
+     *
+     * @param enabled whether to enable auto commit
+     */
+    public void setAutoCommitEnabled(boolean enabled) throws IOException {
+        JsonObject config = readConfig();
+        config.addProperty("autoCommitEnabled", enabled);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set auto commit enabled: " + enabled);
+    }
+
+    /**
+     * Get whether auto resolve commit conflicts is enabled.
+     *
+     * @return whether auto resolve is enabled, default is false
+     */
+    public boolean getAutoResolveConflictsEnabled() throws IOException {
+        JsonObject config = readConfig();
+        if (config.has("autoResolveConflictsEnabled") && !config.get("autoResolveConflictsEnabled").isJsonNull()) {
+            return config.get("autoResolveConflictsEnabled").getAsBoolean();
+        }
+        return false;
+    }
+
+    /**
+     * Set whether auto resolve commit conflicts is enabled.
+     *
+     * @param enabled whether to enable auto resolve
+     */
+    public void setAutoResolveConflictsEnabled(boolean enabled) throws IOException {
+        JsonObject config = readConfig();
+        config.addProperty("autoResolveConflictsEnabled", enabled);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set auto resolve conflicts enabled: " + enabled);
+    }
+
+    /**
+     * Get preferred UI language (webview setting).
+     * Falls back to current IDEA language when not explicitly set.
+     */
+    public String getUiLanguage() throws IOException {
+        JsonObject config = readConfig();
+        if (config.has("uiLanguage") && !config.get("uiLanguage").isJsonNull()) {
+            return normalizeUiLanguage(config.get("uiLanguage").getAsString());
+        }
+        return com.github.claudecodegui.util.LanguageConfigService.getCurrentLanguage();
+    }
+
+    /**
+     * Persist preferred UI language.
+     */
+    public void setUiLanguage(String language) throws IOException {
+        JsonObject config = readConfig();
+        config.addProperty("uiLanguage", normalizeUiLanguage(language));
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set ui language: " + language);
+    }
+
+    private String normalizeUiLanguage(String language) {
+        if (language == null) {
+            return "en";
+        }
+        String trimmed = language.trim();
+        if (trimmed.isEmpty()) {
+            return "en";
+        }
+        switch (trimmed) {
+            case "zh":
+            case "zh-TW":
+            case "en":
+            case "hi":
+            case "es":
+            case "fr":
+            case "ja":
+            case "ru":
+            case "ko":
+            case "pt-BR":
+                return trimmed;
+            default:
+                return "en";
+        }
+    }
+
     // ==================== UI Font Config Management ====================
 
     /**

@@ -96,6 +96,8 @@ npm run build
 
 ### 3.调试插件
 
+关闭当前 runIde 的 IDE 窗口后重新启动（不要在窗口开着时再跑 gradlew runIde，否则容易再次触发 prepareSandbox 的文件占用错误）
+
 在 IDEA 中运行：
 ```bash
 ./gradlew clean runIde

@@ -170,6 +170,68 @@ describe('useWindowCallbacks integration', () => {
     expect(result.length).toBe(0);
   });
 
+  it('historyLoadComplete backfills durationMs for the last assistant in each user turn', () => {
+    const opts = createOptions({
+      extractRawBlocks: (raw) => {
+        if (!raw || typeof raw !== 'object') return [];
+        const rawObj = raw as { content?: unknown; message?: { content?: unknown } };
+        const content = rawObj.content ?? rawObj.message?.content;
+        return Array.isArray(content) ? (content as Array<Record<string, unknown>>) : [];
+      },
+    });
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      (window as any).historyLoadComplete();
+    });
+
+    expect(opts.setMessages).toHaveBeenCalledTimes(1);
+    const updater = (opts.setMessages as any).mock.calls[0][0] as (prev: ClaudeMessage[]) => ClaudeMessage[];
+
+    const turnStart = '2026-05-01T10:00:00.000Z';
+    const assistant1 = '2026-05-01T10:00:10.000Z';
+    const assistant2 = '2026-05-01T10:00:20.000Z';
+    const assistant3 = '2026-05-01T10:00:35.000Z';
+
+    const previous: ClaudeMessage[] = [
+      { type: 'user', content: '请开始', timestamp: turnStart },
+      {
+        type: 'assistant',
+        content: '先做第一步',
+        timestamp: assistant1,
+      },
+      {
+        type: 'assistant',
+        content: '再做第二步',
+        timestamp: assistant2,
+      },
+      {
+        type: 'user',
+        content: '[tool_result]',
+        timestamp: '2026-05-01T10:00:22.000Z',
+        raw: {
+          message: {
+            content: [
+              { type: 'tool_result', tool_use_id: 'tool-1', content: 'ok' },
+            ],
+          },
+        } as any,
+      },
+      {
+        type: 'assistant',
+        content: '最终回答',
+        timestamp: assistant3,
+      },
+    ];
+
+    const next = updater(previous);
+
+    // Only the last assistant in this turn should get duration
+    expect(next[1].durationMs).toBeUndefined();
+    expect(next[2].durationMs).toBeUndefined();
+    expect(next[4].durationMs).toBe(35_000);
+  });
+
   // ===== setSessionId releases transition guard =====
 
   it('setSessionId releases __sessionTransitioning guard', () => {

@@ -83,6 +83,27 @@ export const ORIGIN_KINDS = {
   CHANNEL: 'channel',
 } as const;
 
+const ATTACHMENT_PLACEHOLDER_PATTERNS: RegExp[] = [
+  /^\[Uploaded attachment\(s\)\]$/i,
+  /^\[Uploaded \d+ image\(s\)\]$/i,
+  /^\[Uploaded Attachments?:[\s\S]*\]$/i,
+  /^\[Attachment:[\s\S]*\]$/i,
+  /^已上传附件[:：]/,
+];
+
+const isAttachmentPlaceholderText = (text: string): boolean => {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  return ATTACHMENT_PLACEHOLDER_PATTERNS.some((pattern) => pattern.test(trimmed));
+};
+
+const isFileUriText = (text: string): boolean => {
+  return /^file:\/\/\//i.test(text.trim());
+};
+
+const hasVisualAttachmentBlocks = (blocks: ClaudeContentBlock[]): boolean =>
+  blocks.some((block) => block.type === 'image' || block.type === 'attachment');
+
 // ---------------------------------------------------------------------------
 // Optimized regex patterns - single pattern instead of multiple matches
 // NOTE: These regexes assume SDK outputs tags in a fixed order
@@ -341,6 +362,12 @@ export function normalizeBlocks(
   }
 
   const buildBlocksFromArray = (entries: unknown[]): ClaudeContentBlock[] => {
+    const hasVisualAttachmentEntry = entries.some((entry) => {
+      if (!entry || typeof entry !== 'object') return false;
+      const candidate = entry as Record<string, unknown>;
+      return candidate.type === 'image' || candidate.type === 'attachment';
+    });
+
     const blocks: ClaudeContentBlock[] = [];
     entries.forEach((entry) => {
       if (!entry || typeof entry !== 'object') {
@@ -352,6 +379,12 @@ export function normalizeBlocks(
         const rawText = typeof candidate.text === 'string' ? candidate.text : '';
         // Some replies contain placeholder text "(no content)", skip to avoid rendering empty content
         if (rawText.trim() === '(no content)') {
+          return;
+        }
+
+        // Attachment/image uploads may contain synthetic placeholder text
+        // that should not be rendered as a separate message line.
+        if (hasVisualAttachmentEntry && (isAttachmentPlaceholderText(rawText) || isFileUriText(rawText))) {
           return;
         }
 
@@ -465,7 +498,7 @@ export function normalizeBlocks(
       }
 
       // Filter empty strings and command tags (without <command-message>)
-      if (!content.trim() || containsAnyTag(content, FILTERED_NORMALIZE_TAGS)) {
+      if (!content.trim() || containsAnyTag(content, FILTERED_NORMALIZE_TAGS) || isAttachmentPlaceholderText(content)) {
         return null;
       }
       return [{ type: 'text' as const, text: localizeMessage(content) }];
@@ -709,6 +742,10 @@ export function getContentBlocks(
       (block) => block.type === 'text' && typeof block.text === 'string' && String(block.text).trim().length > 0,
     );
     if (!hasTextBlock && message.content && message.content.trim()) {
+      const hasVisualAttachment = hasVisualAttachmentBlocks(rawBlocks);
+      if (hasVisualAttachment && (isAttachmentPlaceholderText(message.content) || isFileUriText(message.content))) {
+        return rawBlocks;
+      }
       return [...rawBlocks, { type: 'text', text: localizeMessage(message.content) }];
     }
     return rawBlocks;

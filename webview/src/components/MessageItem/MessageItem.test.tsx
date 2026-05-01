@@ -151,3 +151,79 @@ describe('MessageItem copy button visibility', () => {
     expect(screen.queryAllByTestId('content-block-tool_use')).toHaveLength(0);
   });
 });
+
+describe('MessageItem duration display', () => {
+  it('shows pure seconds as Chinese unit text', () => {
+    const message: ClaudeMessage = {
+      type: 'assistant',
+      durationMs: 14_000,
+      raw: {
+        content: [{ type: 'text', text: 'ok' }],
+      } as any,
+    };
+
+    renderMessageItem(message);
+
+    expect(screen.queryByText('本次耗时')).toBeNull();
+    expect(screen.getByText('14秒')).toBeTruthy();
+    expect(screen.queryByText('0:14')).toBeNull();
+  });
+
+  it('shows minutes and seconds as Chinese unit text', () => {
+    const message: ClaudeMessage = {
+      type: 'assistant',
+      durationMs: 74_000,
+      raw: {
+        content: [{ type: 'text', text: 'ok' }],
+      } as any,
+    };
+
+    renderMessageItem(message);
+
+    expect(screen.getByText('1分14秒')).toBeTruthy();
+  });
+
+  it('omits seconds when second value is zero', () => {
+    const message: ClaudeMessage = {
+      type: 'assistant',
+      durationMs: 60_000,
+      raw: {
+        content: [{ type: 'text', text: 'ok' }],
+      } as any,
+    };
+
+    renderMessageItem(message);
+
+    expect(screen.getByText('1分')).toBeTruthy();
+    expect(screen.queryByText('1分0秒')).toBeNull();
+  });
+
+  it('omits minutes when minute value is zero', () => {
+    const message: ClaudeMessage = {
+      type: 'assistant',
+      durationMs: 3_605_000,
+      raw: {
+        content: [{ type: 'text', text: 'ok' }],
+      } as any,
+    };
+
+    renderMessageItem(message);
+
+    expect(screen.getByText('1时5秒')).toBeTruthy();
+    expect(screen.queryByText('1时0分5秒')).toBeNull();
+  });
+
+  it('supports day and hour units', () => {
+    const message: ClaudeMessage = {
+      type: 'assistant',
+      durationMs: 129_600_000,
+      raw: {
+        content: [{ type: 'text', text: 'ok' }],
+      } as any,
+    };
+
+    renderMessageItem(message);
+
+    expect(screen.getByText('1天12时')).toBeTruthy();
+  });
+});

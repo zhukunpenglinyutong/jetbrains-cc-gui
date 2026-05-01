@@ -159,6 +159,12 @@ const SettingsView = ({
     commitGenerationEnabled,
     setCommitGenerationEnabled,
     handleCommitGenerationEnabledChange,
+    autoCommitEnabled,
+    setAutoCommitEnabled,
+    handleAutoCommitEnabledChange,
+    autoResolveConflictsEnabled,
+    setAutoResolveConflictsEnabled,
+    handleAutoResolveConflictsEnabledChange,
     statusBarWidgetEnabled,
     setStatusBarWidgetEnabled,
     handleStatusBarWidgetEnabledChange,
@@ -295,6 +301,8 @@ const SettingsView = ({
     setBuiltInSounds,
     setCustomSoundPath,
     setCommitGenerationEnabled,
+    setAutoCommitEnabled,
+    setAutoResolveConflictsEnabled,
     setStatusBarWidgetEnabled,
   });
 
@@ -516,6 +524,10 @@ const SettingsView = ({
               onCommitPromptChange={setCommitPrompt}
               onSaveCommitPrompt={handleSaveCommitPrompt}
               savingCommitPrompt={savingCommitPrompt}
+              autoCommitEnabled={autoCommitEnabled}
+              onAutoCommitEnabledChange={handleAutoCommitEnabledChange}
+              autoResolveConflictsEnabled={autoResolveConflictsEnabled}
+              onAutoResolveConflictsEnabledChange={handleAutoResolveConflictsEnabledChange}
             />
           </div>
 

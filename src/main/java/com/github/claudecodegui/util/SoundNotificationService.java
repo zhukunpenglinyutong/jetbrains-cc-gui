@@ -11,6 +11,7 @@ import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.Clip;
 import javax.sound.sampled.LineEvent;
 import javax.sound.sampled.UnsupportedAudioFileException;
+import java.awt.Toolkit;
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -138,11 +139,37 @@ public class SoundNotificationService {
                 }
 
                 String selectedSound = settings.getSelectedSound();
-                playBySelection(selectedSound, settings.getCustomSoundPath());
+                playTaskCompleteSoundWithFallback(selectedSound, settings.getCustomSoundPath());
             } catch (Exception e) {
                 LOG.warn("[SoundNotification] Failed to play notification sound: " + e.getMessage(), e);
             }
         });
+    }
+
+    /**
+     * Play task-complete sound with graceful fallback:
+     * selected sound -> default bundled sound -> system beep.
+     */
+    private void playTaskCompleteSoundWithFallback(String selectedSound, String customPath) {
+        try {
+            playBySelection(selectedSound, customPath);
+            return;
+        } catch (Exception primaryError) {
+            LOG.warn("[SoundNotification] Selected sound playback failed, fallback to default: " + primaryError.getMessage());
+        }
+
+        try {
+            playFromResource(SOUND_RESOURCES.get("default"));
+            return;
+        } catch (Exception fallbackError) {
+            LOG.warn("[SoundNotification] Default sound playback failed, fallback to system beep: " + fallbackError.getMessage());
+        }
+
+        try {
+            Toolkit.getDefaultToolkit().beep();
+        } catch (Exception beepError) {
+            LOG.warn("[SoundNotification] System beep failed: " + beepError.getMessage(), beepError);
+        }
     }
 
     /**
@@ -188,6 +215,23 @@ public class SoundNotificationService {
      * Play audio from a bundled resource.
      */
     private void playFromResource(String resourcePath) throws Exception {
+        if (resourcePath == null || resourcePath.isEmpty()) {
+            LOG.warn("[SoundNotification] Sound resource path is empty");
+            return;
+        }
+
+        String lowerPath = resourcePath.toLowerCase(Locale.ROOT);
+        if (lowerPath.endsWith(".mp3")) {
+            try (InputStream rawStream = getClass().getResourceAsStream(resourcePath)) {
+                if (rawStream == null) {
+                    LOG.warn("[SoundNotification] Sound resource not found: " + resourcePath);
+                    return;
+                }
+                playMp3(rawStream);
+                return;
+            }
+        }
+
         try (InputStream rawStream = getClass().getResourceAsStream(resourcePath)) {
             if (rawStream == null) {
                 LOG.warn("[SoundNotification] Sound resource not found: " + resourcePath);
@@ -271,7 +315,16 @@ public class SoundNotificationService {
      * Play MP3 with JLayer (called from a background thread and blocks until playback completes or times out).
      */
     private void playMp3(File file) throws Exception {
-        try (BufferedInputStream bufferedStream = new BufferedInputStream(new FileInputStream(file))) {
+        try (InputStream inputStream = new FileInputStream(file)) {
+            playMp3(inputStream);
+        }
+    }
+
+    /**
+     * Play MP3 from any input stream (resource or file) with JLayer.
+     */
+    private void playMp3(InputStream inputStream) throws Exception {
+        try (BufferedInputStream bufferedStream = new BufferedInputStream(inputStream)) {
             Player player = new Player(bufferedStream);
             CountDownLatch latch = new CountDownLatch(1);
 

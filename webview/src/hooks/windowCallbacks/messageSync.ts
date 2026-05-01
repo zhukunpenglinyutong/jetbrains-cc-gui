@@ -16,6 +16,43 @@ export const OPTIMISTIC_MESSAGE_TIME_WINDOW = 5000;
 // Raw-field helpers
 // ---------------------------------------------------------------------------
 
+const getRawContentBlocks = (msg: ClaudeMessage | undefined): unknown[] => {
+  const raw = msg?.raw;
+  if (!raw || typeof raw !== 'object') return [];
+
+  const rawObj = raw as Record<string, unknown>;
+  if (rawObj.message && typeof rawObj.message === 'object') {
+    const messageObj = rawObj.message as Record<string, unknown>;
+    if (Array.isArray(messageObj.content)) {
+      return messageObj.content;
+    }
+  }
+  if (Array.isArray(rawObj.content)) {
+    return rawObj.content;
+  }
+  return [];
+};
+
+const getRawTextContent = (msg: ClaudeMessage | undefined): string => {
+  const lines: string[] = [];
+  for (const block of getRawContentBlocks(msg)) {
+    if (!block || typeof block !== 'object') continue;
+    const candidate = block as Record<string, unknown>;
+    if (candidate.type === 'text' && typeof candidate.text === 'string') {
+      lines.push(candidate.text);
+    }
+  }
+  return lines.join('\n');
+};
+
+const hasVisualAttachmentBlock = (msg: ClaudeMessage | undefined): boolean => {
+  return getRawContentBlocks(msg).some((block) => {
+    if (!block || typeof block !== 'object') return false;
+    const candidate = block as Record<string, unknown>;
+    return candidate.type === 'image' || candidate.type === 'attachment';
+  });
+};
+
 export const getRawUuid = (msg: ClaudeMessage | undefined): string | undefined => {
   const raw = msg?.raw;
   if (!raw || typeof raw !== 'object') return undefined;
@@ -78,16 +115,42 @@ export const appendOptimisticMessageIfMissing = (
   if (!lastPrev?.isOptimistic) return nextList;
 
   const optimisticMsg = lastPrev;
+  const optimisticRawText = getRawTextContent(optimisticMsg);
+  const optimisticHasVisualAttachment = hasVisualAttachmentBlock(optimisticMsg);
 
-  const matchFn = (m: ClaudeMessage) =>
-    m.type === 'user' &&
-    (m.content === optimisticMsg.content ||
-      m.content === (optimisticMsg.raw as any)?.message?.content?.[0]?.text) &&
-    m.timestamp &&
-    optimisticMsg.timestamp &&
-    Math.abs(
+  const matchFn = (m: ClaudeMessage) => {
+    if (m.type !== 'user' || !m.timestamp || !optimisticMsg.timestamp) {
+      return false;
+    }
+
+    const withinWindow = Math.abs(
       new Date(m.timestamp).getTime() - new Date(optimisticMsg.timestamp).getTime(),
     ) < OPTIMISTIC_MESSAGE_TIME_WINDOW;
+    if (!withinWindow) {
+      return false;
+    }
+
+    const candidateContent = m.content ?? '';
+    const optimisticContent = optimisticMsg.content ?? '';
+    const candidateRawText = getRawTextContent(m);
+
+    const contentMatches =
+      (optimisticContent.length > 0 && candidateContent === optimisticContent) ||
+      (optimisticRawText.length > 0 &&
+        (candidateContent === optimisticRawText || candidateRawText === optimisticRawText));
+    if (contentMatches) {
+      return true;
+    }
+
+    // Attachment-only optimistic messages may be represented by backend summary
+    // text (e.g. "[Uploaded Attachments: ...]"). In that case, rely on
+    // timestamp + attachment/image presence to avoid duplicate user bubbles.
+    if (optimisticHasVisualAttachment && hasVisualAttachmentBlock(m)) {
+      return true;
+    }
+
+    return false;
+  };
 
   const matchedIndex = nextList.findIndex(matchFn);
   if (matchedIndex < 0) {

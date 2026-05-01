@@ -83,13 +83,18 @@ const CopyButton = memo(function CopyButton({
 
 function formatDurationMs(durationMs: number): string {
   const seconds = Math.max(0, Math.floor(durationMs / 1000));
-  const hours = Math.floor(seconds / 3600);
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
-  const remainder = seconds % 60;
-  if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
-  }
-  return `${minutes}:${String(remainder).padStart(2, '0')}`;
+  const remainderSeconds = seconds % 60;
+  const parts: string[] = [];
+
+  if (days > 0) parts.push(`${days}天`);
+  if (hours > 0) parts.push(`${hours}时`);
+  if (minutes > 0) parts.push(`${minutes}分`);
+  if (remainderSeconds > 0 || parts.length === 0) parts.push(`${remainderSeconds}秒`);
+
+  return parts.join('');
 }
 
 function isToolBlockOfType(block: ClaudeContentBlock, toolNames: Set<string>): boolean {
@@ -580,7 +585,6 @@ export const MessageItem = memo(function MessageItem({
         <div className="message-duration">
           <span className="message-duration-inner">
             <span className="message-duration-flag codicon codicon-clock"></span>
-            <span className="message-duration-cost">{t('chat.totalDuration')}</span>
             <span className="message-duration-value">{formatDurationMs(message.durationMs)}</span>
           </span>
         </div>

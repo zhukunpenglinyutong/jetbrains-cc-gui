@@ -245,6 +245,40 @@ describe('appendOptimisticMessageIfMissing', () => {
     const hasAttachment = raw.message.content.some((b: any) => b.type === 'attachment');
     expect(hasAttachment).toBe(true);
   });
+
+  it('matches backend user message by attachment presence for attachment-only optimistic sends', () => {
+    const ts = new Date().toISOString();
+    const optimistic = makeUserMsg('', {
+      isOptimistic: true,
+      timestamp: ts,
+      raw: {
+        message: {
+          content: [
+            { type: 'image', src: 'data:image/png;base64,AAA' },
+          ],
+        },
+      } as any,
+    });
+
+    const backendMsg = makeUserMsg('[Uploaded Attachments: pasted-image.png]', {
+      timestamp: ts,
+      raw: {
+        message: {
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAA' } },
+            { type: 'text', text: '[Uploaded Attachments: pasted-image.png]' },
+          ],
+        },
+      } as any,
+    });
+
+    const prev = [optimistic];
+    const next = [backendMsg];
+
+    const result = appendOptimisticMessageIfMissing(prev, next);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe(backendMsg);
+  });
 });
 
 // ---------------------------------------------------------------------------

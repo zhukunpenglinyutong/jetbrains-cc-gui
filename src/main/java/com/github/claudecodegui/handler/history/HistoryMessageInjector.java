@@ -145,11 +145,63 @@ class HistoryMessageInjector {
      */
     static List<JsonObject> convertCodexMessagesToFrontendBatch(JsonArray messages) {
         List<JsonObject> frontendMessages = new ArrayList<>();
+        String activeTurnId = null;
+        int lastAssistantIndexInActiveTurn = -1;
+        int lastAssistantIndexGlobal = -1;
+
         for (int i = 0; i < messages.size(); i++) {
             JsonObject msg = messages.get(i).getAsJsonObject();
+            if (msg == null || !msg.has("type")) {
+                continue;
+            }
+
+            String msgType = msg.get("type").getAsString();
+            if ("event_msg".equals(msgType)) {
+                JsonObject payload = msg.has("payload") ? msg.getAsJsonObject("payload") : null;
+                if (payload != null && payload.has("type")) {
+                    String eventType = payload.get("type").getAsString();
+                    if ("task_started".equals(eventType)) {
+                        activeTurnId = payload.has("turn_id") && !payload.get("turn_id").isJsonNull()
+                            ? payload.get("turn_id").getAsString()
+                            : null;
+                        lastAssistantIndexInActiveTurn = -1;
+                    } else if ("task_complete".equals(eventType)) {
+                        long durationMs = payload.has("duration_ms") && !payload.get("duration_ms").isJsonNull()
+                            ? payload.get("duration_ms").getAsLong()
+                            : 0L;
+                        if (durationMs > 0) {
+                            int targetIdx = lastAssistantIndexInActiveTurn >= 0
+                                ? lastAssistantIndexInActiveTurn
+                                : lastAssistantIndexGlobal;
+                            if (targetIdx >= 0 && targetIdx < frontendMessages.size()) {
+                                JsonObject target = frontendMessages.get(targetIdx);
+                                if (!target.has("durationMs")) {
+                                    target.addProperty("durationMs", durationMs);
+                                }
+                            }
+                        }
+
+                        String completedTurnId = payload.has("turn_id") && !payload.get("turn_id").isJsonNull()
+                            ? payload.get("turn_id").getAsString()
+                            : null;
+                        if (activeTurnId == null || completedTurnId == null || activeTurnId.equals(completedTurnId)) {
+                            activeTurnId = null;
+                            lastAssistantIndexInActiveTurn = -1;
+                        }
+                    }
+                }
+                continue;
+            }
+
             JsonObject frontendMsg = convertCodexMessageToFrontend(msg);
             if (frontendMsg != null) {
                 frontendMessages.add(frontendMsg);
+                if (frontendMsg.has("type") && "assistant".equals(frontendMsg.get("type").getAsString())) {
+                    lastAssistantIndexGlobal = frontendMessages.size() - 1;
+                    if (activeTurnId != null) {
+                        lastAssistantIndexInActiveTurn = lastAssistantIndexGlobal;
+                    }
+                }
             }
         }
         return frontendMessages;

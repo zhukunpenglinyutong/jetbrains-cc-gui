@@ -261,6 +261,16 @@ interface Window {
   updateCommitGenerationEnabled?: (json: string) => void;
 
   /**
+   * Update auto commit enabled state
+   */
+  updateAutoCommitEnabled?: (json: string) => void;
+
+  /**
+   * Update auto resolve conflicts enabled state
+   */
+  updateAutoResolveConflictsEnabled?: (json: string) => void;
+
+  /**
    * Update status bar widget enabled state
    */
   updateStatusBarWidgetEnabled?: (json: string) => void;

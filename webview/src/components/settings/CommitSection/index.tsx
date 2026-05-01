@@ -6,6 +6,10 @@ interface CommitSectionProps {
   onCommitPromptChange: (prompt: string) => void;
   onSaveCommitPrompt: () => void;
   savingCommitPrompt: boolean;
+  autoCommitEnabled: boolean;
+  onAutoCommitEnabledChange: (enabled: boolean) => void;
+  autoResolveConflictsEnabled: boolean;
+  onAutoResolveConflictsEnabledChange: (enabled: boolean) => void;
 }
 
 const CommitSection = ({
@@ -13,6 +17,10 @@ const CommitSection = ({
   onCommitPromptChange,
   onSaveCommitPrompt,
   savingCommitPrompt,
+  autoCommitEnabled,
+  onAutoCommitEnabledChange,
+  autoResolveConflictsEnabled,
+  onAutoResolveConflictsEnabledChange,
 }: CommitSectionProps) => {
   const { t } = useTranslation();
 
@@ -20,6 +28,64 @@ const CommitSection = ({
     <div className={styles.configSection}>
       <h3 className={styles.sectionTitle}>{t('settings.commit.title')}</h3>
       <p className={styles.sectionDesc}>{t('settings.commit.description')}</p>
+
+      <div className={styles.autoCommitSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-git-commit" />
+          <span className={styles.fieldLabel}>{t('settings.commit.autoCommit.label')}</span>
+        </div>
+        <label className={styles.toggleWrapper}>
+          <input
+            type="checkbox"
+            className={styles.toggleInput}
+            checked={autoCommitEnabled}
+            onChange={(e) => onAutoCommitEnabledChange(e.target.checked)}
+          />
+          <span className={styles.toggleSlider} />
+          <span className={styles.toggleLabel}>
+            {autoCommitEnabled
+              ? t('settings.commit.autoCommit.enabled')
+              : t('settings.commit.autoCommit.disabled')}
+          </span>
+        </label>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>
+            {autoCommitEnabled
+              ? t('settings.commit.autoCommit.hintEnabled')
+              : t('settings.commit.autoCommit.hintDisabled')}
+          </span>
+        </small>
+      </div>
+
+      <div className={styles.autoCommitSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-git-merge" />
+          <span className={styles.fieldLabel}>{t('settings.commit.autoResolveConflicts.label')}</span>
+        </div>
+        <label className={styles.toggleWrapper}>
+          <input
+            type="checkbox"
+            className={styles.toggleInput}
+            checked={autoResolveConflictsEnabled}
+            onChange={(e) => onAutoResolveConflictsEnabledChange(e.target.checked)}
+          />
+          <span className={styles.toggleSlider} />
+          <span className={styles.toggleLabel}>
+            {autoResolveConflictsEnabled
+              ? t('settings.commit.autoResolveConflicts.enabled')
+              : t('settings.commit.autoResolveConflicts.disabled')}
+          </span>
+        </label>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>
+            {autoResolveConflictsEnabled
+              ? t('settings.commit.autoResolveConflicts.hintEnabled')
+              : t('settings.commit.autoResolveConflicts.hintDisabled')}
+          </span>
+        </small>
+      </div>
 
       {/* Commit AI prompt configuration */}
       <div className={styles.promptSection}>

@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
+import com.github.claudecodegui.handler.CodexMessageConverter;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
@@ -472,11 +473,78 @@ public class CodexSDKBridge extends BaseSDKBridge {
     }
 
     /**
-     * Get session history messages (Codex doesn't support this, returns empty list).
+     * Get session history messages from local Codex history files and convert them
+     * to frontend-compatible messages so restart can restore tab content.
      */
     public List<JsonObject> getSessionMessages(String sessionId, String cwd) {
-        LOG.info("getSessionMessages not supported by Codex SDK");
-        return new ArrayList<>();
+        if (sessionId == null || sessionId.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        try {
+            CodexHistoryReader codexHistoryReader = new CodexHistoryReader();
+            String rawMessagesJson = codexHistoryReader.getSessionMessagesAsJson(sessionId.trim());
+
+            JsonElement parsed = gson.fromJson(rawMessagesJson, JsonElement.class);
+            if (parsed == null || !parsed.isJsonArray()) {
+                LOG.warn("[CodexHistory] Invalid history payload for sessionId=" + sessionId);
+                return new ArrayList<>();
+            }
+
+            JsonArray rawMessages = parsed.getAsJsonArray();
+            List<JsonObject> frontendMessages = new ArrayList<>();
+            for (JsonElement element : rawMessages) {
+                if (!element.isJsonObject()) {
+                    continue;
+                }
+                JsonObject frontendMessage = convertCodexHistoryMessageToFrontend(element.getAsJsonObject());
+                if (frontendMessage != null) {
+                    frontendMessages.add(frontendMessage);
+                }
+            }
+
+            LOG.info("[CodexHistory] Restored " + frontendMessages.size()
+                    + " messages for sessionId=" + sessionId);
+            return frontendMessages;
+        } catch (Exception e) {
+            LOG.warn("[CodexHistory] Failed to load session messages for sessionId="
+                    + sessionId + ": " + e.getMessage(), e);
+            return new ArrayList<>();
+        }
+    }
+
+    private JsonObject convertCodexHistoryMessageToFrontend(JsonObject rawMessage) {
+        if (rawMessage == null
+                || !rawMessage.has("type")
+                || !"response_item".equals(rawMessage.get("type").getAsString())
+                || !rawMessage.has("payload")
+                || !rawMessage.get("payload").isJsonObject()) {
+            return null;
+        }
+
+        JsonObject payload = rawMessage.getAsJsonObject("payload");
+        if (!payload.has("type") || payload.get("type").isJsonNull()) {
+            return null;
+        }
+
+        String payloadType = payload.get("type").getAsString();
+        String timestamp = rawMessage.has("timestamp") && !rawMessage.get("timestamp").isJsonNull()
+                ? rawMessage.get("timestamp").getAsString()
+                : null;
+
+        if ("message".equals(payloadType)) {
+            return CodexMessageConverter.convertCodexMessageToFrontend(payload, timestamp);
+        }
+        if ("function_call".equals(payloadType)) {
+            return CodexMessageConverter.convertFunctionCallToToolUse(payload, timestamp);
+        }
+        if ("function_call_output".equals(payloadType)) {
+            return CodexMessageConverter.convertFunctionCallOutputToToolResult(payload, timestamp);
+        }
+        if ("custom_tool_call".equals(payloadType)) {
+            return CodexMessageConverter.convertCustomToolCallToToolUse(payload, timestamp);
+        }
+        return null;
     }
 
     /**

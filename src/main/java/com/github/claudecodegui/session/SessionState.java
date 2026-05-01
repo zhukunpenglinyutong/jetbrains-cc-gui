@@ -5,6 +5,7 @@ import com.github.claudecodegui.session.ClaudeSession;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -72,6 +73,8 @@ public class SessionState {
     private boolean psiContextEnabled = true;
     // Whether prompt instructions have been injected into message text in this session
     private boolean promptInjected = false;
+    // Candidate files touched by tool_use in the current turn.
+    private final Set<String> turnTouchedFiles = Collections.synchronizedSet(new LinkedHashSet<>());
 
     // Getters
     public String getSessionId() {
@@ -227,6 +230,31 @@ public class SessionState {
 
     public void setPromptInjected(boolean promptInjected) {
         this.promptInjected = promptInjected;
+    }
+
+    public void beginTurnFileTracking() {
+        synchronized (turnTouchedFiles) {
+            turnTouchedFiles.clear();
+        }
+    }
+
+    public void trackTouchedFile(String path) {
+        if (path == null) {
+            return;
+        }
+        String normalized = path.trim();
+        if (normalized.isEmpty()) {
+            return;
+        }
+        turnTouchedFiles.add(normalized);
+    }
+
+    public Set<String> consumeTurnTouchedFiles() {
+        synchronized (turnTouchedFiles) {
+            Set<String> copy = new LinkedHashSet<>(turnTouchedFiles);
+            turnTouchedFiles.clear();
+            return copy;
+        }
     }
 
     /**
