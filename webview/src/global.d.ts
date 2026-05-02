@@ -780,6 +780,11 @@ interface Window {
   __pendingSummaryText?: string;
 
   /**
+   * Pending history load completion signal before callbacks are registered.
+   */
+  __pendingHistoryLoadComplete?: boolean;
+
+  /**
    * Pending user message before addUserMessage is registered (for Quick Fix feature)
    */
   __pendingUserMessage?: string;

@@ -9,6 +9,7 @@ interface ContextMenuState {
   hasSelection: boolean;
   savedRange: Range | null;
   selectedText: string;
+  targetImageSrc: string;
 }
 
 function placeCursorAfterRemoval(
@@ -54,7 +55,7 @@ function restoreRange(range: Range | null): void {
 
 export function useContextMenu() {
   const [state, setState] = useState<ContextMenuState>({
-    visible: false, x: 0, y: 0, hasSelection: false, savedRange: null, selectedText: '',
+    visible: false, x: 0, y: 0, hasSelection: false, savedRange: null, selectedText: '', targetImageSrc: '',
   });
   const targetFileTagRef = useRef<HTMLElement | null>(null);
 
@@ -62,7 +63,10 @@ export function useContextMenu() {
     e.preventDefault();
     const sel = window.getSelection();
     const textSelection = sel?.toString() ?? '';
-    const fileTag = (e.target as HTMLElement | null)?.closest('.file-tag') as HTMLElement | null;
+    const target = e.target as HTMLElement | null;
+    const fileTag = target?.closest('.file-tag') as HTMLElement | null;
+    const image = target?.closest('img') as HTMLImageElement | null;
+    const targetImageSrc = image?.getAttribute('src')?.trim() ?? '';
     const fileTagPath = fileTag?.getAttribute('data-file-path')?.trim() ?? '';
     // When right-clicking on a file tag, copy its full @path reference instead of misjudging as "no selection".
     const selectedText = textSelection.trim().length > 0
@@ -78,6 +82,7 @@ export function useContextMenu() {
       hasSelection,
       savedRange,
       selectedText,
+      targetImageSrc,
     });
   }, []);
 
@@ -92,6 +97,12 @@ export function useContextMenu() {
 export function copySelection(_savedRange: Range | null, text: string): void {
   if (!text) return;
   sendToJava('write_clipboard', text);
+}
+
+/** Copy image from message area to system clipboard via Java bridge */
+export function copyImageSelection(imageSrc: string): void {
+  if (!imageSrc) return;
+  sendToJava('write_clipboard_image', { src: imageSrc });
 }
 
 /** Cut saved selection text via Java bridge (for contenteditable) */

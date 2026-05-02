@@ -32,7 +32,9 @@ public class SessionIndexManager {
     // scan for mtime-driven re-read of already indexed sessions. Bumping forces rebuild of any
     // v2 index, which was produced by the legacy full-parser and has different metadata semantics
     // (title/messageCount/lastTimestamp) than the lite-read pipeline.
-    private static final int INDEX_VERSION = 3;
+    // v4 (2026-05): messageCount switched from head-only approximation to exact per-file
+    // counting during lite-read metadata extraction; old index counts can be underreported.
+    private static final int INDEX_VERSION = 4;
 
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 

@@ -3,12 +3,15 @@ package com.github.claudecodegui.provider.common;
 import com.google.gson.Gson;
 import com.intellij.openapi.diagnostic.Logger;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.function.Predicate;
 
 /**
  * Lightweight session file reader that only reads head and tail chunks.
@@ -385,5 +388,35 @@ public class SessionLiteReader {
             count++;
         }
         return count;
+    }
+
+    /**
+     * Count lines in a file that match a caller-supplied predicate.
+     * <p>
+     * This is used when exact per-session message counts are needed for large JSONL files,
+     * where head-only counting underestimates totals.
+     *
+     * @param path    file path
+     * @param matcher per-line match predicate
+     * @return matching line count, or -1 on I/O failure
+     */
+    public int countMatchingLines(Path path, Predicate<String> matcher) {
+        if (path == null || matcher == null) {
+            return -1;
+        }
+
+        int count = 0;
+        try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (matcher.test(line)) {
+                    count++;
+                }
+            }
+            return count;
+        } catch (IOException e) {
+            LOG.debug("[SessionLiteReader] Failed to count lines: " + path + " - " + e.getMessage());
+            return -1;
+        }
     }
 }

@@ -16,6 +16,7 @@ import {
 import { ContentBlockRenderer } from './ContentBlockRenderer';
 import { formatTime } from '../../utils/helpers';
 import { copyToClipboard } from '../../utils/copyUtils';
+import { copyImageSelection } from '../../hooks/useContextMenu.js';
 import { READ_TOOL_NAMES, EDIT_TOOL_NAMES, BASH_TOOL_NAMES, SEARCH_TOOL_NAMES, isToolName } from '../../utils/toolConstants';
 
 export interface MessageItemProps {
@@ -259,6 +260,8 @@ export const MessageItem = memo(function MessageItem({
 
   const isLastAssistantMessage = message.type === 'assistant' && isLast;
   const isMessageStreaming = streamingActive && isLastAssistantMessage;
+  // Memoize blocks once and reuse for rendering + copy behavior decisions
+  const blocks = useMemo(() => getContentBlocks(message), [message, getContentBlocks]);
 
   // Cache markdown content extraction for better performance
   const markdownContent = useMemo(() => {
@@ -269,12 +272,37 @@ export const MessageItem = memo(function MessageItem({
     return '';
   }, [message, extractMarkdownContent]);
   const hasCopyableText = markdownContent.trim().length > 0;
+  const firstImageSrc = useMemo(() => {
+    const imageBlock = blocks.find((block) => {
+      if (block.type !== 'image') return false;
+      return typeof block.src === 'string' && block.src.trim().length > 0;
+    });
+    return imageBlock?.type === 'image' && typeof imageBlock.src === 'string'
+      ? imageBlock.src.trim()
+      : '';
+  }, [blocks]);
+  const hasNonEmptyTextBlock = useMemo(
+    () => blocks.some((block) => block.type === 'text' && typeof block.text === 'string' && block.text.trim().length > 0),
+    [blocks]
+  );
+  // For image-only messages, copy button should behave like Ctrl+C on image (copy bitmap).
+  const shouldCopyImage = firstImageSrc.length > 0 && !hasNonEmptyTextBlock;
+  const canCopyMessage = shouldCopyImage || hasCopyableText;
+  const copyButtonLabel = shouldCopyImage
+    ? t('contextMenu.copyImage', 'Copy Image')
+    : t('markdown.copyMessage');
 
   const handleCopyMessage = useCallback(async () => {
     // Prevent copying if message is empty or already in "copied" state
-    if (!hasCopyableText || copiedMessageIndex === messageIndex) return;
+    if (!canCopyMessage || copiedMessageIndex === messageIndex) return;
 
-    const success = await copyToClipboard(markdownContent);
+    let success = false;
+    if (shouldCopyImage) {
+      copyImageSelection(firstImageSrc);
+      success = true;
+    } else if (hasCopyableText) {
+      success = await copyToClipboard(markdownContent);
+    }
     if (success) {
       setCopiedMessageIndex(messageIndex);
 
@@ -289,7 +317,15 @@ export const MessageItem = memo(function MessageItem({
         copyTimeoutRef.current = null;
       }, 1500);
     }
-  }, [hasCopyableText, markdownContent, messageIndex, copiedMessageIndex]);
+  }, [
+    canCopyMessage,
+    copiedMessageIndex,
+    firstImageSrc,
+    hasCopyableText,
+    markdownContent,
+    messageIndex,
+    shouldCopyImage,
+  ]);
 
   // Cleanup timeout on unmount to prevent memory leaks
   useEffect(() => {
@@ -301,8 +337,6 @@ export const MessageItem = memo(function MessageItem({
     };
   }, []);
 
-  // Memoize blocks and grouped blocks to avoid recalculation on every render
-  const blocks = useMemo(() => getContentBlocks(message), [message, getContentBlocks]);
   const isEmptyStreamingPlaceholder =
     message.type === 'assistant' &&
     isMessageStreaming &&
@@ -547,12 +581,12 @@ export const MessageItem = memo(function MessageItem({
           <div className="message-timestamp-header">
             {formatTime(message.timestamp)}
           </div>
-          {hasCopyableText && (
+          {canCopyMessage && (
             <CopyButton
               className="message-copy-btn-inline"
               isCopied={copiedMessageIndex === messageIndex}
               onClick={handleCopyMessage}
-              copyLabel={t('markdown.copyMessage')}
+              copyLabel={copyButtonLabel}
               copySuccessText={t('markdown.copySuccess')}
             />
           )}
@@ -560,11 +594,11 @@ export const MessageItem = memo(function MessageItem({
       )}
 
       {/* Copy button for assistant messages only */}
-      {message.type === 'assistant' && !isMessageStreaming && hasCopyableText && (
+      {message.type === 'assistant' && !isMessageStreaming && canCopyMessage && (
         <CopyButton
           isCopied={copiedMessageIndex === messageIndex}
           onClick={handleCopyMessage}
-          copyLabel={t('markdown.copyMessage')}
+          copyLabel={copyButtonLabel}
           copySuccessText={t('markdown.copySuccess')}
         />
       )}

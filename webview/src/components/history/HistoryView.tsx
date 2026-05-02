@@ -107,6 +107,8 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Copy status timeout timer
   const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null); // Track which session ID was copied
   const [copyFailedSessionId, setCopyFailedSessionId] = useState<string | null>(null); // Track which session ID copy failed
+  const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(new Set());
+  const [showClearAllConfirm, setShowClearAllConfirm] = useState(false);
 
   // Clean up all timeout timers on unmount
   useEffect(() => {
@@ -172,6 +174,17 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
     // Merge: favorited first, unfavorited after
     return [...favorited, ...unfavorited];
   }, [historyData?.sessions, searchQuery]);
+
+  useEffect(() => {
+    setSelectedSessionIds(prev => {
+      if (prev.size === 0) {
+        return prev;
+      }
+      const validIds = new Set(sessions.map(s => s.sessionId));
+      const next = new Set(Array.from(prev).filter(id => validIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [sessions]);
 
   const infoBar = useMemo(() => {
     if (!historyData) {
@@ -266,12 +279,62 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
     if (deletingSessionId) {
       onDeleteSession(deletingSessionId);
       setDeletingSessionId(null);
+      setSelectedSessionIds(prev => {
+        const next = new Set(prev);
+        next.delete(deletingSessionId);
+        return next;
+      });
     }
   };
 
   // Cancel deletion
   const cancelDelete = () => {
     setDeletingSessionId(null);
+  };
+
+  const handleToggleSelectSession = (sessionId: string) => {
+    setSelectedSessionIds(prev => {
+      const next = new Set(prev);
+      if (next.has(sessionId)) {
+        next.delete(sessionId);
+      } else {
+        next.add(sessionId);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedSessionIds.size === sessions.length) {
+      setSelectedSessionIds(new Set());
+      return;
+    }
+    setSelectedSessionIds(new Set(sessions.map(s => s.sessionId)));
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedSessionIds.size === 0) {
+      return;
+    }
+    selectedSessionIds.forEach(sessionId => onDeleteSession(sessionId));
+    setSelectedSessionIds(new Set());
+  };
+
+  const handleClearAll = () => {
+    if (sessions.length === 0) {
+      return;
+    }
+    setShowClearAllConfirm(true);
+  };
+
+  const confirmClearAll = () => {
+    sessions.forEach(session => onDeleteSession(session.sessionId));
+    setSelectedSessionIds(new Set());
+    setShowClearAllConfirm(false);
+  };
+
+  const cancelClearAll = () => {
+    setShowClearAllConfirm(false);
   };
 
   // Handle edit button click
@@ -384,6 +447,14 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
 
     return (
       <div key={`${session.sessionId}-${session.lastTimestamp ?? '0'}`} className="history-item" onClick={() => !isEditing && onLoadSession(session.sessionId)}>
+        <div className="history-item-select" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={selectedSessionIds.has(session.sessionId)}
+            onChange={() => handleToggleSelectSession(session.sessionId)}
+            aria-label={t('history.selectSession')}
+          />
+        </div>
         <div className="history-item-header">
           <div className="history-item-title">
             {/* Provider Logo */}
@@ -521,7 +592,35 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div className="history-header">
-        <div className="history-info">{infoBar}</div>
+        <div className="history-header-left">
+          <button
+            type="button"
+            className="history-select-all-btn"
+            onClick={handleSelectAll}
+            disabled={sessions.length === 0}
+          >
+            {t('history.selectAll')}
+          </button>
+          <div className="history-info">{infoBar}</div>
+        </div>
+        <div className="history-header-actions">
+          <button
+            type="button"
+            className="history-header-action-btn danger"
+            onClick={handleDeleteSelected}
+            disabled={selectedSessionIds.size === 0}
+          >
+            {t('history.deleteSelected')}
+          </button>
+          <button
+            type="button"
+            className="history-header-action-btn danger"
+            onClick={handleClearAll}
+            disabled={sessions.length === 0}
+          >
+            {t('history.clearAll')}
+          </button>
+        </div>
         {/* Deep search button */}
         <button
           className={`history-deep-search-btn ${isDeepSearching ? 'searching' : ''}`}
@@ -572,6 +671,22 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
               </button>
               <button className="modal-btn modal-btn-danger" onClick={confirmDelete}>
                 {t('common.delete')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showClearAllConfirm && (
+        <div className="modal-overlay" onClick={cancelClearAll}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3>{t('history.confirmClearAll')}</h3>
+            <p>{t('history.clearAllMessage')}</p>
+            <div className="modal-actions">
+              <button className="modal-btn modal-btn-cancel" onClick={cancelClearAll}>
+                {t('common.cancel')}
+              </button>
+              <button className="modal-btn modal-btn-danger" onClick={confirmClearAll}>
+                {t('history.clearAll')}
               </button>
             </div>
           </div>

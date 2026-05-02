@@ -36,14 +36,69 @@ public class MessageJsonConverter {
         for (ClaudeSession.Message msg : messages) {
             JsonObject msgObj = new JsonObject();
             msgObj.addProperty("type", msg.type.toString().toLowerCase());
-            msgObj.addProperty("timestamp", msg.timestamp);
+            addTransportTimestamp(msgObj, msg);
             msgObj.addProperty("content", truncateErrorContent(msg.content != null ? msg.content : ""));
+            copyDurationMsIfPresent(msgObj, msg);
             if (msg.raw != null) {
                 msgObj.add("raw", truncateRawForTransport(msg.raw));
             }
             messagesArray.add(msgObj);
         }
         return gson.toJson(messagesArray);
+    }
+
+    /**
+     * Prefer history-provided raw timestamp when available so restored messages keep
+     * their original ordering and frontend duration backfill has stable inputs.
+     */
+    private static void addTransportTimestamp(JsonObject msgObj, ClaudeSession.Message msg) {
+        if (msg != null && msg.raw != null && msg.raw.has("timestamp") && !msg.raw.get("timestamp").isJsonNull()) {
+            JsonElement rawTimestamp = msg.raw.get("timestamp");
+            if (rawTimestamp != null && rawTimestamp.isJsonPrimitive()) {
+                try {
+                    if (rawTimestamp.getAsJsonPrimitive().isNumber()) {
+                        msgObj.addProperty("timestamp", rawTimestamp.getAsLong());
+                        return;
+                    }
+                    if (rawTimestamp.getAsJsonPrimitive().isString()) {
+                        String timestamp = rawTimestamp.getAsString();
+                        if (timestamp != null && !timestamp.trim().isEmpty()) {
+                            msgObj.addProperty("timestamp", timestamp);
+                            return;
+                        }
+                    }
+                } catch (Exception ignored) {
+                    // Fall back to in-memory timestamp.
+                }
+            }
+        }
+        msgObj.addProperty("timestamp", msg.timestamp);
+    }
+
+    /**
+     * Preserve durationMs if provider history conversion already computed it.
+     */
+    private static void copyDurationMsIfPresent(JsonObject msgObj, ClaudeSession.Message msg) {
+        if (msg == null || msg.raw == null || !msg.raw.has("durationMs") || msg.raw.get("durationMs").isJsonNull()) {
+            return;
+        }
+        try {
+            JsonElement rawDuration = msg.raw.get("durationMs");
+            if (rawDuration != null && rawDuration.isJsonPrimitive()) {
+                if (rawDuration.getAsJsonPrimitive().isNumber()) {
+                    msgObj.addProperty("durationMs", rawDuration.getAsLong());
+                    return;
+                }
+                if (rawDuration.getAsJsonPrimitive().isString()) {
+                    String durationText = rawDuration.getAsString();
+                    if (durationText != null && !durationText.trim().isEmpty()) {
+                        msgObj.addProperty("durationMs", Long.parseLong(durationText.trim()));
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // Ignore malformed duration and keep rendering without duration.
+        }
     }
 
     /**

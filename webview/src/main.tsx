@@ -443,6 +443,15 @@ if (typeof window !== 'undefined' && !window.showSummary) {
   };
 }
 
+// Pre-register historyLoadComplete to avoid losing early backend calls that
+// arrive before React callback registration.
+if (typeof window !== 'undefined' && !window.historyLoadComplete) {
+  console.log('[Main] Pre-registering historyLoadComplete placeholder');
+  window.historyLoadComplete = () => {
+    window.__pendingHistoryLoadComplete = true;
+  };
+}
+
 // Pre-register updateSlashCommands to handle backend calls that arrive before React initializes
 if (typeof window !== 'undefined' && !window.updateSlashCommands) {
   console.log('[Main] Pre-registering updateSlashCommands placeholder');

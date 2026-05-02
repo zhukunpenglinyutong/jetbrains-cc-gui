@@ -492,16 +492,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
             }
 
             JsonArray rawMessages = parsed.getAsJsonArray();
-            List<JsonObject> frontendMessages = new ArrayList<>();
-            for (JsonElement element : rawMessages) {
-                if (!element.isJsonObject()) {
-                    continue;
-                }
-                JsonObject frontendMessage = convertCodexHistoryMessageToFrontend(element.getAsJsonObject());
-                if (frontendMessage != null) {
-                    frontendMessages.add(frontendMessage);
-                }
-            }
+            List<JsonObject> frontendMessages = convertCodexHistoryMessagesToFrontend(rawMessages);
 
             LOG.info("[CodexHistory] Restored " + frontendMessages.size()
                     + " messages for sessionId=" + sessionId);
@@ -513,7 +504,102 @@ public class CodexSDKBridge extends BaseSDKBridge {
         }
     }
 
-    private JsonObject convertCodexHistoryMessageToFrontend(JsonObject rawMessage) {
+    static List<JsonObject> convertCodexHistoryMessagesToFrontend(JsonArray rawMessages) {
+        List<JsonObject> frontendMessages = new ArrayList<>();
+        String activeTurnId = null;
+        int lastAssistantIndexInActiveTurn = -1;
+        int lastAssistantIndexGlobal = -1;
+
+        for (JsonElement element : rawMessages) {
+            if (!element.isJsonObject()) {
+                continue;
+            }
+
+            JsonObject rawMessage = element.getAsJsonObject();
+            String rawType = readStringField(rawMessage, "type");
+            if ("event_msg".equals(rawType)) {
+                JsonObject payload = rawMessage.has("payload") && rawMessage.get("payload").isJsonObject()
+                        ? rawMessage.getAsJsonObject("payload")
+                        : null;
+                if (payload != null) {
+                    String eventType = readStringField(payload, "type");
+                    if ("task_started".equals(eventType) || "turn_started".equals(eventType)) {
+                        activeTurnId = readStringField(payload, "turn_id");
+                        lastAssistantIndexInActiveTurn = -1;
+                    } else if ("task_complete".equals(eventType) || "turn_complete".equals(eventType)) {
+                        long durationMs = readDurationMs(payload);
+                        if (durationMs > 0) {
+                            int targetIdx = lastAssistantIndexInActiveTurn >= 0
+                                    ? lastAssistantIndexInActiveTurn
+                                    : lastAssistantIndexGlobal;
+                            if (targetIdx >= 0 && targetIdx < frontendMessages.size()) {
+                                JsonObject target = frontendMessages.get(targetIdx);
+                                if (!target.has("durationMs")) {
+                                    target.addProperty("durationMs", durationMs);
+                                }
+                            }
+                        }
+
+                        String completedTurnId = readStringField(payload, "turn_id");
+                        if (activeTurnId == null || completedTurnId == null || activeTurnId.equals(completedTurnId)) {
+                            activeTurnId = null;
+                            lastAssistantIndexInActiveTurn = -1;
+                        }
+                    }
+                }
+                continue;
+            }
+
+            JsonObject frontendMessage = convertCodexHistoryMessageToFrontend(rawMessage);
+            if (frontendMessage == null) {
+                continue;
+            }
+
+            frontendMessages.add(frontendMessage);
+            if (frontendMessage.has("type") && "assistant".equals(readStringField(frontendMessage, "type"))) {
+                lastAssistantIndexGlobal = frontendMessages.size() - 1;
+                if (activeTurnId != null) {
+                    lastAssistantIndexInActiveTurn = lastAssistantIndexGlobal;
+                }
+            }
+        }
+
+        return frontendMessages;
+    }
+
+    private static String readStringField(JsonObject obj, String fieldName) {
+        if (obj == null || fieldName == null || !obj.has(fieldName) || obj.get(fieldName).isJsonNull()) {
+            return null;
+        }
+        try {
+            return obj.get(fieldName).getAsString();
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static long readDurationMs(JsonObject payload) {
+        if (payload == null) {
+            return 0L;
+        }
+        try {
+            if (payload.has("duration_ms") && !payload.get("duration_ms").isJsonNull()) {
+                return payload.get("duration_ms").getAsLong();
+            }
+        } catch (Exception ignored) {
+            // fall through
+        }
+        try {
+            if (payload.has("duration") && !payload.get("duration").isJsonNull()) {
+                return payload.get("duration").getAsLong();
+            }
+        } catch (Exception ignored) {
+            // fall through
+        }
+        return 0L;
+    }
+
+    private static JsonObject convertCodexHistoryMessageToFrontend(JsonObject rawMessage) {
         if (rawMessage == null
                 || !rawMessage.has("type")
                 || !"response_item".equals(rawMessage.get("type").getAsString())

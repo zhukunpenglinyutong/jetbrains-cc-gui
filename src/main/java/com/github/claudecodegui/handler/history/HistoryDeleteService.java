@@ -5,6 +5,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.cache.SessionIndexCache;
 import com.github.claudecodegui.cache.SessionIndexManager;
+import com.github.claudecodegui.ui.toolwindow.ClaudeSDKToolWindow;
 import com.github.claudecodegui.util.PathUtils;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.intellij.openapi.diagnostic.Logger;
@@ -67,6 +68,7 @@ class HistoryDeleteService {
 
                 if (mainDeleted) {
                     cleanupSessionMetadata(sessionId);
+                    ClaudeSDKToolWindow.closeTabsBySessionId(context.getProject(), sessionId);
                 }
                 cleanupCache(currentProvider);
 

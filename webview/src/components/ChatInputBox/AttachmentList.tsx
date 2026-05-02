@@ -2,6 +2,9 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Attachment, AttachmentListProps } from './types';
 import { isImageAttachment } from './types';
+import { ContextMenu } from '../ContextMenu';
+import { copyImageSelection, useContextMenu } from '../../hooks/useContextMenu.js';
+import { ImagePreviewOverlay } from '../ImagePreviewOverlay';
 
 /**
  * AttachmentList - Attachment list component
@@ -14,6 +17,7 @@ export const AttachmentList = ({
 }: AttachmentListProps) => {
   const { t } = useTranslation();
   const [previewImage, setPreviewImage] = useState<Attachment | null>(null);
+  const previewCtxMenu = useContextMenu();
 
   /**
    * Handle attachment click
@@ -40,8 +44,20 @@ export const AttachmentList = ({
    * Close preview
    */
   const closePreview = useCallback(() => {
+    previewCtxMenu.close();
     setPreviewImage(null);
-  }, []);
+  }, [previewCtxMenu]);
+
+  const imageContextMenuItems = [
+    {
+      label: t('contextMenu.copyImage', 'Copy Image'),
+      action: () => copyImageSelection(previewCtxMenu.targetImageSrc),
+    },
+    {
+      label: t('contextMenu.closePreview', 'Close Preview'),
+      action: closePreview,
+    },
+  ];
 
   /**
    * Get file icon
@@ -104,26 +120,48 @@ export const AttachmentList = ({
 
       {/* Image preview dialog */}
       {previewImage && (
-        <div
-          className="image-preview-overlay"
-          onClick={closePreview}
-          onKeyDown={(e) => e.key === 'Escape' && closePreview()}
-          tabIndex={0}
-        >
-          <img
-            className="image-preview-content"
-            src={`data:${previewImage.mediaType};base64,${previewImage.data}`}
-            alt={previewImage.fileName}
-            onClick={(e) => e.stopPropagation()}
-          />
-          <button
-            className="image-preview-close"
+        <ImagePreviewOverlay>
+          <div
+            className="image-preview-overlay"
             onClick={closePreview}
-            title={t('chat.closePreview')}
+            onKeyDown={(e) => e.key === 'Escape' && closePreview()}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if ((e.target as HTMLElement | null)?.closest('img')) {
+                previewCtxMenu.open(e);
+              }
+            }}
+            tabIndex={0}
           >
-            ×
-          </button>
-        </div>
+            <img
+              className="image-preview-content"
+              src={`data:${previewImage.mediaType};base64,${previewImage.data}`}
+              alt={previewImage.fileName}
+              onClick={(e) => e.stopPropagation()}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                previewCtxMenu.open(e);
+              }}
+            />
+            <button
+              className="image-preview-close"
+              onClick={closePreview}
+              title={t('chat.closePreview')}
+            >
+              ×
+            </button>
+          </div>
+        </ImagePreviewOverlay>
+      )}
+      {previewCtxMenu.visible && previewCtxMenu.targetImageSrc && (
+        <ContextMenu
+          x={previewCtxMenu.x}
+          y={previewCtxMenu.y}
+          onClose={previewCtxMenu.close}
+          items={imageContextMenuItems}
+        />
       )}
     </>
   );

@@ -287,6 +287,15 @@ public class DetachedChatFrame extends JFrame {
     }
 
     /**
+     * Force-close detached tab without confirmation dialogs.
+     * Used when the underlying session is deleted from history.
+     */
+    public void disposeFromExternalDeletion() {
+        LOG.info("[DetachedChatFrame] External delete closing detached tab: " + originalTabName);
+        disposeSessionImmediately(false);
+    }
+
+    /**
      * Dispose the session and close the window.
      */
     private void disposeSession() {

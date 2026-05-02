@@ -182,4 +182,36 @@ public class SessionLiteReaderTest {
         assertEquals(0, reader.countMessagesInHead(null));
         assertEquals(0, reader.countMessagesInHead(""));
     }
+
+    @Test
+    public void countMatchingLines_countsByPredicate() throws IOException {
+        Path tempFile = Files.createTempFile("test-count-matching", ".jsonl");
+        try {
+            String content = "{\"type\":\"response_item\"}\n"
+                    + "{\"type\":\"event_msg\"}\n"
+                    + "{\"type\": \"response_item\"}\n";
+            Files.writeString(tempFile, content);
+
+            int count = reader.countMatchingLines(
+                    tempFile,
+                    line -> line.contains("\"type\":\"response_item\"")
+                            || line.contains("\"type\": \"response_item\"")
+            );
+            assertEquals(2, count);
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+    }
+
+    @Test
+    public void countMatchingLines_missingFile_returnsMinusOne() throws IOException {
+        Path tempDir = Files.createTempDirectory("missing-count-lines");
+        Path missing = tempDir.resolve("nope.jsonl");
+        try {
+            int count = reader.countMatchingLines(missing, line -> true);
+            assertEquals(-1, count);
+        } finally {
+            Files.deleteIfExists(tempDir);
+        }
+    }
 }

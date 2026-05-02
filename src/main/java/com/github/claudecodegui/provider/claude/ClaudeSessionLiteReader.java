@@ -82,7 +82,7 @@ public class ClaudeSessionLiteReader {
             return null;
         }
 
-        return this.parseSessionInfoFromLite(sessionId, lite);
+        return this.parseSessionInfoFromLite(sessionId, lite, sessionPath);
     }
 
     /**
@@ -96,6 +96,14 @@ public class ClaudeSessionLiteReader {
     public ClaudeLiteSessionInfo parseSessionInfoFromLite(
             String sessionId,
             SessionLiteReader.LiteSessionFile lite
+    ) {
+        return parseSessionInfoFromLite(sessionId, lite, null);
+    }
+
+    private ClaudeLiteSessionInfo parseSessionInfoFromLite(
+            String sessionId,
+            SessionLiteReader.LiteSessionFile lite,
+            Path sessionPath
     ) {
         if (lite == null || sessionId == null) {
             return null;
@@ -152,8 +160,7 @@ public class ClaudeSessionLiteReader {
             }
         }
 
-        // Count messages in head (approximation)
-        int messageCount = this.liteReader.countMessagesInHead(lite.head);
+        int messageCount = countMessagesExactly(sessionPath, lite);
 
         return new ClaudeLiteSessionInfo(
                 sessionId,
@@ -224,5 +231,29 @@ public class ClaudeSessionLiteReader {
      */
     public SessionLiteReader getLiteReader() {
         return this.liteReader;
+    }
+
+    private int countMessagesExactly(Path sessionPath, SessionLiteReader.LiteSessionFile lite) {
+        if (lite == null || lite.head == null) {
+            return 0;
+        }
+
+        if (sessionPath != null && lite.size > SessionLiteReader.LITE_READ_BUF_SIZE) {
+            int exactCount = this.liteReader.countMatchingLines(
+                    sessionPath,
+                    line -> {
+                        if (line == null || line.trim().isEmpty()) {
+                            return false;
+                        }
+                        return !line.contains("\"isSidechain\":true") && !line.contains("\"isSidechain\": true");
+                    }
+            );
+            if (exactCount >= 0) {
+                return exactCount;
+            }
+        }
+
+        // Fallback for synthetic tests or when file read fails.
+        return this.liteReader.countMessagesInHead(lite.head);
     }
 }

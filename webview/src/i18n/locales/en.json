@@ -91,6 +91,14 @@
     "showEarlierMessages": "Show {{count}} earlier messages",
     "totalDuration": "This reply took"
   },
+  "contextMenu": {
+    "copy": "Copy",
+    "cut": "Cut",
+    "paste": "Paste",
+    "newline": "Insert Newline",
+    "copyImage": "Copy Image",
+    "closePreview": "Close Preview"
+  },
   "settings": {
     "title": "Settings",
     "basic": {
@@ -325,7 +333,7 @@
         "label": "Auto Resolve Conflicts",
         "enabled": "Enabled",
         "disabled": "Disabled",
-        "hintEnabled": "If commit-time same-file conflicts happen, the plugin will try to auto-merge and preserve both intents.",
+        "hintEnabled": "If same-file conflicts occur at commit time, the plugin will prioritize auto-merge and preserve intent from all sides.",
         "hintDisabled": "If conflicts happen during commit, auto commit pauses and waits for manual resolution."
       },
       "prompt": {
@@ -382,6 +390,12 @@
           "minutesAgo_other": "{{count}} minutes ago",
           "justNow": "just now"
         }
+      },
+      "tabAutoRename": {
+        "label": "Tab Auto Rename",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "When enabled, AI will automatically rename the tab based on new requirements (up to 8 characters)."
       }
     },
     "codexFeatureUnavailable": "This settings section is not available in Codex yet. Please switch to Claude Code.",
@@ -823,6 +837,12 @@
     "copySessionId": "Copy session ID for CLI resume",
     "sessionIdCopied": "Session ID copied",
     "copyFailed": "Copy failed",
+    "selectSession": "Select session",
+    "selectAll": "Select all",
+    "deleteSelected": "Delete",
+    "clearAll": "Clear",
+    "confirmClearAll": "Confirm clear",
+    "clearAllMessage": "Are you sure you want to clear all sessions in the current list? This action cannot be undone.",
     "timeAgo": {
       "yearsAgo": "years ago",
       "monthsAgo": "months ago",

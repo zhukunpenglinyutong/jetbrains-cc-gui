@@ -4,7 +4,7 @@ vi.mock('../utils/bridge.js', () => ({
 
 import { act, renderHook } from '@testing-library/react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
-import { cutSelection, useContextMenu } from './useContextMenu.js';
+import { copyImageSelection, cutSelection, useContextMenu } from './useContextMenu.js';
 import { sendToJava } from '../utils/bridge.js';
 
 function mockSelection(options?: {
@@ -98,5 +98,32 @@ describe('useContextMenu', () => {
     expect(focusSpy).toHaveBeenCalled();
     expect(selection.removeAllRanges).toHaveBeenCalled();
     expect(selection.addRange).toHaveBeenCalledTimes(1);
+  });
+
+  it('captures image source when right-clicking on an image', () => {
+    mockSelection({ text: '', rangeCount: 0 });
+    const image = document.createElement('img');
+    image.setAttribute('src', 'data:image/png;base64,AAAA');
+
+    const { result } = renderHook(() => useContextMenu());
+
+    act(() => {
+      result.current.open({
+        preventDefault: vi.fn(),
+        clientX: 8,
+        clientY: 16,
+        target: image,
+      } as unknown as ReactMouseEvent);
+    });
+
+    expect(result.current.visible).toBe(true);
+    expect(result.current.hasSelection).toBe(false);
+    expect(result.current.targetImageSrc).toBe('data:image/png;base64,AAAA');
+  });
+
+  it('sends image copy request to Java bridge', () => {
+    copyImageSelection('https://example.com/demo.png');
+
+    expect(sendToJava).toHaveBeenCalledWith('write_clipboard_image', { src: 'https://example.com/demo.png' });
   });
 });

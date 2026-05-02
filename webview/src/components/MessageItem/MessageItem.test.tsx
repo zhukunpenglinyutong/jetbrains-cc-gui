@@ -33,6 +33,7 @@ const t = ((key: string) => {
   const translations: Record<string, string> = {
     'markdown.copyMessage': '复制消息',
     'markdown.copySuccess': '已复制',
+    'contextMenu.copyImage': '复制图片',
     'chat.streamingConnected': '已连接',
     'chat.totalDuration': '本次耗时',
   };
@@ -149,6 +150,26 @@ describe('MessageItem copy button visibility', () => {
 
     expect(screen.getByTestId('bash-tool-group-block')).toBeTruthy();
     expect(screen.queryAllByTestId('content-block-tool_use')).toHaveLength(0);
+  });
+
+  it('shows image-copy button for image-only user messages', () => {
+    const message: ClaudeMessage = {
+      type: 'user',
+      timestamp: '2026-05-02T00:00:00.000Z',
+      raw: {
+        content: [
+          {
+            type: 'image',
+            src: 'data:image/png;base64,AAAA',
+          },
+        ],
+      } as any,
+      content: 'file:///C:/tmp/demo.png',
+    };
+
+    renderMessageItem(message);
+
+    expect(screen.getByRole('button', { name: '复制图片' })).toBeTruthy();
   });
 });
 

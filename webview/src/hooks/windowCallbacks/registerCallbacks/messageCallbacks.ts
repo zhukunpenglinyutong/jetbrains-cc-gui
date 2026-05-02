@@ -25,10 +25,18 @@ import { parseSequence } from '../parseSequence';
 const isTruthy = (v: unknown) => v === true || v === 'true';
 
 const parseTimestampMs = (timestamp: unknown): number | null => {
+  if (typeof timestamp === 'number') {
+    return Number.isFinite(timestamp) ? timestamp : null;
+  }
   if (typeof timestamp !== 'string' || timestamp.trim().length === 0) {
     return null;
   }
-  const parsed = Date.parse(timestamp);
+  const trimmed = timestamp.trim();
+  if (/^\d+(\.\d+)?$/.test(trimmed)) {
+    const numeric = Number(trimmed);
+    return Number.isFinite(numeric) ? numeric : null;
+  }
+  const parsed = Date.parse(trimmed);
   return Number.isFinite(parsed) ? parsed : null;
 };
 
@@ -541,6 +549,10 @@ export function registerMessageCallbacks(
   }
 
   window.updateStatus = (text) => {
+    const normalized = (text || '').trim().toLowerCase();
+    if (normalized.startsWith('error:') || normalized.startsWith('错误')) {
+      sendBridgeEvent('tab_status_changed', JSON.stringify({ status: 'error' }));
+    }
     // Do not release the transition guard from generic status updates.
     setStatus(text);
     if (suppressNextStatusToastRef.current) {
@@ -560,6 +572,11 @@ export function registerMessageCallbacks(
 
     // Notify backend about loading state change for tab indicator
     sendBridgeEvent('tab_loading_changed', JSON.stringify({ loading: isLoading }));
+    // For non-streaming completion paths, explicitly mark completed.
+    // Streaming paths already emit completed in onStreamEnd.
+    if (!isLoading && !isStreamingRef.current) {
+      sendBridgeEvent('tab_status_changed', JSON.stringify({ status: 'completed' }));
+    }
 
     setLoading((prevLoading) => {
       if (isLoading) {
@@ -679,6 +696,7 @@ export function registerMessageCallbacks(
   };
 
   window.addErrorMessage = (message) => {
+    sendBridgeEvent('tab_status_changed', JSON.stringify({ status: 'error' }));
     addToast(message, 'error');
   };
 
@@ -700,6 +718,11 @@ export function registerMessageCallbacks(
       return withDuration.map(m => ({ ...m }));
     });
   };
+
+  if (window.__pendingHistoryLoadComplete) {
+    delete window.__pendingHistoryLoadComplete;
+    window.historyLoadComplete();
+  }
 
   window.addUserMessage = (content: string) => {
     if (window.__sessionTransitioning) return;

@@ -36,6 +36,7 @@ import com.intellij.ui.jcef.JBCefBrowser;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.geom.Ellipse2D;
 
 /**
  * Chat window instance. Coordinates UI components, session management,
@@ -44,6 +45,9 @@ import java.awt.*;
 public class ClaudeChatWindow {
 
     private static final Logger LOG = Logger.getInstance(ClaudeChatWindow.class);
+    private static final Icon ANSWERING_DOT_ICON = new ColorDotIcon(8, new Color(46, 139, 255));
+    private static final Icon COMPLETED_DOT_ICON = new ColorDotIcon(8, new Color(52, 199, 89));
+    private static final Icon ERROR_DOT_ICON = new ColorDotIcon(8, new Color(255, 69, 58));
 
     private final JPanel mainPanel;
     private final ClaudeSDKBridge claudeSDKBridge;
@@ -293,6 +297,7 @@ public class ClaudeChatWindow {
                 ? name.substring(0, name.length() - 3)
                 : name;
         LOG.debug("[TabLoading] Set original tab name: " + this.originalTabName);
+        chatWindowDelegate.refreshTabStatusDisplay();
     }
 
     public boolean isDisposed() {
@@ -358,9 +363,15 @@ public class ClaudeChatWindow {
         String restoredCwd = isNonEmpty(savedState.cwd) ? savedState.cwd : session.getCwd();
         session.setSessionInfo(restoredSessionId, restoredCwd);
         if (restoredSessionId != null && session.getMessages().isEmpty()) {
-            session.loadFromServer().exceptionally(ex -> {
+            session.loadFromServer().thenRun(() -> ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("historyLoadComplete");
+            })).exceptionally(ex -> {
                 LOG.warn("[TabRestore] Failed to load history for restored tab sessionId="
                         + restoredSessionId + ": " + ex.getMessage());
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    // Ensure frontend history transition state is released on restore failures too.
+                    callJavaScript("historyLoadComplete");
+                });
                 return null;
             });
         }
@@ -368,6 +379,35 @@ public class ClaudeChatWindow {
 
         LOG.info("[TabRestore] Restored tab session state: provider=" + savedState.provider
                 + ", sessionId=" + savedState.sessionId + ", cwd=" + savedState.cwd + ")");
+    }
+
+    public void setTabIndicatorState(ChatWindowDelegate.TabIndicatorState state) {
+        Content content = this.parentContent;
+        if (content == null) {
+            return;
+        }
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (disposed || parentContent == null) {
+                return;
+            }
+            Icon nextIcon;
+            switch (state) {
+                case ANSWERING:
+                    nextIcon = ANSWERING_DOT_ICON;
+                    break;
+                case COMPLETED:
+                    nextIcon = COMPLETED_DOT_ICON;
+                    break;
+                case ERROR:
+                    nextIcon = ERROR_DOT_ICON;
+                    break;
+                case NONE:
+                default:
+                    nextIcon = null;
+                    break;
+            }
+            parentContent.setIcon(nextIcon);
+        });
     }
 
     public void addCodeSnippetFromExternal(String selectionInfo) {
@@ -894,6 +934,43 @@ public class ClaudeChatWindow {
             public void persistTabSessionState() {
                 ClaudeChatWindow.this.persistTabSessionState();
             }
+
+            @Override
+            public void setTabIndicatorState(ChatWindowDelegate.TabIndicatorState state) {
+                ClaudeChatWindow.this.setTabIndicatorState(state);
+            }
         };
+    }
+
+    private static final class ColorDotIcon implements Icon {
+        private final int size;
+        private final Color color;
+
+        private ColorDotIcon(int size, Color color) {
+            this.size = Math.max(6, size);
+            this.color = color;
+        }
+
+        @Override
+        public void paintIcon(Component c, Graphics g, int x, int y) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            try {
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(color);
+                g2.fill(new Ellipse2D.Double(x + 1, y + 1, size - 2.0, size - 2.0));
+            } finally {
+                g2.dispose();
+            }
+        }
+
+        @Override
+        public int getIconWidth() {
+            return size;
+        }
+
+        @Override
+        public int getIconHeight() {
+            return size;
+        }
     }
 }

@@ -5,7 +5,8 @@ import { getMessageKey } from '../utils/messageUtils';
 import { MessageItem } from './MessageItem';
 import WaitingIndicator from './WaitingIndicator';
 import { ContextMenu } from './ContextMenu';
-import { useContextMenu, copySelection } from '../hooks/useContextMenu.js';
+import type { ContextMenuItem } from './ContextMenu';
+import { useContextMenu, copyImageSelection, copySelection } from '../hooks/useContextMenu.js';
 
 /** Always render at least this many recent messages. Earlier messages are collapsed. */
 const VISIBLE_MESSAGE_WINDOW = 15;
@@ -79,14 +80,30 @@ export const MessageList = memo(function MessageList({
 }: MessageListProps) {
   const [showAll, setShowAll] = useState(false);
 
-  // Context menu for message list (copy only, when text selected)
+  // Context menu for message list (copy selected text / copy image)
   const ctxMenu = useContextMenu();
   const handleMessageContextMenu = useCallback((e: React.MouseEvent) => {
     const sel = window.getSelection();
-    if (sel && sel.toString().trim().length > 0) {
+    const hasTextSelection = !!sel && sel.toString().trim().length > 0;
+    const hasImageTarget = !!(e.target as HTMLElement | null)?.closest('img');
+    if (hasTextSelection || hasImageTarget) {
       ctxMenu.open(e);
     }
   }, [ctxMenu.open]);
+
+  const contextMenuItems = useMemo(() => {
+    const items: ContextMenuItem[] = [];
+    if (ctxMenu.hasSelection) {
+      items.push({ label: t('contextMenu.copy', 'Copy'), action: () => copySelection(ctxMenu.savedRange, ctxMenu.selectedText) });
+    }
+    if (ctxMenu.targetImageSrc) {
+      if (items.length > 0) {
+        items.push({ separator: true });
+      }
+      items.push({ label: t('contextMenu.copyImage', 'Copy Image'), action: () => copyImageSelection(ctxMenu.targetImageSrc) });
+    }
+    return items;
+  }, [ctxMenu.hasSelection, ctxMenu.savedRange, ctxMenu.selectedText, ctxMenu.targetImageSrc, t]);
 
   // Reset showAll when a new session starts (first message ID changes)
   const firstMsgIdRef = useRef(messages[0]?.id);
@@ -112,14 +129,12 @@ export const MessageList = memo(function MessageList({
 
   return (
     <div onContextMenu={handleMessageContextMenu}>
-      {ctxMenu.visible && (
+      {ctxMenu.visible && contextMenuItems.length > 0 && (
         <ContextMenu
           x={ctxMenu.x}
           y={ctxMenu.y}
           onClose={ctxMenu.close}
-          items={[
-            { label: t('contextMenu.copy', 'Copy'), action: () => copySelection(ctxMenu.savedRange, ctxMenu.selectedText) },
-          ]}
+          items={contextMenuItems}
         />
       )}
       {shouldCollapse && (

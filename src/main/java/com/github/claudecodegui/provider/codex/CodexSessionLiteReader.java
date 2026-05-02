@@ -80,7 +80,7 @@ public class CodexSessionLiteReader {
             return null;
         }
 
-        return this.parseSessionInfoFromLite(sessionId, lite);
+        return this.parseSessionInfoFromLite(sessionId, lite, sessionPath);
     }
 
     /**
@@ -93,6 +93,14 @@ public class CodexSessionLiteReader {
     public CodexLiteSessionInfo parseSessionInfoFromLite(
             String sessionId,
             SessionLiteReader.LiteSessionFile lite
+    ) {
+        return parseSessionInfoFromLite(sessionId, lite, null);
+    }
+
+    private CodexLiteSessionInfo parseSessionInfoFromLite(
+            String sessionId,
+            SessionLiteReader.LiteSessionFile lite,
+            Path sessionPath
     ) {
         if (lite == null || sessionId == null) {
             return null;
@@ -126,8 +134,7 @@ public class CodexSessionLiteReader {
             return null;
         }
 
-        // Count response_item messages (approximate from head)
-        int messageCount = this.countResponseItems(lite.head);
+        int messageCount = this.countResponseItemsExactly(sessionPath, lite);
 
         // Use mtime as lastTimestamp (more reliable than last message timestamp)
         long lastModified = lite.mtime;
@@ -284,6 +291,23 @@ public class CodexSessionLiteReader {
             }
         }
         return count;
+    }
+
+    private int countResponseItemsExactly(Path sessionPath, SessionLiteReader.LiteSessionFile lite) {
+        if (sessionPath != null && lite != null && lite.size > SessionLiteReader.LITE_READ_BUF_SIZE) {
+            int exactCount = this.liteReader.countMatchingLines(
+                    sessionPath,
+                    line -> line != null && (
+                            line.contains("\"type\":\"response_item\"") ||
+                                    line.contains("\"type\": \"response_item\"")
+                    )
+            );
+            if (exactCount >= 0) {
+                return exactCount;
+            }
+        }
+
+        return lite != null ? this.countResponseItems(lite.head) : 0;
     }
 
     /**

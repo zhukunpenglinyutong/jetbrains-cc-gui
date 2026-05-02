@@ -232,6 +232,35 @@ describe('useWindowCallbacks integration', () => {
     expect(next[4].durationMs).toBe(35_000);
   });
 
+  it('historyLoadComplete backfills durationMs when history timestamps are numeric milliseconds', () => {
+    const opts = createOptions({
+      extractRawBlocks: (raw) => {
+        if (!raw || typeof raw !== 'object') return [];
+        const rawObj = raw as { content?: unknown; message?: { content?: unknown } };
+        const content = rawObj.content ?? rawObj.message?.content;
+        return Array.isArray(content) ? (content as Array<Record<string, unknown>>) : [];
+      },
+    });
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      (window as any).historyLoadComplete();
+    });
+
+    const updater = (opts.setMessages as any).mock.calls[0][0] as (prev: ClaudeMessage[]) => ClaudeMessage[];
+    const t0 = Date.parse('2026-05-01T11:00:00.000Z');
+
+    const previous: ClaudeMessage[] = [
+      { type: 'user', content: '开始', timestamp: String(t0) as any },
+      { type: 'assistant', content: '处理中', timestamp: String(t0 + 8_000) as any },
+      { type: 'assistant', content: '完成', timestamp: String(t0 + 26_000) as any },
+    ];
+
+    const next = updater(previous);
+    expect(next[1].durationMs).toBeUndefined();
+    expect(next[2].durationMs).toBe(26_000);
+  });
+
   // ===== setSessionId releases transition guard =====
 
   it('setSessionId releases __sessionTransitioning guard', () => {

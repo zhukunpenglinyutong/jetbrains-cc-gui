@@ -53,7 +53,9 @@ class OtherSettingsErrorBoundary extends Component<
 
 interface OtherSettingsSectionProps {
   historyCompletionEnabled: boolean;
+  tabAutoRenameEnabled: boolean;
   onHistoryCompletionEnabledChange: (enabled: boolean) => void;
+  onTabAutoRenameEnabledChange: (enabled: boolean) => void;
 }
 
 interface EditorState {
@@ -93,7 +95,9 @@ const formatRelativeTime = (timestamp: string | undefined, t: (key: string, opti
 
 const OtherSettingsSection = ({
   historyCompletionEnabled,
+  tabAutoRenameEnabled,
   onHistoryCompletionEnabledChange,
+  onTabAutoRenameEnabledChange,
 }: OtherSettingsSectionProps) => {
   const { t } = useTranslation();
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
@@ -326,6 +330,32 @@ const OtherSettingsSection = ({
             </div>
           )}
         </div>
+      </div>
+
+      {/* Tab auto rename toggle */}
+      <div className={styles.historyCompletionSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-rename" />
+          <span className={styles.fieldLabel}>{t('settings.other.tabAutoRename.label')}</span>
+        </div>
+        <label className={styles.toggleWrapper}>
+          <input
+            type="checkbox"
+            className={styles.toggleInput}
+            checked={tabAutoRenameEnabled}
+            onChange={(e) => onTabAutoRenameEnabledChange(e.target.checked)}
+          />
+          <span className={styles.toggleSlider} />
+          <span className={styles.toggleLabel}>
+            {tabAutoRenameEnabled
+              ? t('settings.other.tabAutoRename.enabled')
+              : t('settings.other.tabAutoRename.disabled')}
+          </span>
+        </label>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>{t('settings.other.tabAutoRename.hint')}</span>
+        </small>
       </div>
 
       {/* Editor Dialog */}

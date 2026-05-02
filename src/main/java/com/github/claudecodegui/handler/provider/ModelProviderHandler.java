@@ -3,6 +3,7 @@ package com.github.claudecodegui.handler.provider;
 import com.github.claudecodegui.handler.UsagePushService;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
+import com.github.claudecodegui.settings.CodexSettingsManager;
 import com.github.claudecodegui.settings.ModelSelectionStateService;
 import com.github.claudecodegui.skill.SlashCommandRegistry;
 import com.github.claudecodegui.util.EditorFileUtils;
@@ -22,6 +23,9 @@ import java.util.concurrent.CompletableFuture;
 public class ModelProviderHandler {
 
     private static final Logger LOG = Logger.getInstance(ModelProviderHandler.class);
+    private static final long CODEX_CONTEXT_WINDOW_CACHE_TTL_MS = 10_000L;
+    private static volatile Integer cachedCodexContextWindow = null;
+    private static volatile long cachedCodexContextWindowReadAtMillis = 0L;
 
     static final Map<String, Integer> MODEL_CONTEXT_LIMITS = new HashMap<>();
     static {
@@ -352,6 +356,71 @@ public class ModelProviderHandler {
             }
         }
 
+        Integer codexConfiguredLimit = readCodexContextWindowLimit(model);
+        if (codexConfiguredLimit != null) {
+            return codexConfiguredLimit;
+        }
+
         return MODEL_CONTEXT_LIMITS.getOrDefault(model, 200_000);
+    }
+
+    private static Integer readCodexContextWindowLimit(String model) {
+        if (!isCodexModel(model)) {
+            return null;
+        }
+
+        long now = System.currentTimeMillis();
+        if (now - cachedCodexContextWindowReadAtMillis < CODEX_CONTEXT_WINDOW_CACHE_TTL_MS) {
+            return cachedCodexContextWindow;
+        }
+
+        synchronized (ModelProviderHandler.class) {
+            now = System.currentTimeMillis();
+            if (now - cachedCodexContextWindowReadAtMillis < CODEX_CONTEXT_WINDOW_CACHE_TTL_MS) {
+                return cachedCodexContextWindow;
+            }
+
+            Integer parsedContextWindow = null;
+            try {
+                CodexSettingsManager codexSettingsManager = new CodexSettingsManager(new Gson());
+                Map<String, Object> configToml = codexSettingsManager.readConfigToml();
+                if (configToml != null) {
+                    parsedContextWindow = toPositiveInt(configToml.get("model_context_window"));
+                }
+            } catch (Exception e) {
+                LOG.debug("[ModelProviderHandler] Failed to read model_context_window from ~/.codex/config.toml: " + e.getMessage());
+            }
+
+            cachedCodexContextWindow = parsedContextWindow;
+            cachedCodexContextWindowReadAtMillis = now;
+            return parsedContextWindow;
+        }
+    }
+
+    private static Integer toPositiveInt(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number) {
+            long parsed = ((Number) value).longValue();
+            return parsed > 0 && parsed <= Integer.MAX_VALUE ? (int) parsed : null;
+        }
+        if (value instanceof String) {
+            try {
+                long parsed = Long.parseLong(((String) value).trim());
+                return parsed > 0 && parsed <= Integer.MAX_VALUE ? (int) parsed : null;
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private static boolean isCodexModel(String model) {
+        String lower = model.toLowerCase();
+        return lower.startsWith("gpt-")
+                || lower.startsWith("o1")
+                || lower.startsWith("o3")
+                || lower.contains("codex");
     }
 }

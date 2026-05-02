@@ -91,6 +91,14 @@
     "showEarlierMessages": "显示之前的 {{count}} 条消息",
     "totalDuration": "本次耗时"
   },
+  "contextMenu": {
+    "copy": "复制",
+    "cut": "剪切",
+    "paste": "粘贴",
+    "newline": "插入换行",
+    "copyImage": "复制图片",
+    "closePreview": "关闭预览"
+  },
   "settings": {
     "title": "设置",
     "basic": {
@@ -325,7 +333,7 @@
         "label": "自动解决冲突",
         "enabled": "已开启",
         "disabled": "已关闭",
-        "hintEnabled": "提交时如果遇到同文件冲突，会优先自动合并，尽量保留两边需求。",
+        "hintEnabled": "提交时如果遇到同文件冲突，会优先自动合并，尽量保留各方需求。",
         "hintDisabled": "提交时遇到冲突会暂停，等待你手动处理后再提交。"
       },
       "prompt": {
@@ -387,6 +395,12 @@
           "hoursAgo": "{{count}}小时前",
           "minutesAgo": "{{count}}分钟前"
         }
+      },
+      "tabAutoRename": {
+        "label": "标签重命名",
+        "enabled": "已开启",
+        "disabled": "已关闭",
+        "hint": "开启后，AI会自动根据新需求修改标签的名称（8字以内）"
       }
     },
     "codexFeatureUnavailable": "Codex暂未适配此功能，请切换到Claude Code使用",
@@ -828,6 +842,12 @@
     "copySessionId": "复制会话ID用于CLI恢复",
     "sessionIdCopied": "会话ID已复制",
     "copyFailed": "复制失败",
+    "selectSession": "选择会话",
+    "selectAll": "全选",
+    "deleteSelected": "删除",
+    "clearAll": "清空",
+    "confirmClearAll": "确认清空",
+    "clearAllMessage": "确定要清空当前列表中的全部会话吗？此操作无法撤销。",
     "timeAgo": {
       "yearsAgo": "年前",
       "monthsAgo": "个月前",

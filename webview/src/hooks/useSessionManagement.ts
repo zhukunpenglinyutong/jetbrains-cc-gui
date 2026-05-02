@@ -15,7 +15,7 @@ interface UseSessionManagementOptions {
   loading: boolean;
   historyData: HistoryData | null;
   currentSessionId: string | null;
-  setHistoryData: (data: HistoryData | null) => void;
+  setHistoryData: React.Dispatch<React.SetStateAction<HistoryData | null>>;
   setMessages: React.Dispatch<React.SetStateAction<ClaudeMessage[]>>;
   setCurrentView: (view: ViewMode) => void;
   setCurrentSessionId: (id: string | null) => void;
@@ -147,6 +147,7 @@ export function useSessionManagement({
     if (loading) {
       sendBridgeEvent('interrupt_session');
     }
+    sendBridgeEvent('tab_status_changed', JSON.stringify({ status: 'answering' }));
     beginSessionTransition(null, null);
     sendBridgeEvent('create_new_session');
   }, [beginSessionTransition, loading]);
@@ -158,6 +159,7 @@ export function useSessionManagement({
     if (loading) {
       sendBridgeEvent('interrupt_session');
     }
+    sendBridgeEvent('tab_status_changed', JSON.stringify({ status: 'answering' }));
     beginSessionTransition(null, null);
     sendBridgeEvent('create_new_session');
     pendingActionRef.current = null;
@@ -174,6 +176,7 @@ export function useSessionManagement({
     setShowInterruptConfirm(false);
     // Send interrupt signal and create new session
     sendBridgeEvent('interrupt_session');
+    sendBridgeEvent('tab_status_changed', JSON.stringify({ status: 'answering' }));
     beginSessionTransition(null, null);
     sendBridgeEvent('create_new_session');
     pendingActionRef.current = null;
@@ -193,6 +196,7 @@ export function useSessionManagement({
     }
 
     const session = historyDataRef.current?.sessions?.find(s => s.sessionId === sessionId);
+    sendBridgeEvent('tab_status_changed', JSON.stringify({ status: 'answering' }));
     beginSessionTransition(sessionId, session?.title ?? null);
     sendBridgeEvent('load_session', sessionId);
     setCurrentView('chat');
@@ -203,34 +207,38 @@ export function useSessionManagement({
     // Send delete request to Java backend
     sendBridgeEvent('delete_session', sessionId);
 
-    // Immediately update frontend state, remove session from history list
-    if (historyData && historyData.sessions) {
-      const updatedSessions = historyData.sessions.filter(s => s.sessionId !== sessionId);
-      const deletedSession = historyData.sessions.find(s => s.sessionId === sessionId);
-      const updatedTotal = (historyData.total || 0) - (deletedSession?.messageCount || 0);
-
-      setHistoryData({
-        ...historyData,
-        sessions: updatedSessions,
-        total: updatedTotal
-      });
-
-      // If deleted session is current session, clear messages and reset state
-      if (sessionId === currentSessionId) {
-        // [FIX] Send interrupt signal if AI is responding
-        if (loading) {
-          sendBridgeEvent('interrupt_session');
-        }
-        beginSessionTransition(null, null);
-        // Set flag to suppress next updateStatus toast
-        suppressNextStatusToastRef.current = true;
-        sendBridgeEvent('create_new_session');
+    // Immediately update frontend state, remove session from history list.
+    // Use functional update to avoid stale-closure overwrite during bulk delete.
+    setHistoryData(prev => {
+      if (!prev || !prev.sessions) {
+        return prev;
       }
+      const deletedSession = prev.sessions.find(s => s.sessionId === sessionId);
+      if (!deletedSession) {
+        return prev;
+      }
+      return {
+        ...prev,
+        sessions: prev.sessions.filter(s => s.sessionId !== sessionId),
+        total: Math.max(0, (prev.total || 0) - (deletedSession.messageCount || 0))
+      };
+    });
 
-      // Show success toast
-      addToast(t('history.sessionDeleted'), 'success');
+    // If deleted session is current session, clear messages and reset state
+    if (sessionId === currentSessionId) {
+      // [FIX] Send interrupt signal if AI is responding
+      if (loading) {
+        sendBridgeEvent('interrupt_session');
+      }
+      beginSessionTransition(null, null);
+      // Set flag to suppress next updateStatus toast
+      suppressNextStatusToastRef.current = true;
+      sendBridgeEvent('create_new_session');
     }
-  }, [historyData, currentSessionId, loading, setHistoryData, setMessages, setCurrentSessionId, setCustomSessionTitle, setUsagePercentage, setUsageUsedTokens, addToast, t]);
+
+    // Show success toast
+    addToast(t('history.sessionDeleted'), 'success');
+  }, [currentSessionId, loading, setHistoryData, addToast, t, beginSessionTransition]);
 
   // Export history session
   const exportHistorySession = useCallback((sessionId: string, title: string) => {

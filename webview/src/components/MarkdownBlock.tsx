@@ -3,9 +3,12 @@ import DOMPurify from 'dompurify';
 import { memo, useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { openBrowser, openFile } from '../utils/bridge';
+import { copyImageSelection, useContextMenu } from '../hooks/useContextMenu.js';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github-dark.css';
 import { markedHighlight } from 'marked-highlight';
+import { ContextMenu } from './ContextMenu';
+import { ImagePreviewOverlay } from './ImagePreviewOverlay';
 // Lazy-loaded mermaid singleton (deferred until first diagram is encountered)
 let mermaidInstance: typeof import('mermaid').default | null = null;
 async function getMermaid() {
@@ -232,7 +235,24 @@ const copyIconSvg = `
 const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps) => {
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const previewCtxMenu = useContextMenu();
   const { t, i18n } = useTranslation();
+
+  const closePreview = useCallback(() => {
+    previewCtxMenu.close();
+    setPreviewSrc(null);
+  }, [previewCtxMenu]);
+
+  const imageContextMenuItems = useMemo(() => [
+    {
+      label: t('contextMenu.copyImage', 'Copy Image'),
+      action: () => copyImageSelection(previewCtxMenu.targetImageSrc),
+    },
+    {
+      label: t('contextMenu.closePreview', 'Close Preview'),
+      action: closePreview,
+    },
+  ], [t, previewCtxMenu.targetImageSrc, closePreview]);
 
   // Track previous isStreaming state to detect when streaming ends
   const prevIsStreamingRef = useRef(isStreaming);
@@ -534,26 +554,52 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
         onClick={handleClick}
       />
       {previewSrc && (
-        <div
-          className="image-preview-overlay"
-          onClick={() => setPreviewSrc(null)}
-          onKeyDown={(e) => e.key === 'Escape' && setPreviewSrc(null)}
-          tabIndex={0}
-        >
-          <img
-            className="image-preview-content"
-            src={previewSrc}
-            alt=""
-            onClick={(e) => e.stopPropagation()}
-          />
-          <button
-            className="image-preview-close"
-            onClick={() => setPreviewSrc(null)}
-            title={t('chat.closePreview')}
+        <ImagePreviewOverlay>
+          <div
+            className="image-preview-overlay"
+            onClick={closePreview}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                closePreview();
+              }
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if ((e.target as HTMLElement | null)?.closest('img')) {
+                previewCtxMenu.open(e);
+              }
+            }}
+            tabIndex={0}
           >
-            ×
-          </button>
-        </div>
+            <img
+              className="image-preview-content"
+              src={previewSrc}
+              alt=""
+              onClick={(e) => e.stopPropagation()}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                previewCtxMenu.open(e);
+              }}
+            />
+            <button
+              className="image-preview-close"
+              onClick={closePreview}
+              title={t('chat.closePreview')}
+            >
+              ×
+            </button>
+          </div>
+        </ImagePreviewOverlay>
+      )}
+      {previewCtxMenu.visible && previewCtxMenu.targetImageSrc && (
+        <ContextMenu
+          x={previewCtxMenu.x}
+          y={previewCtxMenu.y}
+          onClose={previewCtxMenu.close}
+          items={imageContextMenuItems}
+        />
       )}
     </>
   );

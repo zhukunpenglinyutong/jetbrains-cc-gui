@@ -139,6 +139,8 @@ const SettingsView = ({
     setDiffExpandedByDefault,
     historyCompletionEnabled,
     setHistoryCompletionEnabled,
+    tabAutoRenameEnabled,
+    setTabAutoRenameEnabled,
     handleSaveNodePath,
     handleSaveWorkingDirectory,
     handleUiFontSelectionChange,
@@ -560,11 +562,16 @@ const SettingsView = ({
           <div style={{ display: currentTab === 'other' ? 'block' : 'none' }}>
             <OtherSettingsSection
               historyCompletionEnabled={historyCompletionEnabled}
+              tabAutoRenameEnabled={tabAutoRenameEnabled}
               onHistoryCompletionEnabledChange={(enabled) => {
                 setHistoryCompletionEnabled(enabled);
                 localStorage.setItem('historyCompletionEnabled', enabled.toString());
                 // Dispatch custom event for same-tab sync (localStorage 'storage' event only fires for cross-tab)
                 window.dispatchEvent(new CustomEvent('historyCompletionChanged', { detail: { enabled } }));
+              }}
+              onTabAutoRenameEnabledChange={(enabled) => {
+                setTabAutoRenameEnabled(enabled);
+                localStorage.setItem('tabAutoRenameEnabled', enabled.toString());
               }}
             />
           </div>

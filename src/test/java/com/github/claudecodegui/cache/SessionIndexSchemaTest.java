@@ -8,7 +8,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Verifies the v3 index schema: SessionIndexEntry serializes the new
+ * Verifies the current index schema: SessionIndexEntry serializes the new
  * fileLastModified + fileRelativePath fields and round-trips cleanly through Gson.
  * This is the contract that incremental scan depends on.
  */
@@ -63,6 +63,6 @@ public class SessionIndexSchemaTest {
         // Sanity: a freshly constructed index must advertise the active schema version.
         // When readIndex sees a mismatched version on disk it replaces the content with a blank
         // instance, so this default is what gets returned to callers after an upgrade.
-        assertTrue("version should be at least 3", freshIndex.version >= 3);
+        assertTrue("version should be at least 4", freshIndex.version >= 4);
     }
 }

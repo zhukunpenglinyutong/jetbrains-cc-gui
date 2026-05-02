@@ -4,6 +4,9 @@
     border-bottom: 1px solid var(--color-history-border);
     cursor: pointer;
     transition: background-color 0.2s;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
 }
 
 .history-item:hover {
@@ -60,6 +63,60 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
+}
+
+.history-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.history-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.history-select-all-btn,
+.history-header-action-btn {
+    background: transparent;
+    border: 1px solid var(--border-secondary);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 4px;
+}
+
+.history-header-action-btn.danger:hover:not(:disabled),
+.history-select-all-btn:hover:not(:disabled) {
+    border-color: #0a84ff;
+    color: #0a84ff;
+}
+
+.history-header-action-btn.danger {
+    border-color: rgba(255, 59, 48, 0.35);
+}
+
+.history-header-action-btn.danger:hover:not(:disabled) {
+    border-color: #ff3b30;
+    color: #ff3b30;
+}
+
+.history-select-all-btn:disabled,
+.history-header-action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.history-item-select {
+    padding-top: 2px;
+}
+
+.history-item-select input[type='checkbox'] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
 }
 
 .history-info {

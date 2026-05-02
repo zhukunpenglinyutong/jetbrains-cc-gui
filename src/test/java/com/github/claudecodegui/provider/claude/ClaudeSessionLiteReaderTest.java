@@ -6,6 +6,7 @@ import org.junit.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -104,5 +105,36 @@ public class ClaudeSessionLiteReaderTest {
         );
 
         assertNull(reader.parseSessionInfoFromLite(sessionId, lite));
+    }
+
+    @Test
+    public void readSessionLite_usesExactMessageCountForLargeFile() throws IOException {
+        Path tempDir = Files.createTempDirectory("claude-lite-count-test");
+        try {
+            String sessionId = "abc12345-1234-1234-1234-1234567890ab";
+            Path tempFile = tempDir.resolve(sessionId + ".jsonl");
+
+            // Build a session bigger than 64KB with many lines so head-only count would underreport.
+            StringBuilder sb = new StringBuilder();
+            sb.append("{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"Start\"},\"timestamp\":\"2026-01-15T10:00:00Z\"}\n");
+            int extraLines = 5000;
+            for (int i = 0; i < extraLines; i++) {
+                sb.append("{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":\"R")
+                        .append(i)
+                        .append("\"},\"timestamp\":\"2026-01-15T10:01:00Z\"}\n");
+            }
+            Files.writeString(tempFile, sb.toString(), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+
+            ClaudeSessionLiteReader.ClaudeLiteSessionInfo info = reader.readSessionLite(tempFile);
+            assertNotNull(info);
+            assertEquals(1 + extraLines, info.messageCount);
+        } finally {
+            Files.walk(tempDir).sorted((a, b) -> b.compareTo(a)).forEach(p -> {
+                try {
+                    Files.deleteIfExists(p);
+                } catch (IOException ignored) {
+                }
+            });
+        }
     }
 }

@@ -25,12 +25,6 @@
 
 .message-image-block.user-image img {
     border: 1px solid #3e3e42;
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.message-image-block.user-image:hover img {
-    transform: scale(1.02);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 /* 图片预览遮罩层 */
@@ -44,7 +38,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 10000;
+    z-index: 2147483600;
     animation: fadeIn 0.2s ease-out;
     cursor: pointer;
 }
@@ -73,6 +67,7 @@
     border-radius: 50%;
     cursor: pointer;
     transition: background 0.2s;
+    z-index: 2147483601;
 }
 
 .image-preview-close:hover {

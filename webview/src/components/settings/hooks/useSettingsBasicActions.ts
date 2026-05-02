@@ -59,6 +59,7 @@ export interface UseSettingsBasicActionsReturn {
   customSoundPath: string;
   diffExpandedByDefault: boolean;
   historyCompletionEnabled: boolean;
+  tabAutoRenameEnabled: boolean;
   commitGenerationEnabled: boolean;
   autoCommitEnabled: boolean;
   autoResolveConflictsEnabled: boolean;
@@ -122,6 +123,7 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setCustomSoundPath: (path: string) => void;
   /** @internal */ setDiffExpandedByDefault: (expanded: boolean) => void;
   /** @internal */ setHistoryCompletionEnabled: (enabled: boolean) => void;
+  /** @internal */ setTabAutoRenameEnabled: (enabled: boolean) => void;
   /** @internal */ setCommitGenerationEnabled: (enabled: boolean) => void;
   /** @internal */ setAutoCommitEnabled: (enabled: boolean) => void;
   /** @internal */ setAutoResolveConflictsEnabled: (enabled: boolean) => void;
@@ -196,6 +198,10 @@ export function useSettingsBasicActions({
   // History completion toggle configuration
   const [historyCompletionEnabled, setHistoryCompletionEnabled] = useState<boolean>(() => {
     const saved = localStorage.getItem('historyCompletionEnabled');
+    return saved !== 'false'; // Enabled by default
+  });
+  const [tabAutoRenameEnabled, setTabAutoRenameEnabled] = useState<boolean>(() => {
+    const saved = localStorage.getItem('tabAutoRenameEnabled');
     return saved !== 'false'; // Enabled by default
   });
 
@@ -426,6 +432,8 @@ export function useSettingsBasicActions({
     setDiffExpandedByDefault,
     historyCompletionEnabled,
     setHistoryCompletionEnabled,
+    tabAutoRenameEnabled,
+    setTabAutoRenameEnabled,
     handleSaveNodePath,
     handleSaveWorkingDirectory,
     handleUiFontSelectionChange,

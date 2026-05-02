@@ -1,14 +1,18 @@
+import { useState } from 'react';
 import type { TFunction } from 'i18next';
 import type { ClaudeContentBlock, ToolResultBlock } from '../../types';
 
 import MarkdownBlock from '../MarkdownBlock';
 import CollapsibleTextBlock from '../CollapsibleTextBlock';
+import { ContextMenu } from '../ContextMenu';
+import { ImagePreviewOverlay } from '../ImagePreviewOverlay';
 import {
   BashToolBlock,
   EditToolBlock,
   GenericToolBlock,
   TaskExecutionBlock,
 } from '../toolBlocks';
+import { copyImageSelection, useContextMenu } from '../../hooks/useContextMenu.js';
 import { EDIT_TOOL_NAMES, BASH_TOOL_NAMES, isToolName, isTransientInternalToolName, normalizeToolName } from '../../utils/toolConstants';
 import { TASK_STATUS_COLORS } from '../../utils/messageUtils';
 
@@ -60,6 +64,9 @@ export function ContentBlockRenderer({
   onToggleThinking,
   findToolResult,
 }: ContentBlockRendererProps): React.ReactElement | null {
+  const [previewSrc, setPreviewSrc] = useState<string | null>(null);
+  const previewCtxMenu = useContextMenu();
+
   if (block.type === 'text') {
     return messageType === 'user' ? (
       <CollapsibleTextBlock content={block.text ?? ''} />
@@ -72,57 +79,92 @@ export function ContentBlockRenderer({
   }
 
   if (block.type === 'image' && block.src) {
+    const closePreview = () => {
+      setPreviewSrc(null);
+      previewCtxMenu.close();
+    };
+
+    const imageContextMenuItems = [
+      {
+        label: t('contextMenu.copyImage', 'Copy Image'),
+        action: () => copyImageSelection(previewCtxMenu.targetImageSrc),
+      },
+      {
+        label: t('contextMenu.closePreview', 'Close Preview'),
+        action: closePreview,
+      },
+    ];
+
     const handleImagePreview = () => {
-      const previewRoot = document.getElementById('image-preview-root');
-      if (!previewRoot || !block.src) return;
-
-      // Clear previous content safely
-      previewRoot.innerHTML = '';
-
-      // Create overlay container
-      const overlay = document.createElement('div');
-      overlay.className = 'image-preview-overlay';
-      overlay.onclick = () => overlay.remove();
-
-      // Create image element safely (prevents XSS)
-      const img = document.createElement('img');
-      img.src = block.src;
-      img.alt = t('chat.imagePreview');
-      img.className = 'image-preview-content';
-      img.onclick = (e) => e.stopPropagation();
-
-      // Create close button
-      const closeBtn = document.createElement('div');
-      closeBtn.className = 'image-preview-close';
-      closeBtn.textContent = '×';
-      closeBtn.onclick = (e) => {
-        e.stopPropagation();
-        overlay.remove();
-      };
-
-      overlay.appendChild(img);
-      overlay.appendChild(closeBtn);
-      previewRoot.appendChild(overlay);
+      setPreviewSrc(block.src ?? null);
     };
 
     return (
-      <div
-        className={`message-image-block ${messageType === 'user' ? 'user-image' : ''}`}
-        onClick={handleImagePreview}
-        style={{ cursor: 'pointer' }}
-        title={t('chat.clickToPreview')}
-      >
-        <img
-          src={block.src}
-          alt={t('chat.userUploadedImage')}
-          style={{
-            maxWidth: messageType === 'user' ? '200px' : '100%',
-            maxHeight: messageType === 'user' ? '150px' : 'auto',
-            borderRadius: '8px',
-            objectFit: 'contain',
-          }}
-        />
-      </div>
+      <>
+        <div
+          className={`message-image-block ${messageType === 'user' ? 'user-image' : ''}`}
+          onClick={handleImagePreview}
+          style={{ cursor: 'pointer' }}
+          title={t('chat.clickToPreview')}
+        >
+          <img
+            src={block.src}
+            alt={t('chat.userUploadedImage')}
+            style={{
+              maxWidth: messageType === 'user' ? '200px' : '100%',
+              maxHeight: messageType === 'user' ? '150px' : 'auto',
+              borderRadius: '8px',
+              objectFit: 'contain',
+            }}
+          />
+        </div>
+
+        {previewSrc && (
+          <ImagePreviewOverlay>
+            <div
+              className="image-preview-overlay"
+              onClick={closePreview}
+              onKeyDown={(e) => e.key === 'Escape' && closePreview()}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if ((e.target as HTMLElement | null)?.closest('img')) {
+                  previewCtxMenu.open(e);
+                }
+              }}
+              tabIndex={0}
+            >
+              <img
+                className="image-preview-content"
+                src={previewSrc}
+                alt={t('chat.imagePreview')}
+                onClick={(e) => e.stopPropagation()}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  previewCtxMenu.open(e);
+                }}
+              />
+              <button
+                className="image-preview-close"
+                onClick={closePreview}
+                title={t('chat.closePreview')}
+              >
+                ×
+              </button>
+            </div>
+          </ImagePreviewOverlay>
+        )}
+
+        {previewCtxMenu.visible && previewCtxMenu.targetImageSrc && (
+          <ContextMenu
+            x={previewCtxMenu.x}
+            y={previewCtxMenu.y}
+            onClose={previewCtxMenu.close}
+            items={imageContextMenuItems}
+          />
+        )}
+      </>
     );
   }
 

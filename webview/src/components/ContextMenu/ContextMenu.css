@@ -1,6 +1,6 @@
 .context-menu {
   position: fixed;
-  z-index: 10000;
+  z-index: 2147483640;
   min-width: 140px;
   background: var(--vscode-menu-background, #252526);
   border: 1px solid var(--vscode-menu-border, #454545);

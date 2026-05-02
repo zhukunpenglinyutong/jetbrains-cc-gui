@@ -6,6 +6,7 @@ import org.junit.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -107,6 +108,34 @@ public class CodexSessionLiteReaderTest {
             Path tempFile = tempDir.resolve("invalid-name.jsonl");
             Files.writeString(tempFile, "{\"type\":\"session_meta\"}\n");
             assertNull(reader.readSessionLite(tempFile));
+        } finally {
+            Files.walk(tempDir).sorted((a, b) -> b.compareTo(a)).forEach(p -> {
+                try { Files.deleteIfExists(p); } catch (IOException ignored) {}
+            });
+        }
+    }
+
+    @Test
+    public void readSessionLite_usesExactResponseItemCountForLargeFile() throws IOException {
+        Path tempDir = Files.createTempDirectory("codex-lite-count-test");
+        try {
+            String sessionId = "thread_abc123def456";
+            Path tempFile = tempDir.resolve(sessionId + ".jsonl");
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("{\"type\":\"session_meta\",\"payload\":{\"id\":\"")
+                    .append(sessionId)
+                    .append("\",\"cwd\":\"/workspace/demo\",\"timestamp\":\"2026-03-10T10:00:00Z\"}}\n");
+            sb.append("{\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\",\"message\":\"Count test\"},\"timestamp\":\"2026-03-10T10:01:00Z\"}\n");
+            int responseItems = 5000;
+            for (int i = 0; i < responseItems; i++) {
+                sb.append("{\"type\":\"response_item\",\"payload\":{\"type\":\"message\"},\"timestamp\":\"2026-03-10T10:02:00Z\"}\n");
+            }
+            Files.writeString(tempFile, sb.toString(), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+
+            CodexSessionLiteReader.CodexLiteSessionInfo info = reader.readSessionLite(tempFile);
+            assertNotNull(info);
+            assertEquals(responseItems, info.messageCount);
         } finally {
             Files.walk(tempDir).sorted((a, b) -> b.compareTo(a)).forEach(p -> {
                 try { Files.deleteIfExists(p); } catch (IOException ignored) {}

@@ -50,6 +50,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
     private static final String TAB_NAME_PREFIX = "AI";
     private static final Set<Content> detachingContents =
             Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private static final Set<Content> forceClosingContents =
+            Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     public static ClaudeChatWindow getChatWindow(Project project) {
         return instances.get(project);
@@ -198,6 +200,82 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         return detachingContents.contains(content);
     }
 
+    private static void markContentAsForceClosing(Content content) {
+        forceClosingContents.add(content);
+    }
+
+    private static void unmarkContentAsForceClosing(Content content) {
+        forceClosingContents.remove(content);
+    }
+
+    static boolean isContentForceClosing(Content content) {
+        return forceClosingContents.contains(content);
+    }
+
+    public static void closeTabsBySessionId(@NotNull Project project, String sessionId) {
+        if (sessionId == null || sessionId.trim().isEmpty() || project.isDisposed()) {
+            return;
+        }
+
+        ToolWindowManager.getInstance(project).invokeLater(() -> {
+            if (project.isDisposed()) {
+                return;
+            }
+
+            // Close detached window first.
+            com.github.claudecodegui.ui.detached.DetachedChatFrame detachedFrame =
+                    com.github.claudecodegui.ui.detached.DetachedWindowManager.getDetachedFrame(project, sessionId);
+            if (detachedFrame != null) {
+                detachedFrame.disposeFromExternalDeletion();
+            }
+
+            ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow(TOOL_WINDOW_ID);
+            if (toolWindow == null) {
+                return;
+            }
+
+            ContentManager contentManager = toolWindow.getContentManager();
+            for (Map.Entry<Content, ClaudeChatWindow> entry : new HashMap<>(contentToWindowMap).entrySet()) {
+                Content content = entry.getKey();
+                ClaudeChatWindow window = entry.getValue();
+                if (content == null || window == null) {
+                    continue;
+                }
+                if (!project.equals(window.getProject())) {
+                    continue;
+                }
+                String tabSessionId = window.getSessionId();
+                if (sessionId.equals(tabSessionId) && contentManager.getIndexOfContent(content) >= 0) {
+                    markContentAsForceClosing(content);
+                    try {
+                        contentManager.removeContent(content, true);
+                    } finally {
+                        unmarkContentAsForceClosing(content);
+                    }
+                }
+            }
+
+            // Ensure the tool window still has one usable tab after bulk/session deletion.
+            if (contentManager.getContentCount() == 0) {
+                try {
+                    ClaudeChatWindow newChatWindow = new ClaudeChatWindow(project, true);
+                    ContentFactory contentFactory = ContentFactory.getInstance();
+                    String tabName = getNextTabName(toolWindow);
+                    Content newContent = contentFactory.createContent(newChatWindow.getContent(), tabName, false);
+                    newContent.setCloseable(false);
+                    newChatWindow.setParentContent(newContent);
+                    newContent.setDisposer(newChatWindow::dispose);
+                    contentManager.addContent(newContent);
+                    contentManager.setSelectedContent(newContent);
+                    toolWindow.show(null);
+                    LOG.info("[TabManager] Recreated empty tab after session deletion: " + tabName);
+                } catch (Exception e) {
+                    LOG.error("[TabManager] Failed to recreate empty tab after session deletion", e);
+                }
+            }
+        });
+    }
+
     public static ClaudeChatWindow getChatWindowForContent(Content content) {
         return content != null ? contentToWindowMap.get(content) : null;
     }
@@ -332,12 +410,32 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                         + removedContent.getDisplayName());
                     window.dispose();
                 }
+
+                if (contentManager.getContentCount() == 0) {
+                    try {
+                        ClaudeChatWindow newChatWindow = new ClaudeChatWindow(project, true);
+                        ContentFactory contentFactory = ContentFactory.getInstance();
+                        String tabName = getNextTabName(toolWindow);
+                        Content newContent = contentFactory.createContent(newChatWindow.getContent(), tabName, false);
+                        newChatWindow.setParentContent(newContent);
+                        newChatWindow.setOriginalTabName(tabName);
+                        newContent.setDisposer(newChatWindow::dispose);
+                        contentManager.addContent(newContent);
+                        contentManager.setSelectedContent(newContent);
+                        tabStateService.saveTabCount(contentManager.getContentCount());
+                        tabStateService.saveSelectedTabIndex(contentManager.getIndexOfContent(newContent));
+                        updateTabCloseableState(contentManager);
+                        LOG.info("[TabManager] Recreated new tab after closing the last tab: " + tabName);
+                    } catch (Exception e) {
+                        LOG.error("[TabManager] Failed to recreate new tab after closing the last tab", e);
+                    }
+                }
             }
 
             @Override
             public void contentRemoveQuery(@NotNull ContentManagerEvent event) {
                 Content content = event.getContent();
-                if (isContentDetaching(content)) {
+                if (isContentDetaching(content) || isContentForceClosing(content)) {
                     return;
                 }
 
@@ -362,7 +460,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
     private void updateTabCloseableState(ContentManager contentManager) {
         int tabCount = contentManager.getContentCount();
-        boolean closeable = tabCount > 1;
+        boolean closeable = true;
 
         for (Content tab : contentManager.getContents()) {
             tab.setCloseable(closeable);
