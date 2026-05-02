@@ -4,6 +4,7 @@ import org.junit.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -120,6 +121,27 @@ public class FileReferenceResolverTest {
     }
 
     @Test
+    public void sortsAmbiguousFilenameCandidatesByNearbyCodeContext() throws Exception {
+        Path project = Files.createTempDirectory("file-ref-sort-context");
+        Path nodeRegistry = Files.createDirectories(project.resolve("plugins/google_meet/node")).resolve("registry.py");
+        Path toolsRegistry = Files.createDirectories(project.resolve("plugins/google_meet/tools")).resolve("registry.py");
+        Files.writeString(nodeRegistry, fileWithLine(42, "    def _load(self) -> Dict[str, Any]:"));
+        Files.writeString(toolsRegistry, fileWithLine(42, "def _module_registers_tools(module_path: Path) -> bool:"));
+
+        List<Path> sorted = FileReferenceResolver.sortCandidates(
+                "registry.py",
+                project.toString(),
+                List.of(nodeRegistry, toolsRegistry),
+                "入口位于 registry.py:42，函数：\n"
+                        + "def _module_registers_tools(module_path: Path) -> bool:\n"
+                        + "    source = module_path.read_text(encoding=\"utf-8\")",
+                42
+        );
+
+        assertEquals(toolsRegistry.toString().replace('\\', '/'), sorted.get(0).toString().replace('\\', '/'));
+    }
+
+    @Test
     public void unresolvedResultIncludesReason() throws Exception {
         Path project = Files.createTempDirectory("file-ref-missing");
         FileReferenceResolver resolver = new FileReferenceResolver(null, project.toString(), project.toString());
@@ -129,5 +151,15 @@ public class FileReferenceResolverTest {
 
         assertFalse(result.resolved);
         assertEquals("not_found", result.reason);
+    }
+
+    private static String fileWithLine(int lineNumber, String targetLine) {
+        List<String> lines = new ArrayList<>();
+        for (int i = 1; i < lineNumber; i++) {
+            lines.add("# filler " + i);
+        }
+        lines.add(targetLine);
+        lines.add("# tail");
+        return String.join("\n", lines) + "\n";
     }
 }

@@ -115,6 +115,26 @@ describe('file reference DOM decoration', () => {
     expect(link.title).toBe('D:/project/src/SubjectCategoryController.java (line 64)');
   });
 
+  it('sends nearby code context so ambiguous filenames can resolve to the matching file', () => {
+    window.sendToJava = vi.fn();
+    const container = document.createElement('div');
+    container.innerHTML = [
+      '<p>入口位于 registry.py:42，函数：</p>',
+      '<pre><code>def _module_registers_tools(module_path: Path) -&gt; bool:\n    source = module_path.read_text(encoding=&quot;utf-8&quot;)</code></pre>',
+    ].join('');
+    document.body.appendChild(container);
+
+    decorateFileReferences(container);
+
+    const message = (window.sendToJava as any).mock.calls[0][0] as string;
+    const payload = JSON.parse(message.replace(/^resolve_file_references:/, ''));
+    expect(payload.references[0]).toMatchObject({
+      pathText: 'registry.py',
+      line: 42,
+    });
+    expect(payload.references[0].contextText).toContain('def _module_registers_tools(module_path: Path) -> bool:');
+  });
+
   it('restores unresolved candidates to their original text', () => {
     window.sendToJava = vi.fn();
     const container = document.createElement('div');

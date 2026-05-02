@@ -116,7 +116,8 @@ public class FileHandler extends BaseMessageHandler {
                             new FileReferenceResolver.ResolveRequest(
                                     getString(reference, "id"),
                                     getString(reference, "pathText"),
-                                    getInt(reference, "line")
+                                    getInt(reference, "line"),
+                                    getString(reference, "contextText")
                             );
                     results.add(toJson(resolver.resolve(resolveRequest)));
                 }

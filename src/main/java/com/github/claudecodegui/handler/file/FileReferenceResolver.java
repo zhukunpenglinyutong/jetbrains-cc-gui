@@ -9,6 +9,8 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.search.FilenameIndex;
 import com.intellij.psi.search.GlobalSearchScope;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -23,6 +25,7 @@ import java.util.Locale;
  */
 class FileReferenceResolver {
 
+    private static final long MAX_CONTEXT_MATCH_FILE_SIZE = 1024 * 1024;
     private static final List<String> LOW_PRIORITY_SEGMENTS = List.of(
             "/target/",
             "/build/",
@@ -125,7 +128,13 @@ class FileReferenceResolver {
                 return null;
             }
 
-            List<Path> sorted = sortCandidates(request.pathText, projectBasePath, candidates);
+            List<Path> sorted = sortCandidates(
+                    request.pathText,
+                    projectBasePath,
+                    candidates,
+                    request.contextText,
+                    request.line
+            );
             return ResolveResult.resolved(request, normalizePath(sorted.get(0)));
         } catch (IndexNotReadyException e) {
             return ResolveResult.unresolved(request.id, request.pathText, request.line, "dumb_mode");
@@ -135,17 +144,33 @@ class FileReferenceResolver {
     }
 
     static List<Path> sortCandidates(String pathText, String projectBasePath, List<Path> candidates) {
+        return sortCandidates(pathText, projectBasePath, candidates, "", 0);
+    }
+
+    static List<Path> sortCandidates(
+            String pathText,
+            String projectBasePath,
+            List<Path> candidates,
+            String contextText,
+            int line
+    ) {
         List<Path> sorted = new ArrayList<>(candidates);
-        sorted.sort(candidateComparator(pathText, projectBasePath));
+        sorted.sort(candidateComparator(pathText, projectBasePath, contextText, line));
         return sorted;
     }
 
-    private static Comparator<Path> candidateComparator(String pathText, String projectBasePath) {
+    private static Comparator<Path> candidateComparator(
+            String pathText,
+            String projectBasePath,
+            String contextText,
+            int line
+    ) {
         String normalizedPathText = normalizeTextPath(pathText).toLowerCase(Locale.ROOT);
         String normalizedProjectBase = normalizeTextPath(projectBasePath).toLowerCase(Locale.ROOT);
 
         return Comparator
                 .comparingInt((Path path) -> matchesPathText(path, normalizedPathText) ? 0 : 1)
+                .thenComparingInt(path -> -contextMatchScore(path, contextText, line))
                 .thenComparingInt(path -> isInProject(path, normalizedProjectBase) ? 0 : 1)
                 .thenComparingInt(path -> containsSegment(path, "/src/main/") ? 0 : 1)
                 .thenComparingInt(path -> containsSegment(path, "/src/test/") ? 0 : 1)
@@ -172,6 +197,78 @@ class FileReferenceResolver {
             searchFrom = index + part.length();
         }
         return true;
+    }
+
+    private static int contextMatchScore(Path path, String contextText, int line) {
+        String normalizedContext = normalizeSnippet(contextText);
+        if (normalizedContext.length() < 20) {
+            return 0;
+        }
+
+        try {
+            if (!Files.isRegularFile(path) || Files.size(path) > MAX_CONTEXT_MATCH_FILE_SIZE) {
+                return 0;
+            }
+
+            List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
+            int score = scoreLineWindow(lines, normalizedContext, line);
+            if (score > 0) {
+                return score;
+            }
+            return scoreAnyMatchingLines(lines, normalizedContext);
+        } catch (IOException | RuntimeException e) {
+            return 0;
+        }
+    }
+
+    private static int scoreLineWindow(List<String> lines, String normalizedContext, int line) {
+        if (line <= 0 || lines.isEmpty()) {
+            return 0;
+        }
+
+        int center = Math.min(Math.max(line - 1, 0), lines.size() - 1);
+        int start = Math.max(0, center - 8);
+        int end = Math.min(lines.size() - 1, center + 12);
+        int score = 0;
+        for (int i = start; i <= end; i++) {
+            int lineScore = scoreSourceLine(lines.get(i), normalizedContext);
+            if (lineScore > 0) {
+                score += lineScore + Math.max(0, 120 - Math.abs(i - center) * 12);
+            }
+        }
+        return score;
+    }
+
+    private static int scoreAnyMatchingLines(List<String> lines, String normalizedContext) {
+        int score = 0;
+        int matched = 0;
+        for (String line : lines) {
+            int lineScore = scoreSourceLine(line, normalizedContext);
+            if (lineScore <= 0) {
+                continue;
+            }
+            score += lineScore;
+            matched++;
+            if (matched >= 8) {
+                break;
+            }
+        }
+        return score;
+    }
+
+    private static int scoreSourceLine(String line, String normalizedContext) {
+        String normalizedLine = normalizeSnippet(line);
+        if (normalizedLine.length() < 12 || !normalizedContext.contains(normalizedLine)) {
+            return 0;
+        }
+        return Math.min(160, normalizedLine.length());
+    }
+
+    private static String normalizeSnippet(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.toLowerCase(Locale.ROOT).replaceAll("\\s+", " ").trim();
     }
 
     private static boolean isInProject(Path path, String normalizedProjectBase) {
@@ -233,11 +330,17 @@ class FileReferenceResolver {
         final String id;
         final String pathText;
         final int line;
+        final String contextText;
 
         ResolveRequest(String id, String pathText, int line) {
+            this(id, pathText, line, "");
+        }
+
+        ResolveRequest(String id, String pathText, int line, String contextText) {
             this.id = id;
             this.pathText = pathText;
             this.line = line;
+            this.contextText = contextText;
         }
     }
 

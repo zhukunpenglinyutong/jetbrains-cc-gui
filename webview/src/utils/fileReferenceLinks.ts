@@ -13,6 +13,8 @@ export interface FileReferenceRequest {
   pathText: string;
   /** 1-based line number; 0 means open the file without line navigation. */
   line: number;
+  /** Nearby rendered text/code used by the backend to disambiguate duplicate filenames. */
+  contextText?: string;
 }
 
 export interface FileReferenceResolveResult {
@@ -86,6 +88,8 @@ const SKIP_SELECTOR = [
 
 const resolveCache = new Map<string, FileReferenceResolveResult>();
 const pendingRequests = new Map<string, (results: FileReferenceResolveResult[]) => void>();
+const REFERENCE_CONTEXT_BEFORE_CHARS = 1200;
+const REFERENCE_CONTEXT_AFTER_CHARS = 6000;
 
 let callbackRegistered = false;
 let requestCounter = 0;
@@ -95,8 +99,19 @@ export function normalizeFileReferencePath(pathText: string): string {
   return pathText.replace(/\\/g, '/').trim();
 }
 
-export function getFileReferenceCacheKey(pathText: string, line: number): string {
-  return `${normalizeFileReferencePath(pathText)}:${line}`;
+function hashString(value: string): string {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = Math.imul(31, hash) + value.charCodeAt(i);
+    hash |= 0;
+  }
+  return (hash >>> 0).toString(36);
+}
+
+export function getFileReferenceCacheKey(pathText: string, line: number, contextText = ''): string {
+  const normalizedContext = normalizeContextText(contextText);
+  const contextKey = normalizedContext ? `:${hashString(normalizedContext)}` : '';
+  return `${normalizeFileReferencePath(pathText)}:${line}${contextKey}`;
 }
 
 function getFileExtension(pathText: string): string {
@@ -223,7 +238,6 @@ function createPendingSpan(match: FileReferenceMatch): HTMLSpanElement {
   span.dataset.originalText = match.originalText;
   span.dataset.pathText = match.pathText;
   span.dataset.line = String(match.line);
-  span.dataset.cacheKey = getFileReferenceCacheKey(match.pathText, match.line);
   span.textContent = match.originalText;
   return span;
 }
@@ -263,12 +277,15 @@ function restoreOriginalText(span: HTMLElement): void {
   span.replaceWith(document.createTextNode(span.dataset.originalText || span.textContent || ''));
 }
 
-function patchSpansForResult(container: HTMLElement, result: FileReferenceResolveResult): void {
-  const cacheKey = getFileReferenceCacheKey(result.pathText, result.line);
+function patchSpansForResult(
+  container: HTMLElement,
+  result: FileReferenceResolveResult,
+  cacheKey = getFileReferenceCacheKey(result.pathText, result.line),
+): void {
   const spans = Array.from(container.querySelectorAll<HTMLElement>('.file-reference-pending'));
 
   for (const span of spans) {
-    if (span.dataset.cacheKey !== cacheKey) {
+    if (span.dataset.fileRefId !== result.id && span.dataset.cacheKey !== cacheKey) {
       continue;
     }
 
@@ -291,7 +308,7 @@ function applyCachedResult(container: HTMLElement, span: HTMLSpanElement): boole
     return false;
   }
 
-  patchSpansForResult(container, cached);
+  patchSpansForResult(container, cached, cacheKey);
   return true;
 }
 
@@ -307,6 +324,23 @@ function findFirstTextNode(node: Node): Text | null {
       return text;
     }
     child = child.nextSibling;
+  }
+
+  return null;
+}
+
+function findLastTextNode(node: Node): Text | null {
+  if (node instanceof Text) {
+    return node;
+  }
+
+  let child = node.lastChild;
+  while (child) {
+    const text = findLastTextNode(child);
+    if (text) {
+      return text;
+    }
+    child = child.previousSibling;
   }
 
   return null;
@@ -328,6 +362,77 @@ function findNextTextNodeAfter(node: Node, root: HTMLElement): Text | null {
   }
 
   return null;
+}
+
+function findPreviousTextNodeBefore(node: Node, root: HTMLElement): Text | null {
+  let current: Node | null = node;
+
+  while (current && current !== root) {
+    let sibling = current.previousSibling;
+    while (sibling) {
+      const text = findLastTextNode(sibling);
+      if (text) {
+        return text;
+      }
+      sibling = sibling.previousSibling;
+    }
+    current = current.parentNode;
+  }
+
+  return null;
+}
+
+function collectNextText(node: Node, root: HTMLElement, maxChars: number): string {
+  const parts: string[] = [];
+  let current: Node | null = node;
+  let total = 0;
+
+  while (current && total < maxChars) {
+    const textNode = findNextTextNodeAfter(current, root);
+    if (!textNode) {
+      break;
+    }
+    const value = textNode.nodeValue || '';
+    if (value) {
+      parts.push(value);
+      total += value.length;
+    }
+    current = textNode;
+  }
+
+  return parts.join('').slice(0, maxChars);
+}
+
+function collectPreviousText(node: Node, root: HTMLElement, maxChars: number): string {
+  const parts: string[] = [];
+  let current: Node | null = node;
+  let total = 0;
+
+  while (current && total < maxChars) {
+    const textNode = findPreviousTextNodeBefore(current, root);
+    if (!textNode) {
+      break;
+    }
+    const value = textNode.nodeValue || '';
+    if (value) {
+      parts.unshift(value);
+      total += value.length;
+    }
+    current = textNode;
+  }
+
+  return parts.join('').slice(-maxChars);
+}
+
+function normalizeContextText(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function buildReferenceContext(container: HTMLElement, span: HTMLElement): string {
+  const before = collectPreviousText(span, container, REFERENCE_CONTEXT_BEFORE_CHARS);
+  const current = span.textContent || '';
+  const after = collectNextText(span, container, REFERENCE_CONTEXT_AFTER_CHARS);
+  return normalizeContextText(`${before} ${current} ${after}`);
 }
 
 function consumeAdjacentLineSuffix(container: HTMLElement, span: HTMLSpanElement): void {
@@ -355,7 +460,6 @@ function consumeAdjacentLineSuffix(container: HTMLElement, span: HTMLSpanElement
 
   span.dataset.line = String(line);
   span.dataset.originalText = combinedText;
-  span.dataset.cacheKey = getFileReferenceCacheKey(pathText, line);
   span.textContent = combinedText;
 
   textNode.nodeValue = text.slice(suffix.length);
@@ -510,6 +614,17 @@ export function decorateFileReferences(container: HTMLElement | null): () => voi
   }
 
   for (const span of pendingSpans) {
+    const pathText = span.dataset.pathText;
+    const line = Number.parseInt(span.dataset.line || '', 10);
+    if (!pathText || !Number.isFinite(line) || line < 0) {
+      continue;
+    }
+    const contextText = buildReferenceContext(container, span);
+    span.dataset.contextText = contextText;
+    span.dataset.cacheKey = getFileReferenceCacheKey(pathText, line, contextText);
+  }
+
+  for (const span of pendingSpans) {
     applyCachedResult(container, span);
   }
 
@@ -527,13 +642,21 @@ export function decorateFileReferences(container: HTMLElement | null): () => voi
       id: span.dataset.fileRefId || createReferenceId(),
       pathText,
       line,
+      contextText: span.dataset.contextText || '',
     });
   }
 
-  return requestFileReferenceResolution(Array.from(referencesByCacheKey.values()), (results) => {
+  const requests = Array.from(referencesByCacheKey.values());
+  const requestById = new Map(requests.map((request) => [request.id, request]));
+
+  return requestFileReferenceResolution(requests, (results) => {
     for (const result of results) {
-      resolveCache.set(getFileReferenceCacheKey(result.pathText, result.line), result);
-      patchSpansForResult(container, result);
+      const request = requestById.get(result.id);
+      const cacheKey = request
+        ? getFileReferenceCacheKey(request.pathText, request.line, request.contextText || '')
+        : getFileReferenceCacheKey(result.pathText, result.line);
+      resolveCache.set(cacheKey, result);
+      patchSpansForResult(container, result, cacheKey);
     }
   });
 }
