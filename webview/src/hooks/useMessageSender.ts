@@ -38,6 +38,7 @@ export interface UseMessageSenderOptions {
 
 const TAB_AUTO_RENAME_MAX_CHARS = 8;
 const TAB_AUTO_RENAME_PREFERRED_CHARS = 6;
+const MIN_MEANINGFUL_INPUT_CHARS = 8;
 
 function getTruncatedTitle(input: string, maxChars: number): string {
   const normalized = input.replace(/\s+/g, ' ').trim();
@@ -148,6 +149,15 @@ function isContinueLikeInput(input: string): boolean {
     normalized.startsWith('然后') ||
     normalized.startsWith('下一步')
   );
+}
+
+function isMeaningfulRequirementInput(input: string): boolean {
+  const normalized = stripPathLikeContent(input)
+    .replace(/\s+/g, '')
+    .toLowerCase();
+  if (!normalized) return false;
+  if (isContinueLikeInput(normalized)) return false;
+  return Array.from(normalized).length >= MIN_MEANINGFUL_INPUT_CHARS;
 }
 
 function summarizeRequirementTitle(input: string): string {
@@ -462,12 +472,15 @@ export function useMessageSender({
       const autoRenameEnabled = localStorage.getItem('tabAutoRenameEnabled') !== 'false';
       if (autoRenameEnabled && text) {
         let nextTitle = '';
-        if (isContinueLikeInput(text)) {
+        if (!isMeaningfulRequirementInput(text)) {
           nextTitle = lastMeaningfulTitleRef.current;
         } else {
-          nextTitle = summarizeRequirementTitle(text);
-          if (nextTitle) {
-            lastMeaningfulTitleRef.current = nextTitle;
+          const summarized = summarizeRequirementTitle(text);
+          if (summarized) {
+            lastMeaningfulTitleRef.current = summarized;
+            nextTitle = summarized;
+          } else {
+            nextTitle = lastMeaningfulTitleRef.current;
           }
         }
         if (nextTitle) {

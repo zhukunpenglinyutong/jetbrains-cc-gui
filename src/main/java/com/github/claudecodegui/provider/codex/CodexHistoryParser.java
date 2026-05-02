@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Parses Codex history session files into DTOs used by the facade and collaborators.
@@ -24,6 +25,7 @@ class CodexHistoryParser {
 
     private final Gson gson;
     private static final String AGENT_ROLE_SECTION_MARKER = "## Agent Role and Instructions";
+    private static final int MIN_MEANINGFUL_INPUT_CHARS = 8;
 
     CodexHistoryParser() {
         this(new Gson());
@@ -104,16 +106,23 @@ class CodexHistoryParser {
     }
 
     String generateTitle(List<CodexHistoryReader.CodexMessage> messages) {
-        for (CodexHistoryReader.CodexMessage msg : messages) {
+        String fallback = null;
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            CodexHistoryReader.CodexMessage msg = messages.get(i);
             if (!"event_msg".equals(msg.type) || msg.payload == null) {
                 continue;
             }
             String title = extractUserMessageTitle(msg.payload);
             if (title != null) {
-                return title;
+                if (fallback == null) {
+                    fallback = title;
+                }
+                if (isMeaningfulTitle(title)) {
+                    return title;
+                }
             }
         }
-        return null;
+        return fallback;
     }
 
     boolean isValidSession(CodexHistoryReader.SessionInfo session) {
@@ -147,6 +156,37 @@ class CodexHistoryParser {
         text = stripSystemTags(text);
         text = TagExtractor.extractCommandMessageContent(text);
         return TextSanitizer.sanitizeAndTruncateSingleLine(text, 45);
+    }
+
+    private boolean isMeaningfulTitle(String title) {
+        String normalized = normalizeShortInput(title);
+        if (normalized.isEmpty()) {
+            return false;
+        }
+        if (isContinuationLikeInput(normalized)) {
+            return false;
+        }
+        return normalized.codePointCount(0, normalized.length()) >= MIN_MEANINGFUL_INPUT_CHARS;
+    }
+
+    private boolean isContinuationLikeInput(String normalized) {
+        if (normalized.isEmpty()) {
+            return false;
+        }
+        return "continue".equals(normalized)
+                || "goon".equals(normalized)
+                || "/continue".equals(normalized)
+                || normalized.startsWith("继续")
+                || normalized.startsWith("接着")
+                || normalized.startsWith("然后")
+                || normalized.startsWith("下一步");
+    }
+
+    private String normalizeShortInput(String input) {
+        return input
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("[\\s\\p{Punct}，。！？；：、“”‘’（）【】《》…]+", "")
+                .trim();
     }
 
     /**

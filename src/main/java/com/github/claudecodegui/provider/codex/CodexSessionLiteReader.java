@@ -1,9 +1,12 @@
 package com.github.claudecodegui.provider.codex;
 
+import com.github.claudecodegui.util.TagExtractor;
+import com.github.claudecodegui.util.TextSanitizer;
 import com.github.claudecodegui.provider.common.SessionLiteReader;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -24,6 +27,7 @@ public class CodexSessionLiteReader {
             Pattern.CASE_INSENSITIVE
     );
     private static final String AGENT_ROLE_SECTION_MARKER = "## Agent Role and Instructions";
+    private static final int MIN_MEANINGFUL_INPUT_CHARS = 8;
 
     private final SessionLiteReader liteReader;
 
@@ -126,8 +130,8 @@ public class CodexSessionLiteReader {
             }
         }
 
-        // Extract title from first user_message
-        String summary = this.extractFirstUserMessageTitle(lite.head);
+        // Extract title from the latest meaningful user message.
+        String summary = this.extractLatestMeaningfulUserMessageTitle(lite.head, lite.tail);
 
         // Skip sessions with no title
         if (summary == null || summary.isEmpty()) {
@@ -197,46 +201,107 @@ public class CodexSessionLiteReader {
     }
 
     /**
-     * Extracts the first user message title from event_msg.
+     * Extracts the latest meaningful user message title from event_msg records.
+     * Falls back to the latest available user message if all candidates are shorter than 8 chars.
      */
-    private String extractFirstUserMessageTitle(String head) {
-        int start = 0;
-        while (start < head.length()) {
-            int newlineIdx = head.indexOf('\n', start);
-            String line = newlineIdx >= 0 ? head.substring(start, newlineIdx) : head.substring(start);
-            start = newlineIdx >= 0 ? newlineIdx + 1 : head.length();
+    private String extractLatestMeaningfulUserMessageTitle(String head, String tail) {
+        String fromTail = extractLatestMeaningfulUserMessageTitleFromChunk(tail);
+        if (fromTail != null && !fromTail.isEmpty()) {
+            return fromTail;
+        }
+        return extractLatestMeaningfulUserMessageTitleFromChunk(head);
+    }
 
+    private String extractLatestMeaningfulUserMessageTitleFromChunk(String chunk) {
+        if (chunk == null || chunk.isEmpty()) {
+            return null;
+        }
+
+        String fallback = null;
+        int end = chunk.length();
+        while (end > 0) {
+            int newlineIdx = chunk.lastIndexOf('\n', end - 1);
+            int lineStart = newlineIdx >= 0 ? newlineIdx + 1 : 0;
+            String line = chunk.substring(lineStart, end);
+            end = newlineIdx >= 0 ? newlineIdx : 0;
+
+            if (line.isEmpty()) {
+                continue;
+            }
             if (!line.contains("\"type\":\"event_msg\"") && !line.contains("\"type\": \"event_msg\"")) {
                 continue;
             }
-
-            // Check if payload contains user_message
             if (!line.contains("\"user_message\"")) {
                 continue;
             }
 
-            String message = this.liteReader.extractLastJsonStringField(line, "message");
-            if (message != null && !message.isEmpty()) {
-                // Strip system tags
-                message = stripSystemTags(message);
-                message = message.replace("\n", " ").trim();
-
-                // Skip auto-generated patterns
-                if (message.startsWith("<") && message.length() > 1) {
-                    char nextChar = message.charAt(1);
-                    if (Character.isLowerCase(nextChar)) {
-                        continue;
-                    }
-                }
-
-                // Truncate to 45 chars
-                if (message.length() > 45) {
-                    message = message.substring(0, 45).trim() + "\u2026";
-                }
-                return message;
+            String title = extractUserMessageTitleFromLine(line);
+            if (title == null || title.isEmpty()) {
+                continue;
+            }
+            if (fallback == null) {
+                fallback = title;
+            }
+            if (isMeaningfulTitle(title)) {
+                return title;
             }
         }
-        return null;
+
+        return fallback;
+    }
+
+    private String extractUserMessageTitleFromLine(String line) {
+        String message = this.liteReader.extractLastJsonStringField(line, "message");
+        if (message == null || message.isEmpty()) {
+            return null;
+        }
+
+        message = stripSystemTags(message);
+        message = TagExtractor.extractCommandMessageContent(message);
+        if (message == null || message.isEmpty()) {
+            return null;
+        }
+
+        // Skip auto-generated patterns
+        if (message.startsWith("<") && message.length() > 1) {
+            char nextChar = message.charAt(1);
+            if (Character.isLowerCase(nextChar)) {
+                return null;
+            }
+        }
+
+        return TextSanitizer.sanitizeAndTruncateSingleLine(message, 45);
+    }
+
+    private boolean isMeaningfulTitle(String title) {
+        String normalized = normalizeShortInput(title);
+        if (normalized.isEmpty()) {
+            return false;
+        }
+        if (isContinuationLikeInput(normalized)) {
+            return false;
+        }
+        return normalized.codePointCount(0, normalized.length()) >= MIN_MEANINGFUL_INPUT_CHARS;
+    }
+
+    private boolean isContinuationLikeInput(String normalized) {
+        if (normalized.isEmpty()) {
+            return false;
+        }
+        return "continue".equals(normalized)
+                || "goon".equals(normalized)
+                || "/continue".equals(normalized)
+                || normalized.startsWith("继续")
+                || normalized.startsWith("接着")
+                || normalized.startsWith("然后")
+                || normalized.startsWith("下一步");
+    }
+
+    private String normalizeShortInput(String input) {
+        return input
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("[\\s\\p{Punct}，。！？；：、“”‘’（）【】《》…]+", "")
+                .trim();
     }
 
     /**

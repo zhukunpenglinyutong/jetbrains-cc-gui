@@ -59,6 +59,21 @@ public class CodexSessionLiteReaderTest {
     }
 
     @Test
+    public void parseSessionInfoFromLite_skipsLowSignalLatestUserMessage() {
+        String sessionId = "thread_abc123def456";
+        SessionLiteReader.LiteSessionFile lite = new SessionLiteReader.LiteSessionFile(
+                System.currentTimeMillis(), 1000,
+                "{\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\",\"message\":\"请帮我修复历史标题\"}}\n",
+                "{\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\",\"message\":\"请帮我修复历史标题\"}}\n" +
+                        "{\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\",\"message\":\"继续\"}}\n"
+        );
+
+        CodexSessionLiteReader.CodexLiteSessionInfo info = reader.parseSessionInfoFromLite(sessionId, lite);
+        assertNotNull(info);
+        assertEquals("请帮我修复历史标题", info.summary);
+    }
+
+    @Test
     public void parseSessionInfoFromLite_noTitleReturnsNull() {
         String sessionId = "thread_abc123def456";
         SessionLiteReader.LiteSessionFile lite = new SessionLiteReader.LiteSessionFile(

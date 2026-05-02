@@ -56,6 +56,29 @@ public class CodexHistoryReaderRefactorTest {
     }
 
     @Test
+    public void parserPrefersLatestMeaningfulUserRequirement() throws IOException {
+        Path sessionsDir = Files.createTempDirectory("codex-history-parser-latest");
+        try {
+            Path sessionFile = writeSessionFile(
+                    sessionsDir,
+                    "session-latest",
+                    line("2026-03-10T10:00:00Z", "session_meta", "{\"cwd\":\"/workspace/demo\",\"timestamp\":\"2026-03-10T10:00:00Z\"}"),
+                    line("2026-03-10T10:01:00Z", "event_msg", "{\"type\":\"user_message\",\"message\":\"请修复历史标题提取逻辑\"}"),
+                    line("2026-03-10T10:02:00Z", "event_msg", "{\"type\":\"user_message\",\"message\":\"继续\"}"),
+                    line("2026-03-10T10:03:00Z", "response_item", "{\"type\":\"message\"}")
+            );
+
+            CodexHistoryParser parser = new CodexHistoryParser(new Gson());
+            SessionInfo session = parser.parseSessionFile(sessionFile);
+
+            assertNotNull(session);
+            assertEquals("请修复历史标题提取逻辑", session.title);
+        } finally {
+            deleteDirectory(sessionsDir);
+        }
+    }
+
+    @Test
     public void sessionServiceTransformsFileViewingShellCommandToRead() throws IOException {
         Path sessionsDir = Files.createTempDirectory("codex-history-messages");
         try {
