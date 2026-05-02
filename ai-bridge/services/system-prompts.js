@@ -8,6 +8,7 @@
  * Centralizes prompt management for easier maintenance and modification.
  */
 import { getWindowsPathConstraint } from '../utils/prompt-utils.js';
+import { buildFileReferenceOutputPrompt } from './file-reference-output-prompt.js';
 
 /**
  * Build the IDE context system prompt.
@@ -43,6 +44,8 @@ function buildIDEContextPrompt(openedFiles, agentPrompt = null) {
   }
 
   prompt += getWindowsPathConstraint({ extra: 'Apply this rule going forward, not just for this file.' });
+  prompt += '\n\n';
+  prompt += buildFileReferenceOutputPrompt();
 
   if (!openedFiles || typeof openedFiles !== 'object') {
     // If there's only an agent prompt with no IDE context, still return the agent prompt

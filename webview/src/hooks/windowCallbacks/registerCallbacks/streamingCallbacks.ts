@@ -347,37 +347,12 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     // Snapshot streaming state BEFORE clearing refs - used for post-stream merge guard
     const endedStreamingTurnId = streamingTurnIdRef.current;
     const endedStreamingMessageIndex = streamingMessageIndexRef.current;
-    // Use the more complete content between streaming ref and backend snapshot
-    const endedStreamingContent = (backendSnapshotContent && backendSnapshotContent.length > streamingContentRef.current.length)
-      ? backendSnapshotContent
-      : streamingContentRef.current;
+    // The backend snapshot is authoritative at stream end. During streaming the
+    // local buffer may contain temporary duplicated text; switching sessions
+    // reloads this same backend snapshot, which is why the UI self-corrects
+    // after navigation. If no snapshot is available, keep the local buffer.
+    const endedStreamingContent = backendSnapshotContent ?? streamingContentRef.current;
     const endedBackendRaw = backendSnapshotRaw;
-
-    // Helper to measure total text length from raw blocks (for comparing completeness).
-    // Handles both object and JSON string formats of raw.
-    type TextBlock = { type: 'text'; text: string };
-    const hasTextBlocks = (value: unknown): value is { message: { content: TextBlock[] } } => {
-      if (!value || typeof value !== 'object') return false;
-      const msg = (value as { message?: unknown }).message;
-      if (!msg || typeof msg !== 'object') return false;
-      const content = (msg as { content?: unknown }).content;
-      return Array.isArray(content);
-    };
-    const getTextLenFromRaw = (raw: unknown): number => {
-      let parsedRaw: unknown = raw;
-      if (typeof raw === 'string') {
-        try {
-          parsedRaw = JSON.parse(raw);
-        } catch (error) {
-          console.warn('[Frontend] Failed to parse raw JSON for length comparison:', error);
-          return 0;
-        }
-      }
-      if (!hasTextBlocks(parsedRaw)) return 0;
-      return parsedRaw.message.content
-        .filter((b): b is TextBlock => b?.type === 'text' && typeof b.text === 'string')
-        .reduce((sum, b) => sum + b.text.length, 0);
-    };
 
     // FIX: Clear streaming refs BEFORE setMessages updater to prevent race conditions.
     //
@@ -432,15 +407,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
         const durationMs = (typeof turnStartedAt === 'number' && turnStartedAt > 0)
           ? Date.now() - turnStartedAt
           : undefined;
-        // Use backend raw blocks only if they are more complete than the existing raw.
-        // The backend snapshot may be from an earlier coalescer flush, so the existing
-        // raw (updated by subsequent deltas) could actually be more up-to-date.
-        let finalRaw = newMessages[idx].raw;
-        if (endedBackendRaw != null) {
-          if (getTextLenFromRaw(endedBackendRaw) >= getTextLenFromRaw(finalRaw)) {
-            finalRaw = endedBackendRaw;
-          }
-        }
+        const finalRaw = endedBackendRaw ?? newMessages[idx].raw;
         newMessages[idx] = {
           ...newMessages[idx],
           content: finalContent,

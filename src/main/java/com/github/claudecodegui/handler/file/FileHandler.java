@@ -6,6 +6,8 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.model.FileSortItem;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
@@ -26,7 +28,12 @@ public class FileHandler extends BaseMessageHandler {
 
     private static final Logger LOG = Logger.getInstance(FileHandler.class);
 
-    private static final String[] SUPPORTED_TYPES = {"list_files", "open_file", "open_browser"};
+    private static final String[] SUPPORTED_TYPES = {
+            "list_files",
+            "open_file",
+            "open_browser",
+            "resolve_file_references"
+    };
 
     private final OpenFileHandler openFileHandler;
     private final OpenFileCollector openFileCollector;
@@ -63,8 +70,69 @@ public class FileHandler extends BaseMessageHandler {
                 openFileHandler.handleOpenBrowser(content);
                 yield true;
             }
+            case "resolve_file_references" -> {
+                handleResolveFileReferences(content);
+                yield true;
+            }
             default -> false;
         };
+    }
+
+    /**
+     * Resolve AI-rendered file references to real project files.
+     */
+    private void handleResolveFileReferences(String content) {
+        CompletableFuture.runAsync(() -> {
+            Gson gson = new Gson();
+            JsonObject response = new JsonObject();
+            JsonArray results = new JsonArray();
+
+            try {
+                JsonObject request = gson.fromJson(content, JsonObject.class);
+                String requestId = request != null && request.has("requestId")
+                        ? request.get("requestId").getAsString()
+                        : "";
+                response.addProperty("requestId", requestId);
+
+                String sessionCwd = context.getSession() != null ? context.getSession().getCwd() : null;
+                String projectBasePath = context.getProject() != null ? context.getProject().getBasePath() : null;
+                FileReferenceResolver resolver = new FileReferenceResolver(
+                        context.getProject(),
+                        sessionCwd,
+                        projectBasePath
+                );
+
+                JsonArray references = request != null && request.has("references")
+                        && request.get("references").isJsonArray()
+                        ? request.getAsJsonArray("references")
+                        : new JsonArray();
+
+                for (JsonElement element : references) {
+                    if (!element.isJsonObject()) {
+                        continue;
+                    }
+                    JsonObject reference = element.getAsJsonObject();
+                    FileReferenceResolver.ResolveRequest resolveRequest =
+                            new FileReferenceResolver.ResolveRequest(
+                                    getString(reference, "id"),
+                                    getString(reference, "pathText"),
+                                    getInt(reference, "line"),
+                                    getString(reference, "contextText")
+                            );
+                    results.add(toJson(resolver.resolve(resolveRequest)));
+                }
+            } catch (Exception e) {
+                LOG.warn("[FileHandler] Failed to resolve file references: " + e.getMessage(), e);
+                response.addProperty("requestId", "");
+            }
+
+            response.add("results", results);
+            String resultJson = gson.toJson(response);
+
+            ApplicationManager.getApplication().invokeLater(() ->
+                    callJavaScript("window.onFileReferenceResolveResult", escapeJs(resultJson))
+            );
+        });
     }
 
     /**
@@ -125,6 +193,29 @@ public class FileHandler extends BaseMessageHandler {
         ApplicationManager.getApplication().invokeLater(() -> {
             callJavaScript("window.onFileListResult", escapeJs(resultJson));
         });
+    }
+
+    private static JsonObject toJson(FileReferenceResolver.ResolveResult result) {
+        JsonObject json = new JsonObject();
+        json.addProperty("id", result.id);
+        json.addProperty("pathText", result.pathText);
+        json.addProperty("line", result.line);
+        json.addProperty("resolved", result.resolved);
+        if (result.resolvedPath != null) {
+            json.addProperty("resolvedPath", result.resolvedPath);
+        }
+        if (result.reason != null) {
+            json.addProperty("reason", result.reason);
+        }
+        return json;
+    }
+
+    private static String getString(JsonObject json, String key) {
+        return json.has(key) && !json.get(key).isJsonNull() ? json.get(key).getAsString() : "";
+    }
+
+    private static int getInt(JsonObject json, String key) {
+        return json.has(key) && !json.get(key).isJsonNull() ? json.get(key).getAsInt() : 0;
     }
 
     /**

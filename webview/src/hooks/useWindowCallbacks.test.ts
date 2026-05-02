@@ -431,6 +431,57 @@ describe('useWindowCallbacks integration', () => {
     expect(opts.setMessages).toHaveBeenCalledTimes(1);
   });
 
+  it('onStreamEnd prefers backend final snapshot over duplicated streaming raw', () => {
+    const duplicatedText = '正常最终内容。正常最终内容。';
+    const finalText = '正常最终内容。';
+    const duplicatedRaw = {
+      message: {
+        content: [{ type: 'text', text: duplicatedText }],
+      },
+    };
+    const finalRaw = {
+      message: {
+        content: [{ type: 'text', text: finalText }],
+      },
+    };
+    const opts = createOptions({
+      isStreamingRef: { current: true },
+      streamingContentRef: { current: duplicatedText },
+      streamingMessageIndexRef: { current: 0 },
+      streamingTurnIdRef: { current: 42 },
+    });
+    renderHook(() => useWindowCallbacks(opts));
+
+    window.__pendingUpdateJson = JSON.stringify([
+      {
+        type: 'assistant',
+        content: finalText,
+        raw: finalRaw,
+        timestamp: '2026-04-30T11:00:00.000Z',
+      },
+    ]);
+
+    act(() => {
+      (window as any).onStreamEnd('42');
+    });
+
+    const updater = (opts.setMessages as any).mock.calls[0][0] as (prev: ClaudeMessage[]) => ClaudeMessage[];
+    const next = updater([
+      {
+        type: 'assistant',
+        content: duplicatedText,
+        raw: duplicatedRaw as any,
+        isStreaming: true,
+        __turnId: 42,
+        timestamp: '2026-04-30T11:00:00.000Z',
+      },
+    ]);
+
+    expect(next[0].content).toBe(finalText);
+    expect((next[0].raw as any).message.content[0].text).toBe(finalText);
+    expect(next[0].isStreaming).toBe(false);
+  });
+
   it('accepts streaming updateMessages when assistant raw blocks gain spawn_agent tool_use', () => {
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0);
