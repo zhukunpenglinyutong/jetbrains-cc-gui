@@ -242,17 +242,26 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
     if (lastBlock && typeof lastBlock === 'object' && lastBlock.type === type) {
       const existing = getBlockTextContent(lastBlock, type);
       const merged = mergeStreamingTextLikeContent(existing, novel);
+
+      // Only update if content actually changed — prevents unnecessary React re-renders
+      const currentThinking = lastBlock.thinking ?? lastBlock.text ?? '';
+      const currentText = lastBlock.text ?? '';
+
       if (type === 'thinking') {
-        output[output.length - 1] = {
-          ...lastBlock,
-          thinking: merged,
-          text: merged,
-        };
+        if (merged !== currentThinking || merged !== currentText) {
+          output[output.length - 1] = {
+            ...lastBlock,
+            thinking: merged,
+            text: merged,
+          };
+        }
       } else {
-        output[output.length - 1] = {
-          ...lastBlock,
-          text: merged,
-        };
+        if (merged !== currentText) {
+          output[output.length - 1] = {
+            ...lastBlock,
+            text: merged,
+          };
+        }
       }
       return;
     }
@@ -321,74 +330,109 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
       }
     }
 
-    return mergeOverlappingThinkingBlocks(output);
+    return deduplicateTextLikeBlocks(output);
   };
 
   /**
-   * Merge thinking blocks with overlapping content to prevent duplication.
-   * Preserves distinct thinking phases that have no content overlap.
-   * Uses mark-and-filter approach to avoid splice index corruption.
+   * Remove text/thinking blocks whose content is fully contained within
+   * another block of the same type, then merge the survivors so the
+   * longest version wins.  Handles both text and thinking blocks in a
+   * single pass.
+   *
+   * This is the "nuclear" dedup: if buildStreamingBlocks produces N text
+   * blocks with overlapping content (e.g. cumulative snapshots), this
+   * collapses them into a single block containing the longest variant.
    */
-  const mergeOverlappingThinkingBlocks = (blocks: ContentBlock[]): ContentBlock[] => {
-    const thinkingIndices: number[] = [];
+  const deduplicateTextLikeBlocks = (blocks: ContentBlock[]): ContentBlock[] => {
+    // Collect indices by type
+    const indices: { type: 'text' | 'thinking'; idx: number; content: string }[] = [];
     for (let i = 0; i < blocks.length; i++) {
-      if (blocks[i]?.type === 'thinking') thinkingIndices.push(i);
-    }
-
-    if (thinkingIndices.length <= 1) return blocks;
-
-    const thinkingContents = thinkingIndices.map((i) =>
-      normalizeThinking(blocks[i]?.thinking ?? blocks[i]?.text ?? ''),
-    );
-
-    // Group thinking blocks that have overlapping content
-    const mergeGroups: number[][] = [];
-    const assigned = new Set<number>();
-
-    for (let i = 0; i < thinkingContents.length; i++) {
-      if (assigned.has(i)) continue;
-      const group = [i];
-      assigned.add(i);
-
-      for (let j = i + 1; j < thinkingContents.length; j++) {
-        if (assigned.has(j)) continue;
-        const a = thinkingContents[i];
-        const b = thinkingContents[j];
-        // Overlap: one contains the other (covers prefix/suffix cases too)
-        if (a.includes(b) || b.includes(a)) {
-          group.push(j);
-          assigned.add(j);
-        }
+      const block = blocks[i];
+      if (!block || typeof block !== 'object') continue;
+      if (block.type === 'thinking') {
+        indices.push({ type: 'thinking', idx: i, content: normalizeThinking(block.thinking ?? block.text ?? '') });
+      } else if (block.type === 'text') {
+        indices.push({ type: 'text', idx: i, content: block.text ?? '' });
       }
-      mergeGroups.push(group);
     }
 
-    // Mark indices to remove, update first block with merged content
+    if (indices.length <= 1) return blocks;
+
+    // Group consecutive same-type blocks that have overlapping content
     const toRemove = new Set<number>();
-    for (const group of mergeGroups) {
-      if (group.length === 1) continue;
+    let groupStart = 0;
+    while (groupStart < indices.length) {
+      const groupType = indices[groupStart].type;
+      let groupEnd = groupStart;
+      while (groupEnd + 1 < indices.length && indices[groupEnd + 1].type === groupType) {
+        groupEnd += 1;
+      }
+      const groupSize = groupEnd - groupStart + 1;
+      if (groupSize <= 1) {
+        groupStart = groupEnd + 1;
+        continue;
+      }
 
-      let merged = '';
-      for (const idx of group) {
-        const content = thinkingContents[idx];
-        if (content.includes(merged)) {
-          merged = content;
-        } else if (!merged.includes(content)) {
-          merged = mergeStreamingTextLikeContent(merged, content);
+      // Find the longest content in this group — that's the one we keep.
+      // When lengths are equal, keep the earliest one (groupStart).
+      let longestLocalIdx = groupStart;
+      for (let i = groupStart + 1; i <= groupEnd; i++) {
+        if (indices[i].content.length > indices[longestLocalIdx].content.length) {
+          longestLocalIdx = i;
+        }
+      }
+      const longestContent = indices[longestLocalIdx].content;
+
+      // Remove any block whose content is fully contained in the longest.
+      // This handles three cases:
+      // 1. Empty content (c.length === 0)
+      // 2. Identical content (c === longestContent)
+      // 3. Shorter content that is a substring (c.length < longestContent.length && longestContent.includes(c))
+      for (let i = groupStart; i <= groupEnd; i++) {
+        if (i === longestLocalIdx) continue;
+        const c = indices[i].content;
+        if (c.length === 0 || c === longestContent || (c.length < longestContent.length && longestContent.includes(c))) {
+          toRemove.add(indices[i].idx);
         }
       }
 
-      const firstIdx = thinkingIndices[group[0]];
-      blocks[firstIdx] = { type: 'thinking', thinking: merged, text: merged };
+      groupStart = groupEnd + 1;
+    }
 
-      // Mark other blocks in group for removal
-      for (let k = 1; k < group.length; k++) {
-        toRemove.add(thinkingIndices[group[k]]);
+    if (toRemove.size === 0) return blocks;
+
+    // Update surviving blocks to use the longest content
+    const longestByGroup = new Map<number, { content: string; type: 'text' | 'thinking' }>();
+    let gs2 = 0;
+    while (gs2 < indices.length) {
+      const gt = indices[gs2].type;
+      let ge = gs2;
+      while (ge + 1 < indices.length && indices[ge + 1].type === gt) ge += 1;
+      if (ge - gs2 + 1 > 1) {
+        let longest = indices[gs2];
+        for (let i = gs2 + 1; i <= ge; i++) {
+          if (indices[i].content.length > longest.content.length) longest = indices[i];
+        }
+        longestByGroup.set(longest.idx, { content: longest.content, type: gt });
+      }
+      gs2 = ge + 1;
+    }
+
+    const result = blocks.filter((_, idx) => !toRemove.has(idx));
+    for (const [idx, info] of longestByGroup) {
+      const block = result.find((b) => {
+        return b === blocks[idx];
+      });
+      if (!block) continue;
+      if (info.type === 'thinking') {
+        (block as any).thinking = info.content;
+        (block as any).text = info.content;
+      } else {
+        (block as any).text = info.content;
       }
     }
 
-    // Filter out marked blocks (single pass, no index corruption)
-    return toRemove.size === 0 ? blocks : blocks.filter((_, idx) => !toRemove.has(idx));
+    return result;
   };
 
   /**

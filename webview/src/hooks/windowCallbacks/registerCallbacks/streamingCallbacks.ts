@@ -98,6 +98,11 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     }, STREAM_STALL_CHECK_INTERVAL_MS);
   };
 
+  // Delta deduplication state - initialize tracking for content and thinking deltas
+  // Always reset, don't check for undefined
+  window.__lastContentDelta = '';
+  window.__lastThinkingDelta = '';
+
   window.onStreamStart = () => {
     if (window.__sessionTransitioning) return;
     // Clear any stale pending updateMessages from previous turn.
@@ -131,6 +136,9 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     streamingMessageIndexRef.current = -1;
     turnIdCounterRef.current += 1;
     streamingTurnIdRef.current = turnIdCounterRef.current;
+    // Reset delta deduplication state for new stream
+    window.__lastContentDelta = '';
+    window.__lastThinkingDelta = '';
     setMessages((prev) => {
       const last = prev[prev.length - 1];
       if (last?.type === 'assistant') {
@@ -161,6 +169,38 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     if (window.__sessionTransitioning) return;
     if (!isStreamingRef.current) return;
     window.__lastStreamActivityAt = Date.now();
+
+    // Exact duplicate detection
+    if (delta === window.__lastContentDelta) {
+      console.debug('[ContentDedup] Skipping exact duplicate delta');
+      return;
+    }
+
+    const currentContent = streamingContentRef.current || '';
+
+    // Cumulative delta normalization: the ai-bridge should send incremental
+    // deltas, but when it sends a cumulative snapshot (full content so far),
+    // naive += appending multiplies the content.  Detect this by checking
+    // whether the delta starts with the current buffer — if so, extract only
+    // the novel suffix.
+    if (currentContent.length > 0 && delta.length > currentContent.length && delta.startsWith(currentContent)) {
+      const incremental = delta.slice(currentContent.length);
+      if (!incremental) {
+        console.debug('[ContentDedup] Skipping fully-duplicate cumulative delta');
+        window.__lastContentDelta = delta;
+        return;
+      }
+      delta = incremental;
+    }
+
+    // Suffix duplicate detection
+    if (delta.length < currentContent.length && currentContent.endsWith(delta)) {
+      console.debug('[ContentDedup] Skipping suffix duplicate delta');
+      window.__lastContentDelta = delta;
+      return;
+    }
+
+    window.__lastContentDelta = delta;
     streamingContentRef.current += delta;
     activeThinkingSegmentIndexRef.current = -1;
 
@@ -216,6 +256,33 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     if (window.__sessionTransitioning) return;
     if (!isStreamingRef.current) return;
     window.__lastStreamActivityAt = Date.now();
+
+    // Exact duplicate detection
+    if (delta === window.__lastThinkingDelta) {
+      console.debug('[ThinkingDedup] Skipping exact duplicate delta');
+      return;
+    }
+
+    // Cumulative delta normalization (same logic as onContentDelta)
+    const currentThinking = streamingThinkingSegmentsRef.current[activeThinkingSegmentIndexRef.current] || '';
+    if (currentThinking.length > 0 && delta.length > currentThinking.length && delta.startsWith(currentThinking)) {
+      const incremental = delta.slice(currentThinking.length);
+      if (!incremental) {
+        console.debug('[ThinkingDedup] Skipping fully-duplicate cumulative delta');
+        window.__lastThinkingDelta = delta;
+        return;
+      }
+      delta = incremental;
+    }
+
+    // Suffix duplicate detection
+    if (delta.length < currentThinking.length && currentThinking.endsWith(delta)) {
+      console.debug('[ThinkingDedup] Skipping suffix duplicate delta');
+      window.__lastThinkingDelta = delta;
+      return;
+    }
+
+    window.__lastThinkingDelta = delta;
     activeTextSegmentIndexRef.current = -1;
 
     let forceUpdate = false;
