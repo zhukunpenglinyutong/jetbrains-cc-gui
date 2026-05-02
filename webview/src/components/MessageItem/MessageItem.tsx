@@ -618,7 +618,7 @@ export const MessageItem = memo(function MessageItem({
       {message.type === 'assistant' && !isMessageStreaming && typeof message.durationMs === 'number' && (
         <div className="message-duration">
           <span className="message-duration-inner">
-            <span className="message-duration-flag codicon codicon-clock"></span>
+            <span className="message-duration-flag codicon codicon-watch"></span>
             <span className="message-duration-value">{formatDurationMs(message.durationMs)}</span>
           </span>
         </div>
