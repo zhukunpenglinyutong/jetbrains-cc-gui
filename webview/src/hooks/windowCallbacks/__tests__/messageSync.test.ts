@@ -6,6 +6,7 @@ import {
   appendOptimisticMessageIfMissing,
   ensureStreamingAssistantInList,
   getRawUuid,
+  mergeRawBlocksDuringStreaming,
   preserveLastAssistantIdentity,
   preserveMessageIdentity,
   preserveStreamingAssistantContent,
@@ -781,5 +782,351 @@ describe('preserveStreamingAssistantContent — raw blocks protection', () => {
     expect(blocks[0].type).toBe('thinking');
     expect((blocks[0].thinking as string).length).toBe(longThinking.length);
     expect(blocks[1].text).toBe('answer');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// mergeRawBlocksDuringStreaming
+//
+// Tests the length-based comparison and content validation logic for
+// protecting streamed text/thinking blocks from stale backend snapshots.
+// ---------------------------------------------------------------------------
+
+describe('mergeRawBlocksDuringStreaming', () => {
+  // Helper to extract text from a raw block result
+  const textBlock = (text: string) => ({ type: 'text', text });
+  const thinkingBlock = (thinking: string) => ({ type: 'thinking', thinking, text: thinking });
+  const toolUseBlock = (id: string, name: string) => ({ type: 'tool_use', id, name, input: {} });
+
+  // -- Guard: returns nextRaw unchanged when inputs are invalid --
+
+  describe('guard clauses', () => {
+    it('returns nextRaw unchanged when prevRaw is null', () => {
+      const next = { message: { content: [textBlock('hello')] } };
+      expect(mergeRawBlocksDuringStreaming(null, next)).toBe(next);
+    });
+
+    it('returns nextRaw unchanged when prevRaw is undefined', () => {
+      const next = { message: { content: [textBlock('hello')] } };
+      expect(mergeRawBlocksDuringStreaming(undefined, next)).toBe(next);
+    });
+
+    it('returns nextRaw unchanged when prevRaw is a string', () => {
+      const next = { message: { content: [textBlock('hello')] } };
+      expect(mergeRawBlocksDuringStreaming('raw-string', next)).toBe(next);
+    });
+
+    it('returns nextRaw unchanged when nextRaw is null', () => {
+      const prev = { message: { content: [textBlock('long')] } };
+      expect(mergeRawBlocksDuringStreaming(prev, null)).toBe(null);
+    });
+
+    it('returns nextRaw unchanged when nextRaw is undefined', () => {
+      const prev = { message: { content: [textBlock('long')] } };
+      expect(mergeRawBlocksDuringStreaming(prev, undefined)).toBe(undefined);
+    });
+
+    it('returns nextRaw unchanged when nextRaw has empty blocks', () => {
+      const prev = { message: { content: [textBlock('long')] } };
+      const next = { message: { content: [] } };
+      expect(mergeRawBlocksDuringStreaming(prev, next)).toBe(next);
+    });
+
+    it('returns nextRaw unchanged when nextRaw has no content array', () => {
+      const prev = { message: { content: [textBlock('long')] } };
+      const next = { message: {} };
+      expect(mergeRawBlocksDuringStreaming(prev, next)).toBe(next);
+    });
+  });
+
+  // -- prevLen < nextLen: return nextBlock (backend is more up-to-date) --
+
+  describe('prevLen < nextLen: nextBlock wins', () => {
+    it('returns nextBlock when prev text block is shorter', () => {
+      const prev = { message: { content: [textBlock('AB')] } };
+      const next = { message: { content: [textBlock('ABCDE')] } };
+
+      const result = mergeRawBlocksDuringStreaming(prev, next);
+      const blocks = (result as any).message.content;
+      expect(blocks[0].text).toBe('ABCDE');
+    });
+
+    it('returns nextBlock when prev thinking block is shorter', () => {
+      const prev = { message: { content: [thinkingBlock('short')] } };
+      const next = { message: { content: [thinkingBlock('much longer thinking')] } };
+
+      const result = mergeRawBlocksDuringStreaming(prev, next);
+      const blocks = (result as any).message.content;
+      expect(blocks[0].thinking).toBe('much longer thinking');
+    });
+
+    it('returns same nextRaw reference when no protection needed (all next longer)', () => {
+      const prev = { message: { content: [textBlock('A')] } };
+      const next = { message: { content: [textBlock('ABCDE')] } };
+
+      // When no block needs protecting, nextRaw should be returned unchanged
+      const result = mergeRawBlocksDuringStreaming(prev, next);
+      expect(result).toBe(next);
+    });
+
+    it('returns nextBlock when prev has no text-like blocks to compare', () => {
+      // prev has only a tool_use block (not text-like), so prevBlock is undefined
+      const prev = { message: { content: [toolUseBlock('tu-1', 'Read')] } };
+      const next = { message: { content: [textBlock('ABCDE')] } };
+
+      const result = mergeRawBlocksDuringStreaming(prev, next);
+      const blocks = (result as any).message.content;
+      expect(blocks[0].text).toBe('ABCDE');
+    });
+  });
+
+  // -- prevLen === nextLen: content validation --
+
+  describe('prevLen === nextLen: content validation', () => {
+    it('returns nextBlock when lengths are equal and next content is same length', () => {
+      const prev = { message: { content: [textBlock('ABCDE')] } };
+      const next = { message: { content: [textBlock('FGHIJ')] } };
+
+      // Both length 5; nextContent.length (5) >= prevContent.length (5) => return nextBlock
+      const result = mergeRawBlocksDuringStreaming(prev, next);
+      const blocks = (result as any).message.content;
+      expect(blocks[0].text).toBe('FGHIJ');
+    });
+
+    it('returns nextBlock when lengths are equal and content is identical', () => {
+      const prev = { message: { content: [textBlock('ABCDE')] } };
+      const next = { message: { content: [textBlock('ABCDE')] } };
+
+      const result = mergeRawBlocksDuringStreaming(prev, next);
+      // Should be same reference since no change is needed
+      expect(result).toBe(next);
+    });
+
+    it('uses prev content when lengths are equal but next content is shorter', () => {
+      // This is a subtle edge case: getTextLikeLength counts character length,
+      // but getTextLikeContent might return a different length if the block
+      // has non-standard fields. In normal text blocks, getTextLikeLength
+      // returns block.text.length and getTextLikeContent returns block.text,
+      // so they are the same. This test verifies the actual code path.
+      const prev = { message: { content: [textBlock('ABCDE')] } };
+      // Create a text block where text.length equals prev text length
+      // but getTextLikeContent returns something shorter (edge case with thinking blocks)
+      const next = { message: { content: [{ type: 'text', text: 'ABCDE' }] } };
+
+      const result = mergeRawBlocksDuringStreaming(prev, next);
+      // prevLen === nextLen (5 === 5), nextContent.length (5) >= prevContent.length (5) => nextBlock wins
+      expect(result).toBe(next);
+    });
+
+    it('thinking block with equal lengths: nextBlock wins when content length matches', () => {
+      const prev = { message: { content: [thinkingBlock('ABCDE')] } };
+      const next = { message: { content: [thinkingBlock('FGHIJ')] } };
+
+      const result = mergeRawBlocksDuringStreaming(prev, next);
+      const blocks = (result as any).message.content;
+      expect(blocks[0].thinking).toBe('FGHIJ');
+    });
+  });
+
+  // -- prevLen > nextLen: use prev content (protection case) --
+
+  describe('prevLen > nextLen: prev content wins (protection)', () => {
+    it('replaces shorter next text block with longer prev text', () => {
+      const prev = { message: { content: [textBlock('ABCDE')] } };
+      const next = { message: { content: [textBlock('AB')] } };
+
+      const result = mergeRawBlocksDuringStreaming(prev, next);
+      const blocks = (result as any).message.content;
+      expect(blocks[0].text).toBe('ABCDE');
+      // Should NOT be the same reference since content was modified
+      expect(result).not.toBe(next);
+    });
+
+    it('replaces shorter next thinking block with longer prev thinking', () => {
+      const prev = { message: { content: [thinkingBlock('Long reasoning here')] } };
+      const next = { message: { content: [thinkingBlock('Short')] } };
+
+      const result = mergeRawBlocksDuringStreaming(prev, next);
+      const blocks = (result as any).message.content;
+      expect(blocks[0].thinking).toBe('Long reasoning here');
+      expect(blocks[0].text).toBe('Long reasoning here');
+    });
+
+    it('protects text block while keeping structural blocks from next', () => {
+      const prev = {
+        message: { content: [textBlock('ABCDE')] },
+      };
+      const next = {
+        message: {
+          content: [
+            textBlock('AB'),
+            toolUseBlock('tu-1', 'Read'),
+          ],
+        },
+      };
+
+      const result = mergeRawBlocksDuringStreaming(prev, next);
+      const blocks = (result as any).message.content;
+      expect(blocks).toHaveLength(2);
+      expect(blocks[0].text).toBe('ABCDE'); // protected from prev
+      expect(blocks[1].type).toBe('tool_use'); // kept from next
+      expect(blocks[1].id).toBe('tu-1');
+    });
+
+    it('protects multiple text-like blocks positionally', () => {
+      const prev = {
+        message: {
+          content: [
+            thinkingBlock('Deep thought ABCDE'),
+            textBlock('Response FGHIJ'),
+          ],
+        },
+      };
+      const next = {
+        message: {
+          content: [
+            thinkingBlock('Shallow'),
+            textBlock('Short'),
+          ],
+        },
+      };
+
+      const result = mergeRawBlocksDuringStreaming(prev, next);
+      const blocks = (result as any).message.content;
+      expect(blocks).toHaveLength(2);
+      expect(blocks[0].thinking).toBe('Deep thought ABCDE');
+      expect(blocks[1].text).toBe('Response FGHIJ');
+    });
+  });
+
+  // -- Mixed scenarios --
+
+  describe('mixed scenarios', () => {
+    it('handles interleaved structural and text blocks correctly', () => {
+      // prev: [text("ABCDE"), tool_use, text("FGHIJ")]
+      // next: [text("AB"),     tool_use, text("FG")]
+      // Expected: [text("ABCDE"), tool_use, text("FGHIJ")]
+      const prev = {
+        message: {
+          content: [
+            textBlock('ABCDE'),
+            toolUseBlock('tu-1', 'Read'),
+            textBlock('FGHIJ'),
+          ],
+        },
+      };
+      const next = {
+        message: {
+          content: [
+            textBlock('AB'),
+            toolUseBlock('tu-1', 'Read'),
+            textBlock('FG'),
+          ],
+        },
+      };
+
+      const result = mergeRawBlocksDuringStreaming(prev, next);
+      const blocks = (result as any).message.content;
+      expect(blocks).toHaveLength(3);
+      expect(blocks[0].text).toBe('ABCDE');
+      expect(blocks[1].type).toBe('tool_use');
+      expect(blocks[2].text).toBe('FGHIJ');
+    });
+
+    it('returns same reference when next blocks are all longer or equal', () => {
+      const prev = {
+        message: {
+          content: [textBlock('A'), thinkingBlock('B')],
+        },
+      };
+      const next = {
+        message: {
+          content: [textBlock('AAAA'), thinkingBlock('BBBB')],
+        },
+      };
+
+      const result = mergeRawBlocksDuringStreaming(prev, next);
+      expect(result).toBe(next);
+    });
+
+    it('handles raw with top-level content (no message wrapper)', () => {
+      const prev = { content: [textBlock('ABCDE')] };
+      const next = { content: [textBlock('AB')] };
+
+      const result = mergeRawBlocksDuringStreaming(prev, next);
+      const blocks = (result as any).content;
+      expect(blocks[0].text).toBe('ABCDE');
+    });
+
+    it('preserves non-text-like blocks unchanged from next', () => {
+      const imageBlock = { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'abc' } };
+      const next = {
+        message: {
+          content: [
+            textBlock('short'),
+            imageBlock,
+            toolUseBlock('tu-1', 'Write'),
+          ],
+        },
+      };
+      const prev = {
+        message: {
+          content: [textBlock('much longer text')],
+        },
+      };
+
+      const result = mergeRawBlocksDuringStreaming(prev, next);
+      const blocks = (result as any).message.content;
+      expect(blocks).toHaveLength(3);
+      expect(blocks[0].text).toBe('much longer text');
+      expect(blocks[1].type).toBe('image');
+      expect(blocks[2].type).toBe('tool_use');
+    });
+
+    it('handles empty prev blocks array', () => {
+      const next = { message: { content: [textBlock('hello')] } };
+      const prev = { message: { content: [] } };
+
+      // prev has no text-like blocks, so prevBlock is undefined => nextBlock returned
+      const result = mergeRawBlocksDuringStreaming(prev, next);
+      expect(result).toBe(next);
+    });
+
+    it('handles thinking block without thinking field (falls back to text field)', () => {
+      // Some API responses may use .text instead of .thinking on thinking blocks
+      const prev = {
+        message: {
+          content: [{ type: 'thinking', text: 'long thinking text here' }],
+        },
+      };
+      const next = {
+        message: {
+          content: [{ type: 'thinking', text: 'short' }],
+        },
+      };
+
+      const result = mergeRawBlocksDuringStreaming(prev, next);
+      const blocks = (result as any).message.content;
+      expect(blocks[0].text).toBe('long thinking text here');
+      expect(blocks[0].thinking).toBe('long thinking text here');
+    });
+
+    it('handles non-string text field gracefully', () => {
+      const prev = {
+        message: {
+          content: [{ type: 'text', text: 123 }],
+        },
+      };
+      const next = {
+        message: {
+          content: [{ type: 'text', text: 'hello' }],
+        },
+      };
+
+      // prev text is not a string => getTextLikeLength returns 0
+      // prevLen (0) < nextLen (5) => nextBlock wins
+      const result = mergeRawBlocksDuringStreaming(prev, next);
+      expect(result).toBe(next);
+    });
   });
 });

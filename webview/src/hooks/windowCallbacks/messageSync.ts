@@ -266,11 +266,17 @@ export const mergeRawBlocksDuringStreaming = (
 
     const prevLen = getTextLikeLength(prevBlock);
     const nextLen = getTextLikeLength(nextBlock);
-    if (prevLen <= nextLen) return nextBlock; // next is at least as long — keep it
+    const prevContent = getTextLikeContent(prevBlock);
+    const nextContent = getTextLikeContent(nextBlock);
+
+    // Length check with content validation
+    if (prevLen < nextLen) return nextBlock;
+    if (prevLen === nextLen && nextContent.length >= prevContent.length) {
+      return nextBlock;
+    }
 
     // prev is longer: use prev content, keep next block type and other fields
     changed = true;
-    const prevContent = getTextLikeContent(prevBlock);
     if (nextBlock.type === 'thinking') {
       return { ...nextBlock, thinking: prevContent, text: prevContent };
     }

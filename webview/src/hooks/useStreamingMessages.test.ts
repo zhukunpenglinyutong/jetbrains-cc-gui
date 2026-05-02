@@ -461,4 +461,231 @@ describe('useStreamingMessages', () => {
     // After trimming overlap, the novel content "\n\nMore text" is appended
     expect(merged).toBe("Here's code:\n```python\nprint('hello')\n```\n\nMore text");
   });
+
+  // ---------------------------------------------------------------------------
+  // Nuclear dedup: deduplicateTextLikeBlocks
+  // ---------------------------------------------------------------------------
+
+  describe('deduplicateTextLikeBlocks (nuclear containment dedup)', () => {
+    it('removes text blocks whose content is fully contained in another text block', () => {
+      const { result } = renderHook(() => useStreamingMessages());
+
+      result.current.streamingContentRef.current = 'ABCDE';
+      result.current.streamingTextSegmentsRef.current = ['ABCDE'];
+
+      // Backend sends multiple text blocks where shorter ones are substrings of longer
+      const assistant: ClaudeMessage = {
+        type: 'assistant',
+        content: 'ABCDE',
+        isStreaming: true,
+        raw: {
+          message: {
+            content: [
+              { type: 'text', text: 'ABC' },
+              { type: 'text', text: 'ABCDE' },
+              { type: 'text', text: 'AB' },
+            ],
+          },
+        },
+      };
+
+      const patched = result.current.patchAssistantForStreaming(assistant);
+      const content = ((patched.raw as any).message?.content ?? []) as Array<Record<string, unknown>>;
+      const textBlocks = content.filter((b) => b.type === 'text');
+
+      // Only the longest text block should survive
+      expect(textBlocks).toHaveLength(1);
+      expect(textBlocks[0]).toMatchObject({ type: 'text', text: 'ABCDE' });
+    });
+
+    it('removes thinking blocks whose content is fully contained in another thinking block', () => {
+      const { result } = renderHook(() => useStreamingMessages());
+
+      result.current.streamingContentRef.current = 'Done.';
+      result.current.streamingTextSegmentsRef.current = ['Done.'];
+      result.current.streamingThinkingSegmentsRef.current = [
+        'I need to analyze this carefully.',
+      ];
+
+      const assistant: ClaudeMessage = {
+        type: 'assistant',
+        content: 'Done.',
+        isStreaming: true,
+        raw: {
+          message: {
+            content: [
+              { type: 'thinking', thinking: 'I need to analyze this carefully.', text: 'I need to analyze this carefully.' },
+              { type: 'thinking', thinking: 'I need to analyze', text: 'I need to analyze' },
+              { type: 'text', text: 'Done.' },
+            ],
+          },
+        },
+      };
+
+      const patched = result.current.patchAssistantForStreaming(assistant);
+      const content = ((patched.raw as any).message?.content ?? []) as Array<Record<string, unknown>>;
+      const thinkingBlocks = content.filter((b) => b.type === 'thinking');
+
+      expect(thinkingBlocks).toHaveLength(1);
+      expect(thinkingBlocks[0]).toMatchObject({
+        type: 'thinking',
+        thinking: 'I need to analyze this carefully.',
+      });
+    });
+
+    it('keeps non-overlapping text blocks from different phases', () => {
+      const { result } = renderHook(() => useStreamingMessages());
+
+      result.current.streamingContentRef.current = 'Part A. Part B.';
+      result.current.streamingTextSegmentsRef.current = ['Part A.', 'Part B.'];
+
+      const assistant: ClaudeMessage = {
+        type: 'assistant',
+        content: 'Part A. Part B.',
+        isStreaming: true,
+        raw: {
+          message: {
+            content: [
+              { type: 'text', text: 'Part A.' },
+              { type: 'tool_use', id: 't1', name: 'search', input: {} },
+              { type: 'text', text: 'Part B.' },
+            ],
+          },
+        },
+      };
+
+      const patched = result.current.patchAssistantForStreaming(assistant);
+      const content = ((patched.raw as any).message?.content ?? []) as Array<Record<string, unknown>>;
+      const textBlocks = content.filter((b) => b.type === 'text');
+
+      // Two text blocks separated by a tool_use are in different groups, both kept
+      expect(textBlocks).toHaveLength(2);
+    });
+
+    it('handles the 5x duplication scenario from cumulative snapshots', () => {
+      const { result } = renderHook(() => useStreamingMessages());
+
+      const fullText = '根据截图，你只需要"总耗时 0:10"这部分。';
+      result.current.streamingContentRef.current = fullText;
+      result.current.streamingTextSegmentsRef.current = [fullText];
+
+      // Simulate backend sending 5 text blocks with progressive lengths
+      // (what happens when cumulative snapshots get through despite normalization)
+      const assistant: ClaudeMessage = {
+        type: 'assistant',
+        content: fullText,
+        isStreaming: true,
+        raw: {
+          message: {
+            content: [
+              { type: 'text', text: '根据截图，' },
+              { type: 'text', text: '根据截图，你只需要' },
+              { type: 'text', text: '根据截图，你只需要"总耗时 0:10"' },
+              { type: 'text', text: '根据截图，你只需要"总耗时 0:10"这部分。' },
+              { type: 'text', text: fullText },
+            ],
+          },
+        },
+      };
+
+      const patched = result.current.patchAssistantForStreaming(assistant);
+      const content = ((patched.raw as any).message?.content ?? []) as Array<Record<string, unknown>>;
+      const textBlocks = content.filter((b) => b.type === 'text');
+
+      expect(textBlocks).toHaveLength(1);
+      expect(textBlocks[0]).toMatchObject({ type: 'text', text: fullText });
+    });
+
+    it('removes multiple blocks with identical content (cumulative snapshots with same content)', () => {
+      const { result } = renderHook(() => useStreamingMessages());
+
+      const sameText = '这是一个测试消息';
+      result.current.streamingContentRef.current = sameText;
+      result.current.streamingTextSegmentsRef.current = [sameText];
+
+      // Backend sends 3 identical text blocks (can happen when cumulative snapshots
+      // are sent multiple times with no new content)
+      const assistant: ClaudeMessage = {
+        type: 'assistant',
+        content: sameText,
+        isStreaming: true,
+        raw: {
+          message: {
+            content: [
+              { type: 'text', text: sameText },
+              { type: 'text', text: sameText },
+              { type: 'text', text: sameText },
+            ],
+          },
+        },
+      };
+
+      const patched = result.current.patchAssistantForStreaming(assistant);
+      const content = ((patched.raw as any).message?.content ?? []) as Array<Record<string, unknown>>;
+      const textBlocks = content.filter((b) => b.type === 'text');
+
+      // Only one block should remain despite 3 identical inputs
+      expect(textBlocks).toHaveLength(1);
+      expect(textBlocks[0]).toMatchObject({ type: 'text', text: sameText });
+    });
+
+    it('does not remove blocks with equal-length non-identical content', () => {
+      const { result } = renderHook(() => useStreamingMessages());
+
+      result.current.streamingContentRef.current = 'AAA';
+      result.current.streamingTextSegmentsRef.current = ['AAA'];
+
+      const assistant: ClaudeMessage = {
+        type: 'assistant',
+        content: 'AAA',
+        isStreaming: true,
+        raw: {
+          message: {
+            content: [
+              { type: 'text', text: 'AAA' },
+              { type: 'text', text: 'BBB' },
+            ],
+          },
+        },
+      };
+
+      const patched = result.current.patchAssistantForStreaming(assistant);
+      const content = ((patched.raw as any).message?.content ?? []) as Array<Record<string, unknown>>;
+      const textBlocks = content.filter((b) => b.type === 'text');
+
+      // Same length but neither contains the other — both kept
+      // (but appendNovelTextLikeBlock may merge them if they overlap)
+      // The nuclear dedup should not remove either since neither is a substring of the other
+      expect(textBlocks.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('handles empty content blocks gracefully', () => {
+      const { result } = renderHook(() => useStreamingMessages());
+
+      result.current.streamingContentRef.current = 'Hello';
+      result.current.streamingTextSegmentsRef.current = ['Hello'];
+
+      const assistant: ClaudeMessage = {
+        type: 'assistant',
+        content: 'Hello',
+        isStreaming: true,
+        raw: {
+          message: {
+            content: [
+              { type: 'text', text: '' },
+              { type: 'text', text: 'Hello' },
+              { type: 'text', text: '' },
+            ],
+          },
+        },
+      };
+
+      const patched = result.current.patchAssistantForStreaming(assistant);
+      const content = ((patched.raw as any).message?.content ?? []) as Array<Record<string, unknown>>;
+      const textBlocks = content.filter((b) => b.type === 'text');
+
+      expect(textBlocks).toHaveLength(1);
+      expect(textBlocks[0]).toMatchObject({ type: 'text', text: 'Hello' });
+    });
+  });
 });

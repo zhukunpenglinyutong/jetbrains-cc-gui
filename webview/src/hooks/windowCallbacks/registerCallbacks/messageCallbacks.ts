@@ -324,10 +324,12 @@ export function registerMessageCallbacks(
         const patchedAssistantIdx = findLastAssistantIndex(patched);
         if (patchedAssistantIdx >= 0 && patched[patchedAssistantIdx]?.type === 'assistant') {
           streamingMessageIndexRef.current = patchedAssistantIdx;
-          patched[patchedAssistantIdx] = patchAssistantForStreaming({
-            ...patched[patchedAssistantIdx],
-            __turnId: streamingTurnIdRef.current,
-          });
+          if (patched[patchedAssistantIdx].__turnId !== streamingTurnIdRef.current) {
+            patched[patchedAssistantIdx] = {
+              ...patched[patchedAssistantIdx],
+              __turnId: streamingTurnIdRef.current,
+            };
+          }
         }
 
         // Only skip updates when neither message structure nor non-text raw blocks

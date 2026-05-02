@@ -638,6 +638,18 @@ interface Window {
   __stallWatchdogInterval?: ReturnType<typeof setInterval> | null;
 
   /**
+   * Last content delta received, used for deduplication.
+   * Prevents processing duplicate deltas that may arrive due to retransmission.
+   */
+  __lastContentDelta?: string;
+
+  /**
+   * Last thinking delta received, used for deduplication.
+   * Prevents processing duplicate deltas that may arrive due to retransmission.
+   */
+  __lastThinkingDelta?: string;
+
+  /**
    * Pending rAF handle and JSON for deferred updateMessages processing.
    * Stored on window so re-registration of message callbacks cancels stale rAFs.
    */
