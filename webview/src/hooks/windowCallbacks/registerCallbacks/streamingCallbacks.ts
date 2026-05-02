@@ -100,6 +100,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
 
   window.onStreamStart = () => {
     if (window.__sessionTransitioning) return;
+    sendBridgeEvent('tab_status_changed', JSON.stringify({ status: 'answering' }));
     // Clear any stale pending updateMessages from previous turn.
     // This prevents onStreamEnd from using outdated snapshot data.
     if (typeof window.__cancelPendingUpdateMessages === 'function') {

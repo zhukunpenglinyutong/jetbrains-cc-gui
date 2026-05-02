@@ -228,6 +228,11 @@ public class ClaudeChatWindow {
             public void setFetchedSlashCommandsCount(int count) {
                 fetchedSlashCommandsCount = count;
             }
+
+            @Override
+            public void updateTabStatus(ChatWindowDelegate.TabAnswerStatus status) {
+                chatWindowDelegate.updateTabStatus(status);
+            }
         });
 
         this.editorContextTracker = new EditorContextTracker(project, new EditorContextTracker.ContextCallback() {
@@ -293,11 +298,25 @@ public class ClaudeChatWindow {
     }
 
     public void setOriginalTabName(String name) {
-        this.originalTabName = (name != null && name.endsWith("..."))
-                ? name.substring(0, name.length() - 3)
-                : name;
+        String normalized = name;
+        if (normalized != null) {
+            normalized = normalized.replaceAll("<[^>]*>", "").replace("&nbsp;", " ").trim();
+            if (normalized.endsWith("...")) {
+                normalized = normalized.substring(0, normalized.length() - 3).trim();
+            }
+            if (normalized.endsWith("●")) {
+                normalized = normalized.substring(0, normalized.length() - 1).trim();
+            }
+        }
+        this.originalTabName = normalized;
         LOG.debug("[TabLoading] Set original tab name: " + this.originalTabName);
-        chatWindowDelegate.refreshTabStatusDisplay();
+        Content content = this.parentContent;
+        if (content != null) {
+            ChatWindowDelegate.TabAnswerStatus status = getCurrentTabAnswerStatus();
+            if (status != ChatWindowDelegate.TabAnswerStatus.IDLE) {
+                chatWindowDelegate.refreshTabStatus();
+            }
+        }
     }
 
     public boolean isDisposed() {
@@ -416,6 +435,24 @@ public class ClaudeChatWindow {
 
     public void updateTabStatus(ChatWindowDelegate.TabAnswerStatus status) {
         chatWindowDelegate.updateTabStatus(status);
+    }
+
+    private ChatWindowDelegate.TabAnswerStatus getCurrentTabAnswerStatus() {
+        Content content = this.parentContent;
+        if (content == null) {
+            return ChatWindowDelegate.TabAnswerStatus.IDLE;
+        }
+        Icon icon = content.getIcon();
+        if (icon == ANSWERING_DOT_ICON) {
+            return ChatWindowDelegate.TabAnswerStatus.ANSWERING;
+        }
+        if (icon == COMPLETED_DOT_ICON) {
+            return ChatWindowDelegate.TabAnswerStatus.COMPLETED;
+        }
+        if (icon == ERROR_DOT_ICON) {
+            return ChatWindowDelegate.TabAnswerStatus.ERROR;
+        }
+        return ChatWindowDelegate.TabAnswerStatus.IDLE;
     }
 
     @Deprecated

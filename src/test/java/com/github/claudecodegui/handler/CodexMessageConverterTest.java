@@ -74,6 +74,35 @@ public class CodexMessageConverterTest {
         assertEquals("hello", result.get("content").getAsString());
     }
 
+    @Test
+    public void codexMessageConvertsInputImageAndSkipsImageWrapperText() {
+        JsonArray content = new JsonArray();
+        content.add(textBlock("input_text", "<image name=[Image #1]>"));
+
+        JsonObject imageBlock = new JsonObject();
+        imageBlock.addProperty("type", "input_image");
+        imageBlock.addProperty("image_url", "data:image/png;base64,AAAABBBB");
+        content.add(imageBlock);
+
+        content.add(textBlock("input_text", "</image>"));
+
+        JsonObject payload = new JsonObject();
+        payload.addProperty("type", "message");
+        payload.addProperty("role", "user");
+        payload.add("content", content);
+
+        JsonObject result = CodexMessageConverter.convertCodexMessageToFrontend(payload, "2026-05-01T00:00:00Z");
+        assertNotNull(result);
+        assertTrue(!result.has("content"));
+
+        JsonArray rawContent = result.getAsJsonObject("raw").getAsJsonArray("content");
+        assertEquals(1, rawContent.size());
+        JsonObject convertedImage = rawContent.get(0).getAsJsonObject();
+        assertEquals("image", convertedImage.get("type").getAsString());
+        assertEquals("data:image/png;base64,AAAABBBB", convertedImage.get("src").getAsString());
+        assertEquals("image/png", convertedImage.get("mediaType").getAsString());
+    }
+
     // ---- convertFunctionCallOutputToToolResult ----
 
     @Test
@@ -303,5 +332,12 @@ public class CodexMessageConverterTest {
         block.addProperty("text", text);
         content.add(block);
         return content;
+    }
+
+    private static JsonObject textBlock(String type, String text) {
+        JsonObject block = new JsonObject();
+        block.addProperty("type", type);
+        block.addProperty("text", text);
+        return block;
     }
 }

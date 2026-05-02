@@ -42,12 +42,10 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.jcef.JBCefBrowser;
-import com.intellij.util.concurrency.AppExecutorUtil;
 
 import javax.swing.*;
 import java.util.List;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Delegates for initialization setup and runtime operations:
@@ -58,12 +56,22 @@ public class ChatWindowDelegate {
     private static final Logger LOG = Logger.getInstance(ChatWindowDelegate.class);
     private static final String NODE_PATH_PROPERTY_KEY = "claude.code.node.path";
     private static final String PERMISSION_MODE_PROPERTY_KEY = "claude.code.permission.mode";
-    private static final int STATUS_RESET_DELAY_SECONDS = 5;
+    private static final String BLUE_DOT_COLOR = "#2E8BFF";
+    private static final String GREEN_DOT_COLOR = "#34C759";
+    private static final String RED_DOT_COLOR = "#FF453A";
 
     public enum TabAnswerStatus {
         IDLE,
         ANSWERING,
-        COMPLETED
+        COMPLETED,
+        ERROR
+    }
+
+    public enum TabIndicatorState {
+        NONE,
+        ANSWERING,
+        COMPLETED,
+        ERROR
     }
 
     public interface DelegateHost {
@@ -95,6 +103,7 @@ public class ChatWindowDelegate {
         void setSlashCommandsFetched(boolean fetched);
         void setFetchedSlashCommandsCount(int count);
         void persistTabSessionState();
+        void setTabIndicatorState(TabIndicatorState state);
     }
 
     private final DelegateHost host;
@@ -279,6 +288,7 @@ public class ChatWindowDelegate {
                 switch (statusStr) {
                     case "answering": status = TabAnswerStatus.ANSWERING; break;
                     case "completed": status = TabAnswerStatus.COMPLETED; break;
+                    case "error": status = TabAnswerStatus.ERROR; break;
                     default: status = TabAnswerStatus.IDLE; break;
                 }
                 updateTabStatus(status);
@@ -342,11 +352,6 @@ public class ChatWindowDelegate {
             return;
         }
 
-        if (status == currentTabStatus) {
-            LOG.debug("[TabStatus] Skipping redundant update for tab: " + originalTabName);
-            return;
-        }
-
         currentTabStatus = status;
 
         if (statusResetTask != null && !statusResetTask.isDone()) {
@@ -358,32 +363,43 @@ public class ChatWindowDelegate {
             String tabName = originalTabName;
             String currentDisplayName = parentContent.getDisplayName();
             if (currentDisplayName != null && !currentDisplayName.startsWith(tabName)) {
-                tabName = currentDisplayName.endsWith("...")
-                    ? currentDisplayName.substring(0, currentDisplayName.length() - 3)
-                    : currentDisplayName;
-                host.setOriginalTabName(tabName);
+                tabName = normalizeBaseTabName(currentDisplayName);
                 LOG.debug("[TabStatus] Detected external rename, updated originalTabName to: " + tabName);
+            }
+
+            if (!shouldShowIndicatorForStatus(status)) {
+                host.setTabIndicatorState(TabIndicatorState.NONE);
+                parentContent.setDisplayName(tabName);
+                LOG.debug("[TabStatus] No conversation messages, force plain title without indicator: " + tabName);
+                return;
             }
 
             String displayName;
             switch (status) {
                 case ANSWERING:
-                    displayName = tabName + "...";
-                    LOG.debug("[TabStatus] Set answering state for tab: " + displayName);
+                    host.setTabIndicatorState(TabIndicatorState.ANSWERING);
+                    displayName = decorateTabName(tabName, BLUE_DOT_COLOR, false);
+                    LOG.debug("[TabStatus] Set answering state for tab (no ellipsis): " + displayName);
                     break;
                 case COMPLETED:
-                    String completedText = ClaudeCodeGuiBundle.message("tab.status.completed");
-                    displayName = tabName + " (" + completedText + ")";
+                    if (isEmptyConversationTabName(tabName)) {
+                        host.setTabIndicatorState(TabIndicatorState.NONE);
+                        displayName = tabName;
+                        LOG.debug("[TabStatus] Skip completed indicator for empty conversation tab: " + displayName);
+                        break;
+                    }
+                    host.setTabIndicatorState(TabIndicatorState.COMPLETED);
+                    displayName = decorateTabName(tabName, GREEN_DOT_COLOR, false);
                     LOG.debug("[TabStatus] Set completed state for tab: " + displayName);
-
-                    statusResetTask = AppExecutorUtil.getAppScheduledExecutorService().schedule(() -> {
-                        ApplicationManager.getApplication().invokeLater(() -> {
-                            updateTabStatus(TabAnswerStatus.IDLE);
-                        });
-                    }, STATUS_RESET_DELAY_SECONDS, TimeUnit.SECONDS);
+                    break;
+                case ERROR:
+                    host.setTabIndicatorState(TabIndicatorState.ERROR);
+                    displayName = decorateTabName(tabName, RED_DOT_COLOR, false);
+                    LOG.debug("[TabStatus] Set error state for tab: " + displayName);
                     break;
                 case IDLE:
                 default:
+                    host.setTabIndicatorState(TabIndicatorState.NONE);
                     displayName = tabName;
                     LOG.debug("[TabStatus] Restored idle state for tab: " + displayName);
                     break;
@@ -392,9 +408,87 @@ public class ChatWindowDelegate {
         });
     }
 
+    /**
+     * Re-render tab title and indicator using the current status.
+     * Useful after external tab rename so the active indicator is preserved.
+     */
+    public void refreshTabStatus() {
+        updateTabStatus(currentTabStatus);
+    }
+
     @Deprecated
     public void updateTabLoadingState(boolean loading) {
-        updateTabStatus(loading ? TabAnswerStatus.ANSWERING : TabAnswerStatus.IDLE);
+        // Legacy loading callback is noisy during session restore/bootstrap and can
+        // incorrectly light the answering indicator. Real answering state is driven
+        // by explicit tab_status_changed events (onStreamStart / completed / error).
+        LOG.debug("[TabStatus] Ignore deprecated tab_loading_changed event, loading=" + loading);
+    }
+
+    private String normalizeBaseTabName(String displayName) {
+        if (displayName == null) {
+            return "";
+        }
+        String normalized = displayName
+                .replaceAll("<[^>]*>", "")
+                .replace("&nbsp;", " ")
+                .trim();
+        normalized = stripTrailingStatusSuffix(normalized);
+        return normalized;
+    }
+
+    private String decorateTabName(String baseName, String dotColor, boolean withEllipsis) {
+        String name = baseName == null ? "" : baseName.trim();
+        String suffix = withEllipsis ? "..." : "";
+        return "<html>" + escapeHtml(name) + suffix + "<font color='" + dotColor + "' size='2'>●</font></html>";
+    }
+
+    private String escapeHtml(String value) {
+        return value
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;");
+    }
+
+    private boolean isEmptyConversationTabName(String value) {
+        if (value == null) {
+            return true;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() || "新会话".equals(normalized) || "New Session".equalsIgnoreCase(normalized);
+    }
+
+    private boolean hasConversationMessages() {
+        ClaudeSession session = host.getSession();
+        if (session == null) {
+            return false;
+        }
+        List<ClaudeSession.Message> messages = session.getMessages();
+        return messages != null && !messages.isEmpty();
+    }
+
+    private boolean shouldShowIndicatorForStatus(TabAnswerStatus status) {
+        if (status == TabAnswerStatus.ANSWERING) {
+            // User has sent a message or backend stream has started: show blue indicator immediately.
+            return true;
+        }
+        if (hasConversationMessages()) {
+            return true;
+        }
+        return false;
+    }
+
+    private String stripTrailingStatusSuffix(String value) {
+        if (value == null) {
+            return "";
+        }
+        String normalized = value.trim();
+        if (normalized.endsWith("...")) {
+            normalized = normalized.substring(0, normalized.length() - 3).trim();
+        }
+        if (normalized.endsWith("●")) {
+            normalized = normalized.substring(0, normalized.length() - 1).trim();
+        }
+        return normalized.trim();
     }
 
     public void sendQuickFixMessage(String prompt, boolean isQuickFix, MessageCallback callback) {

@@ -46,6 +46,8 @@ public class CodexMessageConverter {
     private static final Pattern WRITE_CMD_PATTERN = Pattern.compile(
         "cat\\s*>\\s*([^\\s;|&]+)|tee\\s+(?:-[a-zA-Z]+\\s+)*([^\\s;|&]+)|(?:echo|printf)\\s+[^>]*>\\s*([^\\s;|&]+)"
     );
+    private static final Pattern IMAGE_WRAPPER_TAG_PATTERN =
+        Pattern.compile("^\\s*(?:<image\\b[^>]*>|</image>)\\s*$", Pattern.CASE_INSENSITIVE);
 
     private CodexMessageConverter() {
         // Utility class, no instantiation.
@@ -85,6 +87,57 @@ public class CodexMessageConverter {
         }
 
         return sanitized.trim();
+    }
+
+    /**
+     * Detect synthetic wrapper tags used around image payloads in Codex history.
+     */
+    private static boolean isImageWrapperTagText(String text) {
+        if (text == null) {
+            return false;
+        }
+        return IMAGE_WRAPPER_TAG_PATTERN.matcher(text).matches();
+    }
+
+    /**
+     * Extract media type from a data URL.
+     */
+    private static String extractMediaTypeFromDataUrl(String dataUrl) {
+        if (dataUrl == null || !dataUrl.startsWith("data:")) {
+            return null;
+        }
+        int start = "data:".length();
+        int semicolon = dataUrl.indexOf(';', start);
+        int comma = dataUrl.indexOf(',', start);
+        int end = semicolon >= 0 ? semicolon : comma;
+        if (end <= start) {
+            return null;
+        }
+        String mediaType = dataUrl.substring(start, end).trim();
+        return mediaType.isEmpty() ? null : mediaType;
+    }
+
+    /**
+     * Extract image URL from Codex input_image block.
+     */
+    private static String extractImageUrl(JsonObject itemObj) {
+        if (!itemObj.has("image_url")) {
+            return null;
+        }
+        JsonElement imageUrlElem = itemObj.get("image_url");
+        if (imageUrlElem == null || imageUrlElem.isJsonNull()) {
+            return null;
+        }
+        if (imageUrlElem.isJsonPrimitive()) {
+            return imageUrlElem.getAsString();
+        }
+        if (imageUrlElem.isJsonObject()) {
+            JsonObject imageUrlObj = imageUrlElem.getAsJsonObject();
+            if (imageUrlObj.has("url")) {
+                return safeGetAsString(imageUrlObj.get("url"), null);
+            }
+        }
+        return null;
     }
 
     /**
@@ -157,7 +210,7 @@ public class CodexMessageConverter {
                         if ("input_text".equals(type) || "output_text".equals(type) || "text".equals(type)) {
                             if (itemObj.has("text")) {
                                 String sanitizedText = sanitizeHistoryText(itemObj.get("text").getAsString());
-                                if (sanitizedText != null && !sanitizedText.isEmpty()) {
+                                if (sanitizedText != null && !sanitizedText.isEmpty() && !isImageWrapperTagText(sanitizedText)) {
                                     claudeBlock.addProperty("type", "text");
                                     claudeBlock.addProperty("text", sanitizedText);
                                     claudeBlocks.add(claudeBlock);
@@ -202,6 +255,33 @@ public class CodexMessageConverter {
                                 claudeBlock.addProperty("text", itemObj.get("text").getAsString());
                             }
                             claudeBlocks.add(claudeBlock);
+                        }
+                        // Handle image input
+                        else if ("input_image".equals(type)) {
+                            String imageUrl = extractImageUrl(itemObj);
+                            if (imageUrl != null && !imageUrl.trim().isEmpty()) {
+                                claudeBlock.addProperty("type", "image");
+                                claudeBlock.addProperty("src", imageUrl);
+
+                                String mediaType = null;
+                                if (itemObj.has("mediaType")) {
+                                    mediaType = safeGetAsString(itemObj.get("mediaType"), null);
+                                } else if (itemObj.has("media_type")) {
+                                    mediaType = safeGetAsString(itemObj.get("media_type"), null);
+                                } else if (itemObj.has("mime_type")) {
+                                    mediaType = safeGetAsString(itemObj.get("mime_type"), null);
+                                } else {
+                                    mediaType = extractMediaTypeFromDataUrl(imageUrl);
+                                }
+                                if (mediaType != null && !mediaType.isEmpty()) {
+                                    claudeBlock.addProperty("mediaType", mediaType);
+                                }
+
+                                if (itemObj.has("alt")) {
+                                    claudeBlock.addProperty("alt", safeGetAsString(itemObj.get("alt"), ""));
+                                }
+                                claudeBlocks.add(claudeBlock);
+                            }
                         }
                         // Handle image
                         else if ("image".equals(type)) {
@@ -264,7 +344,7 @@ public class CodexMessageConverter {
                     if (itemObj.has("type") && "text".equals(itemObj.get("type").getAsString())) {
                         if (itemObj.has("text")) {
                             String sanitizedText = sanitizeHistoryText(itemObj.get("text").getAsString());
-                            if (!sanitizedText.isEmpty()) {
+                            if (!sanitizedText.isEmpty() && !isImageWrapperTagText(sanitizedText)) {
                                 if (sb.length() > 0) {
                                     sb.append("\n");
                                 }
@@ -276,7 +356,7 @@ public class CodexMessageConverter {
                     else if (itemObj.has("type") && "input_text".equals(itemObj.get("type").getAsString())) {
                         if (itemObj.has("text")) {
                             String sanitizedText = sanitizeHistoryText(itemObj.get("text").getAsString());
-                            if (!sanitizedText.isEmpty()) {
+                            if (!sanitizedText.isEmpty() && !isImageWrapperTagText(sanitizedText)) {
                                 if (sb.length() > 0) {
                                     sb.append("\n");
                                 }
@@ -288,7 +368,7 @@ public class CodexMessageConverter {
                     else if (itemObj.has("type") && "output_text".equals(itemObj.get("type").getAsString())) {
                         if (itemObj.has("text")) {
                             String sanitizedText = sanitizeHistoryText(itemObj.get("text").getAsString());
-                            if (!sanitizedText.isEmpty()) {
+                            if (!sanitizedText.isEmpty() && !isImageWrapperTagText(sanitizedText)) {
                                 if (sb.length() > 0) {
                                     sb.append("\n");
                                 }

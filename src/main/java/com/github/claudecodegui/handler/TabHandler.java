@@ -7,6 +7,8 @@ import com.github.claudecodegui.ui.toolwindow.ClaudeChatWindow;
 import com.github.claudecodegui.ui.toolwindow.ClaudeSDKToolWindow;
 import com.github.claudecodegui.ui.toolwindow.TabSessionStateInheritor;
 import com.github.claudecodegui.settings.TabStateService;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.wm.ToolWindow;
@@ -25,7 +27,8 @@ public class TabHandler extends BaseMessageHandler {
     private static final Logger LOG = Logger.getInstance(TabHandler.class);
 
     private static final String[] SUPPORTED_TYPES = {
-        "create_new_tab"
+        "create_new_tab",
+        "rename_current_tab"
     };
 
     public TabHandler(HandlerContext context) {
@@ -42,6 +45,11 @@ public class TabHandler extends BaseMessageHandler {
         if ("create_new_tab".equals(type)) {
             LOG.debug("[TabHandler] Processing create_new_tab");
             handleCreateNewTab();
+            return true;
+        }
+        if ("rename_current_tab".equals(type)) {
+            LOG.debug("[TabHandler] Processing rename_current_tab");
+            handleRenameCurrentTab(content);
             return true;
         }
         return false;
@@ -114,5 +122,73 @@ public class TabHandler extends BaseMessageHandler {
                 callJavaScript("addErrorMessage", escapeJs("创建新标签页失败: " + e.getMessage()));
             }
         });
+    }
+
+    /**
+     * Rename the currently selected tab from webview request.
+     * Keeps originalTabName and persisted TabStateService in sync.
+     */
+    private void handleRenameCurrentTab(String content) {
+        Project project = context.getProject();
+        if (project == null || project.isDisposed()) {
+            return;
+        }
+
+        String newName = extractTabTitle(content);
+        if (newName == null || newName.isEmpty()) {
+            return;
+        }
+
+        ToolWindowManager.getInstance(project).invokeLater(() -> {
+            ToolWindow toolWindow = ToolWindowManager.getInstance(project)
+                    .getToolWindow(ClaudeSDKToolWindow.TOOL_WINDOW_ID);
+            if (toolWindow == null) {
+                return;
+            }
+
+            ContentManager contentManager = toolWindow.getContentManager();
+            Content selectedContent = contentManager.getSelectedContent();
+            if (selectedContent == null) {
+                return;
+            }
+
+            String currentDisplayName = selectedContent.getDisplayName();
+            if (newName.equals(currentDisplayName)) {
+                return;
+            }
+
+            selectedContent.setDisplayName(newName);
+
+            ClaudeChatWindow chatWindow = ClaudeSDKToolWindow.getChatWindowForContent(selectedContent);
+            if (chatWindow != null) {
+                chatWindow.setOriginalTabName(newName);
+            }
+
+            int tabIndex = contentManager.getIndexOfContent(selectedContent);
+            if (tabIndex >= 0) {
+                TabStateService.getInstance(project).saveTabName(tabIndex, newName);
+            }
+        });
+    }
+
+    private String extractTabTitle(String content) {
+        if (content == null || content.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            JsonObject json = JsonParser.parseString(content).getAsJsonObject();
+            if (!json.has("title") || json.get("title").isJsonNull()) {
+                return null;
+            }
+            String title = json.get("title").getAsString();
+            if (title == null) {
+                return null;
+            }
+            String trimmed = title.trim();
+            return trimmed.isEmpty() ? null : trimmed;
+        } catch (Exception e) {
+            LOG.warn("[TabHandler] Failed to parse rename_current_tab payload: " + e.getMessage());
+            return null;
+        }
     }
 }

@@ -232,7 +232,7 @@ const App = () => {
     clearToasts, addToast, t,
   });
 
-  useHistoryLoader({ currentView, currentProvider });
+  useHistoryLoader({ currentView, currentProvider, historyData });
 
   // ── Window callbacks (bridge communication) ──
   useWindowCallbacks({

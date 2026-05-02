@@ -147,7 +147,6 @@ export function useSessionManagement({
     if (loading) {
       sendBridgeEvent('interrupt_session');
     }
-    sendBridgeEvent('tab_status_changed', JSON.stringify({ status: 'answering' }));
     beginSessionTransition(null, null);
     sendBridgeEvent('create_new_session');
   }, [beginSessionTransition, loading]);
@@ -159,7 +158,6 @@ export function useSessionManagement({
     if (loading) {
       sendBridgeEvent('interrupt_session');
     }
-    sendBridgeEvent('tab_status_changed', JSON.stringify({ status: 'answering' }));
     beginSessionTransition(null, null);
     sendBridgeEvent('create_new_session');
     pendingActionRef.current = null;
@@ -176,7 +174,6 @@ export function useSessionManagement({
     setShowInterruptConfirm(false);
     // Send interrupt signal and create new session
     sendBridgeEvent('interrupt_session');
-    sendBridgeEvent('tab_status_changed', JSON.stringify({ status: 'answering' }));
     beginSessionTransition(null, null);
     sendBridgeEvent('create_new_session');
     pendingActionRef.current = null;
@@ -196,7 +193,6 @@ export function useSessionManagement({
     }
 
     const session = historyDataRef.current?.sessions?.find(s => s.sessionId === sessionId);
-    sendBridgeEvent('tab_status_changed', JSON.stringify({ status: 'answering' }));
     beginSessionTransition(sessionId, session?.title ?? null);
     sendBridgeEvent('load_session', sessionId);
     setCurrentView('chat');

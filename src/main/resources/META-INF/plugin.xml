@@ -126,7 +126,7 @@
         <!-- Detach Tab Action -->
         <action id="ClaudeCodeGUI.DetachTabAction"
                 class="com.github.claudecodegui.action.tab.DetachTabAction"
-                icon="AllIcons.Actions.MoveToWindow"/>
+                icon="/icons/multi-open.svg"/>
 
         <!-- Open DevTools Action for JCEF debugging -->
         <action id="ClaudeCodeGUI.OpenDevToolsAction"

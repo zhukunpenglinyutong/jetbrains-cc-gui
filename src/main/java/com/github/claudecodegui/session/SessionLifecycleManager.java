@@ -67,6 +67,8 @@ public class SessionLifecycleManager {
         void setSlashCommandsFetched(boolean fetched);
 
         void setFetchedSlashCommandsCount(int count);
+
+        void updateTabStatus(com.github.claudecodegui.ui.ChatWindowDelegate.TabAnswerStatus status);
     }
 
     private final SessionHost host;
@@ -106,6 +108,7 @@ public class SessionLifecycleManager {
             ApplicationManager.getApplication().invokeLater(() -> {
                 host.callJavaScript("onStreamEnd");
                 host.callJavaScript("showLoading", "false");
+                host.updateTabStatus(com.github.claudecodegui.ui.ChatWindowDelegate.TabAnswerStatus.IDLE);
             });
 
             host.clearPendingPermissionRequests();
@@ -217,10 +220,12 @@ public class SessionLifecycleManager {
             newSession.setSessionInfo(sessionId, workingDir);
 
             newSession.loadFromServer().thenRun(() -> ApplicationManager.getApplication().invokeLater(() -> {
+                host.updateTabStatus(com.github.claudecodegui.ui.ChatWindowDelegate.TabAnswerStatus.IDLE);
                 host.callJavaScript("historyLoadComplete");
             })).exceptionally(ex -> {
                 ApplicationManager.getApplication().invokeLater(() -> {
                     // Release transition guard so the frontend is not permanently stuck
+                    host.updateTabStatus(com.github.claudecodegui.ui.ChatWindowDelegate.TabAnswerStatus.IDLE);
                     host.callJavaScript("historyLoadComplete");
                     host.callJavaScript("addErrorMessage",
                             JsUtils.escapeJs("Failed to load session: " + ex.getMessage()));
@@ -230,6 +235,7 @@ public class SessionLifecycleManager {
         }).exceptionally(ex -> {
             LOG.error("Failed to load history session: " + ex.getMessage(), ex);
             ApplicationManager.getApplication().invokeLater(() -> {
+                host.updateTabStatus(com.github.claudecodegui.ui.ChatWindowDelegate.TabAnswerStatus.IDLE);
                 host.callJavaScript("historyLoadComplete");
                 host.callJavaScript("addErrorMessage",
                         JsUtils.escapeJs("Failed to load session: " + ex.getMessage()));

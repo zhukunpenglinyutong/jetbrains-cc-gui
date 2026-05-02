@@ -138,7 +138,7 @@ export function ChatHeader({
               onClick={onNewTab}
               data-tooltip={t('common.newTab')}
             >
-              <span className="codicon codicon-split-horizontal" />
+              <span className="codicon codicon-multiple-windows" />
             </button>
             <button
               className="icon-button"
