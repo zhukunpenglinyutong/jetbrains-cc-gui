@@ -63,6 +63,7 @@ public final class TabSessionStateInheritor {
         inherited.permissionMode = sourceSession.getPermissionMode();
         inherited.reasoningEffort = sourceSession.getReasoningEffort();
         inherited.cwd = sourceSession.getCwd();
+        inherited.tabAnswerStatus = com.github.claudecodegui.ui.ChatWindowDelegate.TabAnswerStatus.IDLE.name();
 
         // Keep a fresh conversation identity for the new tab.
         inherited.sessionId = null;
