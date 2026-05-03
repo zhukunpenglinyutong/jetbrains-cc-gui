@@ -12,7 +12,9 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -310,9 +312,8 @@ public class SessionSendService {
     private String buildMessagePromptBlock(String selectedAgentPrompt) {
         String normalizedAgentPrompt = normalizePromptText(selectedAgentPrompt);
         String autoInjectPrompt = state.isPromptInjected() ? null : getEnabledPromptsInstructionBlock();
-        String autoCommitPrompt = getAutoCommitInstructionBlock();
 
-        if (normalizedAgentPrompt == null && autoInjectPrompt == null && autoCommitPrompt == null) {
+        if (normalizedAgentPrompt == null && autoInjectPrompt == null) {
             return null;
         }
 
@@ -330,13 +331,6 @@ public class SessionSendService {
             state.setPromptInjected(true);
         }
 
-        if (autoCommitPrompt != null) {
-            if (builder.length() > 0) {
-                builder.append("\n\n");
-            }
-            builder.append(autoCommitPrompt);
-        }
-
         return builder.toString();
     }
 
@@ -351,7 +345,7 @@ public class SessionSendService {
     private String getEnabledPromptsInstructionBlock() {
         try {
             CodemossSettingsService settingsService = new CodemossSettingsService();
-            List<String> enabledPromptContents = new ArrayList<>();
+            Set<String> enabledPromptContents = new LinkedHashSet<>();
 
             appendScopeEnabledPromptContents(
                     enabledPromptContents,
@@ -371,9 +365,10 @@ public class SessionSendService {
             StringBuilder builder = new StringBuilder();
             builder.append("## Auto Injected Prompt Instructions\n\n");
             builder.append("Apply all enabled prompt instructions below throughout this conversation.\n\n");
-            for (int i = 0; i < enabledPromptContents.size(); i++) {
-                builder.append(enabledPromptContents.get(i));
-                if (i < enabledPromptContents.size() - 1) {
+            List<String> mergedPromptContents = new ArrayList<>(enabledPromptContents);
+            for (int i = 0; i < mergedPromptContents.size(); i++) {
+                builder.append(mergedPromptContents.get(i));
+                if (i < mergedPromptContents.size() - 1) {
                     builder.append("\n\n---\n\n");
                 }
             }
@@ -386,7 +381,7 @@ public class SessionSendService {
     }
 
     private void appendScopeEnabledPromptContents(
-            List<String> collector,
+            Set<String> collector,
             CodemossSettingsService settingsService,
             com.github.claudecodegui.model.PromptScope scope
     ) {
@@ -397,7 +392,7 @@ public class SessionSendService {
         }
     }
 
-    private void appendEnabledPromptContents(List<String> collector, List<JsonObject> prompts) {
+    private void appendEnabledPromptContents(Set<String> collector, List<JsonObject> prompts) {
         if (prompts == null || prompts.isEmpty()) {
             return;
         }
@@ -425,70 +420,30 @@ public class SessionSendService {
         if (text == null) {
             return null;
         }
-        String trimmed = text.trim();
+        String sanitizedText = stripLocalFileUriLines(text);
+        String trimmed = sanitizedText.trim();
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    private String getAutoCommitInstructionBlock() {
-        try {
-            CodemossSettingsService settingsService = new CodemossSettingsService();
-            boolean autoCommitEnabled = settingsService.getAutoCommitEnabled();
-            boolean autoResolveConflictsEnabled = settingsService.getAutoResolveConflictsEnabled();
-            String language = settingsService.getUiLanguage();
-            boolean chinese = "zh".equals(language) || "zh-TW".equals(language);
-            if (autoCommitEnabled) {
-                if (chinese) {
-                    return """
-## Git Auto Commit Policy
-
-当前项目已开启自动提交。
-完成代码修改后：
-1. 先执行 git status 检查变更文件。
-2. 如果存在变更，执行一次 git add 和 git commit。
-3. 不要回退或覆盖其他并行 AI 会话产生的较新改动。
-4. 同一文件中不重叠的改动必须自动合并保留。
-5. %s
-6. 生成的 commit message 必须使用中文。
-""".formatted(
-                            autoResolveConflictsEnabled
-                                    ? "同一位置冲突已开启自动解决：在安全前提下尽量保留两边意图。"
-                                    : "同一位置冲突未开启自动解决：出现冲突时停止并上报给用户决策。"
-                    );
-                }
-                return """
-## Git Auto Commit Policy
-
-Auto commit is enabled for this project.
-After finishing code changes:
-1. Run git status to check changed files.
-2. If there are changes, run git add and git commit once.
-3. Do not revert or overwrite newer changes from other parallel AI sessions.
-4. Resolve non-overlapping same-file changes by merging them.
-5. %s
-""".formatted(
-                        autoResolveConflictsEnabled
-                                ? "Auto resolve for same-line conflicts is enabled: merge both intents when safe."
-                                : "Auto resolve for same-line conflicts is disabled: stop and report conflicts for user decision."
-                );
+    private String stripLocalFileUriLines(String text) {
+        String[] lines = text.split("\\R", -1);
+        StringBuilder builder = new StringBuilder();
+        boolean removed = false;
+        for (String line : lines) {
+            String trimmedLine = line.trim();
+            if (trimmedLine.regionMatches(true, 0, "file:///", 0, 8)
+                    || trimmedLine.regionMatches(true, 0, "file://", 0, 7)) {
+                removed = true;
+                continue;
             }
-            if (chinese) {
-                return """
-## Git Auto Commit Policy
-
-当前项目未开启自动提交。
-除非用户在本轮明确要求，否则不要自动执行 git commit。
-若用户要求提交，commit message 必须使用中文。
-""";
+            if (builder.length() > 0) {
+                builder.append("\n");
             }
-            return """
-## Git Auto Commit Policy
-
-Auto commit is disabled for this project.
-Do not run git commit automatically unless the user explicitly asks in this turn.
-""";
-        } catch (Exception e) {
-            LOG.debug("[AutoCommit] Failed to read auto commit setting for prompt injection: " + e.getMessage());
-            return null;
+            builder.append(line);
         }
+        if (removed) {
+            LOG.info("[PromptAutoInject] Filtered file URI lines from injected prompt content");
+        }
+        return builder.toString();
     }
 }
