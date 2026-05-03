@@ -33,6 +33,7 @@ public class ChatPasteAction extends ChatToolWindowAction {
             if (clipboard.isDataFlavorAvailable(DataFlavor.stringFlavor)) {
                 text = (String) clipboard.getData(DataFlavor.stringFlavor);
                 if (text == null) text = "";
+                if (isLocalFileUri(text)) text = "";
             }
             if (text.isEmpty()) {
                 // No text in clipboard - check for image data
@@ -77,5 +78,13 @@ public class ChatPasteAction extends ChatToolWindowAction {
         } catch (Exception ex) {
             LOG.warn("Failed to read clipboard for paste action", ex);
         }
+    }
+
+    private static boolean isLocalFileUri(String text) {
+        if (text == null) {
+            return false;
+        }
+        String normalized = text.trim().toLowerCase();
+        return normalized.startsWith("file://");
     }
 }

@@ -61,8 +61,6 @@ export interface UseSettingsBasicActionsReturn {
   historyCompletionEnabled: boolean;
   tabAutoRenameEnabled: boolean;
   commitGenerationEnabled: boolean;
-  autoCommitEnabled: boolean;
-  autoResolveConflictsEnabled: boolean;
   statusBarWidgetEnabled: boolean;
 
   // =========================================================================
@@ -86,8 +84,6 @@ export interface UseSettingsBasicActionsReturn {
   handleBrowseSound: () => void;
   handleSaveCommitPrompt: () => void;
   handleCommitGenerationEnabledChange: (enabled: boolean) => void;
-  handleAutoCommitEnabledChange: (enabled: boolean) => void;
-  handleAutoResolveConflictsEnabledChange: (enabled: boolean) => void;
   handleStatusBarWidgetEnabledChange: (enabled: boolean) => void;
 
   // =========================================================================
@@ -125,8 +121,6 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setHistoryCompletionEnabled: (enabled: boolean) => void;
   /** @internal */ setTabAutoRenameEnabled: (enabled: boolean) => void;
   /** @internal */ setCommitGenerationEnabled: (enabled: boolean) => void;
-  /** @internal */ setAutoCommitEnabled: (enabled: boolean) => void;
-  /** @internal */ setAutoResolveConflictsEnabled: (enabled: boolean) => void;
   /** @internal */ setStatusBarWidgetEnabled: (enabled: boolean) => void;
 }
 
@@ -207,10 +201,6 @@ export function useSettingsBasicActions({
 
   // AI commit generation toggle (default: true)
   const [commitGenerationEnabled, setCommitGenerationEnabled] = useState<boolean>(true);
-  // Auto commit toggle (default: false)
-  const [autoCommitEnabled, setAutoCommitEnabled] = useState<boolean>(false);
-  // Auto resolve conflicts toggle (default: false)
-  const [autoResolveConflictsEnabled, setAutoResolveConflictsEnabled] = useState<boolean>(false);
 
   // Status bar widget toggle (default: true)
   const [statusBarWidgetEnabled, setStatusBarWidgetEnabled] = useState<boolean>(true);
@@ -358,20 +348,6 @@ export function useSettingsBasicActions({
     sendToJava(`set_commit_generation_enabled:${JSON.stringify(payload)}`);
   }, []);
 
-  // Auto commit toggle change handler
-  const handleAutoCommitEnabledChange = useCallback((enabled: boolean) => {
-    setAutoCommitEnabled(enabled);
-    const payload = { autoCommitEnabled: enabled };
-    sendToJava(`set_auto_commit_enabled:${JSON.stringify(payload)}`);
-  }, []);
-
-  // Auto resolve conflicts toggle change handler
-  const handleAutoResolveConflictsEnabledChange = useCallback((enabled: boolean) => {
-    setAutoResolveConflictsEnabled(enabled);
-    const payload = { autoResolveConflictsEnabled: enabled };
-    sendToJava(`set_auto_resolve_conflicts_enabled:${JSON.stringify(payload)}`);
-  }, []);
-
   // Status bar widget toggle change handler
   const handleStatusBarWidgetEnabledChange = useCallback((enabled: boolean) => {
     setStatusBarWidgetEnabled(enabled);
@@ -454,12 +430,6 @@ export function useSettingsBasicActions({
     commitGenerationEnabled,
     setCommitGenerationEnabled,
     handleCommitGenerationEnabledChange,
-    autoCommitEnabled,
-    setAutoCommitEnabled,
-    handleAutoCommitEnabledChange,
-    autoResolveConflictsEnabled,
-    setAutoResolveConflictsEnabled,
-    handleAutoResolveConflictsEnabledChange,
     statusBarWidgetEnabled,
     setStatusBarWidgetEnabled,
     handleStatusBarWidgetEnabledChange,

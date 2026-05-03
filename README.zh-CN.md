@@ -69,6 +69,13 @@
 
 ---
 
+## 说明文档
+
+- [CC GUI 说明文档（架构、配置、开发与排障）](./docs/CC_GUI_GUIDE.zh-CN.md)
+- [IDE 插件安装操作文档](./docs/IDE_PLUGIN_INSTALL_GUIDE.md)
+
+---
+
 ### 贡献代码
 
 贡献代码前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)

@@ -12,6 +12,8 @@ import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Stream;
 
 /**
@@ -27,6 +29,8 @@ public class SessionIndexManager {
     private static final Path CODEMOSS_CACHE_DIR = Paths.get(HOME_DIR, ".codemoss", "cache");
     private static final String CLAUDE_INDEX_FILE = "claude-session-index.json";
     private static final String CODEX_INDEX_FILE = "codex-session-index.json";
+    private static final int SAVE_MOVE_MAX_RETRIES = 5;
+    private static final long SAVE_MOVE_BASE_DELAY_MS = 25L;
 
     // v3 (2026-04): SessionIndexEntry.fileLastModified now populated and used by incremental
     // scan for mtime-driven re-read of already indexed sessions. Bumping forces rebuild of any
@@ -37,6 +41,7 @@ public class SessionIndexManager {
     private static final int INDEX_VERSION = 4;
 
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
+    private final ReadWriteLock ioLock = new ReentrantReadWriteLock();
 
     // Singleton
     private static final SessionIndexManager INSTANCE = new SessionIndexManager();
@@ -169,26 +174,31 @@ public class SessionIndexManager {
      * Reads an index file from disk.
      */
     private SessionIndex readIndex(Path indexPath) {
-        if (!Files.exists(indexPath)) {
-            LOG.info("[SessionIndexManager] Index file not found: " + indexPath);
-            return new SessionIndex();
-        }
+        ioLock.readLock().lock();
+        try {
+            if (!Files.exists(indexPath)) {
+                LOG.info("[SessionIndexManager] Index file not found: " + indexPath);
+                return new SessionIndex();
+            }
 
-        try (Reader reader = Files.newBufferedReader(indexPath, StandardCharsets.UTF_8)) {
-            SessionIndex index = this.gson.fromJson(reader, SessionIndex.class);
-            if (index == null) {
+            try (Reader reader = Files.newBufferedReader(indexPath, StandardCharsets.UTF_8)) {
+                SessionIndex index = this.gson.fromJson(reader, SessionIndex.class);
+                if (index == null) {
+                    return new SessionIndex();
+                }
+                // Version check
+                if (index.version != INDEX_VERSION) {
+                    LOG.info("[SessionIndexManager] Index version mismatch, rebuilding");
+                    return new SessionIndex();
+                }
+                LOG.info("[SessionIndexManager] Loaded index from " + indexPath + ", projects: " + index.projects.size());
+                return index;
+            } catch (Exception e) {
+                LOG.error("[SessionIndexManager] Failed to read index: " + e.getMessage(), e);
                 return new SessionIndex();
             }
-            // Version check
-            if (index.version != INDEX_VERSION) {
-                LOG.info("[SessionIndexManager] Index version mismatch, rebuilding");
-                return new SessionIndex();
-            }
-            LOG.info("[SessionIndexManager] Loaded index from " + indexPath + ", projects: " + index.projects.size());
-            return index;
-        } catch (Exception e) {
-            LOG.error("[SessionIndexManager] Failed to read index: " + e.getMessage(), e);
-            return new SessionIndex();
+        } finally {
+            ioLock.readLock().unlock();
         }
     }
 
@@ -196,39 +206,79 @@ public class SessionIndexManager {
      * Saves an index file to disk.
      */
     private void saveIndex(Path indexPath, SessionIndex index) {
-        ensureCacheDir();
-        index.lastUpdated = System.currentTimeMillis();
-        sanitizeIndex(index);
-
-        Path parent = indexPath.getParent();
-        if (parent == null) {
-            LOG.warn("[SessionIndexManager] Failed to save index because parent directory is null: " + indexPath);
-            return;
-        }
-
-        String prefix = indexPath.getFileName() != null ? indexPath.getFileName() + "-" : "session-index-";
-        Path tmp = null;
+        ioLock.writeLock().lock();
         try {
-            tmp = Files.createTempFile(parent, prefix, ".tmp");
-            try (Writer writer = Files.newBufferedWriter(tmp, StandardCharsets.UTF_8)) {
-                gson.toJson(index, writer);
+            ensureCacheDir();
+            index.lastUpdated = System.currentTimeMillis();
+            sanitizeIndex(index);
+
+            Path parent = indexPath.getParent();
+            if (parent == null) {
+                LOG.warn("[SessionIndexManager] Failed to save index because parent directory is null: " + indexPath);
+                return;
             }
+
+            String prefix = indexPath.getFileName() != null ? indexPath.getFileName() + "-" : "session-index-";
+            Path tmp = null;
             try {
-                Files.move(tmp, indexPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-            } catch (AtomicMoveNotSupportedException ignored) {
-                Files.move(tmp, indexPath, StandardCopyOption.REPLACE_EXISTING);
-            }
-            LOG.info("[SessionIndexManager] Saved index to " + indexPath);
-        } catch (Exception e) {
-            LOG.error("[SessionIndexManager] Failed to save index: " + e.getMessage(), e);
-        } finally {
-            if (tmp != null) {
-                try {
-                    Files.deleteIfExists(tmp);
-                } catch (IOException e) {
-                    LOG.debug("[SessionIndexManager] Failed to cleanup temp file: " + tmp + " (" + e.getMessage() + ")");
+                tmp = Files.createTempFile(parent, prefix, ".tmp");
+                try (Writer writer = Files.newBufferedWriter(tmp, StandardCharsets.UTF_8)) {
+                    gson.toJson(index, writer);
+                }
+                moveTempFileWithRetry(tmp, indexPath);
+                LOG.info("[SessionIndexManager] Saved index to " + indexPath);
+            } catch (Exception e) {
+                LOG.error("[SessionIndexManager] Failed to save index: " + e.getMessage(), e);
+            } finally {
+                if (tmp != null) {
+                    try {
+                        Files.deleteIfExists(tmp);
+                    } catch (IOException e) {
+                        LOG.debug("[SessionIndexManager] Failed to cleanup temp file: " + tmp + " (" + e.getMessage() + ")");
+                    }
                 }
             }
+        } finally {
+            ioLock.writeLock().unlock();
+        }
+    }
+
+    private void moveTempFileWithRetry(Path tmp, Path indexPath) throws IOException {
+        AccessDeniedException lastAccessDenied = null;
+        for (int attempt = 1; attempt <= SAVE_MOVE_MAX_RETRIES; attempt++) {
+            try {
+                moveTempFile(tmp, indexPath);
+                return;
+            } catch (AccessDeniedException e) {
+                lastAccessDenied = e;
+                if (attempt >= SAVE_MOVE_MAX_RETRIES) {
+                    break;
+                }
+                long delayMs = SAVE_MOVE_BASE_DELAY_MS * (1L << (attempt - 1));
+                LOG.debug("[SessionIndexManager] Move retry " + attempt + "/" + SAVE_MOVE_MAX_RETRIES
+                        + " for " + indexPath + " after access denied: " + e.getMessage());
+                sleepBeforeRetry(delayMs, indexPath);
+            }
+        }
+        if (lastAccessDenied != null) {
+            throw lastAccessDenied;
+        }
+    }
+
+    private void moveTempFile(Path tmp, Path indexPath) throws IOException {
+        try {
+            Files.move(tmp, indexPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException ignored) {
+            Files.move(tmp, indexPath, StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
+    private void sleepBeforeRetry(long delayMs, Path indexPath) throws IOException {
+        try {
+            Thread.sleep(delayMs);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IOException("[SessionIndexManager] Move retry interrupted for " + indexPath, interrupted);
         }
     }
 

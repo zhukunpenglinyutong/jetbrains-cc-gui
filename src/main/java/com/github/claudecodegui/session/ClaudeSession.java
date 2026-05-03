@@ -4,7 +4,6 @@ import com.github.claudecodegui.permission.PermissionManager;
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
-import com.github.claudecodegui.service.AutoCommitService;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
@@ -401,7 +400,6 @@ public class ClaudeSession {
         String normalizedInput = (input != null) ? input.trim() : "";
         Message userMessage = contextService.buildUserMessage(normalizedInput, attachments);
         state.beginTurnFileTracking();
-        AutoCommitService.TurnCapture autoCommitCapture = AutoCommitService.beginTurnCapture(state.getCwd());
         sendService.updateSessionStateForSend(userMessage, normalizedInput);
 
         final String finalAgentPrompt = agentPrompt;
@@ -422,14 +420,7 @@ public class ClaudeSession {
                             finalRequestedPermissionMode
                     )
             ).thenCompose(v -> syncUserMessageUuidsAfterSend());
-        }).thenRun(() -> AutoCommitService.scheduleIfEnabled(
-                project,
-                state.getCwd(),
-                state.getProvider(),
-                state.getSessionId(),
-                autoCommitCapture,
-                state.consumeTurnTouchedFiles()
-        )).exceptionally(ex -> {
+        }).thenRun(state::consumeTurnTouchedFiles).exceptionally(ex -> {
             state.setError(ex.getMessage());
             state.setBusy(false);
             state.setLoading(false);

@@ -4,12 +4,6 @@ import { generateId } from '../utils/generateId.js';
 import { insertTextAtCursor } from '../utils/selectionUtils.js';
 import { perfTimer } from '../../../utils/debug.js';
 
-declare global {
-  interface Window {
-    getClipboardFilePath?: () => Promise<string>;
-  }
-}
-
 interface UsePasteAndDropOptions {
   editableRef: React.RefObject<HTMLDivElement | null>;
   pathMappingRef: React.MutableRefObject<Map<string, string>>;
@@ -33,6 +27,8 @@ interface UsePasteAndDropReturn {
   /** Handle drop event - detect images and file paths */
   handleDrop: (e: React.DragEvent) => void;
 }
+
+const isLocalFileUri = (value: string): boolean => /^file:\/\/\/?/i.test(value.trim());
 
 /**
  * usePasteAndDrop - Handle paste and drag-drop operations
@@ -113,46 +109,13 @@ export function usePasteAndDrop({
       if (!hasImage) {
         e.preventDefault();
 
-        // Try multiple ways to get text
-        let text =
-          e.clipboardData.getData('text/plain') ||
-          e.clipboardData.getData('text/uri-list') ||
-          e.clipboardData.getData('text/html');
-
-        // If still no text, try to get filename/path from file type item
-        if (!text) {
-          // Check if there's a file type item
-          let hasFileItem = false;
-          for (let i = 0; i < items.length; i++) {
-            const item = items[i];
-            if (item.kind === 'file') {
-              hasFileItem = true;
-              break;
-            }
-          }
-
-          // If there's a file type item, try to get full path via Java side
-          if (hasFileItem && window.getClipboardFilePath) {
-            window
-              .getClipboardFilePath()
-              .then((fullPath: string) => {
-                if (fullPath && fullPath.trim()) {
-                  // Insert full path using modern Selection API
-                  insertTextAtCursor(fullPath, editableRef.current);
-                  // Bypass IME guard (isComposingRef may be stale after recent compositionEnd)
-                  handleInput(false);
-                  // Immediately sync parent state without waiting for debounce
-                  flushInput();
-                }
-              })
-              .catch(() => {
-                // Ignore errors
-              });
-            return;
-          }
-        }
+        let text = e.clipboardData.getData('text/plain') || e.clipboardData.getData('text/html');
 
         if (text && text.trim()) {
+          if (isLocalFileUri(text)) {
+            return;
+          }
+
           const timer = perfTimer('handlePaste-text');
           timer.mark(`text-length:${text.length}`);
 
@@ -250,6 +213,10 @@ export function usePasteAndDrop({
 
       // No image files, process text (file path or other text)
       if (text && text.trim()) {
+        if (isLocalFileUri(text)) {
+          return;
+        }
+
         // Extract file path and add to path mapping
         const filePath = text.trim();
         const fileName = filePath.split(/[/\\]/).pop() || filePath;

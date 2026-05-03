@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { createTextFragment } from '../utils/selectionUtils.js';
 
+const isLocalFileUri = (value: string): boolean => /^file:\/\/\/?/i.test(value.trim());
+
 interface UseGlobalCallbacksOptions {
   editableRef: React.RefObject<HTMLDivElement | null>;
   pathMappingRef: React.MutableRefObject<Map<string, string>>;
@@ -41,6 +43,7 @@ export function useGlobalCallbacks({
 
       const absolutePath = filePath.trim();
       if (!absolutePath) return;
+      if (isLocalFileUri(absolutePath)) return;
 
       // Add path to path mapping
       const fileName = absolutePath.split(/[/\\]/).pop() || absolutePath;

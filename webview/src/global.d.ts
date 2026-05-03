@@ -8,11 +8,6 @@ interface Window {
   sendToJava?: (message: string) => void;
 
   /**
-   * Get clipboard file path from Java
-   */
-  getClipboardFilePath?: () => Promise<string>;
-
-  /**
    * Handle file path(s) dropped from Java (supports batch files)
    */
   handleFilePathFromJava?: (filePathInput: string | string[]) => void;
@@ -259,16 +254,6 @@ interface Window {
    * Update AI commit generation enabled state
    */
   updateCommitGenerationEnabled?: (json: string) => void;
-
-  /**
-   * Update auto commit enabled state
-   */
-  updateAutoCommitEnabled?: (json: string) => void;
-
-  /**
-   * Update auto resolve conflicts enabled state
-   */
-  updateAutoResolveConflictsEnabled?: (json: string) => void;
 
   /**
    * Update status bar widget enabled state

@@ -760,7 +760,7 @@ describe('getContentBlocks', () => {
   it('does not append file URI text when visual block already exists', () => {
     const msg: ClaudeMessage = {
       type: 'user',
-      content: 'file:///C:/Users/achie/AppData/Local/PixPin/Temp/PixPin_2026-05-01_18-52-07.png',
+      content: 'file:///C:/tmp/pasted-image.png',
       timestamp: '1',
       raw: {
         message: {
@@ -775,5 +775,6 @@ describe('getContentBlocks', () => {
     expect(blocks).toHaveLength(1);
     expect(blocks[0].type).toBe('image');
   });
+
 });
 

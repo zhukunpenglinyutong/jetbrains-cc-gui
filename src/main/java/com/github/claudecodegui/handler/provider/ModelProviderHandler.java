@@ -5,6 +5,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.settings.CodexSettingsManager;
 import com.github.claudecodegui.settings.ModelSelectionStateService;
+import com.github.claudecodegui.settings.ReasoningEffortStateService;
 import com.github.claudecodegui.skill.SlashCommandRegistry;
 import com.github.claudecodegui.util.EditorFileUtils;
 import com.google.gson.Gson;
@@ -190,12 +191,14 @@ public class ModelProviderHandler {
 
     public void handleGetReasoningEffort() {
         try {
-            String effort = "medium";
+            String effort = ReasoningEffortStateService.DEFAULT_REASONING_EFFORT;
             if (context.getSession() != null) {
                 String sessionEffort = context.getSession().getReasoningEffort();
                 if (sessionEffort != null && !sessionEffort.trim().isEmpty()) {
-                    effort = sessionEffort.trim();
+                    effort = ReasoningEffortStateService.normalize(sessionEffort);
                 }
+            } else {
+                effort = ReasoningEffortStateService.load();
             }
 
             final String effortToSend = effort;
@@ -220,11 +223,13 @@ public class ModelProviderHandler {
                 }
             }
 
-            LOG.info("[ModelProviderHandler] Setting reasoning effort to: " + effort);
+            String normalizedEffort = ReasoningEffortStateService.normalize(effort);
+            LOG.info("[ModelProviderHandler] Setting reasoning effort to: " + normalizedEffort);
 
             if (context.getSession() != null) {
-                context.getSession().setReasoningEffort(effort);
+                context.getSession().setReasoningEffort(normalizedEffort);
             }
+            ReasoningEffortStateService.save(normalizedEffort);
         } catch (Exception e) {
             LOG.error("[ModelProviderHandler] Failed to set reasoning effort: " + e.getMessage(), e);
         }

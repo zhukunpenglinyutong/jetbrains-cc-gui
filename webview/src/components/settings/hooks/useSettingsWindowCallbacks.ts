@@ -35,8 +35,6 @@ export interface SettingsWindowCallbacksDeps {
   setCodexConfigLoading: (loading: boolean) => void;
   // AI feature toggle setters
   setCommitGenerationEnabled?: (enabled: boolean) => void;
-  setAutoCommitEnabled?: (enabled: boolean) => void;
-  setAutoResolveConflictsEnabled?: (enabled: boolean) => void;
   setStatusBarWidgetEnabled?: (enabled: boolean) => void;
   // Sound notification setters
   setSoundNotificationEnabled?: (enabled: boolean) => void;
@@ -260,26 +258,6 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
     };
 
-    // Auto commit config callback
-    window.updateAutoCommitEnabled = (jsonStr: string) => {
-      try {
-        const data = JSON.parse(jsonStr);
-        d().setAutoCommitEnabled?.(data.autoCommitEnabled ?? false);
-      } catch (error) {
-        console.error('[SettingsView] Failed to parse auto commit config:', error);
-      }
-    };
-
-    // Auto resolve conflicts config callback
-    window.updateAutoResolveConflictsEnabled = (jsonStr: string) => {
-      try {
-        const data = JSON.parse(jsonStr);
-        d().setAutoResolveConflictsEnabled?.(data.autoResolveConflictsEnabled ?? false);
-      } catch (error) {
-        console.error('[SettingsView] Failed to parse auto resolve conflicts config:', error);
-      }
-    };
-
     // Status bar widget config callback
     window.updateStatusBarWidgetEnabled = (jsonStr: string) => {
       try {
@@ -454,8 +432,6 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     sendToJava('get_commit_prompt:');
     sendToJava('get_sound_notification_config:');
     sendToJava('get_commit_generation_enabled:');
-    sendToJava('get_auto_commit_enabled:');
-    sendToJava('get_auto_resolve_conflicts_enabled:');
     sendToJava('get_status_bar_widget_enabled:');
 
     return () => {
@@ -483,8 +459,6 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.updateCommitPrompt = undefined;
       window.updateSoundNotificationConfig = undefined;
       window.updateCommitGenerationEnabled = undefined;
-      window.updateAutoCommitEnabled = undefined;
-      window.updateAutoResolveConflictsEnabled = undefined;
       window.updateStatusBarWidgetEnabled = undefined;
       window.updateAgents = previousUpdateAgents;
       window.agentOperationResult = undefined;

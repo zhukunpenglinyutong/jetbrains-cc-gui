@@ -30,7 +30,6 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
 import java.awt.dnd.DnDConstants;
@@ -126,28 +125,39 @@ public class WebviewInitializer {
         }
 
         if (!claudeSDKBridge.checkEnvironment()) {
-            if (sharedResolver.isExtractionInProgress()) {
-                LOG.info("[ClaudeSDKToolWindow] checkEnvironment failed but extraction in progress, showing loading panel...");
-                showLoadingPanel();
-                sharedResolver.getExtractionFuture().thenAcceptAsync(ready -> {
-                    if (ready) {
-                        reinitializeAfterExtraction();
-                    } else {
-                        invokeLaterForToolWindow(this::showErrorPanel);
-                    }
-                });
+            // checkEnvironment() may fail transiently on some Windows setups even when
+            // Node path verification and bridge resolution are both successful.
+            boolean nodeVerified = nodeResult != null && nodeResult.isFound();
+            File resolvedBridgeDir = sharedResolver.findSdkDir();
+            boolean bridgeResolved = resolvedBridgeDir != null;
+
+            if (nodeVerified && bridgeResolved) {
+                LOG.warn("[ClaudeSDKToolWindow] checkEnvironment returned false, but verified Node.js and resolved ai-bridge are available. Continuing initialization. " +
+                    "nodePath=" + nodeResult.getNodePath() + ", bridgeDir=" + resolvedBridgeDir.getAbsolutePath());
+            } else {
+                if (sharedResolver.isExtractionInProgress()) {
+                    LOG.info("[ClaudeSDKToolWindow] checkEnvironment failed but extraction in progress, showing loading panel...");
+                    showLoadingPanel();
+                    sharedResolver.getExtractionFuture().thenAcceptAsync(ready -> {
+                        if (ready) {
+                            reinitializeAfterExtraction();
+                        } else {
+                            invokeLaterForToolWindow(this::showErrorPanel);
+                        }
+                    });
+                    return;
+                }
+
+                if (sharedResolver.isExtractionComplete()) {
+                    LOG.info("[ClaudeSDKToolWindow] checkEnvironment failed but extraction just completed, retrying initialization with exponential backoff...");
+                    retryCheckEnvironmentWithBackoff(0);
+                    showLoadingPanel();
+                    return;
+                }
+
+                showErrorPanel();
                 return;
             }
-
-            if (sharedResolver.isExtractionComplete()) {
-                LOG.info("[ClaudeSDKToolWindow] checkEnvironment failed but extraction just completed, retrying initialization with exponential backoff...");
-                retryCheckEnvironmentWithBackoff(0);
-                showLoadingPanel();
-                return;
-            }
-
-            showErrorPanel();
-            return;
         }
 
         if (nodeResult == null) {
@@ -186,33 +196,6 @@ public class WebviewInitializer {
                 return new JBCefJSQuery.Response("ok");
             });
 
-            // Create a dedicated JSQuery for getting clipboard file paths
-            JBCefJSQuery getClipboardPathQuery = JBCefJSQuery.create(browserBase);
-            getClipboardPathQuery.addHandler((msg) -> {
-                try {
-                    LOG.debug("Clipboard path request received");
-                    Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
-                    Transferable contents = clipboard.getContents(null);
-
-                    if (contents != null && contents.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
-                        @SuppressWarnings("unchecked")
-                        List<File> files = (List<File>) contents.getTransferData(DataFlavor.javaFileListFlavor);
-
-                        if (!files.isEmpty()) {
-                            File file = files.get(0);
-                            String filePath = file.getAbsolutePath();
-                            LOG.debug("Returning file path from clipboard: " + filePath);
-                            return new JBCefJSQuery.Response(filePath);
-                        }
-                    }
-                    LOG.debug("No file in clipboard");
-                    return new JBCefJSQuery.Response("");
-                } catch (Exception ex) {
-                    LOG.warn("Error getting clipboard path: " + ex.getMessage());
-                    return new JBCefJSQuery.Response("");
-                }
-            });
-
             HtmlLoader htmlLoader = host.getHtmlLoader();
             String htmlContent = htmlLoader.loadChatHtml();
 
@@ -227,17 +210,6 @@ public class WebviewInitializer {
 
                     String injection = "window.sendToJava = function(msg) { " + jsQuery.inject("msg") + " };";
                     cefBrowser.executeJavaScript(injection, cefBrowser.getURL(), 0);
-
-                    // Inject clipboard path retrieval function
-                    String clipboardPathInjection =
-                        "window.getClipboardFilePath = function() {" +
-                        "  return new Promise((resolve) => {" +
-                        "    " + getClipboardPathQuery.inject("''",
-                            "function(response) { resolve(response); }",
-                            "function(error_code, error_message) { console.error('Failed to get clipboard path:', error_message); resolve(''); }") +
-                        "  });" +
-                        "};";
-                    cefBrowser.executeJavaScript(clipboardPathInjection, cefBrowser.getURL(), 0);
 
                     // Forward console logs to IDEA console (dev mode only — IPC overhead hurts scroll FPS in production)
                     if (PlatformUtils.isPluginDevMode()) {

@@ -43,7 +43,7 @@ public class SessionContextService {
 
         try {
             JsonArray contentArr = new JsonArray();
-            String userDisplayText = normalizedInput;
+            String userDisplayText = stripLocalFileUriText(normalizedInput);
 
             if (attachments != null && !attachments.isEmpty()) {
                 for (ClaudeSession.Attachment att : attachments) {
@@ -226,6 +226,22 @@ public class SessionContextService {
         }
 
         return result.toString();
+    }
+
+    private String stripLocalFileUriText(String input) {
+        if (input == null || input.isEmpty()) {
+            return "";
+        }
+
+        String[] lines = input.split("\\R", -1);
+        List<String> sanitizedLines = new ArrayList<>();
+        for (String line : lines) {
+            String cleanedLine = line.replaceAll("(?i)file://\\S+", "");
+            if (!cleanedLine.trim().isEmpty()) {
+                sanitizedLines.add(cleanedLine);
+            }
+        }
+        return String.join("\n", sanitizedLines);
     }
 
     private String resolveTerminalContent(String safeName) {

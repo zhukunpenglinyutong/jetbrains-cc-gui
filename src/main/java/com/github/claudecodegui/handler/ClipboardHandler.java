@@ -93,6 +93,9 @@ public class ClipboardHandler extends BaseMessageHandler {
                 Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
                 if (clipboard.isDataFlavorAvailable(DataFlavor.stringFlavor)) {
                     String text = (String) clipboard.getData(DataFlavor.stringFlavor);
+                    if (isLocalFileUri(text)) {
+                        text = "";
+                    }
                     callJavaScript("window.onClipboardRead", escapeJs(text != null ? text : ""));
                 } else {
                     callJavaScript("window.onClipboardRead", "");
@@ -167,6 +170,14 @@ public class ClipboardHandler extends BaseMessageHandler {
         }
 
         return trimmed;
+    }
+
+    private boolean isLocalFileUri(String text) {
+        if (text == null) {
+            return false;
+        }
+        String normalized = text.trim().toLowerCase(Locale.ROOT);
+        return normalized.startsWith("file://");
     }
 
     private BufferedImage readImageFromSource(String imageSrc) throws IOException {

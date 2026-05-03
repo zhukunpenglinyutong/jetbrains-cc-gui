@@ -34,6 +34,7 @@ import { formatTime } from './utils/helpers';
 import { extractMarkdownContent } from './utils/copyUtils';
 import { applyDiffTheme, getStoredDiffTheme } from './utils/diffTheme';
 import { extractTodosFromToolUse } from './utils/todoToolNormalization';
+import { getLatestMeaningfulRequirementText } from './utils/sessionTitle';
 import {
   finalizeSubagentsForSettledTurn,
   finalizeTodosForSettledTurn,
@@ -470,6 +471,8 @@ const App = () => {
   const sessionTitle = useMemo(() => {
     if (customSessionTitle) return customSessionTitle;
     if (messages.length === 0) return t('common.newSession');
+    const latestMeaningfulTitle = getLatestMeaningfulRequirementText(messages, getMessageText);
+    if (latestMeaningfulTitle) return latestMeaningfulTitle;
     const firstUserMessage = messages.find((message) => message.type === 'user');
     if (!firstUserMessage) return t('common.newSession');
     const text = getMessageText(firstUserMessage);

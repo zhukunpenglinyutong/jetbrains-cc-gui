@@ -400,7 +400,7 @@
         "label": "标签重命名",
         "enabled": "已开启",
         "disabled": "已关闭",
-        "hint": "开启后，AI会自动根据新需求修改标签的名称（8字以内）"
+        "hint": "开启后，AI会自动根据新需求修改标签的名称（10字以内）"
       }
     },
     "codexFeatureUnavailable": "Codex暂未适配此功能，请切换到Claude Code使用",
@@ -750,7 +750,7 @@
       "operationFailed": "操作失败",
       "deleteConfirmTitle": "确认删除",
       "deleteConfirmMessage": "确定要删除提示词 \"{{name}}\" 吗？此操作无法撤销。",
-      "description": "创建常用提示词模板，在聊天输入框中输入 ! 即可快速选择并插入",
+      "description": "勾选右侧按钮即可自动注入当前会话, 在聊天输入框输入 ! 可手动插入提示词",
       "global": "全局提示词",
       "project": "项目提示词",
       "projectScope": "项目提示词 - {{projectName}}",

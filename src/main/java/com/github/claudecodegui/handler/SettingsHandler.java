@@ -51,10 +51,6 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_auto_open_file_enabled",
         "get_commit_generation_enabled",
         "set_commit_generation_enabled",
-        "get_auto_commit_enabled",
-        "set_auto_commit_enabled",
-        "get_auto_resolve_conflicts_enabled",
-        "set_auto_resolve_conflicts_enabled",
         "set_ui_language",
         "get_status_bar_widget_enabled",
         "set_status_bar_widget_enabled",
@@ -188,18 +184,6 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_commit_generation_enabled":
                 projectConfigHandler.handleSetCommitGenerationEnabled(content);
-                return true;
-            case "get_auto_commit_enabled":
-                projectConfigHandler.handleGetAutoCommitEnabled();
-                return true;
-            case "set_auto_commit_enabled":
-                projectConfigHandler.handleSetAutoCommitEnabled(content);
-                return true;
-            case "get_auto_resolve_conflicts_enabled":
-                projectConfigHandler.handleGetAutoResolveConflictsEnabled();
-                return true;
-            case "set_auto_resolve_conflicts_enabled":
-                projectConfigHandler.handleSetAutoResolveConflictsEnabled(content);
                 return true;
             case "set_ui_language":
                 projectConfigHandler.handleSetUiLanguage(content);

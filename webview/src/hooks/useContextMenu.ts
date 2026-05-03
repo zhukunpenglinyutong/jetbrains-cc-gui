@@ -53,6 +53,8 @@ function restoreRange(range: Range | null): void {
   }
 }
 
+const isLocalFileUri = (value: string): boolean => /^file:\/\/\/?/i.test(value.trim());
+
 export function useContextMenu() {
   const [state, setState] = useState<ContextMenuState>({
     visible: false, x: 0, y: 0, hasSelection: false, savedRange: null, selectedText: '', targetImageSrc: '',
@@ -137,6 +139,7 @@ export function pasteAtCursor(savedRange: Range | null, el: HTMLElement, onCompl
       window.onClipboardRead = undefined;
     }
     if (!text || !el.isConnected) return;
+    if (isLocalFileUri(text)) return;
     el.focus();
     restoreRange(savedRange);
     document.execCommand('insertText', false, text);
