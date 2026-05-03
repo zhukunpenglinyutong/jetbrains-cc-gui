@@ -243,6 +243,28 @@ public final class AutoCommitService {
             return;
         }
 
+        // Guardrail: block commit if files are contaminated by timeout marker lines.
+        // Keep the command exact for consistency with team workflow:
+        // git grep -n "^command timed out$" -- .
+        CommandResult timeoutMarkerCheck = runGit(repoRoot, "grep", "-n", "^command timed out$", "--", ".");
+        if (timeoutMarkerCheck.exitCode == 0) {
+            String firstMatch = firstLine(timeoutMarkerCheck.output());
+            String warning = "Auto commit blocked: found timeout marker contamination"
+                    + (firstMatch.isBlank() ? "" : " (" + firstMatch + ")");
+            LOG.warn("[AutoCommit] " + warning);
+            if (project != null) {
+                ClaudeNotifier.showWarning(project, warning);
+            }
+            return;
+        }
+        if (timeoutMarkerCheck.exitCode > 1) {
+            LOG.warn("[AutoCommit] timeout marker check failed: " + timeoutMarkerCheck.output());
+            if (project != null) {
+                ClaudeNotifier.showWarning(project, "Auto commit failed: timeout marker check error");
+            }
+            return;
+        }
+
         String commitMessage = buildCommitMessage(provider, sessionId, changedByMerge.size());
         CommandResult commit = runGit(repoRoot, "commit", "-m", commitMessage);
         if (!commit.isSuccess()) {
