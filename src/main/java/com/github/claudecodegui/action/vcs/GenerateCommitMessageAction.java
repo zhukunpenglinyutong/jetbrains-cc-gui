@@ -142,8 +142,6 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
      * Uses a fallback chain to support different IDEA versions:
      * 1. COMMIT_WORKFLOW_HANDLER.ui.getIncludedChanges() - preferred, gets user-checked files
      * 2. CheckinProjectPanel.getSelectedChanges() - legacy fallback
-     * 3. VcsDataKeys.CHANGES - context-based fallback
-     * 4. ChangeListManager.getAllChanges() - last resort fallback
      */
     @Nullable
     private Collection<Change> getUserSelectedChanges(@NotNull AnActionEvent e, @NotNull Project project) {
@@ -168,22 +166,6 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
                 LOG.info("Got " + changes.size() + " changes from CheckinProjectPanel.getSelectedChanges() (fallback)");
                 return changes;
             }
-        }
-
-        // Method 3: Try VcsDataKeys.CHANGES
-        Change[] changesArray = e.getData(VcsDataKeys.CHANGES);
-        if (changesArray != null && changesArray.length > 0) {
-            changes = java.util.Arrays.asList(changesArray);
-            LOG.info("Got " + changes.size() + " changes from VcsDataKeys.CHANGES (fallback)");
-            return changes;
-        }
-
-        // Method 4: Last resort - get all changes from ChangeListManager
-        ChangeListManager changeListManager = ChangeListManager.getInstance(project);
-        Collection<Change> allChanges = changeListManager.getAllChanges();
-        if (!allChanges.isEmpty()) {
-            LOG.info("Got " + allChanges.size() + " changes from ChangeListManager.getAllChanges() (last resort fallback)");
-            return allChanges;
         }
 
         LOG.warn("Failed to get changes from any data source");

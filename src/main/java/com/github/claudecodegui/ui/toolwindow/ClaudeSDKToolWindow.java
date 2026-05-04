@@ -425,6 +425,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                         tabStateService.saveTabCount(contentManager.getContentCount());
                         tabStateService.saveSelectedTabIndex(contentManager.getIndexOfContent(newContent));
                         updateTabCloseableState(contentManager);
+                        // Closing the last tab can cause the tool window to auto-hide.
+                        // Keep the tool window visible after recreating the replacement tab.
+                        toolWindow.show(null);
                         LOG.info("[TabManager] Recreated new tab after closing the last tab: " + tabName);
                     } catch (Exception e) {
                         LOG.error("[TabManager] Failed to recreate new tab after closing the last tab", e);

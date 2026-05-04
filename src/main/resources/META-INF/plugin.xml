@@ -153,7 +153,9 @@
         <action id="ClaudeCodeGUI.GenerateCommitMessageAction"
                 class="com.github.claudecodegui.action.vcs.GenerateCommitMessageAction"
                 icon="/icons/logo-16.png">
-            <!-- Add to VCS Commit toolbar -->
+            <!-- New commit UI -->
+            <add-to-group group-id="ChangesView.CommitToolbar" anchor="last"/>
+            <!-- Legacy commit UI fallback -->
             <add-to-group group-id="Vcs.MessageActionGroup" anchor="last"/>
         </action>
 

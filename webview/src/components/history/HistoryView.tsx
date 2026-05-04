@@ -111,6 +111,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
   const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null); // Track which session ID was copied
   const [copyFailedSessionId, setCopyFailedSessionId] = useState<string | null>(null); // Track which session ID copy failed
   const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(new Set());
+  const [showDeleteSelectedConfirm, setShowDeleteSelectedConfirm] = useState(false);
   const [showClearAllConfirm, setShowClearAllConfirm] = useState(false);
 
   // Clean up all timeout timers on unmount
@@ -319,14 +320,25 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
     if (selectedSessionIds.size === 0) {
       return;
     }
-    selectedSessionIds.forEach(sessionId => onDeleteSession(sessionId));
+    setShowClearAllConfirm(false);
+    setShowDeleteSelectedConfirm(true);
+  };
+
+  const confirmDeleteSelected = () => {
+    Array.from(selectedSessionIds).forEach(sessionId => onDeleteSession(sessionId));
     setSelectedSessionIds(new Set());
+    setShowDeleteSelectedConfirm(false);
+  };
+
+  const cancelDeleteSelected = () => {
+    setShowDeleteSelectedConfirm(false);
   };
 
   const handleClearAll = () => {
     if (sessions.length === 0) {
       return;
     }
+    setShowDeleteSelectedConfirm(false);
     setShowClearAllConfirm(true);
   };
 
@@ -673,6 +685,22 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
                 {t('common.cancel')}
               </button>
               <button className="modal-btn modal-btn-danger" onClick={confirmDelete}>
+                {t('common.delete')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showDeleteSelectedConfirm && (
+        <div className="modal-overlay" onClick={cancelDeleteSelected}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3>{t('history.confirmDelete')}</h3>
+            <p>{t('history.deleteMessage')}</p>
+            <div className="modal-actions">
+              <button className="modal-btn modal-btn-cancel" onClick={cancelDeleteSelected}>
+                {t('common.cancel')}
+              </button>
+              <button className="modal-btn modal-btn-danger" onClick={confirmDeleteSelected}>
                 {t('common.delete')}
               </button>
             </div>
