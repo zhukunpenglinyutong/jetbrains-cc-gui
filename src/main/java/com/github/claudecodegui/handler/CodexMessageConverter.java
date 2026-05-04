@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler;
 
+import com.github.claudecodegui.util.HistoryPromptSanitizer;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -29,7 +30,6 @@ public class CodexMessageConverter {
     private static final String ROLE_ASSISTANT = "assistant";
     private static final String ROLE_SYSTEM = "system";
     private static final String ROLE_DEVELOPER = "developer";
-    private static final String AGENT_ROLE_SECTION_MARKER = "## Agent Role and Instructions";
 
     // Tracks file-writing sessions so later write_stdin events can display the target file.
     // Uses a bounded LRU map to prevent memory leaks over long IDE sessions.
@@ -72,21 +72,7 @@ public class CodexMessageConverter {
      * Strip internal prompt wrappers from persisted history text so transcript UI shows only user-visible content.
      */
     private static String sanitizeHistoryText(String text) {
-        if (text == null || text.isEmpty()) {
-            return text;
-        }
-
-        String sanitized = text;
-        sanitized = removeTagBlock(sanitized, "agents-instructions");
-        sanitized = removeTagBlock(sanitized, "system-reminder");
-        sanitized = removeTagBlock(sanitized, "system-prompt");
-
-        int markerIndex = sanitized.indexOf(AGENT_ROLE_SECTION_MARKER);
-        if (markerIndex >= 0) {
-            sanitized = sanitized.substring(0, markerIndex);
-        }
-
-        return sanitized.trim();
+        return HistoryPromptSanitizer.sanitizeForHistory(text);
     }
 
     /**
@@ -138,27 +124,6 @@ public class CodexMessageConverter {
             }
         }
         return null;
-    }
-
-    /**
-     * Remove all complete XML tag blocks from text.
-     */
-    private static String removeTagBlock(String text, String tagName) {
-        String result = text;
-        String openTag = "<" + tagName + ">";
-        String closeTag = "</" + tagName + ">";
-        while (true) {
-            int start = result.indexOf(openTag);
-            if (start == -1) {
-                break;
-            }
-            int end = result.indexOf(closeTag, start);
-            if (end == -1) {
-                break;
-            }
-            result = result.substring(0, start) + result.substring(end + closeTag.length());
-        }
-        return result;
     }
 
     /**

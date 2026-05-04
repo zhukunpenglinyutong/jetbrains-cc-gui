@@ -395,7 +395,7 @@
         "label": "Tab Auto Rename",
         "enabled": "Enabled",
         "disabled": "Disabled",
-        "hint": "When enabled, AI will automatically rename the tab based on new requirements (up to 8 characters)."
+        "hint": "When enabled, AI will automatically rename the tab based on new requirements (up to 10 characters)."
       }
     },
     "codexFeatureUnavailable": "This settings section is not available in Codex yet. Please switch to Claude Code.",

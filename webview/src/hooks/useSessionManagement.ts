@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import type { ClaudeMessage, HistoryData } from '../types';
 import { sendBridgeEvent } from '../utils/bridge';
+import { cleanupHistorySessionTitle } from '../utils/sessionTitle';
 
 type ViewMode = 'chat' | 'history' | 'settings';
 
@@ -193,7 +194,7 @@ export function useSessionManagement({
     }
 
     const session = historyDataRef.current?.sessions?.find(s => s.sessionId === sessionId);
-    beginSessionTransition(sessionId, session?.title ?? null);
+    beginSessionTransition(sessionId, session ? cleanupHistorySessionTitle(session.title) : null);
     sendBridgeEvent('load_session', sessionId);
     setCurrentView('chat');
   }, [beginSessionTransition, loading, setCurrentView]);

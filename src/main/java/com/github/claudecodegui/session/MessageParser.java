@@ -1,6 +1,7 @@
 package com.github.claudecodegui.session;
 
 import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.util.HistoryPromptSanitizer;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -148,7 +149,7 @@ public class MessageParser {
      */
     private String extractContentFromElement(JsonElement contentElement) {
         if (contentElement.isJsonPrimitive()) {
-            return contentElement.getAsString();
+            return sanitizeHistoryContent(contentElement.getAsString());
         }
 
         if (contentElement.isJsonArray()) {
@@ -158,7 +159,7 @@ public class MessageParser {
         if (contentElement.isJsonObject()) {
             JsonObject contentObj = contentElement.getAsJsonObject();
             if (contentObj.has("text") && !contentObj.get("text").isJsonNull()) {
-                return contentObj.get("text").getAsString();
+                return sanitizeHistoryContent(contentObj.get("text").getAsString());
             }
             LOG.warn("Content is an object but has no 'text' field: " + contentObj.toString());
         }
@@ -185,7 +186,7 @@ public class MessageParser {
                     if (sb.length() > 0) {
                         sb.append("\n");
                     }
-                    sb.append(block.get("text").getAsString());
+                    sb.append(sanitizeHistoryContent(block.get("text").getAsString()));
                     hasContent = true;
                 } else if ("tool_use".equals(blockType)) {
                     // Skip tool_use block, don't display tool usage text
@@ -200,12 +201,16 @@ public class MessageParser {
                     if (sb.length() > 0) {
                         sb.append("\n");
                     }
-                    sb.append(text);
+                    sb.append(sanitizeHistoryContent(text));
                     hasContent = true;
                 }
             }
         }
 
         return sb.toString();
+    }
+
+    private String sanitizeHistoryContent(String text) {
+        return HistoryPromptSanitizer.sanitizeForHistory(text);
     }
 }

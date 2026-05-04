@@ -6,6 +6,7 @@ import { extractCommandMessageContent } from '../../utils/messageUtils';
 import { sendBridgeEvent } from '../../utils/bridge';
 import { ProviderModelIcon } from '../shared/ProviderModelIcon';
 import { copyToClipboard } from '../../utils/copyUtils';
+import { cleanupHistorySessionTitle } from '../../utils/sessionTitle';
 
 // Deep search timeout (milliseconds)
 const DEEP_SEARCH_TIMEOUT_MS = 30000;
@@ -94,6 +95,8 @@ const deduplicateHistorySessions = (sessions: HistorySessionSummary[]) => {
   return Array.from(deduplicated.values());
 };
 
+const getHistoryDisplayTitle = (title: string): string => cleanupHistorySessionTitle(title || '');
+
 const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSession, onExportSession, onToggleFavorite, onUpdateTitle }: HistoryViewProps) => {
   const { t } = useTranslation();
   const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight || 600);
@@ -160,7 +163,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
     // Search filter (case-insensitive)
     const filteredSessions = searchQuery.trim()
       ? rawSessions.filter(s =>
-          s.title?.toLowerCase().includes(searchQuery.toLowerCase())
+          getHistoryDisplayTitle(extractCommandMessageContent(s.title || '')).toLowerCase().includes(searchQuery.toLowerCase())
         )
       : rawSessions;
 
@@ -341,7 +344,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
   const handleEditClick = (e: React.MouseEvent, sessionId: string, currentTitle: string) => {
     e.stopPropagation(); // Prevent click event from bubbling to parent
     setEditingSessionId(sessionId);
-    setEditingTitle(currentTitle);
+    setEditingTitle(getHistoryDisplayTitle(extractCommandMessageContent(currentTitle || '')));
   };
 
   // Save the edited title
@@ -507,7 +510,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
               </div>
             ) : (
               // Normal mode: show title (with highlight), extract <command-message> content
-              highlightText(extractCommandMessageContent(session.title), searchQuery)
+              highlightText(getHistoryDisplayTitle(extractCommandMessageContent(session.title)), searchQuery)
             )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -603,6 +606,28 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
           </button>
           <div className="history-info">{infoBar}</div>
         </div>
+        {/* Search box */}
+        <div className="history-search-container">
+          <input
+            type="text"
+            className="history-search-input"
+            placeholder={t('history.searchPlaceholder')}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+          />
+          <span
+            className="codicon codicon-search history-search-icon"
+          ></span>
+        </div>
+        {/* Deep search button */}
+        <button
+          className={`history-deep-search-btn ${isDeepSearching ? 'searching' : ''}`}
+          onClick={handleDeepSearch}
+          disabled={isDeepSearching}
+          title={t('history.deepSearchTooltip')}
+        >
+          <span className={`codicon ${isDeepSearching ? 'codicon-sync codicon-modifier-spin' : 'codicon-refresh'}`}></span>
+        </button>
         <div className="history-header-actions">
           <button
             type="button"
@@ -620,28 +645,6 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
           >
             {t('history.clearAll')}
           </button>
-        </div>
-        {/* Deep search button */}
-        <button
-          className={`history-deep-search-btn ${isDeepSearching ? 'searching' : ''}`}
-          onClick={handleDeepSearch}
-          disabled={isDeepSearching}
-          title={t('history.deepSearchTooltip')}
-        >
-          <span className={`codicon ${isDeepSearching ? 'codicon-sync codicon-modifier-spin' : 'codicon-refresh'}`}></span>
-        </button>
-        {/* Search box */}
-        <div className="history-search-container">
-          <input
-            type="text"
-            className="history-search-input"
-            placeholder={t('history.searchPlaceholder')}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-          />
-          <span
-            className="codicon codicon-search history-search-icon"
-          ></span>
         </div>
       </div>
       <div style={{ flex: 1, overflow: 'hidden' }}>
