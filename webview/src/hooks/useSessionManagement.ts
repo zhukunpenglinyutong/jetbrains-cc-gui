@@ -194,7 +194,10 @@ export function useSessionManagement({
     }
 
     const session = historyDataRef.current?.sessions?.find(s => s.sessionId === sessionId);
-    beginSessionTransition(sessionId, session ? cleanupHistorySessionTitle(session.title) : null);
+    const rawTitle = typeof session?.title === 'string' ? session.title : '';
+    const cleanedTitle = cleanupHistorySessionTitle(rawTitle);
+    const nextTitle = cleanedTitle ? cleanedTitle : null;
+    beginSessionTransition(sessionId, nextTitle);
     sendBridgeEvent('load_session', sessionId);
     setCurrentView('chat');
   }, [beginSessionTransition, loading, setCurrentView]);
