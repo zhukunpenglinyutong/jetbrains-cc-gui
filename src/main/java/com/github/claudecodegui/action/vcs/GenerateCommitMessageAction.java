@@ -15,7 +15,8 @@ import com.intellij.openapi.vcs.CheckinProjectPanel;
 import com.intellij.openapi.vcs.CommitMessageI;
 import com.intellij.openapi.vcs.VcsDataKeys;
 import com.intellij.openapi.vcs.changes.Change;
-import com.intellij.openapi.vcs.changes.ChangeListManager;
+import com.intellij.vcs.commit.CommitMessageUi;
+import com.intellij.vcs.commit.CommitWorkflowUi;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -52,14 +53,14 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
 
         LOG.info("Project: " + project.getName());
 
-        // Get CommitMessageI for setting the commit message
-        CommitMessageI commitMessagePanel = getCommitMessagePanel(e);
+        // Get commit message setter (supports both old and new commit UIs)
+        CommitMessageSetter commitMessageSetter = getCommitMessageSetter(e);
 
         // Get user-selected changes using the new method with proper fallback chain
         Collection<Change> changes = getUserSelectedChanges(e, project);
 
         // Check if we successfully obtained required objects
-        if (commitMessagePanel == null) {
+        if (commitMessageSetter == null) {
             LOG.error("Cannot access commit message panel");
             ClaudeNotifier.showWarning(project, ClaudeCodeGuiBundle.message("commit.cannotAccessPanel"));
             return;
@@ -74,12 +75,14 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
         LOG.info("Successfully obtained CommitMessageI and changes, proceeding to generate commit message");
 
         // Save references for async callback
-        final CommitMessageI finalCommitMessagePanel = commitMessagePanel;
+        final CommitMessageSetter finalCommitMessageSetter = commitMessageSetter;
         final Collection<Change> finalChanges = changes;
 
         // Show "generating..." placeholder in commit message box
         String generatingText = ClaudeCodeGuiBundle.message("commit.generating");
-        commitMessagePanel.setCommitMessage(generatingText);
+        commitMessageSetter.startLoading();
+        commitMessageSetter.set(generatingText);
+        ClaudeNotifier.setGenerating(project);
 
         // Generate commit message asynchronously
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
@@ -90,7 +93,9 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
                     public void onSuccess(String commitMessage) {
                         ApplicationManager.getApplication().invokeLater(() -> {
                             // Set the generated commit message
-                            finalCommitMessagePanel.setCommitMessage(commitMessage);
+                            finalCommitMessageSetter.stopLoading();
+                            finalCommitMessageSetter.set(commitMessage);
+                            ClaudeNotifier.clearStatus(project);
                             ClaudeNotifier.showSuccess(project, ClaudeCodeGuiBundle.message("commit.generateSuccess"));
                         });
                     }
@@ -99,7 +104,9 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
                     public void onError(String error) {
                         ApplicationManager.getApplication().invokeLater(() -> {
                             // Clear placeholder text
-                            finalCommitMessagePanel.setCommitMessage("");
+                            finalCommitMessageSetter.stopLoading();
+                            finalCommitMessageSetter.set("");
+                            ClaudeNotifier.clearStatus(project);
                             ClaudeNotifier.showError(project, ClaudeCodeGuiBundle.message("commit.generateFailed") + ": " + error);
                         });
                     }
@@ -108,7 +115,9 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
                 LOG.error("Failed to generate commit message", ex);
                 ApplicationManager.getApplication().invokeLater(() -> {
                     // Clear placeholder text
-                    finalCommitMessagePanel.setCommitMessage("");
+                    finalCommitMessageSetter.stopLoading();
+                    finalCommitMessageSetter.set("");
+                    ClaudeNotifier.clearStatus(project);
                     ClaudeNotifier.showError(project, ClaudeCodeGuiBundle.message("commit.generateFailed") + ": " + ex.getMessage());
                 });
             }
@@ -116,22 +125,87 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
     }
 
     /**
-     * Get CommitMessageI from available data sources.
+     * Commit message setter abstraction for different commit UIs.
+     */
+    private interface CommitMessageSetter {
+        void set(@NotNull String message);
+        default void startLoading() {}
+        default void stopLoading() {}
+    }
+
+    /**
+     * Get commit message setter from available data sources.
      */
     @Nullable
-    private CommitMessageI getCommitMessagePanel(@NotNull AnActionEvent e) {
-        // Try COMMIT_WORKFLOW_HANDLER first (newer IDEA versions)
-        Object workflowHandler = e.getData(VcsDataKeys.COMMIT_WORKFLOW_HANDLER);
-        if (workflowHandler instanceof CommitMessageI) {
-            LOG.info("Got CommitMessageI from COMMIT_WORKFLOW_HANDLER");
-            return (CommitMessageI) workflowHandler;
+    private CommitMessageSetter getCommitMessageSetter(@NotNull AnActionEvent e) {
+        // Method 1: Newer commit UI (CommitWorkflowUi)
+        CommitWorkflowUi workflowUi = e.getData(VcsDataKeys.COMMIT_WORKFLOW_UI);
+        if (workflowUi != null) {
+            CommitMessageUi commitMessageUi = workflowUi.getCommitMessageUi();
+            if (commitMessageUi != null) {
+                LOG.info("Got commit message setter from COMMIT_WORKFLOW_UI");
+                return new CommitMessageSetter() {
+                    @Override
+                    public void set(@NotNull String message) {
+                        commitMessageUi.setText(message);
+                    }
+
+                    @Override
+                    public void startLoading() {
+                        commitMessageUi.startLoading();
+                    }
+
+                    @Override
+                    public void stopLoading() {
+                        commitMessageUi.stopLoading();
+                    }
+                };
+            }
         }
 
-        // Try COMMIT_MESSAGE_CONTROL
+        // Method 2: Legacy commit UI (CommitMessageI)
         CommitMessageI messageControl = e.getData(VcsDataKeys.COMMIT_MESSAGE_CONTROL);
         if (messageControl != null) {
-            LOG.info("Got CommitMessageI from COMMIT_MESSAGE_CONTROL");
-            return messageControl;
+            LOG.info("Got commit message setter from COMMIT_MESSAGE_CONTROL");
+            return new CommitMessageSetter() {
+                @Override
+                public void set(@NotNull String message) {
+                    messageControl.setCommitMessage(message);
+                }
+            };
+        }
+
+        // Method 3: Fallback via workflow handler reflection (for compatibility)
+        Object workflowHandler = e.getData(VcsDataKeys.COMMIT_WORKFLOW_HANDLER);
+        if (workflowHandler != null) {
+            try {
+                Method getUiMethod = workflowHandler.getClass().getMethod("getUi");
+                Object uiObj = getUiMethod.invoke(workflowHandler);
+                if (uiObj instanceof CommitWorkflowUi ui) {
+                    CommitMessageUi commitMessageUi = ui.getCommitMessageUi();
+                    if (commitMessageUi != null) {
+                        LOG.info("Got commit message setter from COMMIT_WORKFLOW_HANDLER.getUi()");
+                        return new CommitMessageSetter() {
+                            @Override
+                            public void set(@NotNull String message) {
+                                commitMessageUi.setText(message);
+                            }
+
+                            @Override
+                            public void startLoading() {
+                                commitMessageUi.startLoading();
+                            }
+
+                            @Override
+                            public void stopLoading() {
+                                commitMessageUi.stopLoading();
+                            }
+                        };
+                    }
+                }
+            } catch (Exception ex) {
+                LOG.debug("Failed to get commit message setter from COMMIT_WORKFLOW_HANDLER: " + ex.getMessage());
+            }
         }
 
         return null;

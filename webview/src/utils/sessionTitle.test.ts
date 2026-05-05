@@ -22,7 +22,7 @@ describe('sessionTitle', () => {
     ];
 
     const title = getLatestMeaningfulRequirementTitle(messages, (message) => message.content || '');
-    expect(title).toBe('标签改名');
+    expect(title).toBe('请把标签标题重命名成');
   });
 
   it('returns latest meaningful requirement text without short-title compression', () => {
@@ -53,7 +53,7 @@ describe('sessionTitle', () => {
     ];
 
     const title = getLatestMeaningfulRequirementTitle(messages, (message) => message.content || '');
-    expect(title).toBe('报错修复');
+    expect(title).toBe('请帮我修复这个报错并');
   });
 
   it('filters path-like noise before meaningful-length check', () => {
@@ -65,11 +65,16 @@ describe('sessionTitle', () => {
     expect(summarizeRequirementTitle(mixed).length).toBeGreaterThan(0);
   });
 
-  it('supports semantic tab-title summarization within 10 chars', () => {
-    expect(summarizeRequirementTitle('你对我的约束是什么')).toBe('约束说明');
-    expect(summarizeRequirementTitle('如果没有全显示完的话你就要打...那3个点省略号')).toBe('显示省略');
-    expect(summarizeRequirementTitle('写一下cc-gui的说明文档 放在这个目录里')).toBe('文档编写');
+  it('uses first sentence and trims to 10 chars', () => {
+    expect(summarizeRequirementTitle('你对我的约束是什么')).toBe('你对我的约束是什么');
+    expect(summarizeRequirementTitle('如果没有全显示完的话你就要打...那3个点省略号')).toBe('如果没有全显示完的话');
+    expect(summarizeRequirementTitle('写一下cc-gui的说明文档 放在这个目录里')).toBe('写一下cc-gui的');
     expect(summarizeRequirementTitle('你好')).toBe('你好');
     expect(summarizeRequirementTitle('这是一个非常非常长并且没有明显关键词的需求描述')).toHaveLength(10);
+  });
+
+  it('extracts label value when first sentence starts with 需求简述', () => {
+    expect(summarizeRequirementTitle('需求简述:改重命名逻辑\n然后继续写实现')).toBe('改重命名逻辑');
+    expect(summarizeRequirementTitle('需求简述：把标签名改成第一句摘要')).toBe('把标签名改成第一句摘');
   });
 });

@@ -61,7 +61,7 @@ public class PromptHandler extends BaseMessageHandler {
         this.settingsService = context.getSettingsService();
         this.gson = new Gson();
 
-        // Initialize file watcher to monitor .codemoss/prompt.json changes
+        // Initialize file watcher to monitor prompt.json changes (project codemoss + legacy/global .codemoss)
         this.fileWatcher = new PromptFileWatcher(
             context.getProject(),
             settingsService,

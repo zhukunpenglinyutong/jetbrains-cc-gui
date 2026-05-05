@@ -155,8 +155,6 @@
                 icon="/icons/logo-16.png">
             <!-- New commit UI -->
             <add-to-group group-id="ChangesView.CommitToolbar" anchor="last"/>
-            <!-- Legacy commit UI fallback -->
-            <add-to-group group-id="Vcs.MessageActionGroup" anchor="last"/>
         </action>
 
         <!-- Chat tool window clipboard actions (scoped to CCG tool window) -->

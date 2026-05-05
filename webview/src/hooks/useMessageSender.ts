@@ -64,6 +64,8 @@ export function useMessageSender({
   handleModeSelect,
 }: UseMessageSenderOptions) {
   const lastMeaningfulTitleRef = useRef('');
+  const pendingRenameFromReplyRef = useRef(false);
+  const pendingCommitMessageFromReplyRef = useRef(false);
   /**
    * Check if the input is a new session command
    */
@@ -286,6 +288,7 @@ export function useMessageSender({
     // Set loading state
     setLoading(true);
     setLoadingStartTime(Date.now());
+    pendingCommitMessageFromReplyRef.current = true;
 
     // Scroll to bottom
     userPausedRef.current = false;
@@ -304,6 +307,8 @@ export function useMessageSender({
     try {
       const autoRenameEnabled = localStorage.getItem('tabAutoRenameEnabled') !== 'false';
       if (autoRenameEnabled && text) {
+        // Always try a second-pass rename from assistant first sentence once reply settles.
+        pendingRenameFromReplyRef.current = true;
         let nextTitle = '';
         const continueLike = isContinueLikeInput(text);
         if (continueLike) {
@@ -382,6 +387,8 @@ export function useMessageSender({
    * Interrupt the current session
    */
   const interruptSession = useCallback(() => {
+    pendingRenameFromReplyRef.current = false;
+    pendingCommitMessageFromReplyRef.current = false;
     setLoading(false);
     setLoadingStartTime(null);
     setStreamingActive(false);
@@ -394,5 +401,7 @@ export function useMessageSender({
     handleSubmit,
     executeMessage,
     interruptSession,
+    pendingRenameFromReplyRef,
+    pendingCommitMessageFromReplyRef,
   };
 }

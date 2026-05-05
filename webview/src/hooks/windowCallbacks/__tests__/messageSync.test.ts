@@ -279,6 +279,41 @@ describe('appendOptimisticMessageIfMissing', () => {
     expect(result).toHaveLength(1);
     expect(result[0]).toBe(backendMsg);
   });
+
+  it('matches backend message when optimistic text contains file URI tokens stripped by backend normalization', () => {
+    const ts = new Date().toISOString();
+    const optimisticText = [
+      'file:///C:/Users/achie/AppData/Local/PixPin/Temp/PixPin_2026-05-04_15-51-57.png',
+      'file:///C:/Users/achie/AppData/Local/PixPin/Temp/PixPin_2026-05-04_15-52-08.png 你这里为什么有时候我发的需求你会出现再次',
+    ].join('\n');
+
+    const optimistic = makeUserMsg(optimisticText, {
+      isOptimistic: true,
+      timestamp: ts,
+      raw: {
+        message: {
+          content: [{ type: 'text', text: optimisticText }],
+        },
+      } as any,
+    });
+
+    const backendText = '你这里为什么有时候我发的需求你会出现再次';
+    const backendMsg = makeUserMsg(backendText, {
+      timestamp: ts,
+      raw: {
+        message: {
+          content: [{ type: 'text', text: backendText }],
+        },
+      } as any,
+    });
+
+    const prev = [optimistic];
+    const next = [backendMsg];
+
+    const result = appendOptimisticMessageIfMissing(prev, next);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe(backendMsg);
+  });
 });
 
 // ---------------------------------------------------------------------------

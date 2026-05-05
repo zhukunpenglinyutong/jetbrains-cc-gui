@@ -14,7 +14,7 @@ public enum PromptScope {
 
     /**
      * Project scope - prompts stored in the project directory.
-     * Location: &lt;project&gt;/.codemoss/prompt.json
+     * Location: &lt;project&gt;/codemoss/prompt.json
      * These prompts are specific to the current project.
      */
     PROJECT("project");

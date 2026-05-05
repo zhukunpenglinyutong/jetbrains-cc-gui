@@ -6,6 +6,8 @@ interface CommitSectionProps {
   onCommitPromptChange: (prompt: string) => void;
   onSaveCommitPrompt: () => void;
   savingCommitPrompt: boolean;
+  commitGenerationEnabled: boolean;
+  onCommitGenerationEnabledChange: (enabled: boolean) => void;
 }
 
 const CommitSection = ({
@@ -13,6 +15,8 @@ const CommitSection = ({
   onCommitPromptChange,
   onSaveCommitPrompt,
   savingCommitPrompt,
+  commitGenerationEnabled,
+  onCommitGenerationEnabledChange,
 }: CommitSectionProps) => {
   const { t } = useTranslation();
 
@@ -49,6 +53,31 @@ const CommitSection = ({
         <small className={styles.formHint}>
           <span className="codicon codicon-info" />
           <span>{t('settings.commit.prompt.hint')}</span>
+        </small>
+      </div>
+
+      <div className={styles.autoCommitSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-git-commit" />
+          <span className={styles.fieldLabel}>{t('settings.basic.commitGeneration.label')}</span>
+        </div>
+        <label className={styles.toggleWrapper}>
+          <input
+            type="checkbox"
+            className={styles.toggleInput}
+            checked={commitGenerationEnabled}
+            onChange={(e) => onCommitGenerationEnabledChange(e.target.checked)}
+          />
+          <span className={styles.toggleSlider} />
+          <span className={styles.toggleLabel}>
+            {commitGenerationEnabled
+              ? t('settings.basic.commitGeneration.enabled')
+              : t('settings.basic.commitGeneration.disabled')}
+          </span>
+        </label>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>{t('settings.basic.commitGeneration.hint')}</span>
         </small>
       </div>
 

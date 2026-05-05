@@ -36,6 +36,7 @@ import { applyDiffTheme, getStoredDiffTheme } from './utils/diffTheme';
 import { extractTodosFromToolUse } from './utils/todoToolNormalization';
 import { getLatestMeaningfulRequirementText } from './utils/sessionTitle';
 import {
+  findLatestConversationTurnStart,
   finalizeSubagentsForSettledTurn,
   finalizeTodosForSettledTurn,
   sliceLatestConversationTurn,
@@ -59,6 +60,7 @@ import type {
 } from './types';
 
 const DEFAULT_STATUS = 'ready';
+const TAB_AUTO_RENAME_MAX_CHARS = 10;
 
 const App = () => {
   const { t } = useTranslation();
@@ -273,6 +275,71 @@ const App = () => {
     mergedMessages, sentAttachmentsRef,
   } = useMessageProcessing({ messages, currentSessionId, t });
 
+  const extractFirstSentenceForTabTitle = useCallback((text: string): string => {
+    const raw = (text || '').trim();
+    if (!raw) return '';
+
+    const firstNonEmptyLine = raw
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find((line) => line.length > 0) || raw;
+
+    const withoutPrefix = firstNonEmptyLine.replace(/^需求简述[:：]\s*/, '').trim();
+    const sentenceSource = withoutPrefix || firstNonEmptyLine;
+    let firstSentence = (sentenceSource.split(/[。！？!?；;，,：:]/)[0] || sentenceSource).trim();
+
+    const stopPhrases = ['我会', '我将', '我先', '我准备', '我来', '然后', '接下来', '并且'];
+    let earliestStop = -1;
+    for (const phrase of stopPhrases) {
+      const idx = firstSentence.indexOf(phrase);
+      if (idx > 0 && (earliestStop < 0 || idx < earliestStop)) {
+        earliestStop = idx;
+      }
+    }
+    if (earliestStop > 0) {
+      firstSentence = firstSentence.slice(0, earliestStop).trim();
+    }
+
+    if (Array.from(firstSentence).length > TAB_AUTO_RENAME_MAX_CHARS) {
+      const longTailStopPhrases = ['现有', '当前'];
+      let longTailStop = -1;
+      for (const phrase of longTailStopPhrases) {
+        const idx = firstSentence.indexOf(phrase);
+        if (idx >= 4 && (longTailStop < 0 || idx < longTailStop)) {
+          longTailStop = idx;
+        }
+      }
+      if (longTailStop > 0) {
+        firstSentence = firstSentence.slice(0, longTailStop).trim();
+      }
+    }
+
+    firstSentence = firstSentence.replace(/[我你他她它吧呢呀嘛]$/u, '').trim();
+    if (!firstSentence) return '';
+
+    return Array.from(firstSentence).slice(0, TAB_AUTO_RENAME_MAX_CHARS).join('');
+  }, []);
+
+  const extractFirstSentenceForCommitMessage = useCallback((text: string): string => {
+    const raw = (text || '').trim();
+    if (!raw) return '';
+
+    const firstNonEmptyLine = raw
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find((line) => line.length > 0) || raw;
+
+    const cleanedLine = firstNonEmptyLine
+      .replace(/^#{1,6}\s*/, '')
+      .replace(/^[-*+]\s+/, '')
+      .replace(/^\d+\.\s+/, '')
+      .trim();
+    const withoutPrefix = cleanedLine.replace(/^需求简述[:：]\s*/, '').trim();
+    const sentenceSource = withoutPrefix || cleanedLine;
+    const firstSentence = (sentenceSource.split(/[。！？!?；;]/)[0] || sentenceSource).trim();
+    return firstSentence;
+  }, []);
+
   // Find tool result (stable ref to avoid re-renders)
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
@@ -306,6 +373,8 @@ const App = () => {
     handleSubmit: hookHandleSubmit,
     executeMessage,
     interruptSession,
+    pendingRenameFromReplyRef,
+    pendingCommitMessageFromReplyRef,
   } = useMessageSender({
     t, addToast,
     currentProvider, permissionMode, selectedAgent,
@@ -317,6 +386,93 @@ const App = () => {
     forceCreateNewSession,
     handleModeSelect,
   });
+
+  const lastReplyRenameMessageKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pendingRenameFromReplyRef.current) return;
+    if (loading || streamingActive) return;
+    if (messages.length === 0) return;
+
+    const latestTurnStart = findLatestConversationTurnStart(messages);
+    if (latestTurnStart < 0) return;
+
+    for (let i = latestTurnStart; i < messages.length; i += 1) {
+      const candidate = messages[i];
+      if (candidate.type !== 'assistant') continue;
+      const candidateKey = `${latestTurnStart}-${candidate.timestamp || ''}-${i}`;
+      if (lastReplyRenameMessageKeyRef.current === candidateKey) {
+        continue;
+      }
+      const text = getMessageText(candidate);
+      const nextTitle = extractFirstSentenceForTabTitle(text);
+      if (!nextTitle) continue;
+      sendBridgeEvent('rename_current_tab', JSON.stringify({ title: nextTitle }));
+      lastReplyRenameMessageKeyRef.current = candidateKey;
+      pendingRenameFromReplyRef.current = false;
+      return;
+    }
+    pendingRenameFromReplyRef.current = false;
+  }, [messages, loading, streamingActive, getMessageText, extractFirstSentenceForTabTitle]);
+
+  const hasFileModificationsInTurn = useCallback((turnStartIndex: number): boolean => {
+    for (let i = turnStartIndex; i < messages.length; i += 1) {
+      const candidate = messages[i];
+      if (candidate.type !== 'assistant') continue;
+      const blocks = getContentBlocks(candidate);
+      for (const block of blocks) {
+        if (block.type !== 'tool_use') continue;
+        if (isToolName(block.name, FILE_MODIFY_TOOL_NAMES)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }, [messages, getContentBlocks]);
+
+  const lastReplyCommitMessageKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pendingCommitMessageFromReplyRef.current) return;
+    if (loading || streamingActive) return;
+    if (messages.length === 0) return;
+
+    const latestTurnStart = findLatestConversationTurnStart(messages);
+    if (latestTurnStart < 0) {
+      pendingCommitMessageFromReplyRef.current = false;
+      return;
+    }
+
+    if (!hasFileModificationsInTurn(latestTurnStart)) {
+      pendingCommitMessageFromReplyRef.current = false;
+      return;
+    }
+
+    for (let i = latestTurnStart; i < messages.length; i += 1) {
+      const candidate = messages[i];
+      if (candidate.type !== 'assistant') continue;
+      const candidateKey = `${latestTurnStart}-${candidate.timestamp || ''}-${i}`;
+      if (lastReplyCommitMessageKeyRef.current === candidateKey) {
+        pendingCommitMessageFromReplyRef.current = false;
+        return;
+      }
+      const text = getMessageText(candidate);
+      const nextCommitMessage = extractFirstSentenceForCommitMessage(text);
+      if (!nextCommitMessage) continue;
+
+      sendBridgeEvent('set_commit_message_from_reply', JSON.stringify({ message: nextCommitMessage }));
+      lastReplyCommitMessageKeyRef.current = candidateKey;
+      pendingCommitMessageFromReplyRef.current = false;
+      return;
+    }
+
+    pendingCommitMessageFromReplyRef.current = false;
+  }, [
+    messages,
+    loading,
+    streamingActive,
+    getMessageText,
+    extractFirstSentenceForCommitMessage,
+    hasFileModificationsInTurn,
+  ]);
 
   // ── Message queue ──
   const {

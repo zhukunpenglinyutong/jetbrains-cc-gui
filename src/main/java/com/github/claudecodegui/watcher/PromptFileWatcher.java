@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.function.BiConsumer;
 
 /**
- * Watches for changes to .codemoss/prompt.json files and notifies listeners.
+ * Watches for changes to prompt.json files and notifies listeners.
  * Monitors both global and project-specific prompt files for external modifications.
  */
 public class PromptFileWatcher implements BulkFileListener {
@@ -81,15 +81,18 @@ public class PromptFileWatcher implements BulkFileListener {
 
     /**
      * Check if the file path matches project prompt.json pattern.
-     * Pattern: <project-path>/.codemoss/prompt.json
+     * Patterns: <project-path>/codemoss/prompt.json, <project-path>/.codemoss/prompt.json
      */
     private boolean isProjectPromptFile(String filePath) {
         if (project == null || project.getBasePath() == null) {
             return false;
         }
 
-        String projectPromptPath = project.getBasePath() + "/.codemoss/prompt.json";
-        return filePath.equals(projectPromptPath);
+        String basePath = normalizePath(project.getBasePath());
+        String normalizedFilePath = normalizePath(filePath);
+        String projectPromptPath = basePath + "/codemoss/prompt.json";
+        String legacyProjectPromptPath = basePath + "/.codemoss/prompt.json";
+        return normalizedFilePath.equals(projectPromptPath) || normalizedFilePath.equals(legacyProjectPromptPath);
     }
 
     /**
@@ -98,8 +101,12 @@ public class PromptFileWatcher implements BulkFileListener {
      */
     private boolean isGlobalPromptFile(String filePath) {
         String homeDir = PlatformUtils.getHomeDirectory();
-        String globalPromptPath = homeDir + "/.codemoss/prompt.json";
-        return filePath.equals(globalPromptPath);
+        String globalPromptPath = normalizePath(homeDir) + "/.codemoss/prompt.json";
+        return normalizePath(filePath).equals(globalPromptPath);
+    }
+
+    private String normalizePath(String path) {
+        return path == null ? "" : path.replace('\\', '/');
     }
 
     /**

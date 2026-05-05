@@ -9,13 +9,23 @@ import com.github.claudecodegui.ui.toolwindow.TabSessionStateInheritor;
 import com.github.claudecodegui.settings.TabStateService;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.intellij.ide.DataManager;
+import com.intellij.openapi.actionSystem.DataContext;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.vcs.CommitMessageI;
+import com.intellij.openapi.vcs.VcsDataKeys;
 import com.intellij.openapi.wm.ToolWindow;
+import com.intellij.openapi.wm.IdeFocusManager;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
 import com.intellij.ui.content.ContentManager;
+import com.intellij.vcs.commit.CommitMessageUi;
+import com.intellij.vcs.commit.CommitWorkflowUi;
+
+import java.awt.Component;
+import java.lang.reflect.Method;
 
 
 /**
@@ -28,7 +38,8 @@ public class TabHandler extends BaseMessageHandler {
 
     private static final String[] SUPPORTED_TYPES = {
         "create_new_tab",
-        "rename_current_tab"
+        "rename_current_tab",
+        "set_commit_message_from_reply"
     };
 
     public TabHandler(HandlerContext context) {
@@ -50,6 +61,11 @@ public class TabHandler extends BaseMessageHandler {
         if ("rename_current_tab".equals(type)) {
             LOG.debug("[TabHandler] Processing rename_current_tab");
             handleRenameCurrentTab(content);
+            return true;
+        }
+        if ("set_commit_message_from_reply".equals(type)) {
+            LOG.debug("[TabHandler] Processing set_commit_message_from_reply");
+            handleSetCommitMessageFromReply(content);
             return true;
         }
         return false;
@@ -147,28 +163,51 @@ public class TabHandler extends BaseMessageHandler {
             }
 
             ContentManager contentManager = toolWindow.getContentManager();
-            Content selectedContent = contentManager.getSelectedContent();
-            if (selectedContent == null) {
+            Content targetContent = resolveRenameTargetContent(contentManager);
+            if (targetContent == null) {
                 return;
             }
 
-            String currentDisplayName = selectedContent.getDisplayName();
+            String currentDisplayName = targetContent.getDisplayName();
             if (newName.equals(currentDisplayName)) {
                 return;
             }
 
-            selectedContent.setDisplayName(newName);
+            targetContent.setDisplayName(newName);
 
-            ClaudeChatWindow chatWindow = ClaudeSDKToolWindow.getChatWindowForContent(selectedContent);
+            ClaudeChatWindow chatWindow = ClaudeSDKToolWindow.getChatWindowForContent(targetContent);
             if (chatWindow != null) {
                 chatWindow.setOriginalTabName(newName);
             }
 
-            int tabIndex = contentManager.getIndexOfContent(selectedContent);
+            int tabIndex = contentManager.getIndexOfContent(targetContent);
             if (tabIndex >= 0) {
                 TabStateService.getInstance(project).saveTabName(tabIndex, newName);
             }
         });
+    }
+
+    /**
+     * Resolve the tab that initiated this handler call.
+     * Do not rely on "currently selected tab" because users may switch tabs
+     * while an assistant response is still streaming.
+     */
+    private Content resolveRenameTargetContent(ContentManager contentManager) {
+        if (contentManager == null) {
+            return null;
+        }
+
+        if (context.getSession() != null) {
+            for (Content content : contentManager.getContents()) {
+                ClaudeChatWindow chatWindow = ClaudeSDKToolWindow.getChatWindowForContent(content);
+                if (chatWindow != null && chatWindow.getSession() == context.getSession()) {
+                    return content;
+                }
+            }
+        }
+
+        // Fallback: keep previous behavior if session mapping cannot be resolved.
+        return contentManager.getSelectedContent();
     }
 
     private String extractTabTitle(String content) {
@@ -190,5 +229,136 @@ public class TabHandler extends BaseMessageHandler {
             LOG.warn("[TabHandler] Failed to parse rename_current_tab payload: " + e.getMessage());
             return null;
         }
+    }
+
+    private void handleSetCommitMessageFromReply(String content) {
+        Project project = context.getProject();
+        if (project == null || project.isDisposed()) {
+            return;
+        }
+
+        if (!isCommitAutoFillEnabled()) {
+            return;
+        }
+
+        String commitMessage = extractCommitMessage(content);
+        if (commitMessage == null || commitMessage.isEmpty()) {
+            return;
+        }
+
+        ToolWindowManager.getInstance(project).invokeLater(() -> {
+            if (project.isDisposed()) {
+                return;
+            }
+            boolean applied = applyCommitMessageFromFocusedContext(commitMessage);
+            if (!applied) {
+                applied = applyCommitMessageFromCommitToolWindow(project, commitMessage);
+            }
+            if (!applied) {
+                LOG.debug("[TabHandler] Commit message panel not found, skip autofill");
+            }
+        });
+    }
+
+    private boolean isCommitAutoFillEnabled() {
+        try {
+            return context.getSettingsService().getCommitGenerationEnabled();
+        } catch (Exception e) {
+            LOG.warn("[TabHandler] Failed to read commitGenerationEnabled, fallback enabled: " + e.getMessage());
+            return true;
+        }
+    }
+
+    private String extractCommitMessage(String content) {
+        if (content == null || content.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            JsonObject json = JsonParser.parseString(content).getAsJsonObject();
+            if (!json.has("message") || json.get("message").isJsonNull()) {
+                return null;
+            }
+            String message = json.get("message").getAsString();
+            if (message == null) {
+                return null;
+            }
+            String trimmed = message.trim();
+            return trimmed.isEmpty() ? null : trimmed;
+        } catch (Exception e) {
+            LOG.warn("[TabHandler] Failed to parse set_commit_message_from_reply payload: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private boolean applyCommitMessageFromFocusedContext(String commitMessage) {
+        try {
+            Component focusOwner = IdeFocusManager.getGlobalInstance().getFocusOwner();
+            if (focusOwner == null) {
+                return false;
+            }
+            DataContext dataContext = DataManager.getInstance().getDataContext(focusOwner);
+            return applyCommitMessageFromDataContext(dataContext, commitMessage);
+        } catch (Exception e) {
+            LOG.debug("[TabHandler] Failed to apply commit message from focused context: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private boolean applyCommitMessageFromCommitToolWindow(Project project, String commitMessage) {
+        try {
+            ToolWindow commitToolWindow = ToolWindowManager.getInstance(project).getToolWindow("Commit");
+            if (commitToolWindow == null) {
+                return false;
+            }
+            Component component = commitToolWindow.getComponent();
+            if (component == null) {
+                return false;
+            }
+            DataContext dataContext = DataManager.getInstance().getDataContext(component);
+            return applyCommitMessageFromDataContext(dataContext, commitMessage);
+        } catch (Exception e) {
+            LOG.debug("[TabHandler] Failed to apply commit message from Commit tool window: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private boolean applyCommitMessageFromDataContext(DataContext dataContext, String commitMessage) {
+        if (dataContext == null) {
+            return false;
+        }
+
+        CommitWorkflowUi workflowUi = VcsDataKeys.COMMIT_WORKFLOW_UI.getData(dataContext);
+        if (workflowUi != null) {
+            CommitMessageUi commitMessageUi = workflowUi.getCommitMessageUi();
+            if (commitMessageUi != null) {
+                commitMessageUi.setText(commitMessage);
+                return true;
+            }
+        }
+
+        CommitMessageI messageControl = VcsDataKeys.COMMIT_MESSAGE_CONTROL.getData(dataContext);
+        if (messageControl != null) {
+            messageControl.setCommitMessage(commitMessage);
+            return true;
+        }
+
+        Object workflowHandler = VcsDataKeys.COMMIT_WORKFLOW_HANDLER.getData(dataContext);
+        if (workflowHandler != null) {
+            try {
+                Method getUiMethod = workflowHandler.getClass().getMethod("getUi");
+                Object uiObj = getUiMethod.invoke(workflowHandler);
+                if (uiObj instanceof CommitWorkflowUi ui) {
+                    CommitMessageUi commitMessageUi = ui.getCommitMessageUi();
+                    if (commitMessageUi != null) {
+                        commitMessageUi.setText(commitMessage);
+                        return true;
+                    }
+                }
+            } catch (Exception e) {
+                LOG.debug("[TabHandler] Reflection fallback failed while setting commit message: " + e.getMessage());
+            }
+        }
+
+        return false;
     }
 }

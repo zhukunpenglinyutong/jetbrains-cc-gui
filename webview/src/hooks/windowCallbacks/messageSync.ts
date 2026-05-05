@@ -53,6 +53,25 @@ const hasVisualAttachmentBlock = (msg: ClaudeMessage | undefined): boolean => {
   });
 };
 
+/**
+ * Keep frontend optimistic matching consistent with backend user-message normalization
+ * (SessionContextService.stripLocalFileUriText): remove file:// tokens per line and
+ * drop lines that become empty after removal.
+ */
+const normalizeTextForOptimisticMatch = (text: string): string => {
+  if (!text) return '';
+  const lines = text.split(/\r?\n/);
+  const sanitized: string[] = [];
+  for (const line of lines) {
+    const cleaned = line.replace(/file:\/\/\S+/gi, '');
+    const normalizedLine = cleaned.replace(/\s+/g, ' ').trim();
+    if (normalizedLine.length > 0) {
+      sanitized.push(normalizedLine);
+    }
+  }
+  return sanitized.join('\n');
+};
+
 export const getRawUuid = (msg: ClaudeMessage | undefined): string | undefined => {
   const raw = msg?.raw;
   if (!raw || typeof raw !== 'object') return undefined;
@@ -116,6 +135,9 @@ export const appendOptimisticMessageIfMissing = (
 
   const optimisticMsg = lastPrev;
   const optimisticRawText = getRawTextContent(optimisticMsg);
+  const optimisticTextContent = optimisticMsg.content ?? '';
+  const normalizedOptimisticContent = normalizeTextForOptimisticMatch(optimisticTextContent);
+  const normalizedOptimisticRawText = normalizeTextForOptimisticMatch(optimisticRawText);
   const optimisticHasVisualAttachment = hasVisualAttachmentBlock(optimisticMsg);
 
   const matchFn = (m: ClaudeMessage) => {
@@ -131,13 +153,20 @@ export const appendOptimisticMessageIfMissing = (
     }
 
     const candidateContent = m.content ?? '';
-    const optimisticContent = optimisticMsg.content ?? '';
     const candidateRawText = getRawTextContent(m);
+    const normalizedCandidateContent = normalizeTextForOptimisticMatch(candidateContent);
+    const normalizedCandidateRawText = normalizeTextForOptimisticMatch(candidateRawText);
 
     const contentMatches =
-      (optimisticContent.length > 0 && candidateContent === optimisticContent) ||
+      (optimisticTextContent.length > 0 && candidateContent === optimisticTextContent) ||
       (optimisticRawText.length > 0 &&
-        (candidateContent === optimisticRawText || candidateRawText === optimisticRawText));
+        (candidateContent === optimisticRawText || candidateRawText === optimisticRawText)) ||
+      (normalizedOptimisticContent.length > 0 &&
+        (normalizedCandidateContent === normalizedOptimisticContent ||
+          normalizedCandidateRawText === normalizedOptimisticContent)) ||
+      (normalizedOptimisticRawText.length > 0 &&
+        (normalizedCandidateContent === normalizedOptimisticRawText ||
+          normalizedCandidateRawText === normalizedOptimisticRawText));
     if (contentMatches) {
       return true;
     }
