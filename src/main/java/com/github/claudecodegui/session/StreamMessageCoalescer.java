@@ -39,6 +39,12 @@ public class StreamMessageCoalescer {
     private static final int LARGE_INTERVAL_MS = 2_000;            // 200-500KB
     private static final int XLARGE_INTERVAL_MS = 5_000;           // >500KB
 
+    // During streaming, delta channel (onContentDelta/onThinkingDelta) provides
+    // real-time character-by-character updates.  updateMessages carries authoritative
+    // raw blocks but its large JSON payloads block JCEF's renderer thread, stalling
+    // the lightweight delta updates.  Use a higher minimum interval so deltas stay smooth.
+    private static final int STREAMING_MIN_INTERVAL_MS = 500;
+
     // FIX: Heartbeat interval during streaming.  During tool execution phases
     // (command execution, file operations, etc.), no content deltas or message
     // updates arrive from the SDK.  Without a heartbeat, the frontend stall
@@ -204,7 +210,7 @@ public class StreamMessageCoalescer {
         } else if (chars > LARGE_PAYLOAD_THRESHOLD) {
             interval = MEDIUM_INTERVAL_MS;
         } else {
-            return UPDATE_INTERVAL_MS;
+            return STREAMING_MIN_INTERVAL_MS;
         }
         if (LOG.isDebugEnabled()) {
             LOG.debug("[AdaptiveThrottle] payload=" + chars + " chars → interval=" + interval + "ms");

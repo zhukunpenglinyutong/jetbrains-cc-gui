@@ -314,15 +314,10 @@ public class ClaudeMessageHandler implements MessageCallback {
                 thinkingSegmentActive = toolSeg.thinkingActive;
             }
 
-            // Streaming: skip full message update in streaming mode unless there is a tool call
-            if (!isStreaming || hasToolUse) {
-                callbackHandler.notifyMessageUpdate(state.getMessages());
-                if (hasToolUse) {
-                    LOG.debug("Streaming active but tool_use detected, sending message update");
-                }
-            } else {
-                LOG.debug("Streaming active, skipping full message update in handleAssistantMessage");
-            }
+            // Assistant messages carry structural changes (tool_use blocks, thinking
+            // blocks, segment boundaries). Unlike text deltas these MUST be pushed to
+            // the frontend so tool cards and collapsible thinking sections render.
+            callbackHandler.notifyMessageUpdate(state.getMessages());
 
             // Update status bar with usage from the final assistant message (matches CLI's PP1 behavior).
             // This ensures the displayed value matches what resume shows from JSONL history.
@@ -435,6 +430,15 @@ public class ClaudeMessageHandler implements MessageCallback {
         textSegmentActive = true;
 
         callbackHandler.notifyContentDelta(novelContent);
+        // During streaming, skip the full message update: the delta channel
+        // (onContentDelta at 33ms) provides real-time character-by-character
+        // display via .content, and pushing large JSON payloads through JCEF
+        // would block the renderer and stall the delta channel.
+        //
+        // After streaming ends (isStreaming=false), we MUST still notify
+        // message updates.  Deltas can arrive after handleStreamEnd has
+        // fired — without this call the frontend never receives them and
+        // the last assistant message appears incomplete.
         if (!isStreaming) {
             callbackHandler.notifyMessageUpdate(state.getMessages());
         }
@@ -723,9 +727,9 @@ public class ClaudeMessageHandler implements MessageCallback {
             // CRITICAL: Only notify frontend when delta was actually applied.
             // Frontend has no dedup and will accumulate, causing duplication.
             callbackHandler.notifyThinkingDelta(novelContent);
-            if (!isStreaming) {
-                callbackHandler.notifyMessageUpdate(state.getMessages());
-            }
+            // Thinking blocks are structural: the frontend renders them from
+            // raw blocks in collapsible UI sections, so raw must stay in sync.
+            callbackHandler.notifyMessageUpdate(state.getMessages());
         } else {
             LOG.debug("Skipping duplicate thinking delta (len=" + content.length() + ")");
         }

@@ -217,7 +217,7 @@ const getTextLikeContent = (block: Record<string, unknown>): string => {
  * always taken from the backend (authoritative source for message structure).
  *
  * Matching is positional: the i-th text/thinking block in prevRaw is compared
- * against the i-th text/thinking block in nextRaw, mirroring buildStreamingBlocks.
+ * against the i-th text/thinking block in nextRaw.
  *
  * Returns nextRaw unchanged (same reference) when no block needs protecting.
  */
@@ -341,6 +341,9 @@ export const preserveStreamingAssistantContent = (
   }
 
   const copy = [...nextList];
+  // NOTE: patchAssistantForStreaming internally does content = max(delta, backend).
+  // Here backend = preferredContent = max(streamingRef, prevContent), so the final
+  // result is max(streamingRef, prevContent, nextContent) — content never goes backwards.
   copy[nextAssistantIdx] = patchAssistantForStreaming({
     ...nextAssistant,
     content: preferredContent,
