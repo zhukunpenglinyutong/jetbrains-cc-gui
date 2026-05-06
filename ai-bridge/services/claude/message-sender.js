@@ -503,17 +503,17 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 
     const systemPromptAppend = buildSystemPromptAppend(openedFiles, agentPrompt, message);
 
-    const contentBlocks = buildContentBlocks(attachments, message);
-    const userMessage = {
-      type: 'user', session_id: '', parent_tool_use_id: null,
-      message: { role: 'user', content: contentBlocks }
-    };
-
     const sdkModelName = mapModelIdToSdkName(model);
     const settings = loadClaudeSettings();
     const resolvedAttachModel = resolveModelFromSettings(model, settings?.env);
     console.log('[DEBUG] (withAttachments) Model:', model, '->', resolvedAttachModel);
     setModelEnvironmentVariables(resolvedAttachModel, model);
+
+    const contentBlocks = buildContentBlocks(attachments, message, resolvedAttachModel);
+    const userMessage = {
+      type: 'user', session_id: '', parent_tool_use_id: null,
+      message: { role: 'user', content: contentBlocks }
+    };
 
     const normalizedPermissionMode = (!permissionMode || permissionMode === '') ? 'default' : permissionMode;
     const preToolUseHook = createPreToolUseHook(normalizedPermissionMode, workingDirectory);
