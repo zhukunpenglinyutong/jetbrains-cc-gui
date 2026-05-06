@@ -26,11 +26,10 @@ public class ClaudeNotifier {
 
     public static void showSuccess(@NotNull Project project, String message) {
         show(project, "Claude ✓", message, 5000);
-        // Play the task completion notification toast
+        // Show the task completion visual notification toast
         SystemNotificationService.getInstance().showVisualNotificationToast(project, message);
         // Play the task completion notification sound
         SoundNotificationService.getInstance().playTaskCompleteSound();
-
     }
 
     public static void showError(@NotNull Project project, String message) {

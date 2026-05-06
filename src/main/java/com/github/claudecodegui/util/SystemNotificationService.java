@@ -6,11 +6,33 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.wm.WindowManager;
+import com.intellij.util.ui.JBUI;
 import org.jetbrains.annotations.NotNull;
 
-import javax.swing.*;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JWindow;
+import javax.swing.SwingConstants;
+import javax.swing.Timer;
+import javax.swing.UIManager;
 import javax.swing.border.EmptyBorder;
-import java.awt.*;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Cursor;
+import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.Frame;
+import java.awt.GraphicsConfiguration;
+import java.awt.GraphicsDevice;
+import java.awt.GraphicsEnvironment;
+import java.awt.GridLayout;
+import java.awt.Insets;
+import java.awt.Point;
+import java.awt.Rectangle;
+import java.awt.Toolkit;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 
@@ -22,10 +44,16 @@ public class SystemNotificationService {
 
     private static final Logger LOG = Logger.getInstance(SystemNotificationService.class);
 
-    // Singleton pattern
+    private static final int MAX_MESSAGE_LENGTH = 150;
+    private static final int MESSAGE_ELLIPSIS_TAIL = 3;
+    private static final int WINDOW_WIDTH = 350;
+    private static final int AUTO_CLOSE_MS = 10_000;
+    private static final int ANIM_STEPS = 10;
+    private static final int ANIM_DELAY_MS = 20;
+
     private static volatile SystemNotificationService instance;
 
-    // Track active notification window to prevent duplicates
+    // Track active notification window to prevent duplicates. Only mutated on EDT.
     private JWindow activeNotificationWindow = null;
 
     private SystemNotificationService() {
@@ -51,236 +79,275 @@ public class SystemNotificationService {
      */
     public void showVisualNotificationToast(@NotNull Project project, String message) {
         ApplicationManager.getApplication().invokeLater(() -> {
+            if (project.isDisposed()) {
+                return;
+            }
             try {
-                CodemossSettingsService settings = new CodemossSettingsService();
-                if (!settings.getTaskCompletionNotificationEnabled()) {
+                if (!isEnabled()) {
                     return;
                 }
+                disposeActiveWindow();
 
-                // Close any existing notification window first
-                if (activeNotificationWindow != null) {
-                    activeNotificationWindow.dispose();
-                    activeNotificationWindow = null;
-                }
+                JWindow window = createNotificationWindow(project, sanitizeMessage(message));
+                activeNotificationWindow = window;
 
-                // Create a custom notification window (no title bar, stays on top)
-                JWindow notificationWindow = new JWindow();
-                activeNotificationWindow = notificationWindow;
+                Point position = getNotificationPosition(window, project);
 
-                // Make window always on top and skip taskbar
-                notificationWindow.setAlwaysOnTop(true);
+                // Place window at slide-in start position BEFORE making it visible to avoid flicker.
+                int startY = position.y + window.getHeight();
+                window.setLocation(position.x, startY);
+                window.setVisible(true);
 
-                // Create main panel with shadow border effect
-                JPanel mainPanel = new JPanel(new BorderLayout());
-                mainPanel.setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createLineBorder(new Color(0, 0, 0, 80), 1),
-                    BorderFactory.createEmptyBorder(1, 1, 1, 1)
-                ));
-
-                // Content panel with rounded corner appearance
-                JPanel contentPanel = new JPanel(new BorderLayout(12, 8));
-                contentPanel.setBorder(new EmptyBorder(16, 16, 16, 16));
-
-                // Determine theme colors
-                boolean isDark = UIManager.getBoolean("Editor.isDarkTheme");
-                Color bgColor = isDark ? new Color(32, 32, 32) : new Color(255, 255, 255);
-                Color textColor = isDark ? new Color(255, 255, 255) : new Color(0, 0, 0);
-                Color subtextColor = isDark ? new Color(180, 180, 180) : new Color(90, 90, 90);
-                Color accentColor = new Color(0, 120, 212); // Windows blue accent
-
-                contentPanel.setBackground(bgColor);
-                mainPanel.setBackground(bgColor);
-                notificationWindow.setBackground(bgColor);
-
-                // Left accent bar (Windows 11 style)
-                JPanel accentBar = new JPanel();
-                accentBar.setBackground(accentColor);
-                accentBar.setPreferredSize(new Dimension(4, 0));
-
-                // Icon label with information icon
-                JLabel iconLabel = new JLabel(UIManager.getIcon("OptionPane.informationIcon"));
-                iconLabel.setHorizontalAlignment(SwingConstants.CENTER);
-                iconLabel.setVerticalAlignment(SwingConstants.TOP);
-
-                // Text panel
-                JPanel textPanel = new JPanel(new GridLayout(2, 1, 0, 4));
-                textPanel.setOpaque(false);
-
-                // Title label
-                JLabel titleLabel = new JLabel(ClaudeCodeGuiBundle.message("notifier.taskComplete.title"));
-                titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 13f));
-                titleLabel.setForeground(textColor);
-
-                // Message label (truncate if too long)
-                String displayMessage = message.length() > 150 ? message.substring(0, 147) + "..." : message;
-                JLabel messageLabel = new JLabel("<html><body style='width: 250px; margin: 0;'>" + displayMessage + "</body></html>");
-                messageLabel.setFont(messageLabel.getFont().deriveFont(11f));
-                messageLabel.setForeground(subtextColor);
-
-                textPanel.add(titleLabel);
-                textPanel.add(messageLabel);
-
-                // Close button
-                JButton closeButton = new JButton("×");
-                closeButton.setFont(closeButton.getFont().deriveFont(Font.BOLD, 18f));
-                closeButton.setFocusPainted(false);
-                closeButton.setBorderPainted(false);
-                closeButton.setContentAreaFilled(false);
-                closeButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
-                closeButton.setForeground(subtextColor);
-                closeButton.setPreferredSize(new Dimension(24, 24));
-                closeButton.addMouseListener(new MouseAdapter() {
-                    @Override
-                    public void mouseEntered(MouseEvent e) {
-                        closeButton.setForeground(isDark ? new Color(200, 200, 200) : new Color(60, 60, 60));
-                        closeButton.setBackground(isDark ? new Color(60, 60, 60) : new Color(230, 230, 230));
-                        closeButton.setOpaque(true);
-                    }
-
-                    @Override
-                    public void mouseExited(MouseEvent e) {
-                        closeButton.setForeground(subtextColor);
-                        closeButton.setOpaque(false);
-                    }
-
-                    @Override
-                    public void mouseClicked(MouseEvent e) {
-                        if (activeNotificationWindow == notificationWindow) {
-                            notificationWindow.dispose();
-                            activeNotificationWindow = null;
-                        }
-                    }
-                });
-
-                // Header panel (icon + text + close)
-                JPanel headerPanel = new JPanel(new BorderLayout(12, 0));
-                headerPanel.setOpaque(false);
-                headerPanel.add(iconLabel, BorderLayout.WEST);
-                headerPanel.add(textPanel, BorderLayout.CENTER);
-                headerPanel.add(closeButton, BorderLayout.EAST);
-
-                contentPanel.add(headerPanel, BorderLayout.CENTER);
-
-                mainPanel.add(accentBar, BorderLayout.WEST);
-                mainPanel.add(contentPanel, BorderLayout.CENTER);
-
-                notificationWindow.getContentPane().add(mainPanel);
-                notificationWindow.pack();
-
-                // Set fixed width for consistent appearance
-                int windowWidth = 350;
-                int windowHeight = notificationWindow.getHeight();
-                notificationWindow.setSize(windowWidth, windowHeight);
-
-                // Get optimal position for notification
-                Point position = getNotificationPosition(notificationWindow, project);
-                notificationWindow.setLocation(position);
-                notificationWindow.setVisible(true);
-
-                // Add mouse click listener to activate IDEA window (click anywhere on notification)
-                notificationWindow.addMouseListener(new MouseAdapter() {
-                    @Override
-                    public void mouseClicked(MouseEvent e) {
-                        // Don't activate if clicking close button
-                        if (e.getSource() == closeButton) return;
-
-                        if (activeNotificationWindow == notificationWindow) {
-                            notificationWindow.dispose();
-                            activeNotificationWindow = null;
-                            activateIdeWindow(project);
-                        }
-                    }
-                });
-
-                // Auto-close after 10 seconds
-                Timer closeTimer = new Timer(10000, ev -> {
-                    if (activeNotificationWindow == notificationWindow) {
-                        notificationWindow.dispose();
-                        activeNotificationWindow = null;
-                    }
-                });
-                closeTimer.setRepeats(false);
-                closeTimer.start();
-
-                // Slide-in animation effect
-                animateSlideIn(notificationWindow, position.y);
-
+                scheduleAutoClose(window);
+                animateSlideIn(window, position.y);
             } catch (Exception e) {
                 LOG.warn("[SystemNotification] Failed to show visual notification: " + e.getMessage(), e);
             }
         });
     }
 
+    private boolean isEnabled() {
+        try {
+            return new CodemossSettingsService().getTaskCompletionNotificationEnabled();
+        } catch (Exception e) {
+            LOG.debug("[SystemNotification] Failed to read enabled flag, defaulting to true: " + e.getMessage());
+            return true;
+        }
+    }
+
+    private void disposeActiveWindow() {
+        if (activeNotificationWindow != null) {
+            activeNotificationWindow.dispose();
+            activeNotificationWindow = null;
+        }
+    }
+
+    /**
+     * Truncate by code points (so emoji and surrogate pairs stay intact) and HTML-escape
+     * the result before embedding into a {@code <html>...</html>} JLabel.
+     */
+    private String sanitizeMessage(String raw) {
+        String text = raw == null ? "" : raw;
+        int cpCount = text.codePointCount(0, text.length());
+        if (cpCount > MAX_MESSAGE_LENGTH) {
+            int end = text.offsetByCodePoints(0, MAX_MESSAGE_LENGTH - MESSAGE_ELLIPSIS_TAIL);
+            text = text.substring(0, end) + "...";
+        }
+        return escapeHtml(text);
+    }
+
+    private static String escapeHtml(String input) {
+        StringBuilder sb = new StringBuilder(input.length() + 16);
+        for (int i = 0; i < input.length(); i++) {
+            char c = input.charAt(i);
+            switch (c) {
+                case '&':
+                    sb.append("&amp;");
+                    break;
+                case '<':
+                    sb.append("&lt;");
+                    break;
+                case '>':
+                    sb.append("&gt;");
+                    break;
+                case '"':
+                    sb.append("&quot;");
+                    break;
+                case '\'':
+                    sb.append("&#39;");
+                    break;
+                default:
+                    sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
+
+    private JWindow createNotificationWindow(@NotNull Project project, String escapedMessage) {
+        JWindow window = new JWindow();
+        window.setAlwaysOnTop(true);
+
+        boolean isDark = UIManager.getBoolean("Editor.isDarkTheme");
+        Color bgColor = isDark ? new Color(32, 32, 32) : new Color(255, 255, 255);
+        Color textColor = isDark ? new Color(255, 255, 255) : new Color(0, 0, 0);
+        Color subtextColor = isDark ? new Color(180, 180, 180) : new Color(90, 90, 90);
+        Color accentColor = new Color(0, 120, 212); // Windows blue accent
+
+        JPanel mainPanel = new JPanel(new BorderLayout());
+        mainPanel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(0, 0, 0, 80), 1),
+            BorderFactory.createEmptyBorder(1, 1, 1, 1)
+        ));
+        mainPanel.setBackground(bgColor);
+
+        JPanel contentPanel = new JPanel(new BorderLayout(JBUI.scale(12), JBUI.scale(8)));
+        contentPanel.setBorder(new EmptyBorder(JBUI.scale(16), JBUI.scale(16), JBUI.scale(16), JBUI.scale(16)));
+        contentPanel.setBackground(bgColor);
+
+        JPanel accentBar = new JPanel();
+        accentBar.setBackground(accentColor);
+        accentBar.setPreferredSize(new Dimension(JBUI.scale(4), 0));
+
+        JLabel iconLabel = new JLabel(UIManager.getIcon("OptionPane.informationIcon"));
+        iconLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        iconLabel.setVerticalAlignment(SwingConstants.TOP);
+
+        JPanel textPanel = buildTextPanel(escapedMessage, textColor, subtextColor);
+        JButton closeButton = createCloseButton(window, isDark, subtextColor);
+
+        JPanel headerPanel = new JPanel(new BorderLayout(JBUI.scale(12), 0));
+        headerPanel.setOpaque(false);
+        headerPanel.add(iconLabel, BorderLayout.WEST);
+        headerPanel.add(textPanel, BorderLayout.CENTER);
+        headerPanel.add(closeButton, BorderLayout.EAST);
+
+        contentPanel.add(headerPanel, BorderLayout.CENTER);
+
+        mainPanel.add(accentBar, BorderLayout.WEST);
+        mainPanel.add(contentPanel, BorderLayout.CENTER);
+
+        window.getContentPane().add(mainPanel);
+        window.setBackground(bgColor);
+        window.pack();
+        window.setSize(JBUI.scale(WINDOW_WIDTH), window.getHeight());
+
+        // Whole-window click activates IDE; clicks on the close button are handled by its own listener.
+        window.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getSource() == closeButton) {
+                    return;
+                }
+                if (activeNotificationWindow == window) {
+                    window.dispose();
+                    activeNotificationWindow = null;
+                    activateIdeWindow(project);
+                }
+            }
+        });
+
+        return window;
+    }
+
+    private JPanel buildTextPanel(String escapedMessage, Color textColor, Color subtextColor) {
+        JPanel textPanel = new JPanel(new GridLayout(2, 1, 0, JBUI.scale(4)));
+        textPanel.setOpaque(false);
+
+        JLabel titleLabel = new JLabel(ClaudeCodeGuiBundle.message("notifier.taskComplete.title"));
+        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 13f));
+        titleLabel.setForeground(textColor);
+
+        JLabel messageLabel = new JLabel(
+            "<html><body style='width: " + JBUI.scale(250) + "px; margin: 0;'>" + escapedMessage + "</body></html>");
+        messageLabel.setFont(messageLabel.getFont().deriveFont(11f));
+        messageLabel.setForeground(subtextColor);
+
+        textPanel.add(titleLabel);
+        textPanel.add(messageLabel);
+        return textPanel;
+    }
+
+    private JButton createCloseButton(JWindow window, boolean isDark, Color subtextColor) {
+        JButton closeButton = new JButton("×");
+        closeButton.setFont(closeButton.getFont().deriveFont(Font.BOLD, 18f));
+        closeButton.setFocusPainted(false);
+        closeButton.setBorderPainted(false);
+        closeButton.setContentAreaFilled(false);
+        closeButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        closeButton.setForeground(subtextColor);
+        closeButton.setPreferredSize(new Dimension(JBUI.scale(24), JBUI.scale(24)));
+        closeButton.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                closeButton.setForeground(isDark ? new Color(200, 200, 200) : new Color(60, 60, 60));
+                closeButton.setBackground(isDark ? new Color(60, 60, 60) : new Color(230, 230, 230));
+                closeButton.setOpaque(true);
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                closeButton.setForeground(subtextColor);
+                closeButton.setOpaque(false);
+            }
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (activeNotificationWindow == window) {
+                    window.dispose();
+                    activeNotificationWindow = null;
+                }
+            }
+        });
+        return closeButton;
+    }
+
+    private void scheduleAutoClose(JWindow window) {
+        Timer closeTimer = new Timer(AUTO_CLOSE_MS, ev -> {
+            if (activeNotificationWindow == window) {
+                window.dispose();
+                activeNotificationWindow = null;
+            }
+        });
+        closeTimer.setRepeats(false);
+        closeTimer.start();
+    }
+
     /**
      * Get optimal position for notification window.
-     * Priority: 1) Near IDEA window (top-right), 2) Primary screen bottom-right.
-     * This ensures the notification appears where the user is working.
+     * Priority: 1) Near IDE window (top-right), 2) Primary screen bottom-right.
      */
-    private Point getNotificationPosition(JWindow window, Project project) {
-        // Try to get IDE frame position
+    private Point getNotificationPosition(JWindow window, @NotNull Project project) {
+        if (project.isDisposed()) {
+            return getFallbackPosition(window);
+        }
         JFrame ideFrame = WindowManager.getInstance().getFrame(project);
-
         if (ideFrame != null && ideFrame.isVisible()) {
-            // Position near the IDE window's top-right corner (like VS Code notifications)
             Rectangle frameBounds = ideFrame.getBounds();
             int windowWidth = window.getWidth();
             int windowHeight = window.getHeight();
 
-            // Calculate position: top-right corner of IDE window
-            int x = frameBounds.x + frameBounds.width - windowWidth - 10;
-            int y = frameBounds.y + 50; // Below title bar area
+            int x = frameBounds.x + frameBounds.width - windowWidth - JBUI.scale(10);
+            int y = frameBounds.y + JBUI.scale(50); // Below title bar area
 
-            // Verify this position is within screen bounds
-            GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
-            GraphicsDevice[] screens = ge.getScreenDevices();
-
-            for (GraphicsDevice screen : screens) {
-                GraphicsConfiguration gc = screen.getDefaultConfiguration();
-                Rectangle screenBounds = gc.getBounds();
-
+            for (GraphicsDevice screen : GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) {
+                Rectangle screenBounds = screen.getDefaultConfiguration().getBounds();
                 if (x >= screenBounds.x && x + windowWidth <= screenBounds.x + screenBounds.width &&
                     y >= screenBounds.y && y + windowHeight <= screenBounds.y + screenBounds.height) {
-                    // Position is valid on this screen
                     return new Point(x, y);
                 }
             }
         }
+        return getFallbackPosition(window);
+    }
 
-        // Fallback: bottom-right of primary screen
+    private Point getFallbackPosition(JWindow window) {
         GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
         GraphicsDevice gd = ge.getDefaultScreenDevice();
         GraphicsConfiguration gc = gd.getDefaultConfiguration();
         Rectangle screenBounds = gc.getBounds();
-
         Insets screenInsets = Toolkit.getDefaultToolkit().getScreenInsets(gc);
+
         int screenWidth = screenBounds.width - screenInsets.right - screenInsets.left;
         int screenHeight = screenBounds.height - screenInsets.top - screenInsets.bottom;
-
         int windowWidth = window.getWidth();
         int windowHeight = window.getHeight();
 
-        int x = screenBounds.x + screenWidth - windowWidth - 10 + screenInsets.right;
-        int y = screenBounds.y + screenHeight - windowHeight - 10 + screenInsets.bottom;
-
+        int x = screenBounds.x + screenWidth - windowWidth - JBUI.scale(10) + screenInsets.right;
+        int y = screenBounds.y + screenHeight - windowHeight - JBUI.scale(10) + screenInsets.bottom;
         return new Point(x, y);
     }
 
     /**
      * Animate notification window sliding in from bottom.
+     * Window must already be positioned at the start position before being made visible.
      */
     private void animateSlideIn(JWindow window, int targetY) {
-        int startY = targetY + window.getHeight();
         int startX = window.getX();
-        window.setLocation(startX, startY);
-
-        final int steps = 10;
-        final int delay = 20;
-
-        Timer animTimer = new Timer(delay, null);
+        int startY = window.getY();
+        Timer animTimer = new Timer(ANIM_DELAY_MS, null);
         animTimer.addActionListener(e -> {
             int currentY = window.getY();
-            int step = (startY - targetY) / steps;
-
+            int step = Math.max(1, (startY - targetY) / ANIM_STEPS);
             if (currentY > targetY) {
                 int newY = Math.max(currentY - step, targetY);
                 window.setLocation(startX, newY);
@@ -293,40 +360,27 @@ public class SystemNotificationService {
     }
 
     /**
-     * Activate and bring IDEA window to front.
+     * Activate and bring IDE window to front.
      * Restores from minimized state and requests focus.
      */
     private void activateIdeWindow(@NotNull Project project) {
         try {
-            // Get the IDE frame for the project
+            if (project.isDisposed()) {
+                return;
+            }
             JFrame frame = WindowManager.getInstance().getFrame(project);
             if (frame != null) {
-                // Restore window if minimized
                 int state = frame.getExtendedState();
                 if ((state & Frame.ICONIFIED) != 0) {
                     frame.setExtendedState(state & ~Frame.ICONIFIED);
                 }
-                // Bring window to front and request focus
                 frame.setVisible(true);
                 frame.toFront();
                 frame.requestFocus();
-
-                // Additional focus request for reliability
                 frame.repaint();
             }
         } catch (Exception e) {
-            LOG.debug("[SystemNotification] Failed to activate IDEA window: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Dispose the active notification window.
-     * Called when the user closes the notification manually.
-     */
-    public void disposeNotification() {
-        if (activeNotificationWindow != null) {
-            activeNotificationWindow.dispose();
-            activeNotificationWindow = null;
+            LOG.debug("[SystemNotification] Failed to activate IDE window: " + e.getMessage());
         }
     }
 }

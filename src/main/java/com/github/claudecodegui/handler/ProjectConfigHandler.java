@@ -577,8 +577,13 @@ public class ProjectConfigHandler {
     public void handleSetTaskCompletionNotificationEnabled(String content) {
         try {
             JsonObject json = gson.fromJson(content, JsonObject.class);
-            boolean enabled = json == null || !json.has("taskCompletionNotificationEnabled") || json.get("taskCompletionNotificationEnabled").isJsonNull()
-                || json.get("taskCompletionNotificationEnabled").getAsBoolean();
+            // Default to enabled when payload is missing or the field is absent/null.
+            boolean enabled = true;
+            if (json != null
+                && json.has("taskCompletionNotificationEnabled")
+                && !json.get("taskCompletionNotificationEnabled").isJsonNull()) {
+                enabled = json.get("taskCompletionNotificationEnabled").getAsBoolean();
+            }
             settingsService.setTaskCompletionNotificationEnabled(enabled);
             LOG.info("[ProjectConfigHandler] Set task completion notification enabled: " + enabled);
             final boolean finalVal = enabled;
