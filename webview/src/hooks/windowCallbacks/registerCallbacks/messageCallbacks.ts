@@ -80,9 +80,6 @@ export function registerMessageCallbacks(
     streamingContentRef,
     isStreamingRef,
     useBackendStreamingRenderRef,
-    activeTextSegmentIndexRef,
-    activeThinkingSegmentIndexRef,
-    seenToolUseCountRef,
     streamingMessageIndexRef,
     streamingTurnIdRef,
     findLastAssistantIndex,
@@ -291,22 +288,6 @@ export function registerMessageCallbacks(
         // which caused ALL updateMessages to be silently dropped during pure-text
         // streaming.  When onStreamEnd was subsequently lost (JCEF async chain),
         // the UI appeared permanently frozen.
-
-        // Track tool_use for segment reset purposes
-        let totalToolUseCount = 0;
-        for (const message of parsed) {
-          if (message.type !== 'assistant') continue;
-          const blocks = extractRawBlocks(message.raw);
-          totalToolUseCount += blocks.filter((b) => b?.type === 'tool_use').length;
-        }
-
-        if (totalToolUseCount > seenToolUseCountRef.current) {
-          seenToolUseCountRef.current = totalToolUseCount;
-          activeTextSegmentIndexRef.current = -1;
-          activeThinkingSegmentIndexRef.current = -1;
-        } else if (totalToolUseCount < seenToolUseCountRef.current) {
-          seenToolUseCountRef.current = totalToolUseCount;
-        }
 
         let patched = [...parsed];
         patched = appendOptimisticMessageIfMissing(prev, patched);

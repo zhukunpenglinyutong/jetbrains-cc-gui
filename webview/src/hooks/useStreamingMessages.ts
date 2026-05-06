@@ -9,29 +9,21 @@ interface ContentBlock {
   [key: string]: unknown;
 }
 
-export const THROTTLE_INTERVAL = 50; // 50ms throttle interval
+// Match backend StreamDeltaThrottler interval (33ms) so frontend renders
+// each backend flush batch without extra accumulation lag.
+export const THROTTLE_INTERVAL = 33;
 
 interface UseStreamingMessagesReturn {
   // Content refs
   streamingContentRef: React.MutableRefObject<string>;
+  streamingThinkingRef: React.MutableRefObject<string>;
   isStreamingRef: React.MutableRefObject<boolean>;
   useBackendStreamingRenderRef: React.MutableRefObject<boolean>;
   streamingMessageIndexRef: React.MutableRefObject<number>;
 
-  // Text segment refs
-  streamingTextSegmentsRef: React.MutableRefObject<string[]>;
-  activeTextSegmentIndexRef: React.MutableRefObject<number>;
-
-  // Thinking segment refs
-  streamingThinkingSegmentsRef: React.MutableRefObject<string[]>;
-  activeThinkingSegmentIndexRef: React.MutableRefObject<number>;
-
-  // Tool use tracking
-  seenToolUseCountRef: React.MutableRefObject<number>;
-
-  // Throttle control refs
-  contentUpdateTimeoutRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
-  thinkingUpdateTimeoutRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
+  // Throttle control refs (stores rAF IDs)
+  contentUpdateTimeoutRef: React.MutableRefObject<number | null>;
+  thinkingUpdateTimeoutRef: React.MutableRefObject<number | null>;
   lastContentUpdateRef: React.MutableRefObject<number>;
   lastThinkingUpdateRef: React.MutableRefObject<number>;
 
@@ -45,7 +37,6 @@ interface UseStreamingMessagesReturn {
   // Helper functions
   findLastAssistantIndex: (list: ClaudeMessage[]) => number;
   extractRawBlocks: (raw: unknown) => ContentBlock[];
-  buildStreamingBlocks: (existingBlocks: ContentBlock[]) => ContentBlock[];
   getOrCreateStreamingAssistantIndex: (list: ClaudeMessage[]) => number;
   patchAssistantForStreaming: (assistant: ClaudeMessage) => ClaudeMessage;
 
@@ -59,24 +50,14 @@ interface UseStreamingMessagesReturn {
 export function useStreamingMessages(): UseStreamingMessagesReturn {
   // Content refs
   const streamingContentRef = useRef('');
+  const streamingThinkingRef = useRef('');
   const isStreamingRef = useRef(false);
   const useBackendStreamingRenderRef = useRef(false);
   const streamingMessageIndexRef = useRef<number>(-1);
 
-  // Text segment refs
-  const streamingTextSegmentsRef = useRef<string[]>([]);
-  const activeTextSegmentIndexRef = useRef<number>(-1);
-
-  // Thinking segment refs
-  const streamingThinkingSegmentsRef = useRef<string[]>([]);
-  const activeThinkingSegmentIndexRef = useRef<number>(-1);
-
-  // Tool use tracking
-  const seenToolUseCountRef = useRef(0);
-
   // Throttle control refs
-  const contentUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const thinkingUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const contentUpdateTimeoutRef = useRef<number | null>(null);
+  const thinkingUpdateTimeoutRef = useRef<number | null>(null);
   const lastContentUpdateRef = useRef(0);
   const lastThinkingUpdateRef = useRef(0);
 
@@ -104,291 +85,119 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
     return Array.isArray(blocks) ? blocks : [];
   };
 
-  const normalizeThinking = (thinking: string): string => {
-    return thinking
-      .replace(/\r\n?/g, '\n')
-      .replace(/\n[ \t]*\n+/g, '\n')
-      .replace(/^\n+/, '')
-      .replace(/\n+$/, '');
+  const syncTextBlocksWithContent = (blocks: ContentBlock[], content: string): ContentBlock[] => {
+    if (!content) return blocks;
+
+    const textIndices = blocks
+      .map((block, index) => (block?.type === 'text' ? index : -1))
+      .filter((index) => index >= 0);
+
+    if (textIndices.length === 0) {
+      return [...blocks, { type: 'text', text: content }];
+    }
+
+    const lastTextIdx = textIndices[textIndices.length - 1];
+    const prefixText = textIndices
+      .slice(0, -1)
+      .map((index) => (typeof blocks[index]?.text === 'string' ? blocks[index].text : ''))
+      .join('');
+
+    if (!content.startsWith(prefixText)) {
+      if (textIndices.length !== 1) {
+        return blocks;
+      }
+      const currentText = typeof blocks[lastTextIdx]?.text === 'string' ? blocks[lastTextIdx].text : '';
+      if (currentText === content) {
+        return blocks;
+      }
+      const nextBlocks = [...blocks];
+      nextBlocks[lastTextIdx] = { ...nextBlocks[lastTextIdx], text: content };
+      return nextBlocks;
+    }
+
+    const desiredLastText = content.slice(prefixText.length);
+    if (!desiredLastText) {
+      return blocks;
+    }
+
+    const currentLastText = typeof blocks[lastTextIdx]?.text === 'string' ? blocks[lastTextIdx].text : '';
+    if (currentLastText === desiredLastText) {
+      return blocks;
+    }
+
+    const nextBlocks = [...blocks];
+    nextBlocks[lastTextIdx] = { ...nextBlocks[lastTextIdx], text: desiredLastText };
+    return nextBlocks;
   };
 
-  const isDoubledContent = (candidate: string, base: string): boolean => {
-    if (!base || !candidate || base.length >= candidate.length) return false;
-    // Check if candidate is base repeated 2+ times (e.g., "ABCABC" from "ABC")
-    const repeated = base + base;
-    return candidate.startsWith(repeated);
+  const getThinkingText = (block: ContentBlock | undefined): string => {
+    if (!block) return '';
+    if (typeof block.thinking === 'string') return block.thinking;
+    if (typeof block.text === 'string') return block.text;
+    return '';
   };
 
-  const preferMoreCompleteText = (segmentText: unknown, existingText: unknown): string => {
-    const streamed = typeof segmentText === 'string' ? segmentText : '';
-    const existing = typeof existingText === 'string' ? existingText : '';
+  // Mirror of syncTextBlocksWithContent for thinking blocks.
+  // streamingThinkingRef accumulates ALL thinking deltas in the current turn,
+  // including segments separated by tool_use blocks (extended thinking can
+  // resume after a tool call).  We must therefore strip the prefix carried by
+  // earlier thinking blocks before assigning the remainder to the last block,
+  // otherwise the last block would receive the concatenation of every segment
+  // and duplicate earlier content.
+  const syncThinkingBlocksWithContent = (blocks: ContentBlock[], thinking: string): ContentBlock[] => {
+    if (!thinking) return blocks;
 
-    if (!streamed) return existing;
-    if (!existing) return streamed;
-    if (isDoubledContent(existing, streamed)) return streamed;
-    return existing.length > streamed.length ? existing : streamed;
-  };
+    const thinkingIndices = blocks
+      .map((block, index) => (block?.type === 'thinking' ? index : -1))
+      .filter((index) => index >= 0);
 
-  const preferMoreCompleteThinking = (segmentThinking: unknown, existingThinking: unknown): string => {
-    const streamed = typeof segmentThinking === 'string' ? normalizeThinking(segmentThinking) : '';
-    const existing = typeof existingThinking === 'string' ? normalizeThinking(existingThinking) : '';
-
-    if (!streamed) return existing;
-    if (!existing) return streamed;
-    if (isDoubledContent(existing, streamed)) return streamed;
-    return existing.length > streamed.length ? existing : streamed;
-  };
-
-  const getBlockTextContent = (block: ContentBlock, type: 'text' | 'thinking'): string => {
-    if (!block || typeof block !== 'object') return '';
-    if (type === 'thinking') {
-      return normalizeThinking(
-        typeof block.thinking === 'string'
-          ? block.thinking
-          : typeof block.text === 'string'
-            ? block.text
-            : '',
-      );
-    }
-    return typeof block.text === 'string' ? block.text : '';
-  };
-
-  const mergeStreamingTextLikeContent = (left: string, right: string): string => {
-    if (!left) return right;
-    if (!right) return left;
-    if (left.includes(right)) return left;
-    if (right.includes(left)) return right;
-
-    const MAX_OVERLAP_SEARCH = 200;
-    const maxOverlap = Math.min(left.length, right.length, MAX_OVERLAP_SEARCH);
-    for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
-      if (left.slice(-overlap) === right.slice(0, overlap)) {
-        return left + right.slice(overlap);
-      }
+    if (thinkingIndices.length === 0) {
+      return [{ type: 'thinking', thinking, text: thinking }, ...blocks];
     }
 
-    return left + right;
-  };
+    const lastThinkingIdx = thinkingIndices[thinkingIndices.length - 1];
+    const prefixThinking = thinkingIndices
+      .slice(0, -1)
+      .map((index) => getThinkingText(blocks[index]))
+      .join('');
 
-  const trimDuplicateTextLikeContent = (
-    candidate: string,
-    output: ContentBlock[],
-    type: 'text' | 'thinking',
-  ): string => {
-    let remaining = candidate;
-    if (!remaining) return '';
-
-    for (const block of output) {
-      if (!block || typeof block !== 'object' || block.type !== type) {
-        continue;
+    if (!thinking.startsWith(prefixThinking)) {
+      // Cannot reconcile cumulative buffer with split blocks (e.g., backend
+      // dedup rewrote earlier blocks).  For a single block we still try to
+      // overwrite directly; otherwise leave structure untouched.
+      if (thinkingIndices.length !== 1) {
+        return blocks;
       }
-
-      const existing = getBlockTextContent(block, type);
-      if (!existing) continue;
-
-      if (existing.includes(remaining)) {
-        return '';
+      const currentThinking = getThinkingText(blocks[lastThinkingIdx]);
+      if (currentThinking === thinking) {
+        return blocks;
       }
-
-      if (remaining.startsWith(existing)) {
-        remaining = remaining.slice(existing.length);
-        if (!remaining) {
-          return '';
-        }
-      } else {
-        // Suffix-prefix overlap detection for markdown fences/code blocks that
-        // the earlier startsWith/includes checks miss (e.g. trailing "```"
-        // repeated in the next segment).
-        //
-        // MIN_OVERLAP=10: shorter matches (e.g. "```python") are ambiguous and
-        //   frequently appear as legitimate repeated tokens inside prose. Ten
-        //   characters is long enough to make an accidental collision unlikely
-        //   while still catching a closing fence followed by a newline.
-        // MAX_OVERLAP=200: the overlap only arises from the tail of one flush
-        //   reappearing at the head of the next; in practice this spans a few
-        //   lines of code. Capping the probe keeps the scan O(n) on short
-        //   strings and bounds worst-case work on large buffers.
-        const MIN_OVERLAP = 10;
-        const MAX_OVERLAP = 200;
-        const maxLen = Math.min(existing.length, remaining.length, MAX_OVERLAP);
-        for (let n = maxLen; n >= MIN_OVERLAP; n -= 1) {
-          if (existing.slice(-n) === remaining.slice(0, n)) {
-            remaining = remaining.slice(n);
-            break;
-          }
-        }
-        if (!remaining) {
-          return '';
-        }
-      }
+      const nextBlocks = [...blocks];
+      nextBlocks[lastThinkingIdx] = {
+        ...nextBlocks[lastThinkingIdx],
+        thinking,
+        text: thinking,
+      };
+      return nextBlocks;
     }
 
-    return remaining;
-  };
-
-  /** Appends a de-duplicated text/thinking block. Mutates the `output` array in place. */
-  const appendNovelTextLikeBlock = (
-    output: ContentBlock[],
-    type: 'text' | 'thinking',
-    rawContent: string,
-  ): void => {
-    const normalized = type === 'thinking' ? normalizeThinking(rawContent) : rawContent;
-    const novel = trimDuplicateTextLikeContent(normalized, output, type);
-    if (!novel) {
-      return;
+    const desiredLastThinking = thinking.slice(prefixThinking.length);
+    if (!desiredLastThinking) {
+      return blocks;
     }
 
-    const lastBlock = output[output.length - 1];
-    if (lastBlock && typeof lastBlock === 'object' && lastBlock.type === type) {
-      const existing = getBlockTextContent(lastBlock, type);
-      const merged = mergeStreamingTextLikeContent(existing, novel);
-      if (type === 'thinking') {
-        output[output.length - 1] = {
-          ...lastBlock,
-          thinking: merged,
-          text: merged,
-        };
-      } else {
-        output[output.length - 1] = {
-          ...lastBlock,
-          text: merged,
-        };
-      }
-      return;
+    const currentLastThinking = getThinkingText(blocks[lastThinkingIdx]);
+    if (currentLastThinking === desiredLastThinking) {
+      return blocks;
     }
 
-    if (type === 'thinking') {
-      output.push({ type: 'thinking', thinking: novel, text: novel });
-      return;
-    }
-
-    output.push({ type: 'text', text: novel });
-  };
-
-  // Helper: Build streaming blocks from segments.
-  // Thinking blocks use index-based matching to preserve positions (multi-phase thinking).
-  // After building, adjacent thinking blocks with overlapping content are merged
-  // to prevent duplication while preserving distinct thinking phases.
-  const buildStreamingBlocks = (existingBlocks: ContentBlock[]): ContentBlock[] => {
-    const textSegments = streamingTextSegmentsRef.current;
-    const thinkingSegments = streamingThinkingSegmentsRef.current;
-
-    const output: ContentBlock[] = [];
-    let thinkingIdx = 0;
-    let textIdx = 0;
-
-    // Process existing blocks in order, matching segments by position
-    for (const block of existingBlocks) {
-      if (!block || typeof block !== 'object') continue;
-
-      if (block.type === 'thinking') {
-        const segmentContent = thinkingSegments[thinkingIdx];
-        const backendContent = block.thinking ?? block.text ?? '';
-        const thinking = preferMoreCompleteThinking(segmentContent, backendContent);
-        thinkingIdx += 1;
-        if (thinking.length > 0) {
-          appendNovelTextLikeBlock(output, 'thinking', thinking);
-        }
-        continue;
-      }
-
-      if (block.type === 'text') {
-        const segmentContent = textSegments[textIdx];
-        const backendContent = block.text ?? '';
-        const text = preferMoreCompleteText(segmentContent, backendContent);
-        textIdx += 1;
-        if (text.length > 0) {
-          appendNovelTextLikeBlock(output, 'text', text);
-        }
-        continue;
-      }
-
-      // Non-text/thinking blocks (tool_use, image, etc.) - keep as-is
-      output.push(block);
-    }
-
-    // Append remaining segments that weren't matched to existing blocks
-    const phasesCount = Math.max(textSegments.length, thinkingSegments.length);
-    const appendFromPhase = Math.max(textIdx, thinkingIdx);
-    for (let phase = appendFromPhase; phase < phasesCount; phase += 1) {
-      const thinking = thinkingSegments[phase];
-      if (typeof thinking === 'string' && thinking.length > 0) {
-        appendNovelTextLikeBlock(output, 'thinking', thinking);
-      }
-      const text = textSegments[phase];
-      if (typeof text === 'string' && text.length > 0) {
-        appendNovelTextLikeBlock(output, 'text', text);
-      }
-    }
-
-    return mergeOverlappingThinkingBlocks(output);
-  };
-
-  /**
-   * Merge thinking blocks with overlapping content to prevent duplication.
-   * Preserves distinct thinking phases that have no content overlap.
-   * Uses mark-and-filter approach to avoid splice index corruption.
-   */
-  const mergeOverlappingThinkingBlocks = (blocks: ContentBlock[]): ContentBlock[] => {
-    const thinkingIndices: number[] = [];
-    for (let i = 0; i < blocks.length; i++) {
-      if (blocks[i]?.type === 'thinking') thinkingIndices.push(i);
-    }
-
-    if (thinkingIndices.length <= 1) return blocks;
-
-    const thinkingContents = thinkingIndices.map((i) =>
-      normalizeThinking(blocks[i]?.thinking ?? blocks[i]?.text ?? ''),
-    );
-
-    // Group thinking blocks that have overlapping content
-    const mergeGroups: number[][] = [];
-    const assigned = new Set<number>();
-
-    for (let i = 0; i < thinkingContents.length; i++) {
-      if (assigned.has(i)) continue;
-      const group = [i];
-      assigned.add(i);
-
-      for (let j = i + 1; j < thinkingContents.length; j++) {
-        if (assigned.has(j)) continue;
-        const a = thinkingContents[i];
-        const b = thinkingContents[j];
-        // Overlap: one contains the other (covers prefix/suffix cases too)
-        if (a.includes(b) || b.includes(a)) {
-          group.push(j);
-          assigned.add(j);
-        }
-      }
-      mergeGroups.push(group);
-    }
-
-    // Mark indices to remove, update first block with merged content
-    const toRemove = new Set<number>();
-    for (const group of mergeGroups) {
-      if (group.length === 1) continue;
-
-      let merged = '';
-      for (const idx of group) {
-        const content = thinkingContents[idx];
-        if (content.includes(merged)) {
-          merged = content;
-        } else if (!merged.includes(content)) {
-          merged = mergeStreamingTextLikeContent(merged, content);
-        }
-      }
-
-      const firstIdx = thinkingIndices[group[0]];
-      blocks[firstIdx] = { type: 'thinking', thinking: merged, text: merged };
-
-      // Mark other blocks in group for removal
-      for (let k = 1; k < group.length; k++) {
-        toRemove.add(thinkingIndices[group[k]]);
-      }
-    }
-
-    // Filter out marked blocks (single pass, no index corruption)
-    return toRemove.size === 0 ? blocks : blocks.filter((_, idx) => !toRemove.has(idx));
+    const nextBlocks = [...blocks];
+    nextBlocks[lastThinkingIdx] = {
+      ...nextBlocks[lastThinkingIdx],
+      thinking: desiredLastThinking,
+      text: desiredLastThinking,
+    };
+    return nextBlocks;
   };
 
   /**
@@ -420,21 +229,46 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
     return streamingMessageIndexRef.current;
   };
 
-  // Helper: Patch assistant message for streaming
+  // Helper: Patch assistant message for streaming.
+  // Backend snapshots remain the source of truth for structure, but the currently
+  // growing text/thinking blocks must stay aligned with the delta buffers because
+  // the UI renders primarily from raw blocks. For the top-level .content string,
+  // use the longer of streamingContentRef (delta-accumulated) and assistant.content
+  // (backend snapshot). This prevents content from "jumping back" when updateMessages
+  // arrives before the delta throttler flushes.
   const patchAssistantForStreaming = (assistant: ClaudeMessage): ClaudeMessage => {
-    const existingRaw = (assistant.raw && typeof assistant.raw === 'object') ? (assistant.raw as Record<string, unknown>) : { message: { content: [] } };
-    const existingBlocks = extractRawBlocks(existingRaw);
-    const newBlocks = buildStreamingBlocks(existingBlocks);
+    const deltaContent = streamingContentRef.current || '';
+    const backendContent = assistant.content || '';
+    const bestContent = deltaContent.length >= backendContent.length ? deltaContent : backendContent;
 
-    const msg = existingRaw.message as Record<string, unknown> | undefined;
-    const rawPatched = msg
-      ? { ...existingRaw, message: { ...msg, content: newBlocks } }
-      : { ...existingRaw, content: newBlocks };
+    const deltaThinking = streamingThinkingRef.current || '';
+    let patchedRaw = assistant.raw;
+
+    if (patchedRaw && typeof patchedRaw === 'object') {
+      const rawObj = patchedRaw as Record<string, unknown>;
+      const msg = rawObj.message as Record<string, unknown> | undefined;
+      const rawContent = Array.isArray(rawObj.content)
+        ? rawObj.content
+        : Array.isArray(msg?.content) ? msg.content : [];
+
+      let blocks = [...rawContent] as ContentBlock[];
+      blocks = syncThinkingBlocksWithContent(blocks, deltaThinking);
+      blocks = syncTextBlocksWithContent(blocks, bestContent);
+
+      patchedRaw = (msg
+        ? { ...rawObj, message: { ...msg, content: blocks } }
+        : { ...rawObj, content: blocks }) as ClaudeMessage['raw'];
+    } else if (deltaThinking) {
+      let blocks: ContentBlock[] = [];
+      blocks = syncThinkingBlocksWithContent(blocks, deltaThinking);
+      blocks = syncTextBlocksWithContent(blocks, bestContent);
+      patchedRaw = { message: { content: blocks } } as ClaudeMessage['raw'];
+    }
 
     return {
       ...assistant,
-      content: streamingContentRef.current,
-      raw: rawPatched,
+      content: bestContent,
+      raw: patchedRaw,
       isStreaming: true,
     } as ClaudeMessage;
   };
@@ -442,23 +276,19 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
   // Reset all streaming state
   const resetStreamingState = () => {
     streamingContentRef.current = '';
-    streamingTextSegmentsRef.current = [];
-    streamingThinkingSegmentsRef.current = [];
+    streamingThinkingRef.current = '';
     streamingMessageIndexRef.current = -1;
-    activeTextSegmentIndexRef.current = -1;
-    activeThinkingSegmentIndexRef.current = -1;
-    seenToolUseCountRef.current = 0;
     lastContentUpdateRef.current = 0;
     lastThinkingUpdateRef.current = 0;
     autoExpandedThinkingKeysRef.current.clear();
     streamingTurnIdRef.current = -1;
 
-    if (contentUpdateTimeoutRef.current) {
-      clearTimeout(contentUpdateTimeoutRef.current);
+    if (contentUpdateTimeoutRef.current != null) {
+      cancelAnimationFrame(contentUpdateTimeoutRef.current);
       contentUpdateTimeoutRef.current = null;
     }
-    if (thinkingUpdateTimeoutRef.current) {
-      clearTimeout(thinkingUpdateTimeoutRef.current);
+    if (thinkingUpdateTimeoutRef.current != null) {
+      cancelAnimationFrame(thinkingUpdateTimeoutRef.current);
       thinkingUpdateTimeoutRef.current = null;
     }
   };
@@ -466,20 +296,10 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
   return {
     // Content refs
     streamingContentRef,
+    streamingThinkingRef,
     isStreamingRef,
     useBackendStreamingRenderRef,
     streamingMessageIndexRef,
-
-    // Text segment refs
-    streamingTextSegmentsRef,
-    activeTextSegmentIndexRef,
-
-    // Thinking segment refs
-    streamingThinkingSegmentsRef,
-    activeThinkingSegmentIndexRef,
-
-    // Tool use tracking
-    seenToolUseCountRef,
 
     // Throttle control refs
     contentUpdateTimeoutRef,
@@ -497,7 +317,6 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
     // Helper functions
     findLastAssistantIndex,
     extractRawBlocks,
-    buildStreamingBlocks,
     getOrCreateStreamingAssistantIndex,
     patchAssistantForStreaming,
 

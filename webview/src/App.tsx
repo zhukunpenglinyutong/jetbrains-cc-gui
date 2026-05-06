@@ -146,10 +146,8 @@ const App = () => {
 
   // ── Streaming messages ──
   const {
-    streamingContentRef, isStreamingRef, useBackendStreamingRenderRef,
-    streamingMessageIndexRef, streamingTextSegmentsRef, activeTextSegmentIndexRef,
-    streamingThinkingSegmentsRef, activeThinkingSegmentIndexRef,
-    seenToolUseCountRef, contentUpdateTimeoutRef, thinkingUpdateTimeoutRef,
+    streamingContentRef, streamingThinkingRef, isStreamingRef, useBackendStreamingRenderRef,
+    streamingMessageIndexRef, contentUpdateTimeoutRef, thinkingUpdateTimeoutRef,
     lastContentUpdateRef, lastThinkingUpdateRef, autoExpandedThinkingKeysRef,
     streamingTurnIdRef, turnIdCounterRef,
     findLastAssistantIndex, extractRawBlocks,
@@ -253,11 +251,9 @@ const App = () => {
     setSubagentHistories,
     currentProviderRef, messagesContainerRef, isUserAtBottomRef, userPausedRef,
     suppressNextStatusToastRef,
-    streamingContentRef, isStreamingRef, useBackendStreamingRenderRef,
+    streamingContentRef, streamingThinkingRef, isStreamingRef, useBackendStreamingRenderRef,
     autoExpandedThinkingKeysRef,
-    streamingTextSegmentsRef, activeTextSegmentIndexRef,
-    streamingThinkingSegmentsRef, activeThinkingSegmentIndexRef,
-    seenToolUseCountRef, streamingMessageIndexRef,
+    streamingMessageIndexRef,
     streamingTurnIdRef, turnIdCounterRef,
     lastContentUpdateRef, contentUpdateTimeoutRef,
     lastThinkingUpdateRef, thinkingUpdateTimeoutRef,
