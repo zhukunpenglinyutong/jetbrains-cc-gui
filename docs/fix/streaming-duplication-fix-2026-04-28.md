@@ -2,13 +2,50 @@
 
 **初版日期**: 2026-04-28  
 **修正日期**: 2026-04-29  
+**第三轮修正日期**: 2026-05-05  
 **版本**: v0.4.1  
-**状态**: 阶段 1 已完成且**对 daemon mode 用户生效**；2026-04-29 追加修复第三方 Claude-compatible 模型（MiniMax / GLM / Mimo 等）更易触发的累计 delta 问题；前端 `reconcile race` 仍作为放大因素保留跟踪
+**状态**: 阶段 1 已完成且**对 daemon mode 用户生效**；2026-04-29 追加修复第三方 Claude-compatible 模型（MiniMax / GLM / Mimo 等）更易触发的累计 delta 问题；2026-05-05 修复 normalizer fall-through 路径在快照修正场景下的整段 duplicate 输出；前端 `reconcile race` 仍作为放大因素保留跟踪
 **初版 Commit**: ddaa590
 
 ---
 
-## ✅ 2026-04-29 二次复盘：第三方模型累计 delta（本轮修复）
+## ✅ 2026-05-05 第三轮修复：normalizer 快照修正路径（本轮修复）
+
+用户在使用 `mimo-v2.5-pro` 等模型时再次反馈：thinking 内容被完整复制一次显示。截图最关键的特征是分隔位置的字符无缝拼接（如 `"Let me implementNow I can see..."`，没有任何空格），证明这是后端字符串硬拼接，不是前端渲染重复。
+
+### 根因
+
+`ai-bridge/services/claude/stream-delta-normalizer.js` 的 `computeNovelDelta` 在三个分支之外存在第四个 fall-through 分支：
+
+```js
+return { novel: incoming, next: previous + incoming };
+```
+
+这条分支假设 `incoming` 是纯粹的增量片段。该假设对 Anthropic 标准 SDK 成立，但对 mimo / GLM / MiniMax 这类**已经在累计快照模式下偶尔发出修正快照的 provider**不成立——例如某次 delta 把上一次的 `"actual"` 修正为 `"actuall"`，结果两边既不互为前缀也不互为后缀，于是 normalizer 把整条修正快照当新增量再发一次，前端 segment 直接 `+= 整段`，UI 看到完整的复制。
+
+### 改动
+
+1. 在 turnState 上新增 `blockStreamModeByKey: Map`，按 `(kind, blockIndex)` 跟踪每个 block 是 `incremental` 还是 `snapshot` 模式。
+2. 一旦某个 block 命中过 `incoming.startsWith(previous)`（确认累计快照），立即锁定为 `snapshot` 模式。assistant 快照如果同样满足前缀延伸关系，也会触发锁定（防止只发一次大块的场景漏检）。
+3. fall-through 分支前先看模式：`snapshot` 模式下 silent absorb 修正快照（不再回灌前端）；`incremental` 模式（默认）保持 Anthropic 标准的增量行为。
+4. 顺手补上 `previous.startsWith(incoming)` 检测，覆盖 incoming 是 previous 真前缀的陈旧重放场景。
+
+### 验证
+
+- ✅ 新增回归测试 `processStreamEvent: snapshot-mode block absorbs corrective rewrites without duplication` 在修复前精确复现 bug（断言断在 `Let me implementNow I can see` 拼接边界），修复后通过。
+- ✅ 新增回归测试 `processStreamEvent: incremental-mode block keeps appending novel deltas` 验证 Anthropic 标准路径未受影响。
+- ✅ `node --test ai-bridge/services/claude/stream-event-processor.test.js`：17/17 通过。
+- ✅ `node --test ai-bridge/services/claude/stream-event-processor.test.js services/claude/persistent-query-service.test.mjs services/claude/persistent-query-service.helpers.test.mjs services/claude/session-service.test.mjs`：33/33 通过。
+- ✅ `cd webview && npx vitest run`：333/333 通过。
+
+### 核心文件
+
+- `ai-bridge/services/claude/stream-delta-normalizer.js`（重写 `computeNovelDelta` + 新增 mode tracking + 在 `rememberStreamSnapshot` 中也锁定 snapshot 模式）
+- `ai-bridge/services/claude/stream-event-processor.test.js`（新增 2 个回归测试）
+
+---
+
+## ✅ 2026-04-29 二次复盘：第三方模型累计 delta
 
 用户补充新规律：Claude Code 官方模型基本不出现，但 MiniMax、GLM、Mimo 等 Claude-compatible 模型特别容易在“正常短 thinking → 超长历史 thinking → 正常短 thinking”之间反复切换。
 

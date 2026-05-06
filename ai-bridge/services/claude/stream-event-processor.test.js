@@ -360,3 +360,130 @@ test('processStreamEvent: cumulative thinking deltas are tracked per block index
   assert.match(deltaLines[2], /" Continue\."/);
   assert.equal(state.lastThinkingContent, 'Plan step one.Plan step two. Continue.');
 });
+
+test('processStreamEvent: snapshot-mode block absorbs corrective rewrites without duplication', () => {
+  // Reproduces the duplication observed with mimo-v2.5-pro / GLM / MiniMax: once
+  // the provider has confirmed cumulative-snapshot mode (via a startsWith match),
+  // a later snapshot that diverges from the accumulated value mid-string (a partial
+  // rewrite, typo correction, or token re-translation) must NOT be re-emitted as
+  // a fresh delta — that would visibly double every character before the
+  // divergence point in the UI.
+  const state = makeTurnState(true);
+
+  const captured = captureStdout(() => {
+    // Delta 1: bootstrap the block
+    processStreamEvent(
+      {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'thinking_delta', thinking: 'Now I can see' },
+        },
+      },
+      state
+    );
+    // Delta 2: cumulative snapshot extending delta 1 — confirms snapshot mode
+    processStreamEvent(
+      {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'thinking_delta', thinking: 'Now I can see the actual code. Let me implement' },
+        },
+      },
+      state
+    );
+    // Delta 3: corrective rewrite — model changed an earlier word (e.g. "actual" →
+    // "actuall" with a typo, or paraphrased mid-block).  Neither startsWith nor
+    // endsWith matches, so the legacy fall-through emits the entire string.
+    // After our fix this branch must absorb the rewrite silently.
+    processStreamEvent(
+      {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          index: 0,
+          delta: {
+            type: 'thinking_delta',
+            thinking: 'Now I can see the actuall code. Let me implement the changes.',
+          },
+        },
+      },
+      state
+    );
+  });
+
+  const deltaLines = tagLines(captured, '[THINKING_DELTA]');
+  const totalEmitted = deltaLines
+    .map((line) => JSON.parse(line.replace(/^\[THINKING_DELTA\]\s+/, '').trim()))
+    .join('');
+
+  // Pre-fix output would be:
+  //   "Now I can see"
+  // + " the actual code. Let me implement"
+  // + "Now I can see the actuall code. Let me implement the changes."  ← duplicates!
+  // After fix the corrective snapshot is absorbed silently and the front-end keeps
+  // the longest non-divergent prefix it already accumulated.
+  assert.ok(
+    !totalEmitted.includes('Now I can seeNow I can see'),
+    'Snapshot rewrite must not double the block content. Emitted: ' + JSON.stringify(totalEmitted),
+  );
+  assert.ok(
+    !totalEmitted.includes('Let me implementNow I can see'),
+    'Snapshot rewrite must not splice duplicated content (boundary signature). Emitted: ' + JSON.stringify(totalEmitted),
+  );
+});
+
+test('processStreamEvent: incremental-mode block keeps appending novel deltas', () => {
+  // Anthropic-standard providers send genuine incremental fragments where
+  // each delta is shorter than the cumulative content.  These must continue
+  // to flow through the fall-through path unchanged after the snapshot-mode
+  // detection is added.
+  const state = makeTurnState(true);
+
+  const captured = captureStdout(() => {
+    processStreamEvent(
+      {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'text_delta', text: 'Hello' },
+        },
+      },
+      state
+    );
+    processStreamEvent(
+      {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'text_delta', text: ' world' },
+        },
+      },
+      state
+    );
+    processStreamEvent(
+      {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'text_delta', text: '!' },
+        },
+      },
+      state
+    );
+  });
+
+  const deltaLines = tagLines(captured, '[CONTENT_DELTA]');
+
+  assert.equal(deltaLines.length, 3, 'each incremental fragment should emit');
+  assert.match(deltaLines[0], /"Hello"/);
+  assert.match(deltaLines[1], /" world"/);
+  assert.match(deltaLines[2], /"!"/);
+  assert.equal(state.lastAssistantContent, 'Hello world!');
+});
