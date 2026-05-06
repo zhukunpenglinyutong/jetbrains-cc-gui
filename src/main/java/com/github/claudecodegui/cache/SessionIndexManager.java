@@ -27,7 +27,9 @@ public class SessionIndexManager {
     private static final String CLAUDE_INDEX_FILE = "claude-session-index.json";
     private static final String CODEX_INDEX_FILE = "codex-session-index.json";
     private static final int INDEX_REPLACE_MAX_ATTEMPTS = 5;
-    private static final long INDEX_REPLACE_RETRY_DELAY_MS = 50L;
+    // Linear backoff base. Sleeps happen while holding indexFileLock, so keep the worst-case
+    // total (sum 1..N-1 * base) within ~100ms to avoid blocking concurrent index reads/writes.
+    private static final long INDEX_REPLACE_RETRY_DELAY_MS = 10L;
 
     // v3 (2026-04): SessionIndexEntry.fileLastModified now populated and used by incremental
     // scan for mtime-driven re-read of already indexed sessions. Bumping forces rebuild of any

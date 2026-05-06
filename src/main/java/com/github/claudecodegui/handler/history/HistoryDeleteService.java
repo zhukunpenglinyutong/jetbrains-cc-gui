@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -33,6 +34,14 @@ class HistoryDeleteService {
 
     private static final Logger LOG = Logger.getInstance(HistoryDeleteService.class);
     private static final Gson GSON = new Gson();
+
+    // Reject anything outside [A-Za-z0-9._-] to defeat path-traversal payloads such as "../foo"
+    // before they reach Path.resolve. Session IDs in both providers are alphanumeric/UUID style.
+    private static final Pattern SESSION_ID_PATTERN = Pattern.compile("^[A-Za-z0-9._-]+$");
+
+    static boolean isValidSessionId(String sessionId) {
+        return sessionId != null && SESSION_ID_PATTERN.matcher(sessionId).matches();
+    }
 
     private final HandlerContext context;
     private final NodeJsServiceCaller nodeJsServiceCaller;
@@ -49,6 +58,10 @@ class HistoryDeleteService {
      * Deletes the .jsonl file for the specified sessionId and related agent-xxx.jsonl files.
      */
     void handleDeleteSession(String sessionId, String currentProvider) {
+        if (!isValidSessionId(sessionId)) {
+            LOG.warn("[HistoryHandler] 删除会话失败: 非法 sessionId 已拒绝");
+            return;
+        }
         CompletableFuture.runAsync(() -> {
             try {
                 LOG.info("[HistoryHandler] ========== 开始删除会话 ==========");
@@ -146,13 +159,22 @@ class HistoryDeleteService {
             }
 
             String sessionId = element.getAsString().trim();
-            if (!sessionId.isEmpty()) {
-                sessionIds.add(sessionId);
+            if (sessionId.isEmpty()) {
+                continue;
             }
+            if (!isValidSessionId(sessionId)) {
+                LOG.warn("[HistoryHandler] 批量删除会话忽略非法 sessionId");
+                continue;
+            }
+            sessionIds.add(sessionId);
         }
     }
 
     private DeleteResult deleteSessionFiles(String sessionId, String currentProvider) throws java.io.IOException {
+        if (!isValidSessionId(sessionId)) {
+            LOG.warn("[HistoryHandler] 删除会话失败: 非法 sessionId 已拒绝");
+            return new DeleteResult(false, 0);
+        }
         if ("codex".equals(currentProvider)) {
             return new DeleteResult(deleteCodexSession(sessionId), 0);
         }
@@ -223,7 +245,11 @@ class HistoryDeleteService {
         int agentFilesDeleted = 0;
 
         // Delete main session file
-        Path mainSessionFile = sessionDir.resolve(sessionId + ".jsonl");
+        Path mainSessionFile = sessionDir.resolve(sessionId + ".jsonl").normalize();
+        if (!mainSessionFile.startsWith(sessionDir.normalize())) {
+            LOG.warn("[HistoryHandler] 拒绝越界路径: " + mainSessionFile);
+            return new int[]{0, 0};
+        }
         if (Files.exists(mainSessionFile)) {
             Files.delete(mainSessionFile);
             LOG.info("[HistoryHandler] 已删除主会话文件: " + mainSessionFile.getFileName());

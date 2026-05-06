@@ -356,82 +356,100 @@ public class CodexMessageHandler implements MessageCallback {
      * @since 1.0.0
      */
     private Message parseServerMessage(com.google.gson.JsonObject msg, Message.Type messageType) {
-        // Filter out isMeta messages (e.g., "Caveat: The messages below were generated...")
-        if (msg.has("isMeta") && msg.get("isMeta").getAsBoolean()) {
+        if (isMetaMessage(msg)) {
+            return null;
+        }
+        if (isFilteredCommandMessage(msg, messageType)) {
             return null;
         }
 
-        // Filter out command messages (containing <command-name> or <local-command-stdout> tags)
-        if (msg.has("message") && msg.get("message").isJsonObject()) {
-            com.google.gson.JsonObject message = msg.getAsJsonObject("message");
-            if (message.has("content")) {
-                com.google.gson.JsonElement contentElement = message.get("content");
-                String contentStr = null;
-
-                if (contentElement.isJsonPrimitive()) {
-                    contentStr = contentElement.getAsString();
-                } else if (contentElement.isJsonArray()) {
-                    // Check text content in the array
-                    com.google.gson.JsonArray contentArray = contentElement.getAsJsonArray();
-                    for (int i = 0; i < contentArray.size(); i++) {
-                        com.google.gson.JsonElement element = contentArray.get(i);
-                        if (element.isJsonObject()) {
-                            com.google.gson.JsonObject block = element.getAsJsonObject();
-                            if (block.has("type") && "text".equals(block.get("type").getAsString()) &&
-                                block.has("text")) {
-                                contentStr = block.get("text").getAsString();
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                // Filter out content with command tags (allow user input containing <command-message>).
-                // Codex prepends internal instruction blocks to user messages; strip them before
-                // checking command tags so those hidden blocks do not hide the actual user input.
-                if (contentStr != null) {
-                    String filterContent = messageType == Message.Type.USER
-                        ? CodexMessageConverter.stripSystemTags(contentStr)
-                        : contentStr;
-                    boolean hasCommandMessage = contentStr.contains("<command-message>") &&
-                        contentStr.contains("</command-message>");
-                    if (!hasCommandMessage && (
-                        filterContent.contains("<command-name>") ||
-                        filterContent.contains("<local-command-stdout>") ||
-                        filterContent.contains("<local-command-stderr>") ||
-                        filterContent.contains("<command-args>")
-                    )) {
-                        return null;
-                    }
-                }
-            }
-        }
-
         String content = extractMessageContent(msg);
-
-        // Special handling for user messages: preserve tool_result even if content is empty,
-        // and remove hidden Codex instruction tags from ordinary user input.
         if (messageType == Message.Type.USER) {
-            boolean hasToolResult = containsToolResult(msg);
-            if (!hasToolResult) {
-                content = CodexMessageConverter.stripSystemTags(content);
-                if (content != null && !content.trim().isEmpty()) {
-                    rewriteUserRawContent(msg, content);
-                }
-            }
-            if (content == null || content.trim().isEmpty()) {
-                // Check if it contains a tool_result
-                if (hasToolResult) {
-                    Message result = new Message(Message.Type.USER, "[tool_result]");
-                    result.raw = msg;
-                    return result;
-                }
-                return null;
-            }
+            return buildUserMessage(msg, content);
         }
 
-        // Create message and preserve the original JSON
         Message result = new Message(messageType, content != null ? content : "");
+        result.raw = msg;
+        return result;
+    }
+
+    private boolean isMetaMessage(com.google.gson.JsonObject msg) {
+        return msg.has("isMeta") && msg.get("isMeta").getAsBoolean();
+    }
+
+    /**
+     * Detect Codex internal command messages that must not be shown to the user.
+     * Codex prepends instruction blocks to user input; strip them before checking command tags
+     * so those hidden blocks do not mask the user's real message.
+     */
+    private boolean isFilteredCommandMessage(com.google.gson.JsonObject msg, Message.Type messageType) {
+        if (!msg.has("message") || !msg.get("message").isJsonObject()) {
+            return false;
+        }
+        com.google.gson.JsonObject message = msg.getAsJsonObject("message");
+        if (!message.has("content")) {
+            return false;
+        }
+
+        String contentStr = extractFirstTextContent(message.get("content"));
+        if (contentStr == null) {
+            return false;
+        }
+
+        String filterContent = messageType == Message.Type.USER
+            ? CodexMessageConverter.stripSystemTags(contentStr)
+            : contentStr;
+        boolean hasCommandMessage = contentStr.contains("<command-message>")
+            && contentStr.contains("</command-message>");
+        if (hasCommandMessage) {
+            return false;
+        }
+        return filterContent.contains("<command-name>")
+            || filterContent.contains("<local-command-stdout>")
+            || filterContent.contains("<local-command-stderr>")
+            || filterContent.contains("<command-args>");
+    }
+
+    private String extractFirstTextContent(com.google.gson.JsonElement contentElement) {
+        if (contentElement.isJsonPrimitive()) {
+            return contentElement.getAsString();
+        }
+        if (!contentElement.isJsonArray()) {
+            return null;
+        }
+        com.google.gson.JsonArray contentArray = contentElement.getAsJsonArray();
+        for (int i = 0; i < contentArray.size(); i++) {
+            com.google.gson.JsonElement element = contentArray.get(i);
+            if (!element.isJsonObject()) {
+                continue;
+            }
+            com.google.gson.JsonObject block = element.getAsJsonObject();
+            if (block.has("type") && "text".equals(block.get("type").getAsString())
+                && block.has("text")) {
+                return block.get("text").getAsString();
+            }
+        }
+        return null;
+    }
+
+    private Message buildUserMessage(com.google.gson.JsonObject msg, String content) {
+        boolean hasToolResult = containsToolResult(msg);
+        if (!hasToolResult) {
+            content = CodexMessageConverter.stripSystemTags(content);
+            if (content != null && !content.trim().isEmpty()) {
+                rewriteUserRawContent(msg, content);
+            }
+        }
+        if (content == null || content.trim().isEmpty()) {
+            if (hasToolResult) {
+                Message result = new Message(Message.Type.USER, "[tool_result]");
+                result.raw = msg;
+                return result;
+            }
+            return null;
+        }
+
+        Message result = new Message(Message.Type.USER, content);
         result.raw = msg;
         return result;
     }

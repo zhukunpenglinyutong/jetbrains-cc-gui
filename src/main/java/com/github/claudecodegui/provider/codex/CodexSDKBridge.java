@@ -167,8 +167,10 @@ public class CodexSDKBridge extends BaseSDKBridge {
     private String decodeJsonStringPayload(String rawPayload) {
         String jsonStr = rawPayload.startsWith(" ") ? rawPayload.substring(1) : rawPayload;
         try {
-            return gson.fromJson(jsonStr, String.class);
-        } catch (Exception ignored) {
+            String decoded = gson.fromJson(jsonStr, String.class);
+            return decoded != null ? decoded : "";
+        } catch (Exception e) {
+            LOG.warn("[CodexSDKBridge] Failed to decode JSON string payload, falling back to raw: " + e.getMessage());
             return jsonStr;
         }
     }
