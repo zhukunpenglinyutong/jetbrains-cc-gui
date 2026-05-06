@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type RefObject } from 'react';
 import type { ClaudeMessage, ToolResultBlock } from '../types';
+import { debugLog } from '../utils/debug';
 
 export interface UseFileChangesManagementOptions {
   currentSessionId: string | null;
@@ -137,7 +138,7 @@ export function useFileChangesManagement({
 
         if (action === 'APPLY' || action === 'REJECT') {
           addFileToProcessed(filePath);
-          console.log(`[InteractiveDiff] ${action} changes to:`, filePath);
+          debugLog(`[InteractiveDiff] ${action} changes to:`, filePath);
         }
       } catch {
         // JSON parse failed, ignore
