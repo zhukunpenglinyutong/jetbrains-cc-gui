@@ -179,6 +179,11 @@ public class WebviewInitializer {
             host.setBrowser(browser);
             host.getHandlerContext().setBrowser(browser);
 
+            browser.getJBCefClient().addRequestHandler(
+                    new UiFontResourceRequestHandler(),
+                    browser.getCefBrowser()
+            );
+
             JBCefBrowserBase browserBase = browser;
             JBCefJSQuery jsQuery = JBCefJSQuery.create(browserBase);
             jsQuery.addHandler((msg) -> {

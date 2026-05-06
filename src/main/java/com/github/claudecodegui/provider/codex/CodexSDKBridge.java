@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
+import com.github.claudecodegui.handler.history.HistoryMessageInjector;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
@@ -22,6 +23,8 @@ import java.util.List;
 import java.util.Map;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Codex SDK bridge.
@@ -77,8 +80,8 @@ public class CodexSDKBridge extends BaseSDKBridge {
             MessageCallback callback,
             SDKResult result,
             StringBuilder assistantContent,
-            boolean[] hadSendError,
-            String[] lastNodeError
+            AtomicBoolean hadSendError,
+            AtomicReference<String> lastNodeError
     ) {
         if (line.contains("[DEBUG]")) {
             LOG.debug("[Codex] " + line);
@@ -86,6 +89,10 @@ public class CodexSDKBridge extends BaseSDKBridge {
 
         if (line.startsWith("[MESSAGE_START]")) {
             callback.onMessage("message_start", "");
+        } else if (line.startsWith("[STREAM_START]")) {
+            callback.onMessage("stream_start", "");
+        } else if (line.startsWith("[STREAM_END]")) {
+            callback.onMessage("stream_end", "");
         } else if (line.startsWith("[MESSAGE_END]")) {
             callback.onMessage("message_end", "");
         } else if (line.startsWith("[THREAD_ID]")) {
@@ -129,9 +136,12 @@ public class CodexSDKBridge extends BaseSDKBridge {
             } catch (Exception ignored) {
             }
         } else if (line.startsWith("[CONTENT_DELTA]")) {
-            String delta = line.substring("[CONTENT_DELTA]".length()).trim();
+            String delta = decodeJsonStringPayload(line.substring("[CONTENT_DELTA]".length()));
             assistantContent.append(delta);
             callback.onMessage("content_delta", delta);
+        } else if (line.startsWith("[THINKING_DELTA]")) {
+            String delta = decodeJsonStringPayload(line.substring("[THINKING_DELTA]".length()));
+            callback.onMessage("thinking_delta", delta);
         } else if (line.startsWith("[CONTENT]")) {
             String content = line.substring("[CONTENT]".length()).trim();
             // Avoid duplicate
@@ -149,10 +159,21 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 }
             } catch (Exception ignored) {
             }
-            hadSendError[0] = true;
+            hadSendError.set(true);
             result.success = false;
             result.error = errorMessage;
             callback.onError(errorMessage);
+        }
+    }
+
+    private String decodeJsonStringPayload(String rawPayload) {
+        String jsonStr = rawPayload.startsWith(" ") ? rawPayload.substring(1) : rawPayload;
+        try {
+            String decoded = gson.fromJson(jsonStr, String.class);
+            return decoded != null ? decoded : "";
+        } catch (Exception e) {
+            LOG.warn("[CodexSDKBridge] Failed to decode JSON string payload, falling back to raw: " + e.getMessage());
+            return jsonStr;
         }
     }
 
@@ -255,8 +276,8 @@ public class CodexSDKBridge extends BaseSDKBridge {
         return CompletableFuture.supplyAsync(() -> {
             SDKResult result = new SDKResult();
             StringBuilder assistantContent = new StringBuilder();
-            final String[] lastNodeError = {null};
-            final boolean[] hadSendError = {false};
+            AtomicReference<String> lastNodeError = new AtomicReference<>(null);
+            AtomicBoolean hadSendError = new AtomicBoolean(false);
             final List<File> tempImageFiles = new ArrayList<>();  // Track temp images for cleanup
 
             try {
@@ -430,7 +451,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                                     || line.startsWith("[UNHANDLED_REJECTION]")
                                     || line.startsWith("[COMMAND_ERROR]")) {
                                 LOG.warn("[Node.js ERROR] " + line);
-                                lastNodeError[0] = line;
+                                lastNodeError.set(line);
                             }
                             processOutputLine(line, callback, result, assistantContent, hadSendError, lastNodeError);
                         }
@@ -448,14 +469,15 @@ public class CodexSDKBridge extends BaseSDKBridge {
                         result.success = false;
                         result.error = "User interrupted";
                         callback.onComplete(result);
-                    } else if (!hadSendError[0]) {
+                    } else if (!hadSendError.get()) {
                         result.success = exitCode == 0;
                         if (result.success) {
                             callback.onComplete(result);
                         } else {
                             String errorMsg = "Codex process exited with code: " + exitCode;
-                            if (lastNodeError[0] != null && !lastNodeError[0].isEmpty()) {
-                                errorMsg = errorMsg + " | Last error: " + lastNodeError[0];
+                            String nodeErr = lastNodeError.get();
+                            if (nodeErr != null && !nodeErr.isEmpty()) {
+                                errorMsg = errorMsg + " | Last error: " + nodeErr;
                             }
                             result.error = errorMsg;
                             callback.onError(errorMsg);
@@ -483,176 +505,17 @@ public class CodexSDKBridge extends BaseSDKBridge {
      * Get persisted Codex session history messages.
      */
     public List<JsonObject> getSessionMessages(String sessionId, String cwd) {
-        List<JsonObject> messages = new ArrayList<>();
         try {
             String rawMessages = historyReader.getSessionMessagesAsJson(sessionId);
             JsonArray historyItems = gson.fromJson(rawMessages, JsonArray.class);
             if (historyItems == null) {
-                return messages;
+                return List.of();
             }
-
-            for (JsonElement item : historyItems) {
-                if (!item.isJsonObject()) {
-                    continue;
-                }
-                JsonObject normalized = normalizeHistoryItem(item.getAsJsonObject());
-                if (normalized != null) {
-                    messages.add(normalized);
-                }
-            }
+            return HistoryMessageInjector.convertCodexMessagesToFrontendBatch(historyItems);
         } catch (Exception e) {
             LOG.warn("Failed to load Codex session history: " + e.getMessage(), e);
+            return List.of();
         }
-        return messages;
-    }
-
-    private JsonObject normalizeHistoryItem(JsonObject item) {
-        String type = item.has("type") && !item.get("type").isJsonNull()
-                ? item.get("type").getAsString() : null;
-        JsonObject payload = item.has("payload") && item.get("payload").isJsonObject()
-                ? item.getAsJsonObject("payload") : null;
-        if (payload == null) {
-            return null;
-        }
-
-        if ("event_msg".equals(type)) {
-            return normalizeEventMessage(payload, item);
-        }
-        if ("response_item".equals(type)) {
-            return normalizeResponseItem(payload, item);
-        }
-        return null;
-    }
-
-    private JsonObject normalizeEventMessage(JsonObject payload, JsonObject rawItem) {
-        if (!payload.has("type") || !"user_message".equals(payload.get("type").getAsString())) {
-            return null;
-        }
-        if (!payload.has("message") || payload.get("message").isJsonNull()) {
-            return null;
-        }
-        JsonObject message = new JsonObject();
-        message.addProperty("type", "user");
-        message.addProperty("content", payload.get("message").getAsString());
-        message.add("rawCodex", rawItem);
-        return message;
-    }
-
-    private JsonObject normalizeResponseItem(JsonObject payload, JsonObject rawItem) {
-        if (!payload.has("type") || payload.get("type").isJsonNull()) {
-            return null;
-        }
-        String payloadType = payload.get("type").getAsString();
-        if ("message".equals(payloadType)) {
-            return normalizeAssistantMessage(payload, rawItem);
-        }
-        if ("function_call".equals(payloadType)) {
-            return normalizeFunctionCall(payload, rawItem);
-        }
-        if ("function_call_output".equals(payloadType)) {
-            return normalizeFunctionCallOutput(payload, rawItem);
-        }
-        return null;
-    }
-
-    private JsonObject normalizeAssistantMessage(JsonObject payload, JsonObject rawItem) {
-        JsonObject message = new JsonObject();
-        message.addProperty("type", "assistant");
-        message.addProperty("content", extractCodexHistoryAssistantText(payload));
-        message.add("rawCodex", rawItem);
-        return message;
-    }
-
-    private String extractCodexHistoryAssistantText(JsonObject payload) {
-        if (!payload.has("content") || payload.get("content").isJsonNull()) {
-            return "";
-        }
-        JsonElement content = payload.get("content");
-        if (content.isJsonPrimitive()) {
-            return content.getAsString();
-        }
-        if (!content.isJsonArray()) {
-            return "";
-        }
-
-        StringBuilder text = new StringBuilder();
-        for (JsonElement element : content.getAsJsonArray()) {
-            if (!element.isJsonObject()) {
-                continue;
-            }
-            JsonObject block = element.getAsJsonObject();
-            if (!block.has("type") || block.get("type").isJsonNull()) {
-                continue;
-            }
-            String blockType = block.get("type").getAsString();
-            if (("text".equals(blockType) || "output_text".equals(blockType))
-                    && block.has("text") && !block.get("text").isJsonNull()) {
-                if (text.length() > 0) {
-                    text.append("\n");
-                }
-                text.append(block.get("text").getAsString());
-            }
-        }
-        return text.toString();
-    }
-
-    private JsonObject normalizeFunctionCall(JsonObject payload, JsonObject rawItem) {
-        JsonObject toolUse = new JsonObject();
-        toolUse.addProperty("type", "tool_use");
-        if (payload.has("call_id") && !payload.get("call_id").isJsonNull()) {
-            toolUse.addProperty("id", payload.get("call_id").getAsString());
-        }
-        if (payload.has("name") && !payload.get("name").isJsonNull()) {
-            toolUse.addProperty("name", payload.get("name").getAsString());
-        }
-        toolUse.add("input", parseArguments(payload));
-
-        JsonObject message = new JsonObject();
-        message.addProperty("type", "assistant");
-        JsonArray content = new JsonArray();
-        content.add(toolUse);
-        message.add("content", content);
-        message.add("rawCodex", rawItem);
-        return message;
-    }
-
-    private JsonObject normalizeFunctionCallOutput(JsonObject payload, JsonObject rawItem) {
-        JsonObject toolResult = new JsonObject();
-        toolResult.addProperty("type", "tool_result");
-        if (payload.has("call_id") && !payload.get("call_id").isJsonNull()) {
-            toolResult.addProperty("tool_use_id", payload.get("call_id").getAsString());
-        }
-        if (payload.has("output") && !payload.get("output").isJsonNull()) {
-            toolResult.addProperty("content", payload.get("output").getAsString());
-        }
-
-        JsonObject message = new JsonObject();
-        message.addProperty("type", "user");
-        JsonArray content = new JsonArray();
-        content.add(toolResult);
-        message.add("content", content);
-        message.add("rawCodex", rawItem);
-        return message;
-    }
-
-    private JsonObject parseArguments(JsonObject payload) {
-        if (!payload.has("arguments") || payload.get("arguments").isJsonNull()) {
-            return new JsonObject();
-        }
-        JsonElement arguments = payload.get("arguments");
-        if (arguments.isJsonObject()) {
-            return arguments.getAsJsonObject();
-        }
-        if (arguments.isJsonPrimitive()) {
-            try {
-                JsonElement parsed = gson.fromJson(arguments.getAsString(), JsonElement.class);
-                if (parsed != null && parsed.isJsonObject()) {
-                    return parsed.getAsJsonObject();
-                }
-            } catch (Exception ignored) {
-            }
-        }
-        return new JsonObject();
     }
 
     /**
@@ -705,33 +568,33 @@ public class CodexSDKBridge extends BaseSDKBridge {
                     stdin.flush();
                 }
 
-                final boolean[] found = {false};
-                final boolean[] readerDone = {false};
-                final String[] toolsJson = {null};
+                AtomicBoolean found = new AtomicBoolean(false);
+                AtomicBoolean readerDone = new AtomicBoolean(false);
+                AtomicReference<String> toolsJson = new AtomicReference<>(null);
                 final StringBuilder output = new StringBuilder();
 
                 Thread readerThread = new Thread(() -> {
                     try (BufferedReader reader = new BufferedReader(
                             new InputStreamReader(finalProcess.getInputStream(), StandardCharsets.UTF_8))) {
                         String line;
-                        while (!found[0] && (line = reader.readLine()) != null) {
+                        while (!found.get() && (line = reader.readLine()) != null) {
                             output.append(line).append("\n");
                             if (line.startsWith("[MCP_SERVER_TOOLS]")) {
-                                toolsJson[0] = line.substring("[MCP_SERVER_TOOLS]".length()).trim();
-                                found[0] = true;
+                                toolsJson.set(line.substring("[MCP_SERVER_TOOLS]".length()).trim());
+                                found.set(true);
                                 break;
                             }
                         }
                     } catch (Exception e) {
                         LOG.debug("[CodexMcpTools] Reader thread exception: " + e.getMessage());
                     } finally {
-                        readerDone[0] = true;
+                        readerDone.set(true);
                     }
                 });
                 readerThread.start();
 
                 long deadline = System.currentTimeMillis() + MCP_TOOLS_TIMEOUT_MS;
-                while (!found[0] && !readerDone[0] && System.currentTimeMillis() < deadline) {
+                while (!found.get() && !readerDone.get() && System.currentTimeMillis() < deadline) {
                     Thread.sleep(100);
                 }
 
@@ -740,9 +603,10 @@ public class CodexSDKBridge extends BaseSDKBridge {
                     PlatformUtils.terminateProcess(process);
                 }
 
-                if (found[0] && toolsJson[0] != null && !toolsJson[0].isEmpty()) {
+                String capturedTools = toolsJson.get();
+                if (found.get() && capturedTools != null && !capturedTools.isEmpty()) {
                     try {
-                        JsonObject result = gson.fromJson(toolsJson[0], JsonObject.class);
+                        JsonObject result = gson.fromJson(capturedTools, JsonObject.class);
                         LOG.info("[CodexMcpTools] Got tools for " + serverId + " in " + elapsed + "ms");
                         return result;
                     } catch (Exception e) {

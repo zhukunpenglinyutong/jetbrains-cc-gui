@@ -267,6 +267,16 @@
     "commit": {
       "title": "Commit AI",
       "description": "Настройка AI-генерации сообщений Git-коммитов",
+      "providerModel": {
+        "label": "Провайдер модели коммитов",
+        "modelLabel": "Модель коммитов",
+        "resetToDefault": "Сбросить",
+        "providerAvailable": "Доступно",
+        "providerUnavailable": "Недоступно",
+        "currentProviderAuto": "Сейчас используется автоматический выбор: {{provider}}",
+        "currentProviderManual": "Сейчас используется выбранный вручную провайдер: {{provider}}",
+        "currentProviderUnavailable": "Выбранный провайдер сейчас недоступен: {{provider}}"
+      },
       "prompt": {
         "label": "Дополнительный промпт",
         "placeholder": "Добавьте дополнительные требования, например, генерировать коммит на английском, включать номер issue и т.д...",
@@ -331,6 +341,12 @@
           "minutesAgo_few": "{{count}} минуты назад",
           "minutesAgo_many": "{{count}} минут назад"
         }
+      },
+      "aiTitleGeneration": {
+        "label": "Автогенерация заголовка сессии ИИ",
+        "enabled": "Включено",
+        "disabled": "Выключено",
+        "hint": "При включении после первой реплики новой сессии будет автоматически сгенерирован короткий заголовок моделью Haiku. При выключении в качестве заголовка остаётся первое сообщение пользователя."
       }
     },
     "codexFeatureUnavailable": "Этот раздел настроек недоступен для Codex. Переключитесь на Claude Code.",
@@ -517,6 +533,7 @@
         "deepseek": "DeepSeek",
         "minimax": "MiniMax",
         "xiaomi": "Xiaomi MiMo",
+        "xiaomiPlan": "Xiaomi MiMo Plan",
         "qwen": "Alibaba Qwen",
         "openrouter": "OpenRouter"
       }
@@ -640,6 +657,16 @@
     "confirmDelete": "Подтвердить удаление",
     "deleteMessage": "Удалить этот чат? Это действие необратимо.",
     "deleteSession": "Удалить чат",
+    "selectMode": "Select",
+    "exitSelectMode": "Exit selection",
+    "selectedSessions": "{{count}} selected",
+    "selectAll": "Select all",
+    "clearSelection": "Clear",
+    "deleteSelected": "Delete selected",
+    "confirmDeleteSelected": "Confirm Delete",
+    "deleteSelectedMessage": "Are you sure you want to delete {{count}} selected sessions? This action cannot be undone.",
+    "selectSession": "Select session",
+    "selectSessionWithTitle": "Select {{title}}",
     "exportSession": "Экспортировать чат",
     "exportSuccess": "Чат экспортирован",
     "exportFailed": "Ошибка экспорта",
@@ -763,6 +790,12 @@
     "clickToCopy": "Нажмите для копирования",
     "switch": "Переключить",
     "switchProvider": "Переключить провайдер",
+    "runtimeProvider": {
+      "title": "Переключить текущий провайдер",
+      "loading": "Загрузка провайдеров...",
+      "empty": "Нет доступных провайдеров",
+      "switched": "Переключено на {{provider}}"
+    },
     "link": "Ссылка"
   },
   "markdown": {

@@ -271,6 +271,12 @@ Thank you for [AtomGit](https://atomgit.com/zhukunpenglinyutong/idea-claude-code
 
 ---
 
+## Acknowledgements
+
+Recently, many bloggers have recommended this project on their own initiative, and I am deeply grateful. Thanks again to bloggers including "沉默的王二", "macrozheng", "JavaGuide", "Java知音", and "程序员青戈" for recommending this project. I will keep iterating to make it more comfortable for everyone to use.
+
+---
+
 ## Star History
 
 [![Star History](https://api.star-history.com/svg?repos=zhukunpenglinyutong/idea-claude-code-gui&type=date&legend=top-left)](https://www.star-history.com/#zhukunpenglinyutong/idea-claude-code-gui&type=date&legend=top-left)

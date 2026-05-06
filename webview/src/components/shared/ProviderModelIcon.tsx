@@ -8,27 +8,41 @@
  * - BlinkingLogo/index.tsx
  * - HistoryView.tsx
  */
-import {
-  Claude,
-  OpenAI,
-  Gemini,
-  Qwen,
-  DeepSeek,
-  Kimi,
-  Moonshot,
-  Zhipu,
-  Minimax,
-  Doubao,
-  Spark,
-  Hunyuan,
-  Baichuan,
-  Mistral,
-  Meta,
-  Cohere,
-  Grok,
-  OpenRouter,
-  Yi,
-} from '@lobehub/icons';
+import ClaudeColor from '@lobehub/icons/es/Claude/components/Color';
+import ClaudeMono from '@lobehub/icons/es/Claude/components/Mono';
+import OpenAIMono from '@lobehub/icons/es/OpenAI/components/Mono';
+import GeminiColor from '@lobehub/icons/es/Gemini/components/Color';
+import GeminiMono from '@lobehub/icons/es/Gemini/components/Mono';
+import QwenColor from '@lobehub/icons/es/Qwen/components/Color';
+import QwenMono from '@lobehub/icons/es/Qwen/components/Mono';
+import DeepSeekColor from '@lobehub/icons/es/DeepSeek/components/Color';
+import DeepSeekMono from '@lobehub/icons/es/DeepSeek/components/Mono';
+import KimiColor from '@lobehub/icons/es/Kimi/components/Color';
+import KimiMono from '@lobehub/icons/es/Kimi/components/Mono';
+import MoonshotMono from '@lobehub/icons/es/Moonshot/components/Mono';
+import ZhipuColor from '@lobehub/icons/es/Zhipu/components/Color';
+import ZhipuMono from '@lobehub/icons/es/Zhipu/components/Mono';
+import MinimaxColor from '@lobehub/icons/es/Minimax/components/Color';
+import MinimaxMono from '@lobehub/icons/es/Minimax/components/Mono';
+import DoubaoColor from '@lobehub/icons/es/Doubao/components/Color';
+import DoubaoMono from '@lobehub/icons/es/Doubao/components/Mono';
+import SparkColor from '@lobehub/icons/es/Spark/components/Color';
+import SparkMono from '@lobehub/icons/es/Spark/components/Mono';
+import HunyuanColor from '@lobehub/icons/es/Hunyuan/components/Color';
+import HunyuanMono from '@lobehub/icons/es/Hunyuan/components/Mono';
+import BaichuanColor from '@lobehub/icons/es/Baichuan/components/Color';
+import BaichuanMono from '@lobehub/icons/es/Baichuan/components/Mono';
+import MistralColor from '@lobehub/icons/es/Mistral/components/Color';
+import MistralMono from '@lobehub/icons/es/Mistral/components/Mono';
+import MetaColor from '@lobehub/icons/es/Meta/components/Color';
+import MetaMono from '@lobehub/icons/es/Meta/components/Mono';
+import CohereColor from '@lobehub/icons/es/Cohere/components/Color';
+import CohereMono from '@lobehub/icons/es/Cohere/components/Mono';
+import GrokMono from '@lobehub/icons/es/Grok/components/Mono';
+import OpenRouterMono from '@lobehub/icons/es/OpenRouter/components/Mono';
+import YiColor from '@lobehub/icons/es/Yi/components/Color';
+import YiMono from '@lobehub/icons/es/Yi/components/Mono';
+import XiaomiMiMoMono from '@lobehub/icons/es/XiaomiMiMo/components/Mono';
 import type { ReactElement } from 'react';
 import { resolveIconVendor, type ModelVendor } from '../../utils/modelIconMapping';
 
@@ -43,55 +57,81 @@ export interface ProviderModelIconProps {
   colored?: boolean;
 }
 
+const XiaomiMiMoIcon = (size: number, colored: boolean): ReactElement => {
+  if (!colored) {
+    return <XiaomiMiMoMono size={size} />;
+  }
+
+  return (
+    <span
+      aria-label="XiaomiMiMo"
+      role="img"
+      style={{
+        alignItems: 'center',
+        background: '#000',
+        borderRadius: Math.max(3, Math.round(size * 0.22)),
+        color: '#fff',
+        display: 'inline-flex',
+        flex: 'none',
+        height: size,
+        justifyContent: 'center',
+        lineHeight: 1,
+        width: size,
+      }}
+    >
+      <XiaomiMiMoMono size={Math.max(1, Math.round(size * 0.72))} />
+    </span>
+  );
+};
+
 /**
  * Icon renderers for each vendor.
  * Returns [coloredVersion, avatarVersion] JSX elements.
- *
- * Note: Some icons (OpenRouter, Moonshot, Grok, OpenAI) do not have a .Color
- * sub-component, so we use .Avatar for both variants.
  */
 const VENDOR_ICON_MAP: Record<
   ModelVendor,
   (size: number, colored: boolean) => ReactElement
 > = {
   claude: (size, colored) =>
-    colored ? <Claude.Color size={size} /> : <Claude.Avatar size={size} />,
+    colored ? <ClaudeColor size={size} /> : <ClaudeMono size={size} />,
   openai: (size, _colored) =>
-    <OpenAI.Avatar size={size} />,
+    <OpenAIMono size={size} />,
   gemini: (size, colored) =>
-    colored ? <Gemini.Color size={size} /> : <Gemini.Avatar size={size} />,
+    colored ? <GeminiColor size={size} /> : <GeminiMono size={size} />,
   qwen: (size, colored) =>
-    colored ? <Qwen.Color size={size} /> : <Qwen.Avatar size={size} />,
+    colored ? <QwenColor size={size} /> : <QwenMono size={size} />,
   deepseek: (size, colored) =>
-    colored ? <DeepSeek.Color size={size} /> : <DeepSeek.Avatar size={size} />,
+    colored ? <DeepSeekColor size={size} /> : <DeepSeekMono size={size} />,
   kimi: (size, colored) =>
-    colored ? <Kimi.Color size={size} /> : <Kimi.Avatar size={size} />,
+    colored ? <KimiColor size={size} /> : <KimiMono size={size} />,
   moonshot: (size, _colored) =>
-    <Moonshot.Avatar size={size} />,
+    <MoonshotMono size={size} />,
   zhipu: (size, colored) =>
-    colored ? <Zhipu.Color size={size} /> : <Zhipu.Avatar size={size} />,
+    colored ? <ZhipuColor size={size} /> : <ZhipuMono size={size} />,
   minimax: (size, colored) =>
-    colored ? <Minimax.Color size={size} /> : <Minimax.Avatar size={size} />,
+    colored ? <MinimaxColor size={size} /> : <MinimaxMono size={size} />,
+  xiaomi: (size, colored) =>
+    XiaomiMiMoIcon(size, colored),
   doubao: (size, colored) =>
-    colored ? <Doubao.Color size={size} /> : <Doubao.Avatar size={size} />,
+    colored ? <DoubaoColor size={size} /> : <DoubaoMono size={size} />,
   spark: (size, colored) =>
-    colored ? <Spark.Color size={size} /> : <Spark.Avatar size={size} />,
+    colored ? <SparkColor size={size} /> : <SparkMono size={size} />,
   hunyuan: (size, colored) =>
-    colored ? <Hunyuan.Color size={size} /> : <Hunyuan.Avatar size={size} />,
+    colored ? <HunyuanColor size={size} /> : <HunyuanMono size={size} />,
   baichuan: (size, colored) =>
-    colored ? <Baichuan.Color size={size} /> : <Baichuan.Avatar size={size} />,
+    colored ? <BaichuanColor size={size} /> : <BaichuanMono size={size} />,
   mistral: (size, colored) =>
-    colored ? <Mistral.Color size={size} /> : <Mistral.Avatar size={size} />,
+    colored ? <MistralColor size={size} /> : <MistralMono size={size} />,
   meta: (size, colored) =>
-    colored ? <Meta.Color size={size} /> : <Meta.Avatar size={size} />,
+    colored ? <MetaColor size={size} /> : <MetaMono size={size} />,
   cohere: (size, colored) =>
-    colored ? <Cohere.Color size={size} /> : <Cohere.Avatar size={size} />,
+    colored ? <CohereColor size={size} /> : <CohereMono size={size} />,
   grok: (size, _colored) =>
-    <Grok.Avatar size={size} />,
+    <GrokMono size={size} />,
   openrouter: (size, _colored) =>
-    <OpenRouter.Avatar size={size} />,
+    <OpenRouterMono size={size} />,
   yi: (size, colored) =>
-    colored ? <Yi.Color size={size} /> : <Yi.Avatar size={size} />,
+    colored ? <YiColor size={size} /> : <YiMono size={size} />,
 };
 
 /**

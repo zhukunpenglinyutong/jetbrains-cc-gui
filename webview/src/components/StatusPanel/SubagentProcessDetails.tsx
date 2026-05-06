@@ -1,3 +1,6 @@
+import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { SubagentHistoryResponse } from '../../types';
 import { buildSubagentProcessModel, formatSubagentDuration } from './subagentProcess';
 
@@ -11,14 +14,14 @@ interface SubagentProcessDetailsProps {
   canLoad: boolean;
 }
 
-function firstMeaningfulLine(text?: string): string | undefined {
+function firstMeaningfulLine(text: string | undefined, t: TFunction): string | undefined {
   if (!text) return undefined;
   const codeFence = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
-  if (codeFence) return 'Structured analysis report generated';
+  if (codeFence) return t('subagent.process.reportGenerated');
   return text.split('\n').map((line) => line.trim()).find(Boolean)?.slice(0, 180);
 }
 
-const SubagentProcessDetails = ({
+const SubagentProcessDetails = memo(function SubagentProcessDetails({
   agentId,
   totalDurationMs,
   totalTokens,
@@ -26,22 +29,26 @@ const SubagentProcessDetails = ({
   resultText,
   history,
   canLoad,
-}: SubagentProcessDetailsProps) => {
-  const duration = formatSubagentDuration(totalDurationMs);
+}: SubagentProcessDetailsProps) {
+  const { t } = useTranslation();
+  const duration = formatSubagentDuration(totalDurationMs, {
+    ms: t('subagent.process.unitMs'),
+    s: t('subagent.process.unitS'),
+  });
   const stats = [
     duration,
-    totalToolUseCount != null ? `${totalToolUseCount} tools` : null,
-    totalTokens != null ? `${totalTokens.toLocaleString()} tokens` : null,
+    totalToolUseCount != null ? `${totalToolUseCount} ${t('subagent.process.unitTools')}` : null,
+    totalTokens != null ? `${totalTokens.toLocaleString()} ${t('subagent.process.unitTokens')}` : null,
   ].filter(Boolean).join(' · ');
   const process = buildSubagentProcessModel(history);
-  const finalSummary = firstMeaningfulLine(resultText);
+  const finalSummary = firstMeaningfulLine(resultText, t);
   const hasContent = process.notes.length > 0 || process.readFiles.length > 0 || process.toolCalls.length > 0 || Boolean(finalSummary);
 
   return (
     <div className="subagent-details subagent-process-card">
       <div className="subagent-process-header">
         <div>
-          <div className="subagent-process-title">Agent process</div>
+          <div className="subagent-process-title">{t('subagent.process.title')}</div>
           {agentId && <div className="subagent-process-subtitle">{agentId}</div>}
         </div>
         {stats && <div className="subagent-process-stats">{stats}</div>}
@@ -55,7 +62,7 @@ const SubagentProcessDetails = ({
             <section className="subagent-process-section">
               <div className="subagent-section-heading">
                 <span className="codicon codicon-comment-discussion" />
-                Thought
+                {t('subagent.process.thought')}
               </div>
               <div className="subagent-note-card">{process.notes[0]}</div>
             </section>
@@ -65,7 +72,7 @@ const SubagentProcessDetails = ({
             <section className="subagent-process-section">
               <div className="subagent-section-heading">
                 <span className="codicon codicon-files" />
-                Read {process.readFiles.length} file{process.readFiles.length > 1 ? 's' : ''}
+                {t('subagent.process.filesRead', { count: process.readFiles.length })}
               </div>
               <div className="subagent-file-grid">
                 {process.readFiles.map((file) => (
@@ -82,7 +89,7 @@ const SubagentProcessDetails = ({
             <section className="subagent-process-section">
               <div className="subagent-section-heading">
                 <span className="codicon codicon-tools" />
-                Other tools
+                {t('subagent.process.otherTools')}
               </div>
               <div className="subagent-tool-list">
                 {process.toolCalls.map((tool) => (
@@ -99,11 +106,11 @@ const SubagentProcessDetails = ({
             <section className="subagent-process-section">
               <div className="subagent-section-heading">
                 <span className="codicon codicon-pass-filled" />
-                Result
+                {t('subagent.process.result')}
               </div>
               <div className="subagent-result-card">{finalSummary}</div>
               <details className="subagent-result">
-                <summary>Show full output</summary>
+                <summary>{t('subagent.process.showFullOutput')}</summary>
                 <pre>{resultText}</pre>
               </details>
             </section>
@@ -112,11 +119,11 @@ const SubagentProcessDetails = ({
       ) : (
         <div className="subagent-loading-card">
           <span className="codicon codicon-loading" />
-          {canLoad ? 'Loading Agent process…' : 'Process log is unavailable until this session has an id.'}
+          {canLoad ? t('subagent.process.loading') : t('subagent.process.unavailable')}
         </div>
       )}
     </div>
   );
-};
+});
 
 export default SubagentProcessDetails;

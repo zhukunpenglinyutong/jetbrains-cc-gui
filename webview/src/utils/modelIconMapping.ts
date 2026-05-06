@@ -19,6 +19,7 @@ export type ModelVendor =
   | 'moonshot'
   | 'zhipu'
   | 'minimax'
+  | 'xiaomi'
   | 'doubao'
   | 'spark'
   | 'hunyuan'
@@ -43,6 +44,7 @@ const MODEL_VENDOR_PATTERNS: ReadonlyArray<readonly [RegExp, ModelVendor]> = [
   [/glm|chatglm/i, 'zhipu'],
   [/zhipu/i, 'zhipu'],
   [/minimax/i, 'minimax'],
+  [/xiaomi|mimo/i, 'xiaomi'],
   [/doubao/i, 'doubao'],
   [/^spark(?:[-\s]|$)/i, 'spark'],
   [/hunyuan/i, 'hunyuan'],
@@ -72,7 +74,7 @@ const PROVIDER_TO_VENDOR: Record<string, ModelVendor> = {
   kimi: 'kimi',
   zhipu: 'zhipu',
   minimax: 'minimax',
-  xiaomi: 'qwen', // Xiaomi MiMo - no dedicated icon, closest is Qwen family
+  xiaomi: 'xiaomi',
   openrouter: 'openrouter',
 };
 

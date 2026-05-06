@@ -1,13 +1,14 @@
 package com.github.claudecodegui.handler.history;
 
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.util.PathUtils;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.github.claudecodegui.util.JsUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.intellij.openapi.application.ApplicationManager;
+import com.google.gson.JsonSyntaxException;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.IOException;
@@ -17,6 +18,7 @@ import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 /**
  * Reads Claude Code sidechain subagent logs for display inside Agent cards.
@@ -26,6 +28,7 @@ class SubagentHistoryService {
     private static final Logger LOG = Logger.getInstance(SubagentHistoryService.class);
     private static final Pattern SAFE_ID = Pattern.compile("[A-Za-z0-9_-]+");
     private static final Gson GSON = new Gson();
+    private static final int MAX_JSONL_LINES = 50_000;
 
     private final HandlerContext context;
 
@@ -158,26 +161,27 @@ class SubagentHistoryService {
         if (basePath == null || basePath.isEmpty()) {
             throw new IllegalStateException("Project base path is null");
         }
-        return basePath.replace('/', '-');
+        return PathUtils.sanitizePath(basePath);
     }
 
     private JsonArray readJsonl(Path file) throws IOException {
         JsonArray messages = new JsonArray();
-        for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
-            String trimmed = line.trim();
-            if (trimmed.isEmpty()) {
-                continue;
-            }
-            messages.add(JsonParser.parseString(trimmed));
+        try (Stream<String> lines = Files.lines(file, StandardCharsets.UTF_8)) {
+            lines.filter(s -> !s.isBlank())
+                    .limit(MAX_JSONL_LINES)
+                    .forEach(line -> {
+                        try {
+                            messages.add(JsonParser.parseString(line));
+                        } catch (JsonSyntaxException e) {
+                            LOG.warn("Skipping malformed JSONL line in subagent history: " + e.getMessage());
+                        }
+                    });
         }
         return messages;
     }
 
     private void sendResponse(JsonObject response) {
         String payload = JsUtils.escapeJs(GSON.toJson(response));
-        ApplicationManager.getApplication().invokeLater(() -> {
-            String jsCode = "if (window.onSubagentHistoryLoaded) { window.onSubagentHistoryLoaded('" + payload + "'); }";
-            context.executeJavaScriptOnEDT(jsCode);
-        });
+        context.callJavaScript("onSubagentHistoryLoaded", payload);
     }
 }

@@ -332,6 +332,33 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
     }
 
     /**
+     * Build a compact, redaction-safe description of the prompt enhancer config
+     * for logging. Avoids dumping the entire JSON (which may include unrelated
+     * availability/resolution metadata).
+     */
+    private static String describePromptEnhancerConfig(JsonObject promptEnhancerConfig) {
+        if (promptEnhancerConfig == null) {
+            return "none";
+        }
+        String provider = null;
+        if (promptEnhancerConfig.has("effectiveProvider")
+                && !promptEnhancerConfig.get("effectiveProvider").isJsonNull()) {
+            provider = promptEnhancerConfig.get("effectiveProvider").getAsString();
+        }
+        String model = null;
+        if (provider != null
+                && promptEnhancerConfig.has("models")
+                && promptEnhancerConfig.get("models").isJsonObject()) {
+            JsonObject models = promptEnhancerConfig.getAsJsonObject("models");
+            if (models.has(provider) && !models.get(provider).isJsonNull()) {
+                model = models.get(provider).getAsString();
+            }
+        }
+        return (provider != null ? provider : "unresolved")
+                + ", model: " + (model != null ? model : "default");
+    }
+
+    /**
      * Call the AI service for prompt enhancement.
      * @param originalPrompt the original prompt
      * @param legacyModel the legacy model to use as a fallback (optional)
@@ -346,7 +373,7 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
     ) {
         LOG.info("[PromptEnhancer] Starting AI service call for prompt enhancement");
         LOG.info("[PromptEnhancer] Original prompt: " + originalPrompt);
-        LOG.info("[PromptEnhancer] Using prompt enhancer config: " + (promptEnhancerConfig != null ? promptEnhancerConfig : "{}"));
+        LOG.info("[PromptEnhancer] Using provider: " + describePromptEnhancerConfig(promptEnhancerConfig));
 
         try {
             // Call AI service using a Node.js script

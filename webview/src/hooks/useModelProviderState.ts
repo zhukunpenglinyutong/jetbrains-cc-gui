@@ -33,8 +33,8 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
   const [claudePermissionMode, setClaudePermissionMode] = useState<PermissionMode>('bypassPermissions');
   const [codexPermissionMode, setCodexPermissionMode] = useState<PermissionMode>('default');
   const [permissionMode, setPermissionMode] = useState<PermissionMode>('bypassPermissions');
-  // Codex reasoning effort (thinking depth)
-  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('medium');
+  // Reasoning effort (thinking depth)
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('high');
   const [usagePercentage, setUsagePercentage] = useState(0);
   const [usageUsedTokens, setUsageUsedTokens] = useState<number | undefined>(undefined);
   const [usageMaxTokens, setUsageMaxTokens] = useState<number | undefined>(undefined);
@@ -133,6 +133,11 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
           setLongContextEnabled(state.longContextEnabled);
         }
 
+        // Load reasoning effort level (default 'high' if not present)
+        if (state.reasoningEffort && ['low', 'medium', 'high', 'xhigh', 'max'].includes(state.reasoningEffort)) {
+          setReasoningEffort(state.reasoningEffort);
+        }
+
         const savedClaudeCustomModels = getCustomModels('claude-custom-models');
         // Strip [1m] suffix for internal state
         const strippedClaudeModel = strip1MContextSuffix(state.claudeModel);
@@ -197,11 +202,12 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
         claudePermissionMode,
         codexPermissionMode,
         longContextEnabled,
+        reasoningEffort,
       }));
     } catch {
       // Failed to save model selection state
     }
-  }, [currentProvider, selectedClaudeModel, selectedCodexModel, claudePermissionMode, codexPermissionMode, longContextEnabled]);
+  }, [currentProvider, selectedClaudeModel, selectedCodexModel, claudePermissionMode, codexPermissionMode, longContextEnabled, reasoningEffort]);
 
   // Load selected agent
   useEffect(() => {

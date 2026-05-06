@@ -66,6 +66,9 @@ interface BasicConfigSectionProps {
   // Status bar widget configuration
   statusBarWidgetEnabled?: boolean;
   onStatusBarWidgetEnabledChange?: (enabled: boolean) => void;
+  // AI title generation configuration
+  aiTitleGenerationEnabled?: boolean;
+  onAiTitleGenerationEnabledChange?: (enabled: boolean) => void;
   // Sound notification configuration
   soundNotificationEnabled?: boolean;
   onSoundNotificationEnabledChange?: (enabled: boolean) => void;
@@ -141,6 +144,8 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onCommitGenerationEnabledChange={props.onCommitGenerationEnabledChange}
           statusBarWidgetEnabled={props.statusBarWidgetEnabled}
           onStatusBarWidgetEnabledChange={props.onStatusBarWidgetEnabledChange}
+          aiTitleGenerationEnabled={props.aiTitleGenerationEnabled}
+          onAiTitleGenerationEnabledChange={props.onAiTitleGenerationEnabledChange}
           soundNotificationEnabled={props.soundNotificationEnabled}
           onSoundNotificationEnabledChange={props.onSoundNotificationEnabledChange}
           soundOnlyWhenUnfocused={props.soundOnlyWhenUnfocused}

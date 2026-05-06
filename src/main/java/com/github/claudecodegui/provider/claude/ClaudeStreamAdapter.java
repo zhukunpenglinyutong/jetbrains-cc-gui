@@ -5,6 +5,9 @@ import com.github.claudecodegui.provider.common.SDKResult;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+
 /**
  * Adapts tagged Node.js output lines into bridge callbacks and SDKResult updates.
  */
@@ -21,14 +24,14 @@ class ClaudeStreamAdapter {
             MessageCallback callback,
             SDKResult result,
             StringBuilder assistantContent,
-            boolean[] hadSendError,
-            String[] lastNodeError
+            AtomicBoolean hadSendError,
+            AtomicReference<String> lastNodeError
     ) {
         if (line.startsWith("[STDIN_ERROR]")
                 || line.startsWith("[STDIN_PARSE_ERROR]")
                 || line.startsWith("[GET_SESSION_ERROR]")
                 || line.startsWith("[PERSIST_ERROR]")) {
-            lastNodeError[0] = line;
+            lastNodeError.set(line);
         }
 
         if (line.startsWith("[MESSAGE]")) {
@@ -53,7 +56,7 @@ class ClaudeStreamAdapter {
                 }
             } catch (Exception ignored) {
             }
-            hadSendError[0] = true;
+            hadSendError.set(true);
             result.success = false;
             result.error = errorMessage;
             callback.onError(errorMessage);

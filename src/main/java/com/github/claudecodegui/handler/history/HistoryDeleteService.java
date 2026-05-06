@@ -7,6 +7,11 @@ import com.github.claudecodegui.cache.SessionIndexCache;
 import com.github.claudecodegui.cache.SessionIndexManager;
 import com.github.claudecodegui.util.PathUtils;
 import com.github.claudecodegui.util.PlatformUtils;
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.BufferedReader;
@@ -14,8 +19,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -25,6 +33,15 @@ import java.util.stream.Stream;
 class HistoryDeleteService {
 
     private static final Logger LOG = Logger.getInstance(HistoryDeleteService.class);
+    private static final Gson GSON = new Gson();
+
+    // Reject anything outside [A-Za-z0-9._-] to defeat path-traversal payloads such as "../foo"
+    // before they reach Path.resolve. Session IDs in both providers are alphanumeric/UUID style.
+    private static final Pattern SESSION_ID_PATTERN = Pattern.compile("^[A-Za-z0-9._-]+$");
+
+    static boolean isValidSessionId(String sessionId) {
+        return sessionId != null && SESSION_ID_PATTERN.matcher(sessionId).matches();
+    }
 
     private final HandlerContext context;
     private final NodeJsServiceCaller nodeJsServiceCaller;
@@ -41,31 +58,20 @@ class HistoryDeleteService {
      * Deletes the .jsonl file for the specified sessionId and related agent-xxx.jsonl files.
      */
     void handleDeleteSession(String sessionId, String currentProvider) {
+        if (!isValidSessionId(sessionId)) {
+            LOG.warn("[HistoryHandler] 删除会话失败: 非法 sessionId 已拒绝");
+            return;
+        }
         CompletableFuture.runAsync(() -> {
             try {
                 LOG.info("[HistoryHandler] ========== 开始删除会话 ==========");
                 LOG.info("[HistoryHandler] SessionId: " + sessionId + ", Provider: " + currentProvider);
 
-                boolean mainDeleted;
-                int agentFilesDeleted;
+                DeleteResult result = deleteSessionFiles(sessionId, currentProvider);
 
-                if ("codex".equals(currentProvider)) {
-                    mainDeleted = deleteCodexSession(sessionId);
-                    agentFilesDeleted = 0;
-                } else {
-                    String projectPath = context.getProject().getBasePath();
-                    if (projectPath == null) {
-                        LOG.warn("[HistoryHandler] Project base path is null, cannot delete Claude session");
-                        return;
-                    }
-                    int[] result = deleteClaudeSession(sessionId, projectPath);
-                    mainDeleted = result[0] == 1;
-                    agentFilesDeleted = result[1];
-                }
+                LOG.info("[HistoryHandler] 删除完成 - 主文件: " + (result.mainDeleted ? "已删除" : "未找到") + ", Agent 文件: " + result.agentFilesDeleted);
 
-                LOG.info("[HistoryHandler] 删除完成 - 主文件: " + (mainDeleted ? "已删除" : "未找到") + ", Agent 文件: " + agentFilesDeleted);
-
-                if (mainDeleted) {
+                if (result.mainDeleted) {
                     cleanupSessionMetadata(sessionId);
                 }
                 cleanupCache(currentProvider);
@@ -77,6 +83,110 @@ class HistoryDeleteService {
                 LOG.error("[HistoryHandler] 删除会话失败: " + e.getMessage(), e);
             }
         });
+    }
+
+    /**
+     * Batch delete session history files in one backend request.
+     */
+    void handleDeleteSessions(String content, String currentProvider) {
+        List<String> sessionIds = parseSessionIds(content);
+        if (sessionIds.isEmpty()) {
+            LOG.warn("[HistoryHandler] 批量删除会话失败: sessionIds 为空");
+            return;
+        }
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                LOG.info("[HistoryHandler] ========== 开始批量删除会话 ==========");
+                LOG.info("[HistoryHandler] SessionIds: " + GSON.toJson(sessionIds) + ", Provider: " + currentProvider);
+
+                int mainDeletedCount = 0;
+                int agentFilesDeletedCount = 0;
+
+                for (String sessionId : sessionIds) {
+                    try {
+                        DeleteResult result = deleteSessionFiles(sessionId, currentProvider);
+                        if (result.mainDeleted) {
+                            mainDeletedCount++;
+                            cleanupSessionMetadata(sessionId);
+                        }
+                        agentFilesDeletedCount += result.agentFilesDeleted;
+                    } catch (Exception e) {
+                        LOG.error("[HistoryHandler] 批量删除单个会话失败: " + sessionId + " - " + e.getMessage(), e);
+                    }
+                }
+
+                cleanupCache(currentProvider);
+
+                LOG.info("[HistoryHandler] 批量删除完成 - 主文件: " + mainDeletedCount + "/" + sessionIds.size()
+                        + ", Agent 文件: " + agentFilesDeletedCount);
+                LOG.info("[HistoryHandler] 重新加载历史数据...");
+                historyLoadService.handleLoadHistoryData(currentProvider);
+            } catch (Exception e) {
+                LOG.error("[HistoryHandler] 批量删除会话失败: " + e.getMessage(), e);
+            }
+        });
+    }
+
+    static List<String> parseSessionIds(String content) {
+        LinkedHashSet<String> sessionIds = new LinkedHashSet<>();
+        if (content == null || content.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        try {
+            JsonElement parsed = JsonParser.parseString(content);
+            if (parsed.isJsonArray()) {
+                collectSessionIds(parsed.getAsJsonArray(), sessionIds);
+            } else if (parsed.isJsonObject()) {
+                JsonObject object = parsed.getAsJsonObject();
+                JsonElement sessionIdsElement = object.get("sessionIds");
+                if (sessionIdsElement != null && sessionIdsElement.isJsonArray()) {
+                    collectSessionIds(sessionIdsElement.getAsJsonArray(), sessionIds);
+                }
+            }
+        } catch (Exception e) {
+            LOG.warn("[HistoryHandler] 批量删除会话参数解析失败: " + e.getMessage());
+        }
+
+        return new ArrayList<>(sessionIds);
+    }
+
+    private static void collectSessionIds(JsonArray array, LinkedHashSet<String> sessionIds) {
+        for (JsonElement element : array) {
+            if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isString()) {
+                continue;
+            }
+
+            String sessionId = element.getAsString().trim();
+            if (sessionId.isEmpty()) {
+                continue;
+            }
+            if (!isValidSessionId(sessionId)) {
+                LOG.warn("[HistoryHandler] 批量删除会话忽略非法 sessionId");
+                continue;
+            }
+            sessionIds.add(sessionId);
+        }
+    }
+
+    private DeleteResult deleteSessionFiles(String sessionId, String currentProvider) throws java.io.IOException {
+        if (!isValidSessionId(sessionId)) {
+            LOG.warn("[HistoryHandler] 删除会话失败: 非法 sessionId 已拒绝");
+            return new DeleteResult(false, 0);
+        }
+        if ("codex".equals(currentProvider)) {
+            return new DeleteResult(deleteCodexSession(sessionId), 0);
+        }
+
+        String projectPath = context.getProject().getBasePath();
+        if (projectPath == null) {
+            LOG.warn("[HistoryHandler] Project base path is null, cannot delete Claude session");
+            return new DeleteResult(false, 0);
+        }
+
+        int[] result = deleteClaudeSession(sessionId, projectPath);
+        return new DeleteResult(result[0] == 1, result[1]);
     }
 
     private boolean deleteCodexSession(String sessionId) throws java.io.IOException {
@@ -135,7 +245,11 @@ class HistoryDeleteService {
         int agentFilesDeleted = 0;
 
         // Delete main session file
-        Path mainSessionFile = sessionDir.resolve(sessionId + ".jsonl");
+        Path mainSessionFile = sessionDir.resolve(sessionId + ".jsonl").normalize();
+        if (!mainSessionFile.startsWith(sessionDir.normalize())) {
+            LOG.warn("[HistoryHandler] 拒绝越界路径: " + mainSessionFile);
+            return new int[]{0, 0};
+        }
         if (Files.exists(mainSessionFile)) {
             Files.delete(mainSessionFile);
             LOG.info("[HistoryHandler] 已删除主会话文件: " + mainSessionFile.getFileName());
@@ -214,6 +328,16 @@ class HistoryDeleteService {
         } catch (Exception e) {
             LOG.warn("[HistoryHandler] 无法读取agent文件 " + agentFilePath.getFileName() + ": " + e.getMessage());
             return false;
+        }
+    }
+
+    private static class DeleteResult {
+        private final boolean mainDeleted;
+        private final int agentFilesDeleted;
+
+        private DeleteResult(boolean mainDeleted, int agentFilesDeleted) {
+            this.mainDeleted = mainDeleted;
+            this.agentFilesDeleted = agentFilesDeleted;
         }
     }
 }

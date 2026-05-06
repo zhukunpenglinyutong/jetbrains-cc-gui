@@ -3,21 +3,9 @@
   padding-bottom: 24px;
 }
 
-.sectionTitle {
-  font-size: 20px;
-  font-weight: 600;
-  margin: 0 0 8px 0;
-  color: var(--text-primary);
-}
-
-.sectionDesc {
-  color: var(--text-tertiary);
-  margin: 0 0 24px 0;
-  font-size: 13px;
-}
-
 .promptSection {
   margin-bottom: 24px;
+  margin-top: 24px;
 }
 
 .fieldHeader {
@@ -121,72 +109,8 @@
   }
 }
 
-/* 预告功能区块 */
-.previewSection {
-  margin-top: 32px;
-  padding-top: 24px;
-  border-top: 1px dashed var(--border-secondary);
-  position: relative;
-  opacity: 0.7;
-
-  .fieldHeader .codicon {
-    color: var(--text-tertiary);
-  }
-}
-
-.previewBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.15));
-  border: 1px solid rgba(139, 92, 246, 0.3);
-  border-radius: 16px;
-  font-size: 12px;
-  font-weight: 500;
-  color: #a78bfa;
-  margin-bottom: 16px;
-
-  .codicon {
-    font-size: 14px;
-  }
-}
-
-.promptTextarea.disabled {
-  background: var(--bg-secondary);
-  cursor: not-allowed;
-  opacity: 0.6;
-
-  &::placeholder {
-    color: var(--text-placeholder);
-    opacity: 0.8;
-  }
-}
-
-.saveBtn.disabledBtn {
-  background: var(--bg-tertiary);
-  color: var(--text-tertiary);
-  border: 1px solid var(--border-secondary);
-  cursor: not-allowed;
-  opacity: 0.5;
-
-  &:hover {
-    background: var(--bg-tertiary);
-  }
-}
-
 /* 响应式适配 */
 @media (max-width: 480px) {
-  .sectionTitle {
-    font-size: 16px;
-    margin-bottom: 6px;
-  }
-
-  .sectionDesc {
-    font-size: 12px;
-    margin-bottom: 16px;
-  }
-
   .promptTextarea {
     font-size: 12px;
     padding: 10px;

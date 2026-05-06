@@ -7,6 +7,8 @@ import './i18n/config';
 import i18n from './i18n/config';
 import { setupSlashCommandsCallback } from './components/ChatInputBox/providers/slashCommandProvider';
 import { setupDollarCommandsCallback } from './components/ChatInputBox/providers/dollarCommandProvider';
+import { applyLinkifyCapabilitiesPayload } from './utils/linkifyCapabilities';
+import { installRuntimeProviderDispatchers } from './utils/runtimeProviderCapabilities';
 import { sendBridgeEvent } from './utils/bridge';
 import type { UiFontConfig } from './types/uiFontConfig';
 
@@ -20,6 +22,12 @@ if (!import.meta.env.DEV) {
   console.warn = noop;
   console.error = noop;
 }
+
+// Install the runtime provider dispatcher exactly once so that every
+// consumer (Settings, RuntimeProviderSelect, …) receives provider events
+// through a deterministic subscriber registry instead of overriding
+// `window.update*Provider*` callbacks ad-hoc.
+installRuntimeProviderDispatchers();
 
 function createBridgeHeartbeatStarter() {
   let started = false;
@@ -229,7 +237,7 @@ let latestEditorFontConfig: {
 
 let latestUiFontConfig: UiFontConfig | null = null;
 
-const UI_FONT_STYLE_ELEMENT_ID = 'codemoss-ui-font-face-style';
+const UI_FONT_STYLE_ELEMENT_ID = 'cc-gui-font-face-style';
 
 function escapeCssFontName(name: string): string {
   return name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -250,6 +258,10 @@ function buildFontFamilyValue(config: { fontFamily: string; fallbackFonts?: stri
 
 let currentFontBlobUrl: string | null = null;
 
+function escapeCssUrl(url: string): string {
+  return url.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n|\r/g, '');
+}
+
 function createFontBlobUrl(base64: string, format: string): string {
   const mimeType = format === 'opentype' ? 'font/opentype' : 'font/truetype';
   const binaryString = atob(base64);
@@ -261,7 +273,7 @@ function createFontBlobUrl(base64: string, format: string): string {
   return URL.createObjectURL(blob);
 }
 
-function setUiFontFaceStyle(fontBase64?: string, fontFormat?: string) {
+function setUiFontFaceStyle(config: UiFontConfig) {
   let styleElement = document.getElementById(UI_FONT_STYLE_ELEMENT_ID) as HTMLStyleElement | null;
   if (!styleElement) {
     styleElement = document.createElement('style');
@@ -275,18 +287,22 @@ function setUiFontFaceStyle(fontBase64?: string, fontFormat?: string) {
     currentFontBlobUrl = null;
   }
 
-  if (!fontBase64 || !fontFormat) {
+  if (!config.fontUrl && (!config.fontBase64 || !config.fontFormat)) {
     styleElement.textContent = '';
     return;
   }
 
-  const blobUrl = createFontBlobUrl(fontBase64, fontFormat);
-  currentFontBlobUrl = blobUrl;
+  const fontFormat = config.fontFormat || 'truetype';
+  let fontSourceUrl = config.fontUrl;
+  if (!fontSourceUrl && config.fontBase64) {
+    fontSourceUrl = createFontBlobUrl(config.fontBase64, fontFormat);
+    currentFontBlobUrl = fontSourceUrl;
+  }
 
-  const familyName = escapeCssFontName('Codemoss UI Custom');
+  const familyName = escapeCssFontName('CC GUI Custom');
   styleElement.textContent =
     `@font-face { font-family: '${familyName}'; font-style: normal; font-weight: 100 900;` +
-    ` font-display: swap; src: url("${blobUrl}") format('${fontFormat}'); }`;
+    ` font-display: swap; src: url("${escapeCssUrl(fontSourceUrl || '')}") format('${fontFormat}'); }`;
 }
 
 function syncEffectiveUiFontFamily() {
@@ -307,7 +323,7 @@ function syncEffectiveUiFontFamily() {
     fallbackFonts: sourceConfig.fallbackFonts ?? latestEditorFontConfig?.fallbackFonts,
   });
 
-  root.style.setProperty('--codemoss-ui-font-family', fontFamilyValue);
+  root.style.setProperty('--cc-gui-ui-font-family', fontFamilyValue);
   // Keep legacy variable in sync so existing components continue to pick up the effective UI font.
   root.style.setProperty('--idea-editor-font-family', fontFamilyValue);
 }
@@ -320,7 +336,7 @@ function applyEditorTypographyConfig(config: {
 }) {
   const root = document.documentElement;
   latestEditorFontConfig = config;
-  root.style.setProperty('--codemoss-editor-font-family', buildFontFamilyValue(config));
+  root.style.setProperty('--cc-gui-editor-font-family', buildFontFamilyValue(config));
   root.style.setProperty('--idea-editor-font-size', `${config.fontSize}px`);
   root.style.setProperty('--idea-editor-line-spacing', String(config.lineSpacing));
   syncEffectiveUiFontFamily();
@@ -331,7 +347,7 @@ function applyUiFontConfig(config: UiFontConfig | string) {
     typeof config === 'string' ? JSON.parse(config) as UiFontConfig : config;
 
   latestUiFontConfig = normalizedConfig;
-  setUiFontFaceStyle(normalizedConfig.fontBase64, normalizedConfig.fontFormat);
+  setUiFontFaceStyle(normalizedConfig);
   syncEffectiveUiFontFamily();
 }
 
@@ -550,6 +566,12 @@ if (typeof window !== 'undefined' && !window.showPlanApprovalDialog) {
   };
 }
 
+if (typeof window !== 'undefined') {
+  window.updateLinkifyCapabilities = (json: string) => {
+    applyLinkifyCapabilitiesPayload(json);
+  };
+}
+
 // Render the React application
 ReactDOM.createRoot(document.getElementById('app') as HTMLElement).render(
   <ErrorBoundary>
@@ -596,4 +618,6 @@ waitForBridge(() => {
   // Ensure SDK dependency status is fetched on initial load (not only after opening Settings).
   console.log('[Main] Requesting dependency status');
   sendBridgeEvent('get_dependency_status');
+
+  sendBridgeEvent('get_linkify_capabilities');
 });

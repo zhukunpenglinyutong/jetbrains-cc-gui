@@ -555,6 +555,21 @@ public class BridgeDirectoryResolver {
                     // Direct extraction on non-EDT thread
                     LOG.info("[BridgeResolver] Starting synchronous extraction on non-EDT thread");
                     try {
+                        // Skip deletion if the directory already passes validation with the
+                        // expected signature. This prevents two IDEA instances from deleting
+                        // each other's extracted files during concurrent startup.
+                        if (isValidBridgeDir(extractedDir) && bridgeSignatureMatches(versionFile, signature)) {
+                            LOG.info("[BridgeResolver] Existing extraction is valid, skipping delete+extract");
+                            this.extractionState.set(ExtractionState.COMPLETED);
+                            this.cachedSdkDir = extractedDir;
+                            CompletableFuture<File> future = this.extractionFutureRef.get();
+                            if (future != null) {
+                                future.complete(extractedDir);
+                            }
+                            this.extractionReadyFuture.complete(true);
+                            return extractedDir;
+                        }
+
                         LOG.info("[BridgeResolver] Step 1: Deleting old directory if exists");
                         deleteDirectory(extractedDir);
 
@@ -701,6 +716,23 @@ public class BridgeDirectoryResolver {
                     indicator.setText("Extracting ai-bridge.zip...");
 
                     try {
+                        // Skip deletion if the directory already passes validation with the
+                        // expected signature. This prevents two IDEA instances from deleting
+                        // each other's extracted files during concurrent startup.
+                        if (isValidBridgeDir(extractedDir) && bridgeSignatureMatches(versionFile, signature)) {
+                            LOG.info("[BridgeResolver] Background: existing extraction is valid, skipping delete+extract");
+                            indicator.setFraction(1.0);
+                            indicator.setText("Using existing extraction");
+                            BridgeDirectoryResolver.this.extractionState.set(ExtractionState.COMPLETED);
+                            BridgeDirectoryResolver.this.cachedSdkDir = extractedDir;
+                            CompletableFuture<File> future = BridgeDirectoryResolver.this.extractionFutureRef.get();
+                            if (future != null) {
+                                future.complete(extractedDir);
+                            }
+                            BridgeDirectoryResolver.this.extractionReadyFuture.complete(true);
+                            return;
+                        }
+
                         // Delete old directory
                         indicator.setFraction(0.1);
                         indicator.setText("Cleaning old files...");

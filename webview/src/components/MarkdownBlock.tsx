@@ -2,10 +2,112 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { memo, useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { openBrowser, openFile } from '../utils/bridge';
-import hljs from 'highlight.js';
+import { openBrowser, openClass, openFile } from '../utils/bridge';
+import {
+  decorateExistingAnchors,
+  linkifyHtml,
+  linkifyPlainTextSegment,
+} from '../utils/linkify';
+import {
+  getLinkifyCapabilities,
+  subscribeLinkifyCapabilities,
+  type LinkifyCapabilities,
+} from '../utils/linkifyCapabilities';
+import hljs from 'highlight.js/lib/core';
+import bash from 'highlight.js/lib/languages/bash';
+import css from 'highlight.js/lib/languages/css';
+import diff from 'highlight.js/lib/languages/diff';
+import dockerfile from 'highlight.js/lib/languages/dockerfile';
+import go from 'highlight.js/lib/languages/go';
+import java from 'highlight.js/lib/languages/java';
+import javascript from 'highlight.js/lib/languages/javascript';
+import json from 'highlight.js/lib/languages/json';
+import kotlin from 'highlight.js/lib/languages/kotlin';
+import markdown from 'highlight.js/lib/languages/markdown';
+import plaintext from 'highlight.js/lib/languages/plaintext';
+import python from 'highlight.js/lib/languages/python';
+import rust from 'highlight.js/lib/languages/rust';
+import shell from 'highlight.js/lib/languages/shell';
+import sql from 'highlight.js/lib/languages/sql';
+import typescript from 'highlight.js/lib/languages/typescript';
+import xml from 'highlight.js/lib/languages/xml';
+import yaml from 'highlight.js/lib/languages/yaml';
 import 'highlight.js/styles/github-dark.css';
 import { markedHighlight } from 'marked-highlight';
+
+const SAFE_HREF_PROTOCOL_REGEX = /^(?:https?|mailto):/i;
+const WINDOWS_DRIVE_PATH_REGEX = /^[A-Za-z]:[\\/]/;
+const URI_SCHEME_REGEX = /^[A-Za-z][A-Za-z0-9+.-]*:/;
+let hrefSanitizerHookInstalled = false;
+
+function isAllowedHrefValue(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  if (WINDOWS_DRIVE_PATH_REGEX.test(trimmed)) {
+    return true;
+  }
+
+  if (!URI_SCHEME_REGEX.test(trimmed)) {
+    return true;
+  }
+
+  return SAFE_HREF_PROTOCOL_REGEX.test(trimmed);
+}
+
+function ensureSafeHrefSanitizerHook(): void {
+  if (hrefSanitizerHookInstalled) {
+    return;
+  }
+
+  DOMPurify.addHook('uponSanitizeAttribute', (_node, data) => {
+    if (data.attrName !== 'href' || typeof data.attrValue !== 'string') {
+      return;
+    }
+
+    if (!isAllowedHrefValue(data.attrValue)) {
+      data.keepAttr = false;
+    }
+  });
+
+  hrefSanitizerHookInstalled = true;
+}
+
+ensureSafeHrefSanitizerHook();
+
+const highlightLanguages: Array<[string, Parameters<typeof hljs.registerLanguage>[1]]> = [
+  ['bash', bash],
+  ['css', css],
+  ['diff', diff],
+  ['dockerfile', dockerfile],
+  ['go', go],
+  ['java', java],
+  ['javascript', javascript],
+  ['json', json],
+  ['kotlin', kotlin],
+  ['markdown', markdown],
+  ['plaintext', plaintext],
+  ['python', python],
+  ['rust', rust],
+  ['shell', shell],
+  ['sql', sql],
+  ['typescript', typescript],
+  ['xml', xml],
+  ['yaml', yaml],
+];
+
+highlightLanguages.forEach(([name, language]) => {
+  hljs.registerLanguage(name, language);
+});
+
+hljs.registerAliases(['js', 'jsx'], { languageName: 'javascript' });
+hljs.registerAliases(['ts', 'tsx'], { languageName: 'typescript' });
+hljs.registerAliases(['sh', 'zsh'], { languageName: 'bash' });
+hljs.registerAliases(['html', 'xhtml', 'svg'], { languageName: 'xml' });
+hljs.registerAliases(['yml'], { languageName: 'yaml' });
+
 // Lazy-loaded mermaid singleton (deferred until first diagram is encountered)
 let mermaidInstance: typeof import('mermaid').default | null = null;
 async function getMermaid() {
@@ -65,6 +167,19 @@ const MERMAID_KEYWORDS = new Set([
   'xychart-beta',
   'block-beta',
 ]);
+
+const MERMAID_FENCE_REGEX = /```mermaid[\s\S]*?```/i;
+
+// Pre-compiled regex: matches any mermaid keyword at the start of a line
+const MERMAID_KEYWORD_REGEX = new RegExp(
+  `(^|\\n)\\s*(?:${[...MERMAID_KEYWORDS].join('|')})\\b`,
+  'i',
+);
+
+function hasPossibleMermaidContent(content: string): boolean {
+  if (!content) return false;
+  return MERMAID_FENCE_REGEX.test(content) || MERMAID_KEYWORD_REGEX.test(content);
+}
 
 marked.setOptions({
   breaks: false,
@@ -129,7 +244,62 @@ function safeLang(lang: string): string {
   return lang.replace(/[^a-zA-Z0-9_.-]/g, '');
 }
 
-function renderStreamingContent(content: string): string {
+function renderStreamingInlineText(
+  text: string,
+  capabilities: LinkifyCapabilities,
+): string {
+  return text
+    .split(/(`[^`\n]+`)/g)
+    .map((inlinePart) => {
+      const inlineCodeMatch = /^`([^`\n]+)`$/.exec(inlinePart);
+      if (inlineCodeMatch) {
+        // Inline code content should also be linkified
+        const linkifiedCode = linkifyPlainTextSegment(inlineCodeMatch[1], capabilities);
+        return `<code>${linkifiedCode}</code>`;
+      }
+
+      return inlinePart
+        .split(/(\*\*[^*]+\*\*)/g)
+        .map((part) => {
+          const boldMatch = /^\*\*([^*]+)\*\*$/.exec(part);
+          if (boldMatch) {
+            return `<strong>${linkifyPlainTextSegment(boldMatch[1], capabilities)}</strong>`;
+          }
+
+          return linkifyPlainTextSegment(part, capabilities);
+        })
+        .join('');
+    })
+    .join('');
+}
+
+function renderStreamingProseSegment(
+  segment: string,
+  capabilities: LinkifyCapabilities,
+): string {
+  return segment
+    .split(/\n{2,}/)
+    .filter((block) => block.length > 0)
+    .map((block) => {
+      const headingMatch = /^(#{1,6})\s+(.+)$/.exec(block);
+      if (headingMatch && !block.includes('\n')) {
+        const level = headingMatch[1].length;
+        return `<h${level}>${renderStreamingInlineText(headingMatch[2], capabilities)}</h${level}>`;
+      }
+
+      const lines = block
+        .split('\n')
+        .map((line) => renderStreamingInlineText(line, capabilities))
+        .join('<br/>');
+      return `<p>${lines}</p>`;
+    })
+    .join('');
+}
+
+function renderStreamingContent(
+  content: string,
+  capabilities: LinkifyCapabilities,
+): string {
   if (!content) return '';
 
   const safeContent = makeStreamSafe(content);
@@ -188,33 +358,14 @@ function renderStreamingContent(content: string): string {
       // Already wrapped in <pre> — pass through
       if (seg.startsWith('<pre>')) return seg;
 
-      let html = seg
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-
-      // Inline code
-      html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
-      // Bold
-      html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-      // Headings (# ... ######)
-      html = html.replace(/^(#{1,6})\s+(.+)$/gm, (_m, hashes: string, text: string) => {
-        const level = hashes.length;
-        return `<h${level}>${text}</h${level}>`;
-      });
-      // Paragraph breaks
-      html = html.replace(/\n\n/g, '</p><p>');
-      // Single line breaks
-      html = html.replace(/\n/g, '<br/>');
-
-      return `<p>${html}</p>`;
+      return renderStreamingProseSegment(seg, capabilities);
     })
     .join('');
 
   // Sanitize the assembled HTML to prevent XSS even during streaming
   return DOMPurify.sanitize(raw, {
-    ALLOWED_TAGS: ['p', 'br', 'pre', 'code', 'strong', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
-    ALLOWED_ATTR: ['class'],
+    ALLOWED_TAGS: ['a', 'p', 'br', 'pre', 'code', 'strong', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
+    ALLOWED_ATTR: ['class', 'href', 'data-linkify'],
   });
 }
 
@@ -231,6 +382,9 @@ const copyIconSvg = `
 
 const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps) => {
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
+  const [linkifyCapabilities, setLinkifyCapabilities] = useState<LinkifyCapabilities>(() =>
+    getLinkifyCapabilities(),
+  );
   const containerRef = useRef<HTMLDivElement>(null);
   const { t, i18n } = useTranslation();
 
@@ -240,6 +394,10 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
   // Ref for tracking retry count
   const mermaidRetryRef = useRef(0);
   const MERMAID_MAX_RETRIES = 3;
+
+  useEffect(() => {
+    return subscribeLinkifyCapabilities(setLinkifyCapabilities);
+  }, []);
 
   // Render mermaid diagrams
   const renderMermaidDiagrams = useCallback(async () => {
@@ -327,6 +485,10 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
   // Render mermaid diagrams after HTML updates (skip during streaming to prevent flicker)
   useEffect(() => {
     if (isStreaming) return;
+    if (!hasPossibleMermaidContent(content)) {
+      mermaidRetryRef.current = 0;
+      return;
+    }
 
     let retryTimeoutId: ReturnType<typeof setTimeout> | null = null;
     let retryRafId: number | null = null;
@@ -387,7 +549,7 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
 
       // During streaming, use lightweight renderer to avoid heavy parsing on every delta
       if (isStreaming) {
-        return renderStreamingContent(trimmedContent);
+        return renderStreamingContent(trimmedContent, linkifyCapabilities);
       }
 
       // Non-streaming: full markdown pipeline
@@ -403,6 +565,7 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
       }
 
       const doc = new DOMParser().parseFromString(rawHtml, 'text/html');
+    decorateExistingAnchors(doc.body);
       const pres = doc.querySelectorAll('pre');
       const copySuccessText = t('markdown.copySuccess');
       const copyCodeTitle = t('markdown.copyCode');
@@ -439,11 +602,13 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
         wrapper.appendChild(btn);
       });
 
+      linkifyHtml(doc.body, linkifyCapabilities);
+
       return doc.body.innerHTML.trim();
     } catch {
       return content;
     }
-  }, [content, isStreaming, i18n.language, t]);
+  }, [content, isStreaming, i18n.language, linkifyCapabilities, t]);
 
   // Force DOM refresh when streaming ends to fix potential layout corruption from streaming render
   useEffect(() => {
@@ -518,7 +683,19 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
       return;
     }
 
-    if (/^(https?:|mailto:)/.test(href)) {
+    const linkType = anchor.getAttribute('data-linkify');
+
+    if (linkType === 'file') {
+      openFile(href);
+      return;
+    }
+
+    if (linkType === 'class') {
+      openClass(href);
+      return;
+    }
+
+    if (linkType === 'url' || /^(https?:|mailto:)/.test(href)) {
       openBrowser(href);
     } else {
       openFile(href);

@@ -358,7 +358,7 @@ async function enhancePromptWithClaude(originalPrompt, systemPrompt, model, cont
   throw new Error('Claude enhancement response is empty');
 }
 
-function extractAppendedDelta(previousText, nextText) {
+export function extractAppendedDelta(previousText, nextText) {
   const previous = typeof previousText === 'string' ? previousText : '';
   const next = typeof nextText === 'string' ? nextText : '';
   if (!next.trim()) return '';
@@ -375,8 +375,9 @@ async function enhancePromptWithCodex(originalPrompt, systemPrompt, model, conte
   const codex = new Codex({ env: cliEnv });
 
   const workingDirectory = getRealHomeDir();
+  const systemPromptText = (systemPrompt || '').trim();
   const fullPrompt = [
-    systemPrompt.trim(),
+    systemPromptText,
     '',
     buildFullPrompt(originalPrompt, context),
     '',

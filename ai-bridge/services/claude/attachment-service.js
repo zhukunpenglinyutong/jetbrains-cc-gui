@@ -4,6 +4,9 @@
  */
 
 import fs from 'fs';
+import path from 'path';
+import os from 'os';
+import { modelSupportsVision } from '../../utils/model-utils.js';
 
 /**
  * Read attachment JSON (path specified via CLAUDE_ATTACHMENTS_FILE environment variable).
@@ -96,40 +99,109 @@ export async function loadAttachments(stdinData) {
 }
 
 /**
+ * Save base64 image data to a temporary file for cross-model compatibility.
+ *
+ * Some models (e.g. mimo-v2.5-pro, deepseek, qwen) do not handle Anthropic
+ * vision content blocks reliably — especially when routed through third-party
+ * proxies that may strip image blocks during translation. Saving to a file and
+ * referencing the path lets the model use the Read tool to load the image,
+ * matching Claude Code CLI's universal image handling approach.
+ *
+ * @param {string} base64Data - Base64-encoded image data (no "data:" prefix)
+ * @param {string} mediaType - MIME type (e.g. "image/png")
+ * @param {string} fileName - Original file name (optional)
+ * @returns {string|null} Absolute path to the saved file, or null on failure
+ */
+function saveImageToTemp(base64Data, mediaType, fileName) {
+  try {
+    if (!base64Data || typeof base64Data !== 'string') {
+      return null;
+    }
+    const ext = (typeof mediaType === 'string' && mediaType.split('/')[1])
+      ? mediaType.split('/')[1].toLowerCase()
+      : 'png';
+    const tempDir = path.join(os.tmpdir(), 'cc-gui-images');
+    fs.mkdirSync(tempDir, { recursive: true });
+
+    let safeName;
+    const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    if (fileName && typeof fileName === 'string') {
+      const baseName = path.basename(fileName).replace(/[^a-zA-Z0-9._-]/g, '_');
+      safeName = `${uniqueId}-${baseName}`;
+    } else {
+      safeName = `image-${uniqueId}.${ext}`;
+    }
+
+    const filePath = path.join(tempDir, safeName);
+    fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
+    return filePath;
+  } catch (e) {
+    console.error('[ATTACHMENTS] Failed to save image to temp:', e.message);
+    return null;
+  }
+}
+
+/**
  * Build user message content blocks (supports images and text).
+ *
+ * Image transmission strategy depends on the target model:
+ * - Claude models: Inline base64 vision content blocks (most efficient,
+ *   natively supported by the Anthropic API).
+ * - Non-Claude models (mimo, deepseek, qwen, etc.): Save images to temp files
+ *   and reference paths in the message text. The model is asked to use the
+ *   Read tool to load them, matching Claude Code CLI behavior. This avoids
+ *   issues where third-party proxies silently drop vision content blocks.
+ *
  * @param {Array} attachments - Attachment array
  * @param {string} message - User message text
+ * @param {string|null} modelId - Resolved model ID actually sent to the API
+ *                                  (e.g. "claude-sonnet-4-5", "mimo-v2.5-pro").
+ *                                  Used to decide image transmission strategy.
  * @returns {Array} Content block array
  */
-export function buildContentBlocks(attachments, message) {
+export function buildContentBlocks(attachments, message, modelId = null) {
   const contentBlocks = [];
+  const useNativeVision = modelSupportsVision(modelId);
+  const imagePathRefs = [];
 
-  // Add image blocks
   for (const a of attachments) {
     const mt = typeof a.mediaType === 'string' ? a.mediaType : '';
     if (mt.startsWith('image/')) {
-      contentBlocks.push({
-        type: 'image',
-        source: {
-          type: 'base64',
-          media_type: mt || 'image/png',
-          data: a.data
+      if (useNativeVision) {
+        contentBlocks.push({
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: mt || 'image/png',
+            data: a.data
+          }
+        });
+      } else {
+        const tempPath = saveImageToTemp(a.data, mt, a.fileName);
+        if (tempPath) {
+          imagePathRefs.push(tempPath);
+          console.log('[ATTACHMENTS] Saved image to temp for non-vision model:', tempPath);
+        } else {
+          contentBlocks.push({
+            type: 'image',
+            source: { type: 'base64', media_type: mt || 'image/png', data: a.data }
+          });
         }
-      });
+      }
     } else {
-      // Non-image attachments as text placeholders
       const name = a.fileName || 'Attachment';
       contentBlocks.push({ type: 'text', text: `[Attachment: ${name}]` });
     }
   }
 
-  // Handle empty message case
   let userText = message;
   if (!userText || userText.trim() === '') {
-    const imageCount = contentBlocks.filter(b => b.type === 'image').length;
+    const totalImages = useNativeVision
+      ? contentBlocks.filter(b => b.type === 'image').length
+      : imagePathRefs.length;
     const textCount = contentBlocks.filter(b => b.type === 'text').length;
-    if (imageCount > 0) {
-      userText = `[Uploaded ${imageCount} image(s)]`;
+    if (totalImages > 0) {
+      userText = `[Uploaded ${totalImages} image(s)]`;
     } else if (textCount > 0) {
       userText = `[Uploaded attachment(s)]`;
     } else {
@@ -137,7 +209,13 @@ export function buildContentBlocks(attachments, message) {
     }
   }
 
-  // Add user text
+  if (imagePathRefs.length > 0) {
+    const refs = imagePathRefs
+      .map((p, idx) => `[Image #${idx + 1}: ${p}]`)
+      .join('\n');
+    userText = `${refs}\n\nThe user has attached the image(s) above. Please use the Read tool to view them.\n\n${userText}`;
+  }
+
   contentBlocks.push({ type: 'text', text: userText });
 
   return contentBlocks;

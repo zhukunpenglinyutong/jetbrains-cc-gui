@@ -274,6 +274,12 @@ https://atomgit.com/zhukunpenglinyutong/idea-claude-code-gui
 
 ---
 
+## 致谢
+
+最近有很多博主自发推荐本项目，心中十分感激，再次感谢《沉默的王二》《macrozheng》《JavaGuide》《Java知音》《程序员青戈》等博主推荐本项目，我会继续努力迭代，让大家用起来更舒适。
+
+---
+
 ## Star History
 
 [![Star History](https://api.star-history.com/svg?repos=zhukunpenglinyutong/idea-claude-code-gui&type=date&legend=top-left)](https://www.star-history.com/#zhukunpenglinyutong/idea-claude-code-gui&type=date&legend=top-left)

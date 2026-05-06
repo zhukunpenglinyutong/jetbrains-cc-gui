@@ -7,9 +7,9 @@
 /* 字体变量（由 Java 端动态注入） */
 :root {
     /* 编辑器原始字体 */
-    --codemoss-editor-font-family: 'JetBrains Mono', 'Consolas', monospace;
+    --cc-gui-editor-font-family: 'JetBrains Mono', 'Consolas', monospace;
     /* 当前插件实际使用的 UI 字体 */
-    --codemoss-ui-font-family: 'JetBrains Mono', 'Consolas', monospace;
+    --cc-gui-ui-font-family: 'JetBrains Mono', 'Consolas', monospace;
     /* 兼容旧样式里对 --idea-editor-font-family 的引用 */
     --idea-editor-font-family: 'JetBrains Mono', 'Consolas', monospace;
     --idea-editor-font-size: 14px;
@@ -17,7 +17,7 @@
 }
 
 body {
-    font-family: var(--codemoss-ui-font-family, 'JetBrains Mono', 'Consolas', monospace);
+    font-family: var(--cc-gui-ui-font-family, 'JetBrains Mono', 'Consolas', monospace);
     background: var(--bg-chat);
     color: var(--text-primary);
     height: 100vh;
@@ -74,7 +74,7 @@ html {
 
 /* 全局字体覆盖 - 让整个插件都使用当前生效的 UI 字体 */
 * {
-    font-family: var(--codemoss-ui-font-family, 'JetBrains Mono', 'Consolas', monospace) !important;
+    font-family: var(--cc-gui-ui-font-family, 'JetBrains Mono', 'Consolas', monospace) !important;
 }
 
 /* 保护字体图标 - 确保 codicon 图标正常显示 */

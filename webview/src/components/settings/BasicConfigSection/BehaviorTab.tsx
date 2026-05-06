@@ -85,6 +85,8 @@ export interface BehaviorTabProps {
   onCommitGenerationEnabledChange?: (enabled: boolean) => void;
   statusBarWidgetEnabled?: boolean;
   onStatusBarWidgetEnabledChange?: (enabled: boolean) => void;
+  aiTitleGenerationEnabled?: boolean;
+  onAiTitleGenerationEnabledChange?: (enabled: boolean) => void;
   soundNotificationEnabled?: boolean;
   onSoundNotificationEnabledChange?: (enabled: boolean) => void;
   soundOnlyWhenUnfocused?: boolean;
@@ -113,6 +115,8 @@ const BehaviorTab = ({
   onCommitGenerationEnabledChange = () => {},
   statusBarWidgetEnabled = true,
   onStatusBarWidgetEnabledChange = () => {},
+  aiTitleGenerationEnabled = true,
+  onAiTitleGenerationEnabledChange = () => {},
   soundNotificationEnabled = false,
   onSoundNotificationEnabledChange = () => {},
   soundOnlyWhenUnfocused = false,
@@ -328,6 +332,32 @@ const BehaviorTab = ({
         <small className={styles.formHint}>
           <span className="codicon codicon-info" />
           <span>{t('settings.basic.taskCompletionNotification.hint')}</span>
+        </small>
+      </div>
+
+      {/* AI session title generation toggle */}
+      <div className={styles.streamingSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-sparkle" />
+          <span className={styles.fieldLabel}>{t('settings.other.aiTitleGeneration.label')}</span>
+        </div>
+        <label className={styles.toggleWrapper}>
+          <input
+            type="checkbox"
+            className={styles.toggleInput}
+            checked={aiTitleGenerationEnabled}
+            onChange={(e) => onAiTitleGenerationEnabledChange(e.target.checked)}
+          />
+          <span className={styles.toggleSlider} />
+          <span className={styles.toggleLabel}>
+            {aiTitleGenerationEnabled
+              ? t('settings.other.aiTitleGeneration.enabled')
+              : t('settings.other.aiTitleGeneration.disabled')}
+          </span>
+        </label>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>{t('settings.other.aiTitleGeneration.hint')}</span>
         </small>
       </div>
 

@@ -67,21 +67,17 @@ export interface UseWindowCallbacksOptions {
 
   // Streaming refs from useStreamingMessages
   streamingContentRef: MutableRefObject<string>;
+  streamingThinkingRef: MutableRefObject<string>;
   isStreamingRef: MutableRefObject<boolean>;
   useBackendStreamingRenderRef: MutableRefObject<boolean>;
   autoExpandedThinkingKeysRef: MutableRefObject<Set<string>>;
-  streamingTextSegmentsRef: MutableRefObject<string[]>;
-  activeTextSegmentIndexRef: MutableRefObject<number>;
-  streamingThinkingSegmentsRef: MutableRefObject<string[]>;
-  activeThinkingSegmentIndexRef: MutableRefObject<number>;
-  seenToolUseCountRef: MutableRefObject<number>;
   streamingMessageIndexRef: MutableRefObject<number>;
   streamingTurnIdRef: MutableRefObject<number>;
   turnIdCounterRef: MutableRefObject<number>;
   lastContentUpdateRef: MutableRefObject<number>;
-  contentUpdateTimeoutRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
+  contentUpdateTimeoutRef: MutableRefObject<number | null>;
   lastThinkingUpdateRef: MutableRefObject<number>;
-  thinkingUpdateTimeoutRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
+  thinkingUpdateTimeoutRef: MutableRefObject<number | null>;
 
   // Functions from useStreamingMessages
   findLastAssistantIndex: (messages: ClaudeMessage[]) => number;
@@ -101,6 +97,9 @@ export interface UseWindowCallbacksOptions {
   customSessionTitleRef: MutableRefObject<string | null>;
   currentSessionIdRef: MutableRefObject<string | null>;
   updateHistoryTitle: (sessionId: string, newTitle: string) => void;
+
+  // AI title generation: update the displayed session title when backend generates one
+  setCustomSessionTitle: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
 export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {

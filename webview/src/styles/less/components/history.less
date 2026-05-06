@@ -4,10 +4,21 @@
     border-bottom: 1px solid var(--color-history-border);
     cursor: pointer;
     transition: background-color 0.2s;
+    overflow: hidden;
+    box-sizing: border-box;
+    position: relative;
 }
 
 .history-item:hover {
     background-color: var(--color-history-hover);
+}
+
+.history-item.selection-mode {
+    cursor: default;
+}
+
+.history-item.selection-mode.selected {
+    background-color: color-mix(in srgb, var(--accent-primary) 10%, transparent);
 }
 
 .history-item-header {
@@ -62,12 +73,42 @@
     gap: 16px;
 }
 
+.history-header-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+}
+
+.history-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
 .history-info {
     font-size: 12px;
     color: var(--text-tertiary);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-/* 深度搜索按钮样式 */
+.history-selection-summary {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent-primary);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.history-toolbar-btn,
 .history-deep-search-btn {
     background: transparent;
     border: 1px solid var(--border-secondary);
@@ -81,6 +122,8 @@
     align-items: center;
     justify-content: center;
     line-height: 1;
+    gap: 6px;
+    min-height: 30px;
 
     .codicon {
         font-size: 14px;
@@ -101,7 +144,23 @@
         cursor: not-allowed;
         opacity: 0.7;
     }
+}
 
+.history-toolbar-btn {
+    span:not(.codicon) {
+        font-size: 12px;
+        white-space: nowrap;
+    }
+
+    &.history-toolbar-danger:hover:not(:disabled) {
+        background-color: rgba(255, 59, 48, 0.15);
+        border-color: #ff3b30;
+        color: #ff3b30;
+    }
+}
+
+/* 深度搜索按钮样式 */
+.history-deep-search-btn {
     &.searching {
         color: #0a84ff;
         border-color: #0a84ff;
@@ -145,6 +204,24 @@
     transform: translateY(-50%);
     color: var(--text-tertiary);
     pointer-events: none;
+}
+
+.history-selection-checkbox-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    margin-right: 12px;
+    flex-shrink: 0;
+}
+
+.history-selection-checkbox {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--accent-primary);
+    cursor: pointer;
 }
 
 /* 删除按钮样式 */
@@ -219,15 +296,34 @@
     }
 }
 
-/* 操作按钮容器：默认隐藏，悬停时显示 */
+/* 操作按钮容器：绝对定位浮层（贴右下、对齐 meta 行），不占据文档流空间，悬停时显示 */
 .history-action-buttons {
-    display: none;
+    position: absolute;
+    bottom: 10px;
+    right: 16px;
+    display: flex;
     align-items: center;
     gap: 4px;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.history-action-buttons.has-favorite {
+    visibility: visible;
+    opacity: 1;
+}
+
+.history-item:not(:hover) .history-action-buttons.has-favorite .history-edit-btn,
+.history-item:not(:hover) .history-action-buttons.has-favorite .history-export-btn,
+.history-item:not(:hover) .history-action-buttons.has-favorite .history-delete-btn {
+    visibility: hidden;
+    opacity: 0;
 }
 
 .history-item:hover .history-action-buttons {
-    display: flex;
+    visibility: visible;
+    opacity: 1;
 }
 
 .history-item:hover .history-delete-btn,

@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, memo, useEffect, useRef } from 'react';
 import type { TFunction } from 'i18next';
-import type { ClaudeMessage, ClaudeContentBlock, SubagentHistoryResponse, ToolResultBlock } from '../../types';
+import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock } from '../../types';
 
 import MarkdownBlock from '../MarkdownBlock';
 import { ProviderNotConfiguredCard, isProviderNotConfiguredError } from './ProviderNotConfiguredCard';
@@ -33,8 +33,6 @@ export interface MessageItemProps {
   onNodeRef?: (id: string, node: HTMLDivElement | null) => void;
   onNavigateToProviderSettings?: () => void;
   toolResultSignature?: string;
-  currentSessionId?: string | null;
-  subagentHistories?: Record<string, SubagentHistoryResponse>;
 }
 
 type GroupedBlock =
@@ -222,8 +220,6 @@ export const MessageItem = memo(function MessageItem({
   onNodeRef,
   onNavigateToProviderSettings,
   toolResultSignature: _toolResultSignature,
-  currentSessionId,
-  subagentHistories,
 }: MessageItemProps): React.ReactElement {
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
   const [showStreamingConnectHint, setShowStreamingConnectHint] = useState(false);
@@ -496,8 +492,6 @@ export const MessageItem = memo(function MessageItem({
                 t={t}
                 onToggleThinking={() => {}}
                 findToolResult={findToolResult}
-                currentSessionId={currentSessionId}
-                subagentHistories={subagentHistories}
               />
             </div>
           );
@@ -526,8 +520,6 @@ export const MessageItem = memo(function MessageItem({
             t={t}
             onToggleThinking={() => toggleThinking(blockIndex)}
             findToolResult={findToolResult}
-            currentSessionId={currentSessionId}
-            subagentHistories={subagentHistories}
           />
         </div>
       );
@@ -540,7 +532,7 @@ export const MessageItem = memo(function MessageItem({
 
   return (
     <div
-      className={`message ${message.type}${isProviderNotConfigured ? ' provider-not-configured' : ''}`}
+      className={`message ${message.type}${isLast ? ' is-last-message' : ''}${isProviderNotConfigured ? ' provider-not-configured' : ''}`}
       ref={anchorRefCallback}
       data-message-anchor-id={message.type === 'user' ? messageKey : undefined}
     >

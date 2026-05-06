@@ -19,6 +19,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Base SDK bridge class.
@@ -77,16 +79,16 @@ public abstract class BaseSDKBridge {
      * @param callback         Message callback
      * @param result           SDK result being built
      * @param assistantContent StringBuilder for accumulating assistant content
-     * @param hadSendError     Flag array indicating if send error occurred
-     * @param lastNodeError    Array to store the last Node.js error
+     * @param hadSendError     Flag indicating if send error occurred
+     * @param lastNodeError    Holder for the last Node.js error
      */
     protected abstract void processOutputLine(
             String line,
             MessageCallback callback,
             SDKResult result,
             StringBuilder assistantContent,
-            boolean[] hadSendError,
-            String[] lastNodeError
+            AtomicBoolean hadSendError,
+            AtomicReference<String> lastNodeError
     );
 
     // ============================================================================
@@ -237,8 +239,8 @@ public abstract class BaseSDKBridge {
         return CompletableFuture.supplyAsync(() -> {
             SDKResult result = new SDKResult();
             StringBuilder assistantContent = new StringBuilder();
-            final boolean[] hadSendError = {false};
-            final String[] lastNodeError = {null};
+            AtomicBoolean hadSendError = new AtomicBoolean(false);
+            AtomicReference<String> lastNodeError = new AtomicReference<>(null);
 
             try {
                 File bridgeDir = getDirectoryResolver().findSdkDir();
@@ -304,7 +306,7 @@ public abstract class BaseSDKBridge {
                                     || line.startsWith("[STARTUP_ERROR]")
                                     || line.startsWith("[ERROR]")) {
                                 LOG.warn("[Node.js ERROR] " + line);
-                                lastNodeError[0] = line;
+                                lastNodeError.set(line);
                             }
 
                             // Delegate to subclass for provider-specific processing
@@ -324,14 +326,15 @@ public abstract class BaseSDKBridge {
                         result.success = false;
                         result.error = "User interrupted";
                         callback.onComplete(result);
-                    } else if (!hadSendError[0]) {
+                    } else if (!hadSendError.get()) {
                         result.success = exitCode == 0;
                         if (result.success) {
                             callback.onComplete(result);
                         } else {
                             String errorMsg = getProviderName() + " process exited with code: " + exitCode;
-                            if (lastNodeError[0] != null && !lastNodeError[0].isEmpty()) {
-                                errorMsg = errorMsg + "\n\nDetails: " + lastNodeError[0];
+                            String nodeErr = lastNodeError.get();
+                            if (nodeErr != null && !nodeErr.isEmpty()) {
+                                errorMsg = errorMsg + "\n\nDetails: " + nodeErr;
                             }
                             result.error = errorMsg;
                             callback.onError(errorMsg);

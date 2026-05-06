@@ -160,12 +160,20 @@ const SettingsView = ({
     commitGenerationEnabled,
     setCommitGenerationEnabled,
     handleCommitGenerationEnabledChange,
+    aiTitleGenerationEnabled,
+    setAiTitleGenerationEnabled,
+    handleAiTitleGenerationEnabledChange,
     statusBarWidgetEnabled,
     setStatusBarWidgetEnabled,
     handleStatusBarWidgetEnabledChange,
     taskCompletionNotificationEnabled,
     setTaskCompletionNotificationEnabled,
     handleTaskCompletionNotificationEnabledChange,
+    commitAiConfig,
+    setCommitAiConfig,
+    handleCommitAiProviderChange,
+    handleCommitAiModelChange,
+    handleCommitAiResetToDefault,
     handlePromptEnhancerProviderChange,
     handlePromptEnhancerModelChange,
     handlePromptEnhancerResetToDefault,
@@ -269,6 +277,7 @@ const SettingsView = ({
     setSavingWorkingDirectory,
     setCommitPrompt,
     setSavingCommitPrompt,
+    setCommitAiConfig,
     setPromptEnhancerConfig,
     setEditorFontConfig,
     setUiFontConfig,
@@ -302,6 +311,7 @@ const SettingsView = ({
     setSelectedSound,
     setCustomSoundPath,
     setCommitGenerationEnabled,
+    setAiTitleGenerationEnabled,
     setStatusBarWidgetEnabled,
     setTaskCompletionNotificationEnabled,
   });
@@ -454,6 +464,8 @@ const SettingsView = ({
                 handleStatusBarWidgetEnabledChange(enabled);
                 addToast(t('toast.restartRequired'), 'warning');
               }}
+              aiTitleGenerationEnabled={aiTitleGenerationEnabled}
+              onAiTitleGenerationEnabledChange={handleAiTitleGenerationEnabledChange}
               soundNotificationEnabled={soundNotificationEnabled}
               onSoundNotificationEnabledChange={handleSoundNotificationEnabledChange}
               soundOnlyWhenUnfocused={soundOnlyWhenUnfocused}
@@ -531,6 +543,10 @@ const SettingsView = ({
           {/* Commit AI configuration */}
           <div style={{ display: currentTab === 'commit' ? 'block' : 'none' }}>
             <CommitSection
+              commitAiConfig={commitAiConfig}
+              onCommitAiProviderChange={handleCommitAiProviderChange}
+              onCommitAiModelChange={handleCommitAiModelChange}
+              onCommitAiResetToDefault={handleCommitAiResetToDefault}
               commitPrompt={commitPrompt}
               onCommitPromptChange={setCommitPrompt}
               onSaveCommitPrompt={handleSaveCommitPrompt}

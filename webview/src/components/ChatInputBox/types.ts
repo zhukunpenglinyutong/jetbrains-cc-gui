@@ -412,11 +412,41 @@ export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
 ];
 
 /**
- * Codex Reasoning Effort (thinking depth)
- * Controls the depth of reasoning for Codex models
- * Valid values: low, medium, high, xhigh
+ * Claude models that support adaptive thinking with effort parameter.
+ * Based on: https://code.claude.com/docs/en/model-config#adjust-effort-level
  */
-export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
+export const EFFORT_SUPPORTED_CLAUDE_MODELS = new Set([
+  'claude-opus-4-7',
+  'claude-opus-4-6',
+  'claude-opus-4-6[1m]',
+  'claude-sonnet-4-6',
+]);
+
+/**
+ * Claude models that additionally support the 'xhigh' effort level.
+ * Opus 4.7 is currently the only Claude Code model with xhigh support.
+ */
+export const XHIGH_EFFORT_CLAUDE_MODELS = new Set([
+  'claude-opus-4-7',
+]);
+
+/**
+ * Claude models that support the 'max' effort level.
+ */
+export const MAX_EFFORT_CLAUDE_MODELS = new Set([
+  'claude-opus-4-7',
+  'claude-opus-4-6',
+  'claude-opus-4-6[1m]',
+  'claude-sonnet-4-6',
+]);
+
+/**
+ * Reasoning Effort (thinking depth)
+ * Controls the depth of reasoning for AI models
+ * Claude API values: low, medium, high, xhigh, max
+ * Codex API values: low, medium, high, xhigh
+ */
+export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 /**
  * Reasoning level information
@@ -429,7 +459,7 @@ export interface ReasoningInfo {
 }
 
 /**
- * Available reasoning levels for Codex
+ * Available reasoning levels
  */
 export const REASONING_LEVELS: ReasoningInfo[] = [
   {
@@ -442,18 +472,24 @@ export const REASONING_LEVELS: ReasoningInfo[] = [
     id: 'medium',
     label: 'Medium',
     icon: 'codicon-circle-filled',
-    description: 'Balanced thinking (default)',
+    description: 'Balanced thinking with moderate token savings',
   },
   {
     id: 'high',
     label: 'High',
     icon: 'codicon-circle-large-filled',
-    description: 'Deep reasoning for complex tasks',
+    description: 'Deep reasoning for complex tasks (default)',
   },
   {
     id: 'xhigh',
-    label: 'Max',
+    label: 'XHigh',
     icon: 'codicon-flame',
+    description: 'Extra deep reasoning for demanding tasks',
+  },
+  {
+    id: 'max',
+    label: 'Max',
+    icon: 'codicon-rocket',
     description: 'Maximum reasoning depth',
   },
 ];
@@ -559,9 +595,9 @@ export interface ChatInputBoxProps {
   onModelSelect?: (modelId: string) => void;
   /** Switch provider */
   onProviderSelect?: (providerId: string) => void;
-  /** Current reasoning effort (Codex only) */
+  /** Current reasoning effort */
   reasoningEffort?: ReasoningEffort;
-  /** Switch reasoning effort callback (Codex only) */
+  /** Switch reasoning effort callback */
   onReasoningChange?: (effort: ReasoningEffort) => void;
   /** Toggle thinking mode */
   onToggleThinking?: (enabled: boolean) => void;
@@ -638,7 +674,7 @@ export interface ButtonAreaProps {
   permissionMode?: PermissionMode;
   /** Current provider */
   currentProvider?: string;
-  /** Current reasoning effort (Codex only) */
+  /** Current reasoning effort */
   reasoningEffort?: ReasoningEffort;
 
   // Event callbacks
@@ -647,7 +683,7 @@ export interface ButtonAreaProps {
   onModeSelect?: (mode: PermissionMode) => void;
   onModelSelect?: (modelId: string) => void;
   onProviderSelect?: (providerId: string) => void;
-  /** Switch reasoning effort callback (Codex only) */
+  /** Switch reasoning effort callback */
   onReasoningChange?: (effort: ReasoningEffort) => void;
   /** Enhance prompt callback */
   onEnhancePrompt?: () => void;

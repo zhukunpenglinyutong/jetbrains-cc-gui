@@ -144,7 +144,9 @@ public class SendTerminalSelectionToInputAction extends AnAction implements Dumb
             }
 
             DefaultActionGroup group = (DefaultActionGroup) groupAction;
-            boolean alreadyRegistered = Arrays.stream(group.getChildren(actionManager))
+            // Use getChildActionsOrStubs() for compatibility with IntelliJ 2023.3+;
+            // getChildren(ActionManager) was only added in 2024.2 and triggers NoSuchMethodError on older builds.
+            boolean alreadyRegistered = Arrays.stream(group.getChildActionsOrStubs())
                     .map(actionManager::getId)
                     .anyMatch(ACTION_ID::equals);
             if (alreadyRegistered) {

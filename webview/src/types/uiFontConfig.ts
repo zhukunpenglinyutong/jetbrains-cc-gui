@@ -11,6 +11,7 @@ export interface UiFontConfig {
   fontSize: number;
   lineSpacing: number;
   fallbackFonts?: string[];
+  fontUrl?: string;
   fontBase64?: string;
   fontFormat?: 'truetype' | 'opentype';
   warningCode?: 'fontUnavailable';

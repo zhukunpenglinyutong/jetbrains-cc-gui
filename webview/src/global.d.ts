@@ -100,6 +100,15 @@ interface Window {
   addToast?: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 
   /**
+   * Toast deferred until a session transition finishes, because backend
+   * clearMessages resets transient UI state during new-session creation.
+   */
+  __pendingSessionTransitionToast?: {
+    message: string;
+    type?: 'success' | 'error' | 'warning' | 'info';
+  };
+
+  /**
    * Usage statistics update callback
    */
   onUsageUpdate?: (json: string) => void;
@@ -261,6 +270,11 @@ interface Window {
   updateCommitGenerationEnabled?: (json: string) => void;
 
   /**
+   * Update AI session title generation enabled state
+   */
+  updateAiTitleGenerationEnabled?: (json: string) => void;
+
+  /**
    * Update status bar widget enabled state
    */
   updateStatusBarWidgetEnabled?: (json: string) => void;
@@ -294,6 +308,11 @@ interface Window {
    * Update working directory configuration
    */
   updateWorkingDirectory?: (json: string) => void;
+
+  /**
+   * Update linkify/navigation capabilities used by Markdown rendering.
+   */
+  updateLinkifyCapabilities?: (json: string) => void;
 
   /**
    * Show success message
@@ -419,9 +438,16 @@ interface Window {
   updatePromptEnhancerConfig?: (json: string) => void;
 
   /**
-   * Update session title (called when session title changes)
+   * Update commit AI settings config from backend
    */
-  updateSessionTitle?: (title: string) => void;
+  updateCommitAiConfig?: (json: string) => void;
+
+  /**
+   * Update session title (called when AI generates a title).
+   * @param sessionId - The session ID the title belongs to
+   * @param title - The generated title text
+   */
+  updateSessionTitle?: (sessionId: string, title: string) => void;
 
   /**
    * Editor font config received callback - receives IDEA editor font configuration

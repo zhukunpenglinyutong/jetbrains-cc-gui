@@ -249,9 +249,10 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     env: {
       ANTHROPIC_BASE_URL: 'https://api.deepseek.com/anthropic',
       ANTHROPIC_AUTH_TOKEN: '',
-      ANTHROPIC_SMALL_FAST_MODEL: 'DeepSeek-V3.2',
-      ANTHROPIC_DEFAULT_SONNET_MODEL: 'DeepSeek-V3.2',
-      ANTHROPIC_DEFAULT_OPUS_MODEL: 'DeepSeek-V3.2',
+      ANTHROPIC_SMALL_FAST_MODEL: 'deepseek-v4-flash',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'deepseek-v4-pro[1m]',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'deepseek-v4-pro[1m]',
+      CLAUDE_CODE_EFFORT_LEVEL: 'max',
     },
   },
   {
@@ -274,9 +275,20 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     env: {
       ANTHROPIC_BASE_URL: 'https://api.xiaomimimo.com/anthropic',
       ANTHROPIC_AUTH_TOKEN: '',
-      ANTHROPIC_SMALL_FAST_MODEL: 'mimo-v2-flash',
-      ANTHROPIC_DEFAULT_SONNET_MODEL: 'mimo-v2-flash',
-      ANTHROPIC_DEFAULT_OPUS_MODEL: 'mimo-v2-flash',
+      ANTHROPIC_SMALL_FAST_MODEL: 'mimo-v2.5-pro',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'mimo-v2.5-pro',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'mimo-v2.5-pro',
+    },
+  },
+  {
+    id: 'xiaomi-plan',
+    nameKey: 'settings.provider.presets.xiaomiPlan',
+    env: {
+      ANTHROPIC_BASE_URL: 'https://token-plan-cn.xiaomimimo.com/anthropic',
+      ANTHROPIC_AUTH_TOKEN: '',
+      ANTHROPIC_SMALL_FAST_MODEL: 'mimo-v2.5-pro',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'mimo-v2.5-pro',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'mimo-v2.5-pro',
     },
   },
   {

@@ -2,6 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SPECIAL_PROVIDER_IDS, type CodexProviderConfig, type ProviderConfig } from '../../../types/provider';
 import { sendBridgeEvent } from '../../../utils/bridge';
+import {
+  subscribeActiveCodexProvider,
+  subscribeActiveProvider,
+  subscribeCodexProviderList,
+  subscribeProviderList,
+} from '../../../utils/runtimeProviderCapabilities';
 
 interface RuntimeProviderSelectProps {
   currentProvider: string;
@@ -35,10 +41,6 @@ export const RuntimeProviderSelect = ({ currentProvider, embedded = false, onClo
   });
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const previousUpdateProvidersRef = useRef<typeof window.updateProviders>(undefined);
-  const previousUpdateActiveProviderRef = useRef<typeof window.updateActiveProvider>(undefined);
-  const previousUpdateCodexProvidersRef = useRef<typeof window.updateCodexProviders>(undefined);
-  const previousUpdateActiveCodexProviderRef = useRef<typeof window.updateActiveCodexProvider>(undefined);
 
   const providerKind: ProviderKind = currentProvider === 'codex' ? 'codex' : 'claude';
   const visibleProviders = providersByKind[providerKind];
@@ -100,13 +102,7 @@ export const RuntimeProviderSelect = ({ currentProvider, embedded = false, onClo
   }, [getProviderDisplayName, onClose, onProviderSwitched, providerKind]);
 
   useEffect(() => {
-    previousUpdateProvidersRef.current = window.updateProviders;
-    previousUpdateActiveProviderRef.current = window.updateActiveProvider;
-    previousUpdateCodexProvidersRef.current = window.updateCodexProviders;
-    previousUpdateActiveCodexProviderRef.current = window.updateActiveCodexProvider;
-
-    window.updateProviders = (json: string) => {
-      previousUpdateProvidersRef.current?.(json);
+    const unsubscribeProviders = subscribeProviderList((json) => {
       try {
         const providers = parseProviderList(json);
         setProvidersByKind((previous) => ({ ...previous, claude: providers }));
@@ -115,10 +111,9 @@ export const RuntimeProviderSelect = ({ currentProvider, embedded = false, onClo
         console.error('[RuntimeProviderSelect] Failed to parse Claude providers:', error);
         setLoading(false);
       }
-    };
+    });
 
-    window.updateActiveProvider = (json: string) => {
-      previousUpdateActiveProviderRef.current?.(json);
+    const unsubscribeActiveProvider = subscribeActiveProvider((json) => {
       try {
         const activeProvider = JSON.parse(json) as RuntimeProvider;
         if (!activeProvider?.id) return;
@@ -132,10 +127,9 @@ export const RuntimeProviderSelect = ({ currentProvider, embedded = false, onClo
       } catch (error) {
         console.error('[RuntimeProviderSelect] Failed to parse active Claude provider:', error);
       }
-    };
+    });
 
-    window.updateCodexProviders = (json: string) => {
-      previousUpdateCodexProvidersRef.current?.(json);
+    const unsubscribeCodexProviders = subscribeCodexProviderList((json) => {
       try {
         const providers = parseProviderList(json);
         setProvidersByKind((previous) => ({ ...previous, codex: providers }));
@@ -144,10 +138,9 @@ export const RuntimeProviderSelect = ({ currentProvider, embedded = false, onClo
         console.error('[RuntimeProviderSelect] Failed to parse Codex providers:', error);
         setLoading(false);
       }
-    };
+    });
 
-    window.updateActiveCodexProvider = (json: string) => {
-      previousUpdateActiveCodexProviderRef.current?.(json);
+    const unsubscribeActiveCodexProvider = subscribeActiveCodexProvider((json) => {
       try {
         const activeProvider = JSON.parse(json) as RuntimeProvider;
         if (!activeProvider?.id) return;
@@ -161,13 +154,13 @@ export const RuntimeProviderSelect = ({ currentProvider, embedded = false, onClo
       } catch (error) {
         console.error('[RuntimeProviderSelect] Failed to parse active Codex provider:', error);
       }
-    };
+    });
 
     return () => {
-      window.updateProviders = previousUpdateProvidersRef.current;
-      window.updateActiveProvider = previousUpdateActiveProviderRef.current;
-      window.updateCodexProviders = previousUpdateCodexProvidersRef.current;
-      window.updateActiveCodexProvider = previousUpdateActiveCodexProviderRef.current;
+      unsubscribeProviders();
+      unsubscribeActiveProvider();
+      unsubscribeCodexProviders();
+      unsubscribeActiveCodexProvider();
     };
   }, []);
 

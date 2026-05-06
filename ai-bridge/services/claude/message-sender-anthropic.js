@@ -9,8 +9,9 @@ import { selectWorkingDirectory } from '../../utils/path-utils.js';
 import { resolveModelFromSettings } from '../../utils/model-utils.js';
 import { loadSessionHistory, persistJsonlMessage } from './session-service.js';
 import { ensureAnthropicSdk, ensureBedrockSdk, truncateErrorContent } from './message-utils.js';
+import { buildContentBlocks } from './attachment-service.js';
 
-export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd, permissionMode, model, apiKey, baseUrl, authType) {
+export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd, permissionMode, model, apiKey, baseUrl, authType, attachments = []) {
   try {
     // Dynamically load Anthropic SDK
     const anthropicModule = await ensureAnthropicSdk();
@@ -79,7 +80,9 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
     console.log('[DEBUG] Base URL:', baseUrl);
     console.log('[DEBUG] Auth type:', authType || 'api_key (default)');
 
-    const userContent = [{ type: 'text', text: message }];
+    const userContent = (Array.isArray(attachments) && attachments.length > 0)
+      ? buildContentBlocks(attachments, message, modelId)
+      : [{ type: 'text', text: message }];
 
     persistJsonlMessage(sessionId, cwd, {
       type: 'user',

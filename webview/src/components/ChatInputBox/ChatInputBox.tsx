@@ -76,7 +76,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       onModeSelect,
       onModelSelect,
       onProviderSelect,
-      reasoningEffort = 'medium',
+      reasoningEffort = 'high',
       onReasoningChange,
       activeFile,
       selectedLines,

@@ -8,6 +8,7 @@ import com.github.claudecodegui.handler.PermissionHandler;
 import com.github.claudecodegui.permission.PermissionService;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.provider.common.DaemonBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.session.SessionCallbackAdapter;
@@ -35,6 +36,7 @@ import com.intellij.ui.jcef.JBCefBrowser;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Chat window instance. Coordinates UI components, session management,
@@ -64,7 +66,10 @@ public class ClaudeChatWindow {
     private volatile boolean initialized = false;
     private volatile boolean frontendReady = false;
     private volatile boolean slashCommandsFetched = false;
-    private volatile boolean restoredHistoryLoadStarted = false;
+    private final AtomicBoolean restoredHistoryLoadStarted = new AtomicBoolean(false);
+
+    // Daemon event listener for AI title forwarding. Held so it can be removed on dispose.
+    private DaemonBridge.DaemonEventListener titleEventListener;
     private volatile int fetchedSlashCommandsCount = 0;
 
     private HandlerContext handlerContext;
@@ -383,10 +388,9 @@ public class ClaudeChatWindow {
         if (!TabSessionRestorePolicy.shouldLoadHistory(savedState) || session == null) {
             return;
         }
-        if (restoredHistoryLoadStarted) {
+        if (!restoredHistoryLoadStarted.compareAndSet(false, true)) {
             return;
         }
-        restoredHistoryLoadStarted = true;
 
         session.loadFromServer().thenRun(() -> ApplicationManager.getApplication().invokeLater(() -> {
             if (!disposed) {
@@ -554,6 +558,32 @@ public class ClaudeChatWindow {
             }
         };
         session.setCallback(sessionCallbackAdapter);
+
+        // Wire daemon events directly to frontend (bypasses adapter lifecycle).
+        // Calling through sessionCallbackAdapter would silently drop the event
+        // if setupSessionCallbacks() is invoked again before the title arrives
+        // (adapter.deactivate() → isInactive() → event discarded).
+        // Register only once per ClaudeChatWindow; subsequent setupSessionCallbacks()
+        // calls reuse the existing listener so the bridge keeps a single registration
+        // per window. The listener is removed in dispose().
+        if (this.titleEventListener == null) {
+            this.titleEventListener = (event, data) -> {
+                if ("title_generated".equals(event)) {
+                    String genSessionId = data.has("sessionId") ? data.get("sessionId").getAsString() : null;
+                    String title = data.has("title") ? data.get("title").getAsString() : null;
+                    if (genSessionId != null && title != null) {
+                        ApplicationManager.getApplication().invokeLater(() -> {
+                            if (!disposed) {
+                                callJavaScript("updateSessionTitle",
+                                        JsUtils.escapeJs(genSessionId), JsUtils.escapeJs(title));
+                            }
+                        });
+                    }
+                }
+            };
+            this.claudeSDKBridge.addDaemonEventListener(this.titleEventListener);
+        }
+
         persistTabSessionState();
     }
 
@@ -649,6 +679,14 @@ public class ClaudeChatWindow {
         streamCoalescer.dispose();
         if (sessionCallbackAdapter != null) {
             sessionCallbackAdapter.dispose();
+        }
+        if (titleEventListener != null && claudeSDKBridge != null) {
+            try {
+                claudeSDKBridge.removeDaemonEventListener(titleEventListener);
+            } catch (Exception e) {
+                LOG.warn("Failed to remove daemon event listener: " + e.getMessage());
+            }
+            titleEventListener = null;
         }
         webviewWatchdog.stop();
 

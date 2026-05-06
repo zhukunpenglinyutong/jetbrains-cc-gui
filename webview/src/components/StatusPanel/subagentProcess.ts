@@ -6,10 +6,15 @@ export interface SubagentProcessModel {
   toolCalls: Array<{ id: string; name: string; detail?: string }>;
 }
 
-export function formatSubagentDuration(totalDurationMs?: number): string | null {
+export function formatSubagentDuration(
+  totalDurationMs?: number,
+  units?: { ms?: string; s?: string },
+): string | null {
   if (typeof totalDurationMs !== 'number') return null;
-  if (totalDurationMs < 1000) return `${totalDurationMs}ms`;
-  return `${(totalDurationMs / 1000).toFixed(1)}s`;
+  const msLabel = units?.ms ?? 'ms';
+  const sLabel = units?.s ?? 's';
+  if (totalDurationMs < 1000) return `${totalDurationMs}${msLabel}`;
+  return `${(totalDurationMs / 1000).toFixed(1)}${sLabel}`;
 }
 
 function getRawContent(message: unknown): unknown[] {
@@ -32,9 +37,6 @@ function getToolDetail(input: unknown): string | undefined {
 }
 
 function compactPath(path: string): string {
-  const marker = '/idea-claude-code-gui/';
-  const markerIndex = path.indexOf(marker);
-  if (markerIndex >= 0) return path.slice(markerIndex + marker.length);
   const parts = path.split('/').filter(Boolean);
   return parts.length > 4 ? `…/${parts.slice(-4).join('/')}` : path;
 }

@@ -267,6 +267,16 @@
     "commit": {
       "title": "Commit AI",
       "description": "Configure AI-generated Git commit message behavior",
+      "providerModel": {
+        "label": "Proveedor del modelo de commit",
+        "modelLabel": "Modelo de commit",
+        "resetToDefault": "Restablecer",
+        "providerAvailable": "Disponible",
+        "providerUnavailable": "No disponible",
+        "currentProviderAuto": "Actualmente usando selección automática: {{provider}}",
+        "currentProviderManual": "Actualmente usando el proveedor seleccionado manualmente: {{provider}}",
+        "currentProviderUnavailable": "El proveedor seleccionado no está disponible actualmente: {{provider}}"
+      },
       "prompt": {
         "label": "Additional Prompt",
         "placeholder": "Add your extra requirements here, e.g., generate commit in English, include issue number, etc...",
@@ -321,6 +331,12 @@
           "minutesAgo_other": "{{count}} minutos atrás",
           "justNow": "ahora mismo"
         }
+      },
+      "aiTitleGeneration": {
+        "label": "Generación automática de título de sesión por IA",
+        "enabled": "Activado",
+        "disabled": "Desactivado",
+        "hint": "Cuando está activado, se genera un título breve con Haiku tras la primera respuesta de una sesión nueva. Si está desactivado, se mantiene el primer mensaje del usuario como título."
       }
     },
     "codexFeatureUnavailable": "Esta sección de configuración aún no está disponible en Codex. Cambia a Claude Code.",
@@ -505,6 +521,7 @@
         "deepseek": "DeepSeek",
         "minimax": "MiniMax",
         "xiaomi": "Xiaomi MiMo",
+        "xiaomiPlan": "Xiaomi MiMo Plan",
         "qwen": "Alibaba Qwen",
         "openrouter": "OpenRouter"
       }
@@ -628,6 +645,16 @@
     "confirmDelete": "Confirmar eliminación",
     "deleteMessage": "��Estás seguro de que quieres eliminar esta sesión? Esta acción no se puede deshacer.",
     "deleteSession": "Eliminar esta sesión",
+    "selectMode": "Select",
+    "exitSelectMode": "Exit selection",
+    "selectedSessions": "{{count}} selected",
+    "selectAll": "Select all",
+    "clearSelection": "Clear",
+    "deleteSelected": "Delete selected",
+    "confirmDeleteSelected": "Confirm Delete",
+    "deleteSelectedMessage": "Are you sure you want to delete {{count}} selected sessions? This action cannot be undone.",
+    "selectSession": "Select session",
+    "selectSessionWithTitle": "Select {{title}}",
     "exportSession": "Exportar sesión",
     "exportSuccess": "Sesión exportada",
     "exportFailed": "Falló la exportación",
@@ -736,6 +763,12 @@
     "clickToCopy": "Haz clic para copiar",
     "switch": "Cambiar",
     "switchProvider": "Cambiar proveedor",
+    "runtimeProvider": {
+      "title": "Cambiar el proveedor actual",
+      "loading": "Cargando proveedores...",
+      "empty": "No hay proveedores disponibles",
+      "switched": "Cambiado a {{provider}}"
+    },
     "link": "Enlace"
   },
   "markdown": {
@@ -1294,7 +1327,7 @@
   },
   "fileContext": {
     "placeholder": "Contexto de archivo",
-    "enableTitle": "\u00bfHabilitar contexto de archivo?",
+    "enableTitle": "¿Habilitar contexto de archivo?",
     "enableDescription": "Cuando esté habilitado, la ruta del archivo abierto en el editor se enviará a la IA. Nota: solo se transmite la ruta del archivo, no su contenido.",
     "enable": "Habilitar",
     "cancel": "Cancelar"

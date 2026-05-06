@@ -334,6 +334,16 @@
     "commit": {
       "title": "IA para Commits",
       "description": "Configurar o comportamento de geração de mensagens de commit Git com IA",
+      "providerModel": {
+        "label": "Provedor do modelo de commit",
+        "modelLabel": "Modelo de commit",
+        "resetToDefault": "Redefinir",
+        "providerAvailable": "Disponível",
+        "providerUnavailable": "Indisponível",
+        "currentProviderAuto": "Usando seleção automática atualmente: {{provider}}",
+        "currentProviderManual": "Usando o provedor selecionado manualmente atualmente: {{provider}}",
+        "currentProviderUnavailable": "O provedor selecionado está indisponível no momento: {{provider}}"
+      },
       "prompt": {
         "label": "Prompt Adicional",
         "placeholder": "Adicione seus requisitos extras aqui, ex: gerar commit em português, incluir número do issue, etc...",
@@ -388,6 +398,12 @@
           "minutesAgo_other": "{{count}} minutos atrás",
           "justNow": "agora mesmo"
         }
+      },
+      "aiTitleGeneration": {
+        "label": "Geração automática de título de sessão por IA",
+        "enabled": "Ativado",
+        "disabled": "Desativado",
+        "hint": "Quando ativado, um título curto gerado pelo Haiku é criado após o primeiro turno de uma nova sessão. Desativado, a sessão continua usando a primeira mensagem do usuário como título."
       }
     },
     "codexFeatureUnavailable": "Esta seção de configurações ainda não está disponível no Codex. Por favor, mude para Claude Code.",
@@ -594,6 +610,7 @@
         "deepseek": "DeepSeek",
         "minimax": "MiniMax",
         "xiaomi": "Xiaomi MiMo",
+        "xiaomiPlan": "Xiaomi MiMo Plan",
         "qwen": "Alibaba Qwen",
         "openrouter": "OpenRouter"
       }
@@ -802,6 +819,16 @@
     "confirmDelete": "Confirmar Exclusão",
     "deleteMessage": "Tem certeza que deseja excluir esta sessão? Esta ação não pode ser desfeita.",
     "deleteSession": "Excluir esta sessão",
+    "selectMode": "Select",
+    "exitSelectMode": "Exit selection",
+    "selectedSessions": "{{count}} selected",
+    "selectAll": "Select all",
+    "clearSelection": "Clear",
+    "deleteSelected": "Delete selected",
+    "confirmDeleteSelected": "Confirm Delete",
+    "deleteSelectedMessage": "Are you sure you want to delete {{count}} selected sessions? This action cannot be undone.",
+    "selectSession": "Select session",
+    "selectSessionWithTitle": "Select {{title}}",
     "exportSession": "Exportar sessão",
     "exportSuccess": "Sessão exportada",
     "exportFailed": "Falha na exportação",
@@ -911,6 +938,12 @@
     "clickToCopy": "Clique para copiar",
     "switch": "Alternar",
     "switchProvider": "Alternar provedor",
+    "runtimeProvider": {
+      "title": "Alternar provedor atual",
+      "loading": "Carregando provedores...",
+      "empty": "Nenhum provedor disponível",
+      "switched": "Alternado para {{provider}}"
+    },
     "link": "Link"
   },
   "markdown": {
