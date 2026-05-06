@@ -128,7 +128,7 @@ const BehaviorTab = ({
   onSaveCustomSoundPath = () => {},
   onTestSound = () => {},
   onBrowseSound = () => {},
-  taskCompletionNotificationEnabled = true,
+  taskCompletionNotificationEnabled = false,
   onTaskCompletionNotificationEnabledChange = () => {},
 }: BehaviorTabProps) => {
   const { t } = useTranslation();

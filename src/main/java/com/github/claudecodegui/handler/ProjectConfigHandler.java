@@ -651,7 +651,7 @@ public class ProjectConfigHandler {
             LOG.error("[ProjectConfigHandler] Failed to get task completion notification enabled: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() -> {
                 JsonObject r = new JsonObject();
-                r.addProperty("taskCompletionNotificationEnabled", true);
+                r.addProperty("taskCompletionNotificationEnabled", false);
                 context.callJavaScript("window.updateTaskCompletionNotificationEnabled", context.escapeJs(gson.toJson(r)));
             });
         }
@@ -660,8 +660,8 @@ public class ProjectConfigHandler {
     public void handleSetTaskCompletionNotificationEnabled(String content) {
         try {
             JsonObject json = gson.fromJson(content, JsonObject.class);
-            // Default to enabled when payload is missing or the field is absent/null.
-            boolean enabled = true;
+            // Default to disabled when payload is missing or the field is absent/null (opt-in feature).
+            boolean enabled = false;
             if (json != null
                 && json.has("taskCompletionNotificationEnabled")
                 && !json.get("taskCompletionNotificationEnabled").isJsonNull()) {

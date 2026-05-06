@@ -215,8 +215,8 @@ export function useSettingsBasicActions({
   // Status bar widget toggle (default: true)
   const [statusBarWidgetEnabled, setStatusBarWidgetEnabled] = useState<boolean>(true);
 
-  // Task completion notification toggle (default: true)
-  const [taskCompletionNotificationEnabled, setTaskCompletionNotificationEnabled] = useState<boolean>(true);
+  // Task completion notification toggle (default: false, opt-in feature)
+  const [taskCompletionNotificationEnabled, setTaskCompletionNotificationEnabled] = useState<boolean>(false);
 
   const [commitAiConfig, setCommitAiConfig] = useState<CommitAiConfig>(
     DEFAULT_COMMIT_AI_CONFIG

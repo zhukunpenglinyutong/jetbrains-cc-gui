@@ -309,11 +309,11 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
     };
 
-    // Task completion notification config callback
+    // Task completion notification config callback (opt-in feature, default false)
     window.updateTaskCompletionNotificationEnabled = (jsonStr: string) => {
       try {
         const data = JSON.parse(jsonStr);
-        d().setTaskCompletionNotificationEnabled?.(data.taskCompletionNotificationEnabled ?? true);
+        d().setTaskCompletionNotificationEnabled?.(data.taskCompletionNotificationEnabled ?? false);
       } catch (error) {
         console.error('[SettingsView] Failed to parse task completion notification config:', error);
       }

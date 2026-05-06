@@ -1138,7 +1138,7 @@ public class CodemossSettingsService {
     /**
      * Get whether task completion balloon notification is enabled.
      *
-     * @return whether task completion notification is enabled, default is true
+     * @return whether task completion notification is enabled, default is false (opt-in)
      */
     public boolean getTaskCompletionNotificationEnabled() throws IOException {
         JsonObject config = readConfig();
@@ -1147,7 +1147,7 @@ public class CodemossSettingsService {
             return config.get("taskCompletionNotificationEnabled").getAsBoolean();
         }
 
-        return true;
+        return false;
     }
 
     /**

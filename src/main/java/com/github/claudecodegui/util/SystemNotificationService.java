@@ -10,6 +10,9 @@ import com.intellij.util.ui.JBUI;
 import org.jetbrains.annotations.NotNull;
 
 import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -21,20 +24,24 @@ import javax.swing.UIManager;
 import javax.swing.border.EmptyBorder;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Frame;
 import java.awt.GraphicsConfiguration;
 import java.awt.GraphicsDevice;
+import java.awt.Graphics2D;
 import java.awt.GraphicsEnvironment;
-import java.awt.GridLayout;
 import java.awt.Insets;
 import java.awt.Point;
 import java.awt.Rectangle;
+import java.awt.RenderingHints;
 import java.awt.Toolkit;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
+import java.net.URL;
 
 /**
  * System notification service.
@@ -44,17 +51,29 @@ public class SystemNotificationService {
 
     private static final Logger LOG = Logger.getInstance(SystemNotificationService.class);
 
-    private static final int MAX_MESSAGE_LENGTH = 150;
+    private static final int MAX_MESSAGE_LENGTH = 220;
     private static final int MESSAGE_ELLIPSIS_TAIL = 3;
-    private static final int WINDOW_WIDTH = 350;
+    private static final int WINDOW_WIDTH = 380;
     private static final int AUTO_CLOSE_MS = 10_000;
     private static final int ANIM_STEPS = 10;
     private static final int ANIM_DELAY_MS = 20;
+    private static final int BRAND_ICON_SIZE = 40;
+
+    // Layout constants used by createNotificationWindow / buildTextPanel.
+    private static final int CONTENT_PADDING_LEFT = 18;
+    private static final int CONTENT_PADDING_RIGHT = 14;
+    private static final int CONTENT_HGAP = 14;
+    private static final int CLOSE_BUTTON_WIDTH = 24;
+    private static final int ACCENT_BAR_WIDTH = 4;
 
     private static volatile SystemNotificationService instance;
 
     // Track active notification window to prevent duplicates. Only mutated on EDT.
     private JWindow activeNotificationWindow = null;
+
+    // Cached scaled brand icon. Loaded lazily on EDT and reused across notifications.
+    private ImageIcon cachedBrandIcon = null;
+    private int cachedBrandIconSize = 0;
 
     private SystemNotificationService() {
     }
@@ -110,8 +129,8 @@ public class SystemNotificationService {
         try {
             return new CodemossSettingsService().getTaskCompletionNotificationEnabled();
         } catch (Exception e) {
-            LOG.debug("[SystemNotification] Failed to read enabled flag, defaulting to true: " + e.getMessage());
-            return true;
+            LOG.debug("[SystemNotification] Failed to read enabled flag, defaulting to false: " + e.getMessage());
+            return false;
         }
     }
 
@@ -168,40 +187,38 @@ public class SystemNotificationService {
         window.setAlwaysOnTop(true);
 
         boolean isDark = UIManager.getBoolean("Editor.isDarkTheme");
-        Color bgColor = isDark ? new Color(32, 32, 32) : new Color(255, 255, 255);
-        Color textColor = isDark ? new Color(255, 255, 255) : new Color(0, 0, 0);
-        Color subtextColor = isDark ? new Color(180, 180, 180) : new Color(90, 90, 90);
-        Color accentColor = new Color(0, 120, 212); // Windows blue accent
+        Color bgColor = isDark ? new Color(40, 42, 48) : new Color(255, 255, 255);
+        Color textColor = isDark ? new Color(240, 240, 242) : new Color(28, 28, 32);
+        Color subtextColor = isDark ? new Color(186, 188, 195) : new Color(90, 92, 100);
+        Color borderColor = isDark ? new Color(0, 0, 0, 130) : new Color(0, 0, 0, 50);
+        Color accentColor = new Color(95, 99, 240); // Brand purple accent
 
         JPanel mainPanel = new JPanel(new BorderLayout());
-        mainPanel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(0, 0, 0, 80), 1),
-            BorderFactory.createEmptyBorder(1, 1, 1, 1)
-        ));
+        mainPanel.setBorder(BorderFactory.createLineBorder(borderColor, 1));
         mainPanel.setBackground(bgColor);
 
-        JPanel contentPanel = new JPanel(new BorderLayout(JBUI.scale(12), JBUI.scale(8)));
-        contentPanel.setBorder(new EmptyBorder(JBUI.scale(16), JBUI.scale(16), JBUI.scale(16), JBUI.scale(16)));
+        JPanel contentPanel = new JPanel(new BorderLayout(JBUI.scale(CONTENT_HGAP), 0));
+        contentPanel.setBorder(new EmptyBorder(
+            JBUI.scale(18), JBUI.scale(CONTENT_PADDING_LEFT),
+            JBUI.scale(18), JBUI.scale(CONTENT_PADDING_RIGHT)));
         contentPanel.setBackground(bgColor);
 
         JPanel accentBar = new JPanel();
         accentBar.setBackground(accentColor);
-        accentBar.setPreferredSize(new Dimension(JBUI.scale(4), 0));
+        accentBar.setPreferredSize(new Dimension(JBUI.scale(ACCENT_BAR_WIDTH), 0));
 
-        JLabel iconLabel = new JLabel(UIManager.getIcon("OptionPane.informationIcon"));
-        iconLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        iconLabel.setVerticalAlignment(SwingConstants.TOP);
+        JLabel iconLabel = createBrandIconLabel();
 
         JPanel textPanel = buildTextPanel(escapedMessage, textColor, subtextColor);
         JButton closeButton = createCloseButton(window, isDark, subtextColor);
 
-        JPanel headerPanel = new JPanel(new BorderLayout(JBUI.scale(12), 0));
-        headerPanel.setOpaque(false);
-        headerPanel.add(iconLabel, BorderLayout.WEST);
-        headerPanel.add(textPanel, BorderLayout.CENTER);
-        headerPanel.add(closeButton, BorderLayout.EAST);
+        JPanel rightPanel = new JPanel(new BorderLayout());
+        rightPanel.setOpaque(false);
+        rightPanel.add(closeButton, BorderLayout.NORTH);
 
-        contentPanel.add(headerPanel, BorderLayout.CENTER);
+        contentPanel.add(iconLabel, BorderLayout.WEST);
+        contentPanel.add(textPanel, BorderLayout.CENTER);
+        contentPanel.add(rightPanel, BorderLayout.EAST);
 
         mainPanel.add(accentBar, BorderLayout.WEST);
         mainPanel.add(contentPanel, BorderLayout.CENTER);
@@ -229,20 +246,95 @@ public class SystemNotificationService {
         return window;
     }
 
+    /**
+     * Build brand icon label using the plugin logo, scaled to {@link #BRAND_ICON_SIZE}.
+     * Falls back to system information icon when the logo resource cannot be loaded.
+     * Caches the scaled icon (per scaled size) to avoid re-decoding on every notification.
+     */
+    private JLabel createBrandIconLabel() {
+        JLabel iconLabel = new JLabel();
+        iconLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        iconLabel.setVerticalAlignment(SwingConstants.TOP);
+        int size = JBUI.scale(BRAND_ICON_SIZE);
+        iconLabel.setPreferredSize(new Dimension(size, size));
+        iconLabel.setBorder(new EmptyBorder(JBUI.scale(2), 0, 0, 0));
+
+        ImageIcon brandIcon = loadBrandIcon(size);
+        if (brandIcon != null) {
+            iconLabel.setIcon(brandIcon);
+            return iconLabel;
+        }
+
+        iconLabel.setIcon(UIManager.getIcon("OptionPane.informationIcon"));
+        return iconLabel;
+    }
+
+    /**
+     * Load (and cache) the brand icon scaled to the given pixel size. Returns null on failure.
+     * Must be called on EDT — fields are not synchronized.
+     */
+    private ImageIcon loadBrandIcon(int size) {
+        if (cachedBrandIcon != null && cachedBrandIconSize == size) {
+            return cachedBrandIcon;
+        }
+        try {
+            URL iconUrl = getClass().getResource("/icons/logo.png");
+            if (iconUrl == null) {
+                return null;
+            }
+            // ImageIO.read blocks until the image is fully decoded, avoiding the half-loaded
+            // frame that ImageIcon(URL) + drawImage can produce on slow filesystems.
+            BufferedImage source = javax.imageio.ImageIO.read(iconUrl);
+            if (source == null) {
+                return null;
+            }
+            BufferedImage buffer = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g = buffer.createGraphics();
+            try {
+                g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+                g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g.drawImage(source, 0, 0, size, size, null);
+            } finally {
+                g.dispose();
+            }
+            cachedBrandIcon = new ImageIcon(buffer);
+            cachedBrandIconSize = size;
+            return cachedBrandIcon;
+        } catch (Exception e) {
+            LOG.debug("[SystemNotification] Failed to load brand icon: " + e.getMessage());
+            return null;
+        }
+    }
+
     private JPanel buildTextPanel(String escapedMessage, Color textColor, Color subtextColor) {
-        JPanel textPanel = new JPanel(new GridLayout(2, 1, 0, JBUI.scale(4)));
+        JPanel textPanel = new JPanel();
+        textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.Y_AXIS));
         textPanel.setOpaque(false);
 
         JLabel titleLabel = new JLabel(ClaudeCodeGuiBundle.message("notifier.taskComplete.title"));
-        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 13f));
+        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 14f));
         titleLabel.setForeground(textColor);
+        titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
+        // Available text width = window width - brand icon - close button - inner gaps - paddings - accent bar.
+        int textBudget = WINDOW_WIDTH
+            - BRAND_ICON_SIZE
+            - CLOSE_BUTTON_WIDTH
+            - (CONTENT_HGAP * 2)
+            - CONTENT_PADDING_LEFT
+            - CONTENT_PADDING_RIGHT
+            - ACCENT_BAR_WIDTH;
+        int messageWidth = JBUI.scale(Math.max(textBudget, 160));
         JLabel messageLabel = new JLabel(
-            "<html><body style='width: " + JBUI.scale(250) + "px; margin: 0;'>" + escapedMessage + "</body></html>");
-        messageLabel.setFont(messageLabel.getFont().deriveFont(11f));
+            "<html><body style='width: " + messageWidth + "px; margin: 0; line-height: 1.5;'>"
+                + escapedMessage + "</body></html>");
+        messageLabel.setFont(messageLabel.getFont().deriveFont(13f));
         messageLabel.setForeground(subtextColor);
+        messageLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         textPanel.add(titleLabel);
+        textPanel.add(Box.createVerticalStrut(JBUI.scale(6)));
         textPanel.add(messageLabel);
         return textPanel;
     }
@@ -255,7 +347,7 @@ public class SystemNotificationService {
         closeButton.setContentAreaFilled(false);
         closeButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
         closeButton.setForeground(subtextColor);
-        closeButton.setPreferredSize(new Dimension(JBUI.scale(24), JBUI.scale(24)));
+        closeButton.setPreferredSize(new Dimension(JBUI.scale(CLOSE_BUTTON_WIDTH), JBUI.scale(CLOSE_BUTTON_WIDTH)));
         closeButton.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseEntered(MouseEvent e) {
