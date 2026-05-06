@@ -13,13 +13,11 @@ import org.jetbrains.annotations.Nullable;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
-import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JWindow;
-import javax.swing.SwingConstants;
 import javax.swing.Timer;
 import javax.swing.UIManager;
 import javax.swing.border.EmptyBorder;
@@ -32,17 +30,13 @@ import java.awt.Font;
 import java.awt.Frame;
 import java.awt.GraphicsConfiguration;
 import java.awt.GraphicsDevice;
-import java.awt.Graphics2D;
 import java.awt.GraphicsEnvironment;
 import java.awt.Insets;
 import java.awt.Point;
 import java.awt.Rectangle;
-import java.awt.RenderingHints;
 import java.awt.Toolkit;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.image.BufferedImage;
-import java.net.URL;
 
 /**
  * System notification service.
@@ -62,8 +56,6 @@ public class SystemNotificationService {
     private static final int AUTO_CLOSE_MS = 10_000;
     private static final int ANIM_STEPS = 10;
     private static final int ANIM_DELAY_MS = 20;
-    private static final int BRAND_ICON_SIZE = 40;
-
     // Layout constants used by createNotificationWindow / buildTextPanel.
     private static final int CONTENT_PADDING_LEFT = 18;
     private static final int CONTENT_PADDING_RIGHT = 14;
@@ -75,10 +67,6 @@ public class SystemNotificationService {
 
     // Track active notification window to prevent duplicates. Only mutated on EDT.
     private JWindow activeNotificationWindow = null;
-
-    // Cached scaled brand icon. Loaded lazily on EDT and reused across notifications.
-    private ImageIcon cachedBrandIcon = null;
-    private int cachedBrandIconSize = 0;
 
     private SystemNotificationService() {
     }
@@ -233,8 +221,6 @@ public class SystemNotificationService {
         accentBar.setBackground(accentColor);
         accentBar.setPreferredSize(new Dimension(JBUI.scale(ACCENT_BAR_WIDTH), 0));
 
-        JLabel iconLabel = createBrandIconLabel();
-
         JPanel textPanel = buildTextPanel(escapedTitle, escapedMessage, textColor, subtextColor);
         JButton closeButton = createCloseButton(window, isDark, subtextColor);
 
@@ -242,7 +228,6 @@ public class SystemNotificationService {
         rightPanel.setOpaque(false);
         rightPanel.add(closeButton, BorderLayout.NORTH);
 
-        contentPanel.add(iconLabel, BorderLayout.WEST);
         contentPanel.add(textPanel, BorderLayout.CENTER);
         contentPanel.add(rightPanel, BorderLayout.EAST);
 
@@ -273,75 +258,13 @@ public class SystemNotificationService {
     }
 
     /**
-     * Build brand icon label using the plugin logo, scaled to {@link #BRAND_ICON_SIZE}.
-     * Falls back to system information icon when the logo resource cannot be loaded.
-     * Caches the scaled icon (per scaled size) to avoid re-decoding on every notification.
-     */
-    private JLabel createBrandIconLabel() {
-        JLabel iconLabel = new JLabel();
-        iconLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        iconLabel.setVerticalAlignment(SwingConstants.TOP);
-        int size = JBUI.scale(BRAND_ICON_SIZE);
-        iconLabel.setPreferredSize(new Dimension(size, size));
-        iconLabel.setBorder(new EmptyBorder(JBUI.scale(2), 0, 0, 0));
-
-        ImageIcon brandIcon = loadBrandIcon(size);
-        if (brandIcon != null) {
-            iconLabel.setIcon(brandIcon);
-            return iconLabel;
-        }
-
-        iconLabel.setIcon(UIManager.getIcon("OptionPane.informationIcon"));
-        return iconLabel;
-    }
-
-    /**
-     * Load (and cache) the brand icon scaled to the given pixel size. Returns null on failure.
-     * Must be called on EDT — fields are not synchronized.
-     */
-    private ImageIcon loadBrandIcon(int size) {
-        if (cachedBrandIcon != null && cachedBrandIconSize == size) {
-            return cachedBrandIcon;
-        }
-        try {
-            URL iconUrl = getClass().getResource("/icons/logo.png");
-            if (iconUrl == null) {
-                return null;
-            }
-            // ImageIO.read blocks until the image is fully decoded, avoiding the half-loaded
-            // frame that ImageIcon(URL) + drawImage can produce on slow filesystems.
-            BufferedImage source = javax.imageio.ImageIO.read(iconUrl);
-            if (source == null) {
-                return null;
-            }
-            BufferedImage buffer = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
-            Graphics2D g = buffer.createGraphics();
-            try {
-                g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-                g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g.drawImage(source, 0, 0, size, size, null);
-            } finally {
-                g.dispose();
-            }
-            cachedBrandIcon = new ImageIcon(buffer);
-            cachedBrandIconSize = size;
-            return cachedBrandIcon;
-        } catch (Exception e) {
-            LOG.debug("[SystemNotification] Failed to load brand icon: " + e.getMessage());
-            return null;
-        }
-    }
-
-    /**
      * Pixel width budget available for title and message labels inside the toast.
      * Derived from layout constants so changes to padding/icon size stay consistent.
      */
     private int computeTextWidthPx() {
         int budget = WINDOW_WIDTH
-            - BRAND_ICON_SIZE
             - CLOSE_BUTTON_WIDTH
-            - (CONTENT_HGAP * 2)
+            - CONTENT_HGAP
             - CONTENT_PADDING_LEFT
             - CONTENT_PADDING_RIGHT
             - ACCENT_BAR_WIDTH;
