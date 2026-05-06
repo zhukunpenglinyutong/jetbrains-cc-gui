@@ -8,6 +8,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.wm.WindowManager;
 import com.intellij.util.ui.JBUI;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -52,6 +53,10 @@ public class SystemNotificationService {
     private static final Logger LOG = Logger.getInstance(SystemNotificationService.class);
 
     private static final int MAX_MESSAGE_LENGTH = 220;
+    // Tightened so titles fit on a single 14pt-bold line in WINDOW_WIDTH for both
+    // CJK and Latin scripts, avoiding HTML JLabel height-measurement issues
+    // that can clip wrapped titles inside BoxLayout.
+    private static final int MAX_TITLE_LENGTH = 35;
     private static final int MESSAGE_ELLIPSIS_TAIL = 3;
     private static final int WINDOW_WIDTH = 380;
     private static final int AUTO_CLOSE_MS = 10_000;
@@ -90,13 +95,18 @@ public class SystemNotificationService {
     }
 
     /**
-     * Show visual notification window.
-     * Styled like Windows 10/11 toast notifications.
-     *
-     * @param project the current project
-     * @param message the notification message to display
+     * Show visual notification window with a fallback title.
      */
     public void showVisualNotificationToast(@NotNull Project project, String message) {
+        showVisualNotificationToast(project, null, message);
+    }
+
+    /**
+     * Show visual notification window with an explicit dynamic title.
+     * When {@code title} is null/blank, the i18n default
+     * {@code notifier.taskComplete.title} is used.
+     */
+    public void showVisualNotificationToast(@NotNull Project project, @Nullable String title, String message) {
         ApplicationManager.getApplication().invokeLater(() -> {
             if (project.isDisposed()) {
                 return;
@@ -107,7 +117,8 @@ public class SystemNotificationService {
                 }
                 disposeActiveWindow();
 
-                JWindow window = createNotificationWindow(project, sanitizeMessage(message));
+                String resolvedTitle = sanitizeTitle(title);
+                JWindow window = createNotificationWindow(project, resolvedTitle, sanitizeMessage(message));
                 activeNotificationWindow = window;
 
                 Point position = getNotificationPosition(window, project);
@@ -146,10 +157,25 @@ public class SystemNotificationService {
      * the result before embedding into a {@code <html>...</html>} JLabel.
      */
     private String sanitizeMessage(String raw) {
-        String text = raw == null ? "" : raw;
+        return truncateAndEscape(raw == null ? "" : raw, MAX_MESSAGE_LENGTH);
+    }
+
+    /**
+     * Resolve the toast title: use the caller-provided title when non-blank,
+     * otherwise fall back to the i18n default. The returned string is HTML-escaped
+     * and truncated for safe embedding in a JLabel.
+     */
+    private String sanitizeTitle(@Nullable String raw) {
+        String chosen = (raw == null || raw.trim().isEmpty())
+            ? ClaudeCodeGuiBundle.message("notifier.taskComplete.title")
+            : raw.trim();
+        return truncateAndEscape(chosen, MAX_TITLE_LENGTH);
+    }
+
+    private String truncateAndEscape(String text, int maxLength) {
         int cpCount = text.codePointCount(0, text.length());
-        if (cpCount > MAX_MESSAGE_LENGTH) {
-            int end = text.offsetByCodePoints(0, MAX_MESSAGE_LENGTH - MESSAGE_ELLIPSIS_TAIL);
+        if (cpCount > maxLength) {
+            int end = text.offsetByCodePoints(0, maxLength - MESSAGE_ELLIPSIS_TAIL);
             text = text.substring(0, end) + "...";
         }
         return escapeHtml(text);
@@ -182,7 +208,7 @@ public class SystemNotificationService {
         return sb.toString();
     }
 
-    private JWindow createNotificationWindow(@NotNull Project project, String escapedMessage) {
+    private JWindow createNotificationWindow(@NotNull Project project, String escapedTitle, String escapedMessage) {
         JWindow window = new JWindow();
         window.setAlwaysOnTop(true);
 
@@ -209,7 +235,7 @@ public class SystemNotificationService {
 
         JLabel iconLabel = createBrandIconLabel();
 
-        JPanel textPanel = buildTextPanel(escapedMessage, textColor, subtextColor);
+        JPanel textPanel = buildTextPanel(escapedTitle, escapedMessage, textColor, subtextColor);
         JButton closeButton = createCloseButton(window, isDark, subtextColor);
 
         JPanel rightPanel = new JPanel(new BorderLayout());
@@ -307,27 +333,37 @@ public class SystemNotificationService {
         }
     }
 
-    private JPanel buildTextPanel(String escapedMessage, Color textColor, Color subtextColor) {
-        JPanel textPanel = new JPanel();
-        textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.Y_AXIS));
-        textPanel.setOpaque(false);
-
-        JLabel titleLabel = new JLabel(ClaudeCodeGuiBundle.message("notifier.taskComplete.title"));
-        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 14f));
-        titleLabel.setForeground(textColor);
-        titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        // Available text width = window width - brand icon - close button - inner gaps - paddings - accent bar.
-        int textBudget = WINDOW_WIDTH
+    /**
+     * Pixel width budget available for title and message labels inside the toast.
+     * Derived from layout constants so changes to padding/icon size stay consistent.
+     */
+    private int computeTextWidthPx() {
+        int budget = WINDOW_WIDTH
             - BRAND_ICON_SIZE
             - CLOSE_BUTTON_WIDTH
             - (CONTENT_HGAP * 2)
             - CONTENT_PADDING_LEFT
             - CONTENT_PADDING_RIGHT
             - ACCENT_BAR_WIDTH;
-        int messageWidth = JBUI.scale(Math.max(textBudget, 160));
+        return JBUI.scale(Math.max(budget, 160));
+    }
+
+    private JPanel buildTextPanel(String escapedTitle, String escapedMessage, Color textColor, Color subtextColor) {
+        JPanel textPanel = new JPanel();
+        textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.Y_AXIS));
+        textPanel.setOpaque(false);
+
+        int textWidth = computeTextWidthPx();
+
+        JLabel titleLabel = new JLabel(
+            "<html><body style='width: " + textWidth + "px; margin: 0;'>"
+                + escapedTitle + "</body></html>");
+        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 14f));
+        titleLabel.setForeground(textColor);
+        titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
         JLabel messageLabel = new JLabel(
-            "<html><body style='width: " + messageWidth + "px; margin: 0; line-height: 1.5;'>"
+            "<html><body style='width: " + textWidth + "px; margin: 0; line-height: 1.5;'>"
                 + escapedMessage + "</body></html>");
         messageLabel.setFont(messageLabel.getFont().deriveFont(13f));
         messageLabel.setForeground(subtextColor);

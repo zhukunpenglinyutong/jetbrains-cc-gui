@@ -1,16 +1,31 @@
 package com.github.claudecodegui.notifications;
 
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
+import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.util.SoundNotificationService;
 import com.github.claudecodegui.util.SystemNotificationService;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * Simple utility to update the Claude Status Bar Widget and show notifications.
  */
 public class ClaudeNotifier {
+
+    // Pre-compiled patterns for {@link #condenseForToast}, reused across notifications.
+    private static final Pattern CODE_FENCE_OPEN = Pattern.compile("```[a-zA-Z0-9_+\\-]*\\n");
+    private static final Pattern CODE_FENCE_CLOSE = Pattern.compile("```");
+    private static final Pattern WHITESPACE_RUN = Pattern.compile("\\s+");
+
+    // Cap how much of an assistant message we run regex over. The toast itself only
+    // shows ~220 codepoints; processing the whole message (which can be tens of KB)
+    // is wasteful and never adds visible content.
+    private static final int CONDENSE_MAX_INPUT = 4096;
 
     public static void setThinking(@NotNull Project project) {
         update(project, "thinking", ClaudeCodeGuiBundle.message("notifier.thinking"));
@@ -25,11 +40,96 @@ public class ClaudeNotifier {
     }
 
     public static void showSuccess(@NotNull Project project, String message) {
+        showSuccess(project, null, message);
+    }
+
+    /**
+     * Show task completion notification with an optional dynamic title.
+     * When {@code title} is null/blank, the toast falls back to the i18n
+     * default ({@code notifier.taskComplete.title}).
+     */
+    public static void showSuccess(@NotNull Project project, @Nullable String title, String message) {
         show(project, "Claude ✓", message, 5000);
         // Show the task completion visual notification toast
-        SystemNotificationService.getInstance().showVisualNotificationToast(project, message);
+        SystemNotificationService.getInstance().showVisualNotificationToast(project, title, message);
         // Play the task completion notification sound
         SoundNotificationService.getInstance().playTaskCompleteSound();
+    }
+
+    /**
+     * Build the toast title from a session: prefer the session summary
+     * (the AI-generated session title shown in the UI), otherwise return null
+     * so the toast falls back to the i18n default.
+     */
+    @Nullable
+    public static String buildTitleFromSession(@Nullable ClaudeSession session) {
+        if (session == null) {
+            return null;
+        }
+        String summary = session.getSummary();
+        if (summary == null) {
+            return null;
+        }
+        String trimmed = summary.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    /**
+     * Build a short preview from the most recent assistant message in the session.
+     * Returns {@code fallback} when no assistant content is available.
+     * <p>
+     * {@code session.getMessages()} returns a defensive copy, but the underlying
+     * {@code ArrayList} is not synchronized. If the message list is mutated on a
+     * different thread during the copy, the resulting {@link ConcurrentModificationException}
+     * (or any other read failure) causes us to fall back gracefully rather than
+     * propagate the error into the completion callback.
+     */
+    public static String buildPreviewFromSession(@Nullable ClaudeSession session, String fallback) {
+        if (session == null) {
+            return fallback;
+        }
+        try {
+            List<ClaudeSession.Message> messages = session.getMessages();
+            if (messages == null || messages.isEmpty()) {
+                return fallback;
+            }
+            for (int i = messages.size() - 1; i >= 0; i--) {
+                ClaudeSession.Message m = messages.get(i);
+                if (m == null || m.type != ClaudeSession.Message.Type.ASSISTANT) {
+                    continue;
+                }
+                String content = m.content;
+                if (content == null || content.isEmpty()) {
+                    // Tool-call frames are emitted as ASSISTANT with empty text content;
+                    // skip them so the preview prefers actual assistant prose.
+                    continue;
+                }
+                String preview = condenseForToast(content);
+                if (!preview.isEmpty()) {
+                    return preview;
+                }
+            }
+        } catch (Exception e) {
+            // Any failure (CME, IOOBE, etc.) just means we don't have a preview.
+            return fallback;
+        }
+        return fallback;
+    }
+
+    /**
+     * Collapse multi-line and code-fenced content into a single dense line that
+     * reads well inside a toast. The {@link SystemNotificationService} performs
+     * the final length truncation, so we only normalize whitespace here.
+     * Caps input size to {@link #CONDENSE_MAX_INPUT} so multi-KB assistant
+     * responses don't run regex over their entire body.
+     */
+    private static String condenseForToast(String raw) {
+        String input = raw.length() > CONDENSE_MAX_INPUT ? raw.substring(0, CONDENSE_MAX_INPUT) : raw;
+        // Drop common code fences so toasts don't open with "```java".
+        String stripped = CODE_FENCE_OPEN.matcher(input).replaceAll("");
+        stripped = CODE_FENCE_CLOSE.matcher(stripped).replaceAll("");
+        // Normalize all whitespace runs (including newlines) to single spaces.
+        return WHITESPACE_RUN.matcher(stripped).replaceAll(" ").trim();
     }
 
     public static void showError(@NotNull Project project, String message) {
