@@ -401,6 +401,12 @@
           "hoursAgo": "{{count}}小时前",
           "minutesAgo": "{{count}}分钟前"
         }
+      },
+      "aiTitleGeneration": {
+        "label": "AI 会话标题自动生成",
+        "enabled": "已开启",
+        "disabled": "已关闭",
+        "hint": "开启后，新会话首次回复完成时将调用 Haiku 模型自动生成简短标题；关闭后会话仍按用户首条消息显示"
       }
     },
     "codexFeatureUnavailable": "Codex暂未适配此功能，请切换到Claude Code使用",

@@ -50,6 +50,7 @@ import {
   processToolResultMessages,
   shouldOutputMessage,
 } from './stream-event-processor.js';
+import { generateSessionTitle } from '../session-title-service.js';
 
 const SUPPORTED_EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 
@@ -77,6 +78,22 @@ function resolveStreamingEnabled(params, settings) {
   return params.streaming != null
     ? !!params.streaming
     : (settings?.streamingEnabled ?? false);
+}
+
+/**
+ * Extract text content from a user message object.
+ * @param {object} userMessage - User message object from buildUserMessage()
+ * @returns {string|null} Extracted text or null
+ */
+function extractUserMessageText(userMessage) {
+  if (!userMessage?.message?.content) return null;
+  const content = userMessage.message.content;
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    const textBlock = content.find(b => b.type === 'text');
+    return textBlock?.text || null;
+  }
+  return null;
 }
 
 function buildSystemPromptAppend(params) {
@@ -304,6 +321,28 @@ async function executeTurn(runtime, requestContext, turnMeta) {
       success: true,
       sessionId: finalSessionId
     }));
+
+    // Fire-and-forget: generate AI title for new sessions (not resumes).
+    // titleGenerationAttempted prevents duplicate calls when a second message
+    // arrives before the first Haiku API response completes.
+    // The flag is reset if generateSessionTitle reports a transient failure
+    // so a future turn may retry; permanent skips (e.g. CLI login mode) keep
+    // the flag set to avoid endless retries.
+    if (!requestContext.requestedSessionId && finalSessionId && !runtime.titleGenerationAttempted) {
+      runtime.titleGenerationAttempted = true;
+      const userMessageText = extractUserMessageText(requestContext.userMessage);
+      if (userMessageText) {
+        generateSessionTitle(userMessageText, finalSessionId, requestContext.options.cwd)
+          .then((completed) => {
+            if (!completed) {
+              runtime.titleGenerationAttempted = false;
+            }
+          })
+          .catch(() => {
+            runtime.titleGenerationAttempted = false;
+          });
+      }
+    }
   } finally {
     endRuntimeTurn(runtime);
     // Only clear if this runtime still owns the pointer (not cleared by abort)

@@ -358,6 +358,12 @@
           "minutesAgo_other": "{{count}}분 전",
           "justNow": "방금 전"
         }
+      },
+      "aiTitleGeneration": {
+        "label": "AI 세션 제목 자동 생성",
+        "enabled": "사용",
+        "disabled": "사용 안 함",
+        "hint": "활성화하면 새 세션의 첫 응답이 끝난 후 Haiku 모델이 짧은 제목을 자동 생성합니다. 비활성화하면 첫 사용자 메시지가 제목으로 표시됩니다."
       }
     },
     "codexFeatureUnavailable": "이 설정 섹션은 Codex에서 아직 사용할 수 없습니다. Claude Code로 전환해주세요.",

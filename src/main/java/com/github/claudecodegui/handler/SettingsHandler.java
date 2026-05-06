@@ -186,6 +186,12 @@ public class SettingsHandler extends BaseMessageHandler {
             case "set_status_bar_widget_enabled":
                 projectConfigHandler.handleSetStatusBarWidgetEnabled(content);
                 return true;
+            case "get_ai_title_generation_enabled":
+                projectConfigHandler.handleGetAiTitleGenerationEnabled();
+                return true;
+            case "set_ai_title_generation_enabled":
+                projectConfigHandler.handleSetAiTitleGenerationEnabled(content);
+                return true;
             case "get_ide_theme":
                 projectConfigHandler.handleGetIdeTheme();
                 return true;

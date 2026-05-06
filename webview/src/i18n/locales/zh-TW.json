@@ -330,6 +330,12 @@
           "hoursAgo": "{{count}}小時前",
           "minutesAgo": "{{count}}分鐘前"
         }
+      },
+      "aiTitleGeneration": {
+        "label": "AI 會話標題自動生成",
+        "enabled": "已開啟",
+        "disabled": "已關閉",
+        "hint": "開啟後，新會話首次回覆完成時將呼叫 Haiku 模型自動生成簡短標題；關閉後會話仍以使用者首條訊息顯示"
       }
     },
     "codexFeatureUnavailable": "Codex 暫未適配此功能，請切換到 Claude Code 使用",

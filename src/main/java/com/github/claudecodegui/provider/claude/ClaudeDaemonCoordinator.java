@@ -7,7 +7,9 @@ import com.github.claudecodegui.provider.common.DaemonBridge;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
@@ -27,6 +29,9 @@ class ClaudeDaemonCoordinator {
     private final Object daemonLock = new Object();
     private volatile long daemonRetryAfter = 0;
     private volatile CompletableFuture<?> prewarmFuture;
+    // Listeners are cached so they can be re-attached when the daemon
+    // restarts (a new DaemonBridge instance is created on each restart).
+    private final List<DaemonBridge.DaemonEventListener> cachedEventListeners = new CopyOnWriteArrayList<>();
 
     ClaudeDaemonCoordinator(
             Logger log,
@@ -38,6 +43,31 @@ class ClaudeDaemonCoordinator {
         this.nodeDetector = nodeDetector;
         this.directoryResolverSupplier = directoryResolverSupplier;
         this.envConfigurator = envConfigurator;
+    }
+
+    /**
+     * Register a listener for custom daemon events. Cached so it is re-attached
+     * to any future daemon bridge created after a restart.
+     */
+    void addDaemonEventListener(DaemonBridge.DaemonEventListener listener) {
+        if (listener == null) return;
+        cachedEventListeners.add(listener);
+        DaemonBridge current = daemonBridge;
+        if (current != null && current.isAlive()) {
+            current.addEventListener(listener);
+        }
+    }
+
+    /**
+     * Unregister a previously added listener. No-op if not registered.
+     */
+    void removeDaemonEventListener(DaemonBridge.DaemonEventListener listener) {
+        if (listener == null) return;
+        cachedEventListeners.remove(listener);
+        DaemonBridge current = daemonBridge;
+        if (current != null && current.isAlive()) {
+            current.removeEventListener(listener);
+        }
     }
 
     DaemonBridge getDaemonBridge() {
@@ -69,6 +99,9 @@ class ClaudeDaemonCoordinator {
                 if (newBridge.start()) {
                     daemonBridge = newBridge;
                     daemonRetryAfter = 0;
+                    for (DaemonBridge.DaemonEventListener cached : cachedEventListeners) {
+                        newBridge.addEventListener(cached);
+                    }
                     log.info("[DaemonCoordinator] Daemon bridge started successfully");
                     return newBridge;
                 }

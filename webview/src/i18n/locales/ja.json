@@ -330,6 +330,12 @@
           "hoursAgo": "{{count}}時間前",
           "minutesAgo": "{{count}}分前"
         }
+      },
+      "aiTitleGeneration": {
+        "label": "AI セッションタイトル自動生成",
+        "enabled": "有効",
+        "disabled": "無効",
+        "hint": "有効にすると、新しいセッションの最初の応答後に Haiku モデルで短いタイトルを自動生成します。無効の場合は最初のメッセージがタイトルとして使われます。"
       }
     },
     "codexFeatureUnavailable": "Codexではこの設定セクションは未対応です。Claude Codeに切り替えてください。",

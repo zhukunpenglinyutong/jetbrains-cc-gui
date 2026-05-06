@@ -325,6 +325,12 @@
           "minutesAgo_other": "{{count}} minutos atrás",
           "justNow": "ahora mismo"
         }
+      },
+      "aiTitleGeneration": {
+        "label": "Generación automática de título de sesión por IA",
+        "enabled": "Activado",
+        "disabled": "Desactivado",
+        "hint": "Cuando está activado, se genera un título breve con Haiku tras la primera respuesta de una sesión nueva. Si está desactivado, se mantiene el primer mensaje del usuario como título."
       }
     },
     "codexFeatureUnavailable": "Esta sección de configuración aún no está disponible en Codex. Cambia a Claude Code.",
@@ -1315,7 +1321,7 @@
   },
   "fileContext": {
     "placeholder": "Contexto de archivo",
-    "enableTitle": "\u00bfHabilitar contexto de archivo?",
+    "enableTitle": "¿Habilitar contexto de archivo?",
     "enableDescription": "Cuando esté habilitado, la ruta del archivo abierto en el editor se enviará a la IA. Nota: solo se transmite la ruta del archivo, no su contenido.",
     "enable": "Habilitar",
     "cancel": "Cancelar"

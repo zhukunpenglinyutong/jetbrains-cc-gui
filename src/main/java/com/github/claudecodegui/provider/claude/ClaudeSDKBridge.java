@@ -73,6 +73,22 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
     }
 
     /**
+     * Register a listener for custom daemon events (e.g., AI title generation).
+     * Multiple listeners may coexist; callers MUST pair this with
+     * {@link #removeDaemonEventListener} on disposal to avoid leaks.
+     */
+    public void addDaemonEventListener(DaemonBridge.DaemonEventListener listener) {
+        this.daemonCoordinator.addDaemonEventListener(listener);
+    }
+
+    /**
+     * Unregister a previously added daemon event listener.
+     */
+    public void removeDaemonEventListener(DaemonBridge.DaemonEventListener listener) {
+        this.daemonCoordinator.removeDaemonEventListener(listener);
+    }
+
+    /**
      * Shut down the daemon process.
      */
     public void shutdownDaemon() {

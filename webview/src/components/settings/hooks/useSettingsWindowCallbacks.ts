@@ -45,6 +45,7 @@ export interface SettingsWindowCallbacksDeps {
   setCodexConfigLoading: (loading: boolean) => void;
   // AI feature toggle setters
   setCommitGenerationEnabled?: (enabled: boolean) => void;
+  setAiTitleGenerationEnabled?: (enabled: boolean) => void;
   setStatusBarWidgetEnabled?: (enabled: boolean) => void;
   // Sound notification setters
   setSoundNotificationEnabled?: (enabled: boolean) => void;
@@ -287,6 +288,16 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
     };
 
+    // AI session title generation config callback
+    window.updateAiTitleGenerationEnabled = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        d().setAiTitleGenerationEnabled?.(data.aiTitleGenerationEnabled ?? true);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse AI title generation config:', error);
+      }
+    };
+
     // Status bar widget config callback
     window.updateStatusBarWidgetEnabled = (jsonStr: string) => {
       try {
@@ -453,6 +464,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     sendToJava('get_prompt_enhancer_config:');
     sendToJava('get_sound_notification_config:');
     sendToJava('get_commit_generation_enabled:');
+    sendToJava('get_ai_title_generation_enabled:');
     sendToJava('get_status_bar_widget_enabled:');
 
     return () => {
@@ -484,6 +496,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.updatePromptEnhancerConfig = undefined;
       window.updateSoundNotificationConfig = undefined;
       window.updateCommitGenerationEnabled = undefined;
+      window.updateAiTitleGenerationEnabled = undefined;
       window.updateStatusBarWidgetEnabled = undefined;
       window.updateAgents = previousUpdateAgents;
       window.agentOperationResult = undefined;

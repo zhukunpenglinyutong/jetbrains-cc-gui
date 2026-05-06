@@ -1189,6 +1189,33 @@ public class CodemossSettingsService {
         LOG.info("[CodemossSettings] Set status bar widget enabled: " + enabled);
     }
 
+    /**
+     * Get whether AI session title generation is enabled.
+     *
+     * @return whether AI title generation is enabled, default is true
+     */
+    public boolean getAiTitleGenerationEnabled() throws IOException {
+        JsonObject config = readConfig();
+
+        if (config.has("aiTitleGenerationEnabled") && !config.get("aiTitleGenerationEnabled").isJsonNull()) {
+            return config.get("aiTitleGenerationEnabled").getAsBoolean();
+        }
+
+        return true;
+    }
+
+    /**
+     * Set whether AI session title generation is enabled.
+     *
+     * @param enabled whether to enable
+     */
+    public void setAiTitleGenerationEnabled(boolean enabled) throws IOException {
+        JsonObject config = readConfig();
+        config.addProperty("aiTitleGenerationEnabled", enabled);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set AI title generation enabled: " + enabled);
+    }
+
     // ==================== Prompt Enhancer Config Management ====================
 
     /**

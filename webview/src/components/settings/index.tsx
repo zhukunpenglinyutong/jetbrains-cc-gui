@@ -160,6 +160,9 @@ const SettingsView = ({
     commitGenerationEnabled,
     setCommitGenerationEnabled,
     handleCommitGenerationEnabledChange,
+    aiTitleGenerationEnabled,
+    setAiTitleGenerationEnabled,
+    handleAiTitleGenerationEnabledChange,
     statusBarWidgetEnabled,
     setStatusBarWidgetEnabled,
     handleStatusBarWidgetEnabledChange,
@@ -305,6 +308,7 @@ const SettingsView = ({
     setSelectedSound,
     setCustomSoundPath,
     setCommitGenerationEnabled,
+    setAiTitleGenerationEnabled,
     setStatusBarWidgetEnabled,
   });
 
@@ -577,6 +581,8 @@ const SettingsView = ({
                 // Dispatch custom event for same-tab sync (localStorage 'storage' event only fires for cross-tab)
                 window.dispatchEvent(new CustomEvent('historyCompletionChanged', { detail: { enabled } }));
               }}
+              aiTitleGenerationEnabled={aiTitleGenerationEnabled}
+              onAiTitleGenerationEnabledChange={handleAiTitleGenerationEnabledChange}
             />
           </div>
 

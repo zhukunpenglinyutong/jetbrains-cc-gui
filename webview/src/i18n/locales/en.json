@@ -396,6 +396,12 @@
           "minutesAgo_other": "{{count}} minutes ago",
           "justNow": "just now"
         }
+      },
+      "aiTitleGeneration": {
+        "label": "AI session title generation",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "When enabled, a short Haiku-generated title is created after the first turn of a new session. When disabled, sessions keep using the first user message as the title."
       }
     },
     "codexFeatureUnavailable": "This settings section is not available in Codex yet. Please switch to Claude Code.",

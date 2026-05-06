@@ -561,6 +561,44 @@ public class ProjectConfigHandler {
         }
     }
 
+    public void handleGetAiTitleGenerationEnabled() {
+        try {
+            boolean enabled = settingsService.getAiTitleGenerationEnabled();
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject r = new JsonObject();
+                r.addProperty("aiTitleGenerationEnabled", enabled);
+                context.callJavaScript("window.updateAiTitleGenerationEnabled", context.escapeJs(gson.toJson(r)));
+            });
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to get AI title generation enabled: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject r = new JsonObject();
+                r.addProperty("aiTitleGenerationEnabled", true);
+                context.callJavaScript("window.updateAiTitleGenerationEnabled", context.escapeJs(gson.toJson(r)));
+            });
+        }
+    }
+
+    public void handleSetAiTitleGenerationEnabled(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            boolean enabled = json == null || !json.has("aiTitleGenerationEnabled") || json.get("aiTitleGenerationEnabled").isJsonNull()
+                || json.get("aiTitleGenerationEnabled").getAsBoolean();
+            settingsService.setAiTitleGenerationEnabled(enabled);
+            LOG.info("[ProjectConfigHandler] Set AI title generation enabled: " + enabled);
+            final boolean finalVal = enabled;
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject r = new JsonObject();
+                r.addProperty("aiTitleGenerationEnabled", finalVal);
+                context.callJavaScript("window.updateAiTitleGenerationEnabled", context.escapeJs(gson.toJson(r)));
+            });
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set AI title generation enabled: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() ->
+                context.callJavaScript("window.showError", context.escapeJs("保存 AI 标题生成配置失败")));
+        }
+    }
+
     public void handleGetStatusBarWidgetEnabled() {
         try {
             boolean enabled = settingsService.getStatusBarWidgetEnabled();

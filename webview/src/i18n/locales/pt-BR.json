@@ -392,6 +392,12 @@
           "minutesAgo_other": "{{count}} minutos atrás",
           "justNow": "agora mesmo"
         }
+      },
+      "aiTitleGeneration": {
+        "label": "Geração automática de título de sessão por IA",
+        "enabled": "Ativado",
+        "disabled": "Desativado",
+        "hint": "Quando ativado, um título curto gerado pelo Haiku é criado após o primeiro turno de uma nova sessão. Desativado, a sessão continua usando a primeira mensagem do usuário como título."
       }
     },
     "codexFeatureUnavailable": "Esta seção de configurações ainda não está disponível no Codex. Por favor, mude para Claude Code.",

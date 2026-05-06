@@ -54,6 +54,8 @@ class OtherSettingsErrorBoundary extends Component<
 interface OtherSettingsSectionProps {
   historyCompletionEnabled: boolean;
   onHistoryCompletionEnabledChange: (enabled: boolean) => void;
+  aiTitleGenerationEnabled: boolean;
+  onAiTitleGenerationEnabledChange: (enabled: boolean) => void;
 }
 
 interface EditorState {
@@ -94,6 +96,8 @@ const formatRelativeTime = (timestamp: string | undefined, t: (key: string, opti
 const OtherSettingsSection = ({
   historyCompletionEnabled,
   onHistoryCompletionEnabledChange,
+  aiTitleGenerationEnabled,
+  onAiTitleGenerationEnabledChange,
 }: OtherSettingsSectionProps) => {
   const { t } = useTranslation();
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
@@ -326,6 +330,32 @@ const OtherSettingsSection = ({
             </div>
           )}
         </div>
+      </div>
+
+      {/* AI session title generation toggle */}
+      <div className={styles.historyCompletionSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-sparkle" />
+          <span className={styles.fieldLabel}>{t('settings.other.aiTitleGeneration.label')}</span>
+        </div>
+        <label className={styles.toggleWrapper}>
+          <input
+            type="checkbox"
+            className={styles.toggleInput}
+            checked={aiTitleGenerationEnabled}
+            onChange={(e) => onAiTitleGenerationEnabledChange(e.target.checked)}
+          />
+          <span className={styles.toggleSlider} />
+          <span className={styles.toggleLabel}>
+            {aiTitleGenerationEnabled
+              ? t('settings.other.aiTitleGeneration.enabled')
+              : t('settings.other.aiTitleGeneration.disabled')}
+          </span>
+        </label>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>{t('settings.other.aiTitleGeneration.hint')}</span>
+        </small>
       </div>
 
       {/* Editor Dialog */}

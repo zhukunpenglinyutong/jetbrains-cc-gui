@@ -27,6 +27,7 @@ export function registerSessionAndSdkCallbacks(
     customSessionTitleRef,
     currentSessionIdRef,
     updateHistoryTitle,
+    setCustomSessionTitle,
   } = options;
 
   window.setSessionId = (sessionId: string) => {
@@ -117,5 +118,18 @@ export function registerSessionAndSdkCallbacks(
       setCurrentRewindRequest(null);
       window.addToast?.(tRef.current('rewind.parseError'), 'error');
     }
+  };
+
+  // =========================================================================
+  // AI Title Callback
+  // =========================================================================
+
+  window.updateSessionTitle = (sessionId: string, title: string) => {
+    if (!title || !title.trim() || !sessionId) return;
+    // Only apply the title if it matches the current session to prevent
+    // stale events from overwriting the wrong session's title.
+    if (currentSessionIdRef.current !== sessionId) return;
+    setCustomSessionTitle(title.trim());
+    updateHistoryTitle(sessionId, title.trim());
   };
 }

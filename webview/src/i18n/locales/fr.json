@@ -325,6 +325,12 @@
           "minutesAgo_other": "il y a {{count}} minutes",
           "justNow": "à l'instant"
         }
+      },
+      "aiTitleGeneration": {
+        "label": "Génération automatique du titre de session par IA",
+        "enabled": "Activé",
+        "disabled": "Désactivé",
+        "hint": "Lorsqu'activé, un titre court généré par Haiku est créé après le premier tour d'une nouvelle session. Désactivé, le premier message de l'utilisateur reste le titre."
       }
     },
     "codexFeatureUnavailable": "Cette section des paramètres n'est pas encore disponible dans Codex. Passez à Claude Code.",
