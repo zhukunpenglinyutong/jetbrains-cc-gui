@@ -191,14 +191,20 @@ const App = () => {
 
   // ── Global drag event interception ──
   useEffect(() => {
-    const prevent = (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); };
-    document.addEventListener('dragover', prevent);
-    document.addEventListener('drop', prevent);
-    document.addEventListener('dragenter', prevent);
+    const preventExternalDrop = (e: DragEvent) => {
+      const types = Array.from(e.dataTransfer?.types ?? []);
+      const isExternalDrop = types.includes('Files') || types.includes('text/uri-list');
+      if (!isExternalDrop) return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    document.addEventListener('dragover', preventExternalDrop);
+    document.addEventListener('drop', preventExternalDrop);
+    document.addEventListener('dragenter', preventExternalDrop);
     return () => {
-      document.removeEventListener('dragover', prevent);
-      document.removeEventListener('drop', prevent);
-      document.removeEventListener('dragenter', prevent);
+      document.removeEventListener('dragover', preventExternalDrop);
+      document.removeEventListener('drop', preventExternalDrop);
+      document.removeEventListener('dragenter', preventExternalDrop);
     };
   }, []);
 

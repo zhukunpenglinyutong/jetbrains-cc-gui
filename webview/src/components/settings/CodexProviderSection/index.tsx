@@ -47,6 +47,7 @@ const CodexProviderSection = ({
     localItems: localProviders,
     draggedId: draggedProviderId,
     dragOverId: dragOverProviderId,
+    handlePointerDown,
     handleDragStart,
     handleDragOver,
     handleDragLeave,
@@ -211,6 +212,7 @@ const CodexProviderSection = ({
                     draggedProviderId === provider.id && styles.dragging,
                     dragOverProviderId === provider.id && styles.dragOver,
                   ].filter(Boolean).join(' ')}
+                  data-drag-sort-id={provider.id}
                   draggable={true}
                   onDragStart={(e) => handleDragStart(e, provider.id)}
                   onDragOver={(e) => handleDragOver(e, provider.id)}
@@ -218,7 +220,11 @@ const CodexProviderSection = ({
                   onDrop={(e) => handleDrop(e, provider.id)}
                   onDragEnd={handleDragEnd}
                 >
-                  <div className={sharedStyles.dragHandle} title={t('settings.provider.dragToSort')}>
+                  <div
+                    className={sharedStyles.dragHandle}
+                    title={t('settings.provider.dragToSort')}
+                    onPointerDown={(e) => handlePointerDown(e, provider.id, e.currentTarget.closest<HTMLElement>('[data-drag-sort-id]'))}
+                  >
                     <span className="codicon codicon-gripper" />
                   </div>
                   <div className={sharedStyles.cardInfo}>

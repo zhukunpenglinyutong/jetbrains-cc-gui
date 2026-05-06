@@ -49,6 +49,7 @@ export default function ProviderList({
     localItems: localProviders,
     draggedId: draggedProviderId,
     dragOverId: dragOverProviderId,
+    handlePointerDown,
     handleDragStart,
     handleDragOver,
     handleDragLeave,
@@ -591,6 +592,7 @@ export default function ProviderList({
                 draggedProviderId === provider.id && styles.dragging,
                 dragOverProviderId === provider.id && styles.dragOver,
               ].filter(Boolean).join(' ')}
+              data-drag-sort-id={provider.id}
               draggable={true}
               onDragStart={(e) => handleDragStart(e, provider.id)}
               onDragOver={(e) => handleDragOver(e, provider.id)}
@@ -598,7 +600,11 @@ export default function ProviderList({
               onDrop={(e) => handleDrop(e, provider.id)}
               onDragEnd={handleDragEnd}
             >
-              <div className={styles.dragHandle} title={t('settings.provider.dragToSort')}>
+              <div
+                className={styles.dragHandle}
+                title={t('settings.provider.dragToSort')}
+                onPointerDown={(e) => handlePointerDown(e, provider.id, e.currentTarget.closest<HTMLElement>('[data-drag-sort-id]'))}
+              >
                 <span className="codicon codicon-gripper" />
               </div>
               <div className={styles.cardInfo}>

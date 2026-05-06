@@ -27,6 +27,7 @@ describe('useWindowCallbacks integration', () => {
     setStreamingActive: vi.fn(),
     setHistoryData: vi.fn(),
     setCurrentSessionId: vi.fn(),
+    setCustomSessionTitle: vi.fn(),
     setUsagePercentage: vi.fn(),
     setUsageUsedTokens: vi.fn(),
     setUsageMaxTokens: vi.fn(),
