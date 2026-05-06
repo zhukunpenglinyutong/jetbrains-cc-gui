@@ -4,6 +4,10 @@ import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.service.GitCommitMessageService;
 import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.intellij.notification.Notification;
+import com.intellij.notification.NotificationAction;
+import com.intellij.notification.NotificationGroupManager;
+import com.intellij.notification.NotificationType;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
@@ -19,6 +23,9 @@ import com.intellij.openapi.vcs.changes.ChangeListManager;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import javax.swing.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -73,23 +80,170 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
 
         LOG.info("Successfully obtained CommitMessageI and changes, proceeding to generate commit message");
 
-        // Save references for async callback
+        // Start generation with system notification cancel support
+        final Notification[] notificationHolder = {null};
+        startGeneration(project, commitMessagePanel, changes, notificationHolder);
+    }
+
+    /**
+     * Show retry notification with options to retry.
+     */
+    private void showRetryNotification(
+            @NotNull Project project,
+            @NotNull CommitMessageI commitMessagePanel,
+            @NotNull Collection<Change> changes,
+            @NotNull Notification[] notificationHolder) {
+
+        ApplicationManager.getApplication().invokeLater(() -> {
+            Notification notification = NotificationGroupManager.getInstance()
+                .getNotificationGroup("CC GUI Notifications")
+                .createNotification(
+                    ClaudeCodeGuiBundle.message("commit.progress.cancelRetry"),
+                    NotificationType.WARNING
+                );
+
+            notification.addAction(new NotificationAction(ClaudeCodeGuiBundle.message("commit.progress.retry")) {
+                @Override
+                public void actionPerformed(@NotNull AnActionEvent e, @NotNull Notification notification) {
+                    notification.expire();
+                    startGeneration(project, commitMessagePanel, changes, notificationHolder);
+                }
+            });
+
+            notification.notify(project);
+        });
+    }
+
+    /**
+     * Start the commit message generation process with notification cancel support.
+     */
+    private void startGeneration(
+            @NotNull Project project,
+            @NotNull CommitMessageI commitMessagePanel,
+            @NotNull Collection<Change> changes,
+            @NotNull Notification[] notificationHolder) {
+
         final CommitMessageI finalCommitMessagePanel = commitMessagePanel;
         final Collection<Change> finalChanges = changes;
+        final long[] startTime = {System.currentTimeMillis()};
+        final Timer[] timerHolder = {null};
+        final String[] lastProgressMessage = {""};
+        final boolean[] hasValidCommit = {false};
+        final boolean[] isCancelled = {false};
 
-        // Show "generating..." placeholder in commit message box
-        String generatingText = ClaudeCodeGuiBundle.message("commit.generating");
-        commitMessagePanel.setCommitMessage(generatingText);
+        // Get model info before starting generation
+        final String[] modelInfo = {""};
+        try {
+            GitCommitMessageService tempService = new GitCommitMessageService(project);
+            modelInfo[0] = tempService.getModelDisplayText();
+        } catch (Exception e) {
+            LOG.warn("Failed to get model info", e);
+            modelInfo[0] = "🤖 " + ClaudeCodeGuiBundle.message("commit.progress.unknownModel");
+        }
+        final String finalModelInfo = modelInfo[0];
 
-        // Generate commit message asynchronously
+        // Set initial status with model info
+        ApplicationManager.getApplication().invokeLater(() -> {
+            String initializingText = ClaudeCodeGuiBundle.message("commit.progress.initializing") + "...";
+            lastProgressMessage[0] = initializingText;
+            String initialStatus = finalModelInfo + "\n\n" + initializingText;
+            finalCommitMessagePanel.setCommitMessage(initialStatus);
+        });
+
+        // Create timer for progress display
+        Timer timer = new Timer(1000, new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (isCancelled[0]) {
+                    return;
+                }
+
+                if (!hasValidCommit[0]) {
+                    long elapsed = System.currentTimeMillis() - startTime[0];
+                    int seconds = (int) (elapsed / 1000);
+                    int minutes = seconds / 60;
+                    seconds = seconds % 60;
+
+                    String timeText = String.format("%02d:%02d", minutes, seconds);
+                    String hint = ClaudeCodeGuiBundle.message("commit.progress.hint");
+                    if (elapsed > 10000) {
+                        hint = ClaudeCodeGuiBundle.message("commit.progress.takingTime");
+                    }
+
+                    // Keep model info at the top, then progress/hint/timer
+                    String status = finalModelInfo + "\n\n" + lastProgressMessage[0] + "\n\n" + hint + "\n" +
+                                   String.format("⏱ %s", timeText);
+
+                    finalCommitMessagePanel.setCommitMessage(status);
+                }
+            }
+        });
+        timerHolder[0] = timer;
+        timer.start();
+
+        // Show notification with cancel button
+        ApplicationManager.getApplication().invokeLater(() -> {
+            Notification notification = NotificationGroupManager.getInstance()
+                .getNotificationGroup("CC GUI Notifications")
+                .createNotification(
+                    ClaudeCodeGuiBundle.message("commit.generating"),
+                    NotificationType.INFORMATION
+                );
+            notification.addAction(new NotificationAction(ClaudeCodeGuiBundle.message("commit.progress.cancel")) {
+                @Override
+                public void actionPerformed(@NotNull AnActionEvent e, @NotNull Notification notification) {
+                    isCancelled[0] = true;
+                    if (timerHolder[0] != null) {
+                        timerHolder[0].stop();
+                    }
+
+                    finalCommitMessagePanel.setCommitMessage(ClaudeCodeGuiBundle.message("commit.progress.initializing") +
+                        "... " + ClaudeCodeGuiBundle.message("commit.progress.cancel"));
+
+                    notification.expire();
+                    showRetryNotification(project, finalCommitMessagePanel, finalChanges, notificationHolder);
+                }
+            });
+            notificationHolder[0] = notification;
+            notification.notify(project);
+        });
+
+        // Generate commit message
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             try {
                 GitCommitMessageService service = new GitCommitMessageService(project);
                 service.generateCommitMessage(finalChanges, new GitCommitMessageService.CommitMessageCallback() {
                     @Override
-                    public void onSuccess(String commitMessage) {
+                    public void onProgress(String partialMessage) {
+                        if (isCancelled[0]) return;
+
                         ApplicationManager.getApplication().invokeLater(() -> {
-                            // Set the generated commit message
+                            lastProgressMessage[0] = partialMessage;
+
+                            if (partialMessage != null && !partialMessage.isEmpty() &&
+                                !partialMessage.contains("...") &&
+                                (partialMessage.matches("^(feat|fix|refactor|docs|test|chore|perf|ci|style|build|revert)(\\(.+\\))?:.*") ||
+                                 partialMessage.contains("\n"))) {
+                                hasValidCommit[0] = true;
+                            }
+
+                            finalCommitMessagePanel.setCommitMessage(partialMessage);
+                        });
+                    }
+
+                    @Override
+                    public void onSuccess(String commitMessage) {
+                        if (isCancelled[0]) return;
+
+                        if (timerHolder[0] != null) {
+                            timerHolder[0].stop();
+                        }
+                        if (notificationHolder[0] != null) {
+                            notificationHolder[0].expire();
+                        }
+                        hasValidCommit[0] = true;
+
+                        ApplicationManager.getApplication().invokeLater(() -> {
                             finalCommitMessagePanel.setCommitMessage(commitMessage);
                             ClaudeNotifier.showSuccess(project, ClaudeCodeGuiBundle.message("commit.generateSuccess"));
                         });
@@ -97,18 +251,32 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
 
                     @Override
                     public void onError(String error) {
+                        if (isCancelled[0]) return;
+
+                        if (timerHolder[0] != null) {
+                            timerHolder[0].stop();
+                        }
+                        if (notificationHolder[0] != null) {
+                            notificationHolder[0].expire();
+                        }
+
                         ApplicationManager.getApplication().invokeLater(() -> {
-                            // Clear placeholder text
-                            finalCommitMessagePanel.setCommitMessage("");
+                            finalCommitMessagePanel.setCommitMessage(ClaudeCodeGuiBundle.message("commit.progress.error") + ": " + error);
                             ClaudeNotifier.showError(project, ClaudeCodeGuiBundle.message("commit.generateFailed") + ": " + error);
                         });
                     }
                 });
             } catch (Exception ex) {
+                if (timerHolder[0] != null) {
+                    timerHolder[0].stop();
+                }
+                if (notificationHolder[0] != null) {
+                    notificationHolder[0].expire();
+                }
+
                 LOG.error("Failed to generate commit message", ex);
                 ApplicationManager.getApplication().invokeLater(() -> {
-                    // Clear placeholder text
-                    finalCommitMessagePanel.setCommitMessage("");
+                    finalCommitMessagePanel.setCommitMessage(ClaudeCodeGuiBundle.message("commit.progress.error") + ": " + ex.getMessage());
                     ClaudeNotifier.showError(project, ClaudeCodeGuiBundle.message("commit.generateFailed") + ": " + ex.getMessage());
                 });
             }
