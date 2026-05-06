@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Sends Claude requests through the long-running daemon.
@@ -54,8 +56,8 @@ class ClaudeDaemonRequestExecutor {
         return CompletableFuture.supplyAsync(() -> {
             SDKResult result = new SDKResult();
             StringBuilder assistantContent = new StringBuilder();
-            boolean[] hadSendError = {false};
-            String[] lastNodeError = {null};
+            AtomicBoolean hadSendError = new AtomicBoolean(false);
+            AtomicReference<String> lastNodeError = new AtomicReference<>(null);
 
             try {
                 JsonObject params = requestParamsBuilder.buildSendParams(
@@ -91,7 +93,7 @@ class ClaudeDaemonRequestExecutor {
                                         || line.startsWith("[STARTUP_ERROR]")
                                         || line.startsWith("[ERROR]")) {
                                     log.warn("[Node.js ERROR] " + line);
-                                    lastNodeError[0] = line;
+                                    lastNodeError.set(line);
                                 }
                                 streamAdapter.processOutputLine(
                                         line,
@@ -121,7 +123,7 @@ class ClaudeDaemonRequestExecutor {
 
                             @Override
                             public void onError(String error) {
-                                if (!hadSendError[0]) {
+                                if (!hadSendError.get()) {
                                     result.success = false;
                                     result.error = error;
                                 }
@@ -156,14 +158,15 @@ class ClaudeDaemonRequestExecutor {
                 result.finalResult = assistantContent.toString();
                 result.messageCount = result.messages.size();
 
-                if (!hadSendError[0]) {
+                if (!hadSendError.get()) {
                     result.success = success != null && success;
                     if (result.success) {
                         callback.onComplete(result);
                     } else {
                         String errorMsg = "Daemon command failed";
-                        if (lastNodeError[0] != null) {
-                            errorMsg += "\n\nDetails: " + lastNodeError[0];
+                        String nodeErr = lastNodeError.get();
+                        if (nodeErr != null) {
+                            errorMsg += "\n\nDetails: " + nodeErr;
                         }
                         if (result.error == null) {
                             result.error = errorMsg;
@@ -174,7 +177,7 @@ class ClaudeDaemonRequestExecutor {
 
                 return result;
             } catch (Exception e) {
-                if (!hadSendError[0]) {
+                if (!hadSendError.get()) {
                     result.success = false;
                     result.error = "Daemon request failed: " + outputExtractor.extractErrorMessage(e);
                     callback.onError(result.error);

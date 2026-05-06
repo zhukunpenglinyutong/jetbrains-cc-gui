@@ -23,6 +23,8 @@ import java.util.List;
 import java.util.Map;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Codex SDK bridge.
@@ -78,8 +80,8 @@ public class CodexSDKBridge extends BaseSDKBridge {
             MessageCallback callback,
             SDKResult result,
             StringBuilder assistantContent,
-            boolean[] hadSendError,
-            String[] lastNodeError
+            AtomicBoolean hadSendError,
+            AtomicReference<String> lastNodeError
     ) {
         if (line.contains("[DEBUG]")) {
             LOG.debug("[Codex] " + line);
@@ -150,7 +152,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 }
             } catch (Exception ignored) {
             }
-            hadSendError[0] = true;
+            hadSendError.set(true);
             result.success = false;
             result.error = errorMessage;
             callback.onError(errorMessage);
@@ -256,8 +258,8 @@ public class CodexSDKBridge extends BaseSDKBridge {
         return CompletableFuture.supplyAsync(() -> {
             SDKResult result = new SDKResult();
             StringBuilder assistantContent = new StringBuilder();
-            final String[] lastNodeError = {null};
-            final boolean[] hadSendError = {false};
+            AtomicReference<String> lastNodeError = new AtomicReference<>(null);
+            AtomicBoolean hadSendError = new AtomicBoolean(false);
             final List<File> tempImageFiles = new ArrayList<>();  // Track temp images for cleanup
 
             try {
@@ -431,7 +433,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                                     || line.startsWith("[UNHANDLED_REJECTION]")
                                     || line.startsWith("[COMMAND_ERROR]")) {
                                 LOG.warn("[Node.js ERROR] " + line);
-                                lastNodeError[0] = line;
+                                lastNodeError.set(line);
                             }
                             processOutputLine(line, callback, result, assistantContent, hadSendError, lastNodeError);
                         }
@@ -449,14 +451,15 @@ public class CodexSDKBridge extends BaseSDKBridge {
                         result.success = false;
                         result.error = "User interrupted";
                         callback.onComplete(result);
-                    } else if (!hadSendError[0]) {
+                    } else if (!hadSendError.get()) {
                         result.success = exitCode == 0;
                         if (result.success) {
                             callback.onComplete(result);
                         } else {
                             String errorMsg = "Codex process exited with code: " + exitCode;
-                            if (lastNodeError[0] != null && !lastNodeError[0].isEmpty()) {
-                                errorMsg = errorMsg + " | Last error: " + lastNodeError[0];
+                            String nodeErr = lastNodeError.get();
+                            if (nodeErr != null && !nodeErr.isEmpty()) {
+                                errorMsg = errorMsg + " | Last error: " + nodeErr;
                             }
                             result.error = errorMsg;
                             callback.onError(errorMsg);
@@ -547,33 +550,33 @@ public class CodexSDKBridge extends BaseSDKBridge {
                     stdin.flush();
                 }
 
-                final boolean[] found = {false};
-                final boolean[] readerDone = {false};
-                final String[] toolsJson = {null};
+                AtomicBoolean found = new AtomicBoolean(false);
+                AtomicBoolean readerDone = new AtomicBoolean(false);
+                AtomicReference<String> toolsJson = new AtomicReference<>(null);
                 final StringBuilder output = new StringBuilder();
 
                 Thread readerThread = new Thread(() -> {
                     try (BufferedReader reader = new BufferedReader(
                             new InputStreamReader(finalProcess.getInputStream(), StandardCharsets.UTF_8))) {
                         String line;
-                        while (!found[0] && (line = reader.readLine()) != null) {
+                        while (!found.get() && (line = reader.readLine()) != null) {
                             output.append(line).append("\n");
                             if (line.startsWith("[MCP_SERVER_TOOLS]")) {
-                                toolsJson[0] = line.substring("[MCP_SERVER_TOOLS]".length()).trim();
-                                found[0] = true;
+                                toolsJson.set(line.substring("[MCP_SERVER_TOOLS]".length()).trim());
+                                found.set(true);
                                 break;
                             }
                         }
                     } catch (Exception e) {
                         LOG.debug("[CodexMcpTools] Reader thread exception: " + e.getMessage());
                     } finally {
-                        readerDone[0] = true;
+                        readerDone.set(true);
                     }
                 });
                 readerThread.start();
 
                 long deadline = System.currentTimeMillis() + MCP_TOOLS_TIMEOUT_MS;
-                while (!found[0] && !readerDone[0] && System.currentTimeMillis() < deadline) {
+                while (!found.get() && !readerDone.get() && System.currentTimeMillis() < deadline) {
                     Thread.sleep(100);
                 }
 
@@ -582,9 +585,10 @@ public class CodexSDKBridge extends BaseSDKBridge {
                     PlatformUtils.terminateProcess(process);
                 }
 
-                if (found[0] && toolsJson[0] != null && !toolsJson[0].isEmpty()) {
+                String capturedTools = toolsJson.get();
+                if (found.get() && capturedTools != null && !capturedTools.isEmpty()) {
                     try {
-                        JsonObject result = gson.fromJson(toolsJson[0], JsonObject.class);
+                        JsonObject result = gson.fromJson(capturedTools, JsonObject.class);
                         LOG.info("[CodexMcpTools] Got tools for " + serverId + " in " + elapsed + "ms");
                         return result;
                     } catch (Exception e) {
