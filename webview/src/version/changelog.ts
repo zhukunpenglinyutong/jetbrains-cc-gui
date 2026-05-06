@@ -13,8 +13,70 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
+    version: '0.4.2-Alpha1',
+    date: '2026-05-06',
+    content: {
+      en: `✨ Features
+- Add task completion toast notification, disabled by default (opt-in via Settings → Basic → Behavior)
+- Add "Copy AI Reference" action to editor right-click menu for sending selected code with file and line context
+- Add multi-project workspace context collection for IntelliJ workspace mode, giving AI providers awareness of subproject structure
+- Add AI-powered session title generation using Claude Haiku after the first query completes
+- Add toggle in Settings → Basic → Behavior to enable/disable AI session title generation
+
+🐛 Fixes
+- Fix Codex message handler causing duplicate assistant messages in new sessions and during history recovery
+- Fix batch deletion of session history records causing SessionIndexManager index corruption
+- Fix Codex thinking process not being restored after provider switch
+- Fix historical record duplication and internal command message leakage
+- Fix deprecated API calls in OpenFileHandler
+- Fix drag-sort in JCEF: ensure drop event fires reliably and set correct dropEffect for move
+- Fix multi-instance startup causing two IDE processes to delete each other's ai-bridge extraction files
+- Fix MCP server config from ~/.claude.json not being passed to the Claude Agent SDK
+- Fix session title listener design to support multiple ChatWindows (CopyOnWriteArrayList), preventing silent event drops
+- Fix editor popup action icons missing after icon refactoring
+- Fix selection reference range formatting in the copy AI reference action
+- Fix sessionId input validation against path-traversal payloads in history deletion endpoints
+
+🔧 Improvements
+- Rebrand task completion toast with plugin logo, purple accent bar, and improved layout
+- Replace single-element array concurrency workaround with AtomicBoolean/AtomicReference throughout the SDK bridge layer
+- Unify all editor action icons to use cc-gui-icon for a consistent visual identity
+- Move AI session title generation toggle to Behavior tab for better discoverability
+- Improve attachment handling and model resolution in ai-bridge with vision model detection
+- Extract loadMcpServersConfigAsRecord helper to fix empty MCP config leaking into SDK options`,
+      zh: `✨ Features
+- 新增任务完成 Toast 通知，默认关闭（可在设置 → 基础 → 行为中开启）
+- 在编辑器右键菜单中新增「Copy AI Reference」操作，可将选中代码连同文件和行号上下文一起发送给 AI
+- 新增 IntelliJ 工作区（Workspace）模式下的多项目上下文收集，让 AI 了解子项目结构
+- 新增 AI 会话标题自动生成功能，在首次对话结束后使用 Claude Haiku 生成语义化标题
+- 新增设置 → 基础 → 行为中的 AI 会话标题生成开关
+
+🐛 Fixes
+- 修复 Codex 消息处理器导致新建会话和历史恢复时出现重复助手消息的问题
+- 修复批量删除会话历史记录导致 SessionIndexManager 索引损坏的问题
+- 修复切换 Provider 后 Codex 思考过程无法恢复的问题
+- 修复历史记录重复和内部命令消息泄漏问题
+- 修复 OpenFileHandler 中废弃 API 的调用
+- 修复 JCEF 中拖拽排序问题：确保 drop 事件可靠触发并为移动操作设置正确的 dropEffect
+- 修复两个 IDE 实例同时启动时互相删除对方 ai-bridge 解压文件的问题
+- 修复 ~/.claude.json 中的 MCP Server 配置未传递给 Claude Agent SDK 的问题
+- 修复会话标题监听器设计，改用 CopyOnWriteArrayList 支持多个 ChatWindow 订阅，防止事件丢失
+- 修复图标重构后编辑器弹出菜单操作图标丢失的问题
+- 修复「Copy AI Reference」功能中选区引用的行号范围格式错误
+- 修复历史删除接口中 sessionId 输入未校验，存在路径穿越风险的安全问题
+
+🔧 Improvements
+- 任务完成 Toast 通知使用插件 Logo、紫色强调条及优化后的布局
+- 将 SDK Bridge 层中的单元素数组并发变通方案替换为 AtomicBoolean/AtomicReference
+- 统一所有编辑器操作图标为 cc-gui-icon，提供一致的视觉标识
+- 将 AI 会话标题生成开关移至行为选项卡，提升可发现性
+- 改进 ai-bridge 中的附件处理和模型解析逻辑，新增视觉模型检测
+- 提取 loadMcpServersConfigAsRecord 工具函数，修复空 MCP 配置被错误传入 SDK 的问题`,
+    },
+  },
+  {
     version: '0.4.1',
-    date: '2026-04-29',
+    date: '2026-05-06',
     content: {
       en: `✨ Features
 - Add runtime provider switcher: switch between providers without restarting the session
