@@ -34,6 +34,7 @@ const t = ((key: string) => {
     'markdown.copyMessage': '复制消息',
     'markdown.copySuccess': '已复制',
     'chat.streamingConnected': '已连接',
+    'chat.streamingConnectedCodex': 'Codex 已连接',
     'chat.totalDuration': '本次耗时',
   };
   return translations[key] ?? key;

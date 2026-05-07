@@ -88,6 +88,7 @@
     "unknownFile": "Unknown file",
     "attachmentsUploaded": "[添付ファイルがアップロードされました]",
     "streamingConnected": "Claudeに接続しました、質問を理解しています",
+    "streamingConnectedCodex": "Codexに接続しました、質問を理解しています",
     "showEarlierMessages": "以前の{{count}}件のメッセージを表示",
     "totalDuration": "今回の応答時間"
   },

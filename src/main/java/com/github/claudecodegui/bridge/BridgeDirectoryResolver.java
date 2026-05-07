@@ -378,6 +378,9 @@ public class BridgeDirectoryResolver {
 
                 if (descriptor == null) {
                     LOG.debug("[BridgeResolver] Could not find plugin descriptor by any method");
+                    if (!this.extractionReadyFuture.isDone()) {
+                        this.extractionReadyFuture.complete(false);
+                    }
                     return null;
                 }
             }
@@ -451,6 +454,9 @@ public class BridgeDirectoryResolver {
                 }
 
                 if (!archiveFile.exists()) {
+                    if (!this.extractionReadyFuture.isDone()) {
+                        this.extractionReadyFuture.complete(false);
+                    }
                     return null;
                 }
 
@@ -622,6 +628,9 @@ public class BridgeDirectoryResolver {
             // so this code path is only reachable if an exception is caught below
         } catch (Exception e) {
             LOG.error("[BridgeResolver] Auto-extraction of ai-bridge failed: " + e.getMessage());
+            if (!this.extractionReadyFuture.isDone()) {
+                this.extractionReadyFuture.complete(false);
+            }
         }
         return null;
     }

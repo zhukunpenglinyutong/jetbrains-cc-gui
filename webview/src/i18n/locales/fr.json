@@ -88,6 +88,7 @@
     "unknownFile": "Unknown file",
     "attachmentsUploaded": "[Pièces jointes téléchargées]",
     "streamingConnected": "Claude connecté, en train de comprendre votre question",
+    "streamingConnectedCodex": "Codex connecté, en train de comprendre votre question",
     "showEarlierMessages": "Afficher {{count}} messages précédents",
     "totalDuration": "Cette réponse a pris"
   },

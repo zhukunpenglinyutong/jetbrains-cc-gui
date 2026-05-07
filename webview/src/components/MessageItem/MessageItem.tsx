@@ -33,6 +33,7 @@ export interface MessageItemProps {
   onNodeRef?: (id: string, node: HTMLDivElement | null) => void;
   onNavigateToProviderSettings?: () => void;
   toolResultSignature?: string;
+  currentProvider?: string;
 }
 
 type GroupedBlock =
@@ -220,6 +221,7 @@ export const MessageItem = memo(function MessageItem({
   onNodeRef,
   onNavigateToProviderSettings,
   toolResultSignature: _toolResultSignature,
+  currentProvider,
 }: MessageItemProps): React.ReactElement {
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
   const [showStreamingConnectHint, setShowStreamingConnectHint] = useState(false);
@@ -374,9 +376,10 @@ export const MessageItem = memo(function MessageItem({
     }
 
     if (isEmptyStreamingPlaceholder) {
+      const streamingKey = currentProvider === 'codex' ? 'chat.streamingConnectedCodex' : 'chat.streamingConnected';
       return (
         <div className="streaming-connect-status">
-          <span className="streaming-connect-text">{t('chat.streamingConnected')}</span>
+          <span className="streaming-connect-text">{t(streamingKey)}</span>
         </div>
       );
     }

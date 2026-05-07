@@ -88,6 +88,7 @@
     "unknownFile": "Arquivo desconhecido",
     "attachmentsUploaded": "[Anexos Enviados]",
     "streamingConnected": "Claude conectado, entendendo sua pergunta",
+    "streamingConnectedCodex": "Codex conectado, entendendo sua pergunta",
     "showEarlierMessages": "Mostrar {{count}} mensagens anteriores",
     "totalDuration": "Esta resposta levou"
   },

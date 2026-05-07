@@ -59,6 +59,7 @@ interface MessageListProps {
   /** Notify parent when the number of collapsed (hidden) messages changes. */
   onCollapsedCountChange?: (count: number) => void;
   onNavigateToProviderSettings?: () => void;
+  currentProvider?: string;
 }
 
 export const MessageList = memo(function MessageList({
@@ -76,6 +77,7 @@ export const MessageList = memo(function MessageList({
   onMessageNodeRef,
   onCollapsedCountChange,
   onNavigateToProviderSettings,
+  currentProvider,
 }: MessageListProps) {
   const [showAll, setShowAll] = useState(false);
 
@@ -153,6 +155,7 @@ export const MessageList = memo(function MessageList({
             onNodeRef={onMessageNodeRef}
             onNavigateToProviderSettings={onNavigateToProviderSettings}
             toolResultSignature={toolResultSignature}
+            currentProvider={currentProvider}
           />
         );
       })}

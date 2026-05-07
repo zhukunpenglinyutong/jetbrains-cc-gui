@@ -88,6 +88,7 @@
     "unknownFile": "Unknown file",
     "attachmentsUploaded": "[已上傳附件]",
     "streamingConnected": "Claude 已成功連接，正在理解問題",
+    "streamingConnectedCodex": "Codex 已成功連接，正在理解問題",
     "showEarlierMessages": "顯示之前的 {{count}} 則訊息",
     "totalDuration": "本次耗時"
   },
