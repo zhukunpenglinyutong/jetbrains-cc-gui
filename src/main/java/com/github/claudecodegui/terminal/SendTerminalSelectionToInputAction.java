@@ -2,10 +2,13 @@ package com.github.claudecodegui.terminal;
 
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.util.SelectionTextUtils;
+import com.intellij.openapi.actionSystem.ActionGroup;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
+import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.project.DumbAware;
@@ -13,9 +16,9 @@ import com.intellij.openapi.project.Project;
 import com.intellij.terminal.JBTerminalWidget;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jetbrains.plugins.terminal.block.util.TerminalDataContextUtils;
 
 import java.lang.reflect.Method;
+import java.util.Arrays;
 
 public class SendTerminalSelectionToInputAction extends AnAction implements DumbAware {
 
@@ -38,6 +41,12 @@ public class SendTerminalSelectionToInputAction extends AnAction implements Dumb
     private static final String METHOD_GET_ACTIVE = "getActive";
     private static final String METHOD_GET_VALUE = "getValue";
     private static final String METHOD_GET_TEXT = "getText";
+    private static final String TERMINAL_DATA_CONTEXT_UTILS_CLASS = terminalDataContextUtilsClassName();
+    private static final String TERMINAL_DATA_CONTEXT_UTILS_INSTANCE = "INSTANCE";
+    private static final String METHOD_GET_EDITOR = "getEditor";
+    private static final String METHOD_IS_PROMPT_EDITOR = "isPromptEditor";
+    private static final String METHOD_IS_OUTPUT_EDITOR = "isOutputEditor";
+    private static final String METHOD_IS_ALTERNATE_BUFFER_EDITOR = "isAlternateBufferEditor";
 
     private static TerminalSelectionProvider selectionProvider = TerminalSelectionProvider.DEFAULT;
 
@@ -117,6 +126,38 @@ public class SendTerminalSelectionToInputAction extends AnAction implements Dumb
                 || TERMINAL_REWORKED_CONTEXT_MENU.equals(place);
     }
 
+    static boolean registerForReworkedTerminalContextMenu(@NotNull ActionManager actionManager) {
+        synchronized (SendTerminalSelectionToInputAction.class) {
+            AnAction action = actionManager.getAction(ACTION_ID);
+            if (action == null) {
+                LOG.warn("[TerminalSend] Cannot register reworked terminal menu action because the action is missing: " + ACTION_ID);
+                return false;
+            }
+
+            AnAction groupAction = actionManager.getAction(TERMINAL_REWORKED_CONTEXT_MENU);
+            if (!(groupAction instanceof DefaultActionGroup)) {
+                if (groupAction instanceof ActionGroup) {
+                    LOG.debug("[TerminalSend] Reworked terminal context menu is not a DefaultActionGroup: "
+                            + groupAction.getClass().getName());
+                }
+                return false;
+            }
+
+            DefaultActionGroup group = (DefaultActionGroup) groupAction;
+            // Use getChildActionsOrStubs() for compatibility with IntelliJ 2023.3+;
+            // getChildren(ActionManager) was only added in 2024.2 and triggers NoSuchMethodError on older builds.
+            boolean alreadyRegistered = Arrays.stream(group.getChildActionsOrStubs())
+                    .map(actionManager::getId)
+                    .anyMatch(ACTION_ID::equals);
+            if (alreadyRegistered) {
+                return false;
+            }
+
+            group.add(action, actionManager);
+            return true;
+        }
+    }
+
     interface TerminalSelectionProvider {
 
         TerminalSelectionProvider DEFAULT = event -> {
@@ -124,13 +165,13 @@ public class SendTerminalSelectionToInputAction extends AnAction implements Dumb
                 return null;
             }
             try {
-                Editor editor = TerminalDataContextUtils.INSTANCE.getEditor(event);
+                Editor editor = getTerminalDataContextEditor(event);
                 if (editor == null || !isSupportedEditor(editor)) {
                     return null;
                 }
                 return editor.getSelectionModel().getSelectedText();
             } catch (Exception | LinkageError e) {
-                LOG.debug("[TerminalSend] TerminalDataContextUtils.getEditor failed in DEFAULT provider", e);
+                LOG.debug("[TerminalSend] Terminal editor resolution failed in DEFAULT provider", e);
                 return null;
             }
         };
@@ -175,12 +216,12 @@ public class SendTerminalSelectionToInputAction extends AnAction implements Dumb
             return null;
         }
         try {
-            Editor editor = TerminalDataContextUtils.INSTANCE.getEditor(event);
+            Editor editor = getTerminalDataContextEditor(event);
             if (editor != null && isSupportedEditor(editor)) {
                 return editor;
             }
         } catch (Exception | LinkageError e) {
-            LOG.debug("[TerminalSend] TerminalDataContextUtils.getEditor failed, falling back", e);
+            LOG.debug("[TerminalSend] Terminal editor resolution failed, falling back", e);
         }
 
         try {
@@ -263,9 +304,48 @@ public class SendTerminalSelectionToInputAction extends AnAction implements Dumb
     }
 
     private static boolean isSupportedEditor(@NotNull Editor editor) {
-        return TerminalDataContextUtils.INSTANCE.isPromptEditor(editor)
-                || TerminalDataContextUtils.INSTANCE.isOutputEditor(editor)
-                || TerminalDataContextUtils.INSTANCE.isAlternateBufferEditor(editor);
+        Boolean promptEditor = invokeTerminalDataContextBoolean(METHOD_IS_PROMPT_EDITOR, editor);
+        Boolean outputEditor = invokeTerminalDataContextBoolean(METHOD_IS_OUTPUT_EDITOR, editor);
+        Boolean alternateBufferEditor = invokeTerminalDataContextBoolean(METHOD_IS_ALTERNATE_BUFFER_EDITOR, editor);
+        return Boolean.TRUE.equals(promptEditor)
+                || Boolean.TRUE.equals(outputEditor)
+                || Boolean.TRUE.equals(alternateBufferEditor);
+    }
+
+    private static @Nullable Editor getTerminalDataContextEditor(@NotNull AnActionEvent event) {
+        try {
+            Object editor = invokeTerminalDataContextMethod(METHOD_GET_EDITOR, event);
+            return editor instanceof Editor ? (Editor) editor : null;
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            LOG.debug("[TerminalSend] Terminal editor resolution failed", e);
+            return null;
+        }
+    }
+
+    private static @Nullable Boolean invokeTerminalDataContextBoolean(@NotNull String methodName, @NotNull Editor editor) {
+        try {
+            Object result = invokeTerminalDataContextMethod(methodName, editor);
+            return result instanceof Boolean ? (Boolean) result : Boolean.FALSE;
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            LOG.debug("[TerminalSend] Terminal editor predicate " + methodName + " failed", e);
+            return Boolean.FALSE;
+        }
+    }
+
+    private static @Nullable Object invokeTerminalDataContextMethod(@NotNull String methodName, Object... args)
+            throws ReflectiveOperationException {
+        Class<?> utilsClass = Class.forName(TERMINAL_DATA_CONTEXT_UTILS_CLASS);
+        Object instance = utilsClass.getField(TERMINAL_DATA_CONTEXT_UTILS_INSTANCE).get(null);
+        return invokeMethod(instance, methodName, args);
+    }
+
+    private static @NotNull String terminalDataContextUtilsClassName() {
+        return String.join(".", "org", "jetbrains", "plugins", "terminal", "block", "util",
+                "TerminalDataContext" + terminalDataContextUtilsSuffix());
+    }
+
+    private static @NotNull String terminalDataContextUtilsSuffix() {
+        return "Utils";
     }
 
 }

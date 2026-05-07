@@ -5,6 +5,7 @@
     border-radius: 8px;
     margin: 12px 0;
     overflow: hidden;
+    overflow-anchor: none;
 }
 
 .task-header {
@@ -31,19 +32,6 @@
     align-items: center;
     gap: 6px;
     flex-shrink: 0;
-}
-
-.task-chevron {
-    font-size: 12px;
-    color: var(--text-tertiary);
-    transition: transform 0.2s ease;
-}
-
-.tool-chevron {
-    font-size: 12px;
-    color: var(--text-tertiary);
-    flex-shrink: 0;
-    margin-right: 4px;
 }
 
 .task-title-section {
@@ -115,6 +103,7 @@
     padding: 0;
     border-top: 1px solid var(--border-primary);
     background: var(--bg-primary);
+    overflow-anchor: none;
 }
 
 .task-content-wrapper {

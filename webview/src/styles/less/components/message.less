@@ -5,8 +5,13 @@
     overflow-y: auto;
     overflow-x: hidden; /* 防止横向滚动 */
     overscroll-behavior-y: contain;
+    overflow-anchor: none; /* 手动跟随到底时禁用锚定，避免和程序滚动抢控制权 */
     padding: 0;
     background: var(--bg-chat);
+}
+
+.messages-container.scroll-anchor-enabled {
+    overflow-anchor: auto; /* 用户离开底部后，交还给浏览器维持当前可见位置 */
 }
 
 /* Collapsed messages indicator */
@@ -35,6 +40,18 @@
     min-width: 0; /* 允许内容缩小 */
     max-width: 100%; /* 防止超出容器 */
     contain: layout style; /* Isolate layout — prevents cross-message recalculation during scroll */
+
+    @supports (content-visibility: auto) {
+        content-visibility: auto;
+        contain-intrinsic-size: 0 160px;
+    }
+}
+
+.message.is-last-message {
+    @supports (content-visibility: auto) {
+        content-visibility: visible;
+        contain-intrinsic-size: auto;
+    }
 }
 
 .message:last-child {
@@ -606,16 +623,39 @@
 .markdown-content h3 { font-size: 1.2em; }
 
 .markdown-content a {
-    color: inherit;
-    text-decoration: none;
+    color: var(--accent-primary, #4ea1ff);
+    text-decoration-line: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+    text-decoration-color: currentColor;
     word-wrap: break-word;
     overflow-wrap: break-word;
-    pointer-events: none;
-    cursor: text;
+    pointer-events: auto;
+    cursor: pointer;
+    transition: color 0.15s ease, text-decoration-thickness 0.15s ease, opacity 0.15s ease;
 }
 
 .markdown-content a:hover {
-    text-decoration: none;
+    text-decoration-thickness: 2px;
+    opacity: 0.95;
+}
+
+.markdown-content a.file-link {
+    text-decoration-style: dotted;
+    color: var(--color-tool-file-link, var(--accent-primary, #4ea1ff));
+}
+
+.markdown-content a.class-link {
+    text-decoration-style: dashed;
+    color: var(--color-tool-class-link, var(--accent-primary, #4ea1ff));
+}
+
+.markdown-content a.url-link {
+    text-decoration-style: solid;
+}
+
+.message.user .markdown-content a {
+    color: inherit;
 }
 
 /* 表格容器 - 处理溢出 */

@@ -30,7 +30,7 @@ checkstyle {
 }
 
 group = 'com.github.idea-claude-code-gui'
-version = '0.4'
+version = '0.4.1'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -113,10 +113,12 @@ sourceSets {
             // PyCharm: exclude Java context collector
             if (targetIde == 'PC' || targetIde == 'PY') {
                 exclude '**/JavaContextCollector.java'
+                exclude '**/JavaClassNavigationSupport.java'
             }
             // Rider: exclude both Java and Python context collectors (no PSI support)
             if (targetIde == 'RD') {
                 exclude '**/JavaContextCollector.java'
+                exclude '**/JavaClassNavigationSupport.java'
                 exclude '**/PythonContextCollector.java'
             }
         }

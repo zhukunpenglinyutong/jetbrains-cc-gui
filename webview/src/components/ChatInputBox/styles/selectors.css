@@ -32,6 +32,15 @@
   background: var(--button-hover);
 }
 
+.runtime-provider-text {
+  max-width: 120px;
+}
+
+.runtime-provider-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Auto mode (bypassPermissions) - subtle orange indicator */
 .selector-button.mode-auto-active {
   color: #cc8400;
@@ -299,4 +308,3 @@
   opacity: 1;
   visibility: visible;
 }
-

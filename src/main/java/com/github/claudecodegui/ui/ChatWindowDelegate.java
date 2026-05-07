@@ -24,6 +24,7 @@ import com.github.claudecodegui.handler.TabHandler;
 import com.github.claudecodegui.handler.WindowEventHandler;
 import com.github.claudecodegui.handler.file.FileExportHandler;
 import com.github.claudecodegui.handler.file.FileHandler;
+import com.github.claudecodegui.handler.file.OpenClassHandler;
 import com.github.claudecodegui.handler.file.UndoFileHandler;
 import com.github.claudecodegui.permission.PermissionService;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
@@ -447,6 +448,10 @@ public class ChatWindowDelegate {
         LOG.info("Received frontend_ready signal, frontend is now ready to receive data");
         host.setFrontendReady(true);
 
+        host.callJavaScript(
+            "window.updateLinkifyCapabilities",
+            JsUtils.escapeJs(OpenClassHandler.buildCapabilitiesJson())
+        );
         host.getSessionLifecycleManager().sendCurrentPermissionMode();
         replayCurrentSessionStateToFrontend();
         host.persistTabSessionState();

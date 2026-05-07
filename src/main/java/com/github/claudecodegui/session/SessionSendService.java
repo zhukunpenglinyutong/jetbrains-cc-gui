@@ -243,6 +243,7 @@ public class SessionSendService {
                         agentPrompt,
                         streaming,
                         false,
+                        state.getReasoningEffort(),
                         handler
                 ).thenApply(result -> null);
     }

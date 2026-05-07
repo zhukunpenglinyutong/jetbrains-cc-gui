@@ -96,8 +96,8 @@ export async function getSessionMessages(sessionId, cwd = null) {
 
     if (!existsSync(sessionFile)) {
       console.log(JSON.stringify({
-        success: false,
-        error: 'Session file not found'
+        success: true,
+        messages: []
       }));
       return;
     }

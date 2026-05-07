@@ -23,7 +23,8 @@ export function buildRuntimeSignature(options, systemPromptAppend, streamingEnab
     systemPromptAppend: systemPromptAppend || '',
     streamingEnabled: !!streamingEnabled,
     runtimeSessionEpoch: runtimeSessionEpoch || '',
-    model: options.model || ''
+    model: options.model || '',
+    effort: options.effort || ''
   };
   return JSON.stringify(material);
 }

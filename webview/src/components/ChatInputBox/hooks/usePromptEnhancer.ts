@@ -10,7 +10,6 @@ declare global {
 interface UsePromptEnhancerOptions {
   editableRef: React.RefObject<HTMLDivElement | null>;
   getTextContent: () => string;
-  selectedModel: string;
   setHasContent: (hasContent: boolean) => void;
   onInput?: (content: string) => void;
 }
@@ -43,7 +42,6 @@ interface UsePromptEnhancerReturn {
 export function usePromptEnhancer({
   editableRef,
   getTextContent,
-  selectedModel,
   setHasContent,
   onInput,
 }: UsePromptEnhancerOptions): UsePromptEnhancerReturn {
@@ -70,10 +68,10 @@ export function usePromptEnhancer({
     // Call backend for prompt enhancement, pass current selected model
     if (window.sendToJava) {
       window.sendToJava(
-        `enhance_prompt:${JSON.stringify({ prompt: content, model: selectedModel })}`
+        `enhance_prompt:${JSON.stringify({ prompt: content })}`
       );
     }
-  }, [getTextContent, selectedModel]);
+  }, [getTextContent]);
 
   /**
    * Handle use enhanced prompt

@@ -283,6 +283,14 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             }
 
             @Override
+            public void selectionChanged(@NotNull ContentManagerEvent event) {
+                ClaudeChatWindow window = contentToWindowMap.get(event.getContent());
+                if (window != null) {
+                    window.loadRestoredHistoryIfNeeded();
+                }
+            }
+
+            @Override
             public void contentRemoved(@NotNull ContentManagerEvent event) {
                 updateTabCloseableState(contentManager);
 
@@ -403,21 +411,24 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         ClaudeChatWindow firstChatWindow = new ClaudeChatWindow(project, false);
         String firstTabName = resolveRestoredTabName(tabStateService, 0);
+        TabStateService.TabSessionState firstSavedState = tabStateService.getTabSessionState(0);
 
         loadingContent.setComponent(firstChatWindow.getContent());
         loadingContent.setDisplayName(firstTabName);
         firstChatWindow.setParentContent(loadingContent);
         loadingContent.setDisposer(firstChatWindow::dispose);
+        restoreTabSessionState(firstSavedState, 0, firstChatWindow, true);
 
         for (int i = 1; i < savedTabCount; i++) {
             ClaudeChatWindow chatWindow = new ClaudeChatWindow(project, true);
             String tabName = resolveRestoredTabName(tabStateService, i);
+            TabStateService.TabSessionState savedState = tabStateService.getTabSessionState(i);
 
             Content content = contentFactory.createContent(chatWindow.getContent(), tabName, false);
             chatWindow.setParentContent(content);
             content.setDisposer(chatWindow::dispose);
             contentManager.addContent(content);
-            restoreTabSessionState(tabStateService, i, chatWindow);
+            restoreTabSessionState(savedState, i, chatWindow, false);
         }
 
         updateTabCloseableState(contentManager);
@@ -436,23 +447,29 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             boolean isFirstTab = (i == 0);
             ClaudeChatWindow chatWindow = new ClaudeChatWindow(project, !isFirstTab);
             String tabName = resolveRestoredTabName(tabStateService, i);
+            TabStateService.TabSessionState savedState = tabStateService.getTabSessionState(i);
 
             Content content = contentFactory.createContent(chatWindow.getContent(), tabName, false);
             chatWindow.setParentContent(content);
             chatWindow.setOriginalTabName(tabName);
             content.setDisposer(chatWindow::dispose);
             contentManager.addContent(content);
+            restoreTabSessionState(savedState, i, chatWindow, isFirstTab);
         }
 
         updateTabCloseableState(contentManager);
     }
 
-    private void restoreTabSessionState(TabStateService tabStateService, int tabIndex, ClaudeChatWindow chatWindow) {
-        TabStateService.TabSessionState savedState = tabStateService.getTabSessionState(tabIndex);
+    private void restoreTabSessionState(
+            TabStateService.TabSessionState savedState,
+            int tabIndex,
+            ClaudeChatWindow chatWindow,
+            boolean loadImmediately
+    ) {
         if (savedState == null) {
             return;
         }
-        chatWindow.restorePersistedTabSessionState(savedState);
+        chatWindow.restorePersistedTabSessionState(savedState, loadImmediately);
         LOG.info("[TabManager] Restored tab " + tabIndex + " session binding from storage");
     }
 

@@ -210,16 +210,34 @@ describe('appendOptimisticMessageIfMissing', () => {
     expect(result[0]).toBe(backendMsg);
   });
 
-  it('appends when timestamps exceed the time window', () => {
+  it('matches the latest backend user message by content even when confirmation is delayed', () => {
     const oldTs = new Date(Date.now() - OPTIMISTIC_MESSAGE_TIME_WINDOW - 1000).toISOString();
     const newTs = new Date().toISOString();
-    const optimistic = makeUserMsg('hello', { isOptimistic: true, timestamp: oldTs });
-    const backendMsg = makeUserMsg('hello', { timestamp: newTs });
+    const optimistic = makeUserMsg('slow confirmation', { isOptimistic: true, timestamp: oldTs });
+    const backendMsg = makeUserMsg('slow confirmation', { timestamp: newTs });
     const prev = [optimistic];
     const next = [backendMsg];
 
     const result = appendOptimisticMessageIfMissing(prev, next);
-    expect(result).toHaveLength(2);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe(backendMsg);
+  });
+
+  it('matches delayed optimistic text against the latest backend user when older history has same content', () => {
+    const optimistic = makeUserMsg('repeatable prompt', {
+      isOptimistic: true,
+      timestamp: new Date(Date.now() - OPTIMISTIC_MESSAGE_TIME_WINDOW - 1000).toISOString(),
+    });
+    const olderBackend = makeUserMsg('repeatable prompt', { timestamp: '2026-04-26T00:00:00.000Z' });
+    const latestBackend = makeUserMsg('repeatable prompt', { timestamp: new Date().toISOString() });
+
+    const result = appendOptimisticMessageIfMissing(
+      [olderBackend, optimistic],
+      [olderBackend, makeAssistantMsg('old answer'), latestBackend],
+    );
+
+    expect(result).toHaveLength(3);
+    expect(result[2]).toBe(latestBackend);
   });
 
   it('merges attachment blocks from optimistic message into matched backend message', () => {
@@ -624,5 +642,144 @@ describe('ensureStreamingAssistantInList', () => {
     const { list, streamingIndex } = ensureStreamingAssistantInList(prev, result, false, 0);
     expect(list).toBe(result);
     expect(streamingIndex).toBe(-1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// preserveStreamingAssistantContent — raw blocks protection
+//
+// Root cause being tested:
+//   After Phase-1 fix, [MESSAGE] is no longer sent for pure-text streaming turns.
+//   [USAGE] and other minor backend pushes still trigger updateMessages which
+//   carries a *stale* raw snapshot (shorter text blocks than what segments have
+//   already accumulated).  preserveStreamingAssistantContent guards .content
+//   (the string), but NOT .raw.message.content blocks.  MarkdownBlock renders
+//   from blocks, so a stale backend raw overwrites the streamed raw, producing
+//   the "ABCDE → ABC → ABCDEF" flicker visible to users.
+// ---------------------------------------------------------------------------
+
+describe('preserveStreamingAssistantContent — raw blocks protection', () => {
+  // Helper: extract text from raw blocks
+  const getRawTextAt = (msg: ClaudeMessage, blockIdx = 0): string | undefined =>
+    ((msg.raw as any)?.message?.content?.[blockIdx] as any)?.text;
+
+  it('protects raw text blocks from backend regression when content string is also protected', () => {
+    // Simulates: segments accumulated "ABCDE", backend snapshot has raw.text="ABC"
+    // preserveStreamingAssistantContent kicks in for content (prev>next length)
+    // but must ALSO protect the raw text block, not just the .content string.
+    const prev = [makeAssistantMsg('ABCDE', {
+      isStreaming: true,
+      raw: { message: { content: [{ type: 'text', text: 'ABCDE' }] } } as any,
+    })];
+    const next = [makeAssistantMsg('ABC', {
+      raw: { message: { content: [{ type: 'text', text: 'ABC' }] } } as any,
+    })];
+
+    const result = preserveStreamingAssistantContent(
+      prev, next, ref(true), ref('ABCDE'),
+      findLastAssistantIndex, patchAssistantForStreaming,
+    );
+
+    // .content string already guarded by existing logic
+    expect(result[0].content).toBe('ABCDE');
+    // raw blocks must also reflect the longer streamed value — not the stale backend value
+    expect(getRawTextAt(result[0], 0)).toBe('ABCDE');
+  });
+
+  it('protects raw text blocks even when backend content length equals streamed length', () => {
+    // Edge case: backend content string matches streamingContentRef length
+    // so current impl returns nextList unchanged (no content protection).
+    // But raw.text may still be stale (same length ≠ same content).
+    // Scenario: streamingContentRef="ABCDE", backend.content="ABCDE", backend.raw.text="ABC"
+    const prev = [makeAssistantMsg('ABCDE', {
+      isStreaming: true,
+      raw: { message: { content: [{ type: 'text', text: 'ABCDE' }] } } as any,
+    })];
+    const next = [makeAssistantMsg('ABCDE', {
+      raw: { message: { content: [{ type: 'text', text: 'ABC' }] } } as any,
+    })];
+
+    const result = preserveStreamingAssistantContent(
+      prev, next, ref(true), ref('ABCDE'),
+      findLastAssistantIndex, patchAssistantForStreaming,
+    );
+
+    // raw text block must not regress to shorter stale value
+    expect(getRawTextAt(result[0], 0)).toBe('ABCDE');
+  });
+
+  it('injects new tool_use from backend while keeping streamed text block intact', () => {
+    // Simulates: text streaming "ABCDE" ongoing; backend pushes snapshot with
+    // stale text "AB" + a newly-appeared tool_use block.
+    // Expected: text block stays "ABCDE", tool_use block is preserved.
+    const prev = [makeAssistantMsg('ABCDE', {
+      isStreaming: true,
+      raw: {
+        message: {
+          content: [{ type: 'text', text: 'ABCDE' }],
+        },
+      } as any,
+    })];
+    const next = [makeAssistantMsg('AB', {
+      raw: {
+        message: {
+          content: [
+            { type: 'text', text: 'AB' },
+            { type: 'tool_use', id: 'tu-1', name: 'Read', input: { path: '/foo' } },
+          ],
+        },
+      } as any,
+    })];
+
+    const result = preserveStreamingAssistantContent(
+      prev, next, ref(true), ref('ABCDE'),
+      findLastAssistantIndex, patchAssistantForStreaming,
+    );
+
+    const blocks = (result[0].raw as any)?.message?.content as any[];
+    expect(blocks).toHaveLength(2);
+    // text block: streamed value wins
+    expect(blocks[0].type).toBe('text');
+    expect(blocks[0].text).toBe('ABCDE');
+    // tool_use block: kept from backend (it was not in prev)
+    expect(blocks[1].type).toBe('tool_use');
+    expect(blocks[1].id).toBe('tu-1');
+  });
+
+  it('does not regress thinking block raw content when backend has shorter thinking', () => {
+    // Same scenario as text, but for thinking blocks
+    const longThinking = 'A'.repeat(200);
+    const shortThinking = 'A'.repeat(50);
+    const prev = [makeAssistantMsg('answer', {
+      isStreaming: true,
+      raw: {
+        message: {
+          content: [
+            { type: 'thinking', thinking: longThinking },
+            { type: 'text', text: 'answer' },
+          ],
+        },
+      } as any,
+    })];
+    const next = [makeAssistantMsg('ans', {
+      raw: {
+        message: {
+          content: [
+            { type: 'thinking', thinking: shortThinking },
+            { type: 'text', text: 'ans' },
+          ],
+        },
+      } as any,
+    })];
+
+    const result = preserveStreamingAssistantContent(
+      prev, next, ref(true), ref('answer'),
+      findLastAssistantIndex, patchAssistantForStreaming,
+    );
+
+    const blocks = (result[0].raw as any)?.message?.content as any[];
+    expect(blocks[0].type).toBe('thinking');
+    expect((blocks[0].thinking as string).length).toBe(longThinking.length);
+    expect(blocks[1].text).toBe('answer');
   });
 });

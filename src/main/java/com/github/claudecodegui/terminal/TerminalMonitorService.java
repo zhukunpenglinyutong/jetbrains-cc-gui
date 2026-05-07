@@ -8,6 +8,7 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.actionSystem.ActionGroup;
 import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.openapi.actionSystem.AnAction;
+import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.Project;
@@ -121,6 +122,8 @@ public class TerminalMonitorService implements ProjectActivity {
         // ContentManager access requires EDT, so schedule this on EDT
         ApplicationManager.getApplication().invokeLater(() -> {
             if (project.isDisposed() || state.listenerDisposable.isDisposed()) return;
+
+            ensureReworkedTerminalMenuRegistration();
 
             ToolWindow terminalWindow = ToolWindowManager.getInstance(project).getToolWindow("Terminal");
             if (terminalWindow == null) return;
@@ -660,9 +663,22 @@ public class TerminalMonitorService implements ProjectActivity {
                     + ", class=" + (action == null ? "null" : action.getClass().getName()));
             logGroupMembership(actionManager, SendTerminalSelectionToInputAction.TERMINAL_OUTPUT_CONTEXT_MENU);
             logGroupMembership(actionManager, SendTerminalSelectionToInputAction.TERMINAL_PROMPT_CONTEXT_MENU);
+            logGroupMembership(actionManager, SendTerminalSelectionToInputAction.TERMINAL_REWORKED_CONTEXT_MENU);
             logGroupMembership(actionManager, EDITOR_POPUP_MENU);
         } catch (Exception e) {
             LOG.warn("[TerminalSend] Failed to log action registration diagnostics", e);
+        }
+    }
+
+    private static void ensureReworkedTerminalMenuRegistration() {
+        try {
+            ActionManager actionManager = ActionManager.getInstance();
+            boolean added = SendTerminalSelectionToInputAction.registerForReworkedTerminalContextMenu(actionManager);
+            if (added) {
+                LOG.info("[TerminalSend] Registered send action into Terminal.ReworkedTerminalContextMenu at runtime");
+            }
+        } catch (Exception | LinkageError e) {
+            LOG.debug("[TerminalSend] Failed to register reworked terminal context menu action", e);
         }
     }
 
@@ -673,14 +689,24 @@ public class TerminalMonitorService implements ProjectActivity {
             return;
         }
 
-        ActionGroup group = (ActionGroup) groupAction;
-        List<String> childIds = Arrays.stream(group.getChildren(null))
+        List<String> childIds = Arrays.stream(resolveActionGroupChildren((ActionGroup) groupAction))
                 .map(child -> actionManager.getId(child))
                 .collect(Collectors.toList());
         LOG.debug("[TerminalSend] group=" + groupId
                 + ", containsSendAction=" + childIds.contains(SendTerminalSelectionToInputAction.ACTION_ID)
                 + ", childCount=" + childIds.size()
                 + ", sampleChildren=" + childIds.stream().limit(12).collect(Collectors.toList()));
+    }
+
+    private static AnAction[] resolveActionGroupChildren(@NotNull ActionGroup group) {
+        try {
+            Method getChildren = group.getClass().getMethod("getChildren", AnActionEvent.class);
+            Object children = getChildren.invoke(group, new Object[]{null});
+            return children instanceof AnAction[] ? (AnAction[]) children : new AnAction[0];
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            LOG.debug("[TerminalSend] Failed to resolve action group children", e);
+            return new AnAction[0];
+        }
     }
 
     private static void installLegacySendAction(@NotNull Object widget) {

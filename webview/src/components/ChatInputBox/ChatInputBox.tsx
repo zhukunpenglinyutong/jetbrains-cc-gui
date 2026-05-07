@@ -76,7 +76,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       onModeSelect,
       onModelSelect,
       onProviderSelect,
-      reasoningEffort = 'medium',
+      reasoningEffort = 'high',
       onReasoningChange,
       activeFile,
       selectedLines,
@@ -406,7 +406,6 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
     } = usePromptEnhancer({
       editableRef,
       getTextContent,
-      selectedModel,
       setHasContent,
       onInput,
     });

@@ -11,7 +11,7 @@ import DiscardAllDialog from './DiscardAllDialog';
 import type { TabType, StatusPanelProps } from './types';
 import './StatusPanel.less';
 
-const StatusPanel = ({ todos, fileChanges, subagents, expanded = true, isStreaming = false, onUndoFile, onDiscardAll, onKeepAll }: StatusPanelProps) => {
+const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, currentSessionId, expanded = true, isStreaming = false, onUndoFile, onDiscardAll, onKeepAll }: StatusPanelProps) => {
   const { t } = useTranslation();
   const [openPopover, setOpenPopover] = useState<TabType | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -207,7 +207,7 @@ const StatusPanel = ({ todos, fileChanges, subagents, expanded = true, isStreami
       case 'todo':
         return <TodoList todos={todos} />;
       case 'subagent':
-        return <SubagentList subagents={subagents} />;
+        return <SubagentList subagents={subagents} histories={subagentHistories} currentSessionId={currentSessionId} isStreaming={isStreaming} />;
       case 'files':
         return (
           <FileChangesList

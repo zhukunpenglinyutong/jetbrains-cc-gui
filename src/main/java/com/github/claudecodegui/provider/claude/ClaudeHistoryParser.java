@@ -6,11 +6,13 @@ import com.google.gson.Gson;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.BufferedReader;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 
 /**
  * Handles parsing of Claude session JSONL files.
@@ -21,6 +23,15 @@ class ClaudeHistoryParser {
     private static final Logger LOG = Logger.getInstance(ClaudeHistoryParser.class);
 
     private final Gson gson = new Gson();
+    private final BiConsumer<Path, Exception> scanFailureReporter;
+
+    ClaudeHistoryParser() {
+        this(ClaudeHistoryParser::logRecoverableScanFailure);
+    }
+
+    ClaudeHistoryParser(BiConsumer<Path, Exception> scanFailureReporter) {
+        this.scanFailureReporter = scanFailureReporter;
+    }
 
     /**
      * Scan a single session file and return a SessionInfo.
@@ -79,9 +90,18 @@ class ClaudeHistoryParser {
 
             return session;
         } catch (Exception e) {
-            LOG.error("[ClaudeHistoryReader] Failed to scan session: " + e.getMessage());
+            this.scanFailureReporter.accept(path, e);
             return null;
         }
+    }
+
+    private static void logRecoverableScanFailure(Path path, Exception e) {
+        if (e instanceof NoSuchFileException) {
+            LOG.debug("[ClaudeHistoryReader] Session disappeared during scan: " + path);
+            return;
+        }
+
+        LOG.warn("[ClaudeHistoryReader] Skipping unreadable session during scan: " + path + " (" + e.getMessage() + ")");
     }
 
     /**

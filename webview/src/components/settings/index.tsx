@@ -16,6 +16,7 @@ import CommunitySection from './CommunitySection';
 import AgentSection from './AgentSection';
 import PromptSection from './PromptSection';
 import CommitSection from './CommitSection';
+import PromptEnhancerSection from './PromptEnhancerSection';
 import OtherSettingsSection from './OtherSettingsSection';
 import { SkillsSettingsSection } from '../skills';
 import SettingsDialogs from './SettingsDialogs';
@@ -121,6 +122,8 @@ const SettingsView = ({
     setLocalSendShortcut,
     sendShortcut,
     autoOpenFileEnabled,
+    promptEnhancerConfig,
+    setPromptEnhancerConfig,
     commitPrompt,
     setCommitPrompt,
     savingCommitPrompt,
@@ -160,6 +163,14 @@ const SettingsView = ({
     statusBarWidgetEnabled,
     setStatusBarWidgetEnabled,
     handleStatusBarWidgetEnabledChange,
+    commitAiConfig,
+    setCommitAiConfig,
+    handleCommitAiProviderChange,
+    handleCommitAiModelChange,
+    handleCommitAiResetToDefault,
+    handlePromptEnhancerProviderChange,
+    handlePromptEnhancerModelChange,
+    handlePromptEnhancerResetToDefault,
   } = useSettingsBasicActions({
     streamingEnabledProp,
     onStreamingEnabledChangeProp,
@@ -260,6 +271,8 @@ const SettingsView = ({
     setSavingWorkingDirectory,
     setCommitPrompt,
     setSavingCommitPrompt,
+    setCommitAiConfig,
+    setPromptEnhancerConfig,
     setEditorFontConfig,
     setUiFontConfig,
     setIdeTheme,
@@ -505,9 +518,23 @@ const SettingsView = ({
             )}
           </div>
 
+          {/* Prompt enhancer configuration */}
+          <div style={{ display: currentTab === 'promptEnhancer' ? 'block' : 'none' }}>
+            <PromptEnhancerSection
+              promptEnhancerConfig={promptEnhancerConfig}
+              onPromptEnhancerProviderChange={handlePromptEnhancerProviderChange}
+              onPromptEnhancerModelChange={handlePromptEnhancerModelChange}
+              onPromptEnhancerResetToDefault={handlePromptEnhancerResetToDefault}
+            />
+          </div>
+
           {/* Commit AI configuration */}
           <div style={{ display: currentTab === 'commit' ? 'block' : 'none' }}>
             <CommitSection
+              commitAiConfig={commitAiConfig}
+              onCommitAiProviderChange={handleCommitAiProviderChange}
+              onCommitAiModelChange={handleCommitAiModelChange}
+              onCommitAiResetToDefault={handleCommitAiResetToDefault}
               commitPrompt={commitPrompt}
               onCommitPromptChange={setCommitPrompt}
               onSaveCommitPrompt={handleSaveCommitPrompt}

@@ -119,7 +119,7 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
             try {
                 JsonObject payload = gson.fromJson(content, JsonObject.class);
                 String originalPrompt = payload.has("prompt") ? payload.get("prompt").getAsString() : "";
-                String model = payload.has("model") ? payload.get("model").getAsString() : null;
+                String legacyModel = payload.has("model") ? payload.get("model").getAsString() : null;
 
                 if (originalPrompt.isEmpty()) {
                     sendEnhanceResult(false, "", "Prompt is empty");
@@ -127,8 +127,8 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
                 }
 
                 LOG.info("[PromptEnhancer] Starting prompt enhancement: " + originalPrompt.substring(0, Math.min(50, originalPrompt.length())) + "...");
-                if (model != null) {
-                    LOG.info("[PromptEnhancer] Using model: " + model);
+                if (legacyModel != null) {
+                    LOG.info("[PromptEnhancer] Received legacy model from frontend: " + legacyModel);
                 }
 
                 // Automatically collect context information from the editor
@@ -165,7 +165,8 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
                 }
 
                 // Call AI service for enhancement (passing context information)
-                String enhancedPrompt = callAIForEnhancement(originalPrompt, model, contextObj);
+                JsonObject promptEnhancerConfig = context.getSettingsService().getPromptEnhancerConfig();
+                String enhancedPrompt = callAIForEnhancement(originalPrompt, legacyModel, contextObj, promptEnhancerConfig);
 
                 if (enhancedPrompt != null && !enhancedPrompt.isEmpty()) {
                     LOG.info("[PromptEnhancer] Enhancement successful");
@@ -331,15 +332,48 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
     }
 
     /**
+     * Build a compact, redaction-safe description of the prompt enhancer config
+     * for logging. Avoids dumping the entire JSON (which may include unrelated
+     * availability/resolution metadata).
+     */
+    private static String describePromptEnhancerConfig(JsonObject promptEnhancerConfig) {
+        if (promptEnhancerConfig == null) {
+            return "none";
+        }
+        String provider = null;
+        if (promptEnhancerConfig.has("effectiveProvider")
+                && !promptEnhancerConfig.get("effectiveProvider").isJsonNull()) {
+            provider = promptEnhancerConfig.get("effectiveProvider").getAsString();
+        }
+        String model = null;
+        if (provider != null
+                && promptEnhancerConfig.has("models")
+                && promptEnhancerConfig.get("models").isJsonObject()) {
+            JsonObject models = promptEnhancerConfig.getAsJsonObject("models");
+            if (models.has(provider) && !models.get(provider).isJsonNull()) {
+                model = models.get(provider).getAsString();
+            }
+        }
+        return (provider != null ? provider : "unresolved")
+                + ", model: " + (model != null ? model : "default");
+    }
+
+    /**
      * Call the AI service for prompt enhancement.
      * @param originalPrompt the original prompt
-     * @param model the model to use (optional)
+     * @param legacyModel the legacy model to use as a fallback (optional)
      * @param contextObj context information (optional)
+     * @param promptEnhancerConfig resolved prompt enhancer configuration
      */
-    private String callAIForEnhancement(String originalPrompt, String model, JsonObject contextObj) {
+    private String callAIForEnhancement(
+            String originalPrompt,
+            String legacyModel,
+            JsonObject contextObj,
+            JsonObject promptEnhancerConfig
+    ) {
         LOG.info("[PromptEnhancer] Starting AI service call for prompt enhancement");
         LOG.info("[PromptEnhancer] Original prompt: " + originalPrompt);
-        LOG.info("[PromptEnhancer] Using model: " + (model != null ? model : "default"));
+        LOG.info("[PromptEnhancer] Using provider: " + describePromptEnhancerConfig(promptEnhancerConfig));
 
         try {
             // Call AI service using a Node.js script
@@ -377,12 +411,15 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
             JsonObject stdinInput = new JsonObject();
             stdinInput.addProperty("prompt", originalPrompt);
             stdinInput.addProperty("systemPrompt", ENHANCE_SYSTEM_PROMPT);
-            if (model != null && !model.isEmpty()) {
-                stdinInput.addProperty("model", model);
+            if (legacyModel != null && !legacyModel.isEmpty()) {
+                stdinInput.addProperty("legacyModel", legacyModel);
             }
             // Add context information
             if (contextObj != null) {
                 stdinInput.add("context", contextObj);
+            }
+            if (promptEnhancerConfig != null) {
+                stdinInput.add("promptEnhancerConfig", promptEnhancerConfig);
             }
 
             try (OutputStreamWriter writer = new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8)) {
@@ -441,4 +478,3 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
         });
     }
 }
-

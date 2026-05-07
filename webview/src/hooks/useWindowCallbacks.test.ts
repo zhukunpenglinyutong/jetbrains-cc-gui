@@ -30,6 +30,7 @@ describe('useWindowCallbacks integration', () => {
     setUsagePercentage: vi.fn(),
     setUsageUsedTokens: vi.fn(),
     setUsageMaxTokens: vi.fn(),
+    setSubagentHistories: vi.fn(),
     setPermissionMode: vi.fn(),
     setClaudePermissionMode: vi.fn(),
     setCodexPermissionMode: vi.fn(),
@@ -56,21 +57,17 @@ describe('useWindowCallbacks integration', () => {
     userPausedRef: { current: false },
     suppressNextStatusToastRef: { current: false },
     streamingContentRef: { current: '' },
+    streamingThinkingRef: { current: '' },
     isStreamingRef: { current: false },
     useBackendStreamingRenderRef: { current: false },
     autoExpandedThinkingKeysRef: { current: new Set<string>() },
-    streamingTextSegmentsRef: { current: [] },
-    activeTextSegmentIndexRef: { current: -1 },
-    streamingThinkingSegmentsRef: { current: [] },
-    activeThinkingSegmentIndexRef: { current: -1 },
-    seenToolUseCountRef: { current: 0 },
     streamingMessageIndexRef: { current: -1 },
     streamingTurnIdRef: { current: -1 },
     turnIdCounterRef: { current: 0 },
     lastContentUpdateRef: { current: 0 },
-    contentUpdateTimeoutRef: { current: null },
+    contentUpdateTimeoutRef: { current: null } as { current: number | null },
     lastThinkingUpdateRef: { current: 0 },
-    thinkingUpdateTimeoutRef: { current: null },
+    thinkingUpdateTimeoutRef: { current: null } as { current: number | null },
 
     // Functions
     findLastAssistantIndex: (msgs: ClaudeMessage[]) =>
@@ -503,6 +500,71 @@ describe('useWindowCallbacks integration', () => {
       id: 'spawn-1',
     });
     expect(nextMessages[0].__turnId).toBe(7);
+  });
+
+  it('reuses replayed in-progress assistant when stream restarts after webview reload', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      (window as any).onStreamStart?.();
+    });
+
+    expect(opts.setMessages).toHaveBeenCalledTimes(1);
+    const updater = (opts.setMessages as any).mock.calls[0][0] as (messages: ClaudeMessage[]) => ClaudeMessage[];
+    const replayedMessages: ClaudeMessage[] = [
+      { type: 'user', content: 'question', timestamp: '2026-04-27T00:00:00.000Z' },
+      { type: 'assistant', content: 'partial answer', timestamp: '2026-04-27T00:00:01.000Z' },
+    ];
+
+    const nextMessages = updater(replayedMessages);
+
+    expect(nextMessages).toHaveLength(2);
+    expect(nextMessages[1]).toMatchObject({
+      type: 'assistant',
+      content: 'partial answer',
+      isStreaming: true,
+      __turnId: 1,
+    });
+  });
+
+  it('onSubagentHistoryLoaded skips updates only when history payload is truly unchanged', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    const firstPayload = {
+      success: true,
+      toolUseId: 'task-1',
+      sessionId: 'session-1',
+      messages: [{ type: 'assistant', content: [{ type: 'text', text: 'draft result' }] }],
+    };
+
+    act(() => {
+      window.onSubagentHistoryLoaded?.(JSON.stringify(firstPayload));
+    });
+
+    expect(opts.setSubagentHistories).toHaveBeenCalledTimes(1);
+    const firstUpdater = (opts.setSubagentHistories as any).mock.calls[0][0] as (prev: Record<string, unknown>) => Record<string, unknown>;
+    const initialState = firstUpdater({});
+
+    act(() => {
+      window.onSubagentHistoryLoaded?.(JSON.stringify(firstPayload));
+    });
+
+    const secondUpdater = (opts.setSubagentHistories as any).mock.calls[1][0] as (prev: Record<string, unknown>) => Record<string, unknown>;
+    expect(secondUpdater(initialState)).toBe(initialState);
+
+    act(() => {
+      window.onSubagentHistoryLoaded?.(JSON.stringify({
+        ...firstPayload,
+        messages: [{ type: 'assistant', content: [{ type: 'text', text: 'final result' }] }],
+      }));
+    });
+
+    const thirdUpdater = (opts.setSubagentHistories as any).mock.calls[2][0] as (prev: Record<string, any>) => Record<string, any>;
+    const updatedState = thirdUpdater(initialState);
+    expect(updatedState).not.toBe(initialState);
+    expect(updatedState['task-1'].messages[0].content[0].text).toBe('final result');
   });
 
   // ===== onStreamEnd idempotency (dual-path delivery) =====

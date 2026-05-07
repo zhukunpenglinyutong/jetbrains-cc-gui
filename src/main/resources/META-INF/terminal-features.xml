@@ -14,7 +14,6 @@
                 icon="/icons/cc-gui-icon.svg">
             <add-to-group group-id="Terminal.OutputContextMenu" anchor="last"/>
             <add-to-group group-id="Terminal.PromptContextMenu" anchor="last"/>
-            <add-to-group group-id="Terminal.ReworkedTerminalContextMenu" anchor="after" relative-to-action="Terminal.CopySelectedText"/>
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </action>
     </actions>

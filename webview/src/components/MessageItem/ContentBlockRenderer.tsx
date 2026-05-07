@@ -184,6 +184,8 @@ export function ContentBlockRenderer({
           name={block.name}
           input={block.input}
           result={findToolResult(block.id, messageIndex)}
+          toolId={block.id}
+          isStreaming={isStreaming}
         />
       );
     }

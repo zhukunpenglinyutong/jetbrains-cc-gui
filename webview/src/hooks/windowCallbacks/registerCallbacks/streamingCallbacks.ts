@@ -5,6 +5,7 @@
  * onStreamStart, onContentDelta, onThinkingDelta, onStreamEnd, onPermissionDenied.
  */
 
+import { startTransition } from 'react';
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
 import type { ClaudeRawMessage } from '../../../types';
 import { sendBridgeEvent } from '../../../utils/bridge';
@@ -35,14 +36,10 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     setIsThinking,
     setExpandedThinking,
     streamingContentRef,
+    streamingThinkingRef,
     isStreamingRef,
     useBackendStreamingRenderRef,
     autoExpandedThinkingKeysRef,
-    streamingTextSegmentsRef,
-    activeTextSegmentIndexRef,
-    streamingThinkingSegmentsRef,
-    activeThinkingSegmentIndexRef,
-    seenToolUseCountRef,
     streamingMessageIndexRef,
     streamingTurnIdRef,
     turnIdCounterRef,
@@ -116,16 +113,12 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     // Record turn start time for duration calculation in onStreamEnd
     window.__turnStartedAt = Date.now();
     streamingContentRef.current = '';
+    streamingThinkingRef.current = '';
     isStreamingRef.current = true;
     startStallWatchdog();
     useBackendStreamingRenderRef.current = false;
     autoExpandedThinkingKeysRef.current.clear();
     setStreamingActive(true);
-    streamingTextSegmentsRef.current = [];
-    activeTextSegmentIndexRef.current = -1;
-    streamingThinkingSegmentsRef.current = [];
-    activeThinkingSegmentIndexRef.current = -1;
-    seenToolUseCountRef.current = 0;
 
     // FIX: Always reset streamingMessageIndexRef regardless of backend streaming mode
     streamingMessageIndexRef.current = -1;
@@ -133,10 +126,14 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     streamingTurnIdRef.current = turnIdCounterRef.current;
     setMessages((prev) => {
       const last = prev[prev.length - 1];
-      if (last?.type === 'assistant' && last?.isStreaming) {
+      if (last?.type === 'assistant') {
         streamingMessageIndexRef.current = prev.length - 1;
         const updated = [...prev];
-        updated[prev.length - 1] = { ...updated[prev.length - 1], __turnId: streamingTurnIdRef.current };
+        updated[prev.length - 1] = {
+          ...updated[prev.length - 1],
+          isStreaming: true,
+          __turnId: streamingTurnIdRef.current,
+        };
         return updated;
       }
       streamingMessageIndexRef.current = prev.length;
@@ -153,112 +150,67 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     });
   };
 
+  // rAF-scheduled streaming update: frame-aligned, avoids setTimeout jank.
+  // Factory that creates a throttled scheduler bound to a specific timeoutRef +
+  // lastUpdateRef pair.  patchAssistantForStreaming reads streamingContentRef /
+  // streamingThinkingRef from the hook closure, so the factory only needs to
+  // know which ref pair to guard against double-scheduling.
+  const createStreamingRafScheduler = (
+    timeoutRef: React.MutableRefObject<number | null>,
+    lastUpdateRef: React.MutableRefObject<number>,
+  ) => {
+    const scheduleRaf = (): void => {
+      if (timeoutRef.current != null) return;
+      timeoutRef.current = requestAnimationFrame(() => {
+        timeoutRef.current = null;
+        const now = Date.now();
+        const elapsed = now - lastUpdateRef.current;
+        if (elapsed < THROTTLE_INTERVAL) {
+          scheduleRaf(); // too soon — wait for next frame
+          return;
+        }
+        lastUpdateRef.current = now;
+        startTransition(() => {
+          setMessages((prev) => {
+            const newMessages = [...prev];
+            let idx: number;
+            if (useBackendStreamingRenderRef.current) {
+              idx = streamingMessageIndexRef.current;
+              if (idx < 0) return prev;
+            } else {
+              idx = getOrCreateStreamingAssistantIndex(newMessages);
+            }
+            if (idx >= 0 && newMessages[idx]?.type === 'assistant') {
+              newMessages[idx] = patchAssistantForStreaming({
+                ...newMessages[idx],
+                isStreaming: true,
+              });
+            }
+            return newMessages;
+          });
+        });
+      });
+    };
+    return scheduleRaf;
+  };
+
+  const scheduleContentRaf = createStreamingRafScheduler(contentUpdateTimeoutRef, lastContentUpdateRef);
+  const scheduleThinkingRaf = createStreamingRafScheduler(thinkingUpdateTimeoutRef, lastThinkingUpdateRef);
+
   window.onContentDelta = (delta: string) => {
     if (window.__sessionTransitioning) return;
     if (!isStreamingRef.current) return;
     window.__lastStreamActivityAt = Date.now();
     streamingContentRef.current += delta;
-    activeThinkingSegmentIndexRef.current = -1;
-
-    if (activeTextSegmentIndexRef.current < 0) {
-      activeTextSegmentIndexRef.current = streamingTextSegmentsRef.current.length;
-      streamingTextSegmentsRef.current.push('');
-    }
-    streamingTextSegmentsRef.current[activeTextSegmentIndexRef.current] += delta;
-
-    const now = Date.now();
-    const timeSinceLastUpdate = now - lastContentUpdateRef.current;
-
-    const updateMessages = () => {
-      const currentContent = streamingContentRef.current;
-      setMessages((prev) => {
-        const newMessages = [...prev];
-        let idx: number;
-        if (useBackendStreamingRenderRef.current) {
-          idx = streamingMessageIndexRef.current;
-          // Index is still -1: backend hasn't created the assistant via updateMessages yet
-          if (idx < 0) return prev;
-        } else {
-          idx = getOrCreateStreamingAssistantIndex(newMessages);
-        }
-
-        if (idx >= 0 && newMessages[idx]?.type === 'assistant') {
-          newMessages[idx] = patchAssistantForStreaming({
-            ...newMessages[idx],
-            content: currentContent,
-            isStreaming: true,
-          });
-        }
-        return newMessages;
-      });
-    };
-
-    if (timeSinceLastUpdate >= THROTTLE_INTERVAL) {
-      lastContentUpdateRef.current = now;
-      updateMessages();
-    } else {
-      if (!contentUpdateTimeoutRef.current) {
-        const remainingTime = THROTTLE_INTERVAL - timeSinceLastUpdate;
-        contentUpdateTimeoutRef.current = setTimeout(() => {
-          contentUpdateTimeoutRef.current = null;
-          lastContentUpdateRef.current = Date.now();
-          updateMessages();
-        }, remainingTime);
-      }
-    }
+    scheduleContentRaf();
   };
 
   window.onThinkingDelta = (delta: string) => {
     if (window.__sessionTransitioning) return;
     if (!isStreamingRef.current) return;
     window.__lastStreamActivityAt = Date.now();
-    activeTextSegmentIndexRef.current = -1;
-
-    let forceUpdate = false;
-    if (activeThinkingSegmentIndexRef.current < 0) {
-      activeThinkingSegmentIndexRef.current = streamingThinkingSegmentsRef.current.length;
-      streamingThinkingSegmentsRef.current.push('');
-      forceUpdate = true;
-    }
-    streamingThinkingSegmentsRef.current[activeThinkingSegmentIndexRef.current] += delta;
-
-    const now = Date.now();
-    const timeSinceLastUpdate = now - lastThinkingUpdateRef.current;
-
-    const updateMessages = () => {
-      setMessages((prev) => {
-        const newMessages = [...prev];
-        let idx: number;
-        if (useBackendStreamingRenderRef.current) {
-          idx = streamingMessageIndexRef.current;
-          if (idx < 0) return prev;
-        } else {
-          idx = getOrCreateStreamingAssistantIndex(newMessages);
-        }
-
-        if (idx >= 0 && newMessages[idx]?.type === 'assistant') {
-          newMessages[idx] = patchAssistantForStreaming({
-            ...newMessages[idx],
-            isStreaming: true,
-          });
-        }
-        return newMessages;
-      });
-    };
-
-    if (forceUpdate || timeSinceLastUpdate >= THROTTLE_INTERVAL) {
-      lastThinkingUpdateRef.current = now;
-      updateMessages();
-    } else {
-      if (!thinkingUpdateTimeoutRef.current) {
-        const remainingTime = THROTTLE_INTERVAL - timeSinceLastUpdate;
-        thinkingUpdateTimeoutRef.current = setTimeout(() => {
-          thinkingUpdateTimeoutRef.current = null;
-          lastThinkingUpdateRef.current = Date.now();
-          updateMessages();
-        }, remainingTime);
-      }
-    }
+    streamingThinkingRef.current += delta;
+    scheduleThinkingRaf();
   };
 
   window.onStreamEnd = (sequence?: string | number) => {
@@ -327,13 +279,13 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
       window.__cancelPendingUpdateMessages();
     }
 
-    // Clear pending throttle timeouts — their content is already in streamingContentRef
-    if (contentUpdateTimeoutRef.current) {
-      clearTimeout(contentUpdateTimeoutRef.current);
+    // Clear pending rAF callbacks — their content is already in streamingContentRef
+    if (contentUpdateTimeoutRef.current != null) {
+      cancelAnimationFrame(contentUpdateTimeoutRef.current);
       contentUpdateTimeoutRef.current = null;
     }
-    if (thinkingUpdateTimeoutRef.current) {
-      clearTimeout(thinkingUpdateTimeoutRef.current);
+    if (thinkingUpdateTimeoutRef.current != null) {
+      cancelAnimationFrame(thinkingUpdateTimeoutRef.current);
       thinkingUpdateTimeoutRef.current = null;
     }
 
@@ -402,15 +354,9 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     streamingMessageIndexRef.current = -1;
     streamingTurnIdRef.current = -1;
 
-    // Content buffer refs (text/thinking segments)
+    // Content buffer refs
     streamingContentRef.current = '';
-    streamingTextSegmentsRef.current = [];
-    streamingThinkingSegmentsRef.current = [];
-    activeTextSegmentIndexRef.current = -1;
-    activeThinkingSegmentIndexRef.current = -1;
-
-    // Counter and tracking refs
-    seenToolUseCountRef.current = 0;
+    streamingThinkingRef.current = '';
     autoExpandedThinkingKeysRef.current.clear();
 
     // Mark that streaming just ended - used by mergeConsecutiveAssistantMessages to
