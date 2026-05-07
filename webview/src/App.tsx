@@ -589,6 +589,7 @@ const App = () => {
                   onMessageNodeRef={handleMessageNodeRef}
                   onCollapsedCountChange={setAnchorCollapsedCount}
                   onNavigateToProviderSettings={handleNavigateToProviderSettings}
+                  currentProvider={currentProvider}
                 />
                 </ToolResultRawContext.Provider>
                 </SubagentHistoryContext.Provider>

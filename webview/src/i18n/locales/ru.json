@@ -87,7 +87,7 @@
     "attachmentFile": "[Вложение: {{fileName}}]",
     "unknownFile": "Неизвестный файл",
     "attachmentsUploaded": "[Вложения загружены]",
-    "streamingConnected": "Claude обрабатывает запрос",
+    "streamingConnected": "{{provider}} обрабатывает запрос",
     "showEarlierMessages": "Показать предыдущие сообщения ({{count}})",
     "totalDuration": "Этот ответ занял"
   },

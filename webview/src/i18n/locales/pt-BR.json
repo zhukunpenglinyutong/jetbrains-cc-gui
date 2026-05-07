@@ -87,7 +87,7 @@
     "attachmentFile": "[Anexo: {{fileName}}]",
     "unknownFile": "Arquivo desconhecido",
     "attachmentsUploaded": "[Anexos Enviados]",
-    "streamingConnected": "Claude conectado, entendendo sua pergunta",
+    "streamingConnected": "{{provider}} conectado, entendendo sua pergunta",
     "showEarlierMessages": "Mostrar {{count}} mensagens anteriores",
     "totalDuration": "Esta resposta levou"
   },
