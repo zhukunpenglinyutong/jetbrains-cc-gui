@@ -814,4 +814,37 @@ interface Window {
    * Clipboard read callback for paste from IDEA shortcut
    */
   onClipboardRead?: (text: string) => void;
+
+  // ============================================================================
+  // Theme initialization (Java pre-injects before React boots)
+  // ============================================================================
+
+  /**
+   * Initial IDE theme injected by Java into the HTML before React boots.
+   * Used by useThemeInit to avoid a flash of incorrect theme.
+   */
+  __INITIAL_IDE_THEME__?: 'light' | 'dark';
+
+  // ============================================================================
+  // Provider settings panel callbacks (registered by ProviderList)
+  // ============================================================================
+
+  /**
+   * CLI login account info callback. Java pushes the logged-in account email
+   * after a successful CLI login to update the settings panel.
+   */
+  updateCliLoginAccountInfo?: (email: string) => void;
+
+  /**
+   * Provider import preview result callback. Java pushes a JSON string or
+   * parsed payload describing the providers detected during import preview.
+   */
+  import_preview_result?: (dataOrStr: string | { providers?: unknown }) => void;
+
+  /**
+   * Backend notification callback (variadic for backward compatibility).
+   * Modern callers pass (type, title, message); legacy callers pass a single
+   * JSON string or object with shape { type, title, message }.
+   */
+  backend_notification?: (...args: unknown[]) => void;
 }

@@ -497,7 +497,7 @@ if (typeof window !== 'undefined' && !window.setSessionId) {
   debugLog('[Main] Pre-registering setSessionId placeholder');
   window.setSessionId = (sessionId: string) => {
     debugLog('[Main] Storing pending session ID:', sessionId);
-    (window as any).__pendingSessionId = sessionId;
+    window.__pendingSessionId = sessionId;
   };
 }
 

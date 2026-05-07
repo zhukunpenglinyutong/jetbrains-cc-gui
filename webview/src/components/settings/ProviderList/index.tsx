@@ -72,15 +72,15 @@ export default function ProviderList({
     };
 
     // Register CLI login account info callback
-    (window as any).updateCliLoginAccountInfo = (email: string) => {
+    window.updateCliLoginAccountInfo = (email: string) => {
       if (mountedRef.current) {
         setCliLoginAccountEmail(email);
       }
     };
 
     // Register global callback functions for Java invocation
-    (window as any).import_preview_result = (dataOrStr: any) => {
-        let data = dataOrStr;
+    window.import_preview_result = (dataOrStr) => {
+        let data: unknown = dataOrStr;
         if (typeof data === 'string') {
             try {
                 data = JSON.parse(data);
@@ -92,7 +92,7 @@ export default function ProviderList({
         window.dispatchEvent(event);
     };
 
-    (window as any).backend_notification = (...args: any[]) => {
+    window.backend_notification = (...args: unknown[]) => {
         let data: any = {};
         
         // Support multi-argument invocation (type, title, message) to avoid JSON parsing issues
@@ -147,9 +147,9 @@ export default function ProviderList({
       window.removeEventListener('backend_notification', handleBackendNotification as EventListener);
       
       // Clean up global functions
-      delete (window as any).updateCliLoginAccountInfo;
-      delete (window as any).import_preview_result;
-      delete (window as any).backend_notification;
+      delete window.updateCliLoginAccountInfo;
+      delete window.import_preview_result;
+      delete window.backend_notification;
     };
   }, [addToast]);
 

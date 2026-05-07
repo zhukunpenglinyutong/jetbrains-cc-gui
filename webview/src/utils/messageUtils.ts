@@ -753,10 +753,10 @@ export function getContentBlocks(
  * The marker expires after 5 seconds to allow normal history merging.
  */
 const clearStaleStreamEndedMarker = (): void => {
-  const lastEndedTime = (window as any).__lastStreamEndedAt;
+  const lastEndedTime = window.__lastStreamEndedAt;
   if (lastEndedTime && Date.now() - lastEndedTime > 5000) {
-    (window as any).__lastStreamEndedTurnId = undefined;
-    (window as any).__lastStreamEndedAt = undefined;
+    window.__lastStreamEndedTurnId = undefined;
+    window.__lastStreamEndedAt = undefined;
   }
 };
 
@@ -766,7 +766,7 @@ const clearStaleStreamEndedMarker = (): void => {
  * Returns true if the message's turnId matches the last ended streaming turn.
  */
 const hasRecentlyEndedTurnId = (turnId: number | undefined): boolean => {
-  const lastEndedTurnId = (window as any).__lastStreamEndedTurnId;
+  const lastEndedTurnId = window.__lastStreamEndedTurnId;
   return lastEndedTurnId !== undefined && lastEndedTurnId > 0 && turnId === lastEndedTurnId;
 };
 

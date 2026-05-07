@@ -95,8 +95,8 @@ export function useSessionManagement({
     window.__sessionTransitionToken = createSessionTransitionToken();
     // Use the single cleanup entry point exposed by useWindowCallbacks.
     // This clears both React state AND internal streaming refs in one shot.
-    if (typeof (window as any).__resetTransientUiState === 'function') {
-      (window as any).__resetTransientUiState();
+    if (typeof window.__resetTransientUiState === 'function') {
+      window.__resetTransientUiState();
     } else {
       // Fallback if useWindowCallbacks hasn't mounted yet (e.g. during SSR/tests)
       clearToasts();
