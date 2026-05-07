@@ -35,6 +35,7 @@ describe('useSettingsWindowCallbacks', () => {
     setSoundOnlyWhenUnfocused: vi.fn(),
     setSelectedSound: vi.fn(),
     setCustomSoundPath: vi.fn(),
+    setTaskCompletionNotificationMode: vi.fn(),
     updateProviders: vi.fn(),
     updateActiveProvider: vi.fn(),
     loadProviders: vi.fn(),
@@ -76,6 +77,19 @@ describe('useSettingsWindowCallbacks', () => {
     expect(window.sendToJava).toHaveBeenCalledWith('get_prompt_enhancer_config:');
     expect(window.sendToJava).toHaveBeenCalledWith('get_sound_notification_config:');
     expect(window.sendToJava).toHaveBeenCalledWith('get_ui_font_config:');
+    expect(window.sendToJava).toHaveBeenCalledWith('get_task_completion_notification_mode:');
+  });
+
+  it('registers task completion notification mode callback and updates state from backend payload', () => {
+    const deps = createDeps();
+
+    renderHook(() => useSettingsWindowCallbacks(deps));
+
+    window.updateTaskCompletionNotificationMode?.(JSON.stringify({
+      taskCompletionNotificationMode: 'card',
+    }));
+
+    expect(deps.setTaskCompletionNotificationMode).toHaveBeenCalledWith('card');
   });
 
   it('registers prompt enhancer callback and updates state from backend payload', () => {

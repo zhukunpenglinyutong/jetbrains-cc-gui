@@ -1,9 +1,12 @@
 package com.github.claudecodegui.handler.history;
 
+import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.session.SessionState;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import org.junit.Test;
 
+import java.time.Instant;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -68,6 +71,20 @@ public class HistoryMessageInjectorTest {
                 .getAsJsonObject()
                 .get("text")
                 .getAsString());
+    }
+
+    @Test
+    public void restoreCodexMessagesToSessionStatePreservesFrontendTimestamp() {
+        JsonArray messages = new JsonArray();
+        String timestamp = "2026-04-30T09:40:26.701Z";
+        messages.add(responseItemUserMessage(timestamp, "hello"));
+
+        SessionState state = new SessionState();
+        HistoryMessageInjector.restoreCodexMessagesToSessionState(state, messages);
+
+        assertEquals(1, state.getMessages().size());
+        ClaudeSession.Message restored = state.getMessages().get(0);
+        assertEquals(Instant.parse(timestamp).toEpochMilli(), restored.timestamp);
     }
 
     private static JsonObject responseItemUserMessage(String timestamp, String text) {

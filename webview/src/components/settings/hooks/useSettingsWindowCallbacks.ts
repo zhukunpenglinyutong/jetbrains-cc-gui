@@ -48,6 +48,7 @@ export interface SettingsWindowCallbacksDeps {
   setAiTitleGenerationEnabled?: (enabled: boolean) => void;
   setStatusBarWidgetEnabled?: (enabled: boolean) => void;
   setTaskCompletionNotificationEnabled?: (enabled: boolean) => void;
+  setTaskCompletionNotificationMode?: (mode: 'ide-native' | 'card') => void;
   // Sound notification setters
   setSoundNotificationEnabled?: (enabled: boolean) => void;
   setSoundOnlyWhenUnfocused?: (enabled: boolean) => void;
@@ -319,6 +320,17 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
     };
 
+    window.updateTaskCompletionNotificationMode = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        d().setTaskCompletionNotificationMode?.(
+          data.taskCompletionNotificationMode === 'card' ? 'card' : 'ide-native'
+        );
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse task completion notification mode:', error);
+      }
+    };
+
     // Sound notification config callback
     window.updateSoundNotificationConfig = (jsonStr: string) => {
       try {
@@ -478,6 +490,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     sendToJava('get_ai_title_generation_enabled:');
     sendToJava('get_status_bar_widget_enabled:');
     sendToJava('get_task_completion_notification_enabled:');
+    sendToJava('get_task_completion_notification_mode:');
 
     return () => {
       d().cleanupAgentsTimeout();
@@ -511,6 +524,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.updateAiTitleGenerationEnabled = undefined;
       window.updateStatusBarWidgetEnabled = undefined;
       window.updateTaskCompletionNotificationEnabled = undefined;
+      window.updateTaskCompletionNotificationMode = undefined;
       window.updateAgents = previousUpdateAgents;
       window.agentOperationResult = undefined;
       window.agentImportPreviewResult = undefined;

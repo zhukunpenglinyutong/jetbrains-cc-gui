@@ -84,6 +84,8 @@ interface BasicConfigSectionProps {
   // Task completion notification configuration
   taskCompletionNotificationEnabled?: boolean;
   onTaskCompletionNotificationEnabledChange?: (enabled: boolean) => void;
+  taskCompletionNotificationMode?: 'ide-native' | 'card';
+  onTaskCompletionNotificationModeChange?: (mode: 'ide-native' | 'card') => void;
 }
 
 const BasicConfigSection = (props: BasicConfigSectionProps) => {
@@ -159,6 +161,8 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onBrowseSound={props.onBrowseSound}
           taskCompletionNotificationEnabled={props.taskCompletionNotificationEnabled}
           onTaskCompletionNotificationEnabledChange={props.onTaskCompletionNotificationEnabledChange}
+          taskCompletionNotificationMode={props.taskCompletionNotificationMode}
+          onTaskCompletionNotificationModeChange={props.onTaskCompletionNotificationModeChange}
         />
       )}
 

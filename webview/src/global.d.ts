@@ -285,6 +285,11 @@ interface Window {
   updateTaskCompletionNotificationEnabled?: (json: string) => void;
 
   /**
+   * Update task completion notification mode
+   */
+  updateTaskCompletionNotificationMode?: (json: string) => void;
+
+  /**
    * Update current Claude config
    */
   updateCurrentClaudeConfig?: (json: string) => void;

@@ -694,6 +694,7 @@ public class ClaudeMessageHandler implements MessageCallback {
         ensureRawBlocksConsistency();
 
         // After streaming ends, send a final message update to ensure the message list is in sync
+        callbackHandler.notifyStreamCompleted();
         callbackHandler.notifyMessageUpdate(state.getMessages());
         callbackHandler.notifyStreamEnd();
         state.setBusy(false);

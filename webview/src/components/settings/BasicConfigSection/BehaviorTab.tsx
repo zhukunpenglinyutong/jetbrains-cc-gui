@@ -100,6 +100,8 @@ export interface BehaviorTabProps {
   onBrowseSound?: () => void;
   taskCompletionNotificationEnabled?: boolean;
   onTaskCompletionNotificationEnabledChange?: (enabled: boolean) => void;
+  taskCompletionNotificationMode?: 'ide-native' | 'card';
+  onTaskCompletionNotificationModeChange?: (mode: 'ide-native' | 'card') => void;
 }
 
 const BehaviorTab = ({
@@ -130,6 +132,8 @@ const BehaviorTab = ({
   onBrowseSound = () => {},
   taskCompletionNotificationEnabled = false,
   onTaskCompletionNotificationEnabledChange = () => {},
+  taskCompletionNotificationMode = 'ide-native',
+  onTaskCompletionNotificationModeChange = () => {},
 }: BehaviorTabProps) => {
   const { t } = useTranslation();
 
@@ -333,6 +337,43 @@ const BehaviorTab = ({
           <span className="codicon codicon-info" />
           <span>{t('settings.basic.taskCompletionNotification.hint')}</span>
         </small>
+        {taskCompletionNotificationEnabled && (
+          <div className={styles.themeGrid}>
+            <div
+              className={`${styles.themeCard} ${taskCompletionNotificationMode === 'ide-native' ? styles.active : ''}`}
+              onClick={() => onTaskCompletionNotificationModeChange('ide-native')}
+            >
+              {taskCompletionNotificationMode === 'ide-native' && (
+                <div className={styles.checkBadge}>
+                  <span className="codicon codicon-check" />
+                </div>
+              )}
+              <div className={styles.themeCardTitle}>
+                {t('settings.basic.taskCompletionNotification.mode.ideNative')}
+              </div>
+              <div className={styles.themeCardDesc}>
+                {t('settings.basic.taskCompletionNotification.mode.ideNativeDesc')}
+              </div>
+            </div>
+
+            <div
+              className={`${styles.themeCard} ${taskCompletionNotificationMode === 'card' ? styles.active : ''}`}
+              onClick={() => onTaskCompletionNotificationModeChange('card')}
+            >
+              {taskCompletionNotificationMode === 'card' && (
+                <div className={styles.checkBadge}>
+                  <span className="codicon codicon-check" />
+                </div>
+              )}
+              <div className={styles.themeCardTitle}>
+                {t('settings.basic.taskCompletionNotification.mode.card')}
+              </div>
+              <div className={styles.themeCardDesc}>
+                {t('settings.basic.taskCompletionNotification.mode.cardDesc')}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* AI session title generation toggle */}

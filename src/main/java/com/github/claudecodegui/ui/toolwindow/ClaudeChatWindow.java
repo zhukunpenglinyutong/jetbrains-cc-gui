@@ -67,6 +67,7 @@ public class ClaudeChatWindow {
     private volatile boolean frontendReady = false;
     private volatile boolean slashCommandsFetched = false;
     private final AtomicBoolean restoredHistoryLoadStarted = new AtomicBoolean(false);
+    private final AtomicBoolean taskCompletionNotificationSent = new AtomicBoolean(false);
 
     // Daemon event listener for AI title forwarding. Held so it can be removed on dispose.
     private DaemonBridge.DaemonEventListener titleEventListener;
@@ -538,6 +539,7 @@ public class ClaudeChatWindow {
         if (this.sessionCallbackAdapter != null) {
             this.sessionCallbackAdapter.deactivate();
         }
+        taskCompletionNotificationSent.set(false);
         this.sessionCallbackAdapter = new SessionCallbackAdapter(
                 streamCoalescer,
                 new SessionCallbackAdapter.JsTarget() {
@@ -548,8 +550,14 @@ public class ClaudeChatWindow {
                 },
                 permissionHandler,
                 () -> slashCommandsFetched,
-                this::onStreamEnded
+                this::onStreamCompleted
         ) {
+            @Override
+            public void onStreamStart() {
+                ClaudeChatWindow.this.onSendStarted();
+                super.onStreamStart();
+            }
+
             @Override
             public void onSessionIdReceived(String newSessionId) {
                 super.onSessionIdReceived(newSessionId);
@@ -558,6 +566,7 @@ public class ClaudeChatWindow {
             }
         };
         session.setCallback(sessionCallbackAdapter);
+        onSendStarted();
 
         // Wire daemon events directly to frontend (bypasses adapter lifecycle).
         // Calling through sessionCallbackAdapter would silently drop the event
@@ -587,16 +596,42 @@ public class ClaudeChatWindow {
         persistTabSessionState();
     }
 
-    private void onStreamEnded() {
+    private void onStreamCompleted() {
         if (session == null) {
             return;
         }
-        if ("claude".equals(session.getProvider()) && session.getError() == null) {
-            com.github.claudecodegui.notifications.ClaudeNotifier.showSuccess(
-                project,
-                com.github.claudecodegui.notifications.ClaudeNotifier.buildTitleFromSession(session),
-                com.github.claudecodegui.notifications.ClaudeNotifier.buildPreviewFromSession(session, "Task completed"));
+        maybeShowTaskCompletionNotification();
+    }
+
+    public void onSendStarted() {
+        taskCompletionNotificationSent.set(false);
+    }
+
+    public void maybeShowTaskCompletionNotification() {
+        if (!shouldShowTaskCompletionNotification(session)) {
+            return;
         }
+        if (!taskCompletionNotificationSent.compareAndSet(false, true)) {
+            return;
+        }
+        com.github.claudecodegui.notifications.ClaudeNotifier.showTaskCompletionSuccess(
+            project,
+            com.github.claudecodegui.notifications.ClaudeNotifier.buildTitleFromSession(session),
+            com.github.claudecodegui.notifications.ClaudeNotifier.buildPreviewFromSession(session, "Task completed"));
+    }
+
+    static boolean shouldShowTaskCompletionNotification(ClaudeSession session) {
+        if (session == null) {
+            return false;
+        }
+        return shouldShowTaskCompletionNotification(session.getProvider(), session.getError());
+    }
+
+    static boolean shouldShowTaskCompletionNotification(String provider, String error) {
+        if (error != null) {
+            return false;
+        }
+        return provider != null && !provider.trim().isEmpty();
     }
 
     private void initializeSessionInfo() {

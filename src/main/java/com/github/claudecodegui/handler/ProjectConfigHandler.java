@@ -682,6 +682,50 @@ public class ProjectConfigHandler {
         }
     }
 
+    public void handleGetTaskCompletionNotificationMode() {
+        try {
+            String mode = settingsService.getTaskCompletionNotificationMode();
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject r = new JsonObject();
+                r.addProperty("taskCompletionNotificationMode", mode);
+                context.callJavaScript("window.updateTaskCompletionNotificationMode", context.escapeJs(gson.toJson(r)));
+            });
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to get task completion notification mode: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject r = new JsonObject();
+                r.addProperty(
+                    "taskCompletionNotificationMode",
+                    CodemossSettingsService.TASK_COMPLETION_NOTIFICATION_MODE_IDE_NATIVE
+                );
+                context.callJavaScript("window.updateTaskCompletionNotificationMode", context.escapeJs(gson.toJson(r)));
+            });
+        }
+    }
+
+    public void handleSetTaskCompletionNotificationMode(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            String mode = json != null
+                && json.has("taskCompletionNotificationMode")
+                && !json.get("taskCompletionNotificationMode").isJsonNull()
+                ? json.get("taskCompletionNotificationMode").getAsString()
+                : CodemossSettingsService.TASK_COMPLETION_NOTIFICATION_MODE_IDE_NATIVE;
+            settingsService.setTaskCompletionNotificationMode(mode);
+            String finalMode = settingsService.getTaskCompletionNotificationMode();
+            LOG.info("[ProjectConfigHandler] Set task completion notification mode: " + finalMode);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject r = new JsonObject();
+                r.addProperty("taskCompletionNotificationMode", finalMode);
+                context.callJavaScript("window.updateTaskCompletionNotificationMode", context.escapeJs(gson.toJson(r)));
+            });
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set task completion notification mode: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() ->
+                context.callJavaScript("window.showError", context.escapeJs("Failed to save task completion notification mode")));
+        }
+    }
+
     private void dispatchUiFontConfigUpdate() {
         try {
             String uiFontConfigJson = FontConfigService.getResolvedUiFontConfigJson(settingsService);

@@ -2,20 +2,18 @@ package com.github.claudecodegui.handler.history;
 
 import com.github.claudecodegui.handler.CodexMessageConverter;
 import com.github.claudecodegui.handler.core.HandlerContext;
-import com.github.claudecodegui.provider.codex.CodexHistoryReader;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.session.SessionState;
 import com.github.claudecodegui.util.JsUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
+import java.time.Instant;
 
 /**
  * Service for loading session messages and injecting them into the frontend.
@@ -42,73 +40,11 @@ public class HistoryMessageInjector {
         }
         LOG.info("[HistoryHandler] Loading history session: " + sessionId + " from project: " + projectPath + ", provider: " + currentProvider);
 
-        if ("codex".equals(currentProvider)) {
-            // Codex session: read session info and restore session state
-            loadCodexSession(sessionId);
+        if (sessionLoadCallback != null) {
+            sessionLoadCallback.onLoadSession(sessionId, projectPath);
         } else {
-            // Claude session: use existing callback mechanism
-            if (sessionLoadCallback != null) {
-                sessionLoadCallback.onLoadSession(sessionId, projectPath);
-            } else {
-                LOG.warn("[HistoryHandler] WARNING: No session load callback set");
-            }
+            LOG.warn("[HistoryHandler] WARNING: No session load callback set");
         }
-    }
-
-    /**
-     * Load a Codex session.
-     * Reads session messages directly and injects them into the frontend, while restoring session state.
-     */
-    private void loadCodexSession(String sessionId) {
-        CompletableFuture.runAsync(() -> {
-            LOG.info("[HistoryHandler] ========== 开始加载 Codex 会话 ==========");
-            LOG.info("[HistoryHandler] SessionId: " + sessionId);
-
-            try {
-                CodexHistoryReader codexReader = new CodexHistoryReader();
-                String messagesJson = codexReader.getSessionMessagesAsJson(sessionId);
-                JsonArray messages = JsonParser.parseString(messagesJson).getAsJsonArray();
-
-                LOG.info("[HistoryHandler] 读取到 " + messages.size() + " 条 Codex 消息");
-
-                // Extract session metadata and restore session state
-                String[] sessionMeta = extractSessionMeta(messages);
-                String threadIdToUse = sessionMeta[0] != null ? sessionMeta[0] : sessionId;
-                String cwd = sessionMeta[1];
-
-                context.getSession().setSessionInfo(threadIdToUse, cwd);
-                restoreCodexMessagesToSessionState(context.getSession().getState(), messages);
-                LOG.info("[HistoryHandler] 恢复 Codex 会话状态: threadId=" + threadIdToUse + " (from sessionId=" + sessionId + "), cwd=" + cwd);
-
-                List<JsonObject> frontendMessages = convertCodexMessagesToFrontendBatch(messages);
-                injectBatchToFrontend(frontendMessages);
-
-                // Notify frontend that history messages have finished loading, trigger Markdown re-rendering
-                ApplicationManager.getApplication().invokeLater(() -> {
-                    String jsCode = "if (window.historyLoadComplete) { " +
-                                            "  try { " +
-                                            "    window.historyLoadComplete(); " +
-                                            "  } catch(e) { " +
-                                            "    console.error('[HistoryHandler] historyLoadComplete callback failed:', e); " +
-                                            "  } " +
-                                            "}";
-                    context.executeJavaScriptOnEDT(jsCode);
-                });
-
-                LOG.info("[HistoryHandler] ========== Codex 会话加载完成 ==========");
-
-            } catch (Exception e) {
-                LOG.error("[HistoryHandler] 加载 Codex 会话失败: " + e.getMessage(), e);
-
-                ApplicationManager.getApplication().invokeLater(() -> {
-                    String errorMsg = context.escapeJs(e.getMessage() != null ? e.getMessage() : "未知错误");
-                    String jsCode = "if (window.addErrorMessage) { " +
-                                            "  window.addErrorMessage('加载 Codex 会话失败: " + errorMsg + "'); " +
-                                            "}";
-                    context.executeJavaScriptOnEDT(jsCode);
-                });
-            }
-        });
     }
 
     /**
@@ -277,9 +213,26 @@ public class HistoryMessageInjector {
         JsonObject raw = frontendMsg.has("raw") && frontendMsg.get("raw").isJsonObject()
             ? frontendMsg.getAsJsonObject("raw")
             : null;
-        return raw != null
+        ClaudeSession.Message restoredMessage = raw != null
             ? new ClaudeSession.Message(messageType, content, raw.deepCopy())
             : new ClaudeSession.Message(messageType, content);
+        Long restoredTimestamp = parseFrontendTimestamp(frontendMsg);
+        if (restoredTimestamp != null) {
+            restoredMessage.timestamp = restoredTimestamp;
+        }
+        return restoredMessage;
+    }
+
+    private static Long parseFrontendTimestamp(JsonObject frontendMsg) {
+        String timestamp = getStringProperty(frontendMsg, "timestamp");
+        if (timestamp == null || timestamp.isBlank()) {
+            return null;
+        }
+        try {
+            return Instant.parse(timestamp).toEpochMilli();
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     /**

@@ -31,6 +31,10 @@ test('recognizes Windows process termination noise emitted after Codex runs', ()
     true,
   );
   assert.equal(
+    isIgnorableCodexEventNoiseLine('�ɹ�: ����ֹ PID 42484 (���� PID 47728 �ӽ���)�Ľ��̡�'),
+    true,
+  );
+  assert.equal(
     isIgnorableCodexEventNoiseLine('{"type":"event_msg","payload":{"type":"user_message"}}'),
     false,
   );

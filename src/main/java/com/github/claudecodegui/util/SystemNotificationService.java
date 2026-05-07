@@ -2,6 +2,9 @@ package com.github.claudecodegui.util;
 
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.intellij.notification.Notification;
+import com.intellij.notification.NotificationGroupManager;
+import com.intellij.notification.NotificationType;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
@@ -103,10 +106,19 @@ public class SystemNotificationService {
                 if (!isEnabled()) {
                     return;
                 }
-                disposeActiveWindow();
-
                 String resolvedTitle = sanitizeTitle(title);
-                JWindow window = createNotificationWindow(project, resolvedTitle, sanitizeMessage(message));
+                String resolvedMessage = sanitizeMessage(message);
+
+                String notificationMode = getNotificationMode();
+                if (isIdeNativeMode(notificationMode)) {
+                    showIdeNativeNotification(project, resolvedTitle, resolvedMessage);
+                    if (!shouldAlsoShowCardPopup(notificationMode, ApplicationManager.getApplication().isActive())) {
+                        return;
+                    }
+                }
+
+                disposeActiveWindow();
+                JWindow window = createNotificationWindow(project, resolvedTitle, resolvedMessage);
                 activeNotificationWindow = window;
 
                 Point position = getNotificationPosition(window, project);
@@ -131,6 +143,26 @@ public class SystemNotificationService {
             LOG.debug("[SystemNotification] Failed to read enabled flag, defaulting to false: " + e.getMessage());
             return false;
         }
+    }
+
+    private String getNotificationMode() {
+        try {
+            return new CodemossSettingsService().getTaskCompletionNotificationMode();
+        } catch (Exception e) {
+            LOG.debug("[SystemNotification] Failed to read notification mode, defaulting to ide-native: " + e.getMessage());
+            return CodemossSettingsService.TASK_COMPLETION_NOTIFICATION_MODE_IDE_NATIVE;
+        }
+    }
+
+    static boolean isIdeNativeMode(@Nullable String mode) {
+        return !CodemossSettingsService.TASK_COMPLETION_NOTIFICATION_MODE_CARD.equals(mode);
+    }
+
+    static boolean shouldAlsoShowCardPopup(@Nullable String mode, boolean appActive) {
+        if (CodemossSettingsService.TASK_COMPLETION_NOTIFICATION_MODE_CARD.equals(mode)) {
+            return true;
+        }
+        return !appActive;
     }
 
     private void disposeActiveWindow() {
@@ -194,6 +226,22 @@ public class SystemNotificationService {
             }
         }
         return sb.toString();
+    }
+
+    private void showIdeNativeNotification(@NotNull Project project, String escapedTitle, String escapedMessage) {
+        Notification notification = NotificationGroupManager.getInstance()
+            .getNotificationGroup("CC GUI Notifications")
+            .createNotification(unescapeHtml(escapedTitle), unescapeHtml(escapedMessage), NotificationType.INFORMATION);
+        notification.notify(project);
+    }
+
+    private static String unescapeHtml(String input) {
+        return input
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", "\"")
+            .replace("&#39;", "'")
+            .replace("&amp;", "&");
     }
 
     private JWindow createNotificationWindow(@NotNull Project project, String escapedTitle, String escapedMessage) {

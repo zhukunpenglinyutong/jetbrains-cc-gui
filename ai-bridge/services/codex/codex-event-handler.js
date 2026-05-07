@@ -41,7 +41,17 @@ export function isIgnorableWindowsTerminationNoiseLine(line) {
   if (typeof line !== 'string') return false;
   const trimmed = line.trim();
   if (!trimmed) return false;
-  return WINDOWS_TERMINATION_NOISE_RE.test(trimmed);
+  if (WINDOWS_TERMINATION_NOISE_RE.test(trimmed)) {
+    return true;
+  }
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    return false;
+  }
+  const pidMatches = trimmed.match(/\bPID \d+\b/g) || [];
+  if (pidMatches.length >= 2) {
+    return true;
+  }
+  return pidMatches.length >= 1 && trimmed.includes('�');
 }
 
 export function shouldSuppressCodexStreamParseErrorAfterCompletion(errorMessage, state) {

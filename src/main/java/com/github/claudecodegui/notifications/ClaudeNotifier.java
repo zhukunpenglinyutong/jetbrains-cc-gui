@@ -44,12 +44,18 @@ public class ClaudeNotifier {
     }
 
     /**
+     * Show a generic success hint in the status bar widget only.
+     */
+    public static void showSuccess(@NotNull Project project, @Nullable String title, String message) {
+        show(project, "Claude ✓", message, 5000);
+    }
+
+    /**
      * Show task completion notification with an optional dynamic title.
      * When {@code title} is null/blank, the toast falls back to the i18n
      * default ({@code notifier.taskComplete.title}).
      */
-    public static void showSuccess(@NotNull Project project, @Nullable String title, String message) {
-        show(project, "Claude ✓", message, 5000);
+    public static void showTaskCompletionSuccess(@NotNull Project project, @Nullable String title, String message) {
         // Show the task completion visual notification toast
         SystemNotificationService.getInstance().showVisualNotificationToast(project, title, message);
         // Play the task completion notification sound

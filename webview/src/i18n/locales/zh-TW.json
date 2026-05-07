@@ -193,7 +193,13 @@
         "label": "任務完成通知",
         "enabled": "已開啟",
         "disabled": "已關閉",
-        "hint": "開啟後，當 AI 任務完成時顯示系統通知。關閉後不顯示系統通知。"
+        "hint": "開啟後，當 AI 任務完成時顯示系統通知。關閉後不顯示系統通知。",
+        "mode": {
+          "ideNative": "IDE 原生通知",
+          "ideNativeDesc": "使用 IntelliJ IDEA / WebStorm 原生支援的通知樣式。",
+          "card": "卡片通知",
+          "cardDesc": "保留插件自訂卡片通知樣式。"
+        }
       },
       "sendShortcut": {
         "label": "發送快捷鍵",

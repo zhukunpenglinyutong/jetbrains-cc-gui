@@ -94,6 +94,10 @@ test('recognizes localized Windows termination noise lines', () => {
     true,
   );
   assert.equal(
+    isIgnorableWindowsTerminationNoiseLine('�ɹ�: ����ֹ PID 42484 (���� PID 47728 �ӽ���)�Ľ��̡�'),
+    true,
+  );
+  assert.equal(
     isIgnorableWindowsTerminationNoiseLine('Failed to parse item: something else'),
     false,
   );
@@ -106,6 +110,13 @@ test('suppresses post-completion parse errors caused by Windows termination nois
   assert.equal(
     shouldSuppressCodexStreamParseErrorAfterCompletion(
       'Failed to parse item: 成功: 已终止 PID 37392 (属于 PID 38456 子进程) 的进程。',
+      state,
+    ),
+    true,
+  );
+  assert.equal(
+    shouldSuppressCodexStreamParseErrorAfterCompletion(
+      'Failed to parse item: �ɹ�: ����ֹ PID 42484 (���� PID 47728 �ӽ���)�Ľ��̡�',
       state,
     ),
     true,

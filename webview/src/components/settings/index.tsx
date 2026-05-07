@@ -172,6 +172,9 @@ const SettingsView = ({
     taskCompletionNotificationEnabled,
     setTaskCompletionNotificationEnabled,
     handleTaskCompletionNotificationEnabledChange,
+    taskCompletionNotificationMode,
+    setTaskCompletionNotificationMode,
+    handleTaskCompletionNotificationModeChange,
     commitAiConfig,
     setCommitAiConfig,
     handleCommitAiProviderChange,
@@ -317,6 +320,7 @@ const SettingsView = ({
     setAiTitleGenerationEnabled,
     setStatusBarWidgetEnabled,
     setTaskCompletionNotificationEnabled,
+    setTaskCompletionNotificationMode,
   });
 
   // Save provider (wrapper function with validation logic)
@@ -482,6 +486,8 @@ const SettingsView = ({
               onBrowseSound={handleBrowseSound}
               taskCompletionNotificationEnabled={taskCompletionNotificationEnabled}
               onTaskCompletionNotificationEnabledChange={handleTaskCompletionNotificationEnabledChange}
+              taskCompletionNotificationMode={taskCompletionNotificationMode}
+              onTaskCompletionNotificationModeChange={handleTaskCompletionNotificationModeChange}
             />
           </div>
 

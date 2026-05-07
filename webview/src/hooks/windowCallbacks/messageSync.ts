@@ -93,17 +93,15 @@ export const appendOptimisticMessageIfMissing = (
 
   const optimisticMsg = lastPrev;
   const optimisticText = getUserMessageComparableContent(optimisticMsg);
-  const optimisticTime = optimisticMsg.timestamp
-    ? new Date(optimisticMsg.timestamp).getTime()
-    : Number.NaN;
+  const optimisticTime = parseMessageTimestamp(optimisticMsg.timestamp);
 
   const matchFn = (m: ClaudeMessage) =>
     m.type === 'user' &&
     getUserMessageComparableContent(m) === optimisticText &&
-    m.timestamp &&
-    optimisticMsg.timestamp &&
+    Number.isFinite(parseMessageTimestamp(m.timestamp)) &&
+    Number.isFinite(optimisticTime) &&
     Math.abs(
-      new Date(m.timestamp).getTime() - new Date(optimisticMsg.timestamp).getTime(),
+      parseMessageTimestamp(m.timestamp) - optimisticTime,
     ) < OPTIMISTIC_MESSAGE_TIME_WINDOW;
 
   let matchedIndex = nextList.findIndex(matchFn);
@@ -112,7 +110,7 @@ export const appendOptimisticMessageIfMissing = (
       const candidate = nextList[i];
       if (candidate?.type !== 'user') continue;
       if (getUserMessageComparableContent(candidate) !== optimisticText) continue;
-      const candidateTime = candidate.timestamp ? new Date(candidate.timestamp).getTime() : Number.NaN;
+      const candidateTime = parseMessageTimestamp(candidate.timestamp);
       if (Number.isFinite(optimisticTime) && Number.isFinite(candidateTime) && candidateTime < optimisticTime) {
         continue;
       }
@@ -166,6 +164,23 @@ const getUserMessageComparableContent = (message: ClaudeMessage): string => {
     .map((block: any) => block.text)
     .join('\n');
   return rawText || message.content || '';
+};
+
+const parseMessageTimestamp = (timestamp: unknown): number => {
+  if (typeof timestamp === 'number' && Number.isFinite(timestamp)) {
+    return timestamp;
+  }
+  if (typeof timestamp === 'string' && timestamp.trim()) {
+    const numeric = Number(timestamp);
+    if (Number.isFinite(numeric)) {
+      return numeric;
+    }
+    const parsed = Date.parse(timestamp);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return Number.NaN;
 };
 
 /**
@@ -483,6 +498,29 @@ export const preserveLatestMessagesOnShrink = (
   // Other providers: only preserve if tail contains streaming/recent messages
   if (provider !== 'codex' && !hasStreamingTail && !hasRecentUserTail) {
     return nextList;
+  }
+
+  if (provider === 'codex') {
+    const confirmedUserContents = new Set(
+      nextList
+        .filter((msg) => msg.type === 'user')
+        .map((msg) => getUserMessageComparableContent(msg))
+        .filter((content) => content.trim().length > 0),
+    );
+    const duplicateSafeTail = preservedTail.filter((msg) => {
+      if (msg.type !== 'user') {
+        return true;
+      }
+      const comparable = getUserMessageComparableContent(msg);
+      if (!comparable.trim()) {
+        return true;
+      }
+      return !confirmedUserContents.has(comparable);
+    });
+    if (duplicateSafeTail.length === 0) {
+      return nextList;
+    }
+    return [...nextList, ...duplicateSafeTail];
   }
 
   return [...nextList, ...preservedTail];
