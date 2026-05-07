@@ -97,6 +97,14 @@
         <!-- Remove redundant modifiers (e.g. public on interface methods) -->
         <module name="RedundantModifier"/>
 
+        <!-- ===== Block Style ===== -->
+
+        <!-- Require braces around all if/else/while/for/do bodies. Guards against
+             goto-fail-style bugs where a future edit silently slips outside the
+             conditional. The 197 pre-existing single-line violations were fixed
+             in the preceding commit. -->
+        <module name="NeedBraces"/>
+
         <!-- ===== Regexp ===== -->
 
         <!--
@@ -132,10 +140,6 @@
 
             - InnerTypeLastCheck  (~628 violations)
               Reason: pure code-ordering preference, no functional benefit.
-
-            - NeedBraces  (~197 violations)
-              Reason: useful safety net but requires touching many single-line if statements.
-              Consider re-enabling after a dedicated cleanup pass.
 
             - NestedIfDepth / NestedTryDepth  (~26 violations)
               Reason: real refactoring required, schedule separately.
