@@ -113,7 +113,7 @@ describe('useWindowCallbacks integration', () => {
 
     // Simulate: Java calls historyLoadComplete on success
     act(() => {
-      window.historyLoadComplete();
+      window.historyLoadComplete!();
     });
 
     expect(window.__sessionTransitioning).toBe(false);
@@ -130,7 +130,7 @@ describe('useWindowCallbacks integration', () => {
     };
 
     act(() => {
-      window.historyLoadComplete();
+      window.historyLoadComplete!();
     });
 
     expect(opts.addToast).toHaveBeenCalledWith('history.sessionDeleted', 'success');
@@ -149,7 +149,7 @@ describe('useWindowCallbacks integration', () => {
     ];
 
     act(() => {
-      window.historyLoadComplete();
+      window.historyLoadComplete!();
     });
 
     expect(opts.setMessages).toHaveBeenCalledTimes(1);
@@ -171,7 +171,7 @@ describe('useWindowCallbacks integration', () => {
     renderHook(() => useWindowCallbacks(opts));
 
     act(() => {
-      window.historyLoadComplete();
+      window.historyLoadComplete!();
     });
 
     expect(opts.setMessages).toHaveBeenCalledTimes(1);
@@ -194,7 +194,7 @@ describe('useWindowCallbacks integration', () => {
     window.__sessionTransitionToken = 'transition-2';
 
     act(() => {
-      window.setSessionId('new-session-123');
+      window.setSessionId!('new-session-123');
     });
 
     expect(window.__sessionTransitioning).toBe(false);
@@ -215,7 +215,7 @@ describe('useWindowCallbacks integration', () => {
     ];
 
     act(() => {
-      window.updateMessages(JSON.stringify(staleMessages));
+      window.updateMessages!(JSON.stringify(staleMessages));
     });
 
     // setMessages should NOT be called because guard is active
@@ -234,7 +234,7 @@ describe('useWindowCallbacks integration', () => {
     ];
 
     act(() => {
-      window.updateMessages(JSON.stringify(freshMessages));
+      window.updateMessages!(JSON.stringify(freshMessages));
     });
 
     // setMessages SHOULD be called
@@ -306,7 +306,7 @@ describe('useWindowCallbacks integration', () => {
     window.__sessionTransitionToken = 'transition-status';
 
     act(() => {
-      window.updateStatus('warming runtime');
+      window.updateStatus!('warming runtime');
     });
 
     expect(window.__sessionTransitioning).toBe(true);
@@ -321,7 +321,7 @@ describe('useWindowCallbacks integration', () => {
     renderHook(() => useWindowCallbacks(opts));
 
     act(() => {
-      window.addErrorMessage('Something went wrong');
+      window.addErrorMessage!('Something went wrong');
     });
 
     expect(opts.addToast).toHaveBeenCalledWith('Something went wrong', 'error');
@@ -342,7 +342,7 @@ describe('useWindowCallbacks integration', () => {
     renderHook(() => useWindowCallbacks(opts));
 
     act(() => {
-      window.clearMessages();
+      window.clearMessages!();
     });
 
     expect(opts.setMessages).toHaveBeenCalledWith([]);
@@ -368,7 +368,7 @@ describe('useWindowCallbacks integration', () => {
     renderHook(() => useWindowCallbacks(opts));
 
     act(() => {
-      window.clearMessages();
+      window.clearMessages!();
     });
 
     // Turn ID should be reset to -1 (no active streaming turn)
@@ -388,25 +388,25 @@ describe('useWindowCallbacks integration', () => {
 
     // Step 2: During transition, stale messages are blocked
     act(() => {
-      window.updateMessages(JSON.stringify([{ type: 'assistant', content: 'stale' }]));
+      window.updateMessages!(JSON.stringify([{ type: 'assistant', content: 'stale' }]));
     });
     expect(opts.setMessages).not.toHaveBeenCalled();
 
     // Step 3: Java calls historyLoadComplete (failure path also calls this before addErrorMessage)
     act(() => {
-      window.historyLoadComplete();
+      window.historyLoadComplete!();
     });
     expect(window.__sessionTransitioning).toBe(false);
 
     // Step 4: Java calls addErrorMessage
     act(() => {
-      window.addErrorMessage('Failed to load session: network error');
+      window.addErrorMessage!('Failed to load session: network error');
     });
     expect(opts.addToast).toHaveBeenCalledWith('Failed to load session: network error', 'error');
 
     // Step 5: After guard release, new messages work
     act(() => {
-      window.updateMessages(
+      window.updateMessages!(
         JSON.stringify([{ type: 'user', content: 'new message' }])
       );
     });
@@ -429,7 +429,7 @@ describe('useWindowCallbacks integration', () => {
     (opts.setMessages as any).mockClear();
 
     act(() => {
-      window.updateMessages(
+      window.updateMessages!(
         JSON.stringify([{ type: 'assistant', content: 'stale backlog', timestamp: new Date().toISOString() }]),
         '9',
       );
@@ -438,7 +438,7 @@ describe('useWindowCallbacks integration', () => {
     expect(opts.setMessages).not.toHaveBeenCalled();
 
     act(() => {
-      window.updateMessages(
+      window.updateMessages!(
         JSON.stringify([{ type: 'assistant', content: 'final snapshot', timestamp: new Date().toISOString() }]),
         '10',
       );
@@ -490,7 +490,7 @@ describe('useWindowCallbacks integration', () => {
     ];
 
     act(() => {
-      window.updateMessages(JSON.stringify([
+      window.updateMessages!(JSON.stringify([
         {
           type: 'assistant',
           content: 'Working',
@@ -601,14 +601,14 @@ describe('useWindowCallbacks integration', () => {
 
       // Simulate onStreamStart to set up streaming state
       act(() => {
-        window.onStreamStart();
+        window.onStreamStart!();
       });
 
       const turnId = opts.streamingTurnIdRef.current;
 
       // First onStreamEnd — should process
       act(() => {
-        window.onStreamEnd('10');
+        window.onStreamEnd!('10');
       });
       expect(window.__streamEndProcessedTurnId).toBe(turnId);
 
@@ -617,7 +617,7 @@ describe('useWindowCallbacks integration', () => {
 
       // Second onStreamEnd with same turn — should be no-op
       act(() => {
-        window.onStreamEnd('10');
+        window.onStreamEnd!('10');
       });
 
       // setStreamingActive should not have been called again (idempotency)
@@ -633,7 +633,7 @@ describe('useWindowCallbacks integration', () => {
 
       // New turn starts
       act(() => {
-        window.onStreamStart();
+        window.onStreamStart!();
       });
 
       expect(window.__streamEndProcessedTurnId).toBeUndefined();

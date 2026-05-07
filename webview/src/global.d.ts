@@ -806,6 +806,11 @@ interface Window {
   __pendingLoadingState?: boolean;
 
   /**
+   * Pending mode payload before setMode is registered.
+   */
+  __pendingModeReceived?: string;
+
+  /**
    * Execute context action from IDEA shortcut (copy/cut/send)
    */
   execContextAction?: (action: string) => void;

@@ -115,11 +115,14 @@ const SubagentList = memo(({ subagents, histories = {}, currentSessionId, isStre
 
   return (
     <div className="subagent-list">
-      {subagents.map((subagent) => {
+      {subagents.map((subagent, index) => {
         const history = historyById[subagent.id] ?? (subagent.agentId ? historyById[subagent.agentId] : undefined);
+        // Index fallback guards against rare cases where the bridge emits a
+        // subagent without a stable id; without it React surfaces a duplicate-key
+        // warning and may miscompare rows during streaming updates.
         return (
           <SubagentRow
-            key={subagent.id}
+            key={subagent.id ?? `subagent-${index}`}
             subagent={subagent}
             isExpanded={expandedId === subagent.id}
             history={history}

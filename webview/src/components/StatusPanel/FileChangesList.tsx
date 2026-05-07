@@ -1,4 +1,5 @@
 import { memo, useCallback } from 'react';
+import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { FileChangeSummary } from '../../types';
@@ -31,6 +32,13 @@ const FileChangeRow = memo(({ fileChange, isUndoing, onOpen, onShowDiff, onUndo,
     onOpen(fileChange);
   }, [onOpen, fileChange]);
 
+  const handleOpenKeyDown = useCallback((event: React.KeyboardEvent<HTMLSpanElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onOpen(fileChange);
+    }
+  }, [onOpen, fileChange]);
+
   const handleShowDiff = useCallback(() => {
     onShowDiff(fileChange);
   }, [onShowDiff, fileChange]);
@@ -49,10 +57,13 @@ const FileChangeRow = memo(({ fileChange, isUndoing, onOpen, onShowDiff, onUndo,
       {/* File icon */}
       <FileIcon filePath={fileChange.filePath} />
 
-      {/* File name */}
+      {/* File name — keyboard accessible since it acts as a button */}
       <span
         className="file-change-name"
+        role="button"
+        tabIndex={0}
         onClick={handleOpen}
+        onKeyDown={handleOpenKeyDown}
         title={fileChange.filePath}
       >
         {fileChange.fileName}

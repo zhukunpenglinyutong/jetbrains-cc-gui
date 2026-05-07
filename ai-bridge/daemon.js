@@ -36,6 +36,7 @@ import {
   resetRuntimePersistent
 } from './services/claude/persistent-query-service.js';
 import { injectNetworkEnvVars } from './config/api-config.js';
+import { cleanupStaleTempImages } from './services/claude/attachment-service.js';
 
 // =============================================================================
 // Network Environment Setup (must run before any HTTPS connection)
@@ -416,6 +417,10 @@ async function processRequest(request) {
 
   // Pre-load SDK
   await preloadSdks();
+
+  // Best-effort cleanup of stale temp image files (>24h). Fire-and-forget so
+  // it doesn't block daemon readiness.
+  cleanupStaleTempImages().catch(() => {});
 
   // Signal ready
   sendDaemonEvent('ready', {

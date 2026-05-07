@@ -13,15 +13,15 @@ import { sendBridgeEvent } from './utils/bridge';
 import { debugLog } from './utils/debug';
 import type { UiFontConfig } from './types/uiFontConfig';
 
-// Silence console output in production (including third-party libs).
-// In dev, keep console for debugging.
+// Silence noisy console output in production (including third-party libs).
+// console.error is preserved so ErrorBoundary and unhandled exceptions still
+// surface in the IDE's webview devtools — silencing it would hide regressions.
 if (!import.meta.env.DEV) {
   const noop = () => {};
   console.log = noop;
   console.debug = noop;
   console.info = noop;
   console.warn = noop;
-  console.error = noop;
 }
 
 // Install the runtime provider dispatcher exactly once so that every
@@ -436,7 +436,7 @@ if (typeof window !== 'undefined' && !window.updateMessages) {
         : typeof sequence === 'string' && sequence.trim().length > 0
           ? Number.parseInt(sequence, 10)
           : null;
-    (window as unknown as Record<string, unknown>).__pendingUpdateMessages = {
+    window.__pendingUpdateMessages = {
       json,
       sequence: Number.isFinite(parsedSequence) ? parsedSequence : null,
     };
@@ -447,7 +447,7 @@ if (typeof window !== 'undefined' && !window.updateMessages) {
 if (typeof window !== 'undefined' && !window.updateStatus) {
   debugLog('[Main] Pre-registering updateStatus placeholder');
   window.updateStatus = (text: string) => {
-    (window as unknown as Record<string, unknown>).__pendingStatusText = text;
+    window.__pendingStatusText = text;
   };
 }
 
@@ -471,7 +471,7 @@ if (typeof window !== 'undefined' && !window.addUserMessage) {
 if (typeof window !== 'undefined' && !window.showSummary) {
   debugLog('[Main] Pre-registering showSummary placeholder');
   window.showSummary = (summary: string) => {
-    (window as unknown as Record<string, unknown>).__pendingSummaryText = summary;
+    window.__pendingSummaryText = summary;
   };
 }
 
@@ -551,7 +551,7 @@ if (typeof window !== 'undefined' && !window.onModeReceived) {
   debugLog('[Main] Pre-registering onModeReceived placeholder');
   window.onModeReceived = (mode: string) => {
     debugLog('[Main] Storing pending mode:', mode);
-    (window as unknown as Record<string, unknown>).__pendingModeReceived = mode;
+    window.__pendingModeReceived = mode;
   };
 }
 

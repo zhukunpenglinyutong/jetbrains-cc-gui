@@ -59,28 +59,28 @@ class HistoryDeleteService {
      */
     void handleDeleteSession(String sessionId, String currentProvider) {
         if (!isValidSessionId(sessionId)) {
-            LOG.warn("[HistoryHandler] 删除会话失败: 非法 sessionId 已拒绝");
+            LOG.warn("[HistoryHandler] Delete session rejected: invalid sessionId");
             return;
         }
         CompletableFuture.runAsync(() -> {
             try {
-                LOG.info("[HistoryHandler] ========== 开始删除会话 ==========");
+                LOG.info("[HistoryHandler] ========== Delete session start ==========");
                 LOG.info("[HistoryHandler] SessionId: " + sessionId + ", Provider: " + currentProvider);
 
                 DeleteResult result = deleteSessionFiles(sessionId, currentProvider);
 
-                LOG.info("[HistoryHandler] 删除完成 - 主文件: " + (result.mainDeleted ? "已删除" : "未找到") + ", Agent 文件: " + result.agentFilesDeleted);
+                LOG.info("[HistoryHandler] Delete completed - Main file: " + (result.mainDeleted ? "deleted" : "not found") + ", Agent files: " + result.agentFilesDeleted);
 
                 if (result.mainDeleted) {
                     cleanupSessionMetadata(sessionId);
                 }
                 cleanupCache(currentProvider);
 
-                LOG.info("[HistoryHandler] 重新加载历史数据...");
+                LOG.info("[HistoryHandler] Reloading history data...");
                 historyLoadService.handleLoadHistoryData(currentProvider);
 
             } catch (Exception e) {
-                LOG.error("[HistoryHandler] 删除会话失败: " + e.getMessage(), e);
+                LOG.error("[HistoryHandler] Delete session failed: " + e.getMessage(), e);
             }
         });
     }
@@ -91,13 +91,13 @@ class HistoryDeleteService {
     void handleDeleteSessions(String content, String currentProvider) {
         List<String> sessionIds = parseSessionIds(content);
         if (sessionIds.isEmpty()) {
-            LOG.warn("[HistoryHandler] 批量删除会话失败: sessionIds 为空");
+            LOG.warn("[HistoryHandler] Batch delete failed: empty sessionIds");
             return;
         }
 
         CompletableFuture.runAsync(() -> {
             try {
-                LOG.info("[HistoryHandler] ========== 开始批量删除会话 ==========");
+                LOG.info("[HistoryHandler] ========== Batch delete sessions start ==========");
                 LOG.info("[HistoryHandler] SessionIds: " + GSON.toJson(sessionIds) + ", Provider: " + currentProvider);
 
                 int mainDeletedCount = 0;
@@ -112,18 +112,18 @@ class HistoryDeleteService {
                         }
                         agentFilesDeletedCount += result.agentFilesDeleted;
                     } catch (Exception e) {
-                        LOG.error("[HistoryHandler] 批量删除单个会话失败: " + sessionId + " - " + e.getMessage(), e);
+                        LOG.error("[HistoryHandler] Batch delete single session failed: " + sessionId + " - " + e.getMessage(), e);
                     }
                 }
 
                 cleanupCache(currentProvider);
 
-                LOG.info("[HistoryHandler] 批量删除完成 - 主文件: " + mainDeletedCount + "/" + sessionIds.size()
-                        + ", Agent 文件: " + agentFilesDeletedCount);
-                LOG.info("[HistoryHandler] 重新加载历史数据...");
+                LOG.info("[HistoryHandler] Batch delete completed - Main files: " + mainDeletedCount + "/" + sessionIds.size()
+                        + ", Agent files: " + agentFilesDeletedCount);
+                LOG.info("[HistoryHandler] Reloading history data...");
                 historyLoadService.handleLoadHistoryData(currentProvider);
             } catch (Exception e) {
-                LOG.error("[HistoryHandler] 批量删除会话失败: " + e.getMessage(), e);
+                LOG.error("[HistoryHandler] Batch delete sessions failed: " + e.getMessage(), e);
             }
         });
     }
@@ -146,7 +146,7 @@ class HistoryDeleteService {
                 }
             }
         } catch (Exception e) {
-            LOG.warn("[HistoryHandler] 批量删除会话参数解析失败: " + e.getMessage());
+            LOG.warn("[HistoryHandler] Batch delete sessionIds parse failed: " + e.getMessage());
         }
 
         return new ArrayList<>(sessionIds);
@@ -163,7 +163,7 @@ class HistoryDeleteService {
                 continue;
             }
             if (!isValidSessionId(sessionId)) {
-                LOG.warn("[HistoryHandler] 批量删除会话忽略非法 sessionId");
+                LOG.warn("[HistoryHandler] Batch delete ignored invalid sessionId");
                 continue;
             }
             sessionIds.add(sessionId);
@@ -172,7 +172,7 @@ class HistoryDeleteService {
 
     private DeleteResult deleteSessionFiles(String sessionId, String currentProvider) throws java.io.IOException {
         if (!isValidSessionId(sessionId)) {
-            LOG.warn("[HistoryHandler] 删除会话失败: 非法 sessionId 已拒绝");
+            LOG.warn("[HistoryHandler] Delete session rejected: invalid sessionId");
             return new DeleteResult(false, 0);
         }
         if ("codex".equals(currentProvider)) {
@@ -194,7 +194,7 @@ class HistoryDeleteService {
         Path sessionDir = Paths.get(homeDir, ".codex", "sessions");
 
         if (!Files.exists(sessionDir)) {
-            LOG.error("[HistoryHandler] Codex 会话目录不存在: " + sessionDir);
+            LOG.error("[HistoryHandler] Codex session directory not found: " + sessionDir);
             return false;
         }
 
@@ -208,22 +208,27 @@ class HistoryDeleteService {
             for (Path sessionFile : sessionFiles) {
                 try {
                     Files.delete(sessionFile);
-                    LOG.info("[HistoryHandler] 已删除 Codex 会话文件: " + sessionFile);
+                    LOG.info("[HistoryHandler] Deleted Codex session file: " + sessionFile);
                     deleted = true;
                 } catch (Exception e) {
-                    LOG.error("[HistoryHandler] 删除 Codex 会话文件失败: " + sessionFile + " - " + e.getMessage(), e);
+                    LOG.error("[HistoryHandler] Failed to delete Codex session file: " + sessionFile + " - " + e.getMessage(), e);
                 }
             }
         }
         return deleted;
     }
 
+    /**
+     * Match Codex rollout filenames whose UUID suffix equals the session ID.
+     * Real format: rollout-{ISO timestamp}-{sessionId}.jsonl, so we anchor to "-{sessionId}.jsonl"
+     * to avoid removing neighbouring sessions whose UUIDs share a substring.
+     */
     static boolean isCodexSessionFileMatch(Path path, String sessionId) {
         if (path == null || sessionId == null || sessionId.isEmpty()) {
             return false;
         }
         String fileName = path.getFileName().toString();
-        return fileName.endsWith(".jsonl") && fileName.contains(sessionId);
+        return fileName.endsWith("-" + sessionId + ".jsonl");
     }
 
     /**
@@ -237,7 +242,7 @@ class HistoryDeleteService {
         Path sessionDir = projectsDir.resolve(sanitizedPath);
 
         if (!Files.exists(sessionDir)) {
-            LOG.error("[HistoryHandler] Claude 项目目录不存在: " + sessionDir);
+            LOG.error("[HistoryHandler] Claude project directory not found: " + sessionDir);
             return new int[]{0, 0};
         }
 
@@ -247,15 +252,15 @@ class HistoryDeleteService {
         // Delete main session file
         Path mainSessionFile = sessionDir.resolve(sessionId + ".jsonl").normalize();
         if (!mainSessionFile.startsWith(sessionDir.normalize())) {
-            LOG.warn("[HistoryHandler] 拒绝越界路径: " + mainSessionFile);
+            LOG.warn("[HistoryHandler] Refused out-of-bounds path: " + mainSessionFile);
             return new int[]{0, 0};
         }
         if (Files.exists(mainSessionFile)) {
             Files.delete(mainSessionFile);
-            LOG.info("[HistoryHandler] 已删除主会话文件: " + mainSessionFile.getFileName());
+            LOG.info("[HistoryHandler] Deleted main session file: " + mainSessionFile.getFileName());
             mainDeleted = true;
         } else {
-            LOG.warn("[HistoryHandler] 主会话文件不存在: " + mainSessionFile.getFileName());
+            LOG.warn("[HistoryHandler] Main session file not found: " + mainSessionFile.getFileName());
         }
 
         // Delete related agent files
@@ -271,10 +276,10 @@ class HistoryDeleteService {
             for (Path agentFile : agentFiles) {
                 try {
                     Files.delete(agentFile);
-                    LOG.info("[HistoryHandler] 已删除关联 agent 文件: " + agentFile.getFileName());
+                    LOG.info("[HistoryHandler] Deleted related agent file: " + agentFile.getFileName());
                     agentFilesDeleted++;
                 } catch (Exception e) {
-                    LOG.error("[HistoryHandler] 删除 agent 文件失败: " + agentFile.getFileName() + " - " + e.getMessage(), e);
+                    LOG.error("[HistoryHandler] Failed to delete agent file: " + agentFile.getFileName() + " - " + e.getMessage(), e);
                 }
             }
         }
@@ -286,9 +291,9 @@ class HistoryDeleteService {
         try {
             nodeJsServiceCaller.callNodeJsFavoritesService("removeFavorite", sessionId);
             nodeJsServiceCaller.callNodeJsDeleteTitle(sessionId);
-            LOG.info("[HistoryHandler] 已清理会话关联数据");
+            LOG.info("[HistoryHandler] Cleaned up session metadata");
         } catch (Exception e) {
-            LOG.warn("[HistoryHandler] 清理关联数据失败（不影响会话删除）: " + e.getMessage());
+            LOG.warn("[HistoryHandler] Failed to clean up metadata (does not affect deletion): " + e.getMessage());
         }
     }
 
@@ -303,7 +308,7 @@ class HistoryDeleteService {
                 SessionIndexManager.getInstance().clearProjectIndex("claude", projectPath);
             }
         } catch (Exception e) {
-            LOG.warn("[HistoryHandler] 清理缓存失败（不影响会话删除）: " + e.getMessage());
+            LOG.warn("[HistoryHandler] Failed to clean up cache (does not affect deletion): " + e.getMessage());
         }
     }
 
@@ -318,15 +323,15 @@ class HistoryDeleteService {
             while ((line = reader.readLine()) != null && lineCount < 20) {
                 if (line.contains("\"sessionId\":\"" + sessionId + "\"") ||
                             line.contains("\"parentSessionId\":\"" + sessionId + "\"")) {
-                    LOG.debug("[HistoryHandler] Agent文件 " + agentFilePath.getFileName() + " 属于会话 " + sessionId);
+                    LOG.debug("[HistoryHandler] Agent file " + agentFilePath.getFileName() + " belongs to session " + sessionId);
                     return true;
                 }
                 lineCount++;
             }
-            LOG.debug("[HistoryHandler] Agent文件 " + agentFilePath.getFileName() + " 不属于会话 " + sessionId);
+            LOG.debug("[HistoryHandler] Agent file " + agentFilePath.getFileName() + " does not belong to session " + sessionId);
             return false;
         } catch (Exception e) {
-            LOG.warn("[HistoryHandler] 无法读取agent文件 " + agentFilePath.getFileName() + ": " + e.getMessage());
+            LOG.warn("[HistoryHandler] Failed to read agent file " + agentFilePath.getFileName() + ": " + e.getMessage());
             return false;
         }
     }

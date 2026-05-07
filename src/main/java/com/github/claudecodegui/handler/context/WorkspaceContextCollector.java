@@ -247,10 +247,14 @@ public class WorkspaceContextCollector {
      * Resolves the isLoaded method against the actual handler class on each call,
      * because different handlers (Gradle, Maven, etc.) may declare it on different classes.
      * Method lookup is internally cached by the JVM, so the per-call cost is negligible.
+     *
+     * Returns {@code false} when the load state cannot be determined, so the prompt
+     * surfaces a "[not loaded]" hint rather than silently claiming the subproject
+     * is available — incorrectly asserting "loaded" misleads downstream reasoning.
      */
     private static boolean checkSubprojectLoaded(@NotNull Object subproject) {
         if (getHandlerMethod == null) {
-            return true;
+            return false;
         }
 
         try {
@@ -263,7 +267,7 @@ public class WorkspaceContextCollector {
         } catch (Exception e) {
             LOG.debug("Failed to check subproject loaded status: " + e.getMessage());
         }
-        return true; // Assume loaded if we can't check
+        return false;
     }
 
     /**

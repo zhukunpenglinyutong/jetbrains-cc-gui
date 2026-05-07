@@ -4,9 +4,16 @@
  */
 
 import fs from 'fs';
+import { mkdir, writeFile, readdir, stat as statAsync, unlink } from 'fs/promises';
 import path from 'path';
 import os from 'os';
+import crypto from 'crypto';
 import { modelSupportsVision } from '../../utils/model-utils.js';
+
+// Image temp directory shared across the daemon's lifetime.
+const TEMP_IMAGE_SUBDIR = 'cc-gui-images';
+// Files older than 24h are removed at daemon startup to bound disk growth.
+const TEMP_IMAGE_TTL_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Read attachment JSON (path specified via CLAUDE_ATTACHMENTS_FILE environment variable).
@@ -112,7 +119,7 @@ export async function loadAttachments(stdinData) {
  * @param {string} fileName - Original file name (optional)
  * @returns {string|null} Absolute path to the saved file, or null on failure
  */
-function saveImageToTemp(base64Data, mediaType, fileName) {
+async function saveImageToTemp(base64Data, mediaType, fileName) {
   try {
     if (!base64Data || typeof base64Data !== 'string') {
       return null;
@@ -120,11 +127,11 @@ function saveImageToTemp(base64Data, mediaType, fileName) {
     const ext = (typeof mediaType === 'string' && mediaType.split('/')[1])
       ? mediaType.split('/')[1].toLowerCase()
       : 'png';
-    const tempDir = path.join(os.tmpdir(), 'cc-gui-images');
-    fs.mkdirSync(tempDir, { recursive: true });
+    const tempDir = path.join(os.tmpdir(), TEMP_IMAGE_SUBDIR);
+    await mkdir(tempDir, { recursive: true });
 
     let safeName;
-    const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const uniqueId = crypto.randomUUID();
     if (fileName && typeof fileName === 'string') {
       const baseName = path.basename(fileName).replace(/[^a-zA-Z0-9._-]/g, '_');
       safeName = `${uniqueId}-${baseName}`;
@@ -133,11 +140,38 @@ function saveImageToTemp(base64Data, mediaType, fileName) {
     }
 
     const filePath = path.join(tempDir, safeName);
-    fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
+    await writeFile(filePath, Buffer.from(base64Data, 'base64'));
     return filePath;
   } catch (e) {
     console.error('[ATTACHMENTS] Failed to save image to temp:', e.message);
     return null;
+  }
+}
+
+/**
+ * Best-effort cleanup of old temp image files (>24h old). Called at daemon
+ * startup so failed/abandoned writes from previous sessions don't accumulate.
+ * Errors are swallowed — cleanup is non-critical.
+ */
+export async function cleanupStaleTempImages() {
+  try {
+    const tempDir = path.join(os.tmpdir(), TEMP_IMAGE_SUBDIR);
+    const entries = await readdir(tempDir).catch(() => null);
+    if (!entries) return;
+    const now = Date.now();
+    await Promise.all(entries.map(async (name) => {
+      const filePath = path.join(tempDir, name);
+      try {
+        const info = await statAsync(filePath);
+        if (info.isFile() && now - info.mtimeMs > TEMP_IMAGE_TTL_MS) {
+          await unlink(filePath);
+        }
+      } catch {
+        // Ignore individual cleanup failures (file may be in use or already gone).
+      }
+    }));
+  } catch {
+    // Cleanup is best-effort.
   }
 }
 
@@ -159,7 +193,7 @@ function saveImageToTemp(base64Data, mediaType, fileName) {
  *                                  Used to decide image transmission strategy.
  * @returns {Array} Content block array
  */
-export function buildContentBlocks(attachments, message, modelId = null) {
+export async function buildContentBlocks(attachments, message, modelId = null) {
   const contentBlocks = [];
   const useNativeVision = modelSupportsVision(modelId);
   const imagePathRefs = [];
@@ -177,7 +211,7 @@ export function buildContentBlocks(attachments, message, modelId = null) {
           }
         });
       } else {
-        const tempPath = saveImageToTemp(a.data, mt, a.fileName);
+        const tempPath = await saveImageToTemp(a.data, mt, a.fileName);
         if (tempPath) {
           imagePathRefs.push(tempPath);
           console.log('[ATTACHMENTS] Saved image to temp for non-vision model:', tempPath);
