@@ -665,6 +665,7 @@ interface Window {
   __pendingUpdateRaf?: number | null;
   __pendingUpdateJson?: string | null;
   __pendingUpdateSequence?: number | null;
+  __streamingDeltaRenderingFrame?: number;
   __minAcceptedUpdateSequence?: number;
   /** Cancel pending rAF-deferred updateMessages (set by messageCallbacks, called by onStreamEnd). */
   __cancelPendingUpdateMessages?: () => void;

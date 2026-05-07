@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
   createInitialEventState,
   processCodexEventStream,
+  isIgnorableWindowsTerminationNoiseLine,
+  shouldSuppressCodexStreamParseErrorAfterCompletion,
 } from './codex-event-handler.js';
 
 async function* eventsFrom(items) {
@@ -80,4 +82,41 @@ test('Codex item.updated agent_message emits incremental content deltas before c
       content: [{ type: 'text', text: 'Hello' }],
     },
   });
+});
+
+test('recognizes localized Windows termination noise lines', () => {
+  assert.equal(
+    isIgnorableWindowsTerminationNoiseLine('SUCCESS: The process with PID 41032 (child process of PID 20716) has been terminated.'),
+    true,
+  );
+  assert.equal(
+    isIgnorableWindowsTerminationNoiseLine('成功: 已终止 PID 37392 (属于 PID 38456 子进程) 的进程。'),
+    true,
+  );
+  assert.equal(
+    isIgnorableWindowsTerminationNoiseLine('Failed to parse item: something else'),
+    false,
+  );
+});
+
+test('suppresses post-completion parse errors caused by Windows termination noise', () => {
+  const state = createInitialEventState(() => {});
+  state.turnCompletedObserved = true;
+
+  assert.equal(
+    shouldSuppressCodexStreamParseErrorAfterCompletion(
+      'Failed to parse item: 成功: 已终止 PID 37392 (属于 PID 38456 子进程) 的进程。',
+      state,
+    ),
+    true,
+  );
+
+  state.turnCompletedObserved = false;
+  assert.equal(
+    shouldSuppressCodexStreamParseErrorAfterCompletion(
+      'Failed to parse item: 成功: 已终止 PID 37392 (属于 PID 38456 子进程) 的进程。',
+      state,
+    ),
+    false,
+  );
 });
