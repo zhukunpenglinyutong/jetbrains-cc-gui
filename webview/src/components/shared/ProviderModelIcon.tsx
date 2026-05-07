@@ -42,7 +42,6 @@ import GrokMono from '@lobehub/icons/es/Grok/components/Mono';
 import OpenRouterMono from '@lobehub/icons/es/OpenRouter/components/Mono';
 import YiColor from '@lobehub/icons/es/Yi/components/Color';
 import YiMono from '@lobehub/icons/es/Yi/components/Mono';
-import XiaomiMiMoMono from '@lobehub/icons/es/XiaomiMiMo/components/Mono';
 import type { ReactElement } from 'react';
 import { resolveIconVendor, type ModelVendor } from '../../utils/modelIconMapping';
 
@@ -56,6 +55,22 @@ export interface ProviderModelIconProps {
   /** Whether to use colored variant (true) or avatar/mono variant (false) */
   colored?: boolean;
 }
+
+const XiaomiMiMoMono = ({ size = '1em' }: { size?: number | string }): ReactElement => (
+  <svg
+    fill="currentColor"
+    fillRule="evenodd"
+    height={size}
+    role="img"
+    style={{ flex: 'none', lineHeight: 1 }}
+    viewBox="0 0 24 24"
+    width={size}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <title>XiaomiMiMo</title>
+    <path d="M4.5 5.75A2.75 2.75 0 0 1 7.25 3h9.5a2.75 2.75 0 0 1 2.75 2.75v12.5A2.75 2.75 0 0 1 16.75 21h-9.5a2.75 2.75 0 0 1-2.75-2.75V5.75Zm2.1.05v12.4h2.15V9.55l2.52 5.58h1.46l2.52-5.58v8.65h2.15V5.8h-2.28L12 12.74 8.88 5.8H6.6Z" />
+  </svg>
+);
 
 const XiaomiMiMoIcon = (size: number, colored: boolean): ReactElement => {
   if (!colored) {
