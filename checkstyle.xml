@@ -7,7 +7,22 @@
     <property name="charset" value="UTF-8"/>
     <property name="severity" value="error"/>
 
+    <!-- File-level: enforce newline at end of file -->
+    <module name="NewlineAtEndOfFile">
+        <property name="lineSeparator" value="lf"/>
+    </module>
+
+    <!-- File-level: enforce max line length -->
+    <module name="LineLength">
+        <property name="max" value="200"/>
+        <property name="fileExtensions" value="java"/>
+        <property name="ignorePattern" value="^package.*|^import.*|a href|href|http://|https://|ftp://"/>
+    </module>
+
     <module name="TreeWalker">
+
+        <!-- ===== Project-specific: IntelliJ Platform API Usage ===== -->
+
         <!-- Prohibit use of System.out, System.err, and e.printStackTrace -->
         <module name="RegexpSinglelineJava">
             <property name="format" value="System\.(out|err)\.print|e\.printStackTrace"/>
@@ -32,5 +47,113 @@
             <property name="id" value="NoUserHomeProperty"/>
             <property name="files" value="PlatformUtils\.java"/>
         </module>
+
+        <!-- ===== Annotations ===== -->
+
+        <!-- Enforce @Override when overriding methods -->
+        <module name="MissingOverride"/>
+
+        <!-- ===== Imports ===== -->
+
+        <!-- No illegal imports (e.g. sun.*) -->
+        <module name="IllegalImport"/>
+        <!-- No duplicate imports or imports of classes in java.lang -->
+        <module name="RedundantImport"/>
+        <!-- No unused imports -->
+        <module name="UnusedImports">
+            <property name="processJavadoc" value="true"/>
+        </module>
+
+        <!-- ===== Coding (real bug-catchers) ===== -->
+
+        <!-- equals(Object) and equals(SameType) must be consistent -->
+        <module name="CovariantEquals"/>
+        <!-- Disallow empty statements (lone semicolons) -->
+        <module name="EmptyStatement"/>
+        <!-- equals() and hashCode() must be overridden together -->
+        <module name="EqualsHashCode"/>
+        <!-- Simplify boolean expressions such as "x == true" -->
+        <module name="SimplifyBooleanExpression"/>
+        <!-- Simplify "if (x) return true; else return false;" -->
+        <module name="SimplifyBooleanReturn"/>
+        <!-- Use .equals() for String comparison, not == -->
+        <module name="StringLiteralEquality"/>
+        <!-- Declare one variable per declaration statement -->
+        <module name="MultipleVariableDeclarations"/>
+        <!-- One statement per line -->
+        <module name="OneStatementPerLine"/>
+
+        <!-- ===== Miscellaneous ===== -->
+
+        <!-- Use uppercase L for long literals (1000L not 1000l) -->
+        <module name="UpperEll"/>
+        <!-- Array brackets belong to the type, not the variable (String[] args not String args[]) -->
+        <module name="ArrayTypeStyle"/>
+        <!-- File name must match the public type name -->
+        <module name="OuterTypeFilename"/>
+
+        <!-- ===== Modifiers ===== -->
+
+        <!-- Remove redundant modifiers (e.g. public on interface methods) -->
+        <module name="RedundantModifier"/>
+
+        <!-- ===== Regexp ===== -->
+
+        <!--
+            Forbid single-element array hack used to smuggle mutable state into lambdas / anonymous
+            classes, e.g.: final boolean[] flag = {false}; final int[] count = {0};
+            Prefer AtomicBoolean / AtomicInteger / AtomicLong / AtomicReference.
+        -->
+        <module name="RegexpSinglelineJava">
+            <property name="format"
+                      value="^\s*(?:final\s+)?[A-Za-z_][\w&lt;&gt;,?\s]*\s*\[\]\s+[a-z]\w*\s*=\s*\{\s*[^,{}]+\s*\}"/>
+            <property name="message"
+                      value="Do not use a single-element array to capture mutable state in a lambda or anonymous class. Use AtomicBoolean / AtomicInteger / AtomicLong / AtomicReference instead."/>
+            <property name="ignoreComments" value="true"/>
+        </module>
+        <module name="RegexpSinglelineJava">
+            <property name="format"
+                      value="^\s*(?:final\s+)?[A-Za-z_][\w&lt;&gt;,?\s]*\s*\[\]\s+[a-z]\w*\s*=\s*\{\s*new\s+[A-Za-z_][\w&lt;&gt;,?\s]*\s*\[\]\s*\{\s*[^,{}]+\s*\}"/>
+            <property name="message"
+                      value="Do not use a single-element array to capture mutable state in a lambda or anonymous class. Use AtomicBoolean / AtomicInteger / AtomicLong / AtomicReference instead."/>
+            <property name="ignoreComments" value="true"/>
+        </module>
+
+        <!--
+            ===== Disabled Rules (kept here for future adoption) =====
+
+            The following rules from checkstyle-new.xml are intentionally left out
+            for now because they would create a large backlog of fixes. Enable them
+            in a future cleanup pass when the team is ready.
+
+            - JavadocMethod / JavadocVariable / JavadocStyle / NonEmptyAtclauseDescription  (~1216 violations)
+              Reason: requires writing Javadoc for every public method/field. High effort, low return for
+              this project where method names are self-documenting.
+
+            - InnerTypeLastCheck  (~628 violations)
+              Reason: pure code-ordering preference, no functional benefit.
+
+            - NeedBraces  (~197 violations)
+              Reason: useful safety net but requires touching many single-line if statements.
+              Consider re-enabling after a dedicated cleanup pass.
+
+            - NestedIfDepth / NestedTryDepth  (~26 violations)
+              Reason: real refactoring required, schedule separately.
+
+            - HideUtilityClassConstructor  (~23 violations)
+              Reason: needs adding private constructors to all utility classes.
+
+            - LeftCurly / RightCurly / WhitespaceAround / WhitespaceAfter / NoWhitespaceBefore /
+              NoWhitespaceAfter / ParenPad / MethodParamPad / GenericWhitespace / AnnotationLocation /
+              AvoidNestedBlocks / EmptyBlock  (collectively ~70 violations)
+              Reason: stylistic, IDE-fixable. Worth a one-shot reformat in a separate commit.
+
+            - InterfaceIsType / InnerAssignment / OneTopLevelClass
+              Reason: project-specific exceptions exist; review case by case before enabling.
+
+            - Trailing whitespace
+              Reason: easy to enable after a one-time reformat of all files.
+        -->
+
     </module>
 </module>

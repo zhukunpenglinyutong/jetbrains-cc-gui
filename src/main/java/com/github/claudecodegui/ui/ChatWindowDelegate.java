@@ -268,9 +268,15 @@ public class ChatWindowDelegate {
             @Override public void onTabStatusChanged(String statusStr) {
                 TabAnswerStatus status;
                 switch (statusStr) {
-                    case "answering": status = TabAnswerStatus.ANSWERING; break;
-                    case "completed": status = TabAnswerStatus.COMPLETED; break;
-                    default: status = TabAnswerStatus.IDLE; break;
+                    case "answering":
+                        status = TabAnswerStatus.ANSWERING;
+                        break;
+                    case "completed":
+                        status = TabAnswerStatus.COMPLETED;
+                        break;
+                    default:
+                        status = TabAnswerStatus.IDLE;
+                        break;
                 }
                 updateTabStatus(status);
             }

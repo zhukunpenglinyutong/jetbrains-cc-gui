@@ -227,17 +227,29 @@ public class DaemonBridge {
         // Kill process if still alive and wait for termination
         if (daemonProcess != null && daemonProcess.isAlive()) {
             daemonProcess.destroyForcibly();
-            try { daemonProcess.waitFor(3, TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            try {
+                daemonProcess.waitFor(3, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
 
         // Interrupt and join threads
         if (readerThread != null) {
             readerThread.interrupt();
-            try { readerThread.join(2000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            try {
+                readerThread.join(2000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
         if (heartbeatThread != null) {
             heartbeatThread.interrupt();
-            try { heartbeatThread.join(2000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            try {
+                heartbeatThread.join(2000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
 
         LOG.info("[DaemonBridge] Daemon stopped");
@@ -599,7 +611,11 @@ public class DaemonBridge {
             LOG.info("[DaemonBridge] Forcefully killing unresponsive daemon process (PID: "
                     + oldProcess.pid() + ")");
             oldProcess.destroyForcibly();
-            try { oldProcess.waitFor(2, TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            try {
+                oldProcess.waitFor(2, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
 
         // Fail all pending requests

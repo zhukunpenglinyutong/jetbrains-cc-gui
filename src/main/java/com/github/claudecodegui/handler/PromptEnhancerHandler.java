@@ -71,7 +71,9 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
         "- Do NOT use Markdown headings or formatting\n" +
         "- Do NOT ask the user any questions\n" +
         "- Output the prompt text directly, ready to be copied and used\n" +
-        "- [KEY] The optimized prompt MUST be in the same language as the user's original prompt. If the original is in English, output in English; if in Chinese, output in Chinese; if in Japanese, output in Japanese. Always match the language of the original prompt.\n\n" +
+        "- [KEY] The optimized prompt MUST be in the same language as the user's original prompt. "
+        + "If the original is in English, output in English; if in Chinese, output in Chinese; "
+        + "if in Japanese, output in Japanese. Always match the language of the original prompt.\n\n" +
         "[How to Utilize Context Information]:\n" +
         "1. If the user's prompt contains vague references (e.g., \"this code\", \"this file\", \"here\"), replace them with specific descriptions based on the context\n" +
         "2. Add relevant professional terminology and best practices based on the code language type\n" +
@@ -89,8 +91,14 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
         "User input: Please optimize the following prompt:\\n\\nAnalyze the logic\n" +
         "Your output: Please analyze the business logic of the current code file, including the main functionality, data flow, and key processing steps.\n\n" +
         "Example 2 (with context):\n" +
-        "User input: Please optimize the following prompt:\\n\\nWhat's wrong with this code\\n\\n---\\nBelow is the relevant context information:\\n\\n[User's Selected Code]\\n```java\\npublic void process() { ... }\\n```\\n\\n[Current File] UserService.java\\n[Language Type] java\n" +
-        "Your output: Please analyze the process() method in UserService.java, checking for potential issues including but not limited to: null pointer exception risks, resource leaks, thread safety concerns, performance bottlenecks, and provide improvement suggestions.";
+        "User input: Please optimize the following prompt:\\n\\nWhat's wrong with this code\\n\\n---\\n"
+        + "Below is the relevant context information:\\n\\n[User's Selected Code]\\n"
+        + "```java\\npublic void process() { ... }\\n```\\n\\n[Current File] UserService.java\\n"
+        + "[Language Type] java\n" +
+        "Your output: Please analyze the process() method in UserService.java, "
+        + "checking for potential issues including but not limited to: null pointer exception risks, "
+        + "resource leaks, thread safety concerns, performance bottlenecks, "
+        + "and provide improvement suggestions.";
 
     public PromptEnhancerHandler(HandlerContext context) {
         super(context);
