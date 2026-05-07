@@ -93,12 +93,12 @@ public class ProjectConfigHandler {
     }
 
     private boolean readBoolean(JsonObject json, String field, boolean defaultValue) {
-        if (json == null || !json.has(field) || json.get(field).isJsonNull()) return defaultValue;
+        if (json == null || !json.has(field) || json.get(field).isJsonNull()) { return defaultValue; }
         return json.get(field).getAsBoolean();
     }
 
     private String readString(JsonObject json, String field, String defaultValue) {
-        if (json == null || !json.has(field) || json.get(field).isJsonNull()) return defaultValue;
+        if (json == null || !json.has(field) || json.get(field).isJsonNull()) { return defaultValue; }
         return json.get(field).getAsString();
     }
 
@@ -455,7 +455,7 @@ public class ProjectConfigHandler {
     }
 
     private void saveSelectedCustomFont(VirtualFile file) {
-        if (file == null) return;
+        if (file == null) { return; }
         String path = file.getPath();
         FontConfigService.ValidationResult validation = FontConfigService.validateCustomUiFontFile(path);
         if (!validation.valid()) {
@@ -561,8 +561,8 @@ public class ProjectConfigHandler {
                         if (json.has("dateRange")) {
                             String dateRange = json.get("dateRange").getAsString();
                             long now = System.currentTimeMillis();
-                            if ("7d".equals(dateRange)) cutoffTime = now - 7L * 24 * 60 * 60 * 1000;
-                            else if ("30d".equals(dateRange)) cutoffTime = now - 30L * 24 * 60 * 60 * 1000;
+                            if ("7d".equals(dateRange)) { cutoffTime = now - 7L * 24 * 60 * 60 * 1000; }
+                            else if ("30d".equals(dateRange)) { cutoffTime = now - 30L * 24 * 60 * 60 * 1000; }
                         }
                     } catch (Exception e) {
                         projectPath = "current".equals(content) ? context.getProject().getBasePath() : content;

@@ -461,9 +461,9 @@ public class CodexProviderManager {
     public boolean isCodexCliLoginProviderActive() {
         try {
             JsonObject config = configReader.apply(null);
-            if (!config.has("codex")) return false;
+            if (!config.has("codex")) { return false; }
             JsonObject codex = config.getAsJsonObject("codex");
-            if (!codex.has("current")) return false;
+            if (!codex.has("current")) { return false; }
             return CODEX_CLI_LOGIN_PROVIDER_ID.equals(codex.get("current").getAsString())
                     && isCodexCliLoginAuthorized(config);
         } catch (Exception e) {

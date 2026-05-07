@@ -173,7 +173,7 @@ public class DetachedChatFrame extends JFrame {
      * Update the window colors to match the current IDE theme.
      */
     private void updateThemeColors() {
-        if (!isDisplayable()) return;
+        if (!isDisplayable()) { return; }
 
         Color bg = UIUtil.getPanelBackground();
         getContentPane().setBackground(bg);
@@ -337,7 +337,7 @@ public class DetachedChatFrame extends JFrame {
 
     @Override
     public void dispose() {
-        if (disposed) return;
+        if (disposed) { return; }
         disposed = true;
 
         LOG.info("[DetachedChatFrame] Disposing window: " + originalTabName);

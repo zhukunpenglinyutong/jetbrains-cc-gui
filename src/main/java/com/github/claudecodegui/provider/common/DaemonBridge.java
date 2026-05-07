@@ -298,7 +298,7 @@ public class DaemonBridge {
      * Ensure the daemon is running, starting it if necessary.
      */
     public boolean ensureRunning() {
-        if (isAlive()) return true;
+        if (isAlive()) { return true; }
         return start();
     }
 
@@ -420,7 +420,7 @@ public class DaemonBridge {
             while (isRunning.get()) {
                 try {
                     Thread.sleep(HEARTBEAT_INTERVAL_MS);
-                    if (!isAlive()) break;
+                    if (!isAlive()) { break; }
 
                     // Check if daemon is unresponsive (no heartbeat response for too long)
                     long currentTime = System.currentTimeMillis();
@@ -472,7 +472,7 @@ public class DaemonBridge {
 
         try {
             JsonElement element = JsonParser.parseString(trimmed);
-            if (!element.isJsonObject()) return;
+            if (!element.isJsonObject()) { return; }
             JsonObject obj = element.getAsJsonObject();
 
             // --- Daemon lifecycle events ---
@@ -498,11 +498,11 @@ public class DaemonBridge {
             }
 
             // --- Request-tagged output ---
-            if (!obj.has("id")) return;
+            if (!obj.has("id")) { return; }
             String id = obj.get("id").getAsString();
 
             // Skip heartbeat responses
-            if (id.startsWith("hb-")) return;
+            if (id.startsWith("hb-")) { return; }
 
             RequestHandler handler = pendingRequests.get(id);
             if (handler == null) {
@@ -601,7 +601,7 @@ public class DaemonBridge {
     // =========================================================================
 
     private void handleDaemonDeath() {
-        if (!isRunning.compareAndSet(true, false)) return;
+        if (!isRunning.compareAndSet(true, false)) { return; }
 
         LOG.warn("[DaemonBridge] Daemon process died");
 
@@ -664,7 +664,7 @@ public class DaemonBridge {
      * avoid memory leaks.
      */
     public void addEventListener(DaemonEventListener listener) {
-        if (listener == null) return;
+        if (listener == null) { return; }
         eventListeners.add(listener);
     }
 
@@ -672,7 +672,7 @@ public class DaemonBridge {
      * Remove a previously registered listener. No-op if not registered.
      */
     public void removeEventListener(DaemonEventListener listener) {
-        if (listener == null) return;
+        if (listener == null) { return; }
         eventListeners.remove(listener);
     }
 

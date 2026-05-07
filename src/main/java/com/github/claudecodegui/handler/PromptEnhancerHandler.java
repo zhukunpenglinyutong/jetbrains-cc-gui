@@ -307,7 +307,7 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
      * @return language type name
      */
     private String getLanguageFromExtension(String extension) {
-        if (extension == null) return "text";
+        if (extension == null) { return "text"; }
 
         switch (extension.toLowerCase()) {
             case "java": return "java";

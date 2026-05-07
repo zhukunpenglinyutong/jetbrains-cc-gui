@@ -101,10 +101,10 @@ public class RunConfigMonitorService implements ProjectActivity {
     }
 
     private void attachContentListener(ToolWindow toolWindow, String windowName) {
-        if (toolWindow == null) return;
+        if (toolWindow == null) { return; }
 
         ContentManager contentManager = toolWindow.getContentManager();
-        if (contentManager == null) return;
+        if (contentManager == null) { return; }
 
         // Check if already attached
         if (attachedManagers.contains(contentManager)) {
@@ -225,7 +225,7 @@ public class RunConfigMonitorService implements ProjectActivity {
         List<RunConfigInfo> configs = new ArrayList<>();
         try {
             RunContentManager runContentManager = RunContentManager.getInstance(project);
-            if (runContentManager == null) return configs;
+            if (runContentManager == null) { return configs; }
 
             List<RunContentDescriptor> descriptors = runContentManager.getAllDescriptors();
             for (RunContentDescriptor descriptor : descriptors) {

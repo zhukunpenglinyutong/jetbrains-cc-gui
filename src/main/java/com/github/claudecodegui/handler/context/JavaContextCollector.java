@@ -74,11 +74,11 @@ public class JavaContextCollector {
             PsiClass cls = getContainingClass(psiFile, offset);
             if (cls != null) {
                 JsonObject hierarchy = getClassHierarchy(cls);
-                if (hierarchy.size() > 0) semanticData.add("classHierarchy", hierarchy);
+                if (hierarchy.size() > 0) { semanticData.add("classHierarchy", hierarchy); }
                 JsonArray fields = getClassFields(cls);
-                if (fields.size() > 0) semanticData.add("fields", fields);
+                if (fields.size() > 0) { semanticData.add("fields", fields); }
                 JsonArray annotations = getAnnotations(cls);
-                if (annotations.size() > 0) semanticData.add("annotations", annotations);
+                if (annotations.size() > 0) { semanticData.add("annotations", annotations); }
             }
         } catch (Throwable t) {
             LOG.debug("Failed to collect class info: " + t.getMessage());
@@ -185,7 +185,7 @@ public class JavaContextCollector {
             sig.append(method.getName()).append("(");
             PsiParameter[] params = method.getParameterList().getParameters();
             for (int i = 0; i < params.length; i++) {
-                if (i > 0) sig.append(", ");
+                if (i > 0) { sig.append(", "); }
                 sig.append(params[i].getType().getPresentableText());
             }
             sig.append(")");
@@ -199,7 +199,7 @@ public class JavaContextCollector {
     @Nullable
     private static PsiClass getContainingClass(PsiFile psiFile, int offset) {
         PsiElement element = psiFile.findElementAt(offset);
-        if (element == null) return null;
+        if (element == null) { return null; }
         return PsiTreeUtil.getParentOfType(element, PsiClass.class);
     }
 
@@ -254,7 +254,7 @@ public class JavaContextCollector {
     private static JsonArray getMethodCalls(PsiFile psiFile, int offset) {
         JsonArray calls = new JsonArray();
         PsiElement element = psiFile.findElementAt(offset);
-        if (element == null) return calls;
+        if (element == null) { return calls; }
 
         PsiMethod containingMethod = PsiTreeUtil.getParentOfType(element, PsiMethod.class);
         PsiElement scope = containingMethod != null ? containingMethod : psiFile;
@@ -262,7 +262,7 @@ public class JavaContextCollector {
         Collection<PsiMethodCallExpression> methodCalls = PsiTreeUtil.findChildrenOfType(scope, PsiMethodCallExpression.class);
         for (PsiMethodCallExpression call : methodCalls) {
             PsiMethod resolved = call.resolveMethod();
-            if (resolved == null) continue;
+            if (resolved == null) { continue; }
 
             JsonObject info = new JsonObject();
             info.addProperty("name", resolved.getName());
@@ -282,7 +282,7 @@ public class JavaContextCollector {
 
     private static JsonArray getImports(PsiFile psiFile) {
         JsonArray imports = new JsonArray();
-        if (!(psiFile instanceof PsiJavaFile)) return imports;
+        if (!(psiFile instanceof PsiJavaFile)) { return imports; }
 
         PsiJavaFile javaFile = (PsiJavaFile) psiFile;
         PsiImportList importList = javaFile.getImportList();
@@ -307,7 +307,7 @@ public class JavaContextCollector {
     private static JsonArray getReferences(PsiFile psiFile, int start, int end) {
         JsonArray refs = new JsonArray();
         PsiElement element = psiFile.findElementAt(start);
-        if (element == null) return refs;
+        if (element == null) { return refs; }
 
         Set<String> seen = new HashSet<>();
         collectReferences(element, refs, seen);
@@ -323,7 +323,7 @@ public class JavaContextCollector {
             if (resolved instanceof PsiNamedElement) {
                 PsiNamedElement named = (PsiNamedElement) resolved;
                 String name = named.getName();
-                if (name == null || seen.contains(name)) continue;
+                if (name == null || seen.contains(name)) { continue; }
 
                 JsonObject info = new JsonObject();
                 info.addProperty("name", name);
@@ -372,7 +372,7 @@ public class JavaContextCollector {
             int startOffset = selectionModel.hasSelection() ? selectionModel.getSelectionStart() : editor.getCaretModel().getOffset();
 
             PsiElement startElem = psiFile.findElementAt(startOffset);
-            if (startElem == null) return functions;
+            if (startElem == null) { return functions; }
 
             PsiMethod startMethod = PsiTreeUtil.getParentOfType(startElem, PsiMethod.class);
             if (startMethod != null) {
@@ -412,12 +412,12 @@ public class JavaContextCollector {
     private static JsonArray collectUsages(PsiFile psiFile, JsonArray functions, Project project, Editor editor) {
         JsonArray usages = new JsonArray();
         try {
-            if (functions == null || functions.size() == 0) return usages;
+            if (functions == null || functions.size() == 0) { return usages; }
 
             var firstFunction = functions.get(0);
-            if (firstFunction == null || !firstFunction.isJsonObject()) return usages;
+            if (firstFunction == null || !firstFunction.isJsonObject()) { return usages; }
             var nameElement = firstFunction.getAsJsonObject().get("name");
-            if (nameElement == null || nameElement.isJsonNull()) return usages;
+            if (nameElement == null || nameElement.isJsonNull()) { return usages; }
 
             int offset = editor.getCaretModel().getOffset();
             PsiElement element = psiFile.findElementAt(offset);
@@ -429,14 +429,14 @@ public class JavaContextCollector {
 
                 int count = 0;
                 for (PsiReference ref : query.findAll()) {
-                    if (count++ > MAX_USAGES_LIMIT) break;
+                    if (count++ > MAX_USAGES_LIMIT) { break; }
 
                     PsiElement refElem = ref.getElement();
                     PsiFile refFile = refElem.getContainingFile();
-                    if (refFile == null || refFile.equals(psiFile)) continue;
+                    if (refFile == null || refFile.equals(psiFile)) { continue; }
 
                     VirtualFile vRefFile = refFile.getVirtualFile();
-                    if (vRefFile == null) continue;
+                    if (vRefFile == null) { continue; }
 
                     JsonObject usage = new JsonObject();
                     usage.addProperty("file", formatPath(vRefFile.getPath()));
@@ -464,7 +464,7 @@ public class JavaContextCollector {
         JsonObject definitions = new JsonObject();
         try {
             PsiElement element = psiFile.findElementAt(offset);
-            if (element == null) return definitions;
+            if (element == null) { return definitions; }
 
             Set<PsiClass> classesToResolve = new HashSet<>();
 
@@ -496,8 +496,8 @@ public class JavaContextCollector {
             // 4. Limit results
             int count = 0;
             for (PsiClass cls : classesToResolve) {
-                if (count >= MAX_RELATED_DEFINITIONS) break;
-                if (definitions.has(cls.getQualifiedName())) continue;
+                if (count >= MAX_RELATED_DEFINITIONS) { break; }
+                if (definitions.has(cls.getQualifiedName())) { continue; }
 
                 JsonObject def = collectClassDetails(cls);
                 if (def.size() > 0) {
@@ -512,7 +512,7 @@ public class JavaContextCollector {
     }
 
     private static void addClassFromType(PsiType type, Set<PsiClass> classes, Project project) {
-        if (type == null) return;
+        if (type == null) { return; }
         PsiClass cls = com.intellij.psi.util.PsiUtil.resolveClassInType(type);
         if (cls != null && isProjectClass(cls, project)) {
             classes.add(cls);
@@ -521,9 +521,9 @@ public class JavaContextCollector {
 
     private static boolean isProjectClass(PsiClass cls, Project project) {
         PsiFile file = cls.getContainingFile();
-        if (file == null) return false;
+        if (file == null) { return false; }
         VirtualFile vFile = file.getVirtualFile();
-        if (vFile == null) return false;
+        if (vFile == null) { return false; }
         return com.intellij.openapi.roots.ProjectFileIndex.getInstance(project).isInContent(vFile);
     }
 
@@ -573,17 +573,17 @@ public class JavaContextCollector {
                     fields.add(sb.toString());
                 }
             }
-            if (fields.size() > 0) details.add("fields", fields);
+            if (fields.size() > 0) { details.add("fields", fields); }
 
             // Methods
             JsonArray methods = new JsonArray();
             for (PsiMethod m : cls.getMethods()) {
-                if (m.isConstructor()) continue;
+                if (m.isConstructor()) { continue; }
                 if (m.hasModifierProperty(PsiModifier.PUBLIC)) {
                     methods.add(getMethodSignature(m));
                 }
             }
-            if (methods.size() > 0) details.add("methods", methods);
+            if (methods.size() > 0) { details.add("methods", methods); }
 
         } catch (Exception e) {
             // Ignore individual class failures
@@ -592,7 +592,7 @@ public class JavaContextCollector {
     }
 
     private static String formatPath(String path) {
-        if (path == null) return null;
+        if (path == null) { return null; }
         if (System.getProperty("os.name").toLowerCase().contains("win")) {
             return path.replace('/', '\\');
         }

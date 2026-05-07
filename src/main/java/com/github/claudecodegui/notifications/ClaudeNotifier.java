@@ -155,7 +155,7 @@ public class ClaudeNotifier {
     }
 
     private static String formatTokenUsage(int used, int max) {
-        if (used == 0) return "";
+        if (used == 0) { return ""; }
         String usedStr = formatNumber(used);
         if (max > 0) {
             String maxStr = formatNumber(max);
@@ -167,27 +167,27 @@ public class ClaudeNotifier {
     public static void setModel(@NotNull Project project, String model) {
         ApplicationManager.getApplication().invokeLater(() -> {
             ClaudeStatusBarWidget widget = ClaudeStatusBarWidget.Factory.getWidget(project);
-            if (widget != null) widget.setModel(model);
+            if (widget != null) { widget.setModel(model); }
         });
     }
 
     public static void setMode(@NotNull Project project, String mode) {
         ApplicationManager.getApplication().invokeLater(() -> {
             ClaudeStatusBarWidget widget = ClaudeStatusBarWidget.Factory.getWidget(project);
-            if (widget != null) widget.setMode(mode);
+            if (widget != null) { widget.setMode(mode); }
         });
     }
 
     public static void setAgent(@NotNull Project project, String agent) {
         ApplicationManager.getApplication().invokeLater(() -> {
             ClaudeStatusBarWidget widget = ClaudeStatusBarWidget.Factory.getWidget(project);
-            if (widget != null) widget.setAgent(agent);
+            if (widget != null) { widget.setAgent(agent); }
         });
     }
 
     private static String formatNumber(int num) {
-        if (num < 1000) return String.valueOf(num);
-        if (num < 1000000) return String.format("%.1fk", num / 1000.0);
+        if (num < 1000) { return String.valueOf(num); }
+        if (num < 1000000) { return String.format("%.1fk", num / 1000.0); }
         return String.format("%.1fm", num / 1000000.0);
     }
 

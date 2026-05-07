@@ -124,7 +124,7 @@ class ClaudeUsageAggregator {
     }
 
     private String getProjectFolderName(String projectPath) {
-        if (projectPath == null) return "";
+        if (projectPath == null) { return ""; }
         return PathUtils.sanitizePath(projectPath);
     }
 
@@ -168,7 +168,7 @@ class ClaudeUsageAggregator {
 
             String line;
             while ((line = reader.readLine()) != null) {
-                if (line.trim().isEmpty()) continue;
+                if (line.trim().isEmpty()) { continue; }
 
                 try {
                     ClaudeHistoryReader.ConversationMessage msg = gson.fromJson(line, ClaudeHistoryReader.ConversationMessage.class);
@@ -181,7 +181,7 @@ class ClaudeUsageAggregator {
                         Map<String, Object> rawMap = gson.fromJson(line, Map.class);
                         if (rawMap.containsKey("summary")) {
                             Object s = rawMap.get("summary");
-                            if (s instanceof String) summary = (String) s;
+                            if (s instanceof String) { summary = (String) s; }
                         }
                     }
 
@@ -219,7 +219,7 @@ class ClaudeUsageAggregator {
 
             usage.totalTokens = usage.inputTokens + usage.outputTokens + usage.cacheWriteTokens + usage.cacheReadTokens;
 
-            if (usage.totalTokens == 0) return null;
+            if (usage.totalTokens == 0) { return null; }
 
             ClaudeHistoryReader.SessionSummary session = new ClaudeHistoryReader.SessionSummary();
             session.sessionId = filePath.getFileName().toString().replace(".jsonl", "");
@@ -316,7 +316,7 @@ class ClaudeUsageAggregator {
     }
 
     private double calculateTrend(double current, double last) {
-        if (last == 0) return 0;
+        if (last == 0) { return 0; }
         return ((current - last) / last) * 100;
     }
 }

@@ -205,7 +205,7 @@ public class FileHandler extends BaseMessageHandler {
      * Sort files.
      */
     private void sortFiles(List<JsonObject> files) {
-        if (files.isEmpty()) return;
+        if (files.isEmpty()) { return; }
 
         // 1. Wrap as SortItem, pre-read/compute sorting fields
         List<FileSortItem> items = new ArrayList<>(files.size());
@@ -227,10 +227,10 @@ public class FileHandler extends BaseMessageHandler {
 
             // Priority 3+: Sort by depth -> parent -> type -> name
             int depthDiff = a.getDepth() - b.getDepth();
-            if (depthDiff != 0) return depthDiff;
+            if (depthDiff != 0) { return depthDiff; }
 
             int parentDiff = a.getParentPath().compareToIgnoreCase(b.getParentPath());
-            if (parentDiff != 0) return parentDiff;
+            if (parentDiff != 0) { return parentDiff; }
 
             if (a.isDir != b.isDir) {
                 return a.isDir ? -1 : 1;
@@ -303,21 +303,21 @@ public class FileHandler extends BaseMessageHandler {
      */
     static void addVirtualFile(VirtualFile vf, String basePath, List<JsonObject> files, FileSet fileSet, FileListRequest request, int priority) {
         // Enhanced null safety checks
-        if (vf == null || !vf.isValid() || vf.isDirectory()) return;
+        if (vf == null || !vf.isValid() || vf.isDirectory()) { return; }
         if (basePath == null) {
             LOG.warn("[FileHandler] basePath is null in addVirtualFile, skipping file");
             return;
         }
 
         String name = vf.getName();
-        if (FileSystemCollector.shouldSkipInSearch(name, false)) return;
+        if (FileSystemCollector.shouldSkipInSearch(name, false)) { return; }
 
         String path = vf.getPath();
         if (path == null) {
             LOG.warn("[FileHandler] VirtualFile path is null for: " + name);
             return;
         }
-        if (!fileSet.tryAdd(path)) return;
+        if (!fileSet.tryAdd(path)) { return; }
 
         // Calculate relative path
         String relativePath = path;
@@ -356,7 +356,7 @@ public class FileHandler extends BaseMessageHandler {
         }
 
         boolean matches(String name, String relativePath) {
-            if (!hasQuery) return true;
+            if (!hasQuery) { return true; }
             String lowerName = name.toLowerCase();
             String lowerPath = relativePath.toLowerCase();
             return (lowerName.contains(queryLower) || lowerPath.contains(queryLower));

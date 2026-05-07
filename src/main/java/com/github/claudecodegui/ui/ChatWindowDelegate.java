@@ -306,7 +306,7 @@ public class ChatWindowDelegate {
     public void initializeStatusBar() {
         ApplicationManager.getApplication().invokeLater(() -> {
             Project project = host.getProject();
-            if (project == null || host.isDisposed()) return;
+            if (project == null || host.isDisposed()) { return; }
 
             ClaudeSession session = host.getSession();
             String mode = session != null ? session.getPermissionMode() : "default";

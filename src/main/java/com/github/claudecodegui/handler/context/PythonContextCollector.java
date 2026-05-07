@@ -56,7 +56,7 @@ public class PythonContextCollector {
     private static JsonObject getCurrentScope(PsiFile psiFile, int offset) {
         JsonObject scope = new JsonObject();
         PsiElement element = psiFile.findElementAt(offset);
-        if (element == null) return null;
+        if (element == null) { return null; }
 
         PyFunction pyFunction = PsiTreeUtil.getParentOfType(element, PyFunction.class);
         PyClass pyClass = PsiTreeUtil.getParentOfType(element, PyClass.class);

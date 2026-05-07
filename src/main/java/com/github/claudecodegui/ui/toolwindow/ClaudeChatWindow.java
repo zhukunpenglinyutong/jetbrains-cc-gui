@@ -466,7 +466,7 @@ public class ClaudeChatWindow {
                 StringBuilder argsJs = new StringBuilder();
                 if (args != null) {
                     for (int i = 0; i < args.length; i++) {
-                        if (i > 0) argsJs.append(", ");
+                        if (i > 0) { argsJs.append(", "); }
                         String arg = args[i] == null ? "" : args[i];
                         argsJs.append("'").append(arg).append("'");
                     }
@@ -499,7 +499,7 @@ public class ClaudeChatWindow {
 
                 StringBuilder logMessage = new StringBuilder("[Webview] ");
                 for (int i = 0; i < args.size(); i++) {
-                    if (i > 0) logMessage.append(" ");
+                    if (i > 0) { logMessage.append(" "); }
                     logMessage.append(args.get(i).toString());
                 }
 
@@ -674,7 +674,7 @@ public class ClaudeChatWindow {
     // ==================== Dispose ====================
 
     public synchronized void dispose() {
-        if (this.disposed) return;
+        if (this.disposed) { return; }
         this.disposed = true;
 
         chatWindowDelegate.dispose();
@@ -718,7 +718,7 @@ public class ClaudeChatWindow {
         ClaudeSDKToolWindow.unregisterWindow(project, this);
 
         try {
-            if (session != null) session.interrupt();
+            if (session != null) { session.interrupt(); }
         } catch (Exception e) {
             LOG.warn("Failed to clean up session: " + e.getMessage());
         }

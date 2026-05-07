@@ -127,7 +127,7 @@ final class BridgeArchiveLocator {
             int climbs = 0;
             while (climbs < 6) {
                 File parent = ancestor.getParentFile();
-                if (parent == null) break;
+                if (parent == null) { break; }
 
                 File maybeTopPlugins = new File(parent, "plugins");
                 if (maybeTopPlugins.exists() && maybeTopPlugins.isDirectory()) {

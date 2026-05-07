@@ -99,7 +99,7 @@ public class QuickFixService {
     private static void showDiffAndApply(Project project, Editor editor, String oldCode, String newCode, int startOffset, int endOffset) {
         Document document = editor.getDocument();
         VirtualFile file = FileDocumentManager.getInstance().getFile(document);
-        if (file == null) return;
+        if (file == null) { return; }
         
         String fileName = file.getName();
         FileType fileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName);
@@ -110,7 +110,7 @@ public class QuickFixService {
                              "Applying this will replace your entire file with just this snippet.\n\n" +
                              "Do you want to continue?";
             int answer = Messages.showYesNoDialog(project, message, "Warning: Possible Partial Response", Messages.getWarningIcon());
-            if (answer != Messages.YES) return;
+            if (answer != Messages.YES) { return; }
         }
 
         // Create Diff contents
