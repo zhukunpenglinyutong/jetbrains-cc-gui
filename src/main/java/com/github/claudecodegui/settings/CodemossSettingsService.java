@@ -1167,36 +1167,25 @@ public class CodemossSettingsService {
     /**
      * Get the task completion notification mode.
      *
-     * @return notification mode, defaults to ide-native
+     * @return notification mode, always returns ide-native
      */
     public String getTaskCompletionNotificationMode() throws IOException {
-        JsonObject config = readConfig();
-
-        if (config.has("taskCompletionNotificationMode") && !config.get("taskCompletionNotificationMode").isJsonNull()) {
-            return normalizeTaskCompletionNotificationMode(config.get("taskCompletionNotificationMode").getAsString());
-        }
-
+        // Always return ide-native since card mode has been removed
         return TASK_COMPLETION_NOTIFICATION_MODE_IDE_NATIVE;
     }
 
     /**
      * Set the task completion notification mode.
+     * Note: The 'card' mode has been removed, always defaults to 'ide-native'.
      *
-     * @param mode notification mode
+     * @param mode notification mode (ignored, always set to ide-native)
      */
     public void setTaskCompletionNotificationMode(String mode) throws IOException {
         JsonObject config = readConfig();
-        String normalizedMode = normalizeTaskCompletionNotificationMode(mode);
-        config.addProperty("taskCompletionNotificationMode", normalizedMode);
+        // Always use ide-native mode since card mode has been removed
+        config.addProperty("taskCompletionNotificationMode", TASK_COMPLETION_NOTIFICATION_MODE_IDE_NATIVE);
         writeConfig(config);
-        LOG.info("[CodemossSettings] Set task completion notification mode: " + normalizedMode);
-    }
-
-    private String normalizeTaskCompletionNotificationMode(String mode) {
-        if (TASK_COMPLETION_NOTIFICATION_MODE_CARD.equals(mode)) {
-            return TASK_COMPLETION_NOTIFICATION_MODE_CARD;
-        }
-        return TASK_COMPLETION_NOTIFICATION_MODE_IDE_NATIVE;
+        LOG.info("[CodemossSettings] Set task completion notification mode: " + TASK_COMPLETION_NOTIFICATION_MODE_IDE_NATIVE);
     }
 
     // ==================== AI Feature Toggle Management ====================

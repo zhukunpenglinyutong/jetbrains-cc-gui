@@ -1,76 +1,5 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import styles from './style.module.less';
 import { useTranslation } from 'react-i18next';
-
-/** Upward-opening custom select for sound selection (avoids JCEF clipping) */
-const SoundSelectUpward = ({
-  value,
-  onChange,
-  options,
-  onTestSound,
-  testSoundLabel,
-}: {
-  value: string;
-  onChange: (val: string) => void;
-  options: { value: string; label: string }[];
-  onTestSound: () => void;
-  testSoundLabel: string;
-}) => {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const selectedLabel = options.find((o) => o.value === value)?.label ?? value;
-
-  const handleClickOutside = useCallback((e: MouseEvent) => {
-    if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-      setOpen(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (open) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [open, handleClickOutside]);
-
-  return (
-    <div className={styles.soundSelectRow}>
-      <div className={styles.upwardSelect} ref={containerRef}>
-        <button
-          type="button"
-          className={`${styles.upwardSelectTrigger} ${open ? styles.open : ''}`}
-          onClick={() => setOpen((prev) => !prev)}
-        >
-          {selectedLabel}
-        </button>
-        {open && (
-          <div className={styles.upwardSelectDropdown}>
-            {options.map((opt) => (
-              <div
-                key={opt.value}
-                className={`${styles.upwardSelectOption} ${opt.value === value ? styles.selected : ''}`}
-                onClick={() => {
-                  onChange(opt.value);
-                  setOpen(false);
-                }}
-              >
-                {opt.label}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-      <button
-        className={styles.soundTestBtn}
-        onClick={onTestSound}
-        title={testSoundLabel}
-      >
-        <span className="codicon codicon-play" />
-      </button>
-    </div>
-  );
-};
 
 export interface BehaviorTabProps {
   sendShortcut?: 'enter' | 'cmdEnter';
@@ -87,21 +16,8 @@ export interface BehaviorTabProps {
   onStatusBarWidgetEnabledChange?: (enabled: boolean) => void;
   aiTitleGenerationEnabled?: boolean;
   onAiTitleGenerationEnabledChange?: (enabled: boolean) => void;
-  soundNotificationEnabled?: boolean;
-  onSoundNotificationEnabledChange?: (enabled: boolean) => void;
-  soundOnlyWhenUnfocused?: boolean;
-  onSoundOnlyWhenUnfocusedChange?: (enabled: boolean) => void;
-  selectedSound?: string;
-  onSelectedSoundChange?: (soundId: string) => void;
-  customSoundPath?: string;
-  onCustomSoundPathChange?: (path: string) => void;
-  onSaveCustomSoundPath?: () => void;
-  onTestSound?: () => void;
-  onBrowseSound?: () => void;
   taskCompletionNotificationEnabled?: boolean;
   onTaskCompletionNotificationEnabledChange?: (enabled: boolean) => void;
-  taskCompletionNotificationMode?: 'ide-native' | 'card';
-  onTaskCompletionNotificationModeChange?: (mode: 'ide-native' | 'card') => void;
 }
 
 const BehaviorTab = ({
@@ -119,32 +35,10 @@ const BehaviorTab = ({
   onStatusBarWidgetEnabledChange = () => {},
   aiTitleGenerationEnabled = true,
   onAiTitleGenerationEnabledChange = () => {},
-  soundNotificationEnabled = false,
-  onSoundNotificationEnabledChange = () => {},
-  soundOnlyWhenUnfocused = false,
-  onSoundOnlyWhenUnfocusedChange = () => {},
-  selectedSound = 'default',
-  onSelectedSoundChange = () => {},
-  customSoundPath = '',
-  onCustomSoundPathChange = () => {},
-  onSaveCustomSoundPath = () => {},
-  onTestSound = () => {},
-  onBrowseSound = () => {},
   taskCompletionNotificationEnabled = false,
   onTaskCompletionNotificationEnabledChange = () => {},
-  taskCompletionNotificationMode = 'ide-native',
-  onTaskCompletionNotificationModeChange = () => {},
 }: BehaviorTabProps) => {
   const { t } = useTranslation();
-
-  const soundOptions = useMemo(() => [
-    { value: 'default', label: t('settings.basic.soundNotification.soundDefault') },
-    { value: 'chime', label: t('settings.basic.soundNotification.soundChime') },
-    { value: 'bell', label: t('settings.basic.soundNotification.soundBell') },
-    { value: 'ding', label: t('settings.basic.soundNotification.soundDing') },
-    { value: 'success', label: t('settings.basic.soundNotification.soundSuccess') },
-    { value: 'custom', label: t('settings.basic.soundNotification.soundCustom') },
-  ], [t]);
 
   return (
     <div className={styles.tabContent}>
@@ -337,43 +231,6 @@ const BehaviorTab = ({
           <span className="codicon codicon-info" />
           <span>{t('settings.basic.taskCompletionNotification.hint')}</span>
         </small>
-        {taskCompletionNotificationEnabled && (
-          <div className={styles.themeGrid}>
-            <div
-              className={`${styles.themeCard} ${taskCompletionNotificationMode === 'ide-native' ? styles.active : ''}`}
-              onClick={() => onTaskCompletionNotificationModeChange('ide-native')}
-            >
-              {taskCompletionNotificationMode === 'ide-native' && (
-                <div className={styles.checkBadge}>
-                  <span className="codicon codicon-check" />
-                </div>
-              )}
-              <div className={styles.themeCardTitle}>
-                {t('settings.basic.taskCompletionNotification.mode.ideNative')}
-              </div>
-              <div className={styles.themeCardDesc}>
-                {t('settings.basic.taskCompletionNotification.mode.ideNativeDesc')}
-              </div>
-            </div>
-
-            <div
-              className={`${styles.themeCard} ${taskCompletionNotificationMode === 'card' ? styles.active : ''}`}
-              onClick={() => onTaskCompletionNotificationModeChange('card')}
-            >
-              {taskCompletionNotificationMode === 'card' && (
-                <div className={styles.checkBadge}>
-                  <span className="codicon codicon-check" />
-                </div>
-              )}
-              <div className={styles.themeCardTitle}>
-                {t('settings.basic.taskCompletionNotification.mode.card')}
-              </div>
-              <div className={styles.themeCardDesc}>
-                {t('settings.basic.taskCompletionNotification.mode.cardDesc')}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* AI session title generation toggle */}
@@ -400,108 +257,6 @@ const BehaviorTab = ({
           <span className="codicon codicon-info" />
           <span>{t('settings.other.aiTitleGeneration.hint')}</span>
         </small>
-      </div>
-
-      {/* Sound notification */}
-      <div className={styles.streamingSection}>
-        <div className={styles.fieldHeader}>
-          <span className="codicon codicon-unmute" />
-          <span className={styles.fieldLabel}>{t('settings.basic.soundNotification.label')}</span>
-        </div>
-        <label className={styles.toggleWrapper}>
-          <input
-            type="checkbox"
-            className={styles.toggleInput}
-            checked={soundNotificationEnabled}
-            onChange={(e) => onSoundNotificationEnabledChange(e.target.checked)}
-          />
-          <span className={styles.toggleSlider} />
-          <span className={styles.toggleLabel}>
-            {soundNotificationEnabled
-              ? t('settings.basic.soundNotification.enabled')
-              : t('settings.basic.soundNotification.disabled')}
-          </span>
-        </label>
-        <small className={styles.formHint}>
-          <span className="codicon codicon-info" />
-          <span>{t('settings.basic.soundNotification.hint')}</span>
-        </small>
-
-        {soundNotificationEnabled && (
-          <div className={styles.customSoundSection}>
-            <div className={styles.soundOnlyWhenUnfocusedSection}>
-              <div className={styles.fieldHeader}>
-                <span className="codicon codicon-eye-closed" />
-                <span className={styles.fieldLabel}>{t('settings.basic.soundNotification.onlyWhenUnfocused')}</span>
-              </div>
-              <label className={styles.toggleWrapper}>
-                <input
-                  type="checkbox"
-                  className={styles.toggleInput}
-                  checked={soundOnlyWhenUnfocused}
-                  onChange={(e) => onSoundOnlyWhenUnfocusedChange(e.target.checked)}
-                />
-                <span className={styles.toggleSlider} />
-                <span className={styles.toggleLabel}>
-                  {soundOnlyWhenUnfocused
-                    ? t('settings.basic.soundNotification.enabled')
-                    : t('settings.basic.soundNotification.disabled')}
-                </span>
-              </label>
-              <small className={styles.formHint}>
-                <span className="codicon codicon-info" />
-                <span>{t('settings.basic.soundNotification.onlyWhenUnfocusedHint')}</span>
-              </small>
-            </div>
-
-            <div className={styles.fieldHeader}>
-              <span className="codicon codicon-library" />
-              <span className={styles.fieldLabel}>{t('settings.basic.soundNotification.selectSound')}</span>
-            </div>
-            <SoundSelectUpward
-              value={selectedSound}
-              onChange={onSelectedSoundChange}
-              options={soundOptions}
-              onTestSound={onTestSound}
-              testSoundLabel={t('settings.basic.soundNotification.testSound')}
-            />
-
-            {selectedSound === 'custom' && (
-              <div className={styles.customSoundFileSection}>
-                <div className={styles.fieldHeader}>
-                  <span className="codicon codicon-file-media" />
-                  <span className={styles.fieldLabel}>{t('settings.basic.soundNotification.customSound')}</span>
-                </div>
-                <div className={styles.nodePathInputWrapper}>
-                  <input
-                    type="text"
-                    className={styles.nodePathInput}
-                    placeholder={t('settings.basic.soundNotification.customSoundPlaceholder')}
-                    value={customSoundPath}
-                    onChange={(e) => onCustomSoundPathChange(e.target.value)}
-                  />
-                  <button
-                    className={styles.saveBtn}
-                    onClick={onBrowseSound}
-                    title={t('settings.basic.soundNotification.browse')}
-                  >
-                    <span className="codicon codicon-folder-opened" />
-                  </button>
-                  <button
-                    className={styles.saveBtn}
-                    onClick={onSaveCustomSoundPath}
-                  >
-                    {t('common.save')}
-                  </button>
-                </div>
-                <small className={styles.formHint}>
-                  <span className="codicon codicon-info" />
-                  <span>{t('settings.basic.soundNotification.customSoundHint')}</span>
-                </small>
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

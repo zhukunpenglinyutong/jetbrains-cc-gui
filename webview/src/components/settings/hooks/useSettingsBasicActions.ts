@@ -52,17 +52,12 @@ export interface UseSettingsBasicActionsReturn {
   localAutoOpenFileEnabled: boolean;
   commitPrompt: string;
   savingCommitPrompt: boolean;
-  soundNotificationEnabled: boolean;
-  soundOnlyWhenUnfocused: boolean;
-  selectedSound: string;
-  customSoundPath: string;
   diffExpandedByDefault: boolean;
   historyCompletionEnabled: boolean;
   commitGenerationEnabled: boolean;
   aiTitleGenerationEnabled: boolean;
   statusBarWidgetEnabled: boolean;
   taskCompletionNotificationEnabled: boolean;
-  taskCompletionNotificationMode: 'ide-native' | 'card';
   commitAiConfig: CommitAiConfig;
   promptEnhancerConfig: PromptEnhancerConfig;
 
@@ -78,19 +73,11 @@ export interface UseSettingsBasicActionsReturn {
   handleCodexSandboxModeChange: (mode: 'workspace-write' | 'danger-full-access') => void;
   handleSendShortcutChange: (shortcut: 'enter' | 'cmdEnter') => void;
   handleAutoOpenFileEnabledChange: (enabled: boolean) => void;
-  handleSoundNotificationEnabledChange: (enabled: boolean) => void;
-  handleSoundOnlyWhenUnfocusedChange: (enabled: boolean) => void;
-  handleSelectedSoundChange: (soundId: string) => void;
-  handleCustomSoundPathChange: (path: string) => void;
-  handleSaveCustomSoundPath: () => void;
-  handleTestSound: () => void;
-  handleBrowseSound: () => void;
   handleSaveCommitPrompt: () => void;
   handleCommitGenerationEnabledChange: (enabled: boolean) => void;
   handleAiTitleGenerationEnabledChange: (enabled: boolean) => void;
   handleStatusBarWidgetEnabledChange: (enabled: boolean) => void;
   handleTaskCompletionNotificationEnabledChange: (enabled: boolean) => void;
-  handleTaskCompletionNotificationModeChange: (mode: 'ide-native' | 'card') => void;
   handleCommitAiProviderChange: (provider: CommitAiProvider) => void;
   handleCommitAiModelChange: (model: string) => void;
   handleCommitAiResetToDefault: () => void;
@@ -124,17 +111,12 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setLocalAutoOpenFileEnabled: (enabled: boolean) => void;
   /** @internal */ setCommitPrompt: (prompt: string) => void;
   /** @internal */ setSavingCommitPrompt: (saving: boolean) => void;
-  /** @internal */ setSoundNotificationEnabled: (enabled: boolean) => void;
-  /** @internal */ setSoundOnlyWhenUnfocused: (enabled: boolean) => void;
-  /** @internal */ setSelectedSound: (soundId: string) => void;
-  /** @internal */ setCustomSoundPath: (path: string) => void;
   /** @internal */ setDiffExpandedByDefault: (expanded: boolean) => void;
   /** @internal */ setHistoryCompletionEnabled: (enabled: boolean) => void;
   /** @internal */ setCommitGenerationEnabled: (enabled: boolean) => void;
   /** @internal */ setAiTitleGenerationEnabled: (enabled: boolean) => void;
   /** @internal */ setStatusBarWidgetEnabled: (enabled: boolean) => void;
   /** @internal */ setTaskCompletionNotificationEnabled: (enabled: boolean) => void;
-  /** @internal */ setTaskCompletionNotificationMode: (mode: 'ide-native' | 'card') => void;
   /** @internal */ setCommitAiConfig: (config: CommitAiConfig) => void;
   /** @internal */ setPromptEnhancerConfig: (config: PromptEnhancerConfig) => void;
 }
@@ -188,12 +170,6 @@ export function useSettingsBasicActions({
   const [commitPrompt, setCommitPrompt] = useState('');
   const [savingCommitPrompt, setSavingCommitPrompt] = useState(false);
 
-  // Sound notification configuration
-  const [soundNotificationEnabled, setSoundNotificationEnabled] = useState<boolean>(false);
-  const [soundOnlyWhenUnfocused, setSoundOnlyWhenUnfocused] = useState<boolean>(false);
-  const [selectedSound, setSelectedSound] = useState<string>('default');
-  const [customSoundPath, setCustomSoundPath] = useState<string>('');
-
   // Diff expanded by default configuration (localStorage-only)
   const [diffExpandedByDefault, setDiffExpandedByDefault] = useState<boolean>(() => {
     try {
@@ -220,7 +196,6 @@ export function useSettingsBasicActions({
 
   // Task completion notification toggle (default: false, opt-in feature)
   const [taskCompletionNotificationEnabled, setTaskCompletionNotificationEnabled] = useState<boolean>(false);
-  const [taskCompletionNotificationMode, setTaskCompletionNotificationMode] = useState<'ide-native' | 'card'>('ide-native');
 
   const [commitAiConfig, setCommitAiConfig] = useState<CommitAiConfig>(
     DEFAULT_COMMIT_AI_CONFIG
@@ -322,49 +297,6 @@ export function useSettingsBasicActions({
     }
   }, [onAutoOpenFileEnabledChangeProp]);
 
-  // Sound notification toggle change handler
-  const handleSoundNotificationEnabledChange = useCallback((enabled: boolean) => {
-    setSoundNotificationEnabled(enabled);
-    const payload = { enabled };
-    sendToJava(`set_sound_notification_enabled:${JSON.stringify(payload)}`);
-  }, []);
-
-  // Sound only-when-unfocused toggle change handler
-  const handleSoundOnlyWhenUnfocusedChange = useCallback((enabled: boolean) => {
-    setSoundOnlyWhenUnfocused(enabled);
-    const payload = { onlyWhenUnfocused: enabled };
-    sendToJava(`set_sound_only_when_unfocused:${JSON.stringify(payload)}`);
-  }, []);
-
-  // Selected sound change handler
-  const handleSelectedSoundChange = useCallback((soundId: string) => {
-    setSelectedSound(soundId);
-    const payload = { soundId };
-    sendToJava(`set_selected_sound:${JSON.stringify(payload)}`);
-  }, []);
-
-  // Custom sound path change handler
-  const handleCustomSoundPathChange = useCallback((path: string) => {
-    setCustomSoundPath(path);
-  }, []);
-
-  // Save custom sound path
-  const handleSaveCustomSoundPath = useCallback(() => {
-    const payload = { path: customSoundPath };
-    sendToJava(`set_custom_sound_path:${JSON.stringify(payload)}`);
-  }, [customSoundPath]);
-
-  // Test sound
-  const handleTestSound = useCallback(() => {
-    const payload = { soundId: selectedSound, path: customSoundPath };
-    sendToJava(`test_sound:${JSON.stringify(payload)}`);
-  }, [selectedSound, customSoundPath]);
-
-  // Browse sound file
-  const handleBrowseSound = useCallback(() => {
-    sendToJava('browse_sound_file:');
-  }, []);
-
   // AI commit generation toggle change handler
   const handleCommitGenerationEnabledChange = useCallback((enabled: boolean) => {
     setCommitGenerationEnabled(enabled);
@@ -391,12 +323,6 @@ export function useSettingsBasicActions({
     setTaskCompletionNotificationEnabled(enabled);
     const payload = { taskCompletionNotificationEnabled: enabled };
     sendToJava(`set_task_completion_notification_enabled:${JSON.stringify(payload)}`);
-  }, []);
-
-  const handleTaskCompletionNotificationModeChange = useCallback((mode: 'ide-native' | 'card') => {
-    setTaskCompletionNotificationMode(mode);
-    const payload = { taskCompletionNotificationMode: mode };
-    sendToJava(`set_task_completion_notification_mode:${JSON.stringify(payload)}`);
   }, []);
 
   const handleCommitAiProviderChange = useCallback((provider: CommitAiProvider) => {
@@ -536,14 +462,6 @@ export function useSettingsBasicActions({
     setCommitPrompt,
     savingCommitPrompt,
     setSavingCommitPrompt,
-    soundNotificationEnabled,
-    setSoundNotificationEnabled,
-    soundOnlyWhenUnfocused,
-    setSoundOnlyWhenUnfocused,
-    selectedSound,
-    setSelectedSound,
-    customSoundPath,
-    setCustomSoundPath,
     diffExpandedByDefault,
     setDiffExpandedByDefault,
     historyCompletionEnabled,
@@ -557,13 +475,6 @@ export function useSettingsBasicActions({
     handleCodexSandboxModeChange,
     handleSendShortcutChange,
     handleAutoOpenFileEnabledChange,
-    handleSoundNotificationEnabledChange,
-    handleSoundOnlyWhenUnfocusedChange,
-    handleSelectedSoundChange,
-    handleCustomSoundPathChange,
-    handleSaveCustomSoundPath,
-    handleTestSound,
-    handleBrowseSound,
     handleSaveCommitPrompt,
     commitGenerationEnabled,
     setCommitGenerationEnabled,
@@ -577,9 +488,6 @@ export function useSettingsBasicActions({
     taskCompletionNotificationEnabled,
     setTaskCompletionNotificationEnabled,
     handleTaskCompletionNotificationEnabledChange,
-    taskCompletionNotificationMode,
-    setTaskCompletionNotificationMode,
-    handleTaskCompletionNotificationModeChange,
     commitAiConfig,
     setCommitAiConfig,
     handleCommitAiProviderChange,
