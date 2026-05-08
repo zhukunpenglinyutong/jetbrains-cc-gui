@@ -196,7 +196,7 @@
         "hint": "활성화하면 AI 작업이 완료될 때 시스템 알림이 표시됩니다. 비활성화하면 알림이 표시되지 않습니다.",
         "mode": {
           "ideNative": "IDE 기본 알림",
-          "ideNativeDesc": "IntelliJ IDEA / WebStorm의 내장 알림 스타일을 사용합니다.",
+          "ideNativeDesc": "IntelliJ의 네이티브 알림 스타일을 사용합니다.",
           "card": "카드 알림",
           "cardDesc": "플러그인의 커스텀 카드 스타일 알림을 유지합니다."
         }
