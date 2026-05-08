@@ -212,7 +212,7 @@
         "hint": "When enabled, shows a system notification when AI task completes. When disabled, no notification appears.",
         "mode": {
           "ideNative": "IDE Native Notification",
-          "ideNativeDesc": "Use the built-in IntelliJ IDEA / WebStorm notification style.",
+          "ideNativeDesc": "Use IntelliJ's native notification style.",
           "card": "Card Notification",
           "cardDesc": "Keep the plugin's custom card-style notification."
         }
