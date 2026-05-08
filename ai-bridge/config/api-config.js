@@ -365,7 +365,15 @@ export function setupApiKey() {
 
   // HIGHEST PRIORITY: CLI login mode. When user explicitly opted in via plugin UI,
   // strictly use SDK native OAuth flow. No fallback to other auth methods.
-  const cliLoginAuthorized = settings?.env?.CCGUI_CLI_LOGIN_AUTHORIZED === '1';
+  //
+  // Source of truth: ~/.codemoss/config.json (claude.current === "__cli_login__"),
+  // surfaced by getClaudeRuntimeState() above. We deliberately do NOT consult
+  // ~/.claude/settings.json for this signal — that file is user-owned and must not
+  // be mutated by provider switches. The legacy CCGUI_CLI_LOGIN_AUTHORIZED env flag
+  // is honored as a fallback for users upgrading from versions that wrote it to
+  // settings.json, so they keep working until that residue is cleaned up.
+  const cliLoginAuthorized =
+    runtimeState.access === 'cli_login' || settings?.env?.CCGUI_CLI_LOGIN_AUTHORIZED === '1';
   if (cliLoginAuthorized) {
     debugLog('[INFO] CLI login authorized by user - delegating auth to Claude SDK native OAuth flow');
 

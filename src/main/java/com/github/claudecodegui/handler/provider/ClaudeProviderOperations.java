@@ -233,6 +233,24 @@ public class ClaudeProviderOperations {
             JsonObject data = GSON.fromJson(content, JsonObject.class);
             String id = data.get("id").getAsString();
 
+            // Shut down the Claude daemon before applying any provider switch.
+            //
+            // The daemon caches process.env (set once at boot by setupApiKey() reading
+            // ~/.codemoss/config.json) and the Agent SDK spawns its CLI subprocess at
+            // runtime-creation time, freezing whatever ANTHROPIC_API_KEY / OAuth state
+            // was active then. Live runtimes are reused across turns by signature, and
+            // that signature does NOT include auth state — so without a restart, the
+            // next message after a provider switch would silently keep using the old
+            // credential until the daemon idle-timed out (10 min – 6 hr).
+            //
+            // Killing the daemon here forces a fresh spawn on the next request, where
+            // setupApiKey() re-reads config.json and applies the new auth mode.
+            try {
+                context.getClaudeSDKBridge().shutdownDaemon();
+            } catch (Exception e) {
+                LOG.warn("[ProviderHandler] Failed to shut down Claude daemon during switch", e);
+            }
+
             if (ProviderManager.DISABLED_PROVIDER_ID.equals(id)) {
                 context.getSettingsService().deactivateClaudeProvider();
 
