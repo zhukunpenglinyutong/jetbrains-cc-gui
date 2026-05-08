@@ -1,6 +1,7 @@
 package com.github.claudecodegui.session;
 
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
+import com.github.claudecodegui.model.SessionTemplate;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.handler.core.HandlerContext;
@@ -146,6 +147,82 @@ public class SessionLifecycleManager {
                 host.callJavaScript("historyLoadComplete");
                 host.callJavaScript("updateStatus",
                         JsUtils.escapeJs("Failed to create new session: " + ex.getMessage()));
+            });
+            return null;
+        });
+    }
+
+    /**
+     * Create a new session from a template, interrupting the old one first.
+     */
+    public void createNewSessionFromTemplate(SessionTemplate template) {
+        LOG.info("Creating new session from template: " + template.name);
+
+        ClaudeSession oldSession = host.getSession();
+
+        host.invalidateSessionCallbacks();
+        host.getStreamCoalescer().resetStreamState();
+        host.callJavaScript("clearMessages");
+
+        CompletableFuture<Void> interruptFuture = oldSession != null
+                ? oldSession.interrupt()
+                : CompletableFuture.completedFuture(null);
+
+        interruptFuture.thenRun(() -> {
+            if (oldSession != null) {
+                host.getClaudeSDKBridge().resetPersistentRuntime(oldSession.getRuntimeSessionEpoch());
+                LOG.info("[Lifecycle] Requested daemon runtime reset for old epoch=" + oldSession.getRuntimeSessionEpoch());
+            }
+            LOG.info("Old session interrupted, creating new session from template");
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                host.callJavaScript("onStreamEnd");
+                host.callJavaScript("showLoading", "false");
+            });
+
+            host.clearPendingPermissionRequests();
+            host.clearPermissionDecisionMemory();
+
+            ClaudeSession newSession = new ClaudeSession(
+                    host.getProject(), host.getClaudeSDKBridge(), host.getCodexSDKBridge());
+
+            // Apply template settings
+            newSession.setPermissionMode(template.permissionMode != null ? template.permissionMode : "bypassPermissions");
+            newSession.setProvider(template.provider != null ? template.provider : "claude");
+            newSession.setModel(template.model != null ? template.model : "claude-sonnet-4-6");
+            newSession.setReasoningEffort(template.reasoningEffort != null ? template.reasoningEffort : "high");
+            newSession.setPsiContextEnabled(template.psiContextEnabled);
+
+            LOG.info("Applied template settings to new session: provider=" + template.provider
+                    + ", model=" + template.model + ", mode=" + template.permissionMode);
+
+            host.setSession(newSession);
+            host.getHandlerContext().setSession(newSession);
+            host.setupSessionCallbacks();
+
+            String workingDirectory = template.cwd != null && !template.cwd.trim().isEmpty()
+                    ? template.cwd : determineWorkingDirectory();
+            newSession.setSessionInfo(null, workingDirectory);
+            LOG.info("New session created from template successfully, working directory: " + workingDirectory
+                    + ", epoch=" + newSession.getRuntimeSessionEpoch());
+            host.getClaudeSDKBridge().prewarmDaemonAsync(workingDirectory, newSession.getRuntimeSessionEpoch());
+
+            // Push slash commands for the new session
+            fetchSlashCommandsOnStartup();
+
+            ApplicationManager.getApplication().invokeLater(() -> {
+                // Release the frontend session transition guard so updateMessages works again.
+                host.callJavaScript("historyLoadComplete");
+                host.callJavaScript("updateStatus",
+                        JsUtils.escapeJs(ClaudeCodeGuiBundle.message("toast.newSessionCreatedReady")));
+                resetTokenUsage();
+            });
+        }).exceptionally(ex -> {
+            LOG.error("Failed to create new session from template: " + ex.getMessage(), ex);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                host.callJavaScript("historyLoadComplete");
+                host.callJavaScript("updateStatus",
+                        JsUtils.escapeJs("Failed to create new session from template: " + ex.getMessage()));
             });
             return null;
         });

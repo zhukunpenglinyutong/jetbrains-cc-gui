@@ -13,6 +13,7 @@ English:
 - Restore persisted Codex session history on startup
 - Surface sponsor support and community recommendations in the community settings page
 - Keep SDK version updates reachable from JCEF-based settings UI
+- Add lightweight reusable session templates for creating pre-configured sessions
 
 🐛 Fixes
 - Fix startup crash on IDEs that lack the reworked terminal menu
@@ -44,6 +45,7 @@ English:
 - 启动时恢复 Codex 持久化会话历史
 - 在社区设置页面展示赞助商支持和社区推荐
 - JCEF 设置界面中保持 SDK 版本更新入口可达
+- 新增轻量级可重用会话模板，用于创建预配置会话
 
 🐛 Fixes
 - 修复缺少重构终端菜单的 IDE 上启动崩溃问题
