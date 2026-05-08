@@ -9,12 +9,33 @@
  */
 import { getWindowsPathConstraint } from '../utils/prompt-utils.js';
 
+const PROMPT_VALUE_MAX_LEN = 256;
+
+/**
+ * Reduce IDE-supplied strings (paths, names) to a single line and bounded
+ * length before splicing into the system prompt. Defends against prompt
+ * structure breakage from stray backticks, newlines or pathologically long
+ * values without changing the prompt for normal inputs.
+ *
+ * Replaces ASCII control chars (0x00-0x1F, 0x7F) and backticks with spaces,
+ * then collapses runs of whitespace.
+ */
+function sanitizePromptValue(value) {
+  if (value === null || value === undefined) return '';
+  let str = String(value);
+  str = str.replace(/[\x00-\x1F\x7F`]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (str.length > PROMPT_VALUE_MAX_LEN) {
+    str = str.slice(0, PROMPT_VALUE_MAX_LEN) + '...';
+  }
+  return str;
+}
+
 /**
  * Build the IDE context system prompt.
  *
  * This function constructs a detailed system prompt based on the user's working environment
- * in the IDE (open files, selected code, etc.), helping the AI understand the user's current
- * code context.
+ * in the IDE (open files, selected code, workspace structure, etc.), helping the AI understand
+ * the user's current code context.
  *
  * @param {Object} openedFiles - Information about files open in the IDE
  * @param {string} openedFiles.active - Path of the currently active file (may include line markers #LX-Y)
@@ -23,6 +44,11 @@ import { getWindowsPathConstraint } from '../utils/prompt-utils.js';
  * @param {number} openedFiles.selection.endLine - Ending line number of the selection
  * @param {string} openedFiles.selection.selectedText - Content of the selected code
  * @param {string[]} openedFiles.others - List of other open file paths
+ * @param {boolean} openedFiles.isWorkspace - Whether this is a multi-project workspace
+ * @param {string} openedFiles.workspaceRoot - Root path of the workspace
+ * @param {Array} openedFiles.subprojects - List of subprojects in the workspace
+ * @param {Array} openedFiles.modules - List of modules in the project
+ * @param {string} openedFiles.activeSubproject - Name of the subproject containing the active file
  * @param {string} agentPrompt - Agent prompt (optional)
  * @returns {string} The constructed system prompt, or an empty string if there's no valid information
  */
@@ -31,15 +57,15 @@ function buildIDEContextPrompt(openedFiles, agentPrompt = null) {
   let prompt = '';
 
   if (agentPrompt && typeof agentPrompt === 'string' && agentPrompt.trim() !== '') {
-    console.log('[Agent] ✓ buildIDEContextPrompt: Adding agent prompt to system context');
-    console.log('[Agent] ✓ Agent prompt preview:', agentPrompt.length > 100 ? agentPrompt.substring(0, 100) + '...' : agentPrompt);
+    console.log('[Agent] [OK] buildIDEContextPrompt: Adding agent prompt to system context');
+    console.log('[Agent] [OK] Agent prompt preview:', agentPrompt.length > 100 ? agentPrompt.substring(0, 100) + '...' : agentPrompt);
     prompt += '\n\n## Agent Role and Instructions\n\n';
     prompt += 'You are acting as a specialized agent with the following role and instructions:\n\n';
     prompt += agentPrompt.trim();
     prompt += '\n\n**IMPORTANT**: Follow the above role and instructions throughout this conversation.\n';
     prompt += '\n---\n';
   } else {
-    console.log('[Agent] ✗ buildIDEContextPrompt: No agent prompt provided');
+    console.log('[Agent] [SKIP] buildIDEContextPrompt: No agent prompt provided');
   }
 
   prompt += getWindowsPathConstraint({ extra: 'Apply this rule going forward, not just for this file.' });
@@ -49,28 +75,87 @@ function buildIDEContextPrompt(openedFiles, agentPrompt = null) {
     return prompt;
   }
 
-  const { active, selection, others } = openedFiles;
+  const { active, selection, others, isWorkspace, workspaceRoot, subprojects, modules, activeSubproject } = openedFiles;
   const hasActive = active && active.trim() !== '';
   const hasSelection = selection && selection.selectedText;
   const hasOthers = Array.isArray(others) && others.length > 0;
+  const hasWorkspace = !!isWorkspace;
+  const hasModules = Array.isArray(modules) && modules.length > 1;
 
   // If there's no valid information, return only the agent prompt (if any)
-  if (!hasActive && !hasOthers) {
+  if (!hasActive && !hasOthers && !hasWorkspace && !hasModules) {
     return prompt;
   }
 
   console.log('[SystemPrompts] Building IDE context prompt with active file:', active,
               'selection:', hasSelection ? 'yes' : 'no',
-              'other files:', others?.length || 0);
+              'other files:', others?.length || 0,
+              'workspace:', hasWorkspace ? 'yes' : 'no',
+              'modules:', modules?.length || 0);
 
   prompt += '\n\n## User\'s Current IDE Context\n\n';
   prompt += 'The user is working in an IDE. Below is their current workspace context, which provides critical information about what they are looking at and asking about:\n\n';
 
+  // Workspace/Multi-project context (highest priority for project structure understanding)
+  if (hasWorkspace) {
+    prompt += '### Multi-Project Workspace Structure\n\n';
+    prompt += 'You are working in a **multi-project workspace** environment. This is important for understanding project boundaries and dependencies:\n\n';
+
+    if (workspaceRoot) {
+      prompt += `**Workspace Root**: \`${sanitizePromptValue(workspaceRoot)}\`\n\n`;
+    }
+
+    if (Array.isArray(subprojects) && subprojects.length > 0) {
+      prompt += '**Subprojects in this workspace**:\n';
+      for (const sp of subprojects) {
+        const name = sanitizePromptValue(sp.name || 'unknown');
+        const path = sanitizePromptValue(sp.path || '');
+        const type = sanitizePromptValue(sp.type || '');
+        const loaded = sp.loaded !== false; // Default to true if not specified
+
+        prompt += `- **${name}**`;
+        if (type) {
+          prompt += ` (${type})`;
+        }
+        if (!loaded) {
+          prompt += ' [not loaded]';
+        }
+        prompt += `: \`${path}\`\n`;
+      }
+      prompt += '\n';
+    }
+
+    if (activeSubproject) {
+      prompt += `**Current Context**: The active file belongs to subproject **${sanitizePromptValue(activeSubproject)}**\n\n`;
+    }
+
+    prompt += '**Workspace Guidelines**:\n';
+    prompt += '- Each subproject may have its own build configuration, dependencies, and module structure\n';
+    prompt += '- When editing files, consider which subproject they belong to\n';
+    prompt += '- Cross-subproject references should be handled carefully (different package structures, etc.)\n';
+    prompt += '- Build commands should target the appropriate subproject\n\n';
+    prompt += '---\n\n';
+  } else if (hasModules) {
+    // Single project with multiple modules
+    prompt += '### Project Module Structure\n\n';
+    prompt += 'This project contains multiple modules:\n';
+    for (const mod of modules) {
+      const name = sanitizePromptValue(mod.name || 'unknown');
+      prompt += `- \`${name}\`\n`;
+    }
+    prompt += '\n**Note**: When editing files, consider which module they belong to and the module-specific configuration.\n\n';
+    prompt += '---\n\n';
+  }
+
   // Priority rules
   prompt += '**Context Priority Rules**:\n';
-  prompt += '1. If code is selected → That specific code is the PRIMARY SUBJECT of the question\n';
-  prompt += '2. If no code is selected → The currently active file is the PRIMARY SUBJECT\n';
-  prompt += '3. Other open files → Secondary context that MAY be relevant to the question\n\n';
+  prompt += '1. If code is selected -> That specific code is the PRIMARY SUBJECT of the question\n';
+  prompt += '2. If no code is selected -> The currently active file is the PRIMARY SUBJECT\n';
+  prompt += '3. Other open files -> Secondary context that MAY be relevant to the question\n';
+  if (hasWorkspace) {
+    prompt += '4. Workspace structure -> Helps understand project boundaries and dependencies\n';
+  }
+  prompt += '\n';
 
   // File path format explanation
   prompt += '**File Path Format**: Paths may include line references: `#LX-Y` (lines X to Y) or `#LX` (single line X)\n\n';
@@ -79,7 +164,7 @@ function buildIDEContextPrompt(openedFiles, agentPrompt = null) {
   // Currently active file
   if (hasActive) {
     prompt += '### Currently Active File (User is viewing/editing this file)\n\n';
-    prompt += `**File**: \`${active}\`\n\n`;
+    prompt += `**File**: \`${sanitizePromptValue(active)}\`\n\n`;
 
     if (hasSelection) {
       // User has selected code
@@ -88,7 +173,7 @@ function buildIDEContextPrompt(openedFiles, agentPrompt = null) {
       prompt += selection.selectedText;
       prompt += '\n```\n\n';
       prompt += '**CRITICAL**: The selected code above is the PRIMARY FOCUS of the user\'s question.\n';
-      prompt += '- When the user asks vague questions like "what\'s wrong with this", "explain this", "how to improve" → They are referring to THIS SELECTED CODE\n';
+      prompt += '- When the user asks vague questions like "what\'s wrong with this", "explain this", "how to improve" -> They are referring to THIS SELECTED CODE\n';
       prompt += '- Your answer should directly address this specific code section\n';
       prompt += '- If you need to reference other parts of the file or other files, do so as supporting context, but keep the selected code as your main focus\n\n';
     } else {
@@ -109,7 +194,7 @@ function buildIDEContextPrompt(openedFiles, agentPrompt = null) {
     prompt += '- Should be considered as supporting context, NOT the primary subject\n';
     prompt += '- Can be referenced if they help answer the question about the active file/selected code\n\n';
     others.forEach(file => {
-      prompt += `- \`${file}\`\n`;
+      prompt += `- \`${sanitizePromptValue(file)}\`\n`;
     });
     prompt += '\n**Note**: Only reference these files if they are directly relevant to answering the user\'s question about the active file or selected code.\n\n';
   }
@@ -118,9 +203,13 @@ function buildIDEContextPrompt(openedFiles, agentPrompt = null) {
   prompt += '---\n\n';
   prompt += '**How to use this context**:\n';
   prompt += '- If the user asks a vague question (e.g., "what does this do?", "is this correct?"), apply it to the PRIMARY FOCUS (selected code or active file)\n';
-  prompt += '- If the user mentions "this file", "this code", "here" → They mean the active file or selected code\n';
-  prompt += '- If the user asks about relationships or dependencies → Consider the other open files as potential references\n';
-  prompt += '- Always prioritize the selected code > active file > other files when determining what the user is asking about\n\n';
+  prompt += '- If the user mentions "this file", "this code", "here" -> They mean the active file or selected code\n';
+  prompt += '- If the user asks about relationships or dependencies -> Consider the other open files as potential references\n';
+  prompt += '- Always prioritize the selected code > active file > other files when determining what the user is asking about\n';
+  if (hasWorkspace) {
+    prompt += '- For build/run commands, target the appropriate subproject (ask if unclear)\n';
+  }
+  prompt += '\n';
 
   return prompt;
 }
@@ -130,6 +219,7 @@ function buildIDEContextPrompt(openedFiles, agentPrompt = null) {
  */
 export {
   buildIDEContextPrompt,
+  sanitizePromptValue,
   // Additional prompt building functions can be added here in the future
   // e.g.: buildErrorContextPrompt, buildDebugContextPrompt, etc.
 };

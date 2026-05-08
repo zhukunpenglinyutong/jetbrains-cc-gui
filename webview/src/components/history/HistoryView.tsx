@@ -1,46 +1,73 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { HistoryData, HistorySessionSummary } from '../../types';
 import VirtualList from './VirtualList';
-import { extractCommandMessageContent } from '../../utils/messageUtils';
 import { sendBridgeEvent } from '../../utils/bridge';
-import { ProviderModelIcon } from '../shared/ProviderModelIcon';
 import { copyToClipboard } from '../../utils/copyUtils';
+import { HistoryListItem, stopPropagationHandler } from './HistoryListItem';
+import { HistoryFilters } from './HistoryFilters';
+import { HistoryActions } from './HistoryActions';
 
 // Deep search timeout (milliseconds)
 const DEEP_SEARCH_TIMEOUT_MS = 30000;
+
+const ROOT_STYLE: React.CSSProperties = {
+  height: '100%',
+  display: 'flex',
+  flexDirection: 'column',
+};
+
+const LIST_WRAPPER_STYLE: React.CSSProperties = {
+  flex: 1,
+  overflow: 'hidden',
+};
+
+const SPINNER_STYLE: React.CSSProperties = {
+  width: '48px',
+  height: '48px',
+  margin: '0 auto 16px',
+  border: '4px solid rgba(133, 133, 133, 0.2)',
+  borderTop: '4px solid #858585',
+  borderRadius: '50%',
+  animation: 'spin 1s linear infinite',
+};
+
+const CENTER_BLOCK_STYLE: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
+
+const CENTER_BLOCK_FULL_HEIGHT_STYLE: React.CSSProperties = {
+  ...CENTER_BLOCK_STYLE,
+  height: '100%',
+};
+
+const EMPTY_TEXT_STYLE: React.CSSProperties = {
+  textAlign: 'center',
+  color: '#858585',
+};
+
+const EMPTY_ICON_STYLE: React.CSSProperties = {
+  fontSize: '48px',
+  marginBottom: '16px',
+};
+
+const EMPTY_HINT_STYLE: React.CSSProperties = {
+  fontSize: '12px',
+  marginTop: '8px',
+};
 
 interface HistoryViewProps {
   historyData: HistoryData | null;
   currentProvider?: string; // Current provider (claude or codex)
   onLoadSession: (sessionId: string) => void;
   onDeleteSession: (sessionId: string) => void; // Delete session callback
+  onDeleteSessions: (sessionIds: string[]) => void; // Batch delete sessions callback
   onExportSession: (sessionId: string, title: string) => void; // Export session callback
   onToggleFavorite: (sessionId: string) => void; // Toggle favorite callback
   onUpdateTitle: (sessionId: string, newTitle: string) => void; // Update title callback
 }
-
-const formatTimeAgo = (timestamp: string | undefined, t: (key: string) => string) => {
-  if (!timestamp) {
-    return '';
-  }
-  const seconds = Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000);
-  const units: [number, string][] = [
-    [31536000, t('history.timeAgo.yearsAgo')],
-    [2592000, t('history.timeAgo.monthsAgo')],
-    [86400, t('history.timeAgo.daysAgo')],
-    [3600, t('history.timeAgo.hoursAgo')],
-    [60, t('history.timeAgo.minutesAgo')],
-  ];
-
-  for (const [unitSeconds, label] of units) {
-    const interval = Math.floor(seconds / unitSeconds);
-    if (interval >= 1) {
-      return `${interval} ${label}`;
-    }
-  }
-  return `${Math.max(seconds, 1)} ${t('history.timeAgo.secondsAgo')}`;
-};
 
 const getComparableTimestamp = (timestamp: string | undefined) => {
   if (!timestamp) {
@@ -48,18 +75,6 @@ const getComparableTimestamp = (timestamp: string | undefined) => {
   }
   const value = new Date(timestamp).getTime();
   return Number.isNaN(value) ? 0 : value;
-};
-
-const formatFileSize = (bytes: number | undefined): { text: string; isMB: boolean } => {
-  if (!bytes || bytes === 0) {
-    return { text: '0 KB', isMB: false };
-  }
-  const kb = bytes / 1024;
-  if (kb < 1024) {
-    return { text: `${kb.toFixed(1)} KB`, isMB: false };
-  }
-  const mb = kb / 1024;
-  return { text: `${mb.toFixed(1)} MB`, isMB: true };
 };
 
 const deduplicateHistorySessions = (sessions: HistorySessionSummary[]) => {
@@ -94,7 +109,7 @@ const deduplicateHistorySessions = (sessions: HistorySessionSummary[]) => {
   return Array.from(deduplicated.values());
 };
 
-const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSession, onExportSession, onToggleFavorite, onUpdateTitle }: HistoryViewProps) => {
+const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSession, onDeleteSessions, onExportSession, onToggleFavorite, onUpdateTitle }: HistoryViewProps) => {
   const { t } = useTranslation();
   const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight || 600);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null); // Session ID pending deletion
@@ -200,84 +215,17 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
     });
   }, [sessions]);
 
-  if (!historyData) {
-    return (
-      <div className="messages-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ textAlign: 'center', color: '#858585' }}>
-          <div style={{
-            width: '48px',
-            height: '48px',
-            margin: '0 auto 16px',
-            border: '4px solid rgba(133, 133, 133, 0.2)',
-            borderTop: '4px solid #858585',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite'
-          }}></div>
-          <div>{t('history.loading')}</div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!historyData.success) {
-    return (
-      <div className="messages-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ textAlign: 'center', color: '#858585' }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
-          <div>{historyData.error ?? t('history.loadFailed')}</div>
-        </div>
-      </div>
-    );
-  }
-
-  // Render empty state (no search results or no sessions)
-  const renderEmptyState = () => {
-    // If search returned no results
-    if (searchQuery.trim() && sessions.length === 0) {
-      return (
-        <div className="messages-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-          <div style={{ textAlign: 'center', color: '#858585' }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔍</div>
-            <div>{t('history.noSearchResults')}</div>
-            <div style={{ fontSize: '12px', marginTop: '8px' }}>{t('history.tryOtherKeywords')}</div>
-          </div>
-        </div>
-      );
-    }
-
-    // If there are no sessions at all
-    if (!searchQuery.trim() && sessions.length === 0) {
-      return (
-        <div className="messages-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-          <div style={{ textAlign: 'center', color: '#858585' }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📭</div>
-            <div>{t('history.noSessions')}</div>
-            <div style={{ fontSize: '12px', marginTop: '8px' }}>{t('history.noSessionsDesc')}</div>
-          </div>
-        </div>
-      );
-    }
-
-    return null;
-  };
-
-  // Handle delete button click (stop event bubbling to avoid triggering session load)
-  const handleDeleteClick = (e: React.MouseEvent, sessionId: string) => {
-    e.stopPropagation(); // Prevent click event from bubbling to parent
-    setDeletingSessionId(sessionId); // Show confirmation dialog
-  };
-
-  const enterSelectionMode = () => {
+  const enterSelectionMode = useCallback(() => {
     setIsSelectionMode(true);
-  };
+  }, []);
 
-  const exitSelectionMode = () => {
+  const exitSelectionMode = useCallback(() => {
     setIsSelectionMode(false);
     setSelectedSessionIds(new Set());
     setIsDeletingSelected(false);
-  };
+  }, []);
 
-  const toggleSessionSelection = (sessionId: string) => {
+  const toggleSessionSelection = useCallback((sessionId: string) => {
     setSelectedSessionIds(prev => {
       const next = new Set(prev);
       if (next.has(sessionId)) {
@@ -287,67 +235,57 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
       }
       return next;
     });
-  };
+  }, []);
 
-  const handleSelectionCheckboxClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-  };
+  const toggleSelectAllVisible = useCallback(() => {
+    setSelectedSessionIds(prev => {
+      if (sessions.length > 0 && sessions.every(session => prev.has(session.sessionId))) {
+        return new Set();
+      }
+      return new Set(sessions.map(session => session.sessionId));
+    });
+  }, [sessions]);
 
-  const toggleSelectAllVisible = () => {
-    if (allVisibleSelected) {
-      setSelectedSessionIds(new Set());
-      return;
-    }
+  const handleDeleteRequest = useCallback((sessionId: string) => {
+    setDeletingSessionId(sessionId);
+  }, []);
 
-    setSelectedSessionIds(new Set(sessions.map(session => session.sessionId)));
-  };
-
-  // Handle export button click (stop event bubbling to avoid triggering session load)
-  const handleExportClick = (e: React.MouseEvent, sessionId: string, title: string) => {
-    e.stopPropagation(); // Prevent click event from bubbling to parent
+  const handleExportRequest = useCallback((sessionId: string, title: string) => {
     onExportSession(sessionId, title);
-  };
+  }, [onExportSession]);
 
-  // Handle favorite button click (stop event bubbling to avoid triggering session load)
-  const handleFavoriteClick = (e: React.MouseEvent, sessionId: string) => {
-    e.stopPropagation(); // Prevent click event from bubbling to parent
+  const handleFavoriteRequest = useCallback((sessionId: string) => {
     onToggleFavorite(sessionId);
-  };
+  }, [onToggleFavorite]);
 
-  // Confirm deletion
-  const confirmDelete = () => {
+  const confirmDelete = useCallback(() => {
     if (deletingSessionId) {
       onDeleteSession(deletingSessionId);
       setDeletingSessionId(null);
     }
-  };
+  }, [deletingSessionId, onDeleteSession]);
 
-  const confirmDeleteSelected = () => {
+  const confirmDeleteSelected = useCallback(() => {
     if (selectedSessionIds.size === 0) {
       setIsDeletingSelected(false);
       return;
     }
 
-    selectedSessionIds.forEach(sessionId => onDeleteSession(sessionId));
+    onDeleteSessions(Array.from(selectedSessionIds));
     exitSelectionMode();
-  };
+  }, [selectedSessionIds, onDeleteSessions, exitSelectionMode]);
 
-  // Cancel deletion
-  const cancelDelete = () => {
+  const cancelDelete = useCallback(() => {
     setDeletingSessionId(null);
-  };
+  }, []);
 
-  // Handle edit button click
-  const handleEditClick = (e: React.MouseEvent, sessionId: string, currentTitle: string) => {
-    e.stopPropagation(); // Prevent click event from bubbling to parent
+  const handleEditStart = useCallback((sessionId: string, currentTitle: string) => {
     setEditingSessionId(sessionId);
     setEditingTitle(currentTitle);
-  };
+  }, []);
 
-  // Save the edited title
-  const handleSaveTitle = (e: React.MouseEvent, sessionId: string) => {
-    e.stopPropagation();
-    const trimmedTitle = editingTitle.trim();
+  const handleEditSave = useCallback((sessionId: string, title: string) => {
+    const trimmedTitle = title.trim();
 
     if (!trimmedTitle) {
       return; // Title cannot be empty
@@ -357,25 +295,17 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
       return;
     }
 
-    // Call callback to update the title
     onUpdateTitle(sessionId, trimmedTitle);
-
-    // Exit edit mode
     setEditingSessionId(null);
     setEditingTitle('');
-  };
+  }, [onUpdateTitle]);
 
-  // Cancel editing
-  const handleCancelEdit = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleEditCancel = useCallback(() => {
     setEditingSessionId(null);
     setEditingTitle('');
-  };
+  }, []);
 
-  // Handle copy session ID
-  const handleCopySessionId = async (e: React.MouseEvent, sessionId: string) => {
-    e.stopPropagation(); // Prevent click event from bubbling to parent
-    // Clear previous timeout if exists (handles rapid clicking)
+  const handleCopySessionId = useCallback(async (sessionId: string) => {
     if (copyTimeoutRef.current) {
       clearTimeout(copyTimeoutRef.current);
       copyTimeoutRef.current = null;
@@ -388,229 +318,134 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
       setCopyFailedSessionId(sessionId);
       setCopiedSessionId(null);
     }
-    // Clear the status after 2 seconds
     copyTimeoutRef.current = setTimeout(() => {
       setCopiedSessionId(null);
       setCopyFailedSessionId(null);
       copyTimeoutRef.current = null;
     }, 2000);
-  };
+  }, []);
 
-  // Deep search: clear cache and reload history
-  const handleDeepSearch = () => {
-    if (isDeepSearching) return;
-
-    setIsDeepSearching(true);
-    sendBridgeEvent('deep_search_history', currentProvider || 'claude');
-
-    // Clear previous timeout if it exists
-    if (deepSearchTimeoutRef.current) {
-      clearTimeout(deepSearchTimeoutRef.current);
+  const handleItemClick = useCallback((session: HistorySessionSummary, isEditing: boolean) => {
+    if (isSelectionMode) {
+      toggleSessionSelection(session.sessionId);
+      return;
     }
-
-    // Set timeout to auto-recover state (prevent infinite loading on errors)
-    deepSearchTimeoutRef.current = setTimeout(() => {
-      setIsDeepSearching(false);
-      deepSearchTimeoutRef.current = null;
-    }, DEEP_SEARCH_TIMEOUT_MS);
-  };
-
-  // Highlight matching text
-  const highlightText = (text: string, query: string) => {
-    if (!query.trim()) {
-      return <span>{text}</span>;
+    if (!isEditing) {
+      onLoadSession(session.sessionId);
     }
+  }, [isSelectionMode, toggleSessionSelection, onLoadSession]);
 
-    const lowerText = text.toLowerCase();
-    const lowerQuery = query.toLowerCase();
-    const index = lowerText.indexOf(lowerQuery);
+  const handleDeepSearch = useCallback(() => {
+    setIsDeepSearching(prev => {
+      if (prev) return prev;
+      sendBridgeEvent('deep_search_history', currentProvider || 'claude');
 
-    if (index === -1) {
-      return <span>{text}</span>;
-    }
+      if (deepSearchTimeoutRef.current) {
+        clearTimeout(deepSearchTimeoutRef.current);
+      }
 
-    const before = text.slice(0, index);
-    const match = text.slice(index, index + query.length);
-    const after = text.slice(index + query.length);
+      deepSearchTimeoutRef.current = setTimeout(() => {
+        setIsDeepSearching(false);
+        deepSearchTimeoutRef.current = null;
+      }, DEEP_SEARCH_TIMEOUT_MS);
+      return true;
+    });
+  }, [currentProvider]);
 
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputValue(e.target.value);
+  }, []);
+
+  const handleStartDeleteSelected = useCallback(() => {
+    setIsDeletingSelected(true);
+  }, []);
+
+  const handleCancelDeleteSelected = useCallback(() => {
+    setIsDeletingSelected(false);
+  }, []);
+
+  if (!historyData) {
     return (
-      <span>
-        {before}
-        <mark style={{ backgroundColor: '#ffd700', color: '#000', padding: '0 2px' }}>{match}</mark>
-        {after}
-      </span>
-    );
-  };
-
-  const renderHistoryItem = (session: HistorySessionSummary) => {
-    const isEditing = editingSessionId === session.sessionId;
-    const isSelected = selectedSessionIds.has(session.sessionId);
-
-    return (
-      <div
-        key={`${session.sessionId}-${session.lastTimestamp ?? '0'}`}
-        className={`history-item ${isSelectionMode ? 'selection-mode' : ''} ${isSelected ? 'selected' : ''}`}
-        onClick={() => {
-          if (isSelectionMode) {
-            toggleSessionSelection(session.sessionId);
-            return;
-          }
-
-          if (!isEditing) {
-            onLoadSession(session.sessionId);
-          }
-        }}
-      >
-        <div className="history-item-header">
-          {isSelectionMode && (
-            <label
-              className="history-selection-checkbox-wrapper"
-              onClick={(e) => e.stopPropagation()}
-              title={t('history.selectSession')}
-            >
-              <input
-                type="checkbox"
-                className="history-selection-checkbox"
-                checked={isSelected}
-                onChange={() => toggleSessionSelection(session.sessionId)}
-                onClick={handleSelectionCheckboxClick}
-                aria-label={t('history.selectSessionWithTitle', { title: extractCommandMessageContent(session.title) })}
-              />
-            </label>
-          )}
-          <div className="history-item-title">
-            {/* Provider Logo */}
-            {session.provider && (
-              <span
-                className="history-provider-badge"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  marginRight: '8px',
-                  verticalAlign: 'middle'
-                }}
-                title={session.provider === 'claude' ? 'Claude' : 'Codex'}
-              >
-                <ProviderModelIcon providerId={session.provider} size={20} colored />
-              </span>
-            )}
-            {isEditing ? (
-              // Edit mode: show input and save/cancel buttons
-              <div className="history-title-edit-mode" onClick={(e) => e.stopPropagation()}>
-                <input
-                  type="text"
-                  className="history-title-input"
-                  value={editingTitle}
-                  onChange={(e) => setEditingTitle(e.target.value)}
-                  maxLength={50}
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      handleSaveTitle(e as any, session.sessionId);
-                    } else if (e.key === 'Escape') {
-                      handleCancelEdit(e as any);
-                    }
-                  }}
-                />
-                <button
-                  className="history-title-save-btn"
-                  onClick={(e) => handleSaveTitle(e, session.sessionId)}
-                  title={t('history.saveTitleButton')}
-                >
-                  <span className="codicon codicon-check"></span>
-                </button>
-                <button
-                  className="history-title-cancel-btn"
-                  onClick={(e) => handleCancelEdit(e)}
-                  title={t('history.cancelEditButton')}
-                >
-                  <span className="codicon codicon-close"></span>
-                </button>
-              </div>
-            ) : (
-              // Normal mode: show title (with highlight), extract <command-message> content
-              highlightText(extractCommandMessageContent(session.title), searchQuery)
-            )}
-          </div>
-          <div className="history-item-time">{formatTimeAgo(session.lastTimestamp, t)}</div>
-          {!isEditing && !isSelectionMode && (
-            <div className={`history-action-buttons ${session.isFavorited ? 'has-favorite' : ''}`}>
-              {/* Edit button */}
-              <button
-                className="history-edit-btn"
-                onClick={(e) => handleEditClick(e, session.sessionId, session.title)}
-                title={t('history.editTitle')}
-                aria-label={t('history.editTitle')}
-              >
-                <span className="codicon codicon-edit"></span>
-              </button>
-              {/* Export button */}
-              <button
-                className="history-export-btn"
-                onClick={(e) => handleExportClick(e, session.sessionId, session.title)}
-                title={t('history.exportSession')}
-                aria-label={t('history.exportSession')}
-              >
-                <span className="codicon codicon-arrow-down"></span>
-              </button>
-              {/* Delete button */}
-              <button
-                className="history-delete-btn"
-                onClick={(e) => handleDeleteClick(e, session.sessionId)}
-                title={t('history.deleteSession')}
-                aria-label={t('history.deleteSession')}
-              >
-                <span className="codicon codicon-trash"></span>
-              </button>
-              {/* Favorite button (放最后，确保已收藏时星标显示在右侧) */}
-              <button
-                className={`history-favorite-btn ${session.isFavorited ? 'favorited' : ''}`}
-                onClick={(e) => handleFavoriteClick(e, session.sessionId)}
-                title={session.isFavorited ? t('history.unfavoriteSession') : t('history.favoriteSession')}
-                aria-label={session.isFavorited ? t('history.unfavoriteSession') : t('history.favoriteSession')}
-              >
-                <span className={session.isFavorited ? 'codicon codicon-star-full' : 'codicon codicon-star-empty'}></span>
-              </button>
-            </div>
-          )}
-        </div>
-        <div className="history-item-meta">
-          <span>{t('history.messageCount', { count: session.messageCount })}</span>
-          {session.fileSize ? (() => {
-            const { text, isMB } = formatFileSize(session.fileSize);
-            return (
-              <>
-                <span className="history-meta-dot">•</span>
-                <span className={isMB ? 'history-filesize-large' : ''}>{text}</span>
-              </>
-            );
-          })() : null}
-          <span className="history-meta-dot">•</span>
-          <div className="history-session-id-container">
-            <span
-              className="history-session-id"
-              title={session.sessionId}
-            >
-              {session.sessionId.slice(0, 8)}
-            </span>
-            <button
-              className={`history-copy-id-btn ${copiedSessionId === session.sessionId ? 'copied' : ''} ${copyFailedSessionId === session.sessionId ? 'failed' : ''}`}
-              onClick={(e) => handleCopySessionId(e, session.sessionId)}
-              title={copiedSessionId === session.sessionId ? t('history.sessionIdCopied') : copyFailedSessionId === session.sessionId ? t('history.copyFailed') : t('history.copySessionId')}
-              aria-label={t('history.copySessionId')}
-            >
-              <span className={`codicon ${copiedSessionId === session.sessionId ? 'codicon-check' : copyFailedSessionId === session.sessionId ? 'codicon-error' : 'codicon-copy'}`}></span>
-            </button>
-          </div>
+      <div className="messages-container" style={CENTER_BLOCK_STYLE}>
+        <div style={EMPTY_TEXT_STYLE}>
+          <div style={SPINNER_STYLE}></div>
+          <div>{t('history.loading')}</div>
         </div>
       </div>
     );
+  }
+
+  if (!historyData.success) {
+    return (
+      <div className="messages-container" style={CENTER_BLOCK_STYLE}>
+        <div style={EMPTY_TEXT_STYLE}>
+          <div style={EMPTY_ICON_STYLE}>⚠️</div>
+          <div>{historyData.error ?? t('history.loadFailed')}</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Render empty state (no search results or no sessions)
+  const renderEmptyState = () => {
+    // If search returned no results
+    if (searchQuery.trim() && sessions.length === 0) {
+      return (
+        <div className="messages-container" style={CENTER_BLOCK_FULL_HEIGHT_STYLE}>
+          <div style={EMPTY_TEXT_STYLE}>
+            <div style={EMPTY_ICON_STYLE}>🔍</div>
+            <div>{t('history.noSearchResults')}</div>
+            <div style={EMPTY_HINT_STYLE}>{t('history.tryOtherKeywords')}</div>
+          </div>
+        </div>
+      );
+    }
+
+    // If there are no sessions at all
+    if (!searchQuery.trim() && sessions.length === 0) {
+      return (
+        <div className="messages-container" style={CENTER_BLOCK_FULL_HEIGHT_STYLE}>
+          <div style={EMPTY_TEXT_STYLE}>
+            <div style={EMPTY_ICON_STYLE}>📭</div>
+            <div>{t('history.noSessions')}</div>
+            <div style={EMPTY_HINT_STYLE}>{t('history.noSessionsDesc')}</div>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
   };
+
+  const renderHistoryItem = (session: HistorySessionSummary) => (
+    <HistoryListItem
+      key={`${session.sessionId}-${session.lastTimestamp ?? '0'}`}
+      session={session}
+      isEditing={editingSessionId === session.sessionId}
+      isSelected={selectedSessionIds.has(session.sessionId)}
+      isSelectionMode={isSelectionMode}
+      isCopied={copiedSessionId === session.sessionId}
+      isCopyFailed={copyFailedSessionId === session.sessionId}
+      editingTitle={editingSessionId === session.sessionId ? editingTitle : ''}
+      searchQuery={searchQuery}
+      t={t}
+      onItemClick={handleItemClick}
+      onSelectionToggle={toggleSessionSelection}
+      onEditStart={handleEditStart}
+      onEditSave={handleEditSave}
+      onEditCancel={handleEditCancel}
+      onEditTitleChange={setEditingTitle}
+      onExport={handleExportRequest}
+      onDelete={handleDeleteRequest}
+      onFavorite={handleFavoriteRequest}
+      onCopySessionId={handleCopySessionId}
+    />
+  );
 
   const listHeight = Math.max(240, viewportHeight - 118);
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div style={ROOT_STYLE}>
       <div className="history-header">
         <div className="history-header-main">
           {isSelectionMode ? (
@@ -620,78 +455,29 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
           ) : (
             <div className="history-info">{infoBar}</div>
           )}
-          <div className="history-header-actions">
-            {isSelectionMode ? (
-              <>
-                <button
-                  className="history-toolbar-btn"
-                  onClick={toggleSelectAllVisible}
-                  disabled={sessions.length === 0}
-                  title={allVisibleSelected ? t('history.clearSelection') : t('history.selectAll')}
-                  aria-label={allVisibleSelected ? t('history.clearSelection') : t('history.selectAll')}
-                >
-                  <span className={`codicon ${allVisibleSelected ? 'codicon-clear-all' : 'codicon-check-all'}`}></span>
-                  <span>{allVisibleSelected ? t('history.clearSelection') : t('history.selectAll')}</span>
-                </button>
-                <button
-                  className="history-toolbar-btn history-toolbar-danger"
-                  onClick={() => setIsDeletingSelected(true)}
-                  disabled={selectedCount === 0}
-                  title={t('history.deleteSelected')}
-                  aria-label={t('history.deleteSelected')}
-                >
-                  <span className="codicon codicon-trash"></span>
-                  <span>{t('history.deleteSelected')}</span>
-                </button>
-                <button
-                  className="history-toolbar-btn"
-                  onClick={exitSelectionMode}
-                  title={t('history.exitSelectMode')}
-                  aria-label={t('history.exitSelectMode')}
-                >
-                  <span className="codicon codicon-close"></span>
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  className="history-toolbar-btn"
-                  onClick={enterSelectionMode}
-                  title={t('history.selectMode')}
-                  aria-label={t('history.selectMode')}
-                >
-                  <span className="codicon codicon-checklist"></span>
-                  <span>{t('history.selectMode')}</span>
-                </button>
-                {/* Deep search button */}
-                <button
-                  className={`history-deep-search-btn ${isDeepSearching ? 'searching' : ''}`}
-                  onClick={handleDeepSearch}
-                  disabled={isDeepSearching}
-                  title={t('history.deepSearchTooltip')}
-                >
-                  <span className={`codicon ${isDeepSearching ? 'codicon-sync codicon-modifier-spin' : 'codicon-refresh'}`}></span>
-                </button>
-              </>
-            )}
-          </div>
+          <HistoryActions
+            isSelectionMode={isSelectionMode}
+            selectedCount={selectedCount}
+            visibleCount={sessions.length}
+            allVisibleSelected={allVisibleSelected}
+            isDeepSearching={isDeepSearching}
+            t={t}
+            onEnterSelectionMode={enterSelectionMode}
+            onExitSelectionMode={exitSelectionMode}
+            onToggleSelectAllVisible={toggleSelectAllVisible}
+            onStartDeleteSelected={handleStartDeleteSelected}
+            onDeepSearch={handleDeepSearch}
+          />
         </div>
         {!isSelectionMode && (
-          <div className="history-search-container">
-            <input
-              type="text"
-              className="history-search-input"
-              placeholder={t('history.searchPlaceholder')}
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-            />
-            <span
-              className="codicon codicon-search history-search-icon"
-            ></span>
-          </div>
+          <HistoryFilters
+            inputValue={inputValue}
+            onInputChange={handleInputChange}
+            t={t}
+          />
         )}
         </div>
-      <div style={{ flex: 1, overflow: 'hidden' }}>
+      <div style={LIST_WRAPPER_STYLE}>
         {sessions.length > 0 ? (
           <VirtualList
             items={sessions}
@@ -709,7 +495,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
       {/* Delete confirmation dialog */}
       {deletingSessionId && (
         <div className="modal-overlay" onClick={cancelDelete} role="presentation">
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content" onClick={stopPropagationHandler}>
             <h3>{t('history.confirmDelete')}</h3>
             <p>{t('history.deleteMessage')}</p>
             <div className="modal-actions">
@@ -725,12 +511,12 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
       )}
 
       {isDeletingSelected && (
-        <div className="modal-overlay" onClick={() => setIsDeletingSelected(false)} role="presentation">
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="delete-selected-title">
+        <div className="modal-overlay" onClick={handleCancelDeleteSelected} role="presentation">
+          <div className="modal-content" onClick={stopPropagationHandler} role="dialog" aria-modal="true" aria-labelledby="delete-selected-title">
             <h3 id="delete-selected-title">{t('history.confirmDeleteSelected')}</h3>
             <p>{t('history.deleteSelectedMessage', { count: selectedCount })}</p>
             <div className="modal-actions">
-              <button className="modal-btn modal-btn-cancel" onClick={() => setIsDeletingSelected(false)}>
+              <button className="modal-btn modal-btn-cancel" onClick={handleCancelDeleteSelected}>
                 {t('common.cancel')}
               </button>
               <button className="modal-btn modal-btn-danger" onClick={confirmDeleteSelected}>

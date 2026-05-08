@@ -195,27 +195,24 @@ public class ClaudeSettingsManager {
     }
 
     /**
-     * Apply CLI login mode to Claude settings.json.
-     * Sets CCGUI_CLI_LOGIN_AUTHORIZED=1 and removes explicit API keys
-     * so the Claude SDK falls through to its native OAuth auth flow.
+     * Apply CLI login mode.
+     *
+     * Historical behavior (REMOVED): this method used to write CCGUI_CLI_LOGIN_AUTHORIZED=1
+     * AND DELETE the user's ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN from
+     * ~/.claude/settings.json so that the Claude SDK would fall through to its native
+     * OAuth flow. That destructively wiped user-configured keys with no recovery path.
+     *
+     * Current behavior: this is a no-op. The single source of truth for CLI login mode
+     * is the plugin-owned ~/.codemoss/config.json (claude.current === "__cli_login__").
+     * The Node.js bridge reads that file via getClaudeRuntimeState() in api-config.js
+     * and clears process.env.ANTHROPIC_API_KEY at runtime — without ever touching
+     * the user's ~/.claude/settings.json.
+     *
+     * Kept as a no-op (rather than deleted) to preserve the call site in
+     * ClaudeProviderOperations.handleSwitchProvider for future hooks if needed.
      */
     public void applyCliLoginToClaudeSettings() throws IOException {
-        JsonObject settings = readClaudeSettings();
-
-        if (!settings.has("env") || settings.get("env").isJsonNull()) {
-            settings.add("env", new JsonObject());
-        }
-        JsonObject env = settings.getAsJsonObject("env");
-
-        // Set the authorization flag
-        env.addProperty("CCGUI_CLI_LOGIN_AUTHORIZED", "1");
-
-        // Remove explicit API keys so SDK uses native OAuth
-        env.remove("ANTHROPIC_API_KEY");
-        env.remove("ANTHROPIC_AUTH_TOKEN");
-
-        writeClaudeSettings(settings);
-        LOG.info("[ClaudeSettingsManager] Applied CLI login mode to settings.json");
+        LOG.info("[ClaudeSettingsManager] Switched to CLI login mode (settings.json untouched, API keys preserved)");
     }
 
     /**
@@ -255,8 +252,12 @@ public class ClaudeSettingsManager {
     }
 
     /**
-     * Remove CLI login authorization flag from Claude settings.json.
-     * Called when switching away from CLI login mode.
+     * Remove the legacy CCGUI_CLI_LOGIN_AUTHORIZED flag from settings.json if present.
+     *
+     * This flag is no longer written by the plugin (CLI login mode is tracked in
+     * ~/.codemoss/config.json), but earlier versions did write it. This method cleans
+     * up that residue when users switch away from CLI login mode, so the flag does
+     * not leak into other auth flows.
      */
     public void removeCliLoginFromClaudeSettings() throws IOException {
         JsonObject settings = readClaudeSettings();

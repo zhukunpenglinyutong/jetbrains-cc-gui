@@ -1,51 +1,36 @@
 package com.github.claudecodegui.bridge;
 
-import com.github.claudecodegui.util.PlatformUtils;
 import com.intellij.ide.plugins.IdeaPluginDescriptor;
-import com.intellij.ide.plugins.PluginManagerCore;
 import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.openapi.extensions.PluginId;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
-import com.intellij.openapi.util.io.FileUtil;
 import org.jetbrains.annotations.NotNull;
 
-import java.io.BufferedInputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.security.CodeSource;
-import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 
 /**
  * Bridge directory resolver.
  * Responsible for locating and managing the ai-bridge directory (unified bridge for Claude and Codex SDKs).
+ *
+ * <p>This class is the public facade. Path discovery, archive extraction, and
+ * signature verification are delegated to package-private helpers
+ * ({@link BridgePathLocator}, {@link BridgeArchiveExtractor},
+ * {@link BridgeSignatureVerifier}).
  */
 public class BridgeDirectoryResolver {
 
     private static final Logger LOG = Logger.getInstance(BridgeDirectoryResolver.class);
-    private static final String SDK_DIR_NAME = "ai-bridge";
-    private static final String NODE_SCRIPT = "channel-manager.js";
-    private static final String SDK_ARCHIVE_NAME = "ai-bridge.zip";
-    private static final String SDK_HASH_FILE_NAME = "ai-bridge.hash";
+    private static final String SDK_DIR_NAME = BridgePathLocator.SDK_DIR_NAME;
     private static final String BRIDGE_VERSION_FILE = ".bridge-version";
-    private static final String BRIDGE_PATH_PROPERTY = "claude.bridge.path";
-    private static final String BRIDGE_PATH_ENV = "CLAUDE_BRIDGE_PATH";
-    private static final String PLUGIN_DIR_NAME = "idea-claude-code-gui";
 
     private volatile File cachedSdkDir = null;
     /**
@@ -82,7 +67,7 @@ public class BridgeDirectoryResolver {
         }
 
         // Priority 1: Configured path
-        File configuredDir = resolveConfiguredBridgeDir();
+        File configuredDir = BridgePathLocator.resolveConfiguredBridgeDir();
         if (configuredDir != null) {
             LOG.debug("[BridgeResolver] Using configured path: " + configuredDir.getAbsolutePath());
             this.cachedSdkDir = configuredDir;
@@ -127,7 +112,7 @@ public class BridgeDirectoryResolver {
 
         // 1. Current working directory
         File currentDir = new File(System.getProperty("user.dir"));
-        addCandidate(possibleDirs, new File(currentDir, SDK_DIR_NAME));
+        BridgePathLocator.addCandidate(possibleDirs, new File(currentDir, SDK_DIR_NAME));
 
         // 2. Project root directory (the current directory may be in a subdirectory)
         File parent = currentDir.getParentFile();
@@ -135,22 +120,22 @@ public class BridgeDirectoryResolver {
             boolean hasIdeaDir = new File(parent, ".idea").exists();
             boolean hasBridgeDir = new File(parent, SDK_DIR_NAME).exists();
             if (hasIdeaDir || hasBridgeDir) {
-                addCandidate(possibleDirs, new File(parent, SDK_DIR_NAME));
+                BridgePathLocator.addCandidate(possibleDirs, new File(parent, SDK_DIR_NAME));
                 if (hasIdeaDir) {
                     break;
                 }
             }
-            if (isRootDirectory(parent)) {
+            if (BridgePathLocator.isRootDirectory(parent)) {
                 break;
             }
             parent = parent.getParentFile();
         }
 
         // 3. Plugin directory and sandbox
-        addPluginCandidates(possibleDirs);
+        BridgePathLocator.addPluginCandidates(possibleDirs);
 
         // 4. Infer from classpath
-        addClasspathCandidates(possibleDirs);
+        BridgePathLocator.addClasspathCandidates(possibleDirs);
 
         // Find the first valid directory
         for (File dir : possibleDirs) {
@@ -199,151 +184,12 @@ public class BridgeDirectoryResolver {
     }
 
     /**
-     * Resolve the configured bridge directory.
-     */
-    private File resolveConfiguredBridgeDir() {
-        File fromProperty = tryResolveConfiguredPath(
-            System.getProperty(BRIDGE_PATH_PROPERTY),
-            "system property " + BRIDGE_PATH_PROPERTY
-        );
-        if (fromProperty != null) {
-            return fromProperty;
-        }
-        return tryResolveConfiguredPath(
-            System.getenv(BRIDGE_PATH_ENV),
-            "environment variable " + BRIDGE_PATH_ENV
-        );
-    }
-
-    private File tryResolveConfiguredPath(String path, String source) {
-        if (path == null || path.trim().isEmpty()) {
-            return null;
-        }
-        File dir = new File(path.trim());
-        if (isValidBridgeDir(dir)) {
-            LOG.debug("[BridgeResolver] Using " + source + ": " + dir.getAbsolutePath());
-            return dir;
-        }
-        LOG.warn("[BridgeResolver] " + source + " points to invalid directory: " + dir.getAbsolutePath());
-        return null;
-    }
-
-    private void addPluginCandidates(List<File> possibleDirs) {
-        try {
-            PluginId pluginId = PluginId.getId(PlatformUtils.getPluginId());
-            IdeaPluginDescriptor descriptor = PluginManagerCore.getPlugin(pluginId);
-            if (descriptor != null) {
-                File pluginDir = descriptor.getPluginPath().toFile();
-                addCandidate(possibleDirs, new File(pluginDir, SDK_DIR_NAME));
-            }
-        } catch (Throwable t) {
-            LOG.debug("[BridgeResolver] Cannot infer from plugin descriptor: " + t.getMessage());
-        }
-
-        try {
-            String pluginsRoot = PathManager.getPluginsPath();
-            if (!pluginsRoot.isEmpty()) {
-                addCandidate(possibleDirs, Paths.get(pluginsRoot, PLUGIN_DIR_NAME, SDK_DIR_NAME).toFile());
-                addCandidate(possibleDirs, Paths.get(pluginsRoot, PlatformUtils.getPluginId(), SDK_DIR_NAME).toFile());
-            }
-
-            String systemPath = PathManager.getSystemPath();
-            if (!systemPath.isEmpty()) {
-                Path sandboxPath = Paths.get(systemPath, "plugins");
-                addCandidate(possibleDirs, sandboxPath.resolve(PLUGIN_DIR_NAME).resolve(SDK_DIR_NAME).toFile());
-                addCandidate(possibleDirs, sandboxPath.resolve(PlatformUtils.getPluginId()).resolve(SDK_DIR_NAME).toFile());
-            }
-        } catch (Throwable t) {
-            LOG.debug("[BridgeResolver] Cannot infer from plugin path: " + t.getMessage());
-        }
-    }
-
-    private void addClasspathCandidates(List<File> possibleDirs) {
-        try {
-            CodeSource codeSource = BridgeDirectoryResolver.class.getProtectionDomain().getCodeSource();
-            if (codeSource == null || codeSource.getLocation() == null) {
-                LOG.debug("[BridgeResolver] Cannot infer from classpath: CodeSource unavailable");
-                return;
-            }
-            File location = new File(codeSource.getLocation().toURI());
-            File classDir = location.getParentFile();
-            while (classDir != null && classDir.exists()) {
-                addCandidate(possibleDirs, new File(classDir, SDK_DIR_NAME));
-                String name = classDir.getName();
-                if (PLUGIN_DIR_NAME.equals(name) || PlatformUtils.getPluginId().equals(name)) {
-                    break;
-                }
-                if (isRootDirectory(classDir)) {
-                    break;
-                }
-                classDir = classDir.getParentFile();
-            }
-        } catch (Exception e) {
-            LOG.debug("[BridgeResolver] Cannot infer from classpath: " + e.getMessage());
-        }
-    }
-
-    /**
      * Validate whether a directory is a valid bridge directory.
-     * Checks for the existence of the core script and node_modules.
-     *
-     * Note: AI SDKs such as @anthropic-ai/claude-agent-sdk are not bundled in ai-bridge.
-     * They are loaded dynamically from ~/.codemoss/dependencies/, so SDK presence is not checked here.
+     * Delegates to {@link BridgePathLocator#isValidBridgeDir(File)} but kept on
+     * the facade because callers depend on this public method.
      */
     public boolean isValidBridgeDir(File dir) {
-        LOG.debug("[BridgeResolver] Validating bridge dir: " + (dir != null ? dir.getAbsolutePath() : "null"));
-        if (dir == null) {
-            LOG.debug("[BridgeResolver] Validation failed: dir is null");
-            return false;
-        }
-        if (!dir.exists()) {
-            LOG.debug("[BridgeResolver] Validation failed: dir does not exist");
-            return false;
-        }
-        if (!dir.isDirectory()) {
-            LOG.debug("[BridgeResolver] Validation failed: dir is not a directory");
-            return false;
-        }
-
-        // Check for the core script
-        File scriptFile = new File(dir, NODE_SCRIPT);
-        LOG.debug("[BridgeResolver] Checking for core script: " + scriptFile.getAbsolutePath());
-        if (!scriptFile.exists()) {
-            LOG.debug("[BridgeResolver] Validation failed: Core script not found: " + scriptFile.getAbsolutePath());
-            return false;
-        }
-        LOG.debug("[BridgeResolver] Core script found");
-
-        // Check that node_modules exists (contains bridge-layer dependencies like sql.js)
-        File nodeModules = new File(dir, "node_modules");
-        LOG.debug("[BridgeResolver] Checking for node_modules: " + nodeModules.getAbsolutePath());
-        if (!nodeModules.exists() || !nodeModules.isDirectory()) {
-            LOG.debug("[BridgeResolver] Validation failed: node_modules not found or not a directory");
-            return false;
-        }
-        LOG.debug("[BridgeResolver] node_modules found");
-
-        // AI SDKs (@anthropic-ai/claude-agent-sdk, @openai/codex-sdk, etc.)
-        // are loaded dynamically from ~/.codemoss/dependencies/, no need to check within ai-bridge
-
-        return true;
-    }
-
-    private void addCandidate(List<File> possibleDirs, File dir) {
-        if (dir == null) {
-            return;
-        }
-        String candidatePath = dir.getAbsolutePath();
-        for (File existing : possibleDirs) {
-            if (existing.getAbsolutePath().equals(candidatePath)) {
-                return;
-            }
-        }
-        possibleDirs.add(dir);
-    }
-
-    private boolean isRootDirectory(File dir) {
-        return dir.getParentFile() == null;
+        return BridgePathLocator.isValidBridgeDir(dir);
     }
 
     private File ensureEmbeddedBridgeExtracted() {
@@ -352,134 +198,32 @@ public class BridgeDirectoryResolver {
             LOG.info("[BridgeResolver] Current thread: " + Thread.currentThread().getName());
             LOG.info("[BridgeResolver] Is EDT: " + ApplicationManager.getApplication().isDispatchThread());
 
-            PluginId pluginId = PluginId.getId(PlatformUtils.getPluginId());
-            LOG.info("[BridgeResolver] Plugin ID: " + PlatformUtils.getPluginId());
-            IdeaPluginDescriptor descriptor = PluginManagerCore.getPlugin(pluginId);
+            IdeaPluginDescriptor descriptor = BridgeArchiveLocator.resolveDescriptor();
             if (descriptor == null) {
-                LOG.warn("[BridgeResolver] Cannot get plugin descriptor by PluginId: " + PlatformUtils.getPluginId());
-
-                // Try to find by iterating through all plugins
-                for (IdeaPluginDescriptor plugin : PluginManagerCore.getPlugins()) {
-                    String id = plugin.getPluginId().getIdString();
-                    String name = plugin.getName();
-                    // Match by plugin ID or name
-                    if (id.contains("claude") || id.contains("Claude") ||
-                        (name != null && (name.contains("Claude") || name.contains("claude")))) {
-                        LOG.debug("[BridgeResolver] Found candidate plugin: id=" + id + ", name=" + name + ", path=" + plugin.getPluginPath());
-                        File candidateDir = plugin.getPluginPath().toFile();
-                        File candidateArchive = new File(candidateDir, SDK_ARCHIVE_NAME);
-                        if (candidateArchive.exists()) {
-                            LOG.debug("[BridgeResolver] Found ai-bridge.zip in candidate plugin: " + candidateArchive.getAbsolutePath());
-                            descriptor = plugin;
-                            break;
-                        }
-                    }
-                }
-
-                if (descriptor == null) {
-                    LOG.debug("[BridgeResolver] Could not find plugin descriptor by any method");
-                    return null;
-                }
+                return null;
             }
 
             File pluginDir = descriptor.getPluginPath().toFile();
             LOG.info("[BridgeResolver] Plugin directory: " + pluginDir.getAbsolutePath());
             LOG.info("[BridgeResolver] Plugin directory exists: " + pluginDir.exists());
 
-            File archiveFile = new File(pluginDir, SDK_ARCHIVE_NAME);
-            LOG.info("[BridgeResolver] Looking for archive: " + archiveFile.getAbsolutePath());
-            LOG.info("[BridgeResolver] Archive exists: " + archiveFile.exists());
-            if (archiveFile.exists()) {
-                LOG.info("[BridgeResolver] Archive size: " + archiveFile.length() + " bytes");
-            }
-
-            if (!archiveFile.exists()) {
-                // Try searching in the lib directory
-                File libDir = new File(pluginDir, "lib");
-                if (libDir.exists()) {
-                    LOG.debug("[BridgeResolver] Checking lib directory: " + libDir.getAbsolutePath());
-                    File[] files = libDir.listFiles();
-                    if (files != null) {
-                        for (File f : files) {
-                            LOG.debug("[BridgeResolver]   - " + f.getName());
-                        }
-                    }
-                }
-
-                // If not found in plugin dir or lib, try common sandbox top-level plugins directories and plugins under system/config
-                List<File> fallbackCandidates = new ArrayList<>();
-                try {
-                    // Walk up ancestors to find a potential idea-sandbox root or top-level plugins directory
-                    File ancestor = pluginDir;
-                    int climbs = 0;
-                    while (climbs < 6) {
-                        File parent = ancestor.getParentFile();
-                        if (parent == null) break;
-
-                        File maybeTopPlugins = new File(parent, "plugins");
-                        if (maybeTopPlugins.exists() && maybeTopPlugins.isDirectory()) {
-                            fallbackCandidates.add(new File(maybeTopPlugins, PLUGIN_DIR_NAME + File.separator + SDK_ARCHIVE_NAME));
-                            fallbackCandidates.add(new File(maybeTopPlugins, PlatformUtils.getPluginId() + File.separator + SDK_ARCHIVE_NAME));
-                        }
-
-                        // system/config siblings under this parent
-                        File maybeSystemPlugins = new File(parent, "system/plugins");
-                        File maybeConfigPlugins = new File(parent, "config/plugins");
-                        if (maybeSystemPlugins.exists() && maybeSystemPlugins.isDirectory()) {
-                            fallbackCandidates.add(new File(maybeSystemPlugins, PLUGIN_DIR_NAME + File.separator + SDK_ARCHIVE_NAME));
-                            fallbackCandidates.add(new File(maybeSystemPlugins, PlatformUtils.getPluginId() + File.separator + SDK_ARCHIVE_NAME));
-                        }
-                        if (maybeConfigPlugins.exists() && maybeConfigPlugins.isDirectory()) {
-                            fallbackCandidates.add(new File(maybeConfigPlugins, PLUGIN_DIR_NAME + File.separator + SDK_ARCHIVE_NAME));
-                            fallbackCandidates.add(new File(maybeConfigPlugins, PlatformUtils.getPluginId() + File.separator + SDK_ARCHIVE_NAME));
-                        }
-
-                        ancestor = parent;
-                        climbs++;
-                    }
-                } catch (Throwable ignore) {
-                    // ignore fallback discovery errors
-                }
-
-                // Log and try these candidate paths
-                for (File f : fallbackCandidates) {
-                    LOG.debug("[BridgeResolver] Trying candidate path: " + f.getAbsolutePath() + " (exists: " + f.exists() + ")");
-                    if (f.exists()) {
-                        archiveFile = f;
-                        break;
-                    }
-                }
-
-                if (!archiveFile.exists()) {
-                    return null;
-                }
-
+            File archiveFile = BridgeArchiveLocator.locateArchive(pluginDir);
+            if (archiveFile == null) {
+                return null;
             }
 
             File extractedDir = new File(pluginDir, SDK_DIR_NAME);
             LOG.info("[BridgeResolver] Extracted dir path: " + extractedDir.getAbsolutePath());
             LOG.info("[BridgeResolver] Extracted dir exists: " + extractedDir.exists());
 
-            // Prefer precomputed hash file (generated at build time) to avoid runtime calculation overhead
-            // Note: hash file should be in the same directory as archiveFile
-            File archiveParentDir = archiveFile.getParentFile();
-            String archiveHash = readPrecomputedHash(archiveParentDir);
-            if (archiveHash == null) {
-                LOG.info("[BridgeResolver] Precomputed hash file not found, falling back to runtime calculation");
-                archiveHash = calculateFileHash(archiveFile);
-            }
-            if (archiveHash == null) {
-                LOG.warn("[BridgeResolver] Failed to calculate archive hash, falling back to version-based signature");
-                archiveHash = "unknown";
-            }
-            String signature = descriptor.getVersion() + ":" + archiveHash;
+            String signature = BridgeArchiveLocator.computeSignature(descriptor, archiveFile);
             LOG.info("[BridgeResolver] Expected signature: " + signature);
             File versionFile = new File(extractedDir, BRIDGE_VERSION_FILE);
             LOG.info("[BridgeResolver] Version file path: " + versionFile.getAbsolutePath());
             LOG.info("[BridgeResolver] Version file exists: " + versionFile.exists());
 
             boolean isValid = isValidBridgeDir(extractedDir);
-            boolean signatureMatches = bridgeSignatureMatches(versionFile, signature);
+            boolean signatureMatches = BridgeSignatureVerifier.bridgeSignatureMatches(versionFile, signature);
             LOG.info("[BridgeResolver] isValidBridgeDir: " + isValid);
             LOG.info("[BridgeResolver] signatureMatches: " + signatureMatches);
 
@@ -494,7 +238,7 @@ public class BridgeDirectoryResolver {
             }
 
             synchronized (this.bridgeExtractionLock) {
-                if (isValidBridgeDir(extractedDir) && bridgeSignatureMatches(versionFile, signature)) {
+                if (isValidBridgeDir(extractedDir) && BridgeSignatureVerifier.bridgeSignatureMatches(versionFile, signature)) {
                     this.cachedSdkDir = extractedDir;
                     // Ensure waiters are notified
                     this.extractionState.compareAndSet(ExtractionState.NOT_STARTED, ExtractionState.COMPLETED);
@@ -555,11 +299,26 @@ public class BridgeDirectoryResolver {
                     // Direct extraction on non-EDT thread
                     LOG.info("[BridgeResolver] Starting synchronous extraction on non-EDT thread");
                     try {
+                        // Skip deletion if the directory already passes validation with the
+                        // expected signature. This prevents two IDEA instances from deleting
+                        // each other's extracted files during concurrent startup.
+                        if (isValidBridgeDir(extractedDir) && BridgeSignatureVerifier.bridgeSignatureMatches(versionFile, signature)) {
+                            LOG.info("[BridgeResolver] Existing extraction is valid, skipping delete+extract");
+                            this.extractionState.set(ExtractionState.COMPLETED);
+                            this.cachedSdkDir = extractedDir;
+                            CompletableFuture<File> future = this.extractionFutureRef.get();
+                            if (future != null) {
+                                future.complete(extractedDir);
+                            }
+                            this.extractionReadyFuture.complete(true);
+                            return extractedDir;
+                        }
+
                         LOG.info("[BridgeResolver] Step 1: Deleting old directory if exists");
-                        deleteDirectory(extractedDir);
+                        BridgeArchiveExtractor.deleteDirectory(extractedDir);
 
                         LOG.info("[BridgeResolver] Step 2: Unzipping archive");
-                        unzipArchive(archiveFile, extractedDir);
+                        BridgeArchiveExtractor.unzipArchive(archiveFile, extractedDir);
                         LOG.info("[BridgeResolver] Unzip completed, extractedDir exists: " + extractedDir.exists());
 
                         LOG.info("[BridgeResolver] Step 3: Writing version file");
@@ -609,18 +368,6 @@ public class BridgeDirectoryResolver {
             LOG.error("[BridgeResolver] Auto-extraction of ai-bridge failed: " + e.getMessage());
         }
         return null;
-    }
-
-    private boolean bridgeSignatureMatches(File versionFile, String expectedSignature) {
-        if (versionFile == null || !versionFile.exists()) {
-            return false;
-        }
-        try {
-            String content = Files.readString(versionFile.toPath(), StandardCharsets.UTF_8).trim();
-            return expectedSignature.equals(content);
-        } catch (IOException e) {
-            return false;
-        }
     }
 
     /**
@@ -701,15 +448,32 @@ public class BridgeDirectoryResolver {
                     indicator.setText("Extracting ai-bridge.zip...");
 
                     try {
+                        // Skip deletion if the directory already passes validation with the
+                        // expected signature. This prevents two IDEA instances from deleting
+                        // each other's extracted files during concurrent startup.
+                        if (isValidBridgeDir(extractedDir) && BridgeSignatureVerifier.bridgeSignatureMatches(versionFile, signature)) {
+                            LOG.info("[BridgeResolver] Background: existing extraction is valid, skipping delete+extract");
+                            indicator.setFraction(1.0);
+                            indicator.setText("Using existing extraction");
+                            BridgeDirectoryResolver.this.extractionState.set(ExtractionState.COMPLETED);
+                            BridgeDirectoryResolver.this.cachedSdkDir = extractedDir;
+                            CompletableFuture<File> future = BridgeDirectoryResolver.this.extractionFutureRef.get();
+                            if (future != null) {
+                                future.complete(extractedDir);
+                            }
+                            BridgeDirectoryResolver.this.extractionReadyFuture.complete(true);
+                            return;
+                        }
+
                         // Delete old directory
                         indicator.setFraction(0.1);
                         indicator.setText("Cleaning old files...");
-                        deleteDirectory(extractedDir);
+                        BridgeArchiveExtractor.deleteDirectory(extractedDir);
 
                         // Extract archive
                         indicator.setFraction(0.2);
                         indicator.setText("Extracting archive...");
-                        unzipArchiveWithProgress(archiveFile, extractedDir, indicator);
+                        BridgeArchiveExtractor.unzipArchiveWithProgress(archiveFile, extractedDir, indicator);
 
                         // Write version file
                         indicator.setFraction(0.9);
@@ -782,210 +546,6 @@ public class BridgeDirectoryResolver {
                 future.completeExceptionally(e);
             }
             this.extractionReadyFuture.complete(false);
-        }
-    }
-
-    private void deleteDirectory(File dir) {
-        if (dir == null || !dir.exists()) {
-            return;
-        }
-        // Use retry mechanism for directory deletion to handle Windows file locking issues
-        if (!PlatformUtils.deleteDirectoryWithRetry(dir, 3)) {
-            // If retry fails, fall back to IntelliJ's FileUtil
-            if (!FileUtil.delete(dir)) {
-                LOG.warn("[BridgeResolver] Cannot delete directory: " + dir.getAbsolutePath());
-            }
-        }
-    }
-
-    private void unzipArchive(File archiveFile, File targetDir) throws IOException {
-        Files.createDirectories(targetDir.toPath());
-
-        // Try to use system unzip command to preserve permissions
-        if (trySystemUnzip(archiveFile, targetDir)) {
-            LOG.info("[BridgeResolver] Successfully extracted using system unzip command");
-            return;
-        }
-
-        // Fallback to Java ZipInputStream
-        LOG.warn("[BridgeResolver] System unzip not available, using Java ZipInputStream (permissions may be lost)");
-        unzipWithJava(archiveFile, targetDir);
-    }
-
-    /**
-     * Try to extract using system unzip command to preserve file permissions.
-     * Returns true if successful, false if unzip command is not available.
-     */
-    private boolean trySystemUnzip(File archiveFile, File targetDir) {
-        return executeSystemUnzip(archiveFile, targetDir, null);
-    }
-
-    /**
-     * Try to extract using system unzip command with progress updates.
-     */
-    private boolean trySystemUnzipWithProgress(File archiveFile, File targetDir, ProgressIndicator indicator) {
-        if (indicator != null) {
-            indicator.setText("Extracting with system unzip...");
-            indicator.setFraction(0.5);
-        }
-        boolean result = executeSystemUnzip(archiveFile, targetDir, indicator);
-        if (result && indicator != null) {
-            indicator.setFraction(0.9);
-        }
-        return result;
-    }
-
-    /**
-     * Core implementation for system unzip extraction.
-     * @param archiveFile The archive to extract
-     * @param targetDir The target directory
-     * @param indicator Optional progress indicator (can be null)
-     * @return true if extraction succeeded, false otherwise
-     */
-    private boolean executeSystemUnzip(File archiveFile, File targetDir, ProgressIndicator indicator) {
-        Process process = null;
-        try {
-            ProcessBuilder pb;
-            if (System.getProperty("os.name").toLowerCase().contains("windows")) {
-                // Windows: try to use tar command (available in Windows 10+)
-                pb = new ProcessBuilder("tar", "-xf", archiveFile.getAbsolutePath(), "-C", targetDir.getAbsolutePath());
-            } else {
-                // Unix/Linux/macOS: use unzip command
-                pb = new ProcessBuilder("unzip", "-o", "-q", archiveFile.getAbsolutePath(), "-d", targetDir.getAbsolutePath());
-            }
-
-            pb.redirectErrorStream(true);
-            process = pb.start();
-
-            // Read output to prevent blocking
-            try (java.io.BufferedReader reader = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(process.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    LOG.debug("[BridgeResolver] unzip: " + line);
-                }
-            }
-
-            // Add timeout (5 minutes) to prevent hanging
-            if (!process.waitFor(5, java.util.concurrent.TimeUnit.MINUTES)) {
-                LOG.warn("[BridgeResolver] Unzip process timeout, killing...");
-                process.destroyForcibly();
-                return false;
-            }
-
-            return process.exitValue() == 0;
-        } catch (Exception e) {
-            LOG.debug("[BridgeResolver] System unzip failed: " + e.getMessage());
-            return false;
-        } finally {
-            // Ensure process is destroyed if still alive
-            if (process != null && process.isAlive()) {
-                LOG.warn("[BridgeResolver] Forcibly destroying unzip process");
-                process.destroyForcibly();
-            }
-        }
-    }
-
-    /**
-     * Fallback extraction using Java ZipInputStream.
-     * Note: This method does not preserve Unix file permissions.
-     */
-    private void unzipWithJava(File archiveFile, File targetDir) throws IOException {
-        Path targetPath = targetDir.toPath();
-        byte[] buffer = new byte[8192];
-
-        try (ZipInputStream zis = new ZipInputStream(new BufferedInputStream(new FileInputStream(archiveFile)))) {
-            ZipEntry entry;
-            while ((entry = zis.getNextEntry()) != null) {
-                Path resolvedPath = targetPath.resolve(entry.getName()).normalize();
-                if (!resolvedPath.startsWith(targetPath)) {
-                    throw new IOException("Unsafe zip entry detected: " + entry.getName());
-                }
-
-                if (entry.isDirectory()) {
-                    Files.createDirectories(resolvedPath);
-                } else {
-                    Files.createDirectories(resolvedPath.getParent());
-                    try (FileOutputStream fos = new FileOutputStream(resolvedPath.toFile())) {
-                        int len;
-                        while ((len = zis.read(buffer)) > 0) {
-                            fos.write(buffer, 0, len);
-                        }
-                    }
-                }
-
-                zis.closeEntry();
-            }
-        }
-    }
-
-    /**
-     * Unzip archive with progress indicator support.
-     * This method counts total entries first, then updates progress during extraction.
-     */
-    private void unzipArchiveWithProgress(File archiveFile, File targetDir, ProgressIndicator indicator) throws IOException {
-        Files.createDirectories(targetDir.toPath());
-
-        // Try to use system unzip command first
-        if (trySystemUnzipWithProgress(archiveFile, targetDir, indicator)) {
-            LOG.info("[BridgeResolver] Successfully extracted using system unzip command");
-            return;
-        }
-
-        // Fallback to Java ZipInputStream
-        LOG.warn("[BridgeResolver] System unzip not available, using Java ZipInputStream (permissions may be lost)");
-        unzipWithJavaAndProgress(archiveFile, targetDir, indicator);
-    }
-
-    /**
-     * Fallback extraction with progress using Java ZipInputStream.
-     */
-    private void unzipWithJavaAndProgress(File archiveFile, File targetDir, ProgressIndicator indicator) throws IOException {
-        Path targetPath = targetDir.toPath();
-        byte[] buffer = new byte[8192];
-
-        // First pass: count total entries
-        int totalEntries = 0;
-        try (ZipInputStream zis = new ZipInputStream(new BufferedInputStream(new FileInputStream(archiveFile)))) {
-            while (zis.getNextEntry() != null) {
-                totalEntries++;
-                zis.closeEntry();
-            }
-        }
-
-        LOG.info("[BridgeResolver] Total entries to extract: " + totalEntries);
-
-        // Second pass: extract with progress
-        try (ZipInputStream zis = new ZipInputStream(new BufferedInputStream(new FileInputStream(archiveFile)))) {
-            ZipEntry entry;
-            int processedEntries = 0;
-
-            while ((entry = zis.getNextEntry()) != null) {
-                Path resolvedPath = targetPath.resolve(entry.getName()).normalize();
-                if (!resolvedPath.startsWith(targetPath)) {
-                    throw new IOException("Unsafe zip entry detected: " + entry.getName());
-                }
-
-                if (entry.isDirectory()) {
-                    Files.createDirectories(resolvedPath);
-                } else {
-                    Files.createDirectories(resolvedPath.getParent());
-                    try (FileOutputStream fos = new FileOutputStream(resolvedPath.toFile())) {
-                        int len;
-                        while ((len = zis.read(buffer)) > 0) {
-                            fos.write(buffer, 0, len);
-                        }
-                    }
-                }
-
-                zis.closeEntry();
-                processedEntries++;
-
-                // Update progress (0.2 to 0.9 range allocated for extraction)
-                double progress = 0.2 + (0.7 * processedEntries / totalEntries);
-                indicator.setFraction(progress);
-                indicator.setText("Extracting: " + entry.getName() + " (" + processedEntries + "/" + totalEntries + ")");
-            }
         }
     }
 
@@ -1067,76 +627,4 @@ public class BridgeDirectoryResolver {
     public boolean isExtractionInProgress() {
         return this.extractionState.get() == ExtractionState.IN_PROGRESS;
     }
-
-    /**
-     * Read precomputed hash from ai-bridge.hash file (generated at build time).
-     * This avoids expensive runtime hash calculation.
-     *
-     * @param pluginDir The plugin directory containing ai-bridge.hash
-     * @return The hash string, or null if file doesn't exist or read fails
-     */
-    private String readPrecomputedHash(File pluginDir) {
-        File hashFile = new File(pluginDir, SDK_HASH_FILE_NAME);
-        if (!hashFile.exists()) {
-            LOG.debug("[BridgeResolver] Precomputed hash file not found: " + hashFile.getAbsolutePath());
-            return null;
-        }
-
-        try {
-            String hash = Files.readString(hashFile.toPath(), StandardCharsets.UTF_8).trim();
-            if (hash.isEmpty()) {
-                LOG.warn("[BridgeResolver] Precomputed hash file is empty");
-                return null;
-            }
-            LOG.debug("[BridgeResolver] Using precomputed hash: " + hash);
-            return hash;
-        } catch (IOException e) {
-            LOG.warn("[BridgeResolver] Failed to read precomputed hash: " + e.getMessage());
-            return null;
-        }
-    }
-
-    /**
-     * Calculate SHA-256 hash of a file.
-     * NOTE: This is a fallback method only used when precomputed hash file is missing.
-     * Prefer using readPrecomputedHash() when available.
-     *
-     * @param file The file to hash
-     * @return Hex string of the hash, or null if calculation fails
-     */
-    private String calculateFileHash(File file) {
-        if (file == null || !file.exists()) {
-            return null;
-        }
-
-        LOG.info("[BridgeResolver] Calculating archive hash at runtime (fallback mode)");
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] buffer = new byte[8192];
-
-            try (FileInputStream fis = new FileInputStream(file);
-                 BufferedInputStream bis = new BufferedInputStream(fis)) {
-                int bytesRead;
-                while ((bytesRead = bis.read(buffer)) != -1) {
-                    digest.update(buffer, 0, bytesRead);
-                }
-            }
-
-            byte[] hashBytes = digest.digest();
-            StringBuilder hexString = new StringBuilder();
-            for (byte b : hashBytes) {
-                String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) {
-                    hexString.append('0');
-                }
-                hexString.append(hex);
-            }
-
-            return hexString.toString();
-        } catch (Exception e) {
-            LOG.warn("[BridgeResolver] Failed to calculate file hash: " + e.getMessage());
-            return null;
-        }
-    }
 }
-

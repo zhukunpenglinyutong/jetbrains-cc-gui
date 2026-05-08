@@ -91,9 +91,17 @@
     margin-right: 8px;
 }
 
+/* Pending: render a rotating ring spinner instead of a solid pulsing dot,
+   so users immediately recognize "the tool is executing" rather than
+   misreading it as a static dot stuck at the bottom of the message list. */
 .tool-status-indicator.pending {
-    background-color: var(--color-warning);
-    animation: breathing 1.5s ease-in-out infinite;
+    width: 12px;
+    height: 12px;
+    background-color: transparent;
+    border: 2px solid var(--color-warning);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: tool-status-spin 0.85s linear infinite;
 }
 
 .tool-status-indicator.completed {
@@ -104,6 +112,12 @@
     background-color: var(--color-error);
 }
 
+@keyframes tool-status-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Legacy keyframe retained — referenced by .waiting-indicator and other
+   subtle-pulse callers; do not remove. */
 @keyframes breathing {
     0%, 100% {
         opacity: 1;

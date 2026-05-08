@@ -100,6 +100,8 @@ export function McpPresetDialog({ onClose, onSelect }: McpPresetDialogProps) {
     return iconColors[Math.abs(hash) % iconColors.length];
   };
 
+  const getIconStyle = (presetId: string): React.CSSProperties => ({ background: getIconColor(presetId) });
+
   const getServerType = (preset: McpPreset): string => {
     return preset.server.type || 'stdio';
   };
@@ -147,7 +149,7 @@ export function McpPresetDialog({ onClose, onSelect }: McpPresetDialogProps) {
                 className="preset-item"
                 onClick={() => handleSelect(preset)}
               >
-                <div className="preset-icon" style={{ background: getIconColor(preset.id) }}>
+                <div className="preset-icon" style={getIconStyle(preset.id)}>
                   {preset.name.charAt(0).toUpperCase()}
                 </div>
                 <div className="preset-info">

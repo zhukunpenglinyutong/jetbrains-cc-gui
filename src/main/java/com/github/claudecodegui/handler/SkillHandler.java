@@ -297,8 +297,8 @@ public class SkillHandler extends BaseMessageHandler {
      * This is a defense-in-depth check; individual service methods perform their own validation.
      */
     private static boolean isPathClean(String path) {
-        if (path == null || path.isEmpty()) return false;
-        if (path.contains("\0")) return false;
+        if (path == null || path.isEmpty()) { return false; }
+        if (path.contains("\0")) { return false; }
         try {
             Path original = Paths.get(path).toAbsolutePath();
             Path normalized = original.normalize();

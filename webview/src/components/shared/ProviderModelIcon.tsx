@@ -57,6 +57,21 @@ export interface ProviderModelIconProps {
   colored?: boolean;
 }
 
+function getXiaomiWrapperStyle(size: number): React.CSSProperties {
+  return {
+    alignItems: 'center',
+    background: '#000',
+    borderRadius: Math.max(3, Math.round(size * 0.22)),
+    color: '#fff',
+    display: 'inline-flex',
+    flex: 'none',
+    height: size,
+    justifyContent: 'center',
+    lineHeight: 1,
+    width: size,
+  };
+}
+
 const XiaomiMiMoIcon = (size: number, colored: boolean): ReactElement => {
   if (!colored) {
     return <XiaomiMiMoMono size={size} />;
@@ -66,18 +81,7 @@ const XiaomiMiMoIcon = (size: number, colored: boolean): ReactElement => {
     <span
       aria-label="XiaomiMiMo"
       role="img"
-      style={{
-        alignItems: 'center',
-        background: '#000',
-        borderRadius: Math.max(3, Math.round(size * 0.22)),
-        color: '#fff',
-        display: 'inline-flex',
-        flex: 'none',
-        height: size,
-        justifyContent: 'center',
-        lineHeight: 1,
-        width: size,
-      }}
+      style={getXiaomiWrapperStyle(size)}
     >
       <XiaomiMiMoMono size={Math.max(1, Math.round(size * 0.72))} />
     </span>

@@ -101,6 +101,15 @@
             <keyboard-shortcut keymap="macOS" first-keystroke="meta alt K"/>
         </action>
 
+        <!-- Copy AI Reference Action -->
+        <action id="ClaudeCodeGUI.CopySelectionReferenceAction"
+                class="com.github.claudecodegui.action.editor.CopySelectionReferenceAction"
+                icon="/icons/cc-gui-icon.svg">
+            <add-to-group group-id="EditorPopupMenu"
+                           anchor="after"
+                           relative-to-action="ClaudeCodeGUI.SendSelectionToTerminalAction"/>
+        </action>
+
         <!-- Quick Fix with Claude Action -->
         <action id="ClaudeCodeGUI.QuickFixWithClaudeAction"
                 class="com.github.claudecodegui.action.editor.QuickFixWithClaudeAction"

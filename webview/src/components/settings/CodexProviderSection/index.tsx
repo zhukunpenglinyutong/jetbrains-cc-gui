@@ -7,6 +7,8 @@ import { useDragSort } from '../hooks/useDragSort';
 import sharedStyles from '../ProviderList/style.module.less';
 import styles from './style.module.less';
 
+const ICON_MR_8_STYLE: React.CSSProperties = { marginRight: '8px' };
+
 interface CodexProviderSectionProps {
   codexProviders: CodexProviderConfig[];
   codexLoading: boolean;
@@ -47,6 +49,7 @@ const CodexProviderSection = ({
     localItems: localProviders,
     draggedId: draggedProviderId,
     dragOverId: dragOverProviderId,
+    handlePointerDown,
     handleDragStart,
     handleDragOver,
     handleDragLeave,
@@ -170,7 +173,7 @@ const CodexProviderSection = ({
               >
                 <div className={sharedStyles.cardInfo}>
                   <div className={sharedStyles.name}>
-                    <span className="codicon codicon-key" style={{ marginRight: '8px' }} />
+                    <span className="codicon codicon-key" style={ICON_MR_8_STYLE} />
                     {t('settings.codexProvider.dialog.cliLoginProviderName')}
                   </div>
                   <div className={sharedStyles.website} title={t('settings.codexProvider.dialog.cliLoginProviderDescription')}>
@@ -211,6 +214,7 @@ const CodexProviderSection = ({
                     draggedProviderId === provider.id && styles.dragging,
                     dragOverProviderId === provider.id && styles.dragOver,
                   ].filter(Boolean).join(' ')}
+                  data-drag-sort-id={provider.id}
                   draggable={true}
                   onDragStart={(e) => handleDragStart(e, provider.id)}
                   onDragOver={(e) => handleDragOver(e, provider.id)}
@@ -218,7 +222,11 @@ const CodexProviderSection = ({
                   onDrop={(e) => handleDrop(e, provider.id)}
                   onDragEnd={handleDragEnd}
                 >
-                  <div className={sharedStyles.dragHandle} title={t('settings.provider.dragToSort')}>
+                  <div
+                    className={sharedStyles.dragHandle}
+                    title={t('settings.provider.dragToSort')}
+                    onPointerDown={(e) => handlePointerDown(e, provider.id, e.currentTarget.closest<HTMLElement>('[data-drag-sort-id]'))}
+                  >
                     <span className="codicon codicon-gripper" />
                   </div>
                   <div className={sharedStyles.cardInfo}>

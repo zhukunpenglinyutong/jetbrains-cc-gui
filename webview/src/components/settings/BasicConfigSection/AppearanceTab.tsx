@@ -58,6 +58,12 @@ const DEFAULT_LIGHT_USER_MSG = '#0078d4';
 const UI_FONT_SELECT_ID = 'settings-ui-font-select';
 const UI_FONT_CUSTOM_PATH_ID = 'settings-ui-font-custom-path';
 
+const NODE_PATH_SECTION_STYLE: React.CSSProperties = { marginTop: 12 };
+
+function getSwatchStyle(color: string): React.CSSProperties {
+  return { backgroundColor: color };
+}
+
 const SunIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M12 17C14.7614 17 17 14.7614 17 12C17 9.23858 14.7614 7 12 7C9.23858 7 7 9.23858 7 12C7 14.7614 9.23858 17 12 17Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -408,7 +414,7 @@ const AppearanceTab = ({
         </select>
 
         {isCustomUiFontSelected && (
-          <div className={styles.nodePathSection} style={{ marginTop: 12 }}>
+          <div className={styles.nodePathSection} style={NODE_PATH_SECTION_STYLE}>
             <div className={styles.fieldHeader}>
               <span className="codicon codicon-file-media" />
               <label className={styles.fieldLabel} htmlFor={UI_FONT_CUSTOM_PATH_ID}>
@@ -497,7 +503,7 @@ const AppearanceTab = ({
             >
               <div
                 className={styles.colorSwatchInner}
-                style={{ backgroundColor: preset.color }}
+                style={getSwatchStyle(preset.color)}
               />
             </div>
           ))}
@@ -511,7 +517,7 @@ const AppearanceTab = ({
           >
             <div
               className={styles.colorPickerPreview}
-              style={{ backgroundColor: chatBgColor || defaultBgColor }}
+              style={getSwatchStyle(chatBgColor || defaultBgColor)}
             />
             <input
               ref={colorInputRef}
@@ -573,7 +579,7 @@ const AppearanceTab = ({
             >
               <div
                 className={styles.colorSwatchInner}
-                style={{ backgroundColor: preset.color }}
+                style={getSwatchStyle(preset.color)}
               />
             </div>
           ))}
@@ -587,7 +593,7 @@ const AppearanceTab = ({
           >
             <div
               className={styles.colorPickerPreview}
-              style={{ backgroundColor: userMsgColor || defaultUserMsgColor }}
+              style={getSwatchStyle(userMsgColor || defaultUserMsgColor)}
             />
             <input
               ref={userMsgColorInputRef}

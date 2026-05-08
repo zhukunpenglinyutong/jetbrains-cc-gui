@@ -1,5 +1,7 @@
 import { memo, useCallback } from 'react';
+import type React from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { FileChangeSummary } from '../../types';
 import { showEditableDiff, openFile } from '../../utils/bridge';
 import FileIcon from './FileIcon';
@@ -13,6 +15,96 @@ interface FileChangesListProps {
   onKeepAllClick: () => void;
 }
 
+interface FileChangeRowProps {
+  fileChange: FileChangeSummary;
+  isUndoing: boolean;
+  onOpen: (fileChange: FileChangeSummary) => void;
+  onShowDiff: (fileChange: FileChangeSummary) => void;
+  onUndo: (fileChange: FileChangeSummary) => void;
+  t: TFunction;
+}
+
+const FileChangeRow = memo(({ fileChange, isUndoing, onOpen, onShowDiff, onUndo, t }: FileChangeRowProps) => {
+  const status = String(fileChange.status || 'M');
+  const statusClass = status === 'A' ? 'added' : 'modified';
+
+  const handleOpen = useCallback(() => {
+    onOpen(fileChange);
+  }, [onOpen, fileChange]);
+
+  const handleOpenKeyDown = useCallback((event: React.KeyboardEvent<HTMLSpanElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onOpen(fileChange);
+    }
+  }, [onOpen, fileChange]);
+
+  const handleShowDiff = useCallback(() => {
+    onShowDiff(fileChange);
+  }, [onShowDiff, fileChange]);
+
+  const handleUndo = useCallback(() => {
+    onUndo(fileChange);
+  }, [onUndo, fileChange]);
+
+  return (
+    <div className="file-change-item">
+      {/* Status indicator (A/M) */}
+      <span className={`file-change-status status-${statusClass}`}>
+        {status}
+      </span>
+
+      {/* File icon */}
+      <FileIcon filePath={fileChange.filePath} />
+
+      {/* File name — keyboard accessible since it acts as a button */}
+      <span
+        className="file-change-name"
+        role="button"
+        tabIndex={0}
+        onClick={handleOpen}
+        onKeyDown={handleOpenKeyDown}
+        title={fileChange.filePath}
+      >
+        {fileChange.fileName}
+      </span>
+
+      {/* Stats */}
+      {(fileChange.additions > 0 || fileChange.deletions > 0) && (
+        <span className="file-change-stats">
+          {fileChange.additions > 0 && <span className="additions">+{fileChange.additions}</span>}
+          {fileChange.deletions > 0 && <span className="deletions">-{fileChange.deletions}</span>}
+        </span>
+      )}
+
+      {/* Actions */}
+      <div className="file-change-actions">
+        <button
+          className="file-change-action-btn diff-btn"
+          onClick={handleShowDiff}
+          title={t('statusPanel.showDiff')}
+        >
+          <span className="codicon codicon-diff" />
+        </button>
+        <button
+          className="file-change-action-btn undo-btn"
+          onClick={handleUndo}
+          title={t('statusPanel.undoChanges')}
+          disabled={isUndoing}
+        >
+          {isUndoing ? (
+            <span className="codicon codicon-loading codicon-modifier-spin" />
+          ) : (
+            <span className="codicon codicon-discard" />
+          )}
+        </button>
+      </div>
+    </div>
+  );
+});
+
+FileChangeRow.displayName = 'FileChangeRow';
+
 const FileChangesList = memo(({
   fileChanges,
   undoingFile,
@@ -23,8 +115,8 @@ const FileChangesList = memo(({
 }: FileChangesListProps) => {
   const { t } = useTranslation();
 
-  const handleOpenFile = useCallback((filePath: string, lineStart?: number, lineEnd?: number) => {
-    openFile(filePath, lineStart, lineEnd);
+  const handleOpenFile = useCallback((fileChange: FileChangeSummary) => {
+    openFile(fileChange.filePath, fileChange.lineStart, fileChange.lineEnd);
   }, []);
 
   const handleShowDiff = useCallback((fileChange: FileChangeSummary) => {
@@ -71,62 +163,17 @@ const FileChangesList = memo(({
 
       {/* File list */}
       <div className="file-changes-list">
-        {fileChanges.map((fileChange) => {
-          const status = String(fileChange.status || 'M');
-          const statusClass = status === 'A' ? 'added' : 'modified';
-
-          return (
-            <div key={fileChange.filePath} className="file-change-item">
-              {/* Status indicator (A/M) */}
-              <span className={`file-change-status status-${statusClass}`}>
-                {status}
-              </span>
-
-              {/* File icon */}
-              <FileIcon filePath={fileChange.filePath} />
-
-              {/* File name */}
-              <span
-                className="file-change-name"
-                onClick={() => handleOpenFile(fileChange.filePath, fileChange.lineStart, fileChange.lineEnd)}
-                title={fileChange.filePath}
-              >
-                {fileChange.fileName}
-              </span>
-
-              {/* Stats */}
-              {(fileChange.additions > 0 || fileChange.deletions > 0) && (
-                <span className="file-change-stats">
-                  {fileChange.additions > 0 && <span className="additions">+{fileChange.additions}</span>}
-                  {fileChange.deletions > 0 && <span className="deletions">-{fileChange.deletions}</span>}
-                </span>
-              )}
-
-              {/* Actions */}
-              <div className="file-change-actions">
-                <button
-                  className="file-change-action-btn diff-btn"
-                  onClick={() => handleShowDiff(fileChange)}
-                  title={t('statusPanel.showDiff')}
-                >
-                  <span className="codicon codicon-diff" />
-                </button>
-                <button
-                  className="file-change-action-btn undo-btn"
-                  onClick={() => onUndoClick(fileChange)}
-                  title={t('statusPanel.undoChanges')}
-                  disabled={undoingFile === fileChange.filePath}
-                >
-                  {undoingFile === fileChange.filePath ? (
-                    <span className="codicon codicon-loading codicon-modifier-spin" />
-                  ) : (
-                    <span className="codicon codicon-discard" />
-                  )}
-                </button>
-              </div>
-            </div>
-          );
-        })}
+        {fileChanges.map((fileChange) => (
+          <FileChangeRow
+            key={fileChange.filePath}
+            fileChange={fileChange}
+            isUndoing={undoingFile === fileChange.filePath}
+            onOpen={handleOpenFile}
+            onShowDiff={handleShowDiff}
+            onUndo={onUndoClick}
+            t={t}
+          />
+        ))}
       </div>
     </div>
   );

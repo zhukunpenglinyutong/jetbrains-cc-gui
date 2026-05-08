@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ClaudeMessage } from '../types';
 import {
   getMessageKey,
+  getContentBlocks,
   mergeConsecutiveAssistantMessages,
   formatCommandForDisplay,
   formatCommandForResubmit,
@@ -9,6 +10,7 @@ import {
   hasCommandMessageTag,
   hasTaskNotificationTag,
   isTaskNotificationOnlyMessage,
+  isSyntheticToolMessageContent,
   hasNonHumanOrigin,
   shouldShowMessage,
   TASK_STATUS_COLORS,
@@ -61,6 +63,80 @@ describe('getMessageKey', () => {
   it('falls back to type-index when no uuid, __turnId, or timestamp', () => {
     const msg: ClaudeMessage = { type: 'assistant', content: 'hi' };
     expect(getMessageKey(msg, 7)).toBe('assistant-7');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getContentBlocks — synthetic tool content filtering
+// ---------------------------------------------------------------------------
+
+describe('getContentBlocks', () => {
+  const normalizeBlocks = (raw: any) => raw?.content ?? null;
+  const localizeMessage = (text: string) => text;
+
+  it('does not append synthetic Tool content for tool-only messages', () => {
+    const message: ClaudeMessage = {
+      type: 'assistant',
+      content: 'Tool: shell_command',
+      raw: {
+        content: [
+          { type: 'tool_use', id: 'tool-1', name: 'shell_command', input: { command: 'git status' } },
+        ],
+      } as any,
+    };
+
+    const result = getContentBlocks(message, normalizeBlocks, localizeMessage);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].type).toBe('tool_use');
+  });
+
+  it('does not append repeated synthetic Tool content for merged tool-only messages', () => {
+    const message: ClaudeMessage = {
+      type: 'assistant',
+      content: 'Tool: shell_command\nTool: shell_command',
+      raw: {
+        content: [
+          { type: 'tool_use', id: 'tool-1', name: 'shell_command', input: { command: 'git status' } },
+          { type: 'tool_use', id: 'tool-2', name: 'shell_command', input: { command: 'git diff' } },
+        ],
+      } as any,
+    };
+
+    const result = getContentBlocks(message, normalizeBlocks, localizeMessage);
+
+    expect(result).toHaveLength(2);
+    expect(result.every((block) => block.type === 'tool_use')).toBe(true);
+  });
+
+  it('still appends real fallback content when raw has only tool blocks', () => {
+    const message: ClaudeMessage = {
+      type: 'assistant',
+      content: '命令已经执行完成。',
+      raw: {
+        content: [
+          { type: 'tool_use', id: 'tool-1', name: 'shell_command', input: { command: 'git status' } },
+        ],
+      } as any,
+    };
+
+    const result = getContentBlocks(message, normalizeBlocks, localizeMessage);
+
+    expect(result.map((block) => block.type)).toEqual(['tool_use', 'text']);
+    expect((result[1] as any).text).toBe('命令已经执行完成。');
+  });
+});
+
+describe('isSyntheticToolMessageContent', () => {
+  it('requires a tool_use block', () => {
+    expect(isSyntheticToolMessageContent('Tool: shell_command', [{ type: 'text', text: 'x' }])).toBe(false);
+  });
+
+  it('matches single and repeated synthetic tool titles', () => {
+    const blocks = [{ type: 'tool_use', id: 'tool-1', name: 'shell_command', input: {} }] as any;
+
+    expect(isSyntheticToolMessageContent('Tool: shell_command', blocks)).toBe(true);
+    expect(isSyntheticToolMessageContent('Tool: shell_command\nTool: apply_patch', blocks)).toBe(true);
   });
 });
 

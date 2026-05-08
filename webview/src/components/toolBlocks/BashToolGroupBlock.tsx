@@ -29,6 +29,9 @@ const ITEM_HEIGHT = 32;
 /** Max height when an item is expanded */
 const EXPANDED_MAX_HEIGHT = 400;
 
+const PROGRESS_ICON_STYLE: React.CSSProperties = { fontSize: '12px', marginRight: '4px' };
+const ERROR_ICON_STYLE: React.CSSProperties = { fontSize: '14px', marginTop: '1px' };
+
 /**
  * Parse item to BashItem
  */
@@ -140,7 +143,7 @@ const BashToolGroupBlock = ({ items, deniedToolIds }: BashToolGroupBlockProps) =
     if (errorCount > 0) {
       return (
         <span className="bash-group-progress error">
-          <span className="codicon codicon-warning" style={{ fontSize: '12px', marginRight: '4px' }} />
+          <span className="codicon codicon-warning" style={PROGRESS_ICON_STYLE} />
           {errorCount} {t('tools.bashGroupFailed')}
         </span>
       );
@@ -148,7 +151,7 @@ const BashToolGroupBlock = ({ items, deniedToolIds }: BashToolGroupBlockProps) =
     if (completedCount === totalCount) {
       return (
         <span className="bash-group-progress completed">
-          <span className="codicon codicon-check" style={{ fontSize: '12px', marginRight: '4px' }} />
+          <span className="codicon codicon-check" style={PROGRESS_ICON_STYLE} />
           {t('tools.bashGroupAllCompleted')}
         </span>
       );
@@ -158,6 +161,11 @@ const BashToolGroupBlock = ({ items, deniedToolIds }: BashToolGroupBlockProps) =
         {completedCount}/{totalCount} {t('tools.bashGroupCompleted')}
       </span>
     );
+  };
+
+  const timelineStyle: React.CSSProperties = {
+    maxHeight: `${listHeight + 16}px`,
+    overflowY: overflowY,
   };
 
   return (
@@ -180,10 +188,7 @@ const BashToolGroupBlock = ({ items, deniedToolIds }: BashToolGroupBlockProps) =
         <div
           ref={listRef}
           className="bash-group-timeline"
-          style={{
-            maxHeight: `${listHeight + 16}px`,
-            overflowY: overflowY,
-          }}
+          style={timelineStyle}
         >
           {bashItems.map((item, index) => {
             const isLast = index === bashItems.length - 1;
@@ -222,7 +227,7 @@ const BashToolGroupBlock = ({ items, deniedToolIds }: BashToolGroupBlockProps) =
                           {item.isError && (
                             <span
                               className="codicon codicon-error"
-                              style={{ fontSize: '14px', marginTop: '1px' }}
+                              style={ERROR_ICON_STYLE}
                             />
                           )}
                           <span>{item.output}</span>

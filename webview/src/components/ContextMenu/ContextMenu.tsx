@@ -57,13 +57,15 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
     };
   }, []);
 
+  const menuStyle: React.CSSProperties = { left: pos.left, top: pos.top };
+
   return createPortal(
     <div
       ref={menuRef}
       className="context-menu"
       role="menu"
       aria-label="Context menu"
-      style={{ left: pos.left, top: pos.top }}
+      style={menuStyle}
     >
       {items.map((item, i) =>
         item.separator ? (

@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 export function useThemeInit() {
   // IDE theme state - prefer initial theme injected by Java
   const [ideTheme, setIdeTheme] = useState<'light' | 'dark' | null>(() => {
-    const injectedTheme = (window as any).__INITIAL_IDE_THEME__;
+    const injectedTheme = window.__INITIAL_IDE_THEME__;
     if (injectedTheme === 'light' || injectedTheme === 'dark') {
       return injectedTheme;
     }
@@ -72,7 +72,7 @@ export function useThemeInit() {
     const savedTheme = localStorage.getItem('theme');
 
     // Check if there's an initial theme injected by Java
-    const injectedTheme = (window as any).__INITIAL_IDE_THEME__;
+    const injectedTheme = window.__INITIAL_IDE_THEME__;
 
     // Request IDE theme (with retry mechanism)
     let retryCount = 0;

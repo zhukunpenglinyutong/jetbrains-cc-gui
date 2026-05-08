@@ -115,7 +115,7 @@ describe('useGlobalCallbacks', () => {
     expect(getTextContent()).toBe('draft question\nconsole payload ');
   });
 
-  it('ignores caret position and appends external snippet to the end', () => {
+  it('inserts external snippet at caret position when caret is inside editable', () => {
     const editable = createEditable();
     editable.appendChild(document.createTextNode('abc'));
     placeCaretInsideFirstTextNode(editable, 1);
@@ -124,6 +124,21 @@ describe('useGlobalCallbacks', () => {
     window.insertCodeSnippetAtCursor?.('XYZ');
     vi.runAllTimers();
 
-    expect(getTextContent()).toBe('abc\nXYZ ');
+    expect(getTextContent()).toBe('aXYZ bc');
+  });
+
+  it('falls back to appending at end when caret is not inside editable', () => {
+    const editable = createEditable();
+    editable.appendChild(document.createTextNode('draft question'));
+    // Place caret outside editable to simulate external action (e.g. project tree right-click)
+    const outside = document.createElement('input');
+    document.body.appendChild(outside);
+    outside.focus();
+    const { getTextContent } = renderUseGlobalCallbacks(editable);
+
+    window.insertCodeSnippetAtCursor?.('@/path/to/file');
+    vi.runAllTimers();
+
+    expect(getTextContent()).toBe('draft question\n@/path/to/file ');
   });
 });

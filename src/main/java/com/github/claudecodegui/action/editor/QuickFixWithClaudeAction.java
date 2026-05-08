@@ -33,6 +33,8 @@ import java.awt.event.KeyEvent;
 import java.awt.event.KeyAdapter;
 import java.util.Deque;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Quick Fix with Claude - Áp dụng các thay đổi thông minh dựa trên PSI context
@@ -78,8 +80,8 @@ public class QuickFixWithClaudeAction extends AnAction implements DumbAware {
 
     private void showQuickFixInput(@NotNull Project project, @NotNull Editor editor) {
         // Use local variables for thread safety (each popup invocation has its own state)
-        final int[] historyIndex = {-1};
-        final String[] currentInput = {""};
+        final AtomicInteger historyIndex = new AtomicInteger(-1);
+        final AtomicReference<String> currentInput = new AtomicReference<>("");
 
         JPanel panel = new JPanel(new BorderLayout(0, 4));
         panel.setBorder(JBUI.Borders.empty(8));
@@ -130,7 +132,7 @@ public class QuickFixWithClaudeAction extends AnAction implements DumbAware {
             // Select all text so user can easily type to replace
             textField.selectAll();
             // Set historyIndex to 0 since we're showing the first item
-            historyIndex[0] = 0;
+            historyIndex.set(0);
         }
 
         inputPanel.add(navPanel, BorderLayout.WEST);
@@ -172,25 +174,26 @@ public class QuickFixWithClaudeAction extends AnAction implements DumbAware {
         Runnable historyUpAction = () -> {
             String[] historyArray = INPUT_HISTORY.toArray(new String[0]);
             int size = historyArray.length;
-            if (size > 0 && historyIndex[0] < size - 1) {
-                if (historyIndex[0] == -1) {
-                    currentInput[0] = textField.getText();
+            if (size > 0 && historyIndex.get() < size - 1) {
+                if (historyIndex.get() == -1) {
+                    currentInput.set(textField.getText());
                 }
-                historyIndex[0]++;
-                if (historyIndex[0] < historyArray.length) {
-                    textField.setText(historyArray[historyIndex[0]]);
+                int idx = historyIndex.incrementAndGet();
+                if (idx < historyArray.length) {
+                    textField.setText(historyArray[idx]);
                 }
             }
         };
 
         Runnable historyDownAction = () -> {
             String[] historyArray = INPUT_HISTORY.toArray(new String[0]);
-            if (historyIndex[0] > 0 && historyIndex[0] < historyArray.length) {
-                historyIndex[0]--;
-                textField.setText(historyArray[historyIndex[0]]);
-            } else if (historyIndex[0] == 0) {
-                historyIndex[0] = -1;
-                textField.setText(currentInput[0]);
+            int idx = historyIndex.get();
+            if (idx > 0 && idx < historyArray.length) {
+                int newIdx = historyIndex.decrementAndGet();
+                textField.setText(historyArray[newIdx]);
+            } else if (idx == 0) {
+                historyIndex.set(-1);
+                textField.setText(currentInput.get());
             }
         };
 

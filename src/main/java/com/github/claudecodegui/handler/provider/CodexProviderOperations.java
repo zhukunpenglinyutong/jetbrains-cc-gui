@@ -175,7 +175,9 @@ public class CodexProviderOperations {
             context.getSettingsService().applyActiveProviderToCodexSettings();
 
             ApplicationManager.getApplication().invokeLater(() -> {
-                context.callJavaScript("window.showSwitchSuccess", context.escapeJs(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("toast.providerSwitchSuccess") + com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("provider.switchSyncCodex")));
+                String successMsg = com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("toast.providerSwitchSuccess")
+                        + com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("provider.switchSyncCodex");
+                context.callJavaScript("window.showSwitchSuccess", context.escapeJs(successMsg));
                 handleGetCodexProviders(); // Refresh provider list
                 handleGetCurrentCodexConfig(); // Refresh Codex CLI config display
                 handleGetActiveCodexProvider(); // Refresh active provider config

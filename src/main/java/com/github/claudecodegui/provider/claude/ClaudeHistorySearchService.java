@@ -185,7 +185,7 @@ class ClaudeHistorySearchService {
             try (BufferedReader br = Files.newBufferedReader(sessionFile, java.nio.charset.StandardCharsets.UTF_8)) {
                 String line;
                 while ((line = br.readLine()) != null) {
-                    if (line.trim().isEmpty()) continue;
+                    if (line.trim().isEmpty()) { continue; }
 
                     try {
                         ClaudeHistoryReader.ConversationMessage msg = gson.fromJson(line, ClaudeHistoryReader.ConversationMessage.class);

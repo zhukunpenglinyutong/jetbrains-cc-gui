@@ -193,21 +193,16 @@ test('setupApiKey does not read settings.json credentials when Claude provider i
   assert.equal(result.error, 'API Key not configured');
 });
 
-test('setupApiKey supports CLI login when explicitly authorized by user', () => {
+test('setupApiKey enters CLI login when config.json sets claude.current=__cli_login__', () => {
+  // CLI login mode is identified by ~/.codemoss/config.json — NOT by any flag in
+  // ~/.claude/settings.json. The plugin must never mutate the user's settings.json.
   const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-api-config-'));
   const claudeDir = path.join(tempHome, '.claude');
   fs.mkdirSync(claudeDir, { recursive: true });
   writeCodemossClaudeConfig(tempHome, '__cli_login__');
 
-  fs.writeFileSync(
-    path.join(claudeDir, 'settings.json'),
-    JSON.stringify({
-      env: {
-        CCGUI_CLI_LOGIN_AUTHORIZED: '1',
-      },
-    }),
-    'utf8'
-  );
+  // settings.json has no CLI login flag — we are explicitly verifying it is not required
+  fs.writeFileSync(path.join(claudeDir, 'settings.json'), JSON.stringify({ env: {} }), 'utf8');
 
   const result = runSetupApiKey(tempHome);
   assert.equal(result.ok, true);
@@ -221,13 +216,13 @@ test('setupApiKey CLI login takes priority over existing API keys (no fallback)'
   fs.mkdirSync(claudeDir, { recursive: true });
   writeCodemossClaudeConfig(tempHome, '__cli_login__');
 
-  // Simulate: CLI login authorized AND an API key is present in settings.json
-  // CLI login MUST win — no silent fallback to the API key
+  // Real-world scenario: user previously configured an API key under "use local
+  // settings.json" mode, then switched to CLI login. The key remains in settings.json
+  // (the plugin no longer deletes it), but CLI login mode MUST win — no silent fallback.
   fs.writeFileSync(
     path.join(claudeDir, 'settings.json'),
     JSON.stringify({
       env: {
-        CCGUI_CLI_LOGIN_AUTHORIZED: '1',
         ANTHROPIC_AUTH_TOKEN: 'sk-ant-should-be-ignored',
         ANTHROPIC_BASE_URL: 'https://api.anthropic.com',
       },
@@ -242,17 +237,30 @@ test('setupApiKey CLI login takes priority over existing API keys (no fallback)'
   assert.equal(result.result.apiKeySource, 'CLI login (SDK native auth)');
 });
 
-test('setupApiKey does not use CLI login when flag is not set', () => {
+test('setupApiKey honors legacy CCGUI_CLI_LOGIN_AUTHORIZED flag for backwards compatibility', () => {
+  // Earlier plugin versions wrote CCGUI_CLI_LOGIN_AUTHORIZED=1 into settings.json.
+  // Users upgrading from those versions may still have the flag — keep honoring it
+  // as a fallback so they keep working until the residue is cleaned up.
   const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-api-config-'));
   const claudeDir = path.join(tempHome, '.claude');
   fs.mkdirSync(claudeDir, { recursive: true });
+  // config.json points at the legacy provider id, not __cli_login__
   writeCodemossClaudeConfig(tempHome, '__cli_login__');
 
-  fs.writeFileSync(path.join(claudeDir, 'settings.json'), JSON.stringify({ env: {} }), 'utf8');
+  fs.writeFileSync(
+    path.join(claudeDir, 'settings.json'),
+    JSON.stringify({
+      env: {
+        CCGUI_CLI_LOGIN_AUTHORIZED: '1',
+      },
+    }),
+    'utf8'
+  );
 
   const result = runSetupApiKey(tempHome);
-  assert.equal(result.ok, false);
-  assert.equal(result.error, 'API Key not configured');
+  assert.equal(result.ok, true);
+  assert.equal(result.result.authType, 'cli_login');
+  assert.equal(result.result.apiKey, null);
 });
 
 test('injectNetworkEnvVars ignores local proxy settings when Claude provider is inactive', () => {

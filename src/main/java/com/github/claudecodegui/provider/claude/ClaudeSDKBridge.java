@@ -13,6 +13,8 @@ import java.io.File;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Claude Agent SDK bridge.
@@ -68,6 +70,22 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
         this.daemonRequestExecutor = new ClaudeDaemonRequestExecutor(
                 LOG, requestParamsBuilder, streamAdapter, jsonOutputExtractor
         );
+    }
+
+    /**
+     * Register a listener for custom daemon events (e.g., AI title generation).
+     * Multiple listeners may coexist; callers MUST pair this with
+     * {@link #removeDaemonEventListener} on disposal to avoid leaks.
+     */
+    public void addDaemonEventListener(DaemonBridge.DaemonEventListener listener) {
+        this.daemonCoordinator.addDaemonEventListener(listener);
+    }
+
+    /**
+     * Unregister a previously added daemon event listener.
+     */
+    public void removeDaemonEventListener(DaemonBridge.DaemonEventListener listener) {
+        this.daemonCoordinator.removeDaemonEventListener(listener);
     }
 
     /**
@@ -137,8 +155,8 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             MessageCallback callback,
             SDKResult result,
             StringBuilder assistantContent,
-            boolean[] hadSendError,
-            String[] lastNodeError
+            AtomicBoolean hadSendError,
+            AtomicReference<String> lastNodeError
     ) {
         if (line.startsWith("[STDIN_ERROR]")
                 || line.startsWith("[STDIN_PARSE_ERROR]")

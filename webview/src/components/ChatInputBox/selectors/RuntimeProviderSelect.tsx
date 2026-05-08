@@ -9,6 +9,11 @@ import {
   subscribeProviderList,
 } from '../../../utils/runtimeProviderCapabilities';
 
+const DISABLED_OPTION_STYLE: React.CSSProperties = { cursor: 'default' };
+const PROVIDER_INFO_STYLE: React.CSSProperties = { display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 };
+const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
+const CHEVRON_ICON_STYLE: React.CSSProperties = { fontSize: '10px', marginLeft: '2px' };
+
 interface RuntimeProviderSelectProps {
   currentProvider: string;
   embedded?: boolean;
@@ -199,32 +204,34 @@ export const RuntimeProviderSelect = ({ currentProvider, embedded = false, onClo
 
   const activeName = activeProvider ? getProviderDisplayName(activeProvider, providerKind) : t('config.runtimeProvider.title');
 
+  const dropdownStyle: React.CSSProperties = {
+    position: 'absolute',
+    bottom: embedded ? 0 : '100%',
+    left: embedded ? '100%' : 0,
+    marginLeft: embedded ? '-30px' : undefined,
+    marginBottom: embedded ? undefined : '4px',
+    zIndex: 10001,
+    minWidth: '260px',
+    maxWidth: '360px',
+    maxHeight: '300px',
+    overflowY: 'auto',
+  };
+
   const renderProviderDropdown = () => (
     <div
       ref={dropdownRef}
       role="listbox"
       className="selector-dropdown runtime-provider-dropdown"
-      style={{
-        position: 'absolute',
-        bottom: embedded ? 0 : '100%',
-        left: embedded ? '100%' : 0,
-        marginLeft: embedded ? '-30px' : undefined,
-        marginBottom: embedded ? undefined : '4px',
-        zIndex: 10001,
-        minWidth: '260px',
-        maxWidth: '360px',
-        maxHeight: '300px',
-        overflowY: 'auto',
-      }}
+      style={dropdownStyle}
       onMouseEnter={(event) => event.stopPropagation()}
     >
       {loading && visibleProviders.length === 0 ? (
-        <div className="selector-option disabled" style={{ cursor: 'default' }}>
+        <div className="selector-option disabled" style={DISABLED_OPTION_STYLE}>
           <span className="codicon codicon-loading codicon-modifier-spin" />
           <span>{t('config.runtimeProvider.loading')}</span>
         </div>
       ) : visibleProviders.length === 0 ? (
-        <div className="selector-option disabled" style={{ cursor: 'default' }}>
+        <div className="selector-option disabled" style={DISABLED_OPTION_STYLE}>
           <span className="codicon codicon-info" />
           <span>{t('config.runtimeProvider.empty')}</span>
         </div>
@@ -240,7 +247,7 @@ export const RuntimeProviderSelect = ({ currentProvider, embedded = false, onClo
               title={description || getProviderDisplayName(provider, providerKind)}
             >
               <span className="codicon codicon-key" />
-              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+              <div style={PROVIDER_INFO_STYLE}>
                 <span className="runtime-provider-name">{getProviderDisplayName(provider, providerKind)}</span>
                 {description ? <span className="model-description">{description}</span> : null}
               </div>
@@ -257,7 +264,7 @@ export const RuntimeProviderSelect = ({ currentProvider, embedded = false, onClo
   }
 
   return (
-    <div style={{ position: 'relative', display: 'inline-block' }}>
+    <div style={RELATIVE_INLINE_BLOCK_STYLE}>
       <button
         ref={buttonRef}
         type="button"
@@ -268,7 +275,7 @@ export const RuntimeProviderSelect = ({ currentProvider, embedded = false, onClo
       >
         <span className="codicon codicon-vm-connect" />
         <span className="selector-button-text runtime-provider-text">{activeName}</span>
-        <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={{ fontSize: '10px', marginLeft: '2px' }} />
+        <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={CHEVRON_ICON_STYLE} />
       </button>
 
       {isOpen && renderProviderDropdown()}

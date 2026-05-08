@@ -34,6 +34,9 @@ import {
 
 import styles from './style.module.less';
 
+const BLOCK_STYLE: React.CSSProperties = { display: 'block' };
+const NONE_STYLE: React.CSSProperties = { display: 'none' };
+
 interface SettingsViewProps {
   onClose: () => void;
   initialTab?: SettingsTab;
@@ -160,9 +163,15 @@ const SettingsView = ({
     commitGenerationEnabled,
     setCommitGenerationEnabled,
     handleCommitGenerationEnabledChange,
+    aiTitleGenerationEnabled,
+    setAiTitleGenerationEnabled,
+    handleAiTitleGenerationEnabledChange,
     statusBarWidgetEnabled,
     setStatusBarWidgetEnabled,
     handleStatusBarWidgetEnabledChange,
+    taskCompletionNotificationEnabled,
+    setTaskCompletionNotificationEnabled,
+    handleTaskCompletionNotificationEnabledChange,
     commitAiConfig,
     setCommitAiConfig,
     handleCommitAiProviderChange,
@@ -305,7 +314,9 @@ const SettingsView = ({
     setSelectedSound,
     setCustomSoundPath,
     setCommitGenerationEnabled,
+    setAiTitleGenerationEnabled,
     setStatusBarWidgetEnabled,
+    setTaskCompletionNotificationEnabled,
   });
 
   // Save provider (wrapper function with validation logic)
@@ -411,7 +422,7 @@ const SettingsView = ({
         {/* Content area */}
         <div className={`${styles.settingsContent} ${currentTab === 'providers' ? styles.providerSettingsContent : ''}`}>
           {/* Basic configuration */}
-          <div style={{ display: currentTab === 'basic' ? 'block' : 'none' }}>
+          <div style={currentTab === 'basic' ? BLOCK_STYLE : NONE_STYLE}>
             <BasicConfigSection
               theme={themePreference}
               onThemeChange={setThemePreference}
@@ -456,6 +467,8 @@ const SettingsView = ({
                 handleStatusBarWidgetEnabledChange(enabled);
                 addToast(t('toast.restartRequired'), 'warning');
               }}
+              aiTitleGenerationEnabled={aiTitleGenerationEnabled}
+              onAiTitleGenerationEnabledChange={handleAiTitleGenerationEnabledChange}
               soundNotificationEnabled={soundNotificationEnabled}
               onSoundNotificationEnabledChange={handleSoundNotificationEnabledChange}
               soundOnlyWhenUnfocused={soundOnlyWhenUnfocused}
@@ -467,11 +480,13 @@ const SettingsView = ({
               onSaveCustomSoundPath={handleSaveCustomSoundPath}
               onTestSound={handleTestSound}
               onBrowseSound={handleBrowseSound}
+              taskCompletionNotificationEnabled={taskCompletionNotificationEnabled}
+              onTaskCompletionNotificationEnabledChange={handleTaskCompletionNotificationEnabledChange}
             />
           </div>
 
           {/* Provider management (Claude + Codex internal tab switching) */}
-          <div style={{ display: currentTab === 'providers' ? 'block' : 'none' }}>
+          <div style={currentTab === 'providers' ? BLOCK_STYLE : NONE_STYLE}>
             <ProviderTabSection
               currentProvider={currentProvider}
               providers={providers}
@@ -492,22 +507,22 @@ const SettingsView = ({
           </div>
 
           {/* SDK dependency management */}
-          <div style={{ display: currentTab === 'dependencies' ? 'block' : 'none' }}>
+          <div style={currentTab === 'dependencies' ? BLOCK_STYLE : NONE_STYLE}>
             <DependencySection addToast={addToast} isActive={currentTab === 'dependencies'} />
           </div>
 
           {/* Usage statistics */}
-          <div style={{ display: currentTab === 'usage' ? 'block' : 'none' }}>
+          <div style={currentTab === 'usage' ? BLOCK_STYLE : NONE_STYLE}>
             <UsageSection currentProvider={currentProvider} />
           </div>
 
           {/* MCP servers */}
-          <div style={{ display: currentTab === 'mcp' ? 'block' : 'none' }}>
+          <div style={currentTab === 'mcp' ? BLOCK_STYLE : NONE_STYLE}>
             <PlaceholderSection type="mcp" currentProvider={currentProvider} />
           </div>
 
           {/* Permissions configuration */}
-          <div style={{ display: currentTab === 'permissions' ? 'block' : 'none' }}>
+          <div style={currentTab === 'permissions' ? BLOCK_STYLE : NONE_STYLE}>
             {currentProvider === 'codex' ? (
               <PermissionsSection
                 codexSandboxMode={codexSandboxMode}
@@ -519,7 +534,7 @@ const SettingsView = ({
           </div>
 
           {/* Prompt enhancer configuration */}
-          <div style={{ display: currentTab === 'promptEnhancer' ? 'block' : 'none' }}>
+          <div style={currentTab === 'promptEnhancer' ? BLOCK_STYLE : NONE_STYLE}>
             <PromptEnhancerSection
               promptEnhancerConfig={promptEnhancerConfig}
               onPromptEnhancerProviderChange={handlePromptEnhancerProviderChange}
@@ -529,7 +544,7 @@ const SettingsView = ({
           </div>
 
           {/* Commit AI configuration */}
-          <div style={{ display: currentTab === 'commit' ? 'block' : 'none' }}>
+          <div style={currentTab === 'commit' ? BLOCK_STYLE : NONE_STYLE}>
             <CommitSection
               commitAiConfig={commitAiConfig}
               onCommitAiProviderChange={handleCommitAiProviderChange}
@@ -543,7 +558,7 @@ const SettingsView = ({
           </div>
 
           {/* Agents */}
-          <div style={{ display: currentTab === 'agents' ? 'block' : 'none' }}>
+          <div style={currentTab === 'agents' ? BLOCK_STYLE : NONE_STYLE}>
             <AgentSection
               agents={agents}
               loading={agentsLoading}
@@ -556,19 +571,19 @@ const SettingsView = ({
           </div>
 
           {/* Prompts */}
-          <div style={{ display: currentTab === 'prompts' ? 'block' : 'none' }}>
+          <div style={currentTab === 'prompts' ? BLOCK_STYLE : NONE_STYLE}>
             <PromptSection
               onSuccess={(msg) => addToast(msg, 'success')}
             />
           </div>
 
           {/* Skills */}
-          <div style={{ display: currentTab === 'skills' ? 'block' : 'none' }}>
+          <div style={currentTab === 'skills' ? BLOCK_STYLE : NONE_STYLE}>
             <SkillsSettingsSection currentProvider={currentProvider} />
           </div>
 
           {/* Other settings */}
-          <div style={{ display: currentTab === 'other' ? 'block' : 'none' }}>
+          <div style={currentTab === 'other' ? BLOCK_STYLE : NONE_STYLE}>
             <OtherSettingsSection
               historyCompletionEnabled={historyCompletionEnabled}
               onHistoryCompletionEnabledChange={(enabled) => {
@@ -581,7 +596,7 @@ const SettingsView = ({
           </div>
 
           {/* Community */}
-          <div style={{ display: currentTab === 'community' ? 'block' : 'none' }}>
+          <div style={currentTab === 'community' ? BLOCK_STYLE : NONE_STYLE}>
             <CommunitySection addToast={addToast} />
           </div>
         </div>

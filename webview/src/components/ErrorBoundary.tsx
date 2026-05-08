@@ -14,6 +14,148 @@ interface State {
   copied: boolean;
 }
 
+const ROOT_STYLE: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  minHeight: '100vh',
+  padding: '20px',
+  backgroundColor: 'var(--vscode-editor-background, #1e1e1e)',
+  color: 'var(--vscode-editor-foreground, #cccccc)',
+};
+
+const CARD_STYLE: React.CSSProperties = {
+  maxWidth: '700px',
+  width: '100%',
+  padding: '24px',
+  backgroundColor: 'var(--vscode-notifications-background, #252526)',
+  border: '1px solid var(--vscode-notifications-border, #454545)',
+  borderRadius: '6px',
+};
+
+const HEADER_STYLE: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  marginBottom: '16px',
+};
+
+const HEADER_ICON_STYLE: React.CSSProperties = {
+  fontSize: '24px',
+  color: 'var(--vscode-errorForeground, #f48771)',
+  marginRight: '12px',
+};
+
+const HEADER_TITLE_STYLE: React.CSSProperties = {
+  margin: 0,
+  fontSize: '18px',
+  fontWeight: 600,
+};
+
+const DESCRIPTION_STYLE: React.CSSProperties = {
+  marginBottom: '16px',
+  lineHeight: '1.5',
+};
+
+const CAUSES_BOX_STYLE: React.CSSProperties = {
+  padding: '12px',
+  marginBottom: '16px',
+  backgroundColor: 'var(--vscode-inputValidation-warningBackground, #352a05)',
+  border: '1px solid var(--vscode-inputValidation-warningBorder, #be8c0088)',
+  borderRadius: '4px',
+};
+
+const CAUSES_TITLE_STYLE: React.CSSProperties = {
+  fontWeight: 500,
+  marginBottom: '8px',
+};
+
+const CAUSES_LIST_STYLE: React.CSSProperties = {
+  margin: 0,
+  paddingLeft: '20px',
+  lineHeight: '1.6',
+};
+
+const DETAILS_STYLE: React.CSSProperties = {
+  marginBottom: '16px',
+};
+
+const SUMMARY_STYLE: React.CSSProperties = {
+  cursor: 'pointer',
+  padding: '8px 12px',
+  backgroundColor: 'var(--vscode-input-background, #3c3c3c)',
+  border: '1px solid var(--vscode-input-border, #3c3c3c)',
+  borderRadius: '4px',
+  marginBottom: '8px',
+  fontWeight: 500,
+};
+
+const PRE_STYLE: React.CSSProperties = {
+  padding: '12px',
+  backgroundColor: 'var(--vscode-textCodeBlock-background, #2d2d2d)',
+  border: '1px solid var(--vscode-input-border, #3c3c3c)',
+  borderRadius: '4px',
+  overflow: 'auto',
+  fontSize: '11px',
+  lineHeight: '1.4',
+  maxHeight: '300px',
+  whiteSpace: 'pre-wrap',
+  wordBreak: 'break-word',
+};
+
+const ACTION_BUTTONS_STYLE: React.CSSProperties = {
+  display: 'flex',
+  gap: '12px',
+  flexWrap: 'wrap',
+};
+
+const RELOAD_BUTTON_STYLE: React.CSSProperties = {
+  padding: '8px 16px',
+  backgroundColor: 'var(--vscode-button-secondaryBackground, #3a3d41)',
+  color: 'var(--vscode-button-secondaryForeground, #cccccc)',
+  border: 'none',
+  borderRadius: '4px',
+  cursor: 'pointer',
+  fontSize: '13px',
+  fontWeight: 500,
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px',
+};
+
+const BUTTON_ICON_STYLE: React.CSSProperties = {
+  fontSize: '14px',
+};
+
+const HELP_TEXT_STYLE: React.CSSProperties = {
+  marginTop: '16px',
+  marginBottom: 0,
+  fontSize: '12px',
+  color: 'var(--vscode-descriptionForeground, #8b8b8b)',
+  lineHeight: '1.5',
+};
+
+function getCopyButtonStyle(copied: boolean): React.CSSProperties {
+  return {
+    padding: '8px 16px',
+    backgroundColor: copied
+      ? 'var(--vscode-button-secondaryBackground, #3a3d41)'
+      : 'var(--vscode-button-background, #0e639c)',
+    color: copied
+      ? 'var(--vscode-button-secondaryForeground, #cccccc)'
+      : 'var(--vscode-button-foreground, #ffffff)',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '13px',
+    fontWeight: 500,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    transition: 'background-color 0.2s',
+  };
+}
+
 /**
  * Collect system environment information for debugging
  */
@@ -164,71 +306,42 @@ class ErrorBoundary extends Component<Props, State> {
       }
 
       const errorDetails = formatErrorDetails(this.state.error, this.state.errorInfo);
+      const copyButtonStyle = getCopyButtonStyle(this.state.copied);
 
-      // Default fallback UI
+      // Default fallback UI — role/aria-live announce the error to assistive
+      // tech, otherwise screen-reader users have no signal that the surface
+      // suddenly switched to an error state.
       return (
         <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: '100vh',
-            padding: '20px',
-            backgroundColor: 'var(--vscode-editor-background, #1e1e1e)',
-            color: 'var(--vscode-editor-foreground, #cccccc)',
-          }}
+          style={ROOT_STYLE}
+          role="alert"
+          aria-live="assertive"
+          aria-atomic="true"
         >
-          <div
-            style={{
-              maxWidth: '700px',
-              width: '100%',
-              padding: '24px',
-              backgroundColor: 'var(--vscode-notifications-background, #252526)',
-              border: '1px solid var(--vscode-notifications-border, #454545)',
-              borderRadius: '6px',
-            }}
-          >
+          <div style={CARD_STYLE}>
             {/* Header */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                marginBottom: '16px',
-              }}
-            >
+            <div style={HEADER_STYLE}>
               <span
                 className="codicon codicon-error"
-                style={{
-                  fontSize: '24px',
-                  color: 'var(--vscode-errorForeground, #f48771)',
-                  marginRight: '12px',
-                }}
+                style={HEADER_ICON_STYLE}
+                aria-hidden="true"
               />
-              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>
+              <h2 style={HEADER_TITLE_STYLE}>
                 {t('errorBoundary.title', 'Something went wrong')}
               </h2>
             </div>
 
             {/* Description */}
-            <p style={{ marginBottom: '16px', lineHeight: '1.5' }}>
+            <p style={DESCRIPTION_STYLE}>
               {t('errorBoundary.description', 'The application encountered an unexpected error. Please copy the error details below and share them with the developer for troubleshooting.')}
             </p>
 
             {/* Possible causes hint */}
-            <div
-              style={{
-                padding: '12px',
-                marginBottom: '16px',
-                backgroundColor: 'var(--vscode-inputValidation-warningBackground, #352a05)',
-                border: '1px solid var(--vscode-inputValidation-warningBorder, #be8c0088)',
-                borderRadius: '4px',
-              }}
-            >
-              <div style={{ fontWeight: 500, marginBottom: '8px' }}>
+            <div style={CAUSES_BOX_STYLE}>
+              <div style={CAUSES_TITLE_STYLE}>
                 {t('errorBoundary.possibleCauses', 'Possible causes:')}
               </div>
-              <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
+              <ul style={CAUSES_LIST_STYLE}>
                 <li>{t('errorBoundary.cause1', 'Node.js is not installed or not configured correctly')}</li>
                 <li>{t('errorBoundary.cause2', 'Network connection issues')}</li>
                 <li>{t('errorBoundary.cause3', 'Plugin or IDE compatibility issues')}</li>
@@ -238,62 +351,23 @@ class ErrorBoundary extends Component<Props, State> {
 
             {/* Error Details */}
             {this.state.error && (
-              <details style={{ marginBottom: '16px' }} open>
-                <summary
-                  style={{
-                    cursor: 'pointer',
-                    padding: '8px 12px',
-                    backgroundColor: 'var(--vscode-input-background, #3c3c3c)',
-                    border: '1px solid var(--vscode-input-border, #3c3c3c)',
-                    borderRadius: '4px',
-                    marginBottom: '8px',
-                    fontWeight: 500,
-                  }}
-                >
+              <details style={DETAILS_STYLE} open>
+                <summary style={SUMMARY_STYLE}>
                   {t('errorBoundary.errorDetails', 'Error Details')}
                 </summary>
-                <pre
-                  style={{
-                    padding: '12px',
-                    backgroundColor: 'var(--vscode-textCodeBlock-background, #2d2d2d)',
-                    border: '1px solid var(--vscode-input-border, #3c3c3c)',
-                    borderRadius: '4px',
-                    overflow: 'auto',
-                    fontSize: '11px',
-                    lineHeight: '1.4',
-                    maxHeight: '300px',
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                  }}
-                >
+                <pre style={PRE_STYLE}>
                   {errorDetails}
                 </pre>
               </details>
             )}
 
             {/* Action Buttons */}
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={ACTION_BUTTONS_STYLE}>
               {/* Copy Error Button */}
               <button
                 onClick={this.handleCopyError}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: this.state.copied
-                    ? 'var(--vscode-button-secondaryBackground, #3a3d41)'
-                    : 'var(--vscode-button-background, #0e639c)',
-                  color: this.state.copied
-                    ? 'var(--vscode-button-secondaryForeground, #cccccc)'
-                    : 'var(--vscode-button-foreground, #ffffff)',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  fontWeight: 500,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  transition: 'background-color 0.2s',
-                }}
+                aria-label={t('errorBoundary.copyError', 'Copy Error Info')}
+                style={copyButtonStyle}
                 onMouseOver={(e) => {
                   if (!this.state.copied) {
                     e.currentTarget.style.backgroundColor =
@@ -309,7 +383,7 @@ class ErrorBoundary extends Component<Props, State> {
               >
                 <span
                   className={this.state.copied ? 'codicon codicon-check' : 'codicon codicon-copy'}
-                  style={{ fontSize: '14px' }}
+                  style={BUTTON_ICON_STYLE}
                 />
                 {this.state.copied
                   ? t('errorBoundary.copied', 'Copied!')
@@ -319,19 +393,8 @@ class ErrorBoundary extends Component<Props, State> {
               {/* Reload Button */}
               <button
                 onClick={this.handleReset}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: 'var(--vscode-button-secondaryBackground, #3a3d41)',
-                  color: 'var(--vscode-button-secondaryForeground, #cccccc)',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  fontWeight: 500,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                }}
+                aria-label={t('errorBoundary.reload', 'Reload Application')}
+                style={RELOAD_BUTTON_STYLE}
                 onMouseOver={(e) => {
                   e.currentTarget.style.backgroundColor =
                     'var(--vscode-button-secondaryHoverBackground, #45494e)';
@@ -341,19 +404,13 @@ class ErrorBoundary extends Component<Props, State> {
                     'var(--vscode-button-secondaryBackground, #3a3d41)';
                 }}
               >
-                <span className="codicon codicon-refresh" style={{ fontSize: '14px' }} />
+                <span className="codicon codicon-refresh" style={BUTTON_ICON_STYLE} />
                 {t('errorBoundary.reload', 'Reload Application')}
               </button>
             </div>
 
             {/* Help text */}
-            <p style={{
-              marginTop: '16px',
-              marginBottom: 0,
-              fontSize: '12px',
-              color: 'var(--vscode-descriptionForeground, #8b8b8b)',
-              lineHeight: '1.5',
-            }}>
+            <p style={HELP_TEXT_STYLE}>
               {t('errorBoundary.helpText', 'If the problem persists, please copy the error information and submit it as an issue on GitHub, or share it in the community group.')}
             </p>
           </div>

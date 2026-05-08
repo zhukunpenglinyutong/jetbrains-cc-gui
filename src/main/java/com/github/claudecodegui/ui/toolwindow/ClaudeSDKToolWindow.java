@@ -215,10 +215,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     CompletableFuture<Boolean> future = BridgePreloader.waitForBridgeAsync();
                     Boolean ready = future.get(60, TimeUnit.SECONDS);
 
-                    if (project.isDisposed()) return;
+                    if (project.isDisposed()) { return; }
 
                     ToolWindowManager.getInstance(project).invokeLater(() -> {
-                        if (project.isDisposed()) return;
+                        if (project.isDisposed()) { return; }
 
                         if (ready != null && ready) {
                             LOG.info("[ToolWindow] ai-bridge ready, replacing loading panel with chat window");

@@ -98,7 +98,7 @@ public final class ContentRebuildUtil {
      * Normalize whitespace characters (for fuzzy matching).
      */
     static String normalizeWhitespace(String s) {
-        if (s == null) return "";
+        if (s == null) { return ""; }
         return s.replaceAll("\\s+", " ").trim();
     }
 
@@ -115,7 +115,7 @@ public final class ContentRebuildUtil {
         for (int lineIdx = 0; lineIdx < lines.length; lineIdx++) {
             StringBuilder remainingBuilder = new StringBuilder();
             for (int j = lineIdx; j < lines.length; j++) {
-                if (j > lineIdx) remainingBuilder.append("\n");
+                if (j > lineIdx) { remainingBuilder.append("\n"); }
                 remainingBuilder.append(lines[j]);
             }
             String normalizedRemaining = normalizeWhitespace(remainingBuilder.toString());
@@ -166,7 +166,7 @@ public final class ContentRebuildUtil {
      */
     static String replaceNormalized(String content, String target, String replacement) {
         int index = findNormalizedIndex(content, target);
-        if (index < 0) return content;
+        if (index < 0) { return content; }
 
         int endIndex = findActualEndIndex(content, index, target);
         return content.substring(0, index) + replacement + content.substring(endIndex);
