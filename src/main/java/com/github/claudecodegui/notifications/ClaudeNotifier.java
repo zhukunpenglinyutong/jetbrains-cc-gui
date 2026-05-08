@@ -4,6 +4,9 @@ import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.util.SoundNotificationService;
 import com.github.claudecodegui.util.SystemNotificationService;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import java.util.ConcurrentModificationException;
@@ -166,7 +169,14 @@ public class ClaudeNotifier {
                 if (m == null || m.type != ClaudeSession.Message.Type.ASSISTANT) {
                     continue;
                 }
-                String content = m.content;
+                // Prefer the last text block from raw JSON: in tool-use turns the
+                // accumulated m.content concatenates ALL text segments (including
+                // pre-tool-call prose), so the preview would show mid-turn text
+                // instead of the final answer.
+                String content = extractLastTextFromRaw(m);
+                if (content == null || content.isEmpty()) {
+                    content = m.content;
+                }
                 if (content == null || content.isEmpty()) {
                     // Tool-call frames are emitted as ASSISTANT with empty text content;
                     // skip them so the preview prefers actual assistant prose.
@@ -211,6 +221,41 @@ public class ClaudeNotifier {
      * @param message message
      * @since 1.0.0
      */
+     * Extract the text of the <b>last</b> text block from the raw JSON of an assistant message.
+     * In tool-use turns the raw content array contains multiple text blocks
+     * (pre-tool-call prose + final answer); this method returns only the final one.
+     *
+     * @return the last text block's content, or {@code null} if unavailable.
+     */
+    @Nullable
+    private static String extractLastTextFromRaw(@NotNull ClaudeSession.Message m) {
+        JsonObject raw = m.raw;
+        if (raw == null || !raw.has("message") || !raw.get("message").isJsonObject()) {
+            return null;
+        }
+        try {
+            JsonObject message = raw.getAsJsonObject("message");
+            if (!message.has("content") || !message.get("content").isJsonArray()) {
+                return null;
+            }
+            JsonArray contentArray = message.getAsJsonArray("content");
+            String lastText = null;
+            for (JsonElement element : contentArray) {
+                if (!element.isJsonObject()) {
+                    continue;
+                }
+                JsonObject block = element.getAsJsonObject();
+                if (block.has("type") && "text".equals(block.get("type").getAsString())
+                        && block.has("text")) {
+                    lastText = block.get("text").getAsString();
+                }
+            }
+            return lastText;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     public static void showError(@NotNull Project project, String message) {
         show(project, "Claude [ERR]", message, 8000);
     }
