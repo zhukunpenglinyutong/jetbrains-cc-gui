@@ -90,11 +90,9 @@ export function useMessageSender({
       return true;
     }
 
-    // /plan - switch to plan mode (Claude only)
-    if (PLAN_COMMANDS.has(command)) {
-      if (currentProvider === 'codex') {
-        addToast(t('chat.planModeNotAvailableForCodex', { defaultValue: 'Plan mode is not available for Codex provider' }), 'warning');
-      } else if (handleModeSelect) {
+    // /plan - switch to plan mode (Claude only; Codex sends as normal text)
+    if (PLAN_COMMANDS.has(command) && currentProvider === 'claude') {
+      if (handleModeSelect) {
         handleModeSelect('plan');
         addToast(t('chat.planModeEnabled', { defaultValue: 'Plan mode enabled' }), 'info');
       }
