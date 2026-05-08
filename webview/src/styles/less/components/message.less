@@ -30,7 +30,22 @@
     }
 }
 
-/* Message Styles - Agent Style */
+/* Message Styles - Agent Style
+ *
+ * NOTE: We intentionally do NOT use `content-visibility: auto` here.
+ *
+ * The combination of `content-visibility: auto` + `contain-intrinsic-size`
+ * causes scrollHeight to fluctuate as messages enter/leave the viewport
+ * (placeholder height vs real height). During streaming, this manifests as:
+ *   1. Stream finishes → off-screen messages re-enter content-visibility:auto
+ *   2. scrollHeight drops sharply (placeholders < real heights)
+ *   3. Browser auto-clamps scrollTop to the new (smaller) maxScrollTop
+ *   4. The viewport jumps upward, leaving tool-call cards "stuck" mid-screen
+ *   5. User must manually scroll to force layout recalculation
+ *
+ * Performance impact of skipping the optimization is minimal: chat sessions
+ * rarely exceed 100 messages, and `contain: layout style` already isolates
+ * each message from cross-recalculation during scroll. */
 .message {
     padding: 16px 20px;
     display: flex;
@@ -40,38 +55,6 @@
     min-width: 0; /* 允许内容缩小 */
     max-width: 100%; /* 防止超出容器 */
     contain: layout style; /* Isolate layout — prevents cross-message recalculation during scroll */
-
-    @supports (content-visibility: auto) {
-        content-visibility: auto;
-        /* `auto <length>` makes the browser cache last-rendered size after first
-           paint and use it as the placeholder estimate when the element scrolls
-           off-screen again. This dramatically improves scrollbar accuracy on long
-           sessions (Chromium 111+ / JCEF 2024.3+). The fallback length is a
-           per-message-type estimate (overridden below). */
-        contain-intrinsic-size: auto 240px;
-    }
-}
-
-/* Per-type initial size hints — refines the first-paint estimate before
-   `contain-intrinsic-size: auto` learns the actual rendered height. */
-.message.user {
-    @supports (content-visibility: auto) {
-        contain-intrinsic-size: auto 96px;
-    }
-}
-
-.message.task_notification,
-.message.notification {
-    @supports (content-visibility: auto) {
-        contain-intrinsic-size: auto 40px;
-    }
-}
-
-.message.is-last-message {
-    @supports (content-visibility: auto) {
-        content-visibility: visible;
-        contain-intrinsic-size: auto;
-    }
 }
 
 .message:last-child {

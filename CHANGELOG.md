@@ -1,4 +1,74 @@
 
+##### **2026年5月8日（v0.4.2-Alpha3）**
+
+English:
+
+🐛 Fixes
+- Fix content-visibility placeholder size mismatch that caused tool-call cards to appear "stuck" mid-screen during streaming until manual scroll
+- Fix streamed text being incorrectly repositioned when tool_use/tool_result blocks appeared mid-stream by switching from turn-based to boundary-based message patching
+
+🔧 Improvements
+- Split oversized App component into focused modules with dedicated context providers (DialogContext, SessionContext, UIStateContext, MessagesContext) and a new ChatScreen container
+- Split the 400+ line useModelProviderState hook into four single-responsibility hooks (useClaudeProvider, useCodexProvider, useModelStatePersistence, useProviderSettings) for clearer state ownership
+- Enable Checkstyle NeedBraces rule and wrap 197 pre-existing single-line if/else bodies across 44 Java files in braces to guard against goto-fail-style edits
+- Tighten Checkstyle configuration: enforce newline at end of file, line length limits, reorganize rule sections, and remove unused imports
+
+中文：
+
+🐛 Fixes
+- 修复流式输出时 content-visibility 占位高度估算偏差导致工具调用卡片"卡"在屏幕中部、需手动滚动才能恢复的问题
+- 将消息打补丁逻辑从基于 turn 改为基于边界（boundary），修复工具卡片中途出现时流式文本错位的问题
+
+🔧 Improvements
+- 拆分过大的 App 组件为多个聚焦模块，新增 DialogContext / SessionContext / UIStateContext / MessagesContext 上下文以及 ChatScreen 容器组件
+- 将 400+ 行的 useModelProviderState Hook 拆分为四个单一职责 Hook（useClaudeProvider、useCodexProvider、useModelStatePersistence、useProviderSettings），状态归属更清晰
+- 启用 Checkstyle NeedBraces 规则，并在 44 个 Java 文件中为 197 处单行 if/else 补全花括号，防止未来编辑出现 goto-fail 式漏洞
+- 收紧 Checkstyle 配置：强制文件末尾换行、行长度限制，重新组织规则分组，移除无用 import
+
+---
+
+##### **2026年5月7日（v0.4.2-Alpha2）**
+
+English:
+
+✨ Features
+- Insert code snippet at current caret position instead of always appending to the end when using "Copy AI Reference" or editor send actions
+- Tool blocks now display execution results and track permission denial state for better observability
+- "AI provider connected" banner now shows the active provider name dynamically (e.g., "Codex connected" instead of always "Claude connected")
+
+🐛 Fixes
+- Fix event listener memory leaks in webview: properly clean up visibilitychange, focus, and pageshow listeners on unload
+
+🔧 Improvements
+- Remove brand icon from task completion toast for a simpler, lighter notification layout
+- Improve drag-sort external drop detection: distinguish file drops from UI reorder drags; add pointer handling and touch-action CSS
+- Memoize SubagentList, FileChangesList, and HistoryView list items to reduce re-renders by ~50%
+- Optimize long-session rendering: switch to auto-sizing content-visibility with per-type size hints and 30-message pagination
+- Eliminate 110+ unsafe `(window as any)` casts with proper TypeScript Window interface extensions and JSDoc annotations
+- Extract repeated inline style objects to named module-level constants across multiple components
+- Refactor Java bridge, webview, and ai-bridge: split oversized classes into focused single-responsibility components
+
+中文：
+
+✨ Features
+- 使用「Copy AI Reference」或编辑器发送操作时，代码片段将插入到当前光标位置，而非始终追加到末尾
+- 工具调用块现在展示执行结果并跟踪权限拒绝状态，便于调试和观察
+- AI 连接提示横幅改为动态显示当前 Provider 名称（如切换至 Codex 时显示"Codex connected"）
+
+🐛 Fixes
+- 修复 Webview 中事件监听器内存泄漏：visibilitychange、focus、pageshow 监听器现在在页面卸载时正确清理
+
+🔧 Improvements
+- 移除任务完成 Toast 通知中的品牌图标，布局更简洁轻量
+- 改进拖拽排序的外部文件检测逻辑，区分文件拖入和 UI 排序操作，添加 pointer 事件处理和触控 CSS
+- 对 SubagentList、FileChangesList、HistoryView 列表项进行记忆化优化，减少约 50% 的不必要重渲染
+- 优化长会话渲染：content-visibility 改为自动尺寸估算，添加 30 条消息分页
+- 消除 110+ 处不安全的 `(window as any)` 类型断言，改用正确的 TypeScript Window 接口扩展
+- 将多个组件中的内联样式对象提取为模块级命名常量
+- 重构 Java Bridge、Webview 及 ai-bridge：拆分过大的类为单一职责的聚焦组件
+
+---
+
 ##### **2026年5月6日（v0.4.2-Alpha1）**
 
 English:

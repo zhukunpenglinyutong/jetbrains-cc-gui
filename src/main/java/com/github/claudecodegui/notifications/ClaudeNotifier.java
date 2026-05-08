@@ -56,6 +56,8 @@ public class ClaudeNotifier {
      * default ({@code notifier.taskComplete.title}).
      */
     public static void showTaskCompletionSuccess(@NotNull Project project, @Nullable String title, String message) {
+    public static void showSuccess(@NotNull Project project, @Nullable String title, String message) {
+        show(project, "Claude [OK]", message, 5000);
         // Show the task completion visual notification toast
         SystemNotificationService.getInstance().showVisualNotificationToast(project, title, message);
         // Play the task completion notification sound
@@ -139,11 +141,11 @@ public class ClaudeNotifier {
     }
 
     public static void showError(@NotNull Project project, String message) {
-        show(project, "Claude ✗", message, 8000);
+        show(project, "Claude [ERR]", message, 8000);
     }
 
     public static void showWarning(@NotNull Project project, String message) {
-        show(project, "Claude ⚠", message, 6000);
+        show(project, "Claude [WARN]", message, 6000);
     }
 
     public static void clearStatus(@NotNull Project project) {
@@ -161,7 +163,7 @@ public class ClaudeNotifier {
     }
 
     private static String formatTokenUsage(int used, int max) {
-        if (used == 0) return "";
+        if (used == 0) { return ""; }
         String usedStr = formatNumber(used);
         if (max > 0) {
             String maxStr = formatNumber(max);
@@ -173,27 +175,27 @@ public class ClaudeNotifier {
     public static void setModel(@NotNull Project project, String model) {
         ApplicationManager.getApplication().invokeLater(() -> {
             ClaudeStatusBarWidget widget = ClaudeStatusBarWidget.Factory.getWidget(project);
-            if (widget != null) widget.setModel(model);
+            if (widget != null) { widget.setModel(model); }
         });
     }
 
     public static void setMode(@NotNull Project project, String mode) {
         ApplicationManager.getApplication().invokeLater(() -> {
             ClaudeStatusBarWidget widget = ClaudeStatusBarWidget.Factory.getWidget(project);
-            if (widget != null) widget.setMode(mode);
+            if (widget != null) { widget.setMode(mode); }
         });
     }
 
     public static void setAgent(@NotNull Project project, String agent) {
         ApplicationManager.getApplication().invokeLater(() -> {
             ClaudeStatusBarWidget widget = ClaudeStatusBarWidget.Factory.getWidget(project);
-            if (widget != null) widget.setAgent(agent);
+            if (widget != null) { widget.setAgent(agent); }
         });
     }
 
     private static String formatNumber(int num) {
-        if (num < 1000) return String.valueOf(num);
-        if (num < 1000000) return String.format("%.1fk", num / 1000.0);
+        if (num < 1000) { return String.valueOf(num); }
+        if (num < 1000000) { return String.format("%.1fk", num / 1000.0); }
         return String.format("%.1fm", num / 1000000.0);
     }
 

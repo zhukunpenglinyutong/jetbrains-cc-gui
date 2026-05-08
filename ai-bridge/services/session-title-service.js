@@ -5,7 +5,7 @@
  */
 
 import { appendFile, mkdir, access, open as fsOpen, stat as fsStat, readFile } from 'fs/promises';
-import { join } from 'path';
+import { join, basename } from 'path';
 import { setupApiKey, loadClaudeSettings, getCliUserAgent } from '../config/api-config.js';
 import { ensureAnthropicSdk, ensureBedrockSdk } from './claude/message-utils.js';
 import { resolveModelFromSettings } from '../utils/model-utils.js';
@@ -14,6 +14,15 @@ import { getClaudeDir, getCodemossDir } from '../utils/path-utils.js';
 const DEFAULT_HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 const MAX_CONVERSATION_TEXT = 1000;
 const MAX_SANITIZED_LENGTH = 200;
+// Aligns with Java HistoryDeleteService.SESSION_ID_PATTERN — alphanumeric,
+// dot, dash, underscore. Defeats path-traversal payloads in upstream payloads.
+const SESSION_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
+// Safety net for Haiku calls — avoids hung requests holding daemon resources.
+const HAIKU_API_TIMEOUT_MS = 15000;
+
+function isValidSessionId(sessionId) {
+  return typeof sessionId === 'string' && SESSION_ID_PATTERN.test(sessionId);
+}
 
 const SESSION_TITLE_PROMPT = `Generate a concise title (3-7 words) for this coding session. The title must be in the SAME LANGUAGE as the user's message.
 
@@ -146,7 +155,9 @@ function sanitizePath(name) {
 function getSessionFilePath(sessionId, cwd) {
   const projectsDir = join(getClaudeDir(), 'projects');
   const sanitizedCwd = sanitizePath(cwd || process.cwd());
-  return join(projectsDir, sanitizedCwd, `${sessionId}.jsonl`);
+  // Use basename as a defensive second layer in case validation is bypassed
+  // by future refactors — basename strips any path separators that slip through.
+  return join(projectsDir, sanitizedCwd, `${basename(sessionId)}.jsonl`);
 }
 
 // --- API ---
@@ -221,12 +232,29 @@ async function callHaikuApi(userMessage) {
   const model = resolveHaikuModel();
   logTitleEvent('info', 'Calling Haiku API, model: ' + model);
 
-  const response = await client.messages.create({
-    model,
-    max_tokens: 128,
-    messages: [{ role: 'user', content: userMessage }],
-    system: SESSION_TITLE_PROMPT,
-  });
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), HAIKU_API_TIMEOUT_MS);
+
+  let response;
+  try {
+    response = await client.messages.create(
+      {
+        model,
+        max_tokens: 128,
+        messages: [{ role: 'user', content: userMessage }],
+        system: SESSION_TITLE_PROMPT,
+      },
+      { signal: controller.signal }
+    );
+  } catch (err) {
+    if (controller.signal.aborted) {
+      logTitleEvent('warn', 'Haiku API call aborted after ' + HAIKU_API_TIMEOUT_MS + 'ms timeout');
+      return null;
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
 
   const text = (response.content || [])
     .filter(b => b.type === 'text')
@@ -308,6 +336,11 @@ export async function generateSessionTitle(userMessage, sessionId, cwd) {
     logTitleEvent('info', 'Skipping title generation: missing userMessage or sessionId');
     // Treat invalid input as "do not retry" — return true so callers don't
     // un-flag titleGenerationAttempted and re-trigger on the next turn.
+    return true;
+  }
+
+  if (!isValidSessionId(sessionId)) {
+    logTitleEvent('warn', 'Skipping title generation: invalid sessionId rejected');
     return true;
   }
 

@@ -67,33 +67,56 @@ export function useScrollBehavior({
   }, [syncScrollAnchoring]);
 
   // Scroll to bottom function
+  //
+  // Two-step strategy for reliability across browsers and mid-streaming
+  // layout phases (Agent tool blocks expand in multiple ticks):
+  //
+  //   Step 1 — `scrollTop = scrollHeight`: deterministic landing path that
+  //     also exercises the test environment (jsdom does not implement
+  //     `scrollIntoView` faithfully).
+  //
+  //   Step 2 — `scrollIntoView({block: 'end'})`: provides browser-native
+  //     end-positioning. Even though step 1 alone is usually sufficient, this
+  //     extra call hardens against intermediate scroll targets when the last
+  //     message grows in multiple paint phases (e.g. tool blocks streaming
+  //     in one-by-one). Force-reading `getBoundingClientRect`/`offsetTop`
+  //     beforehand ensures layout is up-to-date before the scroll command.
   const scrollToBottom = useCallback(() => {
     const container = messagesContainerRef.current;
     const endElement = messagesEndRef.current;
 
-    if (container) {
-      isAutoScrollingRef.current = true;
-      isUserAtBottomRef.current = true;
-      container.classList.remove(SCROLL_ANCHOR_ENABLED_CLASS);
-      container.scrollTop = container.scrollHeight;
-      requestAnimationFrame(() => {
-        isAutoScrollingRef.current = false;
-      });
-      return;
-    }
+    if (!container && !endElement) return;
+
+    isAutoScrollingRef.current = true;
+    isUserAtBottomRef.current = true;
+    container?.classList.remove(SCROLL_ANCHOR_ENABLED_CLASS);
 
     if (endElement) {
-      isAutoScrollingRef.current = true;
+      void endElement.getBoundingClientRect();
+      void endElement.offsetTop;
+    }
+
+    // Step 1: deterministic scrollTop adjustment.
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
+
+    // Step 2: native end-positioning (handles late-arriving layout).
+    if (endElement) {
       try {
         endElement.scrollIntoView({ block: 'end', behavior: 'auto' });
       } catch {
-        endElement.scrollIntoView(false);
+        try {
+          endElement.scrollIntoView(false);
+        } catch {
+          // No-op: scrollTop fallback already executed in Step 1.
+        }
       }
-      requestAnimationFrame(() => {
-        isAutoScrollingRef.current = false;
-      });
-      return;
     }
+
+    requestAnimationFrame(() => {
+      isAutoScrollingRef.current = false;
+    });
   }, []);
 
   const scheduleScrollToBottom = useCallback(() => {

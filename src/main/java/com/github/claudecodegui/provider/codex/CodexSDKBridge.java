@@ -227,10 +227,10 @@ public class CodexSDKBridge extends BaseSDKBridge {
             }
 
             File[] platformDirs = vendorDir.listFiles();
-            if (platformDirs == null) return;
+            if (platformDirs == null) { return; }
 
             for (File platformDir : platformDirs) {
-                if (!platformDir.isDirectory()) continue;
+                if (!platformDir.isDirectory()) { continue; }
 
                 File codexDir = new File(platformDir, "codex");
                 File codexBinary = new File(codexDir, "codex");
@@ -707,7 +707,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
         }
 
         for (ClaudeSession.Attachment attachment : attachments) {
-            if (attachment == null) continue;
+            if (attachment == null) { continue; }
 
             String type = attachment.mediaType;
             String data = attachment.data;
@@ -780,7 +780,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
      * Get file extension from MIME type.
      */
     private String getImageExtension(String mimeType) {
-        if (mimeType == null) return ".png";
+        if (mimeType == null) { return ".png"; }
 
         switch (mimeType.toLowerCase()) {
             case "image/jpeg":
@@ -801,11 +801,11 @@ public class CodexSDKBridge extends BaseSDKBridge {
     }
 
     private String extractAssistantText(JsonObject msg) {
-        if (msg == null) return "";
-        if (!msg.has("message") || !msg.get("message").isJsonObject()) return "";
+        if (msg == null) { return ""; }
+        if (!msg.has("message") || !msg.get("message").isJsonObject()) { return ""; }
 
         JsonObject message = msg.getAsJsonObject("message");
-        if (!message.has("content") || message.get("content").isJsonNull()) return "";
+        if (!message.has("content") || message.get("content").isJsonNull()) { return ""; }
 
         JsonElement contentEl = message.get("content");
         if (contentEl.isJsonPrimitive()) {
@@ -818,12 +818,12 @@ public class CodexSDKBridge extends BaseSDKBridge {
         JsonArray arr = contentEl.getAsJsonArray();
         StringBuilder sb = new StringBuilder();
         for (JsonElement el : arr) {
-            if (!el.isJsonObject()) continue;
+            if (!el.isJsonObject()) { continue; }
             JsonObject block = el.getAsJsonObject();
-            if (!block.has("type") || block.get("type").isJsonNull()) continue;
+            if (!block.has("type") || block.get("type").isJsonNull()) { continue; }
             String type = block.get("type").getAsString();
             if ("text".equals(type) && block.has("text") && !block.get("text").isJsonNull()) {
-                if (sb.length() > 0) sb.append("\n");
+                if (sb.length() > 0) { sb.append("\n"); }
                 sb.append(block.get("text").getAsString());
             }
         }

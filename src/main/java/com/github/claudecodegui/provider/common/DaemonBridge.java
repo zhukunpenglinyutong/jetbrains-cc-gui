@@ -227,17 +227,29 @@ public class DaemonBridge {
         // Kill process if still alive and wait for termination
         if (daemonProcess != null && daemonProcess.isAlive()) {
             daemonProcess.destroyForcibly();
-            try { daemonProcess.waitFor(3, TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            try {
+                daemonProcess.waitFor(3, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
 
         // Interrupt and join threads
         if (readerThread != null) {
             readerThread.interrupt();
-            try { readerThread.join(2000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            try {
+                readerThread.join(2000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
         if (heartbeatThread != null) {
             heartbeatThread.interrupt();
-            try { heartbeatThread.join(2000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            try {
+                heartbeatThread.join(2000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
 
         LOG.info("[DaemonBridge] Daemon stopped");
@@ -286,7 +298,7 @@ public class DaemonBridge {
      * Ensure the daemon is running, starting it if necessary.
      */
     public boolean ensureRunning() {
-        if (isAlive()) return true;
+        if (isAlive()) { return true; }
         return start();
     }
 
@@ -408,7 +420,7 @@ public class DaemonBridge {
             while (isRunning.get()) {
                 try {
                     Thread.sleep(HEARTBEAT_INTERVAL_MS);
-                    if (!isAlive()) break;
+                    if (!isAlive()) { break; }
 
                     // Check if daemon is unresponsive (no heartbeat response for too long)
                     long currentTime = System.currentTimeMillis();
@@ -460,7 +472,7 @@ public class DaemonBridge {
 
         try {
             JsonElement element = JsonParser.parseString(trimmed);
-            if (!element.isJsonObject()) return;
+            if (!element.isJsonObject()) { return; }
             JsonObject obj = element.getAsJsonObject();
 
             // --- Daemon lifecycle events ---
@@ -486,11 +498,11 @@ public class DaemonBridge {
             }
 
             // --- Request-tagged output ---
-            if (!obj.has("id")) return;
+            if (!obj.has("id")) { return; }
             String id = obj.get("id").getAsString();
 
             // Skip heartbeat responses
-            if (id.startsWith("hb-")) return;
+            if (id.startsWith("hb-")) { return; }
 
             RequestHandler handler = pendingRequests.get(id);
             if (handler == null) {
@@ -589,7 +601,7 @@ public class DaemonBridge {
     // =========================================================================
 
     private void handleDaemonDeath() {
-        if (!isRunning.compareAndSet(true, false)) return;
+        if (!isRunning.compareAndSet(true, false)) { return; }
 
         LOG.warn("[DaemonBridge] Daemon process died");
 
@@ -599,7 +611,11 @@ public class DaemonBridge {
             LOG.info("[DaemonBridge] Forcefully killing unresponsive daemon process (PID: "
                     + oldProcess.pid() + ")");
             oldProcess.destroyForcibly();
-            try { oldProcess.waitFor(2, TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            try {
+                oldProcess.waitFor(2, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
 
         // Fail all pending requests
@@ -648,7 +664,7 @@ public class DaemonBridge {
      * avoid memory leaks.
      */
     public void addEventListener(DaemonEventListener listener) {
-        if (listener == null) return;
+        if (listener == null) { return; }
         eventListeners.add(listener);
     }
 
@@ -656,7 +672,7 @@ public class DaemonBridge {
      * Remove a previously registered listener. No-op if not registered.
      */
     public void removeEventListener(DaemonEventListener listener) {
-        if (listener == null) return;
+        if (listener == null) { return; }
         eventListeners.remove(listener);
     }
 

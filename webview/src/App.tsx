@@ -1,124 +1,92 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import HistoryView from './components/history/HistoryView';
 import SettingsView from './components/settings';
-import type { SettingsTab } from './components/settings/SettingsSidebar';
 import { sendBridgeEvent } from './utils/bridge';
-import { ChatInputBox } from './components/ChatInputBox';
 import { preloadSlashCommands, forceRefreshPrompts } from './components/ChatInputBox/providers';
 import {
   useScrollBehavior,
-  useDialogManagement,
   useSessionManagement,
   useStreamingMessages,
   useWindowCallbacks,
   useRewindHandlers,
   useHistoryLoader,
-  useFileChanges,
-  useSubagents,
   useMessageQueue,
   useThemeInit,
   useContextActions,
   useMessageProcessing,
   useMessageSender,
-  useFileChangesManagement,
   useModelProviderState,
+  useChatComputations,
 } from './hooks';
 import {
   NEW_SESSION_COMMANDS,
   RESUME_COMMANDS,
   PLAN_COMMANDS,
 } from './hooks/useMessageSender';
-import type { ContextInfo, ViewMode } from './hooks';
-import { formatTime } from './utils/helpers';
-import { extractMarkdownContent } from './utils/copyUtils';
 import { applyDiffTheme, getStoredDiffTheme } from './utils/diffTheme';
-import { extractTodosFromToolUse } from './utils/todoToolNormalization';
-import {
-  finalizeSubagentsForSettledTurn,
-  finalizeTodosForSettledTurn,
-  sliceLatestConversationTurn,
-} from './utils/turnScope';
 import type { Attachment, ChatInputBoxHandle } from './components/ChatInputBox/types';
-import { StatusPanel, StatusPanelErrorBoundary } from './components/StatusPanel';
-import { ToastContainer, type ToastMessage } from './components/Toast';
-import { ScrollControl } from './components/ScrollControl';
+import { ToastContainer } from './components/Toast';
 import { ChatHeader } from './components/ChatHeader';
-import { WelcomeScreen } from './components/WelcomeScreen';
-import { MessageList } from './components/MessageList';
-import { MessageAnchorRail } from './components/MessageAnchorRail';
-import { SubagentHistoryContext, SessionIdContext, ToolResultRawContext, useSubagentContextValues } from './contexts/SubagentContext';
-import { FILE_MODIFY_TOOL_NAMES, isToolName } from './utils/toolConstants';
-import type { RewindableMessage } from './components/RewindSelectDialog';
+import { ChatScreen } from './components/ChatScreen';
+import { useSubagentContextValues } from './contexts/SubagentContext';
+import { useMessages } from './contexts/MessagesContext';
+import { useSession } from './contexts/SessionContext';
+import { useUIState } from './contexts/UIStateContext';
+import { useDialogs } from './contexts/DialogContext';
 import { AppDialogs } from './components/AppDialogs';
-import { APP_VERSION } from './version/version';
-import type {
-  ClaudeMessage,
-  ClaudeRawMessage,
-  HistoryData,
-  SubagentHistoryResponse,
-  ToolResultBlock,
-} from './types';
-
-const DEFAULT_STATUS = 'ready';
 
 const App = () => {
   const { t } = useTranslation();
 
-  // ── Dialog management ──
+  // ── Dialog management (extracted to DialogContext, stage 4 of TASK-P1-01) ──
+  // Open* / set* are still needed by hooks (useWindowCallbacks, useRewindHandlers).
+  // Display state (permissionDialogOpen / askUserQuestionDialogOpen / etc.) is
+  // consumed directly inside <AppDialogs> via useDialogs().
   const {
-    permissionDialogOpen, currentPermissionRequest, openPermissionDialog,
-    handlePermissionApprove, handlePermissionApproveAlways, handlePermissionSkip,
-    askUserQuestionDialogOpen, currentAskUserQuestionRequest, openAskUserQuestionDialog,
-    handleAskUserQuestionSubmit, handleAskUserQuestionCancel,
-    planApprovalDialogOpen, currentPlanApprovalRequest, openPlanApprovalDialog,
-    handlePlanApprovalApprove, handlePlanApprovalReject,
-    rewindDialogOpen, setRewindDialogOpen, currentRewindRequest, setCurrentRewindRequest,
-    isRewinding, setIsRewinding, rewindSelectDialogOpen, setRewindSelectDialogOpen,
-  } = useDialogManagement({ t });
+    openPermissionDialog,
+    openAskUserQuestionDialog,
+    openPlanApprovalDialog,
+    setRewindDialogOpen, setCurrentRewindRequest,
+    isRewinding, setIsRewinding, setRewindSelectDialogOpen,
+  } = useDialogs();
 
-  // ── Core state (shared across multiple hooks) ──
-  const [messages, setMessages] = useState<ClaudeMessage[]>([]);
-  const [subagentHistories, setSubagentHistories] = useState<Record<string, SubagentHistoryResponse>>({});
-  const [_status, setStatus] = useState(DEFAULT_STATUS);
-  const [loading, setLoading] = useState(false);
-  const [loadingStartTime, setLoadingStartTime] = useState<number | null>(null);
-  const [isThinking, setIsThinking] = useState(false);
-  const [streamingActive, setStreamingActive] = useState(false);
-  const [currentView, setCurrentView] = useState<ViewMode>('chat');
-  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>(undefined);
-  const [historyData, setHistoryData] = useState<HistoryData | null>(null);
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  const [addModelDialogOpen, setAddModelDialogOpen] = useState(false);
+  // ── Messages flow state (extracted to MessagesContext, stage 1 of TASK-P1-01) ──
+  // Display state (loadingStartTime / isThinking) is consumed inside <ChatScreen>.
+  const {
+    messages, setMessages,
+    subagentHistories, setSubagentHistories,
+    setStatus,
+    loading, setLoading, setLoadingStartTime,
+    setIsThinking,
+    streamingActive, setStreamingActive,
+  } = useMessages();
+
+  // ── Session state (extracted to SessionContext, stage 2 of TASK-P1-01) ──
+  const {
+    currentSessionId, setCurrentSessionId,
+    customSessionTitle, setCustomSessionTitle,
+    historyData, setHistoryData,
+    currentSessionIdRef, customSessionTitleRef,
+  } = useSession();
+
+  // ── UI state (extracted to UIStateContext, stage 3 of TASK-P1-01) ──
+  // Dialog visibility (addModelDialog / changelog) is consumed inside AppDialogs.
+  const {
+    currentView, setCurrentView,
+    settingsInitialTab, setSettingsInitialTab,
+    toasts, addToast, dismissToast, clearToasts,
+    setContextInfo,
+  } = useUIState();
+
+  // ── Local refs (don't trigger re-render, kept in App.tsx) ──
   const isFirstMountRef = useRef(true);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [customSessionTitle, setCustomSessionTitle] = useState<string | null>(null);
   const chatInputRef = useRef<ChatInputBoxHandle>(null);
-  const [draftInput, setDraftInput] = useState('');
 
-  // StatusPanel collapse state
+  // StatusPanel collapse state — kept in App.tsx because forceStatusUpdate is
+  // intentionally local: a tiny re-render trigger paired with userCollapsedRef.
   const userCollapsedRef = useRef(false);
   const [, forceStatusUpdate] = useState(0);
-
-  // Changelog dialog state (show once per version update)
-  const LAST_SEEN_VERSION_KEY = 'lastSeenChangelogVersion';
-  const [showChangelogDialog, setShowChangelogDialog] = useState(() => {
-    const lastSeen = localStorage.getItem(LAST_SEEN_VERSION_KEY);
-    return lastSeen !== APP_VERSION;
-  });
-  const handleCloseChangelog = useCallback(() => {
-    localStorage.setItem(LAST_SEEN_VERSION_KEY, APP_VERSION);
-    setShowChangelogDialog(false);
-  }, []);
-
-  // Context state (active file and selection)
-  const [contextInfo, setContextInfo] = useState<ContextInfo | null>(null);
-
-  // Refs for stale closure prevention
-  const currentSessionIdRef = useRef(currentSessionId);
-  useEffect(() => { currentSessionIdRef.current = currentSessionId; }, [currentSessionId]);
-  const customSessionTitleRef = useRef(customSessionTitle);
-  useEffect(() => { customSessionTitleRef.current = customSessionTitle; }, [customSessionTitle]);
 
   // Message anchor node registry for anchor rail navigation
   const messageNodeMapRef = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -154,16 +122,7 @@ const App = () => {
     getOrCreateStreamingAssistantIndex, patchAssistantForStreaming,
   } = useStreamingMessages();
 
-  // ── Toast helpers ──
-  const addToast = useCallback((message: string, type: ToastMessage['type'] = 'info') => {
-    if (message === DEFAULT_STATUS || !message) return;
-    const id = `toast-${Date.now()}-${Math.random()}`;
-    setToasts((prev) => [...prev, { id, message, type }]);
-  }, []);
-  const dismissToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id));
-  }, []);
-  const clearToasts = useCallback(() => { setToasts([]); }, []);
+  // (Toast helpers moved to UIStateContext)
 
   // ── Model/Provider state ──
   const {
@@ -277,48 +236,6 @@ const App = () => {
     mergedMessages, sentAttachmentsRef,
   } = useMessageProcessing({ messages, currentSessionId, t });
 
-  // Find tool result (stable ref to avoid re-renders).
-  // Also populates toolResultRawMap so downstream code can look up the
-  // enclosing raw message without carrying it on every result object.
-  const messagesRef = useRef(messages);
-  messagesRef.current = messages;
-  const toolResultRawMapRef = useRef<Map<string, ClaudeRawMessage>>(new Map());
-  const findToolResult = useCallback((toolUseId?: string, messageIndex?: number): ToolResultBlock | null => {
-    if (!toolUseId || typeof messageIndex !== 'number') return null;
-    const currentMessages = messagesRef.current;
-    // Check the cache first — the raw message for a given tool_use_id never
-    // changes once written, so a cache hit avoids a full scan.
-    const cachedRaw = toolResultRawMapRef.current.get(toolUseId);
-    if (cachedRaw != null) {
-      const content = cachedRaw.content ?? cachedRaw.message?.content;
-      if (Array.isArray(content)) {
-        const hit = content.find(
-          (block): block is ToolResultBlock =>
-            Boolean(block) && block.type === 'tool_result' && block.tool_use_id === toolUseId,
-        );
-        if (hit) return hit;
-      }
-    }
-    for (let i = 0; i < currentMessages.length; i += 1) {
-      const candidate = currentMessages[i];
-      const raw = candidate.raw;
-      if (!raw || typeof raw === 'string') continue;
-      const content = raw.content ?? raw.message?.content;
-      if (!Array.isArray(content)) continue;
-      const resultBlock = content.find(
-        (block): block is ToolResultBlock =>
-          Boolean(block) && block.type === 'tool_result' && block.tool_use_id === toolUseId,
-      );
-      if (resultBlock) {
-        toolResultRawMapRef.current.set(toolUseId, raw);
-        return resultBlock;
-      }
-    }
-    return null;
-  }, []);
-  const getToolResultRaw = useCallback((toolUseId: string): ClaudeRawMessage | null =>
-    toolResultRawMapRef.current.get(toolUseId) ?? null, []);
-
   // ── Message sender ──
   // Wrap handleProviderSelect to also clear messages and input (like creating a new session)
   const wrappedHandleProviderSelect = useCallback((providerId: string) => {
@@ -387,49 +304,30 @@ const App = () => {
     hookHandleSubmit(content, attachments);
   }, [loading, enqueueMessage, hookHandleSubmit, forceCreateNewSession, currentProvider, handleModeSelect, setCurrentView, addToast, t]);
 
-  // ── File changes management ──
+  // ── Chat-view computations (stage 5 of TASK-P1-01) ──
   const {
-    processedFiles, baseMessageIndex,
-    handleUndoFile, handleDiscardAll: handleDiscardAllRaw, handleKeepAll,
-  } = useFileChangesManagement({
-    currentSessionId, currentSessionIdRef, messages,
-    getContentBlocks, findToolResult,
+    findToolResult, getToolResultRaw,
+    fileChangeMgmt,
+    filteredFileChanges, subagents, globalTodos, rewindableMessages, sessionTitle,
+  } = useChatComputations({
+    t, messages, mergedMessages, customSessionTitle, streamingActive, currentProvider,
+    currentSessionId, currentSessionIdRef,
+    getMessageText, getContentBlocks,
   });
 
-  const fileChanges = useFileChanges({
-    messages, getContentBlocks, findToolResult,
-    startFromIndex: baseMessageIndex,
-  });
-
-  const filteredFileChanges = useMemo(() => {
-    if (processedFiles.length === 0) return fileChanges;
-    return fileChanges.filter(fc => !processedFiles.includes(fc.filePath));
-  }, [fileChanges, processedFiles]);
-
-  const onDiscardAll = useCallback(() => {
-    handleDiscardAllRaw(filteredFileChanges);
-  }, [handleDiscardAllRaw, filteredFileChanges]);
-
-  const latestTurnMessages = useMemo(() => sliceLatestConversationTurn(messages), [messages]);
-
-  // ── Subagents ──
-  const latestTurnSubagents = useSubagents({ messages: latestTurnMessages, getContentBlocks, findToolResult, getToolResultRaw });
-  const subagents = useMemo(
-    () => finalizeSubagentsForSettledTurn(latestTurnSubagents, streamingActive),
-    [latestTurnSubagents, streamingActive],
+  const { handleUndoFile, handleDiscardAll: handleDiscardAllRaw, handleKeepAll } = fileChangeMgmt;
+  const onDiscardAll = useCallback(
+    () => { handleDiscardAllRaw(filteredFileChanges); },
+    [handleDiscardAllRaw, filteredFileChanges],
   );
 
-  // Stabilize context value references — prevents consumers from re-rendering
-  // when App re-renders for unrelated reasons (e.g. streaming messages change).
-  // subagentHistoryCtxValue is a getter function backed by a ref, so its
-  // reference never changes even when individual histories are updated.
+  // Stabilize context value references for SubagentContext consumers.
   const { subagentHistoryCtxValue, sessionIdCtxValue } = useSubagentContextValues(subagentHistories, currentSessionId);
 
-  // Stable callback to avoid defeating MessageList memo on every App render.
   const handleNavigateToProviderSettings = useCallback(() => {
     setSettingsInitialTab('providers');
     setCurrentView('settings');
-  }, []);
+  }, [setSettingsInitialTab, setCurrentView]);
 
   // ── Rewind handlers ──
   const {
@@ -441,78 +339,7 @@ const App = () => {
     setIsRewinding, isRewinding,
   });
 
-  // ── Computed values ──
-
-  // Extract todos from the latest turn only so the status panel reflects the
-  // current/most-recent task, instead of accumulating historical plans forever.
-  const globalTodos = useMemo(() => {
-    let latestTodos: ReturnType<typeof extractTodosFromToolUse> = null;
-    for (let i = latestTurnMessages.length - 1; i >= 0; i--) {
-      const msg = latestTurnMessages[i];
-      if (msg.type !== 'assistant') continue;
-      const blocks = getContentBlocks(msg);
-      for (let j = blocks.length - 1; j >= 0; j--) {
-        const todos = extractTodosFromToolUse(blocks[j]);
-        if (todos && todos.length > 0) {
-          latestTodos = todos;
-          break;
-        }
-      }
-      if (latestTodos) {
-        break;
-      }
-    }
-    return finalizeTodosForSettledTurn(latestTodos ?? [], streamingActive);
-  }, [latestTurnMessages, getContentBlocks, streamingActive]);
-
-  const canRewindFromMessageIndex = (userMessageIndex: number) => {
-    if (userMessageIndex < 0 || userMessageIndex >= mergedMessages.length) return false;
-    const current = mergedMessages[userMessageIndex];
-    if (current.type !== 'user') return false;
-    if ((current.content || '').trim() === '[tool_result]') return false;
-    const raw = current.raw;
-    if (raw && typeof raw !== 'string') {
-      const content = (raw as any).content ?? (raw as any).message?.content;
-      if (Array.isArray(content) && content.some((block: any) => block && block.type === 'tool_result')) {
-        return false;
-      }
-    }
-    for (let i = userMessageIndex + 1; i < mergedMessages.length; i += 1) {
-      const msg = mergedMessages[i];
-      if (msg.type === 'user') break;
-      const blocks = getContentBlocks(msg);
-      for (const block of blocks) {
-        if (block.type !== 'tool_use') continue;
-        if (isToolName(block.name, FILE_MODIFY_TOOL_NAMES)) return true;
-      }
-    }
-    return false;
-  };
-
-  const rewindableMessages = useMemo((): RewindableMessage[] => {
-    if (currentProvider !== 'claude') return [];
-    const result: RewindableMessage[] = [];
-    for (let i = 0; i < mergedMessages.length - 1; i++) {
-      if (!canRewindFromMessageIndex(i)) continue;
-      const message = mergedMessages[i];
-      const content = message.content || getMessageText(message);
-      const timestamp = message.timestamp ? formatTime(message.timestamp) : undefined;
-      const messagesAfterCount = mergedMessages.length - i - 1;
-      result.push({ messageIndex: i, message, displayContent: content, timestamp, messagesAfterCount });
-    }
-    return result;
-  }, [mergedMessages, currentProvider]);
-
   const statusPanelExpanded = !userCollapsedRef.current;
-
-  const sessionTitle = useMemo(() => {
-    if (customSessionTitle) return customSessionTitle;
-    if (messages.length === 0) return t('common.newSession');
-    const firstUserMessage = messages.find((message) => message.type === 'user');
-    if (!firstUserMessage) return t('common.newSession');
-    const text = getMessageText(firstUserMessage);
-    return text.length > 15 ? `${text.substring(0, 15)}...` : text;
-  }, [customSessionTitle, messages, t, getMessageText]);
 
   // ── Render ──
   return (
@@ -552,54 +379,63 @@ const App = () => {
           onAutoOpenFileEnabledChange={handleAutoOpenFileEnabledChange}
         />
       ) : currentView === 'chat' ? (
-        <>
-          <div className="messages-shell">
-            <MessageAnchorRail
-              messages={mergedMessages}
-              collapsedCount={anchorCollapsedCount}
-              containerRef={messagesContainerRef}
-              messageNodeMap={messageNodeMapRef}
-            />
-            <div className="messages-container" ref={messagesContainerRef}>
-              {messages.length === 0 && (
-                <WelcomeScreen
-                  currentProvider={currentProvider}
-                  currentModelId={selectedModel}
-                  t={t}
-                  onProviderChange={wrappedHandleProviderSelect}
-                  onVersionClick={() => setShowChangelogDialog(true)}
-                />
-              )}
-
-              <SessionIdContext.Provider value={sessionIdCtxValue}>
-                <SubagentHistoryContext.Provider value={subagentHistoryCtxValue}>
-                <ToolResultRawContext.Provider value={getToolResultRaw}>
-                <MessageList
-                  messages={mergedMessages}
-                  streamingActive={streamingActive}
-                  isThinking={isThinking}
-                  loading={loading}
-                  loadingStartTime={loadingStartTime}
-                  t={t}
-                  getMessageText={getMessageText}
-                  getContentBlocks={getContentBlocks}
-                  findToolResult={findToolResult}
-                  extractMarkdownContent={extractMarkdownContent}
-                  messagesEndRef={messagesEndRef}
-                  onMessageNodeRef={handleMessageNodeRef}
-                  onCollapsedCountChange={setAnchorCollapsedCount}
-                  onNavigateToProviderSettings={handleNavigateToProviderSettings}
-                  currentProvider={currentProvider}
-                />
-                </ToolResultRawContext.Provider>
-                </SubagentHistoryContext.Provider>
-              </SessionIdContext.Provider>
-            </div>
-          </div>
-
-          {/* Scroll control button */}
-          <ScrollControl containerRef={messagesContainerRef} inputAreaRef={inputAreaRef} />
-        </>
+        <ChatScreen
+          mergedMessages={mergedMessages}
+          getMessageText={getMessageText}
+          getContentBlocks={getContentBlocks}
+          findToolResult={findToolResult}
+          getToolResultRaw={getToolResultRaw}
+          subagents={subagents}
+          globalTodos={globalTodos}
+          filteredFileChanges={filteredFileChanges}
+          subagentHistoryCtxValue={subagentHistoryCtxValue}
+          sessionIdCtxValue={sessionIdCtxValue}
+          chatInputRef={chatInputRef}
+          messagesContainerRef={messagesContainerRef}
+          messagesEndRef={messagesEndRef}
+          inputAreaRef={inputAreaRef}
+          messageNodeMapRef={messageNodeMapRef}
+          userCollapsedRef={userCollapsedRef}
+          anchorCollapsedCount={anchorCollapsedCount}
+          setAnchorCollapsedCount={setAnchorCollapsedCount}
+          onMessageNodeRef={handleMessageNodeRef}
+          statusPanelExpanded={statusPanelExpanded}
+          forceStatusUpdate={forceStatusUpdate}
+          onUndoFile={handleUndoFile}
+          onDiscardAll={onDiscardAll}
+          onKeepAll={handleKeepAll}
+          onSubmit={handleSubmit}
+          onInterrupt={interruptSession}
+          onRewind={handleOpenRewindSelectDialog}
+          onNavigateToProviderSettings={handleNavigateToProviderSettings}
+          onProviderSelect={wrappedHandleProviderSelect}
+          currentProvider={currentProvider}
+          selectedModel={selectedModel}
+          permissionMode={permissionMode}
+          selectedAgent={selectedAgent}
+          sdkStatusLoaded={sdkStatusLoaded}
+          currentSdkInstalled={currentSdkInstalled}
+          activeProviderConfig={activeProviderConfig}
+          claudeSettingsAlwaysThinkingEnabled={claudeSettingsAlwaysThinkingEnabled}
+          reasoningEffort={reasoningEffort}
+          streamingEnabledSetting={streamingEnabledSetting}
+          sendShortcut={sendShortcut}
+          autoOpenFileEnabled={autoOpenFileEnabled}
+          longContextEnabled={longContextEnabled}
+          usagePercentage={usagePercentage}
+          usageUsedTokens={usageUsedTokens}
+          usageMaxTokens={usageMaxTokens}
+          onModeSelect={handleModeSelect}
+          onModelSelect={handleModelSelect}
+          onAgentSelect={handleAgentSelect}
+          onReasoningChange={handleReasoningChange}
+          onToggleThinking={handleToggleThinking}
+          onStreamingEnabledChange={handleStreamingEnabledChange}
+          onAutoOpenFileEnabledChange={handleAutoOpenFileEnabledChange}
+          onLongContextChange={handleLongContextChange}
+          messageQueue={messageQueue}
+          onRemoveFromQueue={dequeueMessage}
+        />
       ) : (
         <HistoryView
           historyData={historyData}
@@ -613,126 +449,20 @@ const App = () => {
         />
       )}
 
-      {currentView === 'chat' && (
-        <>
-          <StatusPanelErrorBoundary>
-            <StatusPanel
-              todos={globalTodos}
-              fileChanges={filteredFileChanges}
-              subagents={subagents}
-              subagentHistories={subagentHistories}
-              currentSessionId={currentSessionId}
-              expanded={statusPanelExpanded}
-              isStreaming={streamingActive}
-              onUndoFile={handleUndoFile}
-              onDiscardAll={onDiscardAll}
-              onKeepAll={handleKeepAll}
-            />
-          </StatusPanelErrorBoundary>
-          <div className="input-area" ref={inputAreaRef}>
-            <ChatInputBox
-              ref={chatInputRef}
-              isLoading={loading}
-              selectedModel={selectedModel}
-              permissionMode={permissionMode}
-              currentProvider={currentProvider}
-              usagePercentage={usagePercentage}
-              usageUsedTokens={usageUsedTokens}
-              usageMaxTokens={usageMaxTokens}
-              showUsage={true}
-              alwaysThinkingEnabled={activeProviderConfig?.settingsConfig?.alwaysThinkingEnabled ?? claudeSettingsAlwaysThinkingEnabled}
-              placeholder={sendShortcut === 'cmdEnter' ? t('chat.inputPlaceholderCmdEnter') : t('chat.inputPlaceholderEnter')}
-              sdkInstalled={currentSdkInstalled}
-              sdkStatusLoading={!sdkStatusLoaded}
-              onInstallSdk={() => {
-                setSettingsInitialTab('dependencies');
-                setCurrentView('settings');
-              }}
-              value={draftInput}
-              onInput={setDraftInput}
-              onSubmit={handleSubmit}
-              onStop={interruptSession}
-              onModeSelect={handleModeSelect}
-              onModelSelect={handleModelSelect}
-              onProviderSelect={wrappedHandleProviderSelect}
-              reasoningEffort={reasoningEffort}
-              onReasoningChange={handleReasoningChange}
-              onToggleThinking={handleToggleThinking}
-              streamingEnabled={streamingEnabledSetting}
-              onStreamingEnabledChange={handleStreamingEnabledChange}
-              sendShortcut={sendShortcut}
-              selectedAgent={selectedAgent}
-              onAgentSelect={handleAgentSelect}
-              activeFile={contextInfo?.file}
-              selectedLines={contextInfo?.startLine !== undefined && contextInfo?.endLine !== undefined
-                ? (contextInfo.startLine === contextInfo.endLine
-                    ? `L${contextInfo.startLine}`
-                    : `L${contextInfo.startLine}-${contextInfo.endLine}`)
-                : undefined}
-              onClearContext={() => setContextInfo(null)}
-              onOpenAgentSettings={() => {
-                setSettingsInitialTab('agents');
-                setCurrentView('settings');
-              }}
-              onOpenPromptSettings={() => {
-                setSettingsInitialTab('prompts');
-                setCurrentView('settings');
-              }}
-              onOpenModelSettings={() => {
-                setAddModelDialogOpen(true);
-              }}
-              hasMessages={messages.length > 0}
-              onRewind={handleOpenRewindSelectDialog}
-              statusPanelExpanded={statusPanelExpanded}
-              onToggleStatusPanel={() => { userCollapsedRef.current = !userCollapsedRef.current; forceStatusUpdate(c => c + 1); }}
-              addToast={addToast}
-              messageQueue={messageQueue}
-              onRemoveFromQueue={dequeueMessage}
-              autoOpenFileEnabled={autoOpenFileEnabled}
-              onAutoOpenFileEnabledChange={handleAutoOpenFileEnabledChange}
-              longContextEnabled={longContextEnabled}
-              onLongContextChange={handleLongContextChange}
-            />
-          </div>
-        </>
-      )}
-
       <div id="image-preview-root" />
 
       <AppDialogs
-        t={t}
         showNewSessionConfirm={showNewSessionConfirm}
         onConfirmNewSession={handleConfirmNewSession}
         onCancelNewSession={handleCancelNewSession}
         showInterruptConfirm={showInterruptConfirm}
         onConfirmInterrupt={handleConfirmInterrupt}
         onCancelInterrupt={handleCancelInterrupt}
-        permissionDialogOpen={permissionDialogOpen}
-        currentPermissionRequest={currentPermissionRequest}
-        onPermissionApprove={handlePermissionApprove}
-        onPermissionSkip={handlePermissionSkip}
-        onPermissionApproveAlways={handlePermissionApproveAlways}
-        askUserQuestionDialogOpen={askUserQuestionDialogOpen}
-        currentAskUserQuestionRequest={currentAskUserQuestionRequest}
-        onAskUserQuestionSubmit={handleAskUserQuestionSubmit}
-        onAskUserQuestionCancel={handleAskUserQuestionCancel}
-        planApprovalDialogOpen={planApprovalDialogOpen}
-        currentPlanApprovalRequest={currentPlanApprovalRequest}
-        onPlanApprovalApprove={handlePlanApprovalApprove}
-        onPlanApprovalReject={handlePlanApprovalReject}
-        rewindSelectDialogOpen={rewindSelectDialogOpen}
         rewindableMessages={rewindableMessages}
         onRewindSelect={handleRewindSelect}
         onRewindSelectCancel={handleRewindSelectCancel}
-        rewindDialogOpen={rewindDialogOpen}
-        currentRewindRequest={currentRewindRequest}
-        isRewinding={isRewinding}
         onRewindConfirm={handleRewindConfirm}
         onRewindCancel={handleRewindCancel}
-        showChangelogDialog={showChangelogDialog}
-        onCloseChangelog={handleCloseChangelog}
-        addModelDialogOpen={addModelDialogOpen}
-        onCloseAddModel={() => setAddModelDialogOpen(false)}
         currentProvider={currentProvider}
       />
     </>

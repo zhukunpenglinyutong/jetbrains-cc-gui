@@ -308,15 +308,23 @@ class ErrorBoundary extends Component<Props, State> {
       const errorDetails = formatErrorDetails(this.state.error, this.state.errorInfo);
       const copyButtonStyle = getCopyButtonStyle(this.state.copied);
 
-      // Default fallback UI
+      // Default fallback UI — role/aria-live announce the error to assistive
+      // tech, otherwise screen-reader users have no signal that the surface
+      // suddenly switched to an error state.
       return (
-        <div style={ROOT_STYLE}>
+        <div
+          style={ROOT_STYLE}
+          role="alert"
+          aria-live="assertive"
+          aria-atomic="true"
+        >
           <div style={CARD_STYLE}>
             {/* Header */}
             <div style={HEADER_STYLE}>
               <span
                 className="codicon codicon-error"
                 style={HEADER_ICON_STYLE}
+                aria-hidden="true"
               />
               <h2 style={HEADER_TITLE_STYLE}>
                 {t('errorBoundary.title', 'Something went wrong')}
@@ -358,6 +366,7 @@ class ErrorBoundary extends Component<Props, State> {
               {/* Copy Error Button */}
               <button
                 onClick={this.handleCopyError}
+                aria-label={t('errorBoundary.copyError', 'Copy Error Info')}
                 style={copyButtonStyle}
                 onMouseOver={(e) => {
                   if (!this.state.copied) {
@@ -384,6 +393,7 @@ class ErrorBoundary extends Component<Props, State> {
               {/* Reload Button */}
               <button
                 onClick={this.handleReset}
+                aria-label={t('errorBoundary.reload', 'Reload Application')}
                 style={RELOAD_BUTTON_STYLE}
                 onMouseOver={(e) => {
                   e.currentTarget.style.backgroundColor =

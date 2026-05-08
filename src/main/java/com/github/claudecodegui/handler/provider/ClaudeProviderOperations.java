@@ -339,7 +339,9 @@ public class ClaudeProviderOperations {
             context.getSettingsService().applyActiveProviderToClaudeSettings();
 
             ApplicationManager.getApplication().invokeLater(() -> {
-                context.callJavaScript("window.showSwitchSuccess", context.escapeJs(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("toast.providerSwitchSuccess") + com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("provider.switchSyncClaude")));
+                String successMsg = com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("toast.providerSwitchSuccess")
+                        + com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("provider.switchSyncClaude");
+                context.callJavaScript("window.showSwitchSuccess", context.escapeJs(successMsg));
                 handleGetProviders();
                 handleGetActiveProvider();
             });

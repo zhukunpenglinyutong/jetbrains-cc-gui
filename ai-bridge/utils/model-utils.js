@@ -142,7 +142,11 @@ export function modelSupportsVision(modelId) {
     return true;
   }
   const lower = modelId.toLowerCase();
-  return lower.startsWith('claude-') || lower.includes('claude');
+  // Anchor to the canonical "claude-" prefix to avoid matching third-party
+  // model names that merely contain the substring "claude" (e.g.
+  // "claude-compatible-proxy"), which historically yielded false positives
+  // and dropped images for proxies that don't speak Anthropic vision blocks.
+  return lower.startsWith('claude-');
 }
 
 // Note: getClaudeCliPath() has been removed.

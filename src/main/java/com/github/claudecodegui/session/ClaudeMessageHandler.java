@@ -888,7 +888,7 @@ public class ClaudeMessageHandler implements MessageCallback {
      * Handle usage data from the [USAGE] tag emitted by ai-bridge during streaming.
      */
     private void handleUsage(String content) {
-        if (content == null || content.isEmpty() || !content.startsWith("{")) return;
+        if (content == null || content.isEmpty() || !content.startsWith("{")) { return; }
         try {
             JsonObject usageJson = gson.fromJson(content, JsonObject.class);
             int usedTokens = TokenUsageUtils.extractUsedTokens(usageJson, state.getProvider());
@@ -917,10 +917,10 @@ public class ClaudeMessageHandler implements MessageCallback {
      * - Allowing overwrites ensures consistency with JSONL history and CLI behavior.
      */
     private void backfillUsageToAssistantMessage(JsonObject usageJson) {
-        if (currentAssistantMessage == null || currentAssistantMessage.raw == null) return;
+        if (currentAssistantMessage == null || currentAssistantMessage.raw == null) { return; }
         JsonObject message = currentAssistantMessage.raw.has("message") && currentAssistantMessage.raw.get("message").isJsonObject()
                 ? currentAssistantMessage.raw.getAsJsonObject("message") : null;
-        if (message == null) return;
+        if (message == null) { return; }
 
         // Always update usage during streaming to capture accumulating values
         message.add("usage", usageJson);

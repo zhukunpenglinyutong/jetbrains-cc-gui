@@ -136,7 +136,7 @@ function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxTh
 async function buildUserMessage(params, withAttachments, requestedSessionId, resolvedModelId = null) {
   if (withAttachments) {
     const attachments = await loadAttachments({ attachments: params.attachments || [] });
-    const contentBlocks = buildContentBlocks(attachments, params.message || '', resolvedModelId);
+    const contentBlocks = await buildContentBlocks(attachments, params.message || '', resolvedModelId);
     return {
       type: 'user',
       session_id: requestedSessionId || '',

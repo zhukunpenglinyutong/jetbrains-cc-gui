@@ -131,7 +131,7 @@ public class SendFilePathToInputAction extends AnAction implements DumbAware {
                         AppExecutorUtil.getAppScheduledExecutorService().schedule(() -> {
                             ApplicationManager.getApplication().invokeLater(() -> {
                                 try {
-                                    if (project.isDisposed()) return;
+                                    if (project.isDisposed()) { return; }
                                     ClaudeSDKToolWindow.addSelectionFromExternal(project, filePaths);
                                     LOG.info("Window activated and sent file paths to project: " + project.getName());
                                 } catch (Exception ex) {

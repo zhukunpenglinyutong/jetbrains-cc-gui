@@ -1,6 +1,5 @@
 package com.github.claudecodegui.session;
 
-import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.intellij.openapi.project.Project;

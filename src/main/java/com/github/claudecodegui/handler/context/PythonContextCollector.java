@@ -11,7 +11,6 @@ import com.intellij.psi.PsiNameIdentifierOwner;
 import com.intellij.psi.PsiNamedElement;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.jetbrains.python.psi.*;
-import org.jetbrains.annotations.NotNull;
 
 /**
  * Python-specific context collection.
@@ -57,7 +56,7 @@ public class PythonContextCollector {
     private static JsonObject getCurrentScope(PsiFile psiFile, int offset) {
         JsonObject scope = new JsonObject();
         PsiElement element = psiFile.findElementAt(offset);
-        if (element == null) return null;
+        if (element == null) { return null; }
 
         PyFunction pyFunction = PsiTreeUtil.getParentOfType(element, PyFunction.class);
         PyClass pyClass = PsiTreeUtil.getParentOfType(element, PyClass.class);

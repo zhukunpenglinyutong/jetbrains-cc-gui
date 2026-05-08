@@ -11,12 +11,6 @@ import com.intellij.openapi.diagnostic.Logger;
  * Processes messages returned by Codex AI.
  * Similar to ClaudeMessageHandler but handles Codex's simpler message format,
  * primarily dealing with streaming text output.
- *
- * @author melon
- * @email "mailto:melon@email.com"
- * @date 2026-04-30 16:26
- * @version 1.0.0
- * @since 1.0.0
  */
 public class CodexMessageHandler implements MessageCallback {
     /**

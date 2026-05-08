@@ -38,8 +38,14 @@ public class ClipboardHandler extends BaseMessageHandler {
     @Override
     public boolean handle(String type, String content) {
         return switch (type) {
-            case "read_clipboard" -> { handleReadClipboard(); yield true; }
-            case "write_clipboard" -> { handleWriteClipboard(content); yield true; }
+            case "read_clipboard" -> {
+                handleReadClipboard();
+                yield true;
+            }
+            case "write_clipboard" -> {
+                handleWriteClipboard(content);
+                yield true;
+            }
             default -> false;
         };
     }

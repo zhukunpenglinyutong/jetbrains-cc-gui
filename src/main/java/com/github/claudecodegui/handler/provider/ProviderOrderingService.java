@@ -35,7 +35,7 @@ public class ProviderOrderingService {
      */
     public void handleSortProviders(String content) {
         List<String> orderedIds = parseOrderedIds(content, "sorting");
-        if (orderedIds == null) return;
+        if (orderedIds == null) { return; }
         try {
             context.getSettingsService().saveProviderOrder(orderedIds);
             LOG.info("[ProviderHandler] Saved provider order: " + orderedIds);
@@ -52,7 +52,7 @@ public class ProviderOrderingService {
      */
     public void handleSortCodexProviders(String content) {
         List<String> orderedIds = parseOrderedIds(content, "Codex sorting");
-        if (orderedIds == null) return;
+        if (orderedIds == null) { return; }
         try {
             context.getSettingsService().saveCodexProviderOrder(orderedIds);
             LOG.info("[ProviderHandler] Saved Codex provider order: " + orderedIds);

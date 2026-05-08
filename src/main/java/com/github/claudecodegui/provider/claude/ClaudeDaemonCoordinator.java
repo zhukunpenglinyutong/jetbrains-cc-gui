@@ -50,7 +50,7 @@ class ClaudeDaemonCoordinator {
      * to any future daemon bridge created after a restart.
      */
     void addDaemonEventListener(DaemonBridge.DaemonEventListener listener) {
-        if (listener == null) return;
+        if (listener == null) { return; }
         cachedEventListeners.add(listener);
         DaemonBridge current = daemonBridge;
         if (current != null && current.isAlive()) {
@@ -62,7 +62,7 @@ class ClaudeDaemonCoordinator {
      * Unregister a previously added listener. No-op if not registered.
      */
     void removeDaemonEventListener(DaemonBridge.DaemonEventListener listener) {
-        if (listener == null) return;
+        if (listener == null) { return; }
         cachedEventListeners.remove(listener);
         DaemonBridge current = daemonBridge;
         if (current != null && current.isAlive()) {

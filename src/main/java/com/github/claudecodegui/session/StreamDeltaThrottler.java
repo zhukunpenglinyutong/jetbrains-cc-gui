@@ -150,7 +150,7 @@ public final class StreamDeltaThrottler {
         }
 
         private void dispose() {
-            if (disposed) return;
+            if (disposed) { return; }
             disposed = true;
             cancel();
             executor.shutdownNow();

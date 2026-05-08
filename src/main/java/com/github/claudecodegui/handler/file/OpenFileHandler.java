@@ -483,9 +483,9 @@ class OpenFileHandler {
      * Result of file resolution: either a File path or a VirtualFile from fuzzy matching.
      * At most one of the two fields will be non-null.
      */
-    static record FileResolutionResult(File file, VirtualFile virtualFile) {
+    record FileResolutionResult(File file, VirtualFile virtualFile) {
     }
 
-    static record LineInfo(String actualPath, int lineNumber, int endLineNumber, boolean hasLineInfo) {
+    record LineInfo(String actualPath, int lineNumber, int endLineNumber, boolean hasLineInfo) {
     }
 }

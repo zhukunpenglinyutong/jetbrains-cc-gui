@@ -50,7 +50,7 @@ public class JsUtils {
         js.append(functionName).append("(");
 
         for (int i = 0; i < args.length; i++) {
-            if (i > 0) js.append(", ");
+            if (i > 0) { js.append(", "); }
             js.append("'").append(args[i]).append("'");
         }
 
@@ -73,7 +73,7 @@ public class JsUtils {
         js.append(objectPath).append("(");
 
         for (int i = 0; i < args.length; i++) {
-            if (i > 0) js.append(", ");
+            if (i > 0) { js.append(", "); }
             js.append("'").append(args[i]).append("'");
         }
 

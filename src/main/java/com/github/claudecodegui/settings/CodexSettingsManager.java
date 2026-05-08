@@ -843,7 +843,7 @@ public class CodexSettingsManager {
             List<Object> list = (List<Object>) value;
             StringBuilder sb = new StringBuilder("[");
             for (int i = 0; i < list.size(); i++) {
-                if (i > 0) sb.append(", ");
+                if (i > 0) { sb.append(", "); }
                 sb.append(toTomlValue(list.get(i)));
             }
             sb.append("]");
@@ -856,7 +856,7 @@ public class CodexSettingsManager {
             StringBuilder sb = new StringBuilder("{ ");
             boolean first = true;
             for (Map.Entry<String, Object> entry : map.entrySet()) {
-                if (!first) sb.append(", ");
+                if (!first) { sb.append(", "); }
                 first = false;
                 sb.append("\"").append(escapeTomlString(entry.getKey())).append("\" = ");
                 sb.append(toTomlValue(entry.getValue()));

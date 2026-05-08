@@ -15,6 +15,7 @@ export { useMessageProcessing } from './useMessageProcessing';
 export { useMessageSender } from './useMessageSender';
 export { useFileChangesManagement } from './useFileChangesManagement';
 export { useModelProviderState } from './useModelProviderState';
+export { useChatComputations } from './useChatComputations';
 export type { UseWindowCallbacksOptions, ContextInfo } from './useWindowCallbacks';
 export type { UseRewindHandlersOptions, UseRewindHandlersReturn } from './useRewindHandlers';
 export type { UseHistoryLoaderOptions } from './useHistoryLoader';
