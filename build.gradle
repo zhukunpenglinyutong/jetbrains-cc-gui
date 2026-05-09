@@ -354,12 +354,19 @@ tasks.register('packageAiBridge', Exec) {
     // Switch to ai-bridge directory for packaging, avoiding inclusion of top-level directory
     workingDir aiBridgeDir
 
-    // Ensure output directory exists
+    // Ensure output directory exists and dependencies are installed
     doFirst {
         aiBridgePackDir.mkdirs()
         // Delete old zip file
         if (aiBridgeArchive.exists()) {
             aiBridgeArchive.delete()
+        }
+        // Install npm dependencies if node_modules doesn't exist
+        if (!new File(aiBridgeDir, 'node_modules').exists()) {
+            println 'Installing ai-bridge npm dependencies...'
+            String npmCmd = System.getProperty('os.name').toLowerCase().contains('windows') ? 'npm.cmd' : 'npm'
+            exec { commandLine npmCmd, 'install', '--silent', '--loglevel=error'; workingDir = aiBridgeDir }
+            println 'ai-bridge npm dependencies installed.'
         }
     }
 
