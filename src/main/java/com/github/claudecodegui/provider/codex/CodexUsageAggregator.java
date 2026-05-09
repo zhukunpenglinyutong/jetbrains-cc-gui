@@ -28,9 +28,12 @@ class CodexUsageAggregator {
     private static final Logger LOG = Logger.getInstance(CodexUsageAggregator.class);
 
     private static final String DEFAULT_MODEL = "gpt-5.1";
-    private static final double INPUT_COST_PER_1M = 3.0;
-    private static final double OUTPUT_COST_PER_1M = 15.0;
-    private static final double CACHE_READ_COST_PER_1M = 0.30;
+
+    // Pricing per 1M tokens: [inputCost, outputCost, cacheReadCost]
+    private static final double[] DEFAULT_PRICING = {3.0, 15.0, 0.30};
+    private static final Map<String, double[]> MODEL_PRICING = Map.of(
+            "gpt-5.4-mini", new double[]{0.75, 4.50, 0.075}
+    );
 
     private static final DateTimeFormatter DATE_FORMATTER =
             DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneId.systemDefault());
@@ -175,7 +178,7 @@ class CodexUsageAggregator {
             summary.model = actualModel;
         }
 
-        summary.cost = calculateCost(summary.usage);
+        summary.cost = calculateCost(summary.usage, summary.model);
 
         if (sessionTitle == null && summary.usage.totalTokens == 0) {
             LOG.debug("[CodexHistoryReader] Skipping session with no valid data: " + summary.sessionId);
@@ -227,10 +230,11 @@ class CodexUsageAggregator {
         usage.cacheWriteTokens = 0;
     }
 
-    private double calculateCost(CodexHistoryReader.UsageData usage) {
-        double inputCost = (usage.inputTokens / 1_000_000.0) * INPUT_COST_PER_1M;
-        double outputCost = (usage.outputTokens / 1_000_000.0) * OUTPUT_COST_PER_1M;
-        double cacheReadCost = (usage.cacheReadTokens / 1_000_000.0) * CACHE_READ_COST_PER_1M;
+    private double calculateCost(CodexHistoryReader.UsageData usage, String model) {
+        double[] pricing = MODEL_PRICING.getOrDefault(model, DEFAULT_PRICING);
+        double inputCost = (usage.inputTokens / 1_000_000.0) * pricing[0];
+        double outputCost = (usage.outputTokens / 1_000_000.0) * pricing[1];
+        double cacheReadCost = (usage.cacheReadTokens / 1_000_000.0) * pricing[2];
         return inputCost + outputCost + cacheReadCost;
     }
 
