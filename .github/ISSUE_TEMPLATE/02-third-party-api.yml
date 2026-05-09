@@ -1,0 +1,138 @@
+name: 🔌 第三方 API 兼容问题 / Third-party API Issue
+description: GLM/DeepSeek/ModelScope/自定义 Provider 等中转 API 报错 / Issues with proxy APIs
+title: "[API] "
+labels: ["bugfix", "third-party-api"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **请先查看 [#1096 第三方 API 兼容性 tracking issue](https://github.com/zhukunpenglinyutong/jetbrains-cc-gui/issues/1096)**
+
+        如果你的问题属于已知兼容性问题，请直接在 #1096 下评论补充。
+        If your issue is similar to known compatibility problems, please comment on #1096 instead.
+
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: 提交前确认 / Pre-submission Checklist
+      options:
+        - label: 我已查看 #1096 第三方 API 兼容性 tracking issue
+          required: true
+        - label: 我确认这是一个新的兼容性问题，不是已知的
+          required: true
+
+  - type: dropdown
+    id: api-provider
+    attributes:
+      label: API 服务商 / API Provider
+      options:
+        - GLM / 智谱清言
+        - DeepSeek
+        - ModelScope / 魔搭
+        - Moonshot / Kimi
+        - Qwen / 通义千问
+        - OpenRouter
+        - LiteLLM
+        - AWS Bedrock
+        - 自定义中转 / Custom proxy
+        - 其他 / Other
+    validations:
+      required: true
+
+  - type: input
+    id: api-name-other
+    attributes:
+      label: 其他 API 名称（如选 Other 请填写）
+      placeholder: "例如 / e.g. Volcano API, Baichuan, ..."
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: 插件版本 / Plugin Version
+      placeholder: "例如 / e.g. v0.4.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: ide-os
+    attributes:
+      label: IDE + 操作系统 / IDE + OS
+      options:
+        - IntelliJ IDEA + Windows
+        - IntelliJ IDEA + macOS
+        - IntelliJ IDEA + Linux
+        - PyCharm + Windows
+        - PyCharm + macOS
+        - PyCharm + Linux
+        - WebStorm + Windows
+        - WebStorm + macOS
+        - 其他 / Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: connection-mode
+    attributes:
+      label: 接入方式 / Connection Mode
+      options:
+        - Claude Code → 第三方中转
+        - Codex → 第三方中转
+        - 自定义 Provider 配置
+        - settings.json 配置
+        - 其他 / Other
+    validations:
+      required: true
+
+  - type: input
+    id: base-url
+    attributes:
+      label: Base URL（请隐藏 API Key）/ Base URL (mask API key)
+      description: 仅填写域名部分，不要包含密钥
+      placeholder: "例如 / e.g. https://open.bigmodel.cn/api/anthropic"
+    validations:
+      required: true
+
+  - type: input
+    id: model-name
+    attributes:
+      label: 使用的模型名称 / Model Name
+      placeholder: "例如 / e.g. glm-4.6, deepseek-chat, claude-sonnet-4"
+    validations:
+      required: true
+
+  - type: textarea
+    id: error-message
+    attributes:
+      label: 完整错误信息 / Full Error Message
+      description: 请粘贴完整的错误信息（请隐藏敏感信息如 API Key）
+      render: shell
+      placeholder: |
+        粘贴在此 / Paste here
+        请隐藏 API Key 等敏感信息
+    validations:
+      required: true
+
+  - type: dropdown
+    id: cli-works
+    attributes:
+      label: 是否在该 API 的官方 CLI 中可用？/ Does the API work in its official CLI?
+      description: 例如 GLM 自己的 CLI 工具，DeepSeek 自己的 SDK
+      options:
+        - 是 - 官方 CLI 可用 / Yes
+        - 否 - 官方 CLI 也不行 / No
+        - 没测试过 / Not tested
+        - 没有官方 CLI / No official CLI
+    validations:
+      required: true
+
+  - type: textarea
+    id: config-screenshot
+    attributes:
+      label: Provider 配置截图 / Provider Config Screenshot
+      description: 请上传 Provider 设置截图（API Key 请打码）
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 补充信息 / Additional Context
+      description: 其他相关信息
