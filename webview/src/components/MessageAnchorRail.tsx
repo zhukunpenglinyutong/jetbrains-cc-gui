@@ -19,6 +19,10 @@ interface MessageAnchorRailProps {
 const MAX_PREVIEW_LENGTH = 300;
 const TOOLTIP_DELAY_MS = 500;
 
+function getAnchorStyle(position: number): React.CSSProperties {
+  return { top: `${position * 100}%` };
+}
+
 /**
  * Extracts a short preview text from a user message for the tooltip.
  * Strips control characters and collapses excessive whitespace for clean display.
@@ -175,7 +179,7 @@ export const MessageAnchorRail = memo(function MessageAnchorRail({
             role="button"
             tabIndex={0}
             className={`messages-anchor-dot${isActive ? ' is-active' : ''}`}
-            style={{ top: `${anchor.position * 100}%` }}
+            style={getAnchorStyle(anchor.position)}
             onClick={() => scrollToAnchor(anchor.id)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {

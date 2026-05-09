@@ -67,7 +67,7 @@ public class MessageJsonConverter {
      * Check if content starts with a known error prefix.
      */
     public static boolean isErrorContent(String content) {
-        if (content == null) return false;
+        if (content == null) { return false; }
         for (String prefix : ERROR_CONTENT_PREFIXES) {
             if (content.startsWith(prefix)) {
                 return true;
@@ -111,13 +111,13 @@ public class MessageJsonConverter {
         JsonArray contentArr = contentEl.getAsJsonArray();
         boolean needsCopy = false;
         for (JsonElement el : contentArr) {
-            if (!el.isJsonObject()) continue;
+            if (!el.isJsonObject()) { continue; }
             JsonObject block = el.getAsJsonObject();
-            if (!block.has("type") || block.get("type").isJsonNull()) continue;
+            if (!block.has("type") || block.get("type").isJsonNull()) { continue; }
             String blockType = block.get("type").getAsString();
             // Check tool_result blocks for oversized content
             if ("tool_result".equals(blockType)) {
-                if (!block.has("content") || block.get("content").isJsonNull()) continue;
+                if (!block.has("content") || block.get("content").isJsonNull()) { continue; }
                 JsonElement c = block.get("content");
                 if (c.isJsonPrimitive() && c.getAsJsonPrimitive().isString()) {
                     if (c.getAsString().length() > MAX_TOOL_RESULT_CHARS) {
@@ -152,13 +152,13 @@ public class MessageJsonConverter {
 
         JsonArray copiedArr = copiedContentEl.getAsJsonArray();
         for (JsonElement el : copiedArr) {
-            if (!el.isJsonObject()) continue;
+            if (!el.isJsonObject()) { continue; }
             JsonObject block = el.getAsJsonObject();
-            if (!block.has("type") || block.get("type").isJsonNull()) continue;
+            if (!block.has("type") || block.get("type").isJsonNull()) { continue; }
             String blockType = block.get("type").getAsString();
             // Truncate oversized tool_result content
             if ("tool_result".equals(blockType)) {
-                if (!block.has("content") || block.get("content").isJsonNull()) continue;
+                if (!block.has("content") || block.get("content").isJsonNull()) { continue; }
                 JsonElement c = block.get("content");
                 if (c.isJsonPrimitive() && c.getAsJsonPrimitive().isString()) {
                     String s = c.getAsString();

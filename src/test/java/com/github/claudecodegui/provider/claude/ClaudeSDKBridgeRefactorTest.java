@@ -9,6 +9,8 @@ import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -51,7 +53,8 @@ public class ClaudeSDKBridgeRefactorTest {
                 openedFiles,
                 "system prompt",
                 Boolean.TRUE,
-                Boolean.TRUE
+                Boolean.TRUE,
+                "xhigh"
         );
 
         assertEquals("hello", params.get("message").getAsString());
@@ -63,6 +66,7 @@ public class ClaudeSDKBridgeRefactorTest {
         assertEquals("system prompt", params.get("agentPrompt").getAsString());
         assertTrue(params.get("streaming").getAsBoolean());
         assertTrue(params.get("disableThinking").getAsBoolean());
+        assertEquals("xhigh", params.get("reasoningEffort").getAsString());
         assertTrue(params.has("attachments"));
         assertEquals(1, params.getAsJsonArray("attachments").size());
         assertEquals("image.png", params.getAsJsonArray("attachments").get(0).getAsJsonObject().get("fileName").getAsString());
@@ -86,6 +90,7 @@ public class ClaudeSDKBridgeRefactorTest {
                 null,
                 null,
                 null,
+                null,
                 null
         );
 
@@ -100,8 +105,8 @@ public class ClaudeSDKBridgeRefactorTest {
         RecordingCallback callback = new RecordingCallback();
         SDKResult result = new SDKResult();
         StringBuilder assistantContent = new StringBuilder();
-        boolean[] hadSendError = {false};
-        String[] lastNodeError = {null};
+        AtomicBoolean hadSendError = new AtomicBoolean(false);
+        AtomicReference<String> lastNodeError = new AtomicReference<>(null);
 
         adapter.processOutputLine("[MESSAGE] {\"type\":\"assistant\",\"content\":\"ignored\"}", callback, result, assistantContent, hadSendError, lastNodeError);
         adapter.processOutputLine("[CONTENT_DELTA] \"Hello\\nWorld\"", callback, result, assistantContent, hadSendError, lastNodeError);
@@ -116,8 +121,8 @@ public class ClaudeSDKBridgeRefactorTest {
         assertEquals("reasoning", callback.events.get(2).payload);
         assertEquals("session_id", callback.events.get(3).type);
         assertEquals("Hello\nWorld", assistantContent.toString());
-        assertFalse(hadSendError[0]);
-        assertEquals(null, lastNodeError[0]);
+        assertFalse(hadSendError.get());
+        assertEquals(null, lastNodeError.get());
     }
 
     @Test
@@ -126,12 +131,12 @@ public class ClaudeSDKBridgeRefactorTest {
         RecordingCallback callback = new RecordingCallback();
         SDKResult result = new SDKResult();
         StringBuilder assistantContent = new StringBuilder();
-        boolean[] hadSendError = {false};
-        String[] lastNodeError = {null};
+        AtomicBoolean hadSendError = new AtomicBoolean(false);
+        AtomicReference<String> lastNodeError = new AtomicReference<>(null);
 
         adapter.processOutputLine("[SEND_ERROR] {\"error\":\"boom\"}", callback, result, assistantContent, hadSendError, lastNodeError);
 
-        assertTrue(hadSendError[0]);
+        assertTrue(hadSendError.get());
         assertFalse(result.success);
         assertEquals("boom", result.error);
         assertEquals(1, callback.errors.size());

@@ -24,6 +24,7 @@ import com.github.claudecodegui.handler.TabHandler;
 import com.github.claudecodegui.handler.WindowEventHandler;
 import com.github.claudecodegui.handler.file.FileExportHandler;
 import com.github.claudecodegui.handler.file.FileHandler;
+import com.github.claudecodegui.handler.file.OpenClassHandler;
 import com.github.claudecodegui.handler.file.UndoFileHandler;
 import com.github.claudecodegui.permission.PermissionService;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
@@ -267,9 +268,15 @@ public class ChatWindowDelegate {
             @Override public void onTabStatusChanged(String statusStr) {
                 TabAnswerStatus status;
                 switch (statusStr) {
-                    case "answering": status = TabAnswerStatus.ANSWERING; break;
-                    case "completed": status = TabAnswerStatus.COMPLETED; break;
-                    default: status = TabAnswerStatus.IDLE; break;
+                    case "answering":
+                        status = TabAnswerStatus.ANSWERING;
+                        break;
+                    case "completed":
+                        status = TabAnswerStatus.COMPLETED;
+                        break;
+                    default:
+                        status = TabAnswerStatus.IDLE;
+                        break;
                 }
                 updateTabStatus(status);
             }
@@ -299,7 +306,7 @@ public class ChatWindowDelegate {
     public void initializeStatusBar() {
         ApplicationManager.getApplication().invokeLater(() -> {
             Project project = host.getProject();
-            if (project == null || host.isDisposed()) return;
+            if (project == null || host.isDisposed()) { return; }
 
             ClaudeSession session = host.getSession();
             String mode = session != null ? session.getPermissionMode() : "default";
@@ -447,6 +454,10 @@ public class ChatWindowDelegate {
         LOG.info("Received frontend_ready signal, frontend is now ready to receive data");
         host.setFrontendReady(true);
 
+        host.callJavaScript(
+            "window.updateLinkifyCapabilities",
+            JsUtils.escapeJs(OpenClassHandler.buildCapabilitiesJson())
+        );
         host.getSessionLifecycleManager().sendCurrentPermissionMode();
         replayCurrentSessionStateToFrontend();
         host.persistTabSessionState();

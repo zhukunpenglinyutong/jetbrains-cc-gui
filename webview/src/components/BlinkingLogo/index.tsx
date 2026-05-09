@@ -4,6 +4,29 @@ import styles from './style.module.less';
 import { AVAILABLE_PROVIDERS } from '../ChatInputBox/types';
 import { ProviderModelIcon } from '../shared/ProviderModelIcon';
 
+const ROOT_STYLE: React.CSSProperties = {
+  position: 'relative',
+  display: 'inline-flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+};
+
+const DROPDOWN_STYLE: React.CSSProperties = {
+  position: 'absolute',
+  top: '100%',
+  left: '50%',
+  transform: 'translateX(-50%)',
+  marginTop: '8px',
+  zIndex: 10000,
+};
+
+function getProviderOptionStyle(enabled: boolean): React.CSSProperties {
+  return {
+    opacity: enabled ? 1 : 0.5,
+    cursor: enabled ? 'pointer' : 'not-allowed',
+  };
+}
+
 interface BlinkingLogoProps {
   provider: string;
   /** Current model ID, used to show vendor-specific icon */
@@ -108,13 +131,17 @@ export const BlinkingLogo = ({ provider, modelId, onProviderChange }: BlinkingLo
     return t(`providers.${providerId}.label`);
   };
 
+  const logoStyle: React.CSSProperties = {
+    cursor: onProviderChange ? 'pointer' : 'default',
+  };
+
   return (
-    <div style={{ position: 'relative', display: 'inline-flex', flexDirection: 'column', alignItems: 'center' }}>
+    <div style={ROOT_STYLE}>
       <div
         ref={containerRef}
         className={`${styles.container} ${styles[animationState]}`}
         onClick={handleToggle}
-        style={{ cursor: onProviderChange ? 'pointer' : 'default' }}
+        style={logoStyle}
       >
         <ProviderModelIcon
           providerId={displayProvider}
@@ -128,14 +155,7 @@ export const BlinkingLogo = ({ provider, modelId, onProviderChange }: BlinkingLo
         <div
           ref={dropdownRef}
           className="selector-dropdown"
-          style={{
-            position: 'absolute',
-            top: '100%',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            marginTop: '8px',
-            zIndex: 10000,
-          }}
+          style={DROPDOWN_STYLE}
         >
           {AVAILABLE_PROVIDERS.map((p) => (
             <div
@@ -145,10 +165,7 @@ export const BlinkingLogo = ({ provider, modelId, onProviderChange }: BlinkingLo
                 e.stopPropagation();
                 handleSelect(p.id);
               }}
-              style={{
-                opacity: p.enabled ? 1 : 0.5,
-                cursor: p.enabled ? 'pointer' : 'not-allowed',
-              }}
+              style={getProviderOptionStyle(!!p.enabled)}
             >
               <ProviderModelIcon providerId={p.id} size={16} colored />
               <span>{getProviderLabel(p.id)}</span>

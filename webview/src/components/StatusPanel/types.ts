@@ -1,4 +1,4 @@
-import type { TodoItem, FileChangeSummary, SubagentInfo } from '../../types';
+import type { TodoItem, FileChangeSummary, SubagentInfo, SubagentHistoryResponse } from '../../types';
 
 export type TabType = 'todo' | 'subagent' | 'files';
 
@@ -6,6 +6,8 @@ export interface StatusPanelProps {
   todos: TodoItem[];
   fileChanges: FileChangeSummary[];
   subagents: SubagentInfo[];
+  subagentHistories?: Record<string, SubagentHistoryResponse>;
+  currentSessionId?: string | null;
   /** Whether the panel is expanded */
   expanded?: boolean;
   /** Whether the conversation is currently streaming (active) */

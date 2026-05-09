@@ -74,7 +74,7 @@ export const ButtonArea = ({
   selectedModel = 'claude-sonnet-4-6',
   permissionMode = 'bypassPermissions',
   currentProvider = 'claude',
-  reasoningEffort = 'medium',
+  reasoningEffort = 'high',
   onSubmit,
   onStop,
   onModeSelect,
@@ -90,6 +90,8 @@ export const ButtonArea = ({
   onAgentSelect,
   onOpenAgentSettings,
   onAddModel,
+  longContextEnabled = true,
+  onLongContextChange,
 }: ButtonAreaProps) => {
   const { t } = useTranslation();
   // const fileInputRef = useRef<HTMLInputElement>(null);
@@ -129,7 +131,7 @@ export const ButtonArea = ({
   const applyModelMapping = useCallback((model: ModelInfo, mapping: { main?: string; haiku?: string; sonnet?: string; opus?: string }): ModelInfo => {
     const modelKeyMap: Record<string, keyof typeof mapping> = {
       'claude-sonnet-4-6': 'sonnet',
-      'claude-opus-4-6': 'opus',
+      'claude-opus-4-7': 'opus',
       'claude-haiku-4-5': 'haiku',
     };
 
@@ -225,7 +227,7 @@ export const ButtonArea = ({
   }, [onProviderSelect]);
 
   /**
-   * Handle reasoning depth selection (Codex only)
+   * Handle reasoning depth selection
    */
   const handleReasoningChange = useCallback((effort: ReasoningEffort) => {
     onReasoningChange?.(effort);
@@ -251,6 +253,7 @@ export const ButtonArea = ({
           selectedAgent={selectedAgent}
           onAgentSelect={onAgentSelect}
           onOpenAgentSettings={onOpenAgentSettings}
+          currentProvider={currentProvider}
         />
         <ProviderSelect
           value={currentProvider}
@@ -258,10 +261,8 @@ export const ButtonArea = ({
           compact
         />
         <ModeSelect value={permissionMode} onChange={handleModeSelect} provider={currentProvider} />
-        <ModelSelect value={selectedModel} onChange={handleModelSelect} models={availableModels} currentProvider={currentProvider} onAddModel={onAddModel} />
-        {currentProvider === 'codex' && (
-          <ReasoningSelect value={reasoningEffort} onChange={handleReasoningChange} />
-        )}
+        <ModelSelect value={selectedModel} onChange={handleModelSelect} models={availableModels} currentProvider={currentProvider} onAddModel={onAddModel} longContextEnabled={longContextEnabled} onLongContextChange={onLongContextChange} />
+        <ReasoningSelect value={reasoningEffort} onChange={handleReasoningChange} selectedModel={selectedModel} currentProvider={currentProvider} />
       </div>
 
       {/* Right side: tool buttons */}

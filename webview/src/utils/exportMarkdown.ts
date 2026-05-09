@@ -1,4 +1,24 @@
-import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock } from '../types';
+import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock, ClaudeRawMessage } from '../types';
+import {
+  hasCommandMessageTag,
+  hasTaskNotificationTag,
+  formatCommandForResubmit,
+  formatTaskNotificationForDisplay,
+  HIDDEN_OUTPUT_TAGS,
+  INTERNAL_METADATA_TAGS,
+  containsAnyTag,
+} from './messageUtils';
+
+// ---------------------------------------------------------------------------
+// Type guard for text blocks in raw content arrays
+// ---------------------------------------------------------------------------
+
+/** Type guard: check if an unknown block is a text content block */
+function isTextBlock(block: unknown): block is { type: 'text'; text: string } {
+  return !!block && typeof block === 'object'
+    && (block as Record<string, unknown>).type === 'text'
+    && typeof (block as Record<string, unknown>).text === 'string';
+}
 
 /**
  * Convert a message list to JSON format
@@ -25,13 +45,14 @@ export function convertMessagesToJSON(messages: ClaudeMessage[], sessionTitle: s
 /**
  * Process a single message for export
  */
-function processMessageForExport(message: ClaudeMessage): any {
+function processMessageForExport(message: ClaudeMessage) {
   const contentBlocks = getContentBlocks(message);
 
   // Process content blocks
-  let processedBlocks: any[] = [];
+  type ProcessedBlock = { type: string } & Record<string, unknown>;
+  let processedBlocks: ProcessedBlock[] = [];
   if (contentBlocks.length > 0) {
-    processedBlocks = contentBlocks.map(block => processContentBlock(block));
+    processedBlocks = contentBlocks.map(block => processContentBlock(block)) as ProcessedBlock[];
   } else if (message.content && message.content.trim()) {
     // If no content blocks but content field exists, use content
     processedBlocks = [{ type: 'text', text: message.content }];
@@ -55,26 +76,28 @@ function processMessageForExport(message: ClaudeMessage): any {
 /**
  * Extract text content from raw data
  */
-function extractRawContent(raw: any): string | null {
+function extractRawContent(raw: ClaudeRawMessage | unknown): string | null {
   if (!raw) return null;
 
   if (typeof raw === 'string') return raw;
 
-  if (typeof raw.content === 'string') return raw.content;
+  const rawObj = raw as Record<string, unknown>;
+  if (typeof rawObj.content === 'string') return rawObj.content;
 
-  if (Array.isArray(raw.content)) {
-    return raw.content
-      .filter((block: any) => block && block.type === 'text')
-      .map((block: any) => block.text || '')
+  if (Array.isArray(rawObj.content)) {
+    return rawObj.content
+      .filter(isTextBlock)
+      .map(block => block.text || '')
       .join('\n');
   }
 
-  if (raw.message?.content) {
-    if (typeof raw.message.content === 'string') return raw.message.content;
-    if (Array.isArray(raw.message.content)) {
-      return raw.message.content
-        .filter((block: any) => block && block.type === 'text')
-        .map((block: any) => block.text || '')
+  if (rawObj.message && typeof rawObj.message === 'object') {
+    const msg = rawObj.message as Record<string, unknown>;
+    if (typeof msg.content === 'string') return msg.content;
+    if (Array.isArray(msg.content)) {
+      return msg.content
+        .filter(isTextBlock)
+        .map(block => block.text || '')
         .join('\n');
     }
   }
@@ -85,17 +108,18 @@ function extractRawContent(raw: any): string | null {
 /**
  * Process a content block
  */
-function processContentBlock(block: ClaudeContentBlock | ToolResultBlock): any {
+function processContentBlock(block: ClaudeContentBlock | ToolResultBlock) {
   if (block.type === 'text') {
     return {
       type: 'text',
       text: block.text
     };
   } else if (block.type === 'thinking') {
+    const tb = block as { type: 'thinking'; thinking?: string; text?: string };
     return {
       type: 'thinking',
-      thinking: (block as any).thinking,
-      text: (block as any).text
+      thinking: tb.thinking,
+      text: tb.text
     };
   } else if (block.type === 'tool_use') {
     return {
@@ -115,12 +139,19 @@ function processContentBlock(block: ClaudeContentBlock | ToolResultBlock): any {
       is_error: toolResult.is_error
     };
   } else if (block.type === 'image') {
-    const imageBlock = block as any;
+    const ib = block as { type: 'image'; src?: string; source?: { data?: string; media_type?: string }; mediaType?: string; alt?: string };
     return {
       type: 'image',
-      src: imageBlock.src || imageBlock.source?.data,
-      mediaType: imageBlock.mediaType || imageBlock.source?.media_type,
-      alt: imageBlock.alt
+      src: ib.src || ib.source?.data,
+      mediaType: ib.mediaType || ib.source?.media_type,
+      alt: ib.alt
+    };
+  } else if (block.type === 'task_notification') {
+    const tb = block as { type: 'task_notification'; icon?: string; summary?: string };
+    // Export task_notification as formatted text: "● summary"
+    return {
+      type: 'text',
+      text: `${tb.icon || '●'} ${tb.summary || ''}`
     };
   }
 
@@ -130,7 +161,7 @@ function processContentBlock(block: ClaudeContentBlock | ToolResultBlock): any {
 /**
  * Limit content length
  */
-function limitContentLength(content: any, maxLength: number): any {
+function limitContentLength(content: unknown, maxLength: number): unknown {
   if (typeof content === 'string') {
     if (content.length > maxLength) {
       return content.substring(0, maxLength) + '\n... (content too long, truncated)';
@@ -138,11 +169,15 @@ function limitContentLength(content: any, maxLength: number): any {
     return content;
   } else if (Array.isArray(content)) {
     return content.map(item => {
-      if (item.text && item.text.length > maxLength) {
-        return {
-          ...item,
-          text: item.text.substring(0, maxLength) + '\n... (content too long, truncated)'
-        };
+      if (item && typeof item === 'object') {
+        const objItem = item as Record<string, unknown>;
+        const text = objItem.text as string | undefined;
+        if (text && text.length > maxLength) {
+          return {
+            ...item,
+            text: text.substring(0, maxLength) + '\n... (content too long, truncated)'
+          };
+        }
       }
       return item;
     });
@@ -172,15 +207,20 @@ function formatTimestamp(timestamp: string): string {
  * Determine whether a message should be exported
  */
 function shouldExportMessage(message: ClaudeMessage): boolean {
-  // Skip special command messages
   const text = getMessageText(message);
-  if (text && (
-    text.includes('<command-name>') ||
-    text.includes('<local-command-stdout>') ||
-    text.includes('<local-command-stderr>') ||
-    text.includes('<command-message>') ||
-    text.includes('<command-args>')
-  )) {
+
+  // Allow task-notification messages - they will be formatted properly
+  if (text && hasTaskNotificationTag(text)) {
+    return true;
+  }
+
+  // Allow command messages with <command-message> - format with formatCommandForResubmit
+  if (text && hasCommandMessageTag(text)) {
+    return true;
+  }
+
+  // Skip special internal tags (but not command-message or task-notification)
+  if (text && (containsAnyTag(text, HIDDEN_OUTPUT_TAGS) || containsAnyTag(text, INTERNAL_METADATA_TAGS))) {
     return false;
   }
 
@@ -210,15 +250,15 @@ function getMessageText(message: ClaudeMessage): string {
 
   if (Array.isArray(raw.content)) {
     return raw.content
-      .filter((block: any) => block && block.type === 'text')
-      .map((block: any) => block.text ?? '')
+      .filter(isTextBlock)
+      .map(block => block.text ?? '')
       .join('\n');
   }
 
   if (raw.message?.content && Array.isArray(raw.message.content)) {
     return raw.message.content
-      .filter((block: any) => block && block.type === 'text')
-      .map((block: any) => block.text ?? '')
+      .filter(isTextBlock)
+      .map(block => block.text ?? '')
       .join('\n');
   }
 
@@ -248,52 +288,81 @@ function getContentBlocks(message: ClaudeMessage): (ClaudeContentBlock | ToolRes
 /**
  * Normalize content blocks
  */
-function normalizeBlocks(raw: any): (ClaudeContentBlock | ToolResultBlock)[] | null {
+function normalizeBlocks(raw: ClaudeRawMessage | unknown): (ClaudeContentBlock | ToolResultBlock)[] | null {
   if (!raw) {
     return null;
   }
 
-  let contentArray: any[] | null = null;
+  // Type-safe access helpers
+  const rawObj = raw as Record<string, unknown>;
+  let contentArray: unknown[] | null = null;
 
   // Handle backend ConversationMessage format
-  if (raw.message && Array.isArray(raw.message.content)) {
-    contentArray = raw.message.content;
+  if (rawObj.message && typeof rawObj.message === 'object') {
+    const msg = rawObj.message as Record<string, unknown>;
+    if (Array.isArray(msg.content)) {
+      contentArray = msg.content;
+    }
   }
   // Handle other formats
   else if (Array.isArray(raw)) {
-    contentArray = raw;
-  } else if (Array.isArray(raw.content)) {
-    contentArray = raw.content;
-  } else if (typeof raw.content === 'string' && raw.content.trim()) {
-    return [{ type: 'text', text: raw.content }];
-  } else if (raw.message && typeof raw.message.content === 'string' && raw.message.content.trim()) {
-    return [{ type: 'text', text: raw.message.content }];
+    contentArray = raw as unknown[];
+  } else if (Array.isArray(rawObj.content)) {
+    contentArray = rawObj.content;
+  } else if (typeof rawObj.content === 'string' && (rawObj.content as string).trim()) {
+    return [{ type: 'text', text: rawObj.content as string }];
+  } else if (rawObj.message && typeof rawObj.message === 'object') {
+    const msg = rawObj.message as Record<string, unknown>;
+    if (typeof msg.content === 'string' && (msg.content as string).trim()) {
+      return [{ type: 'text', text: msg.content as string }];
+    }
   }
 
   if (contentArray) {
-    return contentArray.map((block: any) => {
-      if (block.type === 'text') {
-        return { type: 'text', text: block.text };
+    return contentArray.map((block: unknown) => {
+      if (!block || typeof block !== 'object') return block;
+      const b = block as Record<string, unknown>;
+      if (b.type === 'text') {
+        let text = (b.text as string) || '';
+        // Format command messages for export using formatCommandForResubmit
+        if (hasCommandMessageTag(text)) {
+          const formatted = formatCommandForResubmit(text);
+          if (formatted) {
+            text = formatted;
+          }
+        }
+        // Format task-notification for export
+        if (hasTaskNotificationTag(text)) {
+          const notification = formatTaskNotificationForDisplay(text);
+          if (notification) {
+            text = `${notification.icon} ${notification.summary}`;
+          }
+        }
+        return { type: 'text', text };
       }
-      if (block.type === 'thinking') {
-        return { type: 'thinking', thinking: block.thinking, text: block.text };
+      if (b.type === 'thinking') {
+        return { type: 'thinking', thinking: b.thinking, text: b.text };
       }
-      if (block.type === 'tool_use') {
-        return { type: 'tool_use', id: block.id, name: block.name, input: block.input };
+      if (b.type === 'tool_use') {
+        return { type: 'tool_use', id: b.id, name: b.name, input: b.input };
       }
-      if (block.type === 'tool_result') {
+      if (b.type === 'tool_result') {
         return {
           type: 'tool_result',
-          tool_use_id: block.tool_use_id,
-          content: block.content,
-          is_error: block.is_error
+          tool_use_id: b.tool_use_id,
+          content: b.content,
+          is_error: b.is_error
         };
       }
-      if (block.type === 'image') {
-        return { type: 'image', src: block.source?.data, mediaType: block.source?.media_type };
+      if (b.type === 'image') {
+        const source = b.source as Record<string, unknown> | undefined;
+        return { type: 'image', src: source?.data, mediaType: source?.media_type };
+      }
+      if (b.type === 'task_notification') {
+        return { type: 'task_notification', icon: b.icon, summary: b.summary, status: b.status };
       }
       return block;
-    });
+    }) as (ClaudeContentBlock | ToolResultBlock)[];
   }
 
   return null;

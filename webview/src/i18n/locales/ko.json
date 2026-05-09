@@ -87,7 +87,7 @@
     "attachmentFile": "[첨부파일: {{fileName}}]",
     "unknownFile": "알 수 없는 파일",
     "attachmentsUploaded": "[첨부파일 업로드됨]",
-    "streamingConnected": "Claude 연결됨, 질문을 이해하는 중",
+    "streamingConnected": "{{provider}} 연결됨, 질문을 이해하는 중",
     "showEarlierMessages": "이전 메시지 {{count}}개 보기",
     "totalDuration": "이번 응답 소요 시간"
   },
@@ -146,8 +146,16 @@
         "level6": "매우 크게 (140%)"
       },
       "editorFont": {
-        "label": "글꼴 (에디터 글꼴 따라감)",
-        "hint": "여기서 수정할 수 없습니다. 변경하려면 IDEA 설정 → Editor → Font로 이동하세요 (플러그인 글꼴 적용을 위해 IDEA 재시작 필요)"
+        "label": "글꼴",
+        "hint": "여기서는 플러그인 UI 글꼴을 변경합니다. 글자 크기와 줄 간격은 계속 에디터를 따릅니다.",
+        "followOption": "에디터 따라가기 ({{font}})",
+        "customOption": "사용자 지정 글꼴 파일",
+        "customPathLabel": "글꼴 파일 경로",
+        "customPathPlaceholder": ".ttf / .otf 글꼴 파일 경로를 선택하거나 입력하세요",
+        "browse": "찾아보기",
+        "warningUnavailable": "글꼴을 사용할 수 없어 현재 에디터 글꼴을 사용 중입니다",
+        "statusFollowEditor": "현재 에디터 글꼴 사용 중: {{font}}",
+        "statusCustom": "현재 사용자 지정 글꼴 사용 중: {{font}}"
       },
       "streaming": {
         "label": "스트리밍",
@@ -161,11 +169,31 @@
         "disabled": "비활성화",
         "hint": "활성화하면 프로젝트 트리에서 파일을 선택할 때 자동으로 파일 경로를 AI에 전송합니다 (참고: 파일 경로만 전송되며 파일 내용은 전송되지 않습니다). 비활성화하면 수동 조작이 필요합니다."
       },
+      "promptEnhancer": {
+        "label": "Prompt Enhancer",
+        "modelLabel": "Enhancer Model",
+        "resetToDefault": "Restore Default",
+        "providerAvailable": "Available",
+        "providerUnavailable": "Currently unavailable",
+        "provider": {
+          "claude": "Claude Code",
+          "codex": "Codex"
+        },
+        "currentProviderAuto": "Currently using automatic selection: {{provider}}",
+        "currentProviderManual": "Currently using manually selected provider: {{provider}}",
+        "currentProviderUnavailable": "The selected provider is currently unavailable: {{provider}}"
+      },
       "diffExpanded": {
         "label": "Diff 기본 펼침",
         "enabled": "펼침",
         "disabled": "접힘",
         "hint": "활성화하면 채팅의 코드 diff가 기본적으로 펼쳐집니다. 비활성화하면 접힌 상태로 시작하며 클릭하여 펼칠 수 있습니다."
+      },
+      "taskCompletionNotification": {
+        "label": "작업 완료 알림",
+        "enabled": "활성화",
+        "disabled": "비활성화",
+        "hint": "활성화하면 AI 작업이 완료될 때 시스템 알림이 표시됩니다. 비활성화하면 알림이 표시되지 않습니다."
       },
       "sendShortcut": {
         "label": "전송 단축키",
@@ -255,6 +283,10 @@
     "permissions": "권한",
     "permissionsDesc": "Claude Code 파일 접근 및 작업 권한 관리",
     "codexPermissionsDesc": "Codex 권한 및 샌드박스 정책 관리",
+    "promptEnhancer": {
+      "title": "Prompt Enhancer",
+      "description": "Choose which provider and model should be used when enhancing prompts before sending them."
+    },
     "permissionsPanel": {
       "codexSandboxTitle": "Codex 샌드박스 모드",
       "codexSandboxDesc": "Codex가 명령을 실행할 때의 시스템 접근 범위를 제어합니다. 기본값은 danger-full-access입니다. 더 엄격한 샌드박스를 위해 workspace-write로 전환하세요.",
@@ -268,6 +300,16 @@
     "commit": {
       "title": "Commit AI",
       "description": "AI 생성 Git 커밋 메시지 동작 설정",
+      "providerModel": {
+        "label": "커밋 모델 제공자",
+        "modelLabel": "커밋 모델",
+        "resetToDefault": "재설정",
+        "providerAvailable": "사용 가능",
+        "providerUnavailable": "사용 불가",
+        "currentProviderAuto": "현재 자동 선택 사용 중: {{provider}}",
+        "currentProviderManual": "현재 수동 선택된 제공자 사용 중: {{provider}}",
+        "currentProviderUnavailable": "선택된 제공자를 현재 사용할 수 없습니다: {{provider}}"
+      },
       "prompt": {
         "label": "추가 프롬프트",
         "placeholder": "추가 요구사항을 입력하세요. 예: 영어로 커밋 생성, 이슈 번호 포함 등...",
@@ -322,6 +364,12 @@
           "minutesAgo_other": "{{count}}분 전",
           "justNow": "방금 전"
         }
+      },
+      "aiTitleGeneration": {
+        "label": "AI 세션 제목 자동 생성",
+        "enabled": "사용",
+        "disabled": "사용 안 함",
+        "hint": "활성화하면 새 세션의 첫 응답이 끝난 후 Haiku 모델이 짧은 제목을 자동 생성합니다. 비활성화하면 첫 사용자 메시지가 제목으로 표시됩니다."
       }
     },
     "codexFeatureUnavailable": "이 설정 섹션은 Codex에서 아직 사용할 수 없습니다. Claude Code로 전환해주세요.",
@@ -509,6 +557,7 @@
         "deepseek": "DeepSeek",
         "minimax": "MiniMax",
         "xiaomi": "Xiaomi MiMo",
+        "xiaomiPlan": "Xiaomi MiMo Plan",
         "qwen": "Alibaba Qwen",
         "openrouter": "OpenRouter"
       }
@@ -556,7 +605,19 @@
         "cliLoginDisableMessage": "이전 config.toml을 복원하고 API 키 인증 방식으로 전환합니다.",
         "modelIdRequired": "모델 ID는 필수입니다",
         "modelIdInvalid": "잘못된 모델 ID 형식 (영문자, 숫자, 점, 하이픈, 밑줄, 슬래시, 콜론만 허용)",
-        "modelIdDuplicate": "모델 ID가 이미 존재합니다"
+        "modelIdDuplicate": "모델 ID가 이미 존재합니다",
+        "envVarsTitle": "Environment Variables",
+        "messageEnvLabel": "Message Environment Variables",
+        "messageEnvHint": "Custom environment variables injected into the Codex message subprocess",
+        "mcpEnvLabel": "MCP Environment Variables",
+        "mcpEnvHint": "Custom environment variables injected into the MCP tool discovery subprocess",
+        "envKeyPlaceholder": "ENV_KEY",
+        "envValuePlaceholder": "value",
+        "addEnvVar": "Add Variable",
+        "envKeyInvalid": "Invalid key name (must start with letter/underscore, alphanumeric only)",
+        "envKeyProtected": "Cannot set built-in variable: {{key}}",
+        "envKeyDuplicate": "Duplicate key: {{key}}",
+        "envValueTooLong": "값이 너무 깁니다 (최대 {{max}}자)"
       }
     },
     "agent": {
@@ -717,6 +778,16 @@
     "confirmDelete": "삭제 확인",
     "deleteMessage": "이 세션을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
     "deleteSession": "이 세션 삭제",
+    "selectMode": "Select",
+    "exitSelectMode": "Exit selection",
+    "selectedSessions": "{{count}} selected",
+    "selectAll": "Select all",
+    "clearSelection": "Clear",
+    "deleteSelected": "Delete selected",
+    "confirmDeleteSelected": "Confirm Delete",
+    "deleteSelectedMessage": "Are you sure you want to delete {{count}} selected sessions? This action cannot be undone.",
+    "selectSession": "Select session",
+    "selectSessionWithTitle": "Select {{title}}",
     "exportSession": "세션 내보내기",
     "exportSuccess": "세션 내보내기 완료",
     "exportFailed": "내보내기 실패",
@@ -739,6 +810,9 @@
     "cancelEditButton": "취소",
     "titleTooLong": "제목이 너무 깁니다 (최대 50자)",
     "titleUpdated": "제목 업데이트됨",
+    "copySessionId": "CLI resume용 세션 ID 복사",
+    "sessionIdCopied": "세션 ID 복사됨",
+    "copyFailed": "복사 실패",
     "timeAgo": {
       "yearsAgo": "년 전",
       "monthsAgo": "개월 전",
@@ -822,6 +896,12 @@
     "clickToCopy": "클릭하여 복사",
     "switch": "전환",
     "switchProvider": "제공자 전환",
+    "runtimeProvider": {
+      "title": "현재 제공자 전환",
+      "loading": "제공자 로드 중...",
+      "empty": "사용 가능한 제공자 없음",
+      "switched": "{{provider}}(으)로 전환됨"
+    },
     "link": "링크"
   },
   "markdown": {
@@ -1250,11 +1330,11 @@
         "description": "Sonnet 4.6 · 기본 모델 사용"
       },
       "opus46": {
-        "label": "Opus 4.6",
-        "description": "Opus 4.6 · 최신 및 가장 강력한 모델"
+        "label": "Opus 4.7",
+        "description": "Opus 4.7 · 최신 및 가장 강력한 모델"
       },
       "opus46_1m": {
-        "label": "Opus (1M 컨텍스트)",
+        "label": "Opus 4.6",
         "description": "긴 세션을 위한 Opus 4.6"
       },
       "haiku45": {
@@ -1262,25 +1342,47 @@
         "description": "Haiku 4.5 · 빠른 응답에 최적"
       }
     },
+    "longContext": {
+      "label": "1M",
+      "shortLabel": "1M 컨텍스트",
+      "tooltipEnabled": "1M 컨텍스트 켜기/끄기",
+      "tooltipDisabled": "Haiku에서는 1M 컨텍스트를 사용할 수 없습니다"
+    },
     "codex": {
       "gpt53codex": {
-        "label": "gpt-5.3-codex",
+        "label": "GPT-5.3-Codex",
         "description": "향상된 기능의 최신 프론티어 에이전트 코딩 모델."
       },
+      "gpt55": {
+        "label": "GPT-5.5",
+        "description": "최신 프런티어 모델, 성능이 한층 강화되었습니다"
+      },
       "gpt54": {
-        "label": "gpt-5.4",
+        "label": "GPT-5.4",
         "description": "향상된 기능의 최신 프론티어 모델."
       },
       "gpt52codex": {
-        "label": "gpt-5.2-codex",
-        "description": "최신 프론티어 에이전트 코딩 모델."
+        "label": "GPT-5.2-Codex",
+        "description": "프론티어 에이전트 코딩 모델."
       },
       "gpt51codexMax": {
-        "label": "gpt-5.1-codex-max",
+        "label": "GPT-5.1-Codex-Max",
         "description": "깊고 빠른 추론을 위한 Codex 최적화 플래그십."
       },
+      "gpt54mini": {
+        "label": "GPT-5.4-Mini",
+        "description": "더 가벼운 프론티어 에이전트 코딩 모델."
+      },
+      "gpt53codexSpark": {
+        "label": "GPT-5.3-Codex-Spark",
+        "description": "초고속 코딩 모델."
+      },
+      "gpt52": {
+        "label": "GPT-5.2",
+        "description": "전문 작업과 장시간 에이전트 작업에 최적화."
+      },
       "gpt51codexMini": {
-        "label": "gpt-5.1-codex-mini",
+        "label": "GPT-5.1-Codex-Mini",
         "description": "Codex에 최적화. 저렴하고 빠르지만 성능이 낮음."
       }
     }

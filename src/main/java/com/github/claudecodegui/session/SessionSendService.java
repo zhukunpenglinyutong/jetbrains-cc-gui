@@ -1,6 +1,5 @@
 package com.github.claudecodegui.session;
 
-import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
@@ -243,6 +242,7 @@ public class SessionSendService {
                         agentPrompt,
                         streaming,
                         false,
+                        state.getReasoningEffort(),
                         handler
                 ).thenApply(result -> null);
     }

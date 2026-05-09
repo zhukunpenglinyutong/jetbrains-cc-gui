@@ -1,7 +1,13 @@
+import { readFileSync } from 'node:fs';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import CodexProviderSection from './index';
 import { SPECIAL_PROVIDER_IDS } from '../../../types/provider';
+
+const providerListStyles = readFileSync(
+  'src/components/settings/ProviderList/style.module.less',
+  'utf8'
+);
 
 const translations: Record<string, string> = {
   'settings.codexProvider.title': 'Codex Provider Management',
@@ -146,5 +152,36 @@ describe('CodexProviderSection', () => {
 
     expect(onRevokeCodexLocalConfigAuthorization).toHaveBeenCalledWith('provider-1');
     expect(onSwitchCodexProvider).not.toHaveBeenCalled();
+  });
+
+  it('allows long remarks to truncate instead of squeezing the action area', () => {
+    const longRemark =
+      'https://api.example.com/providers/' + 'very-long-segment/'.repeat(8);
+
+    render(
+      <CodexProviderSection
+        codexProviders={[
+          {
+            id: 'provider-long-remark',
+            name: 'xinghuapi',
+            remark: longRemark,
+            isActive: false,
+          },
+        ]}
+        codexLoading={false}
+        onAddCodexProvider={onAddCodexProvider}
+        onEditCodexProvider={onEditCodexProvider}
+        onDeleteCodexProvider={onDeleteCodexProvider}
+        onSwitchCodexProvider={onSwitchCodexProvider}
+        onRevokeCodexLocalConfigAuthorization={onRevokeCodexLocalConfigAuthorization}
+      />
+    );
+
+    expect(screen.getByText(longRemark)).toBeTruthy();
+    expect(providerListStyles).toMatch(/\.cardInfo\s*\{[\s\S]*min-width:\s*0;/);
+    expect(providerListStyles).toMatch(/\.cardActions\s*\{[\s\S]*flex-shrink:\s*0;/);
+    expect(providerListStyles).toMatch(
+      /\.website\s*\{[\s\S]*overflow:\s*hidden;[\s\S]*text-overflow:\s*ellipsis;[\s\S]*white-space:\s*nowrap;/
+    );
   });
 });

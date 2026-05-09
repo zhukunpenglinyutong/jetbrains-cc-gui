@@ -517,11 +517,15 @@
   flex-direction: column;
   gap: 4px;
   flex: 1;
+  min-width: 0;
 
   .name {
     font-size: 14px;
     font-weight: 600;
     color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .website {
@@ -531,7 +535,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 400px;
+    max-width: 100%;
   }
 }
 
@@ -539,6 +543,7 @@
   display: flex;
   align-items: center;
   gap: 16px;
+  flex-shrink: 0;
 }
 
 .useButton {

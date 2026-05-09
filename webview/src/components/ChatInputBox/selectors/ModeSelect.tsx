@@ -2,6 +2,24 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AVAILABLE_MODES, type PermissionMode } from '../types';
 
+const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
+const CHEVRON_ICON_STYLE: React.CSSProperties = { fontSize: '10px', marginLeft: '2px' };
+const DROPDOWN_STYLE: React.CSSProperties = {
+  position: 'absolute',
+  bottom: '100%',
+  left: 0,
+  marginBottom: '4px',
+  zIndex: 10000,
+};
+const MODE_INFO_STYLE: React.CSSProperties = { display: 'flex', flexDirection: 'column', flex: 1 };
+
+function getModeOptionStyle(disabled: boolean): React.CSSProperties {
+  return {
+    opacity: disabled ? 0.5 : 1,
+    cursor: disabled ? 'not-allowed' : 'pointer',
+  };
+}
+
 interface ModeSelectProps {
   value: PermissionMode;
   onChange: (mode: PermissionMode) => void;
@@ -85,7 +103,7 @@ export const ModeSelect = ({ value, onChange, provider }: ModeSelectProps) => {
   }, [isOpen]);
 
   return (
-    <div style={{ position: 'relative', display: 'inline-block' }}>
+    <div style={RELATIVE_INLINE_BLOCK_STYLE}>
       <button
         ref={buttonRef}
         className={`selector-button${value === 'bypassPermissions' ? ' mode-auto-active' : ''}`}
@@ -94,20 +112,14 @@ export const ModeSelect = ({ value, onChange, provider }: ModeSelectProps) => {
       >
         <span className={`codicon ${currentMode.icon}`} />
         <span className="selector-button-text">{getModeText(currentMode.id, 'label')}</span>
-        <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={{ fontSize: '10px', marginLeft: '2px' }} />
+        <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={CHEVRON_ICON_STYLE} />
       </button>
 
       {isOpen && (
         <div
           ref={dropdownRef}
           className="selector-dropdown"
-          style={{
-            position: 'absolute',
-            bottom: '100%',
-            left: 0,
-            marginBottom: '4px',
-            zIndex: 10000,
-          }}
+          style={DROPDOWN_STYLE}
         >
           {modeOptions.map((mode) => (
             <div
@@ -115,13 +127,10 @@ export const ModeSelect = ({ value, onChange, provider }: ModeSelectProps) => {
               className={`selector-option ${mode.id === value ? 'selected' : ''} ${mode.disabled ? 'disabled' : ''}`}
               onClick={() => handleSelect(mode.id, mode.disabled)}
               title={getModeText(mode.id, 'tooltip')}
-              style={{
-                opacity: mode.disabled ? 0.5 : 1,
-                cursor: mode.disabled ? 'not-allowed' : 'pointer',
-              }}
+              style={getModeOptionStyle(!!mode.disabled)}
             >
               <span className={`codicon ${mode.icon}`} />
-              <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+              <div style={MODE_INFO_STYLE}>
                 <span>{getModeText(mode.id, 'label')}</span>
                 <span className="mode-description">{getModeText(mode.id, 'description')}</span>
               </div>

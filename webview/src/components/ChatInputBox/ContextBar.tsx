@@ -4,6 +4,17 @@ import { getFileIcon } from '../../utils/fileIcons';
 import { TokenIndicator } from './TokenIndicator';
 import type { SelectedAgent } from './types';
 
+const HIDDEN_INPUT_STYLE: React.CSSProperties = { display: 'none' };
+const CURSOR_DEFAULT_STYLE: React.CSSProperties = { cursor: 'default' };
+const ROBOT_ICON_STYLE: React.CSSProperties = { marginRight: 4 };
+const FILE_ICON_STYLE: React.CSSProperties = {
+  marginRight: 4,
+  display: 'inline-flex',
+  alignItems: 'center',
+  width: 16,
+  height: 16,
+};
+
 interface ContextBarProps {
   activeFile?: string;
   selectedLines?: string;
@@ -162,7 +173,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
           multiple
           className="hidden-file-input"
           onChange={handleFileChange}
-          style={{ display: 'none' }}
+          style={HIDDEN_INPUT_STYLE}
         />
         
         <div className="context-tool-divider" />
@@ -170,14 +181,14 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
 
       {/* Selected Agent Chip */}
       {selectedAgent && (
-        <div 
-          className="context-item has-tooltip" 
+        <div
+          className="context-item has-tooltip"
           data-tooltip={selectedAgent.name}
-          style={{ cursor: 'default' }}
+          style={CURSOR_DEFAULT_STYLE}
         >
-          <span 
-            className="codicon codicon-robot" 
-            style={{ marginRight: 4 }}
+          <span
+            className="codicon codicon-robot"
+            style={ROBOT_ICON_STYLE}
           />
           <span className="context-text">
             <span dir="ltr">
@@ -199,18 +210,12 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
         <div
           className="context-item has-tooltip"
           data-tooltip={fullDisplayText}
-          style={{ cursor: 'default' }}
+          style={CURSOR_DEFAULT_STYLE}
         >
           {activeFile && (
             <span
               className="context-file-icon"
-              style={{
-                marginRight: 4,
-                display: 'inline-flex',
-                alignItems: 'center',
-                width: 16,
-                height: 16
-              }}
+              style={FILE_ICON_STYLE}
               dangerouslySetInnerHTML={{ __html: getFileIconSvg(activeFile) }}
             />
           )}

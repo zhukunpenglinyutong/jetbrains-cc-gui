@@ -41,6 +41,8 @@ export function ChatInputBoxFooter({
   onOpenAgentSettings,
   onAddModel,
   onClearAgent,
+  longContextEnabled = true,
+  onLongContextChange,
   fileCompletion,
   commandCompletion,
   agentCompletion,
@@ -74,6 +76,8 @@ export function ChatInputBoxFooter({
   onOpenAgentSettings?: () => void;
   onAddModel?: () => void;
   onClearAgent: () => void;
+  longContextEnabled?: boolean;
+  onLongContextChange?: (enabled: boolean) => void;
   fileCompletion: CompletionController;
   commandCompletion: CompletionController;
   agentCompletion: CompletionController;
@@ -119,6 +123,8 @@ export function ChatInputBoxFooter({
         onOpenAgentSettings={onOpenAgentSettings}
         onAddModel={onAddModel}
         onClearAgent={onClearAgent}
+        longContextEnabled={longContextEnabled}
+        onLongContextChange={onLongContextChange}
       />
 
       {/* @ file reference dropdown menu */}
@@ -193,21 +199,24 @@ export function ChatInputBoxFooter({
       )}
 
       {/* Floating Tooltip (uses Portal or Fixed positioning to break overflow limit) */}
-      {tooltip && tooltip.visible && (
+      {tooltip && tooltip.visible && (() => {
+        const tooltipStyle: React.CSSProperties = {
+          top: `${tooltip.top}px`,
+          left: `${tooltip.left}px`,
+          width: tooltip.width ? `${tooltip.width}px` : undefined,
+          // @ts-expect-error CSS custom properties
+          '--tooltip-tx': tooltip.tx || '-50%',
+          '--arrow-left': tooltip.arrowLeft || '50%',
+        };
+        return (
         <div
           className={`tooltip-popup ${tooltip.isBar ? 'tooltip-bar' : ''}`}
-          style={{
-            top: `${tooltip.top}px`,
-            left: `${tooltip.left}px`,
-            width: tooltip.width ? `${tooltip.width}px` : undefined,
-            // @ts-expect-error CSS custom properties
-            '--tooltip-tx': tooltip.tx || '-50%',
-            '--arrow-left': tooltip.arrowLeft || '50%',
-          }}
+          style={tooltipStyle}
         >
           {tooltip.text}
         </div>
-      )}
+        );
+      })()}
 
       {/* Prompt enhancer dialog */}
       <PromptEnhancerDialog

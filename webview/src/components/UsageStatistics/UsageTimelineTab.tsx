@@ -1,6 +1,18 @@
 import { useTranslation } from 'react-i18next';
 import type { DailyUsage } from '../../types/usage';
 
+function getGridLineStyle(index: number): React.CSSProperties {
+  return { bottom: `${index * 25}%` };
+}
+
+function getBarStyle(height: number): React.CSSProperties {
+  return { height: `${height}%` };
+}
+
+function getTooltipStyle(x: number, y: number): React.CSSProperties {
+  return { left: x, top: y };
+}
+
 interface TimelineTabProps {
   filteredDailyUsage: DailyUsage[];
   tooltip: {
@@ -42,7 +54,7 @@ export const UsageTimelineTab = ({
                 <div className="chart-main">
                   <div className="chart-grid">
                     {[0, 1, 2, 3, 4].map(i => (
-                      <div key={i} className="chart-grid-line" style={{ bottom: `${i * 25}%` }} />
+                      <div key={i} className="chart-grid-line" style={getGridLineStyle(i)} />
                     ))}
                   </div>
 
@@ -55,7 +67,7 @@ export const UsageTimelineTab = ({
                             <div className="chart-bar-container">
                               <div
                                 className="chart-bar"
-                                style={{ height: `${height}%` }}
+                                style={getBarStyle(height)}
                                 onMouseEnter={(e) => {
                                   const rect = e.currentTarget.getBoundingClientRect();
                                   setTooltip({
@@ -89,7 +101,7 @@ export const UsageTimelineTab = ({
       {tooltip.visible && (
         <div
           className="chart-tooltip"
-          style={{ left: tooltip.x, top: tooltip.y }}
+          style={getTooltipStyle(tooltip.x, tooltip.y)}
         >
           <div className="tooltip-date">{formatChineseDate(tooltip.content.date)}</div>
           <div className="tooltip-cost">{formatCost(tooltip.content.cost)}</div>

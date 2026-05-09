@@ -23,7 +23,8 @@ export function buildRuntimeSignature(options, systemPromptAppend, streamingEnab
     systemPromptAppend: systemPromptAppend || '',
     streamingEnabled: !!streamingEnabled,
     runtimeSessionEpoch: runtimeSessionEpoch || '',
-    model: options.model || ''
+    model: options.model || '',
+    effort: options.effort || ''
   };
   return JSON.stringify(material);
 }
@@ -93,7 +94,8 @@ async function createRuntime(requestContext, callbacks) {
     activeTurnCount: 0,
     stderrLines: [],
     query: null,
-    inputStream: new AsyncStream()
+    inputStream: new AsyncStream(),
+    titleGenerationAttempted: false
   };
 
   const options = {

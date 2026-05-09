@@ -33,7 +33,7 @@ class RuntimeContextCollector {
     void collectTerminals(List<JsonObject> files, FileHandler.FileListRequest request) {
         ApplicationManager.getApplication().runReadAction(() -> {
             Project project = context.getProject();
-            if (project == null || project.isDisposed()) return;
+            if (project == null || project.isDisposed()) { return; }
 
             try {
                 List<Object> widgets = TerminalMonitorService.getWidgets(project);
@@ -77,7 +77,7 @@ class RuntimeContextCollector {
     void collectServices(List<JsonObject> files, FileHandler.FileListRequest request) {
         ApplicationManager.getApplication().runReadAction(() -> {
             Project project = context.getProject();
-            if (project == null || project.isDisposed()) return;
+            if (project == null || project.isDisposed()) { return; }
 
             try {
                 List<RunConfigMonitorService.RunConfigInfo> configs = RunConfigMonitorService.getRunConfigurations(project);

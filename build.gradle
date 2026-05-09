@@ -30,7 +30,7 @@ checkstyle {
 }
 
 group = 'com.github.idea-claude-code-gui'
-version = '0.3.4'
+version = '0.4.2'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -113,10 +113,12 @@ sourceSets {
             // PyCharm: exclude Java context collector
             if (targetIde == 'PC' || targetIde == 'PY') {
                 exclude '**/JavaContextCollector.java'
+                exclude '**/JavaClassNavigationSupport.java'
             }
             // Rider: exclude both Java and Python context collectors (no PSI support)
             if (targetIde == 'RD') {
                 exclude '**/JavaContextCollector.java'
+                exclude '**/JavaClassNavigationSupport.java'
                 exclude '**/PythonContextCollector.java'
             }
         }
@@ -352,12 +354,19 @@ tasks.register('packageAiBridge', Exec) {
     // Switch to ai-bridge directory for packaging, avoiding inclusion of top-level directory
     workingDir aiBridgeDir
 
-    // Ensure output directory exists
+    // Ensure output directory exists and dependencies are installed
     doFirst {
         aiBridgePackDir.mkdirs()
         // Delete old zip file
         if (aiBridgeArchive.exists()) {
             aiBridgeArchive.delete()
+        }
+        // Install npm dependencies if node_modules doesn't exist
+        if (!new File(aiBridgeDir, 'node_modules').exists()) {
+            println 'Installing ai-bridge npm dependencies...'
+            String npmCmd = System.getProperty('os.name').toLowerCase().contains('windows') ? 'npm.cmd' : 'npm'
+            exec { commandLine npmCmd, 'install', '--silent', '--loglevel=error'; workingDir = aiBridgeDir }
+            println 'ai-bridge npm dependencies installed.'
         }
     }
 
@@ -450,6 +459,9 @@ def pluginName = project.name
 
 tasks.matching { it.name.startsWith('prepareSandbox') }.configureEach {
     dependsOn('buildWebview', 'packageAiBridge')
+    // Declare ai-bridge files as task inputs so changes to JS source
+    // invalidate the UP-TO-DATE check and ensure doLast (copy/cleanup) runs.
+    inputs.files(aiBridgeArchive, aiBridgeHashFile)
     def sandboxRootProvider = layout.buildDirectory.dir('idea-sandbox')
     // Capture needed file references during configuration phase
     def archiveSource = aiBridgeArchive
@@ -517,6 +529,8 @@ tasks.matching { it.name == 'preparePluginForDistribution' || it.name == 'compos
 
 tasks.named('buildPlugin') {
     dependsOn('packageAiBridge', 'checkstyleMain')
+    // Invalidate UP-TO-DATE when ai-bridge.zip content changes.
+    inputs.files(aiBridgeArchive, aiBridgeHashFile)
 
     doLast {
         // Unzip the plugin zip, add ai-bridge.zip and ai-bridge.hash, then repackage

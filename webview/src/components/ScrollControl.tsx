@@ -200,10 +200,13 @@ export const ScrollControl = memo(({ containerRef, inputAreaRef }: ScrollControl
 
   if (!visible) return null;
 
+  const buttonStyle: React.CSSProperties = { bottom: `${bottomOffset}px` };
+  const svgStyle: React.CSSProperties = { transform: direction === 'up' ? 'rotate(180deg)' : 'none' };
+
   return (
     <button
       className="scroll-control-button"
-      style={{ bottom: `${bottomOffset}px` }}
+      style={buttonStyle}
       onClick={handleClick}
       aria-label={direction === 'up' ? t('chat.backToTop') : t('chat.backToBottom')}
       title={direction === 'up' ? t('chat.backToTop') : t('chat.backToBottom')}
@@ -217,7 +220,7 @@ export const ScrollControl = memo(({ containerRef, inputAreaRef }: ScrollControl
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
-        style={{ transform: direction === 'up' ? 'rotate(180deg)' : 'none' }}
+        style={svgStyle}
       >
         <path d="M12 5v14M19 12l-7 7-7-7" />
       </svg>

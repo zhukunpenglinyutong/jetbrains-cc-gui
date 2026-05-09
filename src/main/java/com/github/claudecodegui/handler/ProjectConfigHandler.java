@@ -2,6 +2,7 @@ package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.handler.core.HandlerContext;
 
+import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.action.SendShortcutSync;
 import com.github.claudecodegui.provider.claude.ClaudeHistoryReader;
@@ -9,10 +10,15 @@ import com.github.claudecodegui.provider.codex.CodexHistoryReader;
 import com.github.claudecodegui.util.FontConfigService;
 import com.github.claudecodegui.util.ThemeConfigService;
 import com.google.gson.Gson;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.fileChooser.FileChooser;
+import com.intellij.openapi.fileChooser.FileChooserDescriptor;
+import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.openapi.vfs.VirtualFile;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -34,6 +40,107 @@ public class ProjectConfigHandler {
         this.settingsService = context.getSettingsService();
     }
 
+    // ---- Internal helpers --------------------------------------------------
+
+    @FunctionalInterface
+    private interface ThrowingJsonSupplier { JsonElement get() throws Exception; }
+
+    @FunctionalInterface
+    private interface ThrowingBooleanConsumer { void accept(boolean value) throws Exception; }
+
+    @FunctionalInterface
+    private interface ThrowingProjectBooleanConsumer { void accept(String projectPath, boolean value) throws Exception; }
+
+    private void pushJson(String jsCallback, JsonElement payload) {
+        String json = gson.toJson(payload);
+        ApplicationManager.getApplication().invokeLater(() ->
+            context.callJavaScript(jsCallback, context.escapeJs(json)));
+    }
+
+    private void showError(String message) {
+        ApplicationManager.getApplication().invokeLater(() ->
+            context.callJavaScript("window.showError", context.escapeJs(message)));
+    }
+
+    private void showSuccess(String message) {
+        ApplicationManager.getApplication().invokeLater(() ->
+            context.callJavaScript("window.showSuccess", context.escapeJs(message)));
+    }
+
+    private static JsonObject jsonOf(String key, boolean value) {
+        JsonObject obj = new JsonObject();
+        obj.addProperty(key, value);
+        return obj;
+    }
+
+    private static JsonObject jsonOf(String key, String value) {
+        JsonObject obj = new JsonObject();
+        obj.addProperty(key, value);
+        return obj;
+    }
+
+    /** Run a getter and push the JSON payload; on error, push {@code fallback} so the UI always gets a response. */
+    private void respondWithJson(String jsCallback, ThrowingJsonSupplier producer, JsonElement fallback,
+                                 String errorLogMessage) {
+        try {
+            pushJson(jsCallback, producer.get());
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] " + errorLogMessage + ": " + e.getMessage(), e);
+            if (fallback != null) {
+                pushJson(jsCallback, fallback);
+            }
+        }
+    }
+
+    private boolean readBoolean(JsonObject json, String field, boolean defaultValue) {
+        if (json == null || !json.has(field) || json.get(field).isJsonNull()) { return defaultValue; }
+        return json.get(field).getAsBoolean();
+    }
+
+    private String readString(JsonObject json, String field, String defaultValue) {
+        if (json == null || !json.has(field) || json.get(field).isJsonNull()) { return defaultValue; }
+        return json.get(field).getAsString();
+    }
+
+    /** Standard boolean-toggle setter: parse one field, apply mutation, log, echo back via {@code jsCallback}. */
+    private void handleBooleanToggle(String content, String field, boolean defaultValue,
+                                     String logLabel, ThrowingBooleanConsumer mutation,
+                                     String jsCallback, String errorMessage) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            boolean enabled = readBoolean(json, field, defaultValue);
+            mutation.accept(enabled);
+            LOG.info("[ProjectConfigHandler] Set " + logLabel + ": " + enabled);
+            pushJson(jsCallback, jsonOf(field, enabled));
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set " + logLabel + ": " + e.getMessage(), e);
+            showError(errorMessage);
+        }
+    }
+
+    /** Project-scoped variant of {@link #handleBooleanToggle}; validates project path first. */
+    private void handleProjectBooleanToggle(String content, String field, boolean defaultValue,
+                                            String logLabel, ThrowingProjectBooleanConsumer mutation,
+                                            String jsCallback, String errorMessage) {
+        try {
+            String projectPath = context.getProject().getBasePath();
+            if (projectPath == null) {
+                showError("Unable to resolve project path");
+                return;
+            }
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            boolean enabled = readBoolean(json, field, defaultValue);
+            mutation.accept(projectPath, enabled);
+            LOG.info("[ProjectConfigHandler] Set " + logLabel + ": " + enabled);
+            pushJson(jsCallback, jsonOf(field, enabled));
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set " + logLabel + ": " + e.getMessage(), e);
+            showError(errorMessage + ": " + e.getMessage());
+        }
+    }
+
+    // ---- Working Directory -------------------------------------------------
+
     public void handleGetWorkingDirectory() {
         try {
             String projectPath = context.getProject().getBasePath();
@@ -42,17 +149,14 @@ public class ProjectConfigHandler {
                     context.callJavaScript("window.updateWorkingDirectory", "{}"));
                 return;
             }
-            String customWorkingDir = new CodemossSettingsService().getCustomWorkingDirectory(projectPath);
+            String customWorkingDir = settingsService.getCustomWorkingDirectory(projectPath);
             JsonObject response = new JsonObject();
             response.addProperty("projectPath", projectPath);
             response.addProperty("customWorkingDir", customWorkingDir != null ? customWorkingDir : "");
-            String json = gson.toJson(response);
-            ApplicationManager.getApplication().invokeLater(() ->
-                context.callJavaScript("window.updateWorkingDirectory", context.escapeJs(json)));
+            pushJson("window.updateWorkingDirectory", response);
         } catch (Exception e) {
             LOG.error("[ProjectConfigHandler] Failed to get working directory: " + e.getMessage(), e);
-            ApplicationManager.getApplication().invokeLater(() ->
-                context.callJavaScript("window.showError", context.escapeJs("获取工作目录配置失败: " + e.getMessage())));
+            showError("Failed to get working directory config: " + e.getMessage());
         }
     }
 
@@ -60,191 +164,95 @@ public class ProjectConfigHandler {
         try {
             String projectPath = context.getProject().getBasePath();
             if (projectPath == null) {
-                ApplicationManager.getApplication().invokeLater(() ->
-                    context.callJavaScript("window.showError", context.escapeJs("无法获取项目路径")));
+                showError("Unable to resolve project path");
                 return;
             }
             JsonObject json = gson.fromJson(content, JsonObject.class);
-            String customWorkingDir = (json != null && json.has("customWorkingDir") && !json.get("customWorkingDir").isJsonNull())
-                ? json.get("customWorkingDir").getAsString() : null;
+            String customWorkingDir = readString(json, "customWorkingDir", null);
             if (customWorkingDir != null && !customWorkingDir.trim().isEmpty()) {
                 java.io.File workingDirFile = new java.io.File(customWorkingDir);
                 if (!workingDirFile.isAbsolute()) {
                     workingDirFile = new java.io.File(projectPath, customWorkingDir);
                 }
                 if (!workingDirFile.exists() || !workingDirFile.isDirectory()) {
-                    final String errorPath = workingDirFile.getAbsolutePath();
-                    ApplicationManager.getApplication().invokeLater(() ->
-                        context.callJavaScript("window.showError", context.escapeJs("工作目录不存在: " + errorPath)));
+                    showError("Working directory does not exist: " + workingDirFile.getAbsolutePath());
                     return;
                 }
             }
-            new CodemossSettingsService().setCustomWorkingDirectory(projectPath, customWorkingDir);
+            settingsService.setCustomWorkingDirectory(projectPath, customWorkingDir);
             LOG.info("[ProjectConfigHandler] Set custom working directory: " + customWorkingDir);
-            ApplicationManager.getApplication().invokeLater(() ->
-                context.callJavaScript("window.showSuccess", context.escapeJs("工作目录配置已保存")));
+            showSuccess("Working directory config saved");
         } catch (Exception e) {
             LOG.error("[ProjectConfigHandler] Failed to set working directory: " + e.getMessage(), e);
-            ApplicationManager.getApplication().invokeLater(() ->
-                context.callJavaScript("window.showError", context.escapeJs("保存工作目录配置失败: " + e.getMessage())));
+            showError("Failed to save working directory config: " + e.getMessage());
         }
     }
 
     public void handleGetStreamingEnabled() {
-        try {
-            String projectPath = context.getProject().getBasePath();
-            if (projectPath == null) {
-                ApplicationManager.getApplication().invokeLater(() -> {
-                    JsonObject r = new JsonObject();
-                    r.addProperty("streamingEnabled", true);
-                    context.callJavaScript("window.updateStreamingEnabled", context.escapeJs(gson.toJson(r)));
-                });
-                return;
-            }
-            boolean streamingEnabled = new CodemossSettingsService().getStreamingEnabled(projectPath);
-            ApplicationManager.getApplication().invokeLater(() -> {
-                JsonObject r = new JsonObject();
-                r.addProperty("streamingEnabled", streamingEnabled);
-                context.callJavaScript("window.updateStreamingEnabled", context.escapeJs(gson.toJson(r)));
-            });
-        } catch (Exception e) {
-            LOG.error("[ProjectConfigHandler] Failed to get streaming enabled: " + e.getMessage(), e);
-            ApplicationManager.getApplication().invokeLater(() -> {
-                JsonObject r = new JsonObject();
-                r.addProperty("streamingEnabled", true);
-                context.callJavaScript("window.updateStreamingEnabled", context.escapeJs(gson.toJson(r)));
-            });
-        }
+        respondWithJson("window.updateStreamingEnabled",
+            () -> {
+                String projectPath = context.getProject().getBasePath();
+                boolean enabled = projectPath == null || settingsService.getStreamingEnabled(projectPath);
+                return jsonOf("streamingEnabled", enabled);
+            },
+            jsonOf("streamingEnabled", true),
+            "Failed to get streaming enabled");
     }
 
     public void handleSetStreamingEnabled(String content) {
-        try {
-            String projectPath = context.getProject().getBasePath();
-            if (projectPath == null) {
-                ApplicationManager.getApplication().invokeLater(() ->
-                    context.callJavaScript("window.showError", context.escapeJs("无法获取项目路径")));
-                return;
-            }
-            JsonObject json = gson.fromJson(content, JsonObject.class);
-            boolean streamingEnabled = (json == null || !json.has("streamingEnabled") || json.get("streamingEnabled").isJsonNull())
-                || json.get("streamingEnabled").getAsBoolean();
-            new CodemossSettingsService().setStreamingEnabled(projectPath, streamingEnabled);
-            LOG.info("[ProjectConfigHandler] Set streaming enabled: " + streamingEnabled);
-            final boolean finalVal = streamingEnabled;
-            ApplicationManager.getApplication().invokeLater(() -> {
-                JsonObject r = new JsonObject();
-                r.addProperty("streamingEnabled", finalVal);
-                context.callJavaScript("window.updateStreamingEnabled", context.escapeJs(gson.toJson(r)));
-            });
-        } catch (Exception e) {
-            LOG.error("[ProjectConfigHandler] Failed to set streaming enabled: " + e.getMessage(), e);
-            ApplicationManager.getApplication().invokeLater(() ->
-                context.callJavaScript("window.showError", context.escapeJs("保存流式传输配置失败: " + e.getMessage())));
-        }
+        handleProjectBooleanToggle(content, "streamingEnabled", true, "streaming enabled",
+            settingsService::setStreamingEnabled,
+            "window.updateStreamingEnabled",
+            "Failed to save streaming config");
     }
 
     public void handleGetCodexSandboxMode() {
-        try {
-            String projectPath = context.getProject().getBasePath();
-            String sandboxMode = settingsService.getCodexSandboxMode(projectPath);
-            ApplicationManager.getApplication().invokeLater(() -> {
-                JsonObject r = new JsonObject();
-                r.addProperty("sandboxMode", sandboxMode);
-                context.callJavaScript("window.updateCodexSandboxMode", context.escapeJs(gson.toJson(r)));
-            });
-        } catch (Exception e) {
-            LOG.error("[ProjectConfigHandler] Failed to get Codex sandbox mode: " + e.getMessage(), e);
-            ApplicationManager.getApplication().invokeLater(() -> {
-                JsonObject r = new JsonObject();
-                r.addProperty("sandboxMode", "danger-full-access");
-                context.callJavaScript("window.updateCodexSandboxMode", context.escapeJs(gson.toJson(r)));
-            });
-        }
+        respondWithJson("window.updateCodexSandboxMode",
+            () -> jsonOf("sandboxMode", settingsService.getCodexSandboxMode(context.getProject().getBasePath())),
+            jsonOf("sandboxMode", "danger-full-access"),
+            "Failed to get Codex sandbox mode");
     }
 
     public void handleSetCodexSandboxMode(String content) {
         try {
             String projectPath = context.getProject().getBasePath();
             JsonObject json = gson.fromJson(content, JsonObject.class);
-            String sandboxMode = (json != null && json.has("sandboxMode") && !json.get("sandboxMode").isJsonNull())
-                ? json.get("sandboxMode").getAsString() : "danger-full-access";
+            String sandboxMode = readString(json, "sandboxMode", "danger-full-access");
             settingsService.setCodexSandboxMode(projectPath, sandboxMode);
             LOG.info("[ProjectConfigHandler] Set Codex sandbox mode: " + sandboxMode);
-            final String finalMode = sandboxMode;
             ApplicationManager.getApplication().invokeLater(() -> {
-                JsonObject r = new JsonObject();
-                r.addProperty("sandboxMode", finalMode);
-                context.callJavaScript("window.updateCodexSandboxMode", context.escapeJs(gson.toJson(r)));
+                context.callJavaScript("window.updateCodexSandboxMode",
+                    context.escapeJs(gson.toJson(jsonOf("sandboxMode", sandboxMode))));
                 context.callJavaScript("window.showSuccessI18n", "toast.saveSuccess");
             });
         } catch (Exception e) {
             LOG.error("[ProjectConfigHandler] Failed to set Codex sandbox mode: " + e.getMessage(), e);
-            ApplicationManager.getApplication().invokeLater(() ->
-                context.callJavaScript("window.showError", context.escapeJs("Failed to save Codex sandbox mode: " + e.getMessage())));
+            showError("Failed to save Codex sandbox mode: " + e.getMessage());
         }
     }
 
     public void handleGetAutoOpenFileEnabled() {
-        try {
-            String projectPath = context.getProject().getBasePath();
-            if (projectPath == null) {
-                ApplicationManager.getApplication().invokeLater(() -> {
-                    JsonObject r = new JsonObject();
-                    r.addProperty("autoOpenFileEnabled", false);
-                    context.callJavaScript("window.updateAutoOpenFileEnabled", context.escapeJs(gson.toJson(r)));
-                });
-                return;
-            }
-            boolean enabled = new CodemossSettingsService().getAutoOpenFileEnabled(projectPath);
-            ApplicationManager.getApplication().invokeLater(() -> {
-                JsonObject r = new JsonObject();
-                r.addProperty("autoOpenFileEnabled", enabled);
-                context.callJavaScript("window.updateAutoOpenFileEnabled", context.escapeJs(gson.toJson(r)));
-            });
-        } catch (Exception e) {
-            LOG.error("[ProjectConfigHandler] Failed to get auto open file enabled: " + e.getMessage(), e);
-            ApplicationManager.getApplication().invokeLater(() -> {
-                JsonObject r = new JsonObject();
-                r.addProperty("autoOpenFileEnabled", false);
-                context.callJavaScript("window.updateAutoOpenFileEnabled", context.escapeJs(gson.toJson(r)));
-            });
-        }
+        respondWithJson("window.updateAutoOpenFileEnabled",
+            () -> {
+                String projectPath = context.getProject().getBasePath();
+                boolean enabled = projectPath != null && settingsService.getAutoOpenFileEnabled(projectPath);
+                return jsonOf("autoOpenFileEnabled", enabled);
+            },
+            jsonOf("autoOpenFileEnabled", false),
+            "Failed to get auto open file enabled");
     }
 
     public void handleSetAutoOpenFileEnabled(String content) {
-        try {
-            String projectPath = context.getProject().getBasePath();
-            if (projectPath == null) {
-                ApplicationManager.getApplication().invokeLater(() ->
-                    context.callJavaScript("window.showError", context.escapeJs("无法获取项目路径")));
-                return;
-            }
-            JsonObject json = gson.fromJson(content, JsonObject.class);
-            boolean enabled = json != null && json.has("autoOpenFileEnabled") && !json.get("autoOpenFileEnabled").isJsonNull()
-                && json.get("autoOpenFileEnabled").getAsBoolean();
-            new CodemossSettingsService().setAutoOpenFileEnabled(projectPath, enabled);
-            LOG.info("[ProjectConfigHandler] Set auto open file enabled: " + enabled);
-            final boolean finalVal = enabled;
-            ApplicationManager.getApplication().invokeLater(() -> {
-                JsonObject r = new JsonObject();
-                r.addProperty("autoOpenFileEnabled", finalVal);
-                context.callJavaScript("window.updateAutoOpenFileEnabled", context.escapeJs(gson.toJson(r)));
-            });
-        } catch (Exception e) {
-            LOG.error("[ProjectConfigHandler] Failed to set auto open file enabled: " + e.getMessage(), e);
-            ApplicationManager.getApplication().invokeLater(() ->
-                context.callJavaScript("window.showError", context.escapeJs("保存自动打开文件配置失败: " + e.getMessage())));
-        }
+        handleProjectBooleanToggle(content, "autoOpenFileEnabled", false, "auto open file enabled",
+            settingsService::setAutoOpenFileEnabled,
+            "window.updateAutoOpenFileEnabled",
+            "Failed to save auto open file config");
     }
 
     public void handleGetSendShortcut() {
         try {
             String sendShortcut = PropertiesComponent.getInstance().getValue(SEND_SHORTCUT_PROPERTY_KEY, "enter");
-            ApplicationManager.getApplication().invokeLater(() -> {
-                JsonObject r = new JsonObject();
-                r.addProperty("sendShortcut", sendShortcut);
-                context.callJavaScript("window.updateSendShortcut", context.escapeJs(gson.toJson(r)));
-            });
+            pushJson("window.updateSendShortcut", jsonOf("sendShortcut", sendShortcut));
         } catch (Exception e) {
             LOG.error("[ProjectConfigHandler] Failed to get send shortcut: " + e.getMessage(), e);
         }
@@ -253,35 +261,24 @@ public class ProjectConfigHandler {
     public void handleSetSendShortcut(String content) {
         try {
             JsonObject json = gson.fromJson(content, JsonObject.class);
-            String sendShortcut = (json != null && json.has("sendShortcut") && !json.get("sendShortcut").isJsonNull())
-                ? json.get("sendShortcut").getAsString() : "enter";
+            String sendShortcut = readString(json, "sendShortcut", "enter");
             if (!"enter".equals(sendShortcut) && !"cmdEnter".equals(sendShortcut)) {
                 sendShortcut = "enter";
             }
             PropertiesComponent.getInstance().setValue(SEND_SHORTCUT_PROPERTY_KEY, sendShortcut);
             SendShortcutSync.sync(sendShortcut);
             LOG.info("[ProjectConfigHandler] Set send shortcut: " + sendShortcut);
-            final String finalShortcut = sendShortcut;
-            ApplicationManager.getApplication().invokeLater(() -> {
-                JsonObject r = new JsonObject();
-                r.addProperty("sendShortcut", finalShortcut);
-                context.callJavaScript("window.updateSendShortcut", context.escapeJs(gson.toJson(r)));
-            });
+            pushJson("window.updateSendShortcut", jsonOf("sendShortcut", sendShortcut));
         } catch (Exception e) {
             LOG.error("[ProjectConfigHandler] Failed to set send shortcut: " + e.getMessage(), e);
-            ApplicationManager.getApplication().invokeLater(() ->
-                context.callJavaScript("window.showError", context.escapeJs("保存发送快捷键设置失败: " + e.getMessage())));
+            showError("Failed to save send shortcut setting: " + e.getMessage());
         }
     }
 
     public void handleGetCommitPrompt() {
         try {
-            String commitPrompt = new CodemossSettingsService().getCommitPrompt();
-            ApplicationManager.getApplication().invokeLater(() -> {
-                JsonObject r = new JsonObject();
-                r.addProperty("commitPrompt", commitPrompt);
-                context.callJavaScript("window.updateCommitPrompt", context.escapeJs(gson.toJson(r)));
-            });
+            String commitPrompt = settingsService.getCommitPrompt();
+            pushJson("window.updateCommitPrompt", jsonOf("commitPrompt", commitPrompt));
         } catch (Exception e) {
             LOG.error("[ProjectConfigHandler] Failed to get commit prompt: " + e.getMessage(), e);
         }
@@ -296,31 +293,88 @@ public class ProjectConfigHandler {
             }
             String prompt = json.get("prompt").getAsString();
             if (prompt == null) {
-                ApplicationManager.getApplication().invokeLater(() ->
-                    context.callJavaScript("window.showError", context.escapeJs("提示词不能为空")));
+                showError("Prompt cannot be empty");
                 return;
             }
             prompt = prompt.trim();
             final int MAX_PROMPT_LENGTH = 10000;
             if (prompt.length() > MAX_PROMPT_LENGTH) {
                 LOG.warn("[ProjectConfigHandler] Commit prompt too long: " + prompt.length() + " characters");
-                ApplicationManager.getApplication().invokeLater(() ->
-                    context.callJavaScript("window.showError", context.escapeJs("提示词长度不能超过 " + MAX_PROMPT_LENGTH + " 字符")));
+                showError("Prompt length must not exceed " + MAX_PROMPT_LENGTH + " characters");
                 return;
             }
             final String validatedPrompt = prompt;
-            new CodemossSettingsService().setCommitPrompt(validatedPrompt);
+            settingsService.setCommitPrompt(validatedPrompt);
             LOG.info("[ProjectConfigHandler] Set commit prompt, length: " + validatedPrompt.length());
-            ApplicationManager.getApplication().invokeLater(() -> {
-                JsonObject r = new JsonObject();
-                r.addProperty("commitPrompt", validatedPrompt);
-                r.addProperty("saved", true);
-                context.callJavaScript("window.updateCommitPrompt", context.escapeJs(gson.toJson(r)));
-            });
+            JsonObject response = new JsonObject();
+            response.addProperty("commitPrompt", validatedPrompt);
+            response.addProperty("saved", true);
+            pushJson("window.updateCommitPrompt", response);
         } catch (Exception e) {
             LOG.error("[ProjectConfigHandler] Failed to set commit prompt: " + e.getMessage(), e);
-            ApplicationManager.getApplication().invokeLater(() ->
-                context.callJavaScript("window.showError", context.escapeJs("保存 Commit 提示词失败: " + e.getMessage())));
+            showError("Failed to save commit prompt: " + e.getMessage());
+        }
+    }
+
+    public void handleGetPromptEnhancerConfig() {
+        try {
+            pushJson("window.updatePromptEnhancerConfig", settingsService.getPromptEnhancerConfig());
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to get prompt enhancer config: " + e.getMessage(), e);
+            showError(ClaudeCodeGuiBundle.message("projectConfig.promptEnhancer.getFailed", e.getMessage()));
+        }
+    }
+
+    public void handleSetPromptEnhancerConfig(String content) {
+        applyAiProviderConfig(content,
+            settingsService::setPromptEnhancerConfig,
+            settingsService::getPromptEnhancerConfig,
+            "window.updatePromptEnhancerConfig",
+            "Failed to set prompt enhancer config",
+            "projectConfig.promptEnhancer.saveFailed");
+    }
+
+    public void handleGetCommitAiConfig() {
+        try {
+            pushJson("window.updateCommitAiConfig", settingsService.getCommitAiConfig());
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to get commit AI config: " + e.getMessage(), e);
+            showError(ClaudeCodeGuiBundle.message("projectConfig.commitAi.getFailed", e.getMessage()));
+        }
+    }
+
+    public void handleSetCommitAiConfig(String content) {
+        applyAiProviderConfig(content,
+            settingsService::setCommitAiConfig,
+            settingsService::getCommitAiConfig,
+            "window.updateCommitAiConfig",
+            "Failed to set commit AI config",
+            "projectConfig.commitAi.saveFailed");
+    }
+
+    @FunctionalInterface
+    private interface AiProviderSetter {
+        void apply(String provider, String claudeModel, String codexModel) throws Exception;
+    }
+
+    @FunctionalInterface
+    private interface ThrowingJsonObjectSupplier { JsonObject get() throws Exception; }
+
+    /** Shared logic for AI provider+models configs (prompt enhancer, commit AI, etc.). */
+    private void applyAiProviderConfig(String content, AiProviderSetter setter,
+                                       ThrowingJsonObjectSupplier getter,
+                                       String jsCallback, String errorLogMessage, String errorBundleKey) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            String provider = readString(json, "provider", null);
+            JsonObject models = json != null && json.has("models") && json.get("models").isJsonObject()
+                    ? json.getAsJsonObject("models")
+                    : new JsonObject();
+            setter.apply(provider, readString(models, "claude", null), readString(models, "codex", null));
+            pushJson(jsCallback, getter.get());
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] " + errorLogMessage + ": " + e.getMessage(), e);
+            showError(ClaudeCodeGuiBundle.message(errorBundleKey, e.getMessage()));
         }
     }
 
@@ -344,81 +398,146 @@ public class ProjectConfigHandler {
         }
     }
 
-    // ==================== AI Feature Toggle ====================
+    public void handleGetUiFontConfig() {
+        dispatchUiFontConfigUpdate();
+    }
+
+    public void handleSetUiFontConfig(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            String mode = readString(json, "mode", FontConfigService.UI_FONT_MODE_FOLLOW_EDITOR);
+            String customFontPath = readString(json, "customFontPath", null);
+
+            if (FontConfigService.UI_FONT_MODE_CUSTOM_FILE.equals(mode)) {
+                FontConfigService.ValidationResult validation = FontConfigService.validateCustomUiFontFile(customFontPath);
+                if (!validation.valid()) {
+                    showError("Invalid font file: " + validation.errorMessage());
+                    return;
+                }
+            }
+
+            settingsService.setUiFontConfig(mode, customFontPath);
+            dispatchUiFontConfigUpdate();
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set UI font config: " + e.getMessage(), e);
+            showError("Failed to save font config: " + e.getMessage());
+        }
+    }
+
+    public void handleBrowseUiFontFile() {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            try {
+                FileChooserDescriptor descriptor = new FileChooserDescriptor(true, false, false, false, false, false)
+                    .withFileFilter(file -> {
+                        String ext = file.getExtension();
+                        return ext != null && (ext.equalsIgnoreCase("ttf") || ext.equalsIgnoreCase("otf"));
+                    })
+                    .withTitle("Select Font File")
+                    .withDescription("Select a TTF or OTF font file");
+
+                FileChooser.chooseFile(descriptor, context.getProject(), resolveCurrentCustomFontFile(), this::saveSelectedCustomFont);
+            } catch (Exception e) {
+                LOG.error("[ProjectConfigHandler] Failed to open font file chooser: " + e.getMessage(), e);
+            }
+        });
+    }
+
+    private VirtualFile resolveCurrentCustomFontFile() {
+        try {
+            JsonObject persistedUiFont = settingsService.getUiFontConfig();
+            if (persistedUiFont.has("customFontPath") && !persistedUiFont.get("customFontPath").isJsonNull()) {
+                return LocalFileSystem.getInstance().findFileByPath(persistedUiFont.get("customFontPath").getAsString());
+            }
+        } catch (Exception e) {
+            LOG.warn("[ProjectConfigHandler] Failed to resolve current custom font path: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private void saveSelectedCustomFont(VirtualFile file) {
+        if (file == null) { return; }
+        String path = file.getPath();
+        FontConfigService.ValidationResult validation = FontConfigService.validateCustomUiFontFile(path);
+        if (!validation.valid()) {
+            context.callJavaScript("window.showError", context.escapeJs("Invalid font file: " + validation.errorMessage()));
+            return;
+        }
+        try {
+            settingsService.setUiFontConfig(FontConfigService.UI_FONT_MODE_CUSTOM_FILE, path);
+            dispatchUiFontConfigUpdate();
+            context.callJavaScript("window.showSuccessI18n", context.escapeJs("toast.saveSuccess"));
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to save selected font file: " + e.getMessage(), e);
+            context.callJavaScript("window.showError", context.escapeJs("Failed to save font config: " + e.getMessage()));
+        }
+    }
 
     public void handleGetCommitGenerationEnabled() {
-        try {
-            boolean enabled = settingsService.getCommitGenerationEnabled();
-            ApplicationManager.getApplication().invokeLater(() -> {
-                JsonObject r = new JsonObject();
-                r.addProperty("commitGenerationEnabled", enabled);
-                context.callJavaScript("window.updateCommitGenerationEnabled", context.escapeJs(gson.toJson(r)));
-            });
-        } catch (Exception e) {
-            LOG.error("[ProjectConfigHandler] Failed to get commit generation enabled: " + e.getMessage(), e);
-            ApplicationManager.getApplication().invokeLater(() -> {
-                JsonObject r = new JsonObject();
-                r.addProperty("commitGenerationEnabled", true);
-                context.callJavaScript("window.updateCommitGenerationEnabled", context.escapeJs(gson.toJson(r)));
-            });
-        }
+        respondWithJson("window.updateCommitGenerationEnabled",
+            () -> jsonOf("commitGenerationEnabled", settingsService.getCommitGenerationEnabled()),
+            jsonOf("commitGenerationEnabled", true),
+            "Failed to get commit generation enabled");
     }
 
     public void handleSetCommitGenerationEnabled(String content) {
-        try {
-            JsonObject json = gson.fromJson(content, JsonObject.class);
-            boolean enabled = json == null || !json.has("commitGenerationEnabled") || json.get("commitGenerationEnabled").isJsonNull()
-                || json.get("commitGenerationEnabled").getAsBoolean();
-            settingsService.setCommitGenerationEnabled(enabled);
-            LOG.info("[ProjectConfigHandler] Set commit generation enabled: " + enabled);
-            final boolean finalVal = enabled;
-            ApplicationManager.getApplication().invokeLater(() -> {
-                JsonObject r = new JsonObject();
-                r.addProperty("commitGenerationEnabled", finalVal);
-                context.callJavaScript("window.updateCommitGenerationEnabled", context.escapeJs(gson.toJson(r)));
-            });
-        } catch (Exception e) {
-            LOG.error("[ProjectConfigHandler] Failed to set commit generation enabled: " + e.getMessage(), e);
-            ApplicationManager.getApplication().invokeLater(() ->
-                context.callJavaScript("window.showError", context.escapeJs("保存 AI 生成 Commit 配置失败")));
-        }
+        handleBooleanToggle(content, "commitGenerationEnabled", true, "commit generation enabled",
+            settingsService::setCommitGenerationEnabled,
+            "window.updateCommitGenerationEnabled",
+            "Failed to save AI commit generation config");
+    }
+
+    public void handleGetAiTitleGenerationEnabled() {
+        respondWithJson("window.updateAiTitleGenerationEnabled",
+            () -> jsonOf("aiTitleGenerationEnabled", settingsService.getAiTitleGenerationEnabled()),
+            jsonOf("aiTitleGenerationEnabled", true),
+            "Failed to get AI title generation enabled");
+    }
+
+    public void handleSetAiTitleGenerationEnabled(String content) {
+        handleBooleanToggle(content, "aiTitleGenerationEnabled", true, "AI title generation enabled",
+            settingsService::setAiTitleGenerationEnabled,
+            "window.updateAiTitleGenerationEnabled",
+            "Failed to save AI title generation config");
     }
 
     public void handleGetStatusBarWidgetEnabled() {
-        try {
-            boolean enabled = settingsService.getStatusBarWidgetEnabled();
-            ApplicationManager.getApplication().invokeLater(() -> {
-                JsonObject r = new JsonObject();
-                r.addProperty("statusBarWidgetEnabled", enabled);
-                context.callJavaScript("window.updateStatusBarWidgetEnabled", context.escapeJs(gson.toJson(r)));
-            });
-        } catch (Exception e) {
-            LOG.error("[ProjectConfigHandler] Failed to get status bar widget enabled: " + e.getMessage(), e);
-            ApplicationManager.getApplication().invokeLater(() -> {
-                JsonObject r = new JsonObject();
-                r.addProperty("statusBarWidgetEnabled", true);
-                context.callJavaScript("window.updateStatusBarWidgetEnabled", context.escapeJs(gson.toJson(r)));
-            });
-        }
+        respondWithJson("window.updateStatusBarWidgetEnabled",
+            () -> jsonOf("statusBarWidgetEnabled", settingsService.getStatusBarWidgetEnabled()),
+            jsonOf("statusBarWidgetEnabled", true),
+            "Failed to get status bar widget enabled");
     }
 
     public void handleSetStatusBarWidgetEnabled(String content) {
+        handleBooleanToggle(content, "statusBarWidgetEnabled", true, "status bar widget enabled",
+            settingsService::setStatusBarWidgetEnabled,
+            "window.updateStatusBarWidgetEnabled",
+            "Failed to save status bar config");
+    }
+
+    public void handleGetTaskCompletionNotificationEnabled() {
+        respondWithJson("window.updateTaskCompletionNotificationEnabled",
+            () -> jsonOf("taskCompletionNotificationEnabled", settingsService.getTaskCompletionNotificationEnabled()),
+            jsonOf("taskCompletionNotificationEnabled", false),
+            "Failed to get task completion notification enabled");
+    }
+
+    public void handleSetTaskCompletionNotificationEnabled(String content) {
+        // Default to disabled when payload is missing or the field is absent/null (opt-in feature).
+        handleBooleanToggle(content, "taskCompletionNotificationEnabled", false, "task completion notification enabled",
+            settingsService::setTaskCompletionNotificationEnabled,
+            "window.updateTaskCompletionNotificationEnabled",
+            "Failed to save task completion notification setting");
+    }
+
+    private void dispatchUiFontConfigUpdate() {
         try {
-            JsonObject json = gson.fromJson(content, JsonObject.class);
-            boolean enabled = json == null || !json.has("statusBarWidgetEnabled") || json.get("statusBarWidgetEnabled").isJsonNull()
-                || json.get("statusBarWidgetEnabled").getAsBoolean();
-            settingsService.setStatusBarWidgetEnabled(enabled);
-            LOG.info("[ProjectConfigHandler] Set status bar widget enabled: " + enabled);
-            final boolean finalVal = enabled;
+            String uiFontConfigJson = FontConfigService.getResolvedUiFontConfigJson(settingsService);
             ApplicationManager.getApplication().invokeLater(() -> {
-                JsonObject r = new JsonObject();
-                r.addProperty("statusBarWidgetEnabled", finalVal);
-                context.callJavaScript("window.updateStatusBarWidgetEnabled", context.escapeJs(gson.toJson(r)));
+                context.callJavaScript("window.onUiFontConfigReceived", context.escapeJs(uiFontConfigJson));
+                context.callJavaScript("window.applyUiFontConfig", context.escapeJs(uiFontConfigJson));
             });
         } catch (Exception e) {
-            LOG.error("[ProjectConfigHandler] Failed to set status bar widget enabled: " + e.getMessage(), e);
-            ApplicationManager.getApplication().invokeLater(() ->
-                context.callJavaScript("window.showError", context.escapeJs("保存状态栏配置失败")));
+            LOG.error("[ProjectConfigHandler] Failed to dispatch UI font config: " + e.getMessage(), e);
         }
     }
 
@@ -442,8 +561,8 @@ public class ProjectConfigHandler {
                         if (json.has("dateRange")) {
                             String dateRange = json.get("dateRange").getAsString();
                             long now = System.currentTimeMillis();
-                            if ("7d".equals(dateRange)) cutoffTime = now - 7L * 24 * 60 * 60 * 1000;
-                            else if ("30d".equals(dateRange)) cutoffTime = now - 30L * 24 * 60 * 60 * 1000;
+                            if ("7d".equals(dateRange)) { cutoffTime = now - 7L * 24 * 60 * 60 * 1000; }
+                            else if ("30d".equals(dateRange)) { cutoffTime = now - 30L * 24 * 60 * 60 * 1000; }
                         }
                     } catch (Exception e) {
                         projectPath = "current".equals(content) ? context.getProject().getBasePath() : content;
@@ -465,8 +584,7 @@ public class ProjectConfigHandler {
                     context.callJavaScript("window.updateUsageStatistics", context.escapeJs(statsJson)));
             } catch (Exception e) {
                 LOG.error("[ProjectConfigHandler] Failed to get usage statistics: " + e.getMessage(), e);
-                ApplicationManager.getApplication().invokeLater(() ->
-                    context.callJavaScript("window.showError", context.escapeJs("获取统计数据失败: " + e.getMessage())));
+                showError("Failed to get statistics: " + e.getMessage());
             }
         });
     }

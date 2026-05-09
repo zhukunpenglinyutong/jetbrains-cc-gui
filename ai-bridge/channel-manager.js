@@ -27,13 +27,16 @@ import { readStdinData } from './utils/stdin-utils.js';
 import { handleClaudeCommand } from './channels/claude-channel.js';
 import { handleCodexCommand } from './channels/codex-channel.js';
 import { getSdkStatus, isClaudeSdkAvailable, isCodexSdkAvailable } from './utils/sdk-loader.js';
-import { injectNetworkEnvVars } from './config/api-config.js';
+import { injectNetworkEnvVars, configureCliIdentity } from './config/api-config.js';
 
 // Sync proxy/TLS settings from ~/.claude/settings.json BEFORE any network
 // activity, but only for explicitly authorized Local settings.json / CLI Login
 // modes. Without this, users behind corporate SSL-inspection proxies in those
 // modes will get certificate verification errors.
 injectNetworkEnvVars();
+
+// Configure CLI client identity before any SDK loading
+configureCliIdentity();
 
 // Diagnostic logging: startup info
 console.log('[DIAG-ENTRY] ========== CHANNEL-MANAGER STARTUP ==========');

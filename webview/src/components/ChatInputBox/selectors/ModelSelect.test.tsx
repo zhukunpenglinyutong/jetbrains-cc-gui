@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { ModelSelect } from './ModelSelect';
+import { CLAUDE_MODELS, CODEX_MODELS } from '../types';
 import type { ModelInfo } from '../types';
 import { STORAGE_KEYS } from '../../../types/provider';
 
@@ -71,5 +72,24 @@ describe('ModelSelect', () => {
     );
 
     expect(screen.getByRole('button').textContent).toContain('glm-4.7');
+  });
+
+  it('Claude 内置模型列表应默认使用不带 [1m] 的 Opus 4.6 ID', () => {
+    expect(CLAUDE_MODELS.map((model) => model.id)).toContain('claude-opus-4-6');
+    expect(CLAUDE_MODELS.map((model) => model.id)).not.toContain('claude-opus-4-6[1m]');
+  });
+
+  it('Codex 内置模型列表应与目标设计一致', () => {
+    expect(CODEX_MODELS.map((model) => model.id)).toEqual([
+      'gpt-5.5',
+      'gpt-5.4',
+      'gpt-5.2-codex',
+      'gpt-5.1-codex-max',
+      'gpt-5.4-mini',
+      'gpt-5.3-codex',
+      'gpt-5.3-codex-spark',
+      'gpt-5.2',
+      'gpt-5.1-codex-mini',
+    ]);
   });
 });

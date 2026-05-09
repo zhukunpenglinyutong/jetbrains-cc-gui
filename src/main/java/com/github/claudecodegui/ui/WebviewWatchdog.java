@@ -157,8 +157,8 @@ public class WebviewWatchdog {
     }
 
     private void checkHealth() {
-        if (disposedCheck.isDisposed()) return;
-        if (!mainPanel.isShowing()) return;
+        if (disposedCheck.isDisposed()) { return; }
+        if (!mainPanel.isShowing()) { return; }
 
         long now = System.currentTimeMillis();
         long heartbeatAgeMs = now - lastHeartbeatAtMs;
@@ -187,7 +187,7 @@ public class WebviewWatchdog {
             return;
         }
 
-        if (disposedCheck.isDisposed()) return;
+        if (disposedCheck.isDisposed()) { return; }
 
         stallCount += 1;
         String reason = "heartbeatAgeMs=" + heartbeatAgeMs + ", rafAgeMs=" + rafAgeMs;
@@ -208,7 +208,7 @@ public class WebviewWatchdog {
 
     private void reload(String reason) {
         ApplicationManager.getApplication().invokeLater(() -> {
-            if (disposedCheck.isDisposed()) return;
+            if (disposedCheck.isDisposed()) { return; }
             JBCefBrowser browser = browserProvider.getBrowser();
             if (browser == null) {
                 onRecreateWebview.run();

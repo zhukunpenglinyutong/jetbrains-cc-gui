@@ -104,6 +104,14 @@ public class MessageMerger {
                         consumedUnkeyedIndexes.add(idx);
                         continue;
                     }
+
+                    // Fallback: merge with last same-type block instead of adding duplicate
+                    int lastSameTypeIdx = findLastSameTypeBlockIndex(baseContent, block);
+                    if (lastSameTypeIdx >= 0) {
+                        baseContent.set(lastSameTypeIdx,
+                                mergeUnkeyedBlock(baseContent.get(lastSameTypeIdx).getAsJsonObject(), block));
+                        continue;
+                    }
                 }
             }
 
@@ -136,11 +144,11 @@ public class MessageMerger {
      * Get the unique key for a content block.
      */
     private String getContentBlockKey(JsonObject block) {
-        if (block.has("id") && !block.get("id").isJsonNull()) {
+        if (block.has("id") && block.get("id").isJsonPrimitive()) {
             return block.get("id").getAsString();
         }
 
-        if (block.has("tool_use_id") && !block.get("tool_use_id").isJsonNull()) {
+        if (block.has("tool_use_id") && block.get("tool_use_id").isJsonPrimitive()) {
             return "tool_result:" + block.get("tool_use_id").getAsString();
         }
 
@@ -221,10 +229,42 @@ public class MessageMerger {
         }
 
         if ("thinking".equals(type)) {
-            return textLooksRelated(getThinkingContent(existingBlock), getThinkingContent(incomingBlock));
+            String existingThinking = getThinkingContent(existingBlock);
+            String incomingThinking = getThinkingContent(incomingBlock);
+            // During early streaming, thinking content may not yet be populated,
+            // so type-based matching alone determines block identity.
+            if (existingThinking.isEmpty() || incomingThinking.isEmpty()) {
+                return true;
+            }
+            return textLooksRelated(existingThinking, incomingThinking);
         }
 
         return existingBlock.equals(incomingBlock);
+    }
+
+    private int findLastSameTypeBlockIndex(JsonArray baseContent, JsonObject incomingBlock) {
+        String incomingType = getContentBlockType(incomingBlock);
+        if (incomingType == null) {
+            return -1;
+        }
+        // Only consider the tail of baseContent — do not cross keyed blocks
+        // (tool_use, tool_result) to avoid merging content from different segments.
+        // E.g., [text_1, tool_use, text_2] should NOT merge text_2 into text_1.
+        for (int i = baseContent.size() - 1; i >= 0; i--) {
+            JsonElement element = baseContent.get(i);
+            if (!element.isJsonObject()) {
+                continue;
+            }
+            JsonObject existingBlock = element.getAsJsonObject();
+            // Stop scanning if we hit a keyed block (tool_use, tool_result)
+            if (getContentBlockKey(existingBlock) != null) {
+                break;
+            }
+            if (incomingType.equals(getContentBlockType(existingBlock))) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private String getContentBlockType(JsonObject block) {
@@ -263,8 +303,9 @@ public class MessageMerger {
         // Check suffix-prefix overlap (streaming may produce partial overlaps)
         int maxOverlap = Math.min(existing.length(), incoming.length());
         maxOverlap = Math.min(maxOverlap, 200);
+        int eLen = existing.length();
         for (int overlap = maxOverlap; overlap > 0; overlap--) {
-            if (existing.endsWith(incoming.substring(0, overlap))) {
+            if (existing.regionMatches(eLen - overlap, incoming, 0, overlap)) {
                 return true;
             }
         }

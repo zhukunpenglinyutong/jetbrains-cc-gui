@@ -87,7 +87,7 @@
     "attachmentFile": "[अटैचमेंट: {{fileName}}]",
     "unknownFile": "Unknown file",
     "attachmentsUploaded": "[अटैचमेंट अपलोड हो गए]",
-    "streamingConnected": "Claude कनेक्ट हो गया, आपके प्रश्न को समझ रहा है",
+    "streamingConnected": "{{provider}} कनेक्ट हो गया, आपके प्रश्न को समझ रहा है",
     "showEarlierMessages": "{{count}} पुराने संदेश दिखाएं",
     "totalDuration": "इस जवाब में लगा समय"
   },
@@ -146,8 +146,16 @@
         "level6": "सबसे बड़ा (140%)"
       },
       "editorFont": {
-        "label": "फ़ॉन्ट (संपादक फ़ॉन्ट का अनुसरण करता है)",
-        "hint": "यहाँ संपादन योग्य नहीं है। संशोधित करने के लिए, IDEA सेटिंग्स → संपादक → फ़ॉन्ट पर जाएं (प्लगइन फ़ॉन्ट प्रभावी होने के लिए IDEA पुनः आरंभ करें)"
+        "label": "फ़ॉन्ट",
+        "hint": "यहाँ प्लगइन UI का फ़ॉन्ट बदला जाता है; फ़ॉन्ट आकार और लाइन स्पेसिंग अभी भी एडिटर का अनुसरण करते हैं।",
+        "followOption": "एडिटर का अनुसरण करें ({{font}})",
+        "customOption": "कस्टम फ़ॉन्ट फ़ाइल",
+        "customPathLabel": "फ़ॉन्ट फ़ाइल पथ",
+        "customPathPlaceholder": ".ttf / .otf फ़ॉन्ट फ़ाइल का पथ चुनें या दर्ज करें",
+        "browse": "ब्राउज़ करें",
+        "warningUnavailable": "फ़ॉन्ट उपलब्ध नहीं है, अभी एडिटर फ़ॉन्ट उपयोग में है",
+        "statusFollowEditor": "अभी एडिटर फ़ॉन्ट उपयोग में है: {{font}}",
+        "statusCustom": "अभी कस्टम फ़ॉन्ट उपयोग में है: {{font}}"
       },
       "streaming": {
         "label": "Streaming",
@@ -161,11 +169,31 @@
         "disabled": "अक्षम",
         "hint": "सक्षम होने पर, प्रोजेक्ट ट्री में फ़ाइल चुनने पर उसका फ़ाइल पथ स्वचालित रूप से AI को भेजा जाएगा (ध्यान दें: केवल फ़ाइल पथ भेजा जाता है, फ़ाइल सामग्री नहीं)। अक्षम होने पर मैन्युअल कार्रवाई आवश्यक है।"
       },
+      "promptEnhancer": {
+        "label": "Prompt Enhancer",
+        "modelLabel": "Enhancer Model",
+        "resetToDefault": "Restore Default",
+        "providerAvailable": "Available",
+        "providerUnavailable": "Currently unavailable",
+        "provider": {
+          "claude": "Claude Code",
+          "codex": "Codex"
+        },
+        "currentProviderAuto": "Currently using automatic selection: {{provider}}",
+        "currentProviderManual": "Currently using manually selected provider: {{provider}}",
+        "currentProviderUnavailable": "The selected provider is currently unavailable: {{provider}}"
+      },
       "diffExpanded": {
         "label": "डिफ़ॉल्ट रूप से अंतर दिखाएं",
         "enabled": "विस्तारित",
         "disabled": "संक्षिप्त",
         "hint": "सक्षम होने पर, चैट में कोड अंतर डिफ़ॉल्ट रूप से विस्तारित होंगे। अक्षम होने पर, अंतर संक्षिप्त शुरू होते हैं।"
+      },
+      "taskCompletionNotification": {
+        "label": "कार्य पूर्ण सूचना",
+        "enabled": "सक्षम",
+        "disabled": "अक्षम",
+        "hint": "सक्षम होने पर, AI कार्य पूरा होने पर सिस्टम सूचना दिखाता है। अक्षम होने पर, कोई सूचना नहीं दिखती।"
       },
       "sendShortcut": {
         "label": "भेजने का शॉर्टकट",
@@ -232,9 +260,23 @@
     "mcpDesc": "Model Context Protocol सर्वर कॉन्फ़िगर और प्रबंधित करें",
     "permissions": "अनुमति कॉन्फ़िगरेशन",
     "permissionsDesc": "Claude Code की फ़ाइल एक्सेस और ऑपरेशन अनुमतियां प्रबंधित करें",
+    "promptEnhancer": {
+      "title": "Prompt Enhancer",
+      "description": "Choose which provider and model should be used when enhancing prompts before sending them."
+    },
     "commit": {
       "title": "Commit AI",
       "description": "Configure AI-generated Git commit message behavior",
+      "providerModel": {
+        "label": "कमिट मॉडल प्रदाता",
+        "modelLabel": "कमिट मॉडल",
+        "resetToDefault": "रीसेट",
+        "providerAvailable": "उपलब्ध",
+        "providerUnavailable": "अनुपलब्ध",
+        "currentProviderAuto": "वर्तमान में स्वचालित चयन का उपयोग: {{provider}}",
+        "currentProviderManual": "वर्तमान में मैन्युअल रूप से चयनित प्रदाता का उपयोग: {{provider}}",
+        "currentProviderUnavailable": "चयनित प्रदाता वर्तमान में अनुपलब्ध है: {{provider}}"
+      },
       "prompt": {
         "label": "Additional Prompt",
         "placeholder": "Add your extra requirements here, e.g., generate commit in English, include issue number, etc...",
@@ -289,6 +331,12 @@
           "minutesAgo_other": "{{count}} मिनट पहले",
           "justNow": "अभी"
         }
+      },
+      "aiTitleGeneration": {
+        "label": "AI सत्र शीर्षक स्वतः निर्माण",
+        "enabled": "सक्षम",
+        "disabled": "अक्षम",
+        "hint": "सक्षम होने पर, नए सत्र की पहली प्रतिक्रिया के बाद Haiku मॉडल छोटा शीर्षक स्वतः बनाएगा। अक्षम होने पर सत्र पहले उपयोगकर्ता संदेश को शीर्षक के रूप में रखेगा।"
       }
     },
     "codexFeatureUnavailable": "यह सेटिंग अनुभाग अभी Codex में उपलब्ध नहीं है। कृपया Claude Code पर स्विच करें।",
@@ -473,6 +521,7 @@
         "deepseek": "DeepSeek",
         "minimax": "MiniMax",
         "xiaomi": "Xiaomi MiMo",
+        "xiaomiPlan": "Xiaomi MiMo Plan",
         "qwen": "Alibaba Qwen",
         "openrouter": "OpenRouter"
       }
@@ -520,7 +569,19 @@
         "cliLoginDisableMessage": "यह पुराने config.toml को पुनर्स्थापित करेगा और API की प्रमाणीकरण पर स्विच करेगा।",
         "modelIdRequired": "Model ID is required",
         "modelIdInvalid": "Invalid model ID format (only letters, numbers, dots, hyphens, underscores, slashes and colons allowed)",
-        "modelIdDuplicate": "Model ID already exists"
+        "modelIdDuplicate": "Model ID already exists",
+        "envVarsTitle": "Environment Variables",
+        "messageEnvLabel": "Message Environment Variables",
+        "messageEnvHint": "Custom environment variables injected into the Codex message subprocess",
+        "mcpEnvLabel": "MCP Environment Variables",
+        "mcpEnvHint": "Custom environment variables injected into the MCP tool discovery subprocess",
+        "envKeyPlaceholder": "ENV_KEY",
+        "envValuePlaceholder": "value",
+        "addEnvVar": "Add Variable",
+        "envKeyInvalid": "Invalid key name (must start with letter/underscore, alphanumeric only)",
+        "envKeyProtected": "Cannot set built-in variable: {{key}}",
+        "envKeyDuplicate": "Duplicate key: {{key}}",
+        "envValueTooLong": "मान बहुत लंबा है (अधिकतम {{max}} अक्षर)"
       }
     },
     "agent": {
@@ -596,6 +657,16 @@
     "confirmDelete": "हटाने की पुष्टि करें",
     "deleteMessage": "क्या आप इस सत्र को हटाना चाहते हैं? यह क्रिया पूर्ववत नहीं की जा सकती।",
     "deleteSession": "इस सत्र को हटाएं",
+    "selectMode": "Select",
+    "exitSelectMode": "Exit selection",
+    "selectedSessions": "{{count}} selected",
+    "selectAll": "Select all",
+    "clearSelection": "Clear",
+    "deleteSelected": "Delete selected",
+    "confirmDeleteSelected": "Confirm Delete",
+    "deleteSelectedMessage": "Are you sure you want to delete {{count}} selected sessions? This action cannot be undone.",
+    "selectSession": "Select session",
+    "selectSessionWithTitle": "Select {{title}}",
     "exportSession": "सत्र निर्यात करें",
     "exportSuccess": "सत्र निर्यात किया गया",
     "exportFailed": "निर्यात विफल",
@@ -618,6 +689,9 @@
     "cancelEditButton": "रद्द करें",
     "titleTooLong": "शीर्षक बहुत लंबा (अधिकतम 50 वर्ण)",
     "titleUpdated": "शीर्षक अपडेट किया गया",
+    "copySessionId": "CLI resume के लिए सेशन ID कॉपी करें",
+    "sessionIdCopied": "सेशन ID कॉपी किया गया",
+    "copyFailed": "कॉपी विफल",
     "timeAgo": {
       "yearsAgo": "साल पहले",
       "monthsAgo": "महीने पहले",
@@ -701,6 +775,12 @@
     "clickToCopy": "कॉपी करने के लिए क्लिक करें",
     "switch": "स्विच",
     "switchProvider": "प्रदाता स्विच करें",
+    "runtimeProvider": {
+      "title": "वर्तमान प्रदाता बदलें",
+      "loading": "प्रदाता लोड हो रहे हैं...",
+      "empty": "कोई प्रदाता उपलब्ध नहीं",
+      "switched": "{{provider}} पर स्विच किया गया"
+    },
     "link": "लिंक"
   },
   "markdown": {
@@ -1127,11 +1207,11 @@
         "description": "Sonnet 4.6 · डिफ़ॉल्ट अनुशंसित मॉडल"
       },
       "opus46": {
-        "label": "Opus 4.6",
-        "description": "Opus 4.6 · नवीनतम और सबसे सक्षम"
+        "label": "Opus 4.7",
+        "description": "Opus 4.7 · नवीनतम और सबसे सक्षम"
       },
       "opus46_1m": {
-        "label": "Opus (1M संदर्भ)",
+        "label": "Opus 4.6",
         "description": "Opus 4.6 लंबे सत्रों के लिए"
       },
       "haiku45": {
@@ -1139,25 +1219,47 @@
         "description": "Haiku 4.5 · सबसे तेज़, त्वरित उत्तरों के लिए उपयुक्त"
       }
     },
+    "longContext": {
+      "label": "1M",
+      "shortLabel": "1M संदर्भ",
+      "tooltipEnabled": "1M संदर्भ चालू/बंद करें",
+      "tooltipDisabled": "Haiku के लिए 1M संदर्भ उपलब्ध नहीं है"
+    },
     "codex": {
       "gpt53codex": {
-        "label": "gpt-5.3-codex",
+        "label": "GPT-5.3-Codex",
         "description": "नवीनतम फ्रंटियर एजेंटिक कोडिंग मॉडल, उन्नत क्षमताओं के साथ।"
       },
+      "gpt55": {
+        "label": "GPT-5.5",
+        "description": "और अधिक सक्षम नवीनतम फ्रंटियर मॉडल।"
+      },
       "gpt54": {
-        "label": "gpt-5.4",
+        "label": "GPT-5.4",
         "description": "उन्नत क्षमताओं के साथ नवीनतम फ्रंटियर मॉडल।"
       },
       "gpt52codex": {
-        "label": "gpt-5.2-codex",
-        "description": "नवीनतम फ्रंटियर एजेंटिक कोडिंग मॉडल।"
+        "label": "GPT-5.2-Codex",
+        "description": "फ्रंटियर एजेंटिक कोडिंग मॉडल।"
       },
       "gpt51codexMax": {
-        "label": "gpt-5.1-codex-max",
+        "label": "GPT-5.1-Codex-Max",
         "description": "Codex के लिए अनुकूलित फ्लैगशिप मॉडल, गहरी और तेज़ रीज़निंग।"
       },
+      "gpt54mini": {
+        "label": "GPT-5.4-Mini",
+        "description": "हल्का फ्रंटियर एजेंटिक कोडिंग मॉडल।"
+      },
+      "gpt53codexSpark": {
+        "label": "GPT-5.3-Codex-Spark",
+        "description": "अत्यंत तेज़ कोडिंग मॉडल।"
+      },
+      "gpt52": {
+        "label": "GPT-5.2",
+        "description": "पेशेवर काम और लंबे समय तक चलने वाले एजेंटों के लिए अनुकूलित।"
+      },
       "gpt51codexMini": {
-        "label": "gpt-5.1-codex-mini",
+        "label": "GPT-5.1-Codex-Mini",
         "description": "Codex के लिए अनुकूलित। सस्ता और तेज़, लेकिन कम सक्षम।"
       }
     }

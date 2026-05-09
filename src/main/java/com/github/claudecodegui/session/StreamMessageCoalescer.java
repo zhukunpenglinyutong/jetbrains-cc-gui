@@ -1,6 +1,5 @@
 package com.github.claudecodegui.session;
 
-import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.util.JsUtils;
 import com.github.claudecodegui.util.MessageJsonConverter;
@@ -38,6 +37,15 @@ public class StreamMessageCoalescer {
     private static final int MEDIUM_INTERVAL_MS = 500;             // 100-200KB
     private static final int LARGE_INTERVAL_MS = 2_000;            // 200-500KB
     private static final int XLARGE_INTERVAL_MS = 5_000;           // >500KB
+
+    // During streaming, delta channel (onContentDelta/onThinkingDelta) provides
+    // real-time character-by-character updates.  updateMessages carries authoritative
+    // raw blocks (tool_use, tool_result, etc.) and is the ONLY channel that can
+    // surface structural changes to the frontend.  Keep this minimum tight so that
+    // newly-arrived tool_use / tool_result blocks show up promptly instead of
+    // appearing to "stick" at the bottom while the user waits for an answer.
+    // The adaptive thresholds above will still scale up for large payloads.
+    private static final int STREAMING_MIN_INTERVAL_MS = 150;
 
     // FIX: Heartbeat interval during streaming.  During tool execution phases
     // (command execution, file operations, etc.), no content deltas or message
@@ -204,7 +212,7 @@ public class StreamMessageCoalescer {
         } else if (chars > LARGE_PAYLOAD_THRESHOLD) {
             interval = MEDIUM_INTERVAL_MS;
         } else {
-            return UPDATE_INTERVAL_MS;
+            return STREAMING_MIN_INTERVAL_MS;
         }
         if (LOG.isDebugEnabled()) {
             LOG.debug("[AdaptiveThrottle] payload=" + chars + " chars → interval=" + interval + "ms");

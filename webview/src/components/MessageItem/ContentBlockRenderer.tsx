@@ -10,6 +10,20 @@ import {
   TaskExecutionBlock,
 } from '../toolBlocks';
 import { EDIT_TOOL_NAMES, BASH_TOOL_NAMES, isToolName, isTransientInternalToolName, normalizeToolName } from '../../utils/toolConstants';
+import { TASK_STATUS_COLORS } from '../../utils/messageUtils';
+
+const IMAGE_BLOCK_STYLE: React.CSSProperties = { cursor: 'pointer' };
+const THINKING_VISIBLE_STYLE: React.CSSProperties = { display: 'block' };
+const THINKING_HIDDEN_STYLE: React.CSSProperties = { display: 'none' };
+
+function getImageStyle(isUser: boolean): React.CSSProperties {
+  return {
+    maxWidth: isUser ? '200px' : '100%',
+    maxHeight: isUser ? '150px' : 'auto',
+    borderRadius: '8px',
+    objectFit: 'contain',
+  };
+}
 
 /**
  * Get file icon class (consistent with AttachmentList)
@@ -108,18 +122,13 @@ export function ContentBlockRenderer({
       <div
         className={`message-image-block ${messageType === 'user' ? 'user-image' : ''}`}
         onClick={handleImagePreview}
-        style={{ cursor: 'pointer' }}
+        style={IMAGE_BLOCK_STYLE}
         title={t('chat.clickToPreview')}
       >
         <img
           src={block.src}
           alt={t('chat.userUploadedImage')}
-          style={{
-            maxWidth: messageType === 'user' ? '200px' : '100%',
-            maxHeight: messageType === 'user' ? '150px' : 'auto',
-            borderRadius: '8px',
-            objectFit: 'contain',
-          }}
+          style={getImageStyle(messageType === 'user')}
         />
       </div>
     );
@@ -153,9 +162,9 @@ export function ContentBlockRenderer({
             {isThinkingExpanded ? '▼' : '▶'}
           </span>
         </div>
-        <div 
+        <div
           className="thinking-content"
-          style={{ display: isThinkingExpanded ? 'block' : 'none' }}
+          style={isThinkingExpanded ? THINKING_VISIBLE_STYLE : THINKING_HIDDEN_STYLE}
         >
           <MarkdownBlock
             content={block.thinking ?? block.text ?? t('chat.noThinkingContent')}
@@ -183,6 +192,8 @@ export function ContentBlockRenderer({
           name={block.name}
           input={block.input}
           result={findToolResult(block.id, messageIndex)}
+          toolId={block.id}
+          isStreaming={isStreaming}
         />
       );
     }
@@ -216,6 +227,18 @@ export function ContentBlockRenderer({
         result={findToolResult(block.id, messageIndex)}
         toolId={block.id}
       />
+    );
+  }
+
+  // Task notification block - renders as "● summary" with status color
+  if (block.type === 'task_notification') {
+    // TypeScript narrows block to { type: 'task_notification'; icon: string; summary: string; status: string }
+    const statusColor = TASK_STATUS_COLORS[block.status] || 'text';
+    return (
+      <div className={`task-notification-block task-notification-${statusColor}`}>
+        <span className="task-notification-icon">{block.icon}</span>
+        <span className="task-notification-summary">{block.summary}</span>
+      </div>
     );
   }
 

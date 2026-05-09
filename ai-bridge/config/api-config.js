@@ -15,6 +15,122 @@ function debugLog(...args) {
   }
 }
 
+// ============================================================================
+// CLI Client Identity
+// ============================================================================
+// Simulates CLI client identity so the API treats our SDK calls as CLI traffic.
+// The CLI version is resolved dynamically from the installed SDK's manifest.json,
+// which embeds the CLI version that was bundled with the SDK.
+
+const FALLBACK_CLI_VERSION = '2.1.88';
+
+let _cachedCliVersion = null;
+
+/**
+ * Resolve CLI version from the installed SDK's manifest.json.
+ * The SDK bundles a manifest.json with ` "version": "<cli-version>" }`.
+ * Falls back to converting the SDK package version (0.x.y -> x.1.y),
+ * then to the hardcoded fallback.
+ */
+function resolveCliVersionFromSdk() {
+  if (_cachedCliVersion) return _cachedCliVersion;
+
+  try {
+    const depsBase = join(getCodemossDir(), 'dependencies');
+    const sdkDir = join(depsBase, 'claude-sdk', 'node_modules', '@anthropic-ai', 'claude-agent-sdk');
+
+    // Try manifest.json first (contains the bundled CLI version)
+    const manifestPath = join(sdkDir, 'manifest.json');
+    if (existsSync(manifestPath)) {
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+      if (manifest?.version) {
+        _cachedCliVersion = manifest.version;
+        return _cachedCliVersion;
+      }
+    }
+
+    // Fallback: derive from SDK package.json version (0.x.y -> x.1.y)
+    // e.g., SDK 0.2.88 -> CLI 2.1.88
+    const pkgPath = join(sdkDir, 'package.json');
+    if (existsSync(pkgPath)) {
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+      if (pkg?.version) {
+        const parts = pkg.version.split('.');
+        if (parts.length >= 3) {
+          _cachedCliVersion = `${parts[1]}.1.${parts[2]}`;
+          return _cachedCliVersion;
+        }
+      }
+    }
+  } catch {
+    // Ignore errors, use fallback
+  }
+
+  _cachedCliVersion = FALLBACK_CLI_VERSION;
+  return _cachedCliVersion;
+}
+
+/**
+ * Get the CLI version for User-Agent header.
+ * Priority: CLAUDE_CLI_VERSION env var > SDK manifest > SDK version conversion > fallback
+ * @returns {string} CLI version string (e.g., "2.1.88")
+ */
+export function getCliVersion() {
+  return process.env.CLAUDE_CLI_VERSION || resolveCliVersionFromSdk();
+}
+
+/**
+ * Build CLI-style User-Agent header value.
+ * Format: claude-cli/{VERSION} ({USER_TYPE}, {ENTRYPOINT})
+ *
+ * Does NOT include agent-sdk version suffix — we simulate a pure CLI client.
+ * @returns {string} User-Agent header value
+ */
+export function getCliUserAgent() {
+  const version = getCliVersion();
+  const userType = process.env.USER_TYPE || 'external';
+  const entrypoint = process.env.CLAUDE_CODE_ENTRYPOINT || 'cli';
+  return `claude-cli/${version} (${userType}, ${entrypoint})`;
+}
+
+/**
+ * Build a clean env object for SDK child processes that identifies as CLI.
+ *
+ * The SDK's query() checks `options.env` — if absent, it copies process.env
+ * (which includes CLAUDE_AGENT_SDK_VERSION set by the SDK itself).
+ * By passing our own env, we control exactly what the child process sees.
+ *
+ * @returns {Object} Environment variables object for options.env
+ */
+export function buildCliEnv() {
+  const env = {
+    ...process.env,
+    CLAUDE_CODE_ENTRYPOINT: 'cli',
+    USER_TYPE: 'external',
+  };
+  delete env.CLAUDE_AGENT_SDK_VERSION;
+  return env;
+}
+
+/**
+ * Configure process.env for CLI client identity at startup.
+ * Sets CLAUDE_CODE_ENTRYPOINT and USER_TYPE, deletes CLAUDE_AGENT_SDK_VERSION.
+ * Call once at process startup before any SDK loading.
+ */
+export function configureCliIdentity() {
+  if (!process.env.CLAUDE_CODE_ENTRYPOINT) {
+    process.env.CLAUDE_CODE_ENTRYPOINT = 'cli';
+  }
+  if (!process.env.USER_TYPE) {
+    process.env.USER_TYPE = 'external';
+  }
+  delete process.env.CLAUDE_AGENT_SDK_VERSION;
+}
+
+// ============================================================================
+// Network Environment Variables
+// ============================================================================
+
 /**
  * Network-related environment variable names that should be injected from
  * settings.json into process.env early at startup.
@@ -59,7 +175,11 @@ function readJsonFile(filePath) {
     if (!existsSync(filePath)) {
       return null;
     }
-    return JSON.parse(readFileSync(filePath, 'utf8'));
+    const raw = readFileSync(filePath, 'utf8');
+    // PowerShell commonly writes UTF-8 with BOM on Windows. Strip the BOM
+    // before parsing so provider state files remain readable across tools.
+    const normalized = raw.charCodeAt(0) === 0xFEFF ? raw.slice(1) : raw;
+    return JSON.parse(normalized);
   } catch (error) {
     debugLog('[DEBUG] Failed to read JSON file:', filePath, error.message);
     return null;
@@ -219,18 +339,10 @@ export function loadClaudeSettings() {
  * @returns {Object} Contains apiKey, baseUrl, authType and their sources
  */
 export function setupApiKey() {
-  debugLog('[DIAG-CONFIG] ========== setupApiKey() START ==========');
-
   const runtimeState = getClaudeRuntimeState();
   const settings = loadClaudeSettings();
   injectNetworkEnvVars(settings);
   clearRuntimeAuthEnv();
-
-  debugLog('[DIAG-CONFIG] Runtime provider access:', runtimeState.access, runtimeState.currentId || '(none)');
-  debugLog('[DIAG-CONFIG] Settings loaded:', settings ? 'yes' : 'no');
-  if (settings?.env) {
-    debugLog('[DIAG-CONFIG] Settings env keys:', Object.keys(settings.env));
-  }
 
   let apiKey;
   let baseUrl;
@@ -249,10 +361,16 @@ export function setupApiKey() {
 
   // HIGHEST PRIORITY: CLI login mode. When user explicitly opted in via plugin UI,
   // strictly use SDK native OAuth flow. No fallback to other auth methods.
-  const cliLoginAuthorized = settings?.env?.CCGUI_CLI_LOGIN_AUTHORIZED === '1';
+  //
+  // Source of truth: ~/.codemoss/config.json (claude.current === "__cli_login__"),
+  // surfaced by getClaudeRuntimeState() above. We deliberately do NOT consult
+  // ~/.claude/settings.json for this signal — that file is user-owned and must not
+  // be mutated by provider switches. The legacy CCGUI_CLI_LOGIN_AUTHORIZED env flag
+  // is honored as a fallback for users upgrading from versions that wrote it to
+  // settings.json, so they keep working until that residue is cleaned up.
+  const cliLoginAuthorized =
+    runtimeState.access === 'cli_login' || settings?.env?.CCGUI_CLI_LOGIN_AUTHORIZED === '1';
   if (cliLoginAuthorized) {
-    debugLog('[INFO] CLI login authorized by user - delegating auth to Claude SDK native OAuth flow');
-
     // Use empty string assignment instead of delete so the SDK falls through to
     // its native OAuth flow without inheriting stale values from prior requests.
     process.env.ANTHROPIC_API_KEY = '';
@@ -290,7 +408,6 @@ export function setupApiKey() {
     const hasApiKeyHelper = managedSettings?.apiKeyHelper || settings?.apiKeyHelper;
 
     if (hasApiKeyHelper) {
-      debugLog('[INFO] Using apiKeyHelper authentication (SDK will handle execution)');
       authType = 'api_key_helper';
       apiKeySource = managedSettings?.apiKeyHelper
         ? 'managed-settings.json (apiKeyHelper)'
@@ -325,13 +442,6 @@ export function setupApiKey() {
   }
 
   debugLog('[DEBUG] Auth type:', authType);
-
-  debugLog('[DIAG-CONFIG] ========== setupApiKey() RESULT ==========');
-  debugLog('[DIAG-CONFIG] authType:', authType);
-  debugLog('[DIAG-CONFIG] apiKeySource:', apiKeySource);
-  debugLog('[DIAG-CONFIG] baseUrl:', baseUrl || '(not set)');
-  debugLog('[DIAG-CONFIG] baseUrlSource:', baseUrlSource);
-  debugLog('[DIAG-CONFIG] apiKey configured:', apiKey ? 'YES' : 'NO');
 
   return { apiKey, baseUrl, authType, apiKeySource, baseUrlSource };
 }

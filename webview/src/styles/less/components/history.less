@@ -4,10 +4,21 @@
     border-bottom: 1px solid var(--color-history-border);
     cursor: pointer;
     transition: background-color 0.2s;
+    overflow: hidden;
+    box-sizing: border-box;
+    position: relative;
 }
 
 .history-item:hover {
     background-color: var(--color-history-hover);
+}
+
+.history-item.selection-mode {
+    cursor: default;
+}
+
+.history-item.selection-mode.selected {
+    background-color: color-mix(in srgb, var(--accent-primary) 10%, transparent);
 }
 
 .history-item-header {
@@ -35,9 +46,20 @@
 
 .history-item-meta {
     display: flex;
-    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
     font-size: 12px;
     color: var(--text-tertiary);
+}
+
+.history-meta-dot {
+    color: var(--text-tertiary);
+    opacity: 0.5;
+}
+
+.history-filesize-large {
+    color: #ff9500;
+    font-weight: 500;
 }
 
 /* 历史记录头部样式 */
@@ -51,12 +73,42 @@
     gap: 16px;
 }
 
+.history-header-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+}
+
+.history-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
 .history-info {
     font-size: 12px;
     color: var(--text-tertiary);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-/* 深度搜索按钮样式 */
+.history-selection-summary {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent-primary);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.history-toolbar-btn,
 .history-deep-search-btn {
     background: transparent;
     border: 1px solid var(--border-secondary);
@@ -70,6 +122,8 @@
     align-items: center;
     justify-content: center;
     line-height: 1;
+    gap: 6px;
+    min-height: 30px;
 
     .codicon {
         font-size: 14px;
@@ -90,7 +144,23 @@
         cursor: not-allowed;
         opacity: 0.7;
     }
+}
 
+.history-toolbar-btn {
+    span:not(.codicon) {
+        font-size: 12px;
+        white-space: nowrap;
+    }
+
+    &.history-toolbar-danger:hover:not(:disabled) {
+        background-color: rgba(255, 59, 48, 0.15);
+        border-color: #ff3b30;
+        color: #ff3b30;
+    }
+}
+
+/* 深度搜索按钮样式 */
+.history-deep-search-btn {
     &.searching {
         color: #0a84ff;
         border-color: #0a84ff;
@@ -136,6 +206,24 @@
     pointer-events: none;
 }
 
+.history-selection-checkbox-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    margin-right: 12px;
+    flex-shrink: 0;
+}
+
+.history-selection-checkbox {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--accent-primary);
+    cursor: pointer;
+}
+
 /* 删除按钮样式 */
 .history-delete-btn {
     background: transparent;
@@ -154,6 +242,7 @@
 
     .codicon {
         font-size: 14px;
+        pointer-events: none;
     }
 }
 
@@ -175,6 +264,7 @@
 
     .codicon {
         font-size: 14px;
+        pointer-events: none;
     }
 
     /* 已收藏状态：始终显示金色星标 */
@@ -202,12 +292,45 @@
 
     .codicon {
         font-size: 14px;
+        pointer-events: none;
     }
+}
+
+/* 操作按钮容器：绝对定位浮层（贴右下、对齐 meta 行），不占据文档流空间，悬停时显示 */
+.history-action-buttons {
+    position: absolute;
+    bottom: 10px;
+    right: 16px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.history-action-buttons.has-favorite {
+    visibility: visible;
+    opacity: 1;
+}
+
+.history-item:not(:hover) .history-action-buttons.has-favorite .history-edit-btn,
+.history-item:not(:hover) .history-action-buttons.has-favorite .history-export-btn,
+.history-item:not(:hover) .history-action-buttons.has-favorite .history-delete-btn {
+    visibility: hidden;
+    opacity: 0;
+}
+
+.history-item:hover .history-action-buttons {
+    visibility: visible;
+    opacity: 1;
 }
 
 .history-item:hover .history-delete-btn,
 .history-item:hover .history-export-btn,
-.history-item:hover .history-favorite-btn {
+.history-item:hover .history-favorite-btn,
+.history-item:hover .history-edit-btn,
+.history-item:hover .history-copy-id-btn {
     opacity: 1; /* 鼠标悬停时显示 */
 }
 
@@ -259,6 +382,7 @@
 
     .codicon {
         font-size: 14px;
+        pointer-events: none;
     }
 }
 
@@ -360,4 +484,70 @@
 .history-title-cancel-btn:active {
     transform: scale(0.92);
     background-color: rgba(255, 59, 48, 0.25);
+}
+
+/* Session ID container styles */
+.history-session-id-container {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Session ID text styles */
+.history-session-id {
+    font-family: var(--idea-editor-font-family, monospace);
+    color: var(--text-tertiary);
+    font-size: 12px;
+}
+
+/* Copy session ID button styles */
+.history-copy-id-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0; /* Hidden by default */
+    line-height: 1;
+
+    .codicon {
+        font-size: 12px;
+        pointer-events: none;
+    }
+}
+
+.history-copy-id-btn:hover {
+    background-color: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+    color: var(--accent-primary);
+}
+
+.history-copy-id-btn:active {
+    transform: scale(0.92);
+    background-color: color-mix(in srgb, var(--accent-primary) 25%, transparent);
+}
+
+/* Copied state styles */
+.history-copy-id-btn.copied {
+    opacity: 1;
+    color: var(--color-success);
+}
+
+.history-copy-id-btn.copied:hover {
+    background-color: color-mix(in srgb, var(--color-success) 15%, transparent);
+}
+
+/* Failed state styles */
+.history-copy-id-btn.failed {
+    opacity: 1;
+    color: var(--color-error);
+}
+
+.history-copy-id-btn.failed:hover {
+    background-color: color-mix(in srgb, var(--color-error) 15%, transparent);
 }

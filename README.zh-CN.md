@@ -8,7 +8,7 @@
 
 **简体中文** · [English](./README.md)
 
-<a href="https://trendshift.io/repositories/19332" target="_blank"><img src="https://trendshift.io/api/badge/repositories/19332" alt="zhukunpenglinyutong%2Fidea-claude-code-gui | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+<a href="https://trendshift.io/repositories/24968" target="_blank"><img src="https://trendshift.io/api/badge/repositories/24968" alt="zhukunpenglinyutong%2Fjetbrains-cc-gui | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
 ![][github-contributors-shield] ![][github-forks-shield] ![][github-stars-shield] ![][github-issues-shield] ![][github-mit]
 
@@ -24,7 +24,7 @@
 
 ## 插件下载
 
-[IDEA Claude Code GUI 下载](https://plugins.jetbrains.com/plugin/30666-cc-gui)
+[CC GUI（Claude or Codex） 下载](https://plugins.jetbrains.com/plugin/29342-cc-gui-claude-or-codex-)
 
 ---
 
@@ -271,6 +271,12 @@ https://atomgit.com/zhukunpenglinyutong/idea-claude-code-gui
 感谢 [LINUX DO](https://linux.do/) 用户的支持与反馈
 
 感谢[AtomGit](https://atomgit.com/zhukunpenglinyutong/idea-claude-code-gui)平台G-Star认证
+
+---
+
+## 致谢
+
+最近有很多博主自发推荐本项目，心中十分感激，再次感谢《沉默的王二》《macrozheng》《JavaGuide》《Java知音》《程序员青戈》等博主推荐本项目，我会继续努力迭代，让大家用起来更舒适。
 
 ---
 

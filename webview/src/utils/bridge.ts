@@ -1,21 +1,54 @@
+import { isJavaFqcnCandidate } from './linkify';
+
 const BRIDGE_UNAVAILABLE_WARNED = new Set<string>();
+const SAFE_BROWSER_PROTOCOLS = /^(https?|mailto):/i;
 
 /** Regex to detect path traversal: matches ".." as a path segment, not as part of filenames */
 const PATH_TRAVERSAL_REGEX = /(^|[\\/])\.\.($|[\\/])/;
+const CONTROL_CHAR_REGEX = /[\u0000-\u001f]/;
 
 /**
- * Validate file path doesn't contain path traversal patterns
- * Defense-in-depth: backend also validates using canonical paths
+ * Validate mutating file paths don't contain traversal patterns.
+ * Defense-in-depth: backend also validates using canonical paths.
  */
-const isValidPath = (filePath: string): boolean => {
+const isValidMutatingPath = (filePath: string): boolean => {
   if (!filePath) return false;
   let decodedPath: string;
   try {
     decodedPath = decodeURIComponent(filePath);
   } catch {
+    console.debug('[bridge] isValidMutatingPath: decodeURIComponent failed for:', filePath);
+    return false;
+  }
+  if (CONTROL_CHAR_REGEX.test(filePath) || CONTROL_CHAR_REGEX.test(decodedPath)) {
     return false;
   }
   return !PATH_TRAVERSAL_REGEX.test(filePath) && !PATH_TRAVERSAL_REGEX.test(decodedPath);
+};
+
+/**
+ * Navigation-only file opening supports relative paths like ../foo.ts and path:line.
+ */
+const isValidOpenFileTarget = (filePath: string): boolean => {
+  if (!filePath) return false;
+  let decodedPath: string;
+  try {
+    decodedPath = decodeURIComponent(filePath);
+  } catch {
+    console.debug('[bridge] isValidOpenFileTarget: decodeURIComponent failed for:', filePath);
+    return false;
+  }
+
+  return !CONTROL_CHAR_REGEX.test(filePath) && !CONTROL_CHAR_REGEX.test(decodedPath);
+};
+
+const isValidFqcn = (className: string): boolean => {
+  const trimmed = className?.trim();
+  if (!trimmed || CONTROL_CHAR_REGEX.test(trimmed)) {
+    return false;
+  }
+
+  return isJavaFqcnCandidate(trimmed);
 };
 
 const callBridge = (payload: string) => {
@@ -36,8 +69,7 @@ export const openFile = (filePath?: string, lineStart?: number, lineEnd?: number
   if (!filePath) {
     return;
   }
-  // Security: Validate base file path
-  if (!isValidPath(filePath)) {
+  if (!isValidOpenFileTarget(filePath)) {
     return;
   }
   let path = filePath;
@@ -49,8 +81,23 @@ export const openFile = (filePath?: string, lineStart?: number, lineEnd?: number
   sendBridgeEvent('open_file', path);
 };
 
+export const openClass = (className?: string) => {
+  const trimmed = className?.trim();
+  if (!trimmed || !isValidFqcn(trimmed)) {
+    return;
+  }
+
+  sendBridgeEvent('open_class', trimmed);
+};
+
 export const openBrowser = (url?: string) => {
   if (!url) {
+    return;
+  }
+  // Defense-in-depth: only allow http, https, and mailto protocols.
+  // file: and javascript: are explicitly rejected even though markdown
+  // sanitization should strip them before they reach this point.
+  if (!SAFE_BROWSER_PROTOCOLS.test(url)) {
     return;
   }
   sendBridgeEvent('open_browser', url);
@@ -67,6 +114,9 @@ export const refreshFile = (filePath: string) => {
 };
 
 export const showDiff = (filePath: string, oldContent: string, newContent: string, title?: string) => {
+  if (!isValidMutatingPath(filePath)) {
+    return;
+  }
   sendToJava('show_diff', { filePath, oldContent, newContent, title });
 };
 
@@ -75,6 +125,9 @@ export const showMultiEditDiff = (
   edits: Array<{ oldString: string; newString: string; replaceAll?: boolean }>,
   currentContent?: string
 ) => {
+  if (!isValidMutatingPath(filePath)) {
+    return;
+  }
   sendToJava('show_multi_edit_diff', { filePath, edits, currentContent });
 };
 
@@ -91,7 +144,7 @@ export const showEditableDiff = (
   status: 'A' | 'M'
 ) => {
   // Security: Validate file path (defense-in-depth, backend also validates)
-  if (!isValidPath(filePath)) {
+  if (!isValidMutatingPath(filePath)) {
     return;
   }
   sendToJava('show_editable_diff', { filePath, operations, status });
@@ -109,7 +162,7 @@ export const showEditPreviewDiff = (
   edits: Array<{ oldString: string; newString: string; replaceAll?: boolean }>,
   title?: string
 ) => {
-  if (!isValidPath(filePath)) {
+  if (!isValidMutatingPath(filePath)) {
     return;
   }
   sendToJava('show_edit_preview_diff', { filePath, edits, title });
@@ -133,7 +186,7 @@ export const showEditFullDiff = (
   replaceAll?: boolean,
   title?: string
 ) => {
-  if (!isValidPath(filePath)) {
+  if (!isValidMutatingPath(filePath)) {
     return;
   }
   sendToJava('show_edit_full_diff', { filePath, oldString, newString, originalContent, replaceAll, title });
@@ -153,7 +206,7 @@ export const showInteractiveDiff = (
   tabName?: string,
   isNewFile?: boolean
 ) => {
-  if (!isValidPath(filePath)) {
+  if (!isValidMutatingPath(filePath)) {
     return;
   }
   sendToJava('show_interactive_diff', { filePath, newFileContents, tabName, isNewFile: isNewFile ?? false });
@@ -180,7 +233,7 @@ export const undoFileChanges = (
   operations: Array<{ oldString: string; newString: string; replaceAll?: boolean }>
 ) => {
   // Security: Validate file path (defense-in-depth, backend also validates)
-  if (!isValidPath(filePath)) {
+  if (!isValidMutatingPath(filePath)) {
     return;
   }
   sendToJava('undo_file_changes', { filePath, status, operations });

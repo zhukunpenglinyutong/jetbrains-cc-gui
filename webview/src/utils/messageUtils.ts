@@ -1,5 +1,46 @@
 import type { TFunction } from 'i18next';
 import type { ClaudeContentBlock, ClaudeMessage, ClaudeRawMessage } from '../types';
+import {
+  containsAnyTag,
+  createTaskNotificationBlock,
+  extractCommandMessageContent,
+  formatCommandForDisplay,
+  formatTaskNotificationForDisplay,
+  hasCommandMessageTag,
+  hasTaskNotificationTag,
+  isSyntheticToolMessageContent,
+  HIDDEN_OUTPUT_TAGS,
+  INTERNAL_METADATA_TAGS,
+  MESSAGE_TYPES,
+  ORIGIN_KINDS,
+  type LocalizeMessageFn,
+} from './contentBlockNormalize';
+import { MESSAGE_MERGE_CACHE_LIMIT } from './messageMergeCache';
+import { clearStaleStreamEndedMarker, hasRecentlyEndedTurnId } from './streamMarkers';
+
+// ---------------------------------------------------------------------------
+// Re-exports — keep messageUtils.ts as the public barrel so existing imports
+// (from hooks, components, tests) keep working.
+// ---------------------------------------------------------------------------
+
+export {
+  MESSAGE_TYPES,
+  ORIGIN_KINDS,
+  HIDDEN_OUTPUT_TAGS,
+  INTERNAL_METADATA_TAGS,
+  FILTERED_NORMALIZE_TAGS,
+  TASK_STATUS_COLORS,
+  containsAnyTag,
+  hasCommandMessageTag,
+  formatCommandForDisplay,
+  formatCommandForResubmit,
+  hasTaskNotificationTag,
+  formatTaskNotificationForDisplay,
+  extractCommandMessageContent,
+  isSyntheticToolMessageContent,
+  normalizeBlocks,
+} from './contentBlockNormalize';
+export type { LocalizeMessageFn } from './contentBlockNormalize';
 
 /**
  * Generate a stable key for a message, used for React list keys and anchor navigation.
@@ -12,195 +53,78 @@ export function getMessageKey(message: ClaudeMessage, index: number): string {
   return message.timestamp ? `${message.type}-${message.timestamp}` : `${message.type}-${index}`;
 }
 
+// ---------------------------------------------------------------------------
+// Type guards - safer than type assertions
+// ---------------------------------------------------------------------------
+
 /**
- * Extract content from <command-message> and <command-args> tags if present.
- * Returns the combined content: "command-message content command-args content"
- *
- * Example:
- *   Input: "<command-message>aimax:auto</command-message>\n<command-name>/aimax:auto</command-name>\n<command-args>hello there</command-args>"
- *   Output: "aimax:auto hello there"
+ * Type guard: check if raw message has valid origin field
  */
-export function extractCommandMessageContent(text: string): string {
-  if (!text) return text;
-
-  const parts: string[] = [];
-
-  // Extract <command-message> content
-  const messageMatch = text.match(/<command-message>([\s\S]*?)<\/command-message>/);
-  if (messageMatch) {
-    const content = messageMatch[1].trim();
-    if (content) {
-      parts.push(content);
-    }
-  }
-
-  // Extract <command-args> content
-  const argsMatch = text.match(/<command-args>([\s\S]*?)<\/command-args>/);
-  if (argsMatch) {
-    const content = argsMatch[1].trim();
-    if (content) {
-      parts.push(content);
-    }
-  }
-
-  // If we found any parts, return them combined
-  if (parts.length > 0) {
-    return parts.join(' ');
-  }
-
-  // No command tags found, return original text
-  return text;
+function hasOriginField(raw: unknown): raw is { origin: { kind: string } } {
+  if (!raw || typeof raw !== 'object') return false;
+  const r = raw as Record<string, unknown>;
+  const origin = r.origin;
+  if (!origin || typeof origin !== 'object') return false;
+  const o = origin as Record<string, unknown>;
+  return typeof o.kind === 'string';
 }
 
 /**
- * Check if text contains a <command-message> tag
+ * Check if a message has non-human origin (should be rendered as system notification, not user message).
+ * CLI uses origin.kind to distinguish synthetic messages from human input.
  */
-export function hasCommandMessageTag(text: string): boolean {
-  if (!text) return false;
-  return text.includes('<command-message>') && text.includes('</command-message>');
+export function hasNonHumanOrigin(message: ClaudeMessage): boolean {
+  if (message.type !== MESSAGE_TYPES.USER) return false;
+
+  const raw = message.raw;
+  if (!hasOriginField(raw)) return false;
+
+  // If origin.kind exists and is not 'human', this is a synthetic message
+  return raw.origin.kind !== ORIGIN_KINDS.HUMAN;
 }
 
-// Performance optimization constants
 /**
- * Maximum number of merged message groups to cache before clearing.
- * This prevents unbounded memory growth while maintaining cache benefits.
+ * Extract all text strings from a raw message's content (handles various structures).
+ * Shared helper to avoid duplicating traversal logic.
  */
-const MESSAGE_MERGE_CACHE_LIMIT = 3000;
-
-export type LocalizeMessageFn = (text: string) => string;
-
-/**
- * Normalize raw message content into content blocks
- */
-export function normalizeBlocks(
-  raw: ClaudeRawMessage | string | undefined,
-  localizeMessage: LocalizeMessageFn,
-  t: TFunction
-): ClaudeContentBlock[] | null {
-  if (!raw) {
-    return null;
-  }
-  if (typeof raw === 'string') {
-    return [{ type: 'text' as const, text: raw }];
-  }
-
-  const buildBlocksFromArray = (entries: unknown[]): ClaudeContentBlock[] => {
-    const blocks: ClaudeContentBlock[] = [];
-    entries.forEach((entry) => {
-      if (!entry || typeof entry !== 'object') {
-        return;
-      }
-      const candidate = entry as Record<string, unknown>;
-      const type = candidate.type as string | undefined;
-      if (type === 'text') {
-        const rawText = typeof candidate.text === 'string' ? candidate.text : '';
-        // Some replies contain placeholder text "(no content)", skip to avoid rendering empty content
-        if (rawText.trim() === '(no content)') {
-          return;
-        }
-        blocks.push({
-          type: 'text',
-          text: localizeMessage(rawText),
-        });
-      } else if (type === 'thinking') {
-        const thinking =
-          typeof candidate.thinking === 'string'
-            ? (candidate.thinking as string)
-            : typeof candidate.text === 'string'
-              ? (candidate.text as string)
-              : '';
-        blocks.push({
-          type: 'thinking',
-          thinking,
-          text: thinking,
-        });
-      } else if (type === 'tool_use') {
-        blocks.push({
-          type: 'tool_use',
-          id: typeof candidate.id === 'string' ? (candidate.id as string) : undefined,
-          name: typeof candidate.name === 'string' ? (candidate.name as string) : t('tools.unknownTool'),
-          input: (candidate.input as Record<string, unknown>) ?? {},
-        });
-      } else if (type === 'image') {
-        const source = (candidate as any).source;
-        let src: string | undefined;
-        let mediaType: string | undefined;
-
-        // Support two formats:
-        // 1. Backend/history format: { type: 'image', source: { type: 'base64', media_type: '...', data: '...' } }
-        // 2. Frontend direct format: { type: 'image', src: 'data:...', mediaType: '...' }
-        if (source && typeof source === 'object') {
-          const st = source.type;
-          if (st === 'base64' && typeof source.data === 'string') {
-            const mt = typeof source.media_type === 'string' ? source.media_type : 'image/png';
-            src = `data:${mt};base64,${source.data}`;
-            mediaType = mt;
-          } else if (st === 'url' && typeof source.url === 'string') {
-            src = source.url;
-            mediaType = source.media_type;
-          }
-        } else if (typeof candidate.src === 'string') {
-          // Frontend direct format
-          src = candidate.src as string;
-          mediaType = candidate.mediaType as string | undefined;
-        }
-
-        if (src) {
-          blocks.push({ type: 'image', src, mediaType });
-        }
-      } else if (type === 'attachment') {
-        blocks.push({
-          type: 'attachment',
-          fileName: typeof candidate.fileName === 'string' ? candidate.fileName : undefined,
-          mediaType: typeof candidate.mediaType === 'string' ? candidate.mediaType : undefined,
-        });
-      }
-    });
-    return blocks;
-  };
-
-  const pickContent = (content: unknown): ClaudeContentBlock[] | null => {
-    if (!content) {
-      return null;
-    }
+function extractTextsFromRaw(raw: ClaudeRawMessage | string | undefined): string[] {
+  if (!raw || typeof raw !== 'object') return [];
+  const texts: string[] = [];
+  const extractFromContent = (content: unknown) => {
     if (typeof content === 'string') {
-      // If has <command-message>, extract and show content
-      if (hasCommandMessageTag(content)) {
-        const processedContent = extractCommandMessageContent(content);
-        return [{ type: 'text' as const, text: localizeMessage(processedContent) }];
+      texts.push(content);
+    } else if (Array.isArray(content)) {
+      for (const block of content) {
+        if (block && typeof block === 'object') {
+          const b = block as Record<string, unknown>;
+          if (b.type === 'text' && typeof b.text === 'string') {
+            texts.push(b.text);
+          }
+        }
       }
-
-      // Filter empty strings and command messages (without <command-message>)
-      if (!content.trim() ||
-          content.includes('<command-name>') ||
-          content.includes('<local-command-stdout>')) {
-        return null;
-      }
-      return [{ type: 'text' as const, text: localizeMessage(content) }];
     }
-    if (Array.isArray(content)) {
-      const result = buildBlocksFromArray(content);
-      return result.length ? result : null;
-    }
-    return null;
   };
-
-  const contentBlocks = pickContent(raw.message?.content ?? raw.content);
-
-  // If unable to parse content, try getting from other fields
-  if (!contentBlocks) {
-    // Try getting from raw.text or other possible fields
-    if (typeof raw === 'object') {
-      if ('text' in raw && typeof raw.text === 'string' && raw.text.trim()) {
-        return [{ type: 'text' as const, text: localizeMessage(raw.text) }];
-      }
-      // If no content at all, return null instead of showing "(unable to parse content)"
-      // This way shouldShowMessage will filter out this message
-    }
-    return null;
+  const rawObj = raw as Record<string, unknown>;
+  extractFromContent(rawObj.content);
+  if (rawObj.message && typeof rawObj.message === 'object') {
+    extractFromContent((rawObj.message as Record<string, unknown>).content);
   }
+  return texts;
+}
 
-  return contentBlocks;
+/**
+ * Check if a message is a task_notification only message (should be rendered as system notification, not user message).
+ * This is used to change message type from 'user' to 'task_notification' for proper rendering.
+ */
+export function isTaskNotificationOnlyMessage(message: ClaudeMessage): boolean {
+  if (message.type !== 'user') return false;
+
+  // Check raw content structures for task-notification tag
+  const rawTexts = extractTextsFromRaw(message.raw);
+  if (rawTexts.some(hasTaskNotificationTag)) return true;
+
+  // Fallback: check message.content (may differ from raw when set independently)
+  return typeof message.content === 'string' && hasTaskNotificationTag(message.content);
 }
 
 /**
@@ -242,9 +166,23 @@ export function getMessageText(
   // Apply localization
   let result = localizeMessage(text);
 
-  // Extract <command-message> content if present
+  // Format <command-message> content using formatCommandForDisplay
   if (hasCommandMessageTag(result)) {
-    result = extractCommandMessageContent(result);
+    const displayContent = formatCommandForDisplay(result);
+    if (displayContent) {
+      result = displayContent;
+    } else {
+      // Fallback to old extraction
+      result = extractCommandMessageContent(result);
+    }
+  }
+
+  // Format <task-notification> for copy/resubmit purposes
+  if (hasTaskNotificationTag(result)) {
+    const notification = formatTaskNotificationForDisplay(result);
+    if (notification) {
+      result = `${notification.icon} ${notification.summary}`;
+    }
   }
 
   return result;
@@ -260,8 +198,23 @@ export function shouldShowMessage(
   t: TFunction
 ): boolean {
   // Filter isMeta messages (like "Caveat: The messages below were generated...")
+  // CLI: isMeta messages are hidden in normal transcript (except channel messages)
   if (message.raw && typeof message.raw === 'object' && 'isMeta' in message.raw && message.raw.isMeta === true) {
     return false;
+  }
+
+  // Note: origin.kind filtering is ONLY for title extraction (extractTitleText, sessionTitle),
+  // NOT for hiding messages in the main chat. CLI displays these messages with different formats.
+  // See CLI's wrapCommandText() and isVisibleInTranscript() functions.
+
+  // Filter toolUseResult and isCompactSummary messages (CLI filters these in extractTitleText)
+  if (message.raw && typeof message.raw === 'object') {
+    if ('toolUseResult' in message.raw && message.raw.toolUseResult) {
+      return false;
+    }
+    if ('isCompactSummary' in message.raw && message.raw.isCompactSummary) {
+      return false;
+    }
   }
 
   // Filter command messages (containing <command-name> or <local-command-stdout> tags)
@@ -294,26 +247,36 @@ export function shouldShowMessage(
 
   const rawText = getRawTextContent();
 
+  // CLI renders these messages with specific components:
+  // - <command-message> → UserCommandMessage (skill/slash command)
+  // - <local-command-stdout/stderr> → UserLocalCommandOutputMessage
+  // - <task-notification> → UserAgentNotificationMessage
+  // - Plain text (like "Unknown skill: xxx") → UserPromptMessage (displayed with ❯ prefix)
+  // So we should NOT filter these messages, just handle their rendering.
+
   // If message has <command-message>, allow it to be shown
-  // (the content will be extracted by extractCommandMessageContent)
+  // (the content will be extracted by formatCommandForDisplay)
   if (rawText && hasCommandMessageTag(rawText)) {
-    // Only filter if it has stdout/stderr output (which should be hidden)
-    const hasOutputTags =
-      rawText.includes('<local-command-stdout>') ||
-      rawText.includes('<local-command-stderr>');
-    if (!hasOutputTags) {
-      return true;
-    }
+    return true;
   }
 
-  // Filter messages with command tags but no <command-message>
-  if (rawText && (
-    rawText.includes('<command-name>') ||
-    rawText.includes('<local-command-stdout>') ||
-    rawText.includes('<local-command-stderr>') ||
-    rawText.includes('<command-args>')
-  )) {
+  // Messages with <local-command-stdout> or <local-command-stderr> should be shown
+  // CLI renders them with UserLocalCommandOutputMessage component
+  // But for GUI, we filter these as they are internal terminal output
+  if (rawText && containsAnyTag(rawText, HIDDEN_OUTPUT_TAGS)) {
     return false;
+  }
+
+  // Filter messages with command tags (internal metadata, not user input)
+  // BUT keep "Unknown skill: xxx" messages which are plain text user-visible messages
+  if (rawText && containsAnyTag(rawText, INTERNAL_METADATA_TAGS)) {
+    return false;
+  }
+
+  // Task-notification messages are always shown — normalizeBlocks converts them
+  // to task_notification blocks, no need to re-parse here (performance optimization).
+  if (rawText && hasTaskNotificationTag(rawText)) {
+    return true;
   }
 
   const text = getMessageTextFn(message);
@@ -336,6 +299,9 @@ export function shouldShowMessage(
         if (block.type === 'text') {
           return block.text && block.text.trim().length > 0;
         }
+        if (block.type === 'task_notification') {
+          return block.summary && block.summary.trim().length > 0;
+        }
         // Images, tool_use and other block types should be shown
         return true;
       });
@@ -356,16 +322,42 @@ export function getContentBlocks(
 ): ClaudeContentBlock[] {
   const rawBlocks = normalizeBlocksFn(message.raw);
   if (rawBlocks && rawBlocks.length > 0) {
+    // Don't add message.content if we have task_notification blocks
+    // (those are formatted from the raw XML content).
+    // Note: command-message text blocks are already formatted by normalizeBlocks
+    // (e.g., "/opsx:ff hello") and no longer contain raw XML tags.
+    const hasSpecialBlock = rawBlocks.some((block) => block.type === 'task_notification');
+    if (hasSpecialBlock) {
+      return rawBlocks;
+    }
     // Streaming/tool scenario: if raw doesn't have text but message.content has text, still need to show text
     const hasTextBlock = rawBlocks.some(
-      (block) => block.type === 'text' && typeof (block as any).text === 'string' && String((block as any).text).trim().length > 0,
+      (block) => block.type === 'text' && typeof block.text === 'string' && String(block.text).trim().length > 0,
     );
-    if (!hasTextBlock && message.content && message.content.trim()) {
+    if (
+      !hasTextBlock &&
+      message.content &&
+      message.content.trim() &&
+      !isSyntheticToolMessageContent(message.content, rawBlocks)
+    ) {
       return [...rawBlocks, { type: 'text', text: localizeMessage(message.content) }];
     }
     return rawBlocks;
   }
+  // If no raw blocks, check if content needs special handling
   if (message.content && message.content.trim()) {
+    // Handle task-notification in message.content directly
+    if (hasTaskNotificationTag(message.content)) {
+      const block = createTaskNotificationBlock(message.content);
+      if (block) return [block];
+    }
+    // Handle command-message in message.content directly
+    if (hasCommandMessageTag(message.content)) {
+      const displayContent = formatCommandForDisplay(message.content);
+      if (displayContent) {
+        return [{ type: 'text' as const, text: localizeMessage(displayContent) }];
+      }
+    }
     return [{ type: 'text', text: localizeMessage(message.content) }];
   }
   // If no content at all, return empty array instead of showing "(empty message)"
@@ -375,7 +367,7 @@ export function getContentBlocks(
 
 /**
  * Merge consecutive assistant messages to fix style inconsistencies in history
- * where Thinking and ToolUse are separated
+ * where Thinking and ToolUse are separated.
  */
 export function mergeConsecutiveAssistantMessages(
   messages: ClaudeMessage[],
@@ -383,6 +375,9 @@ export function mergeConsecutiveAssistantMessages(
   cache?: Map<string, { source: ClaudeMessage[]; merged: ClaudeMessage }>
 ): ClaudeMessage[] {
   if (messages.length === 0) return [];
+
+  // Clear stale stream-ended markers once at entry (5 second timeout)
+  clearStaleStreamEndedMarker();
 
   const getStableId = (message: ClaudeMessage, index: number): string => {
     const rawObj = typeof message.raw === 'object' ? (message.raw as Record<string, unknown> | null) : null;
@@ -404,19 +399,32 @@ export function mergeConsecutiveAssistantMessages(
   const shouldMergeAssistantMessage = (previous: ClaudeMessage, next: ClaudeMessage): boolean => {
     // Distinct streaming turns must stay visually separated even when the
     // backend emits adjacent assistant fragments during synchronization.
-    if (
-      previous.__turnId !== undefined &&
-      next.__turnId !== undefined &&
-      previous.__turnId !== next.__turnId
-    ) {
+    // Block merge when either side has a __turnId and they differ.
+    // This prevents streaming messages from merging with history messages.
+    // FIX: Also check __lastStreamEndedTurnId to distinguish recently-ended
+    // streaming messages from true history messages.
+    const prevTurnId = previous.__turnId;
+    const nextTurnId = next.__turnId;
+
+    // If either message has the recently-ended turn ID, block merging
+    if (hasRecentlyEndedTurnId(prevTurnId) || hasRecentlyEndedTurnId(nextTurnId)) {
+      return false;
+    }
+
+    // Block merge when either side has a __turnId and they differ
+    if ((prevTurnId !== undefined || nextTurnId !== undefined) &&
+        prevTurnId !== nextTurnId) {
       return false;
     }
 
     const previousSummary = getAssistantBlockSummary(previous);
     const nextSummary = getAssistantBlockSummary(next);
 
-    // Keep tool-execution assistant messages separated from the final answer.
-    if (previousSummary.hasToolUse !== nextSummary.hasToolUse) {
+    // For messages without __turnId (loaded from history), allow merging across
+    // tool_use boundary so that tool-execution and final answer appear as one block.
+    // For streaming messages (with __turnId), keep tool_use separated from answer.
+    const bothLackTurnId = prevTurnId === undefined && nextTurnId === undefined;
+    if (!bothLackTurnId && previousSummary.hasToolUse !== nextSummary.hasToolUse) {
       return false;
     }
 

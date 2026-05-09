@@ -183,6 +183,23 @@ export async function loadMcpServersConfig(cwd = null) {
 }
 
 /**
+ * Load enabled MCP server config and return as a Record<name, config> for the
+ * Claude Agent SDK's `mcpServers` option.
+ *
+ * Returns null (rather than an empty object) when no servers are enabled, so
+ * callers can naturally write `...(mcpServers && { mcpServers })` to omit the
+ * field from SDK options entirely.
+ *
+ * @param {string} cwd - Current working directory (used for project detection)
+ * @returns {Promise<Record<string, Object> | null>}
+ */
+export async function loadMcpServersConfigAsRecord(cwd = null) {
+  const list = await loadMcpServersConfig(cwd);
+  if (list.length === 0) return null;
+  return Object.fromEntries(list.map(({ name, config }) => [name, config]));
+}
+
+/**
  * Load all MCP server info (including disabled and invalid ones)
  * Merges global and project-level mcpServers to stay consistent with the server list seen by the Java side
  * @param {string} cwd - Current working directory

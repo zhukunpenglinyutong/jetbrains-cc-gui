@@ -4,21 +4,27 @@ import com.intellij.execution.process.ProcessEvent;
 import com.intellij.execution.process.ProcessHandler;
 import com.intellij.execution.process.ProcessListener;
 import com.intellij.openapi.Disposable;
-import com.intellij.openapi.util.CheckedDisposable;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.actionSystem.ActionGroup;
+import com.intellij.openapi.actionSystem.ActionManager;
+import com.intellij.openapi.actionSystem.AnAction;
+import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.startup.ProjectActivity;
 import com.intellij.openapi.util.Disposer;
+import com.intellij.openapi.util.CheckedDisposable;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.openapi.wm.ex.ToolWindowManagerListener;
+import com.intellij.terminal.JBTerminalWidget;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentManager;
 import com.intellij.ui.content.ContentManagerEvent;
 import com.intellij.ui.content.ContentManagerListener;
+import com.jediterm.terminal.ui.TerminalActionProvider;
 import kotlin.Unit;
 import kotlin.coroutines.Continuation;
 import org.jetbrains.annotations.NotNull;
@@ -35,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.stream.Collectors;
 
 /**
  * Service to monitor terminal output and user input (echoed).
@@ -58,6 +65,7 @@ import java.util.WeakHashMap;
 public class TerminalMonitorService implements ProjectActivity {
 
     private static final Logger LOG = Logger.getInstance(TerminalMonitorService.class);
+    private static final String EDITOR_POPUP_MENU = "EditorPopupMenu";
 
     /**
      * Tracked terminal widgets using WeakHashMap to prevent memory leaks.
@@ -65,6 +73,8 @@ public class TerminalMonitorService implements ProjectActivity {
      * Wrapped with synchronizedSet for thread-safe access.
      */
     private static final Set<Object> monitoredWidgets =
+            Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
+    private static final Set<Object> legacyActionInstalledWidgets =
             Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
 
     /**
@@ -78,6 +88,7 @@ public class TerminalMonitorService implements ProjectActivity {
     private static final class ProjectMonitorState {
         private final CheckedDisposable listenerDisposable;
         private ContentManager attachedContentManager;
+        private boolean actionDiagnosticsLogged;
 
         private ProjectMonitorState(@NotNull String locationHash) {
             this.listenerDisposable = Disposer.newCheckedDisposable("TerminalMonitorService:" + locationHash);
@@ -110,13 +121,20 @@ public class TerminalMonitorService implements ProjectActivity {
     private void setupTerminalListener(@NotNull Project project, @NotNull ProjectMonitorState state) {
         // ContentManager access requires EDT, so schedule this on EDT
         ApplicationManager.getApplication().invokeLater(() -> {
-            if (project.isDisposed() || state.listenerDisposable.isDisposed()) return;
+            if (project.isDisposed() || state.listenerDisposable.isDisposed()) { return; }
+
+            ensureReworkedTerminalMenuRegistration();
 
             ToolWindow terminalWindow = ToolWindowManager.getInstance(project).getToolWindow("Terminal");
-            if (terminalWindow == null) return;
+            if (terminalWindow == null) { return; }
 
             ContentManager contentManager = terminalWindow.getContentManager();
-            if (contentManager.isDisposed()) return;
+            if (contentManager.isDisposed()) { return; }
+
+            if (!state.actionDiagnosticsLogged) {
+                logTerminalActionRegistration();
+                state.actionDiagnosticsLogged = true;
+            }
 
             // Attach listener to ContentManager to detect new tabs (Terminals)
             if (state.attachedContentManager != contentManager) {
@@ -148,12 +166,12 @@ public class TerminalMonitorService implements ProjectActivity {
     }
 
     private void checkForNewWidgets(@NotNull Project project, @NotNull ProjectMonitorState state) {
-        if (project.isDisposed() || state.listenerDisposable.isDisposed()) return;
+        if (project.isDisposed() || state.listenerDisposable.isDisposed()) { return; }
 
         try {
             Class<?> viewClass = Class.forName("org.jetbrains.plugins.terminal.TerminalView");
             Object view = viewClass.getMethod("getInstance", Project.class).invoke(null, project);
-            if (view == null) return;
+            if (view == null) { return; }
 
             Object result = viewClass.getMethod("getWidgets").invoke(view);
             List<Object> widgets = convertResultToList(result);
@@ -173,7 +191,7 @@ public class TerminalMonitorService implements ProjectActivity {
     }
 
     private void attachToWidget(@NotNull Project project, @NotNull ProjectMonitorState state, @NotNull Object widget) {
-        if (monitoredWidgets.contains(widget)) return;
+        if (monitoredWidgets.contains(widget)) { return; }
 
         monitoredWidgets.add(widget);
         String title = "Unknown";
@@ -183,15 +201,17 @@ public class TerminalMonitorService implements ProjectActivity {
                 title = (String) terminalTitle.getClass().getMethod("getText").invoke(terminalTitle);
             }
         } catch (Exception e) {
-            // ignore
+            LOG.debug("Failed to get terminal widget title", e);
         }
         LOG.debug("Monitoring terminal widget: " + title + " (Class: " + widget.getClass().getName() + ")");
+        installLegacySendAction(widget);
 
         // Handle disposal
         if (widget instanceof Disposable) {
             Disposer.register((Disposable) widget, () -> {
                 LOG.debug("Terminal widget disposed: " + TerminalMonitorService.getWidgetTitle(widget));
                 monitoredWidgets.remove(widget);
+                legacyActionInstalledWidgets.remove(widget);
                 buffers.remove(widget);
             });
         }
@@ -204,7 +224,7 @@ public class TerminalMonitorService implements ProjectActivity {
             for (String methodName : possibleHandlerMethods) {
                 try {
                     getHandlerMethod = widget.getClass().getMethod(methodName);
-                    if (getHandlerMethod != null) break;
+                    if (getHandlerMethod != null) { break; }
                 } catch (NoSuchMethodException e) {
                     // continue
                 }
@@ -287,7 +307,7 @@ public class TerminalMonitorService implements ProjectActivity {
         try {
             Class<?> viewClass = Class.forName("org.jetbrains.plugins.terminal.TerminalView");
             Object view = viewClass.getMethod("getInstance", Project.class).invoke(null, project);
-            if (view == null) return List.of();
+            if (view == null) { return List.of(); }
 
             Object result = viewClass.getMethod("getWidgets").invoke(view);
             List<Object> sortedWidgets = new ArrayList<>(convertResultToList(result));
@@ -355,7 +375,7 @@ public class TerminalMonitorService implements ProjectActivity {
                         return i;
                     }
                 } catch (Exception e) {
-                    // ignore
+                    LOG.debug("Failed to match widget title for index lookup", e);
                 }
             }
         }
@@ -364,20 +384,25 @@ public class TerminalMonitorService implements ProjectActivity {
 
     /**
      * Get the captured content of a terminal widget.
-     * First tries dynamic capture from process listener, then supplements with screen scraping.
+     * Selects the more complete data source between dynamic capture (ProcessListener) and screen scrape.
      */
     public static String getWidgetContent(@NotNull Object widget) {
         String captured = getCapturedContent(widget);
-        LOG.debug("[Terminal] Dynamic capture length: " + captured.length());
-
-        // Supplement with screen scrape to ensure we get history
         String scraped = scrapeTerminalScreen(widget);
-        if (!scraped.isEmpty()) {
+
+        if (scraped.length() > captured.length()) {
+            LOG.debug("[Terminal] Using screen scrape (" + scraped.length()
+                    + " chars) over dynamic capture (" + captured.length() + " chars)");
             return scraped;
         }
 
-        LOG.debug("[Terminal] Falling back to dynamic capture (length: " + captured.length() + ")");
-        return captured;
+        if (!captured.isEmpty()) {
+            LOG.debug("[Terminal] Using dynamic capture (" + captured.length() + " chars)");
+            return captured;
+        }
+
+        LOG.debug("[Terminal] Using screen scrape as fallback (" + scraped.length() + " chars)");
+        return scraped;
     }
 
     /**
@@ -385,7 +410,7 @@ public class TerminalMonitorService implements ProjectActivity {
      */
     private static String getCapturedContent(@NotNull Object widget) {
         StringBuilder sb = buffers.get(widget);
-        if (sb == null) return "";
+        if (sb == null) { return ""; }
         synchronized (sb) {
             return sb.toString();
         }
@@ -401,11 +426,11 @@ public class TerminalMonitorService implements ProjectActivity {
 
             // Step 1: Get Terminal object
             Object terminal = getTerminalObject(widget);
-            if (terminal == null) return "";
+            if (terminal == null) { return ""; }
 
             // Step 2: Get TextBuffer
             Object buffer = getTextBuffer(terminal);
-            if (buffer == null) return "";
+            if (buffer == null) { return ""; }
 
             // Step 3: Scrape lines
             return scrapeBufferLines(buffer, 500);
@@ -564,7 +589,7 @@ public class TerminalMonitorService implements ProjectActivity {
     private static String extractLineText(@NotNull Object buffer, @NotNull Method getLineMethod, int lineIndex) {
         try {
             Object line = getLineMethod.invoke(buffer, lineIndex);
-            if (line == null) return null;
+            if (line == null) { return null; }
 
             // Try common method names
             String[] textMethods = {"getText", "getLineText", "getLine", "getString"};
@@ -572,7 +597,7 @@ public class TerminalMonitorService implements ProjectActivity {
                 try {
                     Method m = line.getClass().getMethod(methodName);
                     String text = (String) m.invoke(line);
-                    if (text != null) return text;
+                    if (text != null) { return text; }
                 } catch (Exception e) {
                     // continue
                 }
@@ -585,11 +610,11 @@ public class TerminalMonitorService implements ProjectActivity {
                         && !m.getName().equals("toString")
                         && !m.getName().equals("getClass")) {
                     String text = (String) m.invoke(line);
-                    if (text != null && !text.isEmpty()) return text;
+                    if (text != null && !text.isEmpty()) { return text; }
                 }
             }
         } catch (Exception e) {
-            // ignore individual line failures
+            LOG.debug("Failed to extract text from line " + lineIndex, e);
         }
         return null;
     }
@@ -610,7 +635,7 @@ public class TerminalMonitorService implements ProjectActivity {
     }
 
     private static List<Object> convertResultToList(Object result) {
-        if (result == null) return Collections.emptyList();
+        if (result == null) { return Collections.emptyList(); }
         if (result instanceof Object[]) {
             return Arrays.asList((Object[]) result);
         }
@@ -625,5 +650,83 @@ public class TerminalMonitorService implements ProjectActivity {
             return list;
         }
         return Collections.emptyList();
+    }
+
+    private static void logTerminalActionRegistration() {
+        if (!LOG.isDebugEnabled()) {
+            return;
+        }
+        try {
+            ActionManager actionManager = ActionManager.getInstance();
+            AnAction action = actionManager.getAction(SendTerminalSelectionToInputAction.ACTION_ID);
+            LOG.debug("[TerminalSend] action registered=" + (action != null)
+                    + ", class=" + (action == null ? "null" : action.getClass().getName()));
+            logGroupMembership(actionManager, SendTerminalSelectionToInputAction.TERMINAL_OUTPUT_CONTEXT_MENU);
+            logGroupMembership(actionManager, SendTerminalSelectionToInputAction.TERMINAL_PROMPT_CONTEXT_MENU);
+            logGroupMembership(actionManager, SendTerminalSelectionToInputAction.TERMINAL_REWORKED_CONTEXT_MENU);
+            logGroupMembership(actionManager, EDITOR_POPUP_MENU);
+        } catch (Exception e) {
+            LOG.warn("[TerminalSend] Failed to log action registration diagnostics", e);
+        }
+    }
+
+    private static void ensureReworkedTerminalMenuRegistration() {
+        try {
+            ActionManager actionManager = ActionManager.getInstance();
+            boolean added = SendTerminalSelectionToInputAction.registerForReworkedTerminalContextMenu(actionManager);
+            if (added) {
+                LOG.info("[TerminalSend] Registered send action into Terminal.ReworkedTerminalContextMenu at runtime");
+            }
+        } catch (Exception | LinkageError e) {
+            LOG.debug("[TerminalSend] Failed to register reworked terminal context menu action", e);
+        }
+    }
+
+    private static void logGroupMembership(@NotNull ActionManager actionManager, @NotNull String groupId) {
+        AnAction groupAction = actionManager.getAction(groupId);
+        if (!(groupAction instanceof ActionGroup)) {
+            LOG.debug("[TerminalSend] group missing or not ActionGroup: " + groupId);
+            return;
+        }
+
+        List<String> childIds = Arrays.stream(resolveActionGroupChildren((ActionGroup) groupAction))
+                .map(child -> actionManager.getId(child))
+                .collect(Collectors.toList());
+        LOG.debug("[TerminalSend] group=" + groupId
+                + ", containsSendAction=" + childIds.contains(SendTerminalSelectionToInputAction.ACTION_ID)
+                + ", childCount=" + childIds.size()
+                + ", sampleChildren=" + childIds.stream().limit(12).collect(Collectors.toList()));
+    }
+
+    private static AnAction[] resolveActionGroupChildren(@NotNull ActionGroup group) {
+        try {
+            Method getChildren = group.getClass().getMethod("getChildren", AnActionEvent.class);
+            Object children = getChildren.invoke(group, new Object[]{null});
+            return children instanceof AnAction[] ? (AnAction[]) children : new AnAction[0];
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            LOG.debug("[TerminalSend] Failed to resolve action group children", e);
+            return new AnAction[0];
+        }
+    }
+
+    private static void installLegacySendAction(@NotNull Object widget) {
+        if (!(widget instanceof JBTerminalWidget) || legacyActionInstalledWidgets.contains(widget)) {
+            return;
+        }
+        if (!"org.jetbrains.plugins.terminal.ShellTerminalWidget".equals(widget.getClass().getName())) {
+            return;
+        }
+
+        JBTerminalWidget terminalWidget = (JBTerminalWidget) widget;
+        try {
+            TerminalActionProvider currentNext = terminalWidget.getTerminalPanel().getNextProvider();
+            terminalWidget.getTerminalPanel().setNextProvider(
+                    new LegacyTerminalSendActionProvider(terminalWidget, currentNext)
+            );
+            legacyActionInstalledWidgets.add(widget);
+            LOG.info("[TerminalSend] Installed legacy terminal action provider for " + widget.getClass().getName());
+        } catch (Exception e) {
+            LOG.warn("[TerminalSend] Failed to install legacy terminal action provider", e);
+        }
     }
 }

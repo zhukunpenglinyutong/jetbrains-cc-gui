@@ -87,7 +87,7 @@
     "attachmentFile": "[Anexo: {{fileName}}]",
     "unknownFile": "Arquivo desconhecido",
     "attachmentsUploaded": "[Anexos Enviados]",
-    "streamingConnected": "Claude conectado, entendendo sua pergunta",
+    "streamingConnected": "{{provider}} conectado, entendendo sua pergunta",
     "showEarlierMessages": "Mostrar {{count}} mensagens anteriores",
     "totalDuration": "Esta resposta levou"
   },
@@ -146,8 +146,16 @@
         "level6": "Muito Grande (140%)"
       },
       "editorFont": {
-        "label": "Fonte (segue a fonte do editor)",
-        "hint": "Não editável aqui. Para modificar, vá em Configurações do IDEA → Editor → Fonte (reinicie o IDEA para que a fonte do plugin entre em vigor)"
+        "label": "Fonte",
+        "hint": "Aqui você altera a fonte da interface do plugin; o tamanho e o espaçamento entre linhas continuam seguindo o editor.",
+        "followOption": "Seguir editor ({{font}})",
+        "customOption": "Arquivo de fonte personalizado",
+        "customPathLabel": "Caminho do arquivo de fonte",
+        "customPathPlaceholder": "Escolha ou digite o caminho de um arquivo .ttf / .otf",
+        "browse": "Procurar",
+        "warningUnavailable": "A fonte está indisponível, usando a fonte do editor",
+        "statusFollowEditor": "Usando atualmente a fonte do editor: {{font}}",
+        "statusCustom": "Usando atualmente a fonte personalizada: {{font}}"
       },
       "streaming": {
         "label": "Streaming",
@@ -160,6 +168,20 @@
         "enabled": "Ativado",
         "disabled": "Desativado",
         "hint": "Quando ativado, selecionar um arquivo na árvore do projeto enviará automaticamente o caminho do arquivo para a IA (atenção: apenas o caminho é enviado, não o conteúdo). Quando desativado, é necessária ação manual."
+      },
+      "promptEnhancer": {
+        "label": "Prompt Enhancer",
+        "modelLabel": "Enhancer Model",
+        "resetToDefault": "Restore Default",
+        "providerAvailable": "Available",
+        "providerUnavailable": "Currently unavailable",
+        "provider": {
+          "claude": "Claude Code",
+          "codex": "Codex"
+        },
+        "currentProviderAuto": "Currently using automatic selection: {{provider}}",
+        "currentProviderManual": "Currently using manually selected provider: {{provider}}",
+        "currentProviderUnavailable": "The selected provider is currently unavailable: {{provider}}"
       },
       "diffExpanded": {
         "label": "Expandir Diffs por Padrão",
@@ -178,6 +200,12 @@
         "enabled": "Ativado",
         "disabled": "Desativado",
         "hint": "Quando ativado, exibe informações do modelo e modo atual na barra de status da IDE (ex: GUI [Opus] {Auto}). Quando desativado, o widget fica oculto."
+      },
+      "taskCompletionNotification": {
+        "label": "Notificação de Conclusão de Tarefa",
+        "enabled": "Ativado",
+        "disabled": "Desativado",
+        "hint": "Quando ativado, exibe uma notificação do sistema quando a tarefa AI é concluída. Quando desativado, nenhuma notificação aparece."
       },
       "sendShortcut": {
         "label": "Atalho de Envio",
@@ -234,6 +262,10 @@
     },
     "providers": "Gerenciamento de Provedores",
     "providersDesc": "Gerenciar configurações de provedores de API Claude e Codex e alternar entre diferentes provedores de serviço",
+    "promptEnhancer": {
+      "title": "Prompt Enhancer",
+      "description": "Choose which provider and model should be used when enhancing prompts before sending them."
+    },
     "providerTab": {
       "claude": "Claude Code",
       "codex": "Codex"
@@ -302,6 +334,16 @@
     "commit": {
       "title": "IA para Commits",
       "description": "Configurar o comportamento de geração de mensagens de commit Git com IA",
+      "providerModel": {
+        "label": "Provedor do modelo de commit",
+        "modelLabel": "Modelo de commit",
+        "resetToDefault": "Redefinir",
+        "providerAvailable": "Disponível",
+        "providerUnavailable": "Indisponível",
+        "currentProviderAuto": "Usando seleção automática atualmente: {{provider}}",
+        "currentProviderManual": "Usando o provedor selecionado manualmente atualmente: {{provider}}",
+        "currentProviderUnavailable": "O provedor selecionado está indisponível no momento: {{provider}}"
+      },
       "prompt": {
         "label": "Prompt Adicional",
         "placeholder": "Adicione seus requisitos extras aqui, ex: gerar commit em português, incluir número do issue, etc...",
@@ -356,6 +398,12 @@
           "minutesAgo_other": "{{count}} minutos atrás",
           "justNow": "agora mesmo"
         }
+      },
+      "aiTitleGeneration": {
+        "label": "Geração automática de título de sessão por IA",
+        "enabled": "Ativado",
+        "disabled": "Desativado",
+        "hint": "Quando ativado, um título curto gerado pelo Haiku é criado após o primeiro turno de uma nova sessão. Desativado, a sessão continua usando a primeira mensagem do usuário como título."
       }
     },
     "codexFeatureUnavailable": "Esta seção de configurações ainda não está disponível no Codex. Por favor, mude para Claude Code.",
@@ -562,6 +610,7 @@
         "deepseek": "DeepSeek",
         "minimax": "MiniMax",
         "xiaomi": "Xiaomi MiMo",
+        "xiaomiPlan": "Xiaomi MiMo Plan",
         "qwen": "Alibaba Qwen",
         "openrouter": "OpenRouter"
       }
@@ -609,7 +658,19 @@
         "cliLoginDisableMessage": "O plugin parará de ler ~/.codex/config.toml e auth.json.",
         "modelIdRequired": "ID do modelo é obrigatório",
         "modelIdInvalid": "Formato de ID do modelo inválido (apenas letras, números, pontos, hífens, underscores, barras e dois pontos permitidos)",
-        "modelIdDuplicate": "ID do modelo já existe"
+        "modelIdDuplicate": "ID do modelo já existe",
+        "envVarsTitle": "Environment Variables",
+        "messageEnvLabel": "Message Environment Variables",
+        "messageEnvHint": "Custom environment variables injected into the Codex message subprocess",
+        "mcpEnvLabel": "MCP Environment Variables",
+        "mcpEnvHint": "Custom environment variables injected into the MCP tool discovery subprocess",
+        "envKeyPlaceholder": "ENV_KEY",
+        "envValuePlaceholder": "value",
+        "addEnvVar": "Add Variable",
+        "envKeyInvalid": "Invalid key name (must start with letter/underscore, alphanumeric only)",
+        "envKeyProtected": "Cannot set built-in variable: {{key}}",
+        "envKeyDuplicate": "Duplicate key: {{key}}",
+        "envValueTooLong": "Valor muito longo (máx. {{max}} caracteres)"
       }
     },
     "agent": {
@@ -770,6 +831,16 @@
     "confirmDelete": "Confirmar Exclusão",
     "deleteMessage": "Tem certeza que deseja excluir esta sessão? Esta ação não pode ser desfeita.",
     "deleteSession": "Excluir esta sessão",
+    "selectMode": "Select",
+    "exitSelectMode": "Exit selection",
+    "selectedSessions": "{{count}} selected",
+    "selectAll": "Select all",
+    "clearSelection": "Clear",
+    "deleteSelected": "Delete selected",
+    "confirmDeleteSelected": "Confirm Delete",
+    "deleteSelectedMessage": "Are you sure you want to delete {{count}} selected sessions? This action cannot be undone.",
+    "selectSession": "Select session",
+    "selectSessionWithTitle": "Select {{title}}",
     "exportSession": "Exportar sessão",
     "exportSuccess": "Sessão exportada",
     "exportFailed": "Falha na exportação",
@@ -792,6 +863,9 @@
     "cancelEditButton": "Cancelar",
     "titleTooLong": "Título muito longo (máx. 50 caracteres)",
     "titleUpdated": "Título atualizado",
+    "copySessionId": "Copiar ID da sessão para CLI resume",
+    "sessionIdCopied": "ID da sessão copiado",
+    "copyFailed": "Falha ao copiar",
     "timeAgo": {
       "yearsAgo": "anos atrás",
       "monthsAgo": "meses atrás",
@@ -876,6 +950,12 @@
     "clickToCopy": "Clique para copiar",
     "switch": "Alternar",
     "switchProvider": "Alternar provedor",
+    "runtimeProvider": {
+      "title": "Alternar provedor atual",
+      "loading": "Carregando provedores...",
+      "empty": "Nenhum provedor disponível",
+      "switched": "Alternado para {{provider}}"
+    },
     "link": "Link"
   },
   "markdown": {
@@ -1305,11 +1385,11 @@
         "description": "Sonnet 4.6 · Usar o modelo padrão"
       },
       "opus46": {
-        "label": "Opus 4.6",
-        "description": "Opus 4.6 · O mais recente e capaz"
+        "label": "Opus 4.7",
+        "description": "Opus 4.7 · O mais recente e capaz"
       },
       "opus46_1m": {
-        "label": "Opus (contexto 1M)",
+        "label": "Opus 4.6",
         "description": "Opus 4.6 para sessões longas"
       },
       "haiku45": {
@@ -1317,26 +1397,48 @@
         "description": "Haiku 4.5 · Mais rápido para respostas rápidas"
       }
     },
+    "longContext": {
+      "label": "1M",
+      "shortLabel": "1M contexto",
+      "tooltipEnabled": "Ativar/desativar contexto 1M",
+      "tooltipDisabled": "1M contexto não disponível para Haiku"
+    },
     "codex": {
       "gpt53codex": {
-        "label": "gpt-5.3-codex",
+        "label": "GPT-5.3-Codex",
         "description": "Modelo de codificação agêntico de fronteira mais recente com capacidades aprimoradas."
       },
+      "gpt55": {
+        "label": "GPT-5.5",
+        "description": "Modelo de fronteira mais recente com capacidades reforçadas."
+      },
       "gpt54": {
-        "label": "gpt-5.4",
+        "label": "GPT-5.4",
         "description": "Modelo de fronteira mais recente com capacidades aprimoradas."
       },
       "gpt52codex": {
-        "label": "gpt-5.2-codex",
-        "description": "Modelo de codificação agêntico de fronteira mais recente."
+        "label": "GPT-5.2-Codex",
+        "description": "Modelo de codificação agêntico de fronteira."
       },
       "gpt51codexMax": {
-        "label": "gpt-5.1-codex-max",
+        "label": "GPT-5.1-Codex-Max",
         "description": "Carro-chefe otimizado para Codex com raciocínio profundo e rápido."
       },
+      "gpt54mini": {
+        "label": "GPT-5.4-Mini",
+        "description": "Modelo de codificação agêntico de fronteira mais leve."
+      },
+      "gpt53codexSpark": {
+        "label": "GPT-5.3-Codex-Spark",
+        "description": "Modelo de codificação ultrarrápido."
+      },
+      "gpt52": {
+        "label": "GPT-5.2",
+        "description": "Otimizado para trabalho profissional e agentes de longa duração."
+      },
       "gpt51codexMini": {
-        "label": "gpt-5.1-codex-mini",
-        "description": "Otimizado para codex. Mais barato, mais rápido, porém menos capaz."
+        "label": "GPT-5.1-Codex-Mini",
+        "description": "Otimizado para Codex. Mais barato, mais rápido, porém menos capaz."
       }
     }
   },

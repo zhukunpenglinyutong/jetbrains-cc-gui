@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { PromptConfig } from '../types/prompt';
 
+const FOOTER_ACTIONS_STYLE: React.CSSProperties = { marginLeft: 'auto' };
+
 interface PromptDialogProps {
   isOpen: boolean;
   prompt?: PromptConfig | null; // null indicates add mode
@@ -142,7 +144,7 @@ export default function PromptDialog({
         </div>
 
         <div className="dialog-footer">
-          <div className="footer-actions" style={{ marginLeft: 'auto' }}>
+          <div className="footer-actions" style={FOOTER_ACTIONS_STYLE}>
             <button className="btn btn-secondary" onClick={onClose}>
               <span className="codicon codicon-close" />
               {t('common.cancel')}

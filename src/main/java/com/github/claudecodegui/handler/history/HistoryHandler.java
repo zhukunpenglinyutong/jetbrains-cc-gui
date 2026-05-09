@@ -18,11 +18,13 @@ public class HistoryHandler extends BaseMessageHandler {
             "load_history_data",
             "load_session",
             "delete_session",  // Delete session
+            "delete_sessions", // Batch delete sessions
             "export_session",  // Export session
             "toggle_favorite", // Toggle favorite status
             "update_title",    // Update session title
             "delete_title",    // Delete orphaned custom title (B-011)
-            "deep_search_history" // Deep search (clear cache and reload)
+            "deep_search_history", // Deep search (clear cache and reload)
+            "load_subagent_session" // Load Claude Code sidechain Agent process log
     };
 
     // Session load callback interface
@@ -38,6 +40,7 @@ public class HistoryHandler extends BaseMessageHandler {
     private final HistoryExportService historyExportService;
     private final HistoryMessageInjector historyMessageInjector;
     private final HistoryMetadataService historyMetadataService;
+    private final SubagentHistoryService subagentHistoryService;
 
     public HistoryHandler(HandlerContext context) {
         super(context);
@@ -47,6 +50,7 @@ public class HistoryHandler extends BaseMessageHandler {
         this.historyExportService = new HistoryExportService(context);
         this.historyMessageInjector = new HistoryMessageInjector(context);
         this.historyMetadataService = new HistoryMetadataService(context, nodeJsServiceCaller);
+        this.subagentHistoryService = new SubagentHistoryService(context);
     }
 
     public void setSessionLoadCallback(SessionLoadCallback callback) {
@@ -74,6 +78,10 @@ public class HistoryHandler extends BaseMessageHandler {
                 LOG.info("[HistoryHandler] 处理: delete_session, sessionId=" + content);
                 historyDeleteService.handleDeleteSession(content, currentProvider);
                 return true;
+            case "delete_sessions":
+                LOG.info("[HistoryHandler] 处理: delete_sessions");
+                historyDeleteService.handleDeleteSessions(content, currentProvider);
+                return true;
             case "export_session":
                 LOG.info("[HistoryHandler] 处理: export_session, sessionId=" + content);
                 historyExportService.handleExportSession(content, currentProvider);
@@ -94,6 +102,10 @@ public class HistoryHandler extends BaseMessageHandler {
                 LOG.info("[HistoryHandler] 处理: deep_search_history, provider=" + content);
                 this.currentProvider = content != null && !content.isEmpty() ? content : "claude";
                 historyLoadService.handleDeepSearchHistory(currentProvider);
+                return true;
+            case "load_subagent_session":
+                LOG.debug("[HistoryHandler] 处理: load_subagent_session");
+                subagentHistoryService.handleLoadSubagentSession(content);
                 return true;
             default:
                 return false;

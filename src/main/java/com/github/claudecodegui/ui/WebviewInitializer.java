@@ -9,6 +9,7 @@ import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.startup.BridgePreloader;
 import com.github.claudecodegui.util.FontConfigService;
 import com.github.claudecodegui.util.HtmlLoader;
+import com.github.claudecodegui.util.JsUtils;
 import com.github.claudecodegui.util.JBCefBrowserFactory;
 import com.github.claudecodegui.util.LanguageConfigService;
 import com.github.claudecodegui.util.PlatformUtils;
@@ -178,6 +179,11 @@ public class WebviewInitializer {
             host.setBrowser(browser);
             host.getHandlerContext().setBrowser(browser);
 
+            browser.getJBCefClient().addRequestHandler(
+                    new UiFontResourceRequestHandler(),
+                    browser.getCefBrowser()
+            );
+
             JBCefBrowserBase browserBase = browser;
             JBCefJSQuery jsQuery = JBCefJSQuery.create(browserBase);
             jsQuery.addHandler((msg) -> {
@@ -269,6 +275,19 @@ public class WebviewInitializer {
                     );
                     cefBrowser.executeJavaScript(fontConfigInjection, cefBrowser.getURL(), 0);
                     LOG.info("[FontSync] Font config injected into frontend");
+
+                    // Pass effective plugin UI font configuration to the frontend
+                    String uiFontConfig = FontConfigService.getResolvedUiFontConfigJson(host.getHandlerContext().getSettingsService());
+                    LOG.info("[UiFontSync] Retrieved UI font config");
+                    String escapedUiFontConfig = JsUtils.escapeJs(uiFontConfig);
+                    String uiFontConfigInjection = String.format(
+                        "(function(){ var c = JSON.parse('%s'); " +
+                        "if (window.applyUiFontConfig) { window.applyUiFontConfig(c); } " +
+                        "else { window.__pendingUiFontConfig = c; } })()",
+                        escapedUiFontConfig
+                    );
+                    cefBrowser.executeJavaScript(uiFontConfigInjection, cefBrowser.getURL(), 0);
+                    LOG.info("[UiFontSync] UI font config injected into frontend");
 
                     // Pass IDEA language configuration to the frontend
                     String languageConfig = LanguageConfigService.getLanguageConfigJson();
@@ -564,7 +583,7 @@ public class WebviewInitializer {
      */
     public void reloadWebview(String reason) {
         ApplicationManager.getApplication().invokeLater(() -> {
-            if (host.isDisposed()) return;
+            if (host.isDisposed()) { return; }
             JBCefBrowser browser = host.getBrowser();
             if (browser == null) {
                 recreateWebview(reason + "_no_browser");
@@ -586,7 +605,7 @@ public class WebviewInitializer {
      */
     public void recreateWebview(String reason) {
         ApplicationManager.getApplication().invokeLater(() -> {
-            if (host.isDisposed()) return;
+            if (host.isDisposed()) { return; }
 
             host.setFrontendReady(false);
             JPanel mainPanel = host.getMainPanel();

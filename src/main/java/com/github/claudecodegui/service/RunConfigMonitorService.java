@@ -1,19 +1,14 @@
 package com.github.claudecodegui.service;
 
-import com.intellij.execution.ExecutionManager;
-import com.intellij.execution.RunnerAndConfigurationSettings;
 import com.intellij.execution.process.ProcessEvent;
 import com.intellij.execution.process.ProcessHandler;
 import com.intellij.execution.process.ProcessListener;
-import com.intellij.execution.ui.ConsoleView;
-import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.execution.ui.RunContentManager;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.startup.ProjectActivity;
-import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
@@ -106,10 +101,10 @@ public class RunConfigMonitorService implements ProjectActivity {
     }
 
     private void attachContentListener(ToolWindow toolWindow, String windowName) {
-        if (toolWindow == null) return;
+        if (toolWindow == null) { return; }
 
         ContentManager contentManager = toolWindow.getContentManager();
-        if (contentManager == null) return;
+        if (contentManager == null) { return; }
 
         // Check if already attached
         if (attachedManagers.contains(contentManager)) {
@@ -230,7 +225,7 @@ public class RunConfigMonitorService implements ProjectActivity {
         List<RunConfigInfo> configs = new ArrayList<>();
         try {
             RunContentManager runContentManager = RunContentManager.getInstance(project);
-            if (runContentManager == null) return configs;
+            if (runContentManager == null) { return configs; }
 
             List<RunContentDescriptor> descriptors = runContentManager.getAllDescriptors();
             for (RunContentDescriptor descriptor : descriptors) {

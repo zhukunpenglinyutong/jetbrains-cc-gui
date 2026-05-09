@@ -42,8 +42,25 @@ public class CodexMessageConverter {
         "cat\\s*>\\s*([^\\s;|&]+)|tee\\s+(?:-[a-zA-Z]+\\s+)*([^\\s;|&]+)|(?:echo|printf)\\s+[^>]*>\\s*([^\\s;|&]+)"
     );
 
+    private static final String[] SYSTEM_TAG_NAMES = {"agents-instructions", "system-reminder", "system-prompt"};
+
     private CodexMessageConverter() {
         // Utility class, no instantiation.
+    }
+
+    /**
+     * Safely extract a string from a JsonElement, handling null, primitives, and structured types.
+     * Returns the primitive string value when possible, falls back to {@code toString()} for
+     * arrays/objects, and returns the given default for null or missing elements.
+     */
+    private static String safeGetAsString(JsonElement elem, String defaultValue) {
+        if (elem == null || elem.isJsonNull()) {
+            return defaultValue;
+        }
+        if (elem.isJsonPrimitive()) {
+            return elem.getAsString();
+        }
+        return elem.toString();
     }
 
     /**
@@ -240,6 +257,18 @@ public class CodexMessageConverter {
      */
     public static JsonObject convertCodexMessageToFrontend(JsonObject payload, String timestamp) {
         String contentStr = extractContentAsString(payload.get("content"));
+        String role = payload.has("role") ? payload.get("role").getAsString() : "user";
+        boolean userMessage = "user".equals(role);
+        boolean strippedSystemTags = false;
+
+        if (userMessage) {
+            String originalContent = contentStr;
+            contentStr = stripSystemTags(originalContent);
+            strippedSystemTags = originalContent != null && !originalContent.equals(contentStr);
+            if (contentStr == null || contentStr.isBlank()) {
+                return null;
+            }
+        }
 
         // Filter out system messages
         if (contentStr != null && isSystemMessage(contentStr)) {
@@ -247,7 +276,6 @@ public class CodexMessageConverter {
         }
 
         JsonObject frontendMsg = new JsonObject();
-        String role = payload.has("role") ? payload.get("role").getAsString() : "user";
         frontendMsg.addProperty("type", role);
 
         if (payload.has("content")) {
@@ -255,7 +283,9 @@ public class CodexMessageConverter {
                 frontendMsg.addProperty("content", contentStr);
             }
 
-            JsonArray claudeContentBlocks = convertToClaudeContentBlocks(payload.get("content"));
+            JsonArray claudeContentBlocks = strippedSystemTags
+                    ? textContentBlocks(contentStr)
+                    : convertToClaudeContentBlocks(payload.get("content"));
             JsonObject rawObj = new JsonObject();
             rawObj.add("content", claudeContentBlocks);
             rawObj.addProperty("role", role);
@@ -277,8 +307,49 @@ public class CodexMessageConverter {
                contentStr.startsWith("Tool result:") ||
                contentStr.startsWith("Exit code:") ||
                contentStr.startsWith("# AGENTS.md instructions") ||
+               contentStr.startsWith("<agents-instructions>") ||
                contentStr.startsWith("<INSTRUCTIONS>") ||
                contentStr.startsWith("<environment_context>");
+    }
+
+    /**
+     * Strip internal instruction blocks that are prepended before sending to Codex.
+     * These blocks are useful model context, but should not be rendered as user history.
+     */
+    public static String stripSystemTags(String text) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+        String result = text;
+        for (String tag : SYSTEM_TAG_NAMES) {
+            result = removeTagBlocks(result, tag);
+        }
+        return result.trim();
+    }
+
+    private static String removeTagBlocks(String text, String tagName) {
+        String result = text;
+        String openTag = "<" + tagName + ">";
+        String closeTag = "</" + tagName + ">";
+        int start = result.indexOf(openTag);
+        while (start >= 0) {
+            int end = result.indexOf(closeTag, start);
+            if (end < 0) {
+                break;
+            }
+            result = result.substring(0, start) + result.substring(end + closeTag.length());
+            start = result.indexOf(openTag);
+        }
+        return result;
+    }
+
+    private static JsonArray textContentBlocks(String text) {
+        JsonArray content = new JsonArray();
+        JsonObject textBlock = new JsonObject();
+        textBlock.addProperty("type", "text");
+        textBlock.addProperty("text", text);
+        content.add(textBlock);
+        return content;
     }
 
     /**
@@ -465,7 +536,7 @@ public class CodexMessageConverter {
         toolResult.addProperty("type", "tool_result");
         toolResult.addProperty("tool_use_id", payload.has("call_id") ? payload.get("call_id").getAsString() : "unknown");
 
-        String output = payload.has("output") ? payload.get("output").getAsString() : "";
+        String output = safeGetAsString(payload.get("output"), "");
         toolResult.addProperty("content", output);
 
         JsonArray content = new JsonArray();
@@ -495,15 +566,7 @@ public class CodexMessageConverter {
 
         String toolName = payload.has("name") ? payload.get("name").getAsString() : "unknown";
 
-        // Safely extract tool input as string, handling non-primitive types
-        String toolInput;
-        if (payload.has("input") && payload.get("input").isJsonPrimitive()) {
-            toolInput = payload.get("input").getAsString();
-        } else if (payload.has("input")) {
-            toolInput = payload.get("input").toString();
-        } else {
-            toolInput = "";
-        }
+        String toolInput = safeGetAsString(payload.get("input"), "");
 
         JsonObject toolUse = new JsonObject();
         toolUse.addProperty("type", "tool_use");

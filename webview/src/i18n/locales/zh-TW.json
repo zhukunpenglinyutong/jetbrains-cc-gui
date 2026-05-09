@@ -87,7 +87,7 @@
     "attachmentFile": "[附件: {{fileName}}]",
     "unknownFile": "Unknown file",
     "attachmentsUploaded": "[已上傳附件]",
-    "streamingConnected": "Claude 已成功連接，正在理解問題",
+    "streamingConnected": "{{provider}} 已成功連接，正在理解問題",
     "showEarlierMessages": "顯示之前的 {{count}} 則訊息",
     "totalDuration": "本次耗時"
   },
@@ -146,8 +146,16 @@
         "level6": "最大（140%）"
       },
       "editorFont": {
-        "label": "字體（跟隨編輯器字體）",
-        "hint": "此處暫時不可修改，如需修改，請在 IDEA 設定 → 編輯器 → 字體 中調整（重啟 IDEA 後本外掛字體生效）"
+        "label": "字體",
+        "hint": "這裡修改的是外掛介面字體；字級和行高仍跟隨編輯器。",
+        "followOption": "跟隨編輯器（{{font}}）",
+        "customOption": "自訂字體檔案",
+        "customPathLabel": "字體檔案路徑",
+        "customPathPlaceholder": "選擇或輸入 .ttf / .otf 字體檔案路徑",
+        "browse": "瀏覽",
+        "warningUnavailable": "字體不可用，目前已回退到編輯器字體",
+        "statusFollowEditor": "目前跟隨編輯器字體：{{font}}",
+        "statusCustom": "目前使用自訂字體：{{font}}"
       },
       "streaming": {
         "label": "Streaming",
@@ -161,11 +169,31 @@
         "disabled": "已停用",
         "hint": "開啟後，在專案樹選擇檔案時會自動將檔案路徑告訴 AI（注意：只傳遞檔案路徑，不傳檔案內容）。關閉後需要手動操作。"
       },
+      "promptEnhancer": {
+        "label": "增強提示詞",
+        "modelLabel": "增強模型",
+        "resetToDefault": "恢復預設",
+        "providerAvailable": "可用",
+        "providerUnavailable": "目前不可用",
+        "provider": {
+          "claude": "Claude Code",
+          "codex": "Codex"
+        },
+        "currentProviderAuto": "目前使用自動選擇：{{provider}}",
+        "currentProviderManual": "目前使用手動選擇的 provider：{{provider}}",
+        "currentProviderUnavailable": "目前所選 provider 不可用：{{provider}}"
+      },
       "diffExpanded": {
         "label": "預設展開差異",
         "enabled": "已展開",
         "disabled": "已折疊",
         "hint": "開啟後，聊天中的程式碼差異將預設展開顯示。關閉後，差異預設摺疊，可點擊展開。"
+      },
+      "taskCompletionNotification": {
+        "label": "任務完成通知",
+        "enabled": "已開啟",
+        "disabled": "已關閉",
+        "hint": "開啟後，當 AI 任務完成時顯示系統通知。關閉後不顯示系統通知。"
       },
       "sendShortcut": {
         "label": "發送快捷鍵",
@@ -232,9 +260,23 @@
     "mcpDesc": "配置和管理 Model Context Protocol 伺服器",
     "permissions": "權限配置",
     "permissionsDesc": "管理 Claude Code 的檔案存取和操作權限",
+    "promptEnhancer": {
+      "title": "增強提示詞",
+      "description": "設定增強提示詞功能使用的 provider 與模型，在訊息送出前先重寫並增強輸入內容。"
+    },
     "commit": {
       "title": "Commit AI",
       "description": "Configure AI-generated Git commit message behavior",
+      "providerModel": {
+        "label": "Commit 生成 Provider",
+        "modelLabel": "Commit 生成模型",
+        "resetToDefault": "恢復預設",
+        "providerAvailable": "可用",
+        "providerUnavailable": "當前不可用",
+        "currentProviderAuto": "當前使用自動選擇：{{provider}}",
+        "currentProviderManual": "當前使用手動選擇的 provider：{{provider}}",
+        "currentProviderUnavailable": "當前所選 provider 不可用：{{provider}}"
+      },
       "prompt": {
         "label": "Additional Prompt",
         "placeholder": "Add your extra requirements here, e.g., generate commit in English, include issue number, etc...",
@@ -294,6 +336,12 @@
           "hoursAgo": "{{count}}小時前",
           "minutesAgo": "{{count}}分鐘前"
         }
+      },
+      "aiTitleGeneration": {
+        "label": "AI 會話標題自動生成",
+        "enabled": "已開啟",
+        "disabled": "已關閉",
+        "hint": "開啟後，新會話首次回覆完成時將呼叫 Haiku 模型自動生成簡短標題；關閉後會話仍以使用者首條訊息顯示"
       }
     },
     "codexFeatureUnavailable": "Codex 暫未適配此功能，請切換到 Claude Code 使用",
@@ -478,6 +526,7 @@
         "deepseek": "DeepSeek",
         "minimax": "MiniMax",
         "xiaomi": "Xiaomi MiMo",
+        "xiaomiPlan": "Xiaomi MiMo Plan",
         "qwen": "阿里千問",
         "openrouter": "OpenRouter"
       }
@@ -525,7 +574,19 @@
         "cliLoginDisableMessage": "將恢復先前的 config.toml 並切換 API Key 認證方式。",
         "modelIdRequired": "Model ID is required",
         "modelIdInvalid": "Invalid model ID format (only letters, numbers, dots, hyphens, underscores, slashes and colons allowed)",
-        "modelIdDuplicate": "Model ID already exists"
+        "modelIdDuplicate": "Model ID already exists",
+        "envVarsTitle": "Environment Variables",
+        "messageEnvLabel": "Message Environment Variables",
+        "messageEnvHint": "Custom environment variables injected into the Codex message subprocess",
+        "mcpEnvLabel": "MCP Environment Variables",
+        "mcpEnvHint": "Custom environment variables injected into the MCP tool discovery subprocess",
+        "envKeyPlaceholder": "ENV_KEY",
+        "envValuePlaceholder": "value",
+        "addEnvVar": "Add Variable",
+        "envKeyInvalid": "Invalid key name (must start with letter/underscore, alphanumeric only)",
+        "envKeyProtected": "Cannot set built-in variable: {{key}}",
+        "envKeyDuplicate": "Duplicate key: {{key}}",
+        "envValueTooLong": "變數值過長（最大 {{max}} 字元）"
       }
     },
     "agent": {
@@ -601,6 +662,16 @@
     "confirmDelete": "確認刪除",
     "deleteMessage": "確定要刪除這個會話嗎?此操作無法撤銷。",
     "deleteSession": "刪除此會話",
+    "selectMode": "多選",
+    "exitSelectMode": "退出多選",
+    "selectedSessions": "已選擇 {{count}} 個會話",
+    "selectAll": "全選",
+    "clearSelection": "清除",
+    "deleteSelected": "刪除所選",
+    "confirmDeleteSelected": "確認刪除",
+    "deleteSelectedMessage": "確定要刪除選中的 {{count}} 個會話嗎?此操作無法撤銷。",
+    "selectSession": "選擇會話",
+    "selectSessionWithTitle": "選擇 {{title}}",
     "exportSession": "匯出會話",
     "exportSuccess": "會話已匯出",
     "exportFailed": "匯出失敗",
@@ -623,6 +694,9 @@
     "cancelEditButton": "取消",
     "titleTooLong": "標題過長（最多50個字元）",
     "titleUpdated": "標題已更新",
+    "copySessionId": "複製會話ID用於CLI恢復",
+    "sessionIdCopied": "會話ID已複製",
+    "copyFailed": "複製失敗",
     "timeAgo": {
       "yearsAgo": "年前",
       "monthsAgo": "個月前",
@@ -706,6 +780,12 @@
     "clickToCopy": "點選複製",
     "switch": "切換",
     "switchProvider": "切換供應商",
+    "runtimeProvider": {
+      "title": "切換當前供應商",
+      "loading": "正在載入供應商...",
+      "empty": "暫無可用供應商",
+      "switched": "已切換到 {{provider}}"
+    },
     "link": "連結"
   },
   "markdown": {
@@ -1133,11 +1213,11 @@
         "description": "Sonnet 4.6 · 預設推薦模型"
       },
       "opus46": {
-        "label": "Opus 4.6",
-        "description": "Opus 4.6 · 最新最強大的模型"
+        "label": "Opus 4.7",
+        "description": "Opus 4.7 · 最新最強大的模型"
       },
       "opus46_1m": {
-        "label": "Opus (1M 上下文)",
+        "label": "Opus 4.6",
         "description": "Opus 4.6 長對話模式"
       },
       "haiku45": {
@@ -1145,25 +1225,47 @@
         "description": "Haiku 4.5 · 速度最快，適合快速回覆"
       }
     },
+    "longContext": {
+      "label": "1M",
+      "shortLabel": "1M上下文",
+      "tooltipEnabled": "開啟/關閉1M上下文",
+      "tooltipDisabled": "Haiku不支援1M上下文"
+    },
     "codex": {
       "gpt53codex": {
-        "label": "gpt-5.3-codex",
+        "label": "GPT-5.3-Codex",
         "description": "最新前沿智慧編程模型，能力全面增強"
       },
+      "gpt55": {
+        "label": "GPT-5.5",
+        "description": "最新前沿模型，能力進一步增強"
+      },
       "gpt54": {
-        "label": "gpt-5.4",
+        "label": "GPT-5.4",
         "description": "最新前沿模型，能力進一步增強"
       },
       "gpt52codex": {
-        "label": "gpt-5.2-codex",
-        "description": "最新前沿智慧編程模型"
+        "label": "GPT-5.2-Codex",
+        "description": "前沿智慧編程模型"
       },
       "gpt51codexMax": {
-        "label": "gpt-5.1-codex-max",
+        "label": "GPT-5.1-Codex-Max",
         "description": "針對Codex優化的旗艦模型，深度與快速推理兼備"
       },
+      "gpt54mini": {
+        "label": "GPT-5.4-Mini",
+        "description": "更輕量的前沿智慧編程模型"
+      },
+      "gpt53codexSpark": {
+        "label": "GPT-5.3-Codex-Spark",
+        "description": "超高速編程模型"
+      },
+      "gpt52": {
+        "label": "GPT-5.2",
+        "description": "針對專業工作與長程代理任務優化"
+      },
       "gpt51codexMini": {
-        "label": "gpt-5.1-codex-mini",
+        "label": "GPT-5.1-Codex-Mini",
         "description": "針對Codex優化。更便宜、更快，但性能較差"
       }
     }

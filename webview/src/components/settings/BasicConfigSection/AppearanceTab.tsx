@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import styles from './style.module.less';
 import { useTranslation } from 'react-i18next';
 import type { DiffThemeMode } from '../../../utils/diffTheme';
+import type { UiFontConfig } from '../hooks/useSettingsBasicActions';
 
 // Preset colors (module-level constants to avoid recreating on each render)
 const DARK_PRESETS = [
@@ -54,6 +55,14 @@ const USER_MSG_LIGHT_PRESETS = [
 
 const DEFAULT_DARK_USER_MSG = '#005fb8';
 const DEFAULT_LIGHT_USER_MSG = '#0078d4';
+const UI_FONT_SELECT_ID = 'settings-ui-font-select';
+const UI_FONT_CUSTOM_PATH_ID = 'settings-ui-font-custom-path';
+
+const NODE_PATH_SECTION_STYLE: React.CSSProperties = { marginTop: 12 };
+
+function getSwatchStyle(color: string): React.CSSProperties {
+  return { backgroundColor: color };
+}
 
 const SunIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -92,6 +101,10 @@ export interface AppearanceTabProps {
     fontSize: number;
     lineSpacing: number;
   };
+  uiFontConfig?: UiFontConfig;
+  onUiFontSelectionChange?: (selection: string) => void;
+  onSaveUiFontCustomPath?: (path: string) => void;
+  onBrowseUiFontFile?: () => void;
   chatBgColor?: string;
   onChatBgColorChange?: (color: string) => void;
   userMsgColor?: string;
@@ -106,6 +119,10 @@ const AppearanceTab = ({
   fontSizeLevel,
   onFontSizeLevelChange,
   editorFontConfig,
+  uiFontConfig,
+  onUiFontSelectionChange = () => {},
+  onSaveUiFontCustomPath = () => {},
+  onBrowseUiFontFile = () => {},
   chatBgColor = '',
   onChatBgColorChange = () => {},
   userMsgColor = '',
@@ -118,6 +135,11 @@ const AppearanceTab = ({
   const userMsgColorInputRef = useRef<HTMLInputElement>(null);
   const [hexInput, setHexInput] = useState(chatBgColor || '');
   const [userMsgHexInput, setUserMsgHexInput] = useState(userMsgColor || '');
+  const [selectedUiFontOption, setSelectedUiFontOption] = useState(() => {
+    if (!uiFontConfig || uiFontConfig.mode === 'followEditor') return 'followEditor';
+    return 'customFile';
+  });
+  const [customFontPathDraft, setCustomFontPathDraft] = useState(uiFontConfig?.customFontPath || '');
 
   useEffect(() => {
     setHexInput(chatBgColor || '');
@@ -126,6 +148,15 @@ const AppearanceTab = ({
   useEffect(() => {
     setUserMsgHexInput(userMsgColor || '');
   }, [userMsgColor]);
+
+  useEffect(() => {
+    if (!uiFontConfig || uiFontConfig.mode === 'followEditor') {
+      setSelectedUiFontOption('followEditor');
+    } else {
+      setSelectedUiFontOption('customFile');
+    }
+    setCustomFontPathDraft(uiFontConfig?.customFontPath || '');
+  }, [uiFontConfig]);
 
   const resolvedTheme = useMemo(() => {
     if (theme !== 'system') return theme;
@@ -197,6 +228,22 @@ const AppearanceTab = ({
   };
 
   const currentLanguage = i18n.language || 'zh';
+  const hasSavedCustomFont = Boolean(uiFontConfig?.customFontPath);
+  const isCustomUiFontSelected = selectedUiFontOption === 'customFile';
+  const isCustomPathEmpty = customFontPathDraft.trim().length === 0;
+  const currentUiFontDisplayName = uiFontConfig?.displayName || editorFontConfig?.fontFamily || '-';
+  const customFontFileName = uiFontConfig?.customFontPath
+    ? uiFontConfig.customFontPath.split(/[\\/]/).pop()
+    : '';
+  const localizedUiFontWarning = uiFontConfig?.warningCode === 'fontUnavailable'
+      ? t('settings.basic.editorFont.warningUnavailable')
+      : uiFontConfig?.warning;
+  const uiFontHint = localizedUiFontWarning
+    || (uiFontConfig?.effectiveMode === 'customFile'
+      ? t('settings.basic.editorFont.statusCustom', { font: currentUiFontDisplayName })
+      : t('settings.basic.editorFont.statusFollowEditor', {
+        font: editorFontConfig?.fontFamily || currentUiFontDisplayName,
+      }));
   const diffThemeOptions: Array<{ value: DiffThemeMode; label: string; desc: string }> = [
     {
       value: 'follow',
@@ -238,6 +285,26 @@ const AppearanceTab = ({
     i18n.changeLanguage(language);
     localStorage.setItem('language', language);
     localStorage.setItem('languageManuallySet', 'true');
+  };
+
+  const handleUiFontSelectionChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const nextSelection = event.target.value;
+    setSelectedUiFontOption(nextSelection);
+
+    if (nextSelection === 'customFile') {
+      // Only notify backend when a custom font path was previously saved;
+      // otherwise the user must first enter/browse a path and click Save.
+      if (hasSavedCustomFont) {
+        onUiFontSelectionChange(nextSelection);
+      }
+      return;
+    }
+
+    onUiFontSelectionChange(nextSelection);
+  };
+
+  const handleSaveCustomUiFontPath = () => {
+    onSaveUiFontCustomPath(customFontPathDraft.trim());
   };
 
   return (
@@ -321,18 +388,72 @@ const AppearanceTab = ({
         </select>
       </div>
 
-      {/* IDEA editor font display - read only */}
+      {/* UI font selector */}
       <div className={styles.editorFontSection}>
         <div className={styles.fieldHeader}>
           <span className="codicon codicon-symbol-text" />
-          <span className={styles.fieldLabel}>{t('settings.basic.editorFont.label')}</span>
+          <label className={styles.fieldLabel} htmlFor={UI_FONT_SELECT_ID}>
+            {t('settings.basic.editorFont.label')}
+          </label>
         </div>
-        <div className={styles.fontInfoDisplay}>
-          {editorFontConfig?.fontFamily || '-'}
-        </div>
+        <select
+          id={UI_FONT_SELECT_ID}
+          aria-label={t('settings.basic.editorFont.label')}
+          className={styles.languageSelect}
+          value={selectedUiFontOption}
+          onChange={handleUiFontSelectionChange}
+        >
+          <option value="followEditor">
+            {t('settings.basic.editorFont.followOption', { font: editorFontConfig?.fontFamily || '-' })}
+          </option>
+          <option value="customFile">
+            {customFontFileName
+              ? `${t('settings.basic.editorFont.customOption')} / ${customFontFileName}`
+              : t('settings.basic.editorFont.customOption')}
+          </option>
+        </select>
+
+        {isCustomUiFontSelected && (
+          <div className={styles.nodePathSection} style={NODE_PATH_SECTION_STYLE}>
+            <div className={styles.fieldHeader}>
+              <span className="codicon codicon-file-media" />
+              <label className={styles.fieldLabel} htmlFor={UI_FONT_CUSTOM_PATH_ID}>
+                {t('settings.basic.editorFont.customPathLabel')}
+              </label>
+            </div>
+            <div className={styles.nodePathInputWrapper}>
+              <input
+                id={UI_FONT_CUSTOM_PATH_ID}
+                type="text"
+                className={styles.nodePathInput}
+                placeholder={t('settings.basic.editorFont.customPathPlaceholder')}
+                value={customFontPathDraft}
+                onChange={(event) => setCustomFontPathDraft(event.target.value)}
+              />
+              <button
+                type="button"
+                className={styles.saveBtn}
+                onClick={onBrowseUiFontFile}
+                aria-label={t('settings.basic.editorFont.browse')}
+                title={t('settings.basic.editorFont.browse')}
+              >
+                <span className="codicon codicon-folder-opened" />
+              </button>
+              <button
+                type="button"
+                className={styles.saveBtn}
+                onClick={handleSaveCustomUiFontPath}
+                disabled={isCustomPathEmpty}
+              >
+                {t('common.save')}
+              </button>
+            </div>
+          </div>
+        )}
+
         <small className={styles.formHint}>
           <span className="codicon codicon-info" />
-          <span>{t('settings.basic.editorFont.hint')}</span>
+          <span>{uiFontHint}</span>
         </small>
       </div>
 
@@ -382,7 +503,7 @@ const AppearanceTab = ({
             >
               <div
                 className={styles.colorSwatchInner}
-                style={{ backgroundColor: preset.color }}
+                style={getSwatchStyle(preset.color)}
               />
             </div>
           ))}
@@ -396,7 +517,7 @@ const AppearanceTab = ({
           >
             <div
               className={styles.colorPickerPreview}
-              style={{ backgroundColor: chatBgColor || defaultBgColor }}
+              style={getSwatchStyle(chatBgColor || defaultBgColor)}
             />
             <input
               ref={colorInputRef}
@@ -458,7 +579,7 @@ const AppearanceTab = ({
             >
               <div
                 className={styles.colorSwatchInner}
-                style={{ backgroundColor: preset.color }}
+                style={getSwatchStyle(preset.color)}
               />
             </div>
           ))}
@@ -472,7 +593,7 @@ const AppearanceTab = ({
           >
             <div
               className={styles.colorPickerPreview}
-              style={{ backgroundColor: userMsgColor || defaultUserMsgColor }}
+              style={getSwatchStyle(userMsgColor || defaultUserMsgColor)}
             />
             <input
               ref={userMsgColorInputRef}

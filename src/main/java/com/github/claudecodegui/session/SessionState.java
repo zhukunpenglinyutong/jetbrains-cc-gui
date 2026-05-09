@@ -1,6 +1,5 @@
 package com.github.claudecodegui.session;
 
-import com.github.claudecodegui.session.ClaudeSession;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -62,8 +61,8 @@ public class SessionState {
     private volatile String permissionMode = "bypassPermissions";
     private volatile String model = "claude-sonnet-4-6";
     private volatile String provider = "claude";
-    // Codex reasoning effort (thinking depth)
-    private volatile String reasoningEffort = "medium";
+    // Reasoning effort (thinking depth)
+    private volatile String reasoningEffort = "high";
 
     // Slash commands — volatile for cross-thread visibility (same reason as permissionMode/model/provider)
     private volatile List<String> slashCommands = new ArrayList<>();

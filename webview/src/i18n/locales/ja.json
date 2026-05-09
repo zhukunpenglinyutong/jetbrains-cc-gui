@@ -87,7 +87,7 @@
     "attachmentFile": "[添付ファイル: {{fileName}}]",
     "unknownFile": "Unknown file",
     "attachmentsUploaded": "[添付ファイルがアップロードされました]",
-    "streamingConnected": "Claudeに接続しました、質問を理解しています",
+    "streamingConnected": "{{provider}}に接続しました、質問を理解しています",
     "showEarlierMessages": "以前の{{count}}件のメッセージを表示",
     "totalDuration": "今回の応答時間"
   },
@@ -146,8 +146,16 @@
         "level6": "最大 (140%)"
       },
       "editorFont": {
-        "label": "フォント (エディタフォントに従う)",
-        "hint": "ここでは編集できません。変更するには、IDEA設定 → エディタ → フォントに移動してください(プラグインフォントを有効にするにはIDEAを再起動してください)"
+        "label": "フォント",
+        "hint": "ここではプラグインUIのフォントを変更します。文字サイズと行間は引き続きエディタに従います。",
+        "followOption": "エディタに従う ({{font}})",
+        "customOption": "カスタムフォントファイル",
+        "customPathLabel": "フォントファイルのパス",
+        "customPathPlaceholder": ".ttf / .otf フォントファイルのパスを選択または入力",
+        "browse": "参照",
+        "warningUnavailable": "フォントを利用できないため、現在はエディタフォントを使用しています",
+        "statusFollowEditor": "現在はエディタフォントを使用中: {{font}}",
+        "statusCustom": "現在はカスタムフォントを使用中: {{font}}"
       },
       "streaming": {
         "label": "Streaming",
@@ -161,11 +169,31 @@
         "disabled": "無効",
         "hint": "有効にすると、プロジェクトツリーでファイルを選択した際に自動的にファイルパスを AI に送信します（注意：ファイルパスのみ送信され、ファイル内容は送信されません）。無効時は手動操作が必要です。"
       },
+      "promptEnhancer": {
+        "label": "Prompt Enhancer",
+        "modelLabel": "Enhancer Model",
+        "resetToDefault": "Restore Default",
+        "providerAvailable": "Available",
+        "providerUnavailable": "Currently unavailable",
+        "provider": {
+          "claude": "Claude Code",
+          "codex": "Codex"
+        },
+        "currentProviderAuto": "Currently using automatic selection: {{provider}}",
+        "currentProviderManual": "Currently using manually selected provider: {{provider}}",
+        "currentProviderUnavailable": "The selected provider is currently unavailable: {{provider}}"
+      },
       "diffExpanded": {
         "label": "差分をデフォルトで展開",
         "enabled": "展開",
         "disabled": "折りたたみ",
         "hint": "有効にすると、チャット内のコード差分がデフォルトで展開表示されます。無効の場合、差分は折りたたまれた状態で表示されます。"
+      },
+      "taskCompletionNotification": {
+        "label": "タスク完了通知",
+        "enabled": "有効",
+        "disabled": "無効",
+        "hint": "有効にすると、AIタスクが完了した時にシステム通知を表示します。無効の場合、通知は表示されません。"
       },
       "sendShortcut": {
         "label": "送信ショートカット",
@@ -232,9 +260,23 @@
     "mcpDesc": "Model Context Protocolサーバーを設定および管理",
     "permissions": "権限",
     "permissionsDesc": "Claude Codeのファイルアクセスおよび操作権限を管理",
+    "promptEnhancer": {
+      "title": "Prompt Enhancer",
+      "description": "Choose which provider and model should be used when enhancing prompts before sending them."
+    },
     "commit": {
       "title": "Commit AI",
       "description": "Configure AI-generated Git commit message behavior",
+      "providerModel": {
+        "label": "コミットモデルプロバイダー",
+        "modelLabel": "コミットモデル",
+        "resetToDefault": "リセット",
+        "providerAvailable": "利用可能",
+        "providerUnavailable": "利用不可",
+        "currentProviderAuto": "現在自動選択を使用中：{{provider}}",
+        "currentProviderManual": "現在手動選択したプロバイダーを使用中：{{provider}}",
+        "currentProviderUnavailable": "選択したプロバイダーは現在利用できません：{{provider}}"
+      },
       "prompt": {
         "label": "Additional Prompt",
         "placeholder": "Add your extra requirements here, e.g., generate commit in English, include issue number, etc...",
@@ -294,6 +336,12 @@
           "hoursAgo": "{{count}}時間前",
           "minutesAgo": "{{count}}分前"
         }
+      },
+      "aiTitleGeneration": {
+        "label": "AI セッションタイトル自動生成",
+        "enabled": "有効",
+        "disabled": "無効",
+        "hint": "有効にすると、新しいセッションの最初の応答後に Haiku モデルで短いタイトルを自動生成します。無効の場合は最初のメッセージがタイトルとして使われます。"
       }
     },
     "codexFeatureUnavailable": "Codexではこの設定セクションは未対応です。Claude Codeに切り替えてください。",
@@ -478,6 +526,7 @@
         "deepseek": "DeepSeek",
         "minimax": "MiniMax",
         "xiaomi": "Xiaomi MiMo",
+        "xiaomiPlan": "Xiaomi MiMo Plan",
         "qwen": "Alibaba Qwen",
         "openrouter": "OpenRouter"
       }
@@ -525,7 +574,19 @@
         "cliLoginDisableMessage": "以前の config.toml を復元し、API Key 認証に切り替えます。",
         "modelIdRequired": "Model ID is required",
         "modelIdInvalid": "Invalid model ID format (only letters, numbers, dots, hyphens, underscores, slashes and colons allowed)",
-        "modelIdDuplicate": "Model ID already exists"
+        "modelIdDuplicate": "Model ID already exists",
+        "envVarsTitle": "Environment Variables",
+        "messageEnvLabel": "Message Environment Variables",
+        "messageEnvHint": "Custom environment variables injected into the Codex message subprocess",
+        "mcpEnvLabel": "MCP Environment Variables",
+        "mcpEnvHint": "Custom environment variables injected into the MCP tool discovery subprocess",
+        "envKeyPlaceholder": "ENV_KEY",
+        "envValuePlaceholder": "value",
+        "addEnvVar": "Add Variable",
+        "envKeyInvalid": "Invalid key name (must start with letter/underscore, alphanumeric only)",
+        "envKeyProtected": "Cannot set built-in variable: {{key}}",
+        "envKeyDuplicate": "Duplicate key: {{key}}",
+        "envValueTooLong": "値が長すぎます（最大 {{max}} 文字）"
       }
     },
     "agent": {
@@ -601,6 +662,16 @@
     "confirmDelete": "削除を確認",
     "deleteMessage": "このセッションを削除してもよろしいですか? この操作は元に戻せません。",
     "deleteSession": "このセッションを削除",
+    "selectMode": "Select",
+    "exitSelectMode": "Exit selection",
+    "selectedSessions": "{{count}} selected",
+    "selectAll": "Select all",
+    "clearSelection": "Clear",
+    "deleteSelected": "Delete selected",
+    "confirmDeleteSelected": "Confirm Delete",
+    "deleteSelectedMessage": "Are you sure you want to delete {{count}} selected sessions? This action cannot be undone.",
+    "selectSession": "Select session",
+    "selectSessionWithTitle": "Select {{title}}",
     "exportSession": "セッションをエクスポート",
     "exportSuccess": "セッションがエクスポートされました",
     "exportFailed": "エクスポート失敗",
@@ -623,6 +694,9 @@
     "cancelEditButton": "キャンセル",
     "titleTooLong": "タイトルが長すぎます(最大50文字)",
     "titleUpdated": "タイトルが更新されました",
+    "copySessionId": "CLI resume用にセッションIDをコピー",
+    "sessionIdCopied": "セッションIDをコピーしました",
+    "copyFailed": "コピーに失敗しました",
     "timeAgo": {
       "yearsAgo": "年前",
       "monthsAgo": "ヶ月前",
@@ -706,6 +780,12 @@
     "clickToCopy": "クリックしてコピー",
     "switch": "切り替え",
     "switchProvider": "プロバイダーを切り替え",
+    "runtimeProvider": {
+      "title": "現在のプロバイダーを切り替え",
+      "loading": "プロバイダーを読み込み中...",
+      "empty": "利用可能なプロバイダーがありません",
+      "switched": "{{provider}} に切り替えました"
+    },
     "link": "リンク"
   },
   "markdown": {
@@ -1127,17 +1207,23 @@
   },
   "models": {
     "addModel": "モデル追加",
+    "longContext": {
+      "label": "1M",
+      "shortLabel": "1Mコンテキスト",
+      "tooltipEnabled": "1Mコンテキストウィンドウをオン/オフ",
+      "tooltipDisabled": "Haikuでは1Mコンテキストは利用できません"
+    },
     "claude": {
       "sonnet46": {
         "label": "Sonnet 4.6",
         "description": "Sonnet 4.6 · デフォルトモデルを使用"
       },
       "opus46": {
-        "label": "Opus 4.6",
-        "description": "Opus 4.6 · 最新かつ最も優れたモデル"
+        "label": "Opus 4.7",
+        "description": "Opus 4.7 · 最新かつ最も優れたモデル"
       },
       "opus46_1m": {
-        "label": "Opus (1M コンテキスト)",
+        "label": "Opus 4.6",
         "description": "Opus 4.6 長時間セッション向け"
       },
       "haiku45": {
@@ -1147,23 +1233,39 @@
     },
     "codex": {
       "gpt53codex": {
-        "label": "gpt-5.3-codex",
+        "label": "GPT-5.3-Codex",
         "description": "最新の最先端エージェントコーディングモデル（機能強化版）"
       },
+      "gpt55": {
+        "label": "GPT-5.5",
+        "description": "最新のフロンティアモデル。能力がさらに向上"
+      },
       "gpt54": {
-        "label": "gpt-5.4",
+        "label": "GPT-5.4",
         "description": "拡張された能力を備えた最新の最先端モデル"
       },
       "gpt52codex": {
-        "label": "gpt-5.2-codex",
-        "description": "最新の最先端エージェントコーディングモデル"
+        "label": "GPT-5.2-Codex",
+        "description": "最先端のエージェントコーディングモデル"
       },
       "gpt51codexMax": {
-        "label": "gpt-5.1-codex-max",
+        "label": "GPT-5.1-Codex-Max",
         "description": "Codex最適化のフラッグシップ、深い推論と高速処理を両立"
       },
+      "gpt54mini": {
+        "label": "GPT-5.4-Mini",
+        "description": "より軽量な最先端エージェントコーディングモデル"
+      },
+      "gpt53codexSpark": {
+        "label": "GPT-5.3-Codex-Spark",
+        "description": "超高速コーディングモデル"
+      },
+      "gpt52": {
+        "label": "GPT-5.2",
+        "description": "プロ向け作業と長時間エージェント向けに最適化"
+      },
       "gpt51codexMini": {
-        "label": "gpt-5.1-codex-mini",
+        "label": "GPT-5.1-Codex-Mini",
         "description": "Codex用に最適化。より安価で高速ですが、性能は低下"
       }
     }

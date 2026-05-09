@@ -13,7 +13,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
@@ -477,13 +476,13 @@ public class NodeDetector {
         String nodeFileName = PlatformUtils.isWindows() ? "node.exe" : "node";
 
         for (String dir : paths) {
-            if (dir == null || dir.isEmpty()) continue;
+            if (dir == null || dir.isEmpty()) { continue; }
 
             File nodeFile = new File(dir, nodeFileName);
             String nodePath = nodeFile.getAbsolutePath();
             triedPaths.add(nodePath);
 
-            if (!nodeFile.exists()) continue;
+            if (!nodeFile.exists()) { continue; }
 
             String version = verifyNodePath(nodePath);
             if (version != null) {
@@ -594,7 +593,7 @@ public class NodeDetector {
      * For example: %USERPROFILE%\\.nvm -> C:\Users\xxx\.nvm
      */
     private String expandWindowsEnvVars(String path) {
-        if (path == null) return null;
+        if (path == null) { return null; }
 
         String result = path;
 
@@ -746,6 +745,17 @@ public class NodeDetector {
         if (path == null || path.isEmpty()) {
             clearCache();
             return NodeDetectionResult.failure("未指定 Node.js 路径");
+        }
+        // Check binary name before attempting execution
+        if (!isValidNodeBinaryName(path)) {
+            String hint = PlatformUtils.isWindows()
+                    ? "Windows 下路径必须以 node.exe 结尾，例如：C:\\Program Files\\nodejs\\node.exe"
+                    : "路径必须以 node 结尾，例如：/usr/local/bin/node";
+            return NodeDetectionResult.failure("路径格式无效：" + hint);
+        }
+        // Check file existence before attempting execution
+        if (!"node".equals(path) && !new File(path).exists()) {
+            return NodeDetectionResult.failure("文件不存在，请检查路径是否正确：" + path);
         }
         String version = verifyNodePath(path);
         NodeDetectionResult result;

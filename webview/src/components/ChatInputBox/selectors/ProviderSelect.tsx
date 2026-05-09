@@ -4,6 +4,24 @@ import { useTranslation } from 'react-i18next';
 import { AVAILABLE_PROVIDERS } from '../types';
 import { ProviderModelIcon } from '../../shared/ProviderModelIcon';
 
+const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
+const CHEVRON_ICON_STYLE: React.CSSProperties = { fontSize: '10px', marginLeft: '2px' };
+const DROPDOWN_STYLE: React.CSSProperties = {
+  position: 'absolute',
+  bottom: '100%',
+  left: 0,
+  marginBottom: '4px',
+  zIndex: 10000,
+};
+const TOAST_STYLE: React.CSSProperties = { zIndex: 20000 };
+
+function getProviderOptionStyle(enabled: boolean): React.CSSProperties {
+  return {
+    opacity: enabled ? 1 : 0.5,
+    cursor: enabled ? 'pointer' : 'not-allowed',
+  };
+}
+
 interface ProviderSelectProps {
   value: string;
   onChange?: (providerId: string) => void;
@@ -100,7 +118,7 @@ export const ProviderSelect = ({ value, onChange, compact = false }: ProviderSel
 
   return (
     <>
-      <div style={{ position: 'relative', display: 'inline-block' }}>
+      <div style={RELATIVE_INLINE_BLOCK_STYLE}>
         <button
           ref={buttonRef}
           className={`selector-button${compact ? ' provider-compact' : ''}`}
@@ -111,7 +129,7 @@ export const ProviderSelect = ({ value, onChange, compact = false }: ProviderSel
           {!compact && (
             <>
               <span>{getProviderLabel(currentProvider.id)}</span>
-              <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={{ fontSize: '10px', marginLeft: '2px' }} />
+              <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={CHEVRON_ICON_STYLE} />
             </>
           )}
         </button>
@@ -120,23 +138,14 @@ export const ProviderSelect = ({ value, onChange, compact = false }: ProviderSel
           <div
             ref={dropdownRef}
             className="selector-dropdown"
-            style={{
-              position: 'absolute',
-              bottom: '100%',
-              left: 0,
-              marginBottom: '4px',
-              zIndex: 10000,
-            }}
+            style={DROPDOWN_STYLE}
           >
             {AVAILABLE_PROVIDERS.map((provider) => (
               <div
                 key={provider.id}
                 className={`selector-option ${provider.id === value ? 'selected' : ''} ${!provider.enabled ? 'disabled' : ''}`}
                 onClick={() => handleSelect(provider.id)}
-                style={{
-                  opacity: provider.enabled ? 1 : 0.5,
-                  cursor: provider.enabled ? 'pointer' : 'not-allowed',
-                }}
+                style={getProviderOptionStyle(!!provider.enabled)}
               >
                 <ProviderModelIcon providerId={provider.id} size={16} colored />
                 <span>{getProviderLabel(provider.id)}</span>
@@ -151,7 +160,7 @@ export const ProviderSelect = ({ value, onChange, compact = false }: ProviderSel
 
       {/* Toast message */}
       {showToast && createPortal(
-        <div className="selector-toast" style={{ zIndex: 20000 }}>
+        <div className="selector-toast" style={TOAST_STYLE}>
           {toastMessage}
         </div>,
         document.body

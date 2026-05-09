@@ -24,6 +24,70 @@ const MAX_VISIBLE_ITEMS = 3;
 /** Height per item in pixels */
 const ITEM_HEIGHT = 28;
 
+const TITLE_SECTION_STYLE: React.CSSProperties = { overflow: 'hidden' };
+
+const TITLE_TEXT_STYLE: React.CSSProperties = { flexShrink: 0 };
+
+const TITLE_SUMMARY_STYLE: React.CSSProperties = {
+  color: 'var(--text-secondary)',
+  marginLeft: '4px',
+  flexShrink: 0,
+};
+
+const FILE_LIST_ITEM_STYLE: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  padding: '4px 8px',
+  borderRadius: '4px',
+  minHeight: `${ITEM_HEIGHT}px`,
+  flexShrink: 0,
+  gap: '6px',
+};
+
+const TOOL_ICON_STYLE: React.CSSProperties = {
+  fontSize: '14px',
+  color: 'var(--text-secondary)',
+  flexShrink: 0,
+  width: '16px',
+  textAlign: 'center',
+};
+
+const PATTERN_STYLE: React.CSSProperties = {
+  fontSize: '12px',
+  fontFamily: 'var(--idea-editor-font-family, monospace)',
+  color: 'var(--text-primary)',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  flex: 1,
+  minWidth: 0,
+};
+
+const FALLBACK_TEXT_STYLE: React.CSSProperties = {
+  fontSize: '12px',
+  color: 'var(--text-secondary)',
+  flex: 1,
+};
+
+const STATUS_INDICATOR_STYLE: React.CSSProperties = {
+  marginLeft: 'auto',
+  flexShrink: 0,
+};
+
+function getPathStyle(hasPattern: boolean): React.CSSProperties {
+  return {
+    fontSize: '11px',
+    color: 'var(--text-tertiary, var(--text-secondary))',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    flexShrink: 1,
+    minWidth: 0,
+    maxWidth: hasPattern ? '40%' : undefined,
+    opacity: 0.8,
+  };
+}
+
 /**
  * Get codicon class for search tool type
  */
@@ -94,25 +158,34 @@ const SearchToolGroupBlock = ({ items }: SearchToolGroupBlockProps) => {
     ? MAX_VISIBLE_ITEMS * ITEM_HEIGHT
     : searchItems.length * ITEM_HEIGHT;
 
+  const headerStyle: React.CSSProperties = {
+    borderBottom: expanded ? '1px solid var(--border-primary)' : undefined,
+  };
+
+  const detailsStyle: React.CSSProperties = {
+    padding: '6px 8px',
+    border: 'none',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0',
+    maxHeight: `${listHeight + 12}px`,
+    overflowY: needsScroll ? 'auto' : 'hidden',
+    overflowX: 'hidden',
+  };
+
   return (
     <div className="task-container">
       <div
         className="task-header"
         onClick={() => setExpanded((prev) => !prev)}
-        style={{
-          borderBottom: expanded ? '1px solid var(--border-primary)' : undefined,
-        }}
+        style={headerStyle}
       >
-        <div className="task-title-section" style={{ overflow: 'hidden' }}>
+        <div className="task-title-section" style={TITLE_SECTION_STYLE}>
           <span className="codicon codicon-search tool-title-icon" />
-          <span className="tool-title-text" style={{ flexShrink: 0 }}>
+          <span className="tool-title-text" style={TITLE_TEXT_STYLE}>
             {t('tools.searchBatchTitle')}
           </span>
-          <span className="tool-title-summary" style={{
-            color: 'var(--text-secondary)',
-            marginLeft: '4px',
-            flexShrink: 0,
-          }}>
+          <span className="tool-title-summary" style={TITLE_SUMMARY_STYLE}>
             ({searchItems.length})
           </span>
         </div>
@@ -122,90 +195,38 @@ const SearchToolGroupBlock = ({ items }: SearchToolGroupBlockProps) => {
         <div
           ref={listRef}
           className="task-details file-list-container"
-          style={{
-            padding: '6px 8px',
-            border: 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0',
-            maxHeight: `${listHeight + 12}px`,
-            overflowY: needsScroll ? 'auto' : 'hidden',
-            overflowX: 'hidden',
-          }}
+          style={detailsStyle}
         >
           {searchItems.map((item, index) => (
             <div
               key={index}
               className="file-list-item"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                padding: '4px 8px',
-                borderRadius: '4px',
-                minHeight: `${ITEM_HEIGHT}px`,
-                flexShrink: 0,
-                gap: '6px',
-              }}
+              style={FILE_LIST_ITEM_STYLE}
               title={item.pattern ? `${item.pattern}${item.path ? ` → ${item.path}` : ''}` : item.path}
             >
               {/* Tool type icon */}
               <span
                 className={`codicon ${getSearchToolIcon(item.toolName)}`}
-                style={{
-                  fontSize: '14px',
-                  color: 'var(--text-secondary)',
-                  flexShrink: 0,
-                  width: '16px',
-                  textAlign: 'center',
-                }}
+                style={TOOL_ICON_STYLE}
               />
 
               {/* Pattern */}
               {item.pattern && (
-                <span
-                  style={{
-                    fontSize: '12px',
-                    fontFamily: 'var(--idea-editor-font-family, monospace)',
-                    color: 'var(--text-primary)',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    flex: 1,
-                    minWidth: 0,
-                  }}
-                >
+                <span style={PATTERN_STYLE}>
                   {truncate(item.pattern)}
                 </span>
               )}
 
               {/* Path */}
               {item.path && (
-                <span
-                  style={{
-                    fontSize: '11px',
-                    color: 'var(--text-tertiary, var(--text-secondary))',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    flexShrink: 1,
-                    minWidth: 0,
-                    maxWidth: item.pattern ? '40%' : undefined,
-                    opacity: 0.8,
-                  }}
-                >
+                <span style={getPathStyle(!!item.pattern)}>
                   {item.path}
                 </span>
               )}
 
               {/* No pattern, show path as primary */}
               {!item.pattern && !item.path && (
-                <span
-                  style={{
-                    fontSize: '12px',
-                    color: 'var(--text-secondary)',
-                    flex: 1,
-                  }}
-                >
+                <span style={FALLBACK_TEXT_STYLE}>
                   {item.toolName}
                 </span>
               )}
@@ -213,7 +234,7 @@ const SearchToolGroupBlock = ({ items }: SearchToolGroupBlockProps) => {
               {/* Status indicator */}
               <div
                 className={`tool-status-indicator ${item.isError ? 'error' : item.isCompleted ? 'completed' : 'pending'}`}
-                style={{ marginLeft: 'auto', flexShrink: 0 }}
+                style={STATUS_INDICATOR_STYLE}
               />
             </div>
           ))}

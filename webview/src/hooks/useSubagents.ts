@@ -1,12 +1,15 @@
 import { useMemo } from 'react';
-import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock, SubagentInfo, SubagentStatus } from '../types';
+import type { ClaudeMessage, ClaudeRawMessage, ClaudeContentBlock, ToolResultBlock, SubagentInfo, SubagentStatus } from '../types';
 import { normalizeToolInput } from '../utils/toolInputNormalization';
 import { normalizeToolName } from '../utils/toolConstants';
+
+type GetToolResultRawFn = (toolUseId: string) => ClaudeRawMessage | null;
 
 interface UseSubagentsParams {
   messages: ClaudeMessage[];
   getContentBlocks: (message: ClaudeMessage) => ClaudeContentBlock[];
   findToolResult: (toolUseId?: string, messageIndex?: number) => ToolResultBlock | null;
+  getToolResultRaw: GetToolResultRawFn;
 }
 
 /**
@@ -22,10 +25,53 @@ function determineStatus(result: ToolResultBlock | null): SubagentStatus {
   return 'completed';
 }
 
+function extractResultText(result: ToolResultBlock | null): string | undefined {
+  if (!result) return undefined;
+  if (typeof result.content === 'string') return result.content;
+  if (!Array.isArray(result.content)) return undefined;
+  const text = result.content
+    .map((item) => (item && typeof item.text === 'string' ? item.text : ''))
+    .filter(Boolean)
+    .join('\n');
+  return text || undefined;
+}
+
+function extractResultMetadata(
+  result: ToolResultBlock | null,
+  getToolResultRaw: GetToolResultRawFn,
+  toolUseId: string,
+): Partial<SubagentInfo> {
+  const rawMessage = getToolResultRaw(toolUseId);
+  const metadata = rawMessage?.toolUseResult;
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return { resultText: extractResultText(result) };
+  }
+
+  const record = metadata as Record<string, unknown>;
+  const getString = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : undefined);
+  const getNumber = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : undefined);
+  const toolStats = record.toolStats && typeof record.toolStats === 'object' && !Array.isArray(record.toolStats)
+    ? Object.fromEntries(
+      Object.entries(record.toolStats as Record<string, unknown>)
+        .filter((entry): entry is [string, number] => typeof entry[1] === 'number' && Number.isFinite(entry[1])),
+    )
+    : undefined;
+
+  return {
+    agentId: getString(record.agentId),
+    totalDurationMs: getNumber(record.totalDurationMs),
+    totalTokens: getNumber(record.totalTokens),
+    totalToolUseCount: getNumber(record.totalToolUseCount),
+    toolStats,
+    resultText: extractResultText(result),
+  };
+}
+
 export function extractSubagentsFromMessages(
   messages: ClaudeMessage[],
   getContentBlocks: (message: ClaudeMessage) => ClaudeContentBlock[],
   findToolResult: (toolUseId?: string, messageIndex?: number) => ToolResultBlock | null,
+  getToolResultRaw: GetToolResultRawFn,
 ): SubagentInfo[] {
   const subagents: SubagentInfo[] = [];
 
@@ -53,8 +99,10 @@ export function extractSubagentsFromMessages(
       const prompt = String((input.prompt as string) ?? '');
 
       // Check tool result to determine status
-      const result = findToolResult(block.id, messageIndex);
+      const toolUseId = block.id ?? '';
+      const result = findToolResult(toolUseId, messageIndex);
       const status = determineStatus(result);
+      const resultMetadata = extractResultMetadata(result, getToolResultRaw, toolUseId);
 
       subagents.push({
         id,
@@ -63,6 +111,7 @@ export function extractSubagentsFromMessages(
         prompt,
         status,
         messageIndex,
+        ...resultMetadata,
       });
     });
   });
@@ -77,9 +126,10 @@ export function useSubagents({
   messages,
   getContentBlocks,
   findToolResult,
+  getToolResultRaw,
 }: UseSubagentsParams): SubagentInfo[] {
   return useMemo(
-    () => extractSubagentsFromMessages(messages, getContentBlocks, findToolResult),
-    [messages, getContentBlocks, findToolResult],
+    () => extractSubagentsFromMessages(messages, getContentBlocks, findToolResult, getToolResultRaw),
+    [messages, getContentBlocks, findToolResult, getToolResultRaw],
   );
 }

@@ -1,18 +1,19 @@
 package com.github.claudecodegui.service;
 
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
-import com.github.claudecodegui.settings.CodemossSettingsService;
-import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
-import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
+import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
+import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.vcs.changes.Change;
-import com.intellij.openapi.vcs.changes.ContentRevision;
 import com.intellij.openapi.vcs.FilePath;
-import com.intellij.openapi.vcs.VcsException;
+import com.intellij.openapi.vcs.changes.Change;
 import com.intellij.openapi.vcs.changes.ChangesUtil;
+import com.intellij.openapi.vcs.changes.ContentRevision;
+import com.intellij.openapi.vcs.VcsException;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
@@ -27,18 +28,8 @@ public class GitCommitMessageService {
     private static final Logger LOG = Logger.getInstance(GitCommitMessageService.class);
 
     private static final int MAX_DIFF_LENGTH = 4000; // Limit diff length to avoid exceeding token limits
-
-    /**
-     * Default model used for commit message generation.
-     * Uses the Sonnet model for a balance between cost and quality.
-     */
-    private static final String COMMIT_MESSAGE_MODEL = "claude-sonnet-4-20250514";
-
-    /**
-     * Default AI provider.
-     * Currently defaults to Claude; may be extended to read from user settings in the future.
-     */
-    private static final String DEFAULT_PROVIDER = "claude";
+    private static final String PROVIDER_CLAUDE = "claude";
+    private static final String PROVIDER_CODEX = "codex";
 
     /**
      * Built-in commit prompt (based on CCG Commits specification).
@@ -173,16 +164,21 @@ Footer 包含：
             // 3. Call the AI SDK
             callAIService(fullPrompt, callback);
 
+        } catch (IOException e) {
+            LOG.warn("AI service call failed", e);
+            String message = e.getMessage();
+            callback.onError("AI service call failed: " + (message != null ? message : e.getClass().getSimpleName()));
         } catch (Exception e) {
             LOG.error("Failed to generate commit message", e);
-            callback.onError(e.getMessage());
+            String message = e.getMessage();
+            callback.onError(message != null ? message : e.getClass().getSimpleName());
         }
     }
 
     /**
      * Generate git diff.
      */
-    private String generateGitDiff(@NotNull Collection<Change> changes) {
+    protected String generateGitDiff(@NotNull Collection<Change> changes) {
         StringBuilder diff = new StringBuilder();
 
         for (Change change : changes) {
@@ -331,33 +327,55 @@ Footer 包含：
     /**
      * Call the AI service.
      */
-    private void callAIService(String prompt, CommitMessageCallback callback) {
-        // Get the current provider
-        String currentProvider = getCurrentProvider();
+    private void callAIService(String prompt, CommitMessageCallback callback) throws IOException {
+        JsonObject commitAiConfig = getCommitAiConfig();
+        String effectiveProvider = getResolvedCommitAiProvider(commitAiConfig);
 
-        if ("codex".equals(currentProvider)) {
-            callCodexAPI(prompt, callback);
-        } else {
-            callClaudeAPI(prompt, callback);
+        if (effectiveProvider == null) {
+            callback.onError(ClaudeCodeGuiBundle.message("commit.noAvailableProvider"));
+            return;
         }
+
+        if (PROVIDER_CODEX.equals(effectiveProvider)) {
+            callCodexAPI(prompt, getResolvedCommitAiModel(commitAiConfig, PROVIDER_CODEX), callback);
+            return;
+        }
+
+        callClaudeAPI(prompt, getResolvedCommitAiModel(commitAiConfig, PROVIDER_CLAUDE), callback);
     }
 
-    /**
-     * Get the current provider.
-     *
-     * Note: Currently always returns the default provider (claude).
-     * In the future, this can be extended to read the user's preferred provider from settings or session state.
-     */
-    private String getCurrentProvider() {
-        // Future extension: read the user's default provider from CodemossSettingsService
-        // e.g.: return settingsService.getDefaultProvider();
-        return DEFAULT_PROVIDER;
+    protected JsonObject getCommitAiConfig() throws IOException {
+        return settingsService.getCommitAiConfig();
+    }
+
+    private String getResolvedCommitAiProvider(JsonObject commitAiConfig) {
+        if (commitAiConfig == null
+                || !commitAiConfig.has("effectiveProvider")
+                || commitAiConfig.get("effectiveProvider").isJsonNull()) {
+            return null;
+        }
+        String provider = commitAiConfig.get("effectiveProvider").getAsString().trim();
+        return provider.isEmpty() ? null : provider;
+    }
+
+    private String getResolvedCommitAiModel(JsonObject commitAiConfig, String provider) {
+        if (commitAiConfig == null
+                || !commitAiConfig.has("models")
+                || !commitAiConfig.get("models").isJsonObject()) {
+            return null;
+        }
+        JsonObject models = commitAiConfig.getAsJsonObject("models");
+        if (!models.has(provider) || models.get(provider).isJsonNull()) {
+            return null;
+        }
+        String model = models.get(provider).getAsString().trim();
+        return model.isEmpty() ? null : model;
     }
 
     /**
      * Call the Claude API.
      */
-    private void callClaudeAPI(String prompt, CommitMessageCallback callback) {
+    protected void callClaudeAPI(String prompt, String model, CommitMessageCallback callback) {
         ClaudeSDKBridge bridge = new ClaudeSDKBridge();
         try {
             // Simple callback handler
@@ -374,7 +392,7 @@ Footer 包含：
                 project.getBasePath(),      // cwd
                 null,                       // attachments (not needed)
                 null,                       // permissionMode (use default)
-                COMMIT_MESSAGE_MODEL,       // model (Sonnet)
+                model,                      // model
                 null,                       // openedFiles
                 null,                       // agentPrompt
                 false,                      // streaming (non-streaming mode)
@@ -422,7 +440,7 @@ Footer 包含：
     /**
      * Call the Codex API.
      */
-    private void callCodexAPI(String prompt, CommitMessageCallback callback) {
+    protected void callCodexAPI(String prompt, String model, CommitMessageCallback callback) {
         CodexSDKBridge bridge = new CodexSDKBridge();
         try {
             // Simple callback handler
@@ -437,7 +455,7 @@ Footer 包含：
                 project.getBasePath(),      // cwd
                 null,                       // attachments (not needed)
                 null,                       // permissionMode (use default)
-                null,                       // model (use default)
+                model,                      // model
                 null,                       // agentPrompt (not needed)
                 null,                       // reasoningEffort (use default)
                 new MessageCallback() {

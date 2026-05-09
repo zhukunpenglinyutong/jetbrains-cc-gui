@@ -33,6 +33,14 @@ export interface MessageItemProps {
   onNodeRef?: (id: string, node: HTMLDivElement | null) => void;
   onNavigateToProviderSettings?: () => void;
   toolResultSignature?: string;
+  /** Current active provider id (e.g. 'claude', 'codex'); drives the streaming-connect label. */
+  currentProvider?: string;
+}
+
+/** Map provider id to a human-readable label used in UI text. */
+function getProviderDisplayName(providerId?: string): string {
+  if (providerId === 'codex') return 'Codex';
+  return 'Claude';
 }
 
 type GroupedBlock =
@@ -220,6 +228,7 @@ export const MessageItem = memo(function MessageItem({
   onNodeRef,
   onNavigateToProviderSettings,
   toolResultSignature: _toolResultSignature,
+  currentProvider,
 }: MessageItemProps): React.ReactElement {
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
   const [showStreamingConnectHint, setShowStreamingConnectHint] = useState(false);
@@ -376,7 +385,9 @@ export const MessageItem = memo(function MessageItem({
     if (isEmptyStreamingPlaceholder) {
       return (
         <div className="streaming-connect-status">
-          <span className="streaming-connect-text">{t('chat.streamingConnected')}</span>
+          <span className="streaming-connect-text">
+            {t('chat.streamingConnected', { provider: getProviderDisplayName(currentProvider) })}
+          </span>
         </div>
       );
     }
@@ -389,13 +400,18 @@ export const MessageItem = memo(function MessageItem({
             name: block.name,
             input: block.input,
             result: findToolResult(block.id, messageIndex),
+            toolId: block.id,
           };
         });
 
         if (readItems.length === 1) {
           return (
             <div key={`${messageIndex}-readgroup-${grouped.startIndex}`} className="content-block">
-              <ReadToolBlock input={readItems[0].input} />
+              <ReadToolBlock
+                input={readItems[0].input}
+                result={readItems[0].result}
+                toolId={readItems[0].toolId}
+              />
             </div>
           );
         }
@@ -532,7 +548,7 @@ export const MessageItem = memo(function MessageItem({
 
   return (
     <div
-      className={`message ${message.type}${isProviderNotConfigured ? ' provider-not-configured' : ''}`}
+      className={`message ${message.type}${isLast ? ' is-last-message' : ''}${isProviderNotConfigured ? ' provider-not-configured' : ''}`}
       ref={anchorRefCallback}
       data-message-anchor-id={message.type === 'user' ? messageKey : undefined}
     >

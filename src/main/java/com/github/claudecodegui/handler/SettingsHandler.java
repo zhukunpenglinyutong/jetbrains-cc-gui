@@ -36,6 +36,9 @@ public class SettingsHandler extends BaseMessageHandler {
         "get_working_directory",
         "set_working_directory",
         "get_editor_font_config",
+        "get_ui_font_config",
+        "set_ui_font_config",
+        "browse_ui_font_file",
         "get_streaming_enabled",
         "set_streaming_enabled",
         "get_codex_sandbox_mode",
@@ -48,9 +51,15 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_commit_generation_enabled",
         "get_status_bar_widget_enabled",
         "set_status_bar_widget_enabled",
+        "get_task_completion_notification_enabled",
+        "set_task_completion_notification_enabled",
         "get_ide_theme",
         "get_commit_prompt",
         "set_commit_prompt",
+        "get_commit_ai_config",
+        "set_commit_ai_config",
+        "get_prompt_enhancer_config",
+        "set_prompt_enhancer_config",
         "get_input_history",
         "record_input_history",
         "delete_input_history_item",
@@ -134,6 +143,15 @@ public class SettingsHandler extends BaseMessageHandler {
             case "get_editor_font_config":
                 projectConfigHandler.handleGetEditorFontConfig();
                 return true;
+            case "get_ui_font_config":
+                projectConfigHandler.handleGetUiFontConfig();
+                return true;
+            case "set_ui_font_config":
+                projectConfigHandler.handleSetUiFontConfig(content);
+                return true;
+            case "browse_ui_font_file":
+                projectConfigHandler.handleBrowseUiFontFile();
+                return true;
             case "get_streaming_enabled":
                 projectConfigHandler.handleGetStreamingEnabled();
                 return true;
@@ -170,6 +188,18 @@ public class SettingsHandler extends BaseMessageHandler {
             case "set_status_bar_widget_enabled":
                 projectConfigHandler.handleSetStatusBarWidgetEnabled(content);
                 return true;
+            case "get_task_completion_notification_enabled":
+                projectConfigHandler.handleGetTaskCompletionNotificationEnabled();
+                return true;
+            case "set_task_completion_notification_enabled":
+                projectConfigHandler.handleSetTaskCompletionNotificationEnabled(content);
+                return true;
+            case "get_ai_title_generation_enabled":
+                projectConfigHandler.handleGetAiTitleGenerationEnabled();
+                return true;
+            case "set_ai_title_generation_enabled":
+                projectConfigHandler.handleSetAiTitleGenerationEnabled(content);
+                return true;
             case "get_ide_theme":
                 projectConfigHandler.handleGetIdeTheme();
                 return true;
@@ -178,6 +208,18 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_commit_prompt":
                 projectConfigHandler.handleSetCommitPrompt(content);
+                return true;
+            case "get_commit_ai_config":
+                projectConfigHandler.handleGetCommitAiConfig();
+                return true;
+            case "set_commit_ai_config":
+                projectConfigHandler.handleSetCommitAiConfig(content);
+                return true;
+            case "get_prompt_enhancer_config":
+                projectConfigHandler.handleGetPromptEnhancerConfig();
+                return true;
+            case "set_prompt_enhancer_config":
+                projectConfigHandler.handleSetPromptEnhancerConfig(content);
                 return true;
             // Input history
             case "get_input_history":

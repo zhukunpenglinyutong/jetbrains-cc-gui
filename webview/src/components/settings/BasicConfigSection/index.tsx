@@ -2,6 +2,7 @@ import { useState } from 'react';
 import styles from './style.module.less';
 import { useTranslation } from 'react-i18next';
 import type { DiffThemeMode } from '../../../utils/diffTheme';
+import type { UiFontConfig } from '../hooks/useSettingsBasicActions';
 import AppearanceTab from './AppearanceTab';
 import BehaviorTab from './BehaviorTab';
 import EnvironmentTab from './EnvironmentTab';
@@ -34,6 +35,10 @@ interface BasicConfigSectionProps {
     fontSize: number;
     lineSpacing: number;
   };
+  uiFontConfig?: UiFontConfig;
+  onUiFontSelectionChange?: (selection: string) => void;
+  onSaveUiFontCustomPath?: (path: string) => void;
+  onBrowseUiFontFile?: () => void;
   // Streaming configuration
   streamingEnabled?: boolean;
   onStreamingEnabledChange?: (enabled: boolean) => void;
@@ -61,6 +66,9 @@ interface BasicConfigSectionProps {
   // Status bar widget configuration
   statusBarWidgetEnabled?: boolean;
   onStatusBarWidgetEnabledChange?: (enabled: boolean) => void;
+  // AI title generation configuration
+  aiTitleGenerationEnabled?: boolean;
+  onAiTitleGenerationEnabledChange?: (enabled: boolean) => void;
   // Sound notification configuration
   soundNotificationEnabled?: boolean;
   onSoundNotificationEnabledChange?: (enabled: boolean) => void;
@@ -73,6 +81,9 @@ interface BasicConfigSectionProps {
   onSaveCustomSoundPath?: () => void;
   onTestSound?: () => void;
   onBrowseSound?: () => void;
+  // Task completion notification configuration
+  taskCompletionNotificationEnabled?: boolean;
+  onTaskCompletionNotificationEnabledChange?: (enabled: boolean) => void;
 }
 
 const BasicConfigSection = (props: BasicConfigSectionProps) => {
@@ -106,6 +117,10 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           fontSizeLevel={props.fontSizeLevel}
           onFontSizeLevelChange={props.onFontSizeLevelChange}
           editorFontConfig={props.editorFontConfig}
+          uiFontConfig={props.uiFontConfig}
+          onUiFontSelectionChange={props.onUiFontSelectionChange}
+          onSaveUiFontCustomPath={props.onSaveUiFontCustomPath}
+          onBrowseUiFontFile={props.onBrowseUiFontFile}
           chatBgColor={props.chatBgColor}
           onChatBgColorChange={props.onChatBgColorChange}
           userMsgColor={props.userMsgColor}
@@ -129,6 +144,8 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onCommitGenerationEnabledChange={props.onCommitGenerationEnabledChange}
           statusBarWidgetEnabled={props.statusBarWidgetEnabled}
           onStatusBarWidgetEnabledChange={props.onStatusBarWidgetEnabledChange}
+          aiTitleGenerationEnabled={props.aiTitleGenerationEnabled}
+          onAiTitleGenerationEnabledChange={props.onAiTitleGenerationEnabledChange}
           soundNotificationEnabled={props.soundNotificationEnabled}
           onSoundNotificationEnabledChange={props.onSoundNotificationEnabledChange}
           soundOnlyWhenUnfocused={props.soundOnlyWhenUnfocused}
@@ -140,6 +157,8 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onSaveCustomSoundPath={props.onSaveCustomSoundPath}
           onTestSound={props.onTestSound}
           onBrowseSound={props.onBrowseSound}
+          taskCompletionNotificationEnabled={props.taskCompletionNotificationEnabled}
+          onTaskCompletionNotificationEnabledChange={props.onTaskCompletionNotificationEnabledChange}
         />
       )}
 

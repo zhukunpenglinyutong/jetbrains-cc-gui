@@ -74,3 +74,4 @@ logs/*.log
 .ace-tool/
 .workflow
 .worktrees/
+.omx/

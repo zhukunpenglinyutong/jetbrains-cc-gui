@@ -87,7 +87,7 @@
     "attachmentFile": "[Вложение: {{fileName}}]",
     "unknownFile": "Неизвестный файл",
     "attachmentsUploaded": "[Вложения загружены]",
-    "streamingConnected": "Claude обрабатывает запрос",
+    "streamingConnected": "{{provider}} обрабатывает запрос",
     "showEarlierMessages": "Показать предыдущие сообщения ({{count}})",
     "totalDuration": "Этот ответ занял"
   },
@@ -146,8 +146,16 @@
         "level6": "Максимальный (140%)"
       },
       "editorFont": {
-        "label": "Шрифт (берётся из редактора)",
-        "hint": "Изменить можно в IDEA Settings → Editor → Font. Перезапустите IDEA для применения."
+        "label": "Шрифт",
+        "hint": "Здесь меняется шрифт интерфейса плагина; размер и межстрочный интервал по-прежнему берутся из редактора.",
+        "followOption": "Следовать шрифту редактора ({{font}})",
+        "customOption": "Пользовательский файл шрифта",
+        "customPathLabel": "Путь к файлу шрифта",
+        "customPathPlaceholder": "Выберите или введите путь к файлу .ttf / .otf",
+        "browse": "Обзор",
+        "warningUnavailable": "Шрифт недоступен, сейчас используется шрифт редактора",
+        "statusFollowEditor": "Сейчас используется шрифт редактора: {{font}}",
+        "statusCustom": "Сейчас используется пользовательский шрифт: {{font}}"
       },
       "streaming": {
         "label": "Потоковый вывод",
@@ -161,11 +169,31 @@
         "disabled": "Отключено",
         "hint": "При включении выбор файла в дереве проекта автоматически отправит его путь в AI (примечание: отправляется только путь к файлу, а не его содержимое). При отключении требуется ручное действие."
       },
+      "promptEnhancer": {
+        "label": "Prompt Enhancer",
+        "modelLabel": "Enhancer Model",
+        "resetToDefault": "Restore Default",
+        "providerAvailable": "Available",
+        "providerUnavailable": "Currently unavailable",
+        "provider": {
+          "claude": "Claude Code",
+          "codex": "Codex"
+        },
+        "currentProviderAuto": "Currently using automatic selection: {{provider}}",
+        "currentProviderManual": "Currently using manually selected provider: {{provider}}",
+        "currentProviderUnavailable": "The selected provider is currently unavailable: {{provider}}"
+      },
       "diffExpanded": {
         "label": "Разворачивать diff по умолчанию",
         "enabled": "Развёрнуто",
         "disabled": "Свёрнуто",
         "hint": "Diff-блоки в чате будут сразу развёрнуты. Можно свернуть кликом."
+      },
+      "taskCompletionNotification": {
+        "label": "Уведомление о завершении задачи",
+        "enabled": "Включено",
+        "disabled": "Выключено",
+        "hint": "При включении показывает системное уведомление при завершении задачи AI. При выключении уведомление не появляется."
       },
       "sendShortcut": {
         "label": "Клавиша отправки",
@@ -232,9 +260,23 @@
     "mcpDesc": "Настройка и управление серверами Model Context Protocol",
     "permissions": "Разрешения",
     "permissionsDesc": "Управление правами доступа Claude Code к файлам и операциям",
+    "promptEnhancer": {
+      "title": "Prompt Enhancer",
+      "description": "Choose which provider and model should be used when enhancing prompts before sending them."
+    },
     "commit": {
       "title": "Commit AI",
       "description": "Настройка AI-генерации сообщений Git-коммитов",
+      "providerModel": {
+        "label": "Провайдер модели коммитов",
+        "modelLabel": "Модель коммитов",
+        "resetToDefault": "Сбросить",
+        "providerAvailable": "Доступно",
+        "providerUnavailable": "Недоступно",
+        "currentProviderAuto": "Сейчас используется автоматический выбор: {{provider}}",
+        "currentProviderManual": "Сейчас используется выбранный вручную провайдер: {{provider}}",
+        "currentProviderUnavailable": "Выбранный провайдер сейчас недоступен: {{provider}}"
+      },
       "prompt": {
         "label": "Дополнительный промпт",
         "placeholder": "Добавьте дополнительные требования, например, генерировать коммит на английском, включать номер issue и т.д...",
@@ -299,6 +341,12 @@
           "minutesAgo_few": "{{count}} минуты назад",
           "minutesAgo_many": "{{count}} минут назад"
         }
+      },
+      "aiTitleGeneration": {
+        "label": "Автогенерация заголовка сессии ИИ",
+        "enabled": "Включено",
+        "disabled": "Выключено",
+        "hint": "При включении после первой реплики новой сессии будет автоматически сгенерирован короткий заголовок моделью Haiku. При выключении в качестве заголовка остаётся первое сообщение пользователя."
       }
     },
     "codexFeatureUnavailable": "Этот раздел настроек недоступен для Codex. Переключитесь на Claude Code.",
@@ -485,6 +533,7 @@
         "deepseek": "DeepSeek",
         "minimax": "MiniMax",
         "xiaomi": "Xiaomi MiMo",
+        "xiaomiPlan": "Xiaomi MiMo Plan",
         "qwen": "Alibaba Qwen",
         "openrouter": "OpenRouter"
       }
@@ -532,7 +581,19 @@
         "cliLoginDisableMessage": "Это восстановит ваш предыдущий config.toml и переключит на API ключ.",
         "modelIdRequired": "ID модели обязателен",
         "modelIdInvalid": "Некорректный формат ID модели (допускаются буквы, цифры, точки, дефисы, подчёркивания, слэши и двоеточия)",
-        "modelIdDuplicate": "ID модели уже существует"
+        "modelIdDuplicate": "ID модели уже существует",
+        "envVarsTitle": "Environment Variables",
+        "messageEnvLabel": "Message Environment Variables",
+        "messageEnvHint": "Custom environment variables injected into the Codex message subprocess",
+        "mcpEnvLabel": "MCP Environment Variables",
+        "mcpEnvHint": "Custom environment variables injected into the MCP tool discovery subprocess",
+        "envKeyPlaceholder": "ENV_KEY",
+        "envValuePlaceholder": "value",
+        "addEnvVar": "Add Variable",
+        "envKeyInvalid": "Invalid key name (must start with letter/underscore, alphanumeric only)",
+        "envKeyProtected": "Cannot set built-in variable: {{key}}",
+        "envKeyDuplicate": "Duplicate key: {{key}}",
+        "envValueTooLong": "Значение слишком длинное (макс. {{max}} символов)"
       }
     },
     "agent": {
@@ -608,6 +669,16 @@
     "confirmDelete": "Подтвердить удаление",
     "deleteMessage": "Удалить этот чат? Это действие необратимо.",
     "deleteSession": "Удалить чат",
+    "selectMode": "Select",
+    "exitSelectMode": "Exit selection",
+    "selectedSessions": "{{count}} selected",
+    "selectAll": "Select all",
+    "clearSelection": "Clear",
+    "deleteSelected": "Delete selected",
+    "confirmDeleteSelected": "Confirm Delete",
+    "deleteSelectedMessage": "Are you sure you want to delete {{count}} selected sessions? This action cannot be undone.",
+    "selectSession": "Select session",
+    "selectSessionWithTitle": "Select {{title}}",
     "exportSession": "Экспортировать чат",
     "exportSuccess": "Чат экспортирован",
     "exportFailed": "Ошибка экспорта",
@@ -630,6 +701,9 @@
     "cancelEditButton": "Отмена",
     "titleTooLong": "Название слишком длинное (максимум 50 символов)",
     "titleUpdated": "Название обновлено",
+    "copySessionId": "Копировать ID сессии для CLI resume",
+    "sessionIdCopied": "ID сессии скопирован",
+    "copyFailed": "Не удалось скопировать",
     "timeAgo": {
       "yearsAgo_one": "{{count}} год назад",
       "yearsAgo_other": "{{count}} лет назад",
@@ -728,6 +802,12 @@
     "clickToCopy": "Нажмите для копирования",
     "switch": "Переключить",
     "switchProvider": "Переключить провайдер",
+    "runtimeProvider": {
+      "title": "Переключить текущий провайдер",
+      "loading": "Загрузка провайдеров...",
+      "empty": "Нет доступных провайдеров",
+      "switched": "Переключено на {{provider}}"
+    },
     "link": "Ссылка"
   },
   "markdown": {
@@ -1154,11 +1234,11 @@
         "description": "Sonnet 4.6 · Модель по умолчанию"
       },
       "opus46": {
-        "label": "Opus 4.6",
-        "description": "Opus 4.6 · Новейшая и самая мощная"
+        "label": "Opus 4.7",
+        "description": "Opus 4.7 · Новейшая и самая мощная"
       },
       "opus46_1m": {
-        "label": "Opus (1M контекст)",
+        "label": "Opus 4.6",
         "description": "Opus 4.6 для длинных чатов"
       },
       "haiku45": {
@@ -1166,25 +1246,47 @@
         "description": "Haiku 4.5 · Самая быстрая для быстрых ответов"
       }
     },
+    "longContext": {
+      "label": "1M",
+      "shortLabel": "1M контекст",
+      "tooltipEnabled": "Включить/выключить 1M контекст",
+      "tooltipDisabled": "1M контекст недоступен для Haiku"
+    },
     "codex": {
       "gpt53codex": {
-        "label": "gpt-5.3-codex",
+        "label": "GPT-5.3-Codex",
         "description": "Новейшая агентная модель для кодинга с улучшенными возможностями."
       },
+      "gpt55": {
+        "label": "GPT-5.5",
+        "description": "Новейшая передовая модель с усиленными возможностями."
+      },
       "gpt54": {
-        "label": "gpt-5.4",
+        "label": "GPT-5.4",
         "description": "Новейшая модель с расширенными возможностями."
       },
       "gpt52codex": {
-        "label": "gpt-5.2-codex",
-        "description": "Новейшая агентная модель для кодинга."
+        "label": "GPT-5.2-Codex",
+        "description": "Агентная модель для кодинга класса frontier."
       },
       "gpt51codexMax": {
-        "label": "gpt-5.1-codex-max",
+        "label": "GPT-5.1-Codex-Max",
         "description": "Флагманская модель Codex для глубоких и быстрых рассуждений."
       },
+      "gpt54mini": {
+        "label": "GPT-5.4-Mini",
+        "description": "Более лёгкая агентная модель для кодинга класса frontier."
+      },
+      "gpt53codexSpark": {
+        "label": "GPT-5.3-Codex-Spark",
+        "description": "Сверхбыстрая модель для кодинга."
+      },
+      "gpt52": {
+        "label": "GPT-5.2",
+        "description": "Оптимизирована для профессиональной работы и длительных агентных задач."
+      },
       "gpt51codexMini": {
-        "label": "gpt-5.1-codex-mini",
+        "label": "GPT-5.1-Codex-Mini",
         "description": "Оптимизирована для Codex. Дешевле, быстрее, но менее мощная."
       }
     }

@@ -200,6 +200,130 @@
   }
 }
 
+/* CLI Login card (pinned, non-draggable) */
+.localProviderCard {
+  border-left: 3px solid #f39c12;
+  background: linear-gradient(90deg, rgba(243, 156, 18, 0.05) 0%, transparent 50%);
+}
+
+.revokeButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  border: 1px solid color-mix(in srgb, #c2410c 45%, transparent);
+  background: color-mix(in srgb, #c2410c 14%, transparent);
+  color: #f97316;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s;
+
+  &:hover {
+    background: color-mix(in srgb, #c2410c 22%, transparent);
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+/* Confirm dialog */
+.warningOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(5px);
+  z-index: 2000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.warningDialog {
+  background: var(--bg-primary);
+  border-radius: 8px;
+  padding: 24px;
+  width: 400px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--warning-color, #ff9800);
+}
+
+.warningTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--warning-color, #ff9800);
+  margin-bottom: 16px;
+}
+
+.warningContent {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  margin-bottom: 24px;
+}
+
+.warningActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btnPrimary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: var(--button-primary-background, #0078d4);
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+
+  &:hover {
+    background: var(--button-primary-hover-background, #0063b1);
+  }
+}
+
+.btnSecondary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-primary);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+
+  &:hover {
+    background: var(--bg-hover);
+  }
+}
+
+.btnDanger {
+  padding: 6px 16px;
+  border: none;
+  background: #c2410c;
+  color: #ffffff;
+  border-radius: 4px;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 0.92;
+  }
+}
+
 /* Responsive */
 @media (max-width: 480px) {
   .configSection {

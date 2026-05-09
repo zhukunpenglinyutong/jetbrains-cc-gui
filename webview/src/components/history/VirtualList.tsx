@@ -1,6 +1,13 @@
 import type { ReactNode, UIEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+const ABSOLUTE_LAYER_BASE_STYLE: React.CSSProperties = {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  right: 0,
+};
+
 interface VirtualListProps<T> {
   items: T[];
   itemHeight: number;
@@ -58,30 +65,30 @@ const VirtualList = <T,>({
 
   const totalHeight = items.length * itemHeight;
 
+  const containerStyle: React.CSSProperties = { overflowY: 'auto', height };
+  const innerStyle: React.CSSProperties = { height: totalHeight, position: 'relative' };
+  const layerStyle: React.CSSProperties = {
+    ...ABSOLUTE_LAYER_BASE_STYLE,
+    transform: `translateY(${offsetY}px)`,
+    willChange: scrollTop > 0 ? 'transform' : undefined,
+  };
+  const itemStyle: React.CSSProperties = { height: itemHeight };
+
   return (
     <div
       className={className}
       onScroll={handleScroll}
-      style={{ overflowY: 'auto', height }}
+      style={containerStyle}
     >
-      <div style={{ height: totalHeight, position: 'relative' }}>
-        <div
-          style={{
-            transform: `translateY(${offsetY}px)`,
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            willChange: scrollTop > 0 ? 'transform' : undefined,
-          }}
-        >
+      <div style={innerStyle}>
+        <div style={layerStyle}>
           {visibleItems.map((item, index) => {
             const actualIndex = startIndex + index;
             const key =
               getItemKey?.(item, actualIndex) ?? (item as { sessionId?: string })?.sessionId ?? actualIndex;
 
             return (
-              <div key={key} style={{ height: itemHeight }}>
+              <div key={key} style={itemStyle}>
                 {renderItem(item, actualIndex)}
               </div>
             );

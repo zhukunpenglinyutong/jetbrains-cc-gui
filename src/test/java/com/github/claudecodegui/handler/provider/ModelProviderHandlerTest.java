@@ -51,4 +51,32 @@ public class ModelProviderHandlerTest {
         assertEquals("glm-4.7[1M]", resolved);
         assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit(resolved));
     }
+
+    @Test
+    public void shouldKeepExpectedContextLimitsForVisibleCodexModels() {
+        assertEquals(258_000, ModelProviderHandler.getModelContextLimit("gpt-5.3-codex"));
+        assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("gpt-5.4"));
+        assertEquals(258_000, ModelProviderHandler.getModelContextLimit("gpt-5.2-codex"));
+    }
+
+    @Test
+    public void shouldReturnCorrectContextLimitsForClaudeModels() {
+        // Base IDs without [1m] suffix - 200k context by default
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-sonnet-4-6"));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-opus-4-7"));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-opus-4-6"));
+        // IDs with [1m] suffix - 1M context
+        assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-sonnet-4-6[1m]"));
+        assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-opus-4-7[1m]"));
+        assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-opus-4-6[1m]"));
+        // Haiku - no 1M context available
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-haiku-4-5"));
+    }
+
+    @Test
+    public void shouldParseCapacitySuffixForCustomContextLimits() {
+        assertEquals(500_000, ModelProviderHandler.getModelContextLimit("custom-model[500k]"));
+        assertEquals(2_000_000, ModelProviderHandler.getModelContextLimit("custom-model[2m]"));
+        assertEquals(100_000, ModelProviderHandler.getModelContextLimit("custom-model[100K]"));
+    }
 }

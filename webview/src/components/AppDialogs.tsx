@@ -1,5 +1,5 @@
 import { type ComponentProps } from 'react';
-import type { TFunction } from 'i18next';
+import { useTranslation } from 'react-i18next';
 import ConfirmDialog from './ConfirmDialog';
 import PermissionDialog from './PermissionDialog';
 import AskUserQuestionDialog from './AskUserQuestionDialog';
@@ -11,6 +11,8 @@ import CustomModelDialog from './settings/CustomModelDialog';
 import { usePluginModels } from './settings/hooks/usePluginModels';
 import { STORAGE_KEYS } from '../types/provider';
 import { CHANGELOG_DATA } from '../version/changelog';
+import { useDialogs } from '../contexts/DialogContext';
+import { useUIState } from '../contexts/UIStateContext';
 
 /**
  * Wrapper that manages plugin-level custom models for the add-model dialog.
@@ -41,103 +43,120 @@ const AddModelDialogWrapper = ({
 };
 
 export interface AppDialogsProps {
-  t: TFunction;
+  /** Session-management dialogs come from useSessionManagement, still passed as props. */
   showNewSessionConfirm: boolean;
   onConfirmNewSession: () => void;
   onCancelNewSession: () => void;
   showInterruptConfirm: boolean;
   onConfirmInterrupt: () => void;
   onCancelInterrupt: () => void;
-  permissionDialogOpen: boolean;
-  currentPermissionRequest: ComponentProps<typeof PermissionDialog>['request'];
-  onPermissionApprove: ComponentProps<typeof PermissionDialog>['onApprove'];
-  onPermissionSkip: ComponentProps<typeof PermissionDialog>['onSkip'];
-  onPermissionApproveAlways: ComponentProps<typeof PermissionDialog>['onApproveAlways'];
-  askUserQuestionDialogOpen: boolean;
-  currentAskUserQuestionRequest: ComponentProps<typeof AskUserQuestionDialog>['request'];
-  onAskUserQuestionSubmit: ComponentProps<typeof AskUserQuestionDialog>['onSubmit'];
-  onAskUserQuestionCancel: ComponentProps<typeof AskUserQuestionDialog>['onCancel'];
-  planApprovalDialogOpen: boolean;
-  currentPlanApprovalRequest: ComponentProps<typeof PlanApprovalDialog>['request'];
-  onPlanApprovalApprove: ComponentProps<typeof PlanApprovalDialog>['onApprove'];
-  onPlanApprovalReject: ComponentProps<typeof PlanApprovalDialog>['onReject'];
-  rewindSelectDialogOpen: boolean;
+  /** Rewind selection list is computed in App.tsx from messages, still a prop. */
   rewindableMessages: RewindableMessage[];
   onRewindSelect: ComponentProps<typeof RewindSelectDialog>['onSelect'];
   onRewindSelectCancel: ComponentProps<typeof RewindSelectDialog>['onCancel'];
-  rewindDialogOpen: boolean;
-  currentRewindRequest: ComponentProps<typeof RewindDialog>['request'];
-  isRewinding: boolean;
   onRewindConfirm: ComponentProps<typeof RewindDialog>['onConfirm'];
   onRewindCancel: ComponentProps<typeof RewindDialog>['onCancel'];
-  showChangelogDialog: boolean;
-  onCloseChangelog: () => void;
-  addModelDialogOpen: boolean;
-  onCloseAddModel: () => void;
+  /** Provider id for the add-model dialog (lives in useModelProviderState). */
   currentProvider: string;
 }
 
-export const AppDialogs = (props: AppDialogsProps) => (
-  <>
-    <ConfirmDialog
-      isOpen={props.showNewSessionConfirm}
-      title={props.t('chat.createNewSession')}
-      message={props.t('chat.confirmNewSession')}
-      confirmText={props.t('common.confirm')}
-      cancelText={props.t('common.cancel')}
-      onConfirm={props.onConfirmNewSession}
-      onCancel={props.onCancelNewSession}
-    />
-    <ConfirmDialog
-      isOpen={props.showInterruptConfirm}
-      title={props.t('chat.createNewSession')}
-      message={props.t('chat.confirmInterrupt')}
-      confirmText={props.t('common.confirm')}
-      cancelText={props.t('common.cancel')}
-      onConfirm={props.onConfirmInterrupt}
-      onCancel={props.onCancelInterrupt}
-    />
-    <PermissionDialog
-      isOpen={props.permissionDialogOpen}
-      request={props.currentPermissionRequest}
-      onApprove={props.onPermissionApprove}
-      onSkip={props.onPermissionSkip}
-      onApproveAlways={props.onPermissionApproveAlways}
-    />
-    <AskUserQuestionDialog
-      isOpen={props.askUserQuestionDialogOpen}
-      request={props.currentAskUserQuestionRequest}
-      onSubmit={props.onAskUserQuestionSubmit}
-      onCancel={props.onAskUserQuestionCancel}
-    />
-    <PlanApprovalDialog
-      isOpen={props.planApprovalDialogOpen}
-      request={props.currentPlanApprovalRequest}
-      onApprove={props.onPlanApprovalApprove}
-      onReject={props.onPlanApprovalReject}
-    />
-    <RewindSelectDialog
-      isOpen={props.rewindSelectDialogOpen}
-      rewindableMessages={props.rewindableMessages}
-      onSelect={props.onRewindSelect}
-      onCancel={props.onRewindSelectCancel}
-    />
-    <RewindDialog
-      isOpen={props.rewindDialogOpen}
-      request={props.currentRewindRequest}
-      isLoading={props.isRewinding}
-      onConfirm={props.onRewindConfirm}
-      onCancel={props.onRewindCancel}
-    />
-    <ChangelogDialog
-      isOpen={props.showChangelogDialog}
-      onClose={props.onCloseChangelog}
-      entries={CHANGELOG_DATA}
-    />
-    <AddModelDialogWrapper
-      isOpen={props.addModelDialogOpen}
-      onClose={props.onCloseAddModel}
-      currentProvider={props.currentProvider}
-    />
-  </>
-);
+/**
+ * Renders all top-level dialogs.
+ * Permission / ask-user / plan / rewind / changelog / add-model state is read
+ * from DialogContext and UIStateContext directly to avoid prop drilling 25+
+ * fields from App.tsx (stage 4-5 of TASK-P1-01).
+ */
+export const AppDialogs = ({
+  showNewSessionConfirm,
+  onConfirmNewSession,
+  onCancelNewSession,
+  showInterruptConfirm,
+  onConfirmInterrupt,
+  onCancelInterrupt,
+  rewindableMessages,
+  onRewindSelect,
+  onRewindSelectCancel,
+  onRewindConfirm,
+  onRewindCancel,
+  currentProvider,
+}: AppDialogsProps) => {
+  const { t } = useTranslation();
+  const {
+    permissionDialogOpen, currentPermissionRequest,
+    handlePermissionApprove, handlePermissionApproveAlways, handlePermissionSkip,
+    askUserQuestionDialogOpen, currentAskUserQuestionRequest,
+    handleAskUserQuestionSubmit, handleAskUserQuestionCancel,
+    planApprovalDialogOpen, currentPlanApprovalRequest,
+    handlePlanApprovalApprove, handlePlanApprovalReject,
+    rewindSelectDialogOpen, rewindDialogOpen, currentRewindRequest, isRewinding,
+  } = useDialogs();
+  const {
+    showChangelogDialog, closeChangelogDialog,
+    addModelDialogOpen, setAddModelDialogOpen,
+  } = useUIState();
+
+  return (
+    <>
+      <ConfirmDialog
+        isOpen={showNewSessionConfirm}
+        title={t('chat.createNewSession')}
+        message={t('chat.confirmNewSession')}
+        confirmText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        onConfirm={onConfirmNewSession}
+        onCancel={onCancelNewSession}
+      />
+      <ConfirmDialog
+        isOpen={showInterruptConfirm}
+        title={t('chat.createNewSession')}
+        message={t('chat.confirmInterrupt')}
+        confirmText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        onConfirm={onConfirmInterrupt}
+        onCancel={onCancelInterrupt}
+      />
+      <PermissionDialog
+        isOpen={permissionDialogOpen}
+        request={currentPermissionRequest}
+        onApprove={handlePermissionApprove}
+        onSkip={handlePermissionSkip}
+        onApproveAlways={handlePermissionApproveAlways}
+      />
+      <AskUserQuestionDialog
+        isOpen={askUserQuestionDialogOpen}
+        request={currentAskUserQuestionRequest}
+        onSubmit={handleAskUserQuestionSubmit}
+        onCancel={handleAskUserQuestionCancel}
+      />
+      <PlanApprovalDialog
+        isOpen={planApprovalDialogOpen}
+        request={currentPlanApprovalRequest}
+        onApprove={handlePlanApprovalApprove}
+        onReject={handlePlanApprovalReject}
+      />
+      <RewindSelectDialog
+        isOpen={rewindSelectDialogOpen}
+        rewindableMessages={rewindableMessages}
+        onSelect={onRewindSelect}
+        onCancel={onRewindSelectCancel}
+      />
+      <RewindDialog
+        isOpen={rewindDialogOpen}
+        request={currentRewindRequest}
+        isLoading={isRewinding}
+        onConfirm={onRewindConfirm}
+        onCancel={onRewindCancel}
+      />
+      <ChangelogDialog
+        isOpen={showChangelogDialog}
+        onClose={closeChangelogDialog}
+        entries={CHANGELOG_DATA}
+      />
+      <AddModelDialogWrapper
+        isOpen={addModelDialogOpen}
+        onClose={() => setAddModelDialogOpen(false)}
+        currentProvider={currentProvider}
+      />
+    </>
+  );
+};

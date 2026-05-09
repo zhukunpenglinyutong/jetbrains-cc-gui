@@ -27,9 +27,11 @@ describe('useWindowCallbacks integration', () => {
     setStreamingActive: vi.fn(),
     setHistoryData: vi.fn(),
     setCurrentSessionId: vi.fn(),
+    setCustomSessionTitle: vi.fn(),
     setUsagePercentage: vi.fn(),
     setUsageUsedTokens: vi.fn(),
     setUsageMaxTokens: vi.fn(),
+    setSubagentHistories: vi.fn(),
     setPermissionMode: vi.fn(),
     setClaudePermissionMode: vi.fn(),
     setCodexPermissionMode: vi.fn(),
@@ -56,21 +58,17 @@ describe('useWindowCallbacks integration', () => {
     userPausedRef: { current: false },
     suppressNextStatusToastRef: { current: false },
     streamingContentRef: { current: '' },
+    streamingThinkingRef: { current: '' },
     isStreamingRef: { current: false },
     useBackendStreamingRenderRef: { current: false },
     autoExpandedThinkingKeysRef: { current: new Set<string>() },
-    streamingTextSegmentsRef: { current: [] },
-    activeTextSegmentIndexRef: { current: -1 },
-    streamingThinkingSegmentsRef: { current: [] },
-    activeThinkingSegmentIndexRef: { current: -1 },
-    seenToolUseCountRef: { current: 0 },
     streamingMessageIndexRef: { current: -1 },
     streamingTurnIdRef: { current: -1 },
     turnIdCounterRef: { current: 0 },
     lastContentUpdateRef: { current: 0 },
-    contentUpdateTimeoutRef: { current: null },
+    contentUpdateTimeoutRef: { current: null } as { current: number | null },
     lastThinkingUpdateRef: { current: 0 },
-    thinkingUpdateTimeoutRef: { current: null },
+    thinkingUpdateTimeoutRef: { current: null } as { current: number | null },
 
     // Functions
     findLastAssistantIndex: (msgs: ClaudeMessage[]) =>
@@ -92,9 +90,10 @@ describe('useWindowCallbacks integration', () => {
   });
 
   beforeEach(() => {
-    (window as any).__sessionTransitioning = false;
-    (window as any).__sessionTransitionToken = null;
-    (window as any).__deniedToolIds = new Set();
+    window.__sessionTransitioning = false;
+    window.__sessionTransitionToken = null;
+    window.__pendingSessionTransitionToast = undefined;
+    window.__deniedToolIds = new Set();
     window.sendToJava = vi.fn();
   });
 
@@ -109,16 +108,80 @@ describe('useWindowCallbacks integration', () => {
     renderHook(() => useWindowCallbacks(opts));
 
     // Simulate: beginSessionTransition sets guard
-    (window as any).__sessionTransitioning = true;
-    (window as any).__sessionTransitionToken = 'transition-1';
+    window.__sessionTransitioning = true;
+    window.__sessionTransitionToken = 'transition-1';
 
     // Simulate: Java calls historyLoadComplete on success
     act(() => {
-      (window as any).historyLoadComplete();
+      window.historyLoadComplete!();
     });
 
-    expect((window as any).__sessionTransitioning).toBe(false);
-    expect((window as any).__sessionTransitionToken).toBeNull();
+    expect(window.__sessionTransitioning).toBe(false);
+    expect(window.__sessionTransitionToken).toBeNull();
+  });
+
+  it('historyLoadComplete shows pending session transition toast', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    window.__pendingSessionTransitionToast = {
+      message: 'history.sessionDeleted',
+      type: 'success',
+    };
+
+    act(() => {
+      window.historyLoadComplete!();
+    });
+
+    expect(opts.addToast).toHaveBeenCalledWith('history.sessionDeleted', 'success');
+    expect(window.__pendingSessionTransitionToast).toBeUndefined();
+  });
+
+  // ===== historyLoadComplete triggers full message re-render =====
+
+  it('historyLoadComplete creates new object references for all messages', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    const originalMessages: ClaudeMessage[] = [
+      { type: 'user', content: 'question', timestamp: '2024-01-01T00:00:00Z' },
+      { type: 'assistant', content: 'answer', timestamp: '2024-01-01T00:01:00Z' },
+    ];
+
+    act(() => {
+      window.historyLoadComplete!();
+    });
+
+    expect(opts.setMessages).toHaveBeenCalledTimes(1);
+    const updater = (opts.setMessages as any).mock.calls[0][0] as (prev: ClaudeMessage[]) => ClaudeMessage[];
+    const result = updater(originalMessages);
+
+    // Verify full shallow copy: array is new, each message object is new
+    expect(result).not.toBe(originalMessages);
+    expect(result.length).toBe(originalMessages.length);
+    for (let i = 0; i < result.length; i++) {
+      expect(result[i]).not.toBe(originalMessages[i]);
+      expect(result[i].content).toBe(originalMessages[i].content);
+      expect(result[i].type).toBe(originalMessages[i].type);
+    }
+  });
+
+  it('historyLoadComplete returns unchanged array when messages are empty', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.historyLoadComplete!();
+    });
+
+    expect(opts.setMessages).toHaveBeenCalledTimes(1);
+    const updater = (opts.setMessages as any).mock.calls[0][0] as (prev: ClaudeMessage[]) => ClaudeMessage[];
+    const emptyArray: ClaudeMessage[] = [];
+    const result = updater(emptyArray);
+
+    // Returns the same empty array reference (no unnecessary copy)
+    expect(result).toBe(emptyArray);
+    expect(result.length).toBe(0);
   });
 
   // ===== setSessionId releases transition guard =====
@@ -127,15 +190,15 @@ describe('useWindowCallbacks integration', () => {
     const opts = createOptions();
     renderHook(() => useWindowCallbacks(opts));
 
-    (window as any).__sessionTransitioning = true;
-    (window as any).__sessionTransitionToken = 'transition-2';
+    window.__sessionTransitioning = true;
+    window.__sessionTransitionToken = 'transition-2';
 
     act(() => {
-      (window as any).setSessionId('new-session-123');
+      window.setSessionId!('new-session-123');
     });
 
-    expect((window as any).__sessionTransitioning).toBe(false);
-    expect((window as any).__sessionTransitionToken).toBeNull();
+    expect(window.__sessionTransitioning).toBe(false);
+    expect(window.__sessionTransitionToken).toBeNull();
     expect(opts.setCurrentSessionId).toHaveBeenCalledWith('new-session-123');
   });
 
@@ -145,14 +208,14 @@ describe('useWindowCallbacks integration', () => {
     const opts = createOptions();
     renderHook(() => useWindowCallbacks(opts));
 
-    (window as any).__sessionTransitioning = true;
+    window.__sessionTransitioning = true;
 
     const staleMessages: ClaudeMessage[] = [
       { type: 'assistant', content: 'stale content', timestamp: new Date().toISOString() },
     ];
 
     act(() => {
-      (window as any).updateMessages(JSON.stringify(staleMessages));
+      window.updateMessages!(JSON.stringify(staleMessages));
     });
 
     // setMessages should NOT be called because guard is active
@@ -164,14 +227,14 @@ describe('useWindowCallbacks integration', () => {
     renderHook(() => useWindowCallbacks(opts));
 
     // Guard is NOT set
-    expect((window as any).__sessionTransitioning).toBe(false);
+    expect(window.__sessionTransitioning).toBe(false);
 
     const freshMessages: ClaudeMessage[] = [
       { type: 'user', content: 'hello', timestamp: new Date().toISOString() },
     ];
 
     act(() => {
-      (window as any).updateMessages(JSON.stringify(freshMessages));
+      window.updateMessages!(JSON.stringify(freshMessages));
     });
 
     // setMessages SHOULD be called
@@ -189,7 +252,7 @@ describe('useWindowCallbacks integration', () => {
     renderHook(() => useWindowCallbacks(opts));
 
     act(() => {
-      (window as any).patchMessageUuid?.('Generated attachment summary', 'uuid-123');
+      window.patchMessageUuid?.('Generated attachment summary', 'uuid-123');
     });
 
     expect(opts.setMessages).toHaveBeenCalledTimes(1);
@@ -226,10 +289,10 @@ describe('useWindowCallbacks integration', () => {
     const opts = createOptions();
     renderHook(() => useWindowCallbacks(opts));
 
-    (window as any).__sessionTransitioning = true;
+    window.__sessionTransitioning = true;
 
     act(() => {
-      (window as any).patchMessageUuid?.('hello', 'uuid-guarded');
+      window.patchMessageUuid?.('hello', 'uuid-guarded');
     });
 
     expect(opts.setMessages).not.toHaveBeenCalled();
@@ -239,15 +302,15 @@ describe('useWindowCallbacks integration', () => {
     const opts = createOptions();
     renderHook(() => useWindowCallbacks(opts));
 
-    (window as any).__sessionTransitioning = true;
-    (window as any).__sessionTransitionToken = 'transition-status';
+    window.__sessionTransitioning = true;
+    window.__sessionTransitionToken = 'transition-status';
 
     act(() => {
-      (window as any).updateStatus('warming runtime');
+      window.updateStatus!('warming runtime');
     });
 
-    expect((window as any).__sessionTransitioning).toBe(true);
-    expect((window as any).__sessionTransitionToken).toBe('transition-status');
+    expect(window.__sessionTransitioning).toBe(true);
+    expect(window.__sessionTransitionToken).toBe('transition-status');
     expect(opts.setStatus).toHaveBeenCalledWith('warming runtime');
   });
 
@@ -258,7 +321,7 @@ describe('useWindowCallbacks integration', () => {
     renderHook(() => useWindowCallbacks(opts));
 
     act(() => {
-      (window as any).addErrorMessage('Something went wrong');
+      window.addErrorMessage!('Something went wrong');
     });
 
     expect(opts.addToast).toHaveBeenCalledWith('Something went wrong', 'error');
@@ -279,7 +342,7 @@ describe('useWindowCallbacks integration', () => {
     renderHook(() => useWindowCallbacks(opts));
 
     act(() => {
-      (window as any).clearMessages();
+      window.clearMessages!();
     });
 
     expect(opts.setMessages).toHaveBeenCalledWith([]);
@@ -305,7 +368,7 @@ describe('useWindowCallbacks integration', () => {
     renderHook(() => useWindowCallbacks(opts));
 
     act(() => {
-      (window as any).clearMessages();
+      window.clearMessages!();
     });
 
     // Turn ID should be reset to -1 (no active streaming turn)
@@ -321,29 +384,29 @@ describe('useWindowCallbacks integration', () => {
     renderHook(() => useWindowCallbacks(opts));
 
     // Step 1: Frontend begins session transition
-    (window as any).__sessionTransitioning = true;
+    window.__sessionTransitioning = true;
 
     // Step 2: During transition, stale messages are blocked
     act(() => {
-      (window as any).updateMessages(JSON.stringify([{ type: 'assistant', content: 'stale' }]));
+      window.updateMessages!(JSON.stringify([{ type: 'assistant', content: 'stale' }]));
     });
     expect(opts.setMessages).not.toHaveBeenCalled();
 
     // Step 3: Java calls historyLoadComplete (failure path also calls this before addErrorMessage)
     act(() => {
-      (window as any).historyLoadComplete();
+      window.historyLoadComplete!();
     });
-    expect((window as any).__sessionTransitioning).toBe(false);
+    expect(window.__sessionTransitioning).toBe(false);
 
     // Step 4: Java calls addErrorMessage
     act(() => {
-      (window as any).addErrorMessage('Failed to load session: network error');
+      window.addErrorMessage!('Failed to load session: network error');
     });
     expect(opts.addToast).toHaveBeenCalledWith('Failed to load session: network error', 'error');
 
     // Step 5: After guard release, new messages work
     act(() => {
-      (window as any).updateMessages(
+      window.updateMessages!(
         JSON.stringify([{ type: 'user', content: 'new message' }])
       );
     });
@@ -355,18 +418,18 @@ describe('useWindowCallbacks integration', () => {
     renderHook(() => useWindowCallbacks(opts));
 
     act(() => {
-      (window as any).onStreamStart?.();
+      window.onStreamStart?.();
     });
 
     act(() => {
-      (window as any).onStreamEnd?.('10');
+      window.onStreamEnd?.('10');
     });
 
     opts.isStreamingRef.current = false;
     (opts.setMessages as any).mockClear();
 
     act(() => {
-      (window as any).updateMessages(
+      window.updateMessages!(
         JSON.stringify([{ type: 'assistant', content: 'stale backlog', timestamp: new Date().toISOString() }]),
         '9',
       );
@@ -375,7 +438,7 @@ describe('useWindowCallbacks integration', () => {
     expect(opts.setMessages).not.toHaveBeenCalled();
 
     act(() => {
-      (window as any).updateMessages(
+      window.updateMessages!(
         JSON.stringify([{ type: 'assistant', content: 'final snapshot', timestamp: new Date().toISOString() }]),
         '10',
       );
@@ -427,7 +490,7 @@ describe('useWindowCallbacks integration', () => {
     ];
 
     act(() => {
-      (window as any).updateMessages(JSON.stringify([
+      window.updateMessages!(JSON.stringify([
         {
           type: 'assistant',
           content: 'Working',
@@ -456,5 +519,124 @@ describe('useWindowCallbacks integration', () => {
       id: 'spawn-1',
     });
     expect(nextMessages[0].__turnId).toBe(7);
+  });
+
+  it('reuses replayed in-progress assistant when stream restarts after webview reload', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.onStreamStart?.();
+    });
+
+    expect(opts.setMessages).toHaveBeenCalledTimes(1);
+    const updater = (opts.setMessages as any).mock.calls[0][0] as (messages: ClaudeMessage[]) => ClaudeMessage[];
+    const replayedMessages: ClaudeMessage[] = [
+      { type: 'user', content: 'question', timestamp: '2026-04-27T00:00:00.000Z' },
+      { type: 'assistant', content: 'partial answer', timestamp: '2026-04-27T00:00:01.000Z' },
+    ];
+
+    const nextMessages = updater(replayedMessages);
+
+    expect(nextMessages).toHaveLength(2);
+    expect(nextMessages[1]).toMatchObject({
+      type: 'assistant',
+      content: 'partial answer',
+      isStreaming: true,
+      __turnId: 1,
+    });
+  });
+
+  it('onSubagentHistoryLoaded skips updates only when history payload is truly unchanged', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    const firstPayload = {
+      success: true,
+      toolUseId: 'task-1',
+      sessionId: 'session-1',
+      messages: [{ type: 'assistant', content: [{ type: 'text', text: 'draft result' }] }],
+    };
+
+    act(() => {
+      window.onSubagentHistoryLoaded?.(JSON.stringify(firstPayload));
+    });
+
+    expect(opts.setSubagentHistories).toHaveBeenCalledTimes(1);
+    const firstUpdater = (opts.setSubagentHistories as any).mock.calls[0][0] as (prev: Record<string, unknown>) => Record<string, unknown>;
+    const initialState = firstUpdater({});
+
+    act(() => {
+      window.onSubagentHistoryLoaded?.(JSON.stringify(firstPayload));
+    });
+
+    const secondUpdater = (opts.setSubagentHistories as any).mock.calls[1][0] as (prev: Record<string, unknown>) => Record<string, unknown>;
+    expect(secondUpdater(initialState)).toBe(initialState);
+
+    act(() => {
+      window.onSubagentHistoryLoaded?.(JSON.stringify({
+        ...firstPayload,
+        messages: [{ type: 'assistant', content: [{ type: 'text', text: 'final result' }] }],
+      }));
+    });
+
+    const thirdUpdater = (opts.setSubagentHistories as any).mock.calls[2][0] as (prev: Record<string, any>) => Record<string, any>;
+    const updatedState = thirdUpdater(initialState);
+    expect(updatedState).not.toBe(initialState);
+    expect(updatedState['task-1'].messages[0].content[0].text).toBe('final result');
+  });
+
+  // ===== onStreamEnd idempotency (dual-path delivery) =====
+
+  describe('onStreamEnd idempotency', () => {
+    it('second onStreamEnd for same turn is ignored', () => {
+      const opts = createOptions();
+      // Simulate streaming state
+      opts.streamingTurnIdRef.current = 5;
+      opts.isStreamingRef.current = true;
+      opts.streamingMessageIndexRef.current = 0;
+      opts.turnIdCounterRef.current = 5;
+
+      renderHook(() => useWindowCallbacks(opts));
+
+      // Simulate onStreamStart to set up streaming state
+      act(() => {
+        window.onStreamStart!();
+      });
+
+      const turnId = opts.streamingTurnIdRef.current;
+
+      // First onStreamEnd — should process
+      act(() => {
+        window.onStreamEnd!('10');
+      });
+      expect(window.__streamEndProcessedTurnId).toBe(turnId);
+
+      // Record call count after first onStreamEnd
+      const callsAfterFirstEnd = (opts.setStreamingActive as any).mock.calls.length;
+
+      // Second onStreamEnd with same turn — should be no-op
+      act(() => {
+        window.onStreamEnd!('10');
+      });
+
+      // setStreamingActive should not have been called again (idempotency)
+      expect((opts.setStreamingActive as any).mock.calls.length).toBe(callsAfterFirstEnd);
+    });
+
+    it('onStreamStart clears __streamEndProcessedTurnId for next turn', () => {
+      const opts = createOptions();
+      renderHook(() => useWindowCallbacks(opts));
+
+      // Simulate a completed turn
+      window.__streamEndProcessedTurnId = 3;
+
+      // New turn starts
+      act(() => {
+        window.onStreamStart!();
+      });
+
+      expect(window.__streamEndProcessedTurnId).toBeUndefined();
+    });
   });
 });

@@ -80,9 +80,6 @@ export function registerMessageCallbacks(
     streamingContentRef,
     isStreamingRef,
     useBackendStreamingRenderRef,
-    activeTextSegmentIndexRef,
-    activeThinkingSegmentIndexRef,
-    seenToolUseCountRef,
     streamingMessageIndexRef,
     streamingTurnIdRef,
     findLastAssistantIndex,
@@ -292,22 +289,6 @@ export function registerMessageCallbacks(
         // streaming.  When onStreamEnd was subsequently lost (JCEF async chain),
         // the UI appeared permanently frozen.
 
-        // Track tool_use for segment reset purposes
-        let totalToolUseCount = 0;
-        for (const message of parsed) {
-          if (message.type !== 'assistant') continue;
-          const blocks = extractRawBlocks(message.raw);
-          totalToolUseCount += blocks.filter((b) => b?.type === 'tool_use').length;
-        }
-
-        if (totalToolUseCount > seenToolUseCountRef.current) {
-          seenToolUseCountRef.current = totalToolUseCount;
-          activeTextSegmentIndexRef.current = -1;
-          activeThinkingSegmentIndexRef.current = -1;
-        } else if (totalToolUseCount < seenToolUseCountRef.current) {
-          seenToolUseCountRef.current = totalToolUseCount;
-        }
-
         let patched = [...parsed];
         patched = appendOptimisticMessageIfMissing(prev, patched);
         patched = preserveLastAssistantIdentity(prev, patched, findLastAssistantIndex);
@@ -334,12 +315,34 @@ export function registerMessageCallbacks(
         // changed. This keeps pure content_delta traffic cheap, while still
         // re-rendering when the backend injects tool_use/tool_result blocks into
         // an existing assistant message during streaming.
+        // FIX: Also check thinking block content changes, as thinking blocks are
+        // rendered in collapsible UI and need updates even when tool_use count is stable.
         const hasStructuralChange = patched.length !== prev.length ||
           patched.some((msg, i) => {
             if (i >= prev.length) return true;
             const prevMsg = prev[i];
             if (msg.type !== prevMsg.type || msg.timestamp !== prevMsg.timestamp) {
               return true;
+            }
+            // For assistant messages during streaming, also check thinking block changes
+            if (msg.type === 'assistant' && prevMsg.type === 'assistant') {
+              const prevBlocks = extractRawBlocks(prevMsg.raw);
+              const newBlocks = extractRawBlocks(msg.raw);
+              // Check if thinking block content changed
+              const prevThinkingBlocks = prevBlocks.filter(
+                (b): b is { type: 'thinking'; thinking?: string } => b?.type === 'thinking'
+              );
+              const newThinkingBlocks = newBlocks.filter(
+                (b): b is { type: 'thinking'; thinking?: string } => b?.type === 'thinking'
+              );
+              if (prevThinkingBlocks.length !== newThinkingBlocks.length) return true;
+              for (let j = 0; j < prevThinkingBlocks.length; j++) {
+                const prevThinking = prevThinkingBlocks[j]?.thinking ?? '';
+                const newThinking = newThinkingBlocks[j]?.thinking ?? '';
+                if (prevThinking !== newThinking) return true;
+              }
+              // Check total block count change (new tool_use added)
+              if (prevBlocks.length !== newBlocks.length) return true;
             }
             return getStructuralRawBlockSignature(msg, extractRawBlocks) !==
               getStructuralRawBlockSignature(prevMsg, extractRawBlocks);
@@ -567,13 +570,20 @@ export function registerMessageCallbacks(
   };
 
   // History load complete callback — triggers Markdown re-rendering
+  // Use full shallow copy to ensure all messages trigger re-render regardless of batching timing
+  // Also clear stream-ended markers since history messages don't have __turnId
   window.historyLoadComplete = () => {
     releaseSessionTransition();
+    const pendingToast = window.__pendingSessionTransitionToast;
+    if (pendingToast) {
+      window.__pendingSessionTransitionToast = undefined;
+      addToast(pendingToast.message, pendingToast.type);
+    }
+    window.__lastStreamEndedTurnId = undefined;
+    window.__lastStreamEndedAt = undefined;
     setMessages((prev) => {
       if (prev.length === 0) return prev;
-      const updated = [...prev];
-      updated[updated.length - 1] = { ...updated[updated.length - 1] };
-      return updated;
+      return prev.map(m => ({ ...m }));
     });
   };
 

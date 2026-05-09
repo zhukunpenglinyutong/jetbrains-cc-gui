@@ -34,6 +34,86 @@ const MAX_VISIBLE_ITEMS = 3;
 /** Height per item in pixels */
 const ITEM_HEIGHT = 32;
 
+const CONTAINER_STYLE: React.CSSProperties = { margin: '12px 0' };
+
+const TITLE_SECTION_STYLE: React.CSSProperties = { overflow: 'hidden' };
+
+const TITLE_TEXT_STYLE: React.CSSProperties = { flexShrink: 0 };
+
+const TITLE_SUMMARY_STYLE: React.CSSProperties = {
+  color: 'var(--text-secondary)',
+  marginLeft: '4px',
+  flexShrink: 0,
+};
+
+const TOTAL_STATS_STYLE: React.CSSProperties = {
+  marginLeft: '12px',
+  fontSize: '12px',
+  fontFamily: 'var(--idea-editor-font-family, monospace)',
+  fontWeight: 600,
+  whiteSpace: 'nowrap',
+  flexShrink: 0,
+};
+
+const ADDED_TEXT_STYLE: React.CSSProperties = { color: 'var(--diff-added-accent)' };
+const DELETED_TEXT_STYLE: React.CSSProperties = { color: 'var(--diff-deleted-accent)' };
+const STATS_SPACER_STYLE: React.CSSProperties = { margin: '0 4px' };
+
+const FILE_ICON_STYLE: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  width: '16px',
+  height: '16px',
+  flexShrink: 0,
+};
+
+const FILE_NAME_STYLE: React.CSSProperties = {
+  fontSize: '12px',
+  color: 'var(--text-primary)',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  flex: 1,
+  minWidth: 0,
+  cursor: 'pointer',
+};
+
+const ITEM_STATS_STYLE: React.CSSProperties = {
+  fontSize: '11px',
+  fontFamily: 'var(--idea-editor-font-family, monospace)',
+  fontWeight: 600,
+  whiteSpace: 'nowrap',
+  flexShrink: 0,
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '6px',
+};
+
+const LINE_INFO_STYLE: React.CSSProperties = { color: 'var(--text-secondary)' };
+
+const ITEM_STATS_SPACER_STYLE: React.CSSProperties = { margin: '0 2px' };
+
+const ACTIONS_STYLE: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '4px',
+  flexShrink: 0,
+};
+
+const ACTION_ICON_STYLE: React.CSSProperties = { fontSize: '12px' };
+
+const STATUS_INDICATOR_STYLE: React.CSSProperties = { marginLeft: '4px' };
+
+const FILE_LIST_ITEM_STYLE: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  padding: '4px 8px',
+  borderRadius: '4px',
+  minHeight: `${ITEM_HEIGHT}px`,
+  flexShrink: 0,
+  gap: '8px',
+};
+
 /**
  * Compute diff statistics (additions and deletions count)
  */
@@ -187,6 +267,21 @@ const EditToolGroupBlock = ({ items }: EditToolGroupBlockProps) => {
     ? MAX_VISIBLE_ITEMS * ITEM_HEIGHT
     : editItems.length * ITEM_HEIGHT;
 
+  const headerStyle: React.CSSProperties = {
+    borderBottom: expanded ? '1px solid var(--border-primary)' : undefined,
+  };
+
+  const detailsStyle: React.CSSProperties = {
+    padding: '6px 8px',
+    border: 'none',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0',
+    maxHeight: `${listHeight + 12}px`,
+    overflowY: needsScroll ? 'auto' : 'hidden',
+    overflowX: 'hidden',
+  };
+
   const handleFileClick = (item: EditItem, e: React.MouseEvent) => {
     e.stopPropagation();
     openFile(item.openPath, item.lineStart, item.lineEnd);
@@ -204,41 +299,26 @@ const EditToolGroupBlock = ({ items }: EditToolGroupBlockProps) => {
   };
 
   return (
-    <div className="task-container" style={{ margin: '12px 0' }}>
+    <div className="task-container" style={CONTAINER_STYLE}>
       <div
         className="task-header"
         onClick={() => setExpanded((prev) => !prev)}
-        style={{
-          borderBottom: expanded ? '1px solid var(--border-primary)' : undefined,
-        }}
+        style={headerStyle}
       >
-        <div className="task-title-section" style={{ overflow: 'hidden' }}>
+        <div className="task-title-section" style={TITLE_SECTION_STYLE}>
           <span className="codicon codicon-edit tool-title-icon" />
-          <span className="tool-title-text" style={{ flexShrink: 0 }}>
+          <span className="tool-title-text" style={TITLE_TEXT_STYLE}>
             {t('tools.editBatchTitle')}
           </span>
-          <span className="tool-title-summary" style={{
-            color: 'var(--text-secondary)',
-            marginLeft: '4px',
-            flexShrink: 0,
-          }}>
+          <span className="tool-title-summary" style={TITLE_SUMMARY_STYLE}>
             ({editItems.length})
           </span>
 
           {(totalAdditions > 0 || totalDeletions > 0) && (
-            <span
-              style={{
-                marginLeft: '12px',
-                fontSize: '12px',
-                fontFamily: 'var(--idea-editor-font-family, monospace)',
-                fontWeight: 600,
-                whiteSpace: 'nowrap',
-                flexShrink: 0,
-              }}
-            >
-              {totalAdditions > 0 && <span style={{ color: 'var(--diff-added-accent)' }}>+{totalAdditions}</span>}
-              {totalAdditions > 0 && totalDeletions > 0 && <span style={{ margin: '0 4px' }} />}
-              {totalDeletions > 0 && <span style={{ color: 'var(--diff-deleted-accent)' }}>-{totalDeletions}</span>}
+            <span style={TOTAL_STATS_STYLE}>
+              {totalAdditions > 0 && <span style={ADDED_TEXT_STYLE}>+{totalAdditions}</span>}
+              {totalAdditions > 0 && totalDeletions > 0 && <span style={STATS_SPACER_STYLE} />}
+              {totalDeletions > 0 && <span style={DELETED_TEXT_STYLE}>-{totalDeletions}</span>}
             </span>
           )}
         </div>
@@ -248,55 +328,23 @@ const EditToolGroupBlock = ({ items }: EditToolGroupBlockProps) => {
         <div
           ref={listRef}
           className="task-details file-list-container"
-          style={{
-            padding: '6px 8px',
-            border: 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0',
-            maxHeight: `${listHeight + 12}px`,
-            overflowY: needsScroll ? 'auto' : 'hidden',
-            overflowX: 'hidden',
-          }}
+          style={detailsStyle}
         >
           {editItems.map((item, index) => (
             <div
               key={index}
               className="file-list-item"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                padding: '4px 8px',
-                borderRadius: '4px',
-                minHeight: `${ITEM_HEIGHT}px`,
-                flexShrink: 0,
-                gap: '8px',
-              }}
+              style={FILE_LIST_ITEM_STYLE}
             >
               {/* File icon and name */}
               <span
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  width: '16px',
-                  height: '16px',
-                  flexShrink: 0,
-                }}
+                style={FILE_ICON_STYLE}
                 dangerouslySetInnerHTML={{ __html: getFileIconSvg(item.fileName) }}
               />
               <span
                 className="clickable-file"
                 onClick={(e) => handleFileClick(item, e)}
-                style={{
-                  fontSize: '12px',
-                  color: 'var(--text-primary)',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  flex: 1,
-                  minWidth: 0,
-                  cursor: 'pointer',
-                }}
+                style={FILE_NAME_STYLE}
                 title={item.displayPath}
               >
                 {item.displayPath}
@@ -304,53 +352,42 @@ const EditToolGroupBlock = ({ items }: EditToolGroupBlockProps) => {
 
               {/* Diff stats */}
               {(item.lineStart || item.additions > 0 || item.deletions > 0) && (
-                <span
-                  style={{
-                    fontSize: '11px',
-                    fontFamily: 'var(--idea-editor-font-family, monospace)',
-                    fontWeight: 600,
-                    whiteSpace: 'nowrap',
-                    flexShrink: 0,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                  }}
-                >
+                <span style={ITEM_STATS_STYLE}>
                   {item.lineStart && (
-                    <span style={{ color: 'var(--text-secondary)' }}>
+                    <span style={LINE_INFO_STYLE}>
                       {item.lineEnd && item.lineEnd !== item.lineStart
                         ? t('tools.lineRange', { start: item.lineStart, end: item.lineEnd })
                         : t('tools.lineSingle', { line: item.lineStart })}
                     </span>
                   )}
-                  {item.additions > 0 && <span style={{ color: 'var(--diff-added-accent)' }}>+{item.additions}</span>}
-                  {item.additions > 0 && item.deletions > 0 && <span style={{ margin: '0 2px' }} />}
-                  {item.deletions > 0 && <span style={{ color: 'var(--diff-deleted-accent)' }}>-{item.deletions}</span>}
+                  {item.additions > 0 && <span style={ADDED_TEXT_STYLE}>+{item.additions}</span>}
+                  {item.additions > 0 && item.deletions > 0 && <span style={ITEM_STATS_SPACER_STYLE} />}
+                  {item.deletions > 0 && <span style={DELETED_TEXT_STYLE}>-{item.deletions}</span>}
                 </span>
               )}
 
               {/* Action buttons */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+              <div style={ACTIONS_STYLE}>
                 <button
                   onClick={(e) => handleShowDiff(item, e)}
                   title={t('tools.showDiffInIdea')}
                   className="edit-group-action-btn"
                 >
-                  <span className="codicon codicon-diff" style={{ fontSize: '12px' }} />
+                  <span className="codicon codicon-diff" style={ACTION_ICON_STYLE} />
                 </button>
                 <button
                   onClick={(e) => handleRefresh(item.openPath, e)}
                   title={t('tools.refreshFileInIdea')}
                   className="edit-group-action-btn"
                 >
-                  <span className="codicon codicon-refresh" style={{ fontSize: '12px' }} />
+                  <span className="codicon codicon-refresh" style={ACTION_ICON_STYLE} />
                 </button>
               </div>
 
               {/* Status indicator */}
               <div
                 className={`tool-status-indicator ${item.isError ? 'error' : item.isCompleted ? 'completed' : 'pending'}`}
-                style={{ marginLeft: '4px' }}
+                style={STATUS_INDICATOR_STYLE}
               />
             </div>
           ))}

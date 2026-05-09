@@ -9,7 +9,7 @@
 
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
 import type { PermissionMode } from '../../../components/ChatInputBox/types';
-import { isValidPermissionMode } from '../../../components/ChatInputBox/types';
+import { isValidPermissionMode, normalizeClaudeModelId } from '../../../components/ChatInputBox/types';
 import { drainPendingSettings, startInitialSettingsRequest } from '../settingsBootstrap';
 
 export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): void {
@@ -85,7 +85,7 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
   window.onModelChanged = (modelId) => {
     const provider = currentProviderRef.current;
     if (provider === 'claude') {
-      setSelectedClaudeModel(modelId);
+      setSelectedClaudeModel(normalizeClaudeModelId(modelId));
     } else if (provider === 'codex') {
       setSelectedCodexModel(modelId);
     }
@@ -93,7 +93,7 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
 
   window.onModelConfirmed = (modelId, provider) => {
     if (provider === 'claude') {
-      setSelectedClaudeModel(modelId);
+      setSelectedClaudeModel(normalizeClaudeModelId(modelId));
     } else if (provider === 'codex') {
       setSelectedCodexModel(modelId);
     }

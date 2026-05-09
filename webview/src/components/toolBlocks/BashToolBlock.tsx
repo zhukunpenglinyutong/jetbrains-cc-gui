@@ -3,6 +3,10 @@ import { useTranslation } from 'react-i18next';
 import type { ToolInput, ToolResultBlock } from '../../types';
 import { useIsToolDenied } from '../../hooks/useIsToolDenied';
 
+const TASK_DETAILS_STYLE: React.CSSProperties = { padding: 0, border: 'none' };
+const TASK_CONTENT_WRAPPER_STYLE: React.CSSProperties = { paddingLeft: '40px', position: 'relative', zIndex: 1 };
+const ERROR_ICON_STYLE: React.CSSProperties = { fontSize: '14px', marginTop: '1px' };
+
 interface BashToolBlockProps {
   name?: string;
   input?: ToolInput;
@@ -57,16 +61,16 @@ const BashToolBlock = ({ input, result, toolId }: BashToolBlockProps) => {
       </div>
 
       {expanded && (
-        <div className="task-details" style={{ padding: 0, border: 'none' }}>
+        <div className="task-details" style={TASK_DETAILS_STYLE}>
           <div className="bash-tool-content">
             <div className="bash-tool-line" />
-            <div className="task-content-wrapper" style={{ paddingLeft: '40px', position: 'relative', zIndex: 1 }}>
+            <div className="task-content-wrapper" style={TASK_CONTENT_WRAPPER_STYLE}>
               <div className="bash-command-block">{command}</div>
 
               {output && (
                 <div className={`bash-output-block ${isError ? 'error' : 'normal'}`}>
                   {isError && (
-                    <span className="codicon codicon-error" style={{ fontSize: '14px', marginTop: '1px' }} />
+                    <span className="codicon codicon-error" style={ERROR_ICON_STYLE} />
                   )}
                   <span>{output}</span>
                 </div>
