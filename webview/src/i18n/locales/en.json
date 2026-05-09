@@ -209,7 +209,13 @@
         "label": "Task Completion Notification",
         "enabled": "Enabled",
         "disabled": "Disabled",
-        "hint": "When enabled, shows a system notification when AI task completes. When disabled, no notification appears."
+        "hint": "When enabled, shows a system notification when AI task completes. When disabled, no notification appears.",
+        "mode": {
+          "ideNative": "IDE Native Notification",
+          "ideNativeDesc": "Use IntelliJ's native notification style.",
+          "card": "Card Notification",
+          "cardDesc": "Keep the plugin's custom card-style notification."
+        }
       },
       "sendShortcut": {
         "label": "Send Shortcut",

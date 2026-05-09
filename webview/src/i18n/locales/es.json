@@ -193,7 +193,13 @@
         "label": "Notificación de tarea completada",
         "enabled": "Activado",
         "disabled": "Desactivado",
-        "hint": "Cuando está activado, muestra una notificación del sistema cuando la tarea AI se completa. Cuando está desactivado, no aparece ninguna notificación."
+        "hint": "Cuando está activado, muestra una notificación del sistema cuando la tarea AI se completa. Cuando está desactivado, no aparece ninguna notificación.",
+        "mode": {
+          "ideNative": "Notificación nativa del IDE",
+          "ideNativeDesc": "Usar el estilo de notificación nativo de IntelliJ.",
+          "card": "Notificación de tarjeta",
+          "cardDesc": "Mantener el estilo de notificación de tarjeta personalizada del plugin."
+        }
       },
       "sendShortcut": {
         "label": "Atajo de envío",

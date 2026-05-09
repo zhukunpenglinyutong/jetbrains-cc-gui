@@ -209,7 +209,13 @@
         "label": "任务完成通知",
         "enabled": "已开启",
         "disabled": "已关闭",
-        "hint": "开启后，当 AI 任务完成时显示系统通知。关闭后不显示系统通知。"
+        "hint": "开启后，当 AI 任务完成时显示系统通知。关闭后不显示系统通知。",
+        "mode": {
+          "ideNative": "IDE 原生通知",
+          "ideNativeDesc": "使用IntelliJ原生支持的通知样式。",
+          "card": "卡片通知",
+          "cardDesc": "保留插件自定义卡片通知样式。"
+        }
       },
       "sendShortcut": {
         "label": "发送快捷键",

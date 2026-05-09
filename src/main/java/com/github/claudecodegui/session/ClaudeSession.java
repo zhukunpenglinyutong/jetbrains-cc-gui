@@ -109,6 +109,9 @@ public class ClaudeSession {
         default void onStreamEnd() {
         }
 
+        default void onStreamCompleted() {
+        }
+
         default void onContentDelta(String delta) {
         }
 

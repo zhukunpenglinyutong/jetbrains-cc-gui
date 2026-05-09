@@ -113,6 +113,15 @@ public class CallbackHandler {
     }
 
     /**
+     * Notify that the provider completed a streaming turn, without waiting for frontend flush.
+     */
+    public void notifyStreamCompleted() {
+        if (callback != null) {
+            callback.onStreamCompleted();
+        }
+    }
+
+    /**
      * Notify of a content delta (handled by the existing onContentDelta callback).
      */
     public void notifyContentDelta(String delta) {

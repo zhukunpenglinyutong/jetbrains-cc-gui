@@ -193,7 +193,13 @@
         "label": "Notification de fin de tâche",
         "enabled": "Activé",
         "disabled": "Désactivé",
-        "hint": "Lorsque activé, affiche une notification système lorsque la tâche AI est terminée. Lorsque désactivé, aucune notification apparaît."
+        "hint": "Lorsque activé, affiche une notification système lorsque la tâche AI est terminée. Lorsque désactivé, aucune notification apparaît.",
+        "mode": {
+          "ideNative": "Notification native IDE",
+          "ideNativeDesc": "Utiliser le style de notification natif d'IntelliJ.",
+          "card": "Notification carte",
+          "cardDesc": "Conserver le style de notification carte personnalisée du plugin."
+        }
       },
       "sendShortcut": {
         "label": "Raccourci d'envoi",

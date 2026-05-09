@@ -63,6 +63,8 @@ public class CodemossSettingsService {
     private static final String DEFAULT_PROMPT_ENHANCER_CODEX_MODEL = "gpt-5.5";
     private static final String DEFAULT_COMMIT_AI_CLAUDE_MODEL = "claude-sonnet-4-6";
     private static final String DEFAULT_COMMIT_AI_CODEX_MODEL = "gpt-5.5";
+    public static final String TASK_COMPLETION_NOTIFICATION_MODE_IDE_NATIVE = "ide-native";
+    public static final String TASK_COMPLETION_NOTIFICATION_MODE_CARD = "card";
 
     private final Gson gson;
 
@@ -1160,6 +1162,30 @@ public class CodemossSettingsService {
         config.addProperty("taskCompletionNotificationEnabled", enabled);
         writeConfig(config);
         LOG.info("[CodemossSettings] Set task completion notification enabled: " + enabled);
+    }
+
+    /**
+     * Get the task completion notification mode.
+     *
+     * @return notification mode, always returns ide-native
+     */
+    public String getTaskCompletionNotificationMode() throws IOException {
+        // Always return ide-native since card mode has been removed
+        return TASK_COMPLETION_NOTIFICATION_MODE_IDE_NATIVE;
+    }
+
+    /**
+     * Set the task completion notification mode.
+     * Note: The 'card' mode has been removed, always defaults to 'ide-native'.
+     *
+     * @param mode notification mode (ignored, always set to ide-native)
+     */
+    public void setTaskCompletionNotificationMode(String mode) throws IOException {
+        JsonObject config = readConfig();
+        // Always use ide-native mode since card mode has been removed
+        config.addProperty("taskCompletionNotificationMode", TASK_COMPLETION_NOTIFICATION_MODE_IDE_NATIVE);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set task completion notification mode: " + TASK_COMPLETION_NOTIFICATION_MODE_IDE_NATIVE);
     }
 
     // ==================== AI Feature Toggle Management ====================

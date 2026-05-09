@@ -73,6 +73,10 @@ public class SessionCallbackFacade {
         callbackHandler.notifyStreamEnd();
     }
 
+    public void notifyStreamCompleted() {
+        callbackHandler.notifyStreamCompleted();
+    }
+
     public void notifyContentDelta(String delta) {
         callbackHandler.notifyContentDelta(delta);
     }

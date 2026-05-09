@@ -205,7 +205,13 @@
         "label": "Notificação de Conclusão de Tarefa",
         "enabled": "Ativado",
         "disabled": "Desativado",
-        "hint": "Quando ativado, exibe uma notificação do sistema quando a tarefa AI é concluída. Quando desativado, nenhuma notificação aparece."
+        "hint": "Quando ativado, exibe uma notificação do sistema quando a tarefa AI é concluída. Quando desativado, nenhuma notificação aparece.",
+        "mode": {
+          "ideNative": "Notificação nativa da IDE",
+          "ideNativeDesc": "Usar o estilo de notificação nativo do IntelliJ.",
+          "card": "Notificação em cartão",
+          "cardDesc": "Manter o estilo de notificação em cartão personalizado do plugin."
+        }
       },
       "sendShortcut": {
         "label": "Atalho de Envio",

@@ -285,6 +285,11 @@ interface Window {
   updateTaskCompletionNotificationEnabled?: (json: string) => void;
 
   /**
+   * Update task completion notification mode
+   */
+  updateTaskCompletionNotificationMode?: (json: string) => void;
+
+  /**
    * Update current Claude config
    */
   updateCurrentClaudeConfig?: (json: string) => void;
@@ -665,6 +670,7 @@ interface Window {
   __pendingUpdateRaf?: number | null;
   __pendingUpdateJson?: string | null;
   __pendingUpdateSequence?: number | null;
+  __streamingDeltaRenderingFrame?: number;
   __minAcceptedUpdateSequence?: number;
   /** Cancel pending rAF-deferred updateMessages (set by messageCallbacks, called by onStreamEnd). */
   __cancelPendingUpdateMessages?: () => void;

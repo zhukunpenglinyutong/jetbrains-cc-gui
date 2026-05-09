@@ -131,14 +131,6 @@ const SettingsView = ({
     setCommitPrompt,
     savingCommitPrompt,
     setSavingCommitPrompt,
-    soundNotificationEnabled,
-    setSoundNotificationEnabled,
-    soundOnlyWhenUnfocused,
-    setSoundOnlyWhenUnfocused,
-    selectedSound,
-    setSelectedSound,
-    customSoundPath,
-    setCustomSoundPath,
     diffExpandedByDefault,
     setDiffExpandedByDefault,
     historyCompletionEnabled,
@@ -152,13 +144,6 @@ const SettingsView = ({
     handleCodexSandboxModeChange,
     handleSendShortcutChange,
     handleAutoOpenFileEnabledChange,
-    handleSoundNotificationEnabledChange,
-    handleSoundOnlyWhenUnfocusedChange,
-    handleSelectedSoundChange,
-    handleCustomSoundPathChange,
-    handleSaveCustomSoundPath,
-    handleTestSound,
-    handleBrowseSound,
     handleSaveCommitPrompt,
     commitGenerationEnabled,
     setCommitGenerationEnabled,
@@ -309,10 +294,6 @@ const SettingsView = ({
     addToast,
     onStreamingEnabledChangeProp,
     onSendShortcutChangeProp,
-    setSoundNotificationEnabled,
-    setSoundOnlyWhenUnfocused,
-    setSelectedSound,
-    setCustomSoundPath,
     setCommitGenerationEnabled,
     setAiTitleGenerationEnabled,
     setStatusBarWidgetEnabled,
@@ -469,17 +450,6 @@ const SettingsView = ({
               }}
               aiTitleGenerationEnabled={aiTitleGenerationEnabled}
               onAiTitleGenerationEnabledChange={handleAiTitleGenerationEnabledChange}
-              soundNotificationEnabled={soundNotificationEnabled}
-              onSoundNotificationEnabledChange={handleSoundNotificationEnabledChange}
-              soundOnlyWhenUnfocused={soundOnlyWhenUnfocused}
-              onSoundOnlyWhenUnfocusedChange={handleSoundOnlyWhenUnfocusedChange}
-              selectedSound={selectedSound}
-              onSelectedSoundChange={handleSelectedSoundChange}
-              customSoundPath={customSoundPath}
-              onCustomSoundPathChange={handleCustomSoundPathChange}
-              onSaveCustomSoundPath={handleSaveCustomSoundPath}
-              onTestSound={handleTestSound}
-              onBrowseSound={handleBrowseSound}
               taskCompletionNotificationEnabled={taskCompletionNotificationEnabled}
               onTaskCompletionNotificationEnabledChange={handleTaskCompletionNotificationEnabledChange}
             />
