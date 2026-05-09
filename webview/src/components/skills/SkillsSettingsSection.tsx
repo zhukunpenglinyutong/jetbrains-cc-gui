@@ -122,6 +122,10 @@ export function SkillsSettingsSection({ currentProvider = 'claude' }: SkillsSett
     return iconColors[Math.abs(hash) % iconColors.length];
   };
 
+  const getSkillIconStyle = (skillId: string, enabled: boolean): React.CSSProperties => ({
+    color: enabled ? getIconColor(skillId) : 'var(--text-tertiary)',
+  });
+
   const loadSkills = useCallback(() => {
     setLoading(true);
     sendToJava('get_all_skills', {});
@@ -476,7 +480,7 @@ export function SkillsSettingsSection({ currentProvider = 'claude' }: SkillsSett
                 )}
               </button>
 
-              <div className="skill-icon-wrapper" style={{ color: skill.enabled ? getIconColor(skill.id) : 'var(--text-tertiary)' }}>
+              <div className="skill-icon-wrapper" style={getSkillIconStyle(skill.id, skill.enabled)}>
                 <span className="codicon codicon-folder"></span>
               </div>
 

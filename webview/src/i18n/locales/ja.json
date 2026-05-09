@@ -87,7 +87,7 @@
     "attachmentFile": "[添付ファイル: {{fileName}}]",
     "unknownFile": "Unknown file",
     "attachmentsUploaded": "[添付ファイルがアップロードされました]",
-    "streamingConnected": "Claudeに接続しました、質問を理解しています",
+    "streamingConnected": "{{provider}}に接続しました、質問を理解しています",
     "showEarlierMessages": "以前の{{count}}件のメッセージを表示",
     "totalDuration": "今回の応答時間"
   },
@@ -188,6 +188,12 @@
         "enabled": "展開",
         "disabled": "折りたたみ",
         "hint": "有効にすると、チャット内のコード差分がデフォルトで展開表示されます。無効の場合、差分は折りたたまれた状態で表示されます。"
+      },
+      "taskCompletionNotification": {
+        "label": "タスク完了通知",
+        "enabled": "有効",
+        "disabled": "無効",
+        "hint": "有効にすると、AIタスクが完了した時にシステム通知を表示します。無効の場合、通知は表示されません。"
       },
       "sendShortcut": {
         "label": "送信ショートカット",
@@ -330,6 +336,12 @@
           "hoursAgo": "{{count}}時間前",
           "minutesAgo": "{{count}}分前"
         }
+      },
+      "aiTitleGeneration": {
+        "label": "AI セッションタイトル自動生成",
+        "enabled": "有効",
+        "disabled": "無効",
+        "hint": "有効にすると、新しいセッションの最初の応答後に Haiku モデルで短いタイトルを自動生成します。無効の場合は最初のメッセージがタイトルとして使われます。"
       }
     },
     "codexFeatureUnavailable": "Codexではこの設定セクションは未対応です。Claude Codeに切り替えてください。",

@@ -25,6 +25,8 @@ import java.util.Map;
 import java.util.Set;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Codex SDK bridge.
@@ -117,14 +119,14 @@ public class CodexSDKBridge extends BaseSDKBridge {
 
             JsonArray envVars = activeProvider.getAsJsonArray(field);
             for (JsonElement el : envVars) {
-                if (!el.isJsonObject()) continue;
+                if (!el.isJsonObject()) { continue; }
                 JsonObject entry = el.getAsJsonObject();
-                if (!entry.has("key") || !entry.has("value")) continue;
+                if (!entry.has("key") || !entry.has("value")) { continue; }
 
                 String key = entry.get("key").getAsString().trim();
                 String value = entry.get("value").getAsString();
 
-                if (key.isEmpty()) continue;
+                if (key.isEmpty()) { continue; }
                 if (PROTECTED_ENV_KEYS.contains(key.toUpperCase())) {
                     LOG.warn("[Codex] Skipping protected env var: " + key);
                     continue;
@@ -143,8 +145,8 @@ public class CodexSDKBridge extends BaseSDKBridge {
             MessageCallback callback,
             SDKResult result,
             StringBuilder assistantContent,
-            boolean[] hadSendError,
-            String[] lastNodeError
+            AtomicBoolean hadSendError,
+            AtomicReference<String> lastNodeError
     ) {
         if (line.contains("[DEBUG]")) {
             LOG.debug("[Codex] " + line);
@@ -152,6 +154,10 @@ public class CodexSDKBridge extends BaseSDKBridge {
 
         if (line.startsWith("[MESSAGE_START]")) {
             callback.onMessage("message_start", "");
+        } else if (line.startsWith("[STREAM_START]")) {
+            callback.onMessage("stream_start", "");
+        } else if (line.startsWith("[STREAM_END]")) {
+            callback.onMessage("stream_end", "");
         } else if (line.startsWith("[MESSAGE_END]")) {
             callback.onMessage("message_end", "");
         } else if (line.startsWith("[THREAD_ID]")) {
@@ -195,9 +201,12 @@ public class CodexSDKBridge extends BaseSDKBridge {
             } catch (Exception ignored) {
             }
         } else if (line.startsWith("[CONTENT_DELTA]")) {
-            String delta = line.substring("[CONTENT_DELTA]".length()).trim();
+            String delta = decodeJsonStringPayload(line.substring("[CONTENT_DELTA]".length()));
             assistantContent.append(delta);
             callback.onMessage("content_delta", delta);
+        } else if (line.startsWith("[THINKING_DELTA]")) {
+            String delta = decodeJsonStringPayload(line.substring("[THINKING_DELTA]".length()));
+            callback.onMessage("thinking_delta", delta);
         } else if (line.startsWith("[CONTENT]")) {
             String content = line.substring("[CONTENT]".length()).trim();
             // Avoid duplicate
@@ -215,10 +224,21 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 }
             } catch (Exception ignored) {
             }
-            hadSendError[0] = true;
+            hadSendError.set(true);
             result.success = false;
             result.error = errorMessage;
             callback.onError(errorMessage);
+        }
+    }
+
+    private String decodeJsonStringPayload(String rawPayload) {
+        String jsonStr = rawPayload.startsWith(" ") ? rawPayload.substring(1) : rawPayload;
+        try {
+            String decoded = gson.fromJson(jsonStr, String.class);
+            return decoded != null ? decoded : "";
+        } catch (Exception e) {
+            LOG.warn("[CodexSDKBridge] Failed to decode JSON string payload, falling back to raw: " + e.getMessage());
+            return jsonStr;
         }
     }
 
@@ -272,10 +292,10 @@ public class CodexSDKBridge extends BaseSDKBridge {
             }
 
             File[] platformDirs = vendorDir.listFiles();
-            if (platformDirs == null) return;
+            if (platformDirs == null) { return; }
 
             for (File platformDir : platformDirs) {
-                if (!platformDir.isDirectory()) continue;
+                if (!platformDir.isDirectory()) { continue; }
 
                 File codexDir = new File(platformDir, "codex");
                 File codexBinary = new File(codexDir, "codex");
@@ -321,8 +341,8 @@ public class CodexSDKBridge extends BaseSDKBridge {
         return CompletableFuture.supplyAsync(() -> {
             SDKResult result = new SDKResult();
             StringBuilder assistantContent = new StringBuilder();
-            final String[] lastNodeError = {null};
-            final boolean[] hadSendError = {false};
+            AtomicReference<String> lastNodeError = new AtomicReference<>(null);
+            AtomicBoolean hadSendError = new AtomicBoolean(false);
             final List<File> tempImageFiles = new ArrayList<>();  // Track temp images for cleanup
 
             try {
@@ -500,7 +520,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                                     || line.startsWith("[UNHANDLED_REJECTION]")
                                     || line.startsWith("[COMMAND_ERROR]")) {
                                 LOG.warn("[Node.js ERROR] " + line);
-                                lastNodeError[0] = line;
+                                lastNodeError.set(line);
                             }
                             processOutputLine(line, callback, result, assistantContent, hadSendError, lastNodeError);
                         }
@@ -518,14 +538,15 @@ public class CodexSDKBridge extends BaseSDKBridge {
                         result.success = false;
                         result.error = "User interrupted";
                         callback.onComplete(result);
-                    } else if (!hadSendError[0]) {
+                    } else if (!hadSendError.get()) {
                         result.success = exitCode == 0;
                         if (result.success) {
                             callback.onComplete(result);
                         } else {
                             String errorMsg = "Codex process exited with code: " + exitCode;
-                            if (lastNodeError[0] != null && !lastNodeError[0].isEmpty()) {
-                                errorMsg = errorMsg + " | Last error: " + lastNodeError[0];
+                            String nodeErr = lastNodeError.get();
+                            if (nodeErr != null && !nodeErr.isEmpty()) {
+                                errorMsg = errorMsg + " | Last error: " + nodeErr;
                             }
                             result.error = errorMsg;
                             callback.onError(errorMsg);
@@ -619,33 +640,33 @@ public class CodexSDKBridge extends BaseSDKBridge {
                     stdin.flush();
                 }
 
-                final boolean[] found = {false};
-                final boolean[] readerDone = {false};
-                final String[] toolsJson = {null};
+                AtomicBoolean found = new AtomicBoolean(false);
+                AtomicBoolean readerDone = new AtomicBoolean(false);
+                AtomicReference<String> toolsJson = new AtomicReference<>(null);
                 final StringBuilder output = new StringBuilder();
 
                 Thread readerThread = new Thread(() -> {
                     try (BufferedReader reader = new BufferedReader(
                             new InputStreamReader(finalProcess.getInputStream(), StandardCharsets.UTF_8))) {
                         String line;
-                        while (!found[0] && (line = reader.readLine()) != null) {
+                        while (!found.get() && (line = reader.readLine()) != null) {
                             output.append(line).append("\n");
                             if (line.startsWith("[MCP_SERVER_TOOLS]")) {
-                                toolsJson[0] = line.substring("[MCP_SERVER_TOOLS]".length()).trim();
-                                found[0] = true;
+                                toolsJson.set(line.substring("[MCP_SERVER_TOOLS]".length()).trim());
+                                found.set(true);
                                 break;
                             }
                         }
                     } catch (Exception e) {
                         LOG.debug("[CodexMcpTools] Reader thread exception: " + e.getMessage());
                     } finally {
-                        readerDone[0] = true;
+                        readerDone.set(true);
                     }
                 });
                 readerThread.start();
 
                 long deadline = System.currentTimeMillis() + MCP_TOOLS_TIMEOUT_MS;
-                while (!found[0] && !readerDone[0] && System.currentTimeMillis() < deadline) {
+                while (!found.get() && !readerDone.get() && System.currentTimeMillis() < deadline) {
                     Thread.sleep(100);
                 }
 
@@ -654,9 +675,10 @@ public class CodexSDKBridge extends BaseSDKBridge {
                     PlatformUtils.terminateProcess(process);
                 }
 
-                if (found[0] && toolsJson[0] != null && !toolsJson[0].isEmpty()) {
+                String capturedTools = toolsJson.get();
+                if (found.get() && capturedTools != null && !capturedTools.isEmpty()) {
                     try {
-                        JsonObject result = gson.fromJson(toolsJson[0], JsonObject.class);
+                        JsonObject result = gson.fromJson(capturedTools, JsonObject.class);
                         LOG.info("[CodexMcpTools] Got tools for " + serverId + " in " + elapsed + "ms");
                         return result;
                     } catch (Exception e) {
@@ -757,7 +779,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
         }
 
         for (ClaudeSession.Attachment attachment : attachments) {
-            if (attachment == null) continue;
+            if (attachment == null) { continue; }
 
             String type = attachment.mediaType;
             String data = attachment.data;
@@ -830,7 +852,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
      * Get file extension from MIME type.
      */
     private String getImageExtension(String mimeType) {
-        if (mimeType == null) return ".png";
+        if (mimeType == null) { return ".png"; }
 
         switch (mimeType.toLowerCase()) {
             case "image/jpeg":
@@ -851,11 +873,11 @@ public class CodexSDKBridge extends BaseSDKBridge {
     }
 
     private String extractAssistantText(JsonObject msg) {
-        if (msg == null) return "";
-        if (!msg.has("message") || !msg.get("message").isJsonObject()) return "";
+        if (msg == null) { return ""; }
+        if (!msg.has("message") || !msg.get("message").isJsonObject()) { return ""; }
 
         JsonObject message = msg.getAsJsonObject("message");
-        if (!message.has("content") || message.get("content").isJsonNull()) return "";
+        if (!message.has("content") || message.get("content").isJsonNull()) { return ""; }
 
         JsonElement contentEl = message.get("content");
         if (contentEl.isJsonPrimitive()) {
@@ -868,12 +890,12 @@ public class CodexSDKBridge extends BaseSDKBridge {
         JsonArray arr = contentEl.getAsJsonArray();
         StringBuilder sb = new StringBuilder();
         for (JsonElement el : arr) {
-            if (!el.isJsonObject()) continue;
+            if (!el.isJsonObject()) { continue; }
             JsonObject block = el.getAsJsonObject();
-            if (!block.has("type") || block.get("type").isJsonNull()) continue;
+            if (!block.has("type") || block.get("type").isJsonNull()) { continue; }
             String type = block.get("type").getAsString();
             if ("text".equals(type) && block.has("text") && !block.get("text").isJsonNull()) {
-                if (sb.length() > 0) sb.append("\n");
+                if (sb.length() > 0) { sb.append("\n"); }
                 sb.append(block.get("text").getAsString());
             }
         }

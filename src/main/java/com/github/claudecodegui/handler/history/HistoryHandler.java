@@ -18,6 +18,7 @@ public class HistoryHandler extends BaseMessageHandler {
             "load_history_data",
             "load_session",
             "delete_session",  // Delete session
+            "delete_sessions", // Batch delete sessions
             "export_session",  // Export session
             "toggle_favorite", // Toggle favorite status
             "update_title",    // Update session title
@@ -76,6 +77,10 @@ public class HistoryHandler extends BaseMessageHandler {
             case "delete_session":
                 LOG.info("[HistoryHandler] 处理: delete_session, sessionId=" + content);
                 historyDeleteService.handleDeleteSession(content, currentProvider);
+                return true;
+            case "delete_sessions":
+                LOG.info("[HistoryHandler] 处理: delete_sessions");
+                historyDeleteService.handleDeleteSessions(content, currentProvider);
                 return true;
             case "export_session":
                 LOG.info("[HistoryHandler] 处理: export_session, sessionId=" + content);

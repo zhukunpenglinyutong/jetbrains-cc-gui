@@ -255,6 +255,85 @@ describe('useStreamingMessages', () => {
     expect(rawContent[2]).toMatchObject({ type: 'thinking', thinking: 'Now I need...' });
   });
 
+  it('appends streamed text after trailing tool_use blocks instead of moving the tool card to the bottom', () => {
+    const { result } = renderHook(() => useStreamingMessages());
+
+    const assistant: ClaudeMessage = {
+      type: 'assistant',
+      content: 'Before tool.',
+      isStreaming: true,
+      raw: {
+        message: {
+          content: [
+            { type: 'text', text: 'Before tool.' },
+            { type: 'tool_use', id: 'bash-1', name: 'shell_command', input: { command: 'git status' } },
+          ],
+        },
+      },
+    };
+
+    result.current.streamingContentRef.current = 'Before tool.';
+    const toolAppeared = result.current.patchAssistantForStreaming(assistant);
+    expect(((toolAppeared.raw as any).message.content as ContentBlockTest[]).map((block) => block.type))
+      .toEqual(['text', 'tool_use']);
+
+    result.current.streamingContentRef.current = 'Before tool.After tool.';
+    const patched = result.current.patchAssistantForStreaming(toolAppeared);
+    const rawContent = (patched.raw as any).message.content as ContentBlockTest[];
+
+    expect(rawContent.map((block) => block.type)).toEqual(['text', 'tool_use', 'text']);
+    expect(rawContent[0]).toMatchObject({ type: 'text', text: 'Before tool.' });
+    expect(rawContent[1]).toMatchObject({ type: 'tool_use', id: 'bash-1' });
+    expect(rawContent[2]).toMatchObject({ type: 'text', text: 'After tool.' });
+
+    result.current.streamingContentRef.current = 'Before tool.After tool.More output.';
+    const patchedAgain = result.current.patchAssistantForStreaming(patched);
+    const updatedRawContent = (patchedAgain.raw as any).message.content as ContentBlockTest[];
+
+    expect(updatedRawContent.map((block) => block.type)).toEqual(['text', 'tool_use', 'text']);
+    expect(updatedRawContent[2]).toMatchObject({ type: 'text', text: 'After tool.More output.' });
+
+    const staleBackendSnapshot: ClaudeMessage = {
+      ...patchedAgain,
+      content: 'Before tool.',
+      raw: assistant.raw,
+    };
+
+    const recoveredFromStaleSnapshot = result.current.patchAssistantForStreaming(staleBackendSnapshot);
+    const recoveredRawContent = (recoveredFromStaleSnapshot.raw as any).message.content as ContentBlockTest[];
+
+    expect(recoveredRawContent.map((block) => block.type)).toEqual(['text', 'tool_use', 'text']);
+    expect(recoveredRawContent[2]).toMatchObject({ type: 'text', text: 'After tool.More output.' });
+  });
+
+  it('splits already-buffered text when the first tool snapshot arrives late', () => {
+    const { result } = renderHook(() => useStreamingMessages());
+
+    result.current.streamingContentRef.current = 'Before tool.After tool.';
+
+    const assistant: ClaudeMessage = {
+      type: 'assistant',
+      content: 'Before tool.',
+      isStreaming: true,
+      raw: {
+        message: {
+          content: [
+            { type: 'text', text: 'Before tool.' },
+            { type: 'tool_use', id: 'bash-late', name: 'shell_command', input: { command: 'git status' } },
+          ],
+        },
+      },
+    };
+
+    const patched = result.current.patchAssistantForStreaming(assistant);
+    const rawContent = (patched.raw as any).message.content as ContentBlockTest[];
+
+    expect(rawContent.map((block) => block.type)).toEqual(['text', 'tool_use', 'text']);
+    expect(rawContent[0]).toMatchObject({ type: 'text', text: 'Before tool.' });
+    expect(rawContent[1]).toMatchObject({ type: 'tool_use', id: 'bash-late' });
+    expect(rawContent[2]).toMatchObject({ type: 'text', text: 'After tool.' });
+  });
+
   it('extends the last thinking block as new deltas arrive (single segment)', () => {
     const { result } = renderHook(() => useStreamingMessages());
 

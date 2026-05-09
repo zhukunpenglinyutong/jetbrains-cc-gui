@@ -3,6 +3,11 @@ import { useTranslation } from 'react-i18next';
 import type { ProviderConfig } from '../types/provider';
 import { CLAUDE_MODEL_MAPPING_ENV_KEYS, PROVIDER_PRESETS } from '../types/provider';
 
+const INFO_ICON_STYLE: React.CSSProperties = { fontSize: '12px', marginRight: '4px' };
+const NOTICE_MT_STYLE: React.CSSProperties = { marginTop: '8px' };
+const SECTION_DESC_STYLE: React.CSSProperties = { marginBottom: '12px', fontSize: '12px', color: '#999' };
+const FOOTER_ACTIONS_STYLE: React.CSSProperties = { marginLeft: 'auto' };
+
 const OFFICIAL_DIRECT_PRESET_ID = 'official_direct';
 const OFFICIAL_ANTHROPIC_URL = 'https://api.anthropic.com';
 const CUSTOM_PRESET_ID = 'custom';
@@ -570,13 +575,13 @@ export default function ProviderDialog({
               readOnly={isOfficialDirectMode}
             />
             <small className="form-hint">
-              <span className="codicon codicon-info" style={{ fontSize: '12px', marginRight: '4px' }} />
+              <span className="codicon codicon-info" style={INFO_ICON_STYLE} />
               {isOfficialDirectMode
                 ? t('settings.provider.dialog.apiUrlLockedHint')
                 : t('settings.provider.dialog.apiUrlHint')}
             </small>
             {!isOfficialAnthropicEndpoint(apiUrl) && (
-              <div className="notice-box notice-box--warning" style={{ marginTop: '8px' }}>
+              <div className="notice-box notice-box--warning" style={NOTICE_MT_STYLE}>
                 <span className="codicon codicon-cloud" />
                 {t('settings.provider.dialog.proxyEndpointWarning')}
               </div>
@@ -631,7 +636,7 @@ export default function ProviderDialog({
               {t('settings.provider.dialog.jsonConfig')}
             </summary>
             <div className="json-config-section">
-              <p className="section-desc" style={{ marginBottom: '12px', fontSize: '12px', color: '#999' }}>
+              <p className="section-desc" style={SECTION_DESC_STYLE}>
                 {t('settings.provider.dialog.jsonConfigDescription')}
               </p>
 
@@ -681,7 +686,7 @@ export default function ProviderDialog({
         </div>
 
         <div className="dialog-footer">
-          <div className="footer-actions" style={{ marginLeft: 'auto' }}>
+          <div className="footer-actions" style={FOOTER_ACTIONS_STYLE}>
             <button className="btn btn-secondary" onClick={onClose}>
               <span className="codicon codicon-close" />
               {t('common.cancel')}

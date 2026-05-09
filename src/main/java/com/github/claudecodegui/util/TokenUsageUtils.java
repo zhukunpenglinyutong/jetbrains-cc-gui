@@ -30,7 +30,7 @@ public final class TokenUsageUtils {
      * - Codex: input + output (input already includes cached tokens)
      */
     public static int extractUsedTokens(JsonObject usage, String provider) {
-        if (usage == null) return 0;
+        if (usage == null) { return 0; }
         int input = usage.has("input_tokens") ? usage.get("input_tokens").getAsInt() : 0;
         int output = usage.has("output_tokens") ? usage.get("output_tokens").getAsInt() : 0;
         if ("codex".equals(provider)) {
@@ -48,7 +48,7 @@ public final class TokenUsageUtils {
     public static JsonObject findLastUsageFromRawMessages(List<JsonObject> messages) {
         for (int i = messages.size() - 1; i >= 0; i--) {
             JsonObject msg = messages.get(i);
-            if (!msg.has("type") || !"assistant".equals(msg.get("type").getAsString())) continue;
+            if (!msg.has("type") || !"assistant".equals(msg.get("type").getAsString())) { continue; }
             if (msg.has("message") && msg.get("message").isJsonObject()) {
                 JsonObject message = msg.getAsJsonObject("message");
                 if (message.has("usage") && message.get("usage").isJsonObject()) {
@@ -66,7 +66,7 @@ public final class TokenUsageUtils {
     public static JsonObject findLastUsageFromSessionMessages(List<ClaudeSession.Message> messages) {
         for (int i = messages.size() - 1; i >= 0; i--) {
             ClaudeSession.Message msg = messages.get(i);
-            if (msg.type != ClaudeSession.Message.Type.ASSISTANT || msg.raw == null) continue;
+            if (msg.type != ClaudeSession.Message.Type.ASSISTANT || msg.raw == null) { continue; }
             // Check usage inside message object
             if (msg.raw.has("message") && msg.raw.get("message").isJsonObject()) {
                 JsonObject message = msg.raw.getAsJsonObject("message");

@@ -5,6 +5,7 @@ import {
   OPTIMISTIC_MESSAGE_TIME_WINDOW,
   appendOptimisticMessageIfMissing,
   ensureStreamingAssistantInList,
+  getStreamEndHandlingMode,
   getRawUuid,
   preserveLastAssistantIdentity,
   preserveMessageIdentity,
@@ -43,6 +44,28 @@ const makeUserMsg = (content: string, extra?: Partial<ClaudeMessage>) =>
 
 const makeAssistantMsg = (content: string, extra?: Partial<ClaudeMessage>) =>
   makeMsg('assistant', content, extra);
+
+// ---------------------------------------------------------------------------
+// getStreamEndHandlingMode
+// ---------------------------------------------------------------------------
+
+describe('getStreamEndHandlingMode', () => {
+  it('uses full finalize when streaming is active', () => {
+    expect(getStreamEndHandlingMode('codex', true, 0)).toBe('full');
+  });
+
+  it('uses full finalize when a turn id is still present', () => {
+    expect(getStreamEndHandlingMode('codex', false, 7)).toBe('full');
+  });
+
+  it('uses minimal finalize for Codex when stream start was lost', () => {
+    expect(getStreamEndHandlingMode('codex', false, 0)).toBe('minimal');
+  });
+
+  it('skips finalize for non-Codex providers when no stream is active', () => {
+    expect(getStreamEndHandlingMode('claude', false, 0)).toBe('skip');
+  });
+});
 
 // ---------------------------------------------------------------------------
 // getRawUuid

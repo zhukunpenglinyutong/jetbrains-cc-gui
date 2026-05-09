@@ -2,6 +2,16 @@ import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { DropdownItemProps } from '../types';
 
+const SVG_ICON_STYLE: React.CSSProperties = {
+  width: 16,
+  height: 16,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
+
+const DISABLED_ITEM_STYLE: React.CSSProperties = { cursor: 'default' };
+
 /**
  * DropdownItem - Dropdown menu item component
  */
@@ -61,13 +71,7 @@ export const DropdownItem = ({
         <span
           className="dropdown-item-icon"
           dangerouslySetInnerHTML={{ __html: icon }}
-          style={{
-            width: 16,
-            height: 16,
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
+          style={SVG_ICON_STYLE}
         />
       );
     }
@@ -192,7 +196,7 @@ export const DropdownItem = ({
           handleMouseEnterItem();
         }}
         onMouseLeave={handleMouseLeaveItem}
-        style={isDisabled ? { cursor: 'default' } : undefined}
+        style={isDisabled ? DISABLED_ITEM_STYLE : undefined}
       >
         {renderIcon()}
         <div className="dropdown-item-content">

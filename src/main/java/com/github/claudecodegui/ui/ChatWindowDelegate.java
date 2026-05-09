@@ -268,9 +268,15 @@ public class ChatWindowDelegate {
             @Override public void onTabStatusChanged(String statusStr) {
                 TabAnswerStatus status;
                 switch (statusStr) {
-                    case "answering": status = TabAnswerStatus.ANSWERING; break;
-                    case "completed": status = TabAnswerStatus.COMPLETED; break;
-                    default: status = TabAnswerStatus.IDLE; break;
+                    case "answering":
+                        status = TabAnswerStatus.ANSWERING;
+                        break;
+                    case "completed":
+                        status = TabAnswerStatus.COMPLETED;
+                        break;
+                    default:
+                        status = TabAnswerStatus.IDLE;
+                        break;
                 }
                 updateTabStatus(status);
             }
@@ -300,7 +306,7 @@ public class ChatWindowDelegate {
     public void initializeStatusBar() {
         ApplicationManager.getApplication().invokeLater(() -> {
             Project project = host.getProject();
-            if (project == null || host.isDisposed()) return;
+            if (project == null || host.isDisposed()) { return; }
 
             ClaudeSession session = host.getSession();
             String mode = session != null ? session.getPermissionMode() : "default";

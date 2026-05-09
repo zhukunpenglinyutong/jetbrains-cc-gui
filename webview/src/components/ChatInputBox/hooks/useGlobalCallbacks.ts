@@ -187,13 +187,47 @@ export function useGlobalCallbacks({
       moveCaretAfterNode(lastChild);
     };
 
+    const tryInsertExternalSnippetAtCaret = (selectionInfo: string): boolean => {
+      if (!editableRef.current) return false;
+
+      const selection = window.getSelection();
+      if (
+        !selection ||
+        selection.rangeCount === 0 ||
+        !editableRef.current.contains(selection.anchorNode)
+      ) {
+        return false;
+      }
+
+      const range = selection.getRangeAt(0);
+      range.deleteContents();
+      const fragment = createTextFragment(`${selectionInfo} `);
+      const lastChild = fragment.lastChild;
+      range.insertNode(fragment);
+
+      if (lastChild) {
+        range.setStartAfter(lastChild);
+      }
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      return true;
+    };
+
     window.insertCodeSnippetAtCursor = (selectionInfo: string) => {
       try {
         if (!editableRef.current) return;
 
-        // Ensure input box has focus
-        editableRef.current.focus();
-        appendExternalSnippetToEnd(selectionInfo);
+        // Read caret BEFORE focus() to avoid focus side-effects on selection.
+        // If caret is inside the editable, insert at caret. Otherwise (e.g. window
+        // just regained focus from an external IDE action with no prior caret),
+        // fall back to appending at the end with a leading newline separator.
+        const insertedAtCaret = tryInsertExternalSnippetAtCaret(selectionInfo);
+
+        if (!insertedAtCaret) {
+          editableRef.current.focus();
+          appendExternalSnippetToEnd(selectionInfo);
+        }
 
         // Trigger state update
         const newText = getTextContent();

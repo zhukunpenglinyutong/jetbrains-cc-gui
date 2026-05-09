@@ -143,7 +143,7 @@ public class ContextCollector {
         // 7. Comments (platform-independent)
         try {
             JsonObject comments = getNearbyComments(psiFile, offset);
-            if (comments.size() > 0) semanticData.add("comments", comments);
+            if (comments.size() > 0) { semanticData.add("comments", comments); }
         } catch (Throwable t) {
             LOG.debug("Failed to collect comments: " + t.getMessage());
         }
@@ -151,7 +151,7 @@ public class ContextCollector {
         // 8. Highlight Information (platform-independent)
         try {
             JsonArray highlights = getHighlightInfo(editor, document);
-            if (highlights.size() > 0) semanticData.add("highlights", highlights);
+            if (highlights.size() > 0) { semanticData.add("highlights", highlights); }
         } catch (Throwable t) {
             LOG.debug("Failed to collect highlights: " + t.getMessage());
         }
@@ -159,7 +159,7 @@ public class ContextCollector {
         // 9. Injected Languages (platform-independent)
         try {
             JsonArray injected = getInjectedLanguages(psiFile, offset, project);
-            if (injected.size() > 0) semanticData.add("injectedLanguages", injected);
+            if (injected.size() > 0) { semanticData.add("injectedLanguages", injected); }
         } catch (Throwable t) {
             LOG.debug("Failed to collect injected languages: " + t.getMessage());
         }
@@ -167,7 +167,7 @@ public class ContextCollector {
         // 10. Syntax Errors (platform-independent)
         try {
             JsonArray errors = getSyntaxErrors(psiFile);
-            if (errors.size() > 0) semanticData.add("errors", errors);
+            if (errors.size() > 0) { semanticData.add("errors", errors); }
         } catch (Throwable t) {
             LOG.debug("Failed to collect syntax errors: " + t.getMessage());
         }
@@ -175,7 +175,7 @@ public class ContextCollector {
         // 11. Quick Fixes (platform-independent)
         try {
             JsonArray quickFixes = getQuickFixes(editor, psiFile, project);
-            if (quickFixes.size() > 0) semanticData.add("quickFixes", quickFixes);
+            if (quickFixes.size() > 0) { semanticData.add("quickFixes", quickFixes); }
         } catch (Throwable t) {
             LOG.debug("Failed to collect quick fixes: " + t.getMessage());
         }
@@ -237,7 +237,7 @@ public class ContextCollector {
     private JsonObject getNearbyComments(PsiFile psiFile, int offset) {
         JsonObject comments = new JsonObject();
         Document document = PsiDocumentManager.getInstance(psiFile.getProject()).getDocument(psiFile);
-        if (document == null) return comments;
+        if (document == null) { return comments; }
 
         int currentLine = document.getLineNumber(offset);
         int searchRange = 5;
@@ -257,15 +257,15 @@ public class ContextCollector {
                     JsonObject c = new JsonObject();
                     c.addProperty("line", line + 1);
                     c.addProperty("text", elem.getText().trim());
-                    if (line < currentLine) before.add(c);
-                    else if (line > currentLine) after.add(c);
+                    if (line < currentLine) { before.add(c); }
+                    else if (line > currentLine) { after.add(c); }
                 }
                 elem = PsiTreeUtil.nextVisibleLeaf(elem);
             }
         }
 
-        if (before.size() > 0) comments.add("before", before);
-        if (after.size() > 0) comments.add("after", after);
+        if (before.size() > 0) { comments.add("before", before); }
+        if (after.size() > 0) { comments.add("after", after); }
 
         return comments;
     }
@@ -275,11 +275,11 @@ public class ContextCollector {
         try {
             int offset = editor.getCaretModel().getOffset();
             Project project = editor.getProject();
-            if (project == null) return highlights;
+            if (project == null) { return highlights; }
 
             // Use public API: DocumentMarkupModel instead of internal DaemonCodeAnalyzerImpl
             MarkupModelEx markupModel = (MarkupModelEx) DocumentMarkupModel.forDocument(document, project, false);
-            if (markupModel == null) return highlights;
+            if (markupModel == null) { return highlights; }
 
             int cursorLine = document.getLineNumber(offset);
             int startLine = Math.max(0, cursorLine - HIGHLIGHT_LINES_RANGE);
@@ -296,7 +296,7 @@ public class ContextCollector {
 
                 // Extract HighlightInfo from the highlighter's error stripe tooltip
                 HighlightInfo info = HighlightInfo.fromRangeHighlighter(highlighter);
-                if (info == null) continue;
+                if (info == null) { continue; }
 
                 String description = info.getDescription();
                 String severityName = info.getSeverity().getName();
@@ -332,7 +332,7 @@ public class ContextCollector {
         try {
             InjectedLanguageManager manager = InjectedLanguageManager.getInstance(project);
             Document document = PsiDocumentManager.getInstance(project).getDocument(psiFile);
-            if (document == null) return injected;
+            if (document == null) { return injected; }
 
             int start = Math.max(0, offset - INJECTION_SEARCH_RANGE);
             int end = Math.min(psiFile.getTextLength(), offset + INJECTION_SEARCH_RANGE);
@@ -373,7 +373,7 @@ public class ContextCollector {
         JsonArray errors = new JsonArray();
         try {
             Document document = PsiDocumentManager.getInstance(psiFile.getProject()).getDocument(psiFile);
-            if (document == null) return errors;
+            if (document == null) { return errors; }
 
             Collection<PsiErrorElement> errorElements = PsiTreeUtil.findChildrenOfType(psiFile, PsiErrorElement.class);
             for (PsiErrorElement error : errorElements) {
@@ -397,7 +397,7 @@ public class ContextCollector {
 
             // Use public API: DocumentMarkupModel instead of internal DaemonCodeAnalyzerImpl
             MarkupModelEx markupModel = (MarkupModelEx) DocumentMarkupModel.forDocument(document, project, false);
-            if (markupModel == null) return quickFixes;
+            if (markupModel == null) { return quickFixes; }
 
             Set<String> addedFixes = new HashSet<>();
 
@@ -408,7 +408,7 @@ public class ContextCollector {
                 }
 
                 HighlightInfo info = HighlightInfo.fromRangeHighlighter(highlighter);
-                if (info == null) continue;
+                if (info == null) { continue; }
 
                 // Use public API: findRegisteredQuickFix instead of deprecated quickFixActionRanges
                 info.findRegisteredQuickFix((descriptor, range) -> {

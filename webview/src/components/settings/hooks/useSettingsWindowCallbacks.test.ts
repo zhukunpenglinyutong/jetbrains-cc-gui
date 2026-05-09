@@ -132,7 +132,7 @@ describe('useSettingsWindowCallbacks', () => {
 
     renderHook(() => useSettingsWindowCallbacks(deps));
 
-    (window as any).onUiFontConfigReceived?.(JSON.stringify({
+    window.onUiFontConfigReceived?.(JSON.stringify({
       mode: 'customFile',
       effectiveMode: 'customFile',
       customFontPath: '/tmp/MapleMono.ttf',
@@ -164,7 +164,7 @@ describe('useSettingsWindowCallbacks', () => {
       fontFormat: 'truetype',
     };
 
-    (window as any).onUiFontConfigReceived?.(JSON.stringify(payload));
+    window.onUiFontConfigReceived?.(JSON.stringify(payload));
 
     expect(window.applyUiFontConfig).toHaveBeenCalledWith(expect.objectContaining({
       mode: 'customFile',

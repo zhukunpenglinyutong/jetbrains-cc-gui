@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { sendToJava } from '../../utils/bridge.js';
+import { debugLog } from '../../utils/debug';
 import type { ProjectStatistics, DailyUsage } from '../../types/usage';
 
 export type TabType = 'overview' | 'models' | 'sessions' | 'timeline';
@@ -55,7 +56,7 @@ export function useUsageStatistics(currentProvider?: string) {
     };
 
     if (isFirstMount.current && window.__pendingUsageStatistics) {
-      console.log('[UsageStatisticsSection] Found pending usage statistics, applying...');
+      debugLog('[UsageStatisticsSection] Found pending usage statistics, applying...');
       try {
         const data: ProjectStatistics = JSON.parse(window.__pendingUsageStatistics);
         setStatistics(data);

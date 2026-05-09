@@ -3,6 +3,15 @@ import { useTranslation } from 'react-i18next';
 import type { CodexProviderConfig, EnvVarEntry } from '../types/provider';
 import EnvVarEditor from './EnvVarEditor';
 
+const FORM_HEADER_STYLE: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
+const FORMAT_BUTTON_STYLE: React.CSSProperties = { padding: '4px 8px', fontSize: '12px' };
+const CODE_TEXTAREA_STYLE: React.CSSProperties = {
+  fontFamily: 'var(--idea-editor-font-family, monospace)',
+  fontSize: '12px',
+  lineHeight: '1.5',
+};
+const FOOTER_ACTIONS_STYLE: React.CSSProperties = { marginLeft: 'auto' };
+
 interface CodexProviderDialogProps {
   isOpen: boolean;
   provider?: CodexProviderConfig | null;
@@ -166,7 +175,7 @@ wire_api = "responses"`);
 
           {/* config.toml JSON */}
           <div className="form-group">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={FORM_HEADER_STYLE}>
               <label htmlFor="configTomlJson">
                 config.toml {t('settings.codexProvider.dialog.configJson')}
                 <span className="required">{t('settings.provider.dialog.required')}</span>
@@ -175,7 +184,7 @@ wire_api = "responses"`);
                 type="button"
                 className="btn btn-secondary btn-sm"
                 onClick={handleFormatConfigJson}
-                style={{ padding: '4px 8px', fontSize: '12px' }}
+                style={FORMAT_BUTTON_STYLE}
               >
                 <span className="codicon codicon-symbol-namespace" />
                 {t('settings.codexProvider.dialog.formatJson')}
@@ -187,18 +196,14 @@ wire_api = "responses"`);
               value={configTomlJson}
               onChange={(e) => setConfigTomlJson(e.target.value)}
               rows={15}
-              style={{
-                fontFamily: 'var(--idea-editor-font-family, monospace)',
-                fontSize: '12px',
-                lineHeight: '1.5'
-              }}
+              style={CODE_TEXTAREA_STYLE}
             />
             <small className="form-hint">{t('settings.codexProvider.dialog.configJsonHint')}</small>
           </div>
 
           {/* auth.json */}
           <div className="form-group">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={FORM_HEADER_STYLE}>
               <label htmlFor="authJson">
                 auth.json {t('settings.codexProvider.dialog.authJsonLabel')}
               </label>
@@ -206,7 +211,7 @@ wire_api = "responses"`);
                 type="button"
                 className="btn btn-secondary btn-sm"
                 onClick={handleFormatAuthJson}
-                style={{ padding: '4px 8px', fontSize: '12px' }}
+                style={FORMAT_BUTTON_STYLE}
               >
                 <span className="codicon codicon-symbol-namespace" />
                 {t('settings.codexProvider.dialog.formatJson')}
@@ -218,11 +223,7 @@ wire_api = "responses"`);
               value={authJson}
               onChange={(e) => setAuthJson(e.target.value)}
               rows={6}
-              style={{
-                fontFamily: 'var(--idea-editor-font-family, monospace)',
-                fontSize: '12px',
-                lineHeight: '1.5'
-              }}
+              style={CODE_TEXTAREA_STYLE}
             />
             <small className="form-hint">{t('settings.codexProvider.dialog.authJsonHint')}</small>
           </div>
@@ -258,7 +259,7 @@ wire_api = "responses"`);
         </div>
 
         <div className="dialog-footer">
-          <div className="footer-actions" style={{ marginLeft: 'auto' }}>
+          <div className="footer-actions" style={FOOTER_ACTIONS_STYLE}>
             <button className="btn btn-secondary" onClick={onClose}>
               <span className="codicon codicon-close" />
               {t('common.cancel')}

@@ -3,6 +3,11 @@ import { useTranslation } from 'react-i18next';
 
 export type AlertType = 'error' | 'warning' | 'info' | 'success';
 
+const DIALOG_HEADER_STYLE: React.CSSProperties = { display: 'flex', alignItems: 'center' };
+const DIALOG_TITLE_STYLE: React.CSSProperties = { margin: 0, lineHeight: 1.2 };
+const PRE_WRAP_STYLE: React.CSSProperties = { whiteSpace: 'pre-wrap' };
+const JUSTIFY_CENTER_STYLE: React.CSSProperties = { justifyContent: 'center' };
+
 interface AlertDialogProps {
   isOpen: boolean;
   type?: AlertType;
@@ -64,20 +69,27 @@ const AlertDialog = ({
     }
   };
 
+  const iconStyle: React.CSSProperties = {
+    color: getIconColor(),
+    marginRight: '8px',
+    fontSize: '16px',
+    lineHeight: 1,
+  };
+
   return (
     <div className="confirm-dialog-overlay" onClick={onClose}>
       <div className="confirm-dialog alert-dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="confirm-dialog-header" style={{ display: 'flex', alignItems: 'center' }}>
+        <div className="confirm-dialog-header" style={DIALOG_HEADER_STYLE}>
           <span
             className={`codicon ${getIconClass()}`}
-            style={{ color: getIconColor(), marginRight: '8px', fontSize: '16px', lineHeight: 1 }}
+            style={iconStyle}
           />
-          <h3 className="confirm-dialog-title" style={{ margin: 0, lineHeight: 1.2 }}>{title}</h3>
+          <h3 className="confirm-dialog-title" style={DIALOG_TITLE_STYLE}>{title}</h3>
         </div>
         <div className="confirm-dialog-body">
-          <p className="confirm-dialog-message" style={{ whiteSpace: 'pre-wrap' }}>{message}</p>
+          <p className="confirm-dialog-message" style={PRE_WRAP_STYLE}>{message}</p>
         </div>
-        <div className="confirm-dialog-footer" style={{ justifyContent: 'center' }}>
+        <div className="confirm-dialog-footer" style={JUSTIFY_CENTER_STYLE}>
           <button className="confirm-dialog-button confirm-button" onClick={onClose} autoFocus>
             {buttonText}
           </button>

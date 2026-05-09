@@ -17,6 +17,110 @@ interface ConfigSelectProps {
   currentProvider?: string;
 }
 
+const WRAPPER_STYLE: React.CSSProperties = {
+  position: 'relative',
+  display: 'inline-block',
+};
+
+const TOGGLE_BUTTON_STYLE: React.CSSProperties = {
+  marginLeft: '5px',
+  marginRight: '-2px',
+};
+
+const SUBMENU_STYLE: React.CSSProperties = {
+  position: 'absolute',
+  left: '100%',
+  bottom: 0,
+  marginLeft: '-30px',
+  zIndex: 10001,
+  minWidth: '320px',
+  maxWidth: '360px',
+  maxHeight: '300px',
+  overflowY: 'auto',
+};
+
+const LOADING_OPTION_STYLE: React.CSSProperties = { cursor: 'default' };
+
+const AGENT_BODY_STYLE: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '2px',
+  minWidth: 0,
+  flex: 1,
+};
+
+const AGENT_NAME_STYLE: React.CSSProperties = {
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+};
+
+const AGENT_DESC_STYLE: React.CSSProperties = {
+  fontStyle: 'normal',
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+};
+
+const AGENT_DESC_PLAIN_STYLE: React.CSSProperties = {
+  fontStyle: 'normal',
+};
+
+const DROPDOWN_STYLE: React.CSSProperties = {
+  position: 'absolute',
+  bottom: '100%',
+  left: 0,
+  marginBottom: '4px',
+  zIndex: 10000,
+  minWidth: '200px',
+};
+
+const SELECTOR_OPTION_RELATIVE_STYLE: React.CSSProperties = { position: 'relative' };
+
+const ITEM_INFO_STYLE: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '2px',
+};
+
+const ARROW_CONTAINER_STYLE: React.CSSProperties = {
+  marginLeft: 'auto',
+  display: 'flex',
+  alignItems: 'center',
+  alignSelf: 'stretch',
+  paddingLeft: '12px',
+  cursor: 'pointer',
+};
+
+const ARROW_ICON_STYLE: React.CSSProperties = { fontSize: '12px' };
+
+const SWITCH_OPTION_STYLE: React.CSSProperties = {
+  justifyContent: 'space-between',
+  cursor: 'pointer',
+};
+
+const SWITCH_LABEL_STYLE: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+};
+
+const FAINT_DIVIDER_STYLE: React.CSSProperties = {
+  height: 1,
+  background: 'var(--dropdown-border)',
+  margin: '4px 0',
+  opacity: 0.5,
+};
+
+const TOAST_STYLE: React.CSSProperties = { zIndex: 20000 };
+
+function getAgentOptionStyle(isInfo: boolean): React.CSSProperties {
+  return {
+    alignItems: 'flex-start',
+    cursor: isInfo ? 'default' : 'pointer',
+  };
+}
+
 /**
  * ConfigSelect - Configuration menu (Agent, Streaming, Thinking)
  * Provider selection has been moved to a standalone ProviderSelect icon button.
@@ -138,24 +242,14 @@ export const ConfigSelect = ({
   const renderAgentSubmenu = () => (
     <div
       className="selector-dropdown"
-      style={{
-        position: 'absolute',
-        left: '100%',
-        bottom: 0,
-        marginLeft: '-30px',
-        zIndex: 10001,
-        minWidth: '320px',
-        maxWidth: '360px',
-        maxHeight: '300px',
-        overflowY: 'auto',
-      }}
+      style={SUBMENU_STYLE}
       onMouseEnter={(e) => {
         e.stopPropagation();
         setActiveSubmenu('agent');
       }}
     >
       {agentsLoading ? (
-        <div className="selector-option" style={{ cursor: 'default' }}>
+        <div className="selector-option" style={LOADING_OPTION_STYLE}>
           <span className="codicon codicon-loading codicon-modifier-spin" />
           <span>{t('chat.loadingDropdown')}</span>
         </div>
@@ -169,10 +263,7 @@ export const ConfigSelect = ({
             <div
               key={agent.id}
               className={`selector-option ${isSelected ? 'selected' : ''} ${isInfo ? 'disabled' : ''}`}
-              style={{
-                alignItems: 'flex-start',
-                cursor: isInfo ? 'default' : 'pointer',
-              }}
+              style={getAgentOptionStyle(isInfo)}
               onClick={(e) => {
                 e.stopPropagation();
                 if (isInfo) return;
@@ -190,14 +281,14 @@ export const ConfigSelect = ({
               }}
             >
               <span className={`codicon ${isCreate ? 'codicon-add' : isInfo ? 'codicon-info' : 'codicon-robot'}`} />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, flex: 1 }}>
-                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{agent.name}</span>
+              <div style={AGENT_BODY_STYLE}>
+                <span style={AGENT_NAME_STYLE}>{agent.name}</span>
                 {agent.prompt ? (
-                  <span className="model-description" style={{ fontStyle: 'normal', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <span className="model-description" style={AGENT_DESC_STYLE}>
                     {agent.prompt.length > 60 ? agent.prompt.substring(0, 60) + '...' : agent.prompt}
                   </span>
                 ) : isCreate ? (
-                  <span className="model-description" style={{ fontStyle: 'normal' }}>{t('settings.agent.createAgentHint')}</span>
+                  <span className="model-description" style={AGENT_DESC_PLAIN_STYLE}>{t('settings.agent.createAgentHint')}</span>
                 ) : null}
               </div>
               {isSelected && <span className="codicon codicon-check check-mark" />}
@@ -209,12 +300,12 @@ export const ConfigSelect = ({
   );
 
   return (
-    <div style={{ position: 'relative', display: 'inline-block' }}>
+    <div style={WRAPPER_STYLE}>
       <button
         ref={buttonRef}
         className="selector-button"
         onClick={handleToggle}
-        style={{ marginLeft: '5px', marginRight: '-2px' }}
+        style={TOGGLE_BUTTON_STYLE}
         title={t('settings.configure', 'Configure')}
       >
         <span className="codicon codicon-settings" />
@@ -224,42 +315,26 @@ export const ConfigSelect = ({
         <div
           ref={dropdownRef}
           className="selector-dropdown"
-          style={{
-            position: 'absolute',
-            bottom: '100%',
-            left: 0,
-            marginBottom: '4px',
-            zIndex: 10000,
-            minWidth: '200px'
-          }}
+          style={DROPDOWN_STYLE}
         >
           {/* Agent Item */}
           <div
             className="selector-option"
             onMouseEnter={() => setActiveSubmenu('agent')}
             onMouseLeave={() => setActiveSubmenu('none')}
-            style={{ position: 'relative' }}
+            style={SELECTOR_OPTION_RELATIVE_STYLE}
           >
             <span className="codicon codicon-robot" />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <div style={ITEM_INFO_STYLE}>
               <span>{t('settings.agent.title')}</span>
               {selectedAgent?.name ? (
-                <span className="model-description" style={{ fontStyle: 'normal' }}>
+                <span className="model-description" style={AGENT_DESC_PLAIN_STYLE}>
                   {selectedAgent.name}
                 </span>
               ) : null}
             </div>
-            <div
-              style={{
-                marginLeft: 'auto',
-                display: 'flex',
-                alignItems: 'center',
-                alignSelf: 'stretch',
-                paddingLeft: '12px',
-                cursor: 'pointer'
-              }}
-            >
-              <span className="codicon codicon-chevron-right" style={{ fontSize: '12px' }} />
+            <div style={ARROW_CONTAINER_STYLE}>
+              <span className="codicon codicon-chevron-right" style={ARROW_ICON_STYLE} />
             </div>
 
             {activeSubmenu === 'agent' && renderAgentSubmenu()}
@@ -272,23 +347,14 @@ export const ConfigSelect = ({
             className="selector-option"
             onMouseEnter={() => setActiveSubmenu('runtimeProvider')}
             onMouseLeave={() => setActiveSubmenu('none')}
-            style={{ position: 'relative' }}
+            style={SELECTOR_OPTION_RELATIVE_STYLE}
           >
             <span className="codicon codicon-vm-connect" />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <div style={ITEM_INFO_STYLE}>
               <span>{t('config.runtimeProvider.title')}</span>
             </div>
-            <div
-              style={{
-                marginLeft: 'auto',
-                display: 'flex',
-                alignItems: 'center',
-                alignSelf: 'stretch',
-                paddingLeft: '12px',
-                cursor: 'pointer'
-              }}
-            >
-              <span className="codicon codicon-chevron-right" style={{ fontSize: '12px' }} />
+            <div style={ARROW_CONTAINER_STYLE}>
+              <span className="codicon codicon-chevron-right" style={ARROW_ICON_STYLE} />
             </div>
 
             {activeSubmenu === 'runtimeProvider' && (
@@ -315,9 +381,9 @@ export const ConfigSelect = ({
               onStreamingEnabledChange?.(!streamingEnabled);
             }}
             onMouseEnter={() => setActiveSubmenu('none')}
-            style={{ justifyContent: 'space-between', cursor: 'pointer' }}
+            style={SWITCH_OPTION_STYLE}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={SWITCH_LABEL_STYLE}>
               <span className="codicon codicon-sync" />
               <span>{t('settings.basic.streaming.label')}</span>
             </div>
@@ -332,7 +398,7 @@ export const ConfigSelect = ({
           </div>
 
           {/* Divider */}
-          <div style={{ height: 1, background: 'var(--dropdown-border)', margin: '4px 0', opacity: 0.5 }} />
+          <div style={FAINT_DIVIDER_STYLE} />
 
           {/* Thinking Switch Item */}
           <div
@@ -342,9 +408,9 @@ export const ConfigSelect = ({
               onToggleThinking?.(!alwaysThinkingEnabled);
             }}
             onMouseEnter={() => setActiveSubmenu('none')}
-            style={{ justifyContent: 'space-between', cursor: 'pointer' }}
+            style={SWITCH_OPTION_STYLE}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={SWITCH_LABEL_STYLE}>
               <span className="codicon codicon-lightbulb" />
               <span>{t('common.thinking')}</span>
             </div>
@@ -361,7 +427,7 @@ export const ConfigSelect = ({
       )}
 
       {showToast && createPortal(
-        <div className="selector-toast" style={{ zIndex: 20000 }}>
+        <div className="selector-toast" style={TOAST_STYLE}>
           {toastMessage}
         </div>,
         document.body

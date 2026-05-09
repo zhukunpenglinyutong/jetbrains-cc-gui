@@ -118,14 +118,14 @@ class FileSystemCollector {
      * List direct children of a directory (non-recursive).
      */
     private void listDirectChildren(File dir, String basePath, List<JsonObject> files, IgnoreRuleMatcher ignoreMatcher) {
-        if (!dir.isDirectory()) return;
+        if (!dir.isDirectory()) { return; }
 
         File[] children = dir.listFiles();
-        if (children == null) return;
+        if (children == null) { return; }
 
         int added = 0;
         for (File child : children) {
-            if (added >= MAX_DIRECTORY_CHILDREN) break;
+            if (added >= MAX_DIRECTORY_CHILDREN) { break; }
 
             String name = child.getName();
             boolean isDir = child.isDirectory();
@@ -145,15 +145,15 @@ class FileSystemCollector {
      * Recursively collect files.
      */
     private void collectFilesRecursive(File dir, String basePath, List<JsonObject> files, FileHandler.FileListRequest request, int depth, IgnoreRuleMatcher ignoreMatcher) {
-        if (depth > MAX_SEARCH_DEPTH || files.size() >= MAX_SEARCH_RESULTS) return;
-        if (!dir.isDirectory()) return;
+        if (depth > MAX_SEARCH_DEPTH || files.size() >= MAX_SEARCH_RESULTS) { return; }
+        if (!dir.isDirectory()) { return; }
 
         File[] children = dir.listFiles();
 
-        if (children == null) return;
+        if (children == null) { return; }
 
         for (File child : children) {
-            if (files.size() >= MAX_SEARCH_RESULTS) break;
+            if (files.size() >= MAX_SEARCH_RESULTS) { break; }
 
             String name = child.getName();
             boolean isDir = child.isDirectory();

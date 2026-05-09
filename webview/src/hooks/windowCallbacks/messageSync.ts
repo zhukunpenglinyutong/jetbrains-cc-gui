@@ -12,6 +12,20 @@ import type { ClaudeContentOrResultBlock, ClaudeMessage, ClaudeRawMessage } from
 /** Time window (ms) for matching optimistic messages with backend messages. */
 export const OPTIMISTIC_MESSAGE_TIME_WINDOW = 5000;
 
+export const getStreamEndHandlingMode = (
+  provider: string,
+  isStreaming: boolean,
+  currentTurnId: number,
+): 'full' | 'minimal' | 'skip' => {
+  if (isStreaming || currentTurnId > 0) {
+    return 'full';
+  }
+  if (provider === 'codex') {
+    return 'minimal';
+  }
+  return 'skip';
+};
+
 // ---------------------------------------------------------------------------
 // Raw-field helpers
 // ---------------------------------------------------------------------------

@@ -1,6 +1,10 @@
 import { useTranslation } from 'react-i18next';
 import type { ProjectStatistics } from '../../types/usage';
 
+function getBarFillStyle(percentage: number): React.CSSProperties {
+  return { width: `${percentage}%` };
+}
+
 interface OverviewTabProps {
   statistics: ProjectStatistics;
   formatCost: (cost: number) => string;
@@ -82,7 +86,7 @@ export const UsageOverviewTab = ({
                 <span className="token-bar-value">{formatNumber(value)}</span>
               </div>
               <div className="token-bar-track">
-                <div className={`token-bar-fill ${cls}`} style={{ width: `${getTokenPercentage(value)}%` }} />
+                <div className={`token-bar-fill ${cls}`} style={getBarFillStyle(getTokenPercentage(value))} />
               </div>
             </div>
           ))}

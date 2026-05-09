@@ -28,8 +28,10 @@ import {
   buildConfigErrorPayload
 } from './message-utils.js';
 import { createPreToolUseHook } from './permission-mode.js';
+import { loadMcpServersConfigAsRecord } from './mcp-status/config-loader.js';
 import { setActiveQueryResult } from './message-session-registry.js';
 import { normalizeStreamDelta, rememberStreamSnapshot } from './stream-delta-normalizer.js';
+import { generateSessionTitle } from '../session-title-service.js';
 
 // ========== Internal helpers for deduplication ==========
 
@@ -59,7 +61,7 @@ function resolveThinkingConfig(settings) {
 /**
  * Build query options object shared by both send functions.
  */
-function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines }) {
+function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers }) {
   return {
     cwd: workingDirectory,
     permissionMode,
@@ -75,6 +77,7 @@ function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, max
     canUseTool,
     hooks: { PreToolUse: [{ hooks: [preToolUseHook] }] },
     settingSources: ['user', 'project', 'local'],
+    ...(mcpServers && { mcpServers }),
     systemPrompt: {
       type: 'preset',
       preset: 'claude_code',
@@ -271,7 +274,7 @@ function emitThinkingDelta(thinkingText, state, blockIndex = 0) {
 /**
  * Execute a query call with auto-retry logic for transient API errors.
  */
-async function executeWithRetry({ createQueryResult, streamingEnabled, resumeSessionId, workingDirectory, logPrefix, outerStreamState }) {
+async function executeWithRetry({ createQueryResult, streamingEnabled, resumeSessionId, workingDirectory, logPrefix, outerStreamState, userMessage }) {
   let retryAttempt = 0;
   let lastRetryError = null;
   const lp = logPrefix ? ` ${logPrefix}` : '';
@@ -328,6 +331,12 @@ async function executeWithRetry({ createQueryResult, streamingEnabled, resumeSes
       outerStreamState.streamStarted = state.streamStarted;
       console.log('[MESSAGE_END]');
       console.log(JSON.stringify({ success: true, sessionId: state.currentSessionId }));
+
+      // Fire-and-forget: generate AI title for new sessions (not resumes)
+      if (userMessage && state.currentSessionId && !resumeSessionId) {
+        void generateSessionTitle(userMessage, state.currentSessionId, workingDirectory);
+      }
+
       break;
 
     } catch (retryError) {
@@ -441,7 +450,8 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     console.log('[DEBUG] Config:', { effectivePermissionMode, alwaysThinkingEnabled, maxThinkingTokens, streamingEnabled, reasoningEffort: normalizedReasoningEffort });
 
     const preToolUseHook = createPreToolUseHook(effectivePermissionMode, workingDirectory);
-    const options = buildQueryOptions({ workingDirectory, permissionMode: effectivePermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines });
+    const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory);
+    const options = buildQueryOptions({ workingDirectory, permissionMode: effectivePermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers });
 
     if (normalizedReasoningEffort) {
       options.effort = normalizedReasoningEffort;
@@ -458,7 +468,8 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
       resumeSessionId,
       workingDirectory,
       logPrefix: '',
-      outerStreamState
+      outerStreamState,
+      userMessage: message
     });
 
   } catch (error) {
@@ -492,17 +503,17 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 
     const systemPromptAppend = buildSystemPromptAppend(openedFiles, agentPrompt, message);
 
-    const contentBlocks = buildContentBlocks(attachments, message);
-    const userMessage = {
-      type: 'user', session_id: '', parent_tool_use_id: null,
-      message: { role: 'user', content: contentBlocks }
-    };
-
     const sdkModelName = mapModelIdToSdkName(model);
     const settings = loadClaudeSettings();
     const resolvedAttachModel = resolveModelFromSettings(model, settings?.env);
     console.log('[DEBUG] (withAttachments) Model:', model, '->', resolvedAttachModel);
     setModelEnvironmentVariables(resolvedAttachModel, model);
+
+    const contentBlocks = await buildContentBlocks(attachments, message, resolvedAttachModel);
+    const userMessage = {
+      type: 'user', session_id: '', parent_tool_use_id: null,
+      message: { role: 'user', content: contentBlocks }
+    };
 
     const normalizedPermissionMode = (!permissionMode || permissionMode === '') ? 'default' : permissionMode;
     const preToolUseHook = createPreToolUseHook(normalizedPermissionMode, workingDirectory);
@@ -515,7 +526,8 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     streamingEnabled = streamingParam != null ? streamingParam : (settings?.streamingEnabled ?? false);
     console.log('[DEBUG] (withAttachments) Config:', { normalizedPermissionMode, alwaysThinkingEnabled, maxThinkingTokens, streamingEnabled, reasoningEffort });
 
-    const options = buildQueryOptions({ workingDirectory, permissionMode: normalizedPermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines });
+    const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory);
+    const options = buildQueryOptions({ workingDirectory, permissionMode: normalizedPermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers });
 
     if (reasoningEffort) {
       options.effort = reasoningEffort;
@@ -538,7 +550,8 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
       resumeSessionId,
       workingDirectory,
       logPrefix: '(withAttachments)',
-      outerStreamState
+      outerStreamState,
+      userMessage: message
     });
 
   } catch (error) {

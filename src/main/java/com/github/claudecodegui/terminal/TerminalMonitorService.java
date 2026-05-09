@@ -121,15 +121,15 @@ public class TerminalMonitorService implements ProjectActivity {
     private void setupTerminalListener(@NotNull Project project, @NotNull ProjectMonitorState state) {
         // ContentManager access requires EDT, so schedule this on EDT
         ApplicationManager.getApplication().invokeLater(() -> {
-            if (project.isDisposed() || state.listenerDisposable.isDisposed()) return;
+            if (project.isDisposed() || state.listenerDisposable.isDisposed()) { return; }
 
             ensureReworkedTerminalMenuRegistration();
 
             ToolWindow terminalWindow = ToolWindowManager.getInstance(project).getToolWindow("Terminal");
-            if (terminalWindow == null) return;
+            if (terminalWindow == null) { return; }
 
             ContentManager contentManager = terminalWindow.getContentManager();
-            if (contentManager.isDisposed()) return;
+            if (contentManager.isDisposed()) { return; }
 
             if (!state.actionDiagnosticsLogged) {
                 logTerminalActionRegistration();
@@ -166,12 +166,12 @@ public class TerminalMonitorService implements ProjectActivity {
     }
 
     private void checkForNewWidgets(@NotNull Project project, @NotNull ProjectMonitorState state) {
-        if (project.isDisposed() || state.listenerDisposable.isDisposed()) return;
+        if (project.isDisposed() || state.listenerDisposable.isDisposed()) { return; }
 
         try {
             Class<?> viewClass = Class.forName("org.jetbrains.plugins.terminal.TerminalView");
             Object view = viewClass.getMethod("getInstance", Project.class).invoke(null, project);
-            if (view == null) return;
+            if (view == null) { return; }
 
             Object result = viewClass.getMethod("getWidgets").invoke(view);
             List<Object> widgets = convertResultToList(result);
@@ -191,7 +191,7 @@ public class TerminalMonitorService implements ProjectActivity {
     }
 
     private void attachToWidget(@NotNull Project project, @NotNull ProjectMonitorState state, @NotNull Object widget) {
-        if (monitoredWidgets.contains(widget)) return;
+        if (monitoredWidgets.contains(widget)) { return; }
 
         monitoredWidgets.add(widget);
         String title = "Unknown";
@@ -224,7 +224,7 @@ public class TerminalMonitorService implements ProjectActivity {
             for (String methodName : possibleHandlerMethods) {
                 try {
                     getHandlerMethod = widget.getClass().getMethod(methodName);
-                    if (getHandlerMethod != null) break;
+                    if (getHandlerMethod != null) { break; }
                 } catch (NoSuchMethodException e) {
                     // continue
                 }
@@ -307,7 +307,7 @@ public class TerminalMonitorService implements ProjectActivity {
         try {
             Class<?> viewClass = Class.forName("org.jetbrains.plugins.terminal.TerminalView");
             Object view = viewClass.getMethod("getInstance", Project.class).invoke(null, project);
-            if (view == null) return List.of();
+            if (view == null) { return List.of(); }
 
             Object result = viewClass.getMethod("getWidgets").invoke(view);
             List<Object> sortedWidgets = new ArrayList<>(convertResultToList(result));
@@ -410,7 +410,7 @@ public class TerminalMonitorService implements ProjectActivity {
      */
     private static String getCapturedContent(@NotNull Object widget) {
         StringBuilder sb = buffers.get(widget);
-        if (sb == null) return "";
+        if (sb == null) { return ""; }
         synchronized (sb) {
             return sb.toString();
         }
@@ -426,11 +426,11 @@ public class TerminalMonitorService implements ProjectActivity {
 
             // Step 1: Get Terminal object
             Object terminal = getTerminalObject(widget);
-            if (terminal == null) return "";
+            if (terminal == null) { return ""; }
 
             // Step 2: Get TextBuffer
             Object buffer = getTextBuffer(terminal);
-            if (buffer == null) return "";
+            if (buffer == null) { return ""; }
 
             // Step 3: Scrape lines
             return scrapeBufferLines(buffer, 500);
@@ -589,7 +589,7 @@ public class TerminalMonitorService implements ProjectActivity {
     private static String extractLineText(@NotNull Object buffer, @NotNull Method getLineMethod, int lineIndex) {
         try {
             Object line = getLineMethod.invoke(buffer, lineIndex);
-            if (line == null) return null;
+            if (line == null) { return null; }
 
             // Try common method names
             String[] textMethods = {"getText", "getLineText", "getLine", "getString"};
@@ -597,7 +597,7 @@ public class TerminalMonitorService implements ProjectActivity {
                 try {
                     Method m = line.getClass().getMethod(methodName);
                     String text = (String) m.invoke(line);
-                    if (text != null) return text;
+                    if (text != null) { return text; }
                 } catch (Exception e) {
                     // continue
                 }
@@ -610,7 +610,7 @@ public class TerminalMonitorService implements ProjectActivity {
                         && !m.getName().equals("toString")
                         && !m.getName().equals("getClass")) {
                     String text = (String) m.invoke(line);
-                    if (text != null && !text.isEmpty()) return text;
+                    if (text != null && !text.isEmpty()) { return text; }
                 }
             }
         } catch (Exception e) {
@@ -635,7 +635,7 @@ public class TerminalMonitorService implements ProjectActivity {
     }
 
     private static List<Object> convertResultToList(Object result) {
-        if (result == null) return Collections.emptyList();
+        if (result == null) { return Collections.emptyList(); }
         if (result instanceof Object[]) {
             return Arrays.asList((Object[]) result);
         }

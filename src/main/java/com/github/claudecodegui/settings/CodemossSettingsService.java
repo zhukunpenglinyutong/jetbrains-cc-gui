@@ -1133,6 +1133,35 @@ public class CodemossSettingsService {
         LOG.info("[CodemossSettings] Set selected sound: " + soundId);
     }
 
+    // ==================== Task Completion Notification Management ====================
+
+    /**
+     * Get whether task completion balloon notification is enabled.
+     *
+     * @return whether task completion notification is enabled, default is false (opt-in)
+     */
+    public boolean getTaskCompletionNotificationEnabled() throws IOException {
+        JsonObject config = readConfig();
+
+        if (config.has("taskCompletionNotificationEnabled") && !config.get("taskCompletionNotificationEnabled").isJsonNull()) {
+            return config.get("taskCompletionNotificationEnabled").getAsBoolean();
+        }
+
+        return false;
+    }
+
+    /**
+     * Set whether task completion balloon notification is enabled.
+     *
+     * @param enabled whether to enable
+     */
+    public void setTaskCompletionNotificationEnabled(boolean enabled) throws IOException {
+        JsonObject config = readConfig();
+        config.addProperty("taskCompletionNotificationEnabled", enabled);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set task completion notification enabled: " + enabled);
+    }
+
     // ==================== AI Feature Toggle Management ====================
 
     /**
@@ -1187,6 +1216,33 @@ public class CodemossSettingsService {
         config.addProperty("statusBarWidgetEnabled", enabled);
         writeConfig(config);
         LOG.info("[CodemossSettings] Set status bar widget enabled: " + enabled);
+    }
+
+    /**
+     * Get whether AI session title generation is enabled.
+     *
+     * @return whether AI title generation is enabled, default is true
+     */
+    public boolean getAiTitleGenerationEnabled() throws IOException {
+        JsonObject config = readConfig();
+
+        if (config.has("aiTitleGenerationEnabled") && !config.get("aiTitleGenerationEnabled").isJsonNull()) {
+            return config.get("aiTitleGenerationEnabled").getAsBoolean();
+        }
+
+        return true;
+    }
+
+    /**
+     * Set whether AI session title generation is enabled.
+     *
+     * @param enabled whether to enable
+     */
+    public void setAiTitleGenerationEnabled(boolean enabled) throws IOException {
+        JsonObject config = readConfig();
+        config.addProperty("aiTitleGenerationEnabled", enabled);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set AI title generation enabled: " + enabled);
     }
 
     // ==================== Prompt Enhancer Config Management ====================

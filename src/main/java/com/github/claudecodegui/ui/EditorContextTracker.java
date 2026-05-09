@@ -74,17 +74,17 @@ public class EditorContextTracker {
     }
 
     private void scheduleContextUpdate() {
-        if (disposed || contextUpdateAlarm == null) return;
+        if (disposed || contextUpdateAlarm == null) { return; }
         contextUpdateAlarm.cancelAllRequests();
         contextUpdateAlarm.addRequest(this::updateContextInfo, 200);
     }
 
     private void updateContextInfo() {
-        if (disposed) return;
+        if (disposed) { return; }
 
         // Ensure we are on EDT (Alarm.ThreadToUse.SWING_THREAD guarantees this, but being safe)
         ApplicationManager.getApplication().invokeLater(() -> {
-            if (disposed) return;
+            if (disposed) { return; }
 
             // Check if auto-open file is enabled
             try {

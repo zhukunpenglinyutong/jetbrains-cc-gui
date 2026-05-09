@@ -8,6 +8,7 @@ import com.github.claudecodegui.handler.PermissionHandler;
 import com.github.claudecodegui.permission.PermissionService;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.provider.common.DaemonBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.session.SessionCallbackAdapter;
@@ -66,6 +67,9 @@ public class ClaudeChatWindow {
     private volatile boolean frontendReady = false;
     private volatile boolean slashCommandsFetched = false;
     private final AtomicBoolean restoredHistoryLoadStarted = new AtomicBoolean(false);
+
+    // Daemon event listener for AI title forwarding. Held so it can be removed on dispose.
+    private DaemonBridge.DaemonEventListener titleEventListener;
     private volatile int fetchedSlashCommandsCount = 0;
 
     private HandlerContext handlerContext;
@@ -462,7 +466,7 @@ public class ClaudeChatWindow {
                 StringBuilder argsJs = new StringBuilder();
                 if (args != null) {
                     for (int i = 0; i < args.length; i++) {
-                        if (i > 0) argsJs.append(", ");
+                        if (i > 0) { argsJs.append(", "); }
                         String arg = args[i] == null ? "" : args[i];
                         argsJs.append("'").append(arg).append("'");
                     }
@@ -495,7 +499,7 @@ public class ClaudeChatWindow {
 
                 StringBuilder logMessage = new StringBuilder("[Webview] ");
                 for (int i = 0; i < args.size(); i++) {
-                    if (i > 0) logMessage.append(" ");
+                    if (i > 0) { logMessage.append(" "); }
                     logMessage.append(args.get(i).toString());
                 }
 
@@ -554,6 +558,32 @@ public class ClaudeChatWindow {
             }
         };
         session.setCallback(sessionCallbackAdapter);
+
+        // Wire daemon events directly to frontend (bypasses adapter lifecycle).
+        // Calling through sessionCallbackAdapter would silently drop the event
+        // if setupSessionCallbacks() is invoked again before the title arrives
+        // (adapter.deactivate() → isInactive() → event discarded).
+        // Register only once per ClaudeChatWindow; subsequent setupSessionCallbacks()
+        // calls reuse the existing listener so the bridge keeps a single registration
+        // per window. The listener is removed in dispose().
+        if (this.titleEventListener == null) {
+            this.titleEventListener = (event, data) -> {
+                if ("title_generated".equals(event)) {
+                    String genSessionId = data.has("sessionId") ? data.get("sessionId").getAsString() : null;
+                    String title = data.has("title") ? data.get("title").getAsString() : null;
+                    if (genSessionId != null && title != null) {
+                        ApplicationManager.getApplication().invokeLater(() -> {
+                            if (!disposed) {
+                                callJavaScript("updateSessionTitle",
+                                        JsUtils.escapeJs(genSessionId), JsUtils.escapeJs(title));
+                            }
+                        });
+                    }
+                }
+            };
+            this.claudeSDKBridge.addDaemonEventListener(this.titleEventListener);
+        }
+
         persistTabSessionState();
     }
 
@@ -562,7 +592,10 @@ public class ClaudeChatWindow {
             return;
         }
         if ("claude".equals(session.getProvider()) && session.getError() == null) {
-            com.github.claudecodegui.notifications.ClaudeNotifier.showSuccess(project, "Task completed");
+            com.github.claudecodegui.notifications.ClaudeNotifier.showSuccess(
+                project,
+                com.github.claudecodegui.notifications.ClaudeNotifier.buildTitleFromSession(session),
+                com.github.claudecodegui.notifications.ClaudeNotifier.buildPreviewFromSession(session, "Task completed"));
         }
     }
 
@@ -641,7 +674,7 @@ public class ClaudeChatWindow {
     // ==================== Dispose ====================
 
     public synchronized void dispose() {
-        if (this.disposed) return;
+        if (this.disposed) { return; }
         this.disposed = true;
 
         chatWindowDelegate.dispose();
@@ -649,6 +682,14 @@ public class ClaudeChatWindow {
         streamCoalescer.dispose();
         if (sessionCallbackAdapter != null) {
             sessionCallbackAdapter.dispose();
+        }
+        if (titleEventListener != null && claudeSDKBridge != null) {
+            try {
+                claudeSDKBridge.removeDaemonEventListener(titleEventListener);
+            } catch (Exception e) {
+                LOG.warn("Failed to remove daemon event listener: " + e.getMessage());
+            }
+            titleEventListener = null;
         }
         webviewWatchdog.stop();
 
@@ -677,7 +718,7 @@ public class ClaudeChatWindow {
         ClaudeSDKToolWindow.unregisterWindow(project, this);
 
         try {
-            if (session != null) session.interrupt();
+            if (session != null) { session.interrupt(); }
         } catch (Exception e) {
             LOG.warn("Failed to clean up session: " + e.getMessage());
         }

@@ -474,14 +474,16 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
       <ToastContainer messages={toasts} onDismiss={dismissToast} />
 
       {/* Tool tooltip popup */}
-      {hoveredTool && (
+      {hoveredTool && (() => {
+        const tooltipStyle: React.CSSProperties = {
+          left: `${Math.min(hoveredTool.position.x, window.innerWidth - 420)}px`,
+          top: `${hoveredTool.position.y}px`,
+        };
+        return (
         <div
           ref={tooltipRef}
           className="mcp-tool-tooltip"
-          style={{
-            left: `${Math.min(hoveredTool.position.x, window.innerWidth - 420)}px`,
-            top: `${hoveredTool.position.y}px`,
-          }}
+          style={tooltipStyle}
         >
           <div className="tooltip-header">
             <span className="tooltip-icon">
@@ -498,7 +500,8 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
             </div>
           )}
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

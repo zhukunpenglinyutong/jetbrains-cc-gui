@@ -11,6 +11,7 @@ import type { ClaudeRawMessage } from '../../../types';
 import { sendBridgeEvent } from '../../../utils/bridge';
 import { THROTTLE_INTERVAL } from '../../useStreamingMessages';
 import { parseSequence } from '../parseSequence';
+import { getStreamEndHandlingMode } from '../messageSync';
 
 /**
  * Timeout (ms) for detecting a stalled stream.  If no content/thinking delta
@@ -226,10 +227,15 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     // 1. If the current turn ID was already processed (before refs were cleared)
     // 2. If streaming is already inactive (refs were already cleared by first call)
     const currentTurnId = streamingTurnIdRef.current;
+    const handlingMode = getStreamEndHandlingMode(
+      options.currentProviderRef.current,
+      isStreamingRef.current,
+      currentTurnId,
+    );
     if (currentTurnId > 0 && window.__streamEndProcessedTurnId === currentTurnId) {
       return;
     }
-    if (!isStreamingRef.current && currentTurnId <= 0) {
+    if (handlingMode === 'skip') {
       // Streaming refs already cleared by a previous onStreamEnd — nothing to do
       return;
     }
@@ -244,6 +250,18 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     }
     // Notify backend about stream completion for tab status indicator
     sendBridgeEvent('tab_status_changed', JSON.stringify({ status: 'completed' }));
+
+    if (handlingMode === 'minimal') {
+      if (typeof window.__cancelPendingUpdateMessages === 'function') {
+        window.__cancelPendingUpdateMessages();
+      }
+      setStreamingActive(false);
+      setLoading(false);
+      setLoadingStartTime(null);
+      setIsThinking(false);
+      window.__streamEndProcessedTurnId = currentTurnId > 0 ? currentTurnId : undefined;
+      return;
+    }
 
     // FIX: Extract backend final snapshot from pending updateMessages BEFORE cancelling rAF.
     // The backend's final flush contains the authoritative message state (complete raw blocks).
