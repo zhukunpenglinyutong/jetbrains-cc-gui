@@ -669,7 +669,8 @@
         "addEnvVar": "Add Variable",
         "envKeyInvalid": "Invalid key name (must start with letter/underscore, alphanumeric only)",
         "envKeyProtected": "Cannot set built-in variable: {{key}}",
-        "envKeyDuplicate": "Duplicate key: {{key}}"
+        "envKeyDuplicate": "Duplicate key: {{key}}",
+        "envValueTooLong": "Valor muito longo (máx. {{max}} caracteres)"
       }
     },
     "agent": {

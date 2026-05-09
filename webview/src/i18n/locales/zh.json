@@ -678,7 +678,8 @@
         "addEnvVar": "添加变量",
         "envKeyInvalid": "无效的变量名（必须以字母或下划线开头，仅允许字母数字和下划线）",
         "envKeyProtected": "无法设置内置变量：{{key}}",
-        "envKeyDuplicate": "重复的变量名：{{key}}"
+        "envKeyDuplicate": "重复的变量名：{{key}}",
+        "envValueTooLong": "变量值过长（最大 {{max}} 字符）"
       }
     },
     "agent": {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CodexProviderConfig, EnvVarEntry } from '../types/provider';
+import { validateEnvVarEntries, ENV_VAR_VALUE_MAX_LENGTH } from '../types/provider';
 import EnvVarEditor from './EnvVarEditor';
 
 const FORM_HEADER_STYLE: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
@@ -102,6 +103,32 @@ wire_api = "responses"`);
     }
   }, [isOpen, onClose]);
 
+  const reportEnvVarIssue = (
+    issue: { reason: string; key?: string },
+    sectionLabel: string,
+  ): boolean => {
+    const reasonKey = (() => {
+      switch (issue.reason) {
+        case 'invalid':
+          return 'settings.codexProvider.dialog.envKeyInvalid';
+        case 'protected':
+          return 'settings.codexProvider.dialog.envKeyProtected';
+        case 'duplicate':
+          return 'settings.codexProvider.dialog.envKeyDuplicate';
+        case 'value_too_long':
+          return 'settings.codexProvider.dialog.envValueTooLong';
+        default:
+          return null;
+      }
+    })();
+    if (!reasonKey) return false;
+    addToast(
+      `${sectionLabel}: ${t(reasonKey, { key: issue.key, max: ENV_VAR_VALUE_MAX_LENGTH })}`,
+      'error',
+    );
+    return true;
+  };
+
   const handleSave = () => {
     if (!providerName.trim()) {
       addToast(t('settings.codexProvider.dialog.nameRequired'), 'error');
@@ -116,6 +143,18 @@ wire_api = "responses"`);
         addToast(t('settings.codexProvider.dialog.authJsonError'), 'error');
         return;
       }
+    }
+
+    // Validate env vars before saving
+    const messageIssues = validateEnvVarEntries(messageEnvVars);
+    if (messageIssues.length > 0) {
+      reportEnvVarIssue(messageIssues[0], t('settings.codexProvider.dialog.messageEnvLabel'));
+      return;
+    }
+    const mcpIssues = validateEnvVarEntries(mcpEnvVars);
+    if (mcpIssues.length > 0) {
+      reportEnvVarIssue(mcpIssues[0], t('settings.codexProvider.dialog.mcpEnvLabel'));
+      return;
     }
 
     const providerData: CodexProviderConfig = {

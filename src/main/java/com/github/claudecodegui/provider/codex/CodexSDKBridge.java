@@ -50,7 +50,9 @@ public class CodexSDKBridge extends BaseSDKBridge {
     private static final String ENV_CODEX_CI = "CODEX_CI";
     private static final String ENV_CODEX_SANDBOX_NETWORK_DISABLED = "CODEX_SANDBOX_NETWORK_DISABLED";
     private static final long MCP_TOOLS_TIMEOUT_MS = 65_000;
+    private static final int MAX_ENV_VAR_VALUE_LENGTH = 16 * 1024;
     private final CodexHistoryReader historyReader;
+    private final CodemossSettingsService settingsService = new CodemossSettingsService();
 
     private static final Set<String> PROTECTED_ENV_KEYS = new HashSet<>();
     static {
@@ -106,23 +108,30 @@ public class CodexSDKBridge extends BaseSDKBridge {
      * @param category "message" or "mcp" to select the correct env var list
      */
     private void injectCustomEnvVars(Map<String, String> env, String category) {
+        JsonObject activeProvider;
         try {
-            JsonObject activeProvider = new CodemossSettingsService().getActiveCodexProvider();
-            if (activeProvider == null) {
-                return;
-            }
+            activeProvider = settingsService.getActiveCodexProvider();
+        } catch (Exception e) {
+            LOG.error("[Codex] Failed to load active provider for env var injection (category=" + category + ")", e);
+            return;
+        }
 
-            String field = "message".equals(category) ? "messageEnvVars" : "mcpEnvVars";
-            if (!activeProvider.has(field) || !activeProvider.get(field).isJsonArray()) {
-                return;
-            }
+        if (activeProvider == null) {
+            return;
+        }
 
-            JsonArray envVars = activeProvider.getAsJsonArray(field);
-            for (JsonElement el : envVars) {
-                if (!el.isJsonObject()) { continue; }
-                JsonObject entry = el.getAsJsonObject();
-                if (!entry.has("key") || !entry.has("value")) { continue; }
+        String field = "message".equals(category) ? "messageEnvVars" : "mcpEnvVars";
+        if (!activeProvider.has(field) || !activeProvider.get(field).isJsonArray()) {
+            return;
+        }
 
+        JsonArray envVars = activeProvider.getAsJsonArray(field);
+        for (JsonElement el : envVars) {
+            if (!el.isJsonObject()) { continue; }
+            JsonObject entry = el.getAsJsonObject();
+            if (!entry.has("key") || !entry.has("value")) { continue; }
+
+            try {
                 String key = entry.get("key").getAsString().trim();
                 String value = entry.get("value").getAsString();
 
@@ -131,11 +140,16 @@ public class CodexSDKBridge extends BaseSDKBridge {
                     LOG.warn("[Codex] Skipping protected env var: " + key);
                     continue;
                 }
+                if (value.length() > MAX_ENV_VAR_VALUE_LENGTH) {
+                    LOG.warn("[Codex] Skipping env var '" + key + "': value exceeds " +
+                            MAX_ENV_VAR_VALUE_LENGTH + " bytes");
+                    continue;
+                }
                 env.put(key, value);
                 LOG.debug("[Codex] Injected custom env var: " + key);
+            } catch (Exception e) {
+                LOG.warn("[Codex] Failed to inject single env var entry: " + e.getMessage());
             }
-        } catch (Exception e) {
-            LOG.warn("[Codex] Failed to inject custom env vars: " + e.getMessage());
         }
     }
 

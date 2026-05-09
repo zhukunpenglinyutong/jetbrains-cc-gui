@@ -208,6 +208,13 @@ export const CODEX_PROTECTED_ENV_KEYS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Maximum length for env var values. Long values risk exceeding the OS
+ * ARG_MAX limit when the child process is spawned.
+ * Must stay in sync with MAX_ENV_VAR_VALUE_LENGTH in CodexSDKBridge.java.
+ */
+export const ENV_VAR_VALUE_MAX_LENGTH = 16 * 1024;
+
+/**
  * Validate whether an env var key name is valid.
  * Must start with letter or underscore, followed by letters, digits, or underscores.
  */
@@ -218,9 +225,58 @@ export function isValidEnvVarKey(key: string): boolean {
 
 /**
  * Check if an env var key is a protected Codex built-in variable.
+ *
+ * NOTE: comparison is case-insensitive (key is uppercased before lookup).
+ * On Linux/macOS env vars are case-sensitive, but we conservatively reject
+ * any case-variant of a protected name to keep behavior consistent across
+ * platforms (Windows env vars are case-insensitive).
  */
 export function isProtectedEnvVarKey(key: string): boolean {
   return CODEX_PROTECTED_ENV_KEYS.has(key.toUpperCase());
+}
+
+export interface EnvVarValidationIssue {
+  index: number;
+  field: 'key' | 'value';
+  reason: 'invalid' | 'protected' | 'duplicate' | 'value_too_long';
+  key?: string;
+}
+
+/**
+ * Validate a list of EnvVarEntry. Returns the first issue per row, if any.
+ * Empty keys are skipped (will be filtered before saving).
+ */
+export function validateEnvVarEntries(entries: EnvVarEntry[]): EnvVarValidationIssue[] {
+  const issues: EnvVarValidationIssue[] = [];
+  const seenKeys = new Set<string>();
+
+  entries.forEach((entry, index) => {
+    if (entry.value.length > ENV_VAR_VALUE_MAX_LENGTH) {
+      issues.push({ index, field: 'value', reason: 'value_too_long' });
+    }
+
+    const key = entry.key.trim();
+    if (!key) return;
+
+    if (!isValidEnvVarKey(key)) {
+      issues.push({ index, field: 'key', reason: 'invalid', key });
+      return;
+    }
+
+    if (isProtectedEnvVarKey(key)) {
+      issues.push({ index, field: 'key', reason: 'protected', key });
+      return;
+    }
+
+    const upperKey = key.toUpperCase();
+    if (seenKeys.has(upperKey)) {
+      issues.push({ index, field: 'key', reason: 'duplicate', key });
+      return;
+    }
+    seenKeys.add(upperKey);
+  });
+
+  return issues;
 }
 
 /**

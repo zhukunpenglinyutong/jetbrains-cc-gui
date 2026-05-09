@@ -364,11 +364,8 @@ tasks.register('packageAiBridge', Exec) {
         // Install npm dependencies if node_modules doesn't exist
         if (!new File(aiBridgeDir, 'node_modules').exists()) {
             println 'Installing ai-bridge npm dependencies...'
-            if (System.getProperty('os.name').toLowerCase().contains('windows')) {
-                exec { commandLine 'npm', 'install', '--silent', '--loglevel=error'; workingDir = aiBridgeDir }
-            } else {
-                exec { commandLine 'npm', 'install', '--silent', '--loglevel=error'; workingDir = aiBridgeDir }
-            }
+            String npmCmd = System.getProperty('os.name').toLowerCase().contains('windows') ? 'npm.cmd' : 'npm'
+            exec { commandLine npmCmd, 'install', '--silent', '--loglevel=error'; workingDir = aiBridgeDir }
             println 'ai-bridge npm dependencies installed.'
         }
     }

@@ -1,7 +1,11 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { EnvVarEntry } from '../../types/provider';
-import { isValidEnvVarKey, isProtectedEnvVarKey } from '../../types/provider';
+import {
+  isValidEnvVarKey,
+  isProtectedEnvVarKey,
+  ENV_VAR_VALUE_MAX_LENGTH,
+} from '../../types/provider';
 import styles from './style.module.less';
 
 interface EnvVarEditorProps {
@@ -21,6 +25,30 @@ export default function EnvVarEditor({ entries, onChange, disabled }: EnvVarEdit
   const { t } = useTranslation();
   const [errors, setErrors] = useState<ValidationErrors>({});
 
+  // Stable ids for React keys, parallel to entries array.
+  // Avoids using array index as key which causes focus loss on delete.
+  const nextIdRef = useRef(0);
+  const [rowIds, setRowIds] = useState<string[]>(() =>
+    entries.map(() => `env-${nextIdRef.current++}`)
+  );
+
+  // Sync rowIds when entries length changes externally (e.g., dialog reset)
+  useEffect(() => {
+    setRowIds((prev) => {
+      if (prev.length === entries.length) {
+        return prev;
+      }
+      const next = [...prev];
+      while (next.length < entries.length) {
+        next.push(`env-${nextIdRef.current++}`);
+      }
+      if (next.length > entries.length) {
+        next.length = entries.length;
+      }
+      return next;
+    });
+  }, [entries.length]);
+
   const validateEntries = useCallback((newEntries: EnvVarEntry[]): ValidationErrors => {
     const newErrors: ValidationErrors = {};
     const seenKeys = new Set<string>();
@@ -28,6 +56,14 @@ export default function EnvVarEditor({ entries, onChange, disabled }: EnvVarEdit
     newEntries.forEach((entry, index) => {
       const key = entry.key.trim();
       const upperKey = key.toUpperCase();
+
+      // Value length check (run regardless of key state)
+      if (entry.value.length > ENV_VAR_VALUE_MAX_LENGTH) {
+        newErrors[`${index}-value-length`] = t(
+          'settings.codexProvider.dialog.envValueTooLong',
+          { max: ENV_VAR_VALUE_MAX_LENGTH },
+        );
+      }
 
       if (!key) {
         return; // Empty key is allowed, will be filtered on save
@@ -67,17 +103,20 @@ export default function EnvVarEditor({ entries, onChange, disabled }: EnvVarEdit
     const newEntries = [...entries];
     newEntries[index] = { ...newEntries[index], value: newValue };
     onChange(newEntries);
-  }, [entries, onChange]);
+    setErrors(validateEntries(newEntries));
+  }, [entries, onChange, validateEntries]);
 
   const handleDelete = useCallback((index: number) => {
     const newEntries = entries.filter((_, i) => i !== index);
     onChange(newEntries);
+    setRowIds((prev) => prev.filter((_, i) => i !== index));
     setErrors(validateEntries(newEntries));
   }, [entries, onChange, validateEntries]);
 
   const handleAdd = useCallback(() => {
     const newEntries = [...entries, { key: '', value: '' }];
     onChange(newEntries);
+    setRowIds((prev) => [...prev, `env-${nextIdRef.current++}`]);
   }, [entries, onChange]);
 
   const handleBlur = useCallback(() => {
@@ -93,8 +132,9 @@ export default function EnvVarEditor({ entries, onChange, disabled }: EnvVarEdit
       ) : (
         <div className={styles.envVarList}>
           {entries.map((entry, index) => {
+            const rowId = rowIds[index] ?? `env-fallback-${index}`;
             return (
-              <div key={index} className={styles.envVarItem}>
+              <div key={rowId} className={styles.envVarItem}>
                 <input
                   type="text"
                   className={styles.keyInput}
@@ -103,6 +143,7 @@ export default function EnvVarEditor({ entries, onChange, disabled }: EnvVarEdit
                   onBlur={handleBlur}
                   placeholder={t('settings.codexProvider.dialog.envKeyPlaceholder')}
                   disabled={disabled}
+                  maxLength={256}
                 />
                 <input
                   type="text"
@@ -111,6 +152,7 @@ export default function EnvVarEditor({ entries, onChange, disabled }: EnvVarEdit
                   onChange={(e) => handleValueChange(index, e.target.value)}
                   placeholder={t('settings.codexProvider.dialog.envValuePlaceholder')}
                   disabled={disabled}
+                  maxLength={ENV_VAR_VALUE_MAX_LENGTH}
                 />
                 <button
                   type="button"

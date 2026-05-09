@@ -585,7 +585,8 @@
         "addEnvVar": "Add Variable",
         "envKeyInvalid": "Invalid key name (must start with letter/underscore, alphanumeric only)",
         "envKeyProtected": "Cannot set built-in variable: {{key}}",
-        "envKeyDuplicate": "Duplicate key: {{key}}"
+        "envKeyDuplicate": "Duplicate key: {{key}}",
+        "envValueTooLong": "値が長すぎます（最大 {{max}} 文字）"
       }
     },
     "agent": {
