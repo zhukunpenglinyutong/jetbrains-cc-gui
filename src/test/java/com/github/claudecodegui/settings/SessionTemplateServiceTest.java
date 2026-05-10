@@ -79,6 +79,12 @@ public class SessionTemplateServiceTest {
         Assert.assertNotSame(firstRead.get(0), secondRead.get(0));
         firstRead.clear();
         Assert.assertEquals(2, service.getAllTemplates().size());
+
+        SessionTemplate firstGet = service.getTemplate("one");
+        SessionTemplate secondGet = service.getTemplate("one");
+        Assert.assertNotNull(firstGet);
+        Assert.assertNotNull(secondGet);
+        Assert.assertNotSame(firstGet, secondGet);
     }
 
     @Test
@@ -87,7 +93,12 @@ public class SessionTemplateServiceTest {
         SessionTemplate input = new SessionTemplate("iso", "claude", "model-a", "default", "medium", "/a", true);
         service.saveTemplate(input);
 
-        input = new SessionTemplate("iso", "codex", "model-b", "plan", "high", "/b", false);
+        List<SessionTemplate> firstRead = service.getAllTemplates();
+        List<SessionTemplate> secondRead = service.getAllTemplates();
+        Assert.assertEquals(1, firstRead.size());
+        Assert.assertEquals(1, secondRead.size());
+        Assert.assertNotSame(firstRead.get(0), secondRead.get(0));
+
         SessionTemplate loaded = service.getTemplate("iso");
         Assert.assertNotNull(loaded);
         Assert.assertEquals("claude", loaded.getProvider());
