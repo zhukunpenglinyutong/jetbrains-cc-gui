@@ -87,7 +87,7 @@
     "attachmentFile": "[अटैचमेंट: {{fileName}}]",
     "unknownFile": "Unknown file",
     "attachmentsUploaded": "[अटैचमेंट अपलोड हो गए]",
-    "streamingConnected": "Claude कनेक्ट हो गया, आपके प्रश्न को समझ रहा है",
+    "streamingConnected": "{{provider}} कनेक्ट हो गया, आपके प्रश्न को समझ रहा है",
     "showEarlierMessages": "{{count}} पुराने संदेश दिखाएं",
     "totalDuration": "इस जवाब में लगा समय"
   },
@@ -188,6 +188,12 @@
         "enabled": "विस्तारित",
         "disabled": "संक्षिप्त",
         "hint": "सक्षम होने पर, चैट में कोड अंतर डिफ़ॉल्ट रूप से विस्तारित होंगे। अक्षम होने पर, अंतर संक्षिप्त शुरू होते हैं।"
+      },
+      "taskCompletionNotification": {
+        "label": "कार्य पूर्ण सूचना",
+        "enabled": "सक्षम",
+        "disabled": "अक्षम",
+        "hint": "सक्षम होने पर, AI कार्य पूरा होने पर सिस्टम सूचना दिखाता है। अक्षम होने पर, कोई सूचना नहीं दिखती।"
       },
       "sendShortcut": {
         "label": "भेजने का शॉर्टकट",
@@ -325,6 +331,12 @@
           "minutesAgo_other": "{{count}} मिनट पहले",
           "justNow": "अभी"
         }
+      },
+      "aiTitleGeneration": {
+        "label": "AI सत्र शीर्षक स्वतः निर्माण",
+        "enabled": "सक्षम",
+        "disabled": "अक्षम",
+        "hint": "सक्षम होने पर, नए सत्र की पहली प्रतिक्रिया के बाद Haiku मॉडल छोटा शीर्षक स्वतः बनाएगा। अक्षम होने पर सत्र पहले उपयोगकर्ता संदेश को शीर्षक के रूप में रखेगा।"
       }
     },
     "codexFeatureUnavailable": "यह सेटिंग अनुभाग अभी Codex में उपलब्ध नहीं है। कृपया Claude Code पर स्विच करें।",

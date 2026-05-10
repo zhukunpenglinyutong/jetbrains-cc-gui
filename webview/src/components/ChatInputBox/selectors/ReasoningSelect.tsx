@@ -8,6 +8,17 @@ import {
   type ReasoningEffort,
 } from '../types';
 
+const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
+const CHEVRON_ICON_STYLE: React.CSSProperties = { fontSize: '10px', marginLeft: '2px' };
+const DROPDOWN_STYLE: React.CSSProperties = {
+  position: 'absolute',
+  bottom: '100%',
+  left: 0,
+  marginBottom: '4px',
+  zIndex: 10000,
+};
+const LEVEL_INFO_STYLE: React.CSSProperties = { display: 'flex', flexDirection: 'column', flex: 1 };
+
 interface ReasoningSelectProps {
   value: ReasoningEffort;
   onChange: (effort: ReasoningEffort) => void;
@@ -118,7 +129,7 @@ export const ReasoningSelect = ({ value, onChange, disabled, selectedModel, curr
   if (!isVisible) return null;
 
   return (
-    <div style={{ position: 'relative', display: 'inline-block' }}>
+    <div style={RELATIVE_INLINE_BLOCK_STYLE}>
       <button
         ref={buttonRef}
         className="selector-button"
@@ -128,20 +139,14 @@ export const ReasoningSelect = ({ value, onChange, disabled, selectedModel, curr
       >
         <span className="codicon codicon-lightbulb" />
         <span className="selector-button-text">{getReasoningText(currentLevel.id, 'label')}</span>
-        <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={{ fontSize: '10px', marginLeft: '2px' }} />
+        <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={CHEVRON_ICON_STYLE} />
       </button>
 
       {isOpen && (
         <div
           ref={dropdownRef}
           className="selector-dropdown"
-          style={{
-            position: 'absolute',
-            bottom: '100%',
-            left: 0,
-            marginBottom: '4px',
-            zIndex: 10000,
-          }}
+          style={DROPDOWN_STYLE}
         >
           {availableLevels.map((level) => (
             <div
@@ -151,7 +156,7 @@ export const ReasoningSelect = ({ value, onChange, disabled, selectedModel, curr
               title={getReasoningText(level.id, 'description')}
             >
               <span className={`codicon ${level.icon}`} />
-              <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+              <div style={LEVEL_INFO_STYLE}>
                 <span>{getReasoningText(level.id, 'label')}</span>
                 <span className="mode-description">{getReasoningText(level.id, 'description')}</span>
               </div>

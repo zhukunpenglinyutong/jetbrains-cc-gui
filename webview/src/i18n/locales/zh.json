@@ -87,7 +87,7 @@
     "attachmentFile": "[附件: {{fileName}}]",
     "unknownFile": "未知文件",
     "attachmentsUploaded": "[已上传附件]",
-    "streamingConnected": "Claude 已成功连接，正在理解问题",
+    "streamingConnected": "{{provider}} 已成功连接，正在理解问题",
     "showEarlierMessages": "显示之前的 {{count}} 条消息",
     "totalDuration": "本次耗时"
   },
@@ -204,6 +204,12 @@
         "enabled": "已开启",
         "disabled": "已关闭",
         "hint": "开启后，在 IDE 右下角状态栏显示当前模型和模式信息（如 GUI [Opus] {自动}）。关闭后隐藏。"
+      },
+      "taskCompletionNotification": {
+        "label": "任务完成通知",
+        "enabled": "已开启",
+        "disabled": "已关闭",
+        "hint": "开启后，当 AI 任务完成时显示系统通知。关闭后不显示系统通知。"
       },
       "sendShortcut": {
         "label": "发送快捷键",
@@ -401,6 +407,12 @@
           "hoursAgo": "{{count}}小时前",
           "minutesAgo": "{{count}}分钟前"
         }
+      },
+      "aiTitleGeneration": {
+        "label": "AI 会话标题自动生成",
+        "enabled": "已开启",
+        "disabled": "已关闭",
+        "hint": "开启后，新会话首次回复完成时将调用 Haiku 模型自动生成简短标题；关闭后会话仍按用户首条消息显示"
       }
     },
     "codexFeatureUnavailable": "Codex暂未适配此功能，请切换到Claude Code使用",

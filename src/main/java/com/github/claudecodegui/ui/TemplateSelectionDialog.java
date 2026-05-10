@@ -3,6 +3,7 @@ package com.github.claudecodegui.ui;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.model.SessionTemplate;
 import com.github.claudecodegui.settings.SessionTemplateService;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.ui.components.JBList;
 import com.intellij.ui.components.JBScrollPane;
@@ -47,7 +48,7 @@ public class TemplateSelectionDialog extends DialogWrapper {
                 super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
                 if (value instanceof SessionTemplate) {
                     SessionTemplate template = (SessionTemplate) value;
-                    setText(template.name);
+                    setText(template.getName());
                     setToolTipText(buildTooltipText(template));
                 }
                 return this;
@@ -70,14 +71,18 @@ public class TemplateSelectionDialog extends DialogWrapper {
     private String buildTooltipText(SessionTemplate template) {
         StringBuilder tooltip = new StringBuilder();
         tooltip.append("<html>");
-        tooltip.append("<b>").append(template.name).append("</b><br>");
-        tooltip.append("Provider: ").append(template.provider).append("<br>");
-        tooltip.append("Model: ").append(template.model).append("<br>");
-        if (template.cwd != null && !template.cwd.isEmpty()) {
-            tooltip.append("Working Directory: ").append(template.cwd).append("<br>");
+        tooltip.append("<b>").append(escapeTooltipValue(template.getName())).append("</b><br>");
+        tooltip.append("Provider: ").append(escapeTooltipValue(template.getProvider())).append("<br>");
+        tooltip.append("Model: ").append(escapeTooltipValue(template.getModel())).append("<br>");
+        if (template.getCwd() != null && !template.getCwd().isEmpty()) {
+            tooltip.append("Working Directory: ").append(escapeTooltipValue(template.getCwd())).append("<br>");
         }
         tooltip.append("</html>");
         return tooltip.toString();
+    }
+
+    private String escapeTooltipValue(String value) {
+        return StringUtil.escapeXmlEntities(value != null ? value : "");
     }
 
     @Override

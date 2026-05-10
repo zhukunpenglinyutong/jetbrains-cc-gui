@@ -47,8 +47,8 @@ public class SkillService {
      * Validate that a skill name is safe (no path traversal characters).
      */
     private static boolean isSafeSkillName(String name) {
-        if (name == null || name.isEmpty()) return false;
-        if (name.contains("..") || name.contains("/") || name.contains("\\") || name.contains("\0")) return false;
+        if (name == null || name.isEmpty()) { return false; }
+        if (name.contains("..") || name.contains("/") || name.contains("\\") || name.contains("\0")) { return false; }
         return SAFE_NAME.matcher(name).matches();
     }
 
@@ -108,7 +108,7 @@ public class SkillService {
      * Ensures that the directory exists, creating it if necessary.
      */
     private static boolean ensureDirectoryExists(String dirPath) {
-        if (dirPath == null) return false;
+        if (dirPath == null) { return false; }
         File dir = new File(dirPath);
         if (!dir.exists()) {
             boolean created = dir.mkdirs();

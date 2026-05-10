@@ -41,7 +41,7 @@ public abstract class ChatToolWindowAction extends AnAction implements DumbAware
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
         Project project = e.getProject();
-        if (project == null) return;
+        if (project == null) { return; }
 
         ClaudeChatWindow chatWindow = getActiveChatWindow(project);
         if (chatWindow == null) {
@@ -77,7 +77,7 @@ public abstract class ChatToolWindowAction extends AnAction implements DumbAware
             Content selectedContent = toolWindow.getContentManager().getSelectedContent();
             if (selectedContent != null) {
                 ClaudeChatWindow window = ClaudeSDKToolWindow.getChatWindowForContent(selectedContent);
-                if (window != null) return window;
+                if (window != null) { return window; }
             }
         }
         // Fallback to legacy single-window lookup

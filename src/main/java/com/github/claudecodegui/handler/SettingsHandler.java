@@ -51,6 +51,8 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_commit_generation_enabled",
         "get_status_bar_widget_enabled",
         "set_status_bar_widget_enabled",
+        "get_task_completion_notification_enabled",
+        "set_task_completion_notification_enabled",
         "get_ide_theme",
         "get_commit_prompt",
         "set_commit_prompt",
@@ -185,6 +187,18 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_status_bar_widget_enabled":
                 projectConfigHandler.handleSetStatusBarWidgetEnabled(content);
+                return true;
+            case "get_task_completion_notification_enabled":
+                projectConfigHandler.handleGetTaskCompletionNotificationEnabled();
+                return true;
+            case "set_task_completion_notification_enabled":
+                projectConfigHandler.handleSetTaskCompletionNotificationEnabled(content);
+                return true;
+            case "get_ai_title_generation_enabled":
+                projectConfigHandler.handleGetAiTitleGenerationEnabled();
+                return true;
+            case "set_ai_title_generation_enabled":
+                projectConfigHandler.handleSetAiTitleGenerationEnabled(content);
                 return true;
             case "get_ide_theme":
                 projectConfigHandler.handleGetIdeTheme();

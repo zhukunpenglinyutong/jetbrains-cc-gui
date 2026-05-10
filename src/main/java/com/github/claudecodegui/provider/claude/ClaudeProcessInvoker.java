@@ -18,6 +18,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 /**
@@ -76,12 +78,12 @@ class ClaudeProcessInvoker {
             String reasoningEffort,
             MessageCallback callback
     ) {
-        final boolean[] errorAlreadyReported = {false};
+        AtomicBoolean errorAlreadyReported = new AtomicBoolean(false);
         return CompletableFuture.supplyAsync(() -> {
             SDKResult result = new SDKResult();
             StringBuilder assistantContent = new StringBuilder();
-            boolean[] hadSendError = {false};
-            String[] lastNodeError = {null};
+            AtomicBoolean hadSendError = new AtomicBoolean(false);
+            AtomicReference<String> lastNodeError = new AtomicReference<>(null);
 
             try {
                 String node = nodeDetector.findNodeExecutable();
@@ -161,21 +163,22 @@ class ClaudeProcessInvoker {
                     int exitCode = process.exitValue();
                     boolean wasInterrupted = processManager.wasInterrupted(channelId);
                     log.debug("[ProcessInvoker] Process exited, exitCode=" + exitCode
-                            + ", wasInterrupted=" + wasInterrupted + ", hadSendError=" + hadSendError[0]);
+                            + ", wasInterrupted=" + wasInterrupted + ", hadSendError=" + hadSendError.get());
 
                     result.finalResult = assistantContent.toString();
                     result.messageCount = result.messages.size();
 
                     if (wasInterrupted) {
                         callback.onComplete(result);
-                    } else if (!hadSendError[0]) {
+                    } else if (!hadSendError.get()) {
                         result.success = exitCode == 0;
                         if (result.success) {
                             callback.onComplete(result);
                         } else {
                             String errorMsg = "Process exited with code: " + exitCode;
-                            if (lastNodeError[0] != null && !lastNodeError[0].isEmpty()) {
-                                errorMsg = errorMsg + "\n\nDetails: " + lastNodeError[0];
+                            String nodeErr = lastNodeError.get();
+                            if (nodeErr != null && !nodeErr.isEmpty()) {
+                                errorMsg = errorMsg + "\n\nDetails: " + nodeErr;
                             }
                             result.success = false;
                             result.error = errorMsg;
@@ -194,12 +197,12 @@ class ClaudeProcessInvoker {
             } catch (Exception e) {
                 result.success = false;
                 result.error = e.getMessage();
-                errorAlreadyReported[0] = true;
+                errorAlreadyReported.set(true);
                 callback.onError(e.getMessage());
                 return result;
             }
         }).exceptionally(ex -> {
-            if (errorAlreadyReported[0]) {
+            if (errorAlreadyReported.get()) {
                 log.debug("[ProcessInvoker] Skipping duplicate onError in exceptionally (already reported by catch)");
                 return new SDKResult();
             }
@@ -216,8 +219,8 @@ class ClaudeProcessInvoker {
             MessageCallback callback,
             SDKResult result,
             StringBuilder assistantContent,
-            boolean[] hadSendError,
-            String[] lastNodeError,
+            AtomicBoolean hadSendError,
+            AtomicReference<String> lastNodeError,
             String node,
             String nodeVersion,
             File workDir
@@ -237,12 +240,12 @@ class ClaudeProcessInvoker {
                         || line.startsWith("[GET_SESSION_ERROR]")
                         || line.startsWith("[PERSIST_ERROR]")) {
                     log.warn("[Node.js ERROR] " + line);
-                    lastNodeError[0] = line;
+                    lastNodeError.set(line);
                 }
 
                 if (line.startsWith("[SEND_ERROR]")) {
                     String errorMessage = formatSendError(line, node, nodeVersion, workDir);
-                    hadSendError[0] = true;
+                    hadSendError.set(true);
                     result.success = false;
                     result.error = errorMessage;
                     callback.onError(errorMessage);
@@ -290,7 +293,7 @@ class ClaudeProcessInvoker {
         return diagMsg.toString();
     }
 
-    private void captureEarlyExitIfNeeded(Process process, String[] lastNodeError) {
+    private void captureEarlyExitIfNeeded(Process process, AtomicReference<String> lastNodeError) {
         try {
             if (!process.isAlive()) {
                 int earlyExitCode = process.exitValue();
@@ -305,7 +308,7 @@ class ClaudeProcessInvoker {
                     }
                     log.debug("[ProcessInvoker] Early exit - captured " + earlyOutput.length() + " chars");
                     if (earlyOutput.length() > 0) {
-                        lastNodeError[0] = earlyOutput.toString().trim();
+                        lastNodeError.set(earlyOutput.toString().trim());
                     }
                 }
             }

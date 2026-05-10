@@ -87,7 +87,7 @@
     "attachmentFile": "[Anexo: {{fileName}}]",
     "unknownFile": "Arquivo desconhecido",
     "attachmentsUploaded": "[Anexos Enviados]",
-    "streamingConnected": "Claude conectado, entendendo sua pergunta",
+    "streamingConnected": "{{provider}} conectado, entendendo sua pergunta",
     "showEarlierMessages": "Mostrar {{count}} mensagens anteriores",
     "totalDuration": "Esta resposta levou"
   },
@@ -200,6 +200,12 @@
         "enabled": "Ativado",
         "disabled": "Desativado",
         "hint": "Quando ativado, exibe informações do modelo e modo atual na barra de status da IDE (ex: GUI [Opus] {Auto}). Quando desativado, o widget fica oculto."
+      },
+      "taskCompletionNotification": {
+        "label": "Notificação de Conclusão de Tarefa",
+        "enabled": "Ativado",
+        "disabled": "Desativado",
+        "hint": "Quando ativado, exibe uma notificação do sistema quando a tarefa AI é concluída. Quando desativado, nenhuma notificação aparece."
       },
       "sendShortcut": {
         "label": "Atalho de Envio",
@@ -392,6 +398,12 @@
           "minutesAgo_other": "{{count}} minutos atrás",
           "justNow": "agora mesmo"
         }
+      },
+      "aiTitleGeneration": {
+        "label": "Geração automática de título de sessão por IA",
+        "enabled": "Ativado",
+        "disabled": "Desativado",
+        "hint": "Quando ativado, um título curto gerado pelo Haiku é criado após o primeiro turno de uma nova sessão. Desativado, a sessão continua usando a primeira mensagem do usuário como título."
       }
     },
     "codexFeatureUnavailable": "Esta seção de configurações ainda não está disponível no Codex. Por favor, mude para Claude Code.",

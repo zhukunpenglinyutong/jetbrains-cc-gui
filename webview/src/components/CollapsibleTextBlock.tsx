@@ -35,15 +35,21 @@ const CollapsibleTextBlock: React.FC<CollapsibleTextBlockProps> = ({ content }) 
     setExpanded(!expanded);
   };
 
+  const contentStyle: React.CSSProperties = {
+    maxHeight: (expanded || !isOverflowing) ? 'none' : `${MAX_HEIGHT}px`,
+    overflow: 'hidden',
+  };
+  const chevronStyle: React.CSSProperties = {
+    transform: expanded ? 'rotate(180deg)' : 'none',
+    transition: 'transform 0.2s',
+  };
+
   return (
     <div className={`collapsible-block ${expanded ? 'expanded' : 'collapsed'}`}>
       <div
         className="collapsible-content"
         ref={contentRef}
-        style={{
-            maxHeight: (expanded || !isOverflowing) ? 'none' : `${MAX_HEIGHT}px`,
-            overflow: 'hidden'
-        }}
+        style={contentStyle}
       >
         <div className="plain-text-content">{content}</div>
 
@@ -55,7 +61,7 @@ const CollapsibleTextBlock: React.FC<CollapsibleTextBlockProps> = ({ content }) 
 
       {isOverflowing && (
         <div className="collapse-toggle" onClick={toggleExpand}>
-            <span className="codicon codicon-chevron-down" style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}></span>
+            <span className="codicon codicon-chevron-down" style={chevronStyle}></span>
         </div>
       )}
     </div>

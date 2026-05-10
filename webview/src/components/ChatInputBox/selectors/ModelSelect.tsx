@@ -6,6 +6,19 @@ import { readClaudeModelMapping } from '../../../utils/claudeModelMapping';
 import { ProviderModelIcon } from '../../shared/ProviderModelIcon';
 import Switch from 'antd/es/switch';
 
+const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
+const CHEVRON_ICON_STYLE: React.CSSProperties = { fontSize: '10px', marginLeft: '2px' };
+const DROPDOWN_STYLE: React.CSSProperties = {
+  position: 'absolute',
+  bottom: '100%',
+  left: 0,
+  marginBottom: '4px',
+  zIndex: 10000,
+};
+const MODEL_OPTION_INFO_STYLE: React.CSSProperties = { display: 'flex', flexDirection: 'column', flex: 1 };
+const LONG_CONTEXT_OPTION_STYLE: React.CSSProperties = { justifyContent: 'space-between', cursor: 'default' };
+const LONG_CONTEXT_LABEL_STYLE: React.CSSProperties = { fontSize: '12px' };
+
 interface ModelSelectProps {
   value: string;
   onChange: (modelId: string) => void;
@@ -213,7 +226,7 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
   }, [isOpen]);
 
   return (
-    <div style={{ position: 'relative', display: 'inline-block' }}>
+    <div style={RELATIVE_INLINE_BLOCK_STYLE}>
       <button
         ref={buttonRef}
         className="selector-button"
@@ -227,20 +240,14 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
           colored
         />
         <span className="selector-button-text">{getModelLabel(currentModel, true)}</span>
-        <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={{ fontSize: '10px', marginLeft: '2px' }} />
+        <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={CHEVRON_ICON_STYLE} />
       </button>
 
       {isOpen && (
         <div
           ref={dropdownRef}
           className="selector-dropdown"
-          style={{
-            position: 'absolute',
-            bottom: '100%',
-            left: 0,
-            marginBottom: '4px',
-            zIndex: 10000,
-          }}
+          style={DROPDOWN_STYLE}
         >
           {models.map((model) => (
             <div
@@ -254,7 +261,7 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
                 size={16}
                 colored
               />
-              <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+              <div style={MODEL_OPTION_INFO_STYLE}>
                 <span>{getModelLabel(model, false)}</span>
                 {getModelDescription(model) && (
                   <span className="model-description">{getModelDescription(model)}</span>
@@ -270,10 +277,10 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
               <div className="selector-divider" />
               <div
                 className="selector-option"
-                style={{ justifyContent: 'space-between', cursor: 'default' }}
+                style={LONG_CONTEXT_OPTION_STYLE}
                 onClick={(e) => e.stopPropagation()}
               >
-                <span style={{ fontSize: '12px' }}>{t('models.longContext.shortLabel')}</span>
+                <span style={LONG_CONTEXT_LABEL_STYLE}>{t('models.longContext.shortLabel')}</span>
                 <Switch
                   size="small"
                   checked={modelSupports1MContext(value) ? longContextEnabled : false}

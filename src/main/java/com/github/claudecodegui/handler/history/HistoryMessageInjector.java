@@ -149,10 +149,86 @@ public class HistoryMessageInjector {
             JsonObject msg = messages.get(i).getAsJsonObject();
             JsonObject frontendMsg = convertCodexMessageToFrontend(msg);
             if (frontendMsg != null) {
-                frontendMessages.add(frontendMsg);
+                addCodexFrontendMessage(frontendMessages, frontendMsg);
             }
         }
         return frontendMessages;
+    }
+
+    private static void addCodexFrontendMessage(List<JsonObject> frontendMessages, JsonObject incoming) {
+        if (frontendMessages.isEmpty()) {
+            frontendMessages.add(incoming);
+            return;
+        }
+
+        int lastIndex = frontendMessages.size() - 1;
+        JsonObject previous = frontendMessages.get(lastIndex);
+        if (isDuplicateAdjacentCodexUserMessage(previous, incoming)) {
+            frontendMessages.set(lastIndex, preferRicherUserMessage(previous, incoming));
+            return;
+        }
+
+        frontendMessages.add(incoming);
+    }
+
+    private static boolean isDuplicateAdjacentCodexUserMessage(JsonObject previous, JsonObject incoming) {
+        if (!isUserMessage(previous) || !isUserMessage(incoming)) {
+            return false;
+        }
+
+        String previousTimestamp = getStringProperty(previous, "timestamp");
+        String incomingTimestamp = getStringProperty(incoming, "timestamp");
+        if (previousTimestamp == null || !previousTimestamp.equals(incomingTimestamp)) {
+            return false;
+        }
+
+        String previousContent = getStringProperty(previous, "content");
+        String incomingContent = getStringProperty(incoming, "content");
+        return previousContent != null
+            && normalizeDuplicateUserContent(previousContent).equals(normalizeDuplicateUserContent(incomingContent));
+    }
+
+    private static JsonObject preferRicherUserMessage(JsonObject previous, JsonObject incoming) {
+        return getRawContentBlockCount(incoming) > getRawContentBlockCount(previous) ? incoming : previous;
+    }
+
+    private static String normalizeDuplicateUserContent(String content) {
+        if (content == null) {
+            return "";
+        }
+        return content
+            .replaceAll("(?m)^<image[^\\r\\n]*>\\R?", "")
+            .replaceAll("(?m)^</image>\\R?", "")
+            .trim();
+    }
+
+    private static boolean isUserMessage(JsonObject message) {
+        return "user".equals(getStringProperty(message, "type"));
+    }
+
+    private static String getStringProperty(JsonObject object, String propertyName) {
+        if (object == null || !object.has(propertyName) || object.get(propertyName).isJsonNull()) {
+            return null;
+        }
+        return object.get(propertyName).getAsString();
+    }
+
+    private static int getRawContentBlockCount(JsonObject message) {
+        if (message == null || !message.has("raw") || !message.get("raw").isJsonObject()) {
+            return 0;
+        }
+
+        JsonObject raw = message.getAsJsonObject("raw");
+        if (raw.has("content") && raw.get("content").isJsonArray()) {
+            return raw.getAsJsonArray("content").size();
+        }
+        if (raw.has("message") && raw.get("message").isJsonObject()) {
+            JsonObject rawMessage = raw.getAsJsonObject("message");
+            if (rawMessage.has("content") && rawMessage.get("content").isJsonArray()) {
+                return rawMessage.getAsJsonArray("content").size();
+            }
+        }
+        return 0;
     }
 
     /**
@@ -264,7 +340,10 @@ public class HistoryMessageInjector {
             return null;
         }
 
-        String content = payload.get("message").getAsString();
+        String content = CodexMessageConverter.stripSystemTags(payload.get("message").getAsString());
+        if (content == null || content.isBlank()) {
+            return null;
+        }
 
         JsonObject frontendMsg = new JsonObject();
         frontendMsg.addProperty("type", "user");

@@ -6,6 +6,8 @@
 import type { ServerToolsState, McpTool } from './types';
 import { getToolIcon } from './utils';
 
+const WARNING_HEADER_STYLE: React.CSSProperties = { color: 'var(--color-warning)' };
+
 export interface ServerToolsPanelProps {
   toolsInfo?: ServerToolsState[string];
   isConnected: boolean;
@@ -70,7 +72,7 @@ export function ServerToolsPanel({
           )}
 
           {toolsInfo?.error && (
-            <div className="sidebar-section-header" style={{color: 'var(--color-warning)'}}>
+            <div className="sidebar-section-header" style={WARNING_HEADER_STYLE}>
               {t('mcp.loadFailed')}
             </div>
           )}

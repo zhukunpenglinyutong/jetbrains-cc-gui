@@ -44,6 +44,8 @@ export const WaitingIndicator = ({ size = 18, startTime }: WaitingIndicatorProps
 
   const dots = '.'.repeat(dotCount);
 
+  const spinnerStyle: React.CSSProperties = { width: size, height: size };
+
   // Format elapsed time: show "X seconds" under 60s, "X min Y sec" above 60s
   const formatElapsedTime = (seconds: number): string => {
     if (seconds < 60) {
@@ -56,7 +58,7 @@ export const WaitingIndicator = ({ size = 18, startTime }: WaitingIndicatorProps
 
   return (
     <div className="waiting-indicator">
-      <span className="waiting-spinner" style={{ width: size, height: size }} />
+      <span className="waiting-spinner" style={spinnerStyle} />
       <span className="waiting-text">
 	        {t('chat.generatingResponse')}<span className="waiting-dots">{dots}</span>
 	        <span className="waiting-seconds">（{t('chat.elapsedTime', { time: formatElapsedTime(elapsedSeconds) })}）</span>

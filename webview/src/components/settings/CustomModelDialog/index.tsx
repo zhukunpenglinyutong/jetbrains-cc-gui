@@ -4,6 +4,11 @@ import type { CodexCustomModel } from '../../../types/provider';
 // Model ID format is intentionally not restricted — see isValidModelId() JSDoc for rationale
 import styles from './style.module.less';
 
+const DIALOG_STYLE: React.CSSProperties = { maxWidth: '500px' };
+const FLEX_1_STYLE: React.CSSProperties = { flex: 1 };
+const DESC_INPUT_STYLE: React.CSSProperties = { width: '100%', marginBottom: '8px' };
+const ADD_ICON_STYLE: React.CSSProperties = { marginRight: '4px' };
+
 interface CustomModelDialogProps {
   isOpen: boolean;
   models: CodexCustomModel[];
@@ -166,7 +171,7 @@ export function CustomModelDialog({
 
   return (
     <div className="dialog-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="dialog provider-dialog" style={{ maxWidth: '500px' }}>
+      <div className="dialog provider-dialog" style={DIALOG_STYLE}>
         <div className="dialog-header">
           <h3>{t('settings.pluginModels.dialogTitle')}</h3>
           <button className="close-btn" onClick={onClose} title={t('common.close')}>
@@ -238,7 +243,7 @@ export function CustomModelDialog({
                   placeholder={t('settings.codexProvider.dialog.modelIdPlaceholder')}
                   value={newModelId}
                   onChange={(e) => { setNewModelId(e.target.value); if (validationError) setValidationError(null); }}
-                  style={{ flex: 1 }}
+                  style={FLEX_1_STYLE}
                   autoFocus
                   aria-invalid={!!validationError}
                   aria-describedby={validationError ? 'model-id-error' : undefined}
@@ -253,7 +258,7 @@ export function CustomModelDialog({
                   placeholder={t('settings.codexProvider.dialog.modelLabelPlaceholder')}
                   value={newModelLabel}
                   onChange={(e) => setNewModelLabel(e.target.value)}
-                  style={{ flex: 1 }}
+                  style={FLEX_1_STYLE}
                 />
               </div>
               {validationError && (
@@ -271,7 +276,7 @@ export function CustomModelDialog({
                 placeholder={t('settings.codexProvider.dialog.modelDescPlaceholder')}
                 value={newModelDesc}
                 onChange={(e) => setNewModelDesc(e.target.value)}
-                style={{ width: '100%', marginBottom: '8px' }}
+                style={DESC_INPUT_STYLE}
               />
               <div className={styles.formActions}>
                 <button className="btn btn-secondary btn-sm" onClick={handleCancelEdit}>
@@ -293,7 +298,7 @@ export function CustomModelDialog({
               onClick={() => setIsAdding(true)}
               aria-label={t('settings.codexProvider.dialog.addModel')}
             >
-              <span className="codicon codicon-add" aria-hidden="true" style={{ marginRight: '4px' }} />
+              <span className="codicon codicon-add" aria-hidden="true" style={ADD_ICON_STYLE} />
               {t('settings.codexProvider.dialog.addModel')}
             </button>
           )}

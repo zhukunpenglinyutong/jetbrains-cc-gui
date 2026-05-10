@@ -10,6 +10,7 @@ import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -65,6 +66,10 @@ public class DaemonBridge {
 
     // Lifecycle listener
     private volatile DaemonLifecycleListener lifecycleListener;
+
+    // Event listeners for custom daemon events. CopyOnWriteArrayList allows safe
+    // iteration during dispatch while listeners may be added/removed concurrently.
+    private final List<DaemonEventListener> eventListeners = new CopyOnWriteArrayList<>();
 
     public DaemonBridge(
             NodeDetector nodeDetector,
@@ -222,17 +227,29 @@ public class DaemonBridge {
         // Kill process if still alive and wait for termination
         if (daemonProcess != null && daemonProcess.isAlive()) {
             daemonProcess.destroyForcibly();
-            try { daemonProcess.waitFor(3, TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            try {
+                daemonProcess.waitFor(3, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
 
         // Interrupt and join threads
         if (readerThread != null) {
             readerThread.interrupt();
-            try { readerThread.join(2000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            try {
+                readerThread.join(2000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
         if (heartbeatThread != null) {
             heartbeatThread.interrupt();
-            try { heartbeatThread.join(2000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            try {
+                heartbeatThread.join(2000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
 
         LOG.info("[DaemonBridge] Daemon stopped");
@@ -281,7 +298,7 @@ public class DaemonBridge {
      * Ensure the daemon is running, starting it if necessary.
      */
     public boolean ensureRunning() {
-        if (isAlive()) return true;
+        if (isAlive()) { return true; }
         return start();
     }
 
@@ -403,7 +420,7 @@ public class DaemonBridge {
             while (isRunning.get()) {
                 try {
                     Thread.sleep(HEARTBEAT_INTERVAL_MS);
-                    if (!isAlive()) break;
+                    if (!isAlive()) { break; }
 
                     // Check if daemon is unresponsive (no heartbeat response for too long)
                     long currentTime = System.currentTimeMillis();
@@ -455,7 +472,7 @@ public class DaemonBridge {
 
         try {
             JsonElement element = JsonParser.parseString(trimmed);
-            if (!element.isJsonObject()) return;
+            if (!element.isJsonObject()) { return; }
             JsonObject obj = element.getAsJsonObject();
 
             // --- Daemon lifecycle events ---
@@ -481,11 +498,11 @@ public class DaemonBridge {
             }
 
             // --- Request-tagged output ---
-            if (!obj.has("id")) return;
+            if (!obj.has("id")) { return; }
             String id = obj.get("id").getAsString();
 
             // Skip heartbeat responses
-            if (id.startsWith("hb-")) return;
+            if (id.startsWith("hb-")) { return; }
 
             RequestHandler handler = pendingRequests.get(id);
             if (handler == null) {
@@ -549,6 +566,31 @@ public class DaemonBridge {
                 LOG.info("[DaemonBridge] Daemon shutting down");
                 break;
 
+            case "title_log": {
+                String titleLevel = obj.has("level") ? obj.get("level").getAsString() : "info";
+                String titleMsg = obj.has("message") ? obj.get("message").getAsString() : "";
+                if ("error".equals(titleLevel) || "warn".equals(titleLevel)) {
+                    LOG.warn("[TitleService] " + titleMsg);
+                } else {
+                    LOG.info("[TitleService] " + titleMsg);
+                }
+                break;
+            }
+
+            case "title_generated": {
+                LOG.info("[DaemonBridge] AI title generated: sessionId="
+                        + (obj.has("sessionId") ? obj.get("sessionId").getAsString() : "?")
+                        + ", title=" + (obj.has("title") ? obj.get("title").getAsString() : "?"));
+                for (DaemonEventListener listener : eventListeners) {
+                    try {
+                        listener.onDaemonEvent(event, obj);
+                    } catch (Exception ex) {
+                        LOG.warn("[DaemonBridge] Listener threw while handling " + event, ex);
+                    }
+                }
+                break;
+            }
+
             default:
                 LOG.debug("[DaemonBridge] Unhandled daemon event: " + event);
         }
@@ -559,7 +601,7 @@ public class DaemonBridge {
     // =========================================================================
 
     private void handleDaemonDeath() {
-        if (!isRunning.compareAndSet(true, false)) return;
+        if (!isRunning.compareAndSet(true, false)) { return; }
 
         LOG.warn("[DaemonBridge] Daemon process died");
 
@@ -569,7 +611,11 @@ public class DaemonBridge {
             LOG.info("[DaemonBridge] Forcefully killing unresponsive daemon process (PID: "
                     + oldProcess.pid() + ")");
             oldProcess.destroyForcibly();
-            try { oldProcess.waitFor(2, TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            try {
+                oldProcess.waitFor(2, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
 
         // Fail all pending requests
@@ -611,6 +657,25 @@ public class DaemonBridge {
         this.lifecycleListener = listener;
     }
 
+    /**
+     * Register a listener for custom daemon events (e.g., title_generated).
+     * Multiple listeners may coexist; each is invoked on every matching event.
+     * Callers MUST pair this with {@link #removeEventListener} on disposal to
+     * avoid memory leaks.
+     */
+    public void addEventListener(DaemonEventListener listener) {
+        if (listener == null) { return; }
+        eventListeners.add(listener);
+    }
+
+    /**
+     * Remove a previously registered listener. No-op if not registered.
+     */
+    public void removeEventListener(DaemonEventListener listener) {
+        if (listener == null) { return; }
+        eventListeners.remove(listener);
+    }
+
     public boolean isSdkPreloaded() {
         return sdkPreloaded.get();
     }
@@ -647,6 +712,13 @@ public class DaemonBridge {
     public interface DaemonLifecycleListener {
         void onDaemonReady();
         void onDaemonDied();
+    }
+
+    /**
+     * Listener for custom daemon events (e.g., title_generated).
+     */
+    public interface DaemonEventListener {
+        void onDaemonEvent(String event, JsonObject data);
     }
 
     /**

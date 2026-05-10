@@ -583,7 +583,7 @@ public class WebviewInitializer {
      */
     public void reloadWebview(String reason) {
         ApplicationManager.getApplication().invokeLater(() -> {
-            if (host.isDisposed()) return;
+            if (host.isDisposed()) { return; }
             JBCefBrowser browser = host.getBrowser();
             if (browser == null) {
                 recreateWebview(reason + "_no_browser");
@@ -605,7 +605,7 @@ public class WebviewInitializer {
      */
     public void recreateWebview(String reason) {
         ApplicationManager.getApplication().invokeLater(() -> {
-            if (host.isDisposed()) return;
+            if (host.isDisposed()) { return; }
 
             host.setFrontendReady(false);
             JPanel mainPanel = host.getMainPanel();

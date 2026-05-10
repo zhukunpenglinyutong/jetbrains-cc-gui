@@ -1,15 +1,12 @@
 package com.github.claudecodegui.settings;
 
 import com.github.claudecodegui.model.SessionTemplate;
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.PersistentStateComponent;
 import com.intellij.openapi.components.State;
 import com.intellij.openapi.components.Storage;
 import com.intellij.openapi.diagnostic.Logger;
 
-import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -26,8 +23,6 @@ import java.util.Map;
 public class SessionTemplateService implements PersistentStateComponent<SessionTemplateService.State> {
 
     private static final Logger LOG = Logger.getInstance(SessionTemplateService.class);
-    private static final Gson gson = new Gson();
-
     private State myState = new State();
 
     /**
@@ -41,13 +36,13 @@ public class SessionTemplateService implements PersistentStateComponent<SessionT
      * Save a session template.
      */
     public void saveTemplate(SessionTemplate template) {
-        if (template == null || template.name == null || template.name.trim().isEmpty()) {
+        if (template == null || template.getName() == null || template.getName().trim().isEmpty()) {
             LOG.warn("Cannot save template with null or empty name");
             return;
         }
 
-        myState.templates.put(template.name.trim(), template.copy());
-        LOG.info("Saved session template: " + template.name);
+        myState.templates.put(template.getName().trim(), template.copy());
+        LOG.info("Saved session template: " + template.getName());
     }
 
     /**

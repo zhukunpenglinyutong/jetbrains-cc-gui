@@ -65,7 +65,9 @@ public class ProviderImportExportSupport {
 
                     if (providers.isEmpty()) {
                         LOG.info("[ProviderHandler] No Claude provider configs found in database");
-                        sendInfoToFrontend(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("provider.ccswitch.noDataTitle"), com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("provider.ccswitch.noData"));
+                        sendInfoToFrontend(
+                                com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("provider.ccswitch.noDataTitle"),
+                                com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("provider.ccswitch.noData"));
                         return;
                     }
 
@@ -133,7 +135,9 @@ public class ProviderImportExportSupport {
 
                 if (selectedFiles.length == 0) {
                     LOG.info("[ProviderHandler] User cancelled file selection");
-                    sendInfoToFrontend(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("provider.ccswitch.cancelledTitle"), com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("provider.ccswitch.cancelled"));
+                    sendInfoToFrontend(
+                            com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("provider.ccswitch.cancelledTitle"),
+                            com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("provider.ccswitch.cancelled"));
                     return;
                 }
 
@@ -168,7 +172,9 @@ public class ProviderImportExportSupport {
 
                         if (providers.isEmpty()) {
                             LOG.info("[ProviderHandler] No Claude provider configs found in database");
-                            sendInfoToFrontend(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("provider.ccswitch.noDataTitle"), com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("provider.ccswitch.noData"));
+                            sendInfoToFrontend(
+                                    com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("provider.ccswitch.noDataTitle"),
+                                    com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("provider.ccswitch.noData"));
                             return;
                         }
 
@@ -223,7 +229,9 @@ public class ProviderImportExportSupport {
 
                 ApplicationManager.getApplication().invokeLater(() -> {
                     claudeOps.handleGetProviders(); // Refresh UI
-                    sendInfoToFrontend(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("provider.ccswitch.importSuccessTitle"), com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("provider.ccswitch.importSuccess", count));
+                    sendInfoToFrontend(
+                            com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("provider.ccswitch.importSuccessTitle"),
+                            com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("provider.ccswitch.importSuccess", count));
                 });
 
             } catch (Exception e) {

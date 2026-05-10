@@ -87,7 +87,7 @@
     "attachmentFile": "[附件: {{fileName}}]",
     "unknownFile": "Unknown file",
     "attachmentsUploaded": "[已上傳附件]",
-    "streamingConnected": "Claude 已成功連接，正在理解問題",
+    "streamingConnected": "{{provider}} 已成功連接，正在理解問題",
     "showEarlierMessages": "顯示之前的 {{count}} 則訊息",
     "totalDuration": "本次耗時"
   },
@@ -188,6 +188,12 @@
         "enabled": "已展開",
         "disabled": "已折疊",
         "hint": "開啟後，聊天中的程式碼差異將預設展開顯示。關閉後，差異預設摺疊，可點擊展開。"
+      },
+      "taskCompletionNotification": {
+        "label": "任務完成通知",
+        "enabled": "已開啟",
+        "disabled": "已關閉",
+        "hint": "開啟後，當 AI 任務完成時顯示系統通知。關閉後不顯示系統通知。"
       },
       "sendShortcut": {
         "label": "發送快捷鍵",
@@ -330,6 +336,12 @@
           "hoursAgo": "{{count}}小時前",
           "minutesAgo": "{{count}}分鐘前"
         }
+      },
+      "aiTitleGeneration": {
+        "label": "AI 會話標題自動生成",
+        "enabled": "已開啟",
+        "disabled": "已關閉",
+        "hint": "開啟後，新會話首次回覆完成時將呼叫 Haiku 模型自動生成簡短標題；關閉後會話仍以使用者首條訊息顯示"
       }
     },
     "codexFeatureUnavailable": "Codex 暫未適配此功能，請切換到 Claude Code 使用",

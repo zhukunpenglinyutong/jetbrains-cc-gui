@@ -64,6 +64,10 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
   // Auto-expanded thinking keys
   const autoExpandedThinkingKeysRef = useRef<Set<string>>(new Set());
 
+  // Text length at the moment trailing structural blocks (tool_use/tool_result)
+  // first appeared. Later text deltas belong after those blocks.
+  const trailingStructuralTextBoundaryRef = useRef<{ signature: string; textLength: number } | null>(null);
+
   // Turn tracking
   const streamingTurnIdRef = useRef(-1);
   const turnIdCounterRef = useRef(0);
@@ -85,6 +89,16 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
     return Array.isArray(blocks) ? blocks : [];
   };
 
+  const getStructuralBlockSignature = (block: ContentBlock): string => {
+    if (block.type === 'tool_use') {
+      return `tool_use:${block.id ?? ''}:${block.name ?? ''}`;
+    }
+    if (block.type === 'tool_result') {
+      return `tool_result:${block.tool_use_id ?? ''}:${block.is_error === true ? '1' : '0'}`;
+    }
+    return String(block.type ?? '');
+  };
+
   const syncTextBlocksWithContent = (blocks: ContentBlock[], content: string): ContentBlock[] => {
     if (!content) return blocks;
 
@@ -101,6 +115,56 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
       .slice(0, -1)
       .map((index) => (typeof blocks[index]?.text === 'string' ? blocks[index].text : ''))
       .join('');
+    const allText = textIndices
+      .map((index) => (typeof blocks[index]?.text === 'string' ? blocks[index].text : ''))
+      .join('');
+    const trailingStructuralBlocks = blocks
+      .slice(lastTextIdx + 1)
+      .filter((block) => block?.type !== 'text' && block?.type !== 'thinking');
+    const trailingStructuralSignature = trailingStructuralBlocks
+      .map(getStructuralBlockSignature)
+      .join('|');
+
+    // When a tool block is already rendered at the end of the raw structure and
+    // new text deltas arrive afterward, append a new text block after the tool
+    // instead of growing the old pre-tool text block. The first time a trailing
+    // structural block appears we intentionally keep all buffered text before it:
+    // the backend snapshot can be stale, and the buffered suffix may still belong
+    // to the pre-tool prose. Subsequent growth beyond this boundary is post-tool.
+    if (trailingStructuralSignature && allText && content.startsWith(allText)) {
+      const previousBoundary = trailingStructuralTextBoundaryRef.current;
+      const canReuseBoundary =
+        previousBoundary &&
+        (trailingStructuralSignature === previousBoundary.signature ||
+          trailingStructuralSignature.startsWith(`${previousBoundary.signature}|`));
+
+      if (!canReuseBoundary) {
+        trailingStructuralTextBoundaryRef.current = {
+          signature: trailingStructuralSignature,
+          textLength: allText.length,
+        };
+      }
+
+      const boundary = trailingStructuralTextBoundaryRef.current;
+      if (boundary && content.length > boundary.textLength) {
+        const textBeforeStructuralBlocks = content.slice(0, boundary.textLength);
+        const textAfterStructuralBlocks = content.slice(boundary.textLength);
+        const desiredLastPreToolText = textBeforeStructuralBlocks.startsWith(prefixText)
+          ? textBeforeStructuralBlocks.slice(prefixText.length)
+          : textBeforeStructuralBlocks;
+        const nextBlocks = [...blocks];
+        nextBlocks[lastTextIdx] = { ...nextBlocks[lastTextIdx], text: desiredLastPreToolText };
+        if (trailingStructuralSignature !== boundary.signature) {
+          trailingStructuralTextBoundaryRef.current = {
+            signature: trailingStructuralSignature,
+            textLength: boundary.textLength,
+          };
+        }
+        return [...nextBlocks, { type: 'text', text: textAfterStructuralBlocks }];
+      }
+    } else if (!trailingStructuralSignature && !trailingStructuralTextBoundaryRef.current) {
+      trailingStructuralTextBoundaryRef.current = null;
+    }
 
     if (!content.startsWith(prefixText)) {
       if (textIndices.length !== 1) {
@@ -281,6 +345,7 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
     lastContentUpdateRef.current = 0;
     lastThinkingUpdateRef.current = 0;
     autoExpandedThinkingKeysRef.current.clear();
+    trailingStructuralTextBoundaryRef.current = null;
     streamingTurnIdRef.current = -1;
 
     if (contentUpdateTimeoutRef.current != null) {

@@ -41,6 +41,7 @@ import {
   resetRegistryState,
   setActiveTurnRuntime,
 } from './runtime-registry.js';
+import { loadMcpServersConfigAsRecord } from './mcp-status/config-loader.js';
 import {
   createTurnState,
   emitUsageTag,
@@ -49,6 +50,7 @@ import {
   processToolResultMessages,
   shouldOutputMessage,
 } from './stream-event-processor.js';
+import { generateSessionTitle } from '../session-title-service.js';
 
 const SUPPORTED_EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 
@@ -78,6 +80,22 @@ function resolveStreamingEnabled(params, settings) {
     : (settings?.streamingEnabled ?? false);
 }
 
+/**
+ * Extract text content from a user message object.
+ * @param {object} userMessage - User message object from buildUserMessage()
+ * @returns {string|null} Extracted text or null
+ */
+function extractUserMessageText(userMessage) {
+  if (!userMessage?.message?.content) return null;
+  const content = userMessage.message.content;
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    const textBlock = content.find(b => b.type === 'text');
+    return textBlock?.text || null;
+  }
+  return null;
+}
+
 function buildSystemPromptAppend(params) {
   const openedFiles = params.openedFiles || null;
   const agentPrompt = params.agentPrompt || null;
@@ -87,7 +105,7 @@ function buildSystemPromptAppend(params) {
   return buildIDEContextPrompt(openedFiles, agentPrompt);
 }
 
-function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId) {
+function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId, mcpServers) {
   return {
     cwd: workingDirectory,
     permissionMode,
@@ -105,6 +123,7 @@ function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxTh
     ),
     canUseTool,
     settingSources: ['user', 'project', 'local'],
+    ...(mcpServers && { mcpServers }),
     systemPrompt: {
       type: 'preset',
       preset: 'claude_code',
@@ -114,10 +133,10 @@ function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxTh
   };
 }
 
-async function buildUserMessage(params, withAttachments, requestedSessionId) {
+async function buildUserMessage(params, withAttachments, requestedSessionId, resolvedModelId = null) {
   if (withAttachments) {
     const attachments = await loadAttachments({ attachments: params.attachments || [] });
-    const contentBlocks = buildContentBlocks(attachments, params.message || '');
+    const contentBlocks = await buildContentBlocks(attachments, params.message || '', resolvedModelId);
     return {
       type: 'user',
       session_id: requestedSessionId || '',
@@ -169,12 +188,15 @@ async function buildRequestContext(params, withAttachments) {
   const maxThinkingTokens = resolveThinkingTokens(params, settings);
   const systemPromptAppend = buildSystemPromptAppend(params);
 
+  const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory);
+
   const options = buildQueryOptions(
     workingDirectory, sdkModelName, permissionMode,
-    maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId
+    maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId,
+    mcpServers
   );
 
-  const userMessage = await buildUserMessage(params, withAttachments, requestedSessionId);
+  const userMessage = await buildUserMessage(params, withAttachments, requestedSessionId, resolvedModel);
 
   const runtimeSignature = buildRuntimeSignature(options, systemPromptAppend, streamingEnabled, runtimeSessionEpoch);
   console.log('[LIFECYCLE] buildRequestContext sessionId=' + (requestedSessionId || '(new)')
@@ -299,6 +321,28 @@ async function executeTurn(runtime, requestContext, turnMeta) {
       success: true,
       sessionId: finalSessionId
     }));
+
+    // Fire-and-forget: generate AI title for new sessions (not resumes).
+    // titleGenerationAttempted prevents duplicate calls when a second message
+    // arrives before the first Haiku API response completes.
+    // The flag is reset if generateSessionTitle reports a transient failure
+    // so a future turn may retry; permanent skips (e.g. CLI login mode) keep
+    // the flag set to avoid endless retries.
+    if (!requestContext.requestedSessionId && finalSessionId && !runtime.titleGenerationAttempted) {
+      runtime.titleGenerationAttempted = true;
+      const userMessageText = extractUserMessageText(requestContext.userMessage);
+      if (userMessageText) {
+        generateSessionTitle(userMessageText, finalSessionId, requestContext.options.cwd)
+          .then((completed) => {
+            if (!completed) {
+              runtime.titleGenerationAttempted = false;
+            }
+          })
+          .catch(() => {
+            runtime.titleGenerationAttempted = false;
+          });
+      }
+    }
   } finally {
     endRuntimeTurn(runtime);
     // Only clear if this runtime still owns the pointer (not cleared by abort)

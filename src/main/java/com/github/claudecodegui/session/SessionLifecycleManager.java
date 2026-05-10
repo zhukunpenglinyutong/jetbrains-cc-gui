@@ -82,9 +82,10 @@ public class SessionLifecycleManager {
         LOG.info("Creating new session...");
 
         ClaudeSession oldSession = host.getSession();
-        String previousPermissionMode = (oldSession != null) ? oldSession.getPermissionMode() : "bypassPermissions";
-        String previousProvider = (oldSession != null) ? oldSession.getProvider() : "claude";
-        String previousModel = (oldSession != null) ? oldSession.getModel() : "claude-sonnet-4-6";
+        ClaudeSession defaultSession = createDefaultSession();
+        String previousPermissionMode = (oldSession != null) ? oldSession.getPermissionMode() : defaultSession.getPermissionMode();
+        String previousProvider = (oldSession != null) ? oldSession.getProvider() : defaultSession.getProvider();
+        String previousModel = (oldSession != null) ? oldSession.getModel() : defaultSession.getModel();
         LOG.info("Preserving session state: mode=" + previousPermissionMode
                          + ", provider=" + previousProvider + ", model=" + previousModel);
 
@@ -108,39 +109,15 @@ public class SessionLifecycleManager {
                 host.callJavaScript("showLoading", "false");
             });
 
-            host.clearPendingPermissionRequests();
-            host.clearPermissionDecisionMemory();
-
-            ClaudeSession newSession = new ClaudeSession(
-                    host.getProject(), host.getClaudeSDKBridge(), host.getCodexSDKBridge());
+            ClaudeSession newSession = createDefaultSession();
             newSession.setPermissionMode(previousPermissionMode);
             newSession.setProvider(previousProvider);
             newSession.setModel(previousModel);
             LOG.info("Restored session state to new session: mode=" + previousPermissionMode
                              + ", provider=" + previousProvider + ", model=" + previousModel);
 
-            host.setSession(newSession);
-            host.getHandlerContext().setSession(newSession);
-            host.setupSessionCallbacks();
-
-            String workingDirectory = determineWorkingDirectory();
-            newSession.setSessionInfo(null, workingDirectory);
-            LOG.info("New session created successfully, working directory: " + workingDirectory
-                    + ", epoch=" + newSession.getRuntimeSessionEpoch());
-            host.getClaudeSDKBridge().prewarmDaemonAsync(workingDirectory, newSession.getRuntimeSessionEpoch());
-
-            // Push slash commands for the new session
-            fetchSlashCommandsOnStartup();
-
-            ApplicationManager.getApplication().invokeLater(() -> {
-                // Release the frontend session transition guard so updateMessages works again.
-                // Must come BEFORE updateStatus to ensure the guard is lifted before any
-                // subsequent message updates arrive.
-                host.callJavaScript("historyLoadComplete");
-                host.callJavaScript("updateStatus",
-                        JsUtils.escapeJs(ClaudeCodeGuiBundle.message("toast.newSessionCreatedReady")));
-                resetTokenUsage();
-            });
+            completeNewSessionBootstrap(newSession, determineWorkingDirectory(),
+                    "New session created successfully, working directory: ");
         }).exceptionally(ex -> {
             LOG.error("Failed to create new session: " + ex.getMessage(), ex);
             ApplicationManager.getApplication().invokeLater(() -> {
@@ -156,7 +133,7 @@ public class SessionLifecycleManager {
      * Create a new session from a template, interrupting the old one first.
      */
     public void createNewSessionFromTemplate(SessionTemplate template) {
-        LOG.info("Creating new session from template: " + template.name);
+        LOG.info("Creating new session from template: " + template.getName());
 
         ClaudeSession oldSession = host.getSession();
 
@@ -180,43 +157,30 @@ public class SessionLifecycleManager {
                 host.callJavaScript("showLoading", "false");
             });
 
-            host.clearPendingPermissionRequests();
-            host.clearPermissionDecisionMemory();
-
-            ClaudeSession newSession = new ClaudeSession(
-                    host.getProject(), host.getClaudeSDKBridge(), host.getCodexSDKBridge());
+            ClaudeSession newSession = createDefaultSession();
 
             // Apply template settings
-            newSession.setPermissionMode(template.permissionMode != null ? template.permissionMode : "bypassPermissions");
-            newSession.setProvider(template.provider != null ? template.provider : "claude");
-            newSession.setModel(template.model != null ? template.model : "claude-sonnet-4-6");
-            newSession.setReasoningEffort(template.reasoningEffort != null ? template.reasoningEffort : "high");
-            newSession.setPsiContextEnabled(template.psiContextEnabled);
+            if (template.getPermissionMode() != null) {
+                newSession.setPermissionMode(template.getPermissionMode());
+            }
+            if (template.getProvider() != null) {
+                newSession.setProvider(template.getProvider());
+            }
+            if (template.getModel() != null) {
+                newSession.setModel(template.getModel());
+            }
+            if (template.getReasoningEffort() != null) {
+                newSession.setReasoningEffort(template.getReasoningEffort());
+            }
+            newSession.getState().setPsiContextEnabled(template.isPsiContextEnabled());
 
-            LOG.info("Applied template settings to new session: provider=" + template.provider
-                    + ", model=" + template.model + ", mode=" + template.permissionMode);
+            LOG.info("Applied template settings to new session: provider=" + template.getProvider()
+                    + ", model=" + template.getModel() + ", mode=" + template.getPermissionMode());
 
-            host.setSession(newSession);
-            host.getHandlerContext().setSession(newSession);
-            host.setupSessionCallbacks();
-
-            String workingDirectory = template.cwd != null && !template.cwd.trim().isEmpty()
-                    ? template.cwd : determineWorkingDirectory();
-            newSession.setSessionInfo(null, workingDirectory);
-            LOG.info("New session created from template successfully, working directory: " + workingDirectory
-                    + ", epoch=" + newSession.getRuntimeSessionEpoch());
-            host.getClaudeSDKBridge().prewarmDaemonAsync(workingDirectory, newSession.getRuntimeSessionEpoch());
-
-            // Push slash commands for the new session
-            fetchSlashCommandsOnStartup();
-
-            ApplicationManager.getApplication().invokeLater(() -> {
-                // Release the frontend session transition guard so updateMessages works again.
-                host.callJavaScript("historyLoadComplete");
-                host.callJavaScript("updateStatus",
-                        JsUtils.escapeJs(ClaudeCodeGuiBundle.message("toast.newSessionCreatedReady")));
-                resetTokenUsage();
-            });
+            String workingDirectory = template.getCwd() != null && !template.getCwd().trim().isEmpty()
+                    ? template.getCwd() : determineWorkingDirectory();
+            completeNewSessionBootstrap(newSession, workingDirectory,
+                    "New session created from template successfully, working directory: ");
         }).exceptionally(ex -> {
             LOG.error("Failed to create new session from template: " + ex.getMessage(), ex);
             ApplicationManager.getApplication().invokeLater(() -> {
@@ -246,10 +210,11 @@ public class SessionLifecycleManager {
         } else {
             PropertiesComponent props = PropertiesComponent.getInstance();
             String savedMode = props.getValue(PERMISSION_MODE_PROPERTY_KEY);
+            ClaudeSession defaultSession = createDefaultSession();
             previousPermissionMode = (savedMode != null && !savedMode.trim().isEmpty())
-                                             ? savedMode.trim() : "bypassPermissions";
-            previousProvider = "claude";
-            previousModel = "claude-sonnet-4-6";
+                                             ? savedMode.trim() : defaultSession.getPermissionMode();
+            previousProvider = defaultSession.getProvider();
+            previousModel = defaultSession.getModel();
         }
         LOG.info("Preserving session state when loading history: mode=" + previousPermissionMode
                          + ", provider=" + previousProvider + ", model=" + previousModel);
@@ -456,5 +421,32 @@ public class SessionLifecycleManager {
 
     private String getCurrentEditorFilePath() {
         return com.github.claudecodegui.util.EditorFileUtils.getCurrentEditorFilePath(this.host.getProject());
+    }
+
+    private ClaudeSession createDefaultSession() {
+        return new ClaudeSession(host.getProject(), host.getClaudeSDKBridge(), host.getCodexSDKBridge());
+    }
+
+    private void completeNewSessionBootstrap(ClaudeSession newSession, String workingDirectory, String successLogPrefix) {
+        host.clearPendingPermissionRequests();
+        host.clearPermissionDecisionMemory();
+        host.setSession(newSession);
+        host.getHandlerContext().setSession(newSession);
+        host.setupSessionCallbacks();
+
+        newSession.setSessionInfo(null, workingDirectory);
+        LOG.info(successLogPrefix + workingDirectory + ", epoch=" + newSession.getRuntimeSessionEpoch());
+        host.getClaudeSDKBridge().prewarmDaemonAsync(workingDirectory, newSession.getRuntimeSessionEpoch());
+        fetchSlashCommandsOnStartup();
+
+        ApplicationManager.getApplication().invokeLater(() -> {
+            // Release the frontend session transition guard so updateMessages works again.
+            // Must come BEFORE updateStatus to ensure the guard is lifted before any
+            // subsequent message updates arrive.
+            host.callJavaScript("historyLoadComplete");
+            host.callJavaScript("updateStatus",
+                    JsUtils.escapeJs(ClaudeCodeGuiBundle.message("toast.newSessionCreatedReady")));
+            resetTokenUsage();
+        });
     }
 }

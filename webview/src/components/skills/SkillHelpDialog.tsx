@@ -2,6 +2,12 @@ import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { copyToClipboard } from '../../utils/copyUtils';
 
+const COPIED_INDICATOR_STYLE: React.CSSProperties = {
+  marginLeft: '8px',
+  color: 'var(--vscode-charts-green, #4caf50)',
+  fontSize: '12px',
+};
+
 interface SkillHelpDialogProps {
   onClose: () => void;
   currentProvider?: string;
@@ -146,7 +152,7 @@ export function SkillHelpDialog({ onClose, currentProvider = 'claude' }: SkillHe
                     {t(`${hp}.learnMore.link1`)}
                   </a>
                   {copiedUrl === 'https://codex.openai.com/docs/skills' && (
-                    <span style={{ marginLeft: '8px', color: 'var(--vscode-charts-green, #4caf50)', fontSize: '12px' }}>✓ {t('mcp.linkCopied')}</span>
+                    <span style={COPIED_INDICATOR_STYLE}>✓ {t('mcp.linkCopied')}</span>
                   )}
                 </li>
               </ul>
@@ -160,7 +166,7 @@ export function SkillHelpDialog({ onClose, currentProvider = 'claude' }: SkillHe
                     {t(`${hp}.learnMore.link1`)}
                   </a>
                   {copiedUrl === 'https://support.claude.com/en/articles/12512176-what-are-skills' && (
-                    <span style={{ marginLeft: '8px', color: 'var(--vscode-charts-green, #4caf50)', fontSize: '12px' }}>✓ {t('mcp.linkCopied')}</span>
+                    <span style={COPIED_INDICATOR_STYLE}>✓ {t('mcp.linkCopied')}</span>
                   )}
                 </li>
                 <li>
@@ -171,7 +177,7 @@ export function SkillHelpDialog({ onClose, currentProvider = 'claude' }: SkillHe
                     {t(`${hp}.learnMore.link2`)}
                   </a>
                   {copiedUrl === 'https://support.claude.com/en/articles/12512198-creating-custom-skills' && (
-                    <span style={{ marginLeft: '8px', color: 'var(--vscode-charts-green, #4caf50)', fontSize: '12px' }}>✓ {t('mcp.linkCopied')}</span>
+                    <span style={COPIED_INDICATOR_STYLE}>✓ {t('mcp.linkCopied')}</span>
                   )}
                 </li>
                 <li>
@@ -182,7 +188,7 @@ export function SkillHelpDialog({ onClose, currentProvider = 'claude' }: SkillHe
                     {t(`${hp}.learnMore.link3`)}
                   </a>
                   {copiedUrl === 'https://github.com/anthropics/skills' && (
-                    <span style={{ marginLeft: '8px', color: 'var(--vscode-charts-green, #4caf50)', fontSize: '12px' }}>✓ {t('mcp.linkCopied')}</span>
+                    <span style={COPIED_INDICATOR_STYLE}>✓ {t('mcp.linkCopied')}</span>
                   )}
                 </li>
               </ul>

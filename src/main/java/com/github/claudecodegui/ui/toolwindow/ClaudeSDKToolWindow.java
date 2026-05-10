@@ -215,10 +215,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     CompletableFuture<Boolean> future = BridgePreloader.waitForBridgeAsync();
                     Boolean ready = future.get(60, TimeUnit.SECONDS);
 
-                    if (project.isDisposed()) return;
+                    if (project.isDisposed()) { return; }
 
                     ToolWindowManager.getInstance(project).invokeLater(() -> {
-                        if (project.isDisposed()) return;
+                        if (project.isDisposed()) { return; }
 
                         if (ready != null && ready) {
                             LOG.info("[ToolWindow] ai-bridge ready, replacing loading panel with chat window");
@@ -261,6 +261,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         com.intellij.openapi.actionSystem.AnAction detachTabAction =
                 com.intellij.openapi.actionSystem.ActionManager.getInstance()
                         .getAction("ClaudeCodeGUI.DetachTabAction");
+        com.intellij.openapi.actionSystem.AnAction saveAsTemplateAction =
+                com.intellij.openapi.actionSystem.ActionManager.getInstance()
+                        .getAction("ClaudeCodeGUI.SaveAsTemplateAction");
+        com.intellij.openapi.actionSystem.AnAction createFromTemplateAction =
+                com.intellij.openapi.actionSystem.ActionManager.getInstance()
+                        .getAction("ClaudeCodeGUI.CreateFromTemplateAction");
 
         com.intellij.openapi.actionSystem.DefaultActionGroup gearActions =
                 new com.intellij.openapi.actionSystem.DefaultActionGroup();
@@ -269,6 +275,13 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
         if (detachTabAction != null) {
             gearActions.add(detachTabAction);
+        }
+        if (saveAsTemplateAction != null) {
+            gearActions.addSeparator();
+            gearActions.add(saveAsTemplateAction);
+        }
+        if (createFromTemplateAction != null) {
+            gearActions.add(createFromTemplateAction);
         }
         toolWindow.setAdditionalGearActions(gearActions);
 

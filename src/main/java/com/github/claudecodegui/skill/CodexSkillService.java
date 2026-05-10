@@ -74,8 +74,8 @@ public class CodexSkillService {
      * Validates a skill name to prevent path traversal via directory names.
      */
     private static boolean isSafeSkillName(String name) {
-        if (name == null || name.isEmpty()) return false;
-        if (name.contains("..") || name.contains("/") || name.contains("\\")) return false;
+        if (name == null || name.isEmpty()) { return false; }
+        if (name.contains("..") || name.contains("/") || name.contains("\\")) { return false; }
         return SAFE_NAME_PATTERN.matcher(name).matches();
     }
 
@@ -84,7 +84,7 @@ public class CodexSkillService {
      * Uses absolute + normalize to handle Windows vs Unix path differences.
      */
     private static String normalizePath(String path) {
-        if (path == null || path.isEmpty()) return path;
+        if (path == null || path.isEmpty()) { return path; }
         return Paths.get(path).toAbsolutePath().normalize().toString();
     }
 
@@ -662,14 +662,14 @@ public class CodexSkillService {
             String normalizedSkillPath = normalizePath(skillPath);
             synchronized (CONFIG_TOML_LOCK) {
                 Map<String, Object> config = codexSettingsManager.readConfigToml();
-                if (config == null) return;
+                if (config == null) { return; }
 
                 Object skillsObj = config.get("skills");
-                if (!(skillsObj instanceof Map)) return;
+                if (!(skillsObj instanceof Map)) { return; }
 
                 Map<String, Object> skillsMap = (Map<String, Object>) skillsObj;
                 Object configObj = skillsMap.get("config");
-                if (!(configObj instanceof List)) return;
+                if (!(configObj instanceof List)) { return; }
 
                 List<Map<String, Object>> configList = (List<Map<String, Object>>) configObj;
                 boolean removed = configList.removeIf(e -> {

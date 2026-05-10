@@ -8,7 +8,7 @@
 
 **English** · [简体中文](./README.zh-CN.md)
 
-<a href="https://trendshift.io/repositories/19332" target="_blank"><img src="https://trendshift.io/api/badge/repositories/19332" alt="zhukunpenglinyutong%2Fidea-claude-code-gui | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+<a href="https://trendshift.io/repositories/24968" target="_blank"><img src="https://trendshift.io/api/badge/repositories/24968" alt="zhukunpenglinyutong%2Fjetbrains-cc-gui | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
 ![][github-contributors-shield] ![][github-forks-shield] ![][github-stars-shield] ![][github-issues-shield] ![][github-mit]
 

@@ -45,7 +45,7 @@ class ClaudeHistoryParser {
             String line;
 
             while ((line = reader.readLine()) != null) {
-                if (line.trim().isEmpty()) continue;
+                if (line.trim().isEmpty()) { continue; }
 
                 try {
                     ClaudeHistoryReader.ConversationMessage msg = this.gson.fromJson(line, ClaudeHistoryReader.ConversationMessage.class);

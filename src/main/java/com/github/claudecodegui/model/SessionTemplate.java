@@ -5,13 +5,13 @@ package com.github.claudecodegui.model;
  * Contains the essential settings needed to recreate a session state.
  */
 public class SessionTemplate {
-    public String name;
-    public String provider;
-    public String model;
-    public String permissionMode;
-    public String reasoningEffort;
-    public String cwd;
-    public boolean psiContextEnabled;
+    private String name;
+    private String provider;
+    private String model;
+    private String permissionMode;
+    private String reasoningEffort;
+    private String cwd;
+    private boolean psiContextEnabled;
 
     public SessionTemplate() {
         // Default constructor for JSON deserialization
@@ -34,6 +34,34 @@ public class SessionTemplate {
     public SessionTemplate copy() {
         return new SessionTemplate(name, provider, model, permissionMode,
                                   reasoningEffort, cwd, psiContextEnabled);
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public String getProvider() {
+        return provider;
+    }
+
+    public String getModel() {
+        return model;
+    }
+
+    public String getPermissionMode() {
+        return permissionMode;
+    }
+
+    public String getReasoningEffort() {
+        return reasoningEffort;
+    }
+
+    public String getCwd() {
+        return cwd;
+    }
+
+    public boolean isPsiContextEnabled() {
+        return psiContextEnabled;
     }
 
     @Override

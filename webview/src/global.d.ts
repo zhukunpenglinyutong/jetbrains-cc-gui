@@ -100,6 +100,15 @@ interface Window {
   addToast?: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 
   /**
+   * Toast deferred until a session transition finishes, because backend
+   * clearMessages resets transient UI state during new-session creation.
+   */
+  __pendingSessionTransitionToast?: {
+    message: string;
+    type?: 'success' | 'error' | 'warning' | 'info';
+  };
+
+  /**
    * Usage statistics update callback
    */
   onUsageUpdate?: (json: string) => void;
@@ -261,9 +270,19 @@ interface Window {
   updateCommitGenerationEnabled?: (json: string) => void;
 
   /**
+   * Update AI session title generation enabled state
+   */
+  updateAiTitleGenerationEnabled?: (json: string) => void;
+
+  /**
    * Update status bar widget enabled state
    */
   updateStatusBarWidgetEnabled?: (json: string) => void;
+
+  /**
+   * Update task completion notification enabled state
+   */
+  updateTaskCompletionNotificationEnabled?: (json: string) => void;
 
   /**
    * Update current Claude config
@@ -424,9 +443,11 @@ interface Window {
   updateCommitAiConfig?: (json: string) => void;
 
   /**
-   * Update session title (called when session title changes)
+   * Update session title (called when AI generates a title).
+   * @param sessionId - The session ID the title belongs to
+   * @param title - The generated title text
    */
-  updateSessionTitle?: (title: string) => void;
+  updateSessionTitle?: (sessionId: string, title: string) => void;
 
   /**
    * Editor font config received callback - receives IDEA editor font configuration
@@ -785,6 +806,11 @@ interface Window {
   __pendingLoadingState?: boolean;
 
   /**
+   * Pending mode payload before setMode is registered.
+   */
+  __pendingModeReceived?: string;
+
+  /**
    * Execute context action from IDEA shortcut (copy/cut/send)
    */
   execContextAction?: (action: string) => void;
@@ -793,4 +819,37 @@ interface Window {
    * Clipboard read callback for paste from IDEA shortcut
    */
   onClipboardRead?: (text: string) => void;
+
+  // ============================================================================
+  // Theme initialization (Java pre-injects before React boots)
+  // ============================================================================
+
+  /**
+   * Initial IDE theme injected by Java into the HTML before React boots.
+   * Used by useThemeInit to avoid a flash of incorrect theme.
+   */
+  __INITIAL_IDE_THEME__?: 'light' | 'dark';
+
+  // ============================================================================
+  // Provider settings panel callbacks (registered by ProviderList)
+  // ============================================================================
+
+  /**
+   * CLI login account info callback. Java pushes the logged-in account email
+   * after a successful CLI login to update the settings panel.
+   */
+  updateCliLoginAccountInfo?: (email: string) => void;
+
+  /**
+   * Provider import preview result callback. Java pushes a JSON string or
+   * parsed payload describing the providers detected during import preview.
+   */
+  import_preview_result?: (dataOrStr: string | { providers?: unknown }) => void;
+
+  /**
+   * Backend notification callback (variadic for backward compatibility).
+   * Modern callers pass (type, title, message); legacy callers pass a single
+   * JSON string or object with shape { type, title, message }.
+   */
+  backend_notification?: (...args: unknown[]) => void;
 }

@@ -1,6 +1,5 @@
 package com.github.claudecodegui.skill;
 
-import com.github.claudecodegui.skill.CodexSkillService;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;

@@ -5,6 +5,7 @@ import {
   formatCommandForResubmit,
   hasTaskNotificationTag,
   formatTaskNotificationForDisplay,
+  isSyntheticToolMessageContent,
 } from './messageUtils';
 
 /**
@@ -105,7 +106,12 @@ export function extractMarkdownContent(message: ClaudeMessage, includeThinking =
   }
 
   // Fallback to message.content if no text blocks found
-  if (parts.length === 0 && message.content && message.content.trim()) {
+  if (
+    parts.length === 0 &&
+    message.content &&
+    message.content.trim() &&
+    !isSyntheticToolMessageContent(message.content, rawBlocks)
+  ) {
     parts.push(formatTextForCopy(message.content));
   }
 

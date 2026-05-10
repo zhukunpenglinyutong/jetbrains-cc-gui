@@ -37,6 +37,6 @@ public class CreateFromTemplateAction extends ChatToolWindowAction {
         // Create new session from template in current window
         chatWindow.getSessionLifecycleManager().createNewSessionFromTemplate(selectedTemplate);
 
-        LOG.info("[CreateFromTemplateAction] Created new session from template: " + selectedTemplate.name);
+        LOG.info("[CreateFromTemplateAction] Created new session from template: " + selectedTemplate.getName());
     }
 }

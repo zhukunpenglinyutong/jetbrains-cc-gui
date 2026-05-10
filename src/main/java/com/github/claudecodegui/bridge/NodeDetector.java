@@ -13,7 +13,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
@@ -477,13 +476,13 @@ public class NodeDetector {
         String nodeFileName = PlatformUtils.isWindows() ? "node.exe" : "node";
 
         for (String dir : paths) {
-            if (dir == null || dir.isEmpty()) continue;
+            if (dir == null || dir.isEmpty()) { continue; }
 
             File nodeFile = new File(dir, nodeFileName);
             String nodePath = nodeFile.getAbsolutePath();
             triedPaths.add(nodePath);
 
-            if (!nodeFile.exists()) continue;
+            if (!nodeFile.exists()) { continue; }
 
             String version = verifyNodePath(nodePath);
             if (version != null) {
@@ -594,7 +593,7 @@ public class NodeDetector {
      * For example: %USERPROFILE%\\.nvm -> C:\Users\xxx\.nvm
      */
     private String expandWindowsEnvVars(String path) {
-        if (path == null) return null;
+        if (path == null) { return null; }
 
         String result = path;
 

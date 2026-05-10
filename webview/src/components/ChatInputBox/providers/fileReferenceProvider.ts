@@ -153,12 +153,13 @@ export async function fileReferenceProvider(
     pendingReject = reject;
     lastQuery = query;
 
-    // Listen for abort signal
+    // Listen for abort signal (once: true prevents listener accumulation when
+    // a long-lived signal is reused across multiple invocations).
     signal.addEventListener('abort', () => {
       pendingResolve = null;
       pendingReject = null;
       reject(new DOMException('Aborted', 'AbortError'));
-    });
+    }, { once: true });
 
     // Check if sendToJava is available
     if (!window.sendToJava) {

@@ -64,7 +64,7 @@ public class PermissionService {
 
         public static PermissionResponse fromValue(int value) {
             for (PermissionResponse response : values()) {
-                if (response.value == value) return response;
+                if (response.value == value) { return response; }
             }
             return null;
         }
@@ -309,7 +309,7 @@ public class PermissionService {
         this.lastActivityTime = startTime;
 
         String content = acquireRequestContent(requestFile, "PERM");
-        if (content == null) return;
+        if (content == null) { return; }
 
         try {
             JsonObject request = gson.fromJson(content, JsonObject.class);
@@ -440,7 +440,7 @@ public class PermissionService {
         String fileName = requestFile.getFileName().toString();
 
         String content = acquireRequestContent(requestFile, "ASK");
-        if (content == null) return;
+        if (content == null) { return; }
 
         // Delete immediately to prevent duplicate polling (polling interval is 500ms)
         safeDeleteFile(requestFile, "ASK");
@@ -501,7 +501,7 @@ public class PermissionService {
         String fileName = requestFile.getFileName().toString();
 
         String content = acquireRequestContent(requestFile, "PLAN");
-        if (content == null) return;
+        if (content == null) { return; }
 
         try {
             JsonObject request = gson.fromJson(content, JsonObject.class);

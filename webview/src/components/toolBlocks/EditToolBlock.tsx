@@ -29,6 +29,149 @@ interface DiffResult {
   deletions: number;
 }
 
+const ROOT_STYLE: React.CSSProperties = { margin: '12px 0' };
+
+const TOP_BAR_STYLE: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'flex-end',
+  marginBottom: '4px',
+  paddingRight: '4px',
+};
+
+const TOP_BAR_INNER_STYLE: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+};
+
+const ACTION_BUTTON_STYLE: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: '2px 6px',
+  fontSize: '11px',
+  fontFamily: 'inherit',
+  color: 'var(--text-secondary)',
+  background: 'var(--bg-tertiary)',
+  border: '1px solid var(--border-primary)',
+  borderRadius: '4px',
+  cursor: 'pointer',
+  transition: 'all 0.15s ease',
+  whiteSpace: 'nowrap',
+};
+
+const DIFF_BUTTON_ICON_STYLE: React.CSSProperties = {
+  marginRight: '4px',
+  fontSize: '12px',
+};
+
+const REFRESH_BUTTON_ICON_STYLE: React.CSSProperties = {
+  fontSize: '12px',
+};
+
+const TASK_CONTAINER_STYLE: React.CSSProperties = { margin: 0 };
+
+const FILE_LINK_STYLE: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+};
+
+const FILE_ICON_STYLE: React.CSSProperties = {
+  marginRight: '4px',
+  display: 'flex',
+  alignItems: 'center',
+  width: '16px',
+  height: '16px',
+};
+
+const LINE_INFO_STYLE: React.CSSProperties = {
+  marginLeft: '8px',
+  fontSize: '12px',
+};
+
+const STATS_STYLE: React.CSSProperties = {
+  marginLeft: '12px',
+  fontSize: '12px',
+  fontFamily: 'var(--idea-editor-font-family, monospace)',
+  fontWeight: 600,
+  whiteSpace: 'nowrap',
+};
+
+const ADDED_TEXT_STYLE: React.CSSProperties = { color: 'var(--diff-added-accent)' };
+const DELETED_TEXT_STYLE: React.CSSProperties = { color: 'var(--diff-deleted-accent)' };
+const STATS_SPACER_STYLE: React.CSSProperties = { margin: '0 4px' };
+
+const TASK_DETAILS_STYLE: React.CSSProperties = {
+  padding: 0,
+  borderTop: '1px solid var(--border-primary)',
+};
+
+const DIFF_CONTAINER_STYLE: React.CSSProperties = {
+  // Use monospace font to ensure consistent tab and space widths
+  fontFamily: 'var(--idea-editor-font-family, monospace)',
+  fontSize: '12px',
+  lineHeight: 1.5,
+  background: 'var(--diff-surface)',
+  // Normalize tab width to prevent indentation shifts across environments
+  tabSize: 4 as unknown as number,
+  MozTabSize: 4 as unknown as number,
+  // Preserve whitespace and line breaks without wrapping to prevent reflow during selection
+  whiteSpace: 'pre' as const,
+  // Horizontal scroll only to avoid jitter from simultaneous horizontal and vertical changes
+  overflowX: 'auto' as const,
+  overflowY: 'hidden' as const,
+  // Hint the browser to promote this container to a compositing layer for better selection performance
+  willChange: 'transform' as const,
+  transform: 'translateZ(0)',
+};
+
+const INNER_WRAPPER_STYLE: React.CSSProperties = {
+  display: 'inline-block',
+  minWidth: '100%',
+};
+
+const DIFF_PRE_STYLE: React.CSSProperties = {
+  // Preserve original whitespace with consistent tab width
+  whiteSpace: 'pre',
+  margin: 0,
+  paddingLeft: '4px',
+  flex: 1,
+  // Re-declare tabSize in case highlight or wrapper layers override it
+  tabSize: 4 as unknown as number,
+  MozTabSize: 4 as unknown as number,
+  // Disable arbitrary line breaks to keep selection and scrolling stable
+  overflowWrap: 'normal' as const,
+};
+
+function getDiffLineStyle(isDeleted: boolean, isAdded: boolean): React.CSSProperties {
+  return {
+    display: 'flex',
+    background: isDeleted
+      ? 'var(--diff-deleted-bg)'
+      : isAdded
+        ? 'var(--diff-added-bg)'
+        : 'transparent',
+    color: 'var(--diff-text)',
+    minWidth: '100%',
+  };
+}
+
+function getDiffGlyphStyle(isDeleted: boolean, isAdded: boolean, isUnchanged: boolean): React.CSSProperties {
+  return {
+    width: '24px',
+    textAlign: 'center',
+    color: isDeleted ? 'var(--diff-deleted-accent)' : isAdded ? 'var(--diff-added-accent)' : 'var(--diff-muted-text)',
+    userSelect: 'none',
+    background: isDeleted
+      ? 'var(--diff-deleted-glyph-bg)'
+      : isAdded
+        ? 'var(--diff-added-glyph-bg)'
+        : 'transparent',
+    opacity: isUnchanged ? 0.5 : 0.7,
+    flex: '0 0 24px',
+  };
+}
+
 // Compute actual diff using the LCS algorithm
 function computeDiff(oldLines: string[], newLines: string[]): DiffResult {
   if (oldLines.length === 0 && newLines.length === 0) {
@@ -183,31 +326,17 @@ const EditToolBlock = ({ name, input, result, toolId }: EditToolBlockProps) => {
   };
 
   return (
-    <div style={{ margin: '12px 0' }}>
+    <div style={ROOT_STYLE}>
       {/* Top Row: Buttons (Right aligned) */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '4px', paddingRight: '4px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div style={TOP_BAR_STYLE}>
+        <div style={TOP_BAR_INNER_STYLE}>
           <button
             onClick={(e) => {
               e.stopPropagation();
               handleShowDiff(e);
             }}
             title={t('tools.showDiffInIdea')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '2px 6px',
-              fontSize: '11px',
-              fontFamily: 'inherit',
-              color: 'var(--text-secondary)',
-              background: 'var(--bg-tertiary)',
-              border: '1px solid var(--border-primary)',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-              whiteSpace: 'nowrap',
-            }}
+            style={ACTION_BUTTON_STYLE}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = 'var(--bg-hover)';
               e.currentTarget.style.color = 'var(--text-primary)';
@@ -217,7 +346,7 @@ const EditToolBlock = ({ name, input, result, toolId }: EditToolBlockProps) => {
               e.currentTarget.style.color = 'var(--text-secondary)';
             }}
           >
-            <span className="codicon codicon-diff" style={{ marginRight: '4px', fontSize: '12px' }} />
+            <span className="codicon codicon-diff" style={DIFF_BUTTON_ICON_STYLE} />
             {t('tools.diffButton')}
           </button>
           <button
@@ -226,20 +355,7 @@ const EditToolBlock = ({ name, input, result, toolId }: EditToolBlockProps) => {
               handleRefreshInIdea(e);
             }}
             title={t('tools.refreshFileInIdea')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '2px 6px',
-              fontSize: '11px',
-              fontFamily: 'inherit',
-              color: 'var(--text-secondary)',
-              background: 'var(--bg-tertiary)',
-              border: '1px solid var(--border-primary)',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
+            style={ACTION_BUTTON_STYLE}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = 'var(--bg-hover)';
               e.currentTarget.style.color = 'var(--text-primary)';
@@ -249,12 +365,12 @@ const EditToolBlock = ({ name, input, result, toolId }: EditToolBlockProps) => {
               e.currentTarget.style.color = 'var(--text-secondary)';
             }}
           >
-            <span className="codicon codicon-refresh" style={{ fontSize: '12px' }} />
+            <span className="codicon codicon-refresh" style={REFRESH_BUTTON_ICON_STYLE} />
           </button>
         </div>
       </div>
 
-      <div className="task-container" style={{ margin: 0 }}>
+      <div className="task-container" style={TASK_CONTAINER_STYLE}>
         <div className="task-header" onClick={() => setExpanded((prev) => !prev)}>
           <div className="task-title-section">
             <span className="codicon codicon-edit tool-title-icon" />
@@ -266,16 +382,16 @@ const EditToolBlock = ({ name, input, result, toolId }: EditToolBlockProps) => {
               className="tool-title-summary clickable-file"
               onClick={handleFileClick}
               title={t('tools.clickToOpen', { filePath: target?.displayPath ?? filePath })}
-              style={{ display: 'flex', alignItems: 'center' }}
+              style={FILE_LINK_STYLE}
             >
               <span
-                style={{ marginRight: '4px', display: 'flex', alignItems: 'center', width: '16px', height: '16px' }}
+                style={FILE_ICON_STYLE}
                 dangerouslySetInnerHTML={{ __html: getFileIconSvg() }}
               />
               {target?.displayPath || filePath}
             </span>
             {lineInfo.start && (
-              <span className="tool-title-summary" style={{ marginLeft: '8px', fontSize: '12px' }}>
+              <span className="tool-title-summary" style={LINE_INFO_STYLE}>
                 {lineInfo.end && lineInfo.end !== lineInfo.start
                   ? t('tools.lineRange', { start: lineInfo.start, end: lineInfo.end })
                   : t('tools.lineSingle', { line: lineInfo.start })}
@@ -283,24 +399,16 @@ const EditToolBlock = ({ name, input, result, toolId }: EditToolBlockProps) => {
               </span>
             )}
             {!lineInfo.start && extraEditCount > 0 && (
-              <span className="tool-title-summary" style={{ marginLeft: '8px', fontSize: '12px' }}>
+              <span className="tool-title-summary" style={LINE_INFO_STYLE}>
                 +{extraEditCount}{t('tools.editLocationsSuffix')}
               </span>
             )}
-            
+
             {(diff.additions > 0 || diff.deletions > 0) && (
-              <span
-                style={{
-                  marginLeft: '12px',
-                  fontSize: '12px',
-                  fontFamily: 'var(--idea-editor-font-family, monospace)',
-                  fontWeight: 600,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {diff.additions > 0 && <span style={{ color: 'var(--diff-added-accent)' }}>+{diff.additions}</span>}
-                {diff.additions > 0 && diff.deletions > 0 && <span style={{ margin: '0 4px' }} />}
-                {diff.deletions > 0 && <span style={{ color: 'var(--diff-deleted-accent)' }}>-{diff.deletions}</span>}
+              <span style={STATS_STYLE}>
+                {diff.additions > 0 && <span style={ADDED_TEXT_STYLE}>+{diff.additions}</span>}
+                {diff.additions > 0 && diff.deletions > 0 && <span style={STATS_SPACER_STYLE} />}
+                {diff.deletions > 0 && <span style={DELETED_TEXT_STYLE}>-{diff.deletions}</span>}
               </span>
             )}
           </div>
@@ -309,29 +417,10 @@ const EditToolBlock = ({ name, input, result, toolId }: EditToolBlockProps) => {
         </div>
 
         {expanded && (
-        <div className="task-details" style={{ padding: 0, borderTop: '1px solid var(--border-primary)' }}>
-          <div
-            style={{
-              // Use monospace font to ensure consistent tab and space widths
-              fontFamily: 'var(--idea-editor-font-family, monospace)',
-              fontSize: '12px',
-              lineHeight: 1.5,
-              background: 'var(--diff-surface)',
-              // Normalize tab width to prevent indentation shifts across environments
-              tabSize: 4 as unknown as number,
-              MozTabSize: 4 as unknown as number,
-              // Preserve whitespace and line breaks without wrapping to prevent reflow during selection
-              whiteSpace: 'pre' as const,
-              // Horizontal scroll only to avoid jitter from simultaneous horizontal and vertical changes
-              overflowX: 'auto' as const,
-              overflowY: 'hidden' as const,
-              // Hint the browser to promote this container to a compositing layer for better selection performance
-              willChange: 'transform' as const,
-              transform: 'translateZ(0)',
-            }}
-          >
+        <div className="task-details" style={TASK_DETAILS_STYLE}>
+          <div style={DIFF_CONTAINER_STYLE}>
             {/* Inner wrapper stretches to scrollWidth so row backgrounds fill the full width */}
-            <div style={{ display: 'inline-block', minWidth: '100%' }}>
+            <div style={INNER_WRAPPER_STYLE}>
             {diff.lines.map((line, index) => {
               const isDeleted = line.type === 'deleted';
               const isAdded = line.type === 'added';
@@ -340,48 +429,12 @@ const EditToolBlock = ({ name, input, result, toolId }: EditToolBlockProps) => {
               return (
                 <div
                   key={index}
-                  style={{
-                    display: 'flex',
-                    background: isDeleted
-                      ? 'var(--diff-deleted-bg)'
-                      : isAdded
-                        ? 'var(--diff-added-bg)'
-                        : 'transparent',
-                    color: 'var(--diff-text)',
-                    minWidth: '100%',
-                  }}
+                  style={getDiffLineStyle(isDeleted, isAdded)}
                 >
-                  <div
-                    style={{
-                      width: '24px',
-                      textAlign: 'center',
-                      color: isDeleted ? 'var(--diff-deleted-accent)' : isAdded ? 'var(--diff-added-accent)' : 'var(--diff-muted-text)',
-                      userSelect: 'none',
-                      background: isDeleted
-                        ? 'var(--diff-deleted-glyph-bg)'
-                        : isAdded
-                          ? 'var(--diff-added-glyph-bg)'
-                          : 'transparent',
-                      opacity: isUnchanged ? 0.5 : 0.7,
-                      flex: '0 0 24px',
-                    }}
-                  >
+                  <div style={getDiffGlyphStyle(isDeleted, isAdded, isUnchanged)}>
                     {isDeleted ? '-' : isAdded ? '+' : ' '}
                   </div>
-                  <pre
-                    style={{
-                      // Preserve original whitespace with consistent tab width
-                      whiteSpace: 'pre',
-                      margin: 0,
-                      paddingLeft: '4px',
-                      flex: 1,
-                      // Re-declare tabSize in case highlight or wrapper layers override it
-                      tabSize: 4 as unknown as number,
-                      MozTabSize: 4 as unknown as number,
-                      // Disable arbitrary line breaks to keep selection and scrolling stable
-                      overflowWrap: 'normal' as const,
-                    }}
-                  >
+                  <pre style={DIFF_PRE_STYLE}>
                     {line.content}
                   </pre>
                 </div>

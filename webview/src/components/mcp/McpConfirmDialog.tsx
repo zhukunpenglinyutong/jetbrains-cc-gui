@@ -1,3 +1,5 @@
+const FOOTER_ACTIONS_STYLE: React.CSSProperties = { marginLeft: 'auto' };
+
 interface McpConfirmDialogProps {
   title: string;
   message: string;
@@ -43,7 +45,7 @@ export function McpConfirmDialog({
         </div>
 
         <div className="dialog-footer">
-          <div className="footer-actions" style={{ marginLeft: 'auto' }}>
+          <div className="footer-actions" style={FOOTER_ACTIONS_STYLE}>
             <button className="btn btn-secondary" onClick={onCancel}>
               {cancelText}
             </button>

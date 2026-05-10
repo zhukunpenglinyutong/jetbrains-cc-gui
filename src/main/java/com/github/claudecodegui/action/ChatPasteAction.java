@@ -32,7 +32,7 @@ public class ChatPasteAction extends ChatToolWindowAction {
             String text = "";
             if (clipboard.isDataFlavorAvailable(DataFlavor.stringFlavor)) {
                 text = (String) clipboard.getData(DataFlavor.stringFlavor);
-                if (text == null) text = "";
+                if (text == null) { text = ""; }
             }
             if (text.isEmpty()) {
                 // No text in clipboard - check for image data

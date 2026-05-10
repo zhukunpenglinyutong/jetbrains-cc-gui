@@ -27,22 +27,15 @@ public class SaveAsTemplateAction extends ChatToolWindowAction {
     protected void performAction(@NotNull AnActionEvent e, @NotNull Project project, @NotNull ClaudeChatWindow chatWindow) {
         ClaudeSession session = chatWindow.getSession();
         if (session == null) {
-            Messages.showErrorDialog(
-                project,
-                ClaudeCodeGuiBundle.message("template.save.error.noSession"),
-                ClaudeCodeGuiBundle.message("template.save.error.title")
-            );
+            handleNoActiveSession(project);
             return;
         }
 
         // Get template name from user
-        String templateName = Messages.showInputDialog(
-            project,
-            ClaudeCodeGuiBundle.message("template.save.name.prompt"),
-            ClaudeCodeGuiBundle.message("template.save.name.title"),
-            Messages.getQuestionIcon(),
-            "",
-            null
+        String templateName = showInputDialog(
+                project,
+                ClaudeCodeGuiBundle.message("template.save.name.prompt"),
+                ClaudeCodeGuiBundle.message("template.save.name.title")
         );
 
         if (templateName == null || templateName.trim().isEmpty()) {
@@ -54,11 +47,10 @@ public class SaveAsTemplateAction extends ChatToolWindowAction {
         // Check if template already exists
         SessionTemplateService templateService = SessionTemplateService.getInstance();
         if (templateService.templateExists(templateName)) {
-            int result = Messages.showYesNoDialog(
-                project,
-                ClaudeCodeGuiBundle.message("template.save.overwrite.prompt", templateName),
-                ClaudeCodeGuiBundle.message("template.save.overwrite.title"),
-                Messages.getQuestionIcon()
+            int result = showOverwriteDialog(
+                    project,
+                    ClaudeCodeGuiBundle.message("template.save.overwrite.prompt", templateName),
+                    ClaudeCodeGuiBundle.message("template.save.overwrite.title")
             );
             if (result != Messages.YES) {
                 return; // User chose not to overwrite
@@ -79,12 +71,36 @@ public class SaveAsTemplateAction extends ChatToolWindowAction {
         // Save template
         templateService.saveTemplate(template);
 
-        Messages.showInfoMessage(
-            project,
-            ClaudeCodeGuiBundle.message("template.save.success", templateName),
-            ClaudeCodeGuiBundle.message("template.save.success.title")
+        showInfoMessage(
+                project,
+                ClaudeCodeGuiBundle.message("template.save.success", templateName),
+                ClaudeCodeGuiBundle.message("template.save.success.title")
         );
 
         LOG.info("Saved session template: " + templateName);
+    }
+
+    void handleNoActiveSession(Project project) {
+        showErrorDialog(
+                project,
+                ClaudeCodeGuiBundle.message("template.save.error.noSession"),
+                ClaudeCodeGuiBundle.message("template.save.error.title")
+        );
+    }
+
+    protected void showErrorDialog(Project project, String message, String title) {
+        Messages.showErrorDialog(project, message, title);
+    }
+
+    protected String showInputDialog(Project project, String prompt, String title) {
+        return Messages.showInputDialog(project, prompt, title, Messages.getQuestionIcon(), "", null);
+    }
+
+    protected int showOverwriteDialog(Project project, String prompt, String title) {
+        return Messages.showYesNoDialog(project, prompt, title, Messages.getQuestionIcon());
+    }
+
+    protected void showInfoMessage(Project project, String message, String title) {
+        Messages.showInfoMessage(project, message, title);
     }
 }
