@@ -21,11 +21,15 @@ interface UseTooltipReturn {
   handleMouseLeave: () => void;
 }
 
+const TOOLTIP_TARGET_SELECTOR =
+  '.file-tag.has-tooltip, .context-tool-btn.has-tooltip, .enhance-prompt-button.has-tooltip';
+
 /**
- * useTooltip - Manage tooltip state for file tags
+ * useTooltip - Manage tooltip state for hoverable elements
  *
- * Shows a floating tooltip when hovering over file tags,
- * with smart positioning to avoid viewport overflow.
+ * Shows a floating tooltip when hovering over elements with `.has-tooltip` class,
+ * with smart positioning to avoid viewport overflow. Uses fixed positioning to
+ * break out of overflow constraints in the input box container.
  */
 export function useTooltip(): UseTooltipReturn {
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
@@ -35,38 +39,38 @@ export function useTooltip(): UseTooltipReturn {
    */
   const handleMouseOver = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
-    const fileTag = target.closest('.file-tag.has-tooltip');
+    const triggerEl = target.closest(TOOLTIP_TARGET_SELECTOR);
 
-    if (fileTag) {
-      const text = fileTag.getAttribute('data-tooltip');
+    if (triggerEl) {
+      const text = triggerEl.getAttribute('data-tooltip');
       if (text) {
         // Use small floating tooltip (same effect as context-item)
-        const rect = fileTag.getBoundingClientRect();
+        const rect = triggerEl.getBoundingClientRect();
         // Use #app's rect as reference - both rects are in the same coordinate space
         const { width: viewportWidth, top: viewportTop, left: viewportLeft, fixedPosDivisor } = getAppViewport();
-        const tagCenterX = rect.left - viewportLeft + rect.width / 2; // File tag center X coordinate (relative to #app)
+        const triggerCenterX = rect.left - viewportLeft + rect.width / 2; // Trigger center X coordinate (relative to #app)
 
         // Estimate tooltip width (based on text length)
         const estimatedTooltipWidth = Math.min(text.length * 7 + 24, 400);
         const tooltipHalfWidth = estimatedTooltipWidth / 2;
 
-        let tooltipLeft = tagCenterX; // Tooltip base point (default centered)
+        let tooltipLeft = triggerCenterX; // Tooltip base point (default centered)
         let tx = '-50%'; // Tooltip horizontal offset (default centered)
         let arrowLeft = '50%'; // Arrow position (relative to tooltip, default middle)
 
         // Boundary detection: prevent tooltip left overflow
-        if (tagCenterX - tooltipHalfWidth < 10) {
+        if (triggerCenterX - tooltipHalfWidth < 10) {
           // Near left edge: tooltip left-aligned
           tooltipLeft = 10; // Tooltip left edge 10px from viewport
           tx = '0'; // Tooltip no offset
-          arrowLeft = `${tagCenterX - 10}px`; // Arrow points to file tag center
+          arrowLeft = `${triggerCenterX - 10}px`; // Arrow points to trigger center
         }
         // Boundary detection: prevent tooltip right overflow
-        else if (tagCenterX + tooltipHalfWidth > viewportWidth - 10) {
+        else if (triggerCenterX + tooltipHalfWidth > viewportWidth - 10) {
           // Near right edge: tooltip right-aligned
           tooltipLeft = viewportWidth - 10; // Tooltip right edge 10px from viewport
           tx = '-100%'; // Tooltip offset left by full width
-          arrowLeft = `${tagCenterX - (viewportWidth - 10) + estimatedTooltipWidth}px`; // Arrow points to file tag center
+          arrowLeft = `${triggerCenterX - (viewportWidth - 10) + estimatedTooltipWidth}px`; // Arrow points to trigger center
         }
         // Normal case: tooltip centered
         else {
