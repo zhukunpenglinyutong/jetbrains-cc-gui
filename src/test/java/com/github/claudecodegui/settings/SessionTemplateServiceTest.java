@@ -4,6 +4,8 @@ import com.github.claudecodegui.model.SessionTemplate;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.util.List;
+
 public class SessionTemplateServiceTest {
 
     @Test
@@ -46,6 +48,7 @@ public class SessionTemplateServiceTest {
         Assert.assertEquals("high", loaded.getReasoningEffort());
         Assert.assertEquals("/cwd", loaded.getCwd());
         Assert.assertFalse(loaded.isPsiContextEnabled());
+        Assert.assertEquals(1, service.getAllTemplates().size());
     }
 
     @Test
@@ -61,5 +64,33 @@ public class SessionTemplateServiceTest {
         Assert.assertEquals("m", loaded.getModel());
         Assert.assertEquals("/x", loaded.getCwd());
     }
-}
 
+    @Test
+    public void getAllTemplatesReturnsDefensiveCopies() {
+        SessionTemplateService service = new SessionTemplateService();
+        service.saveTemplate(new SessionTemplate("one", "claude", "m1", "default", "medium", "/a", true));
+        service.saveTemplate(new SessionTemplate("two", "codex", "m2", "plan", "high", "/b", false));
+
+        List<SessionTemplate> firstRead = service.getAllTemplates();
+        List<SessionTemplate> secondRead = service.getAllTemplates();
+
+        Assert.assertEquals(2, firstRead.size());
+        Assert.assertEquals(2, secondRead.size());
+        Assert.assertNotSame(firstRead.get(0), secondRead.get(0));
+        firstRead.clear();
+        Assert.assertEquals(2, service.getAllTemplates().size());
+    }
+
+    @Test
+    public void saveTemplateUsesCopyIsolation() {
+        SessionTemplateService service = new SessionTemplateService();
+        SessionTemplate input = new SessionTemplate("iso", "claude", "model-a", "default", "medium", "/a", true);
+        service.saveTemplate(input);
+
+        input = new SessionTemplate("iso", "codex", "model-b", "plan", "high", "/b", false);
+        SessionTemplate loaded = service.getTemplate("iso");
+        Assert.assertNotNull(loaded);
+        Assert.assertEquals("claude", loaded.getProvider());
+        Assert.assertEquals("model-a", loaded.getModel());
+    }
+}

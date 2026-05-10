@@ -7,10 +7,10 @@ import com.intellij.openapi.components.State;
 import com.intellij.openapi.components.Storage;
 import com.intellij.openapi.diagnostic.Logger;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Service for managing session templates persistence.
@@ -58,7 +58,10 @@ public class SessionTemplateService implements PersistentStateComponent<SessionT
      * Get all saved templates.
      */
     public List<SessionTemplate> getAllTemplates() {
-        return new ArrayList<>(myState.templates.values());
+        return myState.templates.values()
+                .stream()
+                .map(SessionTemplate::copy)
+                .collect(Collectors.toList());
     }
 
     /**
