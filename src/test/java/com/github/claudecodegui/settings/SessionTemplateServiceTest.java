@@ -1,6 +1,8 @@
 package com.github.claudecodegui.settings;
 
 import com.github.claudecodegui.model.SessionTemplate;
+import com.intellij.util.xmlb.XmlSerializer;
+import org.jdom.Element;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -85,6 +87,31 @@ public class SessionTemplateServiceTest {
         Assert.assertNotNull(firstGet);
         Assert.assertNotNull(secondGet);
         Assert.assertNotSame(firstGet, secondGet);
+    }
+
+    @Test
+    public void xmlSerializationRoundTripPreservesAllFields() {
+        SessionTemplateService original = new SessionTemplateService();
+        original.saveTemplate(new SessionTemplate(
+                "xml-rt", "codex", "claude-sonnet-4-6",
+                "bypassPermissions", "high", "/work/dir", false));
+
+        Element serialized = XmlSerializer.serialize(original.getState());
+        SessionTemplateService.State restoredState =
+                XmlSerializer.deserialize(serialized, SessionTemplateService.State.class);
+
+        SessionTemplateService restored = new SessionTemplateService();
+        restored.loadState(restoredState);
+
+        SessionTemplate loaded = restored.getTemplate("xml-rt");
+        Assert.assertNotNull("template must survive XML round-trip", loaded);
+        Assert.assertEquals("xml-rt", loaded.getName());
+        Assert.assertEquals("codex", loaded.getProvider());
+        Assert.assertEquals("claude-sonnet-4-6", loaded.getModel());
+        Assert.assertEquals("bypassPermissions", loaded.getPermissionMode());
+        Assert.assertEquals("high", loaded.getReasoningEffort());
+        Assert.assertEquals("/work/dir", loaded.getCwd());
+        Assert.assertFalse(loaded.isPsiContextEnabled());
     }
 
     @Test

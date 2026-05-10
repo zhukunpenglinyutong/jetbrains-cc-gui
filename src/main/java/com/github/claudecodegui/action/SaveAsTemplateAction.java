@@ -5,6 +5,7 @@ import com.github.claudecodegui.model.SessionTemplate;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.settings.SessionTemplateService;
 import com.github.claudecodegui.ui.toolwindow.ClaudeChatWindow;
+import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
@@ -65,7 +66,7 @@ public class SaveAsTemplateAction extends ChatToolWindowAction {
             session.getPermissionMode(),
             session.getReasoningEffort(),
             session.getCwd(),
-            session.isPsiContextEnabled()
+            session.getState().isPsiContextEnabled()
         );
 
         // Save template

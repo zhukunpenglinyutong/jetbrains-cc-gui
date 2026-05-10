@@ -3,6 +3,7 @@ package com.github.claudecodegui.settings;
 import com.github.claudecodegui.model.SessionTemplate;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.PersistentStateComponent;
+import com.intellij.openapi.components.Service;
 import com.intellij.openapi.components.State;
 import com.intellij.openapi.components.Storage;
 import com.intellij.openapi.diagnostic.Logger;
@@ -20,7 +21,8 @@ import java.util.stream.Collectors;
     name = "SessionTemplates",
     storages = @Storage("sessionTemplates.xml")
 )
-public class SessionTemplateService implements PersistentStateComponent<SessionTemplateService.State> {
+@Service(Service.Level.APP)
+public final class SessionTemplateService implements PersistentStateComponent<SessionTemplateService.State> {
 
     private static final Logger LOG = Logger.getInstance(SessionTemplateService.class);
     private State myState = new State();
@@ -49,7 +51,9 @@ public class SessionTemplateService implements PersistentStateComponent<SessionT
      * Get a template by name.
      */
     public SessionTemplate getTemplate(String name) {
-        if (name == null) return null;
+        if (name == null) {
+            return null;
+        }
         SessionTemplate template = myState.templates.get(name.trim());
         return template != null ? template.copy() : null;
     }

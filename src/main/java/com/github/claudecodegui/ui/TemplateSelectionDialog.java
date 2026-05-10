@@ -7,7 +7,6 @@ import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.ui.components.JBList;
 import com.intellij.ui.components.JBScrollPane;
-import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
@@ -65,7 +64,19 @@ public class TemplateSelectionDialog extends DialogWrapper {
             }
         });
 
+        // Track selection state to enable/disable OK button
+        templateList.addListSelectionListener(event -> updateOkButtonState());
+
         init();
+
+        updateOkButtonState();
+    }
+
+    private void updateOkButtonState() {
+        JButton okButton = getButton(getOKAction());
+        if (okButton != null) {
+            okButton.setEnabled(templateList.getSelectedValue() != null);
+        }
     }
 
     private String buildTooltipText(SessionTemplate template) {
@@ -111,9 +122,10 @@ public class TemplateSelectionDialog extends DialogWrapper {
 
     @Override
     protected void doOKAction() {
-        if (templateList.getSelectedValue() == null && !listModel.isEmpty()) {
-            // Select first item if none selected
-            templateList.setSelectedIndex(0);
+        if (templateList.getSelectedValue() == null) {
+            // Refuse to close with no selection — OK button should already be disabled,
+            // but guard against keyboard activation paths.
+            return;
         }
         super.doOKAction();
     }

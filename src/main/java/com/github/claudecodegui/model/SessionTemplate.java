@@ -40,28 +40,56 @@ public class SessionTemplate {
         return name;
     }
 
+    public void setName(String name) {
+        this.name = name;
+    }
+
     public String getProvider() {
         return provider;
+    }
+
+    public void setProvider(String provider) {
+        this.provider = provider;
     }
 
     public String getModel() {
         return model;
     }
 
+    public void setModel(String model) {
+        this.model = model;
+    }
+
     public String getPermissionMode() {
         return permissionMode;
+    }
+
+    public void setPermissionMode(String permissionMode) {
+        this.permissionMode = permissionMode;
     }
 
     public String getReasoningEffort() {
         return reasoningEffort;
     }
 
+    public void setReasoningEffort(String reasoningEffort) {
+        this.reasoningEffort = reasoningEffort;
+    }
+
     public String getCwd() {
         return cwd;
     }
 
+    public void setCwd(String cwd) {
+        this.cwd = cwd;
+    }
+
     public boolean isPsiContextEnabled() {
         return psiContextEnabled;
+    }
+
+    public void setPsiContextEnabled(boolean psiContextEnabled) {
+        this.psiContextEnabled = psiContextEnabled;
     }
 
     @Override
