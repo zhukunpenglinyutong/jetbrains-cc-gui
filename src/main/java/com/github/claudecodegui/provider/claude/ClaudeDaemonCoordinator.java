@@ -133,6 +133,10 @@ class ClaudeDaemonCoordinator {
     }
 
     void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch) {
+        prewarmDaemonAsync(cwd, runtimeSessionEpoch, null);
+    }
+
+    void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch, String sessionId) {
         CompletableFuture<?> previous = prewarmFuture;
         if (previous != null && !previous.isDone()) {
             previous.cancel(true);
@@ -148,7 +152,7 @@ class ClaudeDaemonCoordinator {
 
                 JsonObject params = new JsonObject();
                 params.addProperty("cwd", cwd != null ? cwd : "");
-                params.addProperty("sessionId", "");
+                params.addProperty("sessionId", sessionId != null ? sessionId : "");
                 params.addProperty("runtimeSessionEpoch", runtimeSessionEpoch != null ? runtimeSessionEpoch : "");
                 params.addProperty("permissionMode", "");
                 params.addProperty("model", "");
