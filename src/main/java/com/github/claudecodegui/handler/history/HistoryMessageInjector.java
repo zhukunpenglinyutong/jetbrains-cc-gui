@@ -2,8 +2,6 @@ package com.github.claudecodegui.handler.history;
 
 import com.github.claudecodegui.handler.CodexMessageConverter;
 import com.github.claudecodegui.handler.core.HandlerContext;
-import com.github.claudecodegui.session.ClaudeSession;
-import com.github.claudecodegui.session.SessionState;
 import com.github.claudecodegui.util.JsUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -13,7 +11,6 @@ import com.intellij.openapi.diagnostic.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.time.Instant;
 
 /**
  * Service for loading session messages and injecting them into the frontend.
@@ -45,34 +42,6 @@ public class HistoryMessageInjector {
         } else {
             LOG.warn("[HistoryHandler] WARNING: No session load callback set");
         }
-    }
-
-    /**
-     * Extract Codex session metadata (threadId and cwd).
-     *
-     * @return String[2]: [0]=actualThreadId, [1]=cwd
-     */
-    private String[] extractSessionMeta(JsonArray messages) {
-        String cwd = null;
-        String actualThreadId = null;
-
-        for (int i = 0; i < messages.size(); i++) {
-            JsonObject msg = messages.get(i).getAsJsonObject();
-            if (msg.has("type") && "session_meta".equals(msg.get("type").getAsString())) {
-                if (msg.has("payload")) {
-                    JsonObject payload = msg.getAsJsonObject("payload");
-                    if (payload.has("cwd")) {
-                        cwd = payload.get("cwd").getAsString();
-                    }
-                    if (payload.has("id")) {
-                        actualThreadId = payload.get("id").getAsString();
-                    }
-                    break;
-                }
-            }
-        }
-
-        return new String[]{actualThreadId, cwd};
     }
 
     /**
@@ -165,74 +134,6 @@ public class HistoryMessageInjector {
             }
         }
         return 0;
-    }
-
-    /**
-     * 将 Codex 历史消息恢复到后端 SessionState，保证历史加载后继续发送时，
-     * 后端内存态与前端显示态使用同一份消息基线。
-     */
-    static void restoreCodexMessagesToSessionState(SessionState state, JsonArray messages) {
-        state.clearMessages();
-        List<JsonObject> frontendMessages = convertCodexMessagesToFrontendBatch(messages);
-        for (JsonObject frontendMsg : frontendMessages) {
-            ClaudeSession.Message restoredMessage = toSessionMessage(frontendMsg);
-            if (restoredMessage != null) {
-                state.addMessage(restoredMessage);
-            }
-        }
-    }
-
-    /**
-     * 将前端统一消息结构恢复为会话内存消息结构。
-     */
-    private static ClaudeSession.Message toSessionMessage(JsonObject frontendMsg) {
-        if (frontendMsg == null || !frontendMsg.has("type")) {
-            return null;
-        }
-
-        String type = frontendMsg.get("type").getAsString();
-        ClaudeSession.Message.Type messageType;
-        switch (type) {
-            case "user":
-                messageType = ClaudeSession.Message.Type.USER;
-                break;
-            case "assistant":
-                messageType = ClaudeSession.Message.Type.ASSISTANT;
-                break;
-            case "system":
-                messageType = ClaudeSession.Message.Type.SYSTEM;
-                break;
-            case "error":
-                messageType = ClaudeSession.Message.Type.ERROR;
-                break;
-            default:
-                return null;
-        }
-
-        String content = frontendMsg.has("content") ? frontendMsg.get("content").getAsString() : "";
-        JsonObject raw = frontendMsg.has("raw") && frontendMsg.get("raw").isJsonObject()
-            ? frontendMsg.getAsJsonObject("raw")
-            : null;
-        ClaudeSession.Message restoredMessage = raw != null
-            ? new ClaudeSession.Message(messageType, content, raw.deepCopy())
-            : new ClaudeSession.Message(messageType, content);
-        Long restoredTimestamp = parseFrontendTimestamp(frontendMsg);
-        if (restoredTimestamp != null) {
-            restoredMessage.timestamp = restoredTimestamp;
-        }
-        return restoredMessage;
-    }
-
-    private static Long parseFrontendTimestamp(JsonObject frontendMsg) {
-        String timestamp = getStringProperty(frontendMsg, "timestamp");
-        if (timestamp == null || timestamp.isBlank()) {
-            return null;
-        }
-        try {
-            return Instant.parse(timestamp).toEpochMilli();
-        } catch (Exception ignored) {
-            return null;
-        }
     }
 
     /**
