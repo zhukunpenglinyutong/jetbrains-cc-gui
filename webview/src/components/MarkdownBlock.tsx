@@ -438,7 +438,7 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
       const loadingEl = document.createElement('div');
       loadingEl.className = 'mermaid-loading';
       loadingEl.textContent = 'Loading diagram\u2026';
-      loadingEl.style.cssText = 'padding:12px;color:var(--text-secondary,#888);font-style:italic;';
+      loadingEl.style.cssText = 'padding:12px;color:var(--text-secondary,#888);';
       if (wrapper?.classList.contains('code-block-wrapper')) {
         wrapper.insertBefore(loadingEl, pre);
       } else {

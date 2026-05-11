@@ -285,14 +285,10 @@ const App = () => {
         setCurrentView('history');
         return;
       }
-      // /plan - switch to plan mode
-      if (PLAN_COMMANDS.has(command)) {
-        if (currentProvider === 'codex') {
-          addToast(t('chat.planModeNotAvailableForCodex', { defaultValue: 'Plan mode is not available for Codex provider' }), 'warning');
-        } else {
-          handleModeSelect('plan');
-          addToast(t('chat.planModeEnabled', { defaultValue: 'Plan mode enabled' }), 'info');
-        }
+      // /plan - switch to plan mode (Claude only; Codex sends as normal text)
+      if (PLAN_COMMANDS.has(command) && currentProvider === 'claude') {
+        handleModeSelect('plan');
+        addToast(t('chat.planModeEnabled', { defaultValue: 'Plan mode enabled' }), 'info');
         return;
       }
     }

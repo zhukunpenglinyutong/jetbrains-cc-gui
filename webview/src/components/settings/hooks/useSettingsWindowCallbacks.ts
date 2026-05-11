@@ -34,6 +34,8 @@ export interface SettingsWindowCallbacksDeps {
   setSavingCommitPrompt: (saving: boolean) => void;
   setCommitAiConfig: (config: CommitAiConfig) => void;
   setPromptEnhancerConfig: (config: PromptEnhancerConfig) => void;
+  setProjectCommitPrompt: (prompt: string) => void;
+  setSavingProjectCommitPrompt: (saving: boolean) => void;
   setEditorFontConfig: (config: { fontFamily: string; fontSize: number; lineSpacing: number } | undefined) => void;
   setUiFontConfig: (config: UiFontConfig | undefined) => void;
   setIdeTheme: (theme: 'light' | 'dark' | null) => void;
@@ -125,6 +127,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       d().setSavingNodePath(false);
       d().setSavingWorkingDirectory(false);
       d().setSavingCommitPrompt(false);
+      d().setSavingProjectCommitPrompt(false);
     };
 
     window.showSwitchSuccess = (message: string) => {
@@ -246,6 +249,9 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
         const data = JSON.parse(jsonStr);
         d().setCommitPrompt(data.commitPrompt || '');
         d().setSavingCommitPrompt(false);
+        if (data.projectCommitPrompt !== undefined) {
+          d().setProjectCommitPrompt(data.projectCommitPrompt || '');
+        }
         if (data.saved) {
           d().addToast(t('toast.saveSuccess'), 'success');
         }
@@ -271,6 +277,22 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
         d().setCommitAiConfig(data);
       } catch (error) {
         console.error('[SettingsView] Failed to parse commit AI config:', error);
+      }
+    };
+
+    // Project-level commit AI prompt callback
+    window.updateProjectCommitPrompt = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        d().setProjectCommitPrompt(data.projectCommitPrompt || '');
+        d().setSavingProjectCommitPrompt(false);
+        if (data.saved) {
+          d().addToast(t('toast.saveSuccess'), 'success');
+        }
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse project commit prompt:', error);
+        d().setSavingProjectCommitPrompt(false);
+        d().addToast(t('toast.saveFailed'), 'error');
       }
     };
 
@@ -479,6 +501,8 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.updateCommitPrompt = undefined;
       window.updateCommitAiConfig = undefined;
       window.updatePromptEnhancerConfig = undefined;
+      window.updateProjectCommitPrompt = undefined;
+      window.updateSoundNotificationConfig = undefined;
       window.updateCommitGenerationEnabled = undefined;
       window.updateAiTitleGenerationEnabled = undefined;
       window.updateStatusBarWidgetEnabled = undefined;

@@ -359,6 +359,11 @@
         "placeholder": "在此添加您的额外要求，例如：使用中文生成 commit、包含 issue 编号，使用表情符号等等...",
         "hint": "插件已内置完整的 CCG Commits 规范提示词。您在此处添加的内容将作为附加要求，AI 会优先遵循您的要求。"
       },
+      "projectPrompt": {
+        "label": "项目级附加提示词",
+        "placeholder": "在此添加当前项目的专属要求，例如：scope 必须使用模块名、commit body 需包含影响范围等...",
+        "hint": "此提示词仅对当前项目生效，与全局附加提示词同时拼接。当两者内容矛盾时，以项目提示词为准。不同项目可独立配置。"
+      },
       "codeReview": {
         "comingSoon": "即将推出",
         "label": "Code Review AI 附加提示词",
@@ -673,7 +678,19 @@
         "cliLoginDisableMessage": "插件将停止读取 ~/.codex/config.toml 和 auth.json。",
         "modelIdRequired": "请输入模型 ID",
         "modelIdInvalid": "模型 ID 格式无效（仅允许字母、数字、点、连字符、下划线、斜杠和冒号）",
-        "modelIdDuplicate": "模型 ID 已存在"
+        "modelIdDuplicate": "模型 ID 已存在",
+        "envVarsTitle": "环境变量",
+        "messageEnvLabel": "消息环境变量",
+        "messageEnvHint": "注入到 Codex 消息子进程的自定义环境变量",
+        "mcpEnvLabel": "MCP 环境变量",
+        "mcpEnvHint": "注入到 MCP 工具发现子进程的自定义环境变量",
+        "envKeyPlaceholder": "环境变量名",
+        "envValuePlaceholder": "值",
+        "addEnvVar": "添加变量",
+        "envKeyInvalid": "无效的变量名（必须以字母或下划线开头，仅允许字母数字和下划线）",
+        "envKeyProtected": "无法设置内置变量：{{key}}",
+        "envKeyDuplicate": "重复的变量名：{{key}}",
+        "envValueTooLong": "变量值过长（最大 {{max}} 字符）"
       }
     },
     "agent": {

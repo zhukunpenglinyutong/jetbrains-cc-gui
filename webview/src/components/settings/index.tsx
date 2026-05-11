@@ -145,6 +145,11 @@ const SettingsView = ({
     handleSendShortcutChange,
     handleAutoOpenFileEnabledChange,
     handleSaveCommitPrompt,
+    projectCommitPrompt,
+    setProjectCommitPrompt,
+    savingProjectCommitPrompt,
+    setSavingProjectCommitPrompt,
+    handleSaveProjectCommitPrompt,
     commitGenerationEnabled,
     setCommitGenerationEnabled,
     handleCommitGenerationEnabledChange,
@@ -267,6 +272,8 @@ const SettingsView = ({
     setSavingCommitPrompt,
     setCommitAiConfig,
     setPromptEnhancerConfig,
+    setProjectCommitPrompt,
+    setSavingProjectCommitPrompt,
     setEditorFontConfig,
     setUiFontConfig,
     setIdeTheme,
@@ -521,9 +528,13 @@ const SettingsView = ({
               onCommitAiModelChange={handleCommitAiModelChange}
               onCommitAiResetToDefault={handleCommitAiResetToDefault}
               commitPrompt={commitPrompt}
+              projectCommitPrompt={projectCommitPrompt}
               onCommitPromptChange={setCommitPrompt}
+              onProjectCommitPromptChange={setProjectCommitPrompt}
               onSaveCommitPrompt={handleSaveCommitPrompt}
+              onSaveProjectCommitPrompt={handleSaveProjectCommitPrompt}
               savingCommitPrompt={savingCommitPrompt}
+              savingProjectCommitPrompt={savingProjectCommitPrompt}
             />
           </div>
 

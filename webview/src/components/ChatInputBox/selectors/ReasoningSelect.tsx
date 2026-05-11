@@ -13,7 +13,7 @@ const CHEVRON_ICON_STYLE: React.CSSProperties = { fontSize: '10px', marginLeft: 
 const DROPDOWN_STYLE: React.CSSProperties = {
   position: 'absolute',
   bottom: '100%',
-  left: 0,
+  right: 0,
   marginBottom: '4px',
   zIndex: 10000,
 };

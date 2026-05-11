@@ -1,0 +1,57 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📚 查看 README
+    url: https://github.com/zhukunpenglinyutong/jetbrains-cc-gui#readme
+    about: 安装、配置、常见问题请先查看 README
+
+  - name: 📋 CHANGELOG（版本更新记录）
+    url: https://github.com/zhukunpenglinyutong/jetbrains-cc-gui/blob/main/CHANGELOG.md
+    about: 你遇到的问题可能在新版本已修复，请先更新到最新版本
+
+  - name: 🔵 #1093 回复中断/卡死综合跟踪
+    url: https://github.com/zhukunpenglinyutong/jetbrains-cc-gui/issues/1093
+    about: 对话中断、卡死、无限循环类问题统一在此跟踪
+
+  - name: 🔵 #1094 MCP 综合稳定性
+    url: https://github.com/zhukunpenglinyutong/jetbrains-cc-gui/issues/1094
+    about: MCP 服务器连接、配置、显示问题统一在此跟踪
+
+  - name: 🔵 #1095 Codex 专项问题
+    url: https://github.com/zhukunpenglinyutong/jetbrains-cc-gui/issues/1095
+    about: Codex provider 加载、错误、模式切换等综合跟踪
+
+  - name: 🔵 #1096 第三方 API 兼容性
+    url: https://github.com/zhukunpenglinyutong/jetbrains-cc-gui/issues/1096
+    about: GLM/DeepSeek/ModelScope/自定义 Provider 兼容性问题
+
+  - name: 🔵 #1097 WSL / 远程 SSH 支持
+    url: https://github.com/zhukunpenglinyutong/jetbrains-cc-gui/issues/1097
+    about: WSL 环境和远程 SSH 服务器支持需求
+
+  - name: 🔵 #1098 Gemini / 其他 AI 工具支持
+    url: https://github.com/zhukunpenglinyutong/jetbrains-cc-gui/issues/1098
+    about: Gemini CLI、OpenCode 等其他 AI 工具支持
+
+  - name: 🔵 #1099 UI / 字体 / 主题优化
+    url: https://github.com/zhukunpenglinyutong/jetbrains-cc-gui/issues/1099
+    about: 字体、主题、配色、布局等 UI 体验问题
+
+  - name: 🔵 #1100 历史会话稳定性
+    url: https://github.com/zhukunpenglinyutong/jetbrains-cc-gui/issues/1100
+    about: 历史会话加载、显示、保存、删除问题
+
+  - name: 🔵 #1101 Plan / Compact / 上下文模式
+    url: https://github.com/zhukunpenglinyutong/jetbrains-cc-gui/issues/1101
+    about: Plan 模式、Compact 命令、上下文显示问题
+
+  - name: 🔵 #1102 Diff 显示问题
+    url: https://github.com/zhukunpenglinyutong/jetbrains-cc-gui/issues/1102
+    about: 代码变更 diff 渲染准确性问题
+
+  - name: 🔵 #1103 Skills 系统优化
+    url: https://github.com/zhukunpenglinyutong/jetbrains-cc-gui/issues/1103
+    about: Skills 调用、识别、显示、星标等需求
+
+  - name: 🔵 #1104 Git / Commit 功能
+    url: https://github.com/zhukunpenglinyutong/jetbrains-cc-gui/issues/1104
+    about: Git 提交信息生成、回滚、提交开关需求

@@ -397,6 +397,49 @@ public class CodemossSettingsService {
         LOG.info("[CodemossSettings] Set commit prompt: " + prompt);
     }
 
+    /**
+     * Get project-level commit AI prompt.
+     *
+     * @param projectPath project path
+     * @return project commit prompt, empty string if not configured
+     */
+    public String getProjectCommitPrompt(String projectPath) throws IOException {
+        if (projectPath == null) {
+            return "";
+        }
+        JsonObject config = readConfig();
+        if (config.has("projectCommitPrompt")) {
+            JsonObject projectPrompts = config.getAsJsonObject("projectCommitPrompt");
+            if (projectPrompts.has(projectPath)) {
+                return projectPrompts.get(projectPath).getAsString();
+            }
+        }
+        return "";
+    }
+
+    /**
+     * Set project-level commit AI prompt.
+     *
+     * @param projectPath project path
+     * @param prompt commit prompt
+     */
+    public void setProjectCommitPrompt(String projectPath, String prompt) throws IOException {
+        if (projectPath == null) {
+            return;
+        }
+        JsonObject config = readConfig();
+        JsonObject projectPrompts;
+        if (config.has("projectCommitPrompt")) {
+            projectPrompts = config.getAsJsonObject("projectCommitPrompt");
+        } else {
+            projectPrompts = new JsonObject();
+            config.add("projectCommitPrompt", projectPrompts);
+        }
+        projectPrompts.addProperty(projectPath, prompt);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set project commit prompt for project: " + projectPath);
+    }
+
     // ==================== UI Font Config Management ====================
 
     /**

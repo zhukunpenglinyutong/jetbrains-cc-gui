@@ -260,6 +260,11 @@ interface Window {
   updateCommitPrompt?: (json: string) => void;
 
   /**
+   * Update project-level commit AI prompt configuration
+   */
+  updateProjectCommitPrompt?: (json: string) => void;
+
+  /**
    * Update sound notification configuration
    */
   updateSoundNotificationConfig?: (json: string) => void;

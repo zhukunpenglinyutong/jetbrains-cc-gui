@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { CodexProviderConfig } from '../types/provider';
+import type { CodexProviderConfig, EnvVarEntry } from '../types/provider';
+import { validateEnvVarEntries, ENV_VAR_VALUE_MAX_LENGTH } from '../types/provider';
+import EnvVarEditor from './EnvVarEditor';
 
 const FORM_HEADER_STYLE: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
 const FORMAT_BUTTON_STYLE: React.CSSProperties = { padding: '4px 8px', fontSize: '12px' };
@@ -32,6 +34,8 @@ export default function CodexProviderDialog({
   const [providerName, setProviderName] = useState('');
   const [configTomlJson, setConfigTomlJson] = useState('');
   const [authJson, setAuthJson] = useState('');
+  const [messageEnvVars, setMessageEnvVars] = useState<EnvVarEntry[]>([]);
+  const [mcpEnvVars, setMcpEnvVars] = useState<EnvVarEntry[]>([]);
 
   // Initialize form
   useEffect(() => {
@@ -41,6 +45,8 @@ export default function CodexProviderDialog({
         setProviderName(provider.name || '');
         setConfigTomlJson(provider.configToml || '');
         setAuthJson(provider.authJson || '');
+        setMessageEnvVars(provider.messageEnvVars || []);
+        setMcpEnvVars(provider.mcpEnvVars || []);
       } else {
         // Add mode - reset with default template
         setProviderName('');
@@ -57,6 +63,8 @@ wire_api = "responses"`);
         setAuthJson(`{
   "OPENAI_API_KEY": ""
 }`);
+        setMessageEnvVars([]);
+        setMcpEnvVars([]);
       }
     }
   }, [isOpen, provider]);
@@ -95,6 +103,32 @@ wire_api = "responses"`);
     }
   }, [isOpen, onClose]);
 
+  const reportEnvVarIssue = (
+    issue: { reason: string; key?: string },
+    sectionLabel: string,
+  ): boolean => {
+    const reasonKey = (() => {
+      switch (issue.reason) {
+        case 'invalid':
+          return 'settings.codexProvider.dialog.envKeyInvalid';
+        case 'protected':
+          return 'settings.codexProvider.dialog.envKeyProtected';
+        case 'duplicate':
+          return 'settings.codexProvider.dialog.envKeyDuplicate';
+        case 'value_too_long':
+          return 'settings.codexProvider.dialog.envValueTooLong';
+        default:
+          return null;
+      }
+    })();
+    if (!reasonKey) return false;
+    addToast(
+      `${sectionLabel}: ${t(reasonKey, { key: issue.key, max: ENV_VAR_VALUE_MAX_LENGTH })}`,
+      'error',
+    );
+    return true;
+  };
+
   const handleSave = () => {
     if (!providerName.trim()) {
       addToast(t('settings.codexProvider.dialog.nameRequired'), 'error');
@@ -111,12 +145,26 @@ wire_api = "responses"`);
       }
     }
 
+    // Validate env vars before saving
+    const messageIssues = validateEnvVarEntries(messageEnvVars);
+    if (messageIssues.length > 0) {
+      reportEnvVarIssue(messageIssues[0], t('settings.codexProvider.dialog.messageEnvLabel'));
+      return;
+    }
+    const mcpIssues = validateEnvVarEntries(mcpEnvVars);
+    if (mcpIssues.length > 0) {
+      reportEnvVarIssue(mcpIssues[0], t('settings.codexProvider.dialog.mcpEnvLabel'));
+      return;
+    }
+
     const providerData: CodexProviderConfig = {
       id: provider?.id || (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString()),
       name: providerName.trim(),
       createdAt: provider?.createdAt,
       configToml: configTomlJson.trim(),
       authJson: authJson.trim(),
+      messageEnvVars: messageEnvVars.filter(e => e.key.trim() !== ''),
+      mcpEnvVars: mcpEnvVars.filter(e => e.key.trim() !== ''),
     };
 
     onSave(providerData);
@@ -218,6 +266,34 @@ wire_api = "responses"`);
             />
             <small className="form-hint">{t('settings.codexProvider.dialog.authJsonHint')}</small>
           </div>
+
+          {/* Environment Variables */}
+          <details className="advanced-section">
+            <summary className="advanced-toggle">
+              <span className="codicon codicon-chevron-right" />
+              {t('settings.codexProvider.dialog.envVarsTitle')}
+            </summary>
+
+            {/* Message Environment Variables */}
+            <div className="form-group" style={{ marginTop: '16px' }}>
+              <label>{t('settings.codexProvider.dialog.messageEnvLabel')}</label>
+              <small className="form-hint">{t('settings.codexProvider.dialog.messageEnvHint')}</small>
+              <EnvVarEditor
+                entries={messageEnvVars}
+                onChange={setMessageEnvVars}
+              />
+            </div>
+
+            {/* MCP Environment Variables */}
+            <div className="form-group">
+              <label>{t('settings.codexProvider.dialog.mcpEnvLabel')}</label>
+              <small className="form-hint">{t('settings.codexProvider.dialog.mcpEnvHint')}</small>
+              <EnvVarEditor
+                entries={mcpEnvVars}
+                onChange={setMcpEnvVars}
+              />
+            </div>
+          </details>
 
         </div>
 
