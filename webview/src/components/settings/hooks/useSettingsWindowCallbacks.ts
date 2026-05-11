@@ -502,7 +502,6 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.updateCommitAiConfig = undefined;
       window.updatePromptEnhancerConfig = undefined;
       window.updateProjectCommitPrompt = undefined;
-      window.updateSoundNotificationConfig = undefined;
       window.updateCommitGenerationEnabled = undefined;
       window.updateAiTitleGenerationEnabled = undefined;
       window.updateStatusBarWidgetEnabled = undefined;

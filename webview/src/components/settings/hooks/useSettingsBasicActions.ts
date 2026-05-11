@@ -54,10 +54,6 @@ export interface UseSettingsBasicActionsReturn {
   savingCommitPrompt: boolean;
   projectCommitPrompt: string;
   savingProjectCommitPrompt: boolean;
-  soundNotificationEnabled: boolean;
-  soundOnlyWhenUnfocused: boolean;
-  selectedSound: string;
-  customSoundPath: string;
   diffExpandedByDefault: boolean;
   historyCompletionEnabled: boolean;
   commitGenerationEnabled: boolean;
@@ -120,10 +116,6 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setSavingCommitPrompt: (saving: boolean) => void;
   /** @internal */ setProjectCommitPrompt: (prompt: string) => void;
   /** @internal */ setSavingProjectCommitPrompt: (saving: boolean) => void;
-  /** @internal */ setSoundNotificationEnabled: (enabled: boolean) => void;
-  /** @internal */ setSoundOnlyWhenUnfocused: (enabled: boolean) => void;
-  /** @internal */ setSelectedSound: (soundId: string) => void;
-  /** @internal */ setCustomSoundPath: (path: string) => void;
   /** @internal */ setDiffExpandedByDefault: (expanded: boolean) => void;
   /** @internal */ setHistoryCompletionEnabled: (enabled: boolean) => void;
   /** @internal */ setCommitGenerationEnabled: (enabled: boolean) => void;
@@ -186,12 +178,6 @@ export function useSettingsBasicActions({
   // Project-level commit AI prompt configuration
   const [projectCommitPrompt, setProjectCommitPrompt] = useState('');
   const [savingProjectCommitPrompt, setSavingProjectCommitPrompt] = useState(false);
-
-  // Sound notification configuration
-  const [soundNotificationEnabled, setSoundNotificationEnabled] = useState<boolean>(false);
-  const [soundOnlyWhenUnfocused, setSoundOnlyWhenUnfocused] = useState<boolean>(false);
-  const [selectedSound, setSelectedSound] = useState<string>('default');
-  const [customSoundPath, setCustomSoundPath] = useState<string>('');
 
   // Diff expanded by default configuration (localStorage-only)
   const [diffExpandedByDefault, setDiffExpandedByDefault] = useState<boolean>(() => {

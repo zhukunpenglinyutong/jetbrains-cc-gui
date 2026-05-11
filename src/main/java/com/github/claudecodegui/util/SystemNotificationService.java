@@ -16,10 +16,6 @@ import org.jetbrains.annotations.Nullable;
  * Provides IDE native notifications for task completion.
  *
  * @author melon
- * @email "mailto:melon@email.com"
- * @date 2026-05-08 17:07
- * @version 1.0.0
- * @since 1.0.0
  */
 public class SystemNotificationService {
 
@@ -50,7 +46,6 @@ public class SystemNotificationService {
     /**
      * System Notification Service
      *
-     * @since 1.0.0
      */
     private SystemNotificationService() {
     }
@@ -59,7 +54,6 @@ public class SystemNotificationService {
      * Get Instance
      *
      * @return system notification service
-     * @since 1.0.0
      */
     public static SystemNotificationService getInstance() {
         if (instance == null) {
@@ -77,7 +71,6 @@ public class SystemNotificationService {
      *
      * @param project project
      * @param message message
-     * @since 1.0.0
      */
     public void showVisualNotificationToast(@NotNull Project project, String message) {
         showVisualNotificationToast(project, null, message);
@@ -91,7 +84,6 @@ public class SystemNotificationService {
      * @param project project
      * @param title title
      * @param message message
-     * @since 1.0.0
      */
     public void showVisualNotificationToast(@NotNull Project project, @Nullable String title, String message) {
         ApplicationManager.getApplication().invokeLater(() -> {
@@ -116,7 +108,6 @@ public class SystemNotificationService {
      * Is Enabled
      *
      * @return boolean
-     * @since 1.0.0
      */
     private boolean isEnabled() {
         try {
@@ -128,112 +119,56 @@ public class SystemNotificationService {
     }
 
     /**
-     * Truncate by code points (so emoji and surrogate pairs stay intact) and HTML-escape
-     * the result before embedding into a {@code <html>...</html>} JLabel.
+     * Truncate by code points (so emoji and surrogate pairs stay intact).
      *
      * @param raw raw
      * @return string
-     * @since 1.0.0
      */
     private String sanitizeMessage(String raw) {
-        return truncateAndEscape(raw == null ? "" : raw, MAX_MESSAGE_LENGTH);
+        return truncate(raw == null ? "" : raw, MAX_MESSAGE_LENGTH);
     }
 
     /**
      * Resolve the toast title: use the caller-provided title when non-blank,
-     * otherwise fall back to the i18n default. The returned string is HTML-escaped
-     * and truncated for safe embedding in a JLabel.
+     * otherwise fall back to the i18n default. The returned string is truncated.
      *
      * @param raw raw
      * @return string
-     * @since 1.0.0
      */
     private String sanitizeTitle(@Nullable String raw) {
         String chosen = (raw == null || raw.trim().isEmpty())
             ? ClaudeCodeGuiBundle.message("notifier.taskComplete.title")
             : raw.trim();
-        return truncateAndEscape(chosen, MAX_TITLE_LENGTH);
+        return truncate(chosen, MAX_TITLE_LENGTH);
     }
 
     /**
-     * Truncate And Escape
+     * Truncate text to max length (by code points).
      *
      * @param text text
      * @param maxLength max length
-     * @return string
-     * @since 1.0.0
+     * @return truncated string
      */
-    private String truncateAndEscape(String text, int maxLength) {
+    private static String truncate(String text, int maxLength) {
         int cpCount = text.codePointCount(0, text.length());
         if (cpCount > maxLength) {
             int end = text.offsetByCodePoints(0, maxLength - MESSAGE_ELLIPSIS_TAIL);
-            text = text.substring(0, end) + "...";
+            return text.substring(0, end) + "...";
         }
-        return escapeHtml(text);
-    }
-
-    /**
-     * Escape Html
-     *
-     * @param input input
-     * @return string
-     * @since 1.0.0
-     */
-    private static String escapeHtml(String input) {
-        StringBuilder sb = new StringBuilder(input.length() + 16);
-        for (int i = 0; i < input.length(); i++) {
-            char c = input.charAt(i);
-            switch (c) {
-                case '&':
-                    sb.append("&amp;");
-                    break;
-                case '<':
-                    sb.append("&lt;");
-                    break;
-                case '>':
-                    sb.append("&gt;");
-                    break;
-                case '"':
-                    sb.append("&quot;");
-                    break;
-                case '\'':
-                    sb.append("&#39;");
-                    break;
-                default:
-                    sb.append(c);
-            }
-        }
-        return sb.toString();
+        return text;
     }
 
     /**
      * Show Ide Native Notification
      *
      * @param project project
-     * @param escapedTitle escaped title
-     * @param escapedMessage escaped message
-     * @since 1.0.0
+     * @param title title
+     * @param message message
      */
-    private void showIdeNativeNotification(@NotNull Project project, String escapedTitle, String escapedMessage) {
+    private void showIdeNativeNotification(@NotNull Project project, String title, String message) {
         Notification notification = NotificationGroupManager.getInstance()
             .getNotificationGroup("CC GUI Notifications")
-            .createNotification(unescapeHtml(escapedTitle), unescapeHtml(escapedMessage), NotificationType.INFORMATION);
+            .createNotification(title, message, NotificationType.INFORMATION);
         notification.notify(project);
-    }
-
-    /**
-     * Unescape Html
-     *
-     * @param input input
-     * @return string
-     * @since 1.0.0
-     */
-    private static String unescapeHtml(String input) {
-        return input
-            .replace("&lt;", "<")
-            .replace("&gt;", ">")
-            .replace("&quot;", "\"")
-            .replace("&#39;", "'")
-            .replace("&amp;", "&");
     }
 }

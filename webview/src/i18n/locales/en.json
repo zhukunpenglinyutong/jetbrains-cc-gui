@@ -209,13 +209,7 @@
         "label": "Task Completion Notification",
         "enabled": "Enabled",
         "disabled": "Disabled",
-        "hint": "When enabled, shows a system notification when AI task completes. When disabled, no notification appears.",
-        "mode": {
-          "ideNative": "IDE Native Notification",
-          "ideNativeDesc": "Use IntelliJ's native notification style.",
-          "card": "Card Notification",
-          "cardDesc": "Keep the plugin's custom card-style notification."
-        }
+        "hint": "When enabled, shows a system notification when AI task completes. When disabled, no notification appears."
       },
       "sendShortcut": {
         "label": "Send Shortcut",
@@ -240,28 +234,6 @@
         "lightDesc": "Cleaner and better integrated with the settings page",
         "softDark": "Soft Dark",
         "softDarkDesc": "Keep code contrast without the harsh black background"
-      },
-      "soundNotification": {
-        "label": "Task Completion Sound",
-        "enabled": "Enabled",
-        "disabled": "Disabled",
-        "hint": "When enabled, a notification sound will play when AI completes a task, so you'll know even when away from the screen.",
-        "onlyWhenUnfocused": "Play only when IDE is not focused",
-        "onlyWhenUnfocusedHint": "When enabled, the sound will only play when the IDE window is not in focus.",
-        "selectSound": "Notification Sound",
-        "soundDefault": "Default",
-        "soundChime": "Chime",
-        "soundBell": "Bell",
-        "soundDing": "Ding",
-        "soundSuccess": "Success",
-        "soundCustom": "Custom...",
-        "customSound": "Custom Sound File",
-        "customSoundPlaceholder": "Select or enter audio file path",
-        "customSoundHint": "Supports WAV, MP3, AIFF formats",
-        "testSound": "Test",
-        "browse": "Browse",
-        "useDefault": "Use Default",
-        "customSoundSaved": "Custom sound saved"
       },
       "userMsgColor": {
         "label": "User Message Color",

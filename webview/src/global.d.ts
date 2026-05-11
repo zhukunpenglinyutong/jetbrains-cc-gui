@@ -265,11 +265,6 @@ interface Window {
   updateProjectCommitPrompt?: (json: string) => void;
 
   /**
-   * Update sound notification configuration
-   */
-  updateSoundNotificationConfig?: (json: string) => void;
-
-  /**
    * Update AI commit generation enabled state
    */
   updateCommitGenerationEnabled?: (json: string) => void;
@@ -288,11 +283,6 @@ interface Window {
    * Update task completion notification enabled state
    */
   updateTaskCompletionNotificationEnabled?: (json: string) => void;
-
-  /**
-   * Update task completion notification mode
-   */
-  updateTaskCompletionNotificationMode?: (json: string) => void;
 
   /**
    * Update current Claude config

@@ -2,28 +2,21 @@ package com.github.claudecodegui.notifications;
 
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.session.ClaudeSession;
-import com.github.claudecodegui.util.SoundNotificationService;
 import com.github.claudecodegui.util.SystemNotificationService;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
-import java.util.ConcurrentModificationException;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ConcurrentModificationException;
 import java.util.List;
 import java.util.regex.Pattern;
 
 /**
  * Simple utility to update the Claude Status Bar Widget and show notifications.
- *
- * @author melon
- * @email "mailto:melon@email.com"
- * @date 2026-05-08 09:48
- * @version 1.0.0
- * @since 1.0.0
  */
 public class ClaudeNotifier {
 
@@ -47,56 +40,19 @@ public class ClaudeNotifier {
     // is wasteful and never adds visible content.
     private static final int CONDENSE_MAX_INPUT = 4096;
 
-    /**
-     * Set Thinking
-     *
-     * @param project project
-     * @since 1.0.0
-     */
     public static void setThinking(@NotNull Project project) {
         update(project, "thinking", ClaudeCodeGuiBundle.message("notifier.thinking"));
     }
 
-    /**
-     * Set Generating
-     *
-     * @param project project
-     * @since 1.0.0
-     */
     public static void setGenerating(@NotNull Project project) {
         update(project, "generating", ClaudeCodeGuiBundle.message("notifier.generating"));
     }
 
-    /**
-     * Set Waiting
-     *
-     * @param project project
-     * @since 1.0.0
-     */
     public static void setWaiting(@NotNull Project project) {
         update(project, "waiting", ClaudeCodeGuiBundle.message("notifier.waiting"));
     }
 
-    /**
-     * Show Success
-     *
-     * @param project project
-     * @param message message
-     * @since 1.0.0
-     */
     public static void showSuccess(@NotNull Project project, String message) {
-        showSuccess(project, null, message);
-    }
-
-    /**
-     * Show a generic success hint in the status bar widget only.
-     *
-     * @param project project
-     * @param title title
-     * @param message message
-     * @since 1.0.0
-     */
-    public static void showSuccess(@NotNull Project project, @Nullable String title, String message) {
         show(project, "Claude ✓", message, 5000);
     }
 
@@ -104,28 +60,17 @@ public class ClaudeNotifier {
      * Show task completion notification with an optional dynamic title.
      * When {@code title} is null/blank, the toast falls back to the i18n
      * default ({@code notifier.taskComplete.title}).
-     *
-     * @param project project
-     * @param title title
-     * @param message message
-     * @since 1.0.0
      */
     public static void showTaskCompletionSuccess(@NotNull Project project, @Nullable String title, String message) {
         show(project, "Claude [OK]", message, 5000);
         // Show the task completion visual notification toast
         SystemNotificationService.getInstance().showVisualNotificationToast(project, title, message);
-        // Play the task completion notification sound
-        SoundNotificationService.getInstance().playTaskCompleteSound();
     }
 
     /**
      * Build the toast title from a session: prefer the session summary
      * (the AI-generated session title shown in the UI), otherwise return null
      * so the toast falls back to the i18n default.
-     *
-     * @param session session
-     * @return string
-     * @since 1.0.0
      */
     @Nullable
     public static String buildTitleFromSession(@Nullable ClaudeSession session) {
@@ -149,11 +94,6 @@ public class ClaudeNotifier {
      * different thread during the copy, the resulting {@link ConcurrentModificationException}
      * (or any other read failure) causes us to fall back gracefully rather than
      * propagate the error into the completion callback.
-     *
-     * @param session session
-     * @param fallback fallback
-     * @return string
-     * @since 1.0.0
      */
     public static String buildPreviewFromSession(@Nullable ClaudeSession session, String fallback) {
         if (session == null) {
@@ -200,10 +140,6 @@ public class ClaudeNotifier {
      * the final length truncation, so we only normalize whitespace here.
      * Caps input size to {@link #CONDENSE_MAX_INPUT} so multi-KB assistant
      * responses don't run regex over their entire body.
-     *
-     * @param raw raw
-     * @return string
-     * @since 1.0.0
      */
     private static String condenseForToast(String raw) {
         String input = raw.length() > CONDENSE_MAX_INPUT ? raw.substring(0, CONDENSE_MAX_INPUT) : raw;
@@ -215,17 +151,9 @@ public class ClaudeNotifier {
     }
 
     /**
-     * Show Error
-     *
-     * @param project project
-     * @param message message
-     * @since 1.0.0
-     */
      * Extract the text of the <b>last</b> text block from the raw JSON of an assistant message.
      * In tool-use turns the raw content array contains multiple text blocks
      * (pre-tool-call prose + final answer); this method returns only the final one.
-     *
-     * @return the last text block's content, or {@code null} if unavailable.
      */
     @Nullable
     private static String extractLastTextFromRaw(@NotNull ClaudeSession.Message m) {
@@ -260,35 +188,14 @@ public class ClaudeNotifier {
         show(project, "Claude [ERR]", message, 8000);
     }
 
-    /**
-     * Show Warning
-     *
-     * @param project project
-     * @param message message
-     * @since 1.0.0
-     */
     public static void showWarning(@NotNull Project project, String message) {
         show(project, "Claude [WARN]", message, 6000);
     }
 
-    /**
-     * Clear Status
-     *
-     * @param project project
-     * @since 1.0.0
-     */
     public static void clearStatus(@NotNull Project project) {
         update(project, "ready", null);
     }
     
-    /**
-     * Set Token Usage
-     *
-     * @param project project
-     * @param usedTokens used tokens
-     * @param maxTokens max tokens
-     * @since 1.0.0
-     */
     public static void setTokenUsage(@NotNull Project project, int usedTokens, int maxTokens) {
         String tokenInfo = formatTokenUsage(usedTokens, maxTokens);
         ApplicationManager.getApplication().invokeLater(() -> {
@@ -299,14 +206,6 @@ public class ClaudeNotifier {
         });
     }
 
-    /**
-     * Format Token Usage
-     *
-     * @param used used
-     * @param max max
-     * @return string
-     * @since 1.0.0
-     */
     private static String formatTokenUsage(int used, int max) {
         if (used == 0) { return ""; }
         String usedStr = formatNumber(used);
@@ -317,13 +216,6 @@ public class ClaudeNotifier {
         return String.format("[%s ctx]", usedStr);
     }
     
-    /**
-     * Set Model
-     *
-     * @param project project
-     * @param model model
-     * @since 1.0.0
-     */
     public static void setModel(@NotNull Project project, String model) {
         ApplicationManager.getApplication().invokeLater(() -> {
             ClaudeStatusBarWidget widget = ClaudeStatusBarWidget.Factory.getWidget(project);
@@ -331,13 +223,6 @@ public class ClaudeNotifier {
         });
     }
 
-    /**
-     * Set Mode
-     *
-     * @param project project
-     * @param mode mode
-     * @since 1.0.0
-     */
     public static void setMode(@NotNull Project project, String mode) {
         ApplicationManager.getApplication().invokeLater(() -> {
             ClaudeStatusBarWidget widget = ClaudeStatusBarWidget.Factory.getWidget(project);
@@ -345,13 +230,6 @@ public class ClaudeNotifier {
         });
     }
 
-    /**
-     * Set Agent
-     *
-     * @param project project
-     * @param agent agent
-     * @since 1.0.0
-     */
     public static void setAgent(@NotNull Project project, String agent) {
         ApplicationManager.getApplication().invokeLater(() -> {
             ClaudeStatusBarWidget widget = ClaudeStatusBarWidget.Factory.getWidget(project);
@@ -359,27 +237,12 @@ public class ClaudeNotifier {
         });
     }
 
-    /**
-     * Format Number
-     *
-     * @param num num
-     * @return string
-     * @since 1.0.0
-     */
     private static String formatNumber(int num) {
         if (num < 1000) { return String.valueOf(num); }
         if (num < 1000000) { return String.format("%.1fk", num / 1000.0); }
         return String.format("%.1fm", num / 1000000.0);
     }
 
-    /**
-     * Update
-     *
-     * @param project project
-     * @param status status
-     * @param details details
-     * @since 1.0.0
-     */
     private static void update(@NotNull Project project, String status, String details) {
         ApplicationManager.getApplication().invokeLater(() -> {
             ClaudeStatusBarWidget widget = ClaudeStatusBarWidget.Factory.getWidget(project);
@@ -389,15 +252,6 @@ public class ClaudeNotifier {
         });
     }
 
-    /**
-     * Show
-     *
-     * @param project project
-     * @param text text
-     * @param tooltip tooltip
-     * @param duration duration
-     * @since 1.0.0
-     */
     private static void show(@NotNull Project project, String text, String tooltip, long duration) {
         ApplicationManager.getApplication().invokeLater(() -> {
             ClaudeStatusBarWidget widget = ClaudeStatusBarWidget.Factory.getWidget(project);
