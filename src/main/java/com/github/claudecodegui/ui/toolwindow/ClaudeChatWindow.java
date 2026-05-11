@@ -15,6 +15,7 @@ import com.github.claudecodegui.session.SessionCallbackAdapter;
 import com.github.claudecodegui.session.SessionLifecycleManager;
 import com.github.claudecodegui.session.SessionLoadService;
 import com.github.claudecodegui.session.StreamMessageCoalescer;
+import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.settings.TabStateService;
 import com.github.claudecodegui.ui.ChatWindowDelegate;
@@ -41,48 +42,141 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Chat window instance. Coordinates UI components, session management,
  * and message dispatching. One instance per tab.
+ *
+ * @author melon
  */
 public class ClaudeChatWindow {
 
+    /**
+     * log.
+     */
     private static final Logger LOG = Logger.getInstance(ClaudeChatWindow.class);
 
+    /**
+     * main panel.
+     */
     private final JPanel mainPanel;
+    /**
+     * claude sdk bridge.
+     */
     private final ClaudeSDKBridge claudeSDKBridge;
+    /**
+     * codex sdk bridge.
+     */
     private final CodexSDKBridge codexSDKBridge;
+    /**
+     * project.
+     */
     private final Project project;
+    /**
+     * settings service.
+     */
     private final CodemossSettingsService settingsService;
+    /**
+     * html loader.
+     */
     private final HtmlLoader htmlLoader;
 
+    /**
+     * parent content.
+     */
     private Content parentContent;
+    /**
+     * original tab name.
+     */
     private String originalTabName;
+    /**
+     * session id.
+     */
     private volatile String sessionId = null;
 
+    /**
+     * browser.
+     */
     private JBCefBrowser browser;
+    /**
+     * session.
+     */
     private ClaudeSession session;
+    /**
+     * webview watchdog.
+     */
     private final WebviewWatchdog webviewWatchdog;
+    /**
+     * stream coalescer.
+     */
     private final StreamMessageCoalescer streamCoalescer;
 
+    /**
+     * disposed.
+     */
     private volatile boolean disposed = false;
+    /**
+     * initialized.
+     */
     private volatile boolean initialized = false;
+    /**
+     * frontend ready.
+     */
     private volatile boolean frontendReady = false;
+    /**
+     * slash commands fetched.
+     */
     private volatile boolean slashCommandsFetched = false;
+    /**
+     * restored history load started.
+     */
     private final AtomicBoolean restoredHistoryLoadStarted = new AtomicBoolean(false);
+    /**
+     * task completion notification sent.
+     */
     private final AtomicBoolean taskCompletionNotificationSent = new AtomicBoolean(false);
 
-    // Daemon event listener for AI title forwarding. Held so it can be removed on dispose.
+    /**
+     * title event listener.
+     */ // Daemon event listener for AI title forwarding. Held so it can be removed on dispose.
     private DaemonBridge.DaemonEventListener titleEventListener;
+    /**
+     * fetched slash commands count.
+     */
     private volatile int fetchedSlashCommandsCount = 0;
 
+    /**
+     * handler context.
+     */
     private HandlerContext handlerContext;
+    /**
+     * message dispatcher.
+     */
     private MessageDispatcher messageDispatcher;
+    /**
+     * permission handler.
+     */
     private PermissionHandler permissionHandler;
+    /**
+     * history handler.
+     */
     private HistoryHandler historyHandler;
+    /**
+     * session lifecycle manager.
+     */
     private final SessionLifecycleManager sessionLifecycleManager;
 
-    // Delegates
+    /**
+     * webview initializer.
+     */ // Delegates
     private WebviewInitializer webviewInitializer;
+    /**
+     * editor context tracker.
+     */
     private final EditorContextTracker editorContextTracker;
+    /**
+     * chat window delegate.
+     */
     private final ChatWindowDelegate chatWindowDelegate;
+    /**
+     * session callback adapter.
+     */
     private SessionCallbackAdapter sessionCallbackAdapter;
 
     public ClaudeChatWindow(Project project) {
@@ -440,6 +534,9 @@ public class ClaudeChatWindow {
 
     // ==================== JavaScript Bridge ====================
 
+    /**
+     * safe js function name.
+     */
     private static final java.util.regex.Pattern SAFE_JS_FUNCTION_NAME =
             java.util.regex.Pattern.compile("^[a-zA-Z_$][a-zA-Z0-9_$.]*$");
 
@@ -539,7 +636,6 @@ public class ClaudeChatWindow {
         if (this.sessionCallbackAdapter != null) {
             this.sessionCallbackAdapter.deactivate();
         }
-        taskCompletionNotificationSent.set(false);
         this.sessionCallbackAdapter = new SessionCallbackAdapter(
                 streamCoalescer,
                 new SessionCallbackAdapter.JsTarget() {
@@ -566,7 +662,6 @@ public class ClaudeChatWindow {
             }
         };
         session.setCallback(sessionCallbackAdapter);
-        onSendStarted();
 
         // Wire daemon events directly to frontend (bypasses adapter lifecycle).
         // Calling through sessionCallbackAdapter would silently drop the event
@@ -617,7 +712,8 @@ public class ClaudeChatWindow {
         com.github.claudecodegui.notifications.ClaudeNotifier.showTaskCompletionSuccess(
             project,
             com.github.claudecodegui.notifications.ClaudeNotifier.buildTitleFromSession(session),
-            com.github.claudecodegui.notifications.ClaudeNotifier.buildPreviewFromSession(session, "Task completed"));
+            com.github.claudecodegui.notifications.ClaudeNotifier.buildPreviewFromSession(session,
+                ClaudeCodeGuiBundle.message("notifier.taskComplete.title")));
     }
 
     static boolean shouldShowTaskCompletionNotification(ClaudeSession session) {
