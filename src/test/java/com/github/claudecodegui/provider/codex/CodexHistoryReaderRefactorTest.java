@@ -163,7 +163,13 @@ public class CodexHistoryReaderRefactorTest {
                     "session-8",
                     line("2026-03-10T10:00:00Z", "turn_context", "{\"model\":\"gpt-5.4\"}"),
                     line("2026-03-10T10:01:00Z", "event_msg", "{\"type\":\"user_message\",\"message\":\"Summarize test results\"}"),
-                    line("2026-03-10T10:02:00Z", "event_msg", "{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"input_tokens\":3500,\"output_tokens\":250,\"cached_input_tokens\":1500,\"total_tokens\":3750}}}")
+                    line(
+                            "2026-03-10T10:02:00Z",
+                            "event_msg",
+                            "{\"type\":\"token_count\",\"info\":{\"total_token_usage\":"
+                                    + "{\"input_tokens\":3500,\"output_tokens\":250,"
+                                    + "\"cached_input_tokens\":1500,\"total_tokens\":3750}}}"
+                    )
             );
 
             CodexUsageAggregator aggregator = new CodexUsageAggregator(sessionsDir, new CodexHistoryParser(new Gson()), new Gson());

@@ -58,7 +58,7 @@ public class AdditionalDirectoryResolverTest {
                     "%s"
                   ]
                 }
-                """.formatted(shared, userOnly)
+                """.formatted(toJsonPath(shared), toJsonPath(userOnly))
         );
         Files.writeString(
                 projectClaude.resolve("settings.json"),
@@ -69,7 +69,7 @@ public class AdditionalDirectoryResolverTest {
                     "project-only"
                   ]
                 }
-                """.formatted(shared)
+                """.formatted(toJsonPath(shared))
         );
         Files.writeString(
                 projectClaude.resolve("settings.local.json"),
@@ -105,7 +105,7 @@ public class AdditionalDirectoryResolverTest {
                 {
                   "managedDirectory": "%s"
                 }
-                """.formatted(policyDir)
+                """.formatted(toJsonPath(policyDir))
         );
 
         Map<String, String> env = new HashMap<>();
@@ -127,7 +127,7 @@ public class AdditionalDirectoryResolverTest {
                 {
                   "managedDirectory": "%s"
                 }
-                """.formatted(policyDir)
+                """.formatted(toJsonPath(policyDir))
         );
 
         Map<String, String> emptyEnv = new HashMap<>();
@@ -187,5 +187,9 @@ public class AdditionalDirectoryResolverTest {
         assertEquals(2, enabledPlugins.size());
         assertEquals(Boolean.TRUE, enabledPlugins.get("demo@market"));
         assertEquals(Boolean.TRUE, enabledPlugins.get("disabled@market"));
+    }
+
+    private String toJsonPath(Path path) {
+        return path.toString().replace("\\", "\\\\");
     }
 }

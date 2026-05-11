@@ -123,7 +123,7 @@ public class SlashCommandSourceScannersTest {
                     ]
                   }
                 }
-                """.formatted(installDir)
+                """.formatted(toJsonPath(installDir))
         );
         Files.writeString(
                 installDir.resolve(".claude-plugin").resolve("plugin.json"),
@@ -154,5 +154,9 @@ public class SlashCommandSourceScannersTest {
         assertEquals(1, pluginCommands.size());
         assertEquals("/demo:audit", pluginCommands.get(0).name());
         assertEquals("plugin:demo", pluginCommands.get(0).source());
+    }
+
+    private String toJsonPath(Path path) {
+        return path.toString().replace("\\", "\\\\");
     }
 }

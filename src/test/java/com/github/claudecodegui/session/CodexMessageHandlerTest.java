@@ -177,7 +177,10 @@ public class CodexMessageHandlerTest {
         callbackHandler.setCallback(callback);
 
         CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
-        handler.onMessage("user", "{\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"<agents-instructions>\\n# AGENTS.md instructions\\n<INSTRUCTIONS>中文回复</INSTRUCTIONS>\\n</agents-instructions>\\n\\n测试通讯\"}]}}");
+        String payload = "{\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\","
+                + "\"text\":\"<agents-instructions>\\n# AGENTS.md instructions\\n"
+                + "<INSTRUCTIONS>中文回复</INSTRUCTIONS>\\n</agents-instructions>\\n\\n测试通讯\"}]}}";
+        handler.onMessage("user", payload);
 
         assertEquals(1, state.getMessages().size());
         Message message = state.getMessages().get(0);
@@ -200,7 +203,10 @@ public class CodexMessageHandlerTest {
         callbackHandler.setCallback(callback);
 
         CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
-        handler.onMessage("user", "{\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"<agents-instructions>\\n# AGENTS.md instructions\\n</agents-instructions>\"}]}}");
+        String payload = "{\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\","
+                + "\"text\":\"<agents-instructions>\\n# AGENTS.md instructions\\n"
+                + "</agents-instructions>\"}]}}";
+        handler.onMessage("user", payload);
 
         assertEquals(0, state.getMessages().size());
         assertEquals(0, callback.messageUpdateCount);
