@@ -26,7 +26,8 @@ import {
   DEBUG_LEVEL, MAX_TOOL_RESULT_CHARS,
   SESSION_PATCH_SCAN_MAX_LINES, SESSION_CONTEXT_SCAN_MAX_LINES,
   logWarn, logInfo, logDebug,
-  isAutoEditPermissionMode, isReconnectNotice, emitStatusMessage
+  isAutoEditPermissionMode, isReconnectNotice, emitStatusMessage,
+  isIgnorableWindowsTerminationNoiseLine
 } from './codex-utils.js';
 import {
   normalizeMcpToolName, normalizeMcpToolInput,
@@ -35,24 +36,6 @@ import {
 } from './codex-tool-normalization.js';
 
 const COMMAND_DENIED_ABORT_ERROR = '__CODEX_COMMAND_DENIED_ABORT__';
-const WINDOWS_TERMINATION_NOISE_RE = /(?:^SUCCESS:\s+The process with PID \d+(?: \(child process of PID \d+\))? has been terminated\.$)|(?:^成功:\s+已终止 PID \d+(?: \(属于 PID \d+ 子进程\))? 的进程。$)/i;
-
-export function isIgnorableWindowsTerminationNoiseLine(line) {
-  if (typeof line !== 'string') return false;
-  const trimmed = line.trim();
-  if (!trimmed) return false;
-  if (WINDOWS_TERMINATION_NOISE_RE.test(trimmed)) {
-    return true;
-  }
-  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-    return false;
-  }
-  const pidMatches = trimmed.match(/\bPID \d+\b/g) || [];
-  if (pidMatches.length >= 2) {
-    return true;
-  }
-  return pidMatches.length >= 1 && trimmed.includes('�');
-}
 
 export function shouldSuppressCodexStreamParseErrorAfterCompletion(errorMessage, state) {
   if (!state?.turnCompletedObserved) return false;

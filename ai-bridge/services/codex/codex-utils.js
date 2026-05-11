@@ -150,6 +150,56 @@ export async function ensureCodexSdk() {
 export const MAX_TOOL_RESULT_CHARS = 20000;
 export const RAW_EVENT_LOG_MAX_CHARS = 12000;
 
+/**
+ * Regular expression to match Windows termination noise messages.
+ * Covers both English and Chinese versions of the "process terminated" message.
+ */
+export const WINDOWS_TERMINATION_NOISE_RE = /(?:^SUCCESS:\s+The process with PID \d+(?: \(child process of PID \d+\))? has been terminated\.$)|(?:^成功:\s+已终止 PID \d+(?: \(属于 PID \d+ 子进程\))? 的进程。$)/i;
+
+/**
+ * Check if a line is ignorable Windows termination noise.
+ *
+ * Uses a conservative heuristic to avoid filtering legitimate log lines:
+ * - First checks against known termination message patterns
+ * - Then checks for PID + termination keywords (SUCCESS/terminated/成功/已终止)
+ * - Finally falls back to GBK corruption detection (single PID + replacement char)
+ *
+ * @param {string} line - The line to check
+ * @returns {boolean} True if the line should be ignored
+ */
+export function isIgnorableWindowsTerminationNoiseLine(line) {
+  if (typeof line !== 'string') return false;
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+
+  // Check against known termination message patterns first
+  if (WINDOWS_TERMINATION_NOISE_RE.test(trimmed)) {
+    return true;
+  }
+
+  // Don't filter JSON lines
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    return false;
+  }
+
+  // Check for PID + termination keywords to reduce false positives
+  const pidMatches = trimmed.match(/\bPID \d+\b/g) || [];
+  if (pidMatches.length >= 1) {
+    // Must contain termination-related keywords to be filtered
+    const hasTerminationKeyword =
+      /SUCCESS|terminated|终止|terminated|已终止|has been terminated/i.test(trimmed);
+    if (hasTerminationKeyword) {
+      return true;
+    }
+    // GBK corruption detection: single PID + replacement character indicates corrupted output
+    if (pidMatches.length === 1 && trimmed.includes('')) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 // AGENTS.md max read size in bytes (32KB, consistent with Codex CLI)
 export const MAX_AGENTS_MD_BYTES = 32 * 1024;
 

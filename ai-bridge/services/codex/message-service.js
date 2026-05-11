@@ -26,29 +26,16 @@ import {
   resolveSandboxModeOverride,
   resolveApprovalPolicyOverride,
   buildCodexCliEnvironment,
-  buildErrorPayload
+  buildErrorPayload,
+  isIgnorableWindowsTerminationNoiseLine
 } from './codex-utils.js';
 import { collectAgentsInstructions } from './codex-agents-loader.js';
 import { createInitialEventState, processCodexEventStream } from './codex-event-handler.js';
 
 const CODEX_RUN_NOISE_FILTER_PATCHED = Symbol.for('ccgui.codex.runNoiseFilterPatched');
-const WINDOWS_TERMINATION_NOISE_RE = /(?:^SUCCESS:\s+The process with PID \d+(?: \(child process of PID \d+\))? has been terminated\.$)|(?:^成功:\s+已终止 PID \d+(?: \(属于 PID \d+ 子进程\))? 的进程。$)/i;
 
 export function isIgnorableCodexEventNoiseLine(line) {
-  if (typeof line !== 'string') return false;
-  const trimmed = line.trim();
-  if (!trimmed) return false;
-  if (WINDOWS_TERMINATION_NOISE_RE.test(trimmed)) {
-    return true;
-  }
-  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-    return false;
-  }
-  const pidMatches = trimmed.match(/\bPID \d+\b/g) || [];
-  if (pidMatches.length >= 2) {
-    return true;
-  }
-  return pidMatches.length >= 1 && trimmed.includes('�');
+  return isIgnorableWindowsTerminationNoiseLine(line);
 }
 
 export async function* filterCodexExperimentalJsonLines(source, onNoise = () => {}) {
