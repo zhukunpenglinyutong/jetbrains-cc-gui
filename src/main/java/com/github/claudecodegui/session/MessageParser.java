@@ -35,6 +35,9 @@ public class MessageParser {
                 if (hasToolResult(msg)) {
                     return new ClaudeSession.Message(ClaudeSession.Message.Type.USER, "[tool_result]", msg);
                 }
+                if (hasImageContent(msg)) {
+                    return new ClaudeSession.Message(ClaudeSession.Message.Type.USER, "", msg);
+                }
                 return null;
             }
             return new ClaudeSession.Message(ClaudeSession.Message.Type.USER, content, msg);
@@ -100,6 +103,14 @@ public class MessageParser {
      * Check whether the message contains a tool_result.
      */
     public boolean hasToolResult(JsonObject msg) {
+        return hasContentBlockType(msg, "tool_result");
+    }
+
+    public boolean hasImageContent(JsonObject msg) {
+        return hasContentBlockType(msg, "image");
+    }
+
+    private boolean hasContentBlockType(JsonObject msg, String blockType) {
         if (!msg.has("message") || !msg.get("message").isJsonObject()) {
             return false;
         }
@@ -114,7 +125,7 @@ public class MessageParser {
             JsonElement element = contentArray.get(i);
             if (element.isJsonObject()) {
                 JsonObject block = element.getAsJsonObject();
-                if (block.has("type") && "tool_result".equals(block.get("type").getAsString())) {
+                if (block.has("type") && blockType.equals(block.get("type").getAsString())) {
                     return true;
                 }
             }

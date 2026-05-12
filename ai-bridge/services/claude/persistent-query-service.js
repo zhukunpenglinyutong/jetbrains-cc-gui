@@ -466,6 +466,7 @@ async function sendInternal(params, withAttachments) {
   const turnMeta = { state: null };
   let runtime = null;
   let requestContext = null;
+  const sendStartTime = Date.now();
   try {
     requestContext = await buildRequestContext(safeParams, withAttachments);
     runtime = await acquireRuntime(requestContext, { registerActiveQueryResult, removeSession });
@@ -473,14 +474,28 @@ async function sendInternal(params, withAttachments) {
   } catch (error) {
     // Only clear if this runtime still owns the pointer (not cleared by abort)
     clearActiveTurnRuntimeIf(runtime);
+
+    const elapsedMs = Date.now() - sendStartTime;
+
+    const wasAborted = runtime?.abortRequested === true && error?.runtimeTerminated;
+
     if (turnMeta.state?.streamingEnabled && turnMeta.state?.streamStarted && !turnMeta.state?.streamEnded) {
-      // NOTE: Do NOT emit accumulatedUsage at stream end, even on error.
-      // If an assistant message was received, emitUsageTag already sent the correct usage.
-      // If no assistant message was received, the usage would be incomplete anyway.
       process.stdout.write('[STREAM_END]\n');
       turnMeta.state.streamEnded = true;
     }
-    emitSendError(runtime, error, requestContext);
+
+    if (wasAborted) {
+      // Graceful abort — output a clean result instead of SEND_ERROR so Java side
+      // does not show an error toast. Also emit elapsed time like Codex does.
+      console.log(JSON.stringify({
+        success: false,
+        error: 'User interrupted',
+        elapsedMs
+      }));
+    } else {
+      emitSendError(runtime, error, requestContext);
+    }
+
     // Only dispose if not already disposed by abort
     if (runtime && !runtime.closed && error?.runtimeTerminated) {
       await disposeRuntime(runtime, { removeSession });
@@ -526,6 +541,7 @@ export async function abortCurrentTurn() {
   const runtime = getActiveTurnRuntime();
   if (!runtime) return;
   console.log('[LIFECYCLE] abortCurrentTurn epoch=' + (runtime.runtimeSessionEpoch || '(none)'));
+  runtime.abortRequested = true;
   clearActiveTurnRuntime();
 
   try {

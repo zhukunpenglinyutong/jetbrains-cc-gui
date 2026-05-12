@@ -189,6 +189,7 @@ const App = () => {
     showNewSessionConfirm, showInterruptConfirm,
     suppressNextStatusToastRef,
     createNewSession, forceCreateNewSession,
+    forceCreateNewSessionWithProvider,
     handleConfirmNewSession, handleCancelNewSession,
     handleConfirmInterrupt, handleCancelInterrupt,
     loadHistorySession, deleteHistorySession, deleteHistorySessions, exportHistorySession,
@@ -245,10 +246,10 @@ const App = () => {
   // ── Message sender ──
   // Wrap handleProviderSelect to also clear messages and input (like creating a new session)
   const wrappedHandleProviderSelect = useCallback((providerId: string) => {
-    setMessages([]);
     chatInputRef.current?.clear();
     handleProviderSelect(providerId);
-  }, [handleProviderSelect]);
+    forceCreateNewSessionWithProvider(providerId);
+  }, [forceCreateNewSessionWithProvider, handleProviderSelect]);
 
   const {
     handleSubmit: hookHandleSubmit,

@@ -6,13 +6,17 @@ import com.github.claudecodegui.provider.codex.CodexHistoryReader;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.session.SessionState;
 import com.github.claudecodegui.util.JsUtils;
-import com.google.gson.Gson;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Base64;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -35,12 +39,30 @@ public class HistoryMessageInjector {
      * Load a history session.
      */
     void handleLoadSession(String sessionId, String currentProvider, HistoryHandler.SessionLoadCallback sessionLoadCallback) {
+        String provider = currentProvider;
+        String resolvedSessionId = sessionId;
+
+        try {
+            JsonObject payload = new Gson().fromJson(sessionId, JsonObject.class);
+            if (payload != null) {
+                if (payload.has("sessionId") && !payload.get("sessionId").isJsonNull()) {
+                    resolvedSessionId = payload.get("sessionId").getAsString();
+                }
+                if (payload.has("provider") && !payload.get("provider").isJsonNull()) {
+                    provider = payload.get("provider").getAsString();
+                }
+            }
+        } catch (Exception ignored) {
+            // Backward compatible: legacy payload is the raw sessionId string.
+        }
+
         String projectPath = context.getProject().getBasePath();
         if (projectPath == null) {
             LOG.warn("[HistoryHandler] Project base path is null");
             return;
         }
-        LOG.info("[HistoryHandler] Loading history session: " + sessionId + " from project: " + projectPath + ", provider: " + currentProvider);
+        LOG.info("[HistoryHandler] Loading history session: " + resolvedSessionId
+                + " from project: " + projectPath + ", provider: " + provider);
 
         if ("codex".equals(currentProvider)) {
             // Codex session: read session info and restore session state
@@ -48,7 +70,7 @@ public class HistoryMessageInjector {
         } else {
             // Claude session: use existing callback mechanism
             if (sessionLoadCallback != null) {
-                sessionLoadCallback.onLoadSession(sessionId, projectPath);
+                sessionLoadCallback.onLoadSession(resolvedSessionId, projectPath, provider);
             } else {
                 LOG.warn("[HistoryHandler] WARNING: No session load callback set");
             }
@@ -336,13 +358,22 @@ public class HistoryMessageInjector {
         if (!payload.has("type") || !"user_message".equals(payload.get("type").getAsString())) {
             return null;
         }
+        boolean hasLocalImages = hasLocalImages(payload);
         if (!payload.has("message") || payload.get("message").isJsonNull()) {
-            return null;
+            if (!hasLocalImages) {
+                return null;
+            }
         }
 
-        String content = CodexMessageConverter.stripSystemTags(payload.get("message").getAsString());
-        if (content == null || content.isBlank()) {
+        String content = "";
+        if (payload.has("message") && !payload.get("message").isJsonNull()) {
+            content = CodexMessageConverter.stripSystemTags(payload.get("message").getAsString());
+        }
+        if ((content == null || content.isBlank()) && !hasLocalImages) {
             return null;
+        }
+        if (content == null) {
+            content = "";
         }
 
         JsonObject frontendMsg = new JsonObject();
@@ -351,11 +382,7 @@ public class HistoryMessageInjector {
 
         // Build raw structure compatible with MessageParser
         JsonObject rawObj = new JsonObject();
-        JsonArray contentBlocks = new JsonArray();
-        JsonObject textBlock = new JsonObject();
-        textBlock.addProperty("type", "text");
-        textBlock.addProperty("text", content);
-        contentBlocks.add(textBlock);
+        JsonArray contentBlocks = buildUserMessageContentBlocks(payload, content);
         rawObj.add("content", contentBlocks);
         rawObj.addProperty("role", "user");
         frontendMsg.add("raw", rawObj);
@@ -365,6 +392,99 @@ public class HistoryMessageInjector {
         }
 
         return frontendMsg;
+    }
+
+    private static JsonArray buildUserMessageContentBlocks(JsonObject payload, String content) {
+        JsonArray contentBlocks = new JsonArray();
+        appendLocalImageBlocks(payload, contentBlocks);
+
+        if (content != null && !content.isBlank()) {
+            JsonObject textBlock = new JsonObject();
+            textBlock.addProperty("type", "text");
+            textBlock.addProperty("text", content);
+            contentBlocks.add(textBlock);
+        }
+        return contentBlocks;
+    }
+
+    private static boolean hasLocalImages(JsonObject payload) {
+        return payload.has("local_images")
+            && payload.get("local_images").isJsonArray()
+            && payload.getAsJsonArray("local_images").size() > 0;
+    }
+
+    private static void appendLocalImageBlocks(JsonObject payload, JsonArray contentBlocks) {
+        if (!payload.has("local_images") || !payload.get("local_images").isJsonArray()) {
+            return;
+        }
+
+        JsonArray localImages = payload.getAsJsonArray("local_images");
+        for (JsonElement imageElement : localImages) {
+            if (!imageElement.isJsonPrimitive()) {
+                continue;
+            }
+            String imagePath = imageElement.getAsString();
+            JsonObject imageBlock = createLocalImageBlock(imagePath);
+            if (imageBlock != null) {
+                contentBlocks.add(imageBlock);
+            }
+        }
+    }
+
+    private static JsonObject createLocalImageBlock(String imagePath) {
+        if (imagePath == null || imagePath.trim().isEmpty()) {
+            return null;
+        }
+
+        try {
+            Path path = Path.of(imagePath);
+            if (!Files.isRegularFile(path)) {
+                LOG.debug("[HistoryMessageInjector] Skip missing local image: " + imagePath);
+                return null;
+            }
+
+            String mediaType = Files.probeContentType(path);
+            if (mediaType == null || mediaType.isBlank()) {
+                mediaType = guessImageMediaType(path);
+            }
+            if (mediaType == null || mediaType.isBlank()) {
+                mediaType = "image/png";
+            }
+
+            String base64Data = Base64.getEncoder().encodeToString(Files.readAllBytes(path));
+            JsonObject imageBlock = new JsonObject();
+            imageBlock.addProperty("type", "image");
+            imageBlock.addProperty("src", "data:" + mediaType + ";base64," + base64Data);
+            imageBlock.addProperty("mediaType", mediaType);
+            imageBlock.addProperty("alt", path.getFileName() != null ? path.getFileName().toString() : "image");
+            return imageBlock;
+        } catch (Exception e) {
+            LOG.warn("[HistoryMessageInjector] Failed to restore local image from Codex history: " + imagePath, e);
+            return null;
+        }
+    }
+
+    private static String guessImageMediaType(Path path) {
+        String fileName = path.getFileName() != null ? path.getFileName().toString().toLowerCase() : "";
+        if (fileName.endsWith(".png")) {
+            return "image/png";
+        }
+        if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
+            return "image/jpeg";
+        }
+        if (fileName.endsWith(".gif")) {
+            return "image/gif";
+        }
+        if (fileName.endsWith(".webp")) {
+            return "image/webp";
+        }
+        if (fileName.endsWith(".bmp")) {
+            return "image/bmp";
+        }
+        if (fileName.endsWith(".svg")) {
+            return "image/svg+xml";
+        }
+        return null;
     }
 
     /**
