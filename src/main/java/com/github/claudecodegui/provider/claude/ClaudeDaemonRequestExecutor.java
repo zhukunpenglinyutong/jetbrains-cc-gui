@@ -58,6 +58,8 @@ class ClaudeDaemonRequestExecutor {
             StringBuilder assistantContent = new StringBuilder();
             AtomicBoolean hadSendError = new AtomicBoolean(false);
             AtomicReference<String> lastNodeError = new AtomicReference<>(null);
+            AtomicBoolean wasAborted = new AtomicBoolean(false);
+            long startTime = System.currentTimeMillis();
 
             try {
                 JsonObject params = requestParamsBuilder.buildSendParams(
@@ -101,7 +103,8 @@ class ClaudeDaemonRequestExecutor {
                                         result,
                                         assistantContent,
                                         hadSendError,
-                                        lastNodeError
+                                        lastNodeError,
+                                        wasAborted
                                 );
                             }
 
@@ -114,7 +117,8 @@ class ClaudeDaemonRequestExecutor {
                                             result,
                                             assistantContent,
                                             hadSendError,
-                                            lastNodeError
+                                            lastNodeError,
+                                            wasAborted
                                     );
                                     return;
                                 }
@@ -127,6 +131,11 @@ class ClaudeDaemonRequestExecutor {
                                     result.success = false;
                                     result.error = error;
                                 }
+                            }
+
+                            @Override
+                            public void onAbort() {
+                                wasAborted.set(true);
                             }
 
                             @Override
@@ -162,6 +171,15 @@ class ClaudeDaemonRequestExecutor {
                     result.success = success != null && success;
                     if (result.success) {
                         callback.onComplete(result);
+                    } else if (wasAborted.get()) {
+                        // User manually aborted — treat as graceful completion, not an error.
+                        // This matches how Codex handles interruptions (callback.onComplete with
+                        // success=false instead of callback.onError), so the UI does not show
+                        // an error message or toast notification.
+                        long elapsed = System.currentTimeMillis() - startTime;
+                        log.info("[DaemonExecutor] Request was aborted by user (elapsed: " + elapsed + "ms)");
+                        result.error = "User interrupted";
+                        callback.onComplete(result);
                     } else {
                         String errorMsg = "Daemon command failed";
                         String nodeErr = lastNodeError.get();
@@ -177,7 +195,16 @@ class ClaudeDaemonRequestExecutor {
 
                 return result;
             } catch (Exception e) {
-                if (!hadSendError.get()) {
+                long elapsed = System.currentTimeMillis() - startTime;
+                if (wasAborted.get()) {
+                    // Abort arrived but future was already completed exceptionally by the
+                    // daemon's error output before sendAbort() could complete it normally.
+                    // Treat as graceful interruption, same as the wasAborted branch above.
+                    log.info("[DaemonExecutor] Request was aborted by user (caught exception, elapsed: " + elapsed + "ms)");
+                    result.success = false;
+                    result.error = "User interrupted";
+                    callback.onComplete(result);
+                } else if (!hadSendError.get()) {
                     result.success = false;
                     result.error = "Daemon request failed: " + outputExtractor.extractErrorMessage(e);
                     callback.onError(result.error);
