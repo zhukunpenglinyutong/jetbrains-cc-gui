@@ -3,6 +3,8 @@ import styles from './style.module.less';
 import { useTranslation } from 'react-i18next';
 import type { DiffThemeMode } from '../../../utils/diffTheme';
 import type { UiFontConfig } from '../hooks/useSettingsBasicActions';
+import { normalizeUiLanguage } from '../../../i18n/config';
+import { sendBridgeEvent } from '../../../utils/bridge';
 
 // Preset colors (module-level constants to avoid recreating on each render)
 const DARK_PRESETS = [
@@ -227,7 +229,7 @@ const AppearanceTab = ({
     return chatBgColor.toLowerCase() === presetColor.toLowerCase();
   };
 
-  const currentLanguage = i18n.language || 'zh';
+  const currentLanguage = normalizeUiLanguage(i18n.language);
   const hasSavedCustomFont = Boolean(uiFontConfig?.customFontPath);
   const isCustomUiFontSelected = selectedUiFontOption === 'customFile';
   const isCustomPathEmpty = customFontPathDraft.trim().length === 0;
@@ -281,10 +283,11 @@ const AppearanceTab = ({
   ];
 
   const handleLanguageChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const language = event.target.value;
+    const language = normalizeUiLanguage(event.target.value);
     i18n.changeLanguage(language);
     localStorage.setItem('language', language);
     localStorage.setItem('languageManuallySet', 'true');
+    sendBridgeEvent('set_ui_language', JSON.stringify({ language }));
   };
 
   const handleUiFontSelectionChange = (event: React.ChangeEvent<HTMLSelectElement>) => {

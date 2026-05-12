@@ -176,6 +176,10 @@
       "promptEnhancer": {
         "label": "Prompt Enhancer",
         "modelLabel": "Enhancer Model",
+        "otherModelOption": "Other Models",
+        "customModelLabel": "Custom Model",
+        "customModelPlaceholder": "Enter a custom model id",
+        "customModelHint": "Select Other to type a proxy or custom model id.",
         "resetToDefault": "Restore Default",
         "providerAvailable": "Available",
         "providerUnavailable": "Currently unavailable",
@@ -341,12 +345,44 @@
       "providerModel": {
         "label": "Commit Model Provider",
         "modelLabel": "Commit Model",
+        "otherModelOption": "Other Models",
+        "customModelLabel": "Custom Model",
+        "customModelPlaceholder": "Enter a custom model id",
+        "customModelHint": "Select Other to type a proxy or custom model id.",
         "resetToDefault": "Reset",
         "providerAvailable": "Available",
         "providerUnavailable": "Unavailable",
         "currentProviderAuto": "Currently using auto selection: {{provider}}",
         "currentProviderManual": "Currently using the manually selected provider: {{provider}}",
         "currentProviderUnavailable": "The selected provider is currently unavailable: {{provider}}"
+      },
+      "generationMode": {
+        "label": "Generation Mode",
+        "modeLabel": "Generation Mode",
+        "prompt": "Prompt",
+        "skill": "Skill",
+        "hint": "Prompt mode keeps the existing built-in prompt flow. Skill mode uses the selected Skill as the commit-message rule set."
+      },
+      "language": {
+        "label": "Commit Language",
+        "auto": "Follow UI Language",
+        "en": "English",
+        "zh": "Simplified Chinese",
+        "zhTW": "Traditional Chinese",
+        "ko": "Korean",
+        "ja": "Japanese",
+        "es": "Spanish",
+        "fr": "French",
+        "hi": "Hindi",
+        "ru": "Russian",
+        "ptBR": "Portuguese (Brazil)"
+      },
+      "skill": {
+        "label": "Commit Skill",
+        "builtinLabel": "Built-in: git-commit",
+        "builtinDescription": "Built-in commitlint-compatible commit message rules.",
+        "missingDescription": "Selected skill is no longer available.",
+        "hint": "Skill mode defaults to the built-in git-commit Skill and can use scanned local Skills when available."
       },
       "prompt": {
         "label": "Additional Prompt",

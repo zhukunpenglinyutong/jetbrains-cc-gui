@@ -8,6 +8,16 @@
   margin-top: 24px;
 }
 
+.modeSection {
+  margin-top: 24px;
+  margin-bottom: 24px;
+}
+
+.skillSection {
+  margin-top: 24px;
+  margin-bottom: 24px;
+}
+
 .fieldHeader {
   display: flex;
   align-items: center;
@@ -24,6 +34,69 @@
   font-size: 14px;
   font-weight: 600;
   color: var(--text-secondary);
+}
+
+.modeRow,
+.skillRow {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.modeRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.inlineField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.inlineLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+
+.selectWrap {
+  position: relative;
+  width: 100%;
+}
+
+.modeSelect,
+.skillSelect {
+  width: 100%;
+  max-width: 100%;
+  padding: 12px 40px 12px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-secondary);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1.4;
+  appearance: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.15);
+  }
+}
+
+.selectArrow {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  font-size: 14px;
+  color: var(--text-tertiary);
 }
 
 .promptInputWrapper {
@@ -111,6 +184,10 @@
 
 /* 响应式适配 */
 @media (max-width: 480px) {
+  .modeRow {
+    grid-template-columns: 1fr;
+  }
+
   .promptTextarea {
     font-size: 12px;
     padding: 10px;

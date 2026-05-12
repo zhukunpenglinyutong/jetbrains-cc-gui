@@ -5,8 +5,12 @@ import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.skill.CommitSkillResolver;
 import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.github.claudecodegui.settings.CodexProviderManager;
+import com.github.claudecodegui.util.LanguageConfigService;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vcs.FilePath;
@@ -18,6 +22,10 @@ import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Git commit message generation service.
@@ -30,6 +38,11 @@ public class GitCommitMessageService {
     private static final int MAX_DIFF_LENGTH = 4000; // Limit diff length to avoid exceeding token limits
     private static final String PROVIDER_CLAUDE = "claude";
     private static final String PROVIDER_CODEX = "codex";
+    private static final String COMMIT_GENERATION_MODE_KEY = "generationMode";
+    private static final String COMMIT_GENERATION_MODE_SKILL = "skill";
+    private static final String COMMIT_SKILL_REF_KEY = "skillRef";
+    private static final String COMMIT_LANGUAGE_KEY = "language";
+    private static final String COMMIT_LANGUAGE_AUTO = "auto";
 
     /**
      * Built-in commit prompt (based on CCG Commits specification).
@@ -57,7 +70,7 @@ public class GitCommitMessageService {
 - 主题行不超过 72 字符
 - 保持简洁专业
 - **必须用 `<commit></commit>` 标签包裹，标签外不要有任何内容**
-- 语言默认使用英文
+- 语言必须遵循本次请求中的 Commit language 配置
 
 ## 提交类型映射
 
@@ -87,11 +100,11 @@ Scope 应该是一个描述代码库部分的名词，在整个项目中保持�
 ## Body（正文）编写指南
 
 Body 应该：
-- 解释**是什么**变更和**为什么**变更（而不是如何变更）
-- 使用项目符号列出多个变更
-- 包含变更的动机
-- 对比新旧行为
-- 引用相关问题或决策
+- 解释**为什么**变更、解决了什么问题、带来了什么影响（而不是逐行复述 diff）
+- 使用少量项目符号按意图或影响分组
+- 包含变更的动机和用户可见影响
+- 只有在必要时才提及具体类、字段、方法或文件名
+- 引用相关问题、约束或决策
 - 每行不超过 72 个字符
 
 ## Footer（页脚）编写指南
@@ -108,7 +121,7 @@ Footer 包含：
 - 描述的首字母大写
 - 主题行末尾不加句号
 - 主题和正文之间用空行分隔
-- 使用正文解释是什么和为什么（而不是如何）
+- 使用正文解释为什么要改、影响了什么（而不是逐项罗列改动）
 - 引用相关 issue 和破坏性变更
 
 ### 不应该做的
@@ -133,6 +146,8 @@ Footer 包含：
     public interface CommitMessageCallback {
         void onSuccess(String commitMessage);
         void onError(String error);
+        default void onPartial(String commitMessage) {
+        }
     }
 
     public GitCommitMessageService(@NotNull Project project) {
@@ -151,18 +166,30 @@ Footer 包含：
             @NotNull CommitMessageCallback callback
     ) {
         try {
+            long startedAt = System.nanoTime();
+            LOG.info("Starting commit message generation for " + changes.size() + " change(s)");
+
+            JsonObject commitAiConfig = getCommitAiConfig();
+            boolean skillMode = COMMIT_GENERATION_MODE_SKILL.equals(getResolvedCommitGenerationMode(commitAiConfig));
+
             // 1. Generate git diff
-            String diff = generateGitDiff(changes);
+            String diff = skillMode ? generateSkillGitDiff(changes) : generateGitDiff(changes);
             if (diff.isEmpty()) {
                 callback.onError(ClaudeCodeGuiBundle.message("commit.noChangesFound"));
                 return;
             }
+            LOG.info("Git diff generated in " + elapsedMillis(startedAt) + " ms, length=" + diff.length());
 
-            // 2. Build the full prompt (built-in + user's additional prompt + diff)
-            String fullPrompt = buildFullPrompt(diff);
+            // 2. Build the full prompt (built-in prompt or selected Skill + diff)
+            String fullPrompt = buildPromptForMode(diff, commitAiConfig);
+            LOG.info("Commit prompt built in " + elapsedMillis(startedAt) + " ms, mode="
+                    + getResolvedCommitGenerationMode(commitAiConfig)
+                    + ", provider=" + getResolvedCommitAiProvider(commitAiConfig)
+                    + ", language=" + getResolvedCommitLanguage(commitAiConfig)
+                    + ", promptLength=" + fullPrompt.length());
 
             // 3. Call the AI SDK
-            callAIService(fullPrompt, callback);
+            callAIService(fullPrompt, commitAiConfig, callback);
 
         } catch (IOException e) {
             LOG.warn("AI service call failed", e);
@@ -173,6 +200,10 @@ Footer 包含：
             String message = e.getMessage();
             callback.onError(message != null ? message : e.getClass().getSimpleName());
         }
+    }
+
+    protected String generateSkillGitDiff(@NotNull Collection<Change> changes) {
+        return new CommitSkillDiffCollector().collect(changes);
     }
 
     /**
@@ -289,6 +320,9 @@ Footer 包含：
      */
     private String getProjectAdditionalPrompt() {
         try {
+            if (project == null) {
+                return "";
+            }
             String projectPath = project.getBasePath();
             if (null == projectPath) {
                 return "";
@@ -305,16 +339,38 @@ Footer 包含：
     }
 
     /**
-     * Build the full prompt.
-     * Logic: built-in prompt + user's additional prompt + project-level additional prompt (highest priority) + git diff.
+     * Build the full prompt from either the legacy built-in prompt or the selected commit Skill.
      */
-    private String buildFullPrompt(String diff) {
+    private String buildPromptForMode(String diff, JsonObject commitAiConfig) {
+        if (commitAiConfig == null) {
+            return buildPromptWithBase(BUILTIN_COMMIT_PROMPT, diff, COMMIT_LANGUAGE_AUTO);
+        }
+        String mode = getResolvedCommitGenerationMode(commitAiConfig);
+        String language = getResolvedCommitLanguage(commitAiConfig);
+        if (COMMIT_GENERATION_MODE_SKILL.equals(mode)) {
+            String skillRef = getResolvedCommitSkillRef(commitAiConfig);
+            String skillContent = CommitSkillResolver.resolveSkillContent(skillRef);
+            if (skillContent == null || skillContent.trim().isEmpty()) {
+                LOG.warn("Selected skill could not be loaded, falling back to built-in prompt: " + skillRef);
+                skillContent = BUILTIN_COMMIT_PROMPT;
+            }
+            return buildSkillPrompt(skillRef, skillContent, diff, language);
+        }
+        return buildPromptWithBase(BUILTIN_COMMIT_PROMPT, diff, language);
+    }
+
+    private String buildPromptWithBase(String basePrompt, String diff, String language) {
+        int fileCount = countDiffFiles(diff);
         StringBuilder prompt = new StringBuilder();
 
-        // 1. Built-in commit prompt
-        prompt.append(BUILTIN_COMMIT_PROMPT);
+        // 1. Highest-priority language rules
+        appendLanguagePreference(prompt, language);
 
-        // 2. User's global additional prompt (if any)
+        // 2. Base commit rules
+        prompt.append("\n\n");
+        prompt.append(basePrompt);
+
+        // 3. User's global additional prompt (if any)
         String userAdditionalPrompt = getUserAdditionalPrompt();
         if (!userAdditionalPrompt.isEmpty()) {
             prompt.append("\n\n## 用户附加要求（优先遵循）\n\n");
@@ -322,7 +378,7 @@ Footer 包含：
             prompt.append(userAdditionalPrompt);
         }
 
-        // 3. Project-level additional prompt (highest priority)
+        // 4. Project-level additional prompt (highest priority)
         String projectAdditionalPrompt = getProjectAdditionalPrompt();
         if (!projectAdditionalPrompt.isEmpty()) {
             prompt.append("\n\n## 项目专属要求\n\n");
@@ -330,7 +386,16 @@ Footer 包含：
             prompt.append(projectAdditionalPrompt);
         }
 
-        // 4. Git diff content
+        // Repeat near the diff/output request so smaller models do not drift back to English.
+        appendLanguagePreference(prompt, language);
+        prompt.append("- Group related changes by intent or impact; do not write one bullet per file, class, or field.\n");
+        prompt.append("- Cover each major functional area touched by the diff so large commits are still understandable.\n");
+        prompt.append("- Explain why the change exists, what problem it solves, or what behavior it preserves.\n");
+        prompt.append("- Mention specific methods, classes, and fields only when they help explain the reason or impact.\n");
+        prompt.append("- Use precise '- ' bullets that explain why the change matters, not a line-by-line recap of the diff.\n");
+        appendBodyScalePreference(prompt, fileCount);
+
+        // 5. Git diff content
         prompt.append("\n\n---\n\n");
         prompt.append("以下是 git diff 信息，请根据以上规则生成 commit message：\n\n");
         prompt.append("```diff\n");
@@ -341,23 +406,119 @@ Footer 包含：
         prompt.append("\n\n【输出格式要求 - 必须严格遵守】\n");
         prompt.append("请将 commit message 用 XML 标签包裹输出，格式如下：\n");
         prompt.append("<commit>\n");
-        prompt.append("type(scope): description\n");
+        prompt.append(exampleHeader(language)).append("\n");
         prompt.append("\n");
-        prompt.append("optional body\n");
+        prompt.append(exampleBody(language)).append("\n");
         prompt.append("</commit>\n\n");
         prompt.append("重要规则：\n");
         prompt.append("1. 必须使用 <commit> 和 </commit> 标签包裹\n");
         prompt.append("2. 标签外不要有任何其他内容（不要分析、不要解释、不要说明）\n");
+        prompt.append("3. ").append(resolveCommitLanguageInstruction(language)).append("\n");
 
         return prompt.toString();
+    }
+
+    private String buildSkillPrompt(String skillRef, String skillContent, String diff, String language) {
+        int fileCount = countDiffFiles(diff);
+
+        StringBuilder prompt = new StringBuilder();
+        prompt.append("## Required commit message language\n");
+        prompt.append(resolveCommitLanguageInstruction(language)).append("\n");
+        prompt.append("This language requirement overrides Skill text, examples, and any default-language wording below.\n");
+        prompt.append("Use examples only for structure; do not copy their language unless it matches the configured language.\n\n");
+        if (CommitSkillResolver.BUILTIN_SKILL_REF.equals(skillRef)) {
+            prompt.append("Use the following built-in Skill as commit message style and format rules.\n");
+            prompt.append("Do not run commands, do not edit files, do not commit, and do not push.\n\n");
+            prompt.append("## Built-in Skill: git-commit\n\n").append(skillContent.trim()).append("\n\n");
+        } else {
+            prompt.append("Use the following local Skill only as commit message style and format rules.\n");
+            prompt.append("Do not run commands, do not edit files, do not commit, and do not push.\n\n");
+            prompt.append("## Local Skill\n\n").append(skillContent.trim()).append("\n\n");
+        }
+        prompt.append("## User preferences\n");
+        prompt.append("- ").append(resolveCommitLanguageInstruction(language)).append("\n");
+        prompt.append("- Keep only the Conventional Commit type and scope in English, such as `fix(commit):`.\n");
+        prompt.append("- Generate exactly one commit message.\n");
+        prompt.append("- Use only the diff below. Do not infer unrelated changes.\n");
+        prompt.append("- Group related changes by intent or impact; do not write one bullet per file, class, or field.\n");
+        prompt.append("- Cover each major functional area touched by the diff so large commits are still understandable.\n");
+        prompt.append("- Explain why the change exists, what problem it solves, or what behavior it preserves.\n");
+        prompt.append("- When the diff changes numeric values (thresholds, timeouts, limits, sizes), mention both old and new values.\n");
+        prompt.append("- Mention specific methods, classes, and fields only when they help explain the reason or impact.\n");
+        prompt.append("- Do NOT use generic body bullets such as \"improve logic\" or \"optimize experience\".\n");
+        prompt.append("- Mention user-visible behavior, failure modes, compatibility, or settings impact when relevant.\n");
+        prompt.append("- Use precise '- ' bullets that explain why the change matters, not a line-by-line recap of the diff.\n");
+        prompt.append("- Keep the tone and structure consistent across models.\n");
+        appendBodyScalePreference(prompt, fileCount);
+        prompt.append("- Output only the final commit message wrapped in <commit> and </commit> tags.\n\n");
+        prompt.append("## Selected git diff\n\n```diff\n");
+        prompt.append(diff);
+        prompt.append("\n```\n\n");
+        prompt.append("Return format:\n<commit>\n")
+                .append(exampleHeader(language))
+                .append("\n\n")
+                .append(exampleBody(language))
+                .append("\n</commit>\n");
+        return prompt.toString();
+    }
+
+    private void appendBodyScalePreference(StringBuilder prompt, int fileCount) {
+        if (fileCount >= 20) {
+            prompt.append("- IMPORTANT: This diff contains ").append(fileCount).append(" files. ");
+            prompt.append("Write 7-10 grouped body bullets; do not write fewer than 7 unless the diff is almost entirely the same mechanical change repeated across files.\n");
+            prompt.append("- For large diffs, name the main services, settings, UI flows, provider paths, tests, and fallback behavior when they are meaningful, while still grouping related files together.\n");
+        } else if (fileCount >= 10) {
+            prompt.append("- IMPORTANT: This diff contains ").append(fileCount).append(" files. ");
+            prompt.append("Write 6-8 grouped body bullets covering the major functional areas.\n");
+        } else if (fileCount >= 2) {
+            prompt.append("- IMPORTANT: This diff contains ").append(fileCount).append(" files. ");
+            prompt.append("Write 3-6 grouped body bullets as needed; do not compress unrelated areas into one vague bullet.\n");
+        }
+    }
+
+    private void appendLanguagePreference(StringBuilder prompt, String language) {
+        prompt.append("\n\n## Commit language\n");
+        prompt.append(resolveCommitLanguageInstruction(language)).append("\n");
+        prompt.append("Keep only the Conventional Commit type and scope in English, such as `fix(commit):`.\n");
+        prompt.append("Keep the tone and wording natural for that language.\n");
+        prompt.append("This overrides any examples, built-in defaults, or Skill text that mention another language.\n");
+    }
+
+    private int countDiffFiles(String diff) {
+        if (diff == null || diff.isEmpty()) {
+            return 0;
+        }
+        int count = 0;
+        for (String marker : new String[]{"=== MODIFICATION: ", "=== NEW: ", "=== DELETED: ", "=== MOVED: "}) {
+            int idx = 0;
+            while ((idx = diff.indexOf(marker, idx)) >= 0) {
+                count++;
+                idx += marker.length();
+            }
+        }
+        if (count > 0) {
+            return count;
+        }
+        int idx = 0;
+        while ((idx = diff.indexOf("diff --git ", idx)) >= 0) {
+            count++;
+            idx += 11;
+        }
+        return count;
     }
 
     /**
      * Call the AI service.
      */
-    private void callAIService(String prompt, CommitMessageCallback callback) throws IOException {
-        JsonObject commitAiConfig = getCommitAiConfig();
+    private void callAIService(String prompt, JsonObject commitAiConfig, CommitMessageCallback callback) throws IOException {
         String effectiveProvider = getResolvedCommitAiProvider(commitAiConfig);
+        String effectiveModel = getResolvedCommitAiModel(commitAiConfig, effectiveProvider);
+        String language = getResolvedCommitLanguage(commitAiConfig);
+        String generationMode = getResolvedCommitGenerationMode(commitAiConfig);
+        LOG.info("Commit AI routing: provider=" + effectiveProvider
+                + ", model=" + effectiveModel
+                + ", mode=" + generationMode
+                + ", language=" + language);
 
         if (effectiveProvider == null) {
             callback.onError(ClaudeCodeGuiBundle.message("commit.noAvailableProvider"));
@@ -400,20 +561,195 @@ Footer 包含：
         return model.isEmpty() ? null : model;
     }
 
+    private String getResolvedCommitGenerationMode(JsonObject commitAiConfig) {
+        if (commitAiConfig == null
+                || !commitAiConfig.has(COMMIT_GENERATION_MODE_KEY)
+                || commitAiConfig.get(COMMIT_GENERATION_MODE_KEY).isJsonNull()) {
+            return "prompt";
+        }
+        String mode = commitAiConfig.get(COMMIT_GENERATION_MODE_KEY).getAsString().trim().toLowerCase();
+        return COMMIT_GENERATION_MODE_SKILL.equals(mode) ? COMMIT_GENERATION_MODE_SKILL : "prompt";
+    }
+
+    private String getResolvedCommitSkillRef(JsonObject commitAiConfig) {
+        if (commitAiConfig == null
+                || !commitAiConfig.has(COMMIT_SKILL_REF_KEY)
+                || commitAiConfig.get(COMMIT_SKILL_REF_KEY).isJsonNull()) {
+            return CommitSkillResolver.BUILTIN_SKILL_REF;
+        }
+        String skillRef = commitAiConfig.get(COMMIT_SKILL_REF_KEY).getAsString().trim();
+        return skillRef.isEmpty() ? CommitSkillResolver.BUILTIN_SKILL_REF : skillRef;
+    }
+
+    private String getResolvedCommitLanguage(JsonObject commitAiConfig) {
+        if (commitAiConfig == null
+                || !commitAiConfig.has(COMMIT_LANGUAGE_KEY)
+                || commitAiConfig.get(COMMIT_LANGUAGE_KEY).isJsonNull()) {
+            return COMMIT_LANGUAGE_AUTO;
+        }
+        String language = commitAiConfig.get(COMMIT_LANGUAGE_KEY).getAsString().trim();
+        return language.isEmpty() ? COMMIT_LANGUAGE_AUTO : language;
+    }
+
+    private String resolveCommitLanguageLabel(String language) {
+        String normalized = language == null ? COMMIT_LANGUAGE_AUTO : language.trim();
+        if (normalized.isEmpty() || COMMIT_LANGUAGE_AUTO.equalsIgnoreCase(normalized)) {
+            normalized = LanguageConfigService.getCurrentLanguage();
+        }
+        return switch (normalized) {
+            case "zh" -> "Simplified Chinese";
+            case "zh-TW" -> "Traditional Chinese";
+            case "ko" -> "Korean";
+            case "ja" -> "Japanese";
+            case "es" -> "Spanish";
+            case "fr" -> "French";
+            case "hi" -> "Hindi";
+            case "ru" -> "Russian";
+            case "pt-BR" -> "Brazilian Portuguese";
+            case "en" -> "English";
+            default -> "English";
+        };
+    }
+
+    private String resolveCommitLanguageNativeLabel(String language) {
+        String normalized = normalizeCommitLanguageForPrompt(language);
+        return switch (normalized) {
+            case "zh" -> "简体中文";
+            case "zh-TW" -> "繁體中文";
+            case "ko" -> "한국어";
+            case "ja" -> "日本語";
+            case "es" -> "Español";
+            case "fr" -> "Français";
+            case "hi" -> "हिन्दी";
+            case "ru" -> "Русский";
+            case "pt-BR" -> "Português (Brasil)";
+            case "en" -> "English";
+            default -> "English";
+        };
+    }
+
+    private String resolveCommitLanguageInstruction(String language) {
+        String normalized = normalizeCommitLanguageForPrompt(language);
+        String englishLabel = resolveCommitLanguageLabel(normalized);
+        String nativeLabel = resolveCommitLanguageNativeLabel(normalized);
+        return "The final commit message subject and body MUST be written in "
+                + englishLabel + " (" + nativeLabel + ").";
+    }
+
+    private String normalizeCommitLanguageForPrompt(String language) {
+        String normalized = language == null ? COMMIT_LANGUAGE_AUTO : language.trim();
+        if (normalized.isEmpty() || COMMIT_LANGUAGE_AUTO.equalsIgnoreCase(normalized)) {
+            normalized = LanguageConfigService.getCurrentLanguage();
+        }
+        return normalized;
+    }
+
+    private String exampleHeader(String language) {
+        return switch (normalizeCommitLanguageForPrompt(language)) {
+            case "zh" -> "fix(commit): 修复提交信息语言配置";
+            case "zh-TW" -> "fix(commit): 修復提交資訊語言設定";
+            case "ko" -> "fix(commit): 커밋 메시지 언어 설정 수정";
+            case "ja" -> "fix(commit): コミットメッセージの言語設定を修正";
+            case "es" -> "fix(commit): corrige la configuración de idioma del commit";
+            case "fr" -> "fix(commit): corrige la configuration de langue du commit";
+            case "hi" -> "fix(commit): कमिट संदेश भाषा सेटिंग ठीक करें";
+            case "ru" -> "fix(commit): исправить настройку языка коммита";
+            case "pt-BR" -> "fix(commit): corrige a configuração de idioma do commit";
+            default -> "fix(commit): fix commit message language setting";
+        };
+    }
+
+    private String exampleBody(String language) {
+        return switch (normalizeCommitLanguageForPrompt(language)) {
+            case "zh" -> "- 按选择的语言生成提交信息标题和正文";
+            case "zh-TW" -> "- 依照選取的語言生成提交資訊標題與正文";
+            case "ko" -> "- 선택한 언어로 커밋 메시지 제목과 본문을 생성";
+            case "ja" -> "- 選択した言語でコミットメッセージの件名と本文を生成";
+            case "es" -> "- Genera el asunto y el cuerpo del commit en el idioma seleccionado";
+            case "fr" -> "- Génère le sujet et le corps du commit dans la langue choisie";
+            case "hi" -> "- चुनी गई भाषा में कमिट संदेश का विषय और मुख्य भाग बनाएं";
+            case "ru" -> "- Генерирует тему и тело коммита на выбранном языке";
+            case "pt-BR" -> "- Gera o assunto e o corpo do commit no idioma selecionado";
+            default -> "- Generate the commit subject and body in the selected language";
+        };
+    }
+
+    private boolean appendStreamingText(StringBuilder result, String type, String content) {
+        if (content == null || content.isEmpty()) {
+            return false;
+        }
+        if ("assistant".equals(type) && looksLikeJson(content)) {
+            return false;
+        }
+        if ("content".equals(type)
+                || "assistant".equals(type)
+                || "text".equals(type)
+                || "content_delta".equals(type)) {
+            if (!isThinkingContent(content)) {
+                result.append(content);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean looksLikeJson(String content) {
+        String trimmed = content == null ? "" : content.trim();
+        return trimmed.startsWith("{") || trimmed.startsWith("[");
+    }
+
+    private void handleSdkResult(SDKResult sdkResult, StringBuilder result, CommitMessageCallback callback) {
+        if (sdkResult == null) {
+            callback.onError(ClaudeCodeGuiBundle.message("commit.emptyMessage"));
+            return;
+        }
+        String commitMessage = result.length() > 0
+                ? result.toString().trim()
+                : safeTrim(sdkResult.finalResult);
+        if (commitMessage.isEmpty()) {
+            if (sdkResult.error != null && !sdkResult.error.isBlank()) {
+                callback.onError(sdkResult.error);
+            } else {
+                callback.onError(ClaudeCodeGuiBundle.message("commit.emptyMessage"));
+            }
+            return;
+        }
+        callback.onSuccess(new CommitMessageCleaner().clean(commitMessage));
+    }
+
+    private String safeTrim(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private long elapsedMillis(long startedAtNanos) {
+        return (System.nanoTime() - startedAtNanos) / 1_000_000L;
+    }
+
     /**
      * Call the Claude API.
      */
     protected void callClaudeAPI(String prompt, String model, CommitMessageCallback callback) {
+        CommitHttpAiClient.Config httpConfig = resolveClaudeHttpConfig(model);
+        if (httpConfig != null) {
+            LOG.info("Commit AI routing to Claude HTTP path: source=" + httpConfig.source
+                    + ", baseUrl=" + httpConfig.baseUrl
+                    + ", model=" + httpConfig.model);
+            callClaudeHttpAPI(prompt, httpConfig, callback);
+            return;
+        }
+
+        LOG.info("Commit AI routing to Claude SDK bridge: model=" + model);
         ClaudeSDKBridge bridge = new ClaudeSDKBridge();
         try {
             // Simple callback handler
             StringBuilder result = new StringBuilder();
+            AtomicBoolean completed = new AtomicBoolean(false);
 
             // Use the 12-parameter sendMessage overload:
             // - model: COMMIT_MESSAGE_MODEL (Sonnet model)
             // - streaming: false (non-streaming, returns complete result at once)
             // - disableThinking: true (disable thinking mode to avoid verbose reasoning output)
-            bridge.sendMessage(
+            CompletableFuture<SDKResult> future = bridge.sendMessage(
                 "git-commit-message",      // channelId
                 prompt,                     // message
                 null,                       // sessionId (null = new session)
@@ -423,41 +759,51 @@ Footer 包含：
                 model,                      // model
                 null,                       // openedFiles
                 null,                       // agentPrompt
-                false,                      // streaming (non-streaming mode)
+                true,                       // streaming (stream partial commit text)
                 true,                       // disableThinking (disable thinking mode)
                 new MessageCallback() {
                     @Override
                     public void onMessage(String type, String content) {
-                        // Only collect assistant content, ignore thinking/reasoning
-                        if ("content".equals(type) || "assistant".equals(type) || "text".equals(type)) {
-                            // Skip thinking content (typically starts with specific markers)
-                            if (!isThinkingContent(content)) {
-                                result.append(content);
-                            }
+                        if (appendStreamingText(result, type, content)) {
+                            callback.onPartial(new CommitMessageCleaner().cleanPartial(result.toString()));
                         }
                     }
 
                     @Override
                     public void onError(String error) {
-                        bridge.shutdownDaemon();
-                        callback.onError(error);
+                        if (completed.compareAndSet(false, true)) {
+                            bridge.shutdownDaemon();
+                            callback.onError(error);
+                        }
                     }
 
                     @Override
                     public void onComplete(SDKResult sdkResult) {
-                        bridge.shutdownDaemon();
-                        String commitMessage = result.length() > 0
-                                ? result.toString().trim()
-                                : sdkResult.finalResult.trim();
-
-                        if (commitMessage.isEmpty()) {
-                            callback.onError(ClaudeCodeGuiBundle.message("commit.emptyMessage"));
-                        } else {
-                            callback.onSuccess(cleanupCommitMessage(commitMessage));
+                        if (completed.compareAndSet(false, true)) {
+                            bridge.shutdownDaemon();
+                            handleSdkResult(sdkResult, result, callback);
                         }
                     }
                 }
             );
+            try {
+                SDKResult sdkResult = future.get();
+                if (completed.compareAndSet(false, true)) {
+                    bridge.shutdownDaemon();
+                    handleSdkResult(sdkResult, result, callback);
+                }
+            } catch (InterruptedException e) {
+                future.cancel(true);
+                bridge.shutdownDaemon();
+                Thread.currentThread().interrupt();
+                callback.onError("Generation cancelled");
+            } catch (ExecutionException e) {
+                if (completed.compareAndSet(false, true)) {
+                    bridge.shutdownDaemon();
+                    Throwable cause = e.getCause() != null ? e.getCause() : e;
+                    callback.onError(ClaudeCodeGuiBundle.message("commit.callApiFailed") + ": " + cause.getMessage());
+                }
+            }
         } catch (Exception e) {
             bridge.shutdownDaemon();
             LOG.error("Failed to call Claude API", e);
@@ -469,14 +815,26 @@ Footer 包含：
      * Call the Codex API.
      */
     protected void callCodexAPI(String prompt, String model, CommitMessageCallback callback) {
+        CommitHttpAiClient.Config httpConfig = resolveCodexHttpConfig(model);
+        if (httpConfig != null) {
+            LOG.info("Commit AI routing to Codex HTTP path: source=" + httpConfig.source
+                    + ", baseUrl=" + httpConfig.baseUrl
+                    + ", model=" + httpConfig.model
+                    + ", wireApi=" + httpConfig.wireApi);
+            callCodexHttpAPI(prompt, httpConfig, callback);
+            return;
+        }
+
+        LOG.info("Commit AI routing to Codex SDK bridge: model=" + model);
         CodexSDKBridge bridge = new CodexSDKBridge();
         try {
             // Simple callback handler
             StringBuilder result = new StringBuilder();
+            AtomicBoolean completed = new AtomicBoolean(false);
 
             // CodexSDKBridge.sendMessage requires 10 parameters:
             // (channelId, message, threadId, cwd, attachments, permissionMode, model, agentPrompt, reasoningEffort, callback)
-            bridge.sendMessage(
+            CompletableFuture<SDKResult> future = bridge.sendMessage(
                 "git-commit-message",      // channelId
                 prompt,                     // message
                 null,                       // threadId (null = new session)
@@ -489,41 +847,497 @@ Footer 包含：
                 new MessageCallback() {
                     @Override
                     public void onMessage(String type, String content) {
-                        // Only collect assistant content, ignore thinking/reasoning
-                        if ("content".equals(type) || "assistant".equals(type) || "text".equals(type)) {
-                            // Skip thinking content
-                            if (!isThinkingContent(content)) {
-                                result.append(content);
-                            }
+                        if (appendStreamingText(result, type, content)) {
+                            callback.onPartial(new CommitMessageCleaner().cleanPartial(result.toString()));
                         }
                     }
 
                     @Override
                     public void onError(String error) {
-                        bridge.cleanupAllProcesses();
-                        callback.onError(error);
+                        if (completed.compareAndSet(false, true)) {
+                            bridge.cleanupAllProcesses();
+                            callback.onError(error);
+                        }
                     }
 
                     @Override
                     public void onComplete(SDKResult sdkResult) {
-                        bridge.cleanupAllProcesses();
-                        String commitMessage = result.length() > 0
-                                ? result.toString().trim()
-                                : sdkResult.finalResult.trim();
-
-                        if (commitMessage.isEmpty()) {
-                            callback.onError(ClaudeCodeGuiBundle.message("commit.emptyMessage"));
-                        } else {
-                            callback.onSuccess(cleanupCommitMessage(commitMessage));
+                        if (completed.compareAndSet(false, true)) {
+                            bridge.cleanupAllProcesses();
+                            handleSdkResult(sdkResult, result, callback);
                         }
                     }
                 }
             );
+            try {
+                SDKResult sdkResult = future.get();
+                if (completed.compareAndSet(false, true)) {
+                    bridge.cleanupAllProcesses();
+                    handleSdkResult(sdkResult, result, callback);
+                }
+            } catch (InterruptedException e) {
+                future.cancel(true);
+                bridge.cleanupAllProcesses();
+                Thread.currentThread().interrupt();
+                callback.onError("Generation cancelled");
+            } catch (ExecutionException e) {
+                if (completed.compareAndSet(false, true)) {
+                    bridge.cleanupAllProcesses();
+                    Throwable cause = e.getCause() != null ? e.getCause() : e;
+                    callback.onError(ClaudeCodeGuiBundle.message("commit.callApiFailed") + ": " + cause.getMessage());
+                }
+            }
         } catch (Exception e) {
             bridge.cleanupAllProcesses();
             LOG.error("Failed to call Codex API", e);
             callback.onError(ClaudeCodeGuiBundle.message("commit.callApiFailed") + ": " + e.getMessage());
         }
+    }
+
+    private void callClaudeHttpAPI(String prompt, CommitHttpAiClient.Config httpConfig, CommitMessageCallback callback) {
+        try {
+            CommitMessageCleaner cleaner = new CommitMessageCleaner();
+            StringBuilder result = new StringBuilder();
+            String raw = new CommitHttpAiClient().generateClaude(prompt, httpConfig, chunk -> {
+                if (chunk == null || chunk.isEmpty()) {
+                    return;
+                }
+                result.append(chunk);
+                callback.onPartial(cleaner.cleanPartial(result.toString()));
+            });
+            String commitMessage = result.length() > 0 ? result.toString().trim() : raw.trim();
+            if (commitMessage.isEmpty()) {
+                callback.onError(ClaudeCodeGuiBundle.message("commit.emptyMessage"));
+                return;
+            }
+            callback.onSuccess(cleaner.clean(commitMessage));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            callback.onError("Generation cancelled");
+        } catch (Exception e) {
+            LOG.error("Failed to call Claude HTTP API", e);
+            callback.onError(ClaudeCodeGuiBundle.message("commit.callApiFailed") + ": " + e.getMessage());
+        }
+    }
+
+    private void callCodexHttpAPI(String prompt, CommitHttpAiClient.Config httpConfig, CommitMessageCallback callback) {
+        try {
+            CommitMessageCleaner cleaner = new CommitMessageCleaner();
+            StringBuilder result = new StringBuilder();
+            String raw = new CommitHttpAiClient().generateOpenAiCompatible(prompt, httpConfig, chunk -> {
+                if (chunk == null || chunk.isEmpty()) {
+                    return;
+                }
+                result.append(chunk);
+                callback.onPartial(cleaner.cleanPartial(result.toString()));
+            });
+            String commitMessage = result.length() > 0 ? result.toString().trim() : raw.trim();
+            if (commitMessage.isEmpty()) {
+                callback.onError(ClaudeCodeGuiBundle.message("commit.emptyMessage"));
+                return;
+            }
+            callback.onSuccess(cleaner.clean(commitMessage));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            callback.onError("Generation cancelled");
+        } catch (Exception e) {
+            LOG.error("Failed to call Codex HTTP API", e);
+            callback.onError(ClaudeCodeGuiBundle.message("commit.callApiFailed") + ": " + e.getMessage());
+        }
+    }
+
+    private CommitHttpAiClient.Config resolveClaudeHttpConfig(String model) {
+        try {
+            JsonObject activeProvider = settingsService.getActiveClaudeProvider();
+            JsonObject env = new JsonObject();
+            if (activeProvider != null && activeProvider.has("settingsConfig") && activeProvider.get("settingsConfig").isJsonObject()) {
+                JsonObject settingsConfig = activeProvider.getAsJsonObject("settingsConfig");
+                if (settingsConfig.has("env") && settingsConfig.get("env").isJsonObject()) {
+                    env = settingsConfig.getAsJsonObject("env").deepCopy();
+                }
+            }
+            JsonObject claudeSettings = settingsService.readClaudeSettings();
+            if (claudeSettings.has("env") && claudeSettings.get("env").isJsonObject()) {
+                JsonObject fileEnv = claudeSettings.getAsJsonObject("env");
+                mergeEnv(env, fileEnv);
+            }
+            String apiKey = firstJson(env, "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_API_KEY");
+            String baseUrl = firstJson(env, "ANTHROPIC_BASE_URL", "CLAUDE_BASE_URL");
+            if (apiKey == null || apiKey.isBlank()) {
+                return null;
+            }
+            return new CommitHttpAiClient.Config(
+                    apiKey.trim(),
+                    baseUrl == null || baseUrl.isBlank() ? "https://api.anthropic.com" : baseUrl.trim(),
+                    resolveClaudeModel(model, env),
+                    "",
+                    "claude-http"
+            );
+        } catch (Exception e) {
+            LOG.debug("Failed to resolve Claude HTTP config: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private CommitHttpAiClient.Config resolveCodexHttpConfig(String model) {
+        try {
+            JsonObject configRoot = null;
+            JsonObject authJson = null;
+
+            try {
+                JsonObject currentCodexConfig = settingsService.getCurrentCodexConfig();
+                if (currentCodexConfig != null && currentCodexConfig.size() > 0) {
+                    if (currentCodexConfig.has("config") && currentCodexConfig.get("config").isJsonObject()) {
+                        configRoot = currentCodexConfig.getAsJsonObject("config");
+                    }
+                    if (currentCodexConfig.has("auth") && currentCodexConfig.get("auth").isJsonObject()) {
+                        authJson = currentCodexConfig.getAsJsonObject("auth");
+                    }
+                }
+            } catch (Exception e) {
+                LOG.debug("Failed to read current Codex config before provider fallback: " + e.getMessage());
+            }
+
+            JsonObject activeProvider = settingsService.getActiveCodexProvider();
+            if ((configRoot == null || authJson == null)
+                    && activeProvider != null
+                    && !CodexProviderManager.CODEX_CLI_LOGIN_PROVIDER_ID.equals(getString(activeProvider, "id"))) {
+                if (configRoot == null) {
+                    configRoot = readCodexConfigToml(activeProvider);
+                }
+                if (authJson == null) {
+                    authJson = readCodexAuthJson(activeProvider);
+                }
+            }
+
+            if (configRoot == null || authJson == null) {
+                JsonObject fallback = selectDirectCodexProvider();
+                if (fallback != null) {
+                    if (configRoot == null) {
+                        configRoot = readCodexConfigToml(fallback);
+                    }
+                    if (authJson == null) {
+                        authJson = readCodexAuthJson(fallback);
+                    }
+                }
+            }
+
+            if (configRoot == null) {
+                return null;
+            }
+
+            String apiKey = firstJson(authJson, "OPENAI_API_KEY", "api_key", "apiKey");
+            if (apiKey == null || apiKey.isBlank()) {
+                apiKey = firstJson(configRoot, "OPENAI_API_KEY", "api_key", "apiKey");
+            }
+            String providerName = firstJson(configRoot, "model_provider");
+            if (providerName == null || providerName.isBlank()) {
+                providerName = firstModelProviderName(configRoot);
+            }
+            String resolvedModel = firstJson(configRoot, "model");
+            String baseUrl = null;
+            String wireApi = null;
+            if (providerName != null && !providerName.isBlank()) {
+                baseUrl = firstTomlValue(configRoot, "model_providers." + providerName + ".base_url",
+                        "model_providers." + providerName + ".baseURL",
+                        "model_providers." + providerName + ".openai_base_url");
+                wireApi = firstTomlValue(configRoot, "model_providers." + providerName + ".wire_api",
+                        "model_providers." + providerName + ".wireApi");
+                if (apiKey == null || apiKey.isBlank()) {
+                    String envKey = firstTomlValue(configRoot, "model_providers." + providerName + ".env_key",
+                            "model_providers." + providerName + ".api_key_env",
+                            "model_providers." + providerName + ".apiKeyEnv");
+                    if (envKey != null && !envKey.isBlank()) {
+                        apiKey = firstTomlValue(configRoot, "shell_environment_policy.set." + envKey,
+                                "shell_environment_policy.set.OPENAI_API_KEY");
+                        if (apiKey == null || apiKey.isBlank()) {
+                            apiKey = System.getenv(envKey.trim());
+                        }
+                    }
+                    if (apiKey == null || apiKey.isBlank()) {
+                        apiKey = firstTomlValue(configRoot, "model_providers." + providerName + ".api_key",
+                                "model_providers." + providerName + ".apiKey",
+                                "model_providers." + providerName + ".OPENAI_API_KEY");
+                    }
+                }
+                if (resolvedModel == null || resolvedModel.isBlank()) {
+                    resolvedModel = firstTomlValue(configRoot, "model_providers." + providerName + ".model");
+                }
+            }
+            if (model != null && !model.trim().isEmpty()) {
+                resolvedModel = model.trim();
+            }
+            if (baseUrl == null || baseUrl.isBlank()) {
+                baseUrl = firstJson(configRoot, "base_url", "baseURL", "openai_base_url", "OPENAI_BASE_URL", "OPENAI_API_BASE");
+            }
+            if (baseUrl == null || baseUrl.isBlank()) {
+                baseUrl = "https://api.openai.com";
+            }
+            if ((apiKey == null || apiKey.isBlank()) && isLocalUrl(baseUrl)) {
+                apiKey = "local-codex";
+            }
+            if (apiKey == null || apiKey.isBlank()) {
+                return null;
+            }
+            return new CommitHttpAiClient.Config(
+                    apiKey.trim(),
+                    baseUrl.trim(),
+                    resolvedModel == null ? "" : resolvedModel.trim(),
+                    wireApi == null ? "" : wireApi.trim(),
+                    "codex-http"
+            );
+        } catch (Exception e) {
+            LOG.debug("Failed to resolve Codex HTTP config: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private JsonObject selectDirectCodexProvider() {
+        try {
+            for (JsonObject provider : settingsService.getCodexProviders()) {
+                String id = getString(provider, "id");
+                if (CodexProviderManager.CODEX_CLI_LOGIN_PROVIDER_ID.equals(id)) {
+                    continue;
+                }
+                if (readCodexConfigToml(provider) != null) {
+                    return provider;
+                }
+            }
+        } catch (Exception e) {
+            LOG.debug("Failed to select direct Codex provider: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private JsonObject readCodexConfigToml(JsonObject provider) {
+        try {
+            if (provider != null && provider.has("configToml") && provider.get("configToml").isJsonPrimitive()) {
+                String configTomlContent = provider.get("configToml").getAsString();
+                if (configTomlContent != null && !configTomlContent.trim().isEmpty()) {
+                    return parseCodexToml(configTomlContent);
+                }
+            }
+        } catch (Exception e) {
+            LOG.debug("Failed to read Codex configToml: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private JsonObject readCodexAuthJson(JsonObject provider) {
+        try {
+            if (provider != null && provider.has("authJson") && provider.get("authJson").isJsonPrimitive()) {
+                String authJsonContent = provider.get("authJson").getAsString();
+                if (authJsonContent != null && !authJsonContent.trim().isEmpty()) {
+                    return JsonParser.parseString(authJsonContent).getAsJsonObject();
+                }
+            }
+        } catch (Exception e) {
+            LOG.debug("Failed to read Codex authJson: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private String firstModelProviderName(JsonObject object) {
+        if (object == null || !object.has("model_providers") || !object.get("model_providers").isJsonObject()) {
+            return null;
+        }
+        JsonObject providers = object.getAsJsonObject("model_providers");
+        for (Map.Entry<String, com.google.gson.JsonElement> entry : providers.entrySet()) {
+            if (entry.getValue() != null && entry.getValue().isJsonObject()) {
+                return entry.getKey();
+            }
+        }
+        return null;
+    }
+
+    private void mergeEnv(JsonObject target, JsonObject source) {
+        if (target == null || source == null) {
+            return;
+        }
+        for (Map.Entry<String, com.google.gson.JsonElement> entry : source.entrySet()) {
+            if (!entry.getValue().isJsonNull()) {
+                target.add(entry.getKey(), entry.getValue());
+            }
+        }
+    }
+
+    private String firstJson(JsonObject object, String... keys) {
+        if (object == null) {
+            return null;
+        }
+        for (String key : keys) {
+            if (object.has(key) && !object.get(key).isJsonNull()) {
+                String value = object.get(key).getAsString();
+                if (value != null && !value.trim().isEmpty()) {
+                    return value.trim();
+                }
+            }
+        }
+        return null;
+    }
+
+    private String getString(JsonObject object, String key) {
+        if (object == null || key == null || !object.has(key) || object.get(key).isJsonNull()) {
+            return null;
+        }
+        String value = object.get(key).getAsString();
+        return value == null ? null : value.trim();
+    }
+
+    private String resolveClaudeModel(String explicitModel, JsonObject env) {
+        if (explicitModel != null && !explicitModel.trim().isEmpty()) {
+            return explicitModel.trim();
+        }
+        String model = firstJson(env, "ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_SMALL_FAST_MODEL");
+        return model == null || model.isBlank() ? "claude-sonnet-4-6" : model;
+    }
+
+    private JsonObject parseCodexToml(String content) {
+        JsonObject result = new JsonObject();
+        if (content == null || content.trim().isEmpty()) {
+            return result;
+        }
+        JsonObject currentSection = result;
+        for (String rawLine : content.split("\\R")) {
+            String line = stripTomlComment(rawLine).trim();
+            if (line.isEmpty()) {
+                continue;
+            }
+            if (line.startsWith("[[") && line.endsWith("]]")) {
+                currentSection = ensureTomlSection(result, unquoteTomlPath(line.substring(2, line.length() - 2).trim()));
+                continue;
+            }
+            if (line.startsWith("[") && line.endsWith("]")) {
+                currentSection = ensureTomlSection(result, unquoteTomlPath(line.substring(1, line.length() - 1).trim()));
+                continue;
+            }
+            int equals = line.indexOf('=');
+            if (equals <= 0) {
+                continue;
+            }
+            String key = unquoteTomlValue(line.substring(0, equals).trim());
+            String value = unquoteTomlValue(line.substring(equals + 1).trim());
+            currentSection.addProperty(key, value);
+        }
+        return result;
+    }
+
+    private JsonObject ensureTomlSection(JsonObject root, String sectionPath) {
+        JsonObject current = root;
+        if (sectionPath == null || sectionPath.isBlank()) {
+            return current;
+        }
+        for (String part : sectionPath.split("\\.")) {
+            if (part.isBlank()) {
+                continue;
+            }
+            if (!current.has(part) || !current.get(part).isJsonObject()) {
+                current.add(part, new JsonObject());
+            }
+            current = current.getAsJsonObject(part);
+        }
+        return current;
+    }
+
+    private String firstTomlValue(JsonObject object, String... paths) {
+        if (object == null) {
+            return null;
+        }
+        for (String path : paths) {
+            String value = readTomlValue(object, path);
+            if (value != null && !value.trim().isEmpty()) {
+                return value.trim();
+            }
+        }
+        return null;
+    }
+
+    private String readTomlValue(JsonObject object, String path) {
+        if (object == null || path == null || path.isBlank()) {
+            return null;
+        }
+        JsonObject current = object;
+        String[] parts = path.split("\\.");
+        for (int i = 0; i < parts.length; i++) {
+            String part = parts[i];
+            if (i == parts.length - 1) {
+                if (current.has(part) && !current.get(part).isJsonNull()) {
+                    return current.get(part).getAsString();
+                }
+                return null;
+            }
+            if (!current.has(part) || !current.get(part).isJsonObject()) {
+                return null;
+            }
+            current = current.getAsJsonObject(part);
+        }
+        return null;
+    }
+
+    private String stripTomlComment(String line) {
+        boolean inSingle = false;
+        boolean inDouble = false;
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+            if (c == '\'' && !inDouble) {
+                inSingle = !inSingle;
+            } else if (c == '"' && !inSingle) {
+                inDouble = !inDouble;
+            } else if (c == '#' && !inSingle && !inDouble) {
+                return line.substring(0, i);
+            }
+        }
+        return line;
+    }
+
+    private String unquoteTomlPath(String value) {
+        StringBuilder out = new StringBuilder();
+        StringBuilder part = new StringBuilder();
+        boolean inSingle = false;
+        boolean inDouble = false;
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c == '\'' && !inDouble) {
+                inSingle = !inSingle;
+                continue;
+            }
+            if (c == '"' && !inSingle) {
+                inDouble = !inDouble;
+                continue;
+            }
+            if (c == '.' && !inSingle && !inDouble) {
+                appendTomlPathPart(out, part);
+                continue;
+            }
+            part.append(c);
+        }
+        appendTomlPathPart(out, part);
+        return out.toString();
+    }
+
+    private void appendTomlPathPart(StringBuilder out, StringBuilder part) {
+        if (out.length() > 0) {
+            out.append('.');
+        }
+        out.append(part.toString().trim());
+        part.setLength(0);
+    }
+
+    private String unquoteTomlValue(String value) {
+        String trimmed = value == null ? "" : value.trim();
+        if ((trimmed.startsWith("\"") && trimmed.endsWith("\""))
+                || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+            return trimmed.substring(1, trimmed.length() - 1);
+        }
+        return trimmed;
+    }
+
+    private boolean isLocalUrl(String value) {
+        String normalized = value == null ? "" : value.trim().toLowerCase();
+        return normalized.startsWith("http://127.0.0.1")
+                || normalized.startsWith("http://localhost")
+                || normalized.startsWith("http://[::1]");
     }
 
     /**

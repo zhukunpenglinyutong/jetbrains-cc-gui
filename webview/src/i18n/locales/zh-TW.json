@@ -270,6 +270,10 @@
       "providerModel": {
         "label": "Commit 生成 Provider",
         "modelLabel": "Commit 生成模型",
+        "otherModelOption": "其他模型",
+        "customModelLabel": "自訂模型",
+        "customModelPlaceholder": "輸入自訂模型 ID",
+        "customModelHint": "選擇「其他」後可填寫代理站點或自訂模型 ID。",
         "resetToDefault": "恢復預設",
         "providerAvailable": "可用",
         "providerUnavailable": "當前不可用",
@@ -277,10 +281,37 @@
         "currentProviderManual": "當前使用手動選擇的 provider：{{provider}}",
         "currentProviderUnavailable": "當前所選 provider 不可用：{{provider}}"
       },
+      "generationMode": {
+        "label": "生成方式",
+        "prompt": "提示詞",
+        "skill": "Skill",
+        "hint": "提示詞方式保留目前內建 prompt 流程；Skill 方式會使用所選 Skill 作為提交資訊規範。"
+      },
+      "language": {
+        "label": "Commit 語言",
+        "auto": "跟隨 UI 語言",
+        "en": "English",
+        "zh": "簡體中文",
+        "zhTW": "繁體中文",
+        "ko": "韓語",
+        "ja": "日語",
+        "es": "西班牙語",
+        "fr": "法語",
+        "hi": "印地語",
+        "ru": "俄語",
+        "ptBR": "葡萄牙語（巴西）"
+      },
+      "skill": {
+        "label": "Commit Skill",
+        "builtinLabel": "內建：git-commit",
+        "builtinDescription": "內建的 commitlint 相容提交資訊規範。",
+        "missingDescription": "已選取的 Skill 目前不可用。",
+        "hint": "Skill 方式預設使用內建 git-commit，也可選擇掃描到的本機 Skill。"
+      },
       "prompt": {
-        "label": "Additional Prompt",
-        "placeholder": "Add your extra requirements here, e.g., generate commit in English, include issue number, etc...",
-        "hint": "The plugin has built-in CCG Commits specification prompts. Content you add here will be used as additional requirements, and AI will prioritize your instructions."
+        "label": "附加提示詞",
+        "placeholder": "在此新增您的額外要求，例如：使用中文生成 commit、包含 issue 編號、使用表情符號等等...",
+        "hint": "外掛已內建完整的 CCG Commits 規範提示詞。您在此處新增的內容會作為附加要求，AI 會優先遵循您的要求。"
       },
       "projectPrompt": {
         "label": "專案級附加提示詞",

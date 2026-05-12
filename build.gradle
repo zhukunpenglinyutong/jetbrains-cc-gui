@@ -122,6 +122,9 @@ sourceSets {
                 exclude '**/PythonContextCollector.java'
             }
         }
+        resources {
+            srcDir("$buildDir/generated-resources")
+        }
     }
 }
 
@@ -268,6 +271,42 @@ def aiBridgeDir = file("ai-bridge")
 def aiBridgePackDir = layout.buildDirectory.dir('ai-bridge-pack').get().asFile
 def aiBridgeArchive = new File(aiBridgePackDir, 'ai-bridge.zip')
 def aiBridgeHashFile = new File(aiBridgePackDir, 'ai-bridge.hash')
+def builtinSkillsSourceDir = file('docs/skills')
+def builtinSkillsGeneratedDir = file("$buildDir/generated-resources")
+
+tasks.register('syncBuiltinSkills') {
+    inputs.dir(builtinSkillsSourceDir)
+    outputs.dir(builtinSkillsGeneratedDir)
+    doLast {
+        def targetRoot = new File(builtinSkillsGeneratedDir, 'skills')
+        delete(targetRoot)
+
+        if (!builtinSkillsSourceDir.exists()) {
+            return
+        }
+
+        targetRoot.mkdirs()
+
+        fileTree(builtinSkillsSourceDir).matching {
+            include 'git-commit.md'
+            include '**/SKILL.md'
+        }.files.each { skillFile ->
+            if ('SKILL.md'.equals(skillFile.name)) {
+                def skillDir = skillFile.parentFile
+                def relativeDir = builtinSkillsSourceDir.toPath().relativize(skillDir.toPath()).toString()
+                copy {
+                    from(skillDir)
+                    into(new File(targetRoot, relativeDir))
+                }
+                return
+            }
+            copy {
+                from(skillFile)
+                into(targetRoot)
+            }
+        }
+    }
+}
 
 // Build webview automatically
 def webviewDir = file('webview')
@@ -344,6 +383,7 @@ tasks.named('compileJava') {
 }
 
 tasks.named('processResources') {
+    dependsOn('syncBuiltinSkills')
     mustRunAfter('buildWebview')
 }
 

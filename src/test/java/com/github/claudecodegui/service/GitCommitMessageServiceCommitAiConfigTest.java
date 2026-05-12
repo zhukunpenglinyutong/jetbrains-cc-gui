@@ -11,6 +11,7 @@ import java.util.Collections;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class GitCommitMessageServiceCommitAiConfigTest {
 
@@ -49,6 +50,105 @@ public class GitCommitMessageServiceCommitAiConfigTest {
         assertEquals("gpt-5.4", service.lastCodexModel);
         assertNull(service.lastClaudeModel);
         assertEquals("fix: use codex routing", callback.success);
+    }
+
+    @Test
+    public void shouldNotFallBackToClaudeWhenCodexIsManuallySelectedButUnavailable() {
+        JsonObject config = buildConfig("codex", "claude-sonnet-4-6", "gpt-5.4");
+        config.addProperty("provider", "codex");
+        config.getAsJsonObject("availability").addProperty("codex", false);
+        config.addProperty("effectiveProvider", (String) null);
+        config.addProperty("resolutionSource", "unavailable");
+
+        TestableGitCommitMessageService service = new TestableGitCommitMessageService(config);
+        ResultCapture callback = new ResultCapture();
+
+        service.generateCommitMessage(Collections.<Change>emptyList(), callback);
+
+        assertNull(service.lastClaudeModel);
+        assertNull(service.lastCodexModel);
+        assertNotNull(callback.error);
+        assertTrue(callback.error.length() > 0);
+    }
+
+    @Test
+    public void shouldUseSkillPromptWhenSkillModeIsEnabled() {
+        JsonObject config = buildConfig("codex", "claude-sonnet-4-6", "gpt-5.4");
+        config.addProperty("generationMode", "skill");
+        config.addProperty("skillRef", "builtin:git-commit");
+        config.addProperty("language", "ja");
+        TestableGitCommitMessageService service = new TestableGitCommitMessageService(config);
+        ResultCapture callback = new ResultCapture();
+
+        service.generateCommitMessage(Collections.<Change>emptyList(), callback);
+
+        assertEquals("gpt-5.4", service.lastCodexModel);
+        assertNotNull(service.lastPrompt);
+        assertTrue(service.lastPrompt.contains("## Built-in Skill: git-commit"));
+        assertTrue(service.lastPrompt.contains("## User preferences"));
+        assertTrue(service.lastPrompt.contains("## Selected git diff"));
+        assertTrue(service.lastPrompt.contains("Return format:"));
+        assertTrue(service.lastPrompt.contains("<commit>"));
+        assertTrue(service.lastPrompt.contains("Group related changes by intent or impact"));
+        assertTrue(service.lastPrompt.contains("do not write one bullet per file, class, or field"));
+        assertTrue(service.lastPrompt.contains("Cover each major functional area touched by the diff"));
+        assertTrue(service.lastPrompt.contains("MUST be written in Japanese (日本語)"));
+        assertEquals("fix: use codex routing", callback.success);
+    }
+
+    @Test
+    public void shouldPassSelectedCommitLanguageIntoPrompt() {
+        JsonObject config = buildConfig("codex", "claude-sonnet-4-6", "gpt-5.5");
+        config.addProperty("generationMode", "prompt");
+        config.addProperty("language", "ja");
+        TestableGitCommitMessageService service = new TestableGitCommitMessageService(config);
+        ResultCapture callback = new ResultCapture();
+
+        service.generateCommitMessage(Collections.<Change>emptyList(), callback);
+
+        assertNotNull(service.lastPrompt);
+        assertTrue(service.lastPrompt.contains("MUST be written in Japanese (日本語)"));
+        assertTrue(service.lastPrompt.contains("This overrides any examples"));
+        assertTrue(service.lastPrompt.contains("Group related changes by intent or impact"));
+        assertTrue(service.lastPrompt.contains("Cover each major functional area touched by the diff"));
+        assertEquals("fix: use codex routing", callback.success);
+    }
+
+    @Test
+    public void shouldRequireEnoughBodyBulletsForVeryLargeSkillDiff() {
+        JsonObject config = buildConfig("codex", "claude-sonnet-4-6", "gpt-5.5");
+        config.addProperty("generationMode", "skill");
+        config.addProperty("skillRef", "builtin:git-commit");
+        TestableGitCommitMessageService service = new TestableGitCommitMessageService(config, largeDiff(38));
+        ResultCapture callback = new ResultCapture();
+
+        service.generateCommitMessage(Collections.<Change>emptyList(), callback);
+
+        assertTrue(service.lastPrompt.contains("This diff contains 38 files"));
+        assertTrue(service.lastPrompt.contains("Write 7-10 grouped body bullets"));
+        assertTrue(service.lastPrompt.contains("do not write fewer than 7"));
+        assertTrue(service.lastPrompt.contains("name the main services, settings, UI flows"));
+    }
+
+    @Test
+    public void shouldApplyBodyScaleRulesToPromptModeToo() {
+        JsonObject config = buildConfig("codex", "claude-sonnet-4-6", "gpt-5.5");
+        config.addProperty("generationMode", "prompt");
+        TestableGitCommitMessageService service = new TestableGitCommitMessageService(config, largeDiff(20));
+        ResultCapture callback = new ResultCapture();
+
+        service.generateCommitMessage(Collections.<Change>emptyList(), callback);
+
+        assertTrue(service.lastPrompt.contains("This diff contains 20 files"));
+        assertTrue(service.lastPrompt.contains("Write 7-10 grouped body bullets"));
+    }
+
+    private String largeDiff(int files) {
+        StringBuilder diff = new StringBuilder();
+        for (int i = 0; i < files; i++) {
+            diff.append("=== MODIFICATION: File").append(i).append(".java ===\n+ line\n");
+        }
+        return diff.toString();
     }
 
     private JsonObject buildConfig(String effectiveProvider, String claudeModel, String codexModel) {
@@ -92,15 +192,27 @@ public class GitCommitMessageServiceCommitAiConfigTest {
         private final JsonObject config;
         private String lastClaudeModel;
         private String lastCodexModel;
+        private String lastPrompt;
+        private final String diff;
 
         private TestableGitCommitMessageService(JsonObject config) {
+            this(config, "diff");
+        }
+
+        private TestableGitCommitMessageService(JsonObject config, String diff) {
             super((Project) null);
             this.config = config;
+            this.diff = diff;
         }
 
         @Override
         protected String generateGitDiff(java.util.Collection<Change> changes) {
-            return "diff";
+            return diff;
+        }
+
+        @Override
+        protected String generateSkillGitDiff(java.util.Collection<Change> changes) {
+            return diff;
         }
 
         @Override
@@ -110,12 +222,14 @@ public class GitCommitMessageServiceCommitAiConfigTest {
 
         @Override
         protected void callClaudeAPI(String prompt, String model, CommitMessageCallback callback) {
+            this.lastPrompt = prompt;
             this.lastClaudeModel = model;
             callback.onSuccess("fix: use claude routing");
         }
 
         @Override
         protected void callCodexAPI(String prompt, String model, CommitMessageCallback callback) {
+            this.lastPrompt = prompt;
             this.lastCodexModel = model;
             callback.onSuccess("fix: use codex routing");
         }

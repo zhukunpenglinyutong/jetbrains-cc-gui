@@ -2,8 +2,13 @@
 import { useState, useEffect, useCallback } from 'react';
 export type { UiFontConfig } from '../../../types/uiFontConfig';
 import type { UiFontConfig } from '../../../types/uiFontConfig';
-import type { CommitAiConfig, CommitAiProvider } from '../../../types/aiFeatureConfig';
-import { DEFAULT_COMMIT_AI_CONFIG } from '../../../types/aiFeatureConfig';
+import type {
+  CommitAiConfig,
+  CommitAiProvider,
+  CommitGenerationMode,
+  CommitLanguageMode,
+} from '../../../types/aiFeatureConfig';
+import { DEFAULT_COMMIT_AI_CONFIG, DEFAULT_COMMIT_SKILL_REF } from '../../../types/aiFeatureConfig';
 import type { PromptEnhancerConfig, PromptEnhancerProvider } from '../../../types/promptEnhancer';
 import { DEFAULT_PROMPT_ENHANCER_CONFIG } from '../../../types/promptEnhancer';
 
@@ -94,6 +99,9 @@ export interface UseSettingsBasicActionsReturn {
   handleTaskCompletionNotificationEnabledChange: (enabled: boolean) => void;
   handleCommitAiProviderChange: (provider: CommitAiProvider) => void;
   handleCommitAiModelChange: (model: string) => void;
+  handleCommitGenerationModeChange: (mode: CommitGenerationMode) => void;
+  handleCommitSkillChange: (skillRef: string) => void;
+  handleCommitLanguageChange: (language: CommitLanguageMode) => void;
   handleCommitAiResetToDefault: () => void;
   handlePromptEnhancerProviderChange: (provider: PromptEnhancerProvider) => void;
   handlePromptEnhancerModelChange: (model: string) => void;
@@ -407,10 +415,7 @@ export function useSettingsBasicActions({
       resolutionSource: providerAvailable ? 'manual' : 'unavailable',
     };
     setCommitAiConfig(nextConfig);
-    sendToJava(`set_commit_ai_config:${JSON.stringify({
-      provider,
-      models: nextConfig.models,
-    })}`);
+    sendToJava(`set_commit_ai_config:${JSON.stringify(buildCommitAiPayload(nextConfig))}`);
   }, [commitAiConfig]);
 
   const handleCommitAiModelChange = useCallback((model: string) => {
@@ -423,10 +428,38 @@ export function useSettingsBasicActions({
       },
     };
     setCommitAiConfig(nextConfig);
-    sendToJava(`set_commit_ai_config:${JSON.stringify({
-      provider: commitAiConfig.provider,
-      models: nextConfig.models,
-    })}`);
+    sendToJava(`set_commit_ai_config:${JSON.stringify(buildCommitAiPayload(nextConfig))}`);
+  }, [commitAiConfig]);
+
+  const handleCommitGenerationModeChange = useCallback((mode: CommitGenerationMode) => {
+    const nextConfig: CommitAiConfig = {
+      ...commitAiConfig,
+      generationMode: mode,
+      skillRef: mode === 'skill'
+        ? (commitAiConfig.skillRef?.trim() || DEFAULT_COMMIT_SKILL_REF)
+        : (commitAiConfig.skillRef?.trim() || DEFAULT_COMMIT_SKILL_REF),
+    };
+    setCommitAiConfig(nextConfig);
+    sendToJava(`set_commit_ai_config:${JSON.stringify(buildCommitAiPayload(nextConfig))}`);
+  }, [commitAiConfig]);
+
+  const handleCommitSkillChange = useCallback((skillRef: string) => {
+    const nextConfig: CommitAiConfig = {
+      ...commitAiConfig,
+      generationMode: 'skill',
+      skillRef: skillRef?.trim() || DEFAULT_COMMIT_SKILL_REF,
+    };
+    setCommitAiConfig(nextConfig);
+    sendToJava(`set_commit_ai_config:${JSON.stringify(buildCommitAiPayload(nextConfig))}`);
+  }, [commitAiConfig]);
+
+  const handleCommitLanguageChange = useCallback((language: CommitLanguageMode) => {
+    const nextConfig: CommitAiConfig = {
+      ...commitAiConfig,
+      language,
+    };
+    setCommitAiConfig(nextConfig);
+    sendToJava(`set_commit_ai_config:${JSON.stringify(buildCommitAiPayload(nextConfig))}`);
   }, [commitAiConfig]);
 
   const handleCommitAiResetToDefault = useCallback(() => {
@@ -439,12 +472,12 @@ export function useSettingsBasicActions({
       resolutionSource: commitAiConfig.availability.codex || commitAiConfig.availability.claude
         ? 'auto'
         : 'unavailable',
+      generationMode: 'prompt',
+      skillRef: DEFAULT_COMMIT_SKILL_REF,
+      language: 'auto',
     };
     setCommitAiConfig(nextConfig);
-    sendToJava(`set_commit_ai_config:${JSON.stringify({
-      provider: null,
-      models: nextConfig.models,
-    })}`);
+    sendToJava(`set_commit_ai_config:${JSON.stringify(buildCommitAiPayload(nextConfig))}`);
   }, [commitAiConfig]);
 
   const handlePromptEnhancerProviderChange = useCallback((provider: PromptEnhancerProvider) => {
@@ -592,11 +625,24 @@ export function useSettingsBasicActions({
     setCommitAiConfig,
     handleCommitAiProviderChange,
     handleCommitAiModelChange,
+    handleCommitGenerationModeChange,
+    handleCommitSkillChange,
+    handleCommitLanguageChange,
     handleCommitAiResetToDefault,
     promptEnhancerConfig,
     setPromptEnhancerConfig,
     handlePromptEnhancerProviderChange,
     handlePromptEnhancerModelChange,
     handlePromptEnhancerResetToDefault,
+  };
+}
+
+function buildCommitAiPayload(config: CommitAiConfig) {
+  return {
+    provider: config.provider,
+    models: config.models,
+    generationMode: config.generationMode ?? 'prompt',
+    skillRef: config.skillRef ?? DEFAULT_COMMIT_SKILL_REF,
+    language: config.language ?? 'auto',
   };
 }
