@@ -70,7 +70,7 @@ public class HistoryMessageInjector {
         } else {
             // Claude session: use existing callback mechanism
             if (sessionLoadCallback != null) {
-                sessionLoadCallback.onLoadSession(sessionId, projectPath);
+                sessionLoadCallback.onLoadSession(resolvedSessionId, projectPath, provider);
             } else {
                 LOG.warn("[HistoryHandler] WARNING: No session load callback set");
             }
@@ -159,11 +159,6 @@ public class HistoryMessageInjector {
         }
 
         return new String[]{actualThreadId, cwd};
-        if (sessionLoadCallback != null) {
-            sessionLoadCallback.onLoadSession(resolvedSessionId, projectPath, provider);
-        } else {
-            LOG.warn("[HistoryHandler] WARNING: No session load callback set");
-        }
     }
 
     /**
