@@ -435,9 +435,7 @@ export function useSettingsBasicActions({
     const nextConfig: CommitAiConfig = {
       ...commitAiConfig,
       generationMode: mode,
-      skillRef: mode === 'skill'
-        ? (commitAiConfig.skillRef?.trim() || DEFAULT_COMMIT_SKILL_REF)
-        : (commitAiConfig.skillRef?.trim() || DEFAULT_COMMIT_SKILL_REF),
+      skillRef: commitAiConfig.skillRef?.trim() || DEFAULT_COMMIT_SKILL_REF,
     };
     setCommitAiConfig(nextConfig);
     sendToJava(`set_commit_ai_config:${JSON.stringify(buildCommitAiPayload(nextConfig))}`);

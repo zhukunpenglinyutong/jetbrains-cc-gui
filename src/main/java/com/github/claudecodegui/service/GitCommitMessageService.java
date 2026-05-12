@@ -349,7 +349,8 @@ Footer 包含：
         String language = getResolvedCommitLanguage(commitAiConfig);
         if (COMMIT_GENERATION_MODE_SKILL.equals(mode)) {
             String skillRef = getResolvedCommitSkillRef(commitAiConfig);
-            String skillContent = CommitSkillResolver.resolveSkillContent(skillRef);
+            String skillContent = CommitSkillResolver.resolveSkillContent(
+                    skillRef, project == null ? null : project.getBasePath());
             if (skillContent == null || skillContent.trim().isEmpty()) {
                 LOG.warn("Selected skill could not be loaded, falling back to built-in prompt: " + skillRef);
                 skillContent = BUILTIN_COMMIT_PROMPT;
