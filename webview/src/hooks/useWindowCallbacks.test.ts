@@ -80,6 +80,9 @@ describe('useWindowCallbacks integration', () => {
     openPermissionDialog: vi.fn(),
     openAskUserQuestionDialog: vi.fn(),
     openPlanApprovalDialog: vi.fn(),
+    openContextUsageDialog: vi.fn(),
+    updateContextUsageData: vi.fn(),
+    closeContextUsageDialog: vi.fn(),
 
     // B-011
     customSessionTitleRef: { current: null },

@@ -9,7 +9,9 @@
 
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
 import type { ClaudeMessage } from '../../../types';
+import type { ContextUsageData } from '../../../components/ContextUsageDialog';
 import { sendBridgeEvent } from '../../../utils/bridge';
+import { debugError } from '../../../utils/debug';
 import {
   appendOptimisticMessageIfMissing,
   ensureStreamingAssistantInList,
@@ -85,6 +87,8 @@ export function registerMessageCallbacks(
     findLastAssistantIndex,
     extractRawBlocks,
     patchAssistantForStreaming,
+    updateContextUsageData,
+    closeContextUsageDialog,
   } = options;
 
   const ensureStreamingAssistantPreserved = (prevList: ClaudeMessage[], resultList: ClaudeMessage[]): ClaudeMessage[] => {
@@ -557,11 +561,37 @@ export function registerMessageCallbacks(
     }
     window.__deniedToolIds?.clear();
     resetTransientUiState();
+    closeContextUsageDialog();
     setMessages([]);
   };
 
   window.addErrorMessage = (message) => {
     addToast(message, 'error');
+  };
+
+  window.showContextUsageDialog = (json: string) => {
+    try {
+      const result = JSON.parse(json);
+      const requestId = typeof result.requestId === 'string' ? result.requestId : null;
+      const data: ContextUsageData = result.data || result;
+      if (result.success === false) {
+        if (closeContextUsageDialog(requestId)) {
+          addToast(result.error || 'Failed to get context usage', 'error');
+        }
+        return;
+      }
+      updateContextUsageData(requestId, data);
+    } catch (e) {
+      debugError('[ContextUsage] Failed to parse context usage result:', e);
+      closeContextUsageDialog();
+      addToast('Failed to parse context usage data', 'error');
+    }
+  };
+
+  window.onContextUsageError = (message: string, requestId?: string) => {
+    if (closeContextUsageDialog(requestId)) {
+      addToast(message, 'error');
+    }
   };
 
   window.addHistoryMessage = (message: ClaudeMessage) => {

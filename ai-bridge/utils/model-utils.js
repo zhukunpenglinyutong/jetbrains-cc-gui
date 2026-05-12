@@ -101,6 +101,8 @@ export function setModelEnvironmentVariables(modelId, baseModelId) {
   // that doesn't contain 'opus'/'haiku'/'sonnet'.
   const lowerBase = (baseModelId || modelId).toLowerCase();
 
+  process.env.ANTHROPIC_MODEL = modelId;
+
   // Set the corresponding environment variable based on model type
   // so the SDK knows which specific version to use
   if (lowerBase.includes('opus')) {
