@@ -295,8 +295,8 @@ public class ChatWindowDelegate {
         messageDispatcher.registerHandler(permissionHandler);
 
         HistoryHandler historyHandler = new HistoryHandler(handlerContext);
-        historyHandler.setSessionLoadCallback((sessionId, projectPath) ->
-            host.getSessionLifecycleManager().loadHistorySession(sessionId, projectPath));
+        historyHandler.setSessionLoadCallback((sessionId, projectPath, provider) ->
+            host.getSessionLifecycleManager().loadHistorySession(sessionId, projectPath, provider));
         host.setHistoryHandler(historyHandler);
         messageDispatcher.registerHandler(historyHandler);
 

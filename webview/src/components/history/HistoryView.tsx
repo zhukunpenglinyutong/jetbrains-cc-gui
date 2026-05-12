@@ -61,7 +61,7 @@ const EMPTY_HINT_STYLE: React.CSSProperties = {
 interface HistoryViewProps {
   historyData: HistoryData | null;
   currentProvider?: string; // Current provider (claude or codex)
-  onLoadSession: (sessionId: string) => void;
+  onLoadSession: (sessionId: string, provider?: string) => void;
   onDeleteSession: (sessionId: string) => void; // Delete session callback
   onDeleteSessions: (sessionIds: string[]) => void; // Batch delete sessions callback
   onExportSession: (sessionId: string, title: string) => void; // Export session callback
@@ -331,7 +331,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
       return;
     }
     if (!isEditing) {
-      onLoadSession(session.sessionId);
+      onLoadSession(session.sessionId, session.provider);
     }
   }, [isSelectionMode, toggleSessionSelection, onLoadSession]);
 

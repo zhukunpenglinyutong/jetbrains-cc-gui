@@ -154,6 +154,13 @@ public class SessionLifecycleManager {
      * Load a history session by ID.
      */
     public void loadHistorySession(String sessionId, String projectPath) {
+        loadHistorySession(sessionId, projectPath, null);
+    }
+
+    /**
+     * Load a history session by ID and provider.
+     */
+    public void loadHistorySession(String sessionId, String projectPath, String provider) {
         LOG.info("Loading history session: " + sessionId + " from project: " + projectPath);
 
         ClaudeSession oldSession = host.getSession();
@@ -196,10 +203,10 @@ public class SessionLifecycleManager {
             ClaudeSession newSession = new ClaudeSession(
                     host.getProject(), host.getClaudeSDKBridge(), host.getCodexSDKBridge());
             newSession.setPermissionMode(previousPermissionMode);
-            newSession.setProvider(previousProvider);
+            newSession.setProvider(provider != null && !provider.trim().isEmpty() ? provider : previousProvider);
             newSession.setModel(previousModel);
             LOG.info("Restored session state to loaded session: mode=" + previousPermissionMode
-                             + ", provider=" + previousProvider + ", model=" + previousModel);
+                             + ", provider=" + newSession.getProvider() + ", model=" + previousModel);
 
             host.setSession(newSession);
             host.getHandlerContext().setSession(newSession);

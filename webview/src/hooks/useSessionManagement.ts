@@ -38,11 +38,12 @@ interface UseSessionManagementReturn {
   suppressNextStatusToastRef: React.MutableRefObject<boolean>;
   createNewSession: () => void;
   forceCreateNewSession: () => void;
+  forceCreateNewSessionWithProvider: (providerId: string) => void;
   handleConfirmNewSession: () => void;
   handleCancelNewSession: () => void;
   handleConfirmInterrupt: () => void;
   handleCancelInterrupt: () => void;
-  loadHistorySession: (sessionId: string) => void;
+  loadHistorySession: (sessionId: string, provider?: string) => void;
   deleteHistorySession: (sessionId: string) => void;
   deleteHistorySessions: (sessionIds: string[]) => void;
   exportHistorySession: (sessionId: string, title: string) => void;
@@ -160,6 +161,15 @@ export function useSessionManagement({
     sendBridgeEvent('create_new_session');
   }, [beginSessionTransition, loading]);
 
+  const forceCreateNewSessionWithProvider = useCallback((providerId: string) => {
+    if (loading) {
+      sendBridgeEvent('interrupt_session');
+    }
+    beginSessionTransition(null, null);
+    sendBridgeEvent('set_provider', providerId);
+    sendBridgeEvent('create_new_session');
+  }, [beginSessionTransition, loading]);
+
   // Confirm new session
   const handleConfirmNewSession = useCallback(() => {
     setShowNewSessionConfirm(false);
@@ -195,7 +205,7 @@ export function useSessionManagement({
   }, []);
 
   // Load history session
-  const loadHistorySession = useCallback((sessionId: string) => {
+  const loadHistorySession = useCallback((sessionId: string, provider?: string) => {
     // [FIX] Send interrupt signal if AI is responding
     if (loading) {
       sendBridgeEvent('interrupt_session');
@@ -203,7 +213,10 @@ export function useSessionManagement({
 
     const session = historyDataRef.current?.sessions?.find(s => s.sessionId === sessionId);
     beginSessionTransition(sessionId, session?.title ?? null);
-    sendBridgeEvent('load_session', sessionId);
+    sendBridgeEvent('load_session', JSON.stringify({
+      sessionId,
+      provider: provider || session?.provider || 'claude',
+    }));
     setCurrentView('chat');
   }, [beginSessionTransition, loading, setCurrentView]);
 
@@ -361,6 +374,7 @@ export function useSessionManagement({
     suppressNextStatusToastRef,
     createNewSession,
     forceCreateNewSession,
+    forceCreateNewSessionWithProvider,
     handleConfirmNewSession,
     handleCancelNewSession,
     handleConfirmInterrupt,
