@@ -29,7 +29,7 @@ public class HistoryHandler extends BaseMessageHandler {
 
     // Session load callback interface
     public interface SessionLoadCallback {
-        void onLoadSession(String sessionId, String projectPath);
+        void onLoadSession(String sessionId, String projectPath, String provider);
     }
 
     private SessionLoadCallback sessionLoadCallback;

@@ -84,6 +84,7 @@ class ClaudeProcessInvoker {
             StringBuilder assistantContent = new StringBuilder();
             AtomicBoolean hadSendError = new AtomicBoolean(false);
             AtomicReference<String> lastNodeError = new AtomicReference<>(null);
+            long startTime = System.currentTimeMillis();
 
             try {
                 String node = nodeDetector.findNodeExecutable();
@@ -169,6 +170,9 @@ class ClaudeProcessInvoker {
                     result.messageCount = result.messages.size();
 
                     if (wasInterrupted) {
+                        long elapsed = System.currentTimeMillis() - startTime;
+                        log.info("[ProcessInvoker] Request was interrupted by user (elapsed: " + elapsed + "ms)");
+                        result.error = "User interrupted";
                         callback.onComplete(result);
                     } else if (!hadSendError.get()) {
                         result.success = exitCode == 0;

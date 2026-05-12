@@ -2,15 +2,24 @@ package com.github.claudecodegui.handler.history;
 
 import com.github.claudecodegui.handler.CodexMessageConverter;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.provider.codex.CodexHistoryReader;
+import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.session.SessionState;
 import com.github.claudecodegui.util.JsUtils;
-import com.google.gson.Gson;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Base64;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Service for loading session messages and injecting them into the frontend.
@@ -30,18 +39,126 @@ public class HistoryMessageInjector {
      * Load a history session.
      */
     void handleLoadSession(String sessionId, String currentProvider, HistoryHandler.SessionLoadCallback sessionLoadCallback) {
+        String provider = currentProvider;
+        String resolvedSessionId = sessionId;
+
+        try {
+            JsonObject payload = new Gson().fromJson(sessionId, JsonObject.class);
+            if (payload != null) {
+                if (payload.has("sessionId") && !payload.get("sessionId").isJsonNull()) {
+                    resolvedSessionId = payload.get("sessionId").getAsString();
+                }
+                if (payload.has("provider") && !payload.get("provider").isJsonNull()) {
+                    provider = payload.get("provider").getAsString();
+                }
+            }
+        } catch (Exception ignored) {
+            // Backward compatible: legacy payload is the raw sessionId string.
+        }
+
         String projectPath = context.getProject().getBasePath();
         if (projectPath == null) {
             LOG.warn("[HistoryHandler] Project base path is null");
             return;
         }
-        LOG.info("[HistoryHandler] Loading history session: " + sessionId + " from project: " + projectPath + ", provider: " + currentProvider);
+        LOG.info("[HistoryHandler] Loading history session: " + resolvedSessionId
+                + " from project: " + projectPath + ", provider: " + provider);
 
-        if (sessionLoadCallback != null) {
-            sessionLoadCallback.onLoadSession(sessionId, projectPath);
+        if ("codex".equals(currentProvider)) {
+            // Codex session: read session info and restore session state
+            loadCodexSession(sessionId);
         } else {
-            LOG.warn("[HistoryHandler] WARNING: No session load callback set");
+            // Claude session: use existing callback mechanism
+            if (sessionLoadCallback != null) {
+                sessionLoadCallback.onLoadSession(resolvedSessionId, projectPath, provider);
+            } else {
+                LOG.warn("[HistoryHandler] WARNING: No session load callback set");
+            }
         }
+    }
+
+    /**
+     * Load a Codex session.
+     * Reads session messages directly and injects them into the frontend, while restoring session state.
+     */
+    private void loadCodexSession(String sessionId) {
+        CompletableFuture.runAsync(() -> {
+            LOG.info("[HistoryHandler] ========== 开始加载 Codex 会话 ==========");
+            LOG.info("[HistoryHandler] SessionId: " + sessionId);
+
+            try {
+                CodexHistoryReader codexReader = new CodexHistoryReader();
+                String messagesJson = codexReader.getSessionMessagesAsJson(sessionId);
+                JsonArray messages = JsonParser.parseString(messagesJson).getAsJsonArray();
+
+                LOG.info("[HistoryHandler] 读取到 " + messages.size() + " 条 Codex 消息");
+
+                // Extract session metadata and restore session state
+                String[] sessionMeta = extractSessionMeta(messages);
+                String threadIdToUse = sessionMeta[0] != null ? sessionMeta[0] : sessionId;
+                String cwd = sessionMeta[1];
+
+                context.getSession().setSessionInfo(threadIdToUse, cwd);
+                restoreCodexMessagesToSessionState(context.getSession().getState(), messages);
+                LOG.info("[HistoryHandler] 恢复 Codex 会话状态: threadId=" + threadIdToUse + " (from sessionId=" + sessionId + "), cwd=" + cwd);
+
+                List<JsonObject> frontendMessages = convertCodexMessagesToFrontendBatch(messages);
+                injectBatchToFrontend(frontendMessages);
+
+                // Notify frontend that history messages have finished loading, trigger Markdown re-rendering
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    String jsCode = "if (window.historyLoadComplete) { " +
+                                            "  try { " +
+                                            "    window.historyLoadComplete(); " +
+                                            "  } catch(e) { " +
+                                            "    console.error('[HistoryHandler] historyLoadComplete callback failed:', e); " +
+                                            "  } " +
+                                            "}";
+                    context.executeJavaScriptOnEDT(jsCode);
+                });
+
+                LOG.info("[HistoryHandler] ========== Codex 会话加载完成 ==========");
+
+            } catch (Exception e) {
+                LOG.error("[HistoryHandler] 加载 Codex 会话失败: " + e.getMessage(), e);
+
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    String errorMsg = context.escapeJs(e.getMessage() != null ? e.getMessage() : "未知错误");
+                    String jsCode = "if (window.addErrorMessage) { " +
+                                            "  window.addErrorMessage('加载 Codex 会话失败: " + errorMsg + "'); " +
+                                            "}";
+                    context.executeJavaScriptOnEDT(jsCode);
+                });
+            }
+        });
+    }
+
+    /**
+     * Extract Codex session metadata (threadId and cwd).
+     *
+     * @return String[2]: [0]=actualThreadId, [1]=cwd
+     */
+    private String[] extractSessionMeta(JsonArray messages) {
+        String cwd = null;
+        String actualThreadId = null;
+
+        for (int i = 0; i < messages.size(); i++) {
+            JsonObject msg = messages.get(i).getAsJsonObject();
+            if (msg.has("type") && "session_meta".equals(msg.get("type").getAsString())) {
+                if (msg.has("payload")) {
+                    JsonObject payload = msg.getAsJsonObject("payload");
+                    if (payload.has("cwd")) {
+                        cwd = payload.get("cwd").getAsString();
+                    }
+                    if (payload.has("id")) {
+                        actualThreadId = payload.get("id").getAsString();
+                    }
+                    break;
+                }
+            }
+        }
+
+        return new String[]{actualThreadId, cwd};
     }
 
     /**
@@ -137,6 +254,57 @@ public class HistoryMessageInjector {
     }
 
     /**
+     * 将 Codex 历史消息恢复到后端 SessionState，保证历史加载后继续发送时，
+     * 后端内存态与前端显示态使用同一份消息基线。
+     */
+    static void restoreCodexMessagesToSessionState(SessionState state, JsonArray messages) {
+        state.clearMessages();
+        List<JsonObject> frontendMessages = convertCodexMessagesToFrontendBatch(messages);
+        for (JsonObject frontendMsg : frontendMessages) {
+            ClaudeSession.Message restoredMessage = toSessionMessage(frontendMsg);
+            if (restoredMessage != null) {
+                state.addMessage(restoredMessage);
+            }
+        }
+    }
+
+    /**
+     * 将前端统一消息结构恢复为会话内存消息结构。
+     */
+    private static ClaudeSession.Message toSessionMessage(JsonObject frontendMsg) {
+        if (frontendMsg == null || !frontendMsg.has("type")) {
+            return null;
+        }
+
+        String type = frontendMsg.get("type").getAsString();
+        ClaudeSession.Message.Type messageType;
+        switch (type) {
+            case "user":
+                messageType = ClaudeSession.Message.Type.USER;
+                break;
+            case "assistant":
+                messageType = ClaudeSession.Message.Type.ASSISTANT;
+                break;
+            case "system":
+                messageType = ClaudeSession.Message.Type.SYSTEM;
+                break;
+            case "error":
+                messageType = ClaudeSession.Message.Type.ERROR;
+                break;
+            default:
+                return null;
+        }
+
+        String content = frontendMsg.has("content") ? frontendMsg.get("content").getAsString() : "";
+        JsonObject raw = frontendMsg.has("raw") && frontendMsg.get("raw").isJsonObject()
+            ? frontendMsg.getAsJsonObject("raw")
+            : null;
+        return raw != null
+            ? new ClaudeSession.Message(messageType, content, raw.deepCopy())
+            : new ClaudeSession.Message(messageType, content);
+    }
+
+    /**
      * 将单条 Codex 历史消息转换为前端消息。
      * Handles both event_msg (user messages) and response_item (assistant/tool messages).
      */
@@ -190,13 +358,22 @@ public class HistoryMessageInjector {
         if (!payload.has("type") || !"user_message".equals(payload.get("type").getAsString())) {
             return null;
         }
+        boolean hasLocalImages = hasLocalImages(payload);
         if (!payload.has("message") || payload.get("message").isJsonNull()) {
-            return null;
+            if (!hasLocalImages) {
+                return null;
+            }
         }
 
-        String content = CodexMessageConverter.stripSystemTags(payload.get("message").getAsString());
-        if (content == null || content.isBlank()) {
+        String content = "";
+        if (payload.has("message") && !payload.get("message").isJsonNull()) {
+            content = CodexMessageConverter.stripSystemTags(payload.get("message").getAsString());
+        }
+        if ((content == null || content.isBlank()) && !hasLocalImages) {
             return null;
+        }
+        if (content == null) {
+            content = "";
         }
 
         JsonObject frontendMsg = new JsonObject();
@@ -205,11 +382,7 @@ public class HistoryMessageInjector {
 
         // Build raw structure compatible with MessageParser
         JsonObject rawObj = new JsonObject();
-        JsonArray contentBlocks = new JsonArray();
-        JsonObject textBlock = new JsonObject();
-        textBlock.addProperty("type", "text");
-        textBlock.addProperty("text", content);
-        contentBlocks.add(textBlock);
+        JsonArray contentBlocks = buildUserMessageContentBlocks(payload, content);
         rawObj.add("content", contentBlocks);
         rawObj.addProperty("role", "user");
         frontendMsg.add("raw", rawObj);
@@ -219,6 +392,99 @@ public class HistoryMessageInjector {
         }
 
         return frontendMsg;
+    }
+
+    private static JsonArray buildUserMessageContentBlocks(JsonObject payload, String content) {
+        JsonArray contentBlocks = new JsonArray();
+        appendLocalImageBlocks(payload, contentBlocks);
+
+        if (content != null && !content.isBlank()) {
+            JsonObject textBlock = new JsonObject();
+            textBlock.addProperty("type", "text");
+            textBlock.addProperty("text", content);
+            contentBlocks.add(textBlock);
+        }
+        return contentBlocks;
+    }
+
+    private static boolean hasLocalImages(JsonObject payload) {
+        return payload.has("local_images")
+            && payload.get("local_images").isJsonArray()
+            && payload.getAsJsonArray("local_images").size() > 0;
+    }
+
+    private static void appendLocalImageBlocks(JsonObject payload, JsonArray contentBlocks) {
+        if (!payload.has("local_images") || !payload.get("local_images").isJsonArray()) {
+            return;
+        }
+
+        JsonArray localImages = payload.getAsJsonArray("local_images");
+        for (JsonElement imageElement : localImages) {
+            if (!imageElement.isJsonPrimitive()) {
+                continue;
+            }
+            String imagePath = imageElement.getAsString();
+            JsonObject imageBlock = createLocalImageBlock(imagePath);
+            if (imageBlock != null) {
+                contentBlocks.add(imageBlock);
+            }
+        }
+    }
+
+    private static JsonObject createLocalImageBlock(String imagePath) {
+        if (imagePath == null || imagePath.trim().isEmpty()) {
+            return null;
+        }
+
+        try {
+            Path path = Path.of(imagePath);
+            if (!Files.isRegularFile(path)) {
+                LOG.debug("[HistoryMessageInjector] Skip missing local image: " + imagePath);
+                return null;
+            }
+
+            String mediaType = Files.probeContentType(path);
+            if (mediaType == null || mediaType.isBlank()) {
+                mediaType = guessImageMediaType(path);
+            }
+            if (mediaType == null || mediaType.isBlank()) {
+                mediaType = "image/png";
+            }
+
+            String base64Data = Base64.getEncoder().encodeToString(Files.readAllBytes(path));
+            JsonObject imageBlock = new JsonObject();
+            imageBlock.addProperty("type", "image");
+            imageBlock.addProperty("src", "data:" + mediaType + ";base64," + base64Data);
+            imageBlock.addProperty("mediaType", mediaType);
+            imageBlock.addProperty("alt", path.getFileName() != null ? path.getFileName().toString() : "image");
+            return imageBlock;
+        } catch (Exception e) {
+            LOG.warn("[HistoryMessageInjector] Failed to restore local image from Codex history: " + imagePath, e);
+            return null;
+        }
+    }
+
+    private static String guessImageMediaType(Path path) {
+        String fileName = path.getFileName() != null ? path.getFileName().toString().toLowerCase() : "";
+        if (fileName.endsWith(".png")) {
+            return "image/png";
+        }
+        if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
+            return "image/jpeg";
+        }
+        if (fileName.endsWith(".gif")) {
+            return "image/gif";
+        }
+        if (fileName.endsWith(".webp")) {
+            return "image/webp";
+        }
+        if (fileName.endsWith(".bmp")) {
+            return "image/bmp";
+        }
+        if (fileName.endsWith(".svg")) {
+            return "image/svg+xml";
+        }
+        return null;
     }
 
     /**
