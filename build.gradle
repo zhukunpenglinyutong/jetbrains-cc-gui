@@ -312,6 +312,7 @@ tasks.register('syncBuiltinSkills') {
 def webviewDir = file('webview')
 def requestedTasks = gradle.startParameter.taskNames.collect { it.toLowerCase() }
 def enableVConsoleInWebview = requestedTasks.any { it.contains('runide') }
+def skipWebviewBuild = (project.findProperty('skipWebview') ?: 'false').toString().toBoolean()
 
 // Get custom Node.js path from local properties
 def localNodePath = getLocalProperty('node.path')
@@ -371,7 +372,10 @@ tasks.register('buildWebview', Exec) {
         commandLine npmCommand, 'run', 'build'
     }
 
-    onlyIf { webviewDir.exists() }
+    onlyIf { webviewDir.exists() && !skipWebviewBuild }
+    if (skipWebviewBuild) {
+        println "Skipping webview build because -PskipWebview=true"
+    }
     doFirst { println "Building webview..." }
     doLast { println "Webview build completed." }
 }

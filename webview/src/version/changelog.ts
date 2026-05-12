@@ -33,6 +33,7 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
 - Fix duplicated CSS pseudo-element tooltip implementations by unifying with JS-based floating popup (context-tool-btn, enhance-prompt-button) (#850)
 - Fix ReasoningSelect dropdown overflow by right-aligning
 - Fix package-lock.json containing leaked private mirror URL by regenerating from registry.npmjs.org and pinning the official registry in webview/.npmrc
+- Fix settings.json permissions rules (allow/deny/ask) being silently ignored; PreToolUse hook now yields to SDK for native rule evaluation (by @devlimits) (#1120, #1121)
 
 🔧 Improvements
 - Refactor CodexUsageAggregator to use Map-based pricing table for easier maintenance and to avoid cache token double-counting
@@ -59,6 +60,7 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
 - 通过统一改用 JS 实现的浮动 Tooltip，修复重复的 CSS 伪元素 Tooltip 实现（context-tool-btn、enhance-prompt-button）（#850）
 - 修复 ReasoningSelect 下拉菜单溢出，改为右对齐
 - 修复 package-lock.json 中泄漏的私有镜像 URL，重新从官方源生成并在 webview/.npmrc 中锁定官方 registry
+- 修复 ~/.claude/settings.json 中 permissions 规则（allow/deny/ask）被静默忽略的问题，PreToolUse hook 现已交由 SDK 原生评估规则（by @devlimits）（#1120, #1121）
 
 🔧 Improvements
 - 重构 CodexUsageAggregator 改用 Map 形式的定价表，提升可维护性并避免缓存 Token 重复计算

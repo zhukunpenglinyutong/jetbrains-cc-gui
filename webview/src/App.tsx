@@ -23,6 +23,7 @@ import {
   NEW_SESSION_COMMANDS,
   RESUME_COMMANDS,
   PLAN_COMMANDS,
+  CONTEXT_COMMANDS,
 } from './hooks/useMessageSender';
 import { applyDiffTheme, getStoredDiffTheme } from './utils/diffTheme';
 import type { Attachment, ChatInputBoxHandle } from './components/ChatInputBox/types';
@@ -47,6 +48,9 @@ const App = () => {
     openPermissionDialog,
     openAskUserQuestionDialog,
     openPlanApprovalDialog,
+    openContextUsageDialog,
+    updateContextUsageData,
+    closeContextUsageDialog,
     setRewindDialogOpen, setCurrentRewindRequest,
     isRewinding, setIsRewinding, setRewindSelectDialogOpen,
   } = useDialogs();
@@ -185,6 +189,7 @@ const App = () => {
     showNewSessionConfirm, showInterruptConfirm,
     suppressNextStatusToastRef,
     createNewSession, forceCreateNewSession,
+    forceCreateNewSessionWithProvider,
     handleConfirmNewSession, handleCancelNewSession,
     handleConfirmInterrupt, handleCancelInterrupt,
     loadHistorySession, deleteHistorySession, deleteHistorySessions, exportHistorySession,
@@ -226,6 +231,8 @@ const App = () => {
     getOrCreateStreamingAssistantIndex, patchAssistantForStreaming,
     syncActiveProviderModelMapping,
     openPermissionDialog, openAskUserQuestionDialog, openPlanApprovalDialog,
+    openContextUsageDialog, updateContextUsageData,
+    closeContextUsageDialog,
     customSessionTitleRef, currentSessionIdRef, updateHistoryTitle,
     setCustomSessionTitle,
   });
@@ -239,10 +246,10 @@ const App = () => {
   // ── Message sender ──
   // Wrap handleProviderSelect to also clear messages and input (like creating a new session)
   const wrappedHandleProviderSelect = useCallback((providerId: string) => {
-    setMessages([]);
     chatInputRef.current?.clear();
     handleProviderSelect(providerId);
-  }, [handleProviderSelect]);
+    forceCreateNewSessionWithProvider(providerId);
+  }, [forceCreateNewSessionWithProvider, handleProviderSelect]);
 
   const {
     handleSubmit: hookHandleSubmit,
@@ -250,7 +257,7 @@ const App = () => {
     interruptSession,
   } = useMessageSender({
     t, addToast,
-    currentProvider, permissionMode, selectedAgent,
+    currentProvider, selectedModel, permissionMode, selectedAgent,
     sdkStatusLoaded, currentSdkInstalled,
     sentAttachmentsRef, chatInputRef, messagesContainerRef,
     isUserAtBottomRef, userPausedRef, isStreamingRef,
@@ -258,6 +265,9 @@ const App = () => {
     setSettingsInitialTab, setCurrentView,
     forceCreateNewSession,
     handleModeSelect,
+    longContextEnabled,
+    openContextUsageDialog,
+    closeContextUsageDialog,
   });
 
   // ── Message queue ──
@@ -289,6 +299,11 @@ const App = () => {
       if (PLAN_COMMANDS.has(command) && currentProvider === 'claude') {
         handleModeSelect('plan');
         addToast(t('chat.planModeEnabled', { defaultValue: 'Plan mode enabled' }), 'info');
+        return;
+      }
+      // /context - handled locally even while loading
+      if (CONTEXT_COMMANDS.has(command)) {
+        hookHandleSubmit(content, attachments);
         return;
       }
     }

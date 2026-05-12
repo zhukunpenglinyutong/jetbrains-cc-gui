@@ -278,10 +278,12 @@ public class DaemonBridge {
             LOG.debug("[DaemonBridge] Error sending abort command: " + e.getMessage());
         }
 
-        // Complete all pending request futures so Java-side callers unblock
+        // Complete all pending request futures so Java-side callers unblock.
+        // Use onComplete(false) instead of onError() so that user-initiated aborts
+        // are treated as a normal (unsuccessful) completion rather than an error,
+        // matching the graceful handling that Codex uses.
         for (Map.Entry<String, RequestHandler> entry : pendingRequests.entrySet()) {
-            entry.getValue().onError("Request aborted by user");
-            entry.getValue().future.complete(false);
+            entry.getValue().onAbort();
         }
         pendingRequests.clear();
         activeRequestCount.set(0);
@@ -704,6 +706,16 @@ public class DaemonBridge {
         void onStderr(String text);
         void onError(String error);
         void onComplete(boolean success);
+
+        /**
+         * Called when the user manually aborts the request.
+         * Default implementation delegates to {@link #onComplete(boolean) onComplete(false)}
+         * so that aborts are treated as a graceful (unsuccessful) completion,
+         * not an error.
+         */
+        default void onAbort() {
+            onComplete(false);
+        }
     }
 
     /**
@@ -736,6 +748,17 @@ public class DaemonBridge {
         void onError(String error) {
             callback.onError(error);
             future.completeExceptionally(new RuntimeException(error));
+        }
+
+        /**
+         * Handle user-initiated abort gracefully.
+         * Unlike onError, this completes the future normally (with false) so callers
+         * do not see an exception. The DaemonOutputCallback.onAbort() method lets
+         * the downstream handler distinguish aborts from real errors.
+         */
+        void onAbort() {
+            callback.onAbort();
+            future.complete(false);
         }
 
         void onComplete(boolean success) {

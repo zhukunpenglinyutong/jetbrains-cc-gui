@@ -1,0 +1,276 @@
+/* ContextUsageDialog Styles */
+
+.context-usage-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.context-usage-dialog {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-secondary);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  width: 90%;
+  max-width: 560px;
+  max-height: 80vh;
+  overflow-y: auto;
+  animation: slideIn 0.2s ease-out;
+}
+
+.context-usage-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--color-dialog-border);
+}
+
+.context-usage-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.context-usage-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.context-usage-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.context-usage-close:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 2px;
+}
+
+/* Summary */
+.context-usage-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--color-dialog-border);
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.context-usage-model {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.context-usage-tokens {
+  font-variant-numeric: tabular-nums;
+}
+
+.context-usage-autocompact {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* Grid */
+.context-usage-grid {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border-bottom: 1px solid var(--color-dialog-border);
+}
+
+.context-usage-grid-row {
+  display: flex;
+  gap: 3px;
+}
+
+.context-usage-grid-cell {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.context-usage-grid-cell:hover {
+  transform: scale(1.3);
+  z-index: 1;
+}
+
+.context-usage-grid-cell.filled {
+  border-radius: 3px;
+}
+
+.context-usage-grid-cell.partial {
+  border-radius: 3px;
+}
+
+.context-usage-grid-cell.free-space {
+  background-color: var(--bg-hover);
+  border: 1px dashed var(--border-secondary);
+}
+
+/* Loading state */
+.context-usage-loading {
+  min-height: 200px;
+}
+
+.context-usage-loading-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 40px 20px;
+}
+
+.context-usage-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border-secondary);
+  border-top-color: var(--color-link);
+  border-radius: 50%;
+  animation: context-usage-spin 1s linear infinite;
+}
+
+@keyframes context-usage-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.context-usage-loading-text {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+/* Legend */
+.context-usage-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--color-dialog-border);
+}
+
+.context-usage-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.context-usage-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.context-usage-legend-name {
+  color: var(--text-secondary);
+}
+
+.context-usage-legend-tokens {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.free-space-dot {
+  background-color: transparent;
+  border: 1px dashed var(--border-secondary);
+}
+
+.free-space-legend {
+  opacity: 0.7;
+}
+
+/* Details tables */
+.context-usage-details {
+  padding: 12px 20px;
+}
+
+.context-usage-detail-section {
+  margin-bottom: 8px;
+}
+
+.context-usage-detail-section summary {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 6px 0;
+  user-select: none;
+}
+
+.context-usage-detail-section summary:hover {
+  color: var(--text-primary);
+}
+
+.context-usage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.context-usage-table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-secondary);
+}
+
+.context-usage-table td {
+  padding: 4px 8px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--color-dialog-border);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-usage-table td:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Animation keyframes - defined locally to avoid implicit dependency
+   on global stylesheets (dialogs.less) that may change independently. */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}

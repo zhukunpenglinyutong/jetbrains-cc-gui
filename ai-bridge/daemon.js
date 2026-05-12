@@ -33,7 +33,8 @@ import {
   preconnectPersistent,
   shutdownPersistentRuntimes,
   abortCurrentTurn,
-  resetRuntimePersistent
+  resetRuntimePersistent,
+  getContextUsagePersistent
 } from './services/claude/persistent-query-service.js';
 import { injectNetworkEnvVars } from './config/api-config.js';
 import { cleanupStaleTempImages } from './services/claude/attachment-service.js';
@@ -330,6 +331,8 @@ async function processRequest(request) {
       await preconnectPersistent(stdinData);
     } else if (provider === 'claude' && command === 'resetRuntime') {
       await resetRuntimePersistent(stdinData);
+    } else if (provider === 'claude' && command === 'getContextUsage') {
+      await getContextUsagePersistent(stdinData);
     } else {
       // Dispatch to the existing handlers for non-send commands.
       switch (provider) {
