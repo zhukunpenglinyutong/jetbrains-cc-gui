@@ -282,6 +282,11 @@
         "placeholder": "Добавьте дополнительные требования, например, генерировать коммит на английском, включать номер issue и т.д...",
         "hint": "Плагин содержит встроенные промпты для CCG Commits. Ваш текст будет использован как дополнительные требования, и AI отдаст приоритет вашим указаниям."
       },
+      "projectPrompt": {
+        "label": "Дополнительный промпт для проекта",
+        "placeholder": "Добавьте здесь требования, специфичные для проекта, например: scope должен содержать имя модуля, body коммита должен включать область влияния и т.д...",
+        "hint": "Этот промпт применяется только к текущему проекту и объединяется с глобальным дополнительным промптом. При противоречии приоритет отдаётся промпту проекта. Разные проекты можно настраивать независимо."
+      },
       "codeReview": {
         "comingSoon": "Скоро",
         "label": "Дополнительный промпт Code Review AI",
@@ -581,7 +586,19 @@
         "cliLoginDisableMessage": "Это восстановит ваш предыдущий config.toml и переключит на API ключ.",
         "modelIdRequired": "ID модели обязателен",
         "modelIdInvalid": "Некорректный формат ID модели (допускаются буквы, цифры, точки, дефисы, подчёркивания, слэши и двоеточия)",
-        "modelIdDuplicate": "ID модели уже существует"
+        "modelIdDuplicate": "ID модели уже существует",
+        "envVarsTitle": "Environment Variables",
+        "messageEnvLabel": "Message Environment Variables",
+        "messageEnvHint": "Custom environment variables injected into the Codex message subprocess",
+        "mcpEnvLabel": "MCP Environment Variables",
+        "mcpEnvHint": "Custom environment variables injected into the MCP tool discovery subprocess",
+        "envKeyPlaceholder": "ENV_KEY",
+        "envValuePlaceholder": "value",
+        "addEnvVar": "Add Variable",
+        "envKeyInvalid": "Invalid key name (must start with letter/underscore, alphanumeric only)",
+        "envKeyProtected": "Cannot set built-in variable: {{key}}",
+        "envKeyDuplicate": "Duplicate key: {{key}}",
+        "envValueTooLong": "Значение слишком длинное (макс. {{max}} символов)"
       }
     },
     "agent": {

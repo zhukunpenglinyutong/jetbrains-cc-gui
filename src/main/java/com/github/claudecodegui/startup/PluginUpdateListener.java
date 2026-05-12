@@ -1,6 +1,5 @@
 package com.github.claudecodegui.startup;
 
-import com.github.claudecodegui.bridge.BridgeDirectoryResolver;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.intellij.ide.plugins.IdeaPluginDescriptor;
 import com.intellij.ide.plugins.PluginManagerCore;
@@ -10,23 +9,20 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.extensions.PluginId;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.startup.ProjectActivity;
-import com.intellij.openapi.util.io.FileUtil;
 import kotlin.Unit;
 import kotlin.coroutines.Continuation;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.io.File;
-
 /**
- * Plugin update listener that cleans up old ai-bridge cache when plugin version changes.
- * This ensures that users always get the latest ai-bridge version after plugin updates.
+ * Plugin update listener that tracks plugin version changes.
+ * Bridge extraction is already version/hash-aware, so deleting the live ai-bridge
+ * directory here is both unnecessary and risky on Windows while the daemon is active.
  */
 public class PluginUpdateListener implements ProjectActivity {
 
     private static final Logger LOG = Logger.getInstance(PluginUpdateListener.class);
     private static final String LAST_VERSION_KEY = "claude.code.last.plugin.version";
-    private static final String SDK_DIR_NAME = "ai-bridge";
 
     @Nullable
     @Override
@@ -60,41 +56,14 @@ public class PluginUpdateListener implements ProjectActivity {
             LOG.info("[PluginUpdateListener] Current version: " + currentVersion + ", Last version: " + lastVersion);
 
             if (lastVersion != null && !lastVersion.equals(currentVersion)) {
-                LOG.info("[PluginUpdateListener] Plugin version changed from " + lastVersion + " to " + currentVersion + ", cleaning up old cache...");
-                cleanupOldBridgeCache(descriptor);
+                LOG.info("[PluginUpdateListener] Plugin version changed from " + lastVersion + " to " + currentVersion
+                        + ". Skipping ai-bridge deletion; BridgeDirectoryResolver will refresh by signature.");
             }
 
             // Update stored version
             props.setValue(LAST_VERSION_KEY, currentVersion);
         } catch (Exception e) {
             LOG.warn("[PluginUpdateListener] Failed to check plugin version: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Cleanup old ai-bridge cache directory.
-     */
-    private void cleanupOldBridgeCache(IdeaPluginDescriptor descriptor) {
-        try {
-            File pluginDir = descriptor.getPluginPath().toFile();
-            File bridgeDir = new File(pluginDir, SDK_DIR_NAME);
-
-            if (bridgeDir.exists() && bridgeDir.isDirectory()) {
-                LOG.info("[PluginUpdateListener] Deleting old ai-bridge cache: " + bridgeDir.getAbsolutePath());
-                boolean deleted = FileUtil.delete(bridgeDir);
-                if (deleted) {
-                    LOG.info("[PluginUpdateListener] Successfully deleted old ai-bridge cache");
-                    // Reset extraction state in shared resolver
-                    BridgeDirectoryResolver resolver = BridgePreloader.getSharedResolver();
-                    resolver.clearCache();
-                } else {
-                    LOG.warn("[PluginUpdateListener] Failed to delete old ai-bridge cache, will be overwritten on next extraction");
-                }
-            } else {
-                LOG.debug("[PluginUpdateListener] No old ai-bridge cache found at: " + bridgeDir.getAbsolutePath());
-            }
-        } catch (Exception e) {
-            LOG.warn("[PluginUpdateListener] Failed to cleanup old cache: " + e.getMessage(), e);
         }
     }
 }

@@ -273,7 +273,7 @@ Thank you for [AtomGit](https://atomgit.com/zhukunpenglinyutong/idea-claude-code
 
 ## Acknowledgements
 
-Recently, many bloggers have recommended this project on their own initiative, and I am deeply grateful. Thanks again to bloggers including "沉默的王二", "macrozheng", "JavaGuide", "Java知音", and "程序员青戈" for recommending this project. I will keep iterating to make it more comfortable for everyone to use.
+Recently, many bloggers have recommended this project on their own initiative, and I am deeply grateful. Thanks again to bloggers including "沉默的王二", "macrozheng", "JavaGuide", "Java知音", "鲲鹏talk 公众号", and "程序员青戈" for recommending this project. I will keep iterating to make it more comfortable for everyone to use.
 
 ---
 

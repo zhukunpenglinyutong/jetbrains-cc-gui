@@ -278,7 +278,14 @@ public class ProjectConfigHandler {
     public void handleGetCommitPrompt() {
         try {
             String commitPrompt = settingsService.getCommitPrompt();
-            pushJson("window.updateCommitPrompt", jsonOf("commitPrompt", commitPrompt));
+            String projectPath = context.getProject().getBasePath();
+            String projectCommitPrompt = projectPath != null
+                    ? settingsService.getProjectCommitPrompt(projectPath)
+                    : "";
+            JsonObject payload = new JsonObject();
+            payload.addProperty("commitPrompt", commitPrompt);
+            payload.addProperty("projectCommitPrompt", projectCommitPrompt);
+            pushJson("window.updateCommitPrompt", payload);
         } catch (Exception e) {
             LOG.error("[ProjectConfigHandler] Failed to get commit prompt: " + e.getMessage(), e);
         }
@@ -375,6 +382,55 @@ public class ProjectConfigHandler {
         } catch (Exception e) {
             LOG.error("[ProjectConfigHandler] " + errorLogMessage + ": " + e.getMessage(), e);
             showError(ClaudeCodeGuiBundle.message(errorBundleKey, e.getMessage()));
+        }
+    }
+
+    public void handleGetProjectCommitPrompt() {
+        try {
+            String projectPath = context.getProject().getBasePath();
+            String projectCommitPrompt = projectPath != null
+                    ? settingsService.getProjectCommitPrompt(projectPath)
+                    : "";
+            pushJson("window.updateProjectCommitPrompt", jsonOf("projectCommitPrompt", projectCommitPrompt));
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to get project commit prompt: " + e.getMessage(), e);
+        }
+    }
+
+    public void handleSetProjectCommitPrompt(String content) {
+        try {
+            String projectPath = context.getProject().getBasePath();
+            if (projectPath == null) {
+                showError("Cannot resolve project path");
+                return;
+            }
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            if (json == null || !json.has("prompt")) {
+                LOG.warn("[ProjectConfigHandler] Invalid project commit prompt request: missing prompt field");
+                return;
+            }
+            String prompt = json.get("prompt").getAsString();
+            if (prompt == null) {
+                showError("Prompt cannot be empty");
+                return;
+            }
+            prompt = prompt.trim();
+            final int MAX_PROMPT_LENGTH = 10000;
+            if (prompt.length() > MAX_PROMPT_LENGTH) {
+                LOG.warn("[ProjectConfigHandler] Project commit prompt too long: " + prompt.length() + " characters");
+                showError("Prompt length must not exceed " + MAX_PROMPT_LENGTH + " characters");
+                return;
+            }
+            final String validatedPrompt = prompt;
+            settingsService.setProjectCommitPrompt(projectPath, validatedPrompt);
+            LOG.info("[ProjectConfigHandler] Set project commit prompt, length: " + validatedPrompt.length() + ", project: " + projectPath);
+            JsonObject response = new JsonObject();
+            response.addProperty("projectCommitPrompt", validatedPrompt);
+            response.addProperty("saved", true);
+            pushJson("window.updateProjectCommitPrompt", response);
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set project commit prompt: " + e.getMessage(), e);
+            showError("Failed to save project commit prompt: " + e.getMessage());
         }
     }
 
