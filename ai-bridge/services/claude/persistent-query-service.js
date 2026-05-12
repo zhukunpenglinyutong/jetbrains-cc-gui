@@ -377,9 +377,17 @@ function emitSendError(runtime, error, requestContext) {
 
   payload.error = truncateString(payload.error, 2500);
 
-  console.error('[SEND_ERROR]', JSON.stringify(payload));
-  console.log('[SEND_ERROR]', JSON.stringify(payload));
-  console.log(JSON.stringify(payload));
+  // The error payload is emitted on three channels intentionally:
+  //   1. stderr ([SEND_ERROR] tag) — captured by Java's stderrLines for diagnostics
+  //   2. stdout ([SEND_ERROR] tag) — picked up by ClaudeStreamAdapter to surface
+  //      the error in the chat UI without waiting for the [MESSAGE_END] envelope
+  //   3. stdout (raw JSON) — the canonical request-result line consumed by the
+  //      daemon's request demuxer to complete the active CompletableFuture
+  // Removing any one of these breaks either logging, UX, or request completion.
+  const serialized = JSON.stringify(payload);
+  console.error('[SEND_ERROR]', serialized);
+  console.log('[SEND_ERROR]', serialized);
+  console.log(serialized);
 }
 
 function applyExactModelForContextUsage(requestContext) {
@@ -399,6 +407,33 @@ function applyExactModelForContextUsage(requestContext) {
       model: exactModelId,
     },
   };
+}
+
+/**
+ * Decide whether the existing runtime must be recreated to honor the requested model.
+ *
+ * The Claude SDK's `setModel()` can swap model names on an existing runtime, but it
+ * CANNOT change the context-window limit. The `[1m]` suffix on a modelId selects the
+ * 1M-token context window — toggling it requires building a new runtime from scratch.
+ *
+ * Two recreate conditions:
+ *   - contextWindowChanged: the request's [1m] state differs from the runtime's
+ *   - runtimeModelUnknown: caller specified a model but the runtime has no
+ *     tracked modelId (e.g. a prewarmed runtime created without a model), so
+ *     we cannot prove the existing window limit is correct.
+ *
+ * @param {object|null} runtime - The existing runtime (or null if none).
+ * @param {string|null} modelId - The requested model ID, may carry the `[1m]` suffix.
+ * @returns {boolean} True if the runtime must be disposed and recreated.
+ */
+function shouldRecreateRuntimeForModel(runtime, modelId) {
+  if (!runtime) return false;
+  const requestedHas1M = modelId?.includes('[1m]') ?? false;
+  const runtimeModelId = runtime.modelId || null;
+  const runtimeHas1M = runtimeModelId?.includes('[1m]') ?? false;
+  const contextWindowChanged = requestedHas1M !== runtimeHas1M;
+  const runtimeModelUnknown = !!modelId && !runtimeModelId;
+  return contextWindowChanged || runtimeModelUnknown;
 }
 
 async function withScopedContextWindowPreference(modelId, operation) {
@@ -533,20 +568,10 @@ export async function getContextUsagePersistent(params = {}) {
       }
     }
 
-    // Check if [1m] suffix state changed - this affects context window limits
-    // and requires creating a new runtime (setModel cannot change window limits)
-    // We need to compare the full modelId (which includes [1m]) stored in runtime
-    const requestedHas1M = modelId?.includes('[1m]') ?? false;
-    const runtimeModelId = runtime?.modelId || null; // Original modelId used to create runtime
-    const runtimeHas1M = runtimeModelId?.includes('[1m]') ?? false;
-    const contextWindowChanged = runtime && (requestedHas1M !== runtimeHas1M);
-    const runtimeModelUnknown = !!runtime && !!modelId && !runtimeModelId;
+    const mustRecreate = shouldRecreateRuntimeForModel(runtime, modelId);
 
-    // If no suitable runtime exists, OR context window limit changed, acquire one.
-    // The [1m] suffix affects runtime creation's context window limit, not just model name,
-    // so we must create a new runtime when the suffix state changes.
-    if (!runtime || runtime.closed || contextWindowChanged || runtimeModelUnknown) {
-      if ((contextWindowChanged || runtimeModelUnknown) && runtime && !runtime.closed) {
+    if (!runtime || runtime.closed || mustRecreate) {
+      if (mustRecreate && runtime && !runtime.closed) {
         await disposeRuntime(runtime, { removeSession });
         runtime = null;
       }

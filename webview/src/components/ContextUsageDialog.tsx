@@ -67,6 +67,43 @@ function formatTokens(tokens: number): string {
   return String(tokens);
 }
 
+interface DetailsTableProps<T> {
+  summary: string;
+  headers: readonly [string, string, string];
+  rows: readonly T[];
+  rowKey: (row: T) => string;
+  renderRow: (row: T) => readonly [React.ReactNode, React.ReactNode, React.ReactNode];
+}
+
+function DetailsTable<T>({ summary, headers, rows, rowKey, renderRow }: DetailsTableProps<T>) {
+  return (
+    <details className="context-usage-detail-section">
+      <summary>{summary}</summary>
+      <table className="context-usage-table">
+        <thead>
+          <tr>
+            <th>{headers[0]}</th>
+            <th>{headers[1]}</th>
+            <th>{headers[2]}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const cells = renderRow(row);
+            return (
+              <tr key={rowKey(row)}>
+                <td>{cells[0]}</td>
+                <td>{cells[1]}</td>
+                <td>{cells[2]}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </details>
+  );
+}
+
 const ContextUsageDialog = memo(function ContextUsageDialog({
   isOpen,
   isLoading,
@@ -377,108 +414,66 @@ const ContextUsageDialog = memo(function ContextUsageDialog({
         {/* Details tables */}
         <div className="context-usage-details">
           {mcpTools.length > 0 && (
-            <details className="context-usage-detail-section">
-              <summary>{t('contextUsage.sections.mcpTools', { count: mcpTools.length, defaultValue: 'MCP Tools ({{count}})' })}</summary>
-              <table className="context-usage-table">
-                <thead>
-                  <tr>
-                    <th>{t('contextUsage.table.tool', { defaultValue: 'Tool' })}</th>
-                    <th>{t('contextUsage.table.server', { defaultValue: 'Server' })}</th>
-                    <th>{t('contextUsage.table.tokens', { defaultValue: 'Tokens' })}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {mcpTools.map((tool) => (
-                    <tr key={`${tool.serverName}-${tool.name}`}>
-                      <td>{tool.name}</td>
-                      <td>{tool.serverName}</td>
-                      <td>{formatTokens(tool.tokens)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </details>
+            <DetailsTable
+              summary={t('contextUsage.sections.mcpTools', { count: mcpTools.length, defaultValue: 'MCP Tools ({{count}})' })}
+              headers={[
+                t('contextUsage.table.tool', { defaultValue: 'Tool' }),
+                t('contextUsage.table.server', { defaultValue: 'Server' }),
+                t('contextUsage.table.tokens', { defaultValue: 'Tokens' }),
+              ]}
+              rows={mcpTools}
+              rowKey={(tool) => `${tool.serverName}-${tool.name}`}
+              renderRow={(tool) => [tool.name, tool.serverName, formatTokens(tool.tokens)]}
+            />
           )}
 
           {agents.length > 0 && (
-            <details className="context-usage-detail-section">
-              <summary>{t('contextUsage.sections.agents', { count: agents.length, defaultValue: 'Agents ({{count}})' })}</summary>
-              <table className="context-usage-table">
-                <thead>
-                  <tr>
-                    <th>{t('contextUsage.table.agent', { defaultValue: 'Agent' })}</th>
-                    <th>{t('contextUsage.table.source', { defaultValue: 'Source' })}</th>
-                    <th>{t('contextUsage.table.tokens', { defaultValue: 'Tokens' })}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {agents.map((agent) => (
-                    <tr key={`${agent.source}-${agent.agentType}`}>
-                      <td>{agent.agentType}</td>
-                      <td>{agent.source}</td>
-                      <td>{formatTokens(agent.tokens)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </details>
+            <DetailsTable
+              summary={t('contextUsage.sections.agents', { count: agents.length, defaultValue: 'Agents ({{count}})' })}
+              headers={[
+                t('contextUsage.table.agent', { defaultValue: 'Agent' }),
+                t('contextUsage.table.source', { defaultValue: 'Source' }),
+                t('contextUsage.table.tokens', { defaultValue: 'Tokens' }),
+              ]}
+              rows={agents}
+              rowKey={(agent) => `${agent.source}-${agent.agentType}`}
+              renderRow={(agent) => [agent.agentType, agent.source, formatTokens(agent.tokens)]}
+            />
           )}
 
           {memoryFiles.length > 0 && (
-            <details className="context-usage-detail-section">
-              <summary>{t('contextUsage.sections.memoryFiles', { count: memoryFiles.length, defaultValue: 'Memory Files ({{count}})' })}</summary>
-              <table className="context-usage-table">
-                <thead>
-                  <tr>
-                    <th>{t('contextUsage.table.type', { defaultValue: 'Type' })}</th>
-                    <th>{t('contextUsage.table.path', { defaultValue: 'Path' })}</th>
-                    <th>{t('contextUsage.table.tokens', { defaultValue: 'Tokens' })}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {memoryFiles.map((file) => {
-                    const shortPath = file.path.length > 60 ? '...' + file.path.slice(-57) : file.path;
-                    return (
-                      <tr key={`${file.type}-${file.path}`}>
-                        <td>{file.type}</td>
-                        <td title={file.path}>{shortPath}</td>
-                        <td>{formatTokens(file.tokens)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </details>
+            <DetailsTable
+              summary={t('contextUsage.sections.memoryFiles', { count: memoryFiles.length, defaultValue: 'Memory Files ({{count}})' })}
+              headers={[
+                t('contextUsage.table.type', { defaultValue: 'Type' }),
+                t('contextUsage.table.path', { defaultValue: 'Path' }),
+                t('contextUsage.table.tokens', { defaultValue: 'Tokens' }),
+              ]}
+              rows={memoryFiles}
+              rowKey={(file) => `${file.type}-${file.path}`}
+              renderRow={(file) => {
+                const shortPath = file.path.length > 60 ? '...' + file.path.slice(-57) : file.path;
+                return [file.type, <span title={file.path}>{shortPath}</span>, formatTokens(file.tokens)];
+              }}
+            />
           )}
 
           {skills && skills.skillFrontmatter?.length > 0 && (
-            <details className="context-usage-detail-section">
-              <summary>
-                {t('contextUsage.sections.skills', {
-                  included: skills.includedSkills ?? 0,
-                  total: skills.totalSkills ?? 0,
-                  defaultValue: 'Skills ({{included}}/{{total}})',
-                })}
-              </summary>
-              <table className="context-usage-table">
-                <thead>
-                  <tr>
-                    <th>{t('contextUsage.table.skill', { defaultValue: 'Skill' })}</th>
-                    <th>{t('contextUsage.table.source', { defaultValue: 'Source' })}</th>
-                    <th>{t('contextUsage.table.tokens', { defaultValue: 'Tokens' })}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {skills.skillFrontmatter.map((skill) => (
-                    <tr key={`${skill.source}-${skill.name}`}>
-                      <td>{skill.name}</td>
-                      <td>{skill.source}</td>
-                      <td>{formatTokens(skill.tokens)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </details>
+            <DetailsTable
+              summary={t('contextUsage.sections.skills', {
+                included: skills.includedSkills ?? 0,
+                total: skills.totalSkills ?? 0,
+                defaultValue: 'Skills ({{included}}/{{total}})',
+              })}
+              headers={[
+                t('contextUsage.table.skill', { defaultValue: 'Skill' }),
+                t('contextUsage.table.source', { defaultValue: 'Source' }),
+                t('contextUsage.table.tokens', { defaultValue: 'Tokens' }),
+              ]}
+              rows={skills.skillFrontmatter}
+              rowKey={(skill) => `${skill.source}-${skill.name}`}
+              renderRow={(skill) => [skill.name, skill.source, formatTokens(skill.tokens)]}
+            />
           )}
         </div>
       </div>
