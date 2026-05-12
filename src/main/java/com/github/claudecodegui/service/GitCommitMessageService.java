@@ -465,8 +465,10 @@ Footer 包含：
     private void appendBodyScalePreference(StringBuilder prompt, int fileCount) {
         if (fileCount >= 20) {
             prompt.append("- IMPORTANT: This diff contains ").append(fileCount).append(" files. ");
-            prompt.append("Write 7-10 grouped body bullets; do not write fewer than 7 unless the diff is almost entirely the same mechanical change repeated across files.\n");
-            prompt.append("- For large diffs, name the main services, settings, UI flows, provider paths, tests, and fallback behavior when they are meaningful, while still grouping related files together.\n");
+            prompt.append("Write 7-10 grouped body bullets; do not write fewer than 7 unless the diff is ");
+            prompt.append("almost entirely the same mechanical change repeated across files.\n");
+            prompt.append("- For large diffs, name the main services, settings, UI flows, provider paths, ");
+            prompt.append("tests, and fallback behavior when they are meaningful, while still grouping related files together.\n");
         } else if (fileCount >= 10) {
             prompt.append("- IMPORTANT: This diff contains ").append(fileCount).append(" files. ");
             prompt.append("Write 6-8 grouped body bullets covering the major functional areas.\n");
