@@ -50,7 +50,7 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
     private static final ConcurrentMap<String, GenerationSession> IN_FLIGHT_PROJECTS = new ConcurrentHashMap<>();
     private static final javax.swing.Icon ACTION_ICON = IconLoader.getIcon("/icons/logo-16.png", GenerateCommitMessageAction.class);
     private static final Icon LOADING_ICON = new StopSquareIcon();
-    private static final int GENERATION_TIMEOUT_SECONDS = 60;
+    private static final int GENERATION_TIMEOUT_SECONDS = 120;
 
     public GenerateCommitMessageAction() {
         super();
@@ -151,7 +151,7 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
 
                         @Override
                         public void onError(String error) {
-                            if ("Generation cancelled".equalsIgnoreCase(error)) {
+                            if (GitCommitMessageService.GENERATION_CANCELLED_ERROR.equalsIgnoreCase(error)) {
                                 session.cancelled();
                                 return;
                             }

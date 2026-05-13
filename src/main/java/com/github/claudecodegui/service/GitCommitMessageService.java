@@ -13,11 +13,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.vcs.FilePath;
 import com.intellij.openapi.vcs.changes.Change;
-import com.intellij.openapi.vcs.changes.ChangesUtil;
-import com.intellij.openapi.vcs.changes.ContentRevision;
-import com.intellij.openapi.vcs.VcsException;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
@@ -26,6 +22,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Pattern;
 
 /**
  * Git commit message generation service.
@@ -35,7 +32,10 @@ public class GitCommitMessageService {
 
     private static final Logger LOG = Logger.getInstance(GitCommitMessageService.class);
 
-    private static final int MAX_DIFF_LENGTH = 4000; // Limit diff length to avoid exceeding token limits
+    // Prompt mode keeps the historical short diff budget because the built-in
+    // prompt is larger and less diff-focused than the Skill prompt.
+    private static final int MAX_DIFF_LENGTH = 4000;
+    public static final String GENERATION_CANCELLED_ERROR = "Generation cancelled";
     private static final String PROVIDER_CLAUDE = "claude";
     private static final String PROVIDER_CODEX = "codex";
     private static final String COMMIT_GENERATION_MODE_KEY = "generationMode";
@@ -43,6 +43,8 @@ public class GitCommitMessageService {
     private static final String COMMIT_SKILL_REF_KEY = "skillRef";
     private static final String COMMIT_LANGUAGE_KEY = "language";
     private static final String COMMIT_LANGUAGE_AUTO = "auto";
+    private static final Pattern API_KEY_ENV_NAME_PATTERN = Pattern.compile(
+            "^[A-Z_][A-Z0-9_]*(API_KEY|APIKEY|AUTH_TOKEN|ACCESS_TOKEN|TOKEN)[A-Z0-9_]*$");
 
     /**
      * Built-in commit prompt (based on CCG Commits specification).
@@ -133,10 +135,6 @@ Footer 包含：
 - 包含敏感信息
 """;
 
-    // XML tags used to extract the commit message
-    private static final String COMMIT_TAG_START = "<commit>";
-    private static final String COMMIT_TAG_END = "</commit>";
-
     private final Project project;
     private final CodemossSettingsService settingsService;
 
@@ -210,88 +208,7 @@ Footer 包含：
      * Generate git diff.
      */
     protected String generateGitDiff(@NotNull Collection<Change> changes) {
-        StringBuilder diff = new StringBuilder();
-
-        for (Change change : changes) {
-            try {
-                FilePath filePath = ChangesUtil.getFilePath(change);
-                Change.Type changeType = change.getType();
-
-                diff.append("\n=== ").append(changeType.name()).append(": ")
-                        .append(filePath.getPath()).append(" ===\n");
-
-                ContentRevision beforeRevision = change.getBeforeRevision();
-                ContentRevision afterRevision = change.getAfterRevision();
-
-                if (changeType == Change.Type.NEW && afterRevision != null) {
-                    // New file: include content up to 500 characters
-                    String content = afterRevision.getContent();
-                    if (content != null && content.length() <= 500) {
-                        diff.append("+++ ").append(content).append("\n");
-                    } else if (content != null) {
-                        diff.append("+++ [文件过大，仅显示前500字符]\n");
-                        diff.append(content, 0, Math.min(500, content.length())).append("\n");
-                    }
-                } else if (changeType == Change.Type.DELETED && beforeRevision != null) {
-                    // Deleted file marker
-                    diff.append("--- 文件已删除\n");
-                } else if (changeType == Change.Type.MODIFICATION && beforeRevision != null && afterRevision != null) {
-                    // Modified file: generate a simple diff
-                    String before = beforeRevision.getContent();
-                    String after = afterRevision.getContent();
-
-                    if (before != null && after != null) {
-                        diff.append(generateSimpleDiff(before, after));
-                    }
-                }
-
-                // Limit total length
-                if (diff.length() > MAX_DIFF_LENGTH) {
-                    diff.append("\n... (diff 过长，已截断)");
-                    break;
-                }
-
-            } catch (VcsException e) {
-                LOG.warn("Failed to get diff for change: " + e.getMessage());
-            }
-        }
-
-        return diff.toString();
-    }
-
-    /**
-     * Generate a simple diff (showing added/removed lines).
-     */
-    private String generateSimpleDiff(String before, String after) {
-        String[] beforeLines = before.split("\n");
-        String[] afterLines = after.split("\n");
-
-        StringBuilder diff = new StringBuilder();
-        int maxLines = Math.max(beforeLines.length, afterLines.length);
-        int shownLines = 0;
-        int maxShownLines = 30; // Maximum lines to display
-
-        for (int i = 0; i < maxLines && shownLines < maxShownLines; i++) {
-            String beforeLine = i < beforeLines.length ? beforeLines[i] : "";
-            String afterLine = i < afterLines.length ? afterLines[i] : "";
-
-            if (!beforeLine.equals(afterLine)) {
-                if (!beforeLine.isEmpty()) {
-                    diff.append("- ").append(beforeLine).append("\n");
-                    shownLines++;
-                }
-                if (!afterLine.isEmpty() && shownLines < maxShownLines) {
-                    diff.append("+ ").append(afterLine).append("\n");
-                    shownLines++;
-                }
-            }
-        }
-
-        if (maxLines > maxShownLines) {
-            diff.append("... (更多变更已省略)\n");
-        }
-
-        return diff.toString();
+        return new CommitSkillDiffCollector(MAX_DIFF_LENGTH).collect(changes);
     }
 
     /**
@@ -799,7 +716,7 @@ Footer 包含：
                 future.cancel(true);
                 bridge.shutdownDaemon();
                 Thread.currentThread().interrupt();
-                callback.onError("Generation cancelled");
+                callback.onError(GENERATION_CANCELLED_ERROR);
             } catch (ExecutionException e) {
                 if (completed.compareAndSet(false, true)) {
                     bridge.shutdownDaemon();
@@ -882,7 +799,7 @@ Footer 包含：
                 future.cancel(true);
                 bridge.cleanupAllProcesses();
                 Thread.currentThread().interrupt();
-                callback.onError("Generation cancelled");
+                callback.onError(GENERATION_CANCELLED_ERROR);
             } catch (ExecutionException e) {
                 if (completed.compareAndSet(false, true)) {
                     bridge.cleanupAllProcesses();
@@ -916,7 +833,7 @@ Footer 包含：
             callback.onSuccess(cleaner.clean(commitMessage));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            callback.onError("Generation cancelled");
+            callback.onError(GENERATION_CANCELLED_ERROR);
         } catch (Exception e) {
             LOG.error("Failed to call Claude HTTP API", e);
             callback.onError(ClaudeCodeGuiBundle.message("commit.callApiFailed") + ": " + e.getMessage());
@@ -942,7 +859,7 @@ Footer 包含：
             callback.onSuccess(cleaner.clean(commitMessage));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            callback.onError("Generation cancelled");
+            callback.onError(GENERATION_CANCELLED_ERROR);
         } catch (Exception e) {
             LOG.error("Failed to call Codex HTTP API", e);
             callback.onError(ClaudeCodeGuiBundle.message("commit.callApiFailed") + ": " + e.getMessage());
@@ -1051,10 +968,15 @@ Footer 包含：
                             "model_providers." + providerName + ".api_key_env",
                             "model_providers." + providerName + ".apiKeyEnv");
                     if (envKey != null && !envKey.isBlank()) {
-                        apiKey = firstTomlValue(configRoot, "shell_environment_policy.set." + envKey,
-                                "shell_environment_policy.set.OPENAI_API_KEY");
-                        if (apiKey == null || apiKey.isBlank()) {
-                            apiKey = System.getenv(envKey.trim());
+                        String safeEnvKey = normalizeAllowedApiKeyEnvKey(envKey);
+                        if (safeEnvKey != null) {
+                            apiKey = firstTomlValue(configRoot, "shell_environment_policy.set." + safeEnvKey,
+                                    "shell_environment_policy.set.OPENAI_API_KEY");
+                            if (apiKey == null || apiKey.isBlank()) {
+                                apiKey = System.getenv(safeEnvKey);
+                            }
+                        } else {
+                            LOG.warn("Ignoring unsafe Codex env_key for commit AI provider: " + envKey.trim());
                         }
                     }
                     if (apiKey == null || apiKey.isBlank()) {
@@ -1256,6 +1178,17 @@ Footer 包含：
         return null;
     }
 
+    private String normalizeAllowedApiKeyEnvKey(String envKey) {
+        if (envKey == null) {
+            return null;
+        }
+        String normalized = envKey.trim().toUpperCase(java.util.Locale.ROOT);
+        if (API_KEY_ENV_NAME_PATTERN.matcher(normalized).matches()) {
+            return envKey.trim();
+        }
+        return null;
+    }
+
     private String readTomlValue(JsonObject object, String path) {
         if (object == null || path == null || path.isBlank()) {
             return null;
@@ -1344,159 +1277,6 @@ Footer 包含：
     }
 
     /**
-     * Clean up and extract the commit message.
-     * Prioritizes extraction from XML tags, with multiple format fallbacks.
-     */
-    private String cleanupCommitMessage(String message) {
-        if (message == null || message.isEmpty()) {
-            return "";
-        }
-
-        String cleaned = message;
-
-        // 0. Remove thinking markers first (e.g. "Thinking >" etc.)
-        cleaned = removeThinkingMarkers(cleaned);
-
-        // 1. First try to extract from <commit>...</commit> tags
-        int startIdx = cleaned.indexOf(COMMIT_TAG_START);
-        int endIdx = cleaned.indexOf(COMMIT_TAG_END);
-
-        if (startIdx != -1 && endIdx != -1 && endIdx > startIdx) {
-            cleaned = cleaned.substring(startIdx + COMMIT_TAG_START.length(), endIdx);
-            // Convert literal \n to actual newlines
-            return convertLiteralNewlines(cleaned.trim());
-        }
-
-        // 2. Fallback: try to extract from markdown code blocks
-        if (cleaned.contains("```")) {
-            int codeBlockStart = cleaned.indexOf("```");
-            // Find the first newline after the code block opener
-            int contentStart = cleaned.indexOf('\n', codeBlockStart);
-            if (contentStart != -1) {
-                int codeBlockEnd = cleaned.indexOf("```", contentStart);
-                if (codeBlockEnd != -1) {
-                    cleaned = cleaned.substring(contentStart + 1, codeBlockEnd);
-                    return convertLiteralNewlines(cleaned.trim());
-                }
-            }
-        }
-
-        // 3. Fallback: try to extract the first conventional commit formatted line
-        // Format: type(scope): description or type: description
-        String[] lines = cleaned.split("\n");
-        for (String line : lines) {
-            String trimmedLine = line.trim();
-            if (isConventionalCommitLine(trimmedLine)) {
-                // After finding the first line, continue collecting the body until hitting analysis sections
-                StringBuilder result = new StringBuilder(trimmedLine);
-                int idx = java.util.Arrays.asList(lines).indexOf(line);
-                boolean inBody = false;
-
-                for (int i = idx + 1; i < lines.length; i++) {
-                    String nextLine = lines[i].trim();
-                    // Stop when hitting analysis keywords
-                    if (isAnalysisSection(nextLine)) {
-                        break;
-                    }
-                    // Empty line indicates body start
-                    if (nextLine.isEmpty()) {
-                        inBody = true;
-                        result.append("\n");
-                        continue;
-                    }
-                    // Collect body content
-                    if (inBody && !nextLine.startsWith("#") && !nextLine.startsWith("*")) {
-                        result.append("\n").append(nextLine);
-                    } else if (!inBody) {
-                        // Not in body yet but hit a non-empty line, means single-line commit
-                        break;
-                    }
-                }
-                return convertLiteralNewlines(result.toString().trim());
-            }
-        }
-
-        // 4. Last resort fallback: return the first few lines of raw content (excluding analysis sections)
-        StringBuilder fallback = new StringBuilder();
-        for (String line : lines) {
-            String trimmedLine = line.trim();
-            if (isAnalysisSection(trimmedLine)) {
-                break;
-            }
-            if (!trimmedLine.isEmpty()) {
-                fallback.append(trimmedLine).append("\n");
-            }
-            // Take at most 5 lines
-            if (fallback.toString().split("\n").length >= 5) {
-                break;
-            }
-        }
-
-        return convertLiteralNewlines(fallback.toString().trim());
-    }
-
-    /**
-     * Convert literal \n characters to actual newlines and clean up excess blank lines.
-     */
-    private String convertLiteralNewlines(String text) {
-        if (text == null) {
-            return null;
-        }
-        // Convert literal \n (two characters) to actual newlines
-        String result = text.replace("\\n", "\n");
-
-        // Remove leading blank lines
-        result = result.replaceFirst("^\\n+", "");
-
-        // Collapse multiple consecutive blank lines into a single one (preserve the conventional commit title/body separator)
-        result = result.replaceAll("\\n{3,}", "\n\n");
-
-        return result.trim();
-    }
-
-    /**
-     * Check whether a line follows the conventional commit format.
-     */
-    private boolean isConventionalCommitLine(String line) {
-        if (line == null || line.isEmpty()) {
-            return false;
-        }
-        // Match: feat:, fix:, refactor:, feat(scope):, etc.
-        String[] types = {"feat", "fix", "refactor", "docs", "test", "chore", "perf", "ci", "style", "build"};
-        for (String type : types) {
-            if (line.startsWith(type + ":") || line.startsWith(type + "(")) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Check whether a line belongs to an analysis section (content to exclude).
-     */
-    private boolean isAnalysisSection(String line) {
-        if (line == null) {
-            return false;
-        }
-        String[] analysisKeywords = {
-            "分析说明", "变更特征", "分析：", "说明：", "解释：", "备注：",
-            "Analysis:", "Explanation:", "Note:", "---", "===",
-            "1. 类型", "2. Scope", "3. 描述", "4. Body",
-            "• ", "- 无需", "- 不涉及"
-        };
-        for (String keyword : analysisKeywords) {
-            if (line.contains(keyword)) {
-                return true;
-            }
-        }
-        // Check for numbered list items (e.g. "1. xxx")
-        if (line.matches("^\\d+\\.\\s+.*")) {
-            return true;
-        }
-        return false;
-    }
-
-    /**
      * Check whether the content is a thinking/reasoning process.
      */
     private boolean isThinkingContent(String content) {
@@ -1518,36 +1298,4 @@ Footer 包含：
         return false;
     }
 
-    /**
-     * Remove thinking markers and their content.
-     */
-    private String removeThinkingMarkers(String content) {
-        if (content == null || content.isEmpty()) {
-            return content;
-        }
-
-        String result = content;
-
-        // Remove <thinking>...</thinking> tags and their content
-        while (result.contains("<thinking>") && result.contains("</thinking>")) {
-            int start = result.indexOf("<thinking>");
-            int end = result.indexOf("</thinking>") + "</thinking>".length();
-            if (start < end) {
-                result = result.substring(0, start) + result.substring(end);
-            } else {
-                break;
-            }
-        }
-
-        // Remove UI thinking markers like "Thinking >" etc.
-        String[] uiMarkers = {"思考 ▸", "思考▸", "思考 ►", "思考►", "Thinking ▸", "Thinking▸"};
-        for (String marker : uiMarkers) {
-            result = result.replace(marker, "");
-        }
-
-        // Remove leading blank lines
-        result = result.replaceFirst("^\\s*\\n+", "");
-
-        return result.trim();
-    }
 }

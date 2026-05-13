@@ -17,6 +17,8 @@ import java.util.List;
 
 final class CommitSkillDiffCollector {
     private static final Logger LOG = Logger.getInstance(CommitSkillDiffCollector.class);
+    // Skill mode can spend a larger budget on diff context because the selected
+    // Skill content is designed to consume structured diff summaries.
     private static final int MAX_TOTAL_DIFF_LENGTH = 12000;
     private static final int MAX_NEW_FILE_CHARS = 1200;
     private static final int MAX_CHANGED_LINES = 80;
@@ -26,10 +28,19 @@ final class CommitSkillDiffCollector {
             ".env*",
             "*.pem",
             "*.key",
+            "*.pfx",
             "*.crt",
             "*.p12",
             "*.jks",
+            "*.token",
             "id_rsa*",
+            ".aws/credentials",
+            ".aws/config",
+            ".npmrc",
+            ".netrc",
+            "kubeconfig",
+            ".kube/config",
+            ".git-credentials",
             "secrets.*",
             "*.lock",
             "package-lock.json",
@@ -37,8 +48,14 @@ final class CommitSkillDiffCollector {
             "yarn.lock");
 
     private final List<PathMatcher> sensitiveMatchers = new ArrayList<>();
+    private final int maxTotalDiffLength;
 
     CommitSkillDiffCollector() {
+        this(MAX_TOTAL_DIFF_LENGTH);
+    }
+
+    CommitSkillDiffCollector(int maxTotalDiffLength) {
+        this.maxTotalDiffLength = maxTotalDiffLength;
         for (String line : DEFAULT_EXCLUDE_PATTERNS.split("\\R")) {
             String pattern = line.trim();
             if (pattern.isEmpty() || pattern.startsWith("#")) {
@@ -46,7 +63,7 @@ final class CommitSkillDiffCollector {
             }
             String normalized = pattern.replace('\\', '/');
             sensitiveMatchers.add(FileSystems.getDefault().getPathMatcher("glob:" + normalized));
-            if (!normalized.contains("/") && !normalized.contains("\\")) {
+            if (!normalized.startsWith("**/")) {
                 sensitiveMatchers.add(FileSystems.getDefault().getPathMatcher("glob:**/" + normalized));
             }
         }
@@ -64,7 +81,7 @@ final class CommitSkillDiffCollector {
                     continue;
                 }
                 appendChange(diff, change, path);
-                if (diff.length() > MAX_TOTAL_DIFF_LENGTH) {
+                if (diff.length() > maxTotalDiffLength) {
                     diff.append("\n... diff truncated because it is too long\n");
                     break;
                 }

@@ -3,12 +3,19 @@ package com.github.claudecodegui.service;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.vcs.FilePath;
+import com.intellij.openapi.vcs.LocalFilePath;
+import com.intellij.openapi.vcs.VcsException;
 import com.intellij.openapi.vcs.changes.Change;
+import com.intellij.openapi.vcs.changes.ContentRevision;
+import com.intellij.openapi.vcs.history.VcsRevisionNumber;
 import org.junit.Test;
 
 import java.util.Collections;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -143,12 +150,104 @@ public class GitCommitMessageServiceCommitAiConfigTest {
         assertTrue(service.lastPrompt.contains("Write 7-10 grouped body bullets"));
     }
 
+    @Test
+    public void shouldFilterSensitiveFilesInPromptModeDiff() {
+        GitCommitMessageService service = new GitCommitMessageService((Project) null);
+        Change envChange = new Change(null, revision(absolutePath("project/.env"), "OPENAI_API_KEY=secret"));
+        Change codeChange = new Change(null, revision(absolutePath("project/App.java"), "class App {}"));
+
+        String diff = service.generateGitDiff(List.of(envChange, codeChange));
+
+        assertTrue(diff.contains("class App"));
+        assertTrue(diff.contains("Filtered sensitive files: 1"));
+        assertFalse(diff.contains("OPENAI_API_KEY=secret"));
+    }
+
+    @Test
+    public void shouldFilterExpandedSensitivePathPatterns() {
+        String diff = new CommitSkillDiffCollector().collect(List.of(
+                new Change(null, revision(absolutePath("project/.aws/credentials"), "aws_secret_access_key=secret")),
+                new Change(null, revision(absolutePath("project/.aws/config"), "sso_session=secret")),
+                new Change(null, revision(absolutePath("project/.npmrc"), "//registry.npmjs.org/:_authToken=secret")),
+                new Change(null, revision(absolutePath("project/.netrc"), "machine example login token")),
+                new Change(null, revision(absolutePath("project/.kube/config"), "client-key-data: secret")),
+                new Change(null, revision(absolutePath("project/kubeconfig"), "client-certificate-data: secret")),
+                new Change(null, revision(absolutePath("project/auth.token"), "secret")),
+                new Change(null, revision(absolutePath("project/cert.pfx"), "secret")),
+                new Change(null, revision(absolutePath("project/.git-credentials"), "https://token@example.com"))
+        ));
+
+        assertEquals("Filtered sensitive files: 9", diff);
+    }
+
+    @Test
+    public void shouldUsePositionalDiffWhenLcsBoundaryIsExceeded() {
+        String before = repeatedLines("left", 600);
+        String after = repeatedLines("right", 600);
+        Change change = new Change(
+                revision(absolutePath("project/App.java"), before),
+                revision(absolutePath("project/App.java"), after)
+        );
+
+        String diff = new CommitSkillDiffCollector().collect(List.of(change));
+
+        assertTrue(diff.contains("- left-0"));
+        assertTrue(diff.contains("+ right-0"));
+        assertTrue(diff.contains("changed lines truncated"));
+    }
+
+    @Test
+    public void shouldOnlyAllowApiKeyLikeEnvKeyNames() throws Exception {
+        java.lang.reflect.Method method = GitCommitMessageService.class.getDeclaredMethod(
+                "normalizeAllowedApiKeyEnvKey",
+                String.class
+        );
+        method.setAccessible(true);
+        GitCommitMessageService service = new GitCommitMessageService((Project) null);
+
+        assertEquals("OPENAI_API_KEY", method.invoke(service, "OPENAI_API_KEY"));
+        assertEquals("ANTHROPIC_AUTH_TOKEN", method.invoke(service, "ANTHROPIC_AUTH_TOKEN"));
+        assertNull(method.invoke(service, "PATH"));
+        assertNull(method.invoke(service, "HOME"));
+    }
+
     private String largeDiff(int files) {
         StringBuilder diff = new StringBuilder();
         for (int i = 0; i < files; i++) {
             diff.append("=== MODIFICATION: File").append(i).append(".java ===\n+ line\n");
         }
         return diff.toString();
+    }
+
+    private static String absolutePath(String path) {
+        return new java.io.File(path).getAbsolutePath();
+    }
+
+    private static String repeatedLines(String prefix, int count) {
+        StringBuilder text = new StringBuilder();
+        for (int i = 0; i < count; i++) {
+            text.append(prefix).append("-").append(i).append("\n");
+        }
+        return text.toString();
+    }
+
+    private static ContentRevision revision(String path, String content) {
+        return new ContentRevision() {
+            @Override
+            public String getContent() throws VcsException {
+                return content;
+            }
+
+            @Override
+            public FilePath getFile() {
+                return new LocalFilePath(path, false);
+            }
+
+            @Override
+            public VcsRevisionNumber getRevisionNumber() {
+                return VcsRevisionNumber.NULL;
+            }
+        };
     }
 
     private JsonObject buildConfig(String effectiveProvider, String claudeModel, String codexModel) {
