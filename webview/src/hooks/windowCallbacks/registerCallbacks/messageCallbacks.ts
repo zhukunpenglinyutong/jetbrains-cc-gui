@@ -624,7 +624,17 @@ export function registerMessageCallbacks(
       content: content || '',
       timestamp: new Date().toISOString(),
     };
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages((prev) => {
+      // If the last message is an optimistic message with matching content,
+      // skip adding — the frontend already rendered the optimistic copy.
+      // Otherwise addUserMessage + optimistic create a brief duplicate until
+      // the next updateMessages deduplicates them.
+      const lastMsg = prev[prev.length - 1];
+      if (lastMsg?.isOptimistic && lastMsg.type === 'user' && lastMsg.content === content) {
+        return prev;
+      }
+      return [...prev, userMessage];
+    });
     userPausedRef.current = false;
     isUserAtBottomRef.current = true;
     requestAnimationFrame(() => {
