@@ -3,6 +3,8 @@ package com.github.claudecodegui.skill;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
+import com.github.claudecodegui.util.PlatformUtils;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -104,7 +106,7 @@ public final class CommitSkillResolver {
 
     private static List<Path> trustedRoots(String projectPath) {
         List<Path> roots = new ArrayList<>();
-        String userHome = System.getProperty("user.home");
+        String userHome = PlatformUtils.getHomeDirectory();
         if (userHome != null && !userHome.isEmpty()) {
             addRoot(roots, Paths.get(userHome, ".claude", "skills"));
             addRoot(roots, Paths.get(userHome, ".codex", "skills"));
