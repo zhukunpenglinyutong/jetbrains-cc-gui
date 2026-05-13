@@ -16,6 +16,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -27,6 +28,7 @@ final class CommitHttpAiClient {
     static final int DEFAULT_TIMEOUT_SECONDS = 60;
     private static final int MAX_ATTEMPTS = 3;
     private static final long RETRY_BASE_DELAY_MS = 750L;
+    private static final long RETRY_JITTER_MAX_MS = 300L;
 
     private static final Gson GSON = new Gson();
     private static final int DEFAULT_MAX_TOKENS = 1536;
@@ -42,7 +44,11 @@ final class CommitHttpAiClient {
         body.addProperty("max_tokens", DEFAULT_MAX_TOKENS);
         body.addProperty("temperature", 0.0);
         body.addProperty("stream", true);
-        body.add("messages", buildClaudeMessages(prompt, body));
+        ClaudeMessagePayload payload = buildClaudeMessagePayload(prompt);
+        if (!payload.system().isEmpty()) {
+            body.addProperty("system", payload.system());
+        }
+        body.add("messages", payload.messages());
 
         Map<String, String> headers = new LinkedHashMap<>();
         headers.put("x-api-key", config.apiKey);
@@ -294,7 +300,7 @@ final class CommitHttpAiClient {
     }
 
     private void sleepBeforeRetry(int attempt) throws InterruptedException {
-        long delay = RETRY_BASE_DELAY_MS * attempt;
+        long delay = RETRY_BASE_DELAY_MS * attempt + ThreadLocalRandom.current().nextLong(RETRY_JITTER_MAX_MS);
         Thread.sleep(delay);
     }
 
@@ -355,17 +361,17 @@ final class CommitHttpAiClient {
         return messages;
     }
 
-    private JsonArray buildClaudeMessages(String prompt, JsonObject body) {
+    private ClaudeMessagePayload buildClaudeMessagePayload(String prompt) {
         JsonArray messages = new JsonArray();
         String[] parts = splitPrompt(prompt);
-        if (!parts[0].isEmpty()) {
-            body.addProperty("system", parts[0]);
-        }
         JsonObject user = new JsonObject();
         user.addProperty("role", "user");
         user.addProperty("content", parts[0].isEmpty() ? prompt : parts[1]);
         messages.add(user);
-        return messages;
+        return new ClaudeMessagePayload(parts[0], messages);
+    }
+
+    private record ClaudeMessagePayload(String system, JsonArray messages) {
     }
 
     private String[] splitPrompt(String prompt) {
