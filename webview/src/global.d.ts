@@ -112,6 +112,7 @@ interface Window {
    * Usage statistics update callback
    */
   onUsageUpdate?: (json: string) => void;
+  onUsageLimitsUpdate?: (json: string) => void;
 
   /**
    * Mode changed callback

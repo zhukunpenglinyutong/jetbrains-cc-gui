@@ -114,6 +114,11 @@ class ClaudeStreamAdapter {
             return;
         }
 
+        if (line.startsWith("[LIMITS]")) {
+            callback.onMessage("limits", line.substring("[LIMITS]".length()).trim());
+            return;
+        }
+
         if (line.startsWith("[MESSAGE_START]")) {
             callback.onMessage("message_start", "");
             return;

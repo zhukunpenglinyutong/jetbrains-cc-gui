@@ -125,6 +125,7 @@ public class ModelProviderHandler {
 
             refreshSlashCommandsForProvider(provider);
             usagePushService.refreshContextBar();
+            refreshLimitsForProvider(provider);
         } catch (Exception e) {
             LOG.error("[ModelProviderHandler] Failed to set provider: " + e.getMessage(), e);
         }
@@ -255,6 +256,15 @@ public class ModelProviderHandler {
 
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private void refreshLimitsForProvider(String provider) {
+        String method = "codex".equalsIgnoreCase(provider) ? "codex.refreshLimits" : "claude.refreshLimits";
+        context.getClaudeSDKBridge().sendLimitsCommand(method, json ->
+            ApplicationManager.getApplication().invokeLater(() ->
+                context.callJavaScript("window.onUsageLimitsUpdate", context.escapeJs(json))
+            )
+        );
     }
 
     public static int getModelContextLimit(String model) {
