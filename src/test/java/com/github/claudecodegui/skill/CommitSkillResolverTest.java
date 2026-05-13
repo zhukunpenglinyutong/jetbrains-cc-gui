@@ -6,7 +6,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 
 public class CommitSkillResolverTest {
 
@@ -17,22 +16,31 @@ public class CommitSkillResolverTest {
         Path untrustedSkill = Files.createDirectories(root.resolve("outside").resolve("skill"));
         Files.writeString(allowedSkill.resolve("SKILL.md"), "allowed skill");
         Files.writeString(untrustedSkill.resolve("SKILL.md"), "untrusted skill");
+        String builtinSkill = CommitSkillResolver.resolveSkillContent(null);
 
         assertEquals("allowed skill", CommitSkillResolver.resolveSkillContent(
                 "local:" + allowedSkill,
                 root.toString()
         ));
-        assertFalse(CommitSkillResolver.resolveSkillContent(
+        assertEquals("allowed skill", CommitSkillResolver.resolveSkillContent(
+                allowedSkill.toString(),
+                root.toString()
+        ));
+        assertEquals(builtinSkill, CommitSkillResolver.resolveSkillContent(
                 "local:" + untrustedSkill,
                 root.toString()
-        ).contains("untrusted skill"));
-        assertFalse(CommitSkillResolver.resolveSkillContent(
+        ));
+        assertEquals(builtinSkill, CommitSkillResolver.resolveSkillContent(
+                untrustedSkill.toString(),
+                root.toString()
+        ));
+        assertEquals(builtinSkill, CommitSkillResolver.resolveSkillContent(
                 "local:../../../etc/passwd",
                 root.toString()
-        ).contains("root:"));
-        assertFalse(CommitSkillResolver.resolveSkillContent(
+        ));
+        assertEquals(builtinSkill, CommitSkillResolver.resolveSkillContent(
                 "../../../etc/passwd",
                 root.toString()
-        ).contains("root:"));
+        ));
     }
 }

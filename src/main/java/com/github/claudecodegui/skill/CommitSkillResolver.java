@@ -84,12 +84,18 @@ public final class CommitSkillResolver {
     private static boolean isPathWithinTrustedRoots(Path candidate, String projectPath) {
         Path normalizedCandidate;
         try {
-            normalizedCandidate = candidate.toAbsolutePath().normalize();
+            normalizedCandidate = candidate.toAbsolutePath().normalize().toRealPath();
         } catch (Exception e) {
             return false;
         }
         for (Path root : trustedRoots(projectPath)) {
-            if (normalizedCandidate.startsWith(root)) {
+            Path realRoot;
+            try {
+                realRoot = root.toRealPath();
+            } catch (Exception e) {
+                continue;
+            }
+            if (normalizedCandidate.startsWith(realRoot)) {
                 return true;
             }
         }
