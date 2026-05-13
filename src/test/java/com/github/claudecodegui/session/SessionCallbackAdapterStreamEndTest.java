@@ -5,6 +5,7 @@ import org.junit.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.LongConsumer;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.Assert.*;
 
@@ -48,7 +49,9 @@ public class SessionCallbackAdapterStreamEndTest {
 
         /** Simulate the flush callback path (primary). */
         void simulateFlushCallback(long sequence) {
-            if (streamEndSignalSent) return;
+            if (streamEndSignalSent) {
+                return;
+            }
             streamEndSignalSent = true;
             jsTarget.callJavaScript("onStreamEnd", String.valueOf(sequence));
             jsTarget.callJavaScript("showLoading", "false");
@@ -56,7 +59,9 @@ public class SessionCallbackAdapterStreamEndTest {
 
         /** Simulate the fallback alarm path. */
         void simulateFallback() {
-            if (streamEndSignalSent) return;
+            if (streamEndSignalSent) {
+                return;
+            }
             streamEndSignalSent = true;
             jsTarget.callJavaScript("onStreamEnd", String.valueOf(-1));
             jsTarget.callJavaScript("showLoading", "false");
@@ -159,15 +164,15 @@ public class SessionCallbackAdapterStreamEndTest {
 
         // Simulate what happens when flush(callback) is called:
         // The callback receives the sequence from the coalescer.
-        final long[] capturedSequence = {-999};
+        AtomicLong capturedSequence = new AtomicLong(-999);
         LongConsumer flushCallback = seq -> {
-            capturedSequence[0] = seq;
+            capturedSequence.set(seq);
             jsTarget.callJavaScript("onStreamEnd", String.valueOf(seq));
         };
 
         flushCallback.accept(77);
 
-        assertEquals(77, capturedSequence[0]);
+        assertEquals(77, capturedSequence.get());
         assertEquals(1, jsTarget.calls.size());
         assertEquals("onStreamEnd:77", jsTarget.calls.get(0));
     }

@@ -193,15 +193,6 @@ public class SessionHandler extends BaseMessageHandler {
             // [FIX] Pass agent prompt and file tags directly to session
             context.getSession().send(finalPrompt, finalAgentPrompt, finalFileTagPaths, finalRequestedPermissionMode)
                 .thenRun(() -> {
-                    // Claude now triggers success on actual stream_end callback.
-                    // Codex has no stream_end event, keep success trigger at completion.
-                    if (project != null && "codex".equals(context.getSession().getProvider())) {
-                        var session = context.getSession();
-                        ClaudeNotifier.showSuccess(
-                            project,
-                            ClaudeNotifier.buildTitleFromSession(session),
-                            ClaudeNotifier.buildPreviewFromSession(session, "Task completed"));
-                    }
                 })
                 .exceptionally(ex -> {
                     LOG.error("Failed to send message", ex);
@@ -339,15 +330,6 @@ public class SessionHandler extends BaseMessageHandler {
             // [FIX] Pass agent prompt and file tags directly to session
             context.getSession().send(prompt, attachments, finalAgentPrompt, finalFileTagPaths, finalRequestedPermissionMode)
                 .thenRun(() -> {
-                    // Claude now triggers success on actual stream_end callback.
-                    // Codex has no stream_end event, keep success trigger at completion.
-                    if (project != null && "codex".equals(context.getSession().getProvider())) {
-                        var session = context.getSession();
-                        ClaudeNotifier.showSuccess(
-                            project,
-                            ClaudeNotifier.buildTitleFromSession(session),
-                            ClaudeNotifier.buildPreviewFromSession(session, "Task completed"));
-                    }
                 })
                 .exceptionally(ex -> {
                     LOG.error("Failed to send message with attachments", ex);

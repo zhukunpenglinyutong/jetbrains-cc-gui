@@ -111,6 +111,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     window.__lastStreamEndedAt = undefined;
     // Clear idempotency guard for the new turn
     window.__streamEndProcessedTurnId = undefined;
+    window.__streamingDeltaRenderingFrame = undefined;
     // Record turn start time for duration calculation in onStreamEnd
     window.__turnStartedAt = Date.now();
     streamingContentRef.current = '';
@@ -159,10 +160,11 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
   const createStreamingRafScheduler = (
     timeoutRef: React.MutableRefObject<number | null>,
     lastUpdateRef: React.MutableRefObject<number>,
+    markDeltaFrame: boolean,
   ) => {
     const scheduleRaf = (): void => {
       if (timeoutRef.current != null) return;
-      timeoutRef.current = requestAnimationFrame(() => {
+      timeoutRef.current = requestAnimationFrame((frameTime) => {
         timeoutRef.current = null;
         const now = Date.now();
         const elapsed = now - lastUpdateRef.current;
@@ -171,6 +173,9 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
           return;
         }
         lastUpdateRef.current = now;
+        if (markDeltaFrame) {
+          window.__streamingDeltaRenderingFrame = frameTime;
+        }
         startTransition(() => {
           setMessages((prev) => {
             const newMessages = [...prev];
@@ -195,8 +200,16 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     return scheduleRaf;
   };
 
-  const scheduleContentRaf = createStreamingRafScheduler(contentUpdateTimeoutRef, lastContentUpdateRef);
-  const scheduleThinkingRaf = createStreamingRafScheduler(thinkingUpdateTimeoutRef, lastThinkingUpdateRef);
+  const scheduleContentRaf = createStreamingRafScheduler(
+    contentUpdateTimeoutRef,
+    lastContentUpdateRef,
+    true,
+  );
+  const scheduleThinkingRaf = createStreamingRafScheduler(
+    thinkingUpdateTimeoutRef,
+    lastThinkingUpdateRef,
+    false,
+  );
 
   window.onContentDelta = (delta: string) => {
     if (window.__sessionTransitioning) return;
@@ -443,6 +456,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
 
     // Mark this turn as processed — idempotency guard for dual-path delivery
     window.__streamEndProcessedTurnId = endedStreamingTurnId;
+    window.__streamingDeltaRenderingFrame = undefined;
   };
 
   // Streaming heartbeat — lightweight signal from backend during tool execution

@@ -208,28 +208,6 @@
         "reset": "초기화",
         "hint": "채팅 영역의 배경색을 사용자 지정합니다. 비워두면 테마 기본값을 따릅니다."
       },
-      "soundNotification": {
-        "label": "작업 완료 알림음",
-        "enabled": "활성화",
-        "disabled": "비활성화",
-        "hint": "활성화하면 AI가 작업을 완료했을 때 알림음이 재생되어, 화면에서 떨어져 있을 때에도 알 수 있습니다.",
-        "onlyWhenUnfocused": "IDE가 포커스되지 않았을 때만 재생",
-        "onlyWhenUnfocusedHint": "활성화하면 IDE 창이 포커스되지 않았을 때만 알림음이 재생됩니다.",
-        "selectSound": "알림음",
-        "soundDefault": "기본",
-        "soundChime": "Chime",
-        "soundBell": "Bell",
-        "soundDing": "Ding",
-        "soundSuccess": "Success",
-        "soundCustom": "사용자 지정...",
-        "customSound": "사용자 지정 알림음 파일",
-        "customSoundPlaceholder": "오디오 파일 경로를 선택하거나 입력하세요",
-        "customSoundHint": "WAV, MP3, AIFF 형식 지원",
-        "testSound": "테스트",
-        "browse": "찾아보기",
-        "useDefault": "기본값 사용",
-        "customSoundSaved": "사용자 지정 알림음 저장됨"
-      },
       "userMsgColor": {
         "label": "사용자 메시지 색상",
         "custom": "사용자 지정",

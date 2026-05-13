@@ -11,19 +11,44 @@ import com.intellij.openapi.diagnostic.Logger;
 /**
  * Settings and usage statistics message handler.
  * Delegates to focused sub-handlers for each concern.
+ *
+ * @author melon
  */
 public class SettingsHandler extends BaseMessageHandler {
 
+    /**
+     * log.
+     */
     private static final Logger LOG = Logger.getInstance(SettingsHandler.class);
 
+    /**
+     * input history handler.
+     */
     private final InputHistoryHandler inputHistoryHandler;
-    private final SoundSettingsHandler soundSettingsHandler;
+    /**
+     * usage push service.
+     */
     private final UsagePushService usagePushService;
+    /**
+     * permission mode handler.
+     */
     private final PermissionModeHandler permissionModeHandler;
+    /**
+     * model provider handler.
+     */
     private final ModelProviderHandler modelProviderHandler;
+    /**
+     * node path handler.
+     */
     private final NodePathHandler nodePathHandler;
+    /**
+     * project config handler.
+     */
     private final ProjectConfigHandler projectConfigHandler;
 
+    /**
+     * supported types.
+     */
     private static final String[] SUPPORTED_TYPES = {
         "get_mode",
         "set_mode",
@@ -65,21 +90,17 @@ public class SettingsHandler extends BaseMessageHandler {
         "get_input_history",
         "record_input_history",
         "delete_input_history_item",
-        "clear_input_history",
-        // Sound notification configuration
-        "get_sound_notification_config",
-        "set_sound_notification_enabled",
-        "set_sound_only_when_unfocused",
-        "set_selected_sound",
-        "set_custom_sound_path",
-        "test_sound",
-        "browse_sound_file"
+        "clear_input_history"
     };
 
+    /**
+     * Settings Handler
+     *
+     * @param context context
+     */
     public SettingsHandler(HandlerContext context) {
         super(context);
         this.inputHistoryHandler = new InputHistoryHandler(context);
-        this.soundSettingsHandler = new SoundSettingsHandler(context);
         this.usagePushService = new UsagePushService(context);
         this.permissionModeHandler = new PermissionModeHandler(context);
         this.modelProviderHandler = new ModelProviderHandler(context, usagePushService);
@@ -91,6 +112,7 @@ public class SettingsHandler extends BaseMessageHandler {
 
     /**
      * Register theme change listener.
+     *
      */
     private void registerThemeChangeListener() {
         ThemeConfigService.registerThemeChangeListener(themeConfig -> {
@@ -100,11 +122,23 @@ public class SettingsHandler extends BaseMessageHandler {
         });
     }
 
+    /**
+     * Get Supported Types
+     *
+     * @return string[]
+     */
     @Override
     public String[] getSupportedTypes() {
         return SUPPORTED_TYPES;
     }
 
+    /**
+     * Handle
+     *
+     * @param type type
+     * @param content content
+     * @return boolean
+     */
     @Override
     public boolean handle(String type, String content) {
         switch (type) {
@@ -242,28 +276,6 @@ public class SettingsHandler extends BaseMessageHandler {
             case "clear_input_history":
                 inputHistoryHandler.handleClearInputHistory();
                 return true;
-            // Sound notification configuration
-            case "get_sound_notification_config":
-                soundSettingsHandler.handleGetSoundNotificationConfig();
-                return true;
-            case "set_sound_notification_enabled":
-                soundSettingsHandler.handleSetSoundNotificationEnabled(content);
-                return true;
-            case "set_sound_only_when_unfocused":
-                soundSettingsHandler.handleSetSoundOnlyWhenUnfocused(content);
-                return true;
-            case "set_selected_sound":
-                soundSettingsHandler.handleSetSelectedSound(content);
-                return true;
-            case "set_custom_sound_path":
-                soundSettingsHandler.handleSetCustomSoundPath(content);
-                return true;
-            case "test_sound":
-                soundSettingsHandler.handleTestSound(content);
-                return true;
-            case "browse_sound_file":
-                soundSettingsHandler.handleBrowseSoundFile();
-                return true;
             default:
                 return false;
         }
@@ -271,6 +283,9 @@ public class SettingsHandler extends BaseMessageHandler {
 
     /**
      * Expose getModelContextLimit for callers that previously used the static method on SettingsHandler.
+     *
+     * @param model model
+     * @return int
      */
     public static int getModelContextLimit(String model) {
         return ModelProviderHandler.getModelContextLimit(model);

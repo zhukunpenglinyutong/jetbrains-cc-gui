@@ -31,10 +31,8 @@ describe('useSettingsWindowCallbacks', () => {
     setLoading: vi.fn(),
     setCodexLoading: vi.fn(),
     setCodexConfigLoading: vi.fn(),
-    setSoundNotificationEnabled: vi.fn(),
-    setSoundOnlyWhenUnfocused: vi.fn(),
-    setSelectedSound: vi.fn(),
-    setCustomSoundPath: vi.fn(),
+    setProjectCommitPrompt: vi.fn(),
+    setSavingProjectCommitPrompt: vi.fn(),
     updateProviders: vi.fn(),
     updateActiveProvider: vi.fn(),
     loadProviders: vi.fn(),
@@ -74,7 +72,6 @@ describe('useSettingsWindowCallbacks', () => {
     expect(window.sendToJava).toHaveBeenCalledWith('get_commit_prompt:');
     expect(window.sendToJava).toHaveBeenCalledWith('get_commit_ai_config:');
     expect(window.sendToJava).toHaveBeenCalledWith('get_prompt_enhancer_config:');
-    expect(window.sendToJava).toHaveBeenCalledWith('get_sound_notification_config:');
     expect(window.sendToJava).toHaveBeenCalledWith('get_ui_font_config:');
   });
 

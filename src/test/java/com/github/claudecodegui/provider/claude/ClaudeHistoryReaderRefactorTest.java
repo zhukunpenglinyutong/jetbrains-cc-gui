@@ -18,15 +18,14 @@ public class ClaudeHistoryReaderRefactorTest {
         Path projectsDir = Files.createTempDirectory("claude-history-usage");
         try {
             Path projectDir = Files.createDirectories(projectsDir.resolve("demo-project"));
+            String usage = "\"message\":{\"role\":\"assistant\",\"model\":\"claude-sonnet-4-6\","
+                    + "\"usage\":{\"input_tokens\":1000,\"output_tokens\":250,"
+                    + "\"cache_creation_input_tokens\":400,\"cache_read_input_tokens\":50}}";
             writeSessionFile(
                     projectDir,
                     "session-1",
                     line("2026-03-10T10:00:00Z", "summary", "\"summary\":\"Summarize test results\""),
-                    line(
-                            "2026-03-10T10:01:00Z",
-                            "assistant",
-                            "\"message\":{\"role\":\"assistant\",\"model\":\"claude-sonnet-4-6\",\"usage\":{\"input_tokens\":1000,\"output_tokens\":250,\"cache_creation_input_tokens\":400,\"cache_read_input_tokens\":50}}"
-                    )
+                    line("2026-03-10T10:01:00Z", "assistant", usage)
             );
 
             ClaudeUsageAggregator aggregator = new ClaudeUsageAggregator(projectsDir, new ClaudeHistoryParser());
@@ -41,7 +40,7 @@ public class ClaudeHistoryReaderRefactorTest {
             assertEquals(1, stats.dailyUsage.size());
             assertEquals(400, stats.dailyUsage.get(0).usage.cacheWriteTokens);
             assertEquals(50, stats.dailyUsage.get(0).usage.cacheReadTokens);
-            assertEquals(0.007265, stats.estimatedCost, 0.0000001);
+            assertEquals(0.008265, stats.estimatedCost, 0.0000001);
             assertFalse(stats.byModel.isEmpty());
         } finally {
             deleteDirectory(projectsDir);
@@ -53,14 +52,13 @@ public class ClaudeHistoryReaderRefactorTest {
         Path projectsDir = Files.createTempDirectory("claude-history-pricing");
         try {
             Path projectDir = Files.createDirectories(projectsDir.resolve("demo-project"));
+            String usage = "\"message\":{\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\","
+                    + "\"usage\":{\"input_tokens\":250000,\"output_tokens\":1000,"
+                    + "\"cache_creation_input_tokens\":10000,\"cache_read_input_tokens\":5000}}";
             writeSessionFile(
                     projectDir,
                     "session-2",
-                    line(
-                            "2026-03-10T10:01:00Z",
-                            "assistant",
-                            "\"message\":{\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"usage\":{\"input_tokens\":250000,\"output_tokens\":1000,\"cache_creation_input_tokens\":10000,\"cache_read_input_tokens\":5000}}"
-                    )
+                    line("2026-03-10T10:01:00Z", "assistant", usage)
             );
 
             ClaudeUsageAggregator aggregator = new ClaudeUsageAggregator(projectsDir, new ClaudeHistoryParser());

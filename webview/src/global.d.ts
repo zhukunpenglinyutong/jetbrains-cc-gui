@@ -275,11 +275,6 @@ interface Window {
   updateProjectCommitPrompt?: (json: string) => void;
 
   /**
-   * Update sound notification configuration
-   */
-  updateSoundNotificationConfig?: (json: string) => void;
-
-  /**
    * Update AI commit generation enabled state
    */
   updateCommitGenerationEnabled?: (json: string) => void;
@@ -680,6 +675,7 @@ interface Window {
   __pendingUpdateRaf?: number | null;
   __pendingUpdateJson?: string | null;
   __pendingUpdateSequence?: number | null;
+  __streamingDeltaRenderingFrame?: number;
   __minAcceptedUpdateSequence?: number;
   /** Cancel pending rAF-deferred updateMessages (set by messageCallbacks, called by onStreamEnd). */
   __cancelPendingUpdateMessages?: () => void;

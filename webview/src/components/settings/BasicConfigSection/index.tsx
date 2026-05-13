@@ -69,18 +69,6 @@ interface BasicConfigSectionProps {
   // AI title generation configuration
   aiTitleGenerationEnabled?: boolean;
   onAiTitleGenerationEnabledChange?: (enabled: boolean) => void;
-  // Sound notification configuration
-  soundNotificationEnabled?: boolean;
-  onSoundNotificationEnabledChange?: (enabled: boolean) => void;
-  soundOnlyWhenUnfocused?: boolean;
-  onSoundOnlyWhenUnfocusedChange?: (enabled: boolean) => void;
-  selectedSound?: string;
-  onSelectedSoundChange?: (soundId: string) => void;
-  customSoundPath?: string;
-  onCustomSoundPathChange?: (path: string) => void;
-  onSaveCustomSoundPath?: () => void;
-  onTestSound?: () => void;
-  onBrowseSound?: () => void;
   // Task completion notification configuration
   taskCompletionNotificationEnabled?: boolean;
   onTaskCompletionNotificationEnabledChange?: (enabled: boolean) => void;
@@ -146,17 +134,6 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onStatusBarWidgetEnabledChange={props.onStatusBarWidgetEnabledChange}
           aiTitleGenerationEnabled={props.aiTitleGenerationEnabled}
           onAiTitleGenerationEnabledChange={props.onAiTitleGenerationEnabledChange}
-          soundNotificationEnabled={props.soundNotificationEnabled}
-          onSoundNotificationEnabledChange={props.onSoundNotificationEnabledChange}
-          soundOnlyWhenUnfocused={props.soundOnlyWhenUnfocused}
-          onSoundOnlyWhenUnfocusedChange={props.onSoundOnlyWhenUnfocusedChange}
-          selectedSound={props.selectedSound}
-          onSelectedSoundChange={props.onSelectedSoundChange}
-          customSoundPath={props.customSoundPath}
-          onCustomSoundPathChange={props.onCustomSoundPathChange}
-          onSaveCustomSoundPath={props.onSaveCustomSoundPath}
-          onTestSound={props.onTestSound}
-          onBrowseSound={props.onBrowseSound}
           taskCompletionNotificationEnabled={props.taskCompletionNotificationEnabled}
           onTaskCompletionNotificationEnabledChange={props.onTaskCompletionNotificationEnabledChange}
         />

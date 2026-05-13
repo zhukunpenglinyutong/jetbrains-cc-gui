@@ -361,7 +361,11 @@ public class CodexMessageConverter {
         JsonArray content = new JsonArray();
         content.add(toolUse);
 
-        frontendMsg.addProperty("content", "Tool: " + toolName);
+        // FIX: Don't set placeholder text in content field for tool_use messages.
+        // The frontend uses the raw field to render formatted tool blocks.
+        // Setting placeholder text causes it to be displayed as plain text when
+        // switching tabs and replaying session state.
+        frontendMsg.addProperty("content", "");
 
         JsonObject rawObj = new JsonObject();
         rawObj.add("content", content);
@@ -570,7 +574,11 @@ public class CodexMessageConverter {
         JsonArray content = new JsonArray();
         content.add(toolUse);
 
-        frontendMsg.addProperty("content", "Tool: " + toolName);
+        // FIX: Don't set placeholder text in content field for tool_use messages.
+        // The frontend uses the raw field to render formatted tool blocks.
+        // Setting placeholder text causes it to be displayed as plain text when
+        // switching tabs and replaying session state.
+        frontendMsg.addProperty("content", "");
 
         JsonObject rawObj = new JsonObject();
         rawObj.add("content", content);

@@ -285,6 +285,16 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
         }, 300);
     }
 
+    @Override
+    public void onStreamCompleted() {
+        if (isInactive()) {
+            return;
+        }
+        if (streamEndCallback != null) {
+            safeRun("streamEndCallback", streamEndCallback);
+        }
+    }
+
     /**
      * Send the onStreamEnd signal and associated cleanup to the frontend.
      * Called from either the primary (flush callback) or fallback (Alarm) path.
@@ -300,9 +310,6 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
                 jsTarget.callJavaScript("onStreamEnd", String.valueOf(sequence)));
         safeRun("callJavaScript(showLoading, false)", () ->
                 jsTarget.callJavaScript("showLoading", "false"));
-        if (streamEndCallback != null) {
-            safeRun("streamEndCallback", streamEndCallback);
-        }
         LOG.debug("Stream ended - notified frontend (sequence=" + sequence + ")");
     }
 

@@ -2,7 +2,6 @@ package com.github.claudecodegui.notifications;
 
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.session.ClaudeSession;
-import com.github.claudecodegui.util.SoundNotificationService;
 import com.github.claudecodegui.util.SystemNotificationService;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -12,6 +11,7 @@ import com.intellij.openapi.project.Project;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ConcurrentModificationException;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -20,12 +20,22 @@ import java.util.regex.Pattern;
  */
 public class ClaudeNotifier {
 
-    // Pre-compiled patterns for {@link #condenseForToast}, reused across notifications.
+    /**
+     * code fence open.
+     */ // Pre-compiled patterns for {@link #condenseForToast}, reused across notifications.
     private static final Pattern CODE_FENCE_OPEN = Pattern.compile("```[a-zA-Z0-9_+\\-]*\\n");
+    /**
+     * code fence close.
+     */
     private static final Pattern CODE_FENCE_CLOSE = Pattern.compile("```");
+    /**
+     * whitespace run.
+     */
     private static final Pattern WHITESPACE_RUN = Pattern.compile("\\s+");
 
-    // Cap how much of an assistant message we run regex over. The toast itself only
+    /**
+     * condense max input.
+     */ // Cap how much of an assistant message we run regex over. The toast itself only
     // shows ~220 codepoints; processing the whole message (which can be tens of KB)
     // is wasteful and never adds visible content.
     private static final int CONDENSE_MAX_INPUT = 4096;
@@ -43,7 +53,7 @@ public class ClaudeNotifier {
     }
 
     public static void showSuccess(@NotNull Project project, String message) {
-        showSuccess(project, null, message);
+        show(project, "Claude ✓", message, 5000);
     }
 
     /**
@@ -51,12 +61,10 @@ public class ClaudeNotifier {
      * When {@code title} is null/blank, the toast falls back to the i18n
      * default ({@code notifier.taskComplete.title}).
      */
-    public static void showSuccess(@NotNull Project project, @Nullable String title, String message) {
+    public static void showTaskCompletionSuccess(@NotNull Project project, @Nullable String title, String message) {
         show(project, "Claude [OK]", message, 5000);
         // Show the task completion visual notification toast
         SystemNotificationService.getInstance().showVisualNotificationToast(project, title, message);
-        // Play the task completion notification sound
-        SoundNotificationService.getInstance().playTaskCompleteSound();
     }
 
     /**
@@ -146,8 +154,6 @@ public class ClaudeNotifier {
      * Extract the text of the <b>last</b> text block from the raw JSON of an assistant message.
      * In tool-use turns the raw content array contains multiple text blocks
      * (pre-tool-call prose + final answer); this method returns only the final one.
-     *
-     * @return the last text block's content, or {@code null} if unavailable.
      */
     @Nullable
     private static String extractLastTextFromRaw(@NotNull ClaudeSession.Message m) {

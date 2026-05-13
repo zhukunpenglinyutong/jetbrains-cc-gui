@@ -26,10 +26,53 @@ import {
   resolveSandboxModeOverride,
   resolveApprovalPolicyOverride,
   buildCodexCliEnvironment,
-  buildErrorPayload
+  buildErrorPayload,
+  isIgnorableWindowsTerminationNoiseLine
 } from './codex-utils.js';
 import { collectAgentsInstructions } from './codex-agents-loader.js';
 import { createInitialEventState, processCodexEventStream } from './codex-event-handler.js';
+
+const CODEX_RUN_NOISE_FILTER_PATCHED = Symbol.for('ccgui.codex.runNoiseFilterPatched');
+
+export function isIgnorableCodexEventNoiseLine(line) {
+  return isIgnorableWindowsTerminationNoiseLine(line);
+}
+
+export async function* filterCodexExperimentalJsonLines(source, onNoise = () => {}) {
+  for await (const item of source) {
+    if (isIgnorableCodexEventNoiseLine(item)) {
+      onNoise(item);
+      continue;
+    }
+    yield item;
+  }
+}
+
+function installCodexRunNoiseFilter(codex) {
+  const execInstance = codex?.exec;
+  const execProto = execInstance ? Object.getPrototypeOf(execInstance) : null;
+  if (!execProto || typeof execProto.run !== 'function') {
+    logWarn('CODEX_JSON_STREAM', 'Cannot install noise filter: exec.run not found on prototype');
+    return;
+  }
+  if (execProto[CODEX_RUN_NOISE_FILTER_PATCHED]) {
+    return;
+  }
+
+  const originalRun = execProto.run;
+  execProto.run = function patchedCodexRun(...args) {
+    const source = originalRun.apply(this, args);
+    return filterCodexExperimentalJsonLines(source, (line) => {
+      logWarn('CODEX_JSON_STREAM', `Filtered non-JSON stdout line from Codex CLI: ${line}`);
+    });
+  };
+  Object.defineProperty(execProto, CODEX_RUN_NOISE_FILTER_PATCHED, {
+    value: true,
+    configurable: false,
+    enumerable: false,
+    writable: false
+  });
+}
 
 // ---------------------------------------------------------------------------
 // sendMessage
@@ -110,6 +153,7 @@ export async function sendMessage(
     }));
 
     const codex = new Codex(codexOptions);
+    installCodexRunNoiseFilter(codex);
 
     // ============================================================
     // 2. Map Unified Permission Mode to Codex Format

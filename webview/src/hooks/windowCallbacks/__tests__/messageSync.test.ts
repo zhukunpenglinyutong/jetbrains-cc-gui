@@ -246,6 +246,22 @@ describe('appendOptimisticMessageIfMissing', () => {
     expect(result[0]).toBe(backendMsg);
   });
 
+  it('matches backend user message when backend timestamp is numeric milliseconds', () => {
+    const tsMs = Date.now();
+    const optimistic = makeUserMsg('numeric backend timestamp', {
+      isOptimistic: true,
+      timestamp: new Date(tsMs).toISOString(),
+    });
+    const backendMsg = makeUserMsg('numeric backend timestamp', {
+      timestamp: String(tsMs),
+    });
+
+    const result = appendOptimisticMessageIfMissing([optimistic], [backendMsg]);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe(backendMsg);
+  });
+
   it('matches delayed optimistic text against the latest backend user when older history has same content', () => {
     const optimistic = makeUserMsg('repeatable prompt', {
       isOptimistic: true,
@@ -488,6 +504,31 @@ describe('preserveStreamingAssistantContent', () => {
     );
     expect(result).toBe(next);
     expect(result[0].content).toBe('new streaming');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// preserveLatestMessagesOnShrink
+// ---------------------------------------------------------------------------
+
+describe('preserveLatestMessagesOnShrink', () => {
+  it('does not re-append a duplicated Codex user tail when backend already contains the same user message', async () => {
+    const { preserveLatestMessagesOnShrink } = await import('../messageSync');
+    const earlier = makeUserMsg('older history');
+    const confirmed = makeUserMsg('resume first prompt', { timestamp: '1746600000000' });
+    const optimisticDuplicate = makeUserMsg('resume first prompt', {
+      timestamp: new Date().toISOString(),
+      isOptimistic: true,
+    });
+
+    const result = preserveLatestMessagesOnShrink(
+      [earlier, confirmed, optimisticDuplicate],
+      [earlier, confirmed],
+      'codex',
+    );
+
+    expect(result).toHaveLength(2);
+    expect(result[1]).toBe(confirmed);
   });
 });
 

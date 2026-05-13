@@ -54,10 +54,6 @@ export interface UseSettingsBasicActionsReturn {
   savingCommitPrompt: boolean;
   projectCommitPrompt: string;
   savingProjectCommitPrompt: boolean;
-  soundNotificationEnabled: boolean;
-  soundOnlyWhenUnfocused: boolean;
-  selectedSound: string;
-  customSoundPath: string;
   diffExpandedByDefault: boolean;
   historyCompletionEnabled: boolean;
   commitGenerationEnabled: boolean;
@@ -79,13 +75,6 @@ export interface UseSettingsBasicActionsReturn {
   handleCodexSandboxModeChange: (mode: 'workspace-write' | 'danger-full-access') => void;
   handleSendShortcutChange: (shortcut: 'enter' | 'cmdEnter') => void;
   handleAutoOpenFileEnabledChange: (enabled: boolean) => void;
-  handleSoundNotificationEnabledChange: (enabled: boolean) => void;
-  handleSoundOnlyWhenUnfocusedChange: (enabled: boolean) => void;
-  handleSelectedSoundChange: (soundId: string) => void;
-  handleCustomSoundPathChange: (path: string) => void;
-  handleSaveCustomSoundPath: () => void;
-  handleTestSound: () => void;
-  handleBrowseSound: () => void;
   handleSaveCommitPrompt: () => void;
   handleSaveProjectCommitPrompt: () => void;
   handleCommitGenerationEnabledChange: (enabled: boolean) => void;
@@ -127,10 +116,6 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setSavingCommitPrompt: (saving: boolean) => void;
   /** @internal */ setProjectCommitPrompt: (prompt: string) => void;
   /** @internal */ setSavingProjectCommitPrompt: (saving: boolean) => void;
-  /** @internal */ setSoundNotificationEnabled: (enabled: boolean) => void;
-  /** @internal */ setSoundOnlyWhenUnfocused: (enabled: boolean) => void;
-  /** @internal */ setSelectedSound: (soundId: string) => void;
-  /** @internal */ setCustomSoundPath: (path: string) => void;
   /** @internal */ setDiffExpandedByDefault: (expanded: boolean) => void;
   /** @internal */ setHistoryCompletionEnabled: (enabled: boolean) => void;
   /** @internal */ setCommitGenerationEnabled: (enabled: boolean) => void;
@@ -193,12 +178,6 @@ export function useSettingsBasicActions({
   // Project-level commit AI prompt configuration
   const [projectCommitPrompt, setProjectCommitPrompt] = useState('');
   const [savingProjectCommitPrompt, setSavingProjectCommitPrompt] = useState(false);
-
-  // Sound notification configuration
-  const [soundNotificationEnabled, setSoundNotificationEnabled] = useState<boolean>(false);
-  const [soundOnlyWhenUnfocused, setSoundOnlyWhenUnfocused] = useState<boolean>(false);
-  const [selectedSound, setSelectedSound] = useState<string>('default');
-  const [customSoundPath, setCustomSoundPath] = useState<string>('');
 
   // Diff expanded by default configuration (localStorage-only)
   const [diffExpandedByDefault, setDiffExpandedByDefault] = useState<boolean>(() => {
@@ -326,49 +305,6 @@ export function useSettingsBasicActions({
       sendToJava(`set_auto_open_file_enabled:${JSON.stringify(payload)}`);
     }
   }, [onAutoOpenFileEnabledChangeProp]);
-
-  // Sound notification toggle change handler
-  const handleSoundNotificationEnabledChange = useCallback((enabled: boolean) => {
-    setSoundNotificationEnabled(enabled);
-    const payload = { enabled };
-    sendToJava(`set_sound_notification_enabled:${JSON.stringify(payload)}`);
-  }, []);
-
-  // Sound only-when-unfocused toggle change handler
-  const handleSoundOnlyWhenUnfocusedChange = useCallback((enabled: boolean) => {
-    setSoundOnlyWhenUnfocused(enabled);
-    const payload = { onlyWhenUnfocused: enabled };
-    sendToJava(`set_sound_only_when_unfocused:${JSON.stringify(payload)}`);
-  }, []);
-
-  // Selected sound change handler
-  const handleSelectedSoundChange = useCallback((soundId: string) => {
-    setSelectedSound(soundId);
-    const payload = { soundId };
-    sendToJava(`set_selected_sound:${JSON.stringify(payload)}`);
-  }, []);
-
-  // Custom sound path change handler
-  const handleCustomSoundPathChange = useCallback((path: string) => {
-    setCustomSoundPath(path);
-  }, []);
-
-  // Save custom sound path
-  const handleSaveCustomSoundPath = useCallback(() => {
-    const payload = { path: customSoundPath };
-    sendToJava(`set_custom_sound_path:${JSON.stringify(payload)}`);
-  }, [customSoundPath]);
-
-  // Test sound
-  const handleTestSound = useCallback(() => {
-    const payload = { soundId: selectedSound, path: customSoundPath };
-    sendToJava(`test_sound:${JSON.stringify(payload)}`);
-  }, [selectedSound, customSoundPath]);
-
-  // Browse sound file
-  const handleBrowseSound = useCallback(() => {
-    sendToJava('browse_sound_file:');
-  }, []);
 
   // AI commit generation toggle change handler
   const handleCommitGenerationEnabledChange = useCallback((enabled: boolean) => {
@@ -542,14 +478,6 @@ export function useSettingsBasicActions({
     setCommitPrompt,
     savingCommitPrompt,
     setSavingCommitPrompt,
-    soundNotificationEnabled,
-    setSoundNotificationEnabled,
-    soundOnlyWhenUnfocused,
-    setSoundOnlyWhenUnfocused,
-    selectedSound,
-    setSelectedSound,
-    customSoundPath,
-    setCustomSoundPath,
     diffExpandedByDefault,
     setDiffExpandedByDefault,
     historyCompletionEnabled,
@@ -563,13 +491,6 @@ export function useSettingsBasicActions({
     handleCodexSandboxModeChange,
     handleSendShortcutChange,
     handleAutoOpenFileEnabledChange,
-    handleSoundNotificationEnabledChange,
-    handleSoundOnlyWhenUnfocusedChange,
-    handleSelectedSoundChange,
-    handleCustomSoundPathChange,
-    handleSaveCustomSoundPath,
-    handleTestSound,
-    handleBrowseSound,
     handleSaveCommitPrompt,
     projectCommitPrompt,
     setProjectCommitPrompt,

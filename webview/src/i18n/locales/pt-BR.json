@@ -231,28 +231,6 @@
         "softDark": "Escuro Suave",
         "softDarkDesc": "Mantém o contraste do código sem o fundo preto intenso"
       },
-      "soundNotification": {
-        "label": "Som de Conclusão de Tarefa",
-        "enabled": "Ativado",
-        "disabled": "Desativado",
-        "hint": "Quando ativado, um som de notificação será reproduzido quando a IA concluir uma tarefa, para você saber mesmo estando longe da tela.",
-        "onlyWhenUnfocused": "Reproduzir apenas quando a IDE não estiver em foco",
-        "onlyWhenUnfocusedHint": "Quando ativado, o som será reproduzido apenas quando a janela da IDE não estiver em foco.",
-        "selectSound": "Som de Notificação",
-        "soundDefault": "Padrão",
-        "soundChime": "Chime",
-        "soundBell": "Bell",
-        "soundDing": "Ding",
-        "soundSuccess": "Sucesso",
-        "soundCustom": "Personalizado...",
-        "customSound": "Arquivo de Som Personalizado",
-        "customSoundPlaceholder": "Selecione ou insira o caminho do arquivo de áudio",
-        "customSoundHint": "Suporta formatos WAV, MP3, AIFF",
-        "testSound": "Testar",
-        "browse": "Procurar",
-        "useDefault": "Usar Padrão",
-        "customSoundSaved": "Som personalizado salvo"
-      },
       "userMsgColor": {
         "label": "Cor da Mensagem do Usuário",
         "custom": "Personalizado",

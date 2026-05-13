@@ -146,6 +146,31 @@ export function registerMessageCallbacks(
   };
   window.__cancelPendingUpdateMessages = cancelPendingUpdateMessages;
 
+  const schedulePendingUpdateMessages = () => {
+    if (pendingUpdateRaf !== null) return;
+    const rafId = requestAnimationFrame((frameTime) => {
+      pendingUpdateRaf = null;
+      window.__pendingUpdateRaf = null;
+
+      if (window.__streamingDeltaRenderingFrame === frameTime) {
+        schedulePendingUpdateMessages();
+        return;
+      }
+
+      const latestJson = pendingUpdateJson;
+      const latestSequence = pendingUpdateSequence;
+      pendingUpdateJson = null;
+      pendingUpdateSequence = null;
+      window.__pendingUpdateJson = null;
+      window.__pendingUpdateSequence = null;
+      if (latestJson) {
+        processUpdateMessages(latestJson, latestSequence);
+      }
+    });
+    pendingUpdateRaf = rafId;
+    window.__pendingUpdateRaf = rafId;
+  };
+
   const processUpdateMessages = (json: string, sequence: number | null = null) => {
     const minAcceptedSequence = window.__minAcceptedUpdateSequence ?? 0;
     if (sequence != null && sequence < minAcceptedSequence) {
@@ -389,23 +414,7 @@ export function registerMessageCallbacks(
       pendingUpdateSequence = sequence;
       window.__pendingUpdateJson = json;
       window.__pendingUpdateSequence = sequence;
-      if (pendingUpdateRaf === null) {
-        const rafId = requestAnimationFrame(() => {
-          pendingUpdateRaf = null;
-          window.__pendingUpdateRaf = null;
-          const latestJson = pendingUpdateJson;
-          const latestSequence = pendingUpdateSequence;
-          pendingUpdateJson = null;
-          pendingUpdateSequence = null;
-          window.__pendingUpdateJson = null;
-          window.__pendingUpdateSequence = null;
-          if (latestJson) {
-            processUpdateMessages(latestJson, latestSequence);
-          }
-        });
-        pendingUpdateRaf = rafId;
-        window.__pendingUpdateRaf = rafId;
-      }
+      schedulePendingUpdateMessages();
       return;
     }
 

@@ -50,11 +50,6 @@ export interface SettingsWindowCallbacksDeps {
   setAiTitleGenerationEnabled?: (enabled: boolean) => void;
   setStatusBarWidgetEnabled?: (enabled: boolean) => void;
   setTaskCompletionNotificationEnabled?: (enabled: boolean) => void;
-  // Sound notification setters
-  setSoundNotificationEnabled?: (enabled: boolean) => void;
-  setSoundOnlyWhenUnfocused?: (enabled: boolean) => void;
-  setSelectedSound?: (soundId: string) => void;
-  setCustomSoundPath?: (path: string) => void;
 
   // Hook functions
   updateProviders: (providers: ProviderConfig[]) => void;
@@ -341,27 +336,6 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
     };
 
-    // Sound notification config callback
-    window.updateSoundNotificationConfig = (jsonStr: string) => {
-      try {
-        const data = JSON.parse(jsonStr);
-        if (data.enabled !== undefined) {
-          d().setSoundNotificationEnabled?.(data.enabled);
-        }
-        if (data.onlyWhenUnfocused !== undefined) {
-          d().setSoundOnlyWhenUnfocused?.(data.onlyWhenUnfocused);
-        }
-        if (data.selectedSound !== undefined) {
-          d().setSelectedSound?.(data.selectedSound);
-        }
-        if (data.customSoundPath !== undefined) {
-          d().setCustomSoundPath?.(data.customSoundPath);
-        }
-      } catch (error) {
-        console.error('[SettingsView] Failed to parse sound notification config:', error);
-      }
-    };
-
     // Agent callbacks
     const previousUpdateAgents = window.updateAgents;
     window.updateAgents = (jsonStr: string) => {
@@ -495,7 +469,6 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     sendToJava('get_commit_prompt:');
     sendToJava('get_commit_ai_config:');
     sendToJava('get_prompt_enhancer_config:');
-    sendToJava('get_sound_notification_config:');
     sendToJava('get_commit_generation_enabled:');
     sendToJava('get_ai_title_generation_enabled:');
     sendToJava('get_status_bar_widget_enabled:');
@@ -529,7 +502,6 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.updateCommitAiConfig = undefined;
       window.updatePromptEnhancerConfig = undefined;
       window.updateProjectCommitPrompt = undefined;
-      window.updateSoundNotificationConfig = undefined;
       window.updateCommitGenerationEnabled = undefined;
       window.updateAiTitleGenerationEnabled = undefined;
       window.updateStatusBarWidgetEnabled = undefined;

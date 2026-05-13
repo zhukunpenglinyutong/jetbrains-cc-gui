@@ -116,7 +116,7 @@ public class CodexSDKBridgeHistoryTest {
             assertEquals(1, messages.size());
             assertEquals("assistant", messages.get(0).get("type").getAsString());
             assertEquals("read", messages.get(0).getAsJsonObject("raw").getAsJsonArray("content").get(0).getAsJsonObject().get("name").getAsString());
-            assertEquals("Tool: read", messages.get(0).get("content").getAsString());
+            assertEquals("", messages.get(0).get("content").getAsString());
         } finally {
             deleteDirectory(sessionsDir);
         }

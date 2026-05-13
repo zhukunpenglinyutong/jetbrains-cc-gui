@@ -235,28 +235,6 @@
         "softDark": "柔和深色",
         "softDarkDesc": "保留代码感，但弱化纯黑对比"
       },
-      "soundNotification": {
-        "label": "任务完成提示音",
-        "enabled": "已开启",
-        "disabled": "已关闭",
-        "hint": "开启后，AI 完成任务时会播放提示音，方便您离开屏幕时也能知道任务已完成。",
-        "onlyWhenUnfocused": "仅在 IDE 未聚焦时播放",
-        "onlyWhenUnfocusedHint": "开启后，仅在 IDE 窗口未聚焦时播放提示音。",
-        "selectSound": "提示音",
-        "soundDefault": "默认",
-        "soundChime": "清脆铃声",
-        "soundBell": "钟声",
-        "soundDing": "叮咚",
-        "soundSuccess": "成功提示",
-        "soundCustom": "自定义...",
-        "customSound": "自定义音频文件",
-        "customSoundPlaceholder": "选择或输入音频文件路径",
-        "customSoundHint": "支持 WAV、MP3、AIFF 格式",
-        "testSound": "试听",
-        "browse": "浏览",
-        "useDefault": "使用默认",
-        "customSoundSaved": "自定义提示音已保存"
-      },
       "userMsgColor": {
         "label": "用户消息颜色",
         "custom": "自定义",

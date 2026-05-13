@@ -55,7 +55,6 @@ public class CodexMessageHandler implements MessageCallback {
      *
      * @param state state
      * @param callbackHandler callback handler
-     * @since 1.0.0
      */
     public CodexMessageHandler(SessionState state, CallbackHandler callbackHandler) {
         this.state = state;
@@ -67,7 +66,6 @@ public class CodexMessageHandler implements MessageCallback {
      *
      * @param type type
      * @param content content
-     * @since 1.0.0
      */
     @Override
     public void onMessage(String type, String content) {
@@ -117,7 +115,6 @@ public class CodexMessageHandler implements MessageCallback {
      * Handle an error from the SDK.
      *
      * @param error error
-     * @since 1.0.0
      */
     @Override
     public void onError(String error) {
@@ -142,7 +139,6 @@ public class CodexMessageHandler implements MessageCallback {
      * Handle completion of a response turn.
      *
      * @param result result
-     * @since 1.0.0
      */
     @Override
     public void onComplete(SDKResult result) {
@@ -172,7 +168,6 @@ public class CodexMessageHandler implements MessageCallback {
      * Contains thinking, tool_use, text, and other content types.
      *
      * @param jsonContent json content
-     * @since 1.0.0
      */
     private void handleAssistantMessage(String jsonContent) {
         try {
@@ -207,7 +202,6 @@ public class CodexMessageHandler implements MessageCallback {
      * Handle a user message (primarily tool_result).
      *
      * @param jsonContent json content
-     * @since 1.0.0
      */
     private void handleUserMessage(String jsonContent) {
         try {
@@ -234,7 +228,6 @@ public class CodexMessageHandler implements MessageCallback {
      * Handle the session_id (Codex thread ID) for session recovery.
      *
      * @param threadId thread id
-     * @since 1.0.0
      */
     private void handleSessionId(String threadId) {
         if (threadId != null && !threadId.trim().isEmpty()) {
@@ -248,7 +241,6 @@ public class CodexMessageHandler implements MessageCallback {
      * Handle the result message containing usage statistics.
      *
      * @param jsonContent json content
-     * @since 1.0.0
      */
     private void handleResultMessage(String jsonContent) {
         try {
@@ -275,7 +267,6 @@ public class CodexMessageHandler implements MessageCallback {
      * Handle event_msg containing token_count and other events.
      *
      * @param jsonContent json content
-     * @since 1.0.0
      */
     private void handleEventMessage(String jsonContent) {
         try {
@@ -327,7 +318,6 @@ public class CodexMessageHandler implements MessageCallback {
      *
      * @param usage usage
      * @return boolean
-     * @since 1.0.0
      */
     private boolean attachUsageToLastAssistant(com.google.gson.JsonObject usage) {
         java.util.List<Message> messages = state.getMessagesReference();
@@ -347,7 +337,6 @@ public class CodexMessageHandler implements MessageCallback {
      * @param msg msg
      * @param messageType message type
      * @return message
-     * @since 1.0.0
      */
     private Message parseServerMessage(com.google.gson.JsonObject msg, Message.Type messageType) {
         if (isMetaMessage(msg)) {
@@ -453,7 +442,6 @@ public class CodexMessageHandler implements MessageCallback {
      *
      * @param msg msg
      * @return string
-     * @since 1.0.0
      */
     private String extractMessageContent(com.google.gson.JsonObject msg) {
         if (!msg.has("message")) {
@@ -479,7 +467,6 @@ public class CodexMessageHandler implements MessageCallback {
      *
      * @param contentElement content element
      * @return string
-     * @since 1.0.0
      */
     private String extractContentFromElement(com.google.gson.JsonElement contentElement) {
         // String format
@@ -554,7 +541,6 @@ public class CodexMessageHandler implements MessageCallback {
      *
      * @param msg msg
      * @return boolean
-     * @since 1.0.0
      */
     private boolean containsToolResult(com.google.gson.JsonObject msg) {
         com.google.gson.JsonElement contentElement = getMessageContentElement(msg);
@@ -580,7 +566,6 @@ public class CodexMessageHandler implements MessageCallback {
      *
      * @param msg msg
      * @param content visible content
-     * @since 1.0.0
      */
     private void rewriteUserRawContent(com.google.gson.JsonObject msg, String content) {
         com.google.gson.JsonArray contentBlocks = new com.google.gson.JsonArray();
@@ -601,7 +586,6 @@ public class CodexMessageHandler implements MessageCallback {
      *
      * @param msg msg
      * @return element
-     * @since 1.0.0
      */
     private com.google.gson.JsonElement getMessageContentElement(com.google.gson.JsonObject msg) {
         if (msg.has("message") && msg.get("message").isJsonObject()) {
@@ -620,7 +604,6 @@ public class CodexMessageHandler implements MessageCallback {
      * Handle content delta in streaming mode.
      *
      * @param content content
-     * @since 1.0.0
      */
     private void handleContentDelta(String content) {
         // Empty content check (compatible with v0.1.3-codex)
@@ -645,7 +628,6 @@ public class CodexMessageHandler implements MessageCallback {
      * Handle thinking delta in streaming mode.
      *
      * @param content content
-     * @since 1.0.0
      */
     private void handleThinkingDelta(String content) {
         if (content == null || content.isEmpty()) {
@@ -660,7 +642,6 @@ public class CodexMessageHandler implements MessageCallback {
     /**
      * Ensure an assistant message exists for streaming raw updates.
      *
-     * @since 1.0.0
      */
     private void ensureCurrentAssistantMessageExists() {
         if (currentAssistantMessage == null) {
@@ -686,7 +667,6 @@ public class CodexMessageHandler implements MessageCallback {
      * Append thinking delta to the current assistant raw block.
      *
      * @param delta delta
-     * @since 1.0.0
      */
     private void applyThinkingDeltaToRaw(String delta) {
         com.google.gson.JsonObject raw = currentAssistantMessage.raw;
@@ -731,7 +711,6 @@ public class CodexMessageHandler implements MessageCallback {
     /**
      * Handle Stream Start
      *
-     * @since 1.0.0
      */
     private void handleStreamStart() {
         isStreaming = true;
@@ -744,7 +723,6 @@ public class CodexMessageHandler implements MessageCallback {
     /**
      * Handle Stream End
      *
-     * @since 1.0.0
      */
     private void handleStreamEnd() {
         if (!isStreaming && streamEndedThisTurn) {
@@ -753,6 +731,7 @@ public class CodexMessageHandler implements MessageCallback {
 
         isStreaming = false;
         streamEndedThisTurn = true;
+        callbackHandler.notifyStreamCompleted();
         callbackHandler.notifyMessageUpdate(state.getMessages());
         callbackHandler.notifyStreamEnd();
         state.setBusy(false);
@@ -766,7 +745,6 @@ public class CodexMessageHandler implements MessageCallback {
     /**
      * Handle the end of a message.
      *
-     * @since 1.0.0
      */
     private void handleMessageEnd() {
         LOG.debug("Codex message_end received, deferring stream cleanup to stream_end/onComplete");
@@ -775,7 +753,6 @@ public class CodexMessageHandler implements MessageCallback {
     /**
      * Reset per-turn streaming accumulator state.
      *
-     * @since 1.0.0
      */
     private void resetStreamingAccumulator() {
         assistantContent.setLength(0);

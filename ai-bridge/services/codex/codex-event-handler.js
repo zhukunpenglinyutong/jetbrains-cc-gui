@@ -26,7 +26,8 @@ import {
   DEBUG_LEVEL, MAX_TOOL_RESULT_CHARS,
   SESSION_PATCH_SCAN_MAX_LINES, SESSION_CONTEXT_SCAN_MAX_LINES,
   logWarn, logInfo, logDebug,
-  isAutoEditPermissionMode, isReconnectNotice, emitStatusMessage
+  isAutoEditPermissionMode, isReconnectNotice, emitStatusMessage,
+  isIgnorableWindowsTerminationNoiseLine
 } from './codex-utils.js';
 import {
   normalizeMcpToolName, normalizeMcpToolInput,
@@ -35,6 +36,13 @@ import {
 } from './codex-tool-normalization.js';
 
 const COMMAND_DENIED_ABORT_ERROR = '__CODEX_COMMAND_DENIED_ABORT__';
+
+export function shouldSuppressCodexStreamParseErrorAfterCompletion(errorMessage, state) {
+  if (!state?.turnCompletedObserved) return false;
+  if (typeof errorMessage !== 'string' || !errorMessage.includes('Failed to parse item:')) return false;
+  const parsedItem = errorMessage.replace(/^.*Failed to parse item:\s*/i, '').trim();
+  return isIgnorableWindowsTerminationNoiseLine(parsedItem);
+}
 
 function toolUseMsg(id, name, input) {
   return { type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id, name, input }] } };
@@ -109,6 +117,7 @@ export function createInitialEventState(emitMessage) {
     reasoningTextCache: new Map(),
     assistantTextCache: new Map(),
     reasoningObserved: false,
+    turnCompletedObserved: false,
     commandApprovalAbortRequested: false,
     runtimePolicyLogged: false,
     suppressNoResponseFallback: false,
@@ -724,6 +733,7 @@ export async function processCodexEventStream(events, state, config) {
 
       case 'turn.completed': {
         console.log('[DEBUG] Turn completed');
+        state.turnCompletedObserved = true;
         const replayed = await replayMissingFunctionCallsFromSession(state, config);
         if (replayed.toolUses > 0 || replayed.toolResults > 0) {
           console.log('[DEBUG] Replayed session function calls:', JSON.stringify(replayed));
@@ -820,6 +830,8 @@ export async function processCodexEventStream(events, state, config) {
       /aborted|abort|cancel|interrupt/i.test(streamErrorMessage)
     )) {
       logInfo('PERM_DEBUG', `Suppress streamed turn abort after command denial: ${streamErrorMessage}`);
+    } else if (shouldSuppressCodexStreamParseErrorAfterCompletion(streamErrorMessage, state)) {
+      logWarn('CODEX_JSON_STREAM', `Suppress post-completion Windows termination noise: ${streamErrorMessage}`);
     } else {
       throw streamError;
     }
