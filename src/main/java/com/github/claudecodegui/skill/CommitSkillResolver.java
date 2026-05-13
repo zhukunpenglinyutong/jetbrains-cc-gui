@@ -59,6 +59,9 @@ public final class CommitSkillResolver {
         if (pathText.isEmpty()) {
             return readBuiltinSkillContent();
         }
+        if (!isSafeLocalSkillPath(pathText)) {
+            return readBuiltinSkillContent();
+        }
 
         Path candidate;
         try {
@@ -199,6 +202,23 @@ public final class CommitSkillResolver {
             return "";
         }
         return "";
+    }
+
+    private static boolean isSafeLocalSkillPath(String pathText) {
+        if (pathText == null || pathText.isBlank()) {
+            return false;
+        }
+        try {
+            Path path = Path.of(pathText);
+            for (Path part : path) {
+                if ("..".equals(part.toString())) {
+                    return false;
+                }
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private static String getString(JsonObject object, String field, String defaultValue) {
