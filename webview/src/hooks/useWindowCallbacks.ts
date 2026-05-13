@@ -92,6 +92,12 @@ export interface UseWindowCallbacksOptions {
   openPermissionDialog: (request: PermissionRequest) => void;
   openAskUserQuestionDialog: (request: AskUserQuestionRequest) => void;
   openPlanApprovalDialog: (request: PlanApprovalRequest) => void;
+  openContextUsageDialog: (requestId?: string | null, loading?: boolean) => void;
+  updateContextUsageData: (
+    requestId: string | null | undefined,
+    data: import('../components/ContextUsageDialog').ContextUsageData,
+  ) => boolean;
+  closeContextUsageDialog: (requestId?: string | null) => boolean;
 
   // B-011: Title migration on session ID change
   customSessionTitleRef: MutableRefObject<string | null>;

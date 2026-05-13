@@ -68,6 +68,16 @@ interface Window {
   addErrorMessage?: (message: string) => void;
 
   /**
+   * Context usage dialog callback - receives JSON string with context usage data to show in a dialog.
+   */
+  showContextUsageDialog?: (json: string) => void;
+
+  /**
+   * Context usage error callback - shows error toast.
+   */
+  onContextUsageError?: (message: string, requestId?: string) => void;
+
+  /**
    * Add single history message (used for Codex session loading)
    */
   addHistoryMessage?: (message: any) => void;

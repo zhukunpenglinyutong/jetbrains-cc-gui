@@ -13,6 +13,7 @@ import { STORAGE_KEYS } from '../types/provider';
 import { CHANGELOG_DATA } from '../version/changelog';
 import { useDialogs } from '../contexts/DialogContext';
 import { useUIState } from '../contexts/UIStateContext';
+import ContextUsageDialog from './ContextUsageDialog';
 
 /**
  * Wrapper that manages plugin-level custom models for the add-model dialog.
@@ -89,6 +90,7 @@ export const AppDialogs = ({
     planApprovalDialogOpen, currentPlanApprovalRequest,
     handlePlanApprovalApprove, handlePlanApprovalReject,
     rewindSelectDialogOpen, rewindDialogOpen, currentRewindRequest, isRewinding,
+    contextUsageDialogOpen, contextUsageIsLoading, contextUsageData, closeContextUsageDialog,
   } = useDialogs();
   const {
     showChangelogDialog, closeChangelogDialog,
@@ -157,6 +159,14 @@ export const AppDialogs = ({
         onClose={() => setAddModelDialogOpen(false)}
         currentProvider={currentProvider}
       />
+      {contextUsageDialogOpen ? (
+        <ContextUsageDialog
+          isOpen={contextUsageDialogOpen}
+          isLoading={contextUsageIsLoading}
+          data={contextUsageData}
+          onClose={closeContextUsageDialog}
+        />
+      ) : null}
     </>
   );
 };

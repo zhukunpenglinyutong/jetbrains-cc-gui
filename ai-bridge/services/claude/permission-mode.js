@@ -358,72 +358,11 @@ export function createPreToolUseHook(permissionModeState, cwd = null, onModeChan
       };
     }
 
-    // ======== NON-PLAN MODES (default, acceptEdits, bypassPermissions) ========
-
-    // Auto-approve tools that should be auto-approved for this mode
-    // (safe tools in all modes, read-only tools in acceptEdits, everything in bypassPermissions)
-    if (shouldAutoApproveTool(currentPermissionMode, toolName)) {
-      return {
-        hookSpecificOutput: {
-          hookEventName: 'PreToolUse',
-          permissionDecision: 'allow'
-        }
-      };
-    }
-
-    // acceptEdits mode: edit tools need CWD path validation before auto-approve
-    // Matches CLI's checkWritePermissionForTool: only allow edits within working directory
-    if (currentPermissionMode === 'acceptEdits' &&
-        ACCEPT_EDITS_AUTO_APPROVE_TOOLS.has(toolName)) {
-      if (shouldAcceptEditsTool(toolName, input?.tool_input, workingDirectory)) {
-        return {
-          hookSpecificOutput: {
-            hookEventName: 'PreToolUse',
-            permissionDecision: 'allow'
-          }
-        };
+    return {
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'continue'
       }
-      // Path outside CWD or dangerous file → fall through to canUseTool for permission
-    }
-
-    // Everything else goes through canUseTool for permission
-    try {
-      const result = await canUseTool(toolName, input?.tool_input);
-      if (result?.behavior === 'allow') {
-        if (result?.updatedInput !== undefined) {
-          return {
-            hookSpecificOutput: {
-              hookEventName: 'PreToolUse',
-              permissionDecision: 'allow',
-              updatedInput: result.updatedInput
-            }
-          };
-        }
-        return {
-          hookSpecificOutput: {
-            hookEventName: 'PreToolUse',
-            permissionDecision: 'allow'
-          }
-        };
-      }
-      if (result?.behavior === 'deny') {
-        return {
-          hookSpecificOutput: {
-            hookEventName: 'PreToolUse',
-            permissionDecision: 'deny'
-          },
-          reason: result?.message || 'Permission denied'
-        };
-      }
-      return {};
-    } catch (error) {
-      return {
-        hookSpecificOutput: {
-          hookEventName: 'PreToolUse',
-          permissionDecision: 'deny'
-        },
-        reason: 'Permission check failed: ' + (error?.message || String(error))
-      };
-    }
+    };
   };
 }

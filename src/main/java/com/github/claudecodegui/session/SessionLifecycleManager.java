@@ -216,6 +216,9 @@ public class SessionLifecycleManager {
                                     ? projectPath : determineWorkingDirectory();
             newSession.setSessionInfo(sessionId, workingDir);
 
+            // Prewarm daemon runtime for the historical session so /context and first message are fast
+            host.getClaudeSDKBridge().prewarmDaemonAsync(workingDir, newSession.getRuntimeSessionEpoch(), sessionId);
+
             newSession.loadFromServer().thenRun(() -> ApplicationManager.getApplication().invokeLater(() -> {
                 host.callJavaScript("historyLoadComplete");
             })).exceptionally(ex -> {

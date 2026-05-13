@@ -1554,6 +1554,40 @@
     "enable": "开启",
     "cancel": "取消"
   },
+  "contextUsage": {
+    "title": "上下文使用",
+    "loading": "正在加载上下文使用情况...",
+    "autoCompactEnabled": "自动压缩已启用",
+    "autoCompactEnabledWithThreshold": "自动压缩已启用 ({{threshold}}%)",
+    "notAvailable": "不可用",
+    "categories": {
+      "systemPrompt": "系统提示词",
+      "systemTools": "系统工具",
+      "mcpTools": "MCP 工具",
+      "customAgents": "自定义智能体",
+      "memoryFiles": "记忆文件",
+      "skills": "Skills",
+      "messages": "消息",
+      "autoCompactBuffer": "自动压缩缓冲区",
+      "freeSpace": "空闲空间"
+    },
+    "sections": {
+      "mcpTools": "MCP 工具 ({{count}})",
+      "agents": "智能体 ({{count}})",
+      "memoryFiles": "记忆文件 ({{count}})",
+      "skills": "Skills ({{included}}/{{total}})"
+    },
+    "table": {
+      "tool": "工具",
+      "server": "服务器",
+      "tokens": "令牌",
+      "agent": "智能体",
+      "source": "来源",
+      "type": "类型",
+      "path": "路径",
+      "skill": "Skill"
+    }
+  },
   "rewind": {
     "title": "回溯文件到之前的状态",
     "tooltip": "回溯",

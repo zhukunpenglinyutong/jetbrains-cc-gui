@@ -105,11 +105,21 @@ export async function handleClaudeCommand(command, args, stdinData) {
       break;
     }
 
+    case 'getContextUsage': {
+      // getContextUsage requires a persistent runtime (daemon mode).
+      // In per-process mode, there is no persistent runtime, so return an error.
+      console.log(JSON.stringify({
+        success: false,
+        error: 'getContextUsage requires daemon mode. No persistent runtime available in per-process mode.'
+      }));
+      break;
+    }
+
     default:
       throw new Error(`Unknown Claude command: ${command}`);
   }
 }
 
 export function getClaudeCommandList() {
-  return ['send', 'sendWithAttachments', 'getSession', 'getLatestUserMessage', 'rewindFiles', 'getMcpServerStatus', 'getMcpServerTools', 'resetRuntime'];
+  return ['send', 'sendWithAttachments', 'getSession', 'getLatestUserMessage', 'rewindFiles', 'getMcpServerStatus', 'getMcpServerTools', 'resetRuntime', 'getContextUsage'];
 }
