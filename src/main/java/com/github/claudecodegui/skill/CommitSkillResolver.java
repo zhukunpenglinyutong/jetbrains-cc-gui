@@ -7,6 +7,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Resolves commit-generation Skills for the commit message workflow.
@@ -41,39 +44,79 @@ public final class CommitSkillResolver {
     }
 
     public static String resolveSkillContent(String skillRef) {
+        return resolveSkillContent(skillRef, null);
+    }
+
+    public static String resolveSkillContent(String skillRef, String projectPath) {
         if (skillRef == null || skillRef.trim().isEmpty() || BUILTIN_SKILL_REF.equals(skillRef.trim())) {
             return readBuiltinSkillContent();
         }
 
         String normalizedRef = skillRef.trim();
-        if (normalizedRef.startsWith("local:")) {
-            String pathText = normalizedRef.substring("local:".length()).trim();
-            if (pathText.isEmpty()) {
-                return readBuiltinSkillContent();
-            }
-            if (!isSafeLocalSkillPath(pathText)) {
-                return "";
-            }
-            if (!pathText.isEmpty()) {
-                try {
-                    String content = readLocalSkillContent(Path.of(pathText));
-                    if (!content.isEmpty()) {
-                        return content;
-                    }
-                } catch (Exception ignored) {
-                    return readBuiltinSkillContent();
-                }
-            }
+        String pathText = normalizedRef.startsWith("local:")
+                ? normalizedRef.substring("local:".length()).trim()
+                : normalizedRef;
+        if (pathText.isEmpty()) {
+            return readBuiltinSkillContent();
+        }
+        if (!isSafeLocalSkillPath(pathText)) {
             return readBuiltinSkillContent();
         }
 
-        if (!isSafeLocalSkillPath(normalizedRef)) {
-            return "";
-        }
+        Path candidate;
         try {
-            return readLocalSkillContent(Path.of(normalizedRef));
+            candidate = Path.of(pathText);
         } catch (Exception e) {
-            return "";
+            return readBuiltinSkillContent();
+        }
+        if (!isPathWithinTrustedRoots(candidate, projectPath)) {
+            return readBuiltinSkillContent();
+        }
+
+        try {
+            String content = readLocalSkillContent(candidate);
+            return content.isEmpty() ? readBuiltinSkillContent() : content;
+        } catch (Exception e) {
+            return readBuiltinSkillContent();
+        }
+    }
+
+    private static boolean isPathWithinTrustedRoots(Path candidate, String projectPath) {
+        Path normalizedCandidate;
+        try {
+            normalizedCandidate = candidate.toAbsolutePath().normalize();
+        } catch (Exception e) {
+            return false;
+        }
+        for (Path root : trustedRoots(projectPath)) {
+            if (normalizedCandidate.startsWith(root)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static List<Path> trustedRoots(String projectPath) {
+        List<Path> roots = new ArrayList<>();
+        String userHome = System.getProperty("user.home");
+        if (userHome != null && !userHome.isEmpty()) {
+            addRoot(roots, Paths.get(userHome, ".claude", "skills"));
+            addRoot(roots, Paths.get(userHome, ".codex", "skills"));
+            addRoot(roots, Paths.get(userHome, ".codemoss", "skills"));
+        }
+        if (projectPath != null && !projectPath.trim().isEmpty()) {
+            Path project = Paths.get(projectPath.trim());
+            addRoot(roots, project.resolve(".claude").resolve("skills"));
+            addRoot(roots, project.resolve(".codex").resolve("skills"));
+            addRoot(roots, project.resolve(".codemoss").resolve("skills"));
+        }
+        return roots;
+    }
+
+    private static void addRoot(List<Path> roots, Path root) {
+        try {
+            roots.add(root.toAbsolutePath().normalize());
+        } catch (Exception ignored) {
         }
     }
 
@@ -166,7 +209,7 @@ public final class CommitSkillResolver {
             return false;
         }
         try {
-            Path path = Path.of(pathText).normalize();
+            Path path = Path.of(pathText);
             for (Path part : path) {
                 if ("..".equals(part.toString())) {
                     return false;
