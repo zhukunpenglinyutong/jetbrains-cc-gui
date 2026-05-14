@@ -3,11 +3,55 @@
  * Provides functionality to read MCP server configuration from ~/.claude.json
  */
 
-import { existsSync } from 'fs';
+import { existsSync, statSync } from 'fs';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { getRealHomeDir } from '../../../utils/path-utils.js';
 import { log } from './logger.js';
+
+// =============================================================================
+// MCP Configuration Cache
+//
+// Caches parsed MCP config keyed by cwd to avoid repeated disk I/O on every
+// message send.  Cache entries expire after CACHE_TTL_MS.  The mtime of
+// ~/.claude.json is checked on each cache access so external edits (e.g., via
+// the settings UI) are reflected promptly without manual cache invalidation.
+// =============================================================================
+
+const CACHE_TTL_MS = 30_000; // 30 seconds
+const configCache = new Map(); // cwd -> { parsed, mtimeMs, cachedAt }
+
+function getClaudeJsonPath() {
+  return join(getRealHomeDir(), '.claude.json');
+}
+
+function getConfigMtimeMs() {
+  try {
+    return statSync(getClaudeJsonPath()).mtimeMs;
+  } catch {
+    return -1;
+  }
+}
+
+function getCachedParsed(cwd) {
+  const entry = configCache.get(cwd || '');
+  if (!entry) return null;
+  const mtimeMs = getConfigMtimeMs();
+  // Invalidate if the file was modified or the TTL expired
+  if (mtimeMs !== entry.mtimeMs || Date.now() - entry.cachedAt > CACHE_TTL_MS) {
+    configCache.delete(cwd || '');
+    return null;
+  }
+  return entry.parsed;
+}
+
+function setCachedParsed(cwd, parsed) {
+  configCache.set(cwd || '', {
+    parsed,
+    mtimeMs: getConfigMtimeMs(),
+    cachedAt: Date.now(),
+  });
+}
 
 /**
  * Validate the basic structure of an MCP server configuration
@@ -74,7 +118,13 @@ function validateConfigStructure(config) {
  * @returns {Promise<{mcpServers: Object, disabledServers: Set<string>} | null>} Parse result, or null on failure
  */
 async function parseMcpConfig(cwd = null) {
-  const claudeJsonPath = join(getRealHomeDir(), '.claude.json');
+  // Return cached result if available and fresh
+  const cached = getCachedParsed(cwd);
+  if (cached !== null) {
+    return cached;
+  }
+
+  const claudeJsonPath = getClaudeJsonPath();
 
   if (!existsSync(claudeJsonPath)) {
     log('info', '~/.claude.json not found');
@@ -144,7 +194,9 @@ async function parseMcpConfig(cwd = null) {
     disabledServers = new Set(config.disabledMcpServers || []);
   }
 
-  return { mcpServers, disabledServers };
+  const result = { mcpServers, disabledServers };
+  setCachedParsed(cwd, result);
+  return result;
 }
 
 /**
