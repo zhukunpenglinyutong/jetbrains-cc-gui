@@ -406,8 +406,8 @@ async function processRequest(request) {
       return;
     }
 
-    const aheadCount = queuedRequestCount;
     queuedRequestCount += 1;
+    const aheadCount = activeRequestId ? queuedRequestCount - 1 : queuedRequestCount;
     if (aheadCount > 0) {
       sendQueueWaitingEvent(request.id, aheadCount);
     }

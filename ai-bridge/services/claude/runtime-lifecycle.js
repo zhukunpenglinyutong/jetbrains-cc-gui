@@ -60,6 +60,18 @@ export async function disposeRuntime(runtime, callbacks) {
   runtime.closed = true;
   runtime.activeTurnCount = 0;
 
+  // 触发中断信号，立即打断 executeTurn 中挂起的 query.next()
+  // 这确保串行队列不会因为 SDK query 未响应而永久阻塞后续请求
+  const abortReject = runtime._turnAbortReject;
+  if (abortReject) {
+    runtime._turnAbortReject = null;
+    try {
+      abortReject('Runtime disposed');
+    } catch (_) {
+      // Promise rejection 由 executeTurn 的 catch 处理
+    }
+  }
+
   try {
     runtime.inputStream.done();
   } catch (err) {

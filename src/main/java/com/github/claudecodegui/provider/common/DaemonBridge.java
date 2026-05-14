@@ -11,12 +11,14 @@ import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Manages a long-running Node.js daemon process for AI SDK communication.
@@ -60,6 +62,7 @@ public class DaemonBridge {
     private final AtomicLong lastHeartbeatResponse = new AtomicLong(0);
     private final AtomicLong lastDaemonActivity = new AtomicLong(0);
     private final AtomicInteger activeRequestCount = new AtomicInteger(0);
+    private final AtomicReference<String> activeRequestId = new AtomicReference<>(null);
     private final Object startLock = new Object();
 
     // Pending request handlers: requestId -> handler
@@ -199,6 +202,7 @@ public class DaemonBridge {
         }
         pendingRequests.clear();
         activeRequestCount.set(0);
+        activeRequestId.set(null);
 
         // Send shutdown command before closing stdin (allows daemon to flush)
         try {
@@ -254,7 +258,8 @@ public class DaemonBridge {
     /**
      * Send an abort command to cancel the currently executing request.
      * The abort bypasses the daemon's command queue and is processed immediately.
-     * Also completes all pending request futures so Java-side blocking calls unblock.
+     * Also completes the currently active request future so Java-side blocking calls unblock
+     * without dropping queued follow-up requests.
      */
     public void sendAbort() {
         // Send abort command to daemon so it stops the active SDK query
@@ -274,15 +279,23 @@ public class DaemonBridge {
             LOG.debug("[DaemonBridge] Error sending abort command: " + e.getMessage());
         }
 
-        // Complete all pending request futures so Java-side callers unblock.
-        // Use onComplete(false) instead of onError() so that user-initiated aborts
-        // are treated as a normal (unsuccessful) completion rather than an error,
-        // matching the graceful handling that Codex uses.
-        for (Map.Entry<String, RequestHandler> entry : pendingRequests.entrySet()) {
-            entry.getValue().onAbort();
+        String targetRequestId = resolveAbortTargetRequestId();
+        if (targetRequestId == null) {
+            LOG.info("[DaemonBridge] No pending daemon request matched abort");
+            return;
         }
-        pendingRequests.clear();
-        activeRequestCount.set(0);
+
+        RequestHandler targetHandler = pendingRequests.remove(targetRequestId);
+        if (targetHandler == null) {
+            LOG.info("[DaemonBridge] Abort target already cleared: " + targetRequestId);
+            activeRequestId.compareAndSet(targetRequestId, null);
+            return;
+        }
+
+        // Only complete the active request locally. Queued requests must stay registered
+        // so their later queue_started/output events still reach the correct tab.
+        activeRequestId.compareAndSet(targetRequestId, null);
+        targetHandler.onAbort();
     }
 
     /**
@@ -341,6 +354,7 @@ public class DaemonBridge {
         // Ensure cleanup when future completes (e.g., via timeout or cancellation)
         future.whenComplete((result, ex) -> {
             pendingRequests.remove(requestId);
+            activeRequestId.compareAndSet(requestId, null);
             if (countsAsActiveRequest) {
                 activeRequestCount.updateAndGet(current -> Math.max(0, current - 1));
             }
@@ -514,6 +528,7 @@ public class DaemonBridge {
                 if (!success && obj.has("error")) {
                     handler.onError(obj.get("error").getAsString());
                 }
+                activeRequestId.compareAndSet(id, null);
                 handler.onComplete(success);
                 pendingRequests.remove(id);
                 return;
@@ -587,6 +602,11 @@ public class DaemonBridge {
             case "queue_started":
             case "queue_cleared": {
                 String requestId = obj.has("requestId") ? obj.get("requestId").getAsString() : null;
+                if ("queue_started".equals(event) && requestId != null) {
+                    activeRequestId.set(requestId);
+                } else if ("queue_cleared".equals(event) && requestId != null) {
+                    activeRequestId.compareAndSet(requestId, null);
+                }
                 if (requestId != null) {
                     RequestHandler handler = pendingRequests.get(requestId);
                     if (handler != null) {
@@ -635,6 +655,7 @@ public class DaemonBridge {
         }
         pendingRequests.clear();
         activeRequestCount.set(0);
+        activeRequestId.set(null);
 
         // Notify listener
         if (lifecycleListener != null) {
@@ -701,6 +722,29 @@ public class DaemonBridge {
 
     private void markDaemonActivity() {
         lastDaemonActivity.set(System.currentTimeMillis());
+    }
+
+    private String resolveAbortTargetRequestId() {
+        String currentActiveId = activeRequestId.get();
+        if (currentActiveId != null && pendingRequests.containsKey(currentActiveId)) {
+            return currentActiveId;
+        }
+
+        return pendingRequests.values().stream()
+                .min(Comparator.comparingLong(handler -> parseRequestSequence(handler.requestId)))
+                .map(handler -> handler.requestId)
+                .orElse(null);
+    }
+
+    private static long parseRequestSequence(String requestId) {
+        if (requestId == null) {
+            return Long.MAX_VALUE;
+        }
+        try {
+            return Long.parseLong(requestId);
+        } catch (NumberFormatException ignored) {
+            return Long.MAX_VALUE;
+        }
     }
 
     // =========================================================================
