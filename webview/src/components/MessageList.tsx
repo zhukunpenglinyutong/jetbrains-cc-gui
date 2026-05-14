@@ -92,6 +92,19 @@ export const MessageList = memo(function MessageList({
   // mount when sessions exceed hundreds of messages.
   const [revealedCount, setRevealedCount] = useState(0);
 
+  // Keep WaitingIndicator mounted during exit animation
+  const [waitingVisible, setWaitingVisible] = useState(false);
+
+  useEffect(() => {
+    if (loading) {
+      setWaitingVisible(true);
+    }
+  }, [loading]);
+
+  const handleWaitingExitComplete = useCallback(() => {
+    setWaitingVisible(false);
+  }, []);
+
   // Context menu for message list (copy only, when text selected)
   const ctxMenu = useContextMenu();
   const handleMessageContextMenu = useCallback((e: React.MouseEvent) => {
@@ -180,11 +193,13 @@ export const MessageList = memo(function MessageList({
       })}
 
       {/* Loading / queue indicator */}
-      {loading && (
+      {waitingVisible && (
         <WaitingIndicator
           startTime={loadingStartTime ?? undefined}
           queueDisplayState={queueDisplayState}
           queueAheadCount={queueAheadCount}
+          loading={loading}
+          onExitComplete={handleWaitingExitComplete}
         />
       )}
       <div ref={messagesEndRef} />
