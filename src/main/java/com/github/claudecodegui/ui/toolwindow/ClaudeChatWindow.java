@@ -32,6 +32,7 @@ import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentManager;
@@ -383,6 +384,7 @@ public class ClaudeChatWindow {
 
         this.parentContent = content;
         if (content != null) {
+            content.putUserData(ToolWindow.SHOW_CONTENT_ICON, true);
             ClaudeSDKToolWindow.registerContentMapping(content, this);
             LOG.debug("[MultiTab] Registered Content -> ClaudeChatWindow mapping for: " + content.getDisplayName());
 

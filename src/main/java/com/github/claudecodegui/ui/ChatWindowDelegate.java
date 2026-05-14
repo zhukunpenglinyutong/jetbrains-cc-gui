@@ -1,6 +1,5 @@
 package com.github.claudecodegui.ui;
 
-import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.handler.AgentHandler;
@@ -43,14 +42,10 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.jcef.JBCefBrowser;
-import com.intellij.util.concurrency.AppExecutorUtil;
-
 import javax.swing.*;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.util.List;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Delegates for initialization setup and runtime operations:
@@ -61,7 +56,7 @@ public class ChatWindowDelegate {
     private static final Logger LOG = Logger.getInstance(ChatWindowDelegate.class);
     private static final String NODE_PATH_PROPERTY_KEY = "claude.code.node.path";
     private static final String PERMISSION_MODE_PROPERTY_KEY = "claude.code.permission.mode";
-    private static final int STATUS_RESET_DELAY_SECONDS = 5;
+
 
     public enum TabAnswerStatus {
         IDLE,
@@ -103,7 +98,7 @@ public class ChatWindowDelegate {
 
     private final DelegateHost host;
     private TabAnswerStatus currentTabStatus = TabAnswerStatus.IDLE;
-    private ScheduledFuture<?> statusResetTask;
+
     private volatile String pendingQuickFixPrompt = null;
     private volatile MessageCallback pendingQuickFixCallback = null;
 
@@ -355,11 +350,6 @@ public class ChatWindowDelegate {
 
         currentTabStatus = status;
 
-        if (statusResetTask != null && !statusResetTask.isDone()) {
-            statusResetTask.cancel(false);
-            statusResetTask = null;
-        }
-
         ApplicationManager.getApplication().invokeLater(() -> {
             String tabName = originalTabName;
             String currentDisplayName = parentContent.getDisplayName();
@@ -387,12 +377,6 @@ public class ChatWindowDelegate {
                     displayName = tabName;
                     parentContent.setIcon(createStatusDotIcon(new Color(0x2FA35B)));
                     LOG.debug("[TabStatus] Set completed state for tab: " + displayName);
-
-                    statusResetTask = AppExecutorUtil.getAppScheduledExecutorService().schedule(() -> {
-                        ApplicationManager.getApplication().invokeLater(() -> {
-                            updateTabStatus(TabAnswerStatus.IDLE);
-                        });
-                    }, STATUS_RESET_DELAY_SECONDS, TimeUnit.SECONDS);
                     break;
                 case IDLE:
                 default:
@@ -553,10 +537,5 @@ public class ChatWindowDelegate {
     }
 
     public void dispose() {
-        if (statusResetTask != null && !statusResetTask.isDone()) {
-            statusResetTask.cancel(false);
-            statusResetTask = null;
-            LOG.debug("[TabStatus] Cancelled pending status reset task");
-        }
     }
 }
