@@ -34,6 +34,12 @@ public class SessionProviderRouter {
         claudeSDKBridge.interruptChannel(channelId);
     }
 
+    public void cleanupProviderSession(String provider, String sessionId, String cwd) {
+        if ("codex".equals(provider)) {
+            codexSDKBridge.clearCachedThread(sessionId, cwd);
+        }
+    }
+
     public List<JsonObject> getSessionMessages(String provider, String sessionId, String cwd) {
         if ("codex".equals(provider)) {
             return codexSDKBridge.getSessionMessages(sessionId, cwd);

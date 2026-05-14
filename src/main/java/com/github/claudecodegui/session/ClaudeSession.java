@@ -83,6 +83,13 @@ public class ClaudeSession {
      * Callback interface for session events.
      */
     public interface SessionCallback {
+        enum QueueDisplayState {
+            NONE,
+            QUEUED,
+            PROCESSING,
+            COMPLETED
+        }
+
         void onMessageUpdate(List<Message> messages);
 
         void onStateChange(boolean busy, boolean loading, String error);
@@ -122,6 +129,9 @@ public class ClaudeSession {
         }
 
         default void onUserMessageUuidPatched(String content, String uuid) {
+        }
+
+        default void onQueueDisplayStateChanged(QueueDisplayState state, int aheadCount) {
         }
     }
 
@@ -497,6 +507,30 @@ public class ClaudeSession {
             this.mediaType = mediaType;
             this.data = data;
         }
+    }
+
+    /**
+     * Dispose this session, releasing all held resources and breaking reference chains.
+     * Must be called when the associated tab/window is closed to prevent memory leaks.
+     */
+    public void dispose() {
+        LOG.info("[ClaudeSession] Disposing session, channelId=" + state.getChannelId());
+        providerRouter.cleanupProviderSession(state.getProvider(), state.getSessionId(), state.getCwd());
+
+        // Interrupt any active request
+        try {
+            interrupt();
+        } catch (Exception e) {
+            LOG.debug("[ClaudeSession] Interrupt during dispose failed: " + e.getMessage());
+        }
+
+        // Clear callback reference to break: PermissionManager -> lambda -> callbackFacade -> UI
+        callbackFacade.setCallback(null);
+
+        // Clear permission callback to break reference chain
+        permissionManager.setOnPermissionRequestedCallback(null);
+
+        state.setChannelId(null);
     }
 
     /**
