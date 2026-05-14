@@ -417,6 +417,38 @@ public class PlatformUtils {
     }
 
     /**
+     * Terminate a process tree and wait for it to exit.
+     * Uses the platform-aware tree termination logic and then waits for the
+     * requested timeout to reduce duplicated shutdown code at call sites.
+     *
+     * @param process the process to terminate
+     * @param timeout the wait timeout
+     * @param unit the timeout unit
+     * @return true if the process is no longer alive after waiting
+     */
+    public static boolean terminateProcessAndWait(Process process, long timeout, TimeUnit unit) {
+        if (process == null) {
+            return true;
+        }
+        if (!process.isAlive()) {
+            return true;
+        }
+
+        terminateProcess(process);
+
+        try {
+            if (process.waitFor(timeout, unit)) {
+                return true;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return !process.isAlive();
+        }
+
+        return !process.isAlive();
+    }
+
+    /**
      * Terminate a process tree by PID.
      *
      * @param pid the process ID

@@ -89,8 +89,7 @@ public class ProcessManager {
                 boolean terminated = process.waitFor(3, TimeUnit.SECONDS);
                 if (!terminated) {
                     LOG.info("[Interrupt] Process still alive, force killing channel: " + channelId);
-                    process.destroyForcibly();
-                    process.waitFor(2, TimeUnit.SECONDS);
+                    PlatformUtils.terminateProcessAndWait(process, 2, TimeUnit.SECONDS);
                 }
             }
         } catch (InterruptedException e) {
