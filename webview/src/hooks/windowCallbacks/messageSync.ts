@@ -88,10 +88,41 @@ export const appendOptimisticMessageIfMissing = (
   prevList: ClaudeMessage[],
   nextList: ClaudeMessage[],
 ): ClaudeMessage[] => {
-  const lastPrev = prevList[prevList.length - 1];
-  if (!lastPrev?.isOptimistic) return nextList;
+  const optimisticMessages = prevList.filter((msg) => msg.type === 'user' && msg.isOptimistic);
+  if (optimisticMessages.length === 0) return nextList;
 
-  const optimisticMsg = lastPrev;
+  let result = nextList;
+  let changed = false;
+
+  for (const optimisticMsg of optimisticMessages) {
+    const matchedIndex = findOptimisticUserMatchIndex(result, optimisticMsg);
+    if (matchedIndex < 0) {
+      const insertionIndex = findOptimisticInsertionIndex(result);
+      result = [
+        ...result.slice(0, insertionIndex),
+        optimisticMsg,
+        ...result.slice(insertionIndex),
+      ];
+      changed = true;
+      continue;
+    }
+
+    const mergedMessage = mergeOptimisticAttachmentBlocks(optimisticMsg, result[matchedIndex]);
+    if (mergedMessage !== result[matchedIndex]) {
+      const copy = [...result];
+      copy[matchedIndex] = mergedMessage;
+      result = copy;
+      changed = true;
+    }
+  }
+
+  return changed ? result : nextList;
+};
+
+const findOptimisticUserMatchIndex = (
+  nextList: ClaudeMessage[],
+  optimisticMsg: ClaudeMessage,
+): number => {
   const optimisticText = getUserMessageComparableContent(optimisticMsg);
   const optimisticTime = parseMessageTimestamp(optimisticMsg.timestamp);
 
@@ -105,26 +136,37 @@ export const appendOptimisticMessageIfMissing = (
     ) < OPTIMISTIC_MESSAGE_TIME_WINDOW;
 
   let matchedIndex = nextList.findIndex(matchFn);
-  if (matchedIndex < 0 && optimisticText) {
-    for (let i = nextList.length - 1; i >= 0; i -= 1) {
-      const candidate = nextList[i];
-      if (candidate?.type !== 'user') continue;
-      if (getUserMessageComparableContent(candidate) !== optimisticText) continue;
-      const candidateTime = parseMessageTimestamp(candidate.timestamp);
-      if (Number.isFinite(optimisticTime) && Number.isFinite(candidateTime) && candidateTime < optimisticTime) {
-        continue;
-      }
-      matchedIndex = i;
-      break;
-    }
-  }
-  if (matchedIndex < 0) {
-    return [...nextList, optimisticMsg];
+  if (matchedIndex >= 0 || !optimisticText) {
+    return matchedIndex;
   }
 
-  // Backend message matched the optimistic message.  Preserve attachment blocks
-  // from the optimistic message into the backend message's raw data; otherwise
-  // non-image file attachments won't be visible.
+  for (let i = nextList.length - 1; i >= 0; i -= 1) {
+    const candidate = nextList[i];
+    if (candidate?.type !== 'user') continue;
+    if (getUserMessageComparableContent(candidate) !== optimisticText) continue;
+    const candidateTime = parseMessageTimestamp(candidate.timestamp);
+    if (Number.isFinite(optimisticTime) && Number.isFinite(candidateTime) && candidateTime < optimisticTime) {
+      continue;
+    }
+    matchedIndex = i;
+    break;
+  }
+  return matchedIndex;
+};
+
+const findOptimisticInsertionIndex = (nextList: ClaudeMessage[]): number => {
+  if (nextList.length > 0 && (isToolOnlyMessage(nextList[0]) || isToolResultOnlyUserMessage(nextList[0]))) {
+    return 0;
+  }
+  return nextList.length;
+};
+
+const mergeOptimisticAttachmentBlocks = (
+  optimisticMsg: ClaudeMessage,
+  backendMsg: ClaudeMessage,
+): ClaudeMessage => {
+  // Preserve attachment blocks from the optimistic message into the backend
+  // message's raw data; otherwise non-image file attachments won't be visible.
   const optimisticRaw = optimisticMsg.raw as any;
   const optimisticContent: unknown[] | undefined = optimisticRaw?.message?.content;
   if (Array.isArray(optimisticContent)) {
@@ -132,7 +174,6 @@ export const appendOptimisticMessageIfMissing = (
       (b: any) => b && typeof b === 'object' && b.type === 'attachment',
     );
     if (attachmentBlocks.length > 0) {
-      const backendMsg = nextList[matchedIndex];
       const backendRaw = (backendMsg.raw ?? {}) as any;
       const backendContent: unknown[] = Array.isArray(backendRaw?.message?.content)
         ? backendRaw.message.content
@@ -144,13 +185,10 @@ export const appendOptimisticMessageIfMissing = (
         ...backendRaw,
         message: { ...(backendRaw?.message ?? {}), content: mergedContent },
       };
-      const result = [...nextList];
-      result[matchedIndex] = { ...backendMsg, raw: mergedRaw };
-      return result;
+      return { ...backendMsg, raw: mergedRaw };
     }
   }
-
-  return nextList;
+  return backendMsg;
 };
 
 const getUserMessageComparableContent = (message: ClaudeMessage): string => {
@@ -422,6 +460,14 @@ const isToolOnlyMessage = (message: ClaudeMessage): boolean => {
   }
   const blocks = getMessageContentArray(message);
   return blocks.length > 0 && blocks.every((block) => block.type === 'tool_use' || block.type === 'tool_result');
+};
+
+const isToolResultOnlyUserMessage = (message: ClaudeMessage): boolean => {
+  if (message.type !== 'user') return false;
+  if ((message.content ?? '').trim() === '[tool_result]') return true;
+
+  const blocks = getMessageContentArray(message);
+  return blocks.length > 0 && blocks.every((block) => block.type === 'tool_result');
 };
 
 export const stripDuplicateTrailingToolMessages = (

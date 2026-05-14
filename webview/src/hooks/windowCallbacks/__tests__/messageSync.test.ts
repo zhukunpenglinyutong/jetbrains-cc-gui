@@ -221,6 +221,26 @@ describe('appendOptimisticMessageIfMissing', () => {
     expect(result[result.length - 1]).toBe(optimistic);
   });
 
+  it('preserves optimistic user message even when it is no longer the last previous message', () => {
+    const optimistic = makeUserMsg('test communications', {
+      isOptimistic: true,
+      timestamp: new Date().toISOString(),
+    });
+    const streamingAssistant = makeAssistantMsg('connecting', { __turnId: 1, isStreaming: true });
+    const toolResult = makeUserMsg('[tool_result]', {
+      raw: { message: { content: [{ type: 'tool_result', tool_use_id: 'cmd-1', content: 'ok' }] } } as any,
+    });
+
+    const result = appendOptimisticMessageIfMissing(
+      [optimistic, streamingAssistant],
+      [toolResult],
+    );
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toBe(optimistic);
+    expect(result[1]).toBe(toolResult);
+  });
+
   it('does not append when optimistic message is matched by content and time', () => {
     const ts = new Date().toISOString();
     const optimistic = makeUserMsg('hello world', { isOptimistic: true, timestamp: ts });
