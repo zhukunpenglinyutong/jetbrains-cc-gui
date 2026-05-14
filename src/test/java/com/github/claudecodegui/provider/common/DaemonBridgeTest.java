@@ -2,6 +2,9 @@ package com.github.claudecodegui.provider.common;
 
 import org.junit.Test;
 
+import java.nio.file.Files;
+import java.nio.file.Paths;
+
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -27,5 +30,17 @@ public class DaemonBridgeTest {
     @Test
     public void activeRequestWithNoRecentOutputEventuallyTimesOut() {
         assertTrue(DaemonBridge.shouldTreatAsUnresponsive(OVER_ACTIVE_REQUEST_THRESHOLD, OVER_ACTIVE_REQUEST_THRESHOLD, 1));
+    }
+
+    @Test
+    public void daemonBridgeUsesPlatformTerminationHelperForShutdownPaths() throws Exception {
+        String source = Files.readString(Paths.get(
+                "src", "main", "java", "com", "github", "claudecodegui", "provider", "common", "DaemonBridge.java"
+        ));
+
+        assertTrue(source.contains("PlatformUtils.terminateProcessAndWait(daemonProcess, 3, TimeUnit.SECONDS)"));
+        assertTrue(source.contains("PlatformUtils.terminateProcessAndWait(oldProcess, 2, TimeUnit.SECONDS)"));
+        assertFalse(source.contains("daemonProcess.destroyForcibly()"));
+        assertFalse(source.contains("oldProcess.destroyForcibly()"));
     }
 }
