@@ -48,6 +48,7 @@
     "addAttachment": "Add attachment",
     "stopGeneration": "Stop generation",
     "generatingResponse": "Generating response",
+    "queueWaiting": "Queued ({{count}} task(s) ahead)",
     "elapsedTime": "Elapsed {{time}}",
     "minutesAndSeconds": "{{minutes}}m {{seconds}}s",
     "imagePreview": "Preview",

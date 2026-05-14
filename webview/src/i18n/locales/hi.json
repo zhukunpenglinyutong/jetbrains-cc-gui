@@ -48,6 +48,7 @@
     "addAttachment": "अटैचमेंट जोड़ें",
     "stopGeneration": "जनरेशन रोकें",
     "generatingResponse": "प्रतिक्रिया उत्पन्न हो रही है",
+    "queueWaiting": "कतार में ({{count}} कार्य चल रहे हैं)",
     "elapsedTime": "बीता {{time}}",
     "minutesAndSeconds": "{{minutes}} मि {{seconds}} से",
     "imagePreview": "पूर्वावलोकन",

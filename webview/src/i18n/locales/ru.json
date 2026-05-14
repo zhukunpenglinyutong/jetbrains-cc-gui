@@ -48,6 +48,7 @@
     "addAttachment": "Добавить вложение",
     "stopGeneration": "Остановить генерацию",
     "generatingResponse": "Генерирую ответ",
+    "queueWaiting": "В очереди ({{count}} задач впереди)",
     "elapsedTime": "Прошло {{time}}",
     "minutesAndSeconds": "{{minutes}}м {{seconds}}с",
     "imagePreview": "Предпросмотр",

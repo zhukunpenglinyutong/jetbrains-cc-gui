@@ -48,6 +48,7 @@
     "addAttachment": "添付ファイルを追加",
     "stopGeneration": "生成を停止",
     "generatingResponse": "応答を生成中",
+    "queueWaiting": "待機中（前方 {{count}} 件のタスク実行中）",
     "elapsedTime": "経過時間 {{time}}",
     "minutesAndSeconds": "{{minutes}}分 {{seconds}}秒",
     "imagePreview": "プレビュー",

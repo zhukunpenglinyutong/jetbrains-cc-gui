@@ -48,6 +48,7 @@
     "addAttachment": "Ajouter une pièce jointe",
     "stopGeneration": "Arrêter la génération",
     "generatingResponse": "Génération de la réponse",
+    "queueWaiting": "En file d'attente ({{count}} tâche(s) en cours)",
     "elapsedTime": "Écoulé {{time}}",
     "minutesAndSeconds": "{{minutes}}m {{seconds}}s",
     "imagePreview": "Aperçu",

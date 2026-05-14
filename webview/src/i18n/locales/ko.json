@@ -48,6 +48,7 @@
     "addAttachment": "첨부파일 추가",
     "stopGeneration": "생성 중지",
     "generatingResponse": "응답 생성 중",
+    "queueWaiting": "대기 중 (앞에 {{count}}개 작업 실행 중)",
     "elapsedTime": "경과 시간 {{time}}",
     "minutesAndSeconds": "{{minutes}}분 {{seconds}}초",
     "imagePreview": "미리보기",
