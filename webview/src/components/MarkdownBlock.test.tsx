@@ -10,12 +10,14 @@ const bridgeMocks = vi.hoisted(() => ({
   openBrowser: vi.fn(),
   openClass: vi.fn(),
   openFile: vi.fn(),
+  resolveFilePathWithCallback: vi.fn(),
 }));
 
 vi.mock('../utils/bridge', () => ({
   openBrowser: bridgeMocks.openBrowser,
   openClass: bridgeMocks.openClass,
   openFile: bridgeMocks.openFile,
+  resolveFilePathWithCallback: bridgeMocks.resolveFilePathWithCallback,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -31,6 +33,8 @@ describe('MarkdownBlock linkify integration', () => {
     bridgeMocks.openBrowser.mockReset();
     bridgeMocks.openClass.mockReset();
     bridgeMocks.openFile.mockReset();
+    bridgeMocks.resolveFilePathWithCallback.mockReset();
+    document.querySelectorAll('.file-link-tooltip').forEach((element) => element.remove());
   });
 
   it('linkifies inline code content but not code fence blocks', () => {
@@ -193,5 +197,21 @@ describe('MarkdownBlock linkify integration', () => {
       }),
     ).toBeTruthy();
     expect(screen.getByRole('link', { name: 'https://example.com/docs' })).toBeTruthy();
+  });
+
+  it('does not show raw absolute file path when tooltip resolution returns null', () => {
+    const absolutePath = '/home/user/project/src/main.ts';
+    bridgeMocks.resolveFilePathWithCallback.mockImplementation((_path: string, callback: (result: string | null) => void) => {
+      callback(null);
+    });
+
+    render(<MarkdownBlock content={`Open ${absolutePath}`} />);
+
+    fireEvent.mouseOver(screen.getByRole('link', { name: absolutePath }), {
+      clientX: 10,
+      clientY: 10,
+    });
+
+    expect(document.querySelector('.file-link-tooltip')?.textContent).not.toBe(absolutePath);
   });
 });

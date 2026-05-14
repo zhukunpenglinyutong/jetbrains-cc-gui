@@ -145,24 +145,37 @@ const parseUnifiedDiffFirstHunk = (text?: string): { start?: number; end?: numbe
   };
 };
 
+const WINDOWS_DRIVE_REGEX = /^[A-Za-z]:[\\\/]/;
+
+const isAbsolutePath = (path: string): boolean => {
+  return path.startsWith('/') || WINDOWS_DRIVE_REGEX.test(path);
+};
+
 const relativizeDisplayPath = (filePath: string, workdir?: string): string => {
   const cleanPath = stripLineSuffix(filePath);
 
+  // If already a relative path, keep it as-is
+  if (!isAbsolutePath(cleanPath)) {
+    return filePath;
+  }
+
   // If absolute path with workdir, try to relativize
-  if (workdir && cleanPath.startsWith('/') && workdir.startsWith('/')) {
-    if (cleanPath === workdir) {
+  if (workdir) {
+    const normalizedWorkdir = workdir.replace(/\\/g, '/').replace(/\/$/, '');
+    const normalizedPath = cleanPath.replace(/\\/g, '/');
+
+    if (normalizedPath === normalizedWorkdir) {
       return filePath.startsWith(cleanPath) ? './' : '.';
     }
 
-    const normalizedWorkdir = workdir.endsWith('/') ? workdir : `${workdir}/`;
-    if (cleanPath.startsWith(normalizedWorkdir)) {
-      const relativePath = cleanPath.slice(normalizedWorkdir.length);
+    const workdirWithSlash = `${normalizedWorkdir}/`;
+    if (normalizedPath.startsWith(workdirWithSlash)) {
+      const relativePath = normalizedPath.slice(workdirWithSlash.length);
       const lineSuffix = filePath.slice(cleanPath.length);
       return `${relativePath}${lineSuffix}`;
     }
   }
 
-  // For relative paths or paths that cannot be relativized, just return the file name
   return getFileName(filePath);
 };
 

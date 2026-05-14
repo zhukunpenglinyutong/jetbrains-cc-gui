@@ -196,8 +196,13 @@ class OpenFileHandler {
         }
 
         // FilenameIndex requires indexes to be ready
-        if (DumbService.isDumb(project)) {
-            LOG.info("Fuzzy file match deferred during dumb mode for: " + pathHint);
+        try {
+            if (DumbService.isDumb(project)) {
+                LOG.info("Fuzzy file match deferred during dumb mode for: " + pathHint);
+                return null;
+            }
+        } catch (IllegalStateException e) {
+            LOG.debug("DumbService unavailable for fuzzy match, skipping: " + e.getMessage());
             return null;
         }
 
@@ -477,6 +482,138 @@ class OpenFileHandler {
                 LOG.error("Cannot open browser: " + e.getMessage(), e);
             }
         });
+    }
+
+    /**
+     * Build a fallback display path when the file cannot be found on disk.
+     * For absolute paths, relativize against project root if possible.
+     * For relative paths, prepend the session cwd (relative to project root)
+     * so that sub-directory-relative paths become project-root-relative.
+     */
+    private String buildFallbackDisplayPath(String actualPath) {
+        if (actualPath == null || actualPath.isBlank()) {
+            return null;
+        }
+
+        if (isAbsoluteLikePath(actualPath)) {
+            String normalizedPath = PlatformUtils.isWindows()
+                ? PathUtils.convertMsysToWindowsPath(actualPath)
+                : actualPath;
+            return relativizeToProjectRoot(normalizedPath);
+        }
+
+        return relativizeFallbackRelativePath(actualPath);
+    }
+
+    /**
+     * Resolve a file path to a display path (relative to project root) without opening it.
+     * Returns the relative path if the file is inside the project, otherwise the absolute path.
+     * Returns null if the file cannot be resolved.
+     */
+    String resolveDisplayPath(String filePath) {
+        if (filePath == null || filePath.isBlank()) {
+            return null;
+        }
+
+        LineInfo lineInfo = parseLineInfo(filePath);
+        String actualPath = lineInfo.actualPath();
+
+        if (actualPath.contains(".." + File.separator) || actualPath.contains("../") || actualPath.contains("..\\")) {
+            return buildFallbackDisplayPath(actualPath);
+        }
+
+        FileResolutionResult resolution = resolveFile(actualPath);
+        if (resolution == null) {
+            // Even when the file cannot be found on disk, try to produce a
+            // project-root-relative display path so the tooltip shows the full
+            // context instead of a bare sub-directory relative path.
+            String fallback = buildFallbackDisplayPath(actualPath);
+            return fallback;
+        }
+
+        String absolutePath;
+        if (resolution.virtualFile() != null) {
+            VirtualFile vf = resolution.virtualFile();
+            if (!vf.isValid()) {
+                return null;
+            }
+            absolutePath = vf.getPath();
+        } else {
+            absolutePath = resolution.file().getAbsolutePath();
+        }
+
+        return relativizeToProjectRoot(absolutePath);
+    }
+
+    private boolean isAbsoluteLikePath(String path) {
+        return new File(path).isAbsolute()
+            || path.startsWith("/")
+            || path.startsWith("\\\\")
+            || path.startsWith("//")
+            || path.matches("^[A-Za-z]:[\\\\/].*");
+    }
+
+    private String relativizeFallbackRelativePath(String relativePath) {
+        try {
+            Project project = context.getProject();
+            if (project == null) {
+                return null;
+            }
+
+            String basePath = project.getBasePath();
+            if (basePath == null || basePath.isBlank()) {
+                return null;
+            }
+
+            Path projectRoot = new File(basePath).getCanonicalFile().toPath();
+            Path baseDirectory = projectRoot;
+            if (context.getSession() != null) {
+                String sessionCwd = context.getSession().getCwd();
+                if (sessionCwd != null && !sessionCwd.isBlank()) {
+                    Path sessionPath = new File(sessionCwd).getCanonicalFile().toPath();
+                    if (sessionPath.startsWith(projectRoot)) {
+                        baseDirectory = sessionPath;
+                    }
+                }
+            }
+
+            Path displayPath = baseDirectory.resolve(relativePath).normalize();
+            if (!displayPath.startsWith(projectRoot)) {
+                return null;
+            }
+
+            return projectRoot.relativize(displayPath).toString().replace('\\', '/');
+        } catch (Exception e) {
+            LOG.debug("Failed to build fallback tooltip path: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private String relativizeToProjectRoot(String absolutePath) {
+        Project project = context.getProject();
+        if (project == null || absolutePath == null || absolutePath.isBlank()) {
+            return null;
+        }
+
+        String basePath = project.getBasePath();
+        if (basePath == null || basePath.isBlank()) {
+            return null;
+        }
+
+        try {
+            Path projectRoot = new File(basePath).getCanonicalFile().toPath();
+            Path resolvedPath = new File(absolutePath).getCanonicalFile().toPath();
+            if (!resolvedPath.startsWith(projectRoot)) {
+                return null;
+            }
+
+            Path relativePath = projectRoot.relativize(resolvedPath);
+            String displayPath = relativePath.toString().replace('\\', '/');
+            return displayPath.isBlank() ? "." : displayPath;
+        } catch (Exception e) {
+            LOG.debug("Failed to relativize tooltip path: " + e.getMessage());
+            return null;
+        }
     }
 
     /**

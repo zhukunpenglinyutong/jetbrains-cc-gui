@@ -1,6 +1,12 @@
 package com.github.claudecodegui.handler.file;
 
+import com.github.claudecodegui.handler.core.HandlerContext;
+import com.intellij.openapi.project.Project;
 import org.junit.Test;
+
+import java.lang.reflect.Proxy;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -156,5 +162,71 @@ public class OpenFileHandlerTest {
     @Test
     public void extractPathSuffix_null_returnsNull() {
         assertNull(OpenFileHandler.extractPathSuffix(null));
+    }
+
+    @Test
+    public void resolveDisplayPath_returnsNullForExistingAbsoluteFileOutsideProjectRoot() throws Exception {
+        Path tempDirectory = Files.createTempDirectory("ccg-path-tooltip");
+        Path projectRoot = Files.createDirectory(tempDirectory.resolve("app"));
+        Path outsideDirectory = Files.createDirectory(tempDirectory.resolve("app-secrets"));
+        Path outsideFile = Files.writeString(outsideDirectory.resolve("secret.txt"), "secret");
+
+        OpenFileHandler handler = new OpenFileHandler(createContext(projectRoot));
+
+        assertNull(handler.resolveDisplayPath(outsideFile.toString()));
+    }
+
+    @Test
+    public void resolveDisplayPath_returnsNullForMissingAbsoluteFileOutsideProjectRoot() throws Exception {
+        Path tempDirectory = Files.createTempDirectory("ccg-path-tooltip");
+        Path projectRoot = Files.createDirectory(tempDirectory.resolve("app"));
+        Path missingOutsideFile = tempDirectory.resolve("app-secrets").resolve("missing.txt");
+
+        OpenFileHandler handler = new OpenFileHandler(createContext(projectRoot));
+
+        assertNull(handler.resolveDisplayPath(missingOutsideFile.toString()));
+    }
+
+    @Test
+    public void resolveDisplayPath_returnsNullForMsysStyleAbsolutePathOutsideProjectRoot() throws Exception {
+        Path tempDirectory = Files.createTempDirectory("ccg-path-tooltip");
+        Path projectRoot = Files.createDirectory(tempDirectory.resolve("app"));
+        OpenFileHandler handler = new OpenFileHandler(createContext(projectRoot));
+
+        assertNull(handler.resolveDisplayPath("/c/Users/alice/secret.txt"));
+        assertNull(handler.resolveDisplayPath("/mnt/c/Users/alice/secret.txt"));
+    }
+
+    @Test
+    public void resolveDisplayPath_returnsNullForRelativeTraversalFallbackOutsideProjectRoot() throws Exception {
+        Path tempDirectory = Files.createTempDirectory("ccg-path-tooltip");
+        Path projectRoot = Files.createDirectory(tempDirectory.resolve("app"));
+        OpenFileHandler handler = new OpenFileHandler(createContext(projectRoot));
+
+        assertNull(handler.resolveDisplayPath("../outside.txt"));
+    }
+
+    private static HandlerContext createContext(Path projectRoot) {
+        Project project = (Project) Proxy.newProxyInstance(
+                Project.class.getClassLoader(),
+                new Class[]{Project.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "getBasePath" -> projectRoot.toString();
+                    case "isDisposed" -> false;
+                    case "toString" -> "TestProject";
+                    default -> null;
+                }
+        );
+
+        return new HandlerContext(project, null, null, null, new HandlerContext.JsCallback() {
+            @Override
+            public void callJavaScript(String functionName, String... args) {
+            }
+
+            @Override
+            public String escapeJs(String str) {
+                return str;
+            }
+        });
     }
 }
