@@ -10,6 +10,7 @@ import java.nio.file.Path;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -165,7 +166,7 @@ public class OpenFileHandlerTest {
     }
 
     @Test
-    public void resolveDisplayPath_returnsNullForExistingAbsoluteFileOutsideProjectRoot() throws Exception {
+    public void resolveDisplayPath_returnsAbsolutePathForExistingAbsoluteFileOutsideProjectRoot() throws Exception {
         Path tempDirectory = Files.createTempDirectory("ccg-path-tooltip");
         Path projectRoot = Files.createDirectory(tempDirectory.resolve("app"));
         Path outsideDirectory = Files.createDirectory(tempDirectory.resolve("app-secrets"));
@@ -173,37 +174,56 @@ public class OpenFileHandlerTest {
 
         OpenFileHandler handler = new OpenFileHandler(createContext(projectRoot));
 
-        assertNull(handler.resolveDisplayPath(outsideFile.toString()));
+        String expected = outsideFile.toFile().getCanonicalFile().toString().replace('\\', '/');
+        assertEquals(expected, handler.resolveDisplayPath(outsideFile.toString()));
     }
 
     @Test
-    public void resolveDisplayPath_returnsNullForMissingAbsoluteFileOutsideProjectRoot() throws Exception {
+    public void resolveDisplayPath_returnsAbsolutePathForMissingAbsoluteFileOutsideProjectRoot() throws Exception {
         Path tempDirectory = Files.createTempDirectory("ccg-path-tooltip");
         Path projectRoot = Files.createDirectory(tempDirectory.resolve("app"));
         Path missingOutsideFile = tempDirectory.resolve("app-secrets").resolve("missing.txt");
 
         OpenFileHandler handler = new OpenFileHandler(createContext(projectRoot));
 
-        assertNull(handler.resolveDisplayPath(missingOutsideFile.toString()));
+        // File does not exist on disk → resolveFile returns null, falls back to
+        // buildFallbackDisplayPath → relativizeToProjectRoot, which now returns
+        // the canonical absolute path with forward slashes.
+        String expected = missingOutsideFile.toFile().getCanonicalFile().toString().replace('\\', '/');
+        assertEquals(expected, handler.resolveDisplayPath(missingOutsideFile.toString()));
     }
 
     @Test
-    public void resolveDisplayPath_returnsNullForMsysStyleAbsolutePathOutsideProjectRoot() throws Exception {
+    public void resolveDisplayPath_returnsAbsolutePathForMsysStyleAbsolutePathOutsideProjectRoot() throws Exception {
         Path tempDirectory = Files.createTempDirectory("ccg-path-tooltip");
         Path projectRoot = Files.createDirectory(tempDirectory.resolve("app"));
         OpenFileHandler handler = new OpenFileHandler(createContext(projectRoot));
 
-        assertNull(handler.resolveDisplayPath("/c/Users/alice/secret.txt"));
-        assertNull(handler.resolveDisplayPath("/mnt/c/Users/alice/secret.txt"));
+        // MSYS-style paths are converted to Windows paths only on Windows.
+        // Cross-platform check: result must be non-null and reference the same
+        // file basename.
+        String result = handler.resolveDisplayPath("/c/Users/alice/secret.txt");
+        assertNotNull(result);
+        assertTrue("Expected path to end with /secret.txt but was: " + result,
+                result.endsWith("/secret.txt"));
+
+        String mntResult = handler.resolveDisplayPath("/mnt/c/Users/alice/secret.txt");
+        assertNotNull(mntResult);
+        assertTrue("Expected path to end with /secret.txt but was: " + mntResult,
+                mntResult.endsWith("/secret.txt"));
     }
 
     @Test
-    public void resolveDisplayPath_returnsNullForRelativeTraversalFallbackOutsideProjectRoot() throws Exception {
+    public void resolveDisplayPath_returnsAbsolutePathForRelativeTraversalFallbackOutsideProjectRoot() throws Exception {
         Path tempDirectory = Files.createTempDirectory("ccg-path-tooltip");
         Path projectRoot = Files.createDirectory(tempDirectory.resolve("app"));
         OpenFileHandler handler = new OpenFileHandler(createContext(projectRoot));
 
-        assertNull(handler.resolveDisplayPath("../outside.txt"));
+        // "../outside.txt" resolves to <tempDirectory>/outside.txt — outside the
+        // project root. The tooltip now surfaces the canonical absolute path.
+        String expected = projectRoot.resolve("../outside.txt").normalize()
+                .toFile().getCanonicalFile().toString().replace('\\', '/');
+        assertEquals(expected, handler.resolveDisplayPath("../outside.txt"));
     }
 
     private static HandlerContext createContext(Path projectRoot) {

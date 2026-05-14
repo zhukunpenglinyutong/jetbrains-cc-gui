@@ -199,7 +199,10 @@ describe('MarkdownBlock linkify integration', () => {
     expect(screen.getByRole('link', { name: 'https://example.com/docs' })).toBeTruthy();
   });
 
-  it('does not show raw absolute file path when tooltip resolution returns null', () => {
+  it('falls back to the link href when tooltip resolution returns null', () => {
+    // Backend cannot produce a display path (e.g. no project root,
+    // canonicalization failure). The tooltip should still show the user where
+    // the link points — fall back to the raw href text.
     const absolutePath = '/home/user/project/src/main.ts';
     bridgeMocks.resolveFilePathWithCallback.mockImplementation((_path: string, callback: (result: string | null) => void) => {
       callback(null);
@@ -212,6 +215,21 @@ describe('MarkdownBlock linkify integration', () => {
       clientY: 10,
     });
 
-    expect(document.querySelector('.file-link-tooltip')?.textContent).not.toBe(absolutePath);
+    expect(document.querySelector('.file-link-tooltip')?.textContent).toBe(absolutePath);
+  });
+
+  it('shows the resolved tooltip text when backend returns a path', () => {
+    bridgeMocks.resolveFilePathWithCallback.mockImplementation((_path: string, callback: (result: string | null) => void) => {
+      callback('src/main.ts');
+    });
+
+    render(<MarkdownBlock content={'Open /home/user/project/src/main.ts'} />);
+
+    fireEvent.mouseOver(screen.getByRole('link', { name: '/home/user/project/src/main.ts' }), {
+      clientX: 10,
+      clientY: 10,
+    });
+
+    expect(document.querySelector('.file-link-tooltip')?.textContent).toBe('src/main.ts');
   });
 });

@@ -40,7 +40,7 @@ describe('useResolvedFileLinkTooltip', () => {
     expect(document.querySelector('.file-link-tooltip')?.textContent).toBe('src/App.tsx');
   });
 
-  it('does not show raw absolute fallback when resolution returns null', () => {
+  it('shows fallback text when resolution returns null', () => {
     bridgeMocks.resolveFilePathWithCallback.mockImplementation((_path: string, callback: (result: string | null) => void) => {
       callback(null);
     });
@@ -52,10 +52,13 @@ describe('useResolvedFileLinkTooltip', () => {
       result.current.onMouseEnter({ clientX: 12, clientY: 24 } as React.MouseEvent);
     });
 
-    expect(document.querySelector('.file-link-tooltip')).toBeNull();
+    // Local IDE plugin — absolute paths are not sensitive; surface them so
+    // the user can see what the link points to even when the backend cannot
+    // produce a project-relative display path.
+    expect(document.querySelector('.file-link-tooltip')?.textContent).toBe(absolutePath);
   });
 
-  it('does not show absolute resolved paths from backend', () => {
+  it('shows absolute resolved paths from backend', () => {
     bridgeMocks.resolveFilePathWithCallback.mockImplementation((_path: string, callback: (result: string | null) => void) => {
       callback('C:\\Users\\me\\secret.txt');
     });
@@ -66,7 +69,7 @@ describe('useResolvedFileLinkTooltip', () => {
       result.current.onMouseEnter({ clientX: 12, clientY: 24 } as React.MouseEvent);
     });
 
-    expect(document.querySelector('.file-link-tooltip')?.textContent).toBe('secret.txt');
+    expect(document.querySelector('.file-link-tooltip')?.textContent).toBe('C:\\Users\\me\\secret.txt');
   });
 
   it('does not create tooltip after unmount while resolve is pending', () => {

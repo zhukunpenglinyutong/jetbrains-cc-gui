@@ -552,6 +552,23 @@ class OpenFileHandler {
             || path.matches("^[A-Za-z]:[\\\\/].*");
     }
 
+    /**
+     * Builds a tooltip display path from a relative input path.
+     *
+     * <p>Resolution rules:
+     * <ul>
+     *   <li>Path stays inside the project root → project-relative path with
+     *       forward slashes (e.g. {@code "src/Main.java"}).</li>
+     *   <li>Path resolves outside the project root (e.g. {@code "../" }
+     *       traversal) → canonical absolute path. This is a local IDE plugin
+     *       and the path is not sensitive in the user's own session.</li>
+     *   <li>No project / session context or canonicalization failure →
+     *       {@code null}.</li>
+     * </ul>
+     *
+     * <p>Note: {@link File#getCanonicalFile()} resolves symbolic links, so the
+     * returned path may point to a different physical location than the input.
+     */
     private String relativizeFallbackRelativePath(String relativePath) {
         try {
             Project project = context.getProject();
@@ -577,38 +594,58 @@ class OpenFileHandler {
             }
 
             Path displayPath = baseDirectory.resolve(relativePath).normalize();
-            if (!displayPath.startsWith(projectRoot)) {
-                return null;
+            if (displayPath.startsWith(projectRoot)) {
+                return projectRoot.relativize(displayPath).toString().replace('\\', '/');
             }
-
-            return projectRoot.relativize(displayPath).toString().replace('\\', '/');
+            // Outside project root — surface the absolute path. See Javadoc.
+            return displayPath.toString().replace('\\', '/');
         } catch (Exception e) {
             LOG.debug("Failed to build fallback tooltip path: " + e.getMessage());
             return null;
         }
     }
 
+    /**
+     * Builds a tooltip display path from an absolute input path.
+     *
+     * <p>Resolution rules:
+     * <ul>
+     *   <li>Absolute path resolves inside the project root → project-relative
+     *       path with forward slashes (or {@code "."} if the path is the
+     *       project root itself).</li>
+     *   <li>Absolute path resolves outside the project root, or no project
+     *       context is available → canonical absolute path. Surfacing the
+     *       absolute path keeps the tooltip useful for cross-repo file
+     *       references; this is a local IDE plugin and the path is not
+     *       sensitive in the user's own session.</li>
+     *   <li>Input is {@code null}/blank or canonicalization fails →
+     *       {@code null}.</li>
+     * </ul>
+     *
+     * <p>Note: {@link File#getCanonicalFile()} resolves symbolic links, so the
+     * returned path may point to a different physical location than the input.
+     */
     private String relativizeToProjectRoot(String absolutePath) {
-        Project project = context.getProject();
-        if (project == null || absolutePath == null || absolutePath.isBlank()) {
+        if (absolutePath == null || absolutePath.isBlank()) {
             return null;
         }
 
-        String basePath = project.getBasePath();
-        if (basePath == null || basePath.isBlank()) {
-            return null;
-        }
+        Project project = context.getProject();
+        String basePath = project != null ? project.getBasePath() : null;
 
         try {
-            Path projectRoot = new File(basePath).getCanonicalFile().toPath();
             Path resolvedPath = new File(absolutePath).getCanonicalFile().toPath();
-            if (!resolvedPath.startsWith(projectRoot)) {
-                return null;
+            if (basePath != null && !basePath.isBlank()) {
+                Path projectRoot = new File(basePath).getCanonicalFile().toPath();
+                if (resolvedPath.startsWith(projectRoot)) {
+                    Path relativePath = projectRoot.relativize(resolvedPath);
+                    String displayPath = relativePath.toString().replace('\\', '/');
+                    return displayPath.isBlank() ? "." : displayPath;
+                }
             }
-
-            Path relativePath = projectRoot.relativize(resolvedPath);
-            String displayPath = relativePath.toString().replace('\\', '/');
-            return displayPath.isBlank() ? "." : displayPath;
+            // Outside project root (or no project context) — surface the
+            // absolute path. See Javadoc.
+            return resolvedPath.toString().replace('\\', '/');
         } catch (Exception e) {
             LOG.debug("Failed to relativize tooltip path: " + e.getMessage());
             return null;

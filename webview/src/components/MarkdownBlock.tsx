@@ -41,10 +41,6 @@ const WINDOWS_DRIVE_PATH_REGEX = /^[A-Za-z]:[\\/]/;
 const URI_SCHEME_REGEX = /^[A-Za-z][A-Za-z0-9+.-]*:/;
 let hrefSanitizerHookInstalled = false;
 
-function isAbsoluteTooltipPath(value: string): boolean {
-  return value.startsWith('/') || value.startsWith('\\\\') || WINDOWS_DRIVE_PATH_REGEX.test(value);
-}
-
 function isAllowedHrefValue(value: string): boolean {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -832,10 +828,13 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
       if (!mountedRef.current || currentHoverHrefRef.current !== href) {
         return;
       }
-      if (!resolvedPath || isAbsoluteTooltipPath(resolvedPath)) {
+      if (!resolvedPath) {
+        // Backend could not produce a display path (e.g. no project root,
+        // canonicalization failure). Fall back to the raw href so the tooltip
+        // still tells the user where the link points — same policy as
+        // useResolvedFileLinkTooltip.
         resolvedTooltipTextRef.current.delete(href);
-        currentTooltipTextRef.current = null;
-        floatingTooltip.hideTooltip();
+        showTooltip(href);
         return;
       }
 

@@ -39,12 +39,6 @@ const LINE_INFO_STYLE: React.CSSProperties = {
   fontSize: '12px',
 };
 
-const WINDOWS_ABSOLUTE_PATH_REGEX = /^[A-Za-z]:[\\/]/;
-
-const isAbsoluteFilePath = (path: string): boolean => (
-  path.startsWith('/') || WINDOWS_ABSOLUTE_PATH_REGEX.test(path)
-);
-
 const CODICON_MAP: Record<string, string> = {
   read: 'codicon-eye',
   edit: 'codicon-edit',
@@ -193,10 +187,7 @@ interface PatchFileLinkProps {
 const PatchFileLink = ({ path }: PatchFileLinkProps) => {
   const fileName = path.split('/').pop() || path;
   const ext = fileName.includes('.') ? fileName.split('.').pop() : '';
-  const tooltip = useResolvedFileLinkTooltip(
-    path,
-    isAbsoluteFilePath(path) ? undefined : path,
-  );
+  const tooltip = useResolvedFileLinkTooltip(path, path);
 
   return (
     <span

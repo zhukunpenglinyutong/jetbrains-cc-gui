@@ -2,15 +2,8 @@ import { useCallback, useEffect, useRef } from 'react';
 import { resolveFilePathWithCallback } from '../utils/bridge';
 import { useFloatingTextTooltip } from './useFloatingTextTooltip';
 
-const WINDOWS_ABSOLUTE_PATH_REGEX = /^[A-Za-z]:[\\/]/;
-const UNC_PATH_REGEX = /^[\\/]{2}/;
-
-const isAbsoluteFilePath = (path: string): boolean => (
-  path.startsWith('/') || WINDOWS_ABSOLUTE_PATH_REGEX.test(path) || UNC_PATH_REGEX.test(path)
-);
-
-const getSafeFallbackText = (text: string | undefined): string | undefined => {
-  if (!text || isAbsoluteFilePath(text)) {
+const normalizeTooltipText = (text: string | null | undefined): string | undefined => {
+  if (!text || !text.trim()) {
     return undefined;
   }
   return text;
@@ -47,7 +40,7 @@ export function useResolvedFileLinkTooltip(
     currentTooltipTextRef.current = undefined;
     tooltip.hideTooltip();
 
-    const fallback = getSafeFallbackText(fallbackText);
+    const fallback = normalizeTooltipText(fallbackText);
     if (!filePath) {
       if (fallback) {
         currentTooltipTextRef.current = fallback;
@@ -68,24 +61,27 @@ export function useResolvedFileLinkTooltip(
         return;
       }
 
-      const safeResolvedPath = getSafeFallbackText(resolvedPath ?? undefined);
-      if (!safeResolvedPath) {
-        resolvedTextCacheRef.current.delete(filePath);
-        if (fallback) {
-          currentTooltipTextRef.current = fallback;
-          const { clientX, clientY } = latestMousePositionRef.current;
-          tooltip.showTooltip(fallback, clientX, clientY);
-        } else {
-          currentTooltipTextRef.current = undefined;
-          tooltip.hideTooltip();
-        }
+      const resolvedText = normalizeTooltipText(resolvedPath);
+      if (resolvedText) {
+        resolvedTextCacheRef.current.set(filePath, resolvedText);
+        currentTooltipTextRef.current = resolvedText;
+        const { clientX, clientY } = latestMousePositionRef.current;
+        tooltip.showTooltip(resolvedText, clientX, clientY);
         return;
       }
 
-      resolvedTextCacheRef.current.set(filePath, safeResolvedPath);
-      currentTooltipTextRef.current = safeResolvedPath;
-      const { clientX, clientY } = latestMousePositionRef.current;
-      tooltip.showTooltip(safeResolvedPath, clientX, clientY);
+      // Backend could not produce a display path (e.g. no project root,
+      // canonicalization failure). Fall back to the link text if available;
+      // otherwise hide the tooltip.
+      resolvedTextCacheRef.current.delete(filePath);
+      if (fallback) {
+        currentTooltipTextRef.current = fallback;
+        const { clientX, clientY } = latestMousePositionRef.current;
+        tooltip.showTooltip(fallback, clientX, clientY);
+      } else {
+        currentTooltipTextRef.current = undefined;
+        tooltip.hideTooltip();
+      }
     });
   }, [fallbackText, filePath, tooltip]);
 

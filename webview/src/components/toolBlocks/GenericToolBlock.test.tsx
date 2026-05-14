@@ -93,7 +93,7 @@ describe('GenericToolBlock', () => {
     expect(hookMocks.useResolvedFileLinkTooltip).toHaveBeenCalledWith('webview/src/main.tsx', 'webview/src/main.tsx');
   });
 
-  it('does not pass unresolved absolute apply_patch paths to tooltip text', () => {
+  it('passes absolute apply_patch paths through to the tooltip', () => {
     const absolutePath = 'C:\\Users\\me\\.ssh\\config';
 
     render(
@@ -110,6 +110,9 @@ describe('GenericToolBlock', () => {
       />,
     );
 
-    expect(hookMocks.useResolvedFileLinkTooltip).toHaveBeenCalledWith(absolutePath, undefined);
+    // Local IDE plugin — absolute paths are not sensitive. Pass the path as
+    // both the link target and the fallback display text so the tooltip can
+    // still show the user where the link points before the backend resolves.
+    expect(hookMocks.useResolvedFileLinkTooltip).toHaveBeenCalledWith(absolutePath, absolutePath);
   });
 });
