@@ -15,6 +15,17 @@ final class TabSessionRestorePolicy {
         return selectedTab && shouldLoadHistory(savedState);
     }
 
+    static String getDeferredRestoreSessionId(TabStateService.TabSessionState savedState) {
+        if (!shouldLoadHistory(savedState)) {
+            return null;
+        }
+        return savedState.sessionId.trim();
+    }
+
+    static boolean shouldLoadDeferredHistory(String deferredSessionId, String currentSessionId) {
+        return isNonEmpty(deferredSessionId) && deferredSessionId.equals(currentSessionId);
+    }
+
     private static boolean isNonEmpty(String value) {
         return value != null && !value.trim().isEmpty();
     }
