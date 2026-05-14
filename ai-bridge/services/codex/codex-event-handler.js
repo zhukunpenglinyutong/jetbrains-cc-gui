@@ -13,7 +13,7 @@
 
 import { randomUUID } from 'crypto';
 import { existsSync } from 'fs';
-import { readFile } from 'fs/promises';
+import { readFile, stat } from 'fs/promises';
 import { requestPermissionFromJava } from '../../permission-handler.js';
 import { findSessionFileByThreadId } from './codex-agents-loader.js';
 import {
@@ -45,6 +45,7 @@ import {
 export { emitSyntheticPatchOperations, findUniqueRollbackIndex };
 
 const COMMAND_DENIED_ABORT_ERROR = '__CODEX_COMMAND_DENIED_ABORT__';
+const SESSION_LINES_CACHE_MAX_BYTES = 4 * 1024 * 1024;
 
 const LIFECYCLE_TOOL_NAMES = new Set(['spawn_agent', 'wait_agent', 'close_agent', 'send_input', 'resume_agent']);
 
@@ -203,6 +204,9 @@ export function createInitialEventState(emitMessage) {
     deniedCommandToolUseIds: new Set(),
     emittedDeniedCommandToolResultIds: new Set(),
     sessionFilePath: null,
+    sessionLinesCachePath: null,
+    sessionLinesCacheKey: null,
+    sessionLinesCache: [],
     sessionLineCursor: 0,
     sessionFunctionCursor: 0,
     sessionTurnStartCursor: 0,
@@ -263,20 +267,43 @@ function splitSessionJsonlEntries(content) {
   return content.split('\n').filter((line) => line.trim());
 }
 
-function countSessionJsonlLines(content) {
-  return splitSessionJsonlEntries(content).length;
+async function readSessionJsonlLines(state, threadId, debugScope = 'SESSION') {
+  const sessionPath = ensureSessionFilePath(state, threadId);
+  if (!sessionPath) return [];
+  let fileStat;
+  try {
+    fileStat = await stat(sessionPath);
+  } catch (error) {
+    logDebug(debugScope, 'Failed to stat session file:', error?.message || error);
+    return [];
+  }
+  const cacheKey = `${fileStat.mtimeMs}:${fileStat.size}`;
+  if (state.sessionLinesCachePath === sessionPath && state.sessionLinesCacheKey === cacheKey) {
+    return state.sessionLinesCache;
+  }
+  let content = '';
+  try {
+    content = await readFile(sessionPath, 'utf8');
+  } catch (error) {
+    logDebug(debugScope, 'Failed to read session file:', error?.message || error);
+    return [];
+  }
+  const lines = splitSessionJsonlEntries(content);
+  if (fileStat.size <= SESSION_LINES_CACHE_MAX_BYTES) {
+    state.sessionLinesCachePath = sessionPath;
+    state.sessionLinesCacheKey = cacheKey;
+    state.sessionLinesCache = lines;
+  } else {
+    state.sessionLinesCachePath = null;
+    state.sessionLinesCacheKey = null;
+    state.sessionLinesCache = [];
+  }
+  return lines;
 }
 
 async function readLatestTurnContextFromSession(state, threadId) {
-  const sessionPath = ensureSessionFilePath(state, threadId);
-  if (!sessionPath) return null;
-  let content = '';
-  try { content = await readFile(sessionPath, 'utf8'); } catch (error) {
-    logDebug('PERM_DEBUG', 'Failed to read session for turn_context:', error?.message || error);
-    return null;
-  }
-  if (!content.trim()) return null;
-  const lines = splitSessionJsonlEntries(content);
+  const lines = await readSessionJsonlLines(state, threadId, 'PERM_DEBUG');
+  if (lines.length === 0) return null;
   const startIndex = Math.max(0, lines.length - SESSION_CONTEXT_SCAN_MAX_LINES);
   for (let i = lines.length - 1; i >= startIndex; i--) {
     const line = lines[i];
@@ -291,17 +318,8 @@ async function readLatestTurnContextFromSession(state, threadId) {
 }
 
 async function replayMissingFunctionCallsFromSession(state, config) {
-  const sessionPath = ensureSessionFilePath(state, config.threadId);
-  if (!sessionPath) return { toolUses: 0, toolResults: 0 };
-
-  let content = '';
-  try { content = await readFile(sessionPath, 'utf8'); } catch (error) {
-    logDebug('SESSION_REPLAY', 'Failed to read session file for function replay:', error?.message || error);
-    return { toolUses: 0, toolResults: 0 };
-  }
-  if (!content.trim()) return { toolUses: 0, toolResults: 0 };
-
-  const lines = splitSessionJsonlEntries(content);
+  const lines = await readSessionJsonlLines(state, config.threadId, 'SESSION_REPLAY');
+  if (lines.length === 0) return { toolUses: 0, toolResults: 0 };
   const candidateStartIndexes = [
     state.sessionFunctionCursor > 0 ? state.sessionFunctionCursor : null,
     state.sessionTurnStartCursor > 0 ? state.sessionTurnStartCursor : null,
@@ -603,6 +621,9 @@ export async function processCodexEventStream(events, state, config) {
           config.threadId = state.currentThreadId;
         }
         state.sessionFilePath = null;
+        state.sessionLinesCachePath = null;
+        state.sessionLinesCacheKey = null;
+        state.sessionLinesCache = [];
         state.sessionLineCursor = 0;
         state.sessionFunctionCursor = 0;
         state.sessionTurnStartCursor = 0;
@@ -618,17 +639,8 @@ export async function processCodexEventStream(events, state, config) {
       case 'turn.started': {
         state.turnWorkspaceSnapshot = null;
         state.emittedFileChangePaths.clear();
-        const sessionPath = ensureSessionFilePath(state, config.threadId);
-        if (sessionPath && existsSync(sessionPath)) {
-          try {
-            const content = await readFile(sessionPath, 'utf8');
-            state.sessionTurnStartCursor = countSessionJsonlLines(content);
-          } catch {
-            state.sessionTurnStartCursor = state.sessionFunctionCursor;
-          }
-        } else {
-          state.sessionTurnStartCursor = state.sessionFunctionCursor;
-        }
+        const lines = await readSessionJsonlLines(state, config.threadId, 'SESSION_REPLAY');
+        state.sessionTurnStartCursor = lines.length > 0 ? lines.length : state.sessionFunctionCursor;
         await captureTurnWorkspaceSnapshot(state, config);
         logDebug('CODEX_EVENT', 'Turn started');
         break;

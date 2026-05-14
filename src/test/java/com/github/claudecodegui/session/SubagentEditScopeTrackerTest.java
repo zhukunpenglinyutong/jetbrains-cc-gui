@@ -55,6 +55,23 @@ public class SubagentEditScopeTrackerTest {
     }
 
     @Test
+    public void completeScopeBuildsSyntheticMessagesFromBaselineWithoutVfsBeforeEvent() {
+        SubagentEditScopeTracker tracker = new SubagentEditScopeTracker(null, new EditOperationRegistry());
+        tracker.startScope("claude", "task-baseline", null);
+        tracker.recordBaselineForTest(Map.of(
+                "/tmp/Baseline.java", new FileSnapshotUtil.FileSnapshot("/tmp/Baseline.java", true, false, "old", 3, 1L, "h1")
+        ));
+        tracker.recordAfterSnapshotForTest(Map.of(
+                "/tmp/Baseline.java", new FileSnapshotUtil.FileSnapshot("/tmp/Baseline.java", true, false, "new", 3, 2L, "h2")
+        ));
+
+        List<ClaudeSession.Message> messages = tracker.completeByParentToolUseId("task-baseline", "token-baseline");
+
+        assertEquals(2, messages.size());
+        assertTrue(messages.get(0).raw.toString().contains("Baseline.java"));
+    }
+
+    @Test
     public void completeScopeFinalizesOnlyOnceAcrossDifferentTokens() {
         SubagentEditScopeTracker tracker = new SubagentEditScopeTracker(null, new EditOperationRegistry());
         tracker.startScope("codex", "spawn-1", "agent-1");
@@ -157,6 +174,21 @@ public class SubagentEditScopeTrackerTest {
 
         assertEquals(2, tracker.completeByAgentHandle("agent-1", "wait-1").size());
         assertTrue(tracker.completeByAgentHandle("agent-2", "wait-2").isEmpty());
+    }
+
+    @Test
+    public void overlappingScopesDoNotAttributeBaselineOnlyChanges() {
+        SubagentEditScopeTracker tracker = new SubagentEditScopeTracker(null, new EditOperationRegistry());
+        tracker.startScope("codex", "spawn-1", "agent-1");
+        tracker.recordBaselineForTest(Map.of(
+                "/tmp/A.java", new FileSnapshotUtil.FileSnapshot("/tmp/A.java", true, false, "a1", 2, 1L, "a1")
+        ));
+        tracker.startScope("codex", "spawn-2", "agent-2");
+        tracker.recordAfterSnapshotForTest(Map.of(
+                "/tmp/A.java", new FileSnapshotUtil.FileSnapshot("/tmp/A.java", true, false, "a2", 2, 2L, "a2")
+        ));
+
+        assertTrue(tracker.completeByAgentHandle("agent-1", "wait-1").isEmpty());
     }
 
 

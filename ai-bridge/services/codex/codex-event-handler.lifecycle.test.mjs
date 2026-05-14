@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import { createInitialEventState, emitSyntheticPatchOperations, findUniqueRollbackIndex, handleFunctionCallPayload, handleFunctionCallOutputPayload, processCodexEventStream } from './codex-event-handler.js';
+import { collectPatchOperationsFromSession, rollbackDeniedPatchBatches } from './codex-event-patch-tracking.js';
 
 test('function call payload prefers raw call_id over matching signature for repeated lifecycle tools', () => {
   const emitted = [];
@@ -77,6 +78,39 @@ test('denied patch rollback index is line-aware and rejects ambiguous global mat
   const content = 'same\nneedle\nsame\nneedle\n';
   assert.equal(findUniqueRollbackIndex(content, 'needle', { startLine: 2, endLine: 2 }), 5);
   assert.equal(findUniqueRollbackIndex(content, 'needle', {}), -1);
+});
+
+test('collectPatchOperationsFromSession reads jsonl patch operations', async () => {
+  const cwd = await mkdtemp(join(tmpdir(), 'codex-session-patch-'));
+  const sessionPath = join(cwd, 'session.jsonl');
+  const patch = '*** Begin Patch\n*** Update File: src/a.txt\n@@ -1 +1 @@\n-old\n+new\n*** End Patch';
+  const payload = {
+    type: 'response_item',
+    payload: {
+      type: 'function_call',
+      name: 'apply_patch',
+      call_id: 'patch-1',
+      arguments: JSON.stringify({ patch }),
+    },
+  };
+  try {
+    await writeFile(sessionPath, `${JSON.stringify(payload)}\n`, 'utf8');
+    const state = { sessionLineCursor: 0, processedPatchCallIds: new Set() };
+    const batches = await collectPatchOperationsFromSession(
+      state,
+      { cwd, threadId: 'thread-1' },
+      () => sessionPath,
+      (content) => content.split('\n').filter((line) => line.trim()),
+    );
+
+    assert.equal(batches.length, 1);
+    assert.equal(batches[0].operations.length, 1);
+    assert.equal(batches[0].operations[0].oldString, 'old');
+    assert.equal(batches[0].operations[0].newString, 'new');
+    assert.equal(batches[0].operations[0].workspaceRoot, cwd);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
 });
 
 
@@ -173,11 +207,70 @@ test('denied patch rollback failure remains visible as a file change', () => {
   assert.equal(result.message.content[0].is_error, false);
 });
 
+test('denied patch rollback refuses symlink paths', async () => {
+  const cwd = await mkdtemp(join(tmpdir(), 'codex-denied-patch-'));
+  try {
+    await writeFile(join(cwd, 'target.txt'), 'after\n', 'utf8');
+    await symlink(join(cwd, 'target.txt'), join(cwd, 'link.txt'));
+
+    const resultByCallId = await rollbackDeniedPatchBatches([
+      {
+        callId: 'patch-1',
+        operations: [{
+          filePath: join(cwd, 'link.txt'),
+          workspaceRoot: cwd,
+          oldString: 'before\n',
+          newString: 'after\n',
+          toolName: 'edit',
+          kind: 'update',
+        }],
+      },
+    ], new Set(['patch-1']));
+
+    const result = resultByCallId.get('patch-1');
+    assert.equal(result.success, false);
+    assert.equal(result.failures[0].reason, 'refuse-symlink-path');
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test('denied patch rollback refuses symlink parent paths', async () => {
+  const cwd = await mkdtemp(join(tmpdir(), 'codex-denied-patch-root-'));
+  const outside = await mkdtemp(join(tmpdir(), 'codex-denied-patch-outside-'));
+  try {
+    await writeFile(join(outside, 'target.txt'), 'after\n', 'utf8');
+    await symlink(outside, join(cwd, 'linked-dir'));
+
+    const resultByCallId = await rollbackDeniedPatchBatches([
+      {
+        callId: 'patch-1',
+        operations: [{
+          filePath: join(cwd, 'linked-dir', 'target.txt'),
+          workspaceRoot: cwd,
+          oldString: 'before\n',
+          newString: 'after\n',
+          toolName: 'edit',
+          kind: 'update',
+        }],
+      },
+    ], new Set(['patch-1']));
+
+    const result = resultByCallId.get('patch-1');
+    assert.equal(result.success, false);
+    assert.equal(result.failures[0].reason, 'refuse-symlink-path');
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
 
 test('command-created files are emitted as rollback-safe synthetic file changes', async () => {
   const cwd = await mkdtemp(join(tmpdir(), 'codex-fs-snapshot-'));
   const emitted = [];
   const state = createInitialEventState((message) => emitted.push(message));
+  let expectedTextPath = '';
 
   async function* events() {
     yield { type: 'turn.started' };
@@ -190,6 +283,7 @@ test('command-created files are emitted as rollback-safe synthetic file changes'
 
   try {
     await processCodexEventStream(events(), state, { cwd, threadId: 'thread-1', threadOptions: {}, normalizedPermissionMode: 'default' });
+    expectedTextPath = await realpath(join(cwd, 'src/text.js'));
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }
@@ -198,7 +292,7 @@ test('command-created files are emitted as rollback-safe synthetic file changes'
   const fileResult = emitted.find((message) => message.message?.content?.[0]?.type === 'tool_result' && message.message.content[0].tool_use_id === fileUse?.message.content[0].id);
 
   assert.ok(fileUse, 'expected synthetic write tool use');
-  assert.equal(fileUse.message.content[0].input.file_path, join(cwd, 'src/text.js'));
+  assert.equal(fileUse.message.content[0].input.file_path, expectedTextPath);
   assert.equal(fileUse.message.content[0].input.old_string, '');
   assert.equal(fileUse.message.content[0].input.new_string, 'export const hello = "world";\n');
   assert.equal(fileUse.message.content[0].input.safe_to_rollback, true);

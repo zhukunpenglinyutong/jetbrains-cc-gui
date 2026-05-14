@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -57,9 +57,30 @@ test('captureWorkspaceSnapshot skips dependency folders while keeping project fi
 
     const captured = await captureWorkspaceSnapshot(cwd);
 
-    assert.ok(captured.files.has(join(cwd, 'src/app.js')));
+    assert.ok(captured.files.has(await realpath(join(cwd, 'src/app.js'))));
     assert.equal(captured.files.has(join(cwd, 'node_modules/pkg/index.js')), false);
   } finally {
     await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test('captureWorkspaceSnapshot skips symlinked files and directories outside workspace', async () => {
+  const cwd = await mkdtemp(join(tmpdir(), 'codex-workspace-snapshot-'));
+  const outside = await mkdtemp(join(tmpdir(), 'codex-workspace-outside-'));
+  try {
+    await mkdir(join(cwd, 'src'), { recursive: true });
+    await writeFile(join(cwd, 'src/app.js'), 'export const app = true;\n', 'utf8');
+    await writeFile(join(outside, 'secret.txt'), 'secret\n', 'utf8');
+    await symlink(join(outside, 'secret.txt'), join(cwd, 'src/secret-link.txt'));
+    await symlink(outside, join(cwd, 'linked-outside-dir'));
+
+    const captured = await captureWorkspaceSnapshot(cwd);
+
+    assert.ok(captured.files.has(await realpath(join(cwd, 'src/app.js'))));
+    assert.equal(captured.files.has(join(cwd, 'src/secret-link.txt')), false);
+    assert.equal(captured.files.has(join(outside, 'secret.txt')), false);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
   }
 });

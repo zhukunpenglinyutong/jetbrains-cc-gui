@@ -56,16 +56,19 @@ function getKeepAllButton() {
 }
 
 describe('StatusPanel', () => {
-  it('allows Keep All while a session-level subagent is pending', () => {
+  it('disables Keep All while a session-level subagent is pending', () => {
     renderFilesPanel({ hasPendingSubagent: true });
 
-    expect(getKeepAllButton().disabled).toBe(false);
+    expect(getKeepAllButton().disabled).toBe(true);
+    expect((screen.getByTitle('statusPanel.discardAll') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTitle('statusPanel.showDiff') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTitle('statusPanel.undoChanges') as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('allows Keep All while a response is still streaming', () => {
+  it('disables Keep All while a response is still streaming', () => {
     renderFilesPanel({ isStreaming: true });
 
-    expect(getKeepAllButton().disabled).toBe(false);
+    expect(getKeepAllButton().disabled).toBe(true);
   });
 
   it('allows Keep All when no stream or subagent scope is pending', () => {

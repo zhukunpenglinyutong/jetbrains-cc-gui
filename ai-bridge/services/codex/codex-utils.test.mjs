@@ -43,3 +43,21 @@ test('buildCodexCliEnvironment removes inherited Codex/OpenAI auth and endpoint 
     ])
   );
 });
+
+test('buildCodexCliEnvironment removes inherited auth variables case-insensitively', () => {
+  const { cliEnv, removedKeys } = buildCodexCliEnvironment({
+    PATH: '/usr/bin',
+    openai_api_key: 'sk-lowercase-openai',
+    OpenAI_Base_URL: 'https://wrong.example/v1',
+    codex_api_key: 'sk-lowercase-codex',
+  });
+
+  assert.equal(cliEnv.PATH, '/usr/bin');
+  assert.equal(cliEnv.openai_api_key, undefined);
+  assert.equal(cliEnv.OpenAI_Base_URL, undefined);
+  assert.equal(cliEnv.codex_api_key, undefined);
+  assert.deepEqual(
+    new Set(removedKeys),
+    new Set(['openai_api_key', 'OpenAI_Base_URL', 'codex_api_key'])
+  );
+});

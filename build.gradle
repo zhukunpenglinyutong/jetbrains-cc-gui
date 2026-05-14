@@ -1,5 +1,3 @@
-import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
-
 plugins {
     id 'java'
     id 'checkstyle'
@@ -35,12 +33,12 @@ group = 'com.github.idea-claude-code-gui'
 version = '0.4.3-Alpha1'
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
 
     // Use Java Toolchain for consistent JDK across all tasks
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(17)
     }
 }
 
@@ -60,7 +58,7 @@ if (localJavaHome) {
             // Skip runIde task to use JBR for JCEF support
             if (it.name != 'runIde') {
                 javaLauncher = javaToolchains.launcherFor {
-                    languageVersion = JavaLanguageVersion.of(21)
+                    languageVersion = JavaLanguageVersion.of(17)
                 }
             }
         }
@@ -108,15 +106,6 @@ dependencies {
     }
 }
 
-
-intellijPlatform {
-    pluginVerification {
-        ides {
-            create(IntelliJPlatformType.IntellijIdeaCommunity, '2024.3.1')
-        }
-    }
-}
-
 sourceSets {
     main {
         java {
@@ -139,13 +128,14 @@ sourceSets {
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
     // Ensure consistent source/target compatibility
-    options.release.set(21)
+    options.release.set(17)
 }
 
 // Ensure plugin.xml is patched with the correct since/until build and change notes
 patchPluginXml {
     // plugin compatibility range
-    sinceBuild = '243'
+    sinceBuild = '233'
+    untilBuild = '263.*'
 
     // Release notes shown in plugin repositories
     // Dynamically load the latest changelog entry from CHANGELOG.md and convert to simple HTML.

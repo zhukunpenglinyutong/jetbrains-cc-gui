@@ -20,6 +20,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 
 /** Session-owned tracker that captures file deltas produced inside sub-agent scopes. */
@@ -53,8 +57,16 @@ public final class SubagentEditScopeTracker {
                 return existingAgentScope.scopeId;
             }
         }
+        List<Scope> activeScopes = activeScopes();
+        for (Scope activeScope : activeScopes) {
+            activeScope.disableBaselineOnlyDiff = true;
+        }
         String scopeId = provider + "_" + (parentToolUseId != null ? parentToolUseId : UUID.randomUUID());
-        Scope scope = new Scope(scopeId, provider, parentToolUseId, agentHandle, Map.of());
+        CompletableFuture<Map<String, FileSnapshotUtil.FileSnapshot>> baselineFuture = activeScopes.isEmpty()
+                ? captureBaselineAsync(project)
+                : CompletableFuture.completedFuture(Map.of());
+        Scope scope = new Scope(scopeId, provider, parentToolUseId, agentHandle, baselineFuture);
+        scope.disableBaselineOnlyDiff = !activeScopes.isEmpty();
         latestScope = scope;
         if (parentToolUseId != null) {
             scopeByParentToolUseId.put(parentToolUseId, scope);
@@ -77,18 +89,18 @@ public final class SubagentEditScopeTracker {
         scopeByAgentHandle.put(agentHandle, scope);
     }
 
-    public synchronized List<ClaudeSession.Message> completeByParentToolUseId(String parentToolUseId, String completionToken) {
+    public List<ClaudeSession.Message> completeByParentToolUseId(String parentToolUseId, String completionToken) {
         if (parentToolUseId == null) {
             return List.of();
         }
-        return complete(scopeByParentToolUseId.get(parentToolUseId), completionToken);
+        return complete(lookupByParentToolUseId(parentToolUseId), completionToken);
     }
 
-    public synchronized List<ClaudeSession.Message> completeByAgentHandle(String agentHandle, String completionToken) {
+    public List<ClaudeSession.Message> completeByAgentHandle(String agentHandle, String completionToken) {
         if (agentHandle == null) {
             return List.of();
         }
-        return complete(scopeByAgentHandle.get(agentHandle), completionToken);
+        return complete(lookupByAgentHandle(agentHandle), completionToken);
     }
 
     public synchronized void cancelByParentToolUseId(String parentToolUseId) {
@@ -157,6 +169,21 @@ public final class SubagentEditScopeTracker {
 
     public synchronized void recordAfterSnapshotForTest(Map<String, FileSnapshotUtil.FileSnapshot> snapshots) {
         afterSnapshotForTest = snapshots;
+    }
+
+    synchronized void recordBaselineForTest(Map<String, FileSnapshotUtil.FileSnapshot> snapshots) {
+        Scope scope = latestActiveScope();
+        if (scope != null) {
+            scope.baselineByPath = snapshots != null ? snapshots : Map.of();
+            scope.baselineFuture = CompletableFuture.completedFuture(scope.baselineByPath);
+        }
+    }
+
+    private static CompletableFuture<Map<String, FileSnapshotUtil.FileSnapshot>> captureBaselineAsync(Project project) {
+        if (project == null || project.isDisposed() || project.getBasePath() == null) {
+            return CompletableFuture.completedFuture(Map.of());
+        }
+        return CompletableFuture.supplyAsync(() -> FileSnapshotUtil.captureProjectSnapshot(project));
     }
 
     private void installVfsListener() {
@@ -277,7 +304,7 @@ public final class SubagentEditScopeTracker {
     }
 
     private FileSnapshotUtil.FileSnapshot readBeforeSnapshot(Scope scope, VFileEvent event, String path) {
-        FileSnapshotUtil.FileSnapshot baseline = scope.baselineByPath.get(path);
+        FileSnapshotUtil.FileSnapshot baseline = scope.currentBaseline().get(path);
         if (baseline != null) {
             return baseline;
         }
@@ -309,12 +336,9 @@ public final class SubagentEditScopeTracker {
     }
 
     private List<ClaudeSession.Message> complete(Scope scope, String completionToken) {
-        if (scope == null || completionToken == null || scope.completed || scope.completedTokens.contains(completionToken)) {
+        if (completionToken == null || !markCompleted(scope, completionToken)) {
             return List.of();
         }
-        scope.completed = true;
-        scope.completedTokens.add(completionToken);
-        removeScope(scope);
 
         long sequence = editSequence.incrementAndGet();
         List<EditOperationBuilder.Operation> operations = buildOperations(scope, sequence);
@@ -323,6 +347,24 @@ public final class SubagentEditScopeTracker {
         }
         ScopeDescriptor descriptor = new ScopeDescriptor(scope.scopeId, scope.provider, scope.parentToolUseId, scope.agentHandle, sequence);
         return SyntheticFileChangeMessageFactory.build(descriptor, operations);
+    }
+
+    private synchronized Scope lookupByParentToolUseId(String parentToolUseId) {
+        return scopeByParentToolUseId.get(parentToolUseId);
+    }
+
+    private synchronized Scope lookupByAgentHandle(String agentHandle) {
+        return scopeByAgentHandle.get(agentHandle);
+    }
+
+    private synchronized boolean markCompleted(Scope scope, String completionToken) {
+        if (scope == null || completionToken == null || scope.completed || scope.completedTokens.contains(completionToken)) {
+            return false;
+        }
+        scope.completed = true;
+        scope.completedTokens.add(completionToken);
+        removeScope(scope);
+        return true;
     }
 
     private void cancel(Scope scope) {
@@ -346,7 +388,11 @@ public final class SubagentEditScopeTracker {
     }
 
     private List<EditOperationBuilder.Operation> buildOperations(Scope scope, long sequence) {
+        Map<String, FileSnapshotUtil.FileSnapshot> baselineByPath = scope.baselineForCompletion();
         Set<String> paths = new LinkedHashSet<>(scope.beforeByPath.keySet());
+        if (!scope.disableBaselineOnlyDiff) {
+            paths.addAll(baselineByPath.keySet());
+        }
 
         List<EditOperationBuilder.Operation> operations = new ArrayList<>();
         for (String path : paths) {
@@ -354,7 +400,7 @@ public final class SubagentEditScopeTracker {
                 LOG.warn("Skipping ambiguous sub-agent edit path touched by multiple active scopes: " + path);
                 continue;
             }
-            FileSnapshotUtil.FileSnapshot before = scope.beforeByPath.get(path);
+            FileSnapshotUtil.FileSnapshot before = scope.beforeByPath.getOrDefault(path, baselineByPath.get(path));
             FileSnapshotUtil.FileSnapshot after = readAfterSnapshot(path);
             if (after == null) {
                 if (before != null && before.existed() && !before.binary()) {
@@ -401,15 +447,39 @@ public final class SubagentEditScopeTracker {
         private final Map<String, FileSnapshotUtil.FileSnapshot> beforeByPath = new HashMap<>();
         private final Set<String> conflictedPaths = new HashSet<>();
         private final Set<String> completedTokens = new HashSet<>();
-        private final Map<String, FileSnapshotUtil.FileSnapshot> baselineByPath;
+        private boolean disableBaselineOnlyDiff;
+        private Map<String, FileSnapshotUtil.FileSnapshot> baselineByPath;
+        private CompletableFuture<Map<String, FileSnapshotUtil.FileSnapshot>> baselineFuture;
 
         private Scope(String scopeId, String provider, String parentToolUseId, String agentHandle,
-                      Map<String, FileSnapshotUtil.FileSnapshot> baselineByPath) {
+                      CompletableFuture<Map<String, FileSnapshotUtil.FileSnapshot>> baselineFuture) {
             this.scopeId = scopeId;
             this.provider = provider;
             this.parentToolUseId = parentToolUseId;
             this.agentHandle = agentHandle;
-            this.baselineByPath = baselineByPath != null ? baselineByPath : Map.of();
+            this.baselineByPath = Map.of();
+            this.baselineFuture = baselineFuture != null ? baselineFuture : CompletableFuture.completedFuture(Map.of());
+        }
+
+        private Map<String, FileSnapshotUtil.FileSnapshot> currentBaseline() {
+            if (baselineByPath.isEmpty() && baselineFuture != null && baselineFuture.isDone() && !baselineFuture.isCompletedExceptionally()) {
+                baselineByPath = baselineFuture.getNow(Map.of());
+            }
+            return baselineByPath != null ? baselineByPath : Map.of();
+        }
+
+        private Map<String, FileSnapshotUtil.FileSnapshot> baselineForCompletion() {
+            if (!baselineByPath.isEmpty() || baselineFuture == null) {
+                return currentBaseline();
+            }
+            try {
+                baselineByPath = baselineFuture.get(3, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (ExecutionException | TimeoutException e) {
+                LOG.warn("Sub-agent baseline snapshot unavailable at completion", e);
+            }
+            return baselineByPath != null ? baselineByPath : Map.of();
         }
     }
 

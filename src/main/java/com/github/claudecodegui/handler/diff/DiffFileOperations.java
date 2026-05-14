@@ -8,9 +8,11 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.encoding.EncodingProjectManager;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Optional;
@@ -50,7 +52,11 @@ public class DiffFileOperations {
         try {
             Path base = Path.of(projectBasePath).toRealPath().normalize();
             Path input = Path.of(filePath);
-            Path requested = input.isAbsolute() ? input.normalize() : base.resolve(input).normalize();
+            Path requested = (input.isAbsolute() ? input : base.resolve(input)).toAbsolutePath().normalize();
+            if (!isWithin(base, requested) || hasSymlinkSegment(base, requested)) {
+                LOG.warn("Security: Refusing unsafe file path: " + filePath + " (requested: " + requested + ")");
+                return Optional.empty();
+            }
             Path resolved = resolveExistingOrParent(requested);
             if (!isWithin(base, resolved)) {
                 LOG.warn("Security: File path outside project directory: " + filePath + " (resolved: " + resolved + ")");
@@ -75,6 +81,22 @@ public class DiffFileOperations {
             return parent.toRealPath().resolve(requested.getFileName()).normalize();
         }
         return requested.toAbsolutePath().normalize();
+    }
+
+    private static boolean hasSymlinkSegment(Path base, Path requested) {
+        try {
+            Path relative = base.relativize(requested);
+            Path current = base;
+            for (Path part : relative) {
+                current = current.resolve(part);
+                if (Files.exists(current, LinkOption.NOFOLLOW_LINKS) && Files.isSymbolicLink(current)) {
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            return true;
+        }
+        return false;
     }
 
     private static boolean isWithin(Path base, Path candidate) {
@@ -151,6 +173,10 @@ public class DiffFileOperations {
         }
         String resolvedFilePath = safePath.get().toString();
         try {
+            if (Files.isSymbolicLink(safePath.get())) {
+                LOG.warn("Security: Refusing to read symlink path: " + resolvedFilePath);
+                return Optional.empty();
+            }
             VirtualFile file = LocalFileSystem.getInstance()
                     .refreshAndFindFileByPath(resolvedFilePath.replace('\\', '/'));
             if (file != null) {
@@ -161,7 +187,9 @@ public class DiffFileOperations {
             if (!Files.exists(nioPath)) {
                 return Optional.empty();
             }
-            return Optional.of(Files.readString(nioPath, fallbackCharset()));
+            try (InputStream inputStream = Files.newInputStream(nioPath, LinkOption.NOFOLLOW_LINKS)) {
+                return Optional.of(new String(inputStream.readAllBytes(), fallbackCharset()));
+            }
         } catch (Exception e) {
             LOG.error("Failed to read content from file: " + resolvedFilePath, e);
             return Optional.empty();
@@ -193,6 +221,10 @@ public class DiffFileOperations {
         AtomicReference<Exception> failure = new AtomicReference<>();
         runOnDispatchThreadAndWait(() -> {
             try {
+                if (Files.isSymbolicLink(safePath.get())) {
+                    failure.set(new IOException("Refusing to write symlink path"));
+                    return;
+                }
                 VirtualFile file = LocalFileSystem.getInstance()
                         .refreshAndFindFileByPath(resolvedFilePath.replace('\\', '/'));
 

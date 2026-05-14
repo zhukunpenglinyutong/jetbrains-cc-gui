@@ -29,6 +29,7 @@ const StatusPanel = ({
   currentSessionId,
   expanded = true,
   isStreaming = false,
+  hasPendingSubagent = false,
   onUndoFile,
   onKeepAll,
   onRegisterFileChangeAction,
@@ -55,6 +56,8 @@ const StatusPanel = ({
   const hasTodos = todos.length > 0;
   const hasFileChanges = fileChanges.length > 0;
   const hasSubagents = subagents.length > 0;
+  const keepAllDisabled = isStreaming || hasPendingSubagent;
+  const fileActionsDisabled = isStreaming || hasPendingSubagent;
 
   // Calculate todo stats
   const { completedCount, totalCount, hasInProgressTodo } = useMemo(() => {
@@ -125,11 +128,16 @@ const StatusPanel = ({
 
   // Undo handlers
   const handleUndoClick = useCallback((fileChange: FileChangeSummary) => {
+    if (fileActionsDisabled) return;
     setConfirmUndoFile(fileChange);
-  }, []);
+  }, [fileActionsDisabled]);
 
   const handleConfirmUndo = useCallback(() => {
     if (!confirmUndoFile) return;
+    if (fileActionsDisabled) {
+      setConfirmUndoFile(null);
+      return;
+    }
 
     const { filePath, operations } = confirmUndoFile;
     const safeStatus = confirmUndoFile.status === "A" ? "A" : "M";
@@ -139,7 +147,7 @@ const StatusPanel = ({
     setConfirmUndoFile(null);
 
     undoFileChanges(filePath, safeStatus, toBridgeOperations(operations));
-  }, [confirmUndoFile]);
+  }, [confirmUndoFile, fileActionsDisabled]);
 
   const handleCancelUndo = useCallback(() => {
     setConfirmUndoFile(null);
@@ -147,11 +155,16 @@ const StatusPanel = ({
 
   // Discard All handlers
   const handleDiscardAllClick = useCallback(() => {
+    if (fileActionsDisabled) return;
     setConfirmDiscardAll(true);
-  }, []);
+  }, [fileActionsDisabled]);
 
   const handleConfirmDiscardAll = useCallback(() => {
     if (fileChanges.length === 0) return;
+    if (fileActionsDisabled) {
+      setConfirmDiscardAll(false);
+      return;
+    }
 
     setIsDiscardingAll(true);
     setConfirmDiscardAll(false);
@@ -167,7 +180,7 @@ const StatusPanel = ({
     );
 
     sendToJava("undo_all_file_changes", { files });
-  }, [fileChanges]);
+  }, [fileChanges, fileActionsDisabled]);
 
   const handleCancelDiscardAll = useCallback(() => {
     setConfirmDiscardAll(false);
@@ -175,6 +188,7 @@ const StatusPanel = ({
 
   const handleShowDiff = useCallback(
     (fileChange: FileChangeSummary) => {
+      if (fileActionsDisabled) return;
       const status = fileChange.status === "A" ? "A" : "M";
       const requestId = onRegisterFileChangeAction?.(fileChange);
       const dispatched = showEditableDiff(
@@ -187,14 +201,15 @@ const StatusPanel = ({
         onClearFileChangeAction?.(requestId);
       }
     },
-    [onRegisterFileChangeAction, onClearFileChangeAction],
+    [fileActionsDisabled, onRegisterFileChangeAction, onClearFileChangeAction],
   );
 
   // Keep All handler
   const handleKeepAllClick = useCallback(() => {
+    if (keepAllDisabled) return;
     onKeepAll?.();
     window.addToast?.(t("statusPanel.keepAllSuccess"), "success");
-  }, [onKeepAll, t]);
+  }, [keepAllDisabled, onKeepAll, t]);
 
   // Register undo result callback
   useEffect(() => {
@@ -204,19 +219,21 @@ const StatusPanel = ({
         setUndoingFile(null);
 
         if (result.success) {
+          const completedFilePath = result.requestFilePath || result.filePath;
           const requested = undoRequestByFilePathRef.current.get(
-            result.filePath,
+            completedFilePath,
           );
-          undoRequestByFilePathRef.current.delete(result.filePath);
-          onUndoFile?.(result.filePath, requested?.operations);
+          undoRequestByFilePathRef.current.delete(completedFilePath);
+          onUndoFile?.(completedFilePath, requested?.operations);
           window.addToast?.(
             t("statusPanel.undoSuccess", {
-              fileName: getFileName(result.filePath),
+              fileName: getFileName(completedFilePath),
             }),
             "success",
           );
         } else {
-          undoRequestByFilePathRef.current.delete(result.filePath);
+          const completedFilePath = result.requestFilePath || result.filePath;
+          undoRequestByFilePathRef.current.delete(completedFilePath);
           window.addToast?.(
             t("statusPanel.undoFailed", {
               error: result.error || "Unknown error",
@@ -224,8 +241,8 @@ const StatusPanel = ({
             "error",
           );
         }
-      } catch {
-        // JSON parse failed, reset state silently
+      } catch (error) {
+        console.error("Failed to handle undo file result", error);
         setUndoingFile(null);
       }
     };
@@ -283,8 +300,8 @@ const StatusPanel = ({
             "error",
           );
         }
-      } catch {
-        // JSON parse failed, reset state silently
+      } catch (error) {
+        console.error("Failed to handle undo all file result", error);
         setIsDiscardingAll(false);
       }
     };
@@ -322,6 +339,8 @@ const StatusPanel = ({
             onShowDiff={handleShowDiff}
             onDiscardAllClick={handleDiscardAllClick}
             onKeepAllClick={handleKeepAllClick}
+            keepAllDisabled={keepAllDisabled}
+            actionsDisabled={fileActionsDisabled}
           />
         );
       default:

@@ -127,6 +127,17 @@ public final class SubagentLifecycleDetector {
                             agentHandle,
                             "complete:" + toolUseId
                     ));
+                } else if ("wait_agent".equals(info.name())) {
+                    for (String targetHandle : extractTargetArrayHandles(info.input())) {
+                        events.add(new SubagentLifecycleEvent(
+                                SubagentLifecycleEvent.Kind.COMPLETED,
+                                provider,
+                                toolUseId,
+                                null,
+                                targetHandle,
+                                "complete:" + toolUseId + ":" + targetHandle
+                        ));
+                    }
                 }
                 toolUseById.remove(toolUseId);
                 markTerminal(toolUseId);
@@ -228,11 +239,16 @@ public final class SubagentLifecycleDetector {
     }
 
     private static String extractSingleTargetArrayHandle(JsonObject input) {
+        List<String> handles = extractTargetArrayHandles(input);
+        return handles.size() == 1 ? handles.get(0) : null;
+    }
+
+    private static List<String> extractTargetArrayHandles(JsonObject input) {
         if (input == null || !input.has("targets") || !input.get("targets").isJsonArray()) {
-            return null;
+            return List.of();
         }
         JsonArray targets = input.getAsJsonArray("targets");
-        String handle = null;
+        List<String> handles = new ArrayList<>();
         for (JsonElement target : targets) {
             if (!target.isJsonPrimitive()) {
                 continue;
@@ -246,12 +262,9 @@ public final class SubagentLifecycleDetector {
             if (value == null || value.isBlank()) {
                 continue;
             }
-            if (handle != null) {
-                return null;
-            }
-            handle = value;
+            handles.add(value);
         }
-        return handle;
+        return handles;
     }
 
     private static String resolveTerminalAgentHandle(String toolName, JsonObject input, JsonObject resultBlock) {

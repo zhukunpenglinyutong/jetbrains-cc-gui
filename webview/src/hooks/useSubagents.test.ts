@@ -185,7 +185,7 @@ describe('useSubagents lifecycle extraction', () => {
     expect(subagents.find((subagent) => subagent.agentHandle === 'agent-2')?.status).toBe('completed');
   });
 
-  it('does not guess a completed handle from multi-target wait_agent without result identity', () => {
+  it('marks all target handles completed when multi-target wait_agent succeeds without a single result identity', () => {
     const messages = [
       assistantWithTool('spawn-1', 'spawn_agent', { message: 'work 1' }),
       assistantWithTool('spawn-2', 'spawn_agent', { message: 'work 2' }),
@@ -205,7 +205,7 @@ describe('useSubagents lifecycle extraction', () => {
     );
 
     expect(subagents).toHaveLength(2);
-    expect(subagents.every((subagent) => subagent.status === 'running')).toBe(true);
+    expect(subagents.every((subagent) => subagent.status === 'completed')).toBe(true);
   });
 
   it('uses send_input target instead of generic result text as Codex handle', () => {

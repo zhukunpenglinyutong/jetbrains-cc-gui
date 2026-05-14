@@ -52,6 +52,10 @@ export const CODEX_CLI_ENV_BLOCKLIST = new Set([
   'OPENAI_PROJECT'
 ]);
 
+function isBlockedCodexCliEnvKey(key) {
+  return CODEX_CLI_ENV_BLOCKLIST.has(String(key || '').toUpperCase());
+}
+
 /**
  * Reads sandbox mode override from environment variables.
  * Returns an empty string when no override should be applied.
@@ -100,7 +104,7 @@ export function buildCodexCliEnvironment(baseEnv) {
     if (typeof rawValue !== 'string' || rawValue.length === 0) {
       continue;
     }
-    if (CODEX_CLI_ENV_BLOCKLIST.has(key)) {
+    if (isBlockedCodexCliEnvKey(key)) {
       removedKeys.push(key);
       continue;
     }

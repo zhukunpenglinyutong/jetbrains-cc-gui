@@ -188,7 +188,7 @@ public class SubagentLifecycleDetectorTest {
     }
 
     @Test
-    public void waitAgentMultipleTargetsWithoutResultHandleDoesNotGuess() {
+    public void waitAgentMultipleTargetsWithoutResultHandleCompletesAllTargets() {
         SubagentLifecycleDetector detector = new SubagentLifecycleDetector();
         detector.handleAssistant("codex", gson.fromJson("""
                 {"message":{"content":[{"type":"tool_use","id":"wait-1","name":"wait_agent","input":{"targets":["agent-1","agent-2"]}}]}}
@@ -198,7 +198,10 @@ public class SubagentLifecycleDetectorTest {
                 {"message":{"content":[{"type":"tool_result","tool_use_id":"wait-1","content":"{\\"targets\\":[\\"agent-1\\",\\"agent-2\\"]}"}]}}
                 """, com.google.gson.JsonObject.class));
 
-        assertTrue(events.isEmpty());
+        assertEquals(2, events.size());
+        assertEquals(SubagentLifecycleEvent.Kind.COMPLETED, events.get(0).kind());
+        assertEquals("agent-1", events.get(0).agentHandle());
+        assertEquals("agent-2", events.get(1).agentHandle());
     }
 
     @Test

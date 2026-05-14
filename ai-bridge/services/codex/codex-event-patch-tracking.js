@@ -1,5 +1,6 @@
-import { existsSync } from 'fs';
-import { readFile, unlink, writeFile } from 'fs/promises';
+import { constants, existsSync } from 'fs';
+import { lstat, open, readFile, realpath, unlink } from 'fs/promises';
+import { isAbsolute, relative, resolve, sep } from 'path';
 import { requestPermissionFromJava } from '../../permission-handler.js';
 import { extractPatchFromResponseItemPayload, parseApplyPatchToOperations } from './codex-patch-parser.js';
 import { captureWorkspaceSnapshot, diffWorkspaceSnapshots } from './codex-workspace-snapshot.js';
@@ -51,7 +52,7 @@ export async function collectPatchOperationsFromSession(state, config, ensureSes
     if (!patchText) continue;
 
     const operations = parseApplyPatchToOperations(patchText)
-      .map((op) => ({ ...op, filePath: resolveFilePath(op.filePath, config.cwd) }))
+      .map((op) => ({ ...op, filePath: resolveFilePath(op.filePath, config.cwd), workspaceRoot: config.cwd || '' }))
       .filter((op) => op.filePath && (op.kind === 'delete' || op.oldString !== '' || op.newString !== ''));
     state.processedPatchCallIds.add(callId);
     if (operations.length === 0) continue;
@@ -131,6 +132,78 @@ export function findUniqueRollbackIndex(currentContent, newString, operation) {
   return currentContent.indexOf(newString, first + 1) < 0 ? first : -1;
 }
 
+function isPathWithinRoot(root, candidate) {
+  const relativePath = relative(root, candidate);
+  return relativePath === '' || (!!relativePath && !relativePath.startsWith(`..${sep}`) && relativePath !== '..' && !isAbsolute(relativePath));
+}
+
+function noFollowOpenFlag() {
+  if (typeof constants.O_NOFOLLOW !== 'number' || constants.O_NOFOLLOW === 0) {
+    throw new Error('nofollow-open-unsupported');
+  }
+  return constants.O_NOFOLLOW;
+}
+
+async function validateRollbackPath(filePath, workspaceRoot, allowMissingFile) {
+  if (!workspaceRoot || typeof workspaceRoot !== 'string') {
+    return { ok: false, reason: 'missing-workspace-root' };
+  }
+  let realRoot;
+  try {
+    realRoot = await realpath(resolve(workspaceRoot));
+  } catch (error) {
+    return { ok: false, reason: error?.message || String(error) };
+  }
+  const lexicalRoot = resolve(workspaceRoot);
+  const lexicalPath = resolve(filePath);
+  if (!isPathWithinRoot(lexicalRoot, lexicalPath)) {
+    return { ok: false, reason: 'path-outside-workspace' };
+  }
+  const absolutePath = resolve(realRoot, relative(lexicalRoot, lexicalPath));
+  if (!isPathWithinRoot(realRoot, absolutePath)) {
+    return { ok: false, reason: 'path-outside-workspace' };
+  }
+  const relativePath = relative(realRoot, absolutePath);
+  const parts = relativePath ? relativePath.split(sep).filter(Boolean) : [];
+  let current = realRoot;
+  for (let index = 0; index < parts.length; index += 1) {
+    current = resolve(current, parts[index]);
+    try {
+      const currentStat = await lstat(current);
+      if (currentStat.isSymbolicLink()) {
+        return { ok: false, reason: 'refuse-symlink-path' };
+      }
+      if (index < parts.length - 1 && !currentStat.isDirectory()) {
+        return { ok: false, reason: 'parent-not-directory' };
+      }
+    } catch (error) {
+      if (allowMissingFile && index === parts.length - 1) {
+        return { ok: true };
+      }
+      return { ok: false, reason: error?.message || String(error) };
+    }
+  }
+  return { ok: true };
+}
+
+async function readTextNoFollow(filePath) {
+  const handle = await open(filePath, constants.O_RDONLY | noFollowOpenFlag());
+  try {
+    return await handle.readFile('utf8');
+  } finally {
+    await handle.close();
+  }
+}
+
+async function writeTextNoFollow(filePath, content) {
+  const handle = await open(filePath, constants.O_WRONLY | constants.O_TRUNC | noFollowOpenFlag());
+  try {
+    await handle.writeFile(content, 'utf8');
+  } finally {
+    await handle.close();
+  }
+}
+
 async function rollbackSinglePatchOperation(operation) {
   if (!operation || typeof operation !== 'object' || !operation.filePath) {
     return { ok: false, reason: 'invalid-operation' };
@@ -139,22 +212,38 @@ async function rollbackSinglePatchOperation(operation) {
   const oldString = typeof operation.oldString === 'string' ? operation.oldString : '';
   const newString = typeof operation.newString === 'string' ? operation.newString : '';
   const isAddedFile = operation.kind === 'add' || (operation.toolName === 'write' && oldString === '');
+  const validation = await validateRollbackPath(filePath, operation.workspaceRoot, isAddedFile);
+  if (!validation.ok) {
+    return { ok: false, reason: validation.reason };
+  }
+  try {
+    const fileStatus = await lstat(filePath);
+    if (fileStatus.isSymbolicLink()) {
+      return { ok: false, reason: 'refuse-symlink-path' };
+    }
+  } catch (error) {
+    if (!isAddedFile) {
+      return { ok: false, reason: error?.message || String(error) };
+    }
+  }
 
   if (isAddedFile) {
     if (!existsSync(filePath)) return { ok: true, reason: 'file-already-missing' };
+    const deleteValidation = await validateRollbackPath(filePath, operation.workspaceRoot, false);
+    if (!deleteValidation.ok) return { ok: false, reason: deleteValidation.reason };
     try { await unlink(filePath); return { ok: true, reason: 'file-deleted' }; }
     catch (error) { return { ok: false, reason: error?.message || String(error) }; }
   }
   if (!existsSync(filePath)) return { ok: false, reason: 'file-missing' };
   let currentContent = '';
-  try { currentContent = await readFile(filePath, 'utf8'); }
+  try { currentContent = await readTextNoFollow(filePath); }
   catch (error) { return { ok: false, reason: error?.message || String(error) }; }
   if (newString === oldString) return { ok: true, reason: 'noop' };
   if (!newString) return { ok: false, reason: 'unsupported-empty-new-string' };
   const index = findUniqueRollbackIndex(currentContent, newString, operation);
   if (index < 0) return { ok: false, reason: 'new-string-not-found-or-ambiguous' };
   const revertedContent = currentContent.slice(0, index) + oldString + currentContent.slice(index + newString.length);
-  try { await writeFile(filePath, revertedContent, 'utf8'); return { ok: true, reason: 'replaced' }; }
+  try { await writeTextNoFollow(filePath, revertedContent); return { ok: true, reason: 'replaced' }; }
   catch (error) { return { ok: false, reason: error?.message || String(error) }; }
 }
 

@@ -284,7 +284,7 @@ export function extractSubagentsFromMessages(
             resultHandles.forEach((handle) => handles.add(handle));
           } else if (directInputHandles.size > 0) {
             directInputHandles.forEach((handle) => handles.add(handle));
-          } else if (targetArrayHandles.size === 1) {
+          } else if (targetArrayHandles.size === 1 || (targetArrayHandles.size > 1 && !!result && !result.is_error)) {
             targetArrayHandles.forEach((handle) => handles.add(handle));
           }
         } else {

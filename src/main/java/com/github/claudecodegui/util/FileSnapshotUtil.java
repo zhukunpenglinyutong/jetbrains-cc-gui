@@ -5,6 +5,7 @@ import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -15,6 +16,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
 /**
@@ -23,6 +25,7 @@ import java.util.stream.Stream;
 public final class FileSnapshotUtil {
 
     private static final long MAX_FILE_BYTES = 1024 * 1024;
+    private static final long MAX_TOTAL_BYTES = 32L * 1024L * 1024L;
     private static final int MAX_FILES = 5000;
 
     private FileSnapshotUtil() {
@@ -42,6 +45,7 @@ public final class FileSnapshotUtil {
         Map<String, FileSnapshot> snapshots = new HashMap<>();
         try {
             Path realRoot = root.toRealPath().normalize();
+            AtomicLong totalBytes = new AtomicLong();
             try (Stream<Path> stream = Files.walk(realRoot)) {
                 stream
                         .filter(path -> !Files.isSymbolicLink(path))
@@ -49,7 +53,12 @@ public final class FileSnapshotUtil {
                         .filter(path -> isWithin(realRoot, path))
                         .filter(path -> !isExcluded(realRoot, path))
                         .limit(MAX_FILES)
-                        .forEach(path -> readSnapshot(realRoot, path).ifPresent(snapshot -> snapshots.put(snapshot.path(), snapshot)));
+                        .forEach(path -> readSnapshot(realRoot, path).ifPresent(snapshot -> {
+                            if (totalBytes.get() + snapshot.length() <= MAX_TOTAL_BYTES) {
+                                snapshots.put(snapshot.path(), snapshot);
+                                totalBytes.addAndGet(snapshot.length());
+                            }
+                        }));
             }
         } catch (IOException e) {
             return snapshots;
@@ -66,24 +75,34 @@ public final class FileSnapshotUtil {
             if (path == null || Files.isSymbolicLink(path) || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
                 return java.util.Optional.empty();
             }
-            if (root != null && !isWithin(root, path)) {
+            Path realPath = path.toRealPath(LinkOption.NOFOLLOW_LINKS).normalize();
+            if (root != null && !isWithin(root, realPath)) {
                 return java.util.Optional.empty();
             }
-            long length = Files.size(path);
+            if (Files.isSymbolicLink(realPath) || !Files.isRegularFile(realPath, LinkOption.NOFOLLOW_LINKS)) {
+                return java.util.Optional.empty();
+            }
+            long length = Files.size(realPath);
             if (length > MAX_FILE_BYTES) {
                 return java.util.Optional.empty();
             }
-            byte[] bytes = Files.readAllBytes(path);
+            byte[] bytes;
+            try (InputStream inputStream = Files.newInputStream(realPath, LinkOption.NOFOLLOW_LINKS)) {
+                bytes = inputStream.readNBytes((int) MAX_FILE_BYTES + 1);
+            }
+            if (bytes.length > MAX_FILE_BYTES) {
+                return java.util.Optional.empty();
+            }
             boolean binary = isBinary(bytes);
-            Charset charset = resolveCharset(path);
+            Charset charset = resolveCharset(realPath);
             String content = binary ? "" : new String(bytes, charset);
             return java.util.Optional.of(new FileSnapshot(
-                    path.toAbsolutePath().normalize().toString(),
+                    realPath.toAbsolutePath().normalize().toString(),
                     true,
                     binary,
                     content,
                     length,
-                    Files.getLastModifiedTime(path).toMillis(),
+                    Files.getLastModifiedTime(realPath).toMillis(),
                     sha256(bytes)
             ));
         } catch (IOException e) {

@@ -14,6 +14,8 @@ interface FileChangesListProps {
   onShowDiff: (fileChange: FileChangeSummary) => void;
   onDiscardAllClick: () => void;
   onKeepAllClick: () => void;
+  keepAllDisabled?: boolean;
+  actionsDisabled?: boolean;
 }
 
 interface FileChangeRowProps {
@@ -23,6 +25,7 @@ interface FileChangeRowProps {
   onOpen: (fileChange: FileChangeSummary) => void;
   onShowDiff: (fileChange: FileChangeSummary) => void;
   onUndo: (fileChange: FileChangeSummary) => void;
+  actionsDisabled: boolean;
   t: TFunction;
 }
 
@@ -34,6 +37,7 @@ const FileChangeRow = memo(
     onOpen,
     onShowDiff,
     onUndo,
+    actionsDisabled,
     t,
   }: FileChangeRowProps) => {
     const status = String(fileChange.status || "M");
@@ -104,7 +108,7 @@ const FileChangeRow = memo(
             className="file-change-action-btn diff-btn"
             onClick={handleShowDiff}
             title={t("statusPanel.showDiff")}
-            disabled={isDiscardingAll || unsafeRollback}
+            disabled={actionsDisabled || isDiscardingAll || unsafeRollback}
           >
             <span className="codicon codicon-diff" />
           </button>
@@ -112,7 +116,7 @@ const FileChangeRow = memo(
             className="file-change-action-btn undo-btn"
             onClick={handleUndo}
             title={t("statusPanel.undoChanges")}
-            disabled={isDiscardingAll || isUndoing || unsafeRollback}
+            disabled={actionsDisabled || isDiscardingAll || isUndoing || unsafeRollback}
           >
             {isUndoing ? (
               <span className="codicon codicon-loading codicon-modifier-spin" />
@@ -137,6 +141,8 @@ const FileChangesList = memo(
     onShowDiff,
     onDiscardAllClick,
     onKeepAllClick,
+    keepAllDisabled = false,
+    actionsDisabled = false,
   }: FileChangesListProps) => {
     const { t } = useTranslation();
 
@@ -159,7 +165,7 @@ const FileChangesList = memo(
           <button
             className="file-changes-action-btn discard-all-btn"
             onClick={onDiscardAllClick}
-            disabled={isDiscardingAll}
+            disabled={actionsDisabled || isDiscardingAll}
             title={t("statusPanel.discardAll")}
           >
             {isDiscardingAll ? (
@@ -172,6 +178,7 @@ const FileChangesList = memo(
           <button
             className="file-changes-action-btn keep-all-btn"
             onClick={onKeepAllClick}
+            disabled={keepAllDisabled}
             title={t("statusPanel.keepAll")}
           >
             <span className="codicon codicon-check-all" />
@@ -187,6 +194,7 @@ const FileChangesList = memo(
               fileChange={fileChange}
               isUndoing={undoingFile === fileChange.filePath}
               isDiscardingAll={isDiscardingAll}
+              actionsDisabled={actionsDisabled}
               onOpen={handleOpenFile}
               onShowDiff={onShowDiff}
               onUndo={onUndoClick}

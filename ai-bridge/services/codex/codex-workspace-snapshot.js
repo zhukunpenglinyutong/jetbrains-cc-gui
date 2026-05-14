@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { lstat, open, readdir, realpath, stat } from 'node:fs/promises';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 const DEFAULT_MAX_FILES = 5000;
@@ -24,6 +25,15 @@ function isPathWithinRoot(root, candidate) {
   return relativePath === '' || (!!relativePath && !relativePath.startsWith(`..${sep}`) && relativePath !== '..' && !isAbsolute(relativePath));
 }
 
+async function safeRealPathWithinRoot(root, candidate) {
+  try {
+    const realCandidate = await realpath(candidate);
+    return isPathWithinRoot(root, realCandidate) ? realCandidate : '';
+  } catch {
+    return '';
+  }
+}
+
 function isIgnoredDirectory(name) {
   return IGNORED_DIRECTORY_NAMES.has(name);
 }
@@ -44,13 +54,33 @@ function sha256(content) {
   return createHash('sha256').update(typeof content === 'string' ? content : '').digest('hex');
 }
 
+function noFollowOpenFlag() {
+  if (typeof constants.O_NOFOLLOW !== 'number' || constants.O_NOFOLLOW === 0) {
+    return null;
+  }
+  return constants.O_NOFOLLOW;
+}
+
 async function readSnapshotFile(filePath, fileStat, limits) {
   if (!fileStat.isFile()) return null;
   if (fileStat.size > limits.maxFileBytes) return null;
-  const buffer = await readFile(filePath);
+  const noFollowStat = await lstat(filePath);
+  if (!noFollowStat.isFile() || noFollowStat.isSymbolicLink()) return null;
+  const noFollow = noFollowOpenFlag();
+  if (noFollow === null) return null;
+  const handle = await open(filePath, constants.O_RDONLY | noFollow);
+  let buffer;
+  try {
+    const openStat = await handle.stat();
+    if (!openStat.isFile() || openStat.size > limits.maxFileBytes) return null;
+    buffer = await handle.readFile();
+  } finally {
+    await handle.close();
+  }
+  if (buffer.length > limits.maxFileBytes) return null;
   if (isLikelyBinary(buffer)) return null;
   return {
-    path: resolve(filePath),
+    path: filePath,
     existed: true,
     binary: false,
     content: buffer.toString('utf8'),
@@ -76,8 +106,15 @@ export async function captureWorkspaceSnapshot(cwd, options = {}) {
     return null;
   }
 
+  let realRoot = '';
+  try {
+    realRoot = await realpath(root);
+  } catch {
+    return null;
+  }
+
   const files = new Map();
-  const directories = [root];
+  const directories = [realRoot];
   let totalBytes = 0;
   let truncated = false;
 
@@ -95,47 +132,46 @@ export async function captureWorkspaceSnapshot(cwd, options = {}) {
     entries.sort((left, right) => left.name.localeCompare(right.name));
 
     for (const entry of entries) {
+      if (files.size >= limits.maxFiles || totalBytes >= limits.maxTotalBytes) {
+        truncated = true;
+        directories.length = 0;
+        break;
+      }
       const absolutePath = resolve(directory, entry.name);
-      if (!isPathWithinRoot(root, absolutePath)) continue;
+      if (!isPathWithinRoot(realRoot, absolutePath)) continue;
       if (entry.isSymbolicLink()) continue;
 
       if (entry.isDirectory()) {
         if (!isIgnoredDirectory(entry.name)) {
-          if (!isPathWithinRoot(root, absolutePath)) continue;
-          directories.push(absolutePath);
+          const realDirectory = await safeRealPathWithinRoot(realRoot, absolutePath);
+          if (!realDirectory) continue;
+          directories.push(realDirectory);
         }
         continue;
       }
 
       if (!entry.isFile() || isIgnoredFile(entry.name)) continue;
-      if (files.size >= limits.maxFiles || totalBytes >= limits.maxTotalBytes) {
-        truncated = true;
-        continue;
-      }
-
       let fileStat;
       try {
-        fileStat = await stat(absolutePath);
-      } catch {
-        continue;
-      }
-      if (totalBytes + fileStat.size > limits.maxTotalBytes) {
-        truncated = true;
-        continue;
-      }
-
-      try {
-        const snapshot = await readSnapshotFile(absolutePath, fileStat, limits);
+        const realFile = await safeRealPathWithinRoot(realRoot, absolutePath);
+        if (!realFile) continue;
+        fileStat = await stat(realFile);
+        if (realFile !== absolutePath && !isPathWithinRoot(realRoot, realFile)) continue;
+        if (totalBytes + fileStat.size > limits.maxTotalBytes) {
+          truncated = true;
+          continue;
+        }
+        const snapshot = await readSnapshotFile(realFile, fileStat, limits);
         if (!snapshot) continue;
         files.set(snapshot.path, snapshot);
         totalBytes += snapshot.length;
       } catch {
-        // File may disappear or become unreadable while Codex is running.
+        continue;
       }
     }
   }
 
-  return { root, files, totalBytes, truncated };
+  return { root: realRoot, files, totalBytes, truncated };
 }
 
 function countLines(content) {

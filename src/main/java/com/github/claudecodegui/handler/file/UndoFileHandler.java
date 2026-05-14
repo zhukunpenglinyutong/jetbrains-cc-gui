@@ -20,6 +20,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -49,6 +50,9 @@ public class UndoFileHandler extends BaseMessageHandler {
 
     interface BatchUndoAction {
         String filePath();
+        default String requestFilePath() {
+            return filePath();
+        }
         void apply() throws Exception;
         void rollback() throws Exception;
         default void afterCommit() throws Exception {
@@ -100,7 +104,11 @@ public class UndoFileHandler extends BaseMessageHandler {
         try {
             Path basePath = Path.of(projectBasePath).toRealPath().normalize();
             Path inputPath = Path.of(filePath);
-            Path requestedPath = inputPath.isAbsolute() ? inputPath.normalize() : basePath.resolve(inputPath).normalize();
+            Path requestedPath = (inputPath.isAbsolute() ? inputPath : basePath.resolve(inputPath)).toAbsolutePath().normalize();
+            if (!isWithin(basePath, requestedPath) || hasSymlinkSegment(basePath, requestedPath)) {
+                LOG.warn("[UndoFileHandler] Refusing unsafe file path: " + filePath + " (requested: " + requestedPath + ")");
+                return java.util.Optional.empty();
+            }
             Path resolvedPath = resolveExistingOrParent(requestedPath);
             if (!isWithin(basePath, resolvedPath)) {
                 LOG.warn("[UndoFileHandler] File path outside project directory: " + filePath
@@ -126,6 +134,22 @@ public class UndoFileHandler extends BaseMessageHandler {
             return parent.toRealPath().resolve(requestedPath.getFileName()).normalize();
         }
         return requestedPath.toAbsolutePath().normalize();
+    }
+
+    private static boolean hasSymlinkSegment(Path basePath, Path requestedPath) {
+        try {
+            Path relative = basePath.relativize(requestedPath);
+            Path current = basePath;
+            for (Path part : relative) {
+                current = current.resolve(part);
+                if (Files.exists(current, LinkOption.NOFOLLOW_LINKS) && Files.isSymbolicLink(current)) {
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            return true;
+        }
+        return false;
     }
 
     private static boolean isWithin(Path basePath, Path candidatePath) {
@@ -164,6 +188,7 @@ public class UndoFileHandler extends BaseMessageHandler {
             }
 
             LOG.info("[UndoFileHandler] Undoing changes for file: " + resolvedFilePath + ", status: " + status);
+            String requestFilePath = filePath;
 
             ApplicationManager.getApplication().invokeLater(() -> {
                 try {
@@ -188,7 +213,7 @@ public class UndoFileHandler extends BaseMessageHandler {
                     }
 
                     // Send success callback
-                    sendSuccess(resolvedFilePath);
+                    sendSuccess(resolvedFilePath, requestFilePath);
 
                 } catch (Exception e) {
                     LOG.error("[UndoFileHandler] Failed to undo file changes: " + e.getMessage(), e);
@@ -258,7 +283,7 @@ public class UndoFileHandler extends BaseMessageHandler {
             String resolvedFilePath = safePath.get().toString();
 
             try {
-                actions.add(createBatchUndoAction(resolvedFilePath, status, operations));
+                actions.add(createBatchUndoAction(resolvedFilePath, filePath, status, operations));
             } catch (Exception e) {
                 failCount++;
                 String reason = e instanceof UnsafeRollbackException ? "unsafe_to_rollback" : "undo_failed";
@@ -277,7 +302,7 @@ public class UndoFileHandler extends BaseMessageHandler {
         JsonArray succeededFiles = new JsonArray();
         if (execution.success()) {
             for (BatchUndoAction action : actions) {
-                succeededFiles.add(action.filePath());
+                succeededFiles.add(action.requestFilePath());
             }
             sendAllResult(true, false, actions.size(), succeededFiles, failedFiles, null);
         } else {
@@ -432,6 +457,9 @@ public class UndoFileHandler extends BaseMessageHandler {
         LocalFileSystem localFileSystem = LocalFileSystem.getInstance();
         VirtualFile file = localFileSystem.refreshAndFindFileByPath(normalizedPath);
         Path nioPath = Path.of(filePath);
+        if (Files.isSymbolicLink(nioPath)) {
+            throw new Exception("Refusing to delete symlink path");
+        }
         if (file == null || !file.exists()) {
             if (!Files.exists(nioPath)) {
                 LOG.warn("[UndoFileHandler] File not found for deletion: " + filePath);
@@ -470,7 +498,12 @@ public class UndoFileHandler extends BaseMessageHandler {
         }
     }
 
-    private BatchUndoAction createBatchUndoAction(String filePath, String status, JsonArray operations) throws Exception {
+    private BatchUndoAction createBatchUndoAction(
+            String filePath,
+            String requestFilePath,
+            String status,
+            JsonArray operations
+    ) throws Exception {
         if ("A".equals(status)) {
             if (hasUnsafeOperation(operations)) {
                 throw new UnsafeRollbackException("Operation is marked unsafe to rollback");
@@ -484,8 +517,16 @@ public class UndoFileHandler extends BaseMessageHandler {
                 }
 
                 @Override
+                public String requestFilePath() {
+                    return requestFilePath != null ? requestFilePath : filePath;
+                }
+
+                @Override
                 public void apply() throws Exception {
                     validateExpectedAfterHash(filePath, operations);
+                    if (Files.isSymbolicLink(path)) {
+                        throw new Exception("Refusing to undo symlink path");
+                    }
                     if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
                         return;
                     }
@@ -524,6 +565,9 @@ public class UndoFileHandler extends BaseMessageHandler {
             if (operations == null || operations.isEmpty()) {
                 throw new Exception("No operations to undo");
             }
+            if (Files.isSymbolicLink(Path.of(filePath))) {
+                throw new Exception("Refusing to undo symlink path");
+            }
             DocumentSnapshot snapshot = callOnEdtAndWait(() -> {
                 VirtualFile file = LocalFileSystem.getInstance().refreshAndFindFileByPath(filePath.replace('\\', '/'));
                 if (file == null || !file.exists()) {
@@ -545,6 +589,11 @@ public class UndoFileHandler extends BaseMessageHandler {
                 @Override
                 public String filePath() {
                     return filePath;
+                }
+
+                @Override
+                public String requestFilePath() {
+                    return requestFilePath != null ? requestFilePath : filePath;
                 }
 
                 @Override
@@ -620,7 +669,15 @@ public class UndoFileHandler extends BaseMessageHandler {
             return documentText;
         }
         Path path = Path.of(filePath);
-        return Files.exists(path, LinkOption.NOFOLLOW_LINKS) ? Files.readString(path, StandardCharsets.UTF_8) : "";
+        if (Files.isSymbolicLink(path)) {
+            throw new Exception("Refusing to read symlink path");
+        }
+        if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
+            return "";
+        }
+        try (InputStream inputStream = Files.newInputStream(path, LinkOption.NOFOLLOW_LINKS)) {
+            return new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+        }
     }
 
     private static String firstExpectedAfterHash(JsonArray operations) {
@@ -703,10 +760,11 @@ public class UndoFileHandler extends BaseMessageHandler {
         LOG.info("[UndoFileHandler] Successfully reversed edits for file: " + filePath);
     }
 
-    private void sendSuccess(String filePath) {
+    private void sendSuccess(String filePath, String requestFilePath) {
         JsonObject result = new JsonObject();
         result.addProperty("success", true);
         result.addProperty("filePath", filePath != null ? filePath : "");
+        result.addProperty("requestFilePath", requestFilePath != null ? requestFilePath : "");
 
         String json = gson.toJson(result);
         LOG.info("[UndoFileHandler] Sending success callback: " + json);
