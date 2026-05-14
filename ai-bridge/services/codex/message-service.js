@@ -33,6 +33,99 @@ import { collectAgentsInstructions } from './codex-agents-loader.js';
 import { createInitialEventState, processCodexEventStream } from './codex-event-handler.js';
 
 const CODEX_RUN_NOISE_FILTER_PATCHED = Symbol.for('ccgui.codex.runNoiseFilterPatched');
+const CODEX_THREAD_MAX_IDLE_MS = 30 * 60 * 1000;
+const CODEX_THREAD_CACHE_MAX_SIZE = 4;
+const codexThreadCache = new Map();
+
+function buildCodexThreadCacheSignature(codexOptions, threadOptions) {
+  return JSON.stringify({
+    baseUrl: codexOptions?.baseUrl || '',
+    apiKey: codexOptions?.apiKey || '',
+    env: codexOptions?.env || {},
+    model: threadOptions?.model || '',
+    sandboxMode: threadOptions?.sandboxMode || '',
+    workingDirectory: threadOptions?.workingDirectory || '',
+    skipGitRepoCheck: !!threadOptions?.skipGitRepoCheck,
+    modelReasoningEffort: threadOptions?.modelReasoningEffort || '',
+    approvalPolicy: threadOptions?.approvalPolicy || '',
+  });
+}
+
+function cleanupStaleCodexThreads() {
+  const now = Date.now();
+  for (const [threadId, entry] of codexThreadCache.entries()) {
+    if (!entry || typeof entry !== 'object') {
+      codexThreadCache.delete(threadId);
+      continue;
+    }
+    if (now - (entry.lastUsedAt || 0) > CODEX_THREAD_MAX_IDLE_MS) {
+      codexThreadCache.delete(threadId);
+    }
+  }
+}
+
+const _codexThreadCleanupTimer = setInterval(() => {
+  cleanupStaleCodexThreads();
+}, 5 * 60 * 1000);
+_codexThreadCleanupTimer.unref();
+
+function rememberCodexThread(threadId, thread, signature, codex) {
+  if (!threadId || !thread) {
+    return;
+  }
+  if (codexThreadCache.has(threadId)) {
+    codexThreadCache.delete(threadId);
+  }
+  while (codexThreadCache.size >= CODEX_THREAD_CACHE_MAX_SIZE) {
+    const oldestKey = codexThreadCache.keys().next().value;
+    if (!oldestKey) {
+      break;
+    }
+    codexThreadCache.delete(oldestKey);
+  }
+  codexThreadCache.set(threadId, {
+    thread,
+    signature,
+    codex,
+    lastUsedAt: Date.now()
+  });
+}
+
+function acquireCachedCodexThread(threadId, signature) {
+  const entry = codexThreadCache.get(threadId);
+  if (!entry) {
+    return null;
+  }
+  if (entry.signature !== signature || !entry.thread) {
+    codexThreadCache.delete(threadId);
+    return null;
+  }
+  entry.lastUsedAt = Date.now();
+  return entry.thread;
+}
+
+export function resetCodexThreadCache(threadId = null) {
+  if (threadId && typeof threadId === 'string' && threadId.trim() !== '') {
+    codexThreadCache.delete(threadId.trim());
+    return;
+  }
+  codexThreadCache.clear();
+}
+
+export function invalidateCodexThreadCacheForSignature(signature) {
+  if (!signature) {
+    return;
+  }
+  for (const [threadId, entry] of codexThreadCache.entries()) {
+    if (entry?.signature === signature) {
+      codexThreadCache.delete(threadId);
+    }
+  }
+}
+
+export function getCodexThreadCacheSizeForTest() {
+  return codexThreadCache.size;
+}
 
 export function isIgnorableCodexEventNoiseLine(line) {
   return isIgnorableWindowsTerminationNoiseLine(line);
@@ -152,9 +245,6 @@ export async function sendMessage(
       removedCount: removedKeys.length
     }));
 
-    const codex = new Codex(codexOptions);
-    installCodexRunNoiseFilter(codex);
-
     // ============================================================
     // 2. Map Unified Permission Mode to Codex Format
     // ============================================================
@@ -231,11 +321,23 @@ export async function sendMessage(
     // 4. Create or Resume Thread
     // ============================================================
 
+    const threadSignature = buildCodexThreadCacheSignature(codexOptions, threadOptions);
     let thread;
     if (isResumingThread) {
-      console.log('[DEBUG] Resuming thread:', threadId);
-      thread = codex.resumeThread(threadId, threadOptions);
+      thread = acquireCachedCodexThread(threadId, threadSignature);
+      if (thread) {
+        logInfo('CODEX_THREAD_CACHE', `Reusing cached Codex thread: ${threadId}`);
+      } else {
+        const codex = new Codex(codexOptions);
+        installCodexRunNoiseFilter(codex);
+        console.log('[DEBUG] Resuming thread:', threadId);
+        thread = codex.resumeThread(threadId, threadOptions);
+        rememberCodexThread(threadId, thread, threadSignature, codex);
+        logInfo('CODEX_THREAD_CACHE', `Created cached Codex resume thread: ${threadId}`);
+      }
     } else {
+      const codex = new Codex(codexOptions);
+      installCodexRunNoiseFilter(codex);
       console.log('[DEBUG] Starting new thread');
       thread = codex.startThread(threadOptions);
     }
@@ -303,6 +405,11 @@ export async function sendMessage(
 
     await processCodexEventStream(events, state, config);
     emitStreamEndOnce();
+
+    if (state.currentThreadId && state.currentThreadId.trim() !== '') {
+      rememberCodexThread(state.currentThreadId, thread, threadSignature, null);
+      logInfo('CODEX_THREAD_CACHE', `Stored Codex thread in cache: ${state.currentThreadId}`);
+    }
 
     // ============================================================
     // 8. Completion Phase

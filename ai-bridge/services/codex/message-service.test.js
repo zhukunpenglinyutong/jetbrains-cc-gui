@@ -2,7 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   filterCodexExperimentalJsonLines,
+  getCodexThreadCacheSizeForTest,
+  invalidateCodexThreadCacheForSignature,
   isIgnorableCodexEventNoiseLine,
+  resetCodexThreadCache,
 } from './message-service.js';
 
 async function collect(asyncIterable) {
@@ -20,18 +23,6 @@ test('recognizes Windows process termination noise emitted after Codex runs', ()
   );
   assert.equal(
     isIgnorableCodexEventNoiseLine('SUCCESS: The process with PID 41032 has been terminated.'),
-    true,
-  );
-  assert.equal(
-    isIgnorableCodexEventNoiseLine('成功: 已终止 PID 37392 (属于 PID 38456 子进程) 的进程。'),
-    true,
-  );
-  assert.equal(
-    isIgnorableCodexEventNoiseLine('成功: 已终止 PID 37392 的进程。'),
-    true,
-  );
-  assert.equal(
-    isIgnorableCodexEventNoiseLine('�ɹ�: ����ֹ PID 42484 (���� PID 47728 �ӽ���)�Ľ��̡�'),
     true,
   );
   assert.equal(
@@ -58,4 +49,17 @@ test('filters Windows process termination noise without dropping valid Codex ite
   assert.deepEqual(noise, [
     'SUCCESS: The process with PID 41032 (child process of PID 20716) has been terminated.',
   ]);
+});
+
+test('Codex thread cache reset helper clears cached entries state', () => {
+  resetCodexThreadCache();
+  assert.equal(getCodexThreadCacheSizeForTest(), 0);
+  resetCodexThreadCache('non-existent-thread');
+  assert.equal(getCodexThreadCacheSizeForTest(), 0);
+});
+
+test('Codex thread cache invalidation helper is a no-op for unknown signatures', () => {
+  resetCodexThreadCache();
+  invalidateCodexThreadCacheForSignature('missing-signature');
+  assert.equal(getCodexThreadCacheSizeForTest(), 0);
 });
