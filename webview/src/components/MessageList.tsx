@@ -1,6 +1,7 @@
 import { memo, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import type { TFunction } from 'i18next';
 import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock } from '../types';
+import type { QueueDisplayState } from '../contexts/MessagesContext';
 import { getMessageKey } from '../utils/messageUtils';
 import { MessageItem } from './MessageItem';
 import WaitingIndicator from './WaitingIndicator';
@@ -51,6 +52,8 @@ interface MessageListProps {
   isThinking: boolean;
   loading: boolean;
   loadingStartTime: number | null;
+  queueDisplayState: QueueDisplayState;
+  queueAheadCount: number;
   t: TFunction;
   getMessageText: (message: ClaudeMessage) => string;
   getContentBlocks: (message: ClaudeMessage) => ClaudeContentBlock[];
@@ -71,6 +74,8 @@ export const MessageList = memo(function MessageList({
   isThinking,
   loading,
   loadingStartTime,
+  queueDisplayState,
+  queueAheadCount,
   t,
   getMessageText,
   getContentBlocks,
@@ -174,8 +179,14 @@ export const MessageList = memo(function MessageList({
         );
       })}
 
-      {/* Loading indicator */}
-      {loading && <WaitingIndicator startTime={loadingStartTime ?? undefined} />}
+      {/* Loading / queue indicator */}
+      {loading && (
+        <WaitingIndicator
+          startTime={loadingStartTime ?? undefined}
+          queueDisplayState={queueDisplayState}
+          queueAheadCount={queueAheadCount}
+        />
+      )}
       <div ref={messagesEndRef} />
     </div>
   );

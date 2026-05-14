@@ -3,6 +3,7 @@ package com.github.claudecodegui.provider.common;
 import com.github.claudecodegui.bridge.BridgeDirectoryResolver;
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -226,12 +227,7 @@ public class DaemonBridge {
 
         // Kill process if still alive and wait for termination
         if (daemonProcess != null && daemonProcess.isAlive()) {
-            daemonProcess.destroyForcibly();
-            try {
-                daemonProcess.waitFor(3, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
+            PlatformUtils.terminateProcessAndWait(daemonProcess, 3, TimeUnit.SECONDS);
         }
 
         // Interrupt and join threads
@@ -335,7 +331,7 @@ public class DaemonBridge {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         boolean countsAsActiveRequest = !"heartbeat".equals(method) && !"status".equals(method);
 
-        RequestHandler handler = new RequestHandler(callback, future);
+        RequestHandler handler = new RequestHandler(requestId, callback, future);
         pendingRequests.put(requestId, handler);
         if (countsAsActiveRequest) {
             activeRequestCount.incrementAndGet();
@@ -583,18 +579,36 @@ public class DaemonBridge {
                 LOG.info("[DaemonBridge] AI title generated: sessionId="
                         + (obj.has("sessionId") ? obj.get("sessionId").getAsString() : "?")
                         + ", title=" + (obj.has("title") ? obj.get("title").getAsString() : "?"));
-                for (DaemonEventListener listener : eventListeners) {
-                    try {
-                        listener.onDaemonEvent(event, obj);
-                    } catch (Exception ex) {
-                        LOG.warn("[DaemonBridge] Listener threw while handling " + event, ex);
+                dispatchDaemonEventToListeners(event, obj);
+                break;
+            }
+
+            case "queue_waiting":
+            case "queue_started":
+            case "queue_cleared": {
+                String requestId = obj.has("requestId") ? obj.get("requestId").getAsString() : null;
+                if (requestId != null) {
+                    RequestHandler handler = pendingRequests.get(requestId);
+                    if (handler != null) {
+                        handler.onDaemonEvent(event, obj);
                     }
                 }
+                dispatchDaemonEventToListeners(event, obj);
                 break;
             }
 
             default:
                 LOG.debug("[DaemonBridge] Unhandled daemon event: " + event);
+        }
+    }
+
+    private void dispatchDaemonEventToListeners(String event, JsonObject obj) {
+        for (DaemonEventListener listener : eventListeners) {
+            try {
+                listener.onDaemonEvent(event, obj);
+            } catch (Exception ex) {
+                LOG.warn("[DaemonBridge] Listener threw while handling " + event, ex);
+            }
         }
     }
 
@@ -612,12 +626,7 @@ public class DaemonBridge {
         if (oldProcess != null && oldProcess.isAlive()) {
             LOG.info("[DaemonBridge] Forcefully killing unresponsive daemon process (PID: "
                     + oldProcess.pid() + ")");
-            oldProcess.destroyForcibly();
-            try {
-                oldProcess.waitFor(2, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
+            PlatformUtils.terminateProcessAndWait(oldProcess, 2, TimeUnit.SECONDS);
         }
 
         // Fail all pending requests
@@ -706,6 +715,8 @@ public class DaemonBridge {
         void onStderr(String text);
         void onError(String error);
         void onComplete(boolean success);
+        default void onDaemonEvent(String event, JsonObject data) {
+        }
 
         /**
          * Called when the user manually aborts the request.
@@ -737,10 +748,12 @@ public class DaemonBridge {
      * Internal handler that wraps callback + future for a pending request.
      */
     private static class RequestHandler {
+        final String requestId;
         final DaemonOutputCallback callback;
         final CompletableFuture<Boolean> future;
 
-        RequestHandler(DaemonOutputCallback callback, CompletableFuture<Boolean> future) {
+        RequestHandler(String requestId, DaemonOutputCallback callback, CompletableFuture<Boolean> future) {
+            this.requestId = requestId;
             this.callback = callback;
             this.future = future;
         }
@@ -764,6 +777,10 @@ public class DaemonBridge {
         void onComplete(boolean success) {
             callback.onComplete(success);
             future.complete(success);
+        }
+
+        void onDaemonEvent(String event, JsonObject data) {
+            callback.onDaemonEvent(event, data);
         }
     }
 }

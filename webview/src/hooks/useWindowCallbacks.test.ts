@@ -22,6 +22,8 @@ describe('useWindowCallbacks integration', () => {
     setStatus: vi.fn(),
     setLoading: vi.fn(),
     setLoadingStartTime: vi.fn(),
+    setQueueDisplayState: vi.fn(),
+    setQueueAheadCount: vi.fn(),
     setIsThinking: vi.fn(),
     setExpandedThinking: vi.fn(),
     setStreamingActive: vi.fn(),
@@ -121,6 +123,21 @@ describe('useWindowCallbacks integration', () => {
 
     expect(window.__sessionTransitioning).toBe(false);
     expect(window.__sessionTransitionToken).toBeNull();
+  });
+
+  it('historyLoadComplete clears loading, thinking, and queue state', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.historyLoadComplete!();
+    });
+
+    expect(opts.setLoading).toHaveBeenCalledWith(false);
+    expect(opts.setLoadingStartTime).toHaveBeenCalledWith(null);
+    expect(opts.setIsThinking).toHaveBeenCalledWith(false);
+    expect(opts.setQueueDisplayState).toHaveBeenCalledWith('NONE');
+    expect(opts.setQueueAheadCount).toHaveBeenCalledWith(0);
   });
 
   it('historyLoadComplete shows pending session transition toast', () => {
@@ -315,6 +332,24 @@ describe('useWindowCallbacks integration', () => {
     expect(window.__sessionTransitioning).toBe(true);
     expect(window.__sessionTransitionToken).toBe('transition-status');
     expect(opts.setStatus).toHaveBeenCalledWith('warming runtime');
+  });
+
+  it('ignores delayed showLoading and showQueueStatus callbacks during session transition', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    window.__sessionTransitioning = true;
+    window.__sessionTransitionToken = 'transition-loading';
+
+    act(() => {
+      window.showLoading?.(true);
+      window.showQueueStatus?.('QUEUED', 3);
+    });
+
+    expect(opts.setLoading).not.toHaveBeenCalled();
+    expect(opts.setLoadingStartTime).not.toHaveBeenCalled();
+    expect(opts.setQueueDisplayState).not.toHaveBeenCalled();
+    expect(opts.setQueueAheadCount).not.toHaveBeenCalled();
   });
 
   // ===== addErrorMessage only shows toast (no status) =====

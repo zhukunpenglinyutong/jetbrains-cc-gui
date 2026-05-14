@@ -362,6 +362,20 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
         jsTarget.callJavaScript("patchMessageUuid", JsUtils.escapeJs(content), JsUtils.escapeJs(uuid));
     }
 
+    @Override
+    public void onQueueDisplayStateChanged(ClaudeSession.SessionCallback.QueueDisplayState state, int aheadCount) {
+        if (isInactive()) {
+            return;
+        }
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (isInactive()) {
+                return;
+            }
+            String normalizedState = state != null ? state.name() : ClaudeSession.SessionCallback.QueueDisplayState.NONE.name();
+            jsTarget.callJavaScript("showQueueStatus", JsUtils.escapeJs(normalizedState), String.valueOf(Math.max(0, aheadCount)));
+        });
+    }
+
     /**
      * Dispose internal resources. Call when the parent window is disposed.
      */

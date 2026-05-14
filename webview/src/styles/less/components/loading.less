@@ -83,3 +83,21 @@
     min-width: 2em;
     text-align: left;
 }
+
+.waiting-indicator-queued {
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+.queue-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--vscode-editorWarning-foreground, #d98e04) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--vscode-editorWarning-foreground, #d98e04) 55%, transparent);
+    color: var(--vscode-editorWarning-foreground, #d98e04);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0;
+}

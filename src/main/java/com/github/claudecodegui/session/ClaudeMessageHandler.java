@@ -164,6 +164,8 @@ public class ClaudeMessageHandler implements MessageCallback {
         state.setError(error);
         state.setBusy(false);
         state.setLoading(false);
+        state.setQueueDisplayState(ClaudeSession.SessionCallback.QueueDisplayState.NONE);
+        state.setQueueAheadCount(0);
 
         Message errorMessage = new Message(Message.Type.ERROR, error);
         state.addMessage(errorMessage);
@@ -171,6 +173,7 @@ public class ClaudeMessageHandler implements MessageCallback {
         if (wasStreaming) {
             callbackHandler.notifyStreamEnd();
         }
+        callbackHandler.notifyQueueDisplayStateChanged(state.getQueueDisplayState(), state.getQueueAheadCount());
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
 
         // Show error in status bar
@@ -193,6 +196,9 @@ public class ClaudeMessageHandler implements MessageCallback {
             // from getting stuck in "responding" state.
             state.setBusy(false);
             state.setLoading(false);
+            state.setQueueDisplayState(ClaudeSession.SessionCallback.QueueDisplayState.COMPLETED);
+            state.setQueueAheadCount(0);
+            callbackHandler.notifyQueueDisplayStateChanged(state.getQueueDisplayState(), state.getQueueAheadCount());
             callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
             return;
         }
@@ -220,6 +226,8 @@ public class ClaudeMessageHandler implements MessageCallback {
         state.setBusy(false);
         state.setLoading(false);
         state.updateLastModifiedTime();
+        state.setQueueDisplayState(ClaudeSession.SessionCallback.QueueDisplayState.COMPLETED);
+        state.setQueueAheadCount(0);
 
         if (wasStreaming) {
             LOG.warn("onComplete called without prior stream_end — forcing stream cleanup");
@@ -227,7 +235,15 @@ public class ClaudeMessageHandler implements MessageCallback {
             callbackHandler.notifyStreamEnd();
         }
 
+        callbackHandler.notifyQueueDisplayStateChanged(state.getQueueDisplayState(), state.getQueueAheadCount());
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+    }
+
+    @Override
+    public void onQueueDisplayStateChanged(ClaudeSession.SessionCallback.QueueDisplayState queueState, int aheadCount) {
+        state.setQueueDisplayState(queueState);
+        state.setQueueAheadCount(aheadCount);
+        callbackHandler.notifyQueueDisplayStateChanged(state.getQueueDisplayState(), state.getQueueAheadCount());
     }
 
     // ===== Private methods: handle different message types =====
@@ -448,6 +464,12 @@ public class ClaudeMessageHandler implements MessageCallback {
      * Handle session ID received from the SDK.
      */
     private void handleSessionId(String content) {
+        String currentSessionId = state.getSessionId();
+        if (currentSessionId != null && !currentSessionId.equals(content)) {
+            LOG.warn("Session ID changed unexpectedly: " + currentSessionId + " -> " + content
+                    + ". Keeping original session ID to prevent session split.");
+            return;
+        }
         state.setSessionId(content);
         callbackHandler.notifySessionIdReceived(content);
         LOG.info("Captured session ID: " + content);
@@ -699,7 +721,10 @@ public class ClaudeMessageHandler implements MessageCallback {
         callbackHandler.notifyStreamEnd();
         state.setBusy(false);
         state.setLoading(false);
+        state.setQueueDisplayState(ClaudeSession.SessionCallback.QueueDisplayState.COMPLETED);
+        state.setQueueAheadCount(0);
         state.updateLastModifiedTime();
+        callbackHandler.notifyQueueDisplayStateChanged(state.getQueueDisplayState(), state.getQueueAheadCount());
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
     }
 

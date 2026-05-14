@@ -11,16 +11,10 @@
  *   {"id":"2","method":"heartbeat"}
  *
  * Protocol (stdout, one JSON per line):
- *   {"type":"daemon","event":"ready","pid":12345}           // daemon lifecycle
- *   {"id":"1","line":"[STREAM_START]"}                      // command output
- *   {"id":"1","line":"[CONTENT_DELTA] \"Hello\""}           // streaming delta
- *   {"id":"1","done":true,"success":true}                   // command complete
- *   {"id":"2","type":"heartbeat","ts":1234567890}           // heartbeat response
- *
- * Key advantages over per-request spawning:
- * - SDK loaded once at startup (~2-5s saved per request)
- * - Process always warm (no cold start)
- * - Persistent session state across requests
+ *   {"type":"daemon","event":"ready","pid":12345}
+ *   {"id":"1","line":"[STREAM_START]"}
+ *   {"id":"1","done":true,"success":true}
+ *   {"id":"2","type":"heartbeat","ts":1234567890}
  */
 
 import { createInterface } from 'readline';
@@ -36,92 +30,75 @@ import {
   resetRuntimePersistent,
   getContextUsagePersistent
 } from './services/claude/persistent-query-service.js';
+import { resetCodexThreadCache } from './services/codex/message-service.js';
 import { injectNetworkEnvVars } from './config/api-config.js';
 import { cleanupStaleTempImages } from './services/claude/attachment-service.js';
 
-// =============================================================================
-// Network Environment Setup (must run before any HTTPS connection)
-// =============================================================================
-
-// Sync proxy and TLS settings from ~/.claude/settings.json BEFORE SDK
-// preloading or any other network activity, but only for explicitly
-// authorized Local settings.json / CLI Login modes. Without this, users behind
-// corporate SSL-inspection proxies in those modes will get certificate
-// verification errors.
 injectNetworkEnvVars();
 
-// =============================================================================
-// Constants
-// =============================================================================
-
-// NOTE: Keep in sync with package.json version when updating.
 const DAEMON_VERSION = '1.0.0';
-
-// =============================================================================
-// State
-// =============================================================================
 
 let activeRequestId = null;
 let isDaemonMode = true;
 let sdkPreloaded = false;
-
-// =============================================================================
-// Output Interception
-//
-// The existing message-service.js uses console.log('[TAG]', data) and
-// process.stdout.write('[CONTENT_DELTA] ...\n') to communicate with Java.
-// In daemon mode, we intercept these to wrap each line in a JSON envelope
-// tagged with the current request ID, so Java can demux responses.
-// =============================================================================
+let commandQueue = Promise.resolve();
+let queuedRequestCount = 0;
 
 const _originalStdoutWrite = process.stdout.write.bind(process.stdout);
 const _originalStderrWrite = process.stderr.write.bind(process.stderr);
-const _originalConsoleLog = console.log.bind(console);
-const _originalConsoleError = console.error.bind(console);
+const _originalExit = process.exit;
 
-/**
- * Write a raw NDJSON line to stdout (bypasses interception).
- */
 function writeRawLine(obj) {
   _originalStdoutWrite(JSON.stringify(obj) + '\n', 'utf8');
 }
 
-/**
- * Send a daemon lifecycle event.
- */
 function sendDaemonEvent(event, data = {}) {
   writeRawLine({ type: 'daemon', event, ...data });
 }
 
-/**
- * Override process.stdout.write to tag output with request ID.
- */
-process.stdout.write = function (chunk, encoding, callback) {
-  // Convert Buffer to string if needed
-  const text = typeof chunk === 'string' ? chunk : chunk.toString(encoding || 'utf8');
+function sendQueueWaitingEvent(requestId, aheadCount) {
+  sendDaemonEvent('queue_waiting', {
+    requestId,
+    aheadCount,
+  });
+}
 
-  if (activeRequestId) {
-    // Tag output with request ID for demuxing on Java side
+function sendQueueStartedEvent(requestId) {
+  sendDaemonEvent('queue_started', {
+    requestId,
+  });
+}
+
+function sendQueueClearedEvent(requestId) {
+  sendDaemonEvent('queue_cleared', {
+    requestId,
+  });
+}
+
+function getCurrentRequestId() {
+  return activeRequestId;
+}
+
+process.stdout.write = function (chunk, encoding, callback) {
+  const text = typeof chunk === 'string' ? chunk : chunk.toString(encoding || 'utf8');
+  const requestId = getCurrentRequestId();
+
+  if (requestId) {
     const lines = text.split('\n');
     for (const line of lines) {
       if (line.length > 0) {
-        writeRawLine({ id: activeRequestId, line });
+        writeRawLine({ id: requestId, line });
       }
     }
     if (typeof callback === 'function') callback();
     return true;
   }
 
-  // No active request — check if this is already JSON (daemon event).
-  // SAFETY: writeRawLine() always produces lines starting with '{' (JSON.stringify
-  // of an object), so they pass through to _originalStdoutWrite without recursion.
   const trimmed = text.trim();
   if (trimmed.startsWith('{')) {
     return _originalStdoutWrite(chunk, encoding, callback);
   }
 
-  // Non-JSON output without a request context (e.g., SDK debug logs during preload)
-  // Wrap as a daemon log event so Java's NDJSON parser can handle it
   if (trimmed.length > 0) {
     const lines = text.split('\n');
     for (const line of lines) {
@@ -130,13 +107,11 @@ process.stdout.write = function (chunk, encoding, callback) {
       }
     }
   }
+
   if (typeof callback === 'function') callback();
   return true;
 };
 
-/**
- * Override console.log to go through our tagged stdout.
- */
 console.log = function (...args) {
   const text = args
     .map((a) => (typeof a === 'string' ? a : JSON.stringify(a)))
@@ -144,30 +119,21 @@ console.log = function (...args) {
   process.stdout.write(text + '\n');
 };
 
-/**
- * Override console.error to tag stderr output as well.
- */
 console.error = function (...args) {
   const text = args
     .map((a) => (typeof a === 'string' ? a : JSON.stringify(a)))
     .join(' ');
-  if (activeRequestId) {
-    writeRawLine({ id: activeRequestId, stderr: text });
+  const requestId = getCurrentRequestId();
+  if (requestId) {
+    writeRawLine({ id: requestId, stderr: text });
   } else {
     _originalStderrWrite(text + '\n', 'utf8');
   }
 };
 
-// =============================================================================
-// Prevent process.exit() from killing the daemon
-// =============================================================================
-
-const _originalExit = process.exit;
 process.exit = function (code) {
   if (isDaemonMode) {
-    // Capture the current request ID before clearing it, so the catch block
-    // in processRequest() won't try to send a duplicate done signal.
-    const capturedId = activeRequestId;
+    const capturedId = getCurrentRequestId();
     activeRequestId = null;
 
     if (capturedId) {
@@ -182,17 +148,12 @@ process.exit = function (code) {
         });
       }
     }
-    // Throw to unwind the current call stack instead of actually exiting.
-    // processRequest's catch block checks activeRequestId === null and
-    // will skip sending a duplicate done signal.
+
     throw new Error(`[daemon] process.exit(${code}) intercepted`);
   }
   _originalExit(code);
 };
 
-// Best-effort guard for process.exitCode writes.
-// Node.js v24+ may expose `process.exitCode` as non-configurable.
-// In that case redefining it throws and would crash daemon startup.
 try {
   const exitCodeDescriptor = Object.getOwnPropertyDescriptor(process, 'exitCode');
   if (exitCodeDescriptor?.configurable) {
@@ -213,10 +174,6 @@ try {
   _originalStderrWrite(`[daemon] Unable to patch process.exitCode: ${error.message}\n`, 'utf8');
 }
 
-// =============================================================================
-// SDK Pre-loading
-// =============================================================================
-
 async function preloadSdks() {
   try {
     if (isClaudeSdkAvailable()) {
@@ -235,17 +192,53 @@ async function preloadSdks() {
   }
 }
 
-// =============================================================================
-// Request Processing
-// =============================================================================
+async function dispatchProviderCommand(method, params) {
+  const dotIndex = method.indexOf('.');
+  if (dotIndex < 0) {
+    throw new Error(`Invalid method format: ${method}. Expected "provider.command"`);
+  }
 
-/**
- * Process a single request from stdin.
- */
+  const provider = method.substring(0, dotIndex);
+  const command = method.substring(dotIndex + 1);
+  const stdinData = { ...params };
+  delete stdinData.env;
+
+  if (provider === 'claude' && command === 'send') {
+    await sendMessagePersistent(stdinData);
+    return;
+  }
+  if (provider === 'claude' && command === 'sendWithAttachments') {
+    await sendMessageWithAttachmentsPersistent(stdinData);
+    return;
+  }
+  if (provider === 'claude' && command === 'preconnect') {
+    await preconnectPersistent(stdinData);
+    return;
+  }
+  if (provider === 'claude' && command === 'resetRuntime') {
+    await resetRuntimePersistent(stdinData);
+    return;
+  }
+  if (provider === 'claude' && command === 'getContextUsage') {
+    await getContextUsagePersistent(stdinData);
+    return;
+  }
+
+  switch (provider) {
+    case 'claude':
+      await handleClaudeCommand(command, [], stdinData);
+      return;
+    case 'codex':
+      await handleCodexCommand(command, [], stdinData);
+      return;
+    default:
+      throw new Error(`Unknown provider: ${provider}`);
+  }
+}
+
 async function processRequest(request) {
   const { id, method, params = {} } = request;
 
-  // --- Heartbeat (no request ID needed) ---
   if (method === 'heartbeat') {
     writeRawLine({
       id: id || '0',
@@ -257,7 +250,6 @@ async function processRequest(request) {
     return;
   }
 
-  // --- Status query ---
   if (method === 'status') {
     writeRawLine({
       id,
@@ -271,85 +263,38 @@ async function processRequest(request) {
     return;
   }
 
-  // --- Graceful shutdown ---
   if (method === 'shutdown') {
     await shutdownPersistentRuntimes();
+    resetCodexThreadCache();
     sendDaemonEvent('shutdown', { reason: 'requested' });
     writeRawLine({ id: id || '0', done: true, success: true });
     isDaemonMode = false;
-    // Allow a brief delay for the response to flush before exiting
     setTimeout(() => _originalExit(0), 100);
     return;
   }
 
-  // --- Command execution ---
   if (!id) {
-    _originalStderrWrite(
-      `[daemon] Ignoring request without id: ${method}\n`,
-      'utf8'
-    );
+    _originalStderrWrite(`[daemon] Ignoring request without id: ${method}\n`, 'utf8');
     return;
   }
 
+  sendQueueStartedEvent(id);
   activeRequestId = id;
-
-  // Save original env values for restoration after request completes
   const savedEnv = {};
 
   try {
-    // Apply environment variables from params (with save for restore).
-    // NOTE: Heartbeat/status requests bypass the command queue and may run
-    // concurrently. This is safe because they never read process.env values
-    // set here — they only return timestamps and memory usage.
     if (params.env && typeof params.env === 'object') {
       for (const [key, value] of Object.entries(params.env)) {
         if (value !== undefined && value !== null) {
-          // Save original value (undefined means key didn't exist)
           savedEnv[key] = process.env[key];
           process.env[key] = String(value);
         }
       }
     }
 
-    // Parse method: "claude.send" -> provider="claude", command="send"
-    const dotIndex = method.indexOf('.');
-    if (dotIndex < 0) {
-      throw new Error(`Invalid method format: ${method}. Expected "provider.command"`);
-    }
-    const provider = method.substring(0, dotIndex);
-    const command = method.substring(dotIndex + 1);
-
-    // Build stdinData from params (mimics what channel-manager.js does)
-    const stdinData = { ...params };
-    delete stdinData.env; // env is handled separately
-
-    if (provider === 'claude' && command === 'send') {
-      await sendMessagePersistent(stdinData);
-    } else if (provider === 'claude' && command === 'sendWithAttachments') {
-      await sendMessageWithAttachmentsPersistent(stdinData);
-    } else if (provider === 'claude' && command === 'preconnect') {
-      await preconnectPersistent(stdinData);
-    } else if (provider === 'claude' && command === 'resetRuntime') {
-      await resetRuntimePersistent(stdinData);
-    } else if (provider === 'claude' && command === 'getContextUsage') {
-      await getContextUsagePersistent(stdinData);
-    } else {
-      // Dispatch to the existing handlers for non-send commands.
-      switch (provider) {
-        case 'claude':
-          await handleClaudeCommand(command, [], stdinData);
-          break;
-        case 'codex':
-          await handleCodexCommand(command, [], stdinData);
-          break;
-        default:
-          throw new Error(`Unknown provider: ${provider}`);
-      }
-    }
-
+    await dispatchProviderCommand(method, params);
     writeRawLine({ id, done: true, success: true });
   } catch (error) {
-    // Only send done if not already sent (e.g., by process.exit interceptor)
     if (activeRequestId !== null) {
       writeRawLine({
         id,
@@ -360,8 +305,8 @@ async function processRequest(request) {
       });
     }
   } finally {
+    sendQueueClearedEvent(id);
     activeRequestId = null;
-    // Restore original environment variables to prevent cross-request pollution
     for (const [key, originalValue] of Object.entries(savedEnv)) {
       if (originalValue === undefined) {
         delete process.env[key];
@@ -372,20 +317,16 @@ async function processRequest(request) {
   }
 }
 
-// =============================================================================
-// Main Entry Point
-// =============================================================================
-
 (async () => {
-  // --- Error Handlers ---
   process.on('uncaughtException', (error) => {
     _originalStderrWrite(
       `[daemon] Uncaught exception: ${error.message}\n${error.stack}\n`,
       'utf8'
     );
-    if (activeRequestId) {
+    const requestId = getCurrentRequestId();
+    if (requestId) {
       writeRawLine({
-        id: activeRequestId,
+        id: requestId,
         done: true,
         success: false,
         error: `Uncaught exception: ${error.message}`,
@@ -399,9 +340,10 @@ async function processRequest(request) {
       `[daemon] Unhandled rejection: ${reason}\n`,
       'utf8'
     );
-    if (activeRequestId) {
+    const requestId = getCurrentRequestId();
+    if (requestId) {
       writeRawLine({
-        id: activeRequestId,
+        id: requestId,
         done: true,
         success: false,
         error: `Unhandled rejection: ${String(reason)}`,
@@ -410,7 +352,6 @@ async function processRequest(request) {
     }
   });
 
-  // --- Startup ---
   sendDaemonEvent('starting', {
     pid: process.pid,
     version: DAEMON_VERSION,
@@ -418,31 +359,20 @@ async function processRequest(request) {
     platform: process.platform,
   });
 
-  // Pre-load SDK
   await preloadSdks();
-
-  // Best-effort cleanup of stale temp image files (>24h). Fire-and-forget so
-  // it doesn't block daemon readiness.
   cleanupStaleTempImages().catch(() => {});
 
-  // Signal ready
   sendDaemonEvent('ready', {
     pid: process.pid,
     sdkPreloaded,
   });
 
-  // --- Listen for requests on stdin ---
   const rl = createInterface({
     input: process.stdin,
     crlfDelay: Infinity,
   });
 
-  // Command requests must be serialized because they share `activeRequestId`
-  // for stdout interception. Heartbeats/status are safe to run concurrently.
-  let commandQueue = Promise.resolve();
-
   rl.on('line', (line) => {
-    // Skip empty lines
     if (!line.trim()) return;
 
     let request;
@@ -456,35 +386,32 @@ async function processRequest(request) {
       return;
     }
 
-    // Heartbeats and status queries don't use activeRequestId — safe to run immediately
     if (request.method === 'heartbeat' || request.method === 'status') {
       processRequest(request);
       return;
     }
 
-    // Abort bypasses the command queue — must run immediately to cancel active work
     if (request.method === 'abort') {
-      const targetId = activeRequestId;
       _originalStderrWrite(
-        `[daemon] Abort requested, active request: ${targetId || 'none'}\n`,
+        `[daemon] Abort requested, active request: ${activeRequestId || 'none'}\n`,
         'utf8'
       );
-      if (targetId) {
-        // Fire-and-forget: disposeRuntime will cause the queued processRequest
-        // to throw and emit its own done signal. We don't need to await here
-        // because the Java side already completes its futures in sendAbort().
-        abortCurrentTurn().catch((e) => {
-          _originalStderrWrite(
-            `[daemon] Abort error: ${e.message}\n`,
-            'utf8'
-          );
-        });
-      }
+      abortCurrentTurn().catch((e) => {
+        _originalStderrWrite(
+          `[daemon] Abort error: ${e.message}\n`,
+          'utf8'
+        );
+      });
       writeRawLine({ id: request.id || '0', done: true, success: true });
       return;
     }
 
-    // Command requests are serialized to prevent activeRequestId conflicts
+    const aheadCount = queuedRequestCount;
+    queuedRequestCount += 1;
+    if (aheadCount > 0) {
+      sendQueueWaitingEvent(request.id, aheadCount);
+    }
+
     commandQueue = commandQueue
       .then(() => processRequest(request))
       .catch((e) => {
@@ -492,17 +419,17 @@ async function processRequest(request) {
           `[daemon] Request queue error: ${e.message}\n`,
           'utf8'
         );
+      })
+      .finally(() => {
+        queuedRequestCount = Math.max(0, queuedRequestCount - 1);
       });
   });
 
   rl.on('close', async () => {
-    // stdin closed — Java process disconnected, exit gracefully
-    // Force-exit after 5s to prevent zombie processes when SDK network connections hang
     const forceExitTimer = setTimeout(() => {
       _originalStderrWrite('[daemon] Shutdown timeout (5s), forcing exit\n', 'utf8');
       _originalExit(0);
     }, 5000);
-    // unref() so this timer doesn't prevent natural exit if cleanup finishes fast
     forceExitTimer.unref();
 
     try {
@@ -510,25 +437,19 @@ async function processRequest(request) {
     } catch (e) {
       _originalStderrWrite(`[daemon] Failed to shutdown persistent runtimes: ${e.message}\n`, 'utf8');
     }
+    resetCodexThreadCache();
     clearTimeout(forceExitTimer);
     sendDaemonEvent('shutdown', { reason: 'stdin_closed' });
     isDaemonMode = false;
     _originalExit(0);
   });
 
-  // --- Parent process monitoring ---
-  // Periodically verify the Java parent is still alive. When IDEA crashes or is
-  // force-killed, stdin may not close cleanly, leaving orphan daemon processes.
-  // On Unix, process.ppid changes to 1 (init/launchd) when the parent dies.
   const initialPpid = process.ppid;
   const ppidMonitor = setInterval(() => {
     const currentPpid = process.ppid;
-    // Parent changed to init (1) — reparented after death
     const reparented = currentPpid !== initialPpid && currentPpid === 1;
-    // Parent PID is gone — kill(pid, 0) throws ESRCH if process doesn't exist.
-    // EPERM means the process exists but we lack permission (PID was recycled by
-    // a privileged process) — treat that as "still alive" to avoid false positives.
     let parentGone = false;
+
     if (!reparented && currentPpid !== 1) {
       try {
         process.kill(currentPpid, 0);
@@ -538,20 +459,15 @@ async function processRequest(request) {
         }
       }
     }
+
     if (reparented || parentGone) {
       _originalStderrWrite(
         `[daemon] Parent process (ppid=${initialPpid}) is gone (current ppid=${currentPpid}), exiting\n`,
         'utf8'
       );
-      // Parent is dead — skip graceful cleanup to exit immediately.
-      // sendDaemonEvent/shutdownPersistentRuntimes are intentionally omitted:
-      // the Java side cannot receive events, and the OS will reclaim sockets on exit.
       isDaemonMode = false;
       _originalExit(0);
     }
   }, 10000);
   ppidMonitor.unref();
-
-  // --- Keep alive ---
-  // The process stays alive as long as stdin is open (rl keeps the event loop active)
 })();

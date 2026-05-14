@@ -46,6 +46,8 @@ import com.intellij.ui.jcef.JBCefBrowser;
 import com.intellij.util.concurrency.AppExecutorUtil;
 
 import javax.swing.*;
+import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.util.List;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -63,7 +65,8 @@ public class ChatWindowDelegate {
 
     public enum TabAnswerStatus {
         IDLE,
-        ANSWERING,
+        QUEUED,
+        PROCESSING,
         COMPLETED
     }
 
@@ -270,8 +273,12 @@ public class ChatWindowDelegate {
             @Override public void onTabStatusChanged(String statusStr) {
                 TabAnswerStatus status;
                 switch (statusStr) {
+                    case "queued":
+                        status = TabAnswerStatus.QUEUED;
+                        break;
+                    case "processing":
                     case "answering":
-                        status = TabAnswerStatus.ANSWERING;
+                        status = TabAnswerStatus.PROCESSING;
                         break;
                     case "completed":
                         status = TabAnswerStatus.COMPLETED;
@@ -366,13 +373,19 @@ public class ChatWindowDelegate {
 
             String displayName;
             switch (status) {
-                case ANSWERING:
-                    displayName = tabName + "...";
-                    LOG.debug("[TabStatus] Set answering state for tab: " + displayName);
+                case QUEUED:
+                    displayName = tabName;
+                    parentContent.setIcon(createStatusDotIcon(new Color(0xD98E04)));
+                    LOG.debug("[TabStatus] Set queued state for tab: " + displayName);
+                    break;
+                case PROCESSING:
+                    displayName = tabName;
+                    parentContent.setIcon(createStatusDotIcon(new Color(0x2F7DFF)));
+                    LOG.debug("[TabStatus] Set processing state for tab: " + displayName);
                     break;
                 case COMPLETED:
-                    String completedText = ClaudeCodeGuiBundle.message("tab.status.completed");
-                    displayName = tabName + " (" + completedText + ")";
+                    displayName = tabName;
+                    parentContent.setIcon(createStatusDotIcon(new Color(0x2FA35B)));
                     LOG.debug("[TabStatus] Set completed state for tab: " + displayName);
 
                     statusResetTask = AppExecutorUtil.getAppScheduledExecutorService().schedule(() -> {
@@ -384,6 +397,7 @@ public class ChatWindowDelegate {
                 case IDLE:
                 default:
                     displayName = tabName;
+                    parentContent.setIcon(null);
                     LOG.debug("[TabStatus] Restored idle state for tab: " + displayName);
                     break;
             }
@@ -393,7 +407,20 @@ public class ChatWindowDelegate {
 
     @Deprecated
     public void updateTabLoadingState(boolean loading) {
-        updateTabStatus(loading ? TabAnswerStatus.ANSWERING : TabAnswerStatus.IDLE);
+        updateTabStatus(loading ? TabAnswerStatus.PROCESSING : TabAnswerStatus.IDLE);
+    }
+
+    private static Icon createStatusDotIcon(Color color) {
+        BufferedImage image = new BufferedImage(10, 10, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2 = image.createGraphics();
+        try {
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(color);
+            g2.fillOval(1, 1, 8, 8);
+        } finally {
+            g2.dispose();
+        }
+        return new ImageIcon(image);
     }
 
     public void sendQuickFixMessage(String prompt, boolean isQuickFix, MessageCallback callback) {

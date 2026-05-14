@@ -38,6 +38,11 @@ interface Window {
   showLoading?: (value: string | boolean) => void;
 
   /**
+   * Show queue display state for the current turn.
+   */
+  showQueueStatus?: (state: string, aheadCount: string | number) => void;
+
+  /**
    * Show thinking status
    */
   showThinkingStatus?: (value: string | boolean) => void;

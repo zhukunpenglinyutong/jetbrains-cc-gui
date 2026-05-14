@@ -74,8 +74,11 @@ public class SessionSendService {
         state.setError(null);
         state.setBusy(true);
         state.setLoading(true);
+        state.setQueueDisplayState(ClaudeSession.SessionCallback.QueueDisplayState.PROCESSING);
+        state.setQueueAheadCount(0);
         ClaudeNotifier.setWaiting(project);
         callbackFacade.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+        callbackFacade.notifyQueueDisplayStateChanged(state.getQueueDisplayState(), state.getQueueAheadCount());
     }
 
     public CompletableFuture<Void> sendMessageToProvider(
@@ -190,7 +193,7 @@ public class SessionSendService {
         String contextAppend = contextService.buildCodexContextAppend(openedFilesJson, fileTagPaths);
         String finalInput = (input != null ? input : "") + contextAppend;
 
-        return codexSDKBridge.sendMessage(
+        return codexSDKBridge.sendMessageWithDaemonPreferred(
                 channelId,
                 finalInput,
                 state.getSessionId(),

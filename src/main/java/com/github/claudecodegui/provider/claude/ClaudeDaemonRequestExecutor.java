@@ -134,6 +134,31 @@ class ClaudeDaemonRequestExecutor {
                             }
 
                             @Override
+                            public void onDaemonEvent(String event, JsonObject data) {
+                                if ("queue_waiting".equals(event)) {
+                                    int aheadCount = data.has("aheadCount") ? data.get("aheadCount").getAsInt() : 0;
+                                    callback.onQueueDisplayStateChanged(
+                                            ClaudeSession.SessionCallback.QueueDisplayState.QUEUED,
+                                            aheadCount
+                                    );
+                                    return;
+                                }
+                                if ("queue_started".equals(event)) {
+                                    callback.onQueueDisplayStateChanged(
+                                            ClaudeSession.SessionCallback.QueueDisplayState.PROCESSING,
+                                            0
+                                    );
+                                    return;
+                                }
+                                if ("queue_cleared".equals(event) && !wasAborted.get()) {
+                                    callback.onQueueDisplayStateChanged(
+                                            ClaudeSession.SessionCallback.QueueDisplayState.NONE,
+                                            0
+                                    );
+                                }
+                            }
+
+                            @Override
                             public void onAbort() {
                                 wasAborted.set(true);
                             }

@@ -10,7 +10,6 @@
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
 import type { ClaudeMessage } from '../../../types';
 import type { ContextUsageData } from '../../../components/ContextUsageDialog';
-import { sendBridgeEvent } from '../../../utils/bridge';
 import { debugError } from '../../../utils/debug';
 import {
   appendOptimisticMessageIfMissing,
@@ -73,6 +72,8 @@ export function registerMessageCallbacks(
     setStatus,
     setLoading,
     setLoadingStartTime,
+    setQueueDisplayState,
+    setQueueAheadCount,
     setIsThinking,
     setHistoryData,
     userPausedRef,
@@ -448,13 +449,14 @@ export function registerMessageCallbacks(
   window.showLoading = (value) => {
     const isLoading = isTruthy(value);
 
+    if (window.__sessionTransitioning) {
+      return;
+    }
+
     // FIX: Ignore loading=false during streaming — onStreamEnd handles it uniformly.
     if (!isLoading && isStreamingRef.current) {
       return;
     }
-
-    // Notify backend about loading state change for tab indicator
-    sendBridgeEvent('tab_loading_changed', JSON.stringify({ loading: isLoading }));
 
     setLoading((prevLoading) => {
       if (isLoading) {
@@ -484,6 +486,42 @@ export function registerMessageCallbacks(
       }
       return isLoading;
     });
+
+    if (!isLoading) {
+      setQueueDisplayState('NONE');
+      setQueueAheadCount(0);
+    }
+  };
+
+  window.showQueueStatus = (state, aheadCount) => {
+    if (window.__sessionTransitioning) {
+      return;
+    }
+
+    const normalizedState = typeof state === 'string' ? state : 'NONE';
+    const normalizedAhead = Number.isFinite(Number(aheadCount)) ? Number(aheadCount) : 0;
+
+    if (normalizedState === 'QUEUED') {
+      setQueueDisplayState('QUEUED');
+      setQueueAheadCount(Math.max(0, normalizedAhead));
+      setLoading(true);
+      return;
+    }
+
+    if (normalizedState === 'PROCESSING') {
+      setQueueDisplayState('PROCESSING');
+      setQueueAheadCount(0);
+      return;
+    }
+
+    if (normalizedState === 'COMPLETED') {
+      setQueueDisplayState('COMPLETED');
+      setQueueAheadCount(0);
+      return;
+    }
+
+    setQueueDisplayState('NONE');
+    setQueueAheadCount(0);
   };
 
   window.showThinkingStatus = (value) => setIsThinking(isTruthy(value));
@@ -613,6 +651,11 @@ export function registerMessageCallbacks(
   // Also clear stream-ended markers since history messages don't have __turnId
   window.historyLoadComplete = () => {
     releaseSessionTransition();
+    setLoading(false);
+    setLoadingStartTime(null);
+    setIsThinking(false);
+    setQueueDisplayState('NONE');
+    setQueueAheadCount(0);
     const pendingToast = window.__pendingSessionTransitionToast;
     if (pendingToast) {
       window.__pendingSessionTransitionToast = undefined;

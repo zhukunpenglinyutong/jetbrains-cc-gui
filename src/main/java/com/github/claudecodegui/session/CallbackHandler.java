@@ -156,4 +156,10 @@ public class CallbackHandler {
             callback.onUserMessageUuidPatched(content, uuid);
         }
     }
+
+    public void notifyQueueDisplayStateChanged(ClaudeSession.SessionCallback.QueueDisplayState state, int aheadCount) {
+        if (callback != null) {
+            callback.onQueueDisplayStateChanged(state, aheadCount);
+        }
+    }
 }

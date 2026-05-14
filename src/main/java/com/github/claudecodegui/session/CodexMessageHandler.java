@@ -42,6 +42,12 @@ public class CodexMessageHandler implements MessageCallback {
     private Message currentAssistantMessage = null;
 
     /**
+     * Deduplicates streaming deltas that were already included via conservative full-message sync.
+     * Mirrors the same mechanism used by ClaudeMessageHandler.
+     */
+    private final ReplayDeduplicator replayDedup = new ReplayDeduplicator();
+
+    /**
      * is streaming.
      */
     private boolean isStreaming = false;
@@ -121,9 +127,12 @@ public class CodexMessageHandler implements MessageCallback {
         boolean wasStreaming = isStreaming;
         isStreaming = false;
         streamEndedThisTurn = false;
+        replayDedup.reset();
         state.setError(error);
         state.setBusy(false);
         state.setLoading(false);
+        state.setQueueDisplayState(ClaudeSession.SessionCallback.QueueDisplayState.NONE);
+        state.setQueueAheadCount(0);
 
         Message errorMessage = new Message(Message.Type.ERROR, error);
         state.addMessage(errorMessage);
@@ -132,6 +141,7 @@ public class CodexMessageHandler implements MessageCallback {
             callbackHandler.notifyStreamEnd();
         }
         resetStreamingAccumulator();
+        callbackHandler.notifyQueueDisplayStateChanged(state.getQueueDisplayState(), state.getQueueAheadCount());
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
     }
 
@@ -149,6 +159,8 @@ public class CodexMessageHandler implements MessageCallback {
         streamEndedThisTurn = false;
         state.setBusy(false);
         state.setLoading(false);
+        state.setQueueDisplayState(ClaudeSession.SessionCallback.QueueDisplayState.COMPLETED);
+        state.setQueueAheadCount(0);
         state.updateLastModifiedTime();
 
         if (wasStreaming && !streamEndedBeforeComplete) {
@@ -158,7 +170,15 @@ public class CodexMessageHandler implements MessageCallback {
         }
 
         resetStreamingAccumulator();
+        callbackHandler.notifyQueueDisplayStateChanged(state.getQueueDisplayState(), state.getQueueAheadCount());
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+    }
+
+    @Override
+    public void onQueueDisplayStateChanged(ClaudeSession.SessionCallback.QueueDisplayState queueState, int aheadCount) {
+        state.setQueueDisplayState(queueState);
+        state.setQueueAheadCount(aheadCount);
+        callbackHandler.notifyQueueDisplayStateChanged(state.getQueueDisplayState(), state.getQueueAheadCount());
     }
 
     // ===== Private methods =====
@@ -188,7 +208,10 @@ public class CodexMessageHandler implements MessageCallback {
                 assistantContent.setLength(0);
                 assistantContent.append(parsed.content != null ? parsed.content : "");
             } else {
+                currentAssistantMessage = parsed;
                 state.addMessage(parsed);
+                assistantContent.setLength(0);
+                assistantContent.append(parsed.content != null ? parsed.content : "");
             }
             callbackHandler.notifyMessageUpdate(state.getMessages());
 
@@ -231,6 +254,12 @@ public class CodexMessageHandler implements MessageCallback {
      */
     private void handleSessionId(String threadId) {
         if (threadId != null && !threadId.trim().isEmpty()) {
+            String currentSessionId = state.getSessionId();
+            if (currentSessionId != null && !currentSessionId.equals(threadId)) {
+                LOG.warn("Codex thread ID changed unexpectedly: " + currentSessionId + " -> " + threadId
+                        + ". Keeping original thread ID to prevent session split.");
+                return;
+            }
             state.setSessionId(threadId);
             callbackHandler.notifySessionIdReceived(threadId);
             LOG.info("Captured Codex thread ID: " + threadId);
@@ -425,6 +454,7 @@ public class CodexMessageHandler implements MessageCallback {
         }
         if (content == null || content.trim().isEmpty()) {
             if (hasToolResult) {
+                markSyntheticToolResultRaw(msg);
                 Message result = new Message(Message.Type.USER, "[tool_result]");
                 result.raw = msg;
                 return result;
@@ -435,6 +465,12 @@ public class CodexMessageHandler implements MessageCallback {
         Message result = new Message(Message.Type.USER, content);
         result.raw = msg;
         return result;
+    }
+
+    private void markSyntheticToolResultRaw(com.google.gson.JsonObject msg) {
+        com.google.gson.JsonObject origin = new com.google.gson.JsonObject();
+        origin.addProperty("kind", "tool_result");
+        msg.add("origin", origin);
     }
 
     /**
@@ -611,7 +647,14 @@ public class CodexMessageHandler implements MessageCallback {
             return;
         }
 
-        assistantContent.append(content);
+        // Deduplicate deltas already covered by conservative full-message sync
+        String novelContent = replayDedup.consumeContentDelta(content);
+        if (novelContent.isEmpty()) {
+            LOG.debug("Skipping replayed Codex content delta (len=" + content.length() + ")");
+            return;
+        }
+
+        assistantContent.append(novelContent);
 
         if (currentAssistantMessage == null) {
             currentAssistantMessage = new Message(Message.Type.ASSISTANT, assistantContent.toString());
@@ -620,8 +663,13 @@ public class CodexMessageHandler implements MessageCallback {
             currentAssistantMessage.content = assistantContent.toString();
         }
 
-        callbackHandler.notifyContentDelta(content);
-        callbackHandler.notifyMessageUpdate(state.getMessages());
+        callbackHandler.notifyContentDelta(novelContent);
+        // During streaming, skip full message update to avoid JCEF IPC overload.
+        // Content deltas (via onContentDelta) provide real-time character display;
+        // pushing full JSON on every delta would block the renderer and stall deltas.
+        if (!isStreaming) {
+            callbackHandler.notifyMessageUpdate(state.getMessages());
+        }
     }
 
     /**
@@ -634,9 +682,20 @@ public class CodexMessageHandler implements MessageCallback {
             return;
         }
 
+        // Deduplicate thinking deltas
+        String novelContent = replayDedup.consumeThinkingDelta(content);
+        if (novelContent.isEmpty()) {
+            LOG.debug("Skipping replayed Codex thinking delta (len=" + content.length() + ")");
+            return;
+        }
+
         ensureCurrentAssistantMessageExists();
-        applyThinkingDeltaToRaw(content);
-        callbackHandler.notifyThinkingDelta(content);
+        applyThinkingDeltaToRaw(novelContent);
+        callbackHandler.notifyThinkingDelta(novelContent);
+        // Only push full message update when not streaming (same pattern as content delta)
+        if (!isStreaming) {
+            callbackHandler.notifyMessageUpdate(state.getMessages());
+        }
     }
 
     /**
@@ -715,6 +774,7 @@ public class CodexMessageHandler implements MessageCallback {
     private void handleStreamStart() {
         isStreaming = true;
         streamEndedThisTurn = false;
+        replayDedup.reset();
         resetStreamingAccumulator();
         callbackHandler.notifyStreamStart();
         LOG.debug("Codex stream started");
@@ -731,6 +791,7 @@ public class CodexMessageHandler implements MessageCallback {
 
         isStreaming = false;
         streamEndedThisTurn = true;
+        replayDedup.reset();
         callbackHandler.notifyStreamCompleted();
         callbackHandler.notifyMessageUpdate(state.getMessages());
         callbackHandler.notifyStreamEnd();
@@ -757,5 +818,6 @@ public class CodexMessageHandler implements MessageCallback {
     private void resetStreamingAccumulator() {
         assistantContent.setLength(0);
         currentAssistantMessage = null;
+        replayDedup.reset();
     }
 }

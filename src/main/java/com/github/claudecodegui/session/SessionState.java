@@ -45,6 +45,9 @@ public class SessionState {
     private boolean busy = false;
     private boolean loading = false;
     private String error = null;
+    private ClaudeSession.SessionCallback.QueueDisplayState queueDisplayState =
+            ClaudeSession.SessionCallback.QueueDisplayState.NONE;
+    private int queueAheadCount = 0;
 
     // Message history
     private final List<ClaudeSession.Message> messages = new ArrayList<>();
@@ -89,6 +92,14 @@ public class SessionState {
 
     public String getError() {
         return error;
+    }
+
+    public ClaudeSession.SessionCallback.QueueDisplayState getQueueDisplayState() {
+        return queueDisplayState;
+    }
+
+    public int getQueueAheadCount() {
+        return queueAheadCount;
     }
 
     public List<ClaudeSession.Message> getMessages() {
@@ -160,6 +171,16 @@ public class SessionState {
 
     public void setError(String error) {
         this.error = error;
+    }
+
+    public void setQueueDisplayState(ClaudeSession.SessionCallback.QueueDisplayState queueDisplayState) {
+        this.queueDisplayState = queueDisplayState != null
+                ? queueDisplayState
+                : ClaudeSession.SessionCallback.QueueDisplayState.NONE;
+    }
+
+    public void setQueueAheadCount(int queueAheadCount) {
+        this.queueAheadCount = Math.max(0, queueAheadCount);
     }
 
     public void setSummary(String summary) {
