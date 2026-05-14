@@ -257,6 +257,9 @@ public class CodexMessageConverter {
     public static JsonObject convertCodexMessageToFrontend(JsonObject payload, String timestamp) {
         String contentStr = extractContentAsString(payload.get("content"));
         String role = payload.has("role") ? payload.get("role").getAsString() : "user";
+        if (!"user".equals(role) && !"assistant".equals(role)) {
+            return null;
+        }
         boolean userMessage = "user".equals(role);
         boolean strippedSystemTags = false;
 

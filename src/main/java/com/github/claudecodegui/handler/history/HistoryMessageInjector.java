@@ -64,9 +64,9 @@ public class HistoryMessageInjector {
         LOG.info("[HistoryHandler] Loading history session: " + resolvedSessionId
                 + " from project: " + projectPath + ", provider: " + provider);
 
-        if ("codex".equals(currentProvider)) {
+        if ("codex".equals(provider)) {
             // Codex session: read session info and restore session state
-            loadCodexSession(sessionId);
+            loadCodexSession(resolvedSessionId);
         } else {
             // Claude session: use existing callback mechanism
             if (sessionLoadCallback != null) {
@@ -81,7 +81,7 @@ public class HistoryMessageInjector {
      * Load a Codex session.
      * Reads session messages directly and injects them into the frontend, while restoring session state.
      */
-    private void loadCodexSession(String sessionId) {
+    void loadCodexSession(String sessionId) {
         CompletableFuture.runAsync(() -> {
             LOG.info("[HistoryHandler] ========== 开始加载 Codex 会话 ==========");
             LOG.info("[HistoryHandler] SessionId: " + sessionId);

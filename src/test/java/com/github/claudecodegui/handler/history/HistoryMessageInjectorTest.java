@@ -1,18 +1,59 @@
 package com.github.claudecodegui.handler.history;
 
+import com.github.claudecodegui.handler.core.HandlerContext;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.project.Project;
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.lang.reflect.Proxy;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class HistoryMessageInjectorTest {
+
+    @Test
+    public void handleLoadSessionUsesPayloadProviderAndResolvedCodexSessionId() {
+        RecordingHistoryMessageInjector injector = new RecordingHistoryMessageInjector(createContext("D:/project/demo"));
+        boolean[] callbackInvoked = {false};
+
+        injector.handleLoadSession(
+                "{\"sessionId\":\"hist-codex\",\"provider\":\"codex\"}",
+                "claude",
+                (sessionId, projectPath, provider) -> callbackInvoked[0] = true
+        );
+
+        assertEquals("hist-codex", injector.loadedCodexSessionId);
+        assertFalse(callbackInvoked[0]);
+    }
+
+    @Test
+    public void handleLoadSessionUsesPayloadProviderForClaudeEvenWhenCurrentProviderIsCodex() {
+        RecordingHistoryMessageInjector injector = new RecordingHistoryMessageInjector(createContext("D:/project/demo"));
+        String[] callbackArgs = new String[3];
+
+        injector.handleLoadSession(
+                "{\"sessionId\":\"hist-claude\",\"provider\":\"claude\"}",
+                "codex",
+                (sessionId, projectPath, provider) -> {
+                    callbackArgs[0] = sessionId;
+                    callbackArgs[1] = projectPath;
+                    callbackArgs[2] = provider;
+                }
+        );
+
+        assertNull(injector.loadedCodexSessionId);
+        assertEquals("hist-claude", callbackArgs[0]);
+        assertEquals("D:/project/demo", callbackArgs[1]);
+        assertEquals("claude", callbackArgs[2]);
+    }
 
     @Test
     public void convertCodexMessagesDeduplicatesDualRecordedUserMessage() {
@@ -99,6 +140,19 @@ public class HistoryMessageInjectorTest {
     }
 
     @Test
+    public void convertCodexMessagesFiltersDeveloperRoleMessages() {
+        JsonArray messages = new JsonArray();
+        messages.add(responseItemDeveloperMessage("2026-05-14T10:00:00.000Z", "internal developer instructions"));
+        messages.add(responseItemAssistantMessage("2026-05-14T10:00:01.000Z", "visible assistant reply"));
+
+        List<JsonObject> result = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(messages);
+
+        assertEquals(1, result.size());
+        assertEquals("assistant", result.get(0).get("type").getAsString());
+        assertEquals("visible assistant reply", result.get(0).get("content").getAsString());
+    }
+
+    @Test
     public void convertCodexMessagesKeepsImageOnlyEventMessage() throws Exception {
         Path imagePath = Files.createTempFile("codex-history-image-only", ".png");
         try {
@@ -138,17 +192,29 @@ public class HistoryMessageInjectorTest {
     }
 
     private static JsonObject responseItemUserMessage(String timestamp, String text) {
+        return responseItemMessage(timestamp, "user", "input_text", text);
+    }
+
+    private static JsonObject responseItemDeveloperMessage(String timestamp, String text) {
+        return responseItemMessage(timestamp, "developer", "text", text);
+    }
+
+    private static JsonObject responseItemAssistantMessage(String timestamp, String text) {
+        return responseItemMessage(timestamp, "assistant", "output_text", text);
+    }
+
+    private static JsonObject responseItemMessage(String timestamp, String role, String blockType, String text) {
         JsonObject line = new JsonObject();
         line.addProperty("timestamp", timestamp);
         line.addProperty("type", "response_item");
 
         JsonObject payload = new JsonObject();
         payload.addProperty("type", "message");
-        payload.addProperty("role", "user");
+        payload.addProperty("role", role);
 
         JsonArray content = new JsonArray();
         JsonObject block = new JsonObject();
-        block.addProperty("type", "input_text");
+        block.addProperty("type", blockType);
         block.addProperty("text", text);
         content.add(block);
 
@@ -175,5 +241,55 @@ public class HistoryMessageInjectorTest {
         localImages.add(localImagePath);
         line.getAsJsonObject("payload").add("local_images", localImages);
         return line;
+    }
+
+    private static HandlerContext createContext(String basePath) {
+        Project project = (Project) Proxy.newProxyInstance(
+                HistoryMessageInjectorTest.class.getClassLoader(),
+                new Class[]{Project.class},
+                (proxy, method, args) -> {
+                    if ("getBasePath".equals(method.getName())) {
+                        return basePath;
+                    }
+                    if ("isDisposed".equals(method.getName())) {
+                        return false;
+                    }
+                    Class<?> returnType = method.getReturnType();
+                    if (returnType.equals(boolean.class)) {
+                        return false;
+                    }
+                    if (returnType.equals(int.class)) {
+                        return 0;
+                    }
+                    if (returnType.equals(long.class)) {
+                        return 0L;
+                    }
+                    return null;
+                }
+        );
+
+        return new HandlerContext(project, null, null, null, new HandlerContext.JsCallback() {
+            @Override
+            public void callJavaScript(String functionName, String... args) {
+            }
+
+            @Override
+            public String escapeJs(String str) {
+                return str;
+            }
+        });
+    }
+
+    private static final class RecordingHistoryMessageInjector extends HistoryMessageInjector {
+        private String loadedCodexSessionId;
+
+        private RecordingHistoryMessageInjector(HandlerContext context) {
+            super(context);
+        }
+
+        @Override
+        void loadCodexSession(String sessionId) {
+            this.loadedCodexSessionId = sessionId;
+        }
     }
 }
