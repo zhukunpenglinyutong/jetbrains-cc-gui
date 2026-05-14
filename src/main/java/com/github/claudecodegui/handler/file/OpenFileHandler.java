@@ -506,9 +506,8 @@ class OpenFileHandler {
     }
 
     /**
-     * Resolve a file path to a display path (relative to project root) without opening it.
-     * Returns the relative path if the file is inside the project, otherwise the absolute path.
-     * Returns null if the file cannot be resolved.
+     * Resolve a file path to a project-root-relative display path without opening it.
+     * Returns null if the path is outside the project root or cannot be resolved safely.
      */
     String resolveDisplayPath(String filePath) {
         if (filePath == null || filePath.isBlank()) {

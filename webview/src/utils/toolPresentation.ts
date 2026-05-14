@@ -148,7 +148,7 @@ const parseUnifiedDiffFirstHunk = (text?: string): { start?: number; end?: numbe
 const WINDOWS_DRIVE_REGEX = /^[A-Za-z]:[\\\/]/;
 
 const isAbsolutePath = (path: string): boolean => {
-  return path.startsWith('/') || WINDOWS_DRIVE_REGEX.test(path);
+  return path.startsWith('/') || path.startsWith('\\') || WINDOWS_DRIVE_REGEX.test(path);
 };
 
 const relativizeDisplayPath = (filePath: string, workdir?: string): string => {

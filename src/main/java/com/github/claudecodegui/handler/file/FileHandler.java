@@ -99,7 +99,7 @@ public class FileHandler extends BaseMessageHandler {
     }
 
     /**
-     * Resolve a file path to its absolute path and return the result to the frontend.
+     * Resolve a file path to a project-relative display path and return the result to the frontend.
      */
     private void handleResolveFilePath(String filePath) {
         CompletableFuture.runAsync(() -> {
