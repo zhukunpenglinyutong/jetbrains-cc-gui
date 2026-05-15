@@ -340,6 +340,10 @@ public class ClaudeChatWindow {
         return session;
     }
 
+    public SessionLifecycleManager getSessionLifecycleManager() {
+        return sessionLifecycleManager;
+    }
+
     public void restorePersistedTabSessionState(TabStateService.TabSessionState savedState) {
         if (savedState == null || session == null) {
             return;
