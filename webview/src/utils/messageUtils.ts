@@ -451,9 +451,11 @@ export function getContentBlocks(
         summaryText = message.content;
       }
 
+      // Pass i18n key as `title`; the renderer resolves it via t().
+      // Keeps localization concerns out of this pure data helper.
       const title = meta && typeof meta.messagesSummarized === 'number'
-        ? 'Summarized conversation'
-        : 'Compact summary';
+        ? 'chat.compactSummary.summarizedConversation'
+        : 'chat.compactSummary.compactSummary';
       return [{ type: 'compact_summary', title, content: summaryText, metadata: meta }];
     }
   }

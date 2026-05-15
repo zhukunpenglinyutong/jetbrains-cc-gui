@@ -54,33 +54,56 @@ interface CompactSummaryBlockProps {
     content: string;
     metadata?: CompactSummaryMetadata;
   };
+  t: TFunction;
 }
 
 /**
- * Compact summary block - collapsed by default, click to expand.
+ * Compact summary block - collapsed by default, click/Enter/Space to expand.
  * Memoized to prevent state reset on parent re-renders during streaming.
+ * `block.title` is an i18n key resolved via t() at render time.
  */
-const CompactSummaryBlock = memo(function CompactSummaryBlock({ block }: CompactSummaryBlockProps) {
+const CompactSummaryBlock = memo(function CompactSummaryBlock({ block, t }: CompactSummaryBlockProps) {
   const [expanded, setExpanded] = useState(false);
   const toggleExpanded = useCallback(() => setExpanded(e => !e), []);
+  const onKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      setExpanded(prev => !prev);
+    }
+  }, []);
   const meta = block.metadata;
   const hasMeta = meta && typeof meta.messagesSummarized === 'number';
+  const titleText = t(block.title);
+  const toggleLabel = expanded ? t('chat.compactSummary.collapse') : t('chat.compactSummary.expand');
 
   return (
     <div className="compact-summary-block">
-      <div className="compact-summary-title" onClick={toggleExpanded}>
-        <span className="compact-summary-icon">●</span>
-        <span className="compact-summary-title-text">{block.title}</span>
-        <span className="compact-summary-toggle">{expanded ? '▼' : '▶'}</span>
+      <div
+        className="compact-summary-title"
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        aria-label={`${titleText} — ${toggleLabel}`}
+        onClick={toggleExpanded}
+        onKeyDown={onKeyDown}
+      >
+        <span className="compact-summary-icon" aria-hidden="true">●</span>
+        <span className="compact-summary-title-text">{titleText}</span>
+        <span className="compact-summary-toggle" aria-hidden="true">{expanded ? '▼' : '▶'}</span>
       </div>
       {hasMeta && (
         <div className="compact-summary-metadata">
           <span className="compact-summary-meta-count">
-            Summarized {meta.messagesSummarized} messages {meta.direction === 'up_to' ? 'up to this point' : 'from this point'}
+            {t(
+              meta.direction === 'from'
+                ? 'chat.compactSummary.messagesFrom'
+                : 'chat.compactSummary.messagesUpTo',
+              { count: meta.messagesSummarized },
+            )}
           </span>
           {meta.userContext && (
             <span className="compact-summary-meta-context">
-              Context: "{meta.userContext}"
+              {t('chat.compactSummary.userContext', { context: meta.userContext })}
             </span>
           )}
         </div>
@@ -301,7 +324,7 @@ export function ContentBlockRenderer({
 
   // Compact summary block - collapsed by default, click to expand
   if (block.type === 'compact_summary') {
-    return <CompactSummaryBlock block={block} />;
+    return <CompactSummaryBlock block={block} t={t} />;
   }
 
   // Task notification block - renders as "● summary" with status color
