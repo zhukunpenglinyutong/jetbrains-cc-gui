@@ -30,7 +30,7 @@ import {
   resetRuntimePersistent,
   getContextUsagePersistent
 } from './services/claude/persistent-query-service.js';
-import { resetCodexThreadCache } from './services/codex/message-service.js';
+import { abortCurrentCodexTurn, resetCodexThreadCache } from './services/codex/message-service.js';
 import { injectNetworkEnvVars } from './config/api-config.js';
 import { cleanupStaleTempImages } from './services/claude/attachment-service.js';
 
@@ -39,10 +39,14 @@ injectNetworkEnvVars();
 const DAEMON_VERSION = '1.0.0';
 
 let activeRequestId = null;
+let activeRequestChannelId = null;
 let isDaemonMode = true;
 let sdkPreloaded = false;
 let commandQueue = Promise.resolve();
 let queuedRequestCount = 0;
+let lastAcceptedRequestSequence = 0;
+let cancelAllQueuedRequestSequence = 0;
+const cancelledChannelSequences = new Map();
 
 const _originalStdoutWrite = process.stdout.write.bind(process.stdout);
 const _originalStderrWrite = process.stderr.write.bind(process.stderr);
@@ -75,8 +79,47 @@ function sendQueueClearedEvent(requestId) {
   });
 }
 
+function normalizeChannelId(channelId) {
+  return typeof channelId === 'string' && channelId.trim() ? channelId.trim() : null;
+}
+
+function getRequestSequence(request) {
+  const parsed = Number.parseInt(request?.id, 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function markQueuedRequestsCancelled(request) {
+  const requestSequence = getRequestSequence(request) || lastAcceptedRequestSequence;
+  const channelId = normalizeChannelId(request?.channelId || request?.params?.channelId);
+  if (channelId) {
+    const current = cancelledChannelSequences.get(channelId) || 0;
+    cancelledChannelSequences.set(channelId, Math.max(current, requestSequence));
+  } else {
+    cancelAllQueuedRequestSequence = Math.max(cancelAllQueuedRequestSequence, requestSequence);
+  }
+}
+
+function isQueuedRequestCancelled(request) {
+  const requestSequence = getRequestSequence(request);
+  if (requestSequence > 0 && requestSequence <= cancelAllQueuedRequestSequence) {
+    return true;
+  }
+
+  const channelId = normalizeChannelId(request?.params?.channelId);
+  if (!channelId) {
+    return false;
+  }
+  const cancelledThrough = cancelledChannelSequences.get(channelId) || 0;
+  return requestSequence > 0 && requestSequence <= cancelledThrough;
+}
+
 function getCurrentRequestId() {
   return activeRequestId;
+}
+
+function shouldAbortActiveRequest(request) {
+  const targetChannelId = normalizeChannelId(request?.channelId || request?.params?.channelId);
+  return !targetChannelId || targetChannelId === activeRequestChannelId;
 }
 
 process.stdout.write = function (chunk, encoding, callback) {
@@ -135,6 +178,7 @@ process.exit = function (code) {
   if (isDaemonMode) {
     const capturedId = getCurrentRequestId();
     activeRequestId = null;
+    activeRequestChannelId = null;
 
     if (capturedId) {
       if (code === 0) {
@@ -280,6 +324,7 @@ async function processRequest(request) {
 
   sendQueueStartedEvent(id);
   activeRequestId = id;
+  activeRequestChannelId = normalizeChannelId(params?.channelId);
   const savedEnv = {};
 
   try {
@@ -307,6 +352,7 @@ async function processRequest(request) {
   } finally {
     sendQueueClearedEvent(id);
     activeRequestId = null;
+    activeRequestChannelId = null;
     for (const [key, originalValue] of Object.entries(savedEnv)) {
       if (originalValue === undefined) {
         delete process.env[key];
@@ -332,6 +378,7 @@ async function processRequest(request) {
         error: `Uncaught exception: ${error.message}`,
       });
       activeRequestId = null;
+      activeRequestChannelId = null;
     }
   });
 
@@ -349,6 +396,7 @@ async function processRequest(request) {
         error: `Unhandled rejection: ${String(reason)}`,
       });
       activeRequestId = null;
+      activeRequestChannelId = null;
     }
   });
 
@@ -392,28 +440,51 @@ async function processRequest(request) {
     }
 
     if (request.method === 'abort') {
+      markQueuedRequestsCancelled(request);
       _originalStderrWrite(
         `[daemon] Abort requested, active request: ${activeRequestId || 'none'}\n`,
         'utf8'
       );
-      abortCurrentTurn().catch((e) => {
-        _originalStderrWrite(
-          `[daemon] Abort error: ${e.message}\n`,
-          'utf8'
-        );
-      });
+      if (shouldAbortActiveRequest(request)) {
+        Promise.allSettled([
+          abortCurrentTurn(),
+          abortCurrentCodexTurn(),
+        ]).then((results) => {
+          for (const result of results) {
+            if (result.status === 'rejected') {
+              _originalStderrWrite(
+                `[daemon] Abort error: ${result.reason?.message || result.reason}\n`,
+                'utf8'
+              );
+            }
+          }
+        });
+      }
       writeRawLine({ id: request.id || '0', done: true, success: true });
       return;
     }
 
     queuedRequestCount += 1;
+    lastAcceptedRequestSequence = Math.max(lastAcceptedRequestSequence, getRequestSequence(request));
     const aheadCount = activeRequestId ? queuedRequestCount - 1 : queuedRequestCount;
     if (aheadCount > 0) {
       sendQueueWaitingEvent(request.id, aheadCount);
     }
 
     commandQueue = commandQueue
-      .then(() => processRequest(request))
+      .then(() => {
+        if (isQueuedRequestCancelled(request)) {
+          sendQueueClearedEvent(request.id);
+          writeRawLine({
+            id: request.id,
+            done: true,
+            success: false,
+            aborted: true,
+          });
+          return;
+        }
+        return processRequest(request);
+      })
       .catch((e) => {
         _originalStderrWrite(
           `[daemon] Request queue error: ${e.message}\n`,
