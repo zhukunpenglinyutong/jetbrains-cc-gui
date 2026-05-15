@@ -2,7 +2,9 @@ package com.github.claudecodegui.handler.diff;
 
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.util.ContentRebuildResult;
 import com.github.claudecodegui.util.ContentRebuildUtil;
+import com.github.claudecodegui.util.LineSeparatorUtil;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -97,21 +99,39 @@ public class EditableDiffHandler implements DiffActionHandler {
                 }
             }
 
-            String originalContent = isNewFile
-                    ? ""
+            // currentContent is the actual disk content — use it as the safe restore baseline on Reject
+            String diskSnapshot = currentContent;
+
+            ContentRebuildResult rebuildResult = isNewFile
+                    ? null
                     : ContentRebuildUtil.rebuildBeforeContent(currentContent, operations);
+            String originalContent = isNewFile ? "" : rebuildResult.getContent();
+            boolean rebuildExact = rebuildResult != null && rebuildResult.isExact();
 
             String fileName = new File(filePath).getName();
             String tabName = ClaudeCodeGuiBundle.message("diff.tabName", fileName, operations.size());
+            if (!isNewFile && !rebuildExact) {
+                tabName += " " + ClaudeCodeGuiBundle.message("diff.editOnly");
+            }
 
-            InteractiveDiffRequest request = isNewFile
-                    ? InteractiveDiffRequest.forNewFile(filePath, currentContent, tabName)
-                    : InteractiveDiffRequest.forModifiedFile(filePath, originalContent, currentContent, tabName);
+            InteractiveDiffRequest request;
+            if (isNewFile) {
+                request = InteractiveDiffRequest.forNewFile(filePath, currentContent, tabName);
+            } else if (rebuildExact) {
+                request = InteractiveDiffRequest.forModifiedFile(filePath, originalContent, currentContent, tabName);
+            } else {
+                // Rebuild was approximate (fuzzy/skipped ops) — right side read-only
+                // to prevent editing based on unreliable baseline, but no Apply Always
+                // (this is not a permission review flow)
+                request = InteractiveDiffRequest.forApproximateModifiedFile(filePath, originalContent, currentContent, tabName);
+            }
 
-            LOG.info("Diff request created - original length: " + originalContent.length() + ", current length: " + currentContent.length());
+            LOG.info("Diff request created - original length: " + originalContent.length()
+                    + ", current length: " + currentContent.length()
+                    + ", rebuild exact: " + rebuildExact);
 
             InteractiveDiffManager.showInteractiveDiff(context.getProject(), request)
-                    .thenAccept(result -> handleDiffResult(result, filePath, originalContent, isNewFile))
+                    .thenAccept(result -> handleDiffResult(result, filePath, diskSnapshot, isNewFile))
                     .exceptionally(e -> {
                         LOG.error("Error in interactive diff: " + e.getMessage(), e);
                         browserBridge.sendDiffResult(filePath, "REJECT", null, e.getMessage());
@@ -125,8 +145,18 @@ public class EditableDiffHandler implements DiffActionHandler {
         }
     }
 
-    private void handleDiffResult(DiffResult result, String filePath, String originalContent, boolean isNewFile) {
+    private void handleDiffResult(DiffResult result, String filePath, String diskSnapshot, boolean isNewFile) {
         if (result.isApplied()) {
+            // Stale-check: verify file hasn't been modified or deleted externally
+            if (diskSnapshot != null) {
+                if (isStale(filePath, diskSnapshot)) {
+                    browserBridge.showErrorToast(
+                            ClaudeCodeGuiBundle.message("diff.adjustable.fileChanged"));
+                    browserBridge.sendDiffResult(filePath, "REJECT", null,
+                            "File changed externally");
+                    return;
+                }
+            }
             fileOperations.writeContentToFile(filePath, result.getFinalContent());
             browserBridge.sendDiffResult(filePath, "APPLY", result.getFinalContent(), null);
             return;
@@ -134,9 +164,23 @@ public class EditableDiffHandler implements DiffActionHandler {
 
         if (result.isRejected()) {
             if (isNewFile) {
+                // Stale-check before deleting: if file was modified externally, don't delete
+                if (diskSnapshot != null && isStale(filePath, diskSnapshot)) {
+                    LOG.warn("New file modified externally, skipping delete on reject: " + filePath);
+                    browserBridge.sendRemoveFileFromEdits(filePath);
+                    browserBridge.sendDiffResult(filePath, "REJECT", null, null);
+                    return;
+                }
                 fileOperations.deleteFile(filePath);
             } else {
-                fileOperations.writeContentToFile(filePath, originalContent);
+                // Stale-check before restoring: if file diverged, don't overwrite
+                if (isStale(filePath, diskSnapshot)) {
+                    LOG.warn("File changed externally, skipping restore on reject: " + filePath);
+                    browserBridge.sendRemoveFileFromEdits(filePath);
+                    browserBridge.sendDiffResult(filePath, "REJECT", null, null);
+                    return;
+                }
+                fileOperations.writeContentToFile(filePath, diskSnapshot);
             }
             browserBridge.sendRemoveFileFromEdits(filePath);
             browserBridge.sendDiffResult(filePath, "REJECT", null, null);
@@ -145,5 +189,24 @@ public class EditableDiffHandler implements DiffActionHandler {
 
         LOG.info("Diff dismissed for: " + filePath);
         browserBridge.sendDiffResult(filePath, "DISMISS", null, null);
+    }
+
+    /**
+     * Check if the file on disk has diverged from the snapshot taken when the diff was opened.
+     * Returns true if the file was deleted or modified externally.
+     */
+    private boolean isStale(String filePath, String diskSnapshot) {
+        String currentDisk = DiffReconstructionService.readFileContent(filePath);
+        if (currentDisk == null) {
+            LOG.warn("File deleted externally during interactive diff session: " + filePath);
+            return true;
+        }
+        String normalizedSnapshot = LineSeparatorUtil.normalizeToLF(diskSnapshot);
+        String normalizedCurrent = LineSeparatorUtil.normalizeToLF(currentDisk);
+        if (!normalizedSnapshot.equals(normalizedCurrent)) {
+            LOG.warn("File modified externally during interactive diff session: " + filePath);
+            return true;
+        }
+        return false;
     }
 }
