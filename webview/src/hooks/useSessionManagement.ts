@@ -49,6 +49,7 @@ interface UseSessionManagementReturn {
   exportHistorySession: (sessionId: string, title: string) => void;
   toggleFavoriteSession: (sessionId: string) => void;
   updateHistoryTitle: (sessionId: string, newTitle: string) => void;
+  applyHistoryTitleLocal: (sessionId: string, newTitle: string) => void;
 }
 
 /**
@@ -368,6 +369,21 @@ export function useSessionManagement({
     }
   }, [historyData, setHistoryData, addToast, t]);
 
+  // AI-generated titles are already persisted by saveAiTitle to the JSONL
+  // session file. This skips the round-trip through the customTitle endpoint,
+  // which would otherwise reject titles over its length limit.
+  const applyHistoryTitleLocal = useCallback((sessionId: string, newTitle: string) => {
+    if (historyData && historyData.sessions) {
+      const updatedSessions = historyData.sessions.map(session =>
+        session.sessionId === sessionId ? { ...session, title: newTitle } : session
+      );
+      setHistoryData({
+        ...historyData,
+        sessions: updatedSessions
+      });
+    }
+  }, [historyData, setHistoryData]);
+
   return {
     showNewSessionConfirm,
     showInterruptConfirm,
@@ -385,5 +401,6 @@ export function useSessionManagement({
     exportHistorySession,
     toggleFavoriteSession,
     updateHistoryTitle,
+    applyHistoryTitleLocal,
   };
 }
