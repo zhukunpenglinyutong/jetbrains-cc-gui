@@ -1,5 +1,6 @@
 import type { TFunction } from 'i18next';
-import type { ClaudeContentBlock, ClaudeMessage, ClaudeRawMessage } from '../types';
+import type { ClaudeContentBlock, ClaudeMessage, ClaudeRawMessage, CompactSummaryMetadata } from '../types';
+import { isCompactSummaryMetadata } from '../types';
 import {
   containsAnyTag,
   createTaskNotificationBlock,
@@ -15,6 +16,7 @@ import {
   ORIGIN_KINDS,
   type LocalizeMessageFn,
 } from './contentBlockNormalize';
+import type { CompactNotificationItem } from '../types';
 import { MESSAGE_MERGE_CACHE_LIMIT } from './messageMergeCache';
 import { clearStaleStreamEndedMarker, hasRecentlyEndedTurnId } from './streamMarkers';
 
@@ -125,6 +127,96 @@ export function isTaskNotificationOnlyMessage(message: ClaudeMessage): boolean {
 
   // Fallback: check message.content (may differ from raw when set independently)
   return typeof message.content === 'string' && hasTaskNotificationTag(message.content);
+}
+
+// ---------------------------------------------------------------------------
+// Compact notification detection and grouping
+// ---------------------------------------------------------------------------
+
+/**
+ * Check if a message is a compact command message.
+ * Only detects backend/history messages containing <command-name>/compact</command-name>
+ * XML tags. Optimistic streaming messages (plain "/compact" text without tags) are
+ * NOT detected — they render as normal user messages until the backend responds.
+ */
+export function isCompactCommandMessage(message: ClaudeMessage): boolean {
+  if (message.type !== MESSAGE_TYPES.USER) return false;
+  const texts = extractTextsFromRaw(message.raw);
+  return texts.some(t => t.includes('<command-name>/compact</command-name>'));
+}
+
+/**
+ * Check if a message is a compact stdout message (contains <local-command-stdout>).
+ */
+export function isCompactStdoutMessage(message: ClaudeMessage): boolean {
+  if (message.type !== MESSAGE_TYPES.USER) return false;
+  const texts = extractTextsFromRaw(message.raw);
+  return texts.some(t => t.includes('<local-command-stdout>'));
+}
+
+/**
+ * Check if a message is compact-related (command, stdout, or summary).
+ */
+export function isCompactRelatedMessage(message: ClaudeMessage): boolean {
+  if (message.type !== MESSAGE_TYPES.USER) return false;
+  if (isCompactCommandMessage(message) || isCompactStdoutMessage(message)) return true;
+  // Also check isCompactSummary flag on raw
+  if (message.raw && typeof message.raw === 'object' && 'isCompactSummary' in message.raw && message.raw.isCompactSummary) {
+    return true;
+  }
+  return false;
+}
+
+const COMPACT_STDOUT_REGEX = /<local-command-stdout>([\s\S]*?)<\/local-command-stdout>/;
+
+/**
+ * Extract compact notification items from a group of messages.
+ */
+export function extractCompactItems(group: ClaudeMessage[]): CompactNotificationItem[] {
+  return group.flatMap(msg => {
+    const texts = extractTextsFromRaw(msg.raw);
+    return texts.flatMap(text => {
+      const match = COMPACT_STDOUT_REGEX.exec(text);
+      return match?.[1] ? [{ type: 'stdout' as const, text: match[1].trim() }] : [];
+    });
+  });
+}
+
+/**
+ * Build a compact_notification message from a group of compact-related messages.
+ * Returns null if no command message is found in the group.
+ */
+export function buildCompactNotification(group: ClaudeMessage[]): ClaudeMessage | null {
+  if (group.length === 0) return null;
+
+  // Find the command message as primary
+  const commandMsg = group.find(m => isCompactCommandMessage(m));
+  if (!commandMsg) return null;
+
+  let headerText = '/compact';
+  const commandTexts = extractTextsFromRaw(commandMsg.raw);
+  for (const text of commandTexts) {
+    const display = formatCommandForDisplay(text);
+    if (display) {
+      headerText = display;
+      break;
+    }
+  }
+
+  // Collect stdout items from the group
+  const items = extractCompactItems(group);
+
+  // Preserve timestamp from first message for ordering
+  const timestamp = commandMsg.timestamp || group[0].timestamp;
+
+  return {
+    type: MESSAGE_TYPES.COMPACT_NOTIFICATION,
+    content: headerText,
+    timestamp,
+    raw: {
+      compactItems: items,
+    },
+  };
 }
 
 /**
@@ -323,6 +415,54 @@ export function getContentBlocks(
   normalizeBlocksFn: (raw?: ClaudeRawMessage | string) => ClaudeContentBlock[] | null,
   localizeMessage: LocalizeMessageFn
 ): ClaudeContentBlock[] {
+  // Compact notification messages carry items in raw.compactItems
+  if (message.type === MESSAGE_TYPES.COMPACT_NOTIFICATION) {
+    const rawObj = typeof message.raw === 'object' ? (message.raw as Record<string, unknown> | null) : null;
+    const items = rawObj?.compactItems as CompactNotificationItem[] | undefined;
+    const headerText = message.content || '';
+    return [{ type: 'compact_notification', headerText, items: items || [] }];
+  }
+
+  // Compact summary notifications — show title + metadata subtitle + full content (expanded)
+  if (message.type === MESSAGE_TYPES.NOTIFICATION) {
+    const rawObj = typeof message.raw === 'object' ? (message.raw as Record<string, unknown> | null) : null;
+    if (rawObj && 'isCompactSummary' in rawObj && rawObj.isCompactSummary) {
+      // Use type guard for safe metadata extraction
+      const meta: CompactSummaryMetadata | undefined = isCompactSummaryMetadata(rawObj.summarizeMetadata)
+        ? rawObj.summarizeMetadata
+        : undefined;
+      // Extract full summary text from raw.message.content
+      const messageObj = rawObj.message as { content?: string | unknown[] } | undefined;
+      let summaryText = '';
+      if (messageObj?.content) {
+        if (typeof messageObj.content === 'string') {
+          summaryText = messageObj.content;
+        } else if (Array.isArray(messageObj.content)) {
+          // Use flatMap to filter and map in single iteration (Vercel best practice)
+          summaryText = messageObj.content
+            .flatMap((b: unknown) => {
+              if (b && typeof b === 'object' && 'type' in (b as Record<string, unknown>) && (b as Record<string, unknown>).type === 'text') {
+                return [((b as Record<string, unknown>).text as string) || ''];
+              }
+              return [];
+            })
+            .join('\n');
+        }
+      }
+      // Fallback to message.content
+      if (!summaryText && message.content) {
+        summaryText = message.content;
+      }
+
+      // Pass i18n key as `title`; the renderer resolves it via t().
+      // Keeps localization concerns out of this pure data helper.
+      const title = meta && typeof meta.messagesSummarized === 'number'
+        ? 'chat.compactSummary.summarizedConversation'
+        : 'chat.compactSummary.compactSummary';
+      return [{ type: 'compact_summary', title, content: summaryText, metadata: meta }];
+    }
+  }
+
   const rawBlocks = normalizeBlocksFn(message.raw);
   if (rawBlocks && rawBlocks.length > 0) {
     // Don't add message.content if we have task_notification blocks
