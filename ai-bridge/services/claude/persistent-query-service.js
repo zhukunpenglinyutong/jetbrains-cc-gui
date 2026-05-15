@@ -24,6 +24,7 @@ import {
   disposeRuntime,
   registerRuntimeSession,
   acquireRuntime,
+  applyDynamicControls,
   buildRuntimeSignature,
   endRuntimeTurn,
   resetCachedQueryFn,
@@ -105,6 +106,13 @@ function buildSystemPromptAppend(params) {
   return buildIDEContextPrompt(openedFiles, agentPrompt);
 }
 
+function resolveRequestModelState(modelId, settingsEnv) {
+  return {
+    sdkModelName: mapModelIdToSdkName(modelId),
+    resolvedModelId: resolveModelFromSettings(modelId, settingsEnv),
+  };
+}
+
 function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId, mcpServers) {
   return {
     cwd: workingDirectory,
@@ -154,7 +162,7 @@ async function buildUserMessage(params, withAttachments, requestedSessionId, res
   };
 }
 
-async function buildRequestContext(params, withAttachments) {
+async function buildRequestContext(params, withAttachments, overrides = {}) {
   setupApiKey();
 
   const baseUrl = process.env.ANTHROPIC_BASE_URL || process.env.ANTHROPIC_API_URL || '';
@@ -176,11 +184,10 @@ async function buildRequestContext(params, withAttachments) {
     console.error('[WARNING] Failed to change process.cwd():', error.message);
   }
 
-  const settings = loadClaudeSettings();
+  const settings = overrides.settings ?? loadClaudeSettings();
   const modelId = params.model || null;
-  const sdkModelName = mapModelIdToSdkName(modelId);
-  const resolvedModel = resolveModelFromSettings(modelId, settings?.env);
-  setModelEnvironmentVariables(resolvedModel, modelId);
+  const { sdkModelName, resolvedModelId } = resolveRequestModelState(modelId, settings?.env);
+  setModelEnvironmentVariables(resolvedModelId, modelId);
 
   const permissionMode = normalizePermissionMode(params.permissionMode);
   const streamingEnabled = resolveStreamingEnabled(params, settings);
@@ -196,7 +203,7 @@ async function buildRequestContext(params, withAttachments) {
     mcpServers
   );
 
-  const userMessage = await buildUserMessage(params, withAttachments, requestedSessionId, resolvedModel);
+  const userMessage = await buildUserMessage(params, withAttachments, requestedSessionId, resolvedModelId);
 
   const runtimeSignature = buildRuntimeSignature(options, systemPromptAppend, streamingEnabled, runtimeSessionEpoch);
   console.log('[LIFECYCLE] buildRequestContext sessionId=' + (requestedSessionId || '(new)')
@@ -210,6 +217,8 @@ async function buildRequestContext(params, withAttachments) {
     options,
     userMessage,
     sdkModelName,
+    modelId, // Original model ID from params, may contain [1m] suffix
+    resolvedModelId,
     permissionMode,
     maxThinkingTokens,
     reasoningEffort,
@@ -368,9 +377,88 @@ function emitSendError(runtime, error, requestContext) {
 
   payload.error = truncateString(payload.error, 2500);
 
-  console.error('[SEND_ERROR]', JSON.stringify(payload));
-  console.log('[SEND_ERROR]', JSON.stringify(payload));
-  console.log(JSON.stringify(payload));
+  // The error payload is emitted on three channels intentionally:
+  //   1. stderr ([SEND_ERROR] tag) — captured by Java's stderrLines for diagnostics
+  //   2. stdout ([SEND_ERROR] tag) — picked up by ClaudeStreamAdapter to surface
+  //      the error in the chat UI without waiting for the [MESSAGE_END] envelope
+  //   3. stdout (raw JSON) — the canonical request-result line consumed by the
+  //      daemon's request demuxer to complete the active CompletableFuture
+  // Removing any one of these breaks either logging, UX, or request completion.
+  const serialized = JSON.stringify(payload);
+  console.error('[SEND_ERROR]', serialized);
+  console.log('[SEND_ERROR]', serialized);
+  console.log(serialized);
+}
+
+function applyExactModelForContextUsage(requestContext) {
+  const exactModelId = typeof requestContext?.resolvedModelId === 'string'
+    ? requestContext.resolvedModelId.trim()
+    : '';
+
+  if (!exactModelId) {
+    return requestContext;
+  }
+
+  return {
+    ...requestContext,
+    sdkModelName: exactModelId,
+    options: {
+      ...requestContext.options,
+      model: exactModelId,
+    },
+  };
+}
+
+/**
+ * Decide whether the existing runtime must be recreated to honor the requested model.
+ *
+ * The Claude SDK's `setModel()` can swap model names on an existing runtime, but it
+ * CANNOT change the context-window limit. The `[1m]` suffix on a modelId selects the
+ * 1M-token context window — toggling it requires building a new runtime from scratch.
+ *
+ * Two recreate conditions:
+ *   - contextWindowChanged: the request's [1m] state differs from the runtime's
+ *   - runtimeModelUnknown: caller specified a model but the runtime has no
+ *     tracked modelId (e.g. a prewarmed runtime created without a model), so
+ *     we cannot prove the existing window limit is correct.
+ *
+ * @param {object|null} runtime - The existing runtime (or null if none).
+ * @param {string|null} modelId - The requested model ID, may carry the `[1m]` suffix.
+ * @returns {boolean} True if the runtime must be disposed and recreated.
+ */
+function shouldRecreateRuntimeForModel(runtime, modelId) {
+  if (!runtime) return false;
+  const requestedHas1M = modelId?.includes('[1m]') ?? false;
+  const runtimeModelId = runtime.modelId || null;
+  const runtimeHas1M = runtimeModelId?.includes('[1m]') ?? false;
+  const contextWindowChanged = requestedHas1M !== runtimeHas1M;
+  const runtimeModelUnknown = !!modelId && !runtimeModelId;
+  return contextWindowChanged || runtimeModelUnknown;
+}
+
+async function withScopedContextWindowPreference(modelId, operation) {
+  const envKey = 'CLAUDE_CODE_DISABLE_1M_CONTEXT';
+  const hadOriginalValue = Object.prototype.hasOwnProperty.call(process.env, envKey);
+  const originalValue = process.env[envKey];
+  const disable1MContext = typeof modelId === 'string'
+    && modelId.trim() !== ''
+    && !modelId.includes('[1m]');
+
+  if (disable1MContext) {
+    process.env[envKey] = '1';
+  } else {
+    delete process.env[envKey];
+  }
+
+  try {
+    return await operation();
+  } finally {
+    if (hadOriginalValue) {
+      process.env[envKey] = originalValue;
+    } else {
+      delete process.env[envKey];
+    }
+  }
 }
 
 async function sendInternal(params, withAttachments) {
@@ -378,6 +466,7 @@ async function sendInternal(params, withAttachments) {
   const turnMeta = { state: null };
   let runtime = null;
   let requestContext = null;
+  const sendStartTime = Date.now();
   try {
     requestContext = await buildRequestContext(safeParams, withAttachments);
     runtime = await acquireRuntime(requestContext, { registerActiveQueryResult, removeSession });
@@ -385,14 +474,28 @@ async function sendInternal(params, withAttachments) {
   } catch (error) {
     // Only clear if this runtime still owns the pointer (not cleared by abort)
     clearActiveTurnRuntimeIf(runtime);
+
+    const elapsedMs = Date.now() - sendStartTime;
+
+    const wasAborted = runtime?.abortRequested === true && error?.runtimeTerminated;
+
     if (turnMeta.state?.streamingEnabled && turnMeta.state?.streamStarted && !turnMeta.state?.streamEnded) {
-      // NOTE: Do NOT emit accumulatedUsage at stream end, even on error.
-      // If an assistant message was received, emitUsageTag already sent the correct usage.
-      // If no assistant message was received, the usage would be incomplete anyway.
       process.stdout.write('[STREAM_END]\n');
       turnMeta.state.streamEnded = true;
     }
-    emitSendError(runtime, error, requestContext);
+
+    if (wasAborted) {
+      // Graceful abort — output a clean result instead of SEND_ERROR so Java side
+      // does not show an error toast. Also emit elapsed time like Codex does.
+      console.log(JSON.stringify({
+        success: false,
+        error: 'User interrupted',
+        elapsedMs
+      }));
+    } else {
+      emitSendError(runtime, error, requestContext);
+    }
+
     // Only dispose if not already disposed by abort
     if (runtime && !runtime.closed && error?.runtimeTerminated) {
       await disposeRuntime(runtime, { removeSession });
@@ -438,6 +541,7 @@ export async function abortCurrentTurn() {
   const runtime = getActiveTurnRuntime();
   if (!runtime) return;
   console.log('[LIFECYCLE] abortCurrentTurn epoch=' + (runtime.runtimeSessionEpoch || '(none)'));
+  runtime.abortRequested = true;
   clearActiveTurnRuntime();
 
   try {
@@ -448,6 +552,82 @@ export async function abortCurrentTurn() {
     // Best-effort — log but don't throw so abort always "succeeds"
     console.error('[ABORT] Failed to dispose runtime:', error.message);
   }
+}
+
+/**
+ * Get context usage breakdown from the active runtime.
+ * Calls the SDK's getContextUsage() control request on the persistent runtime's query object.
+ * If no runtime exists for the requested session, one is created via preconnect
+ * so that /context works on historical sessions without sending a message first.
+ * Outputs the result as JSON to stdout for the Java daemon bridge to collect.
+ * @param {object} params - { sessionId?: string, cwd?: string, model?: string }
+ */
+export async function getContextUsagePersistent(params = {}) {
+  const safeParams = params || {};
+  const sessionId = safeParams.sessionId || null;
+  const modelId = safeParams.model || null; // Original model ID, may contain [1m] suffix
+  return withScopedContextWindowPreference(modelId, async () => {
+    const settings = loadClaudeSettings();
+    const { resolvedModelId } = resolveRequestModelState(modelId, settings?.env);
+    const targetModel = resolvedModelId || modelId || null;
+    let runtime = null;
+
+    // Try to find the runtime for the specific session first
+    if (sessionId) {
+      runtime = getRuntimeForSession(sessionId);
+    }
+    // Only fall back to active turn runtime if it belongs to the same session
+    if (!runtime || runtime.closed) {
+      const active = getActiveTurnRuntime();
+      if (active && !active.closed && (!sessionId || active.sessionId === sessionId)) {
+        runtime = active;
+      }
+    }
+
+    const mustRecreate = shouldRecreateRuntimeForModel(runtime, modelId);
+
+    if (!runtime || runtime.closed || mustRecreate) {
+      if (mustRecreate && runtime && !runtime.closed) {
+        await disposeRuntime(runtime, { removeSession });
+        runtime = null;
+      }
+      const requestContext = applyExactModelForContextUsage(
+        await buildRequestContext(safeParams, false)
+      );
+      runtime = await acquireRuntime(requestContext, { registerActiveQueryResult, removeSession });
+    } else {
+      // Fast path: reuse existing runtime with minimal model sync.
+      // Only map the model ID and call setModel if needed - skip full buildRequestContext
+      // which would unnecessarily load MCP config, settings, etc.
+      setModelEnvironmentVariables(targetModel, modelId);
+    }
+
+    if (typeof runtime.query?.setModel === 'function') {
+      try {
+        await runtime.query.setModel(targetModel || undefined);
+        runtime.currentModel = targetModel;
+        runtime.modelId = modelId || null;
+      } catch (error) {
+        console.error('[LIFECYCLE] setModel failed:', error.message);
+      }
+    }
+
+    if (!runtime || runtime.closed) {
+      throw new Error('Failed to establish a runtime for context usage query');
+    }
+    if (typeof runtime.query?.getContextUsage !== 'function') {
+      throw new Error('getContextUsage is not available on the current runtime');
+    }
+
+    try {
+      const data = await runtime.query.getContextUsage();
+      console.log(JSON.stringify({ success: true, data }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err || 'getContextUsage call failed');
+      console.error('[LIFECYCLE] getContextUsage SDK error:', message);
+      throw new Error(message);
+    }
+  });
 }
 
 export async function shutdownPersistentRuntimes() {
@@ -467,8 +647,14 @@ export const __testing = {
   setQueryFn(queryFn) {
     setCachedQueryFn(queryFn);
   },
-  async buildRequestContext(params = {}, withAttachments = false) {
-    return buildRequestContext(params, withAttachments);
+  async buildRequestContext(params = {}, withAttachments = false, overrides = {}) {
+    return buildRequestContext(params, withAttachments, overrides);
+  },
+  resolveRequestModelState(modelId, settingsEnv) {
+    return resolveRequestModelState(modelId, settingsEnv);
+  },
+  applyExactModelForContextUsage(requestContext) {
+    return applyExactModelForContextUsage(requestContext);
   },
   async acquireRuntime(requestContext) {
     return acquireRuntime(requestContext, { registerActiveQueryResult, removeSession });

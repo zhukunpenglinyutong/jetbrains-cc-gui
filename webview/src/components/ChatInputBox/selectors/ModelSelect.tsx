@@ -167,7 +167,8 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
   };
 
   const append1MContextSuffix = (label: string, modelId: string, show1MContext: boolean): string => {
-    if (show1MContext && modelSupports1MContext(modelId) && longContextEnabled) {
+    // Only show 1M context suffix for Claude provider
+    if (currentProvider === 'claude' && show1MContext && modelSupports1MContext(modelId) && longContextEnabled) {
       return `${label} (${t('models.longContext.shortLabel')})`;
     }
     return label;

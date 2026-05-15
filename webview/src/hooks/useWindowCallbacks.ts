@@ -92,11 +92,18 @@ export interface UseWindowCallbacksOptions {
   openPermissionDialog: (request: PermissionRequest) => void;
   openAskUserQuestionDialog: (request: AskUserQuestionRequest) => void;
   openPlanApprovalDialog: (request: PlanApprovalRequest) => void;
+  openContextUsageDialog: (requestId?: string | null, loading?: boolean) => void;
+  updateContextUsageData: (
+    requestId: string | null | undefined,
+    data: import('../components/ContextUsageDialog').ContextUsageData,
+  ) => boolean;
+  closeContextUsageDialog: (requestId?: string | null) => boolean;
 
   // B-011: Title migration on session ID change
   customSessionTitleRef: MutableRefObject<string | null>;
   currentSessionIdRef: MutableRefObject<string | null>;
   updateHistoryTitle: (sessionId: string, newTitle: string) => void;
+  applyHistoryTitleLocal: (sessionId: string, newTitle: string) => void;
 
   // AI title generation: update the displayed session title when backend generates one
   setCustomSessionTitle: React.Dispatch<React.SetStateAction<string | null>>;

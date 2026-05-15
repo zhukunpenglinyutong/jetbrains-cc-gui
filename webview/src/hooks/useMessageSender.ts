@@ -2,6 +2,7 @@ import { useCallback, type RefObject } from 'react';
 import type { TFunction } from 'i18next';
 import { sendBridgeEvent } from '../utils/bridge';
 import type { ClaudeContentBlock, ClaudeMessage } from '../types';
+import { apply1MContextSuffix } from '../components/ChatInputBox/types';
 import type { Attachment, ChatInputBoxHandle, PermissionMode, SelectedAgent } from '../components/ChatInputBox/types';
 import type { ViewMode } from './useModelProviderState';
 
@@ -11,11 +12,23 @@ import type { ViewMode } from './useModelProviderState';
 export const NEW_SESSION_COMMANDS = new Set(['/new', '/clear', '/reset']);
 export const RESUME_COMMANDS = new Set(['/resume', '/continue']);
 export const PLAN_COMMANDS = new Set(['/plan']);
+export const CONTEXT_COMMANDS = new Set(['/context']);
+
+// Hoisted regex to avoid creating new RegExp on every call
+const WHITESPACE_REGEX = /\s+/;
+
+function createContextUsageRequestId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `context-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 export interface UseMessageSenderOptions {
   t: TFunction;
   addToast: (message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
   currentProvider: string;
+  selectedModel: string;
   permissionMode: PermissionMode;
   selectedAgent: SelectedAgent | null;
   sdkStatusLoaded: boolean;
@@ -34,6 +47,9 @@ export interface UseMessageSenderOptions {
   setCurrentView: React.Dispatch<React.SetStateAction<ViewMode>>;
   forceCreateNewSession: () => void;
   handleModeSelect?: (mode: PermissionMode) => void;
+  longContextEnabled?: boolean;
+  openContextUsageDialog: (requestId?: string | null, loading?: boolean) => void;
+  closeContextUsageDialog: (requestId?: string | null) => boolean;
 }
 
 /**
@@ -43,6 +59,7 @@ export function useMessageSender({
   t,
   addToast,
   currentProvider,
+  selectedModel,
   permissionMode,
   selectedAgent,
   sdkStatusLoaded,
@@ -61,6 +78,9 @@ export function useMessageSender({
   setCurrentView,
   forceCreateNewSession,
   handleModeSelect,
+  longContextEnabled,
+  openContextUsageDialog,
+  closeContextUsageDialog,
 }: UseMessageSenderOptions) {
   /**
    * Check if the input is a new session command
@@ -90,11 +110,9 @@ export function useMessageSender({
       return true;
     }
 
-    // /plan - switch to plan mode (Claude only)
-    if (PLAN_COMMANDS.has(command)) {
-      if (currentProvider === 'codex') {
-        addToast(t('chat.planModeNotAvailableForCodex', { defaultValue: 'Plan mode is not available for Codex provider' }), 'warning');
-      } else if (handleModeSelect) {
+    // /plan - switch to plan mode (Claude only; Codex sends as normal text)
+    if (PLAN_COMMANDS.has(command) && currentProvider === 'claude') {
+      if (handleModeSelect) {
         handleModeSelect('plan');
         addToast(t('chat.planModeEnabled', { defaultValue: 'Plan mode enabled' }), 'info');
       }
@@ -103,6 +121,47 @@ export function useMessageSender({
 
     return false;
   }, [setCurrentView, handleModeSelect, currentProvider, addToast, t]);
+
+  /**
+   * Check for context usage command (/context)
+   * Only available for Claude provider. Opens a dialog to display context window usage.
+   */
+  const checkContextCommand = useCallback((text: string): boolean => {
+    if (!text.startsWith('/')) return false;
+    const command = text.split(WHITESPACE_REGEX)[0].toLowerCase();
+    if (CONTEXT_COMMANDS.has(command)) {
+      if (currentProvider !== 'claude') {
+        addToast(t('chat.commandProviderOnly', {
+          command,
+          provider: 'Claude',
+          defaultValue: `${command} is only available for Claude provider`,
+        }), 'warning');
+        return true;
+      }
+
+      const requestId = createContextUsageRequestId();
+
+      // Open dialog with loading state immediately
+      openContextUsageDialog(requestId, true);
+
+      // Send bridge event to fetch context usage with current model
+      // Apply [1m] suffix if long context is enabled so the SDK creates
+      // a runtime with the correct context window limit.
+      const sent = sendBridgeEvent('get_context_usage', JSON.stringify({
+        model: apply1MContextSuffix(selectedModel, longContextEnabled ?? false),
+        requestId,
+      }));
+
+      if (!sent) {
+        closeContextUsageDialog(requestId);
+        addToast(t('chat.bridgeUnavailable', {
+          defaultValue: 'Bridge is not available right now',
+        }), 'error');
+      }
+      return true;
+    }
+    return false;
+  }, [currentProvider, selectedModel, longContextEnabled, addToast, t, openContextUsageDialog, closeContextUsageDialog]);
 
   /**
    * Check for unimplemented slash commands
@@ -340,12 +399,15 @@ export function useMessageSender({
     // Check local-handled commands (/resume, /plan)
     if (checkLocalCommand(text)) return;
 
+    // Check context usage command (/context)
+    if (checkContextCommand(text)) return;
+
     // Check for unimplemented commands
     if (checkUnimplementedCommand(text)) return;
 
     // Execute message
     executeMessage(content, attachments);
-  }, [checkNewSessionCommand, checkLocalCommand, checkUnimplementedCommand, executeMessage]);
+  }, [checkNewSessionCommand, checkLocalCommand, checkContextCommand, checkUnimplementedCommand, executeMessage]);
 
   /**
    * Interrupt the current session

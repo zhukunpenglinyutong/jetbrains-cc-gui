@@ -89,7 +89,16 @@
     "attachmentsUploaded": "[Anexos Enviados]",
     "streamingConnected": "{{provider}} conectado, entendendo sua pergunta",
     "showEarlierMessages": "Mostrar {{count}} mensagens anteriores",
-    "totalDuration": "Esta resposta levou"
+    "totalDuration": "Esta resposta levou",
+    "compactSummary": {
+      "summarizedConversation": "Conversa resumida",
+      "compactSummary": "Resumo compacto",
+      "messagesUpTo": "{{count}} mensagens resumidas até este ponto",
+      "messagesFrom": "{{count}} mensagens resumidas a partir deste ponto",
+      "userContext": "Contexto: \"{{context}}\"",
+      "expand": "Expandir resumo",
+      "collapse": "Recolher resumo"
+    }
   },
   "settings": {
     "title": "Configurações",
@@ -658,7 +667,19 @@
         "cliLoginDisableMessage": "O plugin parará de ler ~/.codex/config.toml e auth.json.",
         "modelIdRequired": "ID do modelo é obrigatório",
         "modelIdInvalid": "Formato de ID do modelo inválido (apenas letras, números, pontos, hífens, underscores, barras e dois pontos permitidos)",
-        "modelIdDuplicate": "ID do modelo já existe"
+        "modelIdDuplicate": "ID do modelo já existe",
+        "envVarsTitle": "Environment Variables",
+        "messageEnvLabel": "Message Environment Variables",
+        "messageEnvHint": "Custom environment variables injected into the Codex message subprocess",
+        "mcpEnvLabel": "MCP Environment Variables",
+        "mcpEnvHint": "Custom environment variables injected into the MCP tool discovery subprocess",
+        "envKeyPlaceholder": "ENV_KEY",
+        "envValuePlaceholder": "value",
+        "addEnvVar": "Add Variable",
+        "envKeyInvalid": "Invalid key name (must start with letter/underscore, alphanumeric only)",
+        "envKeyProtected": "Cannot set built-in variable: {{key}}",
+        "envKeyDuplicate": "Duplicate key: {{key}}",
+        "envValueTooLong": "Valor muito longo (máx. {{max}} caracteres)"
       }
     },
     "agent": {

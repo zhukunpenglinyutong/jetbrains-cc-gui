@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolInput, ToolResultBlock } from '../../types';
 import { openFile } from '../../utils/bridge';
+import { useResolvedFileLinkTooltip } from '../../hooks/useResolvedFileLinkTooltip';
 import { getFileIcon, getFolderIcon } from '../../utils/fileIcons';
 import { getToolLineInfo, resolveToolTarget } from '../../utils/toolPresentation';
 
@@ -130,6 +131,44 @@ const getFileIconSvg = (fileName: string, isDirectory: boolean) => {
   return getFileIcon(extension ?? '', cleanName);
 };
 
+interface FileListItemProps {
+  item: FileItem;
+  onFileClick: (openPath: string, isDirectory: boolean, e: React.MouseEvent, lineStart?: number, lineEnd?: number) => void;
+}
+
+const FileListItem = ({ item, onFileClick }: FileListItemProps) => {
+  const fileLinkTooltip = useResolvedFileLinkTooltip(
+    !item.isDirectory ? item.filePath : undefined,
+    item.displayPath,
+  );
+
+  return (
+    <div
+      className={`file-list-item ${!item.isDirectory ? 'clickable-file' : ''}`}
+      onClick={(e) => onFileClick(item.openPath, item.isDirectory, e, item.lineStart, item.lineEnd)}
+      style={getFileListItemStyle(item.isDirectory)}
+      {...fileLinkTooltip}
+    >
+      <span
+        style={FILE_ICON_STYLE}
+        dangerouslySetInnerHTML={{ __html: getFileIconSvg(item.cleanFileName, item.isDirectory) }}
+      />
+      <span style={FILE_NAME_STYLE}>
+        {item.displayPath}
+      </span>
+      {item.lineInfo && (
+        <span style={LINE_INFO_STYLE}>
+          {item.lineInfo}
+        </span>
+      )}
+      <div
+        className={`tool-status-indicator ${item.isError ? 'error' : item.isCompleted ? 'completed' : 'pending'}`}
+        style={STATUS_INDICATOR_STYLE}
+      />
+    </div>
+  );
+};
+
 const ReadToolGroupBlock = ({ items }: ReadToolGroupBlockProps) => {
   // Default to expanded
   const [expanded, setExpanded] = useState(true);
@@ -210,31 +249,11 @@ const ReadToolGroupBlock = ({ items }: ReadToolGroupBlockProps) => {
           style={detailsStyle}
         >
           {fileItems.map((item, index) => (
-            <div
+            <FileListItem
               key={index}
-              className={`file-list-item ${!item.isDirectory ? 'clickable-file' : ''}`}
-              onClick={(e) => handleFileClick(item.openPath, item.isDirectory, e, item.lineStart, item.lineEnd)}
-              style={getFileListItemStyle(item.isDirectory)}
-              title={item.displayPath}
-            >
-              <span
-                style={FILE_ICON_STYLE}
-                dangerouslySetInnerHTML={{ __html: getFileIconSvg(item.cleanFileName, item.isDirectory) }}
-              />
-              <span style={FILE_NAME_STYLE}>
-                {item.displayPath}
-              </span>
-              {item.lineInfo && (
-                <span style={LINE_INFO_STYLE}>
-                  {item.lineInfo}
-                </span>
-              )}
-              {/* Status indicator */}
-              <div
-                className={`tool-status-indicator ${item.isError ? 'error' : item.isCompleted ? 'completed' : 'pending'}`}
-                style={STATUS_INDICATOR_STYLE}
-              />
-            </div>
+              item={item}
+              onFileClick={handleFileClick}
+            />
           ))}
         </div>
       )}

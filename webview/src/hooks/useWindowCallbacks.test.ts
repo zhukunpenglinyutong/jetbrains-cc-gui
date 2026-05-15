@@ -80,11 +80,15 @@ describe('useWindowCallbacks integration', () => {
     openPermissionDialog: vi.fn(),
     openAskUserQuestionDialog: vi.fn(),
     openPlanApprovalDialog: vi.fn(),
+    openContextUsageDialog: vi.fn(),
+    updateContextUsageData: vi.fn(),
+    closeContextUsageDialog: vi.fn(),
 
     // B-011
     customSessionTitleRef: { current: null },
     currentSessionIdRef: { current: null },
     updateHistoryTitle: vi.fn(),
+    applyHistoryTitleLocal: vi.fn(),
 
     ...overrides,
   });
@@ -200,6 +204,88 @@ describe('useWindowCallbacks integration', () => {
     expect(window.__sessionTransitioning).toBe(false);
     expect(window.__sessionTransitionToken).toBeNull();
     expect(opts.setCurrentSessionId).toHaveBeenCalledWith('new-session-123');
+  });
+
+  // ===== AI title path uses applyHistoryTitleLocal (no backend round-trip) =====
+
+  it('updateSessionTitle routes AI titles through applyHistoryTitleLocal, not updateHistoryTitle', () => {
+    const opts = createOptions({
+      currentSessionIdRef: { current: 'sess-123' },
+    });
+    renderHook(() => useWindowCallbacks(opts));
+
+    const longAiTitle = 'A very long AI-generated session title that exceeds fifty characters easily';
+
+    act(() => {
+      window.updateSessionTitle!('sess-123', longAiTitle);
+    });
+
+    expect(opts.applyHistoryTitleLocal).toHaveBeenCalledWith('sess-123', longAiTitle);
+    expect(opts.updateHistoryTitle).not.toHaveBeenCalled();
+    expect(opts.setCustomSessionTitle).toHaveBeenCalledWith(longAiTitle);
+  });
+
+  it('updateSessionTitle skips when sessionId does not match currentSessionIdRef (stale event)', () => {
+    const opts = createOptions({
+      currentSessionIdRef: { current: 'sess-current' },
+    });
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.updateSessionTitle!('sess-stale', 'Stale AI title');
+    });
+
+    expect(opts.applyHistoryTitleLocal).not.toHaveBeenCalled();
+    expect(opts.updateHistoryTitle).not.toHaveBeenCalled();
+    expect(opts.setCustomSessionTitle).not.toHaveBeenCalled();
+  });
+
+  it('updateSessionTitle skips empty / whitespace-only titles', () => {
+    const opts = createOptions({
+      currentSessionIdRef: { current: 'sess-123' },
+    });
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.updateSessionTitle!('sess-123', '   ');
+    });
+
+    expect(opts.applyHistoryTitleLocal).not.toHaveBeenCalled();
+    expect(opts.updateHistoryTitle).not.toHaveBeenCalled();
+  });
+
+  // ===== Codex thread transition: route long titles to local-only =====
+
+  it('setSessionId with title > 50 chars uses applyHistoryTitleLocal to avoid backend 50-char limit', () => {
+    const longTitle = 'A very long AI-generated session title that exceeds fifty characters easily';
+    const opts = createOptions({
+      customSessionTitleRef: { current: longTitle },
+      currentSessionIdRef: { current: 'sess-old' },
+    });
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.setSessionId!('sess-new');
+    });
+
+    expect(opts.applyHistoryTitleLocal).toHaveBeenCalledWith('sess-new', longTitle);
+    expect(opts.updateHistoryTitle).not.toHaveBeenCalled();
+  });
+
+  it('setSessionId with title <= 50 chars uses updateHistoryTitle for backend persistence', () => {
+    const shortTitle = 'Short user-set title';
+    const opts = createOptions({
+      customSessionTitleRef: { current: shortTitle },
+      currentSessionIdRef: { current: 'sess-old' },
+    });
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.setSessionId!('sess-new');
+    });
+
+    expect(opts.updateHistoryTitle).toHaveBeenCalledWith('sess-new', shortTitle);
+    expect(opts.applyHistoryTitleLocal).not.toHaveBeenCalled();
   });
 
   // ===== updateMessages is blocked during transition =====

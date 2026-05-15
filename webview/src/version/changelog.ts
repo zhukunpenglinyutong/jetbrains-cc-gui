@@ -13,10 +13,71 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
+    version: '0.4.3-Alpha1',
+    date: '2026-05-10',
+    content: {
+      en: `✨ Features
+- Add Codex provider extension environment variable settings, allowing customization of Codex runtime via environment variables (by @orwenxiang)
+- Add project-level commit AI prompt configuration (Settings → Commit), supporting per-project prompt customization with priority hierarchy: builtin > global > project > diff
+- Add gpt-5.4-mini context limit (400K) and model-specific pricing ($0.75/$4.50/$0.075 per 1M tokens) for accurate cost estimation
+- Add 4 GitHub issue templates (bug, third-party API, feature, question) with bilingual (zh/en) labels and tracking issue navigation
+
+🐛 Fixes
+- Fix UTF-8 BOM configuration parsing failure and prevent multi-instance startups from deleting each other's ai-bridge cache (by @coderdream)
+- Fix Claude and Codex usage aggregation alignment, including cache token double-counting and model alias resolution (by @yadue)
+- Fix /plan command showing warning toast in Codex mode; now sends as normal text (by @gadfly3173)
+- Fix "(1M context)" suffix incorrectly shown for Codex models; now only displayed for Claude provider (by @gadfly3173)
+- Fix Windows build failure by using npm.cmd in build.gradle to avoid spawn errors
+- Fix EnvVarEditor losing focus when deleting middle rows by using stable row IDs instead of array index for React keys
+- Fix italic font-style causing poor readability on small screens (model selector, mermaid loading, MCP tooltips, rewind notes, skill cards) (#728)
+- Fix duplicated CSS pseudo-element tooltip implementations by unifying with JS-based floating popup (context-tool-btn, enhance-prompt-button) (#850)
+- Fix ReasoningSelect dropdown overflow by right-aligning
+- Fix package-lock.json containing leaked private mirror URL by regenerating from registry.npmjs.org and pinning the official registry in webview/.npmrc
+- Fix settings.json permissions rules (allow/deny/ask) being silently ignored; PreToolUse hook now yields to SDK for native rule evaluation (by @devlimits) (#1120, #1121)
+
+🔧 Improvements
+- Refactor CodexUsageAggregator to use Map-based pricing table for easier maintenance and to avoid cache token double-counting
+- Add 16KB cap on Codex environment variable value length to avoid ARG_MAX overflow on system call
+- Reuse a shared CodemossSettingsService instance instead of creating a new one per request in CodexSDKBridge
+- Log full stack trace on Codex settings load failure for better debugging
+- Validate Codex environment variable entries with length, protected name, and duplicate detection; block save and toast the first issue when invalid
+- Add envValueTooLong i18n message across all 10 supported locales
+- Move mouse event handlers to outer container for full tooltip coverage area`,
+      zh: `✨ Features
+- 新增 Codex Provider 扩展环境变量设置，支持通过环境变量自定义 Codex 运行时（by @orwenxiang）
+- 新增项目级别 commit AI Prompt 配置（设置 → 提交），支持按项目维度自定义 Prompt，优先级：builtin > global > project > diff
+- 新增 gpt-5.4-mini 上下文限制（400K）和模型特定定价（$0.75/$4.50/$0.075 per 1M tokens），避免按默认费率估算导致的成本偏差
+- 新增 4 个 GitHub Issue 模板（bug、第三方 API、功能请求、问题咨询），中英双语标签并整合跟踪 Issue 导航
+
+🐛 Fixes
+- 修复 UTF-8 BOM 配置文件解析失败问题，并防止多实例启动时互相删除 ai-bridge 缓存（by @coderdream）
+- 修复 Claude 与 Codex 用量聚合不一致问题，包含缓存 Token 重复计算和模型别名解析（by @yadue）
+- 修复 Codex 模式下 /plan 命令显示警告 Toast 的问题，现在作为普通文本发送（by @gadfly3173）
+- 修复 Codex 模型错误显示「(1M context)」后缀的问题，现在仅在 Claude provider 下显示（by @gadfly3173）
+- 修复 Windows 平台构建失败，build.gradle 改用 npm.cmd 避免 spawn 错误
+- 修复 EnvVarEditor 删除中间行时焦点丢失的问题，改用稳定的行 ID 替代数组索引作为 React Key
+- 修复小屏幕下斜体字体可读性差的问题（model selector、mermaid loading、MCP tooltips、rewind notes、skill cards）（#728）
+- 通过统一改用 JS 实现的浮动 Tooltip，修复重复的 CSS 伪元素 Tooltip 实现（context-tool-btn、enhance-prompt-button）（#850）
+- 修复 ReasoningSelect 下拉菜单溢出，改为右对齐
+- 修复 package-lock.json 中泄漏的私有镜像 URL，重新从官方源生成并在 webview/.npmrc 中锁定官方 registry
+- 修复 ~/.claude/settings.json 中 permissions 规则（allow/deny/ask）被静默忽略的问题，PreToolUse hook 现已交由 SDK 原生评估规则（by @devlimits）（#1120, #1121）
+
+🔧 Improvements
+- 重构 CodexUsageAggregator 改用 Map 形式的定价表，提升可维护性并避免缓存 Token 重复计算
+- 新增 Codex 环境变量值的 16KB 长度上限，防止系统调用 ARG_MAX 溢出
+- CodexSDKBridge 改用共享的 CodemossSettingsService 实例，避免每次请求都新建
+- Codex 设置加载失败时输出完整堆栈，便于排查
+- 校验 Codex 环境变量条目（长度、保护字段、重复检测），无效时阻止保存并通过 Toast 提示首个问题
+- 在 10 个支持的语言中新增 envValueTooLong i18n 消息
+- 将鼠标事件处理移至外部容器，实现完整的 Tooltip 覆盖区域`,
+    },
+  },
+  {
     version: '0.4.2',
     date: '2026-05-08',
     content: {
       en: `✨ Features
+- Add Session Templates: save the current session as a reusable template and create new sessions from templates via the chat tool window menu
 - Add task completion toast notification, disabled by default and opt-in via Settings → Basic → Behavior; the toast shows the session title with the latest assistant answer preview (by @adminkk)
 - Add "Copy AI Reference" action to the editor right-click menu for sending selected code with file path and line range context (by @JackCmd233)
 - Add multi-project workspace context collection for IntelliJ workspace mode, giving AI providers awareness of subproject structure (by @gadfly3173)
@@ -61,6 +122,7 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
 - Enable Checkstyle NeedBraces rule and wrap 197 pre-existing single-line if/else bodies across 44 Java files in braces to guard against goto-fail-style edits
 - Tighten Checkstyle configuration: enforce newline at end of file, line length limits, reorganize rule sections, and remove unused imports`,
       zh: `✨ Features
+- 新增会话模板功能：可将当前会话保存为模板，并可在聊天工具窗口菜单中通过模板快速创建新会话
 - 新增任务完成 Toast 通知，默认关闭，可在「设置 → 基础 → 行为」中开启；Toast 展示会话标题与最新助手回答预览（by @adminkk）
 - 在编辑器右键菜单新增「Copy AI Reference」操作，可将选中代码连同文件路径和行号范围一并发送给 AI（by @JackCmd233）
 - 新增 IntelliJ 工作区（Workspace）模式下的多项目上下文收集，让 AI 感知子项目结构（by @gadfly3173）

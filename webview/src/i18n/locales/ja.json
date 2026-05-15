@@ -89,7 +89,16 @@
     "attachmentsUploaded": "[添付ファイルがアップロードされました]",
     "streamingConnected": "{{provider}}に接続しました、質問を理解しています",
     "showEarlierMessages": "以前の{{count}}件のメッセージを表示",
-    "totalDuration": "今回の応答時間"
+    "totalDuration": "今回の応答時間",
+    "compactSummary": {
+      "summarizedConversation": "要約された会話",
+      "compactSummary": "会話の要約",
+      "messagesUpTo": "この時点までの{{count}}件のメッセージを要約しました",
+      "messagesFrom": "この時点以降の{{count}}件のメッセージを要約しました",
+      "userContext": "コンテキスト：「{{context}}」",
+      "expand": "要約を展開",
+      "collapse": "要約を折りたたむ"
+    }
   },
   "settings": {
     "title": "設定",
@@ -281,6 +290,11 @@
         "label": "Additional Prompt",
         "placeholder": "Add your extra requirements here, e.g., generate commit in English, include issue number, etc...",
         "hint": "The plugin has built-in CCG Commits specification prompts. Content you add here will be used as additional requirements, and AI will prioritize your instructions."
+      },
+      "projectPrompt": {
+        "label": "プロジェクト固有の追加プロンプト",
+        "placeholder": "現在のプロジェクト固有の要件をここに追加してください。例：scopeにはモジュール名を使用、commit bodyに影響範囲を含めるなど...",
+        "hint": "このプロンプトは現在のプロジェクトにのみ適用され、グローバル追加プロンプトと同時に結合されます。両者の内容が矛盾する場合、プロジェクトプロンプトが優先されます。異なるプロジェクトを独立して設定できます。"
       },
       "codeReview": {
         "comingSoon": "Coming Soon",
@@ -574,7 +588,19 @@
         "cliLoginDisableMessage": "以前の config.toml を復元し、API Key 認証に切り替えます。",
         "modelIdRequired": "Model ID is required",
         "modelIdInvalid": "Invalid model ID format (only letters, numbers, dots, hyphens, underscores, slashes and colons allowed)",
-        "modelIdDuplicate": "Model ID already exists"
+        "modelIdDuplicate": "Model ID already exists",
+        "envVarsTitle": "Environment Variables",
+        "messageEnvLabel": "Message Environment Variables",
+        "messageEnvHint": "Custom environment variables injected into the Codex message subprocess",
+        "mcpEnvLabel": "MCP Environment Variables",
+        "mcpEnvHint": "Custom environment variables injected into the MCP tool discovery subprocess",
+        "envKeyPlaceholder": "ENV_KEY",
+        "envValuePlaceholder": "value",
+        "addEnvVar": "Add Variable",
+        "envKeyInvalid": "Invalid key name (must start with letter/underscore, alphanumeric only)",
+        "envKeyProtected": "Cannot set built-in variable: {{key}}",
+        "envKeyDuplicate": "Duplicate key: {{key}}",
+        "envValueTooLong": "値が長すぎます（最大 {{max}} 文字）"
       }
     },
     "agent": {

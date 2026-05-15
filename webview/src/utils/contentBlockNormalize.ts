@@ -10,6 +10,7 @@ export const MESSAGE_TYPES = {
   ASSISTANT: 'assistant',
   TASK_NOTIFICATION: 'task_notification',
   NOTIFICATION: 'notification',
+  COMPACT_NOTIFICATION: 'compact_notification',
   ERROR: 'error',
 } as const;
 
@@ -259,6 +260,14 @@ export function normalizeBlocks(
     return [{ type: 'text' as const, text: raw }];
   }
 
+  // Check if this is a user message - only user messages should have command-message formatting
+  // Use index access since ClaudeRawMessage has [key: string]: unknown
+  const rawMessage = raw.message as Record<string, unknown> | undefined;
+  const isUserMessage =
+    raw.type === 'user' ||
+    raw['role'] === 'user' ||
+    rawMessage?.['role'] === 'user';
+
   const buildBlocksFromArray = (entries: unknown[]): ClaudeContentBlock[] => {
     const blocks: ClaudeContentBlock[] = [];
     entries.forEach((entry) => {
@@ -283,7 +292,9 @@ export function normalizeBlocks(
           }
         }
 
-        if (hasCommandMessageTag(rawText)) {
+        // Only format <command-message> for user messages
+        // Assistant messages may contain these tags in code examples
+        if (isUserMessage && hasCommandMessageTag(rawText)) {
           const displayContent = formatCommandForDisplay(rawText);
           if (displayContent) {
             blocks.push({
@@ -295,7 +306,8 @@ export function normalizeBlocks(
         }
 
         // Filter out messages that only contain command tags without command-message
-        if (containsAnyTag(rawText, FILTERED_NORMALIZE_TAGS)) {
+        // But only for user messages - assistant messages may have these in code examples
+        if (isUserMessage && containsAnyTag(rawText, FILTERED_NORMALIZE_TAGS)) {
           return;
         }
 
@@ -372,8 +384,9 @@ export function normalizeBlocks(
         return null;
       }
 
-      // If has <command-message>, format for display
-      if (hasCommandMessageTag(content)) {
+      // Only format <command-message> for user messages
+      // Assistant messages may contain these tags in code examples
+      if (isUserMessage && hasCommandMessageTag(content)) {
         const displayContent = formatCommandForDisplay(content);
         if (displayContent) {
           return [{ type: 'text' as const, text: localizeMessage(displayContent) }];
@@ -384,7 +397,8 @@ export function normalizeBlocks(
       }
 
       // Filter empty strings and command tags (without <command-message>)
-      if (!content.trim() || containsAnyTag(content, FILTERED_NORMALIZE_TAGS)) {
+      // But only for user messages - assistant messages with these tags should pass through
+      if (!content.trim() || (isUserMessage && containsAnyTag(content, FILTERED_NORMALIZE_TAGS))) {
         return null;
       }
       return [{ type: 'text' as const, text: localizeMessage(content) }];

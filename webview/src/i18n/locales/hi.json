@@ -89,7 +89,16 @@
     "attachmentsUploaded": "[अटैचमेंट अपलोड हो गए]",
     "streamingConnected": "{{provider}} कनेक्ट हो गया, आपके प्रश्न को समझ रहा है",
     "showEarlierMessages": "{{count}} पुराने संदेश दिखाएं",
-    "totalDuration": "इस जवाब में लगा समय"
+    "totalDuration": "इस जवाब में लगा समय",
+    "compactSummary": {
+      "summarizedConversation": "सारांशित वार्तालाप",
+      "compactSummary": "संक्षिप्त सारांश",
+      "messagesUpTo": "इस बिंदु तक के {{count}} संदेश सारांशित किए गए",
+      "messagesFrom": "इस बिंदु से आगे के {{count}} संदेश सारांशित किए गए",
+      "userContext": "संदर्भ: \"{{context}}\"",
+      "expand": "सारांश विस्तृत करें",
+      "collapse": "सारांश संक्षिप्त करें"
+    }
   },
   "settings": {
     "title": "सेटिंग्स",
@@ -281,6 +290,11 @@
         "label": "Additional Prompt",
         "placeholder": "Add your extra requirements here, e.g., generate commit in English, include issue number, etc...",
         "hint": "The plugin has built-in CCG Commits specification prompts. Content you add here will be used as additional requirements, and AI will prioritize your instructions."
+      },
+      "projectPrompt": {
+        "label": "प्रोजेक्ट-विशिष्ट अतिरिक्त प्रॉम्प्ट",
+        "placeholder": "यहाँ प्रोजेक्ट-विशिष्ट आवश्यकताएँ जोड़ें, जैसे: scope में मॉड्यूल नाम का उपयोग करें, commit body में प्रभाव क्षेत्र शामिल करें, आदि...",
+        "hint": "यह प्रॉम्प्ट केवल वर्तमान प्रोजेक्ट पर लागू होता है और वैश्विक अतिरिक्त प्रॉम्प्ट के साथ मिलकर जोड़ा जाता है। जब दोनों में विरोध हो, तो प्रोजेक्ट प्रॉम्प्ट को प्राथमिकता दी जाती है। विभिन्न प्रोजेक्ट्स को स्वतंत्र रूप से कॉन्फ़िगर किया जा सकता है।"
       },
       "codeReview": {
         "comingSoon": "Coming Soon",
@@ -569,7 +583,19 @@
         "cliLoginDisableMessage": "यह पुराने config.toml को पुनर्स्थापित करेगा और API की प्रमाणीकरण पर स्विच करेगा।",
         "modelIdRequired": "Model ID is required",
         "modelIdInvalid": "Invalid model ID format (only letters, numbers, dots, hyphens, underscores, slashes and colons allowed)",
-        "modelIdDuplicate": "Model ID already exists"
+        "modelIdDuplicate": "Model ID already exists",
+        "envVarsTitle": "Environment Variables",
+        "messageEnvLabel": "Message Environment Variables",
+        "messageEnvHint": "Custom environment variables injected into the Codex message subprocess",
+        "mcpEnvLabel": "MCP Environment Variables",
+        "mcpEnvHint": "Custom environment variables injected into the MCP tool discovery subprocess",
+        "envKeyPlaceholder": "ENV_KEY",
+        "envValuePlaceholder": "value",
+        "addEnvVar": "Add Variable",
+        "envKeyInvalid": "Invalid key name (must start with letter/underscore, alphanumeric only)",
+        "envKeyProtected": "Cannot set built-in variable: {{key}}",
+        "envKeyDuplicate": "Duplicate key: {{key}}",
+        "envValueTooLong": "मान बहुत लंबा है (अधिकतम {{max}} अक्षर)"
       }
     },
     "agent": {

@@ -30,7 +30,7 @@ checkstyle {
 }
 
 group = 'com.github.idea-claude-code-gui'
-version = '0.4.2'
+version = '0.4.3-Alpha1'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -273,6 +273,7 @@ def aiBridgeHashFile = new File(aiBridgePackDir, 'ai-bridge.hash')
 def webviewDir = file('webview')
 def requestedTasks = gradle.startParameter.taskNames.collect { it.toLowerCase() }
 def enableVConsoleInWebview = requestedTasks.any { it.contains('runide') }
+def skipWebviewBuild = (project.findProperty('skipWebview') ?: 'false').toString().toBoolean()
 
 // Get custom Node.js path from local properties
 def localNodePath = getLocalProperty('node.path')
@@ -332,7 +333,10 @@ tasks.register('buildWebview', Exec) {
         commandLine npmCommand, 'run', 'build'
     }
 
-    onlyIf { webviewDir.exists() }
+    onlyIf { webviewDir.exists() && !skipWebviewBuild }
+    if (skipWebviewBuild) {
+        println "Skipping webview build because -PskipWebview=true"
+    }
     doFirst { println "Building webview..." }
     doLast { println "Webview build completed." }
 }
@@ -354,12 +358,19 @@ tasks.register('packageAiBridge', Exec) {
     // Switch to ai-bridge directory for packaging, avoiding inclusion of top-level directory
     workingDir aiBridgeDir
 
-    // Ensure output directory exists
+    // Ensure output directory exists and dependencies are installed
     doFirst {
         aiBridgePackDir.mkdirs()
         // Delete old zip file
         if (aiBridgeArchive.exists()) {
             aiBridgeArchive.delete()
+        }
+        // Install npm dependencies if node_modules doesn't exist
+        if (!new File(aiBridgeDir, 'node_modules').exists()) {
+            println 'Installing ai-bridge npm dependencies...'
+            String npmCmd = System.getProperty('os.name').toLowerCase().contains('windows') ? 'npm.cmd' : 'npm'
+            exec { commandLine npmCmd, 'install', '--silent', '--loglevel=error'; workingDir = aiBridgeDir }
+            println 'ai-bridge npm dependencies installed.'
         }
     }
 

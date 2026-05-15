@@ -7,7 +7,6 @@ import { debugError, debugLog, debugWarn } from '../../../utils/debug.js';
  * Local command list (commands to be filtered out)
  */
 const HIDDEN_COMMANDS = new Set([
-  '/context',
   '/cost',
   '/pr-comments',
   '/release-notes',

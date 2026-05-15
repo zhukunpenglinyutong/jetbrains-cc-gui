@@ -27,6 +27,18 @@ class ClaudeStreamAdapter {
             AtomicBoolean hadSendError,
             AtomicReference<String> lastNodeError
     ) {
+        processOutputLine(line, callback, result, assistantContent, hadSendError, lastNodeError, new AtomicBoolean(false));
+    }
+
+    void processOutputLine(
+            String line,
+            MessageCallback callback,
+            SDKResult result,
+            StringBuilder assistantContent,
+            AtomicBoolean hadSendError,
+            AtomicReference<String> lastNodeError,
+            AtomicBoolean wasAborted
+    ) {
         if (line.startsWith("[STDIN_ERROR]")
                 || line.startsWith("[STDIN_PARSE_ERROR]")
                 || line.startsWith("[GET_SESSION_ERROR]")
@@ -47,6 +59,12 @@ class ClaudeStreamAdapter {
         }
 
         if (line.startsWith("[SEND_ERROR]")) {
+            // If the request was aborted by the user, suppress the SEND_ERROR
+            // so the UI does not show an error toast. The abort path in
+            // ClaudeDaemonRequestExecutor handles completion gracefully.
+            if (wasAborted.get()) {
+                return;
+            }
             String jsonStr = line.substring("[SEND_ERROR]".length()).trim();
             String errorMessage = jsonStr;
             try {

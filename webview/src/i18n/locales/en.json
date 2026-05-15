@@ -89,7 +89,16 @@
     "attachmentsUploaded": "[Attachments Uploaded]",
     "streamingConnected": "{{provider}} connected, understanding your question",
     "showEarlierMessages": "Show {{count}} earlier messages",
-    "totalDuration": "This reply took"
+    "totalDuration": "This reply took",
+    "compactSummary": {
+      "summarizedConversation": "Summarized conversation",
+      "compactSummary": "Compact summary",
+      "messagesUpTo": "Summarized {{count}} messages up to this point",
+      "messagesFrom": "Summarized {{count}} messages from this point",
+      "userContext": "Context: \"{{context}}\"",
+      "expand": "Expand summary",
+      "collapse": "Collapse summary"
+    }
   },
   "settings": {
     "title": "Settings",
@@ -352,6 +361,11 @@
         "label": "Additional Prompt",
         "placeholder": "Add your extra requirements here, e.g., generate commit in English, include issue number, etc...",
         "hint": "The plugin has built-in CCG Commits specification prompts. Content you add here will be used as additional requirements, and AI will prioritize your instructions."
+      },
+      "projectPrompt": {
+        "label": "Project-specific Additional Prompt",
+        "placeholder": "Add project-specific requirements here, e.g., scope must use module name, commit body should include impact scope, etc...",
+        "hint": "This prompt only applies to the current project and is appended together with the global additional prompt. When they conflict, the project prompt takes precedence. Different projects can be configured independently."
       },
       "codeReview": {
         "comingSoon": "Coming Soon",
@@ -662,7 +676,19 @@
         "cliLoginDisableMessage": "The plugin will stop reading ~/.codex/config.toml and auth.json.",
         "modelIdRequired": "Model ID is required",
         "modelIdInvalid": "Invalid model ID format (only letters, numbers, dots, hyphens, underscores, slashes and colons allowed)",
-        "modelIdDuplicate": "Model ID already exists"
+        "modelIdDuplicate": "Model ID already exists",
+        "envVarsTitle": "Environment Variables",
+        "messageEnvLabel": "Message Environment Variables",
+        "messageEnvHint": "Custom environment variables injected into the Codex message subprocess",
+        "mcpEnvLabel": "MCP Environment Variables",
+        "mcpEnvHint": "Custom environment variables injected into the MCP tool discovery subprocess",
+        "envKeyPlaceholder": "ENV_KEY",
+        "envValuePlaceholder": "value",
+        "addEnvVar": "Add Variable",
+        "envKeyInvalid": "Invalid key name (must start with letter/underscore, alphanumeric only)",
+        "envKeyProtected": "Cannot set built-in variable: {{key}}",
+        "envKeyDuplicate": "Duplicate key: {{key}}",
+        "envValueTooLong": "Value too long (max {{max}} characters)"
       }
     },
     "agent": {
@@ -1553,6 +1579,40 @@
     "enableDescription": "When enabled, the currently opened file path in the editor will be sent to AI. Note: only the file path is transmitted, not the file content.",
     "enable": "Enable",
     "cancel": "Cancel"
+  },
+  "contextUsage": {
+    "title": "Context Usage",
+    "loading": "Loading context usage...",
+    "autoCompactEnabled": "Auto-compact: enabled",
+    "autoCompactEnabledWithThreshold": "Auto-compact: enabled ({{threshold}}%)",
+    "notAvailable": "N/A",
+    "categories": {
+      "systemPrompt": "System prompt",
+      "systemTools": "System tools",
+      "mcpTools": "MCP tools",
+      "customAgents": "Custom agents",
+      "memoryFiles": "Memory files",
+      "skills": "Skills",
+      "messages": "Messages",
+      "autoCompactBuffer": "Autocompact buffer",
+      "freeSpace": "Free space"
+    },
+    "sections": {
+      "mcpTools": "MCP Tools ({{count}})",
+      "agents": "Agents ({{count}})",
+      "memoryFiles": "Memory Files ({{count}})",
+      "skills": "Skills ({{included}}/{{total}})"
+    },
+    "table": {
+      "tool": "Tool",
+      "server": "Server",
+      "tokens": "Tokens",
+      "agent": "Agent",
+      "source": "Source",
+      "type": "Type",
+      "path": "Path",
+      "skill": "Skill"
+    }
   },
   "rewind": {
     "title": "Rewind Files to Previous State",
