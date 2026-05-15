@@ -7,6 +7,109 @@ const SAFE_BROWSER_PROTOCOLS = /^(https?|mailto):/i;
 const PATH_TRAVERSAL_REGEX = /(^|[\\/])\.\.($|[\\/])/;
 const CONTROL_CHAR_REGEX = /[\u0000-\u001f]/;
 
+type ResolveFilePathCallback = (resolvedPath: string | null) => void;
+
+interface PendingResolveEntry {
+  callbacks: ResolveFilePathCallback[];
+  timeoutId: ReturnType<typeof setTimeout>;
+}
+
+// Upper-bound on how long we wait for the JCEF backend to answer a
+// resolve_file_path request. Without this, a dropped bridge message,
+// closed project, or backend exception would leak the callback forever
+// and let the Map grow unbounded over a long session.
+const RESOLVE_FILE_PATH_TIMEOUT_MS = 5000;
+
+const resolveFilePathCallbacks = new Map<string, PendingResolveEntry>();
+let resolveFilePathHandlerInstalled = false;
+
+function flushPendingCallbacks(path: string, resolvedPath: string | null) {
+  const entry = resolveFilePathCallbacks.get(path);
+  if (!entry) {
+    return;
+  }
+  clearTimeout(entry.timeoutId);
+  resolveFilePathCallbacks.delete(path);
+  entry.callbacks.forEach((cb) => {
+    try {
+      cb(resolvedPath);
+    } catch {
+      // A misbehaving subscriber must not block siblings from receiving
+      // the resolved path or the null-on-timeout signal.
+    }
+  });
+}
+
+function installResolveFilePathHandler() {
+  if (resolveFilePathHandlerInstalled) {
+    return;
+  }
+
+  const originalHandler = window.onFilePathResolved;
+  window.onFilePathResolved = (json: string) => {
+    if (originalHandler) {
+      try {
+        originalHandler(json);
+      } catch {
+        // Ignore errors from legacy handlers
+      }
+    }
+
+    try {
+      const data = JSON.parse(json) as { path?: string; resolvedPath?: string | null };
+      const path = data.path;
+      const resolvedPath = data.resolvedPath ?? null;
+      if (!path) {
+        return;
+      }
+      flushPendingCallbacks(path, resolvedPath);
+    } catch {
+      // Silently ignore malformed JSON from backend
+    }
+  };
+
+  resolveFilePathHandlerInstalled = true;
+}
+
+/**
+ * Resolve a file path asynchronously with a callback.
+ * Multiple callers for the same path share a single backend request.
+ */
+export const resolveFilePathWithCallback = (
+  filePath: string,
+  callback: ResolveFilePathCallback,
+): void => {
+  if (!filePath) {
+    callback(null);
+    return;
+  }
+  if (!isValidOpenFileTarget(filePath)) {
+    callback(null);
+    return;
+  }
+
+  installResolveFilePathHandler();
+
+  const existing = resolveFilePathCallbacks.get(filePath);
+  if (existing) {
+    resolveFilePathCallbacks.set(filePath, {
+      callbacks: [...existing.callbacks, callback],
+      timeoutId: existing.timeoutId,
+    });
+    return;
+  }
+
+  const timeoutId = setTimeout(() => {
+    flushPendingCallbacks(filePath, null);
+  }, RESOLVE_FILE_PATH_TIMEOUT_MS);
+
+  resolveFilePathCallbacks.set(filePath, {
+    callbacks: [callback],
+    timeoutId,
+  });
+  sendBridgeEvent('resolve_file_path', filePath);
+};
+
 /**
  * Validate mutating file paths don't contain traversal patterns.
  * Defense-in-depth: backend also validates using canonical paths.
@@ -63,6 +166,16 @@ const callBridge = (payload: string) => {
 
 export const sendBridgeEvent = (event: string, content = '') => {
   return callBridge(`${event}:${content}`);
+};
+
+export const resolveFilePath = (filePath?: string) => {
+  if (!filePath) {
+    return;
+  }
+  if (!isValidOpenFileTarget(filePath)) {
+    return;
+  }
+  sendBridgeEvent('resolve_file_path', filePath);
 };
 
 export const openFile = (filePath?: string, lineStart?: number, lineEnd?: number) => {

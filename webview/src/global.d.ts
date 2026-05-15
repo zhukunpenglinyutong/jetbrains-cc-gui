@@ -330,6 +330,11 @@ interface Window {
   updateLinkifyCapabilities?: (json: string) => void;
 
   /**
+   * File path resolved callback - receives the resolved absolute path for a file link tooltip.
+   */
+  onFilePathResolved?: (json: string) => void;
+
+  /**
    * Show success message
    */
   showSuccess?: (message: string) => void;

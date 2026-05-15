@@ -1,5 +1,6 @@
+import { useState, useCallback, memo } from 'react';
 import type { TFunction } from 'i18next';
-import type { ClaudeContentBlock, ToolResultBlock } from '../../types';
+import type { ClaudeContentBlock, ToolResultBlock, CompactSummaryMetadata } from '../../types';
 
 import MarkdownBlock from '../MarkdownBlock';
 import CollapsibleTextBlock from '../CollapsibleTextBlock';
@@ -45,6 +46,76 @@ function getExtension(fileName?: string): string {
   const parts = fileName.split('.');
   return parts.length > 1 ? parts[parts.length - 1].toUpperCase() : '';
 }
+
+interface CompactSummaryBlockProps {
+  block: {
+    type: 'compact_summary';
+    title: string;
+    content: string;
+    metadata?: CompactSummaryMetadata;
+  };
+  t: TFunction;
+}
+
+/**
+ * Compact summary block - collapsed by default, click/Enter/Space to expand.
+ * Memoized to prevent state reset on parent re-renders during streaming.
+ * `block.title` is an i18n key resolved via t() at render time.
+ */
+const CompactSummaryBlock = memo(function CompactSummaryBlock({ block, t }: CompactSummaryBlockProps) {
+  const [expanded, setExpanded] = useState(false);
+  const toggleExpanded = useCallback(() => setExpanded(e => !e), []);
+  const onKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      setExpanded(prev => !prev);
+    }
+  }, []);
+  const meta = block.metadata;
+  const hasMeta = meta && typeof meta.messagesSummarized === 'number';
+  const titleText = t(block.title);
+  const toggleLabel = expanded ? t('chat.compactSummary.collapse') : t('chat.compactSummary.expand');
+
+  return (
+    <div className="compact-summary-block">
+      <div
+        className="compact-summary-title"
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        aria-label={`${titleText} — ${toggleLabel}`}
+        onClick={toggleExpanded}
+        onKeyDown={onKeyDown}
+      >
+        <span className="compact-summary-icon" aria-hidden="true">●</span>
+        <span className="compact-summary-title-text">{titleText}</span>
+        <span className="compact-summary-toggle" aria-hidden="true">{expanded ? '▼' : '▶'}</span>
+      </div>
+      {hasMeta && (
+        <div className="compact-summary-metadata">
+          <span className="compact-summary-meta-count">
+            {t(
+              meta.direction === 'from'
+                ? 'chat.compactSummary.messagesFrom'
+                : 'chat.compactSummary.messagesUpTo',
+              { count: meta.messagesSummarized },
+            )}
+          </span>
+          {meta.userContext && (
+            <span className="compact-summary-meta-context">
+              {t('chat.compactSummary.userContext', { context: meta.userContext })}
+            </span>
+          )}
+        </div>
+      )}
+      {expanded && block.content && (
+        <div className="compact-summary-content">
+          <MarkdownBlock content={block.content} />
+        </div>
+      )}
+    </div>
+  );
+});
 
 export interface ContentBlockRendererProps {
   block: ClaudeContentBlock;
@@ -228,6 +299,32 @@ export function ContentBlockRenderer({
         toolId={block.id}
       />
     );
+  }
+
+  // Compact notification block - renders as header + indented sub-items
+  if (block.type === 'compact_notification') {
+    return (
+      <div className="compact-notification-block">
+        <div className="compact-notification-header">
+          {block.headerText}
+        </div>
+        {block.items.length > 0 && (
+          <div className="compact-notification-items">
+            {block.items.map((item, idx) => (
+              <div key={idx} className="compact-notification-item">
+                <span className="compact-notification-prefix">⎿</span>
+                <span className="compact-notification-text">{item.text}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Compact summary block - collapsed by default, click to expand
+  if (block.type === 'compact_summary') {
+    return <CompactSummaryBlock block={block} t={t} />;
   }
 
   // Task notification block - renders as "● summary" with status color

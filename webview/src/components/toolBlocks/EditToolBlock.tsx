@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolInput, ToolResultBlock } from '../../types';
 import { useIsToolDenied } from '../../hooks/useIsToolDenied';
+import { useResolvedFileLinkTooltip } from '../../hooks/useResolvedFileLinkTooltip';
 import { openFile, showDiff, refreshFile } from '../../utils/bridge';
 import { getFileIcon } from '../../utils/fileIcons';
 import { getToolLineInfo, getToolEditCount, resolveToolTarget } from '../../utils/toolPresentation';
@@ -260,6 +261,10 @@ const EditToolBlock = ({ name, input, result, toolId }: EditToolBlockProps) => {
       (typeof normalizedInput.targetFile === 'string' ? normalizedInput.targetFile : undefined),
   }, name) : undefined;
   const filePath = target?.openPath;
+  const fileLinkTooltip = useResolvedFileLinkTooltip(
+    filePath,
+    target?.displayPath || filePath || undefined,
+  );
 
   const oldString =
     (typeof normalizedInput?.old_string === 'string' ? normalizedInput.old_string : undefined) ??
@@ -381,7 +386,7 @@ const EditToolBlock = ({ name, input, result, toolId }: EditToolBlockProps) => {
             <span
               className="tool-title-summary clickable-file"
               onClick={handleFileClick}
-              title={t('tools.clickToOpen', { filePath: target?.displayPath ?? filePath })}
+              {...fileLinkTooltip}
               style={FILE_LINK_STYLE}
             >
               <span

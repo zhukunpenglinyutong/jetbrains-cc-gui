@@ -37,6 +37,7 @@ describe('CommitSection', () => {
         onCommitSkillChange={vi.fn()}
         onCommitAiResetToDefault={vi.fn()}
         commitPrompt="use english"
+        projectCommitPrompt=""
         onCommitPromptChange={vi.fn()}
         projectCommitPrompt=""
         onProjectCommitPromptChange={vi.fn()}

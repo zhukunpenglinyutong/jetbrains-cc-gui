@@ -10,12 +10,14 @@ const bridgeMocks = vi.hoisted(() => ({
   openBrowser: vi.fn(),
   openClass: vi.fn(),
   openFile: vi.fn(),
+  resolveFilePathWithCallback: vi.fn(),
 }));
 
 vi.mock('../utils/bridge', () => ({
   openBrowser: bridgeMocks.openBrowser,
   openClass: bridgeMocks.openClass,
   openFile: bridgeMocks.openFile,
+  resolveFilePathWithCallback: bridgeMocks.resolveFilePathWithCallback,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -31,6 +33,8 @@ describe('MarkdownBlock linkify integration', () => {
     bridgeMocks.openBrowser.mockReset();
     bridgeMocks.openClass.mockReset();
     bridgeMocks.openFile.mockReset();
+    bridgeMocks.resolveFilePathWithCallback.mockReset();
+    document.querySelectorAll('.file-link-tooltip').forEach((element) => element.remove());
   });
 
   it('linkifies inline code content but not code fence blocks', () => {
@@ -163,6 +167,56 @@ describe('MarkdownBlock linkify integration', () => {
     expect(bridgeMocks.openBrowser).toHaveBeenCalledWith('https://example.com/docs');
   });
 
+  it('strips system-internal XML tags (context, commit_analysis, etc.)', () => {
+    render(
+      <MarkdownBlock
+        content={
+          'Before\n\n<context>internal system data\nshould be removed</context>\n\nAfter'
+        }
+      />,
+    );
+
+    const container = document.querySelector('.markdown-content')!;
+    expect(container.textContent).toContain('Before');
+    expect(container.textContent).toContain('After');
+    expect(container.textContent).not.toContain('internal system data');
+    expect(container.innerHTML).not.toContain('<context>');
+  });
+
+  it('escapes unknown XML tags as literal text', () => {
+    render(
+      <MarkdownBlock
+        content={'Analysis:\n\n<thinking>this should be literal</thinking>\n\nDone'}
+      />,
+    );
+
+    const container = document.querySelector('.markdown-content')!;
+    expect(container.textContent).toContain('<thinking>');
+    expect(container.textContent).toContain('this should be literal');
+    expect(container.textContent).toContain('</thinking>');
+    // The tag should NOT exist as a DOM element
+    expect(container.querySelector('thinking')).toBeNull();
+  });
+
+  it('preserves XML tags inside code fences', () => {
+    render(
+      <MarkdownBlock
+        content={'Example:\n\n```xml\n<context>keep this</context>\n```\n\nOutside'}
+      />,
+    );
+
+    const codeBlock = document.querySelector('pre code')!;
+    expect(codeBlock.textContent).toContain('<context>keep this</context>');
+  });
+
+  it('escapes self-closing XML tags', () => {
+    render(<MarkdownBlock content={'Use <br/> or <item attr="val"/> here'} />);
+
+    const container = document.querySelector('.markdown-content')!;
+    expect(container.querySelector('br')).toBeNull();
+    expect(container.querySelector('item')).toBeNull();
+  });
+
   it('shows links during streaming and keeps final rendering consistent', () => {
     setLinkifyCapabilities({ classNavigationEnabled: true });
 
@@ -193,5 +247,213 @@ describe('MarkdownBlock linkify integration', () => {
       }),
     ).toBeTruthy();
     expect(screen.getByRole('link', { name: 'https://example.com/docs' })).toBeTruthy();
+  });
+
+  it('falls back to the link href when tooltip resolution returns null', () => {
+    // Backend cannot produce a display path (e.g. no project root,
+    // canonicalization failure). The tooltip should still show the user where
+    // the link points — fall back to the raw href text.
+    const absolutePath = '/home/user/project/src/main.ts';
+    bridgeMocks.resolveFilePathWithCallback.mockImplementation((_path: string, callback: (result: string | null) => void) => {
+      callback(null);
+    });
+
+    render(<MarkdownBlock content={`Open ${absolutePath}`} />);
+
+    fireEvent.mouseOver(screen.getByRole('link', { name: absolutePath }), {
+      clientX: 10,
+      clientY: 10,
+    });
+
+    expect(document.querySelector('.file-link-tooltip')?.textContent).toBe(absolutePath);
+  });
+
+  it('shows the resolved tooltip text when backend returns a path', () => {
+    bridgeMocks.resolveFilePathWithCallback.mockImplementation((_path: string, callback: (result: string | null) => void) => {
+      callback('src/main.ts');
+    });
+
+    render(<MarkdownBlock content={'Open /home/user/project/src/main.ts'} />);
+
+    fireEvent.mouseOver(screen.getByRole('link', { name: '/home/user/project/src/main.ts' }), {
+      clientX: 10,
+      clientY: 10,
+    });
+
+    expect(document.querySelector('.file-link-tooltip')?.textContent).toBe('src/main.ts');
+  });
+
+  it('renders inline code with XML tags consistently across streaming and non-streaming', () => {
+    const content = 'Use `<div>` and `<custom-tag>` here';
+
+    // Test streaming path
+    const { rerender } = render(<MarkdownBlock content={content} isStreaming />);
+
+    const streamingCodeElements = document.querySelectorAll('code');
+    expect(streamingCodeElements.length).toBe(2);
+
+    // Both should display the tag as literal text <div> and <custom-tag>
+    expect(streamingCodeElements[0].textContent).toBe('<div>');
+    expect(streamingCodeElements[1].textContent).toBe('<custom-tag>');
+
+    // No actual DOM elements should exist for these tags
+    expect(document.querySelector('div.custom-tag')).toBeNull();
+    expect(document.querySelector('custom-tag')).toBeNull();
+
+    // Test non-streaming path
+    rerender(<MarkdownBlock content={content} isStreaming={false} />);
+
+    const nonStreamingCodeElements = document.querySelectorAll('code');
+    expect(nonStreamingCodeElements.length).toBe(2);
+
+    // Should match streaming output exactly
+    expect(nonStreamingCodeElements[0].textContent).toBe('<div>');
+    expect(nonStreamingCodeElements[1].textContent).toBe('<custom-tag>');
+  });
+
+  // Based on real conversation from session JSONL
+  it('renders multi-paragraph content with code blocks correctly', () => {
+    const realContent = [
+      '这是一个很好的调查方向。让我深入分析这个问题，同时涉及 Claude CLI 源码和插件的处理逻辑。',
+      '',
+      '先并行调查几个关键区域：',
+    ].join('\n');
+
+    render(<MarkdownBlock content={realContent} />);
+
+    const container = document.querySelector('.markdown-content')!;
+    expect(container.textContent).toContain('这是一个很好的调查方向');
+    expect(container.textContent).toContain('先并行调查几个关键区域');
+  });
+
+  it('strips command-message XML tags from skill prompts', () => {
+    // Real message format from JSONL: command-message wrapper
+    const content = [
+      'Before text',
+      '',
+      '<command-message>opsx:explore</command-message>',
+      '<command-name>/opsx:explore</command-name>',
+      '<command-args>investigate the bug</command-args>',
+      '',
+      'After text',
+    ].join('\n');
+
+    render(<MarkdownBlock content={content} />);
+
+    const container = document.querySelector('.markdown-content')!;
+    // Command tags should be escaped as literal text, not parsed as DOM
+    expect(container.querySelector('command-message')).toBeNull();
+    expect(container.querySelector('command-name')).toBeNull();
+  });
+
+  it('handles inline code with file paths and preserves content during streaming transition', () => {
+    // Real content pattern from JSONL: file paths in inline code
+    const content = [
+      'The file `E:/project/ClaudeCodeRev/src/commands/compact/compact.ts` contains the handler.',
+      '',
+      'Also see `src/services/compact/compact.ts` for the service.',
+    ].join('\n');
+
+    const { rerender } = render(<MarkdownBlock content={content} isStreaming />);
+
+    // Streaming: inline code should contain the full path
+    const streamingCodes = document.querySelectorAll('code');
+    expect(streamingCodes[0].textContent).toBe('E:/project/ClaudeCodeRev/src/commands/compact/compact.ts');
+    expect(streamingCodes[1].textContent).toBe('src/services/compact/compact.ts');
+
+    // Transition to non-streaming
+    rerender(<MarkdownBlock content={content} isStreaming={false} />);
+
+    const finalCodes = document.querySelectorAll('code');
+    expect(finalCodes[0].textContent).toBe('E:/project/ClaudeCodeRev/src/commands/compact/compact.ts');
+    expect(finalCodes[1].textContent).toBe('src/services/compact/compact.ts');
+  });
+
+  it('handles complex markdown with nested structures', () => {
+    // Complex content from real conversation: headings, lists, code blocks
+    const complexContent = [
+      '## Detailed Report: `/compact` Command Implementation',
+      '',
+      '### 1. Command Definition and Entry Points',
+      '',
+      '**Command Registration:**',
+      '- `E:/project/ClaudeCodeRev/src/commands/compact/index.ts`',
+      '- Defines the command metadata',
+      '',
+      '**Command Handler:**',
+      '- `compact.ts` contains the `call` function',
+      '',
+      '```typescript',
+      'const command = {',
+      '  type: "local",',
+      '  name: "compact",',
+      '  supportsNonInteractive: true',
+      '};',
+      '```',
+    ].join('\n');
+
+    render(<MarkdownBlock content={complexContent} />);
+
+    // Heading should be rendered
+    expect(document.querySelector('h2')).toBeTruthy();
+    expect(document.querySelector('h3')).toBeTruthy();
+
+    // List items should be present
+    const listItems = document.querySelectorAll('li');
+    expect(listItems.length).toBeGreaterThan(0);
+
+    // Code block should preserve content
+    const codeBlock = document.querySelector('pre code');
+    expect(codeBlock?.textContent).toContain('const command');
+    expect(codeBlock?.textContent).toContain('type: "local"');
+  });
+
+  it('handles incremental streaming with partial XML tags without DOM corruption', () => {
+    // Simulates SSE incremental updates where XML tags arrive in fragments
+    // Critical: during streaming, content may pause mid-tag (e.g. "<command-")
+    // and the renderer must not parse incomplete tags as real DOM.
+    const chunks = [
+      'Here is the code: `<command-',
+      'Here is the code: `<command-name>',
+      'Here is the code: `<command-name>/compact</command-name>',
+      'Here is the code: `<command-name>/compact</command-name>` for compacting.',
+    ];
+
+    const { rerender } = render(<MarkdownBlock content={chunks[0]} isStreaming />);
+
+    // Each chunk should render without throwing or creating phantom DOM elements
+    chunks.forEach((chunk) => {
+      rerender(<MarkdownBlock content={chunk} isStreaming />);
+
+      // No phantom <command-name> DOM element should ever appear
+      expect(document.querySelector('command-name')).toBeNull();
+    });
+
+    // Final transition to non-streaming should match the last streaming render
+    rerender(<MarkdownBlock content={chunks[chunks.length - 1]} isStreaming={false} />);
+
+    const finalCode = document.querySelector('code');
+    expect(finalCode?.textContent).toBe('<command-name>/compact</command-name>');
+    expect(document.querySelector('command-name')).toBeNull();
+  });
+
+  it('preserves inline code with angle brackets from real error messages', () => {
+    // Real pattern: error messages with type parameters like <T>
+    const content = 'Use `Array<T>` or `Map<string, number>` for generic types.';
+
+    const { rerender } = render(<MarkdownBlock content={content} isStreaming />);
+
+    const streamingCodes = document.querySelectorAll('code');
+    expect(streamingCodes[0].textContent).toBe('Array<T>');
+    expect(streamingCodes[1].textContent).toBe('Map<string, number>');
+
+    // No actual DOM elements for T or string
+    expect(document.querySelector('T')).toBeNull();
+
+    rerender(<MarkdownBlock content={content} isStreaming={false} />);
+
+    const finalCodes = document.querySelectorAll('code');
+    expect(finalCodes[0].textContent).toBe('Array<T>');
+    expect(finalCodes[1].textContent).toBe('Map<string, number>');
   });
 });

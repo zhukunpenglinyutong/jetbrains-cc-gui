@@ -1,25 +1,5 @@
-import { canUseTool, requestPlanApproval, READ_ONLY_TOOLS, SAFE_ALWAYS_ALLOW_TOOLS, EDIT_TOOLS } from '../../permission-handler.js';
+import { canUseTool, requestPlanApproval, SAFE_ALWAYS_ALLOW_TOOLS, EDIT_TOOLS } from '../../permission-handler.js';
 import { debugLog } from '../../permission-ipc.js';
-import { isAcceptEditsAllowed } from '../../permission-safety.js';
-
-/**
- * Tools auto-approved in acceptEdits mode.
- * Includes all edit/write tools plus read-only tools.
- * Matches CLI's acceptEdits mode behavior:
- * - File edit operations in working directory
- * - All read-only operations
- */
-const ACCEPT_EDITS_AUTO_APPROVE_TOOLS = new Set([
-  // File modification tools
-  'Write',
-  'Edit',
-  'MultiEdit',
-  'NotebookEdit',
-  'CreateDirectory',
-  'MoveFile',
-  'CopyFile',
-  'Rename',
-]);
 
 /**
  * Plan mode allowed tools.
@@ -87,7 +67,6 @@ const INTERACTIVE_TOOLS = new Set(['AskUserQuestion']);
 const VALID_PERMISSION_MODES = new Set(['default', 'plan', 'acceptEdits', 'bypassPermissions']);
 
 export {
-  ACCEPT_EDITS_AUTO_APPROVE_TOOLS,
   PLAN_MODE_ALLOWED_TOOLS,
   INTERACTIVE_TOOLS,
   VALID_PERMISSION_MODES
@@ -98,55 +77,6 @@ export function normalizePermissionMode(permissionMode) {
   if (VALID_PERMISSION_MODES.has(permissionMode)) return permissionMode;
   console.warn('[DAEMON] Unknown permission mode, falling back to default:', permissionMode);
   return 'default';
-}
-
-/**
- * Determines if a tool should be auto-approved based on the current permission mode.
- * Matches CLI's permission flow:
- * 1. SAFE_ALWAYS_ALLOW_TOOLS — always approved in any mode (checked first in preToolUseHook)
- * 2. bypassPermissions — everything approved
- * 3. acceptEdits — READ_ONLY tools approved; EDIT tools need CWD path check (done in hook)
- * 4. default — nothing auto-approved (goes to canUseTool)
- *
- * NOTE: This function cannot check file paths, so acceptEdits edit tools are NOT
- * auto-approved here. The hook must call shouldAcceptEditsTool() with the file path.
- */
-export function shouldAutoApproveTool(permissionMode, toolName) {
-  if (!toolName) return false;
-
-  // Safe tools are always auto-approved regardless of mode
-  // (This covers TodoWrite, Task*, AskUserQuestion, EnterPlanMode, ExitPlanMode,
-  //  Glob, Grep, Read, LSP, ToolSearch, SendMessage, Sleep, etc.)
-  // NOTE: WebFetch, WebSearch, Skill, Cron*, Worktree tools are NOT here —
-  // they have their own permission checks in CLI and go through canUseTool.
-  if (SAFE_ALWAYS_ALLOW_TOOLS.has(toolName)) return true;
-
-  // bypassPermissions mode: everything is approved
-  if (permissionMode === 'bypassPermissions') return true;
-
-  // acceptEdits mode: only read-only tools are auto-approved here.
-  // Edit tools require CWD path checking — handled separately in the hook.
-  if (permissionMode === 'acceptEdits') {
-    return READ_ONLY_TOOLS.has(toolName);
-  }
-
-  return false;
-}
-
-/**
- * Check if an edit tool should be auto-approved in acceptEdits mode.
- * Validates that the file path is within CWD and passes safety checks.
- * Matches CLI's checkWritePermissionForTool (filesystem.ts:1360-1375).
- * @param {string} toolName - Tool name
- * @param {Object} toolInput - Tool input parameters
- * @param {string} cwd - Working directory
- * @returns {boolean}
- */
-export function shouldAcceptEditsTool(toolName, toolInput, cwd) {
-  if (!ACCEPT_EDITS_AUTO_APPROVE_TOOLS.has(toolName)) return false;
-  const filePath = toolInput?.file_path || toolInput?.path;
-  if (!filePath) return true; // Tools like CreateDirectory without explicit path
-  return isAcceptEditsAllowed(filePath, cwd);
 }
 
 export function createPreToolUseHook(permissionModeState, cwd = null, onModeChange = null) {
