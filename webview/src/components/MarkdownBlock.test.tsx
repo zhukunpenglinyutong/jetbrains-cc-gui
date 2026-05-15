@@ -10,12 +10,14 @@ const bridgeMocks = vi.hoisted(() => ({
   openBrowser: vi.fn(),
   openClass: vi.fn(),
   openFile: vi.fn(),
+  resolveFilePathWithCallback: vi.fn(),
 }));
 
 vi.mock('../utils/bridge', () => ({
   openBrowser: bridgeMocks.openBrowser,
   openClass: bridgeMocks.openClass,
   openFile: bridgeMocks.openFile,
+  resolveFilePathWithCallback: bridgeMocks.resolveFilePathWithCallback,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -31,6 +33,8 @@ describe('MarkdownBlock linkify integration', () => {
     bridgeMocks.openBrowser.mockReset();
     bridgeMocks.openClass.mockReset();
     bridgeMocks.openFile.mockReset();
+    bridgeMocks.resolveFilePathWithCallback.mockReset();
+    document.querySelectorAll('.file-link-tooltip').forEach((element) => element.remove());
   });
 
   it('linkifies inline code content but not code fence blocks', () => {
@@ -243,6 +247,40 @@ describe('MarkdownBlock linkify integration', () => {
       }),
     ).toBeTruthy();
     expect(screen.getByRole('link', { name: 'https://example.com/docs' })).toBeTruthy();
+  });
+
+  it('falls back to the link href when tooltip resolution returns null', () => {
+    // Backend cannot produce a display path (e.g. no project root,
+    // canonicalization failure). The tooltip should still show the user where
+    // the link points — fall back to the raw href text.
+    const absolutePath = '/home/user/project/src/main.ts';
+    bridgeMocks.resolveFilePathWithCallback.mockImplementation((_path: string, callback: (result: string | null) => void) => {
+      callback(null);
+    });
+
+    render(<MarkdownBlock content={`Open ${absolutePath}`} />);
+
+    fireEvent.mouseOver(screen.getByRole('link', { name: absolutePath }), {
+      clientX: 10,
+      clientY: 10,
+    });
+
+    expect(document.querySelector('.file-link-tooltip')?.textContent).toBe(absolutePath);
+  });
+
+  it('shows the resolved tooltip text when backend returns a path', () => {
+    bridgeMocks.resolveFilePathWithCallback.mockImplementation((_path: string, callback: (result: string | null) => void) => {
+      callback('src/main.ts');
+    });
+
+    render(<MarkdownBlock content={'Open /home/user/project/src/main.ts'} />);
+
+    fireEvent.mouseOver(screen.getByRole('link', { name: '/home/user/project/src/main.ts' }), {
+      clientX: 10,
+      clientY: 10,
+    });
+
+    expect(document.querySelector('.file-link-tooltip')?.textContent).toBe('src/main.ts');
   });
 
   it('renders inline code with XML tags consistently across streaming and non-streaming', () => {

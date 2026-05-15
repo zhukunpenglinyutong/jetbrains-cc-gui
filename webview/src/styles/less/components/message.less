@@ -1040,6 +1040,32 @@
     to { opacity: 1; transform: translateY(-50%) translateX(0); }
 }
 
+/* File link hover tooltip */
+.file-link-tooltip {
+    position: fixed;
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    border: 1px solid var(--border-secondary);
+    box-shadow: var(--shadow-sm);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.4;
+    max-width: 400px;
+    width: max-content;
+    white-space: normal;
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    pointer-events: none !important;
+    z-index: 100;
+    animation: file-link-tooltip-fade-in 0.15s ease;
+}
+
+@keyframes file-link-tooltip-fade-in {
+    from { opacity: 0; margin-top: -4px; }
+    to { opacity: 1; margin-top: 0; }
+}
+
 /* Hide anchor rail on narrow panels (IntelliJ side panels can be small) */
 @media (max-width: 400px) {
     .messages-anchor-rail {

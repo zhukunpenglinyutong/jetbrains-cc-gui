@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify';
 import { memo, useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { openBrowser, openClass, openFile } from '../utils/bridge';
+import { useMarkdownFileLinkTooltip } from '../hooks/useMarkdownFileLinkTooltip';
 import {
   decorateExistingAnchors,
   linkifyHtml,
@@ -486,6 +487,8 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
   const mermaidRetryRef = useRef(0);
   const MERMAID_MAX_RETRIES = 3;
 
+  const fileLinkTooltip = useMarkdownFileLinkTooltip();
+
   useEffect(() => {
     return subscribeLinkifyCapabilities(setLinkifyCapabilities);
   }, []);
@@ -741,9 +744,15 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
   }, [isStreaming, html, renderMermaidDiagrams]);
 
   const handleClick = async (event: React.MouseEvent<HTMLDivElement>) => {
-    const target = event.target as HTMLElement;
+    // React synthetic events may have a Text node as target when the user
+    // clicks inside an <a> element. Walk up to the parent element so that
+    // element.closest() can be used safely.
+    const targetNode = event.target as unknown as Node;
+    const target = targetNode.nodeType === Node.TEXT_NODE
+      ? (targetNode as Text).parentElement
+      : (event.target as HTMLElement);
 
-    const copyBtn = target.closest('button.copy-code-btn') as HTMLButtonElement | null;
+    const copyBtn = target?.closest('button.copy-code-btn') as HTMLButtonElement | null;
     if (copyBtn && containerRef.current?.contains(copyBtn)) {
       event.preventDefault();
       event.stopPropagation();
@@ -760,13 +769,30 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
       return;
     }
 
-    const img = target.closest('img');
+    const img = target?.closest('img');
     if (img && img.getAttribute('src')) {
       setPreviewSrc(img.getAttribute('src'));
       return;
     }
 
-    const anchor = target.closest('a');
+    let anchor = target?.closest('a');
+
+    // Fallback: if the click target is not inside an <a> (e.g. a portal
+    // tooltip with broken pointer-events overlaying the link), use the
+    // click coordinates to find which <a> was actually clicked.
+    if (!anchor && containerRef.current) {
+      const x = event.clientX;
+      const y = event.clientY;
+      const links = containerRef.current.querySelectorAll('a');
+      for (const link of Array.from(links)) {
+        const rect = link.getBoundingClientRect();
+        if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+          anchor = link as HTMLAnchorElement;
+          break;
+        }
+      }
+    }
+
     if (!anchor) {
       return;
     }
@@ -803,7 +829,12 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
         className="markdown-content"
         dangerouslySetInnerHTML={{ __html: html }}
         onClick={handleClick}
+        onMouseOver={fileLinkTooltip.handleMouseOver}
+        onMouseMove={fileLinkTooltip.handleMouseMove}
+        onMouseOut={fileLinkTooltip.handleMouseOut}
       />
+      {/* Tooltip is managed via native DOM API in handleMouseOver/handleMouseOut
+          to avoid React re-render issues that break click events in JCEF. */}
       {previewSrc && (
         <div
           className="image-preview-overlay"

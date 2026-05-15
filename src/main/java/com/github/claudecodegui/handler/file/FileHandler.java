@@ -11,6 +11,7 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.util.concurrency.AppExecutorUtil;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -26,12 +27,15 @@ public class FileHandler extends BaseMessageHandler {
 
     private static final Logger LOG = Logger.getInstance(FileHandler.class);
 
+    private static final Gson GSON = new Gson();
+
     private static final String[] SUPPORTED_TYPES = {
         "list_files",
         "open_file",
         "open_browser",
         "open_class",
-        "get_linkify_capabilities"
+        "get_linkify_capabilities",
+        "resolve_file_path"
     };
 
     private final OpenFileHandler openFileHandler;
@@ -79,6 +83,10 @@ public class FileHandler extends BaseMessageHandler {
                 sendLinkifyCapabilities();
                 yield true;
             }
+            case "resolve_file_path" -> {
+                handleResolveFilePath(content);
+                yield true;
+            }
             default -> false;
         };
     }
@@ -88,6 +96,35 @@ public class FileHandler extends BaseMessageHandler {
         ApplicationManager.getApplication().invokeLater(() ->
             callJavaScript("window.updateLinkifyCapabilities", escapeJs(capabilitiesJson))
         );
+    }
+
+    /**
+     * Resolve a file path to a project-relative display path and return the result to the frontend.
+     */
+    private void handleResolveFilePath(String filePath) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                String resolvedPath = openFileHandler.resolveDisplayPath(filePath);
+
+                JsonObject result = new JsonObject();
+                result.addProperty("path", filePath);
+                result.addProperty("resolvedPath", resolvedPath);
+                String resultJson = GSON.toJson(result);
+
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.onFilePathResolved", escapeJs(resultJson));
+                });
+            } catch (Exception e) {
+                LOG.error("[FileHandler] Failed to resolve file path: " + e.getMessage(), e);
+                JsonObject errorResult = new JsonObject();
+                errorResult.addProperty("path", filePath);
+                errorResult.addProperty("resolvedPath", (String) null);
+                String errorJson = GSON.toJson(errorResult);
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.onFilePathResolved", escapeJs(errorJson));
+                });
+            }
+        }, AppExecutorUtil.getAppExecutorService());
     }
 
     /**
@@ -140,10 +177,9 @@ public class FileHandler extends BaseMessageHandler {
      * Send results back to the frontend.
      */
     private void sendResult(List<JsonObject> files) {
-        Gson gson = new Gson();
         JsonObject result = new JsonObject();
-        result.add("files", gson.toJsonTree(files));
-        String resultJson = gson.toJson(result);
+        result.add("files", GSON.toJsonTree(files));
+        String resultJson = GSON.toJson(result);
 
         ApplicationManager.getApplication().invokeLater(() -> {
             callJavaScript("window.onFileListResult", escapeJs(resultJson));
@@ -159,7 +195,7 @@ public class FileHandler extends BaseMessageHandler {
         }
 
         try {
-            JsonObject json = new Gson().fromJson(content, JsonObject.class);
+            JsonObject json = GSON.fromJson(content, JsonObject.class);
             String query = json.has("query") ? json.get("query").getAsString() : "";
             String currentPath = json.has("currentPath") ? json.get("currentPath").getAsString() : "";
             return new FileListRequest(query, currentPath);
