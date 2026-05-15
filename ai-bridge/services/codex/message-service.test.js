@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  abortCurrentCodexTurn,
   filterCodexExperimentalJsonLines,
   getCodexThreadCacheSizeForTest,
   invalidateCodexThreadCacheForSignature,
@@ -62,4 +63,8 @@ test('Codex thread cache invalidation helper is a no-op for unknown signatures',
   resetCodexThreadCache();
   invalidateCodexThreadCacheForSignature('missing-signature');
   assert.equal(getCodexThreadCacheSizeForTest(), 0);
+});
+
+test('Codex abort helper is a no-op when there is no active turn', async () => {
+  assert.equal(await abortCurrentCodexTurn(), false);
 });

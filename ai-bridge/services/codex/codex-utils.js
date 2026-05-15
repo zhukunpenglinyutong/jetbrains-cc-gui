@@ -151,18 +151,19 @@ export const MAX_TOOL_RESULT_CHARS = 20000;
 export const RAW_EVENT_LOG_MAX_CHARS = 12000;
 
 /**
- * Regular expression to match Windows termination noise messages.
- * Covers both English and Chinese versions of the "process terminated" message.
+ * Regular expression to match the exact Windows taskkill termination message.
+ * A structural fallback handles mojibake variants that can appear when the
+ * localized output is decoded with the wrong console encoding.
  */
-export const WINDOWS_TERMINATION_NOISE_RE = /(?:^SUCCESS:\s+The process with PID \d+(?: \(child process of PID \d+\))? has been terminated\.$)|(?:^成功:\s+已终止 PID \d+(?: \(属于 PID \d+ 子进程\))? 的进程。$)/i;
+export const WINDOWS_TERMINATION_NOISE_RE =
+  /^(?:SUCCESS:\s+The process with PID \d+(?: \(child process of PID \d+\))? has been terminated\.|成功:\s+已终止 PID \d+(?: \(属于 PID \d+ 子进程\))? 的进程。)$/i;
 
 /**
  * Check if a line is ignorable Windows termination noise.
  *
  * Uses a conservative heuristic to avoid filtering legitimate log lines:
- * - First checks against known termination message patterns
- * - Then checks for PID + termination keywords (SUCCESS/terminated/成功/已终止)
- * - Finally falls back to GBK corruption detection (single PID + replacement char)
+ * - First checks against the exact termination message patterns
+ * - Then checks for the taskkill-shaped mojibake variants seen on Windows
  *
  * @param {string} line - The line to check
  * @returns {boolean} True if the line should be ignored
@@ -182,22 +183,16 @@ export function isIgnorableWindowsTerminationNoiseLine(line) {
     return false;
   }
 
-  // Check for PID + termination keywords to reduce false positives
+  // Check for taskkill-shaped mojibake variants to reduce false positives.
   const pidMatches = trimmed.match(/\bPID \d+\b/g) || [];
-  if (pidMatches.length >= 1) {
-    // Must contain termination-related keywords to be filtered
-    const hasTerminationKeyword =
-      /SUCCESS|terminated|终止|terminated|已终止|has been terminated/i.test(trimmed);
-    if (hasTerminationKeyword) {
-      return true;
-    }
-    // GBK corruption detection: single PID + replacement character indicates corrupted output
-    if (pidMatches.length === 1 && trimmed.includes('')) {
-      return true;
-    }
+  if (pidMatches.length < 2) {
+    return false;
+  }
+  if (!/\([^()]*\bPID \d+\b[^()]*\)/.test(trimmed)) {
+    return false;
   }
 
-  return false;
+  return /[�锟\uFFFD]|success|terminated|成功|已终止|进程|子进程/i.test(trimmed);
 }
 
 // AGENTS.md max read size in bytes (32KB, consistent with Codex CLI)

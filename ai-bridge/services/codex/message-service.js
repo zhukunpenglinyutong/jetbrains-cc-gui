@@ -37,6 +37,11 @@ const CODEX_THREAD_MAX_IDLE_MS = 30 * 60 * 1000;
 const CODEX_THREAD_CACHE_MAX_SIZE = 4;
 const codexThreadCache = new Map();
 
+// Module-level abort controller for the currently active Codex turn.
+let activeCodexAbortController = null;
+let activeCodexTurnInProgress = false;
+let activeCodexAbortRequested = false;
+
 function buildCodexThreadCacheSignature(codexOptions, threadOptions) {
   return JSON.stringify({
     baseUrl: codexOptions?.baseUrl || '',
@@ -112,6 +117,17 @@ export function resetCodexThreadCache(threadId = null) {
   codexThreadCache.clear();
 }
 
+export async function abortCurrentCodexTurn() {
+  activeCodexAbortRequested = true;
+  const controller = activeCodexAbortController;
+  if (!controller) {
+    return activeCodexTurnInProgress;
+  }
+  activeCodexAbortController = null;
+  controller.abort();
+  return true;
+}
+
 export function invalidateCodexThreadCacheForSignature(signature) {
   if (!signature) {
     return;
@@ -167,6 +183,43 @@ function installCodexRunNoiseFilter(codex) {
   });
 }
 
+function isNoRolloutResumeError(error) {
+  const message = `${error?.message || ''}\n${error?.stack || ''}`;
+  return message.includes('thread/resume') && message.includes('no rollout found');
+}
+
+function createCodexInstance(Codex, codexOptions) {
+  const codex = new Codex(codexOptions);
+  installCodexRunNoiseFilter(codex);
+  return codex;
+}
+
+function buildNewThreadOptionsFromResume(threadOptions, cwd) {
+  const newThreadOptions = { ...threadOptions };
+  if (cwd && cwd.trim() !== '') {
+    newThreadOptions.workingDirectory = cwd;
+  }
+  return newThreadOptions;
+}
+
+function createCodexAbortError() {
+  const error = new Error('Codex turn aborted by user');
+  error.name = 'AbortError';
+  error.code = 'ABORT_ERR';
+  return error;
+}
+
+function throwIfCodexAbortRequested() {
+  if (activeCodexAbortRequested) {
+    throw createCodexAbortError();
+  }
+}
+
+function isCodexUserAbortError(error) {
+  const message = `${error?.name || ''}\n${error?.code || ''}\n${error?.message || ''}`;
+  return /AbortError|ABORT_ERR|aborted|abort|cancel|interrupt/i.test(message);
+}
+
 // ---------------------------------------------------------------------------
 // sendMessage
 // ---------------------------------------------------------------------------
@@ -197,6 +250,9 @@ export async function sendMessage(
 ) {
   let streamStarted = false;
   let streamEnded = false;
+  let turnAbortController = null;
+  activeCodexTurnInProgress = true;
+  activeCodexAbortRequested = false;
   const emitStreamEndOnce = () => {
     if (!streamStarted || streamEnded) {
       return;
@@ -220,12 +276,14 @@ export async function sendMessage(
     });
 
     console.log('[MESSAGE_START]');
+    throwIfCodexAbortRequested();
 
     // ============================================================
     // 1. Initialize Codex SDK (dynamic loading)
     // ============================================================
 
     const sdk = await ensureCodexSdk();
+    throwIfCodexAbortRequested();
     const Codex = sdk.Codex || sdk.default || sdk;
 
     const codexOptions = {};
@@ -321,63 +379,96 @@ export async function sendMessage(
     // 4. Create or Resume Thread
     // ============================================================
 
-    const threadSignature = buildCodexThreadCacheSignature(codexOptions, threadOptions);
+    let activeThreadOptions = threadOptions;
+    let activeThreadSignature = buildCodexThreadCacheSignature(codexOptions, activeThreadOptions);
+    let startedNewThread = !isResumingThread;
     let thread;
     if (isResumingThread) {
-      thread = acquireCachedCodexThread(threadId, threadSignature);
+      thread = acquireCachedCodexThread(threadId, activeThreadSignature);
       if (thread) {
         logInfo('CODEX_THREAD_CACHE', `Reusing cached Codex thread: ${threadId}`);
       } else {
-        const codex = new Codex(codexOptions);
-        installCodexRunNoiseFilter(codex);
+        const codex = createCodexInstance(Codex, codexOptions);
         console.log('[DEBUG] Resuming thread:', threadId);
-        thread = codex.resumeThread(threadId, threadOptions);
-        rememberCodexThread(threadId, thread, threadSignature, codex);
+        thread = codex.resumeThread(threadId, activeThreadOptions);
+        rememberCodexThread(threadId, thread, activeThreadSignature, codex);
         logInfo('CODEX_THREAD_CACHE', `Created cached Codex resume thread: ${threadId}`);
       }
     } else {
-      const codex = new Codex(codexOptions);
-      installCodexRunNoiseFilter(codex);
+      const codex = createCodexInstance(Codex, codexOptions);
       console.log('[DEBUG] Starting new thread');
-      thread = codex.startThread(threadOptions);
+      thread = codex.startThread(activeThreadOptions);
     }
 
     // ============================================================
     // 5. Collect AGENTS.md Instructions (only for new threads)
     // ============================================================
 
-    let finalMessage = message;
-    if (!isResumingThread && cwd) {
+    const buildFinalMessage = (isNewThread) => {
+      let nextMessage = message;
+      if (!isNewThread || !cwd) {
+        return nextMessage;
+      }
       const agentsInstructions = collectAgentsInstructions(cwd);
       if (agentsInstructions) {
-        finalMessage = `<agents-instructions>\n${agentsInstructions}\n</agents-instructions>\n\n${message}`;
+        nextMessage = `<agents-instructions>\n${agentsInstructions}\n</agents-instructions>\n\n${message}`;
         logDebug('AGENTS.md', `Prepended ${agentsInstructions.length} chars of instructions to message`);
       }
-    }
+      return nextMessage;
+    };
 
     // ============================================================
     // 6. Build Input and Start Streaming
     // ============================================================
 
-    let runInput;
-    if (attachments && Array.isArray(attachments) && attachments.length > 0) {
-      runInput = [{ type: 'text', text: finalMessage }];
-      for (const attachment of attachments) {
-        if (attachment && attachment.type === 'local_image' && attachment.path) {
-          runInput.push({ type: 'local_image', path: attachment.path });
-          console.log('[DEBUG] Added local_image attachment:', attachment.path);
+    const buildRunInput = (finalMessage) => {
+      if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+        const input = [{ type: 'text', text: finalMessage }];
+        for (const attachment of attachments) {
+          if (attachment && attachment.type === 'local_image' && attachment.path) {
+            input.push({ type: 'local_image', path: attachment.path });
+            console.log('[DEBUG] Added local_image attachment:', attachment.path);
+          }
         }
+        console.log('[DEBUG] Using array input format with', input.length, 'entries');
+        return input;
       }
-      console.log('[DEBUG] Using array input format with', runInput.length, 'entries');
-    } else {
-      runInput = finalMessage;
       console.log('[DEBUG] Using string input format');
-    }
+      return finalMessage;
+    };
 
-    const turnAbortController = new AbortController();
-    const { events } = await thread.runStreamed(runInput, {
-      signal: turnAbortController.signal
-    });
+    let finalMessage = buildFinalMessage(startedNewThread);
+    let runInput = buildRunInput(finalMessage);
+    turnAbortController = new AbortController();
+    activeCodexAbortController = turnAbortController;
+    if (activeCodexAbortRequested) {
+      turnAbortController.abort();
+      throwIfCodexAbortRequested();
+    }
+    let events;
+    try {
+      ({ events } = await thread.runStreamed(runInput, {
+        signal: turnAbortController.signal
+      }));
+    } catch (error) {
+      if (!isResumingThread || !isNoRolloutResumeError(error)) {
+        throw error;
+      }
+
+      logWarn('CODEX_THREAD_RESUME', `Resume failed with no rollout for ${threadId}; starting a new thread`);
+      resetCodexThreadCache(threadId);
+      activeThreadOptions = buildNewThreadOptionsFromResume(threadOptions, cwd);
+      activeThreadSignature = buildCodexThreadCacheSignature(codexOptions, activeThreadOptions);
+      startedNewThread = true;
+      const codex = createCodexInstance(Codex, codexOptions);
+      thread = codex.startThread(activeThreadOptions);
+      finalMessage = buildFinalMessage(startedNewThread);
+      runInput = buildRunInput(finalMessage);
+      throwIfCodexAbortRequested();
+      ({ events } = await thread.runStreamed(runInput, {
+        signal: turnAbortController.signal
+      }));
+    }
     console.log('[STREAM_START]');
     streamStarted = true;
 
@@ -391,23 +482,60 @@ export async function sendMessage(
       console.log('[MESSAGE]', JSON.stringify(msg));
     };
 
-    const state = createInitialEventState(emitMessage);
+    let state = createInitialEventState(emitMessage);
 
-    const config = {
+    let config = {
       cwd: workingDirectory,
-      threadId,
-      threadOptions,
+      threadId: startedNewThread ? null : threadId,
+      threadOptions: activeThreadOptions,
       normalizedPermissionMode,
       turnAbortController,
       onTurnCompleted: emitStreamEndOnce,
       onTurnFailed: emitStreamEndOnce
     };
 
-    await processCodexEventStream(events, state, config);
+    try {
+      await processCodexEventStream(events, state, config);
+    } catch (error) {
+      if (!isResumingThread || startedNewThread || !isNoRolloutResumeError(error)) {
+        throw error;
+      }
+
+      logWarn('CODEX_THREAD_RESUME', `Resume stream failed with no rollout for ${threadId}; starting a new thread`);
+      resetCodexThreadCache(threadId);
+      activeThreadOptions = buildNewThreadOptionsFromResume(threadOptions, cwd);
+      activeThreadSignature = buildCodexThreadCacheSignature(codexOptions, activeThreadOptions);
+      startedNewThread = true;
+      const codex = createCodexInstance(Codex, codexOptions);
+      thread = codex.startThread(activeThreadOptions);
+      finalMessage = buildFinalMessage(startedNewThread);
+      runInput = buildRunInput(finalMessage);
+      throwIfCodexAbortRequested();
+      ({ events } = await thread.runStreamed(runInput, {
+        signal: turnAbortController.signal
+      }));
+      state = createInitialEventState(emitMessage);
+      config = {
+        ...config,
+        threadId: null,
+        threadOptions: activeThreadOptions
+      };
+      await processCodexEventStream(events, state, config);
+    }
     emitStreamEndOnce();
 
+    if (state.userAbortObserved) {
+      console.log('[MESSAGE_END]');
+      console.log(JSON.stringify({
+        success: false,
+        error: 'User interrupted',
+        threadId: state.currentThreadId
+      }));
+      return;
+    }
+
     if (state.currentThreadId && state.currentThreadId.trim() !== '') {
-      rememberCodexThread(state.currentThreadId, thread, threadSignature, null);
+      rememberCodexThread(state.currentThreadId, thread, activeThreadSignature, null);
       logInfo('CODEX_THREAD_CACHE', `Stored Codex thread in cache: ${state.currentThreadId}`);
     }
 
@@ -451,12 +579,27 @@ export async function sendMessage(
 
   } catch (error) {
     emitStreamEndOnce();
+    if (activeCodexAbortRequested && isCodexUserAbortError(error)) {
+      logInfo('CODEX_ABORT', `Codex turn interrupted: ${error?.message || error}`);
+      console.log('[MESSAGE_END]');
+      console.log(JSON.stringify({
+        success: false,
+        error: 'User interrupted'
+      }));
+      return;
+    }
     console.error('[DEBUG] Error:', error.message);
     console.error('[DEBUG] Error stack:', error.stack);
 
     const errorPayload = buildErrorPayload(error);
     console.error('[SEND_ERROR]', JSON.stringify(errorPayload));
     console.log(JSON.stringify(errorPayload));
+  } finally {
+    if (activeCodexAbortController === turnAbortController) {
+      activeCodexAbortController = null;
+    }
+    activeCodexTurnInProgress = false;
+    activeCodexAbortRequested = false;
   }
 }
 

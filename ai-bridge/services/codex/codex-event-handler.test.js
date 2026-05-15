@@ -98,6 +98,10 @@ test('recognizes localized Windows termination noise lines', () => {
     true,
   );
   assert.equal(
+    isIgnorableWindowsTerminationNoiseLine('�ɹ�: ����ֹ PID 38792 (���� PID 49056 �ӽ���)�Ľ��̡�'),
+    true,
+  );
+  assert.equal(
     isIgnorableWindowsTerminationNoiseLine('Failed to parse item: something else'),
     false,
   );
@@ -121,6 +125,13 @@ test('suppresses post-completion parse errors caused by Windows termination nois
     ),
     true,
   );
+  assert.equal(
+    shouldSuppressCodexStreamParseErrorAfterCompletion(
+      'Failed to parse item: �ɹ�: ����ֹ PID 38792 (���� PID 49056 �ӽ���)�Ľ��̡�',
+      state,
+    ),
+    true,
+  );
 
   state.turnCompletedObserved = false;
   assert.equal(
@@ -130,4 +141,58 @@ test('suppresses post-completion parse errors caused by Windows termination nois
     ),
     false,
   );
+});
+
+test('Codex event stream stops waiting when abort signal fires', async () => {
+  const state = createInitialEventState(() => {});
+  const controller = new AbortController();
+  let returnCalled = false;
+
+  const events = {
+    [Symbol.asyncIterator]() {
+      return {
+        next() {
+          return new Promise(() => {});
+        },
+        async return() {
+          returnCalled = true;
+          return { done: true };
+        },
+      };
+    },
+  };
+
+  const processing = processCodexEventStream(events, state, {
+    ...makeConfig(),
+    turnAbortController: controller,
+  });
+
+  controller.abort();
+  await processing;
+
+  assert.equal(state.userAbortObserved, true);
+  assert.equal(state.suppressNoResponseFallback, true);
+  assert.equal(returnCalled, true);
+});
+
+test('Codex event stream propagates no-rollout resume failures when not aborted', async () => {
+  const state = createInitialEventState(() => {});
+  const error = new Error('Codex Exec exited with code 1: thread/resume failed: no rollout found for thread id abc');
+
+  const events = {
+    [Symbol.asyncIterator]() {
+      return {
+        async next() {
+          throw error;
+        },
+      };
+    },
+  };
+
+  await assert.rejects(
+    () => processCodexEventStream(events, state, makeConfig()),
+    /no rollout found/,
+  );
+
+  assert.equal(state.userAbortObserved, false);
 });
