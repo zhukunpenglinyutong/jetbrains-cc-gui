@@ -2,8 +2,8 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { memo, useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { openBrowser, openClass, openFile, resolveFilePathWithCallback } from '../utils/bridge';
-import { useFloatingTextTooltip } from '../hooks/useFloatingTextTooltip';
+import { openBrowser, openClass, openFile } from '../utils/bridge';
+import { useMarkdownFileLinkTooltip } from '../hooks/useMarkdownFileLinkTooltip';
 import {
   decorateExistingAnchors,
   linkifyHtml,
@@ -396,30 +396,11 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
   const mermaidRetryRef = useRef(0);
   const MERMAID_MAX_RETRIES = 3;
 
-  const currentHoverHrefRef = useRef<string | null>(null);
-  const currentHoverAnchorRef = useRef<HTMLAnchorElement | null>(null);
-  const lastTooltipHrefRef = useRef<string | null>(null);
-  // Cache resolved tooltip texts per href to prevent flicker during streaming
-  // when DOM replacement causes repeated mouseover/mouseout cycles.
-  const resolvedTooltipTextRef = useRef<Map<string, string>>(new Map());
-  const currentTooltipTextRef = useRef<string | null>(null);
-  const mountedRef = useRef(true);
-  const latestMousePositionRef = useRef({ clientX: 0, clientY: 0 });
-  const floatingTooltip = useFloatingTextTooltip();
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
+  const fileLinkTooltip = useMarkdownFileLinkTooltip();
 
   useEffect(() => {
     return subscribeLinkifyCapabilities(setLinkifyCapabilities);
   }, []);
-
-  // No global callback registration needed — resolveFilePathWithCallback in bridge.ts
-  // handles distribution to all subscribers.
 
   // Render mermaid diagrams
   const renderMermaidDiagrams = useCallback(async () => {
@@ -747,159 +728,6 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
     }
   };
 
-  const handleMouseOver = (event: React.MouseEvent<HTMLDivElement>) => {
-    const target = event.target as HTMLElement;
-    // Text nodes don't have closest() — walk up to the nearest element.
-    // Cast target to Node first so nodeType is readable on Text nodes.
-    const targetNode = target as unknown as Node;
-    const element = targetNode.nodeType === Node.TEXT_NODE
-      ? (targetNode as Text).parentElement
-      : target;
-    const anchor = element?.closest('a') as HTMLAnchorElement | null;
-    if (!anchor) {
-      floatingTooltip.hideTooltip();
-      currentTooltipTextRef.current = null;
-      currentHoverHrefRef.current = null;
-      currentHoverAnchorRef.current = null;
-      return;
-    }
-
-    const linkType = anchor.getAttribute('data-linkify');
-    if (linkType !== 'file') {
-      floatingTooltip.hideTooltip();
-      currentTooltipTextRef.current = null;
-      currentHoverHrefRef.current = null;
-      currentHoverAnchorRef.current = null;
-      return;
-    }
-
-    const href = anchor.getAttribute('href');
-    if (!href) {
-      floatingTooltip.hideTooltip();
-      currentTooltipTextRef.current = null;
-      currentHoverHrefRef.current = null;
-      currentHoverAnchorRef.current = null;
-      return;
-    }
-
-    // Debounce: skip if the mouse is merely moving within the same <a>.
-    // Rely on relatedTarget (the element the mouse came from) rather than
-    // cross-event ref state, which can become stale when DOM is replaced.
-    const relatedTarget = event.relatedTarget as HTMLElement | null;
-    const relatedNode = relatedTarget as unknown as Node | null;
-    const relatedElement = relatedNode?.nodeType === Node.TEXT_NODE
-      ? (relatedNode as Text).parentElement
-      : relatedTarget;
-    const relatedAnchor = relatedElement?.closest('a');
-    if (relatedAnchor === anchor) {
-      return;
-    }
-
-    currentHoverHrefRef.current = href;
-    currentHoverAnchorRef.current = anchor;
-
-    const nativeEvt = event.nativeEvent as MouseEvent;
-    latestMousePositionRef.current = {
-      clientX: nativeEvt.clientX,
-      clientY: nativeEvt.clientY,
-    };
-
-    if (lastTooltipHrefRef.current === href && currentTooltipTextRef.current) {
-      floatingTooltip.moveTooltip(currentTooltipTextRef.current, nativeEvt.clientX, nativeEvt.clientY);
-      return;
-    }
-
-    floatingTooltip.hideTooltip();
-    currentTooltipTextRef.current = null;
-    lastTooltipHrefRef.current = href;
-
-    const showTooltip = (text: string) => {
-      currentTooltipTextRef.current = text;
-      const { clientX, clientY } = latestMousePositionRef.current;
-      floatingTooltip.showTooltip(text, clientX, clientY);
-    };
-
-    const cachedText = resolvedTooltipTextRef.current.get(href);
-    if (cachedText) {
-      showTooltip(cachedText);
-    }
-
-    resolveFilePathWithCallback(href, (resolvedPath) => {
-      if (!mountedRef.current || currentHoverHrefRef.current !== href) {
-        return;
-      }
-      if (!resolvedPath) {
-        // Backend could not produce a display path (e.g. no project root,
-        // canonicalization failure). Fall back to the raw href so the tooltip
-        // still tells the user where the link points — same policy as
-        // useResolvedFileLinkTooltip.
-        resolvedTooltipTextRef.current.delete(href);
-        showTooltip(href);
-        return;
-      }
-
-      resolvedTooltipTextRef.current.set(href, resolvedPath);
-      showTooltip(resolvedPath);
-    });
-  };
-
-  const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
-    // Only update position when a tooltip is visible and the mouse is
-    // inside a file link.
-    latestMousePositionRef.current = {
-      clientX: event.clientX,
-      clientY: event.clientY,
-    };
-    if (!currentTooltipTextRef.current || !currentHoverHrefRef.current) {
-      return;
-    }
-
-    const target = event.target as HTMLElement;
-    const targetNode = target as unknown as Node;
-    const element = targetNode.nodeType === Node.TEXT_NODE
-      ? (targetNode as Text).parentElement
-      : target;
-    const anchor = element?.closest('a') as HTMLAnchorElement | null;
-    if (!anchor || anchor.getAttribute('data-linkify') !== 'file') {
-      return;
-    }
-
-    floatingTooltip.moveTooltip(
-      currentTooltipTextRef.current,
-      event.clientX,
-      event.clientY,
-    );
-  };
-
-  const handleMouseOut = (event: React.MouseEvent<HTMLDivElement>) => {
-    const target = event.target as HTMLElement;
-    const relatedTarget = event.relatedTarget as HTMLElement | null;
-    // Cast target to Node first so nodeType is readable on Text nodes.
-    const targetNode = target as unknown as Node;
-    const element = targetNode.nodeType === Node.TEXT_NODE
-      ? (targetNode as Text).parentElement
-      : target;
-    const anchor = element?.closest('a') as HTMLAnchorElement | null;
-
-    if (anchor && anchor.getAttribute('data-linkify') === 'file') {
-      const relatedNode = relatedTarget as unknown as Node | null;
-      const relatedElement = relatedNode?.nodeType === Node.TEXT_NODE
-        ? (relatedNode as Text).parentElement
-        : relatedTarget;
-      const relatedAnchor = relatedElement?.closest('a');
-      if (relatedAnchor !== anchor) {
-        floatingTooltip.hideTooltip();
-        currentTooltipTextRef.current = null;
-        currentHoverHrefRef.current = null;
-        currentHoverAnchorRef.current = null;
-        // Note: we intentionally do NOT clear lastTooltipHrefRef or
-        // resolvedTooltipTextRef here. During streaming, DOM replacement
-        // causes rapid mouseout/mouseover cycles; keeping the cache lets
-        // us avoid resetting the tooltip text to the raw href.
-      }
-    }
-  };
-
   return (
     <>
       <div
@@ -907,9 +735,9 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
         className="markdown-content"
         dangerouslySetInnerHTML={{ __html: html }}
         onClick={handleClick}
-        onMouseOver={handleMouseOver}
-        onMouseMove={handleMouseMove}
-        onMouseOut={handleMouseOut}
+        onMouseOver={fileLinkTooltip.handleMouseOver}
+        onMouseMove={fileLinkTooltip.handleMouseMove}
+        onMouseOut={fileLinkTooltip.handleMouseOut}
       />
       {/* Tooltip is managed via native DOM API in handleMouseOver/handleMouseOut
           to avoid React re-render issues that break click events in JCEF. */}

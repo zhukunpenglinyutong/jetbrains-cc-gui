@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { resolveFilePathWithCallback } from '../utils/bridge';
 import { useFloatingTextTooltip } from './useFloatingTextTooltip';
+import { LRUCache } from '../utils/lruCache';
 
 const normalizeTooltipText = (text: string | null | undefined): string | undefined => {
   if (!text || !text.trim()) {
@@ -18,7 +19,7 @@ export function useResolvedFileLinkTooltip(
   onMouseLeave: () => void;
 } {
   const tooltip = useFloatingTextTooltip();
-  const resolvedTextCacheRef = useRef<Map<string, string>>(new Map());
+  const resolvedTextCacheRef = useRef<LRUCache<string, string>>(new LRUCache(200));
   const currentHoverPathRef = useRef<string | undefined>(undefined);
   const currentTooltipTextRef = useRef<string | undefined>(undefined);
   const mountedRef = useRef(true);
