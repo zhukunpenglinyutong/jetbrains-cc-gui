@@ -132,7 +132,7 @@ const App = () => {
     activeProviderConfig, claudeSettingsAlwaysThinkingEnabled,
     reasoningEffort, streamingEnabledSetting, sendShortcut, autoOpenFileEnabled,
     longContextEnabled,
-    usagePercentage, usageUsedTokens, usageMaxTokens,
+    usagePercentage, usageUsedTokens, usageMaxTokens, usageLimits,
     setPermissionMode,
     setClaudePermissionMode, setCodexPermissionMode,
     setSelectedClaudeModel, setSelectedCodexModel,
@@ -140,7 +140,7 @@ const App = () => {
     setClaudeSettingsAlwaysThinkingEnabled, setStreamingEnabledSetting,
     setSendShortcut, setAutoOpenFileEnabled,
     setSdkStatus, setSdkStatusLoaded, setSelectedAgent,
-    setUsagePercentage, setUsageUsedTokens, setUsageMaxTokens,
+    setUsagePercentage, setUsageUsedTokens, setUsageMaxTokens, setUsageLimits,
     syncActiveProviderModelMapping,
     handleModeSelect, handleModelSelect, handleProviderSelect,
     handleReasoningChange, handleAgentSelect, handleToggleThinking,
@@ -204,7 +204,7 @@ const App = () => {
     t, addToast, clearToasts,
     setMessages, setStatus, setLoading, setLoadingStartTime,
     setIsThinking, setStreamingActive, setHistoryData,
-    setCurrentSessionId, setUsagePercentage, setUsageUsedTokens, setUsageMaxTokens,
+    setCurrentSessionId, setUsagePercentage, setUsageUsedTokens, setUsageMaxTokens, setUsageLimits,
     setPermissionMode, setClaudePermissionMode, setCodexPermissionMode,
     setSelectedClaudeModel, setSelectedCodexModel,
     setProviderConfigVersion, setActiveProviderConfig,
@@ -425,6 +425,7 @@ const App = () => {
           usagePercentage={usagePercentage}
           usageUsedTokens={usageUsedTokens}
           usageMaxTokens={usageMaxTokens}
+          usageLimits={usageLimits}
           onModeSelect={handleModeSelect}
           onModelSelect={handleModelSelect}
           onAgentSelect={handleAgentSelect}

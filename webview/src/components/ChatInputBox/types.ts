@@ -654,6 +654,8 @@ export interface ChatInputBoxProps {
   longContextEnabled?: boolean;
   /** Toggle long context callback */
   onLongContextChange?: (enabled: boolean) => void;
+  /** Usage limits for rendering LimitRing indicators */
+  usageLimits?: import('../../hooks/providers/useUsageTracking').UsageLimits | null;
 }
 
 /**

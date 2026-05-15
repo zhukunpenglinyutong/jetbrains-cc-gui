@@ -89,6 +89,7 @@ export interface ChatScreenProps {
   usagePercentage: ProviderState['usagePercentage'];
   usageUsedTokens: ProviderState['usageUsedTokens'];
   usageMaxTokens: ProviderState['usageMaxTokens'];
+  usageLimits: ProviderState['usageLimits'];
 
   // Model handlers
   onModeSelect: ProviderState['handleModeSelect'];
@@ -128,7 +129,7 @@ export const ChatScreen = ({
   sdkStatusLoaded, currentSdkInstalled,
   activeProviderConfig, claudeSettingsAlwaysThinkingEnabled,
   reasoningEffort, streamingEnabledSetting, sendShortcut, autoOpenFileEnabled,
-  longContextEnabled, usagePercentage, usageUsedTokens, usageMaxTokens,
+  longContextEnabled, usagePercentage, usageUsedTokens, usageMaxTokens, usageLimits,
   onModeSelect, onModelSelect, onAgentSelect, onReasoningChange, onToggleThinking,
   onStreamingEnabledChange,
   onAutoOpenFileEnabledChange, onLongContextChange,
@@ -275,6 +276,7 @@ export const ChatScreen = ({
           onAutoOpenFileEnabledChange={onAutoOpenFileEnabledChange}
           longContextEnabled={longContextEnabled}
           onLongContextChange={onLongContextChange}
+          usageLimits={usageLimits}
         />
       </div>
     </>
