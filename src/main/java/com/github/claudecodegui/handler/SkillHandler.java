@@ -5,6 +5,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.skill.CodexSkillService;
 import com.github.claudecodegui.skill.SkillService;
+import com.github.claudecodegui.RemoteSkillService;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
@@ -37,7 +38,11 @@ public class SkillHandler extends BaseMessageHandler {
         "import_skill",
         "delete_skill",
         "open_skill",
-        "toggle_skill"
+        "toggle_skill",
+        "import_remote_skill",
+        "update_remote_skill",
+        "update_remote_skill_interval",
+        "import_from_navigation_directory"
     };
 
     public SkillHandler(HandlerContext context) {
@@ -66,6 +71,18 @@ public class SkillHandler extends BaseMessageHandler {
                 return true;
             case "toggle_skill":
                 handleToggleSkill(content);
+                return true;
+            case "import_remote_skill":
+                handleImportRemoteSkill(content);
+                return true;
+            case "update_remote_skill":
+                handleUpdateRemoteSkill(content);
+                return true;
+            case "update_remote_skill_interval":
+                handleUpdateRemoteSkillInterval(content);
+                return true;
+            case "import_from_navigation_directory":
+                handleImportFromNavigationDirectory(content);
                 return true;
             default:
                 return false;
@@ -340,6 +357,159 @@ public class SkillHandler extends BaseMessageHandler {
             return false;
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    /**
+     * Import remote skill.
+     */
+    private void handleImportRemoteSkill(String content) {
+        try {
+            JsonObject json = GSON.fromJson(content, JsonObject.class);
+            String url = json.get("url").getAsString();
+            String scope = json.has("scope") ? json.get("scope").getAsString() : "global";
+            String updateInterval = json.has("updateInterval") ? json.get("updateInterval").getAsString() : "manual";
+            String workspaceRoot = context.getProject().getBasePath();
+
+            CompletableFuture.runAsync(() -> {
+                try {
+                    JsonObject result = RemoteSkillService.importRemoteSkill(url, scope, updateInterval, workspaceRoot);
+                    String resultJson = GSON.toJson(result);
+
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        callJavaScript("window.skillImportResult", escapeJs(resultJson));
+                    });
+                } catch (Exception e) {
+                    LOG.error("[SkillHandler] Import remote skill failed: " + e.getMessage(), e);
+                    JsonObject errorResult = new JsonObject();
+                    errorResult.addProperty("success", false);
+                    errorResult.addProperty("error", e.getMessage());
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        callJavaScript("window.skillImportResult", escapeJs(GSON.toJson(errorResult)));
+                    });
+                }
+            }, AppExecutorUtil.getAppExecutorService());
+        } catch (Exception e) {
+            LOG.error("[SkillHandler] Failed to handle import remote skill: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Update remote skill.
+     */
+    private void handleUpdateRemoteSkill(String content) {
+        try {
+            JsonObject json = GSON.fromJson(content, JsonObject.class);
+            String name = json.get("name").getAsString();
+            String scope = json.get("scope").getAsString();
+            String url = json.get("url").getAsString();
+            String workspaceRoot = context.getProject().getBasePath();
+
+            CompletableFuture.runAsync(() -> {
+                try {
+                    JsonObject result = RemoteSkillService.updateRemoteSkill(name, scope, url, workspaceRoot);
+                    String resultJson = GSON.toJson(result);
+
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        if (result.get("success").getAsBoolean()) {
+                            callJavaScript("window.skillImportResult", escapeJs(resultJson));
+                            // Refresh skills list
+                            handleGetAllSkills();
+                        } else {
+                            callJavaScript("window.skillImportResult", escapeJs(resultJson));
+                        }
+                    });
+                } catch (Exception e) {
+                    LOG.error("[SkillHandler] Update remote skill failed: " + e.getMessage(), e);
+                    JsonObject errorResult = new JsonObject();
+                    errorResult.addProperty("success", false);
+                    errorResult.addProperty("error", e.getMessage());
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        callJavaScript("window.skillImportResult", escapeJs(GSON.toJson(errorResult)));
+                    });
+                }
+            }, AppExecutorUtil.getAppExecutorService());
+        } catch (Exception e) {
+            LOG.error("[SkillHandler] Failed to handle update remote skill: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Update remote skill interval.
+     */
+    private void handleUpdateRemoteSkillInterval(String content) {
+        try {
+            JsonObject json = GSON.fromJson(content, JsonObject.class);
+            String name = json.get("name").getAsString();
+            String scope = json.get("scope").getAsString();
+            String updateInterval = json.get("updateInterval").getAsString();
+
+            CompletableFuture.runAsync(() -> {
+                try {
+                    JsonObject result = RemoteSkillService.updateRemoteSkillInterval(name, scope, updateInterval);
+
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        // Refresh skills list to show updated config
+                        handleGetAllSkills();
+                    });
+                } catch (Exception e) {
+                    LOG.error("[SkillHandler] Update remote skill interval failed: " + e.getMessage(), e);
+                }
+            }, AppExecutorUtil.getAppExecutorService());
+        } catch (Exception e) {
+            LOG.error("[SkillHandler] Failed to handle update remote skill interval: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Import skills from navigation directory.
+     */
+    private void handleImportFromNavigationDirectory(String content) {
+        try {
+            JsonObject json = GSON.fromJson(content, JsonObject.class);
+            String navUrl = json.get("url").getAsString();
+            String scope = json.has("scope") ? json.get("scope").getAsString() : "global";
+            String updateInterval = json.has("updateInterval") ? json.get("updateInterval").getAsString() : "manual";
+            String workspaceRoot = context.getProject().getBasePath();
+
+            LOG.info("[SkillHandler] Batch import request - scope: " + scope + ", workspaceRoot: " + workspaceRoot + ", url: " + navUrl);
+
+            // Validate workspaceRoot for local/repo scopes
+            if (("local".equals(scope) || "repo".equals(scope)) && (workspaceRoot == null || workspaceRoot.isEmpty())) {
+                LOG.error("[SkillHandler] Cannot import to local/repo scope: workspaceRoot is null or empty");
+                JsonObject errorResult = new JsonObject();
+                errorResult.addProperty("success", false);
+                errorResult.addProperty("error", "Cannot import to " + scope + " scope: no project directory found");
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    callJavaScript("window.skillBatchImportResult", escapeJs(GSON.toJson(errorResult)));
+                });
+                return;
+            }
+
+            CompletableFuture.runAsync(() -> {
+                try {
+                    JsonObject result = RemoteSkillService.importFromNavigationDirectory(navUrl, scope, updateInterval, workspaceRoot);
+                    String resultJson = GSON.toJson(result);
+
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        callJavaScript("window.skillBatchImportResult", escapeJs(resultJson));
+                        // Refresh skills list if any succeeded
+                        if (result.has("succeeded") && result.get("succeeded").getAsInt() > 0) {
+                            handleGetAllSkills();
+                        }
+                    });
+                } catch (Exception e) {
+                    LOG.error("[SkillHandler] Import from navigation directory failed: " + e.getMessage(), e);
+                    JsonObject errorResult = new JsonObject();
+                    errorResult.addProperty("success", false);
+                    errorResult.addProperty("error", e.getMessage());
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        callJavaScript("window.skillBatchImportResult", escapeJs(GSON.toJson(errorResult)));
+                    });
+                }
+            }, AppExecutorUtil.getAppExecutorService());
+        } catch (Exception e) {
+            LOG.error("[SkillHandler] Failed to handle import from navigation directory: " + e.getMessage(), e);
         }
     }
 

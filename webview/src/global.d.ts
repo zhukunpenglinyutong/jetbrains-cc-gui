@@ -350,6 +350,11 @@ interface Window {
   skillImportResult?: (json: string) => void;
 
   /**
+   * Skill batch import result callback (from navigation directory)
+   */
+  skillBatchImportResult?: (json: string) => void;
+
+  /**
    * Skill delete result callback
    */
   skillDeleteResult?: (json: string) => void;

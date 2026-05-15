@@ -72,6 +72,8 @@ logs/*.log
 .intellijPlatform/
 /.idea/
 .ace-tool/
+.workflowbuild.log
+
 .workflow
 .worktrees/
 .omx/
