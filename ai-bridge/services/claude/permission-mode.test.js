@@ -80,11 +80,47 @@ test('EnterPlanMode is still auto-allowed (mode transition signal)', async () =>
   assert.equal(result?.hookSpecificOutput?.permissionDecision, 'allow');
 });
 
-test('plan mode: SAFE tools still short-circuit to allow (plan UX unchanged)', async () => {
+test('plan mode: SAFE tool (Read) yields "continue" so deny rules apply in plan mode', async () => {
   const hook = makeHook('plan');
   const result = await hook({
     tool_name: 'Read',
     tool_input: { file_path: '/tmp/test-cwd/x' },
   });
+  assert.equal(result?.hookSpecificOutput?.permissionDecision, 'continue');
+});
+
+test('plan mode: PLAN_MODE_ALLOWED_TOOLS (WebFetch) yields "continue"', async () => {
+  const hook = makeHook('plan');
+  const result = await hook({
+    tool_name: 'WebFetch',
+    tool_input: { url: 'https://example.com', prompt: 'title' },
+  });
+  assert.equal(result?.hookSpecificOutput?.permissionDecision, 'continue');
+});
+
+test('plan mode: read-only MCP tool yields "continue"', async () => {
+  const hook = makeHook('plan');
+  const result = await hook({
+    tool_name: 'mcp__some-server__lookup',
+    tool_input: { query: 'x' },
+  });
+  assert.equal(result?.hookSpecificOutput?.permissionDecision, 'continue');
+});
+
+test('plan mode: Agent is still auto-allowed (sub-agent permission flow unchanged)', async () => {
+  const hook = makeHook('plan');
+  const result = await hook({
+    tool_name: 'Agent',
+    tool_input: { description: 'x', prompt: 'y' },
+  });
   assert.equal(result?.hookSpecificOutput?.permissionDecision, 'allow');
+});
+
+test('plan mode: non-allowed tool falls through to plan-specific deny', async () => {
+  const hook = makeHook('plan');
+  const result = await hook({
+    tool_name: 'SomeUnknownTool',
+    tool_input: {},
+  });
+  assert.equal(result?.hookSpecificOutput?.permissionDecision, 'deny');
 });
