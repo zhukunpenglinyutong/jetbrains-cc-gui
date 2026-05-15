@@ -30,7 +30,7 @@ public class DiffHandler extends BaseMessageHandler {
         DiffFileOperations fileOperations = new DiffFileOperations(context);
         this.dispatcher = new DiffRequestDispatcher(List.of(
                 new RefreshFileHandler(context, gson, fileOperations),
-                new SimpleDiffDisplayHandler(context, gson, fileOperations),
+                new SimpleDiffDisplayHandler(context, gson, fileOperations, browserBridge),
                 new EditableDiffHandler(context, gson, browserBridge, fileOperations),
                 new InteractiveDiffMessageHandler(context, gson, browserBridge, fileOperations)
         ));

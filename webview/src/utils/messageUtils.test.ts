@@ -288,6 +288,28 @@ describe('mergeConsecutiveAssistantMessages', () => {
     expect(mergedRaw.content?.filter((block) => block.type === 'tool_use').map((block) => block.id)).toEqual(['tool-1', 'tool-2']);
   });
 
+
+
+  it('does not merge hidden meta assistant messages into visible assistant groups', () => {
+    const messages: ClaudeMessage[] = [
+      makeMsg('assistant', '', {
+        raw: { content: [{ type: 'tool_use', id: 'tool-visible', name: 'shell_command', input: { command: 'git status' } }] } as any,
+      }),
+      makeMsg('user', '[tool_result]', {
+        raw: { content: [{ type: 'tool_result', tool_use_id: 'tool-visible', content: 'ok' }] } as any,
+      }),
+      makeMsg('assistant', '', {
+        raw: { isMeta: true, content: [{ type: 'tool_use', id: 'tool-synthetic', name: 'edit', input: { file_path: '/repo/a.ts' } }] } as any,
+      }),
+    ];
+
+    const result = mergeConsecutiveAssistantMessages(messages, normalizeBlocks);
+
+    expect(result).toHaveLength(2);
+    expect(((result[0].raw as any).content ?? []).map((block: any) => block.id)).toEqual(['tool-visible']);
+    expect((result[1].raw as any).isMeta).toBe(true);
+  });
+
   // ---------------------------------------------------------------------------
   // hasToolUse + __turnId absence — tool_use merging behavior
   // ---------------------------------------------------------------------------

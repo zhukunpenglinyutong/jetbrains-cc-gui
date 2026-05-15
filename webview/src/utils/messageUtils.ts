@@ -539,7 +539,15 @@ export function mergeConsecutiveAssistantMessages(
     };
   };
 
+  const isMetaMessage = (message: ClaudeMessage): boolean => {
+    const raw = typeof message.raw === 'object' ? message.raw as ClaudeRawMessage : null;
+    return raw?.isMeta === true;
+  };
+
   const shouldMergeAssistantMessage = (previous: ClaudeMessage, next: ClaudeMessage): boolean => {
+    if (isMetaMessage(previous) || isMetaMessage(next)) {
+      return false;
+    }
     // Distinct streaming turns must stay visually separated even when the
     // backend emits adjacent assistant fragments during synchronization.
     // Block merge when either side has a __turnId and they differ.

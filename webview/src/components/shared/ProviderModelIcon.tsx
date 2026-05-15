@@ -42,8 +42,7 @@ import GrokMono from '@lobehub/icons/es/Grok/components/Mono';
 import OpenRouterMono from '@lobehub/icons/es/OpenRouter/components/Mono';
 import YiColor from '@lobehub/icons/es/Yi/components/Color';
 import YiMono from '@lobehub/icons/es/Yi/components/Mono';
-import XiaomiMiMoMono from '@lobehub/icons/es/XiaomiMiMo/components/Mono';
-import type { ReactElement } from 'react';
+import type { CSSProperties, ReactElement } from 'react';
 import { resolveIconVendor, type ModelVendor } from '../../utils/modelIconMapping';
 
 export interface ProviderModelIconProps {
@@ -57,7 +56,7 @@ export interface ProviderModelIconProps {
   colored?: boolean;
 }
 
-function getXiaomiWrapperStyle(size: number): React.CSSProperties {
+function getXiaomiWrapperStyle(size: number): CSSProperties {
   return {
     alignItems: 'center',
     background: '#000',
@@ -68,22 +67,24 @@ function getXiaomiWrapperStyle(size: number): React.CSSProperties {
     height: size,
     justifyContent: 'center',
     lineHeight: 1,
+    fontSize: Math.max(8, Math.round(size * 0.42)),
+    fontWeight: 700,
     width: size,
   };
 }
 
 const XiaomiMiMoIcon = (size: number, colored: boolean): ReactElement => {
-  if (!colored) {
-    return <XiaomiMiMoMono size={size} />;
-  }
-
   return (
     <span
       aria-label="XiaomiMiMo"
       role="img"
-      style={getXiaomiWrapperStyle(size)}
+      style={{
+        ...getXiaomiWrapperStyle(size),
+        background: colored ? '#ff6900' : 'transparent',
+        color: colored ? '#fff' : 'currentColor',
+      }}
     >
-      <XiaomiMiMoMono size={Math.max(1, Math.round(size * 0.72))} />
+      Mi
     </span>
   );
 };

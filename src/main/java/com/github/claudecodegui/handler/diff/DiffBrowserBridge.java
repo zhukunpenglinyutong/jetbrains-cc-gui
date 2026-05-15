@@ -45,6 +45,10 @@ public class DiffBrowserBridge {
      * Notify the frontend to remove a file from the edits list.
      */
     public void sendRemoveFileFromEdits(String filePath) {
+        sendRemoveFileFromEdits(filePath, null);
+    }
+
+    public void sendRemoveFileFromEdits(String filePath, String requestId) {
         ApplicationManager.getApplication().invokeLater(() -> {
             try {
                 if (context.getBrowser() == null || context.isDisposed()) {
@@ -53,6 +57,9 @@ public class DiffBrowserBridge {
                 }
                 JsonObject payload = new JsonObject();
                 payload.addProperty("filePath", filePath);
+                if (requestId != null && !requestId.isEmpty()) {
+                    payload.addProperty("requestId", requestId);
+                }
                 String payloadJson = gson.toJson(payload);
                 String js = "(function() {" +
                         "  if (typeof window.handleRemoveFileFromEdits === 'function') {" +
@@ -70,6 +77,10 @@ public class DiffBrowserBridge {
      * Send diff result to the frontend.
      */
     public void sendDiffResult(String filePath, String action, String content, String error) {
+        sendDiffResult(filePath, action, content, error, null);
+    }
+
+    public void sendDiffResult(String filePath, String action, String content, String error, String requestId) {
         ApplicationManager.getApplication().invokeLater(() -> {
             try {
                 if (context.getBrowser() == null || context.isDisposed()) {
@@ -85,6 +96,9 @@ public class DiffBrowserBridge {
                 }
                 if (error != null) {
                     payload.addProperty("error", error);
+                }
+                if (requestId != null && !requestId.isEmpty()) {
+                    payload.addProperty("requestId", requestId);
                 }
 
                 String payloadJson = gson.toJson(payload);

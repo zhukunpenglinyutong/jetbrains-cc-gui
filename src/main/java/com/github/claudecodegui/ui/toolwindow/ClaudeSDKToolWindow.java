@@ -1,5 +1,6 @@
 package com.github.claudecodegui.ui.toolwindow;
 
+import com.github.claudecodegui.bridge.BridgeDirectoryResolver;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.settings.TabStateService;
 import com.github.claudecodegui.startup.BridgePreloader;
@@ -22,6 +23,7 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.swing.*;
 import java.awt.*;
+import java.io.File;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
@@ -211,9 +213,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
             ApplicationManager.getApplication().executeOnPooledThread(() -> {
                 try {
-                    BridgePreloader.getSharedResolver().findSdkDir();
-                    CompletableFuture<Boolean> future = BridgePreloader.waitForBridgeAsync();
-                    Boolean ready = future.get(60, TimeUnit.SECONDS);
+                    Boolean ready = waitForBridgeReady();
 
                     if (project.isDisposed()) { return; }
 
@@ -348,6 +348,29 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         LOG.debug("[TabManager] Updated tab closeable state: count=" + tabCount + ", closeable=" + closeable);
+    }
+
+    private boolean waitForBridgeReady() throws Exception {
+        BridgeDirectoryResolver resolver = BridgePreloader.getSharedResolver();
+        File bridgeDir = resolver.findSdkDir();
+        if (bridgeDir != null && resolver.isValidBridgeDir(bridgeDir)) {
+            return true;
+        }
+
+        CompletableFuture<Boolean> future = BridgePreloader.waitForBridgeAsync();
+        Boolean ready = future.get(60, TimeUnit.SECONDS);
+        if (Boolean.TRUE.equals(ready)) {
+            return true;
+        }
+
+        bridgeDir = resolver.findSdkDir();
+        if (bridgeDir != null && resolver.isValidBridgeDir(bridgeDir)) {
+            return true;
+        }
+
+        resolver.clearCache();
+        bridgeDir = resolver.findSdkDir();
+        return bridgeDir != null && resolver.isValidBridgeDir(bridgeDir);
     }
 
     private JPanel createLoadingPanel() {
