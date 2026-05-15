@@ -167,7 +167,8 @@ export function getMessageText(
   let result = localizeMessage(text);
 
   // Format <command-message> content using formatCommandForDisplay
-  if (hasCommandMessageTag(result)) {
+  // Only apply to user messages - assistant messages may contain these tags in code examples
+  if (message.type === 'user' && hasCommandMessageTag(result)) {
     const displayContent = formatCommandForDisplay(result);
     if (displayContent) {
       result = displayContent;
@@ -263,13 +264,15 @@ export function shouldShowMessage(
   // Messages with <local-command-stdout> or <local-command-stderr> should be shown
   // CLI renders them with UserLocalCommandOutputMessage component
   // But for GUI, we filter these as they are internal terminal output
-  if (rawText && containsAnyTag(rawText, HIDDEN_OUTPUT_TAGS)) {
+  // Only filter for user messages - assistant messages may contain these tags in code examples
+  if (message.type === 'user' && rawText && containsAnyTag(rawText, HIDDEN_OUTPUT_TAGS)) {
     return false;
   }
 
   // Filter messages with command tags (internal metadata, not user input)
   // BUT keep "Unknown skill: xxx" messages which are plain text user-visible messages
-  if (rawText && containsAnyTag(rawText, INTERNAL_METADATA_TAGS)) {
+  // Only filter for user messages - assistant messages may contain these tags in code examples
+  if (message.type === 'user' && rawText && containsAnyTag(rawText, INTERNAL_METADATA_TAGS)) {
     return false;
   }
 
