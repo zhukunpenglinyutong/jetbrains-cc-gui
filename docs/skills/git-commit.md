@@ -25,7 +25,7 @@ body
 - Keep the full header within 100 characters when possible.
 - Do not end `subject` with a period.
 - Do not use emoji, signatures, Co-Authored-By lines, issue footers, or explanatory notes outside the commit message.
-- Always include a body. For single-file trivial changes, one concise bullet is enough. For larger diffs, scale the body to the size of the change.
+- Always include a body. For single-file trivial changes, one concise bullet is enough. For complex single-file diffs, use enough concrete bullets to cover the distinct behaviors changed in that file. For larger diffs, scale the body to the size of the change.
 - For medium diffs, use 3-6 grouped bullets. For large diffs (10+ files or several subsystems), use 6-8 grouped bullets. For very large diffs (20+ files), use 7-10 grouped bullets unless the diff is almost entirely the same mechanical change repeated across files.
 - Do not write one bullet per file, class, or field unless that item is the reason for the change.
 - Cover each major functional area touched by the diff, especially new services, settings, UI behavior, tests, provider changes, and migration or fallback paths. Large commits should not collapse unrelated areas into one broad bullet.
@@ -33,6 +33,7 @@ body
 - Prefer a `- ` bullet list for body content. Each bullet should describe one change, but the emphasis should be on why it matters.
 - Keep body bullets concise and within 100 characters when practical.
 - Do not use vague bullets such as "improve user experience" unless the exact behavior is named.
+- Do not collapse a complex single-file diff into a generic subject or filler body. Name the concrete UI, settings, provider, validation, or fallback behavior visible in the diff.
 - Use exact nouns from the diff only when they help explain the behavior, impact, or failure mode.
 - When the diff changes numeric values (thresholds, timeouts, limits, sizes), mention both old and new values.
 - Mention specific methods, classes, or fields only when they are needed to explain the reason or impact.

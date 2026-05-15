@@ -22,6 +22,7 @@ final class CommitSkillDiffCollector {
     private static final int MAX_TOTAL_DIFF_LENGTH = 12000;
     private static final int MAX_NEW_FILE_CHARS = 1200;
     private static final int MAX_CHANGED_LINES = 80;
+    private static final int MAX_DIFF_LINE_CHARS = 600;
     private static final int MAX_LCS_CELLS = 250000;
     private static final long MAX_FILE_CONTENT_CHARS = 16000;
     private static final String DEFAULT_EXCLUDE_PATTERNS = String.join("\n",
@@ -131,10 +132,6 @@ final class CommitSkillDiffCollector {
             diff.append("[binary or unavailable content]\n");
             return;
         }
-        if (isTooLarge(before) || isTooLarge(after)) {
-            diff.append("[large file content omitted]\n");
-            return;
-        }
         diff.append(lineDiff(before, after));
     }
 
@@ -202,8 +199,15 @@ final class CommitSkillDiffCollector {
         if (shown >= MAX_CHANGED_LINES || line == null || line.isEmpty()) {
             return shown;
         }
-        out.append(prefix).append(line).append("\n");
+        out.append(prefix).append(truncateLine(line)).append("\n");
         return shown + 1;
+    }
+
+    private String truncateLine(String line) {
+        if (line.length() <= MAX_DIFF_LINE_CHARS) {
+            return line;
+        }
+        return line.substring(0, MAX_DIFF_LINE_CHARS) + " ... [line truncated]";
     }
 
     private boolean shouldExclude(String path) {

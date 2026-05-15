@@ -151,6 +151,34 @@ public class GitCommitMessageServiceCommitAiConfigTest {
     }
 
     @Test
+    public void shouldRequireConcreteBulletsForComplexSingleFileSkillDiff() {
+        JsonObject config = buildConfig("codex", "claude-sonnet-4-6", "gpt-5.5");
+        config.addProperty("generationMode", "skill");
+        config.addProperty("skillRef", "builtin:git-commit");
+        TestableGitCommitMessageService service = new TestableGitCommitMessageService(config, complexSingleFileDiff());
+        ResultCapture callback = new ResultCapture();
+
+        service.generateCommitMessage(Collections.<Change>emptyList(), callback);
+
+        assertTrue(service.lastPrompt.contains("one file but is non-trivial (36 changed lines)"));
+        assertTrue(service.lastPrompt.contains("Write 3-5 concrete body bullets"));
+        assertTrue(service.lastPrompt.contains("Do not collapse a complex single-file diff into one generic bullet"));
+    }
+
+    @Test
+    public void shouldRequireConcreteBulletsForComplexSingleFilePromptDiff() {
+        JsonObject config = buildConfig("codex", "claude-sonnet-4-6", "gpt-5.5");
+        config.addProperty("generationMode", "prompt");
+        TestableGitCommitMessageService service = new TestableGitCommitMessageService(config, complexSingleFileDiff());
+        ResultCapture callback = new ResultCapture();
+
+        service.generateCommitMessage(Collections.<Change>emptyList(), callback);
+
+        assertTrue(service.lastPrompt.contains("one file but is non-trivial (36 changed lines)"));
+        assertTrue(service.lastPrompt.contains("Write 3-5 concrete body bullets"));
+    }
+
+    @Test
     public void shouldFilterSensitiveFilesInPromptModeDiff() {
         GitCommitMessageService service = new GitCommitMessageService((Project) null);
         Change envChange = new Change(null, revision(absolutePath("project/.env"), "OPENAI_API_KEY=secret"));
@@ -197,6 +225,35 @@ public class GitCommitMessageServiceCommitAiConfigTest {
     }
 
     @Test
+    public void shouldKeepLargeModifiedFileChangesVisible() {
+        String before = repeatedLines("same", 3000) + "old behavior\n";
+        String after = repeatedLines("same", 3000) + "new behavior\n";
+        Change change = new Change(
+                revision(absolutePath("project/SyncApplyService.java"), before),
+                revision(absolutePath("project/SyncApplyService.java"), after)
+        );
+
+        String diff = new CommitSkillDiffCollector().collect(List.of(change));
+
+        assertTrue(diff.contains("- old behavior"));
+        assertTrue(diff.contains("+ new behavior"));
+        assertFalse(diff.contains("large file content omitted"));
+    }
+
+    @Test
+    public void shouldTruncateVeryLongChangedLines() {
+        Change change = new Change(
+                revision(absolutePath("project/App.java"), "old " + repeatedText("a", 800) + "\n"),
+                revision(absolutePath("project/App.java"), "new " + repeatedText("b", 800) + "\n")
+        );
+
+        String diff = new CommitSkillDiffCollector().collect(List.of(change));
+
+        assertTrue(diff.contains("[line truncated]"));
+        assertTrue(diff.length() < 1500);
+    }
+
+    @Test
     public void shouldOnlyAllowApiKeyLikeEnvKeyNames() throws Exception {
         java.lang.reflect.Method method = GitCommitMessageService.class.getDeclaredMethod(
                 "normalizeAllowedApiKeyEnvKey",
@@ -219,6 +276,15 @@ public class GitCommitMessageServiceCommitAiConfigTest {
         return diff.toString();
     }
 
+    private String complexSingleFileDiff() {
+        StringBuilder diff = new StringBuilder("=== MODIFICATION: AiCommitConfigurable.java ===\n");
+        for (int i = 0; i < 18; i++) {
+            diff.append("- old line ").append(i).append("\n");
+            diff.append("+ new line ").append(i).append("\n");
+        }
+        return diff.toString();
+    }
+
     private static String absolutePath(String path) {
         return new java.io.File(path).getAbsolutePath();
     }
@@ -229,6 +295,14 @@ public class GitCommitMessageServiceCommitAiConfigTest {
             text.append(prefix).append("-").append(i).append("\n");
         }
         return text.toString();
+    }
+
+    private static String repeatedText(String text, int count) {
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < count; i++) {
+            out.append(text);
+        }
+        return out.toString();
     }
 
     private static ContentRevision revision(String path, String content) {
