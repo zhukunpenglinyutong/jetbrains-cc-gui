@@ -413,25 +413,37 @@ public class ClaudeSession {
         String normalizedInput = (input != null) ? input.trim() : "";
         Message userMessage = contextService.buildUserMessage(normalizedInput, attachments);
         sendService.updateSessionStateForSend(userMessage, normalizedInput);
+        final long sendInvalidationEpoch = state.capturePendingSendInvalidationEpoch();
 
         final String finalAgentPrompt = agentPrompt;
         final List<String> finalFileTagPaths = fileTagPaths;
         final String finalRequestedPermissionMode = requestedPermissionMode;
 
         return launchClaude().thenCompose(chId -> {
+            if (!state.isPendingSendOperationCurrent(sendInvalidationEpoch)) {
+                return CompletableFuture.completedFuture(null);
+            }
             sendService.prepareContextCollector(contextCollector);
 
-            return contextCollector.collectContext().thenCompose(openedFilesJson ->
-                    sendService.sendMessageToProvider(
-                            chId,
-                            userMessage.content,
-                            attachments,
-                            openedFilesJson,
-                            finalAgentPrompt,
-                            finalFileTagPaths,
-                            finalRequestedPermissionMode
-                    )
-            ).thenCompose(v -> syncUserMessageUuidsAfterSend());
+            return contextCollector.collectContext().thenCompose(openedFilesJson -> {
+                if (!state.isPendingSendOperationCurrent(sendInvalidationEpoch)) {
+                    return CompletableFuture.completedFuture(null);
+                }
+                return sendService.sendMessageToProvider(
+                        chId,
+                        userMessage.content,
+                        attachments,
+                        openedFilesJson,
+                        finalAgentPrompt,
+                        finalFileTagPaths,
+                        finalRequestedPermissionMode
+                );
+            }).thenCompose(v -> {
+                if (!state.isPendingSendOperationCurrent(sendInvalidationEpoch)) {
+                    return CompletableFuture.completedFuture(null);
+                }
+                return syncUserMessageUuidsAfterSend();
+            });
         }).exceptionally(ex -> {
             state.setError(ex.getMessage());
             state.setBusy(false);
@@ -449,7 +461,12 @@ public class ClaudeSession {
      * Interrupt the current execution.
      */
     public CompletableFuture<Void> interrupt() {
+        state.invalidatePendingSendOperations();
         if (state.getChannelId() == null) {
+            state.setError(null);
+            state.setBusy(false);
+            state.setLoading(false);
+            callbackFacade.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
             return CompletableFuture.completedFuture(null);
         }
 

@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Session state management.
@@ -72,6 +73,7 @@ public class SessionState {
 
     // PSI context collection toggle
     private boolean psiContextEnabled = true;
+    private final AtomicLong pendingSendInvalidationEpoch = new AtomicLong(0);
 
     // Getters
     public String getSessionId() {
@@ -150,6 +152,18 @@ public class SessionState {
 
     public boolean isPsiContextEnabled() {
         return psiContextEnabled;
+    }
+
+    public long capturePendingSendInvalidationEpoch() {
+        return pendingSendInvalidationEpoch.get();
+    }
+
+    public long invalidatePendingSendOperations() {
+        return pendingSendInvalidationEpoch.incrementAndGet();
+    }
+
+    public boolean isPendingSendOperationCurrent(long epoch) {
+        return pendingSendInvalidationEpoch.get() == epoch;
     }
 
     // Setters
