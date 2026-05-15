@@ -266,7 +266,6 @@ function escapeXmlTags(text: string): string {
  */
 const CODE_FENCE_RE = /(```[\s\S]*?```)/g;
 const INLINE_CODE_RE = /(`[^`\n]+`)/g;
-const STREAMING_INLINE_CODE_RE = /(`[^`\n]+`)/g;
 const BOLD_SYNTAX_RE = /(\*\*[^*]+\*\*)/g;
 
 function stripAndEscapeOutsideCodeBlocks(content: string): string {
@@ -309,7 +308,7 @@ function renderStreamingInlineText(
 ): string {
   if (handleInlineCode) {
     return text
-      .split(STREAMING_INLINE_CODE_RE)
+      .split(INLINE_CODE_RE)
       .map((inlinePart) => {
         const inlineCodeMatch = /^`([^`\n]+)`$/.exec(inlinePart);
         if (inlineCodeMatch) {
@@ -356,7 +355,7 @@ function renderStreamingProseSegment(
 
   // Split by inline code to avoid double-escaping
   // linkifyPlainTextSegment already handles HTML escaping for inline code content
-  const inlineParts = cleaned.split(STREAMING_INLINE_CODE_RE);
+  const inlineParts = cleaned.split(INLINE_CODE_RE);
 
   const processedParts = inlineParts.map((part, idx) => {
     // Odd indices are inline code — pass to linkifyPlainTextSegment which escapes HTML

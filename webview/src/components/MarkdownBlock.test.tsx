@@ -370,6 +370,35 @@ describe('MarkdownBlock linkify integration', () => {
     expect(codeBlock?.textContent).toContain('type: "local"');
   });
 
+  it('handles incremental streaming with partial XML tags without DOM corruption', () => {
+    // Simulates SSE incremental updates where XML tags arrive in fragments
+    // Critical: during streaming, content may pause mid-tag (e.g. "<command-")
+    // and the renderer must not parse incomplete tags as real DOM.
+    const chunks = [
+      'Here is the code: `<command-',
+      'Here is the code: `<command-name>',
+      'Here is the code: `<command-name>/compact</command-name>',
+      'Here is the code: `<command-name>/compact</command-name>` for compacting.',
+    ];
+
+    const { rerender } = render(<MarkdownBlock content={chunks[0]} isStreaming />);
+
+    // Each chunk should render without throwing or creating phantom DOM elements
+    chunks.forEach((chunk) => {
+      rerender(<MarkdownBlock content={chunk} isStreaming />);
+
+      // No phantom <command-name> DOM element should ever appear
+      expect(document.querySelector('command-name')).toBeNull();
+    });
+
+    // Final transition to non-streaming should match the last streaming render
+    rerender(<MarkdownBlock content={chunks[chunks.length - 1]} isStreaming={false} />);
+
+    const finalCode = document.querySelector('code');
+    expect(finalCode?.textContent).toBe('<command-name>/compact</command-name>');
+    expect(document.querySelector('command-name')).toBeNull();
+  });
+
   it('preserves inline code with angle brackets from real error messages', () => {
     // Real pattern: error messages with type parameters like <T>
     const content = 'Use `Array<T>` or `Map<string, number>` for generic types.';
