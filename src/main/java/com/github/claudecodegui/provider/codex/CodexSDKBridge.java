@@ -360,6 +360,11 @@ public class CodexSDKBridge extends BaseSDKBridge {
             final List<File> tempImageFiles = new ArrayList<>();  // Track temp images for cleanup
 
             try {
+                LOG.info("[Codex] sendMessage start: channelId=" + channelId
+                        + ", cwd=" + cwd
+                        + ", model=" + model
+                        + ", permissionMode=" + permissionMode
+                        + ", threadId=" + threadId);
                 String accessMode = CodemossSettingsService.CODEX_RUNTIME_ACCESS_INACTIVE;
                 try {
                     accessMode = new CodemossSettingsService().getCodexRuntimeAccessMode();
@@ -370,6 +375,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                     String error = ClaudeCodeGuiBundle.message("error.codexLocalAccessNotAuthorized");
                     result.success = false;
                     result.error = error;
+                    LOG.warn("[Codex] Aborting sendMessage because local access is not authorized");
                     callback.onError(error);
                     return result;
                 }
@@ -381,6 +387,8 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 if (bridgeDir == null || !bridgeDir.exists()) {
                     result.success = false;
                     result.error = "Bridge directory not ready or invalid";
+                    LOG.warn("[Codex] Aborting sendMessage because bridge directory is not ready or invalid");
+                    callback.onError(result.error);
                     return result;
                 }
 
@@ -514,6 +522,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 Process process = null;
                 try {
                     process = pb.start();
+                    LOG.info("[Codex] Process started successfully");
                     processManager.registerProcess(channelId, process);
 
                     // Write to stdin
@@ -551,10 +560,12 @@ public class CodexSDKBridge extends BaseSDKBridge {
                     if (wasInterrupted) {
                         result.success = false;
                         result.error = "User interrupted";
+                        LOG.info("[Codex] Process interrupted by user");
                         callback.onComplete(result);
                     } else if (!hadSendError.get()) {
                         result.success = exitCode == 0;
                         if (result.success) {
+                            LOG.info("[Codex] Process completed successfully");
                             callback.onComplete(result);
                         } else {
                             String errorMsg = "Codex process exited with code: " + exitCode;
@@ -563,6 +574,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                                 errorMsg = errorMsg + " | Last error: " + nodeErr;
                             }
                             result.error = errorMsg;
+                            LOG.warn("[Codex] Process completed with error: " + errorMsg);
                             callback.onError(errorMsg);
                         }
                     }
@@ -577,6 +589,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
             } catch (Exception e) {
                 result.success = false;
                 result.error = e.getMessage();
+                LOG.error("[Codex] sendMessage failed", e);
                 callback.onError(e.getMessage());
                 cleanupTempImages(tempImageFiles);  // Cleanup temp image files on error
                 return result;

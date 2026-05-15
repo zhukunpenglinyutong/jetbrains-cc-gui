@@ -1,5 +1,6 @@
 package com.github.claudecodegui.util;
 
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.google.gson.JsonObject;
 import com.intellij.DynamicBundle;
 import com.intellij.openapi.diagnostic.Logger;
@@ -17,7 +18,7 @@ public class LanguageConfigService {
     /**
      * Map IDEA locale codes to i18n-supported language codes.
      * IDEA locale format: zh_CN, en, ja, ko, etc.
-     * Supported i18n languages: zh, en, zh-TW, hi, es, fr, ja, ru
+     * Supported i18n languages: zh, en, zh-TW, hi, es, fr, ja, ru, ko, pt-BR
      *
      * @param ideaLocale the IDEA Locale
      * @return the i18n language code
@@ -38,6 +39,10 @@ public class LanguageConfigService {
             return "zh";  // Simplified Chinese
         }
 
+        if ("pt".equals(language) && "BR".equals(country)) {
+            return "pt-BR";
+        }
+
         // Direct mapping for other languages
         switch (language) {
             case "en":
@@ -52,6 +57,8 @@ public class LanguageConfigService {
                 return "ja";
             case "ru":
                 return "ru";
+            case "ko":
+                return "ko";
             default:
                 // Unsupported language, fall back to English
                 LOG.info("[LanguageConfig] Unsupported language '" + language + "', falling back to English");
@@ -102,9 +109,14 @@ public class LanguageConfigService {
     /**
      * Get the current i18n language code.
      *
-     * @return the language code (zh, en, zh-TW, hi, es, fr, ja, ru)
+     * @return the language code (zh, en, zh-TW, hi, es, fr, ja, ru, ko, pt-BR)
      */
     public static String getCurrentLanguage() {
+        String syncedUiLanguage = getSyncedUiLanguage();
+        if (syncedUiLanguage != null && !syncedUiLanguage.isBlank()) {
+            return syncedUiLanguage;
+        }
+
         try {
             Locale currentLocale = DynamicBundle.getLocale();
             return mapIdeaLocaleToI18n(currentLocale);
@@ -112,5 +124,18 @@ public class LanguageConfigService {
             LOG.error("[LanguageConfig] Failed to get current language: " + e.getMessage());
             return "en";
         }
+    }
+
+    private static String getSyncedUiLanguage() {
+        try {
+            String uiLanguage = new CodemossSettingsService().getUiLanguage();
+            if (uiLanguage != null && !uiLanguage.isBlank()) {
+                LOG.debug("[LanguageConfig] Using synced UI language: " + uiLanguage);
+                return uiLanguage;
+            }
+        } catch (Exception e) {
+            LOG.debug("[LanguageConfig] Failed to read synced UI language: " + e.getMessage());
+        }
+        return null;
     }
 }

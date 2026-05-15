@@ -1,6 +1,8 @@
 package com.github.claudecodegui.settings;
 
+import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.util.PlatformUtils;
+import com.github.claudecodegui.util.LanguageConfigService;
 import com.google.gson.JsonObject;
 import org.junit.After;
 import org.junit.Test;
@@ -127,6 +129,45 @@ public class CodemossSettingsServiceCommitAiConfigTest {
         assertEquals("codex", commitAiConfig.get("provider").getAsString());
         assertEquals("gpt-5.5", commitAiConfig.getAsJsonObject("models").get("codex").getAsString());
         assertEquals("claude-opus-4-7", commitAiConfig.getAsJsonObject("models").get("claude").getAsString());
+    }
+
+    @Test
+    public void shouldPersistSyncedUiLanguage() throws Exception {
+        Path tempHome = Files.createTempDirectory("ui-language-home");
+        useTemporaryHomeDirectory(tempHome);
+        writeConfig(tempHome, "", "");
+
+        CodemossSettingsService service = new CodemossSettingsService();
+
+        service.setUiLanguage("zh");
+
+        assertEquals("zh", service.getUiLanguage());
+        assertEquals("zh", service.readConfig().get("uiLanguage").getAsString());
+    }
+
+    @Test
+    public void currentLanguageShouldPreferSyncedUiLanguage() throws Exception {
+        Path tempHome = Files.createTempDirectory("ui-language-current-home");
+        useTemporaryHomeDirectory(tempHome);
+        writeConfig(tempHome, "", "");
+
+        new CodemossSettingsService().setUiLanguage("zh");
+
+        assertEquals("zh", LanguageConfigService.getCurrentLanguage());
+    }
+
+    @Test
+    public void bundleShouldPreferSyncedUiLanguage() throws Exception {
+        Path tempHome = Files.createTempDirectory("ui-language-bundle-home");
+        useTemporaryHomeDirectory(tempHome);
+        writeConfig(tempHome, "", "");
+
+        new CodemossSettingsService().setUiLanguage("zh");
+
+        assertEquals(
+                "未选择文件变更。请先在 Changes 列表中勾选要用于生成提交信息的文件。",
+                ClaudeCodeGuiBundle.message("commit.noChanges")
+        );
     }
 
     private JsonObject invokeGetCommitAiConfig(CodemossSettingsService service) throws Exception {

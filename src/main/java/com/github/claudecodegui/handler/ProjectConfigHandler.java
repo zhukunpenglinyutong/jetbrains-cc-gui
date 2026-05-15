@@ -3,6 +3,7 @@ package com.github.claudecodegui.handler;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
+import com.github.claudecodegui.skill.CommitSkillResolver;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.action.SendShortcutSync;
 import com.github.claudecodegui.provider.claude.ClaudeHistoryReader;
@@ -323,6 +324,18 @@ public class ProjectConfigHandler {
         }
     }
 
+    public void handleSetUiLanguage(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            String language = readString(json, "language", "");
+            settingsService.setUiLanguage(language);
+            LOG.info("[ProjectConfigHandler] Set UI language: " + language);
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set UI language: " + e.getMessage(), e);
+            showError("Failed to save UI language: " + e.getMessage());
+        }
+    }
+
     public void handleGetPromptEnhancerConfig() {
         try {
             pushJson("window.updatePromptEnhancerConfig", settingsService.getPromptEnhancerConfig());
@@ -343,7 +356,14 @@ public class ProjectConfigHandler {
 
     public void handleGetCommitAiConfig() {
         try {
-            pushJson("window.updateCommitAiConfig", settingsService.getCommitAiConfig());
+            JsonObject config = settingsService.getCommitAiConfig();
+            String projectPath = context.getProject().getBasePath();
+            String provider = readString(config, "effectiveProvider", null);
+            if (provider == null) {
+                provider = readString(config, "provider", null);
+            }
+            config.add("availableSkills", CommitSkillResolver.buildAvailableSkills(projectPath, provider));
+            pushJson("window.updateCommitAiConfig", config);
         } catch (Exception e) {
             LOG.error("[ProjectConfigHandler] Failed to get commit AI config: " + e.getMessage(), e);
             showError(ClaudeCodeGuiBundle.message("projectConfig.commitAi.getFailed", e.getMessage()));
@@ -351,12 +371,23 @@ public class ProjectConfigHandler {
     }
 
     public void handleSetCommitAiConfig(String content) {
-        applyAiProviderConfig(content,
-            settingsService::setCommitAiConfig,
-            settingsService::getCommitAiConfig,
-            "window.updateCommitAiConfig",
-            "Failed to set commit AI config",
-            "projectConfig.commitAi.saveFailed");
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            String provider = readString(json, "provider", null);
+            JsonObject models = json != null && json.has("models") && json.get("models").isJsonObject()
+                    ? json.getAsJsonObject("models")
+                    : new JsonObject();
+            String claudeModel = readString(models, "claude", null);
+            String codexModel = readString(models, "codex", null);
+            String generationMode = readString(json, "generationMode", null);
+            String skillRef = readString(json, "skillRef", null);
+            String language = readString(json, "language", null);
+            settingsService.setCommitAiConfig(provider, claudeModel, codexModel, generationMode, skillRef, language);
+            handleGetCommitAiConfig();
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set commit AI config: " + e.getMessage(), e);
+            showError(ClaudeCodeGuiBundle.message("projectConfig.commitAi.saveFailed", e.getMessage()));
+        }
     }
 
     @FunctionalInterface

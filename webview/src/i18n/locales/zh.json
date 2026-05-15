@@ -185,6 +185,10 @@
       "promptEnhancer": {
         "label": "增强提示词",
         "modelLabel": "增强模型",
+        "otherModelOption": "其他模型",
+        "customModelLabel": "自定义模型",
+        "customModelPlaceholder": "输入自定义模型 ID",
+        "customModelHint": "选择「其他」后可填写代理站点或自定义模型 ID。",
         "resetToDefault": "恢复默认",
         "providerAvailable": "可用",
         "providerUnavailable": "当前不可用",
@@ -350,12 +354,44 @@
       "providerModel": {
         "label": "Commit 生成 Provider",
         "modelLabel": "Commit 生成模型",
+        "otherModelOption": "其他模型",
+        "customModelLabel": "自定义模型",
+        "customModelPlaceholder": "输入自定义模型 ID",
+        "customModelHint": "选择「其他」后可填写代理站点或自定义模型 ID。",
         "resetToDefault": "恢复默认",
         "providerAvailable": "可用",
         "providerUnavailable": "当前不可用",
         "currentProviderAuto": "当前使用自动选择：{{provider}}",
         "currentProviderManual": "当前使用手动选择的 provider：{{provider}}",
         "currentProviderUnavailable": "当前所选 provider 不可用：{{provider}}"
+      },
+      "generationMode": {
+        "label": "生成方式",
+        "modeLabel": "生成方式",
+        "prompt": "提示词",
+        "skill": "Skill",
+        "hint": "提示词方式保留当前内置 prompt 链路；Skill 方式会使用所选 Skill 作为提交信息规范。"
+      },
+      "language": {
+        "label": "Commit 语言",
+        "auto": "跟随 UI 语言",
+        "en": "English",
+        "zh": "简体中文",
+        "zhTW": "繁體中文",
+        "ko": "한국어",
+        "ja": "日本語",
+        "es": "Español",
+        "fr": "Français",
+        "hi": "हिन्दी",
+        "ru": "Русский",
+        "ptBR": "Português (Brasil)"
+      },
+      "skill": {
+        "label": "Commit Skill",
+        "builtinLabel": "内置：git-commit",
+        "builtinDescription": "内置的 commitlint 兼容提交信息规范。",
+        "missingDescription": "已选择的 Skill 当前不可用。",
+        "hint": "Skill 方式默认使用内置 git-commit，也可以选择扫描到的本地 Skill。"
       },
       "prompt": {
         "label": "附加提示词",

@@ -114,4 +114,41 @@ describe('AiFeatureProviderModelPanel', () => {
 
     expect(onModelChange).toHaveBeenCalledWith('gpt-5.4');
   });
+
+  it('shows custom model input when other is selected and forwards custom value changes', () => {
+    const onModelChange = vi.fn();
+
+    render(
+      <AiFeatureProviderModelPanel
+        config={{
+          ...config,
+          provider: 'claude',
+          effectiveProvider: 'claude',
+          resolutionSource: 'manual',
+          models: {
+            ...config.models,
+            claude: 'proxy-claude-sonnet',
+          },
+        }}
+        settingsKeyPrefix="settings.commit.providerModel"
+        providerKeyPrefix="settings.basic.promptEnhancer.provider"
+        onProviderChange={vi.fn()}
+        onModelChange={onModelChange}
+        onResetToDefault={vi.fn()}
+      />
+    );
+
+    const [providerSelect, modelSelect] = screen.getAllByRole('combobox');
+    expect(providerSelect).toBeTruthy();
+    expect((modelSelect as HTMLSelectElement).value).toBe('__other__');
+
+    const customInput = screen.getByRole('textbox', {
+      name: 'settings.commit.providerModel.customModelLabel',
+    });
+    expect((customInput as HTMLInputElement).value).toBe('proxy-claude-sonnet');
+
+    fireEvent.change(customInput, { target: { value: 'proxy-claude-sonnet-4-7' } });
+
+    expect(onModelChange).toHaveBeenLastCalledWith('proxy-claude-sonnet-4-7');
+  });
 });

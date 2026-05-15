@@ -181,6 +181,9 @@ const SettingsView = ({
     setCommitAiConfig,
     handleCommitAiProviderChange,
     handleCommitAiModelChange,
+    handleCommitGenerationModeChange,
+    handleCommitSkillChange,
+    handleCommitLanguageChange,
     handleCommitAiResetToDefault,
     handlePromptEnhancerProviderChange,
     handlePromptEnhancerModelChange,
@@ -556,6 +559,9 @@ const SettingsView = ({
               commitAiConfig={commitAiConfig}
               onCommitAiProviderChange={handleCommitAiProviderChange}
               onCommitAiModelChange={handleCommitAiModelChange}
+              onCommitGenerationModeChange={handleCommitGenerationModeChange}
+              onCommitSkillChange={handleCommitSkillChange}
+              onCommitLanguageChange={handleCommitLanguageChange}
               onCommitAiResetToDefault={handleCommitAiResetToDefault}
               commitPrompt={commitPrompt}
               projectCommitPrompt={projectCommitPrompt}

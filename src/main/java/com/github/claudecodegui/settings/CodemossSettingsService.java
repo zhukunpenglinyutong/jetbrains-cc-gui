@@ -37,9 +37,22 @@ public class CodemossSettingsService {
     private static final int CONFIG_VERSION = 2;
     private static final String CODEX_SANDBOX_MODE_WORKSPACE_WRITE = "workspace-write";
     private static final String CODEX_SANDBOX_MODE_DANGER_FULL_ACCESS = "danger-full-access";
+    private static final String UI_LANGUAGE_KEY = "uiLanguage";
     private static final String UI_FONT_CONFIG_KEY = "uiFont";
     private static final String UI_FONT_MODE_KEY = "mode";
     private static final String UI_FONT_CUSTOM_PATH_KEY = "customFontPath";
+    private static final Set<String> VALID_UI_LANGUAGES = Set.of(
+            "zh",
+            "zh-TW",
+            "en",
+            "hi",
+            "es",
+            "fr",
+            "ja",
+            "ru",
+            "ko",
+            "pt-BR"
+    );
     private static final Set<String> VALID_UI_FONT_MODES = Set.of(
             FontConfigService.UI_FONT_MODE_FOLLOW_EDITOR,
             FontConfigService.UI_FONT_MODE_CUSTOM_FILE
@@ -54,6 +67,12 @@ public class CodemossSettingsService {
     private static final String AI_FEATURE_EFFECTIVE_PROVIDER_KEY = "effectiveProvider";
     private static final String AI_FEATURE_RESOLUTION_SOURCE_KEY = "resolutionSource";
     private static final String AI_FEATURE_AVAILABILITY_KEY = "availability";
+    private static final String COMMIT_GENERATION_MODE_KEY = "generationMode";
+    private static final String COMMIT_SKILL_REF_KEY = "skillRef";
+    private static final String COMMIT_LANGUAGE_KEY = "language";
+    private static final String COMMIT_GENERATION_MODE_PROMPT = "prompt";
+    private static final String COMMIT_GENERATION_MODE_SKILL = "skill";
+    private static final String COMMIT_LANGUAGE_AUTO = "auto";
     private static final String AI_FEATURE_PROVIDER_CLAUDE = "claude";
     private static final String AI_FEATURE_PROVIDER_CODEX = "codex";
     private static final String AI_FEATURE_RESOLUTION_MANUAL = "manual";
@@ -438,6 +457,37 @@ public class CodemossSettingsService {
         LOG.info("[CodemossSettings] Set project commit prompt for project: " + projectPath);
     }
 
+    // ==================== UI Language Config Management ====================
+
+    /**
+     * Get the persisted Webview UI language.
+     *
+     * @return a supported i18n language code, or an empty string when not synced yet
+     */
+    public String getUiLanguage() throws IOException {
+        JsonObject config = readConfig();
+        if (!config.has(UI_LANGUAGE_KEY) || config.get(UI_LANGUAGE_KEY).isJsonNull()) {
+            return "";
+        }
+        return normalizeUiLanguage(config.get(UI_LANGUAGE_KEY).getAsString());
+    }
+
+    /**
+     * Persist the current Webview UI language so backend-only features can follow it.
+     *
+     * @param language current frontend i18n language code
+     */
+    public void setUiLanguage(String language) throws IOException {
+        String normalized = normalizeUiLanguage(language);
+        if (normalized.isEmpty()) {
+            return;
+        }
+        JsonObject config = readConfig();
+        config.addProperty(UI_LANGUAGE_KEY, normalized);
+        writeConfig(config);
+        LOG.debug("[CodemossSettings] Set UI language: " + normalized);
+    }
+
     // ==================== UI Font Config Management ====================
 
     /**
@@ -496,6 +546,14 @@ public class CodemossSettingsService {
         }
 
         return true;
+    }
+
+    private String normalizeUiLanguage(String language) {
+        if (language == null) {
+            return "";
+        }
+        String normalized = language.trim();
+        return VALID_UI_LANGUAGES.contains(normalized) ? normalized : "";
     }
 
     private JsonObject createDefaultUiFontConfig() {
@@ -1330,23 +1388,91 @@ public class CodemossSettingsService {
     }
 
     public JsonObject getCommitAiConfig() throws IOException {
-        return getAiFeatureConfig(
+        JsonObject config = getAiFeatureConfig(
                 COMMIT_AI_KEY,
                 DEFAULT_COMMIT_AI_CLAUDE_MODEL,
                 DEFAULT_COMMIT_AI_CODEX_MODEL
         );
+        JsonObject featureConfig = getAiFeatureRootObject(readConfig(), COMMIT_AI_KEY);
+        config.addProperty(
+                COMMIT_GENERATION_MODE_KEY,
+                normalizeCommitGenerationMode(
+                        featureConfig.has(COMMIT_GENERATION_MODE_KEY) && !featureConfig.get(COMMIT_GENERATION_MODE_KEY).isJsonNull()
+                                ? featureConfig.get(COMMIT_GENERATION_MODE_KEY).getAsString()
+                                : null
+                )
+        );
+        config.addProperty(
+                COMMIT_SKILL_REF_KEY,
+                normalizeCommitSkillRef(
+                        featureConfig.has(COMMIT_SKILL_REF_KEY) && !featureConfig.get(COMMIT_SKILL_REF_KEY).isJsonNull()
+                                ? featureConfig.get(COMMIT_SKILL_REF_KEY).getAsString()
+                                : null
+                )
+        );
+        config.addProperty(
+                COMMIT_LANGUAGE_KEY,
+                normalizeCommitLanguage(
+                        featureConfig.has(COMMIT_LANGUAGE_KEY) && !featureConfig.get(COMMIT_LANGUAGE_KEY).isJsonNull()
+                                ? featureConfig.get(COMMIT_LANGUAGE_KEY).getAsString()
+                                : null
+                )
+        );
+        return config;
     }
 
     public void setCommitAiConfig(String provider, String claudeModel, String codexModel) throws IOException {
-        setAiFeatureConfig(
-                COMMIT_AI_KEY,
-                provider,
-                claudeModel,
-                codexModel,
-                DEFAULT_COMMIT_AI_CLAUDE_MODEL,
-                DEFAULT_COMMIT_AI_CODEX_MODEL,
-                "commit AI"
+        setCommitAiConfig(provider, claudeModel, codexModel, null, null, null);
+    }
+
+    public void setCommitAiConfig(
+            String provider,
+            String claudeModel,
+            String codexModel,
+            String generationMode,
+            String skillRef,
+            String language
+    ) throws IOException {
+        JsonObject config = readConfig();
+        JsonObject featureConfig = getAiFeatureRootObject(config, COMMIT_AI_KEY);
+        String existingGenerationMode = featureConfig.has(COMMIT_GENERATION_MODE_KEY)
+                && !featureConfig.get(COMMIT_GENERATION_MODE_KEY).isJsonNull()
+                ? featureConfig.get(COMMIT_GENERATION_MODE_KEY).getAsString()
+                : null;
+        String existingSkillRef = featureConfig.has(COMMIT_SKILL_REF_KEY)
+                && !featureConfig.get(COMMIT_SKILL_REF_KEY).isJsonNull()
+                ? featureConfig.get(COMMIT_SKILL_REF_KEY).getAsString()
+                : null;
+        String existingLanguage = featureConfig.has(COMMIT_LANGUAGE_KEY)
+                && !featureConfig.get(COMMIT_LANGUAGE_KEY).isJsonNull()
+                ? featureConfig.get(COMMIT_LANGUAGE_KEY).getAsString()
+                : null;
+        String normalizedProvider = normalizeAiFeatureProvider(provider);
+        if (normalizedProvider == null) {
+            featureConfig.add(AI_FEATURE_PROVIDER_KEY, JsonNull.INSTANCE);
+        } else {
+            featureConfig.addProperty(AI_FEATURE_PROVIDER_KEY, normalizedProvider);
+        }
+        featureConfig.add(
+                AI_FEATURE_MODELS_KEY,
+                createAiFeatureModels(claudeModel, codexModel, DEFAULT_COMMIT_AI_CLAUDE_MODEL, DEFAULT_COMMIT_AI_CODEX_MODEL)
         );
+        String normalizedGenerationMode = normalizeCommitGenerationMode(
+                generationMode != null ? generationMode : existingGenerationMode
+        );
+        featureConfig.addProperty(COMMIT_GENERATION_MODE_KEY, normalizedGenerationMode);
+        featureConfig.addProperty(COMMIT_SKILL_REF_KEY, normalizeCommitSkillRef(
+                skillRef != null ? skillRef : existingSkillRef
+        ));
+        featureConfig.addProperty(COMMIT_LANGUAGE_KEY, normalizeCommitLanguage(
+                language != null ? language : existingLanguage
+        ));
+        config.add(COMMIT_AI_KEY, featureConfig);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set commit AI config: provider=" + normalizedProvider
+                + ", generationMode=" + normalizedGenerationMode
+                + ", skillRef=" + featureConfig.get(COMMIT_SKILL_REF_KEY).getAsString()
+                + ", language=" + featureConfig.get(COMMIT_LANGUAGE_KEY).getAsString());
     }
 
     private JsonObject getAiFeatureConfig(
@@ -1523,6 +1649,35 @@ public class CodemossSettingsService {
         }
         String normalized = model.trim();
         return normalized.isEmpty() ? defaultValue : normalized;
+    }
+
+    private String normalizeCommitGenerationMode(String generationMode) {
+        if (generationMode == null) {
+            return COMMIT_GENERATION_MODE_PROMPT;
+        }
+        String normalized = generationMode.trim().toLowerCase();
+        if (COMMIT_GENERATION_MODE_SKILL.equals(normalized)) {
+            return COMMIT_GENERATION_MODE_SKILL;
+        }
+        return COMMIT_GENERATION_MODE_PROMPT;
+    }
+
+    private String normalizeCommitSkillRef(String skillRef) {
+        if (skillRef == null) {
+            return com.github.claudecodegui.skill.CommitSkillResolver.BUILTIN_SKILL_REF;
+        }
+        String normalized = skillRef.trim();
+        return normalized.isEmpty()
+                ? com.github.claudecodegui.skill.CommitSkillResolver.BUILTIN_SKILL_REF
+                : normalized;
+    }
+
+    private String normalizeCommitLanguage(String language) {
+        if (language == null) {
+            return COMMIT_LANGUAGE_AUTO;
+        }
+        String normalized = language.trim();
+        return normalized.isEmpty() ? COMMIT_LANGUAGE_AUTO : normalized;
     }
 
     private static class ResolvedAiFeatureProvider {

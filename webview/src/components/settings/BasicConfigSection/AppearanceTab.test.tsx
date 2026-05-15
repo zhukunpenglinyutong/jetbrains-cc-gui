@@ -1,8 +1,12 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AppearanceTab from './AppearanceTab';
 
 vi.mock('react-i18next', () => ({
+  initReactI18next: {
+    type: '3rdParty',
+    init: vi.fn(),
+  },
   useTranslation: () => ({
     t: (key: string) => key,
     i18n: {
@@ -13,6 +17,11 @@ vi.mock('react-i18next', () => ({
 }));
 
 describe('AppearanceTab ui font selector', () => {
+  beforeEach(() => {
+    window.sendToJava = vi.fn();
+    localStorage.clear();
+  });
+
   it('renders only follow-editor and custom options, plus custom path controls for custom mode', () => {
     const props = {
       theme: 'dark',
@@ -89,5 +98,26 @@ describe('AppearanceTab ui font selector', () => {
 
     expect(onUiFontSelectionChange).toHaveBeenCalledTimes(1);
     expect(onUiFontSelectionChange).toHaveBeenCalledWith('customFile');
+  });
+
+  it('syncs manual UI language changes to the Java backend', () => {
+    render(
+      <AppearanceTab
+        {...({
+          theme: 'dark',
+          onThemeChange: vi.fn(),
+          fontSizeLevel: 3,
+          onFontSizeLevelChange: vi.fn(),
+        } as any)}
+      />
+    );
+
+    fireEvent.change(screen.getByDisplayValue('settings.basic.language.simplifiedChinese'), {
+      target: { value: 'ja' },
+    });
+
+    expect(localStorage.getItem('language')).toBe('ja');
+    expect(localStorage.getItem('languageManuallySet')).toBe('true');
+    expect(window.sendToJava).toHaveBeenCalledWith('set_ui_language:{"language":"ja"}');
   });
 });
