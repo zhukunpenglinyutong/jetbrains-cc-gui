@@ -410,9 +410,19 @@ export function useMessageSender({
   }, [checkNewSessionCommand, checkLocalCommand, checkContextCommand, checkUnimplementedCommand, executeMessage]);
 
   /**
-   * Interrupt the current session
+   * Interrupt the current session.
+   *
+   * Calls the canonical onStreamEnd callback to atomically clean up all
+   * streaming state (refs, buffers, turn tracking) and stamps
+   * __streamEndProcessedTurnId so the backend's delayed onStreamEnd
+   * (from handleInterruptSession) becomes a no-op via the idempotency guard.
    */
   const interruptSession = useCallback(() => {
+    if (typeof window.onStreamEnd === 'function') {
+      window.onStreamEnd();
+    }
+    // Safety net: ensure loading/streaming are reset even when onStreamEnd
+    // ran in 'skip' mode (no active streaming turn to end).
     setLoading(false);
     setLoadingStartTime(null);
     setStreamingActive(false);
