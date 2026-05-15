@@ -59,13 +59,15 @@ public class DaemonBridgeTest {
     }
 
     @Test
-    public void sendAbortOnlyCompletesActiveRequestAndKeepsQueuedRequestsRegistered() throws Exception {
+    public void sendAbortCompletesActiveAndQueuedRequestsForSameChannelOnly() throws Exception {
         DaemonBridge bridge = new DaemonBridge(null, null, null);
 
         AtomicBoolean activeAborted = new AtomicBoolean(false);
         AtomicBoolean queuedAborted = new AtomicBoolean(false);
+        AtomicBoolean otherChannelAborted = new AtomicBoolean(false);
         CompletableFuture<Boolean> activeFuture = new CompletableFuture<>();
         CompletableFuture<Boolean> queuedFuture = new CompletableFuture<>();
+        CompletableFuture<Boolean> otherChannelFuture = new CompletableFuture<>();
 
         setAtomicBooleanField(bridge, "isRunning", true);
         setField(bridge, "daemonStdin", new BufferedWriter(
@@ -75,20 +77,26 @@ public class DaemonBridgeTest {
         @SuppressWarnings("unchecked")
         ConcurrentHashMap<String, Object> pendingRequests =
                 (ConcurrentHashMap<String, Object>) getField(bridge, "pendingRequests");
-        pendingRequests.put("1", createRequestHandler("1", callback(activeAborted), activeFuture));
-        pendingRequests.put("2", createRequestHandler("2", callback(queuedAborted), queuedFuture));
+        pendingRequests.put("1", createRequestHandler("1", "channel-a", callback(activeAborted), activeFuture));
+        pendingRequests.put("2", createRequestHandler("2", "channel-a", callback(queuedAborted), queuedFuture));
+        pendingRequests.put("3", createRequestHandler("3", "channel-b", callback(otherChannelAborted), otherChannelFuture));
 
         invokeHandleDaemonOutput(bridge, "{\"type\":\"daemon\",\"event\":\"queue_started\",\"requestId\":\"1\"}");
-        bridge.sendAbort();
+        bridge.sendAbort("channel-a");
 
         assertTrue(activeAborted.get());
         assertTrue(activeFuture.isDone());
         assertEquals(Boolean.FALSE, activeFuture.getNow(Boolean.TRUE));
 
-        assertFalse(queuedAborted.get());
-        assertFalse(queuedFuture.isDone());
-        assertTrue(pendingRequests.containsKey("2"));
+        assertTrue(queuedAborted.get());
+        assertTrue(queuedFuture.isDone());
+        assertEquals(Boolean.FALSE, queuedFuture.getNow(Boolean.TRUE));
+
+        assertFalse(otherChannelAborted.get());
+        assertFalse(otherChannelFuture.isDone());
         assertFalse(pendingRequests.containsKey("1"));
+        assertFalse(pendingRequests.containsKey("2"));
+        assertTrue(pendingRequests.containsKey("3"));
 
         @SuppressWarnings("unchecked")
         AtomicReference<String> activeRequestId =
@@ -123,14 +131,15 @@ public class DaemonBridgeTest {
 
     private static Object createRequestHandler(
             String requestId,
+            String channelId,
             DaemonBridge.DaemonOutputCallback callback,
             CompletableFuture<Boolean> future
     ) throws Exception {
         Class<?> handlerClass = findRequestHandlerClass();
         Constructor<?> constructor =
-                handlerClass.getDeclaredConstructor(String.class, DaemonBridge.DaemonOutputCallback.class, CompletableFuture.class);
+                handlerClass.getDeclaredConstructor(String.class, String.class, DaemonBridge.DaemonOutputCallback.class, CompletableFuture.class);
         constructor.setAccessible(true);
-        return constructor.newInstance(requestId, callback, future);
+        return constructor.newInstance(requestId, channelId, callback, future);
     }
 
     private static Class<?> findRequestHandlerClass() {

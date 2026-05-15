@@ -118,6 +118,10 @@ class CodexDaemonRequestExecutor {
                             @Override
                             public void onAbort() {
                                 wasAborted.set(true);
+                                callback.onQueueDisplayStateChanged(
+                                        ClaudeSession.SessionCallback.QueueDisplayState.NONE,
+                                        0
+                                );
                             }
 
                             @Override

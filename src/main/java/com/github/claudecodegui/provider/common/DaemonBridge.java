@@ -11,7 +11,7 @@ import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.util.Comparator;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
@@ -262,12 +262,19 @@ public class DaemonBridge {
      * without dropping queued follow-up requests.
      */
     public void sendAbort() {
+        sendAbort(null);
+    }
+
+    public void sendAbort(String channelId) {
         // Send abort command to daemon so it stops the active SDK query
         try {
             if (daemonStdin != null && isRunning.get()) {
                 JsonObject abort = new JsonObject();
                 abort.addProperty("id", "abort-" + System.currentTimeMillis());
                 abort.addProperty("method", "abort");
+                if (channelId != null && !channelId.isBlank()) {
+                    abort.addProperty("channelId", channelId);
+                }
                 synchronized (daemonStdin) {
                     daemonStdin.write(abort.toString());
                     daemonStdin.newLine();
@@ -279,23 +286,13 @@ public class DaemonBridge {
             LOG.debug("[DaemonBridge] Error sending abort command: " + e.getMessage());
         }
 
-        String targetRequestId = resolveAbortTargetRequestId();
-        if (targetRequestId == null) {
+        int abortedCount = abortPendingRequests(channelId);
+        if (abortedCount == 0) {
             LOG.info("[DaemonBridge] No pending daemon request matched abort");
             return;
         }
-
-        RequestHandler targetHandler = pendingRequests.remove(targetRequestId);
-        if (targetHandler == null) {
-            LOG.info("[DaemonBridge] Abort target already cleared: " + targetRequestId);
-            activeRequestId.compareAndSet(targetRequestId, null);
-            return;
-        }
-
-        // Only complete the active request locally. Queued requests must stay registered
-        // so their later queue_started/output events still reach the correct tab.
-        activeRequestId.compareAndSet(targetRequestId, null);
-        targetHandler.onAbort();
+        LOG.info("[DaemonBridge] Aborted " + abortedCount + " pending daemon request(s)"
+                + (channelId != null && !channelId.isBlank() ? " for channel " + channelId : ""));
     }
 
     /**
@@ -344,7 +341,8 @@ public class DaemonBridge {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         boolean countsAsActiveRequest = !"heartbeat".equals(method) && !"status".equals(method);
 
-        RequestHandler handler = new RequestHandler(requestId, callback, future);
+        String channelId = extractChannelId(params);
+        RequestHandler handler = new RequestHandler(requestId, channelId, callback, future);
         pendingRequests.put(requestId, handler);
         if (countsAsActiveRequest) {
             activeRequestCount.incrementAndGet();
@@ -354,7 +352,7 @@ public class DaemonBridge {
         // Ensure cleanup when future completes (e.g., via timeout or cancellation)
         future.whenComplete((result, ex) -> {
             pendingRequests.remove(requestId);
-            activeRequestId.compareAndSet(requestId, null);
+            clearActiveRequestId(requestId);
             if (countsAsActiveRequest) {
                 activeRequestCount.updateAndGet(current -> Math.max(0, current - 1));
             }
@@ -528,7 +526,7 @@ public class DaemonBridge {
                 if (!success && obj.has("error")) {
                     handler.onError(obj.get("error").getAsString());
                 }
-                activeRequestId.compareAndSet(id, null);
+                clearActiveRequestId(id);
                 handler.onComplete(success);
                 pendingRequests.remove(id);
                 return;
@@ -605,7 +603,7 @@ public class DaemonBridge {
                 if ("queue_started".equals(event) && requestId != null) {
                     activeRequestId.set(requestId);
                 } else if ("queue_cleared".equals(event) && requestId != null) {
-                    activeRequestId.compareAndSet(requestId, null);
+                    clearActiveRequestId(requestId);
                 }
                 if (requestId != null) {
                     RequestHandler handler = pendingRequests.get(requestId);
@@ -724,26 +722,52 @@ public class DaemonBridge {
         lastDaemonActivity.set(System.currentTimeMillis());
     }
 
-    private String resolveAbortTargetRequestId() {
-        String currentActiveId = activeRequestId.get();
-        if (currentActiveId != null && pendingRequests.containsKey(currentActiveId)) {
-            return currentActiveId;
+    private int abortPendingRequests(String channelId) {
+        String targetChannelId = normalizeChannelId(channelId);
+        int abortedCount = 0;
+        List<RequestHandler> abortTargets = new ArrayList<>();
+        for (RequestHandler handler : pendingRequests.values()) {
+            if (targetChannelId != null && !targetChannelId.equals(handler.channelId)) {
+                continue;
+            }
+            abortTargets.add(handler);
         }
-
-        return pendingRequests.values().stream()
-                .min(Comparator.comparingLong(handler -> parseRequestSequence(handler.requestId)))
-                .map(handler -> handler.requestId)
-                .orElse(null);
+        for (RequestHandler handler : abortTargets) {
+            if (pendingRequests.remove(handler.requestId, handler)) {
+                clearActiveRequestId(handler.requestId);
+                handler.onAbort();
+                abortedCount++;
+            }
+        }
+        return abortedCount;
     }
 
-    private static long parseRequestSequence(String requestId) {
-        if (requestId == null) {
-            return Long.MAX_VALUE;
+    private static String extractChannelId(JsonObject params) {
+        if (params == null || !params.has("channelId") || params.get("channelId").isJsonNull()) {
+            return null;
         }
         try {
-            return Long.parseLong(requestId);
-        } catch (NumberFormatException ignored) {
-            return Long.MAX_VALUE;
+            return normalizeChannelId(params.get("channelId").getAsString());
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static String normalizeChannelId(String channelId) {
+        if (channelId == null) {
+            return null;
+        }
+        String trimmed = channelId.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private void clearActiveRequestId(String requestId) {
+        if (requestId == null) {
+            return;
+        }
+        String current = activeRequestId.get();
+        if (requestId.equals(current)) {
+            activeRequestId.set(null);
         }
     }
 
@@ -793,11 +817,13 @@ public class DaemonBridge {
      */
     private static class RequestHandler {
         final String requestId;
+        final String channelId;
         final DaemonOutputCallback callback;
         final CompletableFuture<Boolean> future;
 
-        RequestHandler(String requestId, DaemonOutputCallback callback, CompletableFuture<Boolean> future) {
+        RequestHandler(String requestId, String channelId, DaemonOutputCallback callback, CompletableFuture<Boolean> future) {
             this.requestId = requestId;
+            this.channelId = channelId;
             this.callback = callback;
             this.future = future;
         }

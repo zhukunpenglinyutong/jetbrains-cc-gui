@@ -125,7 +125,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
         if (db != null && db.isAlive()) {
             LOG.info("[CodexSDKBridge] Sending daemon abort for channel: " + channelId);
             try {
-                db.sendAbort();
+                db.sendAbort(channelId);
             } catch (Exception e) {
                 LOG.error("[CodexSDKBridge] Daemon abort failed: " + e.getMessage());
             }
@@ -431,6 +431,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 // Note: Codex uses 'threadId' (not 'sessionId')
                 JsonObject stdinInput = new JsonObject();
                 stdinInput.addProperty("message", finalMessage);
+                stdinInput.addProperty("channelId", channelId != null ? channelId : "");
                 stdinInput.addProperty("threadId", threadId != null ? threadId : "");
                 stdinInput.addProperty("cwd", cwd != null ? cwd : "");
                 stdinInput.addProperty("permissionMode", permissionMode != null ? permissionMode : "");
@@ -666,6 +667,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
         final List<File> tempImageFiles = new ArrayList<>();
         JsonObject stdinInput = new JsonObject();
         stdinInput.addProperty("message", finalMessage);
+        stdinInput.addProperty("channelId", channelId != null ? channelId : "");
         stdinInput.addProperty("threadId", threadId != null ? threadId : "");
         stdinInput.addProperty("cwd", cwd != null ? cwd : "");
         stdinInput.addProperty("permissionMode", permissionMode != null ? permissionMode : "");
