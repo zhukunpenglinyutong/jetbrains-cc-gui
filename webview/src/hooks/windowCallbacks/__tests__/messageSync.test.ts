@@ -8,6 +8,7 @@ import {
   getStreamEndHandlingMode,
   getRawUuid,
   preserveLastAssistantIdentity,
+  preserveLatestMessagesOnShrink,
   preserveMessageIdentity,
   preserveStreamingAssistantContent,
   stripDuplicateTrailingToolMessages,
@@ -532,8 +533,7 @@ describe('preserveStreamingAssistantContent', () => {
 // ---------------------------------------------------------------------------
 
 describe('preserveLatestMessagesOnShrink', () => {
-  it('does not re-append a duplicated Codex user tail when backend already contains the same user message', async () => {
-    const { preserveLatestMessagesOnShrink } = await import('../messageSync');
+  it('does not re-append a duplicated Codex user tail when backend already contains the same user message', () => {
     const earlier = makeUserMsg('older history');
     const confirmed = makeUserMsg('resume first prompt', { timestamp: '1746600000000' });
     const optimisticDuplicate = makeUserMsg('resume first prompt', {
@@ -549,6 +549,28 @@ describe('preserveLatestMessagesOnShrink', () => {
 
     expect(result).toHaveLength(2);
     expect(result[1]).toBe(confirmed);
+  });
+
+  it('deduplicates repeated user messages inside a preserved Claude tail after interrupt shrink', () => {
+    const confirmed = makeUserMsg('测试', { timestamp: '2026-05-15T12:24:00.000Z' });
+    const firstLocalTail = makeUserMsg('嘻嘻', {
+      timestamp: '2026-05-15T12:24:10.000Z',
+      isOptimistic: true,
+    });
+    const duplicatedLocalTail = makeUserMsg('嘻嘻', {
+      timestamp: '2026-05-15T12:24:11.000Z',
+      isOptimistic: true,
+    });
+
+    const result = preserveLatestMessagesOnShrink(
+      [confirmed, firstLocalTail, duplicatedLocalTail],
+      [confirmed],
+      'claude',
+    );
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toBe(confirmed);
+    expect(result[1]).toBe(firstLocalTail);
   });
 });
 

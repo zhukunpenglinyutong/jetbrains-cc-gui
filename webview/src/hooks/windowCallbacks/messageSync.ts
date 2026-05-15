@@ -546,30 +546,35 @@ export const preserveLatestMessagesOnShrink = (
     return nextList;
   }
 
-  if (provider === 'codex') {
-    const confirmedUserContents = new Set(
-      nextList
-        .filter((msg) => msg.type === 'user')
-        .map((msg) => getUserMessageComparableContent(msg))
-        .filter((content) => content.trim().length > 0),
-    );
-    const duplicateSafeTail = preservedTail.filter((msg) => {
-      if (msg.type !== 'user') {
-        return true;
-      }
-      const comparable = getUserMessageComparableContent(msg);
-      if (!comparable.trim()) {
-        return true;
-      }
-      return !confirmedUserContents.has(comparable);
-    });
-    if (duplicateSafeTail.length === 0) {
-      return nextList;
+  // Deduplicate user messages: remove tail user messages whose content
+  // already appears in nextList. This prevents duplicate user bubbles
+  // when an optimistic message was preserved but the backend snapshot
+  // now includes the confirmed user message.
+  const confirmedUserContents = new Set(
+    nextList
+      .filter((msg) => msg.type === 'user')
+      .map((msg) => getUserMessageComparableContent(msg))
+      .filter((content) => content.trim().length > 0),
+  );
+  const preservedUserContents = new Set<string>();
+  const duplicateSafeTail = preservedTail.filter((msg) => {
+    if (msg.type !== 'user') {
+      return true;
     }
-    return [...nextList, ...duplicateSafeTail];
+    const comparable = getUserMessageComparableContent(msg);
+    if (!comparable.trim()) {
+      return true;
+    }
+    if (confirmedUserContents.has(comparable) || preservedUserContents.has(comparable)) {
+      return false;
+    }
+    preservedUserContents.add(comparable);
+    return true;
+  });
+  if (duplicateSafeTail.length === 0) {
+    return nextList;
   }
-
-  return [...nextList, ...preservedTail];
+  return [...nextList, ...duplicateSafeTail];
 };
 
 // ---------------------------------------------------------------------------

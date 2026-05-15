@@ -25,6 +25,19 @@ import { parseSequence } from '../parseSequence';
 
 const isTruthy = (v: unknown) => v === true || v === 'true';
 
+const getComparableUserContent = (message: ClaudeMessage): string => {
+  if (message.type !== 'user') return '';
+  const rawContent = (message.raw as any)?.message?.content ?? (message.raw as any)?.content;
+  if (!Array.isArray(rawContent)) {
+    return message.content || '';
+  }
+  const rawText = rawContent
+    .filter((block: any) => block && typeof block === 'object' && block.type === 'text' && typeof block.text === 'string')
+    .map((block: any) => block.text)
+    .join('\n');
+  return rawText || message.content || '';
+};
+
 /**
  * Build a lightweight string signature from non-text raw blocks so we can
  * cheaply detect structural changes (new tool_use/tool_result blocks) without
@@ -676,7 +689,16 @@ export function registerMessageCallbacks(
       content: content || '',
       timestamp: new Date().toISOString(),
     };
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages((prev) => {
+      const comparable = (content || '').trim();
+      if (comparable) {
+        const duplicate = prev.some((message) =>
+          message.type === 'user' && getComparableUserContent(message).trim() === comparable
+        );
+        if (duplicate) return prev;
+      }
+      return [...prev, userMessage];
+    });
     userPausedRef.current = false;
     isUserAtBottomRef.current = true;
     requestAnimationFrame(() => {

@@ -140,6 +140,29 @@ describe('useWindowCallbacks integration', () => {
     expect(opts.setQueueAheadCount).toHaveBeenCalledWith(0);
   });
 
+  it('addUserMessage ignores duplicate user content already present locally', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.addUserMessage?.('嘻嘻');
+    });
+
+    expect(opts.setMessages).toHaveBeenCalledTimes(1);
+    const updater = (opts.setMessages as any).mock.calls[0][0] as (prev: ClaudeMessage[]) => ClaudeMessage[];
+    const existing: ClaudeMessage[] = [
+      {
+        type: 'user',
+        content: '嘻嘻',
+        timestamp: '2026-05-15T12:24:00.000Z',
+        isOptimistic: true,
+        raw: { message: { content: [{ type: 'text', text: '嘻嘻' }] } } as any,
+      },
+    ];
+
+    expect(updater(existing)).toBe(existing);
+  });
+
   it('historyLoadComplete shows pending session transition toast', () => {
     const opts = createOptions();
     renderHook(() => useWindowCallbacks(opts));
