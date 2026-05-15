@@ -89,7 +89,16 @@
     "attachmentsUploaded": "[अटैचमेंट अपलोड हो गए]",
     "streamingConnected": "{{provider}} कनेक्ट हो गया, आपके प्रश्न को समझ रहा है",
     "showEarlierMessages": "{{count}} पुराने संदेश दिखाएं",
-    "totalDuration": "इस जवाब में लगा समय"
+    "totalDuration": "इस जवाब में लगा समय",
+    "compactSummary": {
+      "summarizedConversation": "सारांशित वार्तालाप",
+      "compactSummary": "संक्षिप्त सारांश",
+      "messagesUpTo": "इस बिंदु तक के {{count}} संदेश सारांशित किए गए",
+      "messagesFrom": "इस बिंदु से आगे के {{count}} संदेश सारांशित किए गए",
+      "userContext": "संदर्भ: \"{{context}}\"",
+      "expand": "सारांश विस्तृत करें",
+      "collapse": "सारांश संक्षिप्त करें"
+    }
   },
   "settings": {
     "title": "सेटिंग्स",

@@ -89,7 +89,16 @@
     "attachmentsUploaded": "[添付ファイルがアップロードされました]",
     "streamingConnected": "{{provider}}に接続しました、質問を理解しています",
     "showEarlierMessages": "以前の{{count}}件のメッセージを表示",
-    "totalDuration": "今回の応答時間"
+    "totalDuration": "今回の応答時間",
+    "compactSummary": {
+      "summarizedConversation": "要約された会話",
+      "compactSummary": "会話の要約",
+      "messagesUpTo": "この時点までの{{count}}件のメッセージを要約しました",
+      "messagesFrom": "この時点以降の{{count}}件のメッセージを要約しました",
+      "userContext": "コンテキスト：「{{context}}」",
+      "expand": "要約を展開",
+      "collapse": "要約を折りたたむ"
+    }
   },
   "settings": {
     "title": "設定",

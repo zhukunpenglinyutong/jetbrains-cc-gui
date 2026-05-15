@@ -89,7 +89,16 @@
     "attachmentsUploaded": "[Archivos adjuntos cargados]",
     "streamingConnected": "{{provider}} conectado, entendiendo tu pregunta",
     "showEarlierMessages": "Mostrar {{count}} mensajes anteriores",
-    "totalDuration": "Esta respuesta tardó"
+    "totalDuration": "Esta respuesta tardó",
+    "compactSummary": {
+      "summarizedConversation": "Conversación resumida",
+      "compactSummary": "Resumen compacto",
+      "messagesUpTo": "Se resumieron {{count}} mensajes hasta este punto",
+      "messagesFrom": "Se resumieron {{count}} mensajes desde este punto",
+      "userContext": "Contexto: \"{{context}}\"",
+      "expand": "Expandir resumen",
+      "collapse": "Contraer resumen"
+    }
   },
   "settings": {
     "title": "Configuración",
