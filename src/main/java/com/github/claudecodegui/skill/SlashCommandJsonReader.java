@@ -10,6 +10,7 @@ import org.snakeyaml.engine.v2.api.LoadSettings;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
@@ -24,7 +25,13 @@ final class SlashCommandJsonReader {
     }
 
     static JsonObject readJsonObject(Path path) {
-        if (path == null || !Files.isRegularFile(path)) {
+        if (path == null) {
+            return null;
+        }
+        // Normalize so IntelliJ's MultiRoutingFileSystemProvider can resolve the path
+        path = path.toAbsolutePath().normalize();
+
+        if (!Files.isRegularFile(path)) {
             return null;
         }
 
@@ -34,8 +41,10 @@ final class SlashCommandJsonReader {
                 LOG.warn("JSON file too large, skipping: " + path + " (" + size + " bytes)");
                 return null;
             }
-        } catch (IOException e) {
+        } catch (NoSuchFileException e) {
             return null;
+        } catch (IOException e) {
+            LOG.debug("Cannot check size for JSON file: " + path);
         }
 
         try (var reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
@@ -43,6 +52,8 @@ final class SlashCommandJsonReader {
             if (parsed != null && parsed.isJsonObject()) {
                 return parsed.getAsJsonObject();
             }
+        } catch (NoSuchFileException e) {
+            // Expected when the file does not exist
         } catch (Exception e) {
             LOG.debug("Failed to read JSON: " + path);
         }

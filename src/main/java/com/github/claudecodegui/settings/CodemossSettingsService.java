@@ -63,6 +63,7 @@ public class CodemossSettingsService {
     private static final String DEFAULT_PROMPT_ENHANCER_CODEX_MODEL = "gpt-5.5";
     private static final String DEFAULT_COMMIT_AI_CLAUDE_MODEL = "claude-sonnet-4-6";
     private static final String DEFAULT_COMMIT_AI_CODEX_MODEL = "gpt-5.5";
+    private static final String USER_LANGUAGE_CONFIG_KEY = "language";
 
     private final Gson gson;
 
@@ -279,6 +280,44 @@ public class CodemossSettingsService {
         config.add("codex", codex);
 
         return config;
+    }
+
+    // ==================== Language Config Management ====================
+
+    /**
+     * Get the manually configured UI language.
+     *
+     * @return configured language code, or null when the UI should follow the IDE language
+     */
+    public String getUserLanguage() throws IOException {
+        JsonObject config = readConfig();
+        if (!config.has(USER_LANGUAGE_CONFIG_KEY) || config.get(USER_LANGUAGE_CONFIG_KEY).isJsonNull()) {
+            return null;
+        }
+        String language = config.get(USER_LANGUAGE_CONFIG_KEY).getAsString();
+        return language == null || language.trim().isEmpty() ? null : language.trim();
+    }
+
+    /**
+     * Persist the manually configured UI language.
+     *
+     * @param language supported UI language code
+     */
+    public void setUserLanguage(String language) throws IOException {
+        JsonObject config = readConfig();
+        config.addProperty(USER_LANGUAGE_CONFIG_KEY, language);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set user language: " + language);
+    }
+
+    /**
+     * Clear the manual UI language override so the webview follows the IDE language.
+     */
+    public void clearUserLanguage() throws IOException {
+        JsonObject config = readConfig();
+        config.remove(USER_LANGUAGE_CONFIG_KEY);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Cleared user language override");
     }
 
     // ==================== Claude Settings Management ====================

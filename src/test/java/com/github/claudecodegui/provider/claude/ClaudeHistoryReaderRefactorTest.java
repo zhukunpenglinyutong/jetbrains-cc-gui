@@ -41,7 +41,8 @@ public class ClaudeHistoryReaderRefactorTest {
             assertEquals(1, stats.dailyUsage.size());
             assertEquals(400, stats.dailyUsage.get(0).usage.cacheWriteTokens);
             assertEquals(50, stats.dailyUsage.get(0).usage.cacheReadTokens);
-            assertEquals(0.007265, stats.estimatedCost, 0.0000001);
+            // 1000*3.0 + 250*15.0 + 400*3.75 + 50*0.30 (all /1M) = 0.008265
+            assertEquals(0.008265, stats.estimatedCost, 0.0000001);
             assertFalse(stats.byModel.isEmpty());
         } finally {
             deleteDirectory(projectsDir);

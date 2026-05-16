@@ -1,18 +1,65 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import AppearanceTab from './AppearanceTab';
+
+const changeLanguageMock = vi.fn();
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
     i18n: {
       language: 'zh',
-      changeLanguage: vi.fn(),
+      changeLanguage: changeLanguageMock,
     },
   }),
 }));
 
 describe('AppearanceTab ui font selector', () => {
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it('clears the manual language override when selecting follow IDE', () => {
+    const sendToJava = vi.fn();
+    window.sendToJava = sendToJava;
+    localStorage.setItem('languageSelectionMode', 'manual');
+
+    render(
+      <AppearanceTab
+        {...({
+          theme: 'dark',
+          onThemeChange: vi.fn(),
+          fontSizeLevel: 3,
+          onFontSizeLevelChange: vi.fn(),
+          editorFontConfig: {
+            fontFamily: 'Monaco',
+            fontSize: 14,
+            lineSpacing: 1.35,
+          },
+          uiFontConfig: {
+            mode: 'followEditor',
+            effectiveMode: 'followEditor',
+            fontFamily: 'Monaco',
+            fontSize: 14,
+            lineSpacing: 1.35,
+          },
+          onUiFontSelectionChange: vi.fn(),
+          onUiFontCustomPathChange: vi.fn(),
+          onSaveUiFontCustomPath: vi.fn(),
+          onBrowseUiFontFile: vi.fn(),
+        } as any)}
+      />
+    );
+
+    fireEvent.change(screen.getAllByRole('combobox')[0], {
+      target: { value: '__follow_idea__' },
+    });
+
+    expect(localStorage.getItem('languageSelectionMode')).toBe('followIdea');
+    expect(sendToJava).toHaveBeenCalledWith('clear_user_language:');
+    expect(changeLanguageMock).not.toHaveBeenCalled();
+  });
+
   it('renders only follow-editor and custom options, plus custom path controls for custom mode', () => {
     const props = {
       theme: 'dark',

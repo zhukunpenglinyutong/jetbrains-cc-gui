@@ -389,31 +389,42 @@ if (window.__pendingUiFontConfig) {
 }
 
 /**
- * Apply IDEA language configuration to i18n
- * Only applies IDEA language if user hasn't manually set a language preference
+ * Apply language configuration to i18n
+ * Supports both direct objects (startup injection) and JSON strings (bridge callbacks).
  */
-function applyLanguageConfig(config: { language: string; ideaLocale?: string }) {
-  const { language } = config;
+function applyLanguageConfig(rawConfig: { language: string; source?: string; ideaLocale?: string } | string) {
+  let config: { language: string; source?: string; ideaLocale?: string };
 
-  // Check if user has manually set a language preference
-  const manuallySet = localStorage.getItem('languageManuallySet') === 'true';
-  if (manuallySet) {
-    debugLog('[Main] User has manually set language preference, skipping IDEA language config');
-    return;
+  if (typeof rawConfig === 'string') {
+    try {
+      config = JSON.parse(rawConfig) as { language: string; source?: string; ideaLocale?: string };
+    } catch (error) {
+      console.error('[Main] Failed to parse language config:', error, rawConfig);
+      return;
+    }
+  } else {
+    config = rawConfig;
   }
 
+  const { language, source } = config;
+
   // Validate that the language code is supported
-  const supportedLanguages = ['zh', 'en', 'zh-TW', 'hi', 'es', 'fr', 'ja', 'ru'];
+  const supportedLanguages = ['zh', 'en', 'zh-TW', 'hi', 'es', 'fr', 'ja', 'ru', 'ko', 'pt-BR'];
   const targetLanguage = supportedLanguages.includes(language) ? language : 'en';
 
-  debugLog('[Main] Applying IDEA language config:', config, 'target language:', targetLanguage);
+  debugLog('[Main] Applying language config:', config, 'target language:', targetLanguage, 'source:', source);
 
-  // Switch i18n language
   i18n.changeLanguage(targetLanguage)
     .then(() => {
-      // Persist to localStorage so it's available on next launch
       localStorage.setItem('language', targetLanguage);
-      debugLog('[Main] Language changed successfully to:', targetLanguage);
+      if (source === 'user') {
+        localStorage.setItem('languageSelectionMode', 'manual');
+      } else {
+        localStorage.setItem('languageSelectionMode', 'followIdea');
+      }
+      // Migrate from legacy 'languageManuallySet' key to 'languageSelectionMode'
+      localStorage.removeItem('languageManuallySet');
+      debugLog('[Main] Applied language:', targetLanguage, 'source:', source ?? 'idea');
     })
     .catch((error) => {
       console.error('[Main] Failed to change language:', error);
