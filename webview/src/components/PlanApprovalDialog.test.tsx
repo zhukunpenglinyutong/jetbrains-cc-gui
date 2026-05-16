@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import PlanApprovalDialog, { type PlanApprovalRequest } from './PlanApprovalDialog';
 import { resetLinkifyCapabilities, setLinkifyCapabilities } from '../utils/linkifyCapabilities';
 
@@ -59,5 +59,171 @@ describe('PlanApprovalDialog', () => {
       }),
     ).toBeTruthy();
     expect(screen.getByRole('link', { name: 'https://example.com/docs' })).toBeTruthy();
+  });
+});
+
+describe('PlanApprovalDialog countdown', () => {
+  const buildRequest = (overrides: Partial<PlanApprovalRequest> = {}): PlanApprovalRequest => ({
+    requestId: 'plan-test-1',
+    toolName: 'ExitPlanMode',
+    plan: 'Simple plan body',
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    resetLinkifyCapabilities();
+    setLinkifyCapabilities({ classNavigationEnabled: true });
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    // Drain timers/effects before swapping back to real time, otherwise a
+    // lingering setInterval would fire across the test boundary.
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
+  // When the user does not respond, the dialog must auto-reject — leaving the
+  // Java pending future hanging would block the agent until the safety-net
+  // timeout (much later). Auto-reject mirrors what onCancel does for AskUser.
+
+  it('auto-rejects with the original requestId after timeoutSeconds elapses', () => {
+    const onApprove = vi.fn();
+    const onReject = vi.fn();
+
+    render(
+      <PlanApprovalDialog
+        isOpen
+        request={buildRequest()}
+        onApprove={onApprove}
+        onReject={onReject}
+        timeoutSeconds={30}
+      />,
+    );
+
+    expect(onReject).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(30_000);
+    });
+
+    expect(onReject).toHaveBeenCalledTimes(1);
+    expect(onReject).toHaveBeenCalledWith('plan-test-1');
+    expect(onApprove).not.toHaveBeenCalled();
+  });
+
+  it('does not fire auto-reject before the deadline', () => {
+    const onApprove = vi.fn();
+    const onReject = vi.fn();
+
+    render(
+      <PlanApprovalDialog
+        isOpen
+        request={buildRequest()}
+        onApprove={onApprove}
+        onReject={onReject}
+        timeoutSeconds={30}
+      />,
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(29_000);
+    });
+
+    expect(onReject).not.toHaveBeenCalled();
+  });
+
+  it('approve click suppresses the auto-reject that would otherwise fire after timeout', () => {
+    // Critical race: user clicks "approve" near the deadline, timer expires
+    // moments later. The backend must not receive both approve and reject
+    // for the same plan.
+    const onApprove = vi.fn();
+    const onReject = vi.fn();
+
+    render(
+      <PlanApprovalDialog
+        isOpen
+        request={buildRequest()}
+        onApprove={onApprove}
+        onReject={onReject}
+        timeoutSeconds={30}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('批准并执行'));
+    expect(onApprove).toHaveBeenCalledTimes(1);
+    expect(onApprove).toHaveBeenCalledWith('plan-test-1', 'default');
+
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+
+    expect(onApprove).toHaveBeenCalledTimes(1);
+    expect(onReject).not.toHaveBeenCalled();
+  });
+
+  it('manual reject click suppresses a second auto-reject after timeout', () => {
+    const onApprove = vi.fn();
+    const onReject = vi.fn();
+
+    render(
+      <PlanApprovalDialog
+        isOpen
+        request={buildRequest()}
+        onApprove={onApprove}
+        onReject={onReject}
+        timeoutSeconds={30}
+      />,
+    );
+
+    // Use role + name to disambiguate the reject button from the "Esc 拒绝" keyboard hint, which
+    // also contains the literal "拒绝".
+    fireEvent.click(screen.getByRole('button', { name: '拒绝' }));
+    expect(onReject).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+
+    expect(onReject).toHaveBeenCalledTimes(1);
+  });
+
+  it('respects an updated timeoutSeconds prop (effect dep correctly includes it)', () => {
+    const onApprove = vi.fn();
+    const onReject = vi.fn();
+
+    const { rerender } = render(
+      <PlanApprovalDialog
+        isOpen
+        request={buildRequest()}
+        onApprove={onApprove}
+        onReject={onReject}
+        timeoutSeconds={30}
+      />,
+    );
+
+    // User edits the timeout in Settings while the dialog is open.
+    rerender(
+      <PlanApprovalDialog
+        isOpen
+        request={buildRequest()}
+        onApprove={onApprove}
+        onReject={onReject}
+        timeoutSeconds={60}
+      />,
+    );
+
+    // 30s would have been the OLD deadline. If timeoutSeconds were missing from
+    // the reset effect dep list, the countdown would still expire here.
+    act(() => {
+      vi.advanceTimersByTime(30_000);
+    });
+    expect(onReject).not.toHaveBeenCalled();
+
+    // Run out the new 60s budget.
+    act(() => {
+      vi.advanceTimersByTime(30_000);
+    });
+    expect(onReject).toHaveBeenCalledTimes(1);
   });
 });

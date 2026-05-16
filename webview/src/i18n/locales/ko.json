@@ -211,6 +211,11 @@
         "cmdEnter": "⌘/Ctrl+Enter로 전송",
         "cmdEnterDesc": "⌘/Ctrl+Enter를 눌러 메시지 전송, Enter로 줄바꿈"
       },
+      "permissionDialogTimeout": {
+        "label": "권한 및 질문 대화 상자 제한 시간",
+        "unit": "초",
+        "hint": "Claude 질문 대화 상자와 권한 요청 대화 상자의 제한 시간을 설정합니다(30~3600초). 제한 시간이 지나면 대화 상자가 자동으로 닫히고 Claude가 계속 진행합니다."
+      },
       "chatBgColor": {
         "label": "채팅 배경",
         "custom": "사용자 지정",

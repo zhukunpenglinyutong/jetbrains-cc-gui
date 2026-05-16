@@ -211,6 +211,11 @@
         "cmdEnter": "⌘/Ctrl+Enter para enviar",
         "cmdEnterDesc": "Presiona ⌘/Ctrl+Enter para enviar mensaje, Enter para nueva línea"
       },
+      "permissionDialogTimeout": {
+        "label": "Tiempo de espera de diálogos de permisos y preguntas",
+        "unit": "segundos",
+        "hint": "Establece el tiempo de espera para los diálogos de preguntas de Claude y los diálogos de solicitud de permisos (30~3600 segundos). Después del tiempo de espera, el diálogo se cerrará automáticamente y Claude continuará."
+      },
       "chatBgColor": {
         "label": "Color de fondo del chat",
         "custom": "Personalizado",

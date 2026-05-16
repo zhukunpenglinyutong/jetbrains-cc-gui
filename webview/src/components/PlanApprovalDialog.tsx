@@ -1,13 +1,11 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatCountdown } from '../utils/helpers';
+import { useDialogCountdownTimeout } from '../hooks/useDialogCountdownTimeout';
+import { DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS } from '../utils/permissionDialogTimeout';
 import MarkdownBlock from './MarkdownBlock';
 import { useDialogResize } from '../hooks/useDialogResize';
 import './PlanApprovalDialog.css';
-
-// Timeout configuration (kept in sync with backend PermissionHandler.java)
-const TIMEOUT_SECONDS = 300; // 5 minutes
-const WARNING_THRESHOLD_SECONDS = 30; // Show warning when 30 seconds remain
 
 export interface AllowedPrompt {
   tool: string;
@@ -27,6 +25,7 @@ interface PlanApprovalDialogProps {
   request: PlanApprovalRequest | null;
   onApprove: (requestId: string, targetMode: string) => void;
   onReject: (requestId: string) => void;
+  timeoutSeconds?: number;
 }
 
 // Execution modes available after plan approval
@@ -41,45 +40,43 @@ const PlanApprovalDialog = ({
   request,
   onApprove,
   onReject,
+  timeoutSeconds = DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS,
 }: PlanApprovalDialogProps) => {
   const { t } = useTranslation();
   const [selectedMode, setSelectedMode] = useState('default');
-  // Controls whether the dialog is collapsed (compact mode)
   const [isCollapsed, setIsCollapsed] = useState(false);
-  // Remaining countdown seconds
-  const [remainingSeconds, setRemainingSeconds] = useState(TIMEOUT_SECONDS);
-  // Whether to show timeout warning
-  const isTimeWarning = remainingSeconds <= WARNING_THRESHOLD_SECONDS && remainingSeconds > 0;
-  // Whether the dialog has timed out
-  const isTimedOut = remainingSeconds <= 0;
-
-  // Timer reference
-  const timerRef = useRef<number | null>(null);
-
-  // Resize state: user can drag the top edge to make the dialog taller
   const { dialogRef, dialogHeight, setDialogHeight, handleResizeStart } = useDialogResize({ minHeight: 200 });
 
-  const handleApprove = useCallback(() => {
-    if (!request) return;
-    onApprove(request.requestId, selectedMode);
-  }, [request, selectedMode, onApprove]);
-
-  const handleReject = useCallback(() => {
-    if (!request) return;
-    onReject(request.requestId);
+  const handleTimeout = useCallback(() => {
+    if (request) {
+      onReject(request.requestId);
+    }
   }, [request, onReject]);
 
-  // Reset state
+  const { remainingSeconds, isTimeWarning, markSubmitted } = useDialogCountdownTimeout({
+    isOpen,
+    requestKey: request?.requestId,
+    timeoutSeconds,
+    onTimeout: handleTimeout,
+  });
+
+  const handleApprove = useCallback(() => {
+    if (!request || !markSubmitted()) return;
+    onApprove(request.requestId, selectedMode);
+  }, [request, selectedMode, markSubmitted, onApprove]);
+
+  const handleReject = useCallback(() => {
+    if (!request || !markSubmitted()) return;
+    onReject(request.requestId);
+  }, [request, markSubmitted, onReject]);
+
   useEffect(() => {
     if (isOpen && request) {
-      // Reset to default mode when dialog opens
       setSelectedMode('default');
       setIsCollapsed(false);
-      // Reset countdown
-      setRemainingSeconds(TIMEOUT_SECONDS);
       setDialogHeight(null);
     }
-  }, [isOpen, request?.requestId]);
+  }, [isOpen, request?.requestId, setDialogHeight]);
 
   // Keyboard event handling
   useEffect(() => {
@@ -95,49 +92,6 @@ const PlanApprovalDialog = ({
       return () => window.removeEventListener('keydown', handleKeyDown);
     }
   }, [isOpen, request, handleApprove, handleReject]);
-
-  // Countdown timer
-  useEffect(() => {
-    // Helper function to clear the timer
-    const clearTimer = () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-
-    // If dialog is not open or there is no request, clean up and exit
-    if (!isOpen || !request) {
-      clearTimer();
-      return;
-    }
-
-    // Clear previous timer (prevent duplicates)
-    clearTimer();
-
-    // Start countdown
-    timerRef.current = window.setInterval(() => {
-      setRemainingSeconds((prev) => {
-        if (prev <= 1) {
-          // Timed out, clear timer
-          clearTimer();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    // Cleanup function
-    return clearTimer;
-  }, [isOpen, request?.requestId]);
-
-  // Auto-close on timeout
-  useEffect(() => {
-    if (isTimedOut && request) {
-      // Auto-reject on timeout
-      handleReject();
-    }
-  }, [isTimedOut, request, handleReject]);
 
   if (!isOpen || !request) {
     return null;

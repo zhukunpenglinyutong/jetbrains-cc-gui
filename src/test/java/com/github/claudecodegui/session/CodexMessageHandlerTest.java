@@ -177,7 +177,9 @@ public class CodexMessageHandlerTest {
         callbackHandler.setCallback(callback);
 
         CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
-        handler.onMessage("user", "{\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"<agents-instructions>\\n# AGENTS.md instructions\\n<INSTRUCTIONS>中文回复</INSTRUCTIONS>\\n</agents-instructions>\\n\\n测试通讯\"}]}}");
+        handler.onMessage("user", "{\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\","
+                + "\"text\":\"<agents-instructions>\\n# AGENTS.md instructions\\n"
+                + "<INSTRUCTIONS>中文回复</INSTRUCTIONS>\\n</agents-instructions>\\n\\n测试通讯\"}]}}");
 
         assertEquals(1, state.getMessages().size());
         Message message = state.getMessages().get(0);

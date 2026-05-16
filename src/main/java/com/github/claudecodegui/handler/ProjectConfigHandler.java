@@ -79,13 +79,20 @@ public class ProjectConfigHandler {
         return obj;
     }
 
+    private static JsonObject jsonOf(String key, int value) {
+        JsonObject obj = new JsonObject();
+        obj.addProperty(key, value);
+        return obj;
+    }
+
     /** Run a getter and push the JSON payload; on error, push {@code fallback} so the UI always gets a response. */
     private void respondWithJson(String jsCallback, ThrowingJsonSupplier producer, JsonElement fallback,
                                  String errorLogMessage) {
         try {
             pushJson(jsCallback, producer.get());
         } catch (Exception e) {
-            LOG.error("[ProjectConfigHandler] " + errorLogMessage + ": " + e.getMessage(), e);
+            LOG.error("[ProjectConfigHandler] " + errorLogMessage + "; errorClass="
+                    + e.getClass().getSimpleName(), e);
             if (fallback != null) {
                 pushJson(jsCallback, fallback);
             }
@@ -247,6 +254,44 @@ public class ProjectConfigHandler {
             settingsService::setAutoOpenFileEnabled,
             "window.updateAutoOpenFileEnabled",
             "Failed to save auto open file config");
+    }
+
+    public void handleGetPermissionDialogTimeout() {
+        respondWithJson("window.updatePermissionDialogTimeout",
+            () -> jsonOf("permissionDialogTimeoutSeconds", settingsService.getPermissionDialogTimeoutSeconds()),
+            jsonOf("permissionDialogTimeoutSeconds", CodemossSettingsService.DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS),
+            "Failed to get permission dialog timeout");
+    }
+
+    public void handleSetPermissionDialogTimeout(String content) {
+        try {
+            JsonObject response = setPermissionDialogTimeoutAndCreateResponse(content);
+            LOG.info("[ProjectConfigHandler] Set permission dialog timeout: "
+                    + response.get("permissionDialogTimeoutSeconds").getAsInt() + "s");
+            pushJson("window.updatePermissionDialogTimeout", response);
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set permission dialog timeout; errorClass="
+                    + e.getClass().getSimpleName(), e);
+            showError("Failed to save permission dialog timeout. See IDE log for details.");
+        }
+    }
+
+    JsonObject setPermissionDialogTimeoutAndCreateResponse(String content) throws Exception {
+        JsonObject json = gson.fromJson(content, JsonObject.class);
+        // Strict type check: only accept a JSON numeric primitive. Anything else
+        // (string, boolean, array, object, null, missing) falls back to default.
+        int seconds = CodemossSettingsService.DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS;
+        if (json != null && json.has("permissionDialogTimeoutSeconds")) {
+            JsonElement element = json.get("permissionDialogTimeoutSeconds");
+            if (element != null
+                    && element.isJsonPrimitive()
+                    && element.getAsJsonPrimitive().isNumber()) {
+                seconds = element.getAsInt();
+            }
+        }
+        settingsService.setPermissionDialogTimeoutSeconds(seconds);
+        int effectiveSeconds = settingsService.getPermissionDialogTimeoutSeconds();
+        return jsonOf("permissionDialogTimeoutSeconds", effectiveSeconds);
     }
 
     public void handleGetSendShortcut() {

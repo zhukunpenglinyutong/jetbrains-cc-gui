@@ -414,16 +414,25 @@
     background: var(--accent-primary);
 }
 
-.permission-dialog-v3-title {
-    margin: 0 0 4px 0;
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--text-secondary);
+.permission-dialog-v3-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
     flex-shrink: 0;
 }
 
+.permission-dialog-v3-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    flex: 1;
+    min-width: 0;
+}
+
 .permission-dialog-v3-subtitle {
-    margin: 0 0 14px 0;
+    margin: 4px 0 14px 0;
     font-size: 12px;
     color: var(--text-muted);
     flex-shrink: 0;

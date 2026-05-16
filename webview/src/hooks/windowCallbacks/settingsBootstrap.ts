@@ -15,12 +15,20 @@ const MAX_RETRIES = 30;
  * times (at 100 ms intervals) if window.sendToJava is not yet available.
  */
 export const startInitialSettingsRequest = (): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
   let settingsRetryCount = 0;
   const requestInitialSettings = () => {
+    if (typeof window === 'undefined') {
+      return;
+    }
     if (window.sendToJava) {
       window.sendToJava('get_streaming_enabled:');
       window.sendToJava('get_send_shortcut:');
       window.sendToJava('get_auto_open_file_enabled:');
+      window.sendToJava('get_permission_dialog_timeout:');
     } else {
       settingsRetryCount++;
       if (settingsRetryCount < MAX_RETRIES) {
@@ -36,8 +44,15 @@ export const startInitialSettingsRequest = (): void => {
  * available.
  */
 export const startActiveProviderRequest = (): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
   let retryCount = 0;
   const requestActiveProvider = () => {
+    if (typeof window === 'undefined') {
+      return;
+    }
     if (window.sendToJava) {
       sendBridgeEvent('get_active_provider');
     } else {
@@ -54,8 +69,15 @@ export const startActiveProviderRequest = (): void => {
  * Request the current permission mode from the backend.
  */
 export const startModeRequest = (): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
   let modeRetryCount = 0;
   const requestMode = () => {
+    if (typeof window === 'undefined') {
+      return;
+    }
     if (window.sendToJava) {
       sendBridgeEvent('get_mode');
     } else {
@@ -72,8 +94,15 @@ export const startModeRequest = (): void => {
  * Request the thinking-enabled setting from the backend.
  */
 export const startThinkingEnabledRequest = (): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
   let thinkingRetryCount = 0;
   const requestThinkingEnabled = () => {
+    if (typeof window === 'undefined') {
+      return;
+    }
     if (window.sendToJava) {
       sendBridgeEvent('get_thinking_enabled');
     } else {
@@ -92,6 +121,10 @@ export const startThinkingEnabledRequest = (): void => {
  * window.updateXxx / window.onXxx callbacks have been assigned.
  */
 export const drainPendingSettings = (): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
   const w = window as unknown as Record<string, unknown>;
 
   if (w.__pendingStreamingEnabled) {
@@ -112,6 +145,12 @@ export const drainPendingSettings = (): void => {
     window.updateAutoOpenFileEnabled?.(pending);
   }
 
+  if (w.__pendingPermissionDialogTimeout) {
+    const pending = w.__pendingPermissionDialogTimeout as string;
+    delete w.__pendingPermissionDialogTimeout;
+    window.updatePermissionDialogTimeout?.(pending);
+  }
+
   if (w.__pendingModeReceived) {
     const pending = w.__pendingModeReceived as string;
     delete w.__pendingModeReceived;
@@ -124,6 +163,10 @@ export const drainPendingSettings = (): void => {
  * registered, then trigger a fresh fetch.
  */
 export const drainAndRequestDependencyStatus = (): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
   const w = window as unknown as Record<string, unknown>;
 
   if (w.__pendingDependencyStatus) {

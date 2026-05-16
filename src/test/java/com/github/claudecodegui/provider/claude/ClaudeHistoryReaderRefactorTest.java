@@ -25,7 +25,9 @@ public class ClaudeHistoryReaderRefactorTest {
                     line(
                             "2026-03-10T10:01:00Z",
                             "assistant",
-                            "\"message\":{\"role\":\"assistant\",\"model\":\"claude-sonnet-4-6\",\"usage\":{\"input_tokens\":1000,\"output_tokens\":250,\"cache_creation_input_tokens\":400,\"cache_read_input_tokens\":50}}"
+                            "\"message\":{\"role\":\"assistant\",\"model\":\"claude-sonnet-4-6\","
+                                    + "\"usage\":{\"input_tokens\":1000,\"output_tokens\":250,"
+                                    + "\"cache_creation_input_tokens\":400,\"cache_read_input_tokens\":50}}"
                     )
             );
 
@@ -59,7 +61,9 @@ public class ClaudeHistoryReaderRefactorTest {
                     line(
                             "2026-03-10T10:01:00Z",
                             "assistant",
-                            "\"message\":{\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"usage\":{\"input_tokens\":250000,\"output_tokens\":1000,\"cache_creation_input_tokens\":10000,\"cache_read_input_tokens\":5000}}"
+                            "\"message\":{\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\","
+                                    + "\"usage\":{\"input_tokens\":250000,\"output_tokens\":1000,"
+                                    + "\"cache_creation_input_tokens\":10000,\"cache_read_input_tokens\":5000}}"
                     )
             );
 

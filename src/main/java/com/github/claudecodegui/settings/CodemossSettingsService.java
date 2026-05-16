@@ -467,6 +467,29 @@ public class CodemossSettingsService {
                 + ", customFontPath=" + customFontPath);
     }
 
+    // ==================== Permission Dialog Timeout Config Management ====================
+
+    public static final int DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS =
+            PermissionDialogTimeoutSettings.DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS;
+    public static final int MIN_PERMISSION_DIALOG_TIMEOUT_SECONDS =
+            PermissionDialogTimeoutSettings.MIN_PERMISSION_DIALOG_TIMEOUT_SECONDS;
+    public static final int MAX_PERMISSION_DIALOG_TIMEOUT_SECONDS =
+            PermissionDialogTimeoutSettings.MAX_PERMISSION_DIALOG_TIMEOUT_SECONDS;
+    public static final long PERMISSION_SAFETY_NET_BUFFER_SECONDS =
+            PermissionDialogTimeoutSettings.PERMISSION_SAFETY_NET_BUFFER_SECONDS;
+
+    public static int clampPermissionDialogTimeoutSeconds(int seconds) {
+        return PermissionDialogTimeoutSettings.clampPermissionDialogTimeoutSeconds(seconds);
+    }
+
+    public int getPermissionDialogTimeoutSeconds() throws IOException {
+        return PermissionDialogTimeoutSettings.getPermissionDialogTimeoutSeconds(this);
+    }
+
+    public void setPermissionDialogTimeoutSeconds(int seconds) throws IOException {
+        PermissionDialogTimeoutSettings.setPermissionDialogTimeoutSeconds(this, seconds);
+    }
+
     // ==================== Streaming Config Management ====================
 
     /**

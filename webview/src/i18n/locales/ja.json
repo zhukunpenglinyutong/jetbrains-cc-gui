@@ -211,6 +211,11 @@
         "cmdEnter": "⌘/Ctrl+Enterで送信",
         "cmdEnterDesc": "⌘/Ctrl+Enterでメッセージを送信、Enterで改行"
       },
+      "permissionDialogTimeout": {
+        "label": "権限と質問ダイアログのタイムアウト",
+        "unit": "秒",
+        "hint": "Claudeの質問ダイアログと権限リクエストダイアログのタイムアウト時間を設定します（30~3600秒）。タイムアウト後、ダイアログは自動的に閉じられ、Claudeは続行します。"
+      },
       "chatBgColor": {
         "label": "チャット背景色",
         "custom": "カスタム",
