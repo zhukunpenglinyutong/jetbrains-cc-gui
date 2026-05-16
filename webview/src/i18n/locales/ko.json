@@ -854,7 +854,8 @@
       "WebSearch": "웹 검색",
       "WebFetch": "웹 가져오기",
       "execute": "{{toolName}} 실행",
-      "readDirectory": "디렉토리 읽기"
+      "readDirectory": "디렉토리 읽기",
+      "timeoutWarning": "곧 답변해주세요, {{seconds}}초 후 대화상자가 닫힙니다"
     }
   },
   "askUserQuestion": {

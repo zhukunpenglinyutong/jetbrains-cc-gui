@@ -765,7 +765,8 @@
       "WebSearch": "Ищу в интернете",
       "WebFetch": "Загружаю из сети",
       "execute": "Выполняю {{toolName}}",
-      "readDirectory": "Читаю директорию"
+      "readDirectory": "Читаю директорию",
+      "timeoutWarning": "Ответьте в течение {{seconds}} сек, иначе диалог закроется"
     }
   },
   "askUserQuestion": {

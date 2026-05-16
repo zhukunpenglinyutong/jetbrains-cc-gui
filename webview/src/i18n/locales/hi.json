@@ -738,7 +738,8 @@
       "WebSearch": "वेब खोज",
       "WebFetch": "वेब प्राप्त करें",
       "execute": "{{toolName}} निष्पादित करें",
-      "readDirectory": "निर्देशिका पढ़ें"
+      "readDirectory": "निर्देशिका पढ़ें",
+      "timeoutWarning": "कृपया जल्द उत्तर दें, डायलॉग {{seconds}} सेकंड में स्वचालित रूप से बंद हो जाएगा"
     }
   },
   "askUserQuestion": {

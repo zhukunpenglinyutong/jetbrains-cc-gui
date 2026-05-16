@@ -921,7 +921,8 @@
       "WebSearch": "网页搜索",
       "WebFetch": "获取网页",
       "execute": "执行 {{toolName}}",
-      "readDirectory": "读取目录"
+      "readDirectory": "读取目录",
+      "timeoutWarning": "请尽快回答，对话框将在 {{seconds}} 秒后自动关闭"
     }
   },
   "askUserQuestion": {

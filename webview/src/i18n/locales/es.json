@@ -738,7 +738,8 @@
       "WebSearch": "Búsqueda web",
       "WebFetch": "Obtener web",
       "execute": "Ejecutar {{toolName}}",
-      "readDirectory": "Leer directorio"
+      "readDirectory": "Leer directorio",
+      "timeoutWarning": "Por favor responde pronto, el diálogo se cerrará en {{seconds}} segundos"
     }
   },
   "askUserQuestion": {

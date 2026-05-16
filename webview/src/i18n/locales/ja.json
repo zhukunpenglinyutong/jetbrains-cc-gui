@@ -743,7 +743,8 @@
       "WebSearch": "ウェブ検索",
       "WebFetch": "ウェブ取得",
       "execute": "{{toolName}}を実行",
-      "readDirectory": "ディレクトリを読み取る"
+      "readDirectory": "ディレクトリを読み取る",
+      "timeoutWarning": "お早めにご回答ください。ダイアログは {{seconds}} 秒後に自動的に閉じます"
     }
   },
   "askUserQuestion": {

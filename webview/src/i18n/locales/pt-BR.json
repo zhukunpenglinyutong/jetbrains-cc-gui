@@ -907,7 +907,8 @@
       "WebSearch": "Pesquisa Web",
       "WebFetch": "Buscar Web",
       "execute": "Executar {{toolName}}",
-      "readDirectory": "Ler Diretório"
+      "readDirectory": "Ler Diretório",
+      "timeoutWarning": "Por favor, responda em breve, o diálogo fechará em {{seconds}} segundos"
     }
   },
   "askUserQuestion": {
