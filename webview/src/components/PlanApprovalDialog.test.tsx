@@ -188,7 +188,11 @@ describe('PlanApprovalDialog countdown', () => {
     expect(onReject).toHaveBeenCalledTimes(1);
   });
 
-  it('respects an updated timeoutSeconds prop (effect dep correctly includes it)', () => {
+  it('keeps the original timeout when the prop changes mid-flight', () => {
+    // The Java-side safety net is scheduled once when the dialog is created
+    // and cannot be rescheduled. The frontend must not drift to a new timeout
+    // while the dialog is already open, otherwise the backend could auto-reject
+    // while the user still sees a running countdown.
     const onApprove = vi.fn();
     const onReject = vi.fn();
 
@@ -213,14 +217,7 @@ describe('PlanApprovalDialog countdown', () => {
       />,
     );
 
-    // 30s would have been the OLD deadline. If timeoutSeconds were missing from
-    // the reset effect dep list, the countdown would still expire here.
-    act(() => {
-      vi.advanceTimersByTime(30_000);
-    });
-    expect(onReject).not.toHaveBeenCalled();
-
-    // Run out the new 60s budget.
+    // The dialog must continue using the original 30s timeout.
     act(() => {
       vi.advanceTimersByTime(30_000);
     });

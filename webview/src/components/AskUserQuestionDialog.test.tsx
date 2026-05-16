@@ -179,7 +179,11 @@ describe('AskUserQuestionDialog countdown', () => {
     expect(onCancel).not.toHaveBeenCalled();
   });
 
-  it('respects an updated timeoutSeconds prop (effect dep correctly includes it)', () => {
+  it('keeps the original timeout when the prop changes mid-flight', () => {
+    // The Java-side safety net is scheduled once when the dialog is created
+    // and cannot be rescheduled. The frontend must not drift to a new timeout
+    // while the dialog is already open, otherwise the backend could auto-reject
+    // while the user still sees a running countdown.
     const onCancel = vi.fn();
     const onSubmit = vi.fn();
 
@@ -193,7 +197,7 @@ describe('AskUserQuestionDialog countdown', () => {
       />,
     );
 
-    // Settings update mid-flight: bump the timeout to 60s.
+    // Simulate the user changing the setting while the dialog is visible.
     rerender(
       <AskUserQuestionDialog
         isOpen
@@ -204,18 +208,60 @@ describe('AskUserQuestionDialog countdown', () => {
       />,
     );
 
-    // 30s — the OLD timeout — should NOT have fired auto-cancel. If
-    // timeoutSeconds were missing from the reset effect dependency list,
-    // the countdown would still be using 30 and we'd see a cancel here.
-    act(() => {
-      vi.advanceTimersByTime(30_000);
-    });
-    expect(onCancel).not.toHaveBeenCalled();
-
-    // Run out the remainder of the new 60s budget.
+    // The dialog must continue using the original 30s timeout.
     act(() => {
       vi.advanceTimersByTime(30_000);
     });
     expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('AskUserQuestionDialog keyboard guards', () => {
+  // Escape is a destructive shortcut (cancels the whole turn). When the user is
+  // typing into the chat box or any other input on the page, an Escape there
+  // (e.g. to close an IME suggestion popup) must not propagate to the dialog.
+  it('ignores Escape when focus is on an INPUT element', () => {
+    const onCancel = vi.fn();
+    const onSubmit = vi.fn();
+
+    render(
+      <AskUserQuestionDialog
+        isOpen
+        request={buildRequest()}
+        onSubmit={onSubmit}
+        onCancel={onCancel}
+      />,
+    );
+
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+    try {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    } finally {
+      input.remove();
+    }
+
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('still honors Escape when no editable element has focus', () => {
+    const onCancel = vi.fn();
+    const onSubmit = vi.fn();
+
+    render(
+      <AskUserQuestionDialog
+        isOpen
+        request={buildRequest()}
+        onSubmit={onSubmit}
+        onCancel={onCancel}
+      />,
+    );
+
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onCancel).toHaveBeenCalledWith('req-test-1');
   });
 });

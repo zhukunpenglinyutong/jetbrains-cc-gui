@@ -5,6 +5,7 @@ import { useDialogCountdownTimeout } from '../hooks/useDialogCountdownTimeout';
 import { DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS } from '../utils/permissionDialogTimeout';
 import MarkdownBlock from './MarkdownBlock';
 import { useDialogResize } from '../hooks/useDialogResize';
+import { isEditableEventTarget } from '../utils/isEditableEventTarget';
 import './PlanApprovalDialog.css';
 
 export interface AllowedPrompt {
@@ -82,6 +83,10 @@ const PlanApprovalDialog = ({
   useEffect(() => {
     if (isOpen && request) {
       const handleKeyDown = (e: KeyboardEvent) => {
+        if (isEditableEventTarget(e.target)) {
+          return;
+        }
+
         if (e.key === 'Escape') {
           handleReject();
         } else if (e.key === 'Enter') {

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { formatCountdown } from '../utils/helpers';
 import { useDialogCountdownTimeout } from '../hooks/useDialogCountdownTimeout';
 import { DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS } from '../utils/permissionDialogTimeout';
+import { isEditableEventTarget } from '../utils/isEditableEventTarget';
 import './AskUserQuestionDialog.css';
 
 // Special marker to identify the "Other" option
@@ -117,6 +118,10 @@ const AskUserQuestionDialog = ({
     if (!isOpen || !request) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isEditableEventTarget(e.target)) {
+        return;
+      }
+
       if (e.key === 'Escape') {
         handleCancel();
       }

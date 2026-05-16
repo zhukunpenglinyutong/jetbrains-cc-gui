@@ -30,6 +30,11 @@ export function useDialogCountdownTimeout({
   const expiredRef = useRef(false);
   const timeoutFiredRef = useRef(false);
 
+  // Capture the latest timeoutSeconds so the open effect can read it without
+  // adding timeoutSeconds to its dependency list.
+  const capturedTimeoutRef = useRef(timeoutSeconds);
+  capturedTimeoutRef.current = timeoutSeconds;
+
   const triggerTimeout = useCallback(() => {
     expiredRef.current = true;
     if (submittedRef.current || timeoutFiredRef.current) {
@@ -56,22 +61,15 @@ export function useDialogCountdownTimeout({
 
   useEffect(() => {
     if (isOpen && requestKey) {
+      const effectiveTimeout = capturedTimeoutRef.current;
       submittedRef.current = false;
       expiredRef.current = false;
       timeoutFiredRef.current = false;
-      remainingSecondsRef.current = timeoutSeconds;
-      setRemainingSeconds(timeoutSeconds);
-      deadlineMsRef.current = Date.now() + timeoutSeconds * 1000;
+      remainingSecondsRef.current = effectiveTimeout;
+      setRemainingSeconds(effectiveTimeout);
+      deadlineMsRef.current = Date.now() + effectiveTimeout * 1000;
     }
   }, [isOpen, requestKey]);
-
-  useEffect(() => {
-    if (isOpen && requestKey && !submittedRef.current) {
-      remainingSecondsRef.current = timeoutSeconds;
-      setRemainingSeconds(timeoutSeconds);
-      deadlineMsRef.current = Date.now() + timeoutSeconds * 1000;
-    }
-  }, [isOpen, requestKey, timeoutSeconds]);
 
   useEffect(() => {
     const clearTimer = () => {
@@ -101,7 +99,7 @@ export function useDialogCountdownTimeout({
     }, 1000);
 
     return clearTimer;
-  }, [isOpen, requestKey, timeoutSeconds, triggerTimeout]);
+  }, [isOpen, requestKey, triggerTimeout]);
 
   const isTimeWarning = remainingSeconds <= WARNING_THRESHOLD_SECONDS && remainingSeconds > 0;
   const isTimedOut = remainingSeconds <= 0;
