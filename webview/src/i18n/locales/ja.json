@@ -1238,7 +1238,7 @@
       },
       "opus46_1m": {
         "label": "Opus 4.6",
-        "description": "Opus 4.6 長時間セッション向け"
+        "description": "Opus 4.6 · 高性能推論モデル"
       },
       "haiku45": {
         "label": "Haiku 4.5",

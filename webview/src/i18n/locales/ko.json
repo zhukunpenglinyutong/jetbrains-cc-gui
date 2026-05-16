@@ -1344,7 +1344,7 @@
       },
       "opus46_1m": {
         "label": "Opus 4.6",
-        "description": "긴 세션을 위한 Opus 4.6"
+        "description": "Opus 4.6 · 고성능 추론 모델"
       },
       "haiku45": {
         "label": "Haiku 4.5",

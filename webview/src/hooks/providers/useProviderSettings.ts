@@ -34,7 +34,7 @@ export function useProviderSettings({ addToast, t }: UseProviderSettingsOptions)
     const get = (key: string): string => (typeof env[key] === 'string' ? (env[key] as string) : '');
     const mapping = {
       main: get('ANTHROPIC_MODEL'),
-      haiku: get('ANTHROPIC_SMALL_FAST_MODEL') || get('ANTHROPIC_DEFAULT_HAIKU_MODEL'),
+      haiku: get('ANTHROPIC_DEFAULT_HAIKU_MODEL'),
       sonnet: get('ANTHROPIC_DEFAULT_SONNET_MODEL'),
       opus: get('ANTHROPIC_DEFAULT_OPUS_MODEL'),
     };

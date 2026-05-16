@@ -4,7 +4,10 @@ import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.handler.provider.ModelProviderHandler;
 
+import com.github.claudecodegui.util.LanguageConfigService;
 import com.github.claudecodegui.util.ThemeConfigService;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
@@ -15,6 +18,7 @@ import com.intellij.openapi.diagnostic.Logger;
 public class SettingsHandler extends BaseMessageHandler {
 
     private static final Logger LOG = Logger.getInstance(SettingsHandler.class);
+    private final Gson gson = new Gson();
 
     private final InputHistoryHandler inputHistoryHandler;
     private final SoundSettingsHandler soundSettingsHandler;
@@ -73,7 +77,11 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_selected_sound",
         "set_custom_sound_path",
         "test_sound",
-        "browse_sound_file"
+        "browse_sound_file",
+        // User language preference
+        "set_user_language",
+        "get_user_language",
+        "clear_user_language"
     };
 
     public SettingsHandler(HandlerContext context) {
@@ -264,9 +272,66 @@ public class SettingsHandler extends BaseMessageHandler {
             case "browse_sound_file":
                 soundSettingsHandler.handleBrowseSoundFile();
                 return true;
+            // User language preference
+            case "set_user_language":
+                handleSetUserLanguage(content);
+                return true;
+            case "get_user_language":
+                handleGetUserLanguage();
+                return true;
+            case "clear_user_language":
+                handleClearUserLanguage();
+                return true;
             default:
                 return false;
         }
+    }
+
+    /**
+     * Handle set_user_language: save user's manual language preference.
+     */
+    private void handleSetUserLanguage(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            String language = json.has("language") && !json.get("language").isJsonNull()
+                    ? json.get("language").getAsString() : null;
+            if (language != null && !language.isEmpty()) {
+                LanguageConfigService.setUserLanguage(context.getSettingsService(), language);
+                LOG.info("[SettingsHandler] Saved user language preference: " + language);
+                pushLanguageConfig();
+            }
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to save user language: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Handle get_user_language: return user's saved language preference.
+     */
+    private void handleGetUserLanguage() {
+        String userLanguage = LanguageConfigService.getUserLanguage(context.getSettingsService());
+        JsonObject response = new JsonObject();
+        response.addProperty("language", userLanguage != null ? userLanguage : "");
+        response.addProperty("manuallySet", userLanguage != null);
+        callJavaScript("window.onUserLanguage", escapeJs(response.toString()));
+    }
+
+    /**
+     * Handle clear_user_language: clear user's manual language preference.
+     */
+    private void handleClearUserLanguage() {
+        try {
+            LanguageConfigService.clearUserLanguage(context.getSettingsService());
+            LOG.info("[SettingsHandler] Cleared user language preference");
+            pushLanguageConfig();
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to clear user language: " + e.getMessage(), e);
+        }
+    }
+
+    private void pushLanguageConfig() {
+        JsonObject languageConfig = LanguageConfigService.getLanguageConfig(context.getSettingsService());
+        callJavaScript("window.applyIdeaLanguageConfig", escapeJs(languageConfig.toString()));
     }
 
     /**

@@ -436,14 +436,16 @@ interface Window {
    */
   applyIdeaLanguageConfig?: (config: {
     language: string;
+    source?: string;
     ideaLocale?: string;
-  }) => void;
+  } | string) => void;
 
   /**
    * Pending language config before applyIdeaLanguageConfig is registered
    */
   __pendingLanguageConfig?: {
     language: string;
+    source?: string;
     ideaLocale?: string;
   };
 

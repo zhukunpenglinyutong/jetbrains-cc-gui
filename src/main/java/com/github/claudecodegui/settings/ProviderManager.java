@@ -681,8 +681,7 @@ public class ProviderManager {
                         "ANTHROPIC_MODEL",
                         "ANTHROPIC_DEFAULT_SONNET_MODEL",
                         "ANTHROPIC_DEFAULT_OPUS_MODEL",
-                        "ANTHROPIC_DEFAULT_HAIKU_MODEL",
-                        "ANTHROPIC_SMALL_FAST_MODEL"
+                        "ANTHROPIC_DEFAULT_HAIKU_MODEL"
                     };
                     for (String key : modelMappingKeys) {
                         if (fullEnv.has(key) && !fullEnv.get(key).isJsonNull()) {

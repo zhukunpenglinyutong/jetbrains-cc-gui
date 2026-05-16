@@ -58,7 +58,7 @@ public class AdditionalDirectoryResolverTest {
                     "%s"
                   ]
                 }
-                """.formatted(shared, userOnly)
+                """.formatted(shared.toString().replace("\\", "\\\\"), userOnly.toString().replace("\\", "\\\\"))
         );
         Files.writeString(
                 projectClaude.resolve("settings.json"),
@@ -69,7 +69,7 @@ public class AdditionalDirectoryResolverTest {
                     "project-only"
                   ]
                 }
-                """.formatted(shared)
+                """.formatted(shared.toString().replace("\\", "\\\\"))
         );
         Files.writeString(
                 projectClaude.resolve("settings.local.json"),
@@ -105,7 +105,7 @@ public class AdditionalDirectoryResolverTest {
                 {
                   "managedDirectory": "%s"
                 }
-                """.formatted(policyDir)
+                """.formatted(envDir.toString().replace("\\", "\\\\"))
         );
 
         Map<String, String> env = new HashMap<>();
@@ -127,7 +127,7 @@ public class AdditionalDirectoryResolverTest {
                 {
                   "managedDirectory": "%s"
                 }
-                """.formatted(policyDir)
+                """.formatted(policyDir.toString().replace("\\", "\\\\"))
         );
 
         Map<String, String> emptyEnv = new HashMap<>();

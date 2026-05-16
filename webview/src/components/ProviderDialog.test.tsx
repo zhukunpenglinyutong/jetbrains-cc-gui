@@ -18,7 +18,7 @@ const createProvider = (): ProviderConfig => ({
       ANTHROPIC_BASE_URL: 'https://open.bigmodel.cn/api/anthropic',
       ANTHROPIC_AUTH_TOKEN: '',
       ANTHROPIC_MODEL: 'glm-4.7',
-      ANTHROPIC_SMALL_FAST_MODEL: 'glm-4.7',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'glm-4.7',
       ANTHROPIC_DEFAULT_SONNET_MODEL: 'glm-4.7',
       ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-4.7',
     },
@@ -33,9 +33,22 @@ const createCustomProxyProvider = (): ProviderConfig => ({
     env: {
       ANTHROPIC_BASE_URL: 'https://my-proxy.example.com/v1',
       ANTHROPIC_AUTH_TOKEN: 'sk-test',
-      ANTHROPIC_SMALL_FAST_MODEL: 'custom-haiku',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'custom-haiku',
       ANTHROPIC_DEFAULT_SONNET_MODEL: 'custom-sonnet',
       ANTHROPIC_DEFAULT_OPUS_MODEL: 'custom-opus',
+    },
+  },
+});
+
+const createLegacyHaikuProvider = (): ProviderConfig => ({
+  id: 'provider-legacy-haiku',
+  name: 'Legacy Haiku Provider',
+  isActive: true,
+  settingsConfig: {
+    env: {
+      ANTHROPIC_BASE_URL: 'https://legacy.example.com/anthropic',
+      ANTHROPIC_AUTH_TOKEN: 'sk-legacy',
+      ANTHROPIC_SMALL_FAST_MODEL: 'legacy-haiku-model',
     },
   },
 });
@@ -96,6 +109,20 @@ describe('ProviderDialog', () => {
     expect((screen.getByLabelText('settings.provider.dialog.haikuModel') as HTMLInputElement).value).toBe('custom-haiku');
   });
 
+  it('does not backfill the Haiku field from ANTHROPIC_SMALL_FAST_MODEL', () => {
+    render(
+      <ProviderDialog
+        isOpen
+        provider={createLegacyHaikuProvider()}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        addToast={vi.fn()}
+      />,
+    );
+
+    expect((screen.getByLabelText('settings.provider.dialog.haikuModel') as HTMLInputElement).value).toBe('');
+  });
+
   it('clearing model mapping fields should remove residual ANTHROPIC_MODEL on save', () => {
     const onSave = vi.fn();
 
@@ -131,6 +158,28 @@ describe('ProviderDialog', () => {
     expect(env.ANTHROPIC_MODEL).toBeUndefined();
     expect(env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBeUndefined();
     expect(env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBeUndefined();
-    expect(env.ANTHROPIC_SMALL_FAST_MODEL).toBeUndefined();
+    expect(env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBeUndefined();
+  });
+
+  it('preserves ANTHROPIC_SMALL_FAST_MODEL without turning it into a Haiku override', () => {
+    const onSave = vi.fn();
+
+    render(
+      <ProviderDialog
+        isOpen
+        provider={createLegacyHaikuProvider()}
+        onClose={vi.fn()}
+        onSave={onSave}
+        addToast={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'settings.provider.dialog.saveChanges' }));
+
+    const payload = onSave.mock.calls[0]?.[0] as { jsonConfig: string };
+    const env = JSON.parse(payload.jsonConfig).env ?? {};
+
+    expect(env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBeUndefined();
+    expect(env.ANTHROPIC_SMALL_FAST_MODEL).toBe('legacy-haiku-model');
   });
 });
