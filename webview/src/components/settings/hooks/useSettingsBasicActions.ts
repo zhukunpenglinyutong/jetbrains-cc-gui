@@ -6,6 +6,10 @@ import type { CommitAiConfig, CommitAiProvider } from '../../../types/aiFeatureC
 import { DEFAULT_COMMIT_AI_CONFIG } from '../../../types/aiFeatureConfig';
 import type { PromptEnhancerConfig, PromptEnhancerProvider } from '../../../types/promptEnhancer';
 import { DEFAULT_PROMPT_ENHANCER_CONFIG } from '../../../types/promptEnhancer';
+import {
+  DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS,
+  clampPermissionDialogTimeoutSeconds,
+} from '../../../utils/permissionDialogTimeout';
 
 const sendToJava = (message: string) => {
   if (window.sendToJava) {
@@ -20,6 +24,8 @@ export interface UseSettingsBasicActionsProps {
   onSendShortcutChangeProp?: (shortcut: 'enter' | 'cmdEnter') => void;
   autoOpenFileEnabledProp?: boolean;
   onAutoOpenFileEnabledChangeProp?: (enabled: boolean) => void;
+  permissionDialogTimeoutSecondsProp?: number;
+  onPermissionDialogTimeoutChangeProp?: (seconds: number) => void;
 }
 
 export interface UseSettingsBasicActionsReturn {
@@ -92,6 +98,8 @@ export interface UseSettingsBasicActionsReturn {
   handleAiTitleGenerationEnabledChange: (enabled: boolean) => void;
   handleStatusBarWidgetEnabledChange: (enabled: boolean) => void;
   handleTaskCompletionNotificationEnabledChange: (enabled: boolean) => void;
+  permissionDialogTimeoutSeconds: number;
+  handlePermissionDialogTimeoutChange: (seconds: number) => void;
   handleCommitAiProviderChange: (provider: CommitAiProvider) => void;
   handleCommitAiModelChange: (model: string) => void;
   handleCommitAiResetToDefault: () => void;
@@ -148,6 +156,8 @@ export function useSettingsBasicActions({
   onSendShortcutChangeProp,
   autoOpenFileEnabledProp,
   onAutoOpenFileEnabledChangeProp,
+  permissionDialogTimeoutSecondsProp,
+  onPermissionDialogTimeoutChangeProp,
 }: UseSettingsBasicActionsProps): UseSettingsBasicActionsReturn {
   // Node.js path
   const [nodePath, setNodePath] = useState('');
@@ -226,6 +236,13 @@ export function useSettingsBasicActions({
 
   // Task completion notification toggle (default: false, opt-in feature)
   const [taskCompletionNotificationEnabled, setTaskCompletionNotificationEnabled] = useState<boolean>(false);
+
+  // Permission dialog timeout — owned by App.tsx; we treat the prop as authoritative.
+  // We intentionally do NOT keep a local copy: it would be dead state because the
+  // prop is always provided in production, and a divergent local copy could be read
+  // by accident in future refactors.
+  const permissionDialogTimeoutSeconds =
+    permissionDialogTimeoutSecondsProp ?? DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS;
 
   const [commitAiConfig, setCommitAiConfig] = useState<CommitAiConfig>(
     DEFAULT_COMMIT_AI_CONFIG
@@ -397,6 +414,15 @@ export function useSettingsBasicActions({
     const payload = { taskCompletionNotificationEnabled: enabled };
     sendToJava(`set_task_completion_notification_enabled:${JSON.stringify(payload)}`);
   }, []);
+
+  // Permission dialog timeout change handler
+  const handlePermissionDialogTimeoutChange = useCallback((seconds: number) => {
+    const clamped = clampPermissionDialogTimeoutSeconds(seconds);
+    // App.tsx owns the canonical state and provides the callback in production.
+    onPermissionDialogTimeoutChangeProp?.(clamped);
+    const payload = { permissionDialogTimeoutSeconds: clamped };
+    sendToJava(`set_permission_dialog_timeout:${JSON.stringify(payload)}`);
+  }, [onPermissionDialogTimeoutChangeProp]);
 
   const handleCommitAiProviderChange = useCallback((provider: CommitAiProvider) => {
     const providerAvailable = commitAiConfig.availability[provider];
@@ -588,6 +614,8 @@ export function useSettingsBasicActions({
     taskCompletionNotificationEnabled,
     setTaskCompletionNotificationEnabled,
     handleTaskCompletionNotificationEnabledChange,
+    permissionDialogTimeoutSeconds,
+    handlePermissionDialogTimeoutChange,
     commitAiConfig,
     setCommitAiConfig,
     handleCommitAiProviderChange,

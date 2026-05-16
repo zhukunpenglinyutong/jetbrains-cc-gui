@@ -227,6 +227,11 @@
         "cmdEnter": "⌘/Ctrl+Enter to Send",
         "cmdEnterDesc": "Press ⌘/Ctrl+Enter to send message, Enter for new line"
       },
+      "permissionDialogTimeout": {
+        "label": "Permission & Question Dialog Timeout",
+        "unit": "seconds",
+        "hint": "Set the timeout for Claude question dialogs and permission request dialogs (30~3600 seconds). After timeout, the dialog will close automatically and Claude will continue."
+      },
       "chatBgColor": {
         "label": "Chat Background",
         "custom": "Custom",
@@ -911,7 +916,8 @@
       "WebSearch": "Web Search",
       "WebFetch": "Fetch Web",
       "execute": "Execute {{toolName}}",
-      "readDirectory": "Read Directory"
+      "readDirectory": "Read Directory",
+      "timeoutWarning": "Please answer soon, dialog will close in {{seconds}} seconds"
     }
   },
   "askUserQuestion": {

@@ -5,17 +5,19 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.permission.PermissionService;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
+import com.intellij.util.concurrency.AppExecutorUtil;
 
-import javax.swing.*;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -26,14 +28,35 @@ public class PermissionHandler extends BaseMessageHandler {
 
     private static final Logger LOG = Logger.getInstance(PermissionHandler.class);
 
-    // Permission request timeout (5 minutes), consistent with Node-side PERMISSION_TIMEOUT_MS
-    private static final long PERMISSION_TIMEOUT_SECONDS = 300;
-
     private static final String[] SUPPORTED_TYPES = {
         "permission_decision",
         "ask_user_question_response",
         "plan_approval_response"
     };
+
+    private static int payloadLength(String value) {
+        return value == null ? 0 : value.length();
+    }
+
+    private static String errorClass(Exception error) {
+        return error.getClass().getSimpleName();
+    }
+
+    interface CancellableTask {
+        void cancel();
+    }
+
+    interface SafetyNetScheduler {
+        CancellableTask schedule(Runnable task, long delaySeconds);
+    }
+
+    private static final SafetyNetScheduler DEFAULT_SAFETY_NET_SCHEDULER = (task, delaySeconds) -> {
+        ScheduledFuture<?> scheduledFuture = AppExecutorUtil.getAppScheduledExecutorService()
+                .schedule(task, delaySeconds, TimeUnit.SECONDS);
+        return () -> scheduledFuture.cancel(false);
+    };
+
+    private final SafetyNetScheduler safetyNetScheduler;
 
     // Permission request map
     private final Map<String, CompletableFuture<Integer>> pendingPermissionRequests = new ConcurrentHashMap<>();
@@ -52,7 +75,36 @@ public class PermissionHandler extends BaseMessageHandler {
     private PermissionDeniedCallback deniedCallback;
 
     public PermissionHandler(HandlerContext context) {
+        this(context, DEFAULT_SAFETY_NET_SCHEDULER);
+    }
+
+    PermissionHandler(HandlerContext context, SafetyNetScheduler safetyNetScheduler) {
         super(context);
+        this.safetyNetScheduler = safetyNetScheduler;
+    }
+
+    long getSafetyNetTimeoutSeconds() {
+        CodemossSettingsService settingsService = context.getSettingsService();
+        if (settingsService == null) {
+            // Fall back to DEFAULT (not MAX) so a missing settings service doesn't turn the
+            // safety net into a one-hour hang for an error that's almost always transient.
+            return CodemossSettingsService.DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS
+                    + CodemossSettingsService.PERMISSION_SAFETY_NET_BUFFER_SECONDS;
+        }
+        try {
+            return settingsService.getPermissionDialogTimeoutSeconds()
+                    + CodemossSettingsService.PERMISSION_SAFETY_NET_BUFFER_SECONDS;
+        } catch (Exception e) {
+            LOG.warn("[PERM_SHOW] Failed to read permission dialog timeout for safety net; errorClass="
+                    + e.getClass().getSimpleName(), e);
+            return CodemossSettingsService.DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS
+                    + CodemossSettingsService.PERMISSION_SAFETY_NET_BUFFER_SECONDS;
+        }
+    }
+
+    void scheduleSafetyNet(CompletableFuture<?> future, Runnable timeoutTask) {
+        CancellableTask cancellableTask = safetyNetScheduler.schedule(timeoutTask, getSafetyNetTimeoutSeconds());
+        future.whenComplete((ignored, error) -> cancellableTask.cancel());
     }
 
     public void setPermissionDeniedCallback(PermissionDeniedCallback callback) {
@@ -68,17 +120,17 @@ public class PermissionHandler extends BaseMessageHandler {
     public boolean handle(String type, String content) {
         if ("permission_decision".equals(type)) {
             LOG.debug("[PERM_DEBUG][BRIDGE_RECV] Received permission_decision from JS");
-            LOG.debug("[PERM_DEBUG][BRIDGE_RECV] Content: " + content);
+            LOG.debug("[PERM_DEBUG][BRIDGE_RECV] payloadLength=" + payloadLength(content));
             handlePermissionDecision(content);
             return true;
         } else if ("ask_user_question_response".equals(type)) {
             LOG.debug("[ASK_USER_QUESTION][BRIDGE_RECV] Received ask_user_question_response from JS");
-            LOG.debug("[ASK_USER_QUESTION][BRIDGE_RECV] Content: " + content);
+            LOG.debug("[ASK_USER_QUESTION][BRIDGE_RECV] payloadLength=" + payloadLength(content));
             handleAskUserQuestionResponse(content);
             return true;
         } else if ("plan_approval_response".equals(type)) {
             LOG.debug("[PLAN_APPROVAL][BRIDGE_RECV] Received plan_approval_response from JS");
-            LOG.debug("[PLAN_APPROVAL][BRIDGE_RECV] Content: " + content);
+            LOG.debug("[PLAN_APPROVAL][BRIDGE_RECV] payloadLength=" + payloadLength(content));
             handlePlanApprovalResponse(content);
             return true;
         }
@@ -122,17 +174,15 @@ public class PermissionHandler extends BaseMessageHandler {
                 context.executeJavaScriptOnEDT(jsCode);
             });
 
-            // Timeout handling (give users enough time to review the context)
-            CompletableFuture.delayedExecutor(PERMISSION_TIMEOUT_SECONDS, TimeUnit.SECONDS).execute(() -> {
-                if (!future.isDone()) {
-                    LOG.warn("[PERM_SHOW] Timeout! Removing pending request for channelId=" + channelId);
+            scheduleSafetyNet(future, () -> {
+                if (future.complete(PermissionService.PermissionResponse.DENY.getValue())) {
+                    LOG.warn("[PERM_SHOW] Safety-net timeout fired (webview unreachable) for channelId=" + channelId);
                     pendingPermissionRequests.remove(channelId);
-                    future.complete(PermissionService.PermissionResponse.DENY.getValue());
                 }
             });
 
         } catch (Exception e) {
-            LOG.error("[PERM_SHOW] ERROR: " + e.getMessage(), e);
+            LOG.error("[PERM_SHOW] ERROR: errorClass=" + errorClass(e), e);
             pendingPermissionRequests.remove(channelId);
             future.complete(PermissionService.PermissionResponse.DENY.getValue());
         }
@@ -194,12 +244,12 @@ public class PermissionHandler extends BaseMessageHandler {
             targetWindow.executeJavaScriptCode(jsCode);
 
         } catch (Exception e) {
-            LOG.error("[PermissionHandler] 显示权限弹窗失败: " + e.getMessage(), e);
+            LOG.error("[PermissionHandler] 显示权限弹窗失败: errorClass=" + errorClass(e), e);
             this.context.getSession().handlePermissionDecision(
                 request.getChannelId(),
                 false,
                 false,
-                "Failed to show permission dialog: " + e.getMessage()
+                "Failed to show permission dialog"
             );
             notifyPermissionDenied();
         }
@@ -210,7 +260,7 @@ public class PermissionHandler extends BaseMessageHandler {
      */
     private void handlePermissionDecision(String jsonContent) {
         LOG.info("[PERM_DECISION] Received permission decision from JS");
-        LOG.debug("[PERM_DEBUG][HANDLE_DECISION] Content: " + jsonContent);
+        LOG.debug("[PERM_DEBUG][HANDLE_DECISION] payloadLength=" + payloadLength(jsonContent));
         try {
             Gson gson = new Gson();
             JsonObject decision = gson.fromJson(jsonContent, JsonObject.class);
@@ -258,7 +308,7 @@ public class PermissionHandler extends BaseMessageHandler {
                 }
             }
         } catch (Exception e) {
-            LOG.error("[PERM_DECISION] ERROR: " + e.getMessage(), e);
+            LOG.error("[PERM_DECISION] ERROR: errorClass=" + errorClass(e), e);
         }
     }
 
@@ -315,7 +365,10 @@ public class PermissionHandler extends BaseMessageHandler {
 
         LOG.debug("[ASK_USER_QUESTION][SHOW_DIALOG] Starting showAskUserQuestionDialog");
         LOG.debug("[ASK_USER_QUESTION][SHOW_DIALOG] requestId=" + requestId);
-        LOG.debug("[ASK_USER_QUESTION][SHOW_DIALOG] questionsData=" + questionsData.toString());
+        LOG.debug("[ASK_USER_QUESTION][SHOW_DIALOG] questionCount="
+                + (questionsData.has("questions") && questionsData.get("questions").isJsonArray()
+                    ? questionsData.getAsJsonArray("questions").size()
+                    : 0));
 
         pendingAskUserQuestionRequests.put(requestId, future);
 
@@ -338,18 +391,15 @@ public class PermissionHandler extends BaseMessageHandler {
                 context.executeJavaScriptOnEDT(jsCode);
             });
 
-            // Timeout handling (consistent with regular permission requests: 5 minutes)
-            CompletableFuture.delayedExecutor(PERMISSION_TIMEOUT_SECONDS, TimeUnit.SECONDS).execute(() -> {
-                if (!future.isDone()) {
-                    LOG.warn("[ASK_USER_QUESTION][SHOW_DIALOG] Timeout! Removing pending request for requestId=" + requestId);
+            scheduleSafetyNet(future, () -> {
+                if (future.complete(new JsonObject())) {
+                    LOG.warn("[ASK_USER_QUESTION][SHOW_DIALOG] Safety-net timeout fired (webview unreachable) for requestId=" + requestId);
                     pendingAskUserQuestionRequests.remove(requestId);
-                    // Return empty answers on timeout
-                    future.complete(new JsonObject());
                 }
             });
 
         } catch (Exception e) {
-            LOG.error("[ASK_USER_QUESTION][SHOW_DIALOG] ERROR: " + e.getMessage(), e);
+            LOG.error("[ASK_USER_QUESTION][SHOW_DIALOG] ERROR: errorClass=" + errorClass(e), e);
             pendingAskUserQuestionRequests.remove(requestId);
             future.complete(new JsonObject());
         }
@@ -361,7 +411,7 @@ public class PermissionHandler extends BaseMessageHandler {
      * Handle AskUserQuestion response messages from JavaScript.
      */
     private void handleAskUserQuestionResponse(String jsonContent) {
-        LOG.debug("[ASK_USER_QUESTION][HANDLE_RESPONSE] Received response from JS: " + jsonContent);
+        LOG.debug("[ASK_USER_QUESTION][HANDLE_RESPONSE] payloadLength=" + payloadLength(jsonContent));
         try {
             Gson gson = new Gson();
             JsonObject response = gson.fromJson(jsonContent, JsonObject.class);
@@ -374,13 +424,13 @@ public class PermissionHandler extends BaseMessageHandler {
             CompletableFuture<JsonObject> pendingFuture = pendingAskUserQuestionRequests.remove(requestId);
 
             if (pendingFuture != null) {
-                LOG.debug("[ASK_USER_QUESTION][HANDLE_RESPONSE] Completing future with answers: " + answers.toString());
+                LOG.debug("[ASK_USER_QUESTION][HANDLE_RESPONSE] Completing future with answerCount=" + answers.size());
                 pendingFuture.complete(answers);
             } else {
                 LOG.warn("[ASK_USER_QUESTION][HANDLE_RESPONSE] No pending request found for requestId: " + requestId);
             }
         } catch (Exception e) {
-            LOG.error("[ASK_USER_QUESTION][HANDLE_RESPONSE] ERROR: " + e.getMessage(), e);
+            LOG.error("[ASK_USER_QUESTION][HANDLE_RESPONSE] ERROR: errorClass=" + errorClass(e), e);
         }
     }
 
@@ -392,7 +442,7 @@ public class PermissionHandler extends BaseMessageHandler {
 
         LOG.debug("[PLAN_APPROVAL][SHOW_DIALOG] Starting showPlanApprovalDialog");
         LOG.debug("[PLAN_APPROVAL][SHOW_DIALOG] requestId=" + requestId);
-        LOG.debug("[PLAN_APPROVAL][SHOW_DIALOG] planData=" + planData.toString());
+        LOG.debug("[PLAN_APPROVAL][SHOW_DIALOG] fieldCount=" + planData.size());
 
         pendingPlanApprovalRequests.put(requestId, future);
 
@@ -415,21 +465,19 @@ public class PermissionHandler extends BaseMessageHandler {
                 context.executeJavaScriptOnEDT(jsCode);
             });
 
-            // Timeout handling (consistent with other permission requests: 5 minutes)
-            CompletableFuture.delayedExecutor(PERMISSION_TIMEOUT_SECONDS, TimeUnit.SECONDS).execute(() -> {
-                if (!future.isDone()) {
+            scheduleSafetyNet(future, () -> {
+                JsonObject timeoutResponse = new JsonObject();
+                timeoutResponse.addProperty("approved", false);
+                timeoutResponse.addProperty("targetMode", "default");
+                timeoutResponse.addProperty("message", "Plan approval timed out");
+                if (future.complete(timeoutResponse)) {
+                    LOG.warn("[PLAN_APPROVAL][SHOW_DIALOG] Safety-net timeout fired (webview unreachable) for requestId=" + requestId);
                     pendingPlanApprovalRequests.remove(requestId);
-                    // Return rejection on timeout
-                    JsonObject timeoutResponse = new JsonObject();
-                    timeoutResponse.addProperty("approved", false);
-                    timeoutResponse.addProperty("targetMode", "default");
-                    timeoutResponse.addProperty("message", "Plan approval timed out");
-                    future.complete(timeoutResponse);
                 }
             });
 
         } catch (Exception e) {
-            LOG.error("[PLAN_APPROVAL][SHOW_DIALOG] ERROR: " + e.getMessage(), e);
+            LOG.error("[PLAN_APPROVAL][SHOW_DIALOG] ERROR: errorClass=" + errorClass(e), e);
             pendingPlanApprovalRequests.remove(requestId);
             JsonObject errorResponse = new JsonObject();
             errorResponse.addProperty("approved", false);
@@ -445,7 +493,7 @@ public class PermissionHandler extends BaseMessageHandler {
      * Handle PlanApproval response messages from JavaScript.
      */
     private void handlePlanApprovalResponse(String jsonContent) {
-        LOG.debug("[PLAN_APPROVAL][HANDLE_RESPONSE] Received response from JS: " + jsonContent);
+        LOG.debug("[PLAN_APPROVAL][HANDLE_RESPONSE] payloadLength=" + payloadLength(jsonContent));
         try {
             Gson gson = new Gson();
             JsonObject response = gson.fromJson(jsonContent, JsonObject.class);
@@ -466,7 +514,7 @@ public class PermissionHandler extends BaseMessageHandler {
                 LOG.warn("[PLAN_APPROVAL][HANDLE_RESPONSE] No pending request found for requestId: " + requestId);
             }
         } catch (Exception e) {
-            LOG.error("[PLAN_APPROVAL][HANDLE_RESPONSE] ERROR: " + e.getMessage(), e);
+            LOG.error("[PLAN_APPROVAL][HANDLE_RESPONSE] ERROR: errorClass=" + errorClass(e), e);
         }
     }
 }

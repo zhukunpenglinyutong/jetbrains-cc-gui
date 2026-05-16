@@ -21,7 +21,9 @@ public class ClaudeSessionLiteReaderTest {
         Path tempDir = Files.createTempDirectory("claude-lite-test");
         try {
             Path tempFile = tempDir.resolve("abc12345-1234-1234-1234-1234567890ab.jsonl");
-            String content = "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"Hello Claude\"},\"timestamp\":\"2026-01-15T10:00:00Z\",\"sessionId\":\"abc12345-1234-1234-1234-1234567890ab\"}\n" +
+            String content = "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"Hello Claude\"},"
+                    + "\"timestamp\":\"2026-01-15T10:00:00Z\","
+                    + "\"sessionId\":\"abc12345-1234-1234-1234-1234567890ab\"}\n" +
                     "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":\"Hi there!\"},\"timestamp\":\"2026-01-15T10:01:00Z\"}\n" +
                     "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"How are you?\"},\"timestamp\":\"2026-01-15T10:02:00Z\"}\n";
             Files.writeString(tempFile, content);

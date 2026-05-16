@@ -227,6 +227,11 @@
         "cmdEnter": "⌘/Ctrl+Enter 发送",
         "cmdEnterDesc": "按 ⌘/Ctrl+Enter 发送消息，Enter 换行"
       },
+      "permissionDialogTimeout": {
+        "label": "权限与提问对话框超时时间",
+        "unit": "秒",
+        "hint": "设置 Claude 提问对话框和权限请求对话框的超时时间（30~3600 秒）。超时后对话框将自动关闭，Claude 会继续执行。"
+      },
       "chatBgColor": {
         "label": "聊天背景色",
         "custom": "自定义",
@@ -916,7 +921,8 @@
       "WebSearch": "网页搜索",
       "WebFetch": "获取网页",
       "execute": "执行 {{toolName}}",
-      "readDirectory": "读取目录"
+      "readDirectory": "读取目录",
+      "timeoutWarning": "请尽快回答，对话框将在 {{seconds}} 秒后自动关闭"
     }
   },
   "askUserQuestion": {

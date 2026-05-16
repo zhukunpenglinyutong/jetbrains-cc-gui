@@ -1,7 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { formatCountdown } from '../utils/helpers';
+import { useDialogCountdownTimeout } from '../hooks/useDialogCountdownTimeout';
+import { DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS } from '../utils/permissionDialogTimeout';
 import MarkdownBlock from './MarkdownBlock';
 import { useDialogResize } from '../hooks/useDialogResize';
+import { isEditableEventTarget } from '../utils/isEditableEventTarget';
 
 export interface PermissionRequest {
   channelId: string;
@@ -16,6 +20,7 @@ interface PermissionDialogProps {
   onApprove: (channelId: string) => void;
   onSkip: (channelId: string) => void;
   onApproveAlways: (channelId: string) => void;
+  timeoutSeconds?: number;
 }
 
 const PermissionDialog = ({
@@ -24,63 +29,85 @@ const PermissionDialog = ({
   onApprove,
   onSkip,
   onApproveAlways,
+  timeoutSeconds = DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS,
 }: PermissionDialogProps) => {
-  const [showCommand, setShowCommand] = useState(true); // Expand command by default
+  const [showCommand, setShowCommand] = useState(true);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const { t } = useTranslation();
-
-  // Resize state
   const { dialogRef, dialogHeight, setDialogHeight, handleResizeStart } = useDialogResize({ minHeight: 150 });
 
-  const handleApprove = () => {
-    if (!request) return;
+  const handleTimeout = useCallback(() => {
+    if (request) {
+      onSkip(request.channelId);
+    }
+  }, [request, onSkip]);
+
+  const { remainingSeconds, isTimeWarning, markSubmitted } = useDialogCountdownTimeout({
+    isOpen,
+    requestKey: request?.channelId,
+    timeoutSeconds,
+    onTimeout: handleTimeout,
+  });
+
+  const handleApprove = useCallback(() => {
+    if (!request || !markSubmitted()) return;
     onApprove(request.channelId);
-  };
+  }, [request, markSubmitted, onApprove]);
 
-  const handleApproveAlways = () => {
-    if (!request) return;
+  const handleApproveAlways = useCallback(() => {
+    if (!request || !markSubmitted()) return;
     onApproveAlways(request.channelId);
-  };
+  }, [request, markSubmitted, onApproveAlways]);
 
-  const handleSkip = () => {
-    if (!request) return;
+  const handleSkip = useCallback(() => {
+    if (!request || !markSubmitted()) return;
     onSkip(request.channelId);
-  };
+  }, [request, markSubmitted, onSkip]);
 
   useEffect(() => {
     if (isOpen && request) {
-      setShowCommand(true); // Expand by default each time it opens
+      setShowCommand(true);
       setSelectedIndex(0);
       setDialogHeight(null);
-
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === '1') {
-          handleApprove();
-        } else if (e.key === '2') {
-          handleApproveAlways();
-        } else if (e.key === '3') {
-          handleSkip();
-        } else if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          setSelectedIndex(prev => Math.max(0, prev - 1));
-        } else if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          setSelectedIndex(prev => Math.min(2, prev + 1));
-        } else if (e.key === 'Enter') {
-          e.preventDefault();
-          // Use current selectedIndex from closure instead of state
-          setSelectedIndex(current => {
-            if (current === 0) handleApprove();
-            else if (current === 1) handleApproveAlways();
-            else if (current === 2) handleSkip();
-            return current;
-          });
-        }
-      };
-      window.addEventListener('keydown', handleKeyDown);
-      return () => window.removeEventListener('keydown', handleKeyDown);
     }
-  }, [isOpen, request, onApprove, onApproveAlways, onSkip]);
+  }, [isOpen, request?.channelId, setDialogHeight]);
+
+  useEffect(() => {
+    if (!isOpen || !request) {
+      return;
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isEditableEventTarget(e.target)) {
+        return;
+      }
+
+      if (e.key === '1') {
+        handleApprove();
+      } else if (e.key === '2') {
+        handleApproveAlways();
+      } else if (e.key === '3') {
+        handleSkip();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedIndex(prev => Math.max(0, prev - 1));
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedIndex(prev => Math.min(2, prev + 1));
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        setSelectedIndex(current => {
+          if (current === 0) handleApprove();
+          else if (current === 1) handleApproveAlways();
+          else if (current === 2) handleSkip();
+          return current;
+        });
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, request, handleApprove, handleApproveAlways, handleSkip]);
 
   if (!isOpen || !request) {
     return null;
@@ -153,13 +180,22 @@ const PermissionDialog = ({
         className="permission-dialog-v3"
         style={dialogHeight ? { height: dialogHeight, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' as const } : undefined}
       >
-        {/* Resize handle */}
         <div className="permission-dialog-v3-resize-handle" onPointerDown={handleResizeStart} />
-        {/* Title area */}
-        <h3 className="permission-dialog-v3-title">{getToolTitle(request.toolName)}</h3>
+        <div className="permission-dialog-v3-header-row">
+          <h3 className="permission-dialog-v3-title">{getToolTitle(request.toolName)}</h3>
+          <span className={`countdown-timer ${isTimeWarning ? 'warning' : ''}`}>
+            <span className="codicon codicon-clock" />
+            <span className="countdown-time">{formatCountdown(remainingSeconds)}</span>
+          </span>
+        </div>
+        {isTimeWarning && (
+          <div className="timeout-warning-banner">
+            <span className="codicon codicon-warning" />
+            <span>{t('permission.timeoutWarning', 'Please answer soon, dialog will close in {{seconds}} seconds', { seconds: remainingSeconds })}</span>
+          </div>
+        )}
         <p className="permission-dialog-v3-subtitle">{t('permission.fromExternalProcess')}</p>
 
-        {/* Command/content area */}
         <div className="permission-dialog-v3-command-box">
           <div className="permission-dialog-v3-command-header">
             <span className="command-path">

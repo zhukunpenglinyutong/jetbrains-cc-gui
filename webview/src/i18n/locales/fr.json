@@ -211,6 +211,11 @@
         "cmdEnter": "⌘/Ctrl+Entrée pour envoyer",
         "cmdEnterDesc": "Appuyez sur ⌘/Ctrl+Entrée pour envoyer le message, Entrée pour nouvelle ligne"
       },
+      "permissionDialogTimeout": {
+        "label": "Délai d'expiration des dialogues de permission et de question",
+        "unit": "secondes",
+        "hint": "Définissez le délai d'expiration pour les dialogues de questions de Claude et les dialogues de demande de permission (30~3600 secondes). Après expiration, le dialogue se fermera automatiquement et Claude continuera."
+      },
       "chatBgColor": {
         "label": "Couleur de fond du chat",
         "custom": "Personnalisé",
@@ -733,7 +738,8 @@
       "WebSearch": "Recherche web",
       "WebFetch": "Récupérer web",
       "execute": "Exécuter {{toolName}}",
-      "readDirectory": "Lire le répertoire"
+      "readDirectory": "Lire le répertoire",
+      "timeoutWarning": "Veuillez répondre rapidement, la boîte de dialogue se fermera dans {{seconds}} secondes"
     }
   },
   "askUserQuestion": {

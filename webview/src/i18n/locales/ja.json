@@ -211,6 +211,11 @@
         "cmdEnter": "⌘/Ctrl+Enterで送信",
         "cmdEnterDesc": "⌘/Ctrl+Enterでメッセージを送信、Enterで改行"
       },
+      "permissionDialogTimeout": {
+        "label": "権限と質問ダイアログのタイムアウト",
+        "unit": "秒",
+        "hint": "Claudeの質問ダイアログと権限リクエストダイアログのタイムアウト時間を設定します（30~3600秒）。タイムアウト後、ダイアログは自動的に閉じられ、Claudeは続行します。"
+      },
       "chatBgColor": {
         "label": "チャット背景色",
         "custom": "カスタム",
@@ -738,7 +743,8 @@
       "WebSearch": "ウェブ検索",
       "WebFetch": "ウェブ取得",
       "execute": "{{toolName}}を実行",
-      "readDirectory": "ディレクトリを読み取る"
+      "readDirectory": "ディレクトリを読み取る",
+      "timeoutWarning": "お早めにご回答ください。ダイアログは {{seconds}} 秒後に自動的に閉じます"
     }
   },
   "askUserQuestion": {

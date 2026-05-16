@@ -47,6 +47,8 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_send_shortcut",
         "get_auto_open_file_enabled",
         "set_auto_open_file_enabled",
+        "get_permission_dialog_timeout",
+        "set_permission_dialog_timeout",
         "get_commit_generation_enabled",
         "set_commit_generation_enabled",
         "get_status_bar_widget_enabled",
@@ -177,6 +179,12 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_auto_open_file_enabled":
                 projectConfigHandler.handleSetAutoOpenFileEnabled(content);
+                return true;
+            case "get_permission_dialog_timeout":
+                projectConfigHandler.handleGetPermissionDialogTimeout();
+                return true;
+            case "set_permission_dialog_timeout":
+                projectConfigHandler.handleSetPermissionDialogTimeout(content);
                 return true;
             case "get_commit_generation_enabled":
                 projectConfigHandler.handleGetCommitGenerationEnabled();

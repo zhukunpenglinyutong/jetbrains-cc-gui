@@ -223,6 +223,11 @@
         "cmdEnter": "⌘/Ctrl+Enter para Enviar",
         "cmdEnterDesc": "Pressione ⌘/Ctrl+Enter para enviar mensagem, Enter para nova linha"
       },
+      "permissionDialogTimeout": {
+        "label": "Tempo Limite de Diálogos de Permissão e Pergunta",
+        "unit": "segundos",
+        "hint": "Defina o tempo limite para os diálogos de perguntas do Claude e os diálogos de solicitação de permissão (30~3600 segundos). Após o tempo limite, o diálogo será fechado automaticamente e o Claude continuará."
+      },
       "chatBgColor": {
         "label": "Plano de Fundo do Chat",
         "custom": "Personalizado",
@@ -902,7 +907,8 @@
       "WebSearch": "Pesquisa Web",
       "WebFetch": "Buscar Web",
       "execute": "Executar {{toolName}}",
-      "readDirectory": "Ler Diretório"
+      "readDirectory": "Ler Diretório",
+      "timeoutWarning": "Por favor, responda em breve, o diálogo fechará em {{seconds}} segundos"
     }
   },
   "askUserQuestion": {
