@@ -121,13 +121,9 @@ public class DaemonBridge {
                     return false;
                 }
 
-                ProcessBuilder pb;
-                if (NodeDetector.isWslPath(nodePath)) {
-                    String wslScriptPath = NodeDetector.convertToWslPath(daemonScript.getAbsolutePath());
-                    pb = new ProcessBuilder("wsl", nodePath, wslScriptPath);
-                } else {
-                    pb = new ProcessBuilder(nodePath, daemonScript.getAbsolutePath());
-                }
+                List<String> daemonCmd = NodeDetector.buildNodeScriptCommand(
+                        nodePath, daemonScript.getAbsolutePath());
+                ProcessBuilder pb = new ProcessBuilder(daemonCmd);
                 pb.directory(bridgeDir);
 
                 // Configure environment

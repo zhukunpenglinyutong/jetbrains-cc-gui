@@ -348,16 +348,8 @@ public class CodexSDKBridge extends BaseSDKBridge {
 
                 String stdinJson = gson.toJson(stdinInput);
 
-                List<String> command = new ArrayList<>();
                 String scriptPath = new File(bridgeDir, CHANNEL_SCRIPT).getAbsolutePath();
-                if (NodeDetector.isWslPath(node)) {
-                    command.add("wsl");
-                    command.add(node);
-                    command.add(NodeDetector.convertToWslPath(scriptPath));
-                } else {
-                    command.add(node);
-                    command.add(scriptPath);
-                }
+                List<String> command = NodeDetector.buildNodeScriptCommand(node, scriptPath);
                 command.add("codex");
                 command.add("send");
 
@@ -555,16 +547,8 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 }
                 String stdinJson = gson.toJson(stdinInput);
 
-                List<String> command = new ArrayList<>();
                 String scriptPath = new File(bridgeDir, CHANNEL_SCRIPT).getAbsolutePath();
-                if (NodeDetector.isWslPath(node)) {
-                    command.add("wsl");
-                    command.add(node);
-                    command.add(NodeDetector.convertToWslPath(scriptPath));
-                } else {
-                    command.add(node);
-                    command.add(scriptPath);
-                }
+                List<String> command = NodeDetector.buildNodeScriptCommand(node, scriptPath);
                 command.add("codex");
                 command.add("getMcpServerTools");
 

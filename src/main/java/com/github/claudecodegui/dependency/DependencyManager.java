@@ -616,7 +616,9 @@ public class DependencyManager {
      * Resolves the npm path based on the node path.
      */
     private String getNpmPath(String nodePath) {
-        // For WSL node paths, derive npm path from the same directory inside WSL
+        // For WSL node paths, derive npm path from the same directory inside WSL.
+        // NOTE: This assumes npm is co-located with node (true for official installs and nvm).
+        // Version managers like Volta use separate wrapper binaries and may not follow this layout.
         if (NodeDetector.isWslPath(nodePath)) {
             int lastSlash = nodePath.lastIndexOf('/');
             if (lastSlash > 0) {

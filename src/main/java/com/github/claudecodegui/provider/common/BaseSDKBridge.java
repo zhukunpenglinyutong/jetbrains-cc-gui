@@ -177,12 +177,8 @@ public abstract class BaseSDKBridge {
     public boolean checkEnvironment() {
         try {
             String node = nodeDetector.findNodeExecutable();
-            ProcessBuilder pb;
-            if (NodeDetector.isWslPath(node)) {
-                pb = new ProcessBuilder("wsl", node, "--version");
-            } else {
-                pb = new ProcessBuilder(node, "--version");
-            }
+            List<String> versionCmd = NodeDetector.buildNodeScriptCommand(node, "--version");
+            ProcessBuilder pb = new ProcessBuilder(versionCmd);
             envConfigurator.updateProcessEnvironment(pb, node);
             Process process = pb.start();
 
@@ -391,14 +387,7 @@ public abstract class BaseSDKBridge {
             }
 
             String scriptPath = new File(bridgeDir, CHANNEL_SCRIPT).getAbsolutePath();
-            if (NodeDetector.isWslPath(node)) {
-                command.add("wsl");
-                command.add(node);
-                command.add(NodeDetector.convertToWslPath(scriptPath));
-            } else {
-                command.add(node);
-                command.add(scriptPath);
-            }
+            command.addAll(NodeDetector.buildNodeScriptCommand(node, scriptPath));
             command.add(getProviderName());
             command.add(action);
         } catch (Exception e) {

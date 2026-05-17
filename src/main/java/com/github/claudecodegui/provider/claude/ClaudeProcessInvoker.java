@@ -120,16 +120,8 @@ class ClaudeProcessInvoker {
                 log.debug("[PROMPT] Sending to Node.js (" + stdinJson.length() + " chars):\n" + preview);
 
                 boolean hasAttachments = stdinInput.has("attachments");
-                List<String> command = new ArrayList<>();
                 String scriptPath = new File(workDir, CHANNEL_SCRIPT).getAbsolutePath();
-                if (NodeDetector.isWslPath(node)) {
-                    command.add("wsl");
-                    command.add(node);
-                    command.add(NodeDetector.convertToWslPath(scriptPath));
-                } else {
-                    command.add(node);
-                    command.add(scriptPath);
-                }
+                List<String> command = NodeDetector.buildNodeScriptCommand(node, scriptPath);
                 command.add(PROVIDER_NAME);
                 command.add(hasAttachments ? "sendWithAttachments" : "send");
 

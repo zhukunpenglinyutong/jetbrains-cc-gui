@@ -572,6 +572,37 @@ public class NodeDetector {
     }
 
     /**
+     * Builds the base of a WSL-aware command list for running a Node.js script file.
+     * When {@code nodePath} is a WSL path, prepends {@code "wsl"} and converts
+     * {@code scriptPath} to a WSL-accessible format via {@link #convertToWslPath}.
+     * Callers may append additional arguments to the returned list.
+     *
+     * <p>Use this instead of repeating the {@code isWslPath} guard inline:
+     * <pre>
+     *     List&lt;String&gt; command = NodeDetector.buildNodeScriptCommand(node, scriptPath);
+     *     command.add("myProvider");
+     *     command.add("myAction");
+     *     ProcessBuilder pb = new ProcessBuilder(command);
+     * </pre>
+     *
+     * @param nodePath   Node.js executable path (may be a WSL Unix-style path on Windows)
+     * @param scriptPath path to the Node.js script file
+     * @return mutable command list
+     */
+    public static List<String> buildNodeScriptCommand(String nodePath, String scriptPath) {
+        List<String> command = new ArrayList<>();
+        if (isWslPath(nodePath)) {
+            command.add("wsl");
+            command.add(nodePath);
+            command.add(convertToWslPath(scriptPath));
+        } else {
+            command.add(nodePath);
+            command.add(scriptPath);
+        }
+        return command;
+    }
+
+    /**
      * Converts a Windows file path to a WSL-accessible path.
      * For example: "C:\Users\foo\bar" becomes "/mnt/c/Users/foo/bar".
      * UNC paths like "\\wsl.localhost\Ubuntu\home\..." are converted to "/home/...".

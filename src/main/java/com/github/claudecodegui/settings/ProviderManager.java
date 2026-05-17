@@ -512,13 +512,20 @@ public class ProviderManager {
                 com.intellij.ide.util.PropertiesComponent props = com.intellij.ide.util.PropertiesComponent.getInstance();
                 String savedNodePath = props.getValue("claude.code.node.path");
                 if (savedNodePath != null && !savedNodePath.trim().isEmpty()) {
-                    // Validate whether the user-configured path is valid
-                    File nodeFile = new File(savedNodePath.trim());
-                    if (nodeFile.exists() && nodeFile.canExecute()) {
-                        nodePath = savedNodePath.trim();
-                        LOG.info("[ProviderManager] Using user-configured Node.js path: " + nodePath);
+                    String trimmed = savedNodePath.trim();
+                    // WSL paths (Unix-style) cannot be checked with File.exists() on the Windows JVM.
+                    // Validate via NodeDetector.isWslPath() first, then fall back to File checks.
+                    if (NodeDetector.isWslPath(trimmed)) {
+                        nodePath = trimmed;
+                        LOG.info("[ProviderManager] Using user-configured WSL Node.js path: " + nodePath);
                     } else {
-                        LOG.info("[ProviderManager] User-configured Node.js path is invalid, will auto-detect: " + savedNodePath);
+                        File nodeFile = new File(trimmed);
+                        if (nodeFile.exists() && nodeFile.canExecute()) {
+                            nodePath = trimmed;
+                            LOG.info("[ProviderManager] Using user-configured Node.js path: " + nodePath);
+                        } else {
+                            LOG.info("[ProviderManager] User-configured Node.js path is invalid, will auto-detect: " + savedNodePath);
+                        }
                     }
                 }
             } catch (Exception e) {
@@ -532,8 +539,10 @@ public class ProviderManager {
                 LOG.info("[ProviderManager] Auto-detected Node.js path: " + nodePath);
             }
 
-            // Build the Node.js command
-            ProcessBuilder pb = new ProcessBuilder(nodePath, scriptPath, dbPath);
+            // Build the Node.js command (WSL-aware: prepend 'wsl' and convert paths when needed)
+            List<String> command = NodeDetector.buildNodeScriptCommand(nodePath, scriptPath);
+            command.add(NodeDetector.isWslPath(nodePath) ? NodeDetector.convertToWslPath(dbPath) : dbPath);
+            ProcessBuilder pb = new ProcessBuilder(command);
             pb.directory(new File(aiBridgePath));
             pb.redirectErrorStream(true); // Merge stderr into stdout
 
