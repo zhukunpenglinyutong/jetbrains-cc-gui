@@ -171,9 +171,16 @@ public class DependencyManager {
             String nodePath = nodeDetector.findNodeExecutable();
             String npmPath = getNpmPath(nodePath);
 
-            ProcessBuilder pb = new ProcessBuilder(
-                    npmPath, "view", sdk.getNpmPackage(), "version"
-            );
+            ProcessBuilder pb;
+            if (NodeDetector.isWslPath(nodePath)) {
+                pb = new ProcessBuilder(
+                        "wsl", npmPath, "view", sdk.getNpmPackage(), "version"
+                );
+            } else {
+                pb = new ProcessBuilder(
+                        npmPath, "view", sdk.getNpmPackage(), "version"
+                );
+            }
             configureProcessEnvironment(pb);
 
             Process process = pb.start();
@@ -218,9 +225,16 @@ public class DependencyManager {
             String nodePath = nodeDetector.findNodeExecutable();
             String npmPath = getNpmPath(nodePath);
 
-            ProcessBuilder pb = new ProcessBuilder(
-                    npmPath, "view", sdk.getNpmPackage(), "versions", "--json"
-            );
+            ProcessBuilder pb;
+            if (NodeDetector.isWslPath(nodePath)) {
+                pb = new ProcessBuilder(
+                        "wsl", npmPath, "view", sdk.getNpmPackage(), "versions", "--json"
+                );
+            } else {
+                pb = new ProcessBuilder(
+                        npmPath, "view", sdk.getNpmPackage(), "versions", "--json"
+                );
+            }
             configureProcessEnvironment(pb);
 
             Process process = pb.start();
@@ -384,9 +398,16 @@ public class DependencyManager {
                 }
 
                 log.accept("Running npm install...");
+                boolean isWsl = NodeDetector.isWslPath(nodePath);
+                Path prefixDir = isWsl
+                        ? Paths.get(NodeDetector.convertToWslPath(normalizedSdkDir.toString()))
+                        : normalizedSdkDir;
                 List<String> command = NpmPermissionHelper.buildInstallCommandWithFallback(
-                        npmPath, normalizedSdkDir, packages, attempt
+                        npmPath, prefixDir, packages, attempt
                 );
+                if (isWsl) {
+                    command.add(0, "wsl");
+                }
                 log.accept("Command: " + String.join(" ", command));
 
                 ProcessBuilder pb = new ProcessBuilder(command);
@@ -595,6 +616,17 @@ public class DependencyManager {
      * Resolves the npm path based on the node path.
      */
     private String getNpmPath(String nodePath) {
+        // For WSL node paths, derive npm path from the same directory inside WSL.
+        // NOTE: This assumes npm is co-located with node (true for official installs and nvm).
+        // Version managers like Volta use separate wrapper binaries and may not follow this layout.
+        if (NodeDetector.isWslPath(nodePath)) {
+            int lastSlash = nodePath.lastIndexOf('/');
+            if (lastSlash > 0) {
+                return nodePath.substring(0, lastSlash) + "/npm";
+            }
+            return "npm";
+        }
+
         String npmName = PlatformUtils.isWindows() ? "npm.cmd" : "npm";
 
         // 1. Try to find npm in the same directory as Node.js

@@ -108,9 +108,8 @@ class ClaudeSessionQueryService {
             throw new RuntimeException("Bridge directory not ready or invalid");
         }
 
-        List<String> command = new ArrayList<>();
-        command.add(node);
-        command.add(CHANNEL_SCRIPT);
+        List<String> command = NodeDetector.buildNodeScriptCommand(
+                node, new File(workDir, CHANNEL_SCRIPT).getAbsolutePath());
         command.add("claude");
         command.add(commandName);
         command.add(sessionId);

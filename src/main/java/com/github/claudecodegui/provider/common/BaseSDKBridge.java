@@ -177,7 +177,8 @@ public abstract class BaseSDKBridge {
     public boolean checkEnvironment() {
         try {
             String node = nodeDetector.findNodeExecutable();
-            ProcessBuilder pb = new ProcessBuilder(node, "--version");
+            List<String> versionCmd = NodeDetector.buildNodeScriptCommand(node, "--version");
+            ProcessBuilder pb = new ProcessBuilder(versionCmd);
             envConfigurator.updateProcessEnvironment(pb, node);
             Process process = pb.start();
 
@@ -369,6 +370,8 @@ public abstract class BaseSDKBridge {
 
     /**
      * Build the base command for invoking channel-manager.js.
+     * When the node executable is a WSL path, prepends 'wsl' and converts
+     * the script path to a WSL-accessible format.
      *
      * @param action The action to perform (e.g., "send", "sendWithAttachments")
      * @return Command list
@@ -383,8 +386,8 @@ public abstract class BaseSDKBridge {
                 return command;
             }
 
-            command.add(node);
-            command.add(new File(bridgeDir, CHANNEL_SCRIPT).getAbsolutePath());
+            String scriptPath = new File(bridgeDir, CHANNEL_SCRIPT).getAbsolutePath();
+            command.addAll(NodeDetector.buildNodeScriptCommand(node, scriptPath));
             command.add(getProviderName());
             command.add(action);
         } catch (Exception e) {

@@ -9,6 +9,7 @@ import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.dependency.DependencyManager;
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.provider.common.BaseSDKBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
@@ -347,9 +348,8 @@ public class CodexSDKBridge extends BaseSDKBridge {
 
                 String stdinJson = gson.toJson(stdinInput);
 
-                List<String> command = new ArrayList<>();
-                command.add(node);
-                command.add(new File(bridgeDir, CHANNEL_SCRIPT).getAbsolutePath());
+                String scriptPath = new File(bridgeDir, CHANNEL_SCRIPT).getAbsolutePath();
+                List<String> command = NodeDetector.buildNodeScriptCommand(node, scriptPath);
                 command.add("codex");
                 command.add("send");
 
@@ -547,9 +547,8 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 }
                 String stdinJson = gson.toJson(stdinInput);
 
-                List<String> command = new ArrayList<>();
-                command.add(node);
-                command.add(new File(bridgeDir, CHANNEL_SCRIPT).getAbsolutePath());
+                String scriptPath = new File(bridgeDir, CHANNEL_SCRIPT).getAbsolutePath();
+                List<String> command = NodeDetector.buildNodeScriptCommand(node, scriptPath);
                 command.add("codex");
                 command.add("getMcpServerTools");
 
