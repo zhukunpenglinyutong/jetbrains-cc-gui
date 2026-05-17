@@ -76,8 +76,15 @@ class ClaudeRewindService {
                 String stdinJson = gson.toJson(stdinInput);
 
                 List<String> command = new ArrayList<>();
-                command.add(node);
-                command.add(new File(workDir, CHANNEL_SCRIPT).getAbsolutePath());
+                String scriptPath = new File(workDir, CHANNEL_SCRIPT).getAbsolutePath();
+                if (NodeDetector.isWslPath(node)) {
+                    command.add("wsl");
+                    command.add(node);
+                    command.add(NodeDetector.convertToWslPath(scriptPath));
+                } else {
+                    command.add(node);
+                    command.add(scriptPath);
+                }
                 command.add("claude");
                 command.add("rewindFiles");
 

@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
 import java.io.BufferedReader;
@@ -40,17 +41,20 @@ public class NodeJsServiceCaller {
 
         String bridgePath = context.getClaudeSDKBridge().getSdkTestDir().getAbsolutePath();
         String nodePath = context.getClaudeSDKBridge().getNodeExecutable();
+        String scriptBridgePath = NodeDetector.isWslPath(nodePath)
+                ? NodeDetector.convertToWslPath(bridgePath)
+                : bridgePath.replace("\\", "\\\\");
 
         String nodeScript = String.format(
             "const { %s } = require('%s/services/favorites-service.cjs'); " +
             "const result = %s(process.env.SESSION_ID); " +
             "console.log(JSON.stringify(result));",
             functionName,
-            bridgePath.replace("\\", "\\\\"),
+            scriptBridgePath,
             functionName
         );
 
-        ProcessBuilder pb = new ProcessBuilder(nodePath, "-e", nodeScript);
+        ProcessBuilder pb = buildNodeProcessBuilder(nodePath, nodeScript);
         pb.redirectErrorStream(true);
         pb.environment().put("SESSION_ID", sessionId);
 
@@ -65,17 +69,20 @@ public class NodeJsServiceCaller {
 
         String bridgePath = context.getClaudeSDKBridge().getSdkTestDir().getAbsolutePath();
         String nodePath = context.getClaudeSDKBridge().getNodeExecutable();
+        String scriptBridgePath = NodeDetector.isWslPath(nodePath)
+                ? NodeDetector.convertToWslPath(bridgePath)
+                : bridgePath.replace("\\", "\\\\");
 
         String nodeScript = String.format(
             "const { %s } = require('%s/services/session-titles-service.cjs'); " +
             "const result = %s(); " +
             "console.log(JSON.stringify(result));",
             functionName,
-            bridgePath.replace("\\", "\\\\"),
+            scriptBridgePath,
             functionName
         );
 
-        ProcessBuilder pb = new ProcessBuilder(nodePath, "-e", nodeScript);
+        ProcessBuilder pb = buildNodeProcessBuilder(nodePath, nodeScript);
         pb.redirectErrorStream(true);
 
         return executeNodeScript(pb);
@@ -89,17 +96,20 @@ public class NodeJsServiceCaller {
 
         String bridgePath = context.getClaudeSDKBridge().getSdkTestDir().getAbsolutePath();
         String nodePath = context.getClaudeSDKBridge().getNodeExecutable();
+        String scriptBridgePath = NodeDetector.isWslPath(nodePath)
+                ? NodeDetector.convertToWslPath(bridgePath)
+                : bridgePath.replace("\\", "\\\\");
 
         String nodeScript = String.format(
             "const { %s } = require('%s/services/session-titles-service.cjs'); " +
             "const result = %s(process.env.SESSION_ID, process.env.CUSTOM_TITLE); " +
             "console.log(JSON.stringify(result));",
             functionName,
-            bridgePath.replace("\\", "\\\\"),
+            scriptBridgePath,
             functionName
         );
 
-        ProcessBuilder pb = new ProcessBuilder(nodePath, "-e", nodeScript);
+        ProcessBuilder pb = buildNodeProcessBuilder(nodePath, nodeScript);
         pb.redirectErrorStream(true);
         pb.environment().put("SESSION_ID", sessionId);
         pb.environment().put("CUSTOM_TITLE", customTitle);
@@ -113,19 +123,33 @@ public class NodeJsServiceCaller {
     public String callNodeJsDeleteTitle(String sessionId) throws Exception {
         String bridgePath = context.getClaudeSDKBridge().getSdkTestDir().getAbsolutePath();
         String nodePath = context.getClaudeSDKBridge().getNodeExecutable();
+        String scriptBridgePath = NodeDetector.isWslPath(nodePath)
+                ? NodeDetector.convertToWslPath(bridgePath)
+                : bridgePath.replace("\\", "\\\\");
 
         String nodeScript = String.format(
             "const { deleteTitle } = require('%s/services/session-titles-service.cjs'); " +
             "const result = deleteTitle(process.env.SESSION_ID); " +
             "console.log(JSON.stringify({ success: result }));",
-            bridgePath.replace("\\", "\\\\")
+            scriptBridgePath
         );
 
-        ProcessBuilder pb = new ProcessBuilder(nodePath, "-e", nodeScript);
+        ProcessBuilder pb = buildNodeProcessBuilder(nodePath, nodeScript);
         pb.redirectErrorStream(true);
         pb.environment().put("SESSION_ID", sessionId);
 
         return executeNodeScript(pb);
+    }
+
+    /**
+     * Build a ProcessBuilder for running a Node.js inline script.
+     * When the node path is a WSL path, prepends 'wsl' to the command.
+     */
+    private ProcessBuilder buildNodeProcessBuilder(String nodePath, String nodeScript) {
+        if (NodeDetector.isWslPath(nodePath)) {
+            return new ProcessBuilder("wsl", nodePath, "-e", nodeScript);
+        }
+        return new ProcessBuilder(nodePath, "-e", nodeScript);
     }
 
     /**

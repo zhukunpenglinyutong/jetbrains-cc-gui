@@ -70,8 +70,14 @@ class ClaudeQueryExecutor {
             }
 
             List<String> command = new ArrayList<>();
-            command.add(node);
-            command.add(NODE_SCRIPT);
+            if (NodeDetector.isWslPath(node)) {
+                command.add("wsl");
+                command.add(node);
+                command.add(NodeDetector.convertToWslPath(new File(workDir, NODE_SCRIPT).getAbsolutePath()));
+            } else {
+                command.add(node);
+                command.add(NODE_SCRIPT);
+            }
 
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.directory(workDir);

@@ -109,8 +109,14 @@ class ClaudeSessionQueryService {
         }
 
         List<String> command = new ArrayList<>();
-        command.add(node);
-        command.add(CHANNEL_SCRIPT);
+        if (NodeDetector.isWslPath(node)) {
+            command.add("wsl");
+            command.add(node);
+            command.add(NodeDetector.convertToWslPath(new File(workDir, CHANNEL_SCRIPT).getAbsolutePath()));
+        } else {
+            command.add(node);
+            command.add(CHANNEL_SCRIPT);
+        }
         command.add("claude");
         command.add(commandName);
         command.add(sessionId);
