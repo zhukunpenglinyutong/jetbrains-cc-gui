@@ -7,6 +7,8 @@ import com.github.claudecodegui.provider.common.SDKResult;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 
+import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -60,6 +62,7 @@ class ClaudeDaemonRequestExecutor {
             AtomicReference<String> lastNodeError = new AtomicReference<>(null);
             AtomicBoolean wasAborted = new AtomicBoolean(false);
             long startTime = System.currentTimeMillis();
+            final List<File> tempImageFiles = new ArrayList<>();
 
             try {
                 JsonObject params = requestParamsBuilder.buildSendParams(
@@ -74,7 +77,8 @@ class ClaudeDaemonRequestExecutor {
                         agentPrompt,
                         streaming,
                         disableThinking,
-                        reasoningEffort
+                        reasoningEffort,
+                        tempImageFiles
                 );
 
                 boolean hasAttachments = attachments != null && !attachments.isEmpty() && params.has("attachments");
@@ -235,6 +239,8 @@ class ClaudeDaemonRequestExecutor {
                     callback.onError(result.error);
                 }
                 return result;
+            } finally {
+                ClaudeRequestParamsBuilder.cleanupTempImages(tempImageFiles);
             }
         }).exceptionally(ex -> {
             SDKResult errorResult = new SDKResult();

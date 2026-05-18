@@ -921,36 +921,41 @@ public class CodexSDKBridge extends BaseSDKBridge {
             String data = attachment.data;
 
             // Only process image types
-            if (type == null || !type.startsWith("image/") || data == null) {
+            if (type == null || !type.startsWith("image/")) {
                 LOG.debug("[Codex] Skipping non-image attachment: " + type);
                 continue;
             }
 
             try {
-                // Determine file extension from MIME type
-                String extension = getImageExtension(type);
-
-                // Generate unique filename
-                String filename = "codex-img-" + System.currentTimeMillis() + "-" +
-                                  java.util.UUID.randomUUID().toString().substring(0, 8) + extension;
-                File imageFile = new File(tempDir, filename);
-
-                // Decode base64 and write to file
-                byte[] imageBytes = java.util.Base64.getDecoder().decode(data);
-                try (java.io.FileOutputStream fos = new java.io.FileOutputStream(imageFile)) {
-                    fos.write(imageBytes);
+                File imageFile;
+                long imageSize;
+                if (attachment.localPath != null && !attachment.localPath.isBlank()) {
+                    imageFile = new File(attachment.localPath);
+                    if (!imageFile.isFile()) {
+                        continue;
+                    }
+                    imageSize = imageFile.length();
+                } else {
+                    if (data == null) {
+                        continue;
+                    }
+                    String extension = getImageExtension(type);
+                    String filename = "codex-img-" + System.currentTimeMillis() + "-" +
+                                      java.util.UUID.randomUUID().toString().substring(0, 8) + extension;
+                    imageFile = new File(tempDir, filename);
+                    byte[] imageBytes = java.util.Base64.getDecoder().decode(data);
+                    try (java.io.FileOutputStream fos = new java.io.FileOutputStream(imageFile)) {
+                        fos.write(imageBytes);
+                    }
+                    imageFile.deleteOnExit();
+                    if (tempFiles != null) {
+                        tempFiles.add(imageFile);
+                    }
+                    imageSize = imageBytes.length;
                 }
 
-                // Mark for deletion on JVM exit (fallback cleanup)
-                imageFile.deleteOnExit();
-
-                // Track for immediate cleanup after send
-                if (tempFiles != null) {
-                    tempFiles.add(imageFile);
-                }
-
-                LOG.info("[Codex] Saved temp image: " + imageFile.getAbsolutePath() +
-                         " (" + imageBytes.length + " bytes, will auto-delete)");
+                LOG.info("[Codex] Prepared image file: " + imageFile.getAbsolutePath() +
+                         " (" + imageSize + " bytes)");
 
                 // Add to result array in Codex SDK format
                 JsonObject imageEntry = new JsonObject();

@@ -85,6 +85,7 @@ class ClaudeProcessInvoker {
             AtomicBoolean hadSendError = new AtomicBoolean(false);
             AtomicReference<String> lastNodeError = new AtomicReference<>(null);
             long startTime = System.currentTimeMillis();
+            final List<File> tempImageFiles = new ArrayList<>();
 
             try {
                 String node = nodeDetector.findNodeExecutable();
@@ -114,7 +115,8 @@ class ClaudeProcessInvoker {
                         agentPrompt,
                         streaming,
                         disableThinking,
-                        reasoningEffort
+                        reasoningEffort,
+                        tempImageFiles
                 );
                 String stdinJson = gson.toJson(stdinInput);
                 String preview = logSanitizer.buildPreview(stdinJson, 500);
@@ -197,6 +199,7 @@ class ClaudeProcessInvoker {
                 } finally {
                     processManager.unregisterProcess(channelId, process);
                     processManager.waitForProcessTermination(process);
+                    ClaudeRequestParamsBuilder.cleanupTempImages(tempImageFiles);
                 }
             } catch (Exception e) {
                 result.success = false;

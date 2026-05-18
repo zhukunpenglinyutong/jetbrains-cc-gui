@@ -87,6 +87,11 @@ export async function readStdinData() {
  * Supported stdinData formats:
  * 1. Direct array format: [{fileName, mediaType, data}, ...]
  * 2. Wrapped object format: { attachments: [...] }
+ *
+ * Attachments may have a `path` field instead of `data` — this happens when the
+ * Java side writes base64 images to temp files to avoid bloating the stdin JSON.
+ * The `path` is kept as-is; buildContentBlocks will embed it as a file reference
+ * so the model uses the Read tool to view the image (same as Codex mode).
  */
 export async function loadAttachments(stdinData) {
   // Prefer data passed via stdin
@@ -178,13 +183,13 @@ export async function cleanupStaleTempImages() {
 /**
  * Build user message content blocks (supports images and text).
  *
- * Image transmission strategy depends on the target model:
- * - Claude models: Inline base64 vision content blocks (most efficient,
- *   natively supported by the Anthropic API).
- * - Non-Claude models (mimo, deepseek, qwen, etc.): Save images to temp files
- *   and reference paths in the message text. The model is asked to use the
- *   Read tool to load them, matching Claude Code CLI behavior. This avoids
- *   issues where third-party proxies silently drop vision content blocks.
+ * Image transmission strategy:
+ * - When attachment has a `path` field (Java wrote it to temp file):
+ *   Always embed the file path in the message text. The model uses the Read
+ *   tool to view the image. This avoids passing huge base64 through stdin or API.
+ * - When attachment has inline `data` (base64):
+ *   - Claude models: Inline base64 vision content blocks (natively supported).
+ *   - Non-Claude models: Save to temp file, reference path in message text.
  *
  * @param {Array} attachments - Attachment array
  * @param {string} message - User message text
@@ -201,7 +206,34 @@ export async function buildContentBlocks(attachments, message, modelId = null) {
   for (const a of attachments) {
     const mt = typeof a.mediaType === 'string' ? a.mediaType : '';
     if (mt.startsWith('image/')) {
-      if (useNativeVision) {
+      if (a.path && useNativeVision) {
+        // Claude models: read persisted file and embed as inline base64 vision block
+        try {
+          const fileBuffer = fs.readFileSync(a.path);
+          const base64Data = fileBuffer.toString('base64');
+          contentBlocks.push({
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: mt || 'image/png',
+              data: base64Data
+            }
+          });
+          // Also track the path so the [Image #N: path] marker appears in the text.
+          // This ensures history loading can resolve the image via createImageBlockFromPath().
+          imagePathRefs.push(a.path);
+          console.log('[ATTACHMENTS] Embedded inline vision block from file:', a.path,
+            '(' + fileBuffer.length + ' bytes), path ref kept for history');
+        } catch (e) {
+          console.error('[ATTACHMENTS] Failed to read image file, falling back to path ref:', e.message);
+          imagePathRefs.push(a.path);
+        }
+      } else if (a.path) {
+        // Non-Claude model: use text path reference (model will use Read tool)
+        imagePathRefs.push(a.path);
+        console.log('[ATTACHMENTS] Using file path reference for image:', a.path);
+      } else if (useNativeVision && a.data) {
+        // Inline base64 for Claude models when no file path is available
         contentBlocks.push({
           type: 'image',
           source: {
@@ -210,7 +242,14 @@ export async function buildContentBlocks(attachments, message, modelId = null) {
             data: a.data
           }
         });
-      } else {
+        // Save to temp file and track path for history restoration
+        const tempPath = await saveImageToTemp(a.data, mt, a.fileName);
+        if (tempPath) {
+          imagePathRefs.push(tempPath);
+          console.log('[ATTACHMENTS] Saved inline image to temp for history:', tempPath);
+        }
+      } else if (a.data) {
+        // Non-Claude model with inline data — save to temp file first
         const tempPath = await saveImageToTemp(a.data, mt, a.fileName);
         if (tempPath) {
           imagePathRefs.push(tempPath);
@@ -230,9 +269,8 @@ export async function buildContentBlocks(attachments, message, modelId = null) {
 
   let userText = message;
   if (!userText || userText.trim() === '') {
-    const totalImages = useNativeVision
-      ? contentBlocks.filter(b => b.type === 'image').length
-      : imagePathRefs.length;
+    const totalImages = imagePathRefs.length
+      + contentBlocks.filter(b => b.type === 'image').length;
     const textCount = contentBlocks.filter(b => b.type === 'text').length;
     if (totalImages > 0) {
       userText = `[Uploaded ${totalImages} image(s)]`;
