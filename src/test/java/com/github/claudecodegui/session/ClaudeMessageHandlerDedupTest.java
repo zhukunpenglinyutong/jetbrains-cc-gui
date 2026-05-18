@@ -34,7 +34,8 @@ public class ClaudeMessageHandlerDedupTest {
                 callbackHandler,
                 messageParser,
                 messageMerger,
-                gson
+                gson,
+                state.getRuntimeSessionEpoch()
         );
     }
 

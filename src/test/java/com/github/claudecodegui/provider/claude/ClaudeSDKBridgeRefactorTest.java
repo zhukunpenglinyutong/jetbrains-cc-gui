@@ -39,7 +39,7 @@ public class ClaudeSDKBridgeRefactorTest {
     public void requestBuilderIncludesOptionalFieldsAndSkipsNullAttachments() {
         ClaudeRequestParamsBuilder builder = new ClaudeRequestParamsBuilder(new Gson());
         List<ClaudeSession.Attachment> attachments = new ArrayList<>();
-        attachments.add(createAttachment("image.png", "image/png", "base64-image"));
+        attachments.add(createAttachment("image.png", "image/png", "c21hbGwtaW1hZ2U="));
         attachments.add(null);
 
         JsonObject openedFiles = new JsonObject();
@@ -77,6 +77,38 @@ public class ClaudeSDKBridgeRefactorTest {
         // 图片附件应使用 path 字段而非 data 字段
         assertTrue(params.getAsJsonArray("attachments").get(0).getAsJsonObject().has("path"));
         assertTrue(params.has("openedFiles"));
+    }
+
+    @Test
+    public void requestBuilderFallsBackToInlineDataWhenImageBase64IsInvalid() {
+        ClaudeRequestParamsBuilder builder = new ClaudeRequestParamsBuilder(new Gson());
+        List<ClaudeSession.Attachment> attachments = new ArrayList<>();
+        attachments.add(createAttachment("broken.png", "image/png", "not-base64"));
+
+        JsonObject params = builder.buildSendParams(
+                "hello",
+                null,
+                null,
+                null,
+                null,
+                null,
+                attachments,
+                null,
+                null,
+                null,
+                null,
+                null,
+                new ArrayList<>()
+        );
+
+        assertTrue(params.has("attachments"));
+        assertEquals(1, params.getAsJsonArray("attachments").size());
+        assertTrue(params.getAsJsonArray("attachments").get(0).getAsJsonObject().has("data"));
+        assertFalse(params.getAsJsonArray("attachments").get(0).getAsJsonObject().has("path"));
+        assertEquals(
+                "not-base64",
+                params.getAsJsonArray("attachments").get(0).getAsJsonObject().get("data").getAsString()
+        );
     }
 
     @Test

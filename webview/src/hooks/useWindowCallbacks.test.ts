@@ -99,6 +99,7 @@ describe('useWindowCallbacks integration', () => {
     window.__sessionTransitionToken = null;
     window.__pendingSessionTransitionToast = undefined;
     window.__deniedToolIds = new Set();
+    window.__CLAUDE_INVOCATION_MODE__ = 'sdk';
     window.sendToJava = vi.fn();
   });
 
@@ -282,6 +283,25 @@ describe('useWindowCallbacks integration', () => {
 
     // setMessages SHOULD be called
     expect(opts.setMessages).toHaveBeenCalled();
+  });
+
+  it('requests invocation mode on mount and updates cached chat-side invocation mode', () => {
+    vi.useFakeTimers();
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    expect(window.sendToJava).toHaveBeenCalledWith('get_invocation_mode:');
+
+    act(() => {
+      window.updateInvocationMode?.(JSON.stringify({ invocationMode: 'cli' }));
+    });
+
+    expect(window.__CLAUDE_INVOCATION_MODE__).toBe('cli');
+    vi.useRealTimers();
   });
 
   it('patchMessageUuid updates the latest unresolved user message using raw text fallback', () => {
