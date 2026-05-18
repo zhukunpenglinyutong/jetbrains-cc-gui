@@ -5,6 +5,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.provider.codex.CodexHistoryReader;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.session.SessionState;
+import com.github.claudecodegui.util.AttachmentStorageService;
 import com.github.claudecodegui.util.JsUtils;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -14,9 +15,6 @@ import com.google.gson.JsonParser;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Base64;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -432,59 +430,11 @@ public class HistoryMessageInjector {
     }
 
     private static JsonObject createLocalImageBlock(String imagePath) {
-        if (imagePath == null || imagePath.trim().isEmpty()) {
-            return null;
+        JsonObject imageBlock = AttachmentStorageService.getInstance().createImageBlockFromPath(imagePath);
+        if (imageBlock == null && imagePath != null && !imagePath.isBlank()) {
+            LOG.debug("[HistoryMessageInjector] Skip missing local image: " + imagePath);
         }
-
-        try {
-            Path path = Path.of(imagePath);
-            if (!Files.isRegularFile(path)) {
-                LOG.debug("[HistoryMessageInjector] Skip missing local image: " + imagePath);
-                return null;
-            }
-
-            String mediaType = Files.probeContentType(path);
-            if (mediaType == null || mediaType.isBlank()) {
-                mediaType = guessImageMediaType(path);
-            }
-            if (mediaType == null || mediaType.isBlank()) {
-                mediaType = "image/png";
-            }
-
-            String base64Data = Base64.getEncoder().encodeToString(Files.readAllBytes(path));
-            JsonObject imageBlock = new JsonObject();
-            imageBlock.addProperty("type", "image");
-            imageBlock.addProperty("src", "data:" + mediaType + ";base64," + base64Data);
-            imageBlock.addProperty("mediaType", mediaType);
-            imageBlock.addProperty("alt", path.getFileName() != null ? path.getFileName().toString() : "image");
-            return imageBlock;
-        } catch (Exception e) {
-            LOG.warn("[HistoryMessageInjector] Failed to restore local image from Codex history: " + imagePath, e);
-            return null;
-        }
-    }
-
-    private static String guessImageMediaType(Path path) {
-        String fileName = path.getFileName() != null ? path.getFileName().toString().toLowerCase() : "";
-        if (fileName.endsWith(".png")) {
-            return "image/png";
-        }
-        if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
-            return "image/jpeg";
-        }
-        if (fileName.endsWith(".gif")) {
-            return "image/gif";
-        }
-        if (fileName.endsWith(".webp")) {
-            return "image/webp";
-        }
-        if (fileName.endsWith(".bmp")) {
-            return "image/bmp";
-        }
-        if (fileName.endsWith(".svg")) {
-            return "image/svg+xml";
-        }
-        return null;
+        return imageBlock;
     }
 
     /**

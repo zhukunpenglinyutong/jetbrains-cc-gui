@@ -1,6 +1,7 @@
 package com.github.claudecodegui.provider.claude;
 
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
+import com.github.claudecodegui.util.AttachmentStorageService;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.util.UserMessageSanitizer;
 import com.google.gson.Gson;
@@ -12,11 +13,8 @@ import com.intellij.openapi.diagnostic.Logger;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
@@ -313,57 +311,7 @@ class ClaudeSessionQueryService {
     }
 
     private static JsonObject createLocalImageBlock(String imagePath) {
-        if (imagePath == null || imagePath.isBlank()) {
-            return null;
-        }
-
-        try {
-            Path path = Path.of(imagePath);
-            if (!Files.isRegularFile(path)) {
-                return null;
-            }
-
-            String mediaType = Files.probeContentType(path);
-            if (mediaType == null || mediaType.isBlank()) {
-                mediaType = guessImageMediaType(path);
-            }
-            if (mediaType == null || mediaType.isBlank()) {
-                mediaType = "image/png";
-            }
-
-            String base64Data = Base64.getEncoder().encodeToString(Files.readAllBytes(path));
-            JsonObject imageBlock = new JsonObject();
-            imageBlock.addProperty("type", "image");
-            imageBlock.addProperty("src", "data:" + mediaType + ";base64," + base64Data);
-            imageBlock.addProperty("mediaType", mediaType);
-            imageBlock.addProperty("alt", path.getFileName() != null ? path.getFileName().toString() : "image");
-            return imageBlock;
-        } catch (Exception ignored) {
-            return null;
-        }
-    }
-
-    private static String guessImageMediaType(Path path) {
-        String fileName = path.getFileName() != null ? path.getFileName().toString().toLowerCase() : "";
-        if (fileName.endsWith(".png")) {
-            return "image/png";
-        }
-        if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
-            return "image/jpeg";
-        }
-        if (fileName.endsWith(".gif")) {
-            return "image/gif";
-        }
-        if (fileName.endsWith(".webp")) {
-            return "image/webp";
-        }
-        if (fileName.endsWith(".bmp")) {
-            return "image/bmp";
-        }
-        if (fileName.endsWith(".svg")) {
-            return "image/svg+xml";
-        }
-        return null;
+        return AttachmentStorageService.getInstance().createImageBlockFromPath(imagePath);
     }
 
     private static final class ClaudeImageReferenceRewrite {
