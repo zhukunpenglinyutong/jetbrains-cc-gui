@@ -41,6 +41,7 @@ const codexThreadCache = new Map();
 let activeCodexAbortController = null;
 let activeCodexTurnInProgress = false;
 let activeCodexAbortRequested = false;
+let activeCodexTurnCompletionPromise = null;
 
 function buildCodexThreadCacheSignature(codexOptions, threadOptions) {
   return JSON.stringify({
@@ -126,6 +127,10 @@ export async function abortCurrentCodexTurn() {
   activeCodexAbortController = null;
   controller.abort();
   return true;
+}
+
+export function waitForCodexTurnCompletion() {
+  return activeCodexTurnCompletionPromise || Promise.resolve();
 }
 
 export function invalidateCodexThreadCacheForSignature(signature) {
@@ -251,6 +256,8 @@ export async function sendMessage(
   let streamStarted = false;
   let streamEnded = false;
   let turnAbortController = null;
+  let turnCompletionResolve = null;
+  activeCodexTurnCompletionPromise = new Promise(resolve => { turnCompletionResolve = resolve; });
   activeCodexTurnInProgress = true;
   activeCodexAbortRequested = false;
   const emitStreamEndOnce = () => {
@@ -600,6 +607,13 @@ export async function sendMessage(
     }
     activeCodexTurnInProgress = false;
     activeCodexAbortRequested = false;
+    if (activeCodexTurnCompletionPromise) {
+      activeCodexTurnCompletionPromise = null;
+    }
+    if (turnCompletionResolve) {
+      turnCompletionResolve();
+      turnCompletionResolve = null;
+    }
   }
 }
 

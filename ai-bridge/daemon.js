@@ -30,7 +30,7 @@ import {
   resetRuntimePersistent,
   getContextUsagePersistent
 } from './services/claude/persistent-query-service.js';
-import { abortCurrentCodexTurn, resetCodexThreadCache } from './services/codex/message-service.js';
+import { abortCurrentCodexTurn, resetCodexThreadCache, waitForCodexTurnCompletion } from './services/codex/message-service.js';
 import { injectNetworkEnvVars } from './config/api-config.js';
 import { cleanupStaleTempImages } from './services/claude/attachment-service.js';
 
@@ -43,6 +43,7 @@ let activeRequestChannelId = null;
 let isDaemonMode = true;
 let sdkPreloaded = false;
 let commandQueue = Promise.resolve();
+let abortFlushPromise = null;
 let queuedRequestCount = 0;
 let lastAcceptedRequestSequence = 0;
 let cancelAllQueuedRequestSequence = 0;
@@ -446,18 +447,28 @@ async function processRequest(request) {
         'utf8'
       );
       if (shouldAbortActiveRequest(request)) {
-        Promise.allSettled([
-          abortCurrentTurn(),
-          abortCurrentCodexTurn(),
+        // Fire abort signals immediately, then set a flush promise so the
+        // command queue waits for the abort to fully propagate before
+        // starting the next request.  This prevents a new request from
+        // being queued behind a still-unwinding abort (the root cause of
+        // the "permanently stuck in queue" bug with Codex).
+        abortCurrentTurn();
+        abortCurrentCodexTurn();
+        abortFlushPromise = Promise.allSettled([
+          // Claude: abortCurrentTurn already awaits disposal
+          Promise.resolve(),
+          // Codex: wait for the SDK stream to fully unwind
+          waitForCodexTurnCompletion(),
         ]).then((results) => {
           for (const result of results) {
             if (result.status === 'rejected') {
               _originalStderrWrite(
-                `[daemon] Abort error: ${result.reason?.message || result.reason}\n`,
+                `[daemon] Abort flush error: ${result.reason?.message || result.reason}\n`,
                 'utf8'
               );
             }
           }
+          abortFlushPromise = null;
         });
       }
       writeRawLine({ id: request.id || '0', done: true, success: true });
@@ -472,7 +483,13 @@ async function processRequest(request) {
     }
 
     commandQueue = commandQueue
-      .then(() => {
+      .then(async () => {
+        // Wait for any in-flight abort to fully propagate before starting
+        // the next request.  Without this, a new Codex request would be
+        // queued behind a still-unwinding SDK stream and show "排队中".
+        if (abortFlushPromise) {
+          await abortFlushPromise;
+        }
         if (isQueuedRequestCancelled(request)) {
           sendQueueClearedEvent(request.id);
           writeRawLine({
