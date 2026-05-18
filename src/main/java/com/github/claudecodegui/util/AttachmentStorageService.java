@@ -13,7 +13,7 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
-import java.io.File;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -438,11 +438,11 @@ public final class AttachmentStorageService {
             return ".png";
         }
         String normalized = mediaType.toLowerCase(Locale.ROOT);
-        if (normalized.contains("jpeg") || normalized.contains("jpg")) return ".jpg";
-        if (normalized.contains("gif")) return ".gif";
-        if (normalized.contains("webp")) return ".webp";
-        if (normalized.contains("bmp")) return ".bmp";
-        if (normalized.contains("svg")) return ".svg";
+        if (normalized.contains("jpeg") || normalized.contains("jpg")) { return ".jpg"; }
+        if (normalized.contains("gif")) { return ".gif"; }
+        if (normalized.contains("webp")) { return ".webp"; }
+        if (normalized.contains("bmp")) { return ".bmp"; }
+        if (normalized.contains("svg")) { return ".svg"; }
         return ".png";
     }
 

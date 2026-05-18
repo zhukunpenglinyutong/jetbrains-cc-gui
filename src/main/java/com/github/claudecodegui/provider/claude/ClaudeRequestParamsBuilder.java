@@ -161,12 +161,12 @@ class ClaudeRequestParamsBuilder {
     }
 
     private static String getImageExtension(String mediaType) {
-        if (mediaType == null) return ".png";
-        if (mediaType.contains("jpeg") || mediaType.contains("jpg")) return ".jpg";
-        if (mediaType.contains("gif")) return ".gif";
-        if (mediaType.contains("webp")) return ".webp";
-        if (mediaType.contains("bmp")) return ".bmp";
-        if (mediaType.contains("svg")) return ".svg";
+        if (mediaType == null) { return ".png"; }
+        if (mediaType.contains("jpeg") || mediaType.contains("jpg")) { return ".jpg"; }
+        if (mediaType.contains("gif")) { return ".gif"; }
+        if (mediaType.contains("webp")) { return ".webp"; }
+        if (mediaType.contains("bmp")) { return ".bmp"; }
+        if (mediaType.contains("svg")) { return ".svg"; }
         return ".png";
     }
 
