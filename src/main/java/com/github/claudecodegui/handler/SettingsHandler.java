@@ -90,7 +90,10 @@ public class SettingsHandler extends BaseMessageHandler {
         "get_input_history",
         "record_input_history",
         "delete_input_history_item",
-        "clear_input_history"
+        "clear_input_history",
+        "get_invocation_mode",
+        "set_invocation_mode",
+        "set_cli_path"
     };
 
     /**
@@ -275,6 +278,16 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "clear_input_history":
                 inputHistoryHandler.handleClearInputHistory();
+                return true;
+            // Invocation mode (SDK / CLI)
+            case "get_invocation_mode":
+                projectConfigHandler.handleGetInvocationMode();
+                return true;
+            case "set_invocation_mode":
+                projectConfigHandler.handleSetInvocationMode(content);
+                return true;
+            case "set_cli_path":
+                projectConfigHandler.handleSetCliPath(content);
                 return true;
             default:
                 return false;

@@ -2198,4 +2198,62 @@ public class CodemossSettingsService {
     public void saveCodexProviderOrder(List<String> orderedIds) throws IOException {
         codexProviderManager.saveProviderOrder(orderedIds);
     }
+
+    // ============================================================================
+    // Claude invocation mode settings
+    // ============================================================================
+
+    /**
+     * 获取 Claude 调用模式。
+     *
+     * @return 调用模式，"sdk"（默认）或 "cli"
+     * @throws IOException 读取配置失败
+     */
+    public String getClaudeInvocationMode() throws IOException {
+        JsonObject config = readConfig();
+        if (config.has("claudeInvocationMode") && !config.get("claudeInvocationMode").isJsonNull()) {
+            return config.get("claudeInvocationMode").getAsString();
+        }
+        return "sdk";
+    }
+
+    /**
+     * 设置 Claude 调用模式。
+     *
+     * @param mode 调用模式，"sdk" 或 "cli"
+     * @throws IOException 写入配置失败
+     */
+    public void setClaudeInvocationMode(String mode) throws IOException {
+        JsonObject config = readConfig();
+        config.addProperty("claudeInvocationMode", mode);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set claude invocation mode: " + mode);
+    }
+
+    /**
+     * 获取手动指定的 Claude CLI 路径。
+     *
+     * @return CLI 路径，空字符串表示未设置
+     * @throws IOException 读取配置失败
+     */
+    public String getClaudeCliPath() throws IOException {
+        JsonObject config = readConfig();
+        if (config.has("claudeCliPath") && !config.get("claudeCliPath").isJsonNull()) {
+            return config.get("claudeCliPath").getAsString();
+        }
+        return "";
+    }
+
+    /**
+     * 设置 Claude CLI 路径（手动覆盖）。
+     *
+     * @param path CLI 可执行文件路径
+     * @throws IOException 写入配置失败
+     */
+    public void setClaudeCliPath(String path) throws IOException {
+        JsonObject config = readConfig();
+        config.addProperty("claudeCliPath", path != null ? path : "");
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set claude CLI path: " + path);
+    }
 }

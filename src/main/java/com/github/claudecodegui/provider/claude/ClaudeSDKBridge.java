@@ -33,6 +33,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
     private final ClaudeMcpQueryService mcpQueryService;
     private final ClaudeRewindService rewindService;
     private final ClaudeDaemonRequestExecutor daemonRequestExecutor;
+    private final ClaudeCliBridge cliBridge;
 
     public ClaudeSDKBridge() {
         super(ClaudeSDKBridge.class);
@@ -70,6 +71,13 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
         );
         this.daemonRequestExecutor = new ClaudeDaemonRequestExecutor(
                 LOG, requestParamsBuilder, streamAdapter, jsonOutputExtractor
+        );
+        this.cliBridge = new ClaudeCliBridge(
+                processManager,
+                ClaudeCliDetector.getInstance(),
+                new ClaudeCliStreamParser(gson),
+                gson,
+                envConfigurator
         );
     }
 
@@ -393,6 +401,28 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             String reasoningEffort,
             MessageCallback callback
     ) {
+        // 诊断日志：记录附件到达 SDK bridge 的状态
+        LOG.info("[ClaudeSDKBridge][DIAG] sendMessage called, attachments="
+                + (attachments == null ? "NULL" : attachments.size())
+                + ", isCliMode=" + isCliMode());
+
+        // CLI 模式：直接调用 claude CLI 二进制，不经过 Node.js
+        // 但图片附件需要回退到 daemon/per-process 模式，因为 CLI -p 模式的 Read tool
+        // 处理图片时存在已知 bug (GitHub #25960)：会幻觉内容而非正确解读图片
+        boolean hasImageAttachments = attachments != null && attachments.stream().anyMatch(
+                att -> att.mediaType != null && att.mediaType.startsWith("image/"));
+        if (isCliMode() && !hasImageAttachments) {
+            LOG.info("[ClaudeSDKBridge] Using CLI mode, forwarding to cliBridge with "
+                    + (attachments != null ? attachments.size() : 0) + " attachments");
+            return cliBridge.sendMessage(
+                    channelId, message, sessionId, runtimeSessionEpoch, cwd,
+                    attachments, permissionMode, model, openedFiles, agentPrompt,
+                    streaming, disableThinking, reasoningEffort, callback
+            );
+        } else if (isCliMode() && hasImageAttachments) {
+            LOG.info("[ClaudeSDKBridge] CLI mode has image attachments, falling back to daemon/per-process mode");
+        }
+
         // Try daemon mode first (avoids per-request Node.js process spawning)
         DaemonBridge db = daemonCoordinator.getDaemonBridge();
         if (db != null) {
@@ -615,5 +645,31 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 reasoningEffort,
                 callback
         );
+    }
+
+    // ============================================================================
+    // CLI mode support
+    // ============================================================================
+
+    /**
+     * 检查是否为 CLI 调用模式。
+     * 从 CodemossSettingsService 读取配置。
+     */
+    private boolean isCliMode() {
+        try {
+            com.github.claudecodegui.settings.CodemossSettingsService settings =
+                    new com.github.claudecodegui.settings.CodemossSettingsService();
+            return "cli".equals(settings.getClaudeInvocationMode());
+        } catch (Exception e) {
+            LOG.debug("[ClaudeSDKBridge] 读取调用模式设置失败: " + e.getMessage());
+        }
+        return false;
+    }
+
+    /**
+     * 获取 CLI 桥接器（用于外部检查 CLI 环境等）。
+     */
+    public ClaudeCliBridge getCliBridge() {
+        return cliBridge;
     }
 }

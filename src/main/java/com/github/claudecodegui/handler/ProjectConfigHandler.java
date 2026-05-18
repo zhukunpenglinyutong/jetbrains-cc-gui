@@ -912,4 +912,75 @@ public class ProjectConfigHandler {
             }
         });
     }
+
+    // ============================================================================
+    // Claude invocation mode (SDK / CLI)
+    // ============================================================================
+
+    /**
+     * Handle Get Invocation Mode
+     */
+    public void handleGetInvocationMode() {
+        respondWithJson("window.updateInvocationMode",
+            () -> {
+                String mode = settingsService.getClaudeInvocationMode();
+                String cliPath = settingsService.getClaudeCliPath();
+                com.google.gson.JsonObject obj = new com.google.gson.JsonObject();
+                obj.addProperty("invocationMode", mode);
+                obj.addProperty("cliPath", cliPath);
+                return obj;
+            },
+            jsonOf("invocationMode", "sdk"),
+            "Failed to get invocation mode");
+    }
+
+    /**
+     * Handle Set Invocation Mode
+     *
+     * @param content JSON with "invocationMode" field
+     */
+    public void handleSetInvocationMode(String content) {
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            try {
+                com.google.gson.JsonObject obj = gson.fromJson(content, com.google.gson.JsonObject.class);
+                String mode = obj.has("invocationMode") ? obj.get("invocationMode").getAsString() : "sdk";
+                settingsService.setClaudeInvocationMode(mode);
+                LOG.info("[ProjectConfigHandler] Set invocation mode: " + mode);
+                ApplicationManager.getApplication().invokeLater(() ->
+                    context.callJavaScript("window.updateInvocationMode", context.escapeJs(content)));
+            } catch (Exception e) {
+                LOG.error("[ProjectConfigHandler] Failed to set invocation mode: " + e.getMessage(), e);
+                showError("Failed to save invocation mode: " + e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Handle Set CLI Path
+     *
+     * @param content JSON with "cliPath" field
+     */
+    public void handleSetCliPath(String content) {
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            try {
+                com.google.gson.JsonObject obj = gson.fromJson(content, com.google.gson.JsonObject.class);
+                String cliPath = obj.has("cliPath") ? obj.get("cliPath").getAsString() : "";
+                settingsService.setClaudeCliPath(cliPath);
+
+                // 更新 detector 缓存
+                if (cliPath != null && !cliPath.isEmpty()) {
+                    com.github.claudecodegui.provider.claude.ClaudeCliDetector.getInstance().setCliPath(cliPath);
+                } else {
+                    com.github.claudecodegui.provider.claude.ClaudeCliDetector.getInstance().clearCache();
+                }
+
+                LOG.info("[ProjectConfigHandler] Set CLI path: " + cliPath);
+                ApplicationManager.getApplication().invokeLater(() ->
+                    context.callJavaScript("window.updateCliPath", context.escapeJs(content)));
+            } catch (Exception e) {
+                LOG.error("[ProjectConfigHandler] Failed to set CLI path: " + e.getMessage(), e);
+                showError("Failed to save CLI path: " + e.getMessage());
+            }
+        });
+    }
 }
