@@ -141,6 +141,15 @@
         "placeholder": "例如 project1 或留空使用项目根目录",
         "hint": "指定 Claude 工作的目录。可以使用相对路径（相对于项目根目录）或绝对路径。留空则使用项目根目录。"
       },
+      "invocationMode": {
+        "label": "调用模式",
+        "sdk": "SDK 模式",
+        "sdkDesc": "通过 Node.js SDK 调用，支持所有功能",
+        "cli": "CLI 模式",
+        "cliDesc": "直接调用 claude CLI，进程隔离，内存更优",
+        "cliPathPlaceholder": "留空自动检测 claude CLI 路径",
+        "hint": "CLI 模式下每个会话为独立进程，内存自然隔离，适合多会话并发场景。"
+      },
       "fontSize": {
         "label": "字体大小",
         "level1": "小（80%）",

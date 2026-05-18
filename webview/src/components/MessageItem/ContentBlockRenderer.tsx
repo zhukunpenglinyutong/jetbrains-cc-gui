@@ -87,7 +87,8 @@ export function ContentBlockRenderer({
   if (block.type === 'image' && block.src) {
     const handleImagePreview = () => {
       const previewRoot = document.getElementById('image-preview-root');
-      if (!previewRoot || !block.src) return;
+      const previewSrc = block.previewSrc || block.src;
+      if (!previewRoot || !previewSrc) return;
 
       // Clear previous content safely
       previewRoot.innerHTML = '';
@@ -99,7 +100,7 @@ export function ContentBlockRenderer({
 
       // Create image element safely (prevents XSS)
       const img = document.createElement('img');
-      img.src = block.src;
+      img.src = previewSrc;
       img.alt = t('chat.imagePreview');
       img.className = 'image-preview-content';
       img.onclick = (e) => e.stopPropagation();
@@ -126,7 +127,7 @@ export function ContentBlockRenderer({
         title={t('chat.clickToPreview')}
       >
         <img
-          src={block.src}
+          src={block.thumbnailSrc || block.src}
           alt={t('chat.userUploadedImage')}
           style={getImageStyle(messageType === 'user')}
         />

@@ -347,7 +347,13 @@ export function normalizeBlocks(
         }
 
         if (src) {
-          blocks.push({ type: 'image', src, mediaType });
+          blocks.push({
+            type: 'image',
+            src,
+            mediaType,
+            previewSrc: typeof candidate.previewSrc === 'string' ? candidate.previewSrc as string : src,
+            thumbnailSrc: typeof candidate.thumbnailSrc === 'string' ? candidate.thumbnailSrc as string : src,
+          });
         }
       } else if (type === 'attachment') {
         blocks.push({

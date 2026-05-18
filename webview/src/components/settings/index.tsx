@@ -170,6 +170,12 @@ const SettingsView = ({
     handlePromptEnhancerProviderChange,
     handlePromptEnhancerModelChange,
     handlePromptEnhancerResetToDefault,
+    invocationMode,
+    setInvocationMode,
+    cliPath,
+    setCliPath,
+    handleInvocationModeChange,
+    handleCliPathChange,
   } = useSettingsBasicActions({
     streamingEnabledProp,
     onStreamingEnabledChangeProp,
@@ -305,6 +311,8 @@ const SettingsView = ({
     setAiTitleGenerationEnabled,
     setStatusBarWidgetEnabled,
     setTaskCompletionNotificationEnabled,
+    setInvocationMode,
+    setCliPath,
   });
 
   // Save provider (wrapper function with validation logic)
@@ -459,6 +467,10 @@ const SettingsView = ({
               onAiTitleGenerationEnabledChange={handleAiTitleGenerationEnabledChange}
               taskCompletionNotificationEnabled={taskCompletionNotificationEnabled}
               onTaskCompletionNotificationEnabledChange={handleTaskCompletionNotificationEnabledChange}
+              invocationMode={invocationMode}
+              onInvocationModeChange={handleInvocationModeChange}
+              cliPath={cliPath}
+              onCliPathChange={handleCliPathChange}
             />
           </div>
 

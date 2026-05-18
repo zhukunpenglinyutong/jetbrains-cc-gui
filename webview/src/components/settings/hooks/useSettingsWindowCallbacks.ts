@@ -50,6 +50,9 @@ export interface SettingsWindowCallbacksDeps {
   setAiTitleGenerationEnabled?: (enabled: boolean) => void;
   setStatusBarWidgetEnabled?: (enabled: boolean) => void;
   setTaskCompletionNotificationEnabled?: (enabled: boolean) => void;
+  // Invocation mode setters
+  setInvocationMode: (mode: 'sdk' | 'cli') => void;
+  setCliPath: (path: string) => void;
 
   // Hook functions
   updateProviders: (providers: ProviderConfig[]) => void;
@@ -336,6 +339,22 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
     };
 
+    // Invocation mode callback
+    window.updateInvocationMode = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        const mode = data.invocationMode;
+        if (mode === 'sdk' || mode === 'cli') {
+          d().setInvocationMode(mode);
+        }
+        if (data.cliPath !== undefined) {
+          d().setCliPath(data.cliPath);
+        }
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse invocation mode:', error);
+      }
+    };
+
     // Agent callbacks
     const previousUpdateAgents = window.updateAgents;
     window.updateAgents = (jsonStr: string) => {
@@ -473,6 +492,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     sendToJava('get_ai_title_generation_enabled:');
     sendToJava('get_status_bar_widget_enabled:');
     sendToJava('get_task_completion_notification_enabled:');
+    sendToJava('get_invocation_mode:');
 
     return () => {
       d().cleanupAgentsTimeout();
@@ -506,6 +526,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.updateAiTitleGenerationEnabled = undefined;
       window.updateStatusBarWidgetEnabled = undefined;
       window.updateTaskCompletionNotificationEnabled = undefined;
+      window.updateInvocationMode = undefined;
       window.updateAgents = previousUpdateAgents;
       window.agentOperationResult = undefined;
       window.agentImportPreviewResult = undefined;

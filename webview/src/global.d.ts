@@ -270,6 +270,11 @@ interface Window {
   updateAutoOpenFileEnabled?: (json: string) => void;
 
   /**
+   * Update invocation mode setting (sdk / cli)
+   */
+  updateInvocationMode?: (json: string) => void;
+
+  /**
    * Update commit AI prompt configuration
    */
   updateCommitPrompt?: (json: string) => void;

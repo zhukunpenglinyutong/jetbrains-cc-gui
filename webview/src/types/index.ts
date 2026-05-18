@@ -6,7 +6,7 @@ export type ClaudeContentBlock =
   | { type: 'text'; text?: string }
   | { type: 'thinking'; thinking?: string; text?: string }
   | { type: 'tool_use'; id?: string; name?: string; input?: ToolInput }
-  | { type: 'image'; src?: string; mediaType?: string; alt?: string }
+  | { type: 'image'; src?: string; mediaType?: string; alt?: string; previewSrc?: string; thumbnailSrc?: string }
   | { type: 'attachment'; fileName?: string; mediaType?: string }
   | { type: 'task_notification'; icon: string; summary: string; status: string };
 

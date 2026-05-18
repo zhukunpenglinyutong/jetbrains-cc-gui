@@ -72,6 +72,11 @@ interface BasicConfigSectionProps {
   // Task completion notification configuration
   taskCompletionNotificationEnabled?: boolean;
   onTaskCompletionNotificationEnabledChange?: (enabled: boolean) => void;
+  // Invocation mode configuration
+  invocationMode?: 'sdk' | 'cli';
+  onInvocationModeChange?: (mode: 'sdk' | 'cli') => void;
+  cliPath?: string;
+  onCliPathChange?: (path: string) => void;
 }
 
 const BasicConfigSection = (props: BasicConfigSectionProps) => {
@@ -151,6 +156,10 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onWorkingDirectoryChange={props.onWorkingDirectoryChange}
           onSaveWorkingDirectory={props.onSaveWorkingDirectory}
           savingWorkingDirectory={props.savingWorkingDirectory}
+          invocationMode={props.invocationMode}
+          onInvocationModeChange={props.onInvocationModeChange}
+          cliPath={props.cliPath}
+          onCliPathChange={props.onCliPathChange}
         />
       )}
     </div>

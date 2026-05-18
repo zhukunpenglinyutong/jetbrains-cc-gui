@@ -62,6 +62,8 @@ export interface UseSettingsBasicActionsReturn {
   taskCompletionNotificationEnabled: boolean;
   commitAiConfig: CommitAiConfig;
   promptEnhancerConfig: PromptEnhancerConfig;
+  invocationMode: 'sdk' | 'cli';
+  cliPath: string;
 
   // =========================================================================
   // Handler functions (public API for components)
@@ -87,6 +89,8 @@ export interface UseSettingsBasicActionsReturn {
   handlePromptEnhancerProviderChange: (provider: PromptEnhancerProvider) => void;
   handlePromptEnhancerModelChange: (model: string) => void;
   handlePromptEnhancerResetToDefault: () => void;
+  handleInvocationModeChange: (mode: 'sdk' | 'cli') => void;
+  handleCliPathChange: (path: string) => void;
 
   // =========================================================================
   // @internal — State setters used only by useSettingsWindowCallbacks.
@@ -124,6 +128,8 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setTaskCompletionNotificationEnabled: (enabled: boolean) => void;
   /** @internal */ setCommitAiConfig: (config: CommitAiConfig) => void;
   /** @internal */ setPromptEnhancerConfig: (config: PromptEnhancerConfig) => void;
+  /** @internal */ setInvocationMode: (mode: 'sdk' | 'cli') => void;
+  /** @internal */ setCliPath: (path: string) => void;
 }
 
 export function useSettingsBasicActions({
@@ -212,6 +218,10 @@ export function useSettingsBasicActions({
   const [promptEnhancerConfig, setPromptEnhancerConfig] = useState<PromptEnhancerConfig>(
     DEFAULT_PROMPT_ENHANCER_CONFIG
   );
+
+  // Invocation mode (sdk / cli)
+  const [invocationMode, setInvocationMode] = useState<'sdk' | 'cli'>('sdk');
+  const [cliPath, setCliPath] = useState('');
 
   // Diff expanded by default handler
   useEffect(() => {
@@ -446,6 +456,18 @@ export function useSettingsBasicActions({
     sendToJava(`set_project_commit_prompt:${JSON.stringify(payload)}`);
   }, [projectCommitPrompt]);
 
+  // Invocation mode change handler
+  const handleInvocationModeChange = useCallback((mode: 'sdk' | 'cli') => {
+    setInvocationMode(mode);
+    sendToJava(`set_invocation_mode:${JSON.stringify({ invocationMode: mode })}`);
+  }, []);
+
+  // CLI path change handler
+  const handleCliPathChange = useCallback((path: string) => {
+    setCliPath(path);
+    sendToJava(`set_cli_path:${JSON.stringify({ cliPath: path })}`);
+  }, []);
+
   return {
     nodePath,
     setNodePath,
@@ -519,5 +541,11 @@ export function useSettingsBasicActions({
     handlePromptEnhancerProviderChange,
     handlePromptEnhancerModelChange,
     handlePromptEnhancerResetToDefault,
+    invocationMode,
+    setInvocationMode,
+    cliPath,
+    setCliPath,
+    handleInvocationModeChange,
+    handleCliPathChange,
   };
 }

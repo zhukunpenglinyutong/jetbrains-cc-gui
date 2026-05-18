@@ -24,6 +24,7 @@ import com.github.claudecodegui.ui.ChatWindowDelegate;
 import com.github.claudecodegui.ui.EditorContextTracker;
 import com.github.claudecodegui.ui.WebviewInitializer;
 import com.github.claudecodegui.ui.WebviewWatchdog;
+import com.github.claudecodegui.util.AttachmentStorageService;
 import com.github.claudecodegui.util.HtmlLoader;
 import com.github.claudecodegui.util.JsUtils;
 import com.google.gson.Gson;
@@ -679,6 +680,12 @@ public class ClaudeChatWindow {
             @Override
             public void onSessionIdReceived(String newSessionId) {
                 super.onSessionIdReceived(newSessionId);
+                String provider = session != null ? session.getProvider() : handlerContext.getCurrentProvider();
+                String runtimeEpoch = session != null ? session.getRuntimeSessionEpoch() : null;
+                if (runtimeEpoch != null && !runtimeEpoch.isBlank()) {
+                    AttachmentStorageService.getInstance()
+                            .promotePendingSession(provider, "epoch-" + runtimeEpoch, newSessionId);
+                }
                 sessionId = newSessionId;
                 persistTabSessionState();
             }
