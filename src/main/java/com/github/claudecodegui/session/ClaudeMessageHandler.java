@@ -117,6 +117,9 @@ public class ClaudeMessageHandler implements MessageCallback {
             case "message_end":
                 handleMessageEnd();
                 break;
+            case "message_start":
+                handleNewTurnStart();
+                break;
             case "result":
                 handleResult(content);
                 break;
@@ -591,6 +594,25 @@ public class ClaudeMessageHandler implements MessageCallback {
         // - Non-streaming mode: onComplete
         // This prevents state from being unexpectedly reset during message processing.
         LOG.debug("message_end received, deferring state cleanup to onComplete/onStreamEnd");
+    }
+
+    /**
+     * Handle the start of a new turn within an agentic CLI session.
+     * When isStreaming is true and message_start fires again, it means a new
+     * assistant turn is starting (after tool use). Reset message state so the
+     * new turn's content goes into a fresh assistant message instead of being
+     * mixed into the previous turn's message.
+     */
+    private void handleNewTurnStart() {
+        if (!isStreaming) {
+            return;
+        }
+        currentAssistantMessage = null;
+        assistantContent.setLength(0);
+        textSegmentActive = false;
+        thinkingSegmentActive = false;
+        replayDedup.reset();
+        LOG.debug("New turn started in agentic session, reset message state for new assistant message");
     }
 
     /**

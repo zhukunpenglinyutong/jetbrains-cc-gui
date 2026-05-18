@@ -367,18 +367,32 @@ public class SessionContextService {
             return false;
         }
         String mediaType = att.mediaType != null ? att.mediaType : "";
-        return mediaType.startsWith("image/") && att.data != null;
+        return mediaType.startsWith("image/")
+                && (att.data != null || att.resourceUrl != null || att.localPath != null);
     }
 
     private JsonObject createImageBlock(ClaudeSession.Attachment att) {
         JsonObject imageBlock = new JsonObject();
         imageBlock.addProperty("type", "image");
 
-        JsonObject source = new JsonObject();
-        source.addProperty("type", "base64");
-        source.addProperty("media_type", att.mediaType);
-        source.addProperty("data", att.data);
-        imageBlock.add("source", source);
+        if (att.resourceUrl != null && !att.resourceUrl.isBlank()) {
+            String displayUrl = att.thumbnailUrl != null && !att.thumbnailUrl.isBlank()
+                    ? att.thumbnailUrl
+                    : att.resourceUrl;
+            imageBlock.addProperty("src", displayUrl);
+            imageBlock.addProperty("previewSrc", att.resourceUrl);
+            imageBlock.addProperty("thumbnailSrc", displayUrl);
+            imageBlock.addProperty("mediaType", att.mediaType);
+            if (att.fileName != null && !att.fileName.isBlank()) {
+                imageBlock.addProperty("alt", att.fileName);
+            }
+        } else {
+            JsonObject source = new JsonObject();
+            source.addProperty("type", "base64");
+            source.addProperty("media_type", att.mediaType);
+            source.addProperty("data", att.data);
+            imageBlock.add("source", source);
+        }
 
         return imageBlock;
     }

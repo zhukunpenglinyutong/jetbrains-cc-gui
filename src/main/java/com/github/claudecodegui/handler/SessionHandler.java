@@ -8,6 +8,7 @@ import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.model.NodeDetectionResult;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.session.SessionState;
+import com.github.claudecodegui.util.AttachmentStorageService;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -222,6 +223,12 @@ public class SessionHandler extends BaseMessageHandler {
             java.util.List<ClaudeSession.Attachment> atts = new java.util.ArrayList<>();
             if (payload != null && payload.has("attachments") && payload.get("attachments").isJsonArray()) {
                 JsonArray arr = payload.getAsJsonArray("attachments");
+                String provider = context.getSession() != null ? context.getSession().getProvider() : context.getCurrentProvider();
+                String currentSessionId = context.getSession() != null ? context.getSession().getSessionId() : null;
+                String runtimeEpoch = context.getSession() != null ? context.getSession().getRuntimeSessionEpoch() : null;
+                String sessionKey = currentSessionId != null && !currentSessionId.isBlank()
+                        ? currentSessionId
+                        : "epoch-" + (runtimeEpoch != null && !runtimeEpoch.isBlank() ? runtimeEpoch : System.currentTimeMillis());
                 for (int i = 0; i < arr.size(); i++) {
                     JsonObject a = arr.get(i).getAsJsonObject();
                     String fileName = a.has("fileName") && !a.get("fileName").isJsonNull()
@@ -233,7 +240,18 @@ public class SessionHandler extends BaseMessageHandler {
                     String data = a.has("data") && !a.get("data").isJsonNull()
                                           ? a.get("data").getAsString()
                                           : "";
-                    atts.add(new ClaudeSession.Attachment(fileName, mediaType, data));
+                    ClaudeSession.Attachment attachment = new ClaudeSession.Attachment(fileName, mediaType, data);
+                    if (mediaType.startsWith("image/") && !data.isBlank()) {
+                        AttachmentStorageService.PersistedAttachment persisted = AttachmentStorageService.getInstance()
+                                .persistImageAttachment(provider, sessionKey, fileName, mediaType, data);
+                        if (persisted != null) {
+                            attachment.localPath = persisted.localPath();
+                            attachment.resourceUrl = persisted.resourceUrl();
+                            attachment.thumbnailUrl = persisted.thumbnailUrl();
+                            attachment.attachmentHash = persisted.hash();
+                        }
+                    }
+                    atts.add(attachment);
                 }
             }
 

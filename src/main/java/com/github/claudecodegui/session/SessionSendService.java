@@ -215,6 +215,16 @@ public class SessionSendService {
             String agentPrompt,
             String effectivePermissionMode
     ) {
+        LOG.info("[SessionSendService][DIAG] sendToClaude called, attachments="
+                + (attachments == null ? "NULL" : attachments.size()));
+        if (attachments != null) {
+            for (int i = 0; i < attachments.size(); i++) {
+                ClaudeSession.Attachment att = attachments.get(i);
+                LOG.info("[SessionSendService][DIAG] att[" + i + "]: fileName=" + att.fileName
+                        + ", localPath=" + att.localPath
+                        + ", data=" + (att.data != null ? att.data.length() + "chars" : "null"));
+            }
+        }
         ClaudeMessageHandler handler = new ClaudeMessageHandler(
                 project,
                 state,

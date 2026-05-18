@@ -410,6 +410,17 @@ public class ClaudeSession {
             List<String> fileTagPaths,
             String requestedPermissionMode
     ) {
+        LOG.info("[ClaudeSession][DIAG] send() called, attachments="
+                + (attachments == null ? "NULL" : attachments.size()));
+        if (attachments != null) {
+            for (int i = 0; i < attachments.size(); i++) {
+                Attachment att = attachments.get(i);
+                LOG.info("[ClaudeSession][DIAG] att[" + i + "]: fileName=" + att.fileName
+                        + ", localPath=" + att.localPath
+                        + ", data=" + (att.data != null ? att.data.length() + "chars" : "null")
+                        + ", resourceUrl=" + att.resourceUrl);
+            }
+        }
         String normalizedInput = (input != null) ? input.trim() : "";
         Message userMessage = contextService.buildUserMessage(normalizedInput, attachments);
         sendService.updateSessionStateForSend(userMessage, normalizedInput);
@@ -518,11 +529,33 @@ public class ClaudeSession {
         public String fileName;
         public String mediaType;
         public String data; // Base64 encoded data
+        public String localPath;
+        public String resourceUrl;
+        public String thumbnailUrl;
+        public String attachmentHash;
 
         public Attachment(String fileName, String mediaType, String data) {
             this.fileName = fileName;
             this.mediaType = mediaType;
             this.data = data;
+        }
+
+        public Attachment(
+                String fileName,
+                String mediaType,
+                String data,
+                String localPath,
+                String resourceUrl,
+                String thumbnailUrl,
+                String attachmentHash
+        ) {
+            this.fileName = fileName;
+            this.mediaType = mediaType;
+            this.data = data;
+            this.localPath = localPath;
+            this.resourceUrl = resourceUrl;
+            this.thumbnailUrl = thumbnailUrl;
+            this.attachmentHash = attachmentHash;
         }
     }
 
