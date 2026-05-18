@@ -1070,7 +1070,6 @@ public class CodexSDKBridge extends BaseSDKBridge {
      */
     private boolean isCodexCliLoginActive() {
         try {
-            CodemossSettingsService settingsService = new CodemossSettingsService();
             return CodemossSettingsService.CODEX_RUNTIME_ACCESS_CLI_LOGIN
                     .equals(settingsService.getCodexRuntimeAccessMode());
         } catch (Exception e) {

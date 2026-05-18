@@ -5,15 +5,17 @@ import com.github.claudecodegui.bridge.ProcessManager;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.session.ClaudeSession.SessionCallback.QueueDisplayState;
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStreamReader;
-import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -22,13 +24,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Claude CLI 调用桥接器。
- * 直接将 claude CLI 作为 OS 子进程调用，无需 Node.js 中间层。
- * 每个请求是独立进程，内存完全隔离。
- *
- * 命令格式:
- * claude -p --output-format stream-json --verbose --include-partial-messages
- *   --dangerously-skip-permissions [--model X] [--effort X] [--resume ID] -- "prompt"
+ * Invokes Claude CLI directly as an OS child process.
  */
 class ClaudeCliBridge {
 
@@ -36,28 +32,21 @@ class ClaudeCliBridge {
 
     private final ProcessManager processManager;
     private final ClaudeCliDetector cliDetector;
-    private final ClaudeCliStreamParser streamParser;
     private final Gson gson;
     private final EnvironmentConfigurator envConfigurator;
 
     ClaudeCliBridge(
             ProcessManager processManager,
             ClaudeCliDetector cliDetector,
-            ClaudeCliStreamParser streamParser,
             Gson gson,
             EnvironmentConfigurator envConfigurator
     ) {
         this.processManager = processManager;
         this.cliDetector = cliDetector;
-        this.streamParser = streamParser;
         this.gson = gson;
         this.envConfigurator = envConfigurator;
     }
 
-    /**
-     * 发送消息到 Claude CLI。
-     * 与 ClaudeProcessInvoker.sendMessage() 相同签名。
-     */
     CompletableFuture<SDKResult> sendMessage(
             String channelId,
             String message,
@@ -67,7 +56,7 @@ class ClaudeCliBridge {
             List<ClaudeSession.Attachment> attachments,
             String permissionMode,
             String model,
-            com.google.gson.JsonObject openedFiles,
+            JsonObject openedFiles,
             String agentPrompt,
             Boolean streaming,
             Boolean disableThinking,
@@ -80,108 +69,107 @@ class ClaudeCliBridge {
             StringBuilder assistantContent = new StringBuilder();
             AtomicBoolean hadSendError = new AtomicBoolean(false);
             long startTime = System.currentTimeMillis();
-
+            Process process = null;
+            ClaudeCliStreamParser streamParser = new ClaudeCliStreamParser(gson);
             List<File> tempFiles = new ArrayList<>();
+            boolean suppressThinking = Boolean.TRUE.equals(disableThinking);
 
-            // 诊断日志：记录附件到达 CliBridge 的状态
             LOG.info("[CliBridge][DIAG] sendMessage entry, attachments="
                     + (attachments == null ? "NULL" : attachments.size())
-                    + ", message length=" + (message != null ? message.length() : 0));
+                    + ", message length=" + (message != null ? message.length() : 0)
+                    + ", runtimeSessionEpoch=" + (runtimeSessionEpoch != null ? runtimeSessionEpoch : "(none)"));
 
             try {
-                // 1. 检测 CLI 二进制
+                callback.onQueueDisplayStateChanged(QueueDisplayState.PROCESSING, 0);
+
                 String cliPath = cliDetector.findCliExecutable();
                 if (cliPath == null) {
-                    String error = "未找到 claude CLI 可执行文件。请确保已安装 claude code 并在 PATH 中可用。";
+                    String error = "Unable to find Claude CLI executable. Install Claude Code or configure claudeCliPath.";
                     result.success = false;
                     result.error = error;
                     callback.onError(error);
                     return result;
                 }
 
-                // 2. 处理附件：保存到临时文件，指示 Claude 使用 Read 工具读取
-                String fullPrompt = message;
+                String fullPrompt = message != null ? message : "";
                 List<String> addDirs = new ArrayList<>();
                 if (attachments != null && !attachments.isEmpty()) {
                     LOG.info("[CliBridge][DIAG] Processing " + attachments.size() + " attachments");
-                    StringBuilder promptBuilder = new StringBuilder(message);
+                    StringBuilder promptBuilder = new StringBuilder(fullPrompt);
                     for (int i = 0; i < attachments.size(); i++) {
-                        ClaudeSession.Attachment att = attachments.get(i);
-                        LOG.info("[CliBridge][DIAG] Attachment[" + i + "]: fileName=" + att.fileName
-                                + ", mediaType=" + att.mediaType
-                                + ", localPath=" + att.localPath
-                                + ", data=" + (att.data != null ? att.data.length() + "chars" : "null")
-                                + ", isImage=" + isImageAttachment(att));
-                        File tempFile = writeAttachmentToTempFile(att, channelId);
+                        ClaudeSession.Attachment attachment = attachments.get(i);
+                        if (attachment == null) {
+                            continue;
+                        }
+
+                        LOG.info("[CliBridge][DIAG] Attachment[" + i + "]: fileName=" + attachment.fileName
+                                + ", mediaType=" + attachment.mediaType
+                                + ", localPath=" + attachment.localPath
+                                + ", data=" + (attachment.data != null ? attachment.data.length() + "chars" : "null")
+                                + ", isImage=" + isImageAttachment(attachment));
+
+                        File tempFile = writeAttachmentToTempFile(attachment, channelId);
                         LOG.info("[CliBridge][DIAG] writeAttachmentToTempFile returned: "
                                 + (tempFile != null ? tempFile.getAbsolutePath() : "NULL"));
-                        if (tempFile != null) {
-                            tempFiles.add(tempFile);
-                            String filePath = tempFile.getAbsolutePath();
-                            // Collect unique parent dirs for --add-dir so the Read tool can access them
-                            File parentDir = tempFile.getParentFile();
-                            if (parentDir != null && parentDir.isDirectory()) {
-                                String dirPath = parentDir.getAbsolutePath();
-                                if (!addDirs.contains(dirPath)) {
-                                    addDirs.add(dirPath);
-                                }
+                        if (tempFile == null) {
+                            continue;
+                        }
+
+                        tempFiles.add(tempFile);
+                        File parentDir = tempFile.getParentFile();
+                        if (parentDir != null && parentDir.isDirectory()) {
+                            String dirPath = parentDir.getAbsolutePath();
+                            if (!addDirs.contains(dirPath)) {
+                                addDirs.add(dirPath);
                             }
-                            if (isImageAttachment(att)) {
-                                // Use forward slashes and no quotes to avoid Windows ProcessBuilder
-                                // argument escaping issues with embedded double-quotes
-                                String safePath = filePath.replace('\\', '/');
-                                promptBuilder.append("\n\n[Attached image: ")
-                                        .append(att.fileName)
-                                        .append("]\nPlease use the Read tool to read the file at: ")
-                                        .append(safePath)
-                                        .append("\nThen answer the user's question about this image.");
-                            } else {
-                                String safePath = filePath.replace('\\', '/');
-                                promptBuilder.append("\n\n[Attached file: ")
-                                        .append(att.fileName)
-                                        .append("]\nPlease use the Read tool to read the file at: ")
-                                        .append(safePath);
-                            }
+                        }
+
+                        String safePath = tempFile.getAbsolutePath().replace('\\', '/');
+                        if (isImageAttachment(attachment)) {
+                            promptBuilder.append("\n\n[Attached image: ")
+                                    .append(attachment.fileName)
+                                    .append("]\nPlease use the Read tool to read the file at: ")
+                                    .append(safePath)
+                                    .append("\nThen answer the user's question about this image.");
+                        } else {
+                            promptBuilder.append("\n\n[Attached file: ")
+                                    .append(attachment.fileName)
+                                    .append("]\nPlease use the Read tool to read the file at: ")
+                                    .append(safePath);
                         }
                     }
                     fullPrompt = promptBuilder.toString();
                 }
 
-                // 3. 构建命令
                 List<String> command = buildCliCommand(cliPath, fullPrompt, sessionId, model, reasoningEffort, addDirs);
-                LOG.info("[CliBridge][DIAG] fullPrompt length=" + fullPrompt.length()
-                        + ", addDirs=" + addDirs);
+                LOG.info("[CliBridge][DIAG] fullPrompt length=" + fullPrompt.length() + ", addDirs=" + addDirs);
                 LOG.info("[CliBridge][DIAG] fullPrompt content: "
                         + (fullPrompt.length() > 500 ? fullPrompt.substring(0, 500) + "..." : fullPrompt));
-                LOG.info("[CliBridge] 命令: " + String.join(" ", command));
+                if (suppressThinking) {
+                    LOG.info("[CliBridge] disableThinking requested; Claude CLI has no native no-thinking flag, suppressing thinking events in parser");
+                }
+                LOG.info("[CliBridge] Command: " + String.join(" ", command));
 
-                // 4. 创建进程
-                ProcessBuilder pb = new ProcessBuilder(command);
-                pb.redirectErrorStream(true);
+                ProcessBuilder processBuilder = new ProcessBuilder(command);
+                processBuilder.redirectErrorStream(true);
 
-                // 设置工作目录
                 if (cwd != null && !cwd.isEmpty()) {
                     File workDir = new File(cwd);
                     if (workDir.exists()) {
-                        pb.directory(workDir);
+                        processBuilder.directory(workDir);
                     }
                 }
 
-                // 5. 配置环境
-                Map<String, String> env = pb.environment();
+                Map<String, String> env = processBuilder.environment();
                 env.put("NO_COLOR", "1");
                 envConfigurator.configureProjectPath(env, cwd);
                 envConfigurator.configurePermissionEnv(env);
 
-                // 6. 启动进程
-                Process process = pb.start();
-                LOG.info("[CliBridge] CLI 进程已启动, PID: " + process.pid());
+                process = processBuilder.start();
+                LOG.info("[CliBridge] CLI process started, pid=" + process.pid());
                 processManager.registerProcess(channelId, process);
-
-                // 7. 重置解析器状态
                 streamParser.resetState();
 
-                // 8. 读取输出
                 try (BufferedReader reader = new BufferedReader(
                         new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                     String line;
@@ -189,39 +177,48 @@ class ClaudeCliBridge {
                         if (line.trim().isEmpty()) {
                             continue;
                         }
-                        LOG.debug("[CliBridge] 收到行: " + line);
-                        streamParser.parseLine(line, callback, result, assistantContent, hadSendError);
+                        LOG.debug("[CliBridge] Received line: " + line);
+                        streamParser.parseLine(
+                                line,
+                                callback,
+                                result,
+                                assistantContent,
+                                hadSendError,
+                                suppressThinking
+                        );
                     }
                 }
 
-                // 9. 等待进程退出
                 process.waitFor();
                 int exitCode = process.exitValue();
                 boolean wasInterrupted = processManager.wasInterrupted(channelId);
-                LOG.info("[CliBridge] 进程退出, exitCode=" + exitCode
-                        + ", wasInterrupted=" + wasInterrupted);
+                LOG.info("[CliBridge] Process exited, exitCode=" + exitCode + ", wasInterrupted=" + wasInterrupted);
 
                 result.finalResult = assistantContent.toString();
                 result.messageCount = result.messages.size();
 
                 if (wasInterrupted) {
                     long elapsed = System.currentTimeMillis() - startTime;
-                    LOG.info("[CliBridge] 请求被用户中断 (elapsed: " + elapsed + "ms)");
+                    LOG.info("[CliBridge] Request interrupted by user (elapsed: " + elapsed + "ms)");
                     result.error = "User interrupted";
+                    callback.onQueueDisplayStateChanged(QueueDisplayState.NONE, 0);
                     callback.onComplete(result);
                 } else if (!hadSendError.get()) {
                     if (exitCode == 0) {
                         if (!result.success) {
                             result.success = true;
                         }
+                        callback.onQueueDisplayStateChanged(QueueDisplayState.NONE, 0);
                         callback.onComplete(result);
                     } else {
-                        String errorMsg = "CLI 进程退出码: " + exitCode;
+                        String errorMsg = "CLI process exited with code: " + exitCode;
                         result.success = false;
                         result.error = errorMsg;
+                        callback.onQueueDisplayStateChanged(QueueDisplayState.NONE, 0);
                         callback.onError(errorMsg);
                     }
                 } else {
+                    callback.onQueueDisplayStateChanged(QueueDisplayState.NONE, 0);
                     callback.onComplete(result);
                 }
 
@@ -230,14 +227,17 @@ class ClaudeCliBridge {
                 result.success = false;
                 result.error = e.getMessage();
                 errorAlreadyReported.set(true);
-                LOG.error("[CliBridge] 执行异常", e);
+                LOG.error("[CliBridge] Execution failed", e);
+                callback.onQueueDisplayStateChanged(QueueDisplayState.NONE, 0);
                 callback.onError(e.getMessage());
                 return result;
             } finally {
-                // 清理临时文件
                 cleanupTempFiles(tempFiles);
-                // 注意：unregisterProcess 需要 process 引用，这里从 map 中移除
-                processManager.unregisterProcess(channelId, processManager.getProcess(channelId));
+                callback.onQueueDisplayStateChanged(QueueDisplayState.NONE, 0);
+                if (process != null) {
+                    processManager.unregisterProcess(channelId, process);
+                    processManager.waitForProcessTermination(process);
+                }
             }
         }).exceptionally(ex -> {
             if (errorAlreadyReported.get()) {
@@ -246,15 +246,20 @@ class ClaudeCliBridge {
             SDKResult errorResult = new SDKResult();
             errorResult.success = false;
             errorResult.error = ex.getCause() != null ? ex.getCause().getMessage() : ex.getMessage();
+            callback.onQueueDisplayStateChanged(QueueDisplayState.NONE, 0);
             callback.onError(errorResult.error);
             return errorResult;
         });
     }
 
-    /**
-     * 构建 CLI 命令参数列表。
-     */
-    private List<String> buildCliCommand(String cliPath, String message, String sessionId, String model, String reasoningEffort, List<String> addDirs) {
+    private List<String> buildCliCommand(
+            String cliPath,
+            String message,
+            String sessionId,
+            String model,
+            String reasoningEffort,
+            List<String> addDirs
+    ) {
         List<String> command = new ArrayList<>();
         command.add(cliPath);
         command.add("-p");
@@ -274,7 +279,6 @@ class ClaudeCliBridge {
             command.add(reasoningEffort);
         }
 
-        // Grant Read tool access to attachment directories (each dir as separate --add-dir flag)
         if (addDirs != null && !addDirs.isEmpty()) {
             for (String dir : addDirs) {
                 command.add("--add-dir");
@@ -289,13 +293,9 @@ class ClaudeCliBridge {
 
         command.add("--");
         command.add(message);
-
         return command;
     }
 
-    /**
-     * 将附件数据写入临时文件。
-     */
     private File writeAttachmentToTempFile(ClaudeSession.Attachment attachment, String channelId) {
         try {
             if (attachment.localPath != null && !attachment.localPath.isBlank()) {
@@ -304,18 +304,27 @@ class ClaudeCliBridge {
                     return persisted;
                 }
             }
+
+            if (attachment.data == null || attachment.data.isBlank()) {
+                return null;
+            }
+
             String suffix = getFileSuffix(attachment.fileName);
             File tempDir = processManager.prepareClaudeTempDir();
+            if (tempDir == null) {
+                return null;
+            }
+
             String prefix = "cli-att-" + (channelId != null ? channelId.hashCode() : System.currentTimeMillis());
             File tempFile = File.createTempFile(prefix, suffix, tempDir);
             byte[] data = Base64.getDecoder().decode(attachment.data);
             try (FileOutputStream fos = new FileOutputStream(tempFile)) {
                 fos.write(data);
             }
-            LOG.debug("[CliBridge] 附件写入临时文件: " + tempFile.getAbsolutePath());
+            LOG.debug("[CliBridge] Wrote attachment temp file: " + tempFile.getAbsolutePath());
             return tempFile;
         } catch (Exception e) {
-            LOG.warn("[CliBridge] 写入附件临时文件失败: " + e.getMessage());
+            LOG.warn("[CliBridge] Failed to write attachment temp file: " + e.getMessage());
             return null;
         }
     }
@@ -326,8 +335,12 @@ class ClaudeCliBridge {
         }
         if (attachment.fileName != null) {
             String lower = attachment.fileName.toLowerCase();
-            return lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg")
-                    || lower.endsWith(".gif") || lower.endsWith(".webp") || lower.endsWith(".bmp");
+            return lower.endsWith(".png")
+                    || lower.endsWith(".jpg")
+                    || lower.endsWith(".jpeg")
+                    || lower.endsWith(".gif")
+                    || lower.endsWith(".webp")
+                    || lower.endsWith(".bmp");
         }
         return false;
     }
@@ -344,23 +357,20 @@ class ClaudeCliBridge {
         Path allowedTempDir = allowedTempDirFile != null
                 ? allowedTempDirFile.toPath().toAbsolutePath().normalize()
                 : null;
-        for (File f : tempFiles) {
+        for (File file : tempFiles) {
             try {
-                if (f == null || !f.exists() || allowedTempDir == null) {
+                if (file == null || !file.exists() || allowedTempDir == null) {
                     continue;
                 }
-                Path filePath = f.toPath().toAbsolutePath().normalize();
+                Path filePath = file.toPath().toAbsolutePath().normalize();
                 if (filePath.startsWith(allowedTempDir)) {
-                    f.delete();
+                    file.delete();
                 }
             } catch (Exception ignored) {
             }
         }
     }
 
-    /**
-     * 检查 CLI 环境是否可用。
-     */
     boolean checkEnvironment() {
         return cliDetector.findCliExecutable() != null;
     }
