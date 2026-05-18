@@ -6,8 +6,11 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.extensions.PluginId;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.InputStreamReader;
 import java.lang.management.ManagementFactory;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -462,7 +465,12 @@ public class PlatformUtils {
                 );
                 pb.redirectErrorStream(true);
                 Process killer = pb.start();
-                return killer.waitFor(5, TimeUnit.SECONDS);
+                boolean result = killer.waitFor(5, TimeUnit.SECONDS);
+
+                // Clean up orphaned conhost.exe processes after terminating the parent
+                cleanupOrphanedConhosts(pid);
+
+                return result;
             } else {
                 // Unix: try using the kill command
                 ProcessBuilder pb = new ProcessBuilder(
@@ -475,6 +483,135 @@ public class PlatformUtils {
         } catch (Exception e) {
             LOG.warn("Failed to terminate process (PID: " + pid + "): " + e.getMessage());
             return false;
+        }
+    }
+
+    /**
+     * Clean up orphaned conhost.exe processes that were children of a terminated process.
+     * This is a Windows-specific issue where conhost.exe processes may not be automatically
+     * terminated when their parent process is killed.
+     *
+     * @param parentPid the PID of the parent process that was just terminated
+     */
+    public static void cleanupOrphanedConhosts(long parentPid) {
+        if (!isWindows()) {
+            return;
+        }
+
+        try {
+            // Use WMIC to find conhost.exe processes where the parent process matches
+            // WMIC is more reliable than taskkill for finding parent-child relationships
+            ProcessBuilder wmicBuilder = new ProcessBuilder(
+                    "wmic", "process", "where",
+                    "name='conhost.exe' and ParentProcessId=" + parentPid,
+                    "get", "ProcessId"
+            );
+            wmicBuilder.redirectErrorStream(true);
+
+            Process wmicProcess = wmicBuilder.start();
+            StringBuilder output = new StringBuilder();
+
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(wmicProcess.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line).append("\n");
+                }
+            }
+
+            wmicProcess.waitFor(10, TimeUnit.SECONDS);
+
+            // Parse the output to get PIDs (skip header line)
+            String[] lines = output.toString().split("\n");
+            int cleanedCount = 0;
+
+            for (String line : lines) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty() || trimmed.equals("ProcessId")) {
+                    continue; // Skip empty lines and header
+                }
+
+                try {
+                    long conhostPid = Long.parseLong(trimmed);
+                    LOG.info("[ProcessCleanup] Terminating orphaned conhost.exe (PID: " + conhostPid +
+                            ", parent: " + parentPid + ")");
+
+                    ProcessBuilder taskkillBuilder = new ProcessBuilder(
+                            "taskkill", "/F", "/PID", String.valueOf(conhostPid)
+                    );
+                    taskkillBuilder.redirectErrorStream(true);
+                    Process taskkillProcess = taskkillBuilder.start();
+                    taskkillProcess.waitFor(5, TimeUnit.SECONDS);
+                    cleanedCount++;
+                } catch (NumberFormatException e) {
+                    LOG.debug("[ProcessCleanup] Skipping non-numeric PID: " + trimmed);
+                }
+            }
+
+            if (cleanedCount > 0) {
+                LOG.info("[ProcessCleanup] Cleaned up " + cleanedCount + " orphaned conhost.exe process(es)");
+            }
+        } catch (Exception e) {
+            LOG.debug("[ProcessCleanup] Failed to clean up conhost.exe processes: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Clean up all orphaned conhost.exe processes that belong to known plugin processes.
+     * This is useful as a cleanup routine during IDE shutdown or when resetting the plugin.
+     * Searches for conhost.exe processes whose parents are node.exe, claude.exe, or codex.exe.
+     */
+    public static void cleanupAllPluginConhosts() {
+        if (!isWindows()) {
+            return;
+        }
+
+        LOG.info("[ProcessCleanup] Starting cleanup of all plugin-related conhost.exe processes...");
+
+        try {
+            // Find all node.exe and claude.exe processes
+            ProcessBuilder psBuilder = new ProcessBuilder(
+                    "wmic", "process", "where",
+                    "name='node.exe' or name='claude.exe' or name='codex.exe'",
+                    "get", "ProcessId"
+            );
+            psBuilder.redirectErrorStream(true);
+
+            Process psProcess = psBuilder.start();
+            StringBuilder output = new StringBuilder();
+
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(psProcess.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line).append("\n");
+                }
+            }
+
+            psProcess.waitFor(10, TimeUnit.SECONDS);
+
+            // Parse parent process PIDs and clean their conhost children
+            String[] lines = output.toString().split("\n");
+            int totalCleaned = 0;
+
+            for (String line : lines) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty() || trimmed.equals("ProcessId")) {
+                    continue;
+                }
+
+                try {
+                    long parentPid = Long.parseLong(trimmed);
+                    cleanupOrphanedConhosts(parentPid);
+                    totalCleaned++;
+                } catch (NumberFormatException e) {
+                    // Skip non-numeric lines
+                }
+            }
+
+            LOG.info("[ProcessCleanup] Completed cleanup of plugin conhost.exe processes");
+        } catch (Exception e) {
+            LOG.warn("[ProcessCleanup] Failed to cleanup plugin conhost.exe processes: " + e.getMessage());
         }
     }
 

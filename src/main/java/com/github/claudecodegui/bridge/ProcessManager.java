@@ -79,9 +79,15 @@ public class ProcessManager {
         interruptedChannels.add(channelId);
 
         // Use platform-aware process termination
-        // Windows: uses taskkill /F /T to kill the process tree
+        // Windows: uses taskkill /F /T to kill the process tree and cleans up conhost.exe
         // Unix: uses standard destroy/destroyForcibly
+        long pid = process.pid();
         PlatformUtils.terminateProcess(process);
+
+        // Additional cleanup for Windows conhost.exe processes
+        if (PlatformUtils.isWindows()) {
+            PlatformUtils.cleanupOrphanedConhosts(pid);
+        }
 
         // Wait for the process to fully terminate
         try {
@@ -130,6 +136,11 @@ public class ProcessManager {
         // Clean up stale temp files on shutdown (safe for concurrent sessions)
         cleanupStaleTempFiles();
 
+        // Clean up any orphaned conhost.exe processes on Windows
+        if (PlatformUtils.isWindows()) {
+            PlatformUtils.cleanupAllPluginConhosts();
+        }
+
         LOG.info("[ProcessManager] Cleanup complete. Terminated " + count + " processes.");
     }
 
@@ -160,6 +171,38 @@ public class ProcessManager {
                 Thread.currentThread().interrupt();
             }
         }
+    }
+
+    /**
+     * Manual cleanup method for orphaned conhost.exe processes.
+     * Can be called manually to clean up accumulated conhost.exe processes.
+     */
+    public void manualConhostCleanup() {
+        if (!PlatformUtils.isWindows()) {
+            LOG.info("[ProcessManager] conhost.exe cleanup is Windows-specific, skipping on current platform");
+            return;
+        }
+
+        LOG.info("[ProcessManager] Starting manual conhost.exe cleanup...");
+        int cleanedCount = 0;
+
+        // Clean up conhosts for currently active processes
+        for (Map.Entry<String, Process> entry : activeChannelProcesses.entrySet()) {
+            String channelId = entry.getKey();
+            Process process = entry.getValue();
+
+            if (process != null && process.isAlive()) {
+                long pid = process.pid();
+                LOG.info("[ProcessManager] Cleaning conhosts for active process (channel: " + channelId + ", PID: " + pid + ")");
+                PlatformUtils.cleanupOrphanedConhosts(pid);
+                cleanedCount++;
+            }
+        }
+
+        // Clean up all plugin-related conhosts
+        PlatformUtils.cleanupAllPluginConhosts();
+
+        LOG.info("[ProcessManager] Manual conhost.exe cleanup completed");
     }
 
     /**
