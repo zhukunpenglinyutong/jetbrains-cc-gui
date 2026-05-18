@@ -89,7 +89,16 @@
     "attachmentsUploaded": "[Pièces jointes téléchargées]",
     "streamingConnected": "{{provider}} connecté, en train de comprendre votre question",
     "showEarlierMessages": "Afficher {{count}} messages précédents",
-    "totalDuration": "Cette réponse a pris"
+    "totalDuration": "Cette réponse a pris",
+    "compactSummary": {
+      "summarizedConversation": "Conversation résumée",
+      "compactSummary": "Résumé compact",
+      "messagesUpTo": "{{count}} messages résumés jusqu'à ce point",
+      "messagesFrom": "{{count}} messages résumés à partir de ce point",
+      "userContext": "Contexte : « {{context}} »",
+      "expand": "Développer le résumé",
+      "collapse": "Réduire le résumé"
+    }
   },
   "settings": {
     "title": "Paramètres",

@@ -1,6 +1,10 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import GenericToolBlock from './GenericToolBlock';
+
+const hookMocks = vi.hoisted(() => ({
+  useResolvedFileLinkTooltip: vi.fn(),
+}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -16,7 +20,16 @@ vi.mock('../../utils/bridge', () => ({
   openFile: vi.fn(),
 }));
 
+vi.mock('../../hooks/useResolvedFileLinkTooltip', () => ({
+  useResolvedFileLinkTooltip: hookMocks.useResolvedFileLinkTooltip,
+}));
+
 describe('GenericToolBlock', () => {
+  beforeEach(() => {
+    hookMocks.useResolvedFileLinkTooltip.mockReset();
+    hookMocks.useResolvedFileLinkTooltip.mockReturnValue({});
+  });
+
   it('keeps search-style tools expandable without showing a chevron icon', () => {
     const { container } = render(
       <GenericToolBlock
@@ -57,5 +70,49 @@ describe('GenericToolBlock', () => {
     expect(container.querySelector('.task-details-accordion')?.classList.contains('expanded')).toBe(true);
     expect(screen.getByText('prompt')).toBeTruthy();
     expect(screen.getByText('Summarize this page')).toBeTruthy();
+  });
+
+  it('configures each apply_patch file link independently', () => {
+    render(
+      <GenericToolBlock
+        name="apply_patch"
+        input={{
+          input: [
+            '*** Begin Patch',
+            '*** Update File: webview/src/App.tsx',
+            '@@',
+            '*** Update File: webview/src/main.tsx',
+            '@@',
+            '*** End Patch',
+          ].join('\n'),
+        }}
+      />,
+    );
+
+    expect(hookMocks.useResolvedFileLinkTooltip).toHaveBeenCalledWith('webview/src/App.tsx', 'webview/src/App.tsx');
+    expect(hookMocks.useResolvedFileLinkTooltip).toHaveBeenCalledWith('webview/src/main.tsx', 'webview/src/main.tsx');
+  });
+
+  it('passes absolute apply_patch paths through to the tooltip', () => {
+    const absolutePath = 'C:\\Users\\me\\.ssh\\config';
+
+    render(
+      <GenericToolBlock
+        name="apply_patch"
+        input={{
+          input: [
+            '*** Begin Patch',
+            `*** Update File: ${absolutePath}`,
+            '@@',
+            '*** End Patch',
+          ].join('\n'),
+        }}
+      />,
+    );
+
+    // Local IDE plugin — absolute paths are not sensitive. Pass the path as
+    // both the link target and the fallback display text so the tooltip can
+    // still show the user where the link points before the backend resolves.
+    expect(hookMocks.useResolvedFileLinkTooltip).toHaveBeenCalledWith(absolutePath, absolutePath);
   });
 });

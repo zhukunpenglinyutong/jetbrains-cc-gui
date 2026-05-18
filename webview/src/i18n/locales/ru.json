@@ -89,7 +89,16 @@
     "attachmentsUploaded": "[Вложения загружены]",
     "streamingConnected": "{{provider}} обрабатывает запрос",
     "showEarlierMessages": "Показать предыдущие сообщения ({{count}})",
-    "totalDuration": "Этот ответ занял"
+    "totalDuration": "Этот ответ занял",
+    "compactSummary": {
+      "summarizedConversation": "Сводка беседы",
+      "compactSummary": "Краткое резюме",
+      "messagesUpTo": "Сведено {{count}} сообщений до этого момента",
+      "messagesFrom": "Сведено {{count}} сообщений начиная с этого момента",
+      "userContext": "Контекст: «{{context}}»",
+      "expand": "Развернуть сводку",
+      "collapse": "Свернуть сводку"
+    }
   },
   "settings": {
     "title": "Настройки",

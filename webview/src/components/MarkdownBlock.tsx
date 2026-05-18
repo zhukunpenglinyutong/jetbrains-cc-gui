@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify';
 import { memo, useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { openBrowser, openClass, openFile } from '../utils/bridge';
+import { useMarkdownFileLinkTooltip } from '../hooks/useMarkdownFileLinkTooltip';
 import {
   decorateExistingAnchors,
   linkifyHtml,
@@ -234,6 +235,63 @@ function makeStreamSafe(content: string): string {
 }
 
 /**
+ * Strip system-internal XML tags injected by Claude Code's prompt protocol.
+ * Mirrors `stripPromptXMLTags` from the CLI source (src/utils/messages.ts).
+ */
+const SYSTEM_XML_TAGS_RE =
+  /<(commit_analysis|context|function_analysis|pr_analysis)>[\s\S]*?<\/\1>\n?/g;
+
+function stripSystemTags(content: string): string {
+  const result = content.replace(SYSTEM_XML_TAGS_RE, '');
+  return result !== content ? result.trim() : result;
+}
+
+/**
+ * Escape XML/HTML-like tags in prose text so they are rendered as literal text
+ * rather than being parsed as DOM elements by the browser.
+ * Matches opening <tag>, closing </tag>, self-closing <tag/>, and <!-- comments -->.
+ * Does NOT touch content inside code fences (caller responsibility).
+ */
+const XML_TAG_RE = /<!--[\s\S]*?-->|<\/?[a-zA-Z][a-zA-Z0-9-]*(?:\s[^>]*)?\/?>/g;
+
+function escapeXmlTags(text: string): string {
+  return text.replace(XML_TAG_RE, (match) =>
+    match.replace(/</g, '&lt;').replace(/>/g, '&gt;'),
+  );
+}
+
+/**
+ * Strip system XML tags and escape remaining XML tags only in prose segments
+ * (outside fenced code blocks and inline code). Preserves code content as-is
+ * so marked can handle XML tags inside code naturally (auto-escape).
+ */
+const CODE_FENCE_RE = /(```[\s\S]*?```)/g;
+const INLINE_CODE_RE = /(`[^`\n]+`)/g;
+const BOLD_SYNTAX_RE = /(\*\*[^*]+\*\*)/g;
+
+function stripAndEscapeOutsideCodeBlocks(content: string): string {
+  // First split by fenced code blocks
+  const fenceParts = content.split(CODE_FENCE_RE);
+
+  return fenceParts
+    .map((fencePart, fenceIdx) => {
+      // Odd indices are code fence matches — leave untouched
+      if (fenceIdx % 2 === 1) return fencePart;
+
+      // Then split by inline code within prose segments
+      const inlineParts = fencePart.split(INLINE_CODE_RE);
+      return inlineParts
+        .map((inlinePart, inlineIdx) => {
+          // Odd indices are inline code matches — leave untouched for marked to handle
+          if (inlineIdx % 2 === 1) return inlinePart;
+          return escapeXmlTags(stripSystemTags(inlinePart));
+        })
+        .join('');
+    })
+    .join('');
+}
+
+/**
  * Lightweight renderer for streaming content.
  * Provides basic formatting (code fences, line breaks, inline code, bold)
  * without the heavy marked.parse() + DOMPurify + DOMParser pipeline.
@@ -247,28 +305,44 @@ function safeLang(lang: string): string {
 function renderStreamingInlineText(
   text: string,
   capabilities: LinkifyCapabilities,
+  handleInlineCode: boolean = true,
 ): string {
+  if (handleInlineCode) {
+    return text
+      .split(INLINE_CODE_RE)
+      .map((inlinePart) => {
+        const inlineCodeMatch = /^`([^`\n]+)`$/.exec(inlinePart);
+        if (inlineCodeMatch) {
+          // Inline code content should also be linkified
+          const linkifiedCode = linkifyPlainTextSegment(inlineCodeMatch[1], capabilities);
+          return `<code>${linkifiedCode}</code>`;
+        }
+
+        return inlinePart
+          .split(BOLD_SYNTAX_RE)
+          .map((part) => {
+            const boldMatch = /^\*\*([^*]+)\*\*$/.exec(part);
+            if (boldMatch) {
+              return `<strong>${linkifyPlainTextSegment(boldMatch[1], capabilities)}</strong>`;
+            }
+
+            return linkifyPlainTextSegment(part, capabilities);
+          })
+          .join('');
+      })
+      .join('');
+  }
+
+  // When inline code is already handled upstream, just process bold and linkify
   return text
-    .split(/(`[^`\n]+`)/g)
-    .map((inlinePart) => {
-      const inlineCodeMatch = /^`([^`\n]+)`$/.exec(inlinePart);
-      if (inlineCodeMatch) {
-        // Inline code content should also be linkified
-        const linkifiedCode = linkifyPlainTextSegment(inlineCodeMatch[1], capabilities);
-        return `<code>${linkifiedCode}</code>`;
+    .split(BOLD_SYNTAX_RE)
+    .map((part) => {
+      const boldMatch = /^\*\*([^*]+)\*\*$/.exec(part);
+      if (boldMatch) {
+        return `<strong>${linkifyPlainTextSegment(boldMatch[1], capabilities)}</strong>`;
       }
 
-      return inlinePart
-        .split(/(\*\*[^*]+\*\*)/g)
-        .map((part) => {
-          const boldMatch = /^\*\*([^*]+)\*\*$/.exec(part);
-          if (boldMatch) {
-            return `<strong>${linkifyPlainTextSegment(boldMatch[1], capabilities)}</strong>`;
-          }
-
-          return linkifyPlainTextSegment(part, capabilities);
-        })
-        .join('');
+      return linkifyPlainTextSegment(part, capabilities);
     })
     .join('');
 }
@@ -277,20 +351,36 @@ function renderStreamingProseSegment(
   segment: string,
   capabilities: LinkifyCapabilities,
 ): string {
-  return segment
+  // First strip system-internal XML tags from the prose segment
+  const cleaned = stripSystemTags(segment);
+
+  // Split by inline code to avoid double-escaping
+  // linkifyPlainTextSegment already handles HTML escaping for inline code content
+  const inlineParts = cleaned.split(INLINE_CODE_RE);
+
+  const processedParts = inlineParts.map((part, idx) => {
+    // Odd indices are inline code — pass to linkifyPlainTextSegment which escapes HTML
+    if (idx % 2 === 1) {
+      const inlineContent = part.slice(1, -1); // Remove surrounding backticks
+      return `<code>${linkifyPlainTextSegment(inlineContent, capabilities)}</code>`;
+    }
+    // Even indices are prose — escape XML tags then render inline formatting
+    return renderStreamingInlineText(escapeXmlTags(part), capabilities, false);
+  });
+
+  // Now wrap in paragraph/heading structure based on paragraph breaks
+  const combined = processedParts.join('');
+  return combined
     .split(/\n{2,}/)
     .filter((block) => block.length > 0)
     .map((block) => {
       const headingMatch = /^(#{1,6})\s+(.+)$/.exec(block);
       if (headingMatch && !block.includes('\n')) {
         const level = headingMatch[1].length;
-        return `<h${level}>${renderStreamingInlineText(headingMatch[2], capabilities)}</h${level}>`;
+        return `<h${level}>${headingMatch[2]}</h${level}>`;
       }
 
-      const lines = block
-        .split('\n')
-        .map((line) => renderStreamingInlineText(line, capabilities))
-        .join('<br/>');
+      const lines = block.split('\n').join('<br/>');
       return `<p>${lines}</p>`;
     })
     .join('');
@@ -358,6 +448,8 @@ function renderStreamingContent(
       // Already wrapped in <pre> — pass through
       if (seg.startsWith('<pre>')) return seg;
 
+      // renderStreamingProseSegment handles stripSystemTags + escapeXmlTags internally,
+      // and preserves inline code content for natural HTML escaping
       return renderStreamingProseSegment(seg, capabilities);
     })
     .join('');
@@ -394,6 +486,8 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
   // Ref for tracking retry count
   const mermaidRetryRef = useRef(0);
   const MERMAID_MAX_RETRIES = 3;
+
+  const fileLinkTooltip = useMarkdownFileLinkTooltip();
 
   useEffect(() => {
     return subscribeLinkifyCapabilities(setLinkifyCapabilities);
@@ -553,7 +647,10 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
       }
 
       // Non-streaming: full markdown pipeline
-      const parsed = marked.parse(trimmedContent);
+      // Strip system-internal XML tags and escape remaining XML tags outside code blocks
+      // (mirrors CLI's stripPromptXMLTags + html token discard)
+      const cleaned = stripAndEscapeOutsideCodeBlocks(trimmedContent);
+      const parsed = marked.parse(cleaned);
       const sanitized = DOMPurify.sanitize(
         typeof parsed === 'string' ? parsed : String(parsed),
         { ADD_ATTR: ['class', 'data-lang', 'data-copy-success', 'data-copy-title'] }
@@ -647,9 +744,15 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
   }, [isStreaming, html, renderMermaidDiagrams]);
 
   const handleClick = async (event: React.MouseEvent<HTMLDivElement>) => {
-    const target = event.target as HTMLElement;
+    // React synthetic events may have a Text node as target when the user
+    // clicks inside an <a> element. Walk up to the parent element so that
+    // element.closest() can be used safely.
+    const targetNode = event.target as unknown as Node;
+    const target = targetNode.nodeType === Node.TEXT_NODE
+      ? (targetNode as Text).parentElement
+      : (event.target as HTMLElement);
 
-    const copyBtn = target.closest('button.copy-code-btn') as HTMLButtonElement | null;
+    const copyBtn = target?.closest('button.copy-code-btn') as HTMLButtonElement | null;
     if (copyBtn && containerRef.current?.contains(copyBtn)) {
       event.preventDefault();
       event.stopPropagation();
@@ -666,13 +769,30 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
       return;
     }
 
-    const img = target.closest('img');
+    const img = target?.closest('img');
     if (img && img.getAttribute('src')) {
       setPreviewSrc(img.getAttribute('src'));
       return;
     }
 
-    const anchor = target.closest('a');
+    let anchor = target?.closest('a');
+
+    // Fallback: if the click target is not inside an <a> (e.g. a portal
+    // tooltip with broken pointer-events overlaying the link), use the
+    // click coordinates to find which <a> was actually clicked.
+    if (!anchor && containerRef.current) {
+      const x = event.clientX;
+      const y = event.clientY;
+      const links = containerRef.current.querySelectorAll('a');
+      for (const link of Array.from(links)) {
+        const rect = link.getBoundingClientRect();
+        if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+          anchor = link as HTMLAnchorElement;
+          break;
+        }
+      }
+    }
+
     if (!anchor) {
       return;
     }
@@ -709,7 +829,12 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
         className="markdown-content"
         dangerouslySetInnerHTML={{ __html: html }}
         onClick={handleClick}
+        onMouseOver={fileLinkTooltip.handleMouseOver}
+        onMouseMove={fileLinkTooltip.handleMouseMove}
+        onMouseOut={fileLinkTooltip.handleMouseOut}
       />
+      {/* Tooltip is managed via native DOM API in handleMouseOver/handleMouseOut
+          to avoid React re-render issues that break click events in JCEF. */}
       {previewSrc && (
         <div
           className="image-preview-overlay"

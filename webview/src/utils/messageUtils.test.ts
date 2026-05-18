@@ -13,6 +13,11 @@ import {
   isSyntheticToolMessageContent,
   hasNonHumanOrigin,
   shouldShowMessage,
+  isCompactCommandMessage,
+  isCompactStdoutMessage,
+  isCompactRelatedMessage,
+  extractCompactItems,
+  buildCompactNotification,
   TASK_STATUS_COLORS,
 } from './messageUtils';
 
@@ -741,6 +746,311 @@ describe('shouldShowMessage', () => {
       raw: { isMeta: true },
     };
     expect(shouldShowMessage(msg, mockGetMessageText, mockNormalizeBlocks, mockT)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Compact notification detection
+// ---------------------------------------------------------------------------
+
+describe('isCompactCommandMessage', () => {
+  it('returns true for message with <command-name>/compact in raw.content string', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: '',
+      timestamp: '1',
+      raw: {
+        message: {
+          content: '<command-name>/compact</command-name><command-message>compact</command-message>',
+        },
+      },
+    };
+    expect(isCompactCommandMessage(msg)).toBe(true);
+  });
+
+  it('returns true for message with <command-name>/compact with args', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: '',
+      timestamp: '1',
+      raw: {
+        content: '<command-name>/compact</command-name><command-args>注意保留cli源码地址</command-args>',
+      },
+    };
+    expect(isCompactCommandMessage(msg)).toBe(true);
+  });
+
+  it('returns false for message with other command', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: '',
+      timestamp: '1',
+      raw: {
+        message: {
+          content: '<command-name>/aimax:auto</command-name><command-message>aimax:auto</command-message>',
+        },
+      },
+    };
+    expect(isCompactCommandMessage(msg)).toBe(false);
+  });
+
+  it('returns false for non-user messages', () => {
+    const msg: ClaudeMessage = {
+      type: 'assistant',
+      content: '<command-name>/compact</command-name>',
+      timestamp: '1',
+    };
+    expect(isCompactCommandMessage(msg)).toBe(false);
+  });
+
+  it('returns false when raw is undefined and content is not /compact', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: 'hello',
+      timestamp: '1',
+    };
+    expect(isCompactCommandMessage(msg)).toBe(false);
+  });
+
+  it('does not detect optimistic /compact command by content (no XML tags)', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: '/compact',
+      timestamp: '1',
+    };
+    expect(isCompactCommandMessage(msg)).toBe(false);
+  });
+
+  it('detects /compact in raw.content array of text blocks', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: '',
+      timestamp: '1',
+      raw: {
+        content: [
+          { type: 'text', text: '<command-name>/compact</command-name><command-message>compact</command-message>' },
+        ],
+      },
+    };
+    expect(isCompactCommandMessage(msg)).toBe(true);
+  });
+
+  it('does not detect optimistic /compact with arguments by content (no XML tags)', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: '/compact --verbose',
+      timestamp: '1',
+    };
+    expect(isCompactCommandMessage(msg)).toBe(false);
+  });
+
+  it('does not match non-compact content without XML tags', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: '/compactextra',
+      timestamp: '1',
+    };
+    expect(isCompactCommandMessage(msg)).toBe(false);
+  });
+});
+
+describe('isCompactStdoutMessage', () => {
+  it('returns true for message with <local-command-stdout> in raw', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: '',
+      timestamp: '1',
+      raw: {
+        message: {
+          content: '<local-command-stdout>Compacted Tip: You have access to Opus 1M</local-command-stdout>',
+        },
+      },
+    };
+    expect(isCompactStdoutMessage(msg)).toBe(true);
+  });
+
+  it('returns false for message without stdout tag', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: 'regular message',
+      timestamp: '1',
+      raw: { content: 'regular message' },
+    };
+    expect(isCompactStdoutMessage(msg)).toBe(false);
+  });
+
+  it('returns false for non-user messages', () => {
+    const msg: ClaudeMessage = {
+      type: 'assistant',
+      content: '<local-command-stdout>output</local-command-stdout>',
+      timestamp: '1',
+    };
+    expect(isCompactStdoutMessage(msg)).toBe(false);
+  });
+});
+
+describe('isCompactRelatedMessage', () => {
+  it('returns true for compact command message', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: '',
+      timestamp: '1',
+      raw: { message: { content: '<command-name>/compact</command-name>' } },
+    };
+    expect(isCompactRelatedMessage(msg)).toBe(true);
+  });
+
+  it('returns true for compact stdout message', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: '',
+      timestamp: '1',
+      raw: { message: { content: '<local-command-stdout>Compacted</local-command-stdout>' } },
+    };
+    expect(isCompactRelatedMessage(msg)).toBe(true);
+  });
+
+  it('returns true for isCompactSummary message', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: 'summary',
+      timestamp: '1',
+      raw: { isCompactSummary: true },
+    };
+    expect(isCompactRelatedMessage(msg)).toBe(true);
+  });
+
+  it('returns false for regular message', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: 'hello',
+      timestamp: '1',
+    };
+    expect(isCompactRelatedMessage(msg)).toBe(false);
+  });
+});
+
+describe('extractCompactItems', () => {
+  it('extracts stdout text from messages', () => {
+    const messages: ClaudeMessage[] = [
+      {
+        type: 'user',
+        content: '',
+        timestamp: '1',
+        raw: { message: { content: '<local-command-stdout>Compacted Tip: test</local-command-stdout>' } },
+      },
+    ];
+    const items = extractCompactItems(messages);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toEqual({ type: 'stdout', text: 'Compacted Tip: test' });
+  });
+
+  it('returns empty for messages without stdout', () => {
+    const messages: ClaudeMessage[] = [
+      {
+        type: 'user',
+        content: '',
+        timestamp: '1',
+        raw: { message: { content: '<command-name>/compact</command-name>' } },
+      },
+    ];
+    expect(extractCompactItems(messages)).toHaveLength(0);
+  });
+
+  it('extracts multiple stdout items from group', () => {
+    const messages: ClaudeMessage[] = [
+      {
+        type: 'user',
+        content: '',
+        timestamp: '1',
+        raw: { message: { content: '<local-command-stdout>line one</local-command-stdout>' } },
+      },
+      {
+        type: 'user',
+        content: '',
+        timestamp: '2',
+        raw: { message: { content: '<local-command-stdout>line two</local-command-stdout>' } },
+      },
+    ];
+    const items = extractCompactItems(messages);
+    expect(items).toHaveLength(2);
+    expect(items[0].text).toBe('line one');
+    expect(items[1].text).toBe('line two');
+  });
+});
+
+describe('buildCompactNotification', () => {
+  it('returns null for empty group', () => {
+    expect(buildCompactNotification([])).toBeNull();
+  });
+
+  it('returns null when group has no command message', () => {
+    const messages: ClaudeMessage[] = [
+      {
+        type: 'user',
+        content: '',
+        timestamp: '1',
+        raw: { message: { content: '<local-command-stdout>output</local-command-stdout>' } },
+      },
+    ];
+    expect(buildCompactNotification(messages)).toBeNull();
+  });
+
+  it('builds notification with command and stdout', () => {
+    const messages: ClaudeMessage[] = [
+      {
+        type: 'user',
+        content: '',
+        timestamp: '2026-01-01T00:00:00Z',
+        raw: { message: { content: '<command-name>/compact</command-name><command-message>compact</command-message>' } },
+      },
+      {
+        type: 'user',
+        content: '',
+        timestamp: '2026-01-01T00:00:01Z',
+        raw: { message: { content: '<local-command-stdout>Compacted Tip: test</local-command-stdout>' } },
+      },
+    ];
+    const result = buildCompactNotification(messages);
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe('compact_notification');
+    expect(result!.content).toBe('/compact');
+    expect(result!.timestamp).toBe('2026-01-01T00:00:00Z');
+    const compactItems = (result!.raw as any)?.compactItems;
+    expect(compactItems).toHaveLength(1);
+    expect(compactItems[0]).toEqual({ type: 'stdout', text: 'Compacted Tip: test' });
+  });
+
+  it('uses formatCommandForDisplay for header text with args', () => {
+    const messages: ClaudeMessage[] = [
+      {
+        type: 'user',
+        content: '',
+        timestamp: '1',
+        raw: {
+          message: {
+            content: '<command-name>/compact</command-name><command-message>compact</command-message><command-args>注意保留cli源码地址</command-args>',
+          },
+        },
+      },
+    ];
+    const result = buildCompactNotification(messages);
+    expect(result).not.toBeNull();
+    expect(result!.content).toBe('/compact 注意保留cli源码地址');
+  });
+
+  it('falls back to /compact when formatCommandForDisplay returns null', () => {
+    const messages: ClaudeMessage[] = [
+      {
+        type: 'user',
+        content: '',
+        timestamp: '1',
+        raw: { message: { content: '<command-name>/compact</command-name>' } },
+      },
+    ];
+    const result = buildCompactNotification(messages);
+    expect(result).not.toBeNull();
+    expect(result!.content).toBe('/compact');
   });
 });
 

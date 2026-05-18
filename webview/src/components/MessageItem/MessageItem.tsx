@@ -580,8 +580,9 @@ export const MessageItem = memo(function MessageItem({
         />
       )}
 
-      {/* Role label for non-user/assistant messages */}
-      {message.type !== 'assistant' && message.type !== 'user' && (
+      {/* Role label for non-user/assistant messages — hidden for notification types */}
+      {message.type !== 'assistant' && message.type !== 'user'
+        && message.type !== 'notification' && message.type !== 'task_notification' && (
         <div className="message-role-label">
           {message.type}
         </div>

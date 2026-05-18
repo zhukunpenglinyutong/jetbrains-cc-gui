@@ -23,8 +23,9 @@ public class MessageParser {
             return null;
         }
 
-        // Filter out command messages
-        if (shouldFilterCommandMessage(msg)) {
+        // Filter out command messages - only for user messages
+        // Assistant messages may contain these tags in code examples
+        if (shouldFilterCommandMessage(msg, type)) {
             return null;
         }
 
@@ -51,8 +52,15 @@ public class MessageParser {
 
     /**
      * Check whether a command message should be filtered out.
+     * Only applies to user messages - assistant messages may contain
+     * command tags in code examples and should not be filtered.
      */
-    private boolean shouldFilterCommandMessage(JsonObject msg) {
+    private boolean shouldFilterCommandMessage(JsonObject msg, String type) {
+        // Only filter user messages - assistant messages may contain command tags in code examples
+        if (!"user".equals(type)) {
+            return false;
+        }
+
         if (!msg.has("message") || !msg.get("message").isJsonObject()) {
             return false;
         }

@@ -49,6 +49,15 @@ public class PluginActionRegistrationTest {
         Assert.assertEquals("/icons/cc-gui-icon.svg", quickFixAction.icon);
     }
 
+    @Test
+    public void sessionTemplateActionsAreRegistered() throws Exception {
+        ActionRegistration saveAsTemplateAction = getActionRegistration("ClaudeCodeGUI.SaveAsTemplateAction");
+        ActionRegistration createFromTemplateAction = getActionRegistration("ClaudeCodeGUI.CreateFromTemplateAction");
+
+        Assert.assertEquals("com.github.claudecodegui.action.SaveAsTemplateAction", saveAsTemplateAction.actionClass);
+        Assert.assertEquals("com.github.claudecodegui.action.CreateFromTemplateAction", createFromTemplateAction.actionClass);
+    }
+
     private static Set<String> getActionGroupIds(String actionId) throws Exception {
         return getActionRegistration(actionId).getGroupIds();
     }

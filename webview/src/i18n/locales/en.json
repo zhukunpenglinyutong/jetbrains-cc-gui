@@ -89,7 +89,16 @@
     "attachmentsUploaded": "[Attachments Uploaded]",
     "streamingConnected": "{{provider}} connected, understanding your question",
     "showEarlierMessages": "Show {{count}} earlier messages",
-    "totalDuration": "This reply took"
+    "totalDuration": "This reply took",
+    "compactSummary": {
+      "summarizedConversation": "Summarized conversation",
+      "compactSummary": "Compact summary",
+      "messagesUpTo": "Summarized {{count}} messages up to this point",
+      "messagesFrom": "Summarized {{count}} messages from this point",
+      "userContext": "Context: \"{{context}}\"",
+      "expand": "Expand summary",
+      "collapse": "Collapse summary"
+    }
   },
   "settings": {
     "title": "Settings",
