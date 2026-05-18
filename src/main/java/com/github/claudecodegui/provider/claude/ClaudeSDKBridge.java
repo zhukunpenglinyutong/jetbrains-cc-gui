@@ -8,6 +8,7 @@ import com.github.claudecodegui.provider.common.BaseSDKBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.DaemonBridge;
 import com.github.claudecodegui.provider.common.SDKResult;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 
 import java.io.File;
 import java.util.List;
@@ -34,6 +35,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
     private final ClaudeRewindService rewindService;
     private final ClaudeDaemonRequestExecutor daemonRequestExecutor;
     private final ClaudeCliBridge cliBridge;
+    private volatile String invocationMode = "sdk";
 
     public ClaudeSDKBridge() {
         super(ClaudeSDKBridge.class);
@@ -75,10 +77,10 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
         this.cliBridge = new ClaudeCliBridge(
                 processManager,
                 ClaudeCliDetector.getInstance(),
-                new ClaudeCliStreamParser(gson),
                 gson,
                 envConfigurator
         );
+        refreshInvocationMode();
     }
 
     /**
@@ -129,6 +131,24 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
 
     public void resetPersistentRuntime(String runtimeSessionEpoch) {
         daemonCoordinator.resetPersistentRuntime(runtimeSessionEpoch);
+    }
+
+    public void refreshInvocationMode() {
+        try {
+            this.invocationMode = new CodemossSettingsService().getClaudeInvocationMode();
+        } catch (Exception e) {
+            LOG.debug("[ClaudeSDKBridge] Failed to refresh invocation mode: " + e.getMessage());
+            this.invocationMode = "sdk";
+        }
+    }
+
+    private boolean isCliInvocationModeCached() {
+        String mode = invocationMode;
+        if (mode == null || mode.isEmpty()) {
+            refreshInvocationMode();
+            mode = invocationMode;
+        }
+        return "cli".equals(mode);
     }
 
     @Override
@@ -404,14 +424,14 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
         // 诊断日志：记录附件到达 SDK bridge 的状态
         LOG.info("[ClaudeSDKBridge][DIAG] sendMessage called, attachments="
                 + (attachments == null ? "NULL" : attachments.size())
-                + ", isCliMode=" + isCliMode());
+                + ", isCliMode=" + isCliInvocationModeCached());
 
         // CLI 模式：直接调用 claude CLI 二进制，不经过 Node.js
         // 但图片附件需要回退到 daemon/per-process 模式，因为 CLI -p 模式的 Read tool
         // 处理图片时存在已知 bug (GitHub #25960)：会幻觉内容而非正确解读图片
         boolean hasImageAttachments = attachments != null && attachments.stream().anyMatch(
                 att -> att.mediaType != null && att.mediaType.startsWith("image/"));
-        if (isCliMode() && !hasImageAttachments) {
+        if (isCliInvocationModeCached() && !hasImageAttachments) {
             LOG.info("[ClaudeSDKBridge] Using CLI mode, forwarding to cliBridge with "
                     + (attachments != null ? attachments.size() : 0) + " attachments");
             return cliBridge.sendMessage(
@@ -419,7 +439,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                     attachments, permissionMode, model, openedFiles, agentPrompt,
                     streaming, disableThinking, reasoningEffort, callback
             );
-        } else if (isCliMode() && hasImageAttachments) {
+        } else if (isCliInvocationModeCached() && hasImageAttachments) {
             LOG.info("[ClaudeSDKBridge] CLI mode has image attachments, falling back to daemon/per-process mode");
         }
 
@@ -511,6 +531,13 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
      * @return CompletableFuture with context usage data as JsonObject
      */
     public CompletableFuture<JsonObject> getContextUsage(String sessionId, String cwd, String model) {
+        if (isCliInvocationModeCached()) {
+            JsonObject error = new JsonObject();
+            error.addProperty("success", false);
+            error.addProperty("error", "Context usage is unavailable in Claude CLI mode. Switch invocation mode to SDK to use /context.");
+            return CompletableFuture.completedFuture(error);
+        }
+
         DaemonBridge db = this.daemonCoordinator.getDaemonBridge();
         if (db == null) {
             JsonObject error = new JsonObject();

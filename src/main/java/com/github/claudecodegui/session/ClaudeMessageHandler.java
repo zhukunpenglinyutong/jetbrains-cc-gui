@@ -29,6 +29,7 @@ public class ClaudeMessageHandler implements MessageCallback {
     private final MessageMerger messageMerger;
     private final ReplayDeduplicator replayDedup = new ReplayDeduplicator();
     private final Gson gson;
+    private final String expectedRuntimeSessionEpoch;
 
     // Content accumulator for the current assistant message
     private final StringBuilder assistantContent = new StringBuilder();
@@ -63,7 +64,8 @@ public class ClaudeMessageHandler implements MessageCallback {
             CallbackHandler callbackHandler,
             MessageParser messageParser,
             MessageMerger messageMerger,
-            Gson gson
+            Gson gson,
+            String expectedRuntimeSessionEpoch
     ) {
         this.project = project;
         this.state = state;
@@ -71,6 +73,15 @@ public class ClaudeMessageHandler implements MessageCallback {
         this.messageParser = messageParser;
         this.messageMerger = messageMerger;
         this.gson = gson;
+        this.expectedRuntimeSessionEpoch = expectedRuntimeSessionEpoch;
+    }
+
+    private boolean isStaleRuntimeEpoch() {
+        if (expectedRuntimeSessionEpoch == null || expectedRuntimeSessionEpoch.isEmpty()) {
+            return false;
+        }
+        String currentEpoch = state.getRuntimeSessionEpoch();
+        return currentEpoch != null && !expectedRuntimeSessionEpoch.equals(currentEpoch);
     }
 
     /**
@@ -78,6 +89,10 @@ public class ClaudeMessageHandler implements MessageCallback {
      */
     @Override
     public void onMessage(String type, String content) {
+        if (isStaleRuntimeEpoch()) {
+            LOG.debug("Ignoring stale Claude callback message for epoch: " + expectedRuntimeSessionEpoch);
+            return;
+        }
         // Route to the appropriate handler based on message type
         switch (type) {
             case "user":
@@ -144,6 +159,10 @@ public class ClaudeMessageHandler implements MessageCallback {
      */
     @Override
     public void onError(String error) {
+        if (isStaleRuntimeEpoch()) {
+            LOG.debug("Ignoring stale Claude callback error for epoch: " + expectedRuntimeSessionEpoch);
+            return;
+        }
         if (errorReportedThisTurn && error != null && error.equals(lastReportedError)) {
             LOG.debug("Suppressing duplicate error for current Claude turn");
             return;
@@ -188,6 +207,10 @@ public class ClaudeMessageHandler implements MessageCallback {
      */
     @Override
     public void onComplete(SDKResult result) {
+        if (isStaleRuntimeEpoch()) {
+            LOG.debug("Ignoring stale Claude callback completion for epoch: " + expectedRuntimeSessionEpoch);
+            return;
+        }
         if (streamEndedThisTurn) {
             streamEndedThisTurn = false;
             errorReportedThisTurn = false;
@@ -244,6 +267,10 @@ public class ClaudeMessageHandler implements MessageCallback {
 
     @Override
     public void onQueueDisplayStateChanged(ClaudeSession.SessionCallback.QueueDisplayState queueState, int aheadCount) {
+        if (isStaleRuntimeEpoch()) {
+            LOG.debug("Ignoring stale Claude queue update for epoch: " + expectedRuntimeSessionEpoch);
+            return;
+        }
         state.setQueueDisplayState(queueState);
         state.setQueueAheadCount(aheadCount);
         callbackHandler.notifyQueueDisplayStateChanged(state.getQueueDisplayState(), state.getQueueAheadCount());
@@ -998,7 +1025,37 @@ public class ClaudeMessageHandler implements MessageCallback {
             target = new JsonObject();
             target.addProperty("type", "thinking");
             target.addProperty("thinking", "");
-            contentArray.add(target);
+            // Insert before the first text block to ensure thinking renders above text.
+            int insertPos = 0;
+            for (int j = 0; j < contentArray.size(); j++) {
+                if (contentArray.get(j).isJsonObject()) {
+                    JsonObject b = contentArray.get(j).getAsJsonObject();
+                    if (b.has("type") && "text".equals(b.get("type").getAsString())) {
+                        insertPos = j;
+                        break;
+                    }
+                    insertPos = j + 1;
+                }
+            }
+            JsonArray reordered = new JsonArray();
+            for (int j = 0; j < insertPos; j++) {
+                reordered.add(contentArray.get(j));
+            }
+            reordered.add(target);
+            for (int j = insertPos; j < contentArray.size(); j++) {
+                reordered.add(contentArray.get(j));
+            }
+            // Replace the content array in the parent message object
+            JsonObject msg = currentAssistantMessage.raw.has("message")
+                    && currentAssistantMessage.raw.get("message").isJsonObject()
+                    ? currentAssistantMessage.raw.getAsJsonObject("message") : null;
+            if (msg != null) {
+                msg.add("content", reordered);
+            } else {
+                // Fallback: should not happen, but just append
+                contentArray.add(target);
+                return true;
+            }
         }
 
         String existing = target.has("thinking") && !target.get("thinking").isJsonNull()

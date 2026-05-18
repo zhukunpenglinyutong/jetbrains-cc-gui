@@ -231,7 +231,8 @@ public class SessionSendService {
                 callbackFacade.getCallbackHandler(),
                 messageParser,
                 messageMerger,
-                gson
+                gson,
+                state.getRuntimeSessionEpoch()
         );
 
         Boolean streaming = readStreamingEnabled();

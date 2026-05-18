@@ -945,6 +945,7 @@ public class ProjectConfigHandler {
                 com.google.gson.JsonObject obj = gson.fromJson(content, com.google.gson.JsonObject.class);
                 String mode = obj.has("invocationMode") ? obj.get("invocationMode").getAsString() : "sdk";
                 settingsService.setClaudeInvocationMode(mode);
+                context.getClaudeSDKBridge().refreshInvocationMode();
                 LOG.info("[ProjectConfigHandler] Set invocation mode: " + mode);
                 ApplicationManager.getApplication().invokeLater(() ->
                     context.callJavaScript("window.updateInvocationMode", context.escapeJs(content)));

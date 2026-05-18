@@ -52,7 +52,8 @@ class ClaudeCliStreamParser {
             MessageCallback callback,
             SDKResult result,
             StringBuilder assistantContent,
-            AtomicBoolean hadSendError
+            AtomicBoolean hadSendError,
+            boolean suppressThinking
     ) {
         if (line == null || line.trim().isEmpty()) {
             return;
@@ -77,7 +78,7 @@ class ClaudeCliStreamParser {
                 handleSystem(obj, callback);
                 break;
             case "stream_event":
-                handleStreamEvent(obj, callback, assistantContent);
+                handleStreamEvent(obj, callback, assistantContent, suppressThinking);
                 break;
             case "assistant":
                 handleAssistant(obj, callback);
@@ -109,7 +110,12 @@ class ClaudeCliStreamParser {
         // subtype="status" (如 "requesting") 跳过
     }
 
-    private void handleStreamEvent(JsonObject obj, MessageCallback callback, StringBuilder assistantContent) {
+    private void handleStreamEvent(
+            JsonObject obj,
+            MessageCallback callback,
+            StringBuilder assistantContent,
+            boolean suppressThinking
+    ) {
         if (!obj.has("event")) {
             return;
         }
@@ -127,7 +133,9 @@ class ClaudeCliStreamParser {
                     JsonObject block = event.getAsJsonObject("content_block");
                     String blockType = block.has("type") ? block.get("type").getAsString() : "";
                     if ("thinking".equals(blockType)) {
-                        callback.onMessage("thinking", "");
+                        if (!suppressThinking) {
+                            callback.onMessage("thinking", "");
+                        }
                         thinkingActive = true;
                     }
                 }
@@ -147,7 +155,7 @@ class ClaudeCliStreamParser {
                             break;
                         case "thinking_delta":
                             String thinking = delta.has("thinking") ? delta.get("thinking").getAsString() : "";
-                            if (!thinking.isEmpty()) {
+                            if (!thinking.isEmpty() && !suppressThinking) {
                                 callback.onMessage("thinking_delta", thinking);
                             }
                             break;
