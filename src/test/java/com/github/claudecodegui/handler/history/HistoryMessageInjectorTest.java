@@ -1,6 +1,7 @@
 package com.github.claudecodegui.handler.history;
 
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.util.AttachmentResourceService;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.project.Project;
@@ -131,7 +132,8 @@ public class HistoryMessageInjectorTest {
             assertEquals(2, contentBlocks.size());
             assertEquals("image", contentBlocks.get(0).getAsJsonObject().get("type").getAsString());
             assertEquals("image/png", contentBlocks.get(0).getAsJsonObject().get("mediaType").getAsString());
-            assertTrue(contentBlocks.get(0).getAsJsonObject().get("src").getAsString().startsWith("data:image/png;base64,"));
+            assertTrue(contentBlocks.get(0).getAsJsonObject().get("src").getAsString()
+                    .startsWith(AttachmentResourceService.ATTACHMENT_RESOURCE_ORIGIN + "/"));
             assertEquals("text", contentBlocks.get(1).getAsJsonObject().get("type").getAsString());
             assertEquals("hello", contentBlocks.get(1).getAsJsonObject().get("text").getAsString());
         } finally {
@@ -168,7 +170,8 @@ public class HistoryMessageInjectorTest {
             JsonArray contentBlocks = result.get(0).getAsJsonObject("raw").getAsJsonArray("content");
             assertEquals(1, contentBlocks.size());
             assertEquals("image", contentBlocks.get(0).getAsJsonObject().get("type").getAsString());
-            assertTrue(contentBlocks.get(0).getAsJsonObject().get("src").getAsString().startsWith("data:image/png;base64,"));
+            assertTrue(contentBlocks.get(0).getAsJsonObject().get("src").getAsString()
+                    .startsWith(AttachmentResourceService.ATTACHMENT_RESOURCE_ORIGIN + "/"));
         } finally {
             Files.deleteIfExists(imagePath);
         }

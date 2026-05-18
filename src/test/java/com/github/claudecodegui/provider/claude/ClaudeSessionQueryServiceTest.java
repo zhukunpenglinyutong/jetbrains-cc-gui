@@ -1,5 +1,6 @@
 package com.github.claudecodegui.provider.claude;
 
+import com.github.claudecodegui.util.AttachmentResourceService;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import org.junit.Test;
@@ -29,7 +30,10 @@ public class ClaudeSessionQueryServiceTest {
             JsonArray contentBlocks = normalized.getAsJsonObject("message").getAsJsonArray("content");
             assertEquals(2, contentBlocks.size());
             assertEquals("image", contentBlocks.get(0).getAsJsonObject().get("type").getAsString());
-            assertTrue(contentBlocks.get(0).getAsJsonObject().get("src").getAsString().startsWith("data:image/png;base64,"));
+            assertTrue(contentBlocks.get(0).getAsJsonObject().get("src").getAsString()
+                    .startsWith(AttachmentResourceService.ATTACHMENT_RESOURCE_ORIGIN + "/"));
+            assertTrue(contentBlocks.get(0).getAsJsonObject().get("previewSrc").getAsString()
+                    .startsWith(AttachmentResourceService.ATTACHMENT_RESOURCE_ORIGIN + "/"));
             assertEquals("text", contentBlocks.get(1).getAsJsonObject().get("type").getAsString());
             assertEquals("请分析这张图片", contentBlocks.get(1).getAsJsonObject().get("text").getAsString());
         } finally {
@@ -51,7 +55,8 @@ public class ClaudeSessionQueryServiceTest {
             JsonArray contentBlocks = normalized.getAsJsonObject("message").getAsJsonArray("content");
             assertEquals(1, contentBlocks.size());
             assertEquals("image", contentBlocks.get(0).getAsJsonObject().get("type").getAsString());
-            assertTrue(contentBlocks.get(0).getAsJsonObject().get("src").getAsString().startsWith("data:image/png;base64,"));
+            assertTrue(contentBlocks.get(0).getAsJsonObject().get("src").getAsString()
+                    .startsWith(AttachmentResourceService.ATTACHMENT_RESOURCE_ORIGIN + "/"));
         } finally {
             Files.deleteIfExists(imagePath);
         }

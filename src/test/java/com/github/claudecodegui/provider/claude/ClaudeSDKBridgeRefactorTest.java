@@ -8,6 +8,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import org.junit.Test;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -56,7 +57,8 @@ public class ClaudeSDKBridgeRefactorTest {
                 "system prompt",
                 Boolean.TRUE,
                 Boolean.TRUE,
-                "xhigh"
+                "xhigh",
+                new ArrayList<>()
         );
 
         assertEquals("hello", params.get("message").getAsString());
@@ -72,6 +74,8 @@ public class ClaudeSDKBridgeRefactorTest {
         assertTrue(params.has("attachments"));
         assertEquals(1, params.getAsJsonArray("attachments").size());
         assertEquals("image.png", params.getAsJsonArray("attachments").get(0).getAsJsonObject().get("fileName").getAsString());
+        // 图片附件应使用 path 字段而非 data 字段
+        assertTrue(params.getAsJsonArray("attachments").get(0).getAsJsonObject().has("path"));
         assertTrue(params.has("openedFiles"));
     }
 
@@ -93,7 +97,8 @@ public class ClaudeSDKBridgeRefactorTest {
                 null,
                 null,
                 null,
-                null
+                null,
+                new ArrayList<>()
         );
 
         assertFalse(params.has("attachments"));
