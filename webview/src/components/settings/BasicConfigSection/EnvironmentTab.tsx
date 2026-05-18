@@ -95,10 +95,12 @@ const EnvironmentTab = ({
             />
           </div>
         )}
-        <small className={styles.formHint}>
-          <span className="codicon codicon-info" />
-          <span>{t('settings.basic.invocationMode.hint')}</span>
-        </small>
+        {invocationMode === 'cli' && (
+          <small className={styles.formHint}>
+            <span className="codicon codicon-info" />
+            <span>{t('settings.basic.invocationMode.hint')}</span>
+          </small>
+        )}
       </div>
 
       {/* Node.js path configuration */}

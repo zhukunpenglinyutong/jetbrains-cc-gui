@@ -146,8 +146,8 @@
         "sdk": "SDK 模式",
         "sdkDesc": "通过 Node.js SDK 调用，支持所有功能",
         "cli": "CLI 模式",
-        "cliDesc": "直接调用 claude CLI，进程隔离，内存更优",
-        "cliPathPlaceholder": "留空自动检测 claude CLI 路径",
+        "cliDesc": "直接调用 claude/codex CLI，进程隔离，内存更优",
+        "cliPathPlaceholder": "留空自动检测 claude/codex CLI 路径",
         "hint": "CLI 模式下每个会话为独立进程，内存自然隔离，适合多会话并发场景。"
       },
       "fontSize": {
