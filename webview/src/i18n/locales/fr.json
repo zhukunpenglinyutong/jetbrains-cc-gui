@@ -137,6 +137,15 @@
         "placeholder": "e.g. project1 or leave empty to use project root",
         "hint": "Specify the directory where Claude works. Can use relative path (relative to project root) or absolute path. Leave empty to use project root."
       },
+      "invocationMode": {
+        "label": "Mode d'Invocation",
+        "sdk": "Mode SDK",
+        "sdkDesc": "Via Node.js SDK, toutes les fonctionnalités disponibles",
+        "cli": "Mode CLI",
+        "cliDesc": "CLI claude directe, isolement de processus, meilleure mémoire",
+        "cliPathPlaceholder": "Laisser vide pour détecter automatiquement le chemin de la CLI claude",
+        "hint": "Le mode CLI exécute chaque session comme un processus indépendant avec isolement naturel de la mémoire, adapté à la concurrence multi-session."
+      },
       "fontSize": {
         "label": "Taille de police",
         "level1": "Petite (80%)",

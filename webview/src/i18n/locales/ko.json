@@ -137,6 +137,15 @@
         "placeholder": "예: project1 또는 프로젝트 루트를 사용하려면 비워두세요",
         "hint": "Claude가 작업하는 디렉토리를 지정합니다. 상대 경로(프로젝트 루트 기준) 또는 절대 경로를 사용할 수 있습니다. 비워두면 프로젝트 루트를 사용합니다."
       },
+      "invocationMode": {
+        "label": "호출 모드",
+        "sdk": "SDK 모드",
+        "sdkDesc": "Node.js SDK 통해, 모든 기능 사용 가능",
+        "cli": "CLI 모드",
+        "cliDesc": "직접 claude CLI, 프로세스 분리, 더 나은 메모리",
+        "cliPathPlaceholder": "비워두면 claude CLI 경로 자동 감지",
+        "hint": "CLI 모드는 각 세션을 독립적인 프로세스로 실행하여 자연스러운 메모리 분리를 제공하므로 다중 세션 동시성에 적합합니다."
+      },
       "fontSize": {
         "label": "글꼴 크기",
         "level1": "작게 (80%)",

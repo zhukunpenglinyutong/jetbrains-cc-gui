@@ -137,6 +137,15 @@
         "placeholder": "例: project1 または空欄でプロジェクトルートを使用",
         "hint": "Claudeが作業するディレクトリを指定します。相対パス(プロジェクトルートからの相対)または絶対パスを使用できます。空欄の場合はプロジェクトルートを使用します。"
       },
+      "invocationMode": {
+        "label": "呼び出しモード",
+        "sdk": "SDKモード",
+        "sdkDesc": "Node.js SDK経由、全機能利用可能",
+        "cli": "CLIモード",
+        "cliDesc": "直接claude CLI、プロセス分離、メモリ最適化",
+        "cliPathPlaceholder": "空欄でclaude CLIパスを自動検出",
+        "hint": "CLIモードでは各セッションが独立したプロセスとして実行され、メモリが自然に分離されるため、マルチセッションの同時実行に適しています。"
+      },
       "fontSize": {
         "label": "フォントサイズ",
         "level1": "小 (80%)",

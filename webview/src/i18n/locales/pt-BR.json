@@ -137,6 +137,15 @@
         "placeholder": "ex: projeto1 ou deixe vazio para usar a raiz do projeto",
         "hint": "Especifique o diretório onde o Claude trabalha. Pode usar caminho relativo (relativo à raiz do projeto) ou caminho absoluto. Deixe vazio para usar a raiz do projeto."
       },
+      "invocationMode": {
+        "label": "Modo de Invocação",
+        "sdk": "Modo SDK",
+        "sdkDesc": "Via Node.js SDK, todos os recursos disponíveis",
+        "cli": "Modo CLI",
+        "cliDesc": "CLI claude direta, isolamento de processo, melhor memória",
+        "cliPathPlaceholder": "Deixe vazio para detectar automaticamente o caminho da CLI claude",
+        "hint": "O modo CLI executa cada sessão como um processo independente com isolamento natural de memória, adequado para concorrência multi-sessão."
+      },
       "fontSize": {
         "label": "Tamanho da Fonte",
         "level1": "Pequeno (80%)",

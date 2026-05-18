@@ -137,6 +137,15 @@
         "placeholder": "e.g. project1 or leave empty to use project root",
         "hint": "Specify the directory where Claude works. Can use relative path (relative to project root) or absolute path. Leave empty to use project root."
       },
+      "invocationMode": {
+        "label": "呼叫模式",
+        "sdk": "SDK 模式",
+        "sdkDesc": "透過 Node.js SDK 呼叫，支援所有功能",
+        "cli": "CLI 模式",
+        "cliDesc": "直接呼叫 claude CLI，程序隔離，記憶體更佳",
+        "cliPathPlaceholder": "留空自動偵測 claude CLI 路徑",
+        "hint": "CLI 模式下每個會話為獨立程序，記憶體自然隔離，適合多會話並發場景。"
+      },
       "fontSize": {
         "label": "字體大小",
         "level1": "小（80%）",
