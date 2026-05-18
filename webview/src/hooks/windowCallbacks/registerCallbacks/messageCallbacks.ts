@@ -538,6 +538,14 @@ export function registerMessageCallbacks(
   };
 
   window.showThinkingStatus = (value) => setIsThinking(isTruthy(value));
+  window.updateInvocationMode = (json: string) => {
+    try {
+      const data = JSON.parse(json);
+      window.__CLAUDE_INVOCATION_MODE__ = data?.invocationMode === 'cli' ? 'cli' : 'sdk';
+    } catch (error) {
+      console.error('[Frontend] Failed to parse invocation mode:', error);
+    }
+  };
   window.showSummary = (summary) => {
     if (!summary || !summary.trim()) return;
     setStatus(summary);
@@ -566,6 +574,12 @@ export function registerMessageCallbacks(
   if (typeof pendingSummary === 'string' && pendingSummary.length > 0) {
     delete (window as unknown as Record<string, unknown>).__pendingSummaryText;
     window.showSummary?.(pendingSummary);
+  }
+
+  const pendingInvocationMode = (window as unknown as Record<string, unknown>).__pendingInvocationMode;
+  if (typeof pendingInvocationMode === 'string' && pendingInvocationMode.length > 0) {
+    delete (window as unknown as Record<string, unknown>).__pendingInvocationMode;
+    window.updateInvocationMode?.(pendingInvocationMode);
   }
 
   window.patchMessageUuid = (content, uuid) => {

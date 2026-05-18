@@ -124,6 +124,16 @@ interface Window {
   };
 
   /**
+   * Cached Claude invocation mode for chat-side feature gating.
+   */
+  __CLAUDE_INVOCATION_MODE__?: 'sdk' | 'cli';
+
+  /**
+   * Pending invocation mode payload received before callbacks were registered.
+   */
+  __pendingInvocationMode?: string;
+
+  /**
    * Usage statistics update callback
    */
   onUsageUpdate?: (json: string) => void;

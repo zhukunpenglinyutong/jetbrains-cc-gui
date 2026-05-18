@@ -345,6 +345,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
         const data = JSON.parse(jsonStr);
         const mode = data.invocationMode;
         if (mode === 'sdk' || mode === 'cli') {
+          window.__CLAUDE_INVOCATION_MODE__ = mode;
           d().setInvocationMode(mode);
         }
         if (data.cliPath !== undefined) {

@@ -24,6 +24,10 @@ function createContextUsageRequestId(): string {
   return `context-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function getClaudeInvocationMode(): 'sdk' | 'cli' {
+  return window.__CLAUDE_INVOCATION_MODE__ === 'cli' ? 'cli' : 'sdk';
+}
+
 export interface UseMessageSenderOptions {
   t: TFunction;
   addToast: (message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
@@ -135,6 +139,13 @@ export function useMessageSender({
           command,
           provider: 'Claude',
           defaultValue: `${command} is only available for Claude provider`,
+        }), 'warning');
+        return true;
+      }
+
+      if (getClaudeInvocationMode() === 'cli') {
+        addToast(t('chat.contextUsageUnavailableInCliMode', {
+          defaultValue: 'Context usage is unavailable in Claude CLI mode. Switch invocation mode to SDK to use /context.',
         }), 'warning');
         return true;
       }
