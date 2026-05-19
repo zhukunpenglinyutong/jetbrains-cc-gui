@@ -77,6 +77,9 @@ interface BasicConfigSectionProps {
   onInvocationModeChange?: (mode: 'sdk' | 'cli') => void;
   cliPath?: string;
   onCliPathChange?: (path: string) => void;
+  // Permission dialog timeout configuration
+  permissionDialogTimeoutSeconds?: number;
+  onPermissionDialogTimeoutChange?: (seconds: number) => void;
 }
 
 const BasicConfigSection = (props: BasicConfigSectionProps) => {
@@ -141,6 +144,8 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onAiTitleGenerationEnabledChange={props.onAiTitleGenerationEnabledChange}
           taskCompletionNotificationEnabled={props.taskCompletionNotificationEnabled}
           onTaskCompletionNotificationEnabledChange={props.onTaskCompletionNotificationEnabledChange}
+          permissionDialogTimeoutSeconds={props.permissionDialogTimeoutSeconds}
+          onPermissionDialogTimeoutChange={props.onPermissionDialogTimeoutChange}
         />
       )}
 

@@ -10,6 +10,7 @@
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
 import type { ClaudeMessage } from '../../../types';
 import type { ContextUsageData } from '../../../components/ContextUsageDialog';
+import { sendBridgeEvent } from '../../../utils/bridge';
 import { debugError } from '../../../utils/debug';
 import {
   appendOptimisticMessageIfMissing,
@@ -24,19 +25,6 @@ import { releaseSessionTransition } from '../sessionTransition';
 import { parseSequence } from '../parseSequence';
 
 const isTruthy = (v: unknown) => v === true || v === 'true';
-
-const getComparableUserContent = (message: ClaudeMessage): string => {
-  if (message.type !== 'user') return '';
-  const rawContent = (message.raw as any)?.message?.content ?? (message.raw as any)?.content;
-  if (!Array.isArray(rawContent)) {
-    return message.content || '';
-  }
-  const rawText = rawContent
-    .filter((block: any) => block && typeof block === 'object' && block.type === 'text' && typeof block.text === 'string')
-    .map((block: any) => block.text)
-    .join('\n');
-  return rawText || message.content || '';
-};
 
 /**
  * Build a lightweight string signature from non-text raw blocks so we can
@@ -85,8 +73,6 @@ export function registerMessageCallbacks(
     setStatus,
     setLoading,
     setLoadingStartTime,
-    setQueueDisplayState,
-    setQueueAheadCount,
     setIsThinking,
     setHistoryData,
     userPausedRef,
@@ -159,31 +145,6 @@ export function registerMessageCallbacks(
     window.__pendingUpdateSequence = null;
   };
   window.__cancelPendingUpdateMessages = cancelPendingUpdateMessages;
-
-  const schedulePendingUpdateMessages = () => {
-    if (pendingUpdateRaf !== null) return;
-    const rafId = requestAnimationFrame((frameTime) => {
-      pendingUpdateRaf = null;
-      window.__pendingUpdateRaf = null;
-
-      if (window.__streamingDeltaRenderingFrame === frameTime) {
-        schedulePendingUpdateMessages();
-        return;
-      }
-
-      const latestJson = pendingUpdateJson;
-      const latestSequence = pendingUpdateSequence;
-      pendingUpdateJson = null;
-      pendingUpdateSequence = null;
-      window.__pendingUpdateJson = null;
-      window.__pendingUpdateSequence = null;
-      if (latestJson) {
-        processUpdateMessages(latestJson, latestSequence);
-      }
-    });
-    pendingUpdateRaf = rafId;
-    window.__pendingUpdateRaf = rafId;
-  };
 
   const processUpdateMessages = (json: string, sequence: number | null = null) => {
     const minAcceptedSequence = window.__minAcceptedUpdateSequence ?? 0;
@@ -428,7 +389,23 @@ export function registerMessageCallbacks(
       pendingUpdateSequence = sequence;
       window.__pendingUpdateJson = json;
       window.__pendingUpdateSequence = sequence;
-      schedulePendingUpdateMessages();
+      if (pendingUpdateRaf === null) {
+        const rafId = requestAnimationFrame(() => {
+          pendingUpdateRaf = null;
+          window.__pendingUpdateRaf = null;
+          const latestJson = pendingUpdateJson;
+          const latestSequence = pendingUpdateSequence;
+          pendingUpdateJson = null;
+          pendingUpdateSequence = null;
+          window.__pendingUpdateJson = null;
+          window.__pendingUpdateSequence = null;
+          if (latestJson) {
+            processUpdateMessages(latestJson, latestSequence);
+          }
+        });
+        pendingUpdateRaf = rafId;
+        window.__pendingUpdateRaf = rafId;
+      }
       return;
     }
 
@@ -462,14 +439,13 @@ export function registerMessageCallbacks(
   window.showLoading = (value) => {
     const isLoading = isTruthy(value);
 
-    if (window.__sessionTransitioning) {
-      return;
-    }
-
     // FIX: Ignore loading=false during streaming — onStreamEnd handles it uniformly.
     if (!isLoading && isStreamingRef.current) {
       return;
     }
+
+    // Notify backend about loading state change for tab indicator
+    sendBridgeEvent('tab_loading_changed', JSON.stringify({ loading: isLoading }));
 
     setLoading((prevLoading) => {
       if (isLoading) {
@@ -499,53 +475,9 @@ export function registerMessageCallbacks(
       }
       return isLoading;
     });
-
-    if (!isLoading) {
-      setQueueDisplayState('NONE');
-      setQueueAheadCount(0);
-    }
-  };
-
-  window.showQueueStatus = (state, aheadCount) => {
-    if (window.__sessionTransitioning) {
-      return;
-    }
-
-    const normalizedState = typeof state === 'string' ? state : 'NONE';
-    const normalizedAhead = Number.isFinite(Number(aheadCount)) ? Number(aheadCount) : 0;
-
-    if (normalizedState === 'QUEUED') {
-      setQueueDisplayState('QUEUED');
-      setQueueAheadCount(Math.max(0, normalizedAhead));
-      setLoading(true);
-      return;
-    }
-
-    if (normalizedState === 'PROCESSING') {
-      setQueueDisplayState('PROCESSING');
-      setQueueAheadCount(0);
-      return;
-    }
-
-    if (normalizedState === 'COMPLETED') {
-      setQueueDisplayState('COMPLETED');
-      setQueueAheadCount(0);
-      return;
-    }
-
-    setQueueDisplayState('NONE');
-    setQueueAheadCount(0);
   };
 
   window.showThinkingStatus = (value) => setIsThinking(isTruthy(value));
-  window.updateInvocationMode = (json: string) => {
-    try {
-      const data = JSON.parse(json);
-      window.__CLAUDE_INVOCATION_MODE__ = data?.invocationMode === 'cli' ? 'cli' : 'sdk';
-    } catch (error) {
-      console.error('[Frontend] Failed to parse invocation mode:', error);
-    }
-  };
   window.showSummary = (summary) => {
     if (!summary || !summary.trim()) return;
     setStatus(summary);
@@ -574,12 +506,6 @@ export function registerMessageCallbacks(
   if (typeof pendingSummary === 'string' && pendingSummary.length > 0) {
     delete (window as unknown as Record<string, unknown>).__pendingSummaryText;
     window.showSummary?.(pendingSummary);
-  }
-
-  const pendingInvocationMode = (window as unknown as Record<string, unknown>).__pendingInvocationMode;
-  if (typeof pendingInvocationMode === 'string' && pendingInvocationMode.length > 0) {
-    delete (window as unknown as Record<string, unknown>).__pendingInvocationMode;
-    window.updateInvocationMode?.(pendingInvocationMode);
   }
 
   window.patchMessageUuid = (content, uuid) => {
@@ -678,11 +604,6 @@ export function registerMessageCallbacks(
   // Also clear stream-ended markers since history messages don't have __turnId
   window.historyLoadComplete = () => {
     releaseSessionTransition();
-    setLoading(false);
-    setLoadingStartTime(null);
-    setIsThinking(false);
-    setQueueDisplayState('NONE');
-    setQueueAheadCount(0);
     const pendingToast = window.__pendingSessionTransitionToast;
     if (pendingToast) {
       window.__pendingSessionTransitionToast = undefined;
@@ -704,12 +625,13 @@ export function registerMessageCallbacks(
       timestamp: new Date().toISOString(),
     };
     setMessages((prev) => {
-      const comparable = (content || '').trim();
-      if (comparable) {
-        const duplicate = prev.some((message) =>
-          message.type === 'user' && getComparableUserContent(message).trim() === comparable
-        );
-        if (duplicate) return prev;
+      // If the last message is an optimistic message with matching content,
+      // skip adding — the frontend already rendered the optimistic copy.
+      // Otherwise addUserMessage + optimistic create a brief duplicate until
+      // the next updateMessages deduplicates them.
+      const lastMsg = prev[prev.length - 1];
+      if (lastMsg?.isOptimistic && lastMsg.type === 'user' && lastMsg.content === content) {
+        return prev;
       }
       return [...prev, userMessage];
     });

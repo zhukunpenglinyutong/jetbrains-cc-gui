@@ -45,6 +45,7 @@ describe('useWindowCallbacks integration', () => {
     setStreamingEnabledSetting: vi.fn(),
     setSendShortcut: vi.fn(),
     setAutoOpenFileEnabled: vi.fn(),
+    setPermissionDialogTimeoutSeconds: vi.fn(),
     setSdkStatus: vi.fn(),
     setSdkStatusLoaded: vi.fn(),
     setIsRewinding: vi.fn(),
@@ -90,6 +91,7 @@ describe('useWindowCallbacks integration', () => {
     customSessionTitleRef: { current: null },
     currentSessionIdRef: { current: null },
     updateHistoryTitle: vi.fn(),
+    applyHistoryTitleLocal: vi.fn(),
 
     ...overrides,
   });
@@ -101,6 +103,10 @@ describe('useWindowCallbacks integration', () => {
     window.__deniedToolIds = new Set();
     window.__CLAUDE_INVOCATION_MODE__ = 'sdk';
     window.sendToJava = vi.fn();
+    // The drain test inspects this slot; if a prior test (or earlier suite run)
+    // leaked a value onto window we'd see a false-positive drain. Wipe it here
+    // so each test starts from a clean pending state.
+    delete (window as unknown as Record<string, unknown>).__pendingPermissionDialogTimeout;
   });
 
   afterEach(() => {
@@ -244,6 +250,88 @@ describe('useWindowCallbacks integration', () => {
     expect(window.__sessionTransitioning).toBe(false);
     expect(window.__sessionTransitionToken).toBeNull();
     expect(opts.setCurrentSessionId).toHaveBeenCalledWith('new-session-123');
+  });
+
+  // ===== AI title path uses applyHistoryTitleLocal (no backend round-trip) =====
+
+  it('updateSessionTitle routes AI titles through applyHistoryTitleLocal, not updateHistoryTitle', () => {
+    const opts = createOptions({
+      currentSessionIdRef: { current: 'sess-123' },
+    });
+    renderHook(() => useWindowCallbacks(opts));
+
+    const longAiTitle = 'A very long AI-generated session title that exceeds fifty characters easily';
+
+    act(() => {
+      window.updateSessionTitle!('sess-123', longAiTitle);
+    });
+
+    expect(opts.applyHistoryTitleLocal).toHaveBeenCalledWith('sess-123', longAiTitle);
+    expect(opts.updateHistoryTitle).not.toHaveBeenCalled();
+    expect(opts.setCustomSessionTitle).toHaveBeenCalledWith(longAiTitle);
+  });
+
+  it('updateSessionTitle skips when sessionId does not match currentSessionIdRef (stale event)', () => {
+    const opts = createOptions({
+      currentSessionIdRef: { current: 'sess-current' },
+    });
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.updateSessionTitle!('sess-stale', 'Stale AI title');
+    });
+
+    expect(opts.applyHistoryTitleLocal).not.toHaveBeenCalled();
+    expect(opts.updateHistoryTitle).not.toHaveBeenCalled();
+    expect(opts.setCustomSessionTitle).not.toHaveBeenCalled();
+  });
+
+  it('updateSessionTitle skips empty / whitespace-only titles', () => {
+    const opts = createOptions({
+      currentSessionIdRef: { current: 'sess-123' },
+    });
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.updateSessionTitle!('sess-123', '   ');
+    });
+
+    expect(opts.applyHistoryTitleLocal).not.toHaveBeenCalled();
+    expect(opts.updateHistoryTitle).not.toHaveBeenCalled();
+  });
+
+  // ===== Codex thread transition: route long titles to local-only =====
+
+  it('setSessionId with title > 50 chars uses applyHistoryTitleLocal to avoid backend 50-char limit', () => {
+    const longTitle = 'A very long AI-generated session title that exceeds fifty characters easily';
+    const opts = createOptions({
+      customSessionTitleRef: { current: longTitle },
+      currentSessionIdRef: { current: 'sess-old' },
+    });
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.setSessionId!('sess-new');
+    });
+
+    expect(opts.applyHistoryTitleLocal).toHaveBeenCalledWith('sess-new', longTitle);
+    expect(opts.updateHistoryTitle).not.toHaveBeenCalled();
+  });
+
+  it('setSessionId with title <= 50 chars uses updateHistoryTitle for backend persistence', () => {
+    const shortTitle = 'Short user-set title';
+    const opts = createOptions({
+      customSessionTitleRef: { current: shortTitle },
+      currentSessionIdRef: { current: 'sess-old' },
+    });
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.setSessionId!('sess-new');
+    });
+
+    expect(opts.updateHistoryTitle).toHaveBeenCalledWith('sess-new', shortTitle);
+    expect(opts.applyHistoryTitleLocal).not.toHaveBeenCalled();
   });
 
   // ===== updateMessages is blocked during transition =====
@@ -397,6 +485,93 @@ describe('useWindowCallbacks integration', () => {
 
   // ===== addErrorMessage only shows toast (no status) =====
 
+  it('updatePermissionDialogTimeout sets timeout from JSON', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+    act(() => {
+      window.updatePermissionDialogTimeout!(JSON.stringify({ permissionDialogTimeoutSeconds: 120 }));
+    });
+    expect(opts.setPermissionDialogTimeoutSeconds).toHaveBeenCalledWith(120);
+  });
+
+  it('updatePermissionDialogTimeout ignores invalid JSON', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+    act(() => {
+      window.updatePermissionDialogTimeout!('not-json');
+    });
+    expect(opts.setPermissionDialogTimeoutSeconds).not.toHaveBeenCalled();
+  });
+
+  it('updatePermissionDialogTimeout clamps values from JSON', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.updatePermissionDialogTimeout!(JSON.stringify({ permissionDialogTimeoutSeconds: 1 }));
+    });
+    expect(opts.setPermissionDialogTimeoutSeconds).toHaveBeenLastCalledWith(30);
+
+    act(() => {
+      window.updatePermissionDialogTimeout!(JSON.stringify({ permissionDialogTimeoutSeconds: 99999 }));
+    });
+    expect(opts.setPermissionDialogTimeoutSeconds).toHaveBeenLastCalledWith(3600);
+  });
+
+  it('updatePermissionDialogTimeout falls back to 300 when field is missing or invalid', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.updatePermissionDialogTimeout!(JSON.stringify({ otherField: 123 }));
+    });
+    expect(opts.setPermissionDialogTimeoutSeconds).toHaveBeenLastCalledWith(300);
+
+    act(() => {
+      window.updatePermissionDialogTimeout!(JSON.stringify({ permissionDialogTimeoutSeconds: 'bad' }));
+    });
+    expect(opts.setPermissionDialogTimeoutSeconds).toHaveBeenLastCalledWith(300);
+  });
+
+  // ===== Bootstrap drain for permission dialog timeout =====
+  //
+  // main.tsx may receive `updatePermissionDialogTimeout` from Java before React has
+  // mounted and registered the real callback. To avoid losing that payload it stashes
+  // the raw JSON onto `window.__pendingPermissionDialogTimeout`. After registration,
+  // `drainPendingSettings()` must replay it into the now-installed callback exactly
+  // once and clear the slot so a later re-mount doesn't replay stale data.
+
+  it('drains __pendingPermissionDialogTimeout into the setter on registration', () => {
+    const w = window as unknown as Record<string, unknown>;
+    w.__pendingPermissionDialogTimeout = JSON.stringify({ permissionDialogTimeoutSeconds: 900 });
+
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    expect(opts.setPermissionDialogTimeoutSeconds).toHaveBeenCalledWith(900);
+    // Pending slot is consumed exactly once — leaving it around would let a remount
+    // re-fire the same value and clobber any later edits the user made in between.
+    expect(w.__pendingPermissionDialogTimeout).toBeUndefined();
+  });
+
+  it('drained payload goes through the same clamp/validation as live updates', () => {
+    const w = window as unknown as Record<string, unknown>;
+    w.__pendingPermissionDialogTimeout = JSON.stringify({ permissionDialogTimeoutSeconds: 99999 });
+
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    expect(opts.setPermissionDialogTimeoutSeconds).toHaveBeenCalledWith(3600);
+    expect(w.__pendingPermissionDialogTimeout).toBeUndefined();
+  });
+
+  it('does not call setPermissionDialogTimeoutSeconds when no pending payload exists', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    expect(opts.setPermissionDialogTimeoutSeconds).not.toHaveBeenCalled();
+  });
+
   it('addErrorMessage shows toast but does not set status', () => {
     const opts = createOptions();
     renderHook(() => useWindowCallbacks(opts));
@@ -435,6 +610,36 @@ describe('useWindowCallbacks integration', () => {
     expect(isStreamingRef.current).toBe(false);
     expect(streamingContentRef.current).toBe('');
     expect(streamingMessageIndexRef.current).toBe(-1);
+  });
+
+  it('clearMessages cancels pending scoped updateMessages rAF', () => {
+    const cancelAnimationFrame = vi.fn();
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 42));
+    vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrame);
+
+    const opts = createOptions({
+      isStreamingRef: { current: true },
+      currentSessionIdRef: { current: 'session-a' },
+      streamingTurnIdRef: { current: 1 },
+    });
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.onStreamStart?.();
+      window.updateMessages?.(
+        JSON.stringify([{ type: 'assistant', content: 'pending' }]),
+        '1',
+      );
+    });
+
+    expect(window.__pendingUpdateRaf).toBe(42);
+
+    act(() => {
+      window.clearMessages?.();
+    });
+
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(42);
+    expect(window.__pendingUpdateRaf).toBeNull();
   });
 
   // ===== clearMessages resets turn tracking refs =====
@@ -529,6 +734,11 @@ describe('useWindowCallbacks integration', () => {
   });
 
   it('accepts streaming updateMessages when assistant raw blocks gain spawn_agent tool_use', () => {
+    vi.stubGlobal('setTimeout', (callback: () => void) => {
+      callback();
+      return 1 as unknown as ReturnType<typeof setTimeout>;
+    });
+    vi.stubGlobal('clearTimeout', vi.fn());
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0);
       return 1;

@@ -25,38 +25,16 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Handles project-level configuration: working directory, streaming, sandbox mode,
  * auto-open file, send shortcut, commit prompt, IDE theme, editor font config, and usage statistics.
- *
- * @author melon
  */
 public class ProjectConfigHandler {
 
-    /**
-     * log.
-     */
     private static final Logger LOG = Logger.getInstance(ProjectConfigHandler.class);
-    /**
-     * send shortcut property key.
-     */
     static final String SEND_SHORTCUT_PROPERTY_KEY = "claude.code.send.shortcut";
 
-    /**
-     * context.
-     */
     private final HandlerContext context;
-    /**
-     * settings service.
-     */
     private final CodemossSettingsService settingsService;
-    /**
-     * gson.
-     */
     private final Gson gson = new Gson();
 
-    /**
-     * Project Config Handler
-     *
-     * @param context context
-     */
     public ProjectConfigHandler(HandlerContext context) {
         this.context = context;
         this.settingsService = context.getSettingsService();
@@ -65,73 +43,43 @@ public class ProjectConfigHandler {
     // ---- Internal helpers --------------------------------------------------
 
     @FunctionalInterface
-    private interface ThrowingJsonSupplier {
-        JsonElement get() throws Exception;
-    }
+    private interface ThrowingJsonSupplier { JsonElement get() throws Exception; }
 
     @FunctionalInterface
-    private interface ThrowingBooleanConsumer {
-        void accept(boolean value) throws Exception;
-    }
+    private interface ThrowingBooleanConsumer { void accept(boolean value) throws Exception; }
 
     @FunctionalInterface
-    private interface ThrowingProjectBooleanConsumer {
-        void accept(String projectPath, boolean value) throws Exception;
-    }
+    private interface ThrowingProjectBooleanConsumer { void accept(String projectPath, boolean value) throws Exception; }
 
-    /**
-     * Push Json
-     *
-     * @param jsCallback js callback
-     * @param payload payload
-     */
     private void pushJson(String jsCallback, JsonElement payload) {
         String json = gson.toJson(payload);
         ApplicationManager.getApplication().invokeLater(() ->
             context.callJavaScript(jsCallback, context.escapeJs(json)));
     }
 
-    /**
-     * Show Error
-     *
-     * @param message message
-     */
     private void showError(String message) {
         ApplicationManager.getApplication().invokeLater(() ->
             context.callJavaScript("window.showError", context.escapeJs(message)));
     }
 
-    /**
-     * Show Success
-     *
-     * @param message message
-     */
     private void showSuccess(String message) {
         ApplicationManager.getApplication().invokeLater(() ->
             context.callJavaScript("window.showSuccess", context.escapeJs(message)));
     }
 
-    /**
-     * Json Of
-     *
-     * @param key key
-     * @param value value
-     * @return json object
-     */
     private static JsonObject jsonOf(String key, boolean value) {
         JsonObject obj = new JsonObject();
         obj.addProperty(key, value);
         return obj;
     }
 
-    /**
-     * Json Of
-     *
-     * @param key key
-     * @param value value
-     * @return json object
-     */
     private static JsonObject jsonOf(String key, String value) {
+        JsonObject obj = new JsonObject();
+        obj.addProperty(key, value);
+        return obj;
+    }
+
+    private static JsonObject jsonOf(String key, int value) {
         JsonObject obj = new JsonObject();
         obj.addProperty(key, value);
         return obj;
@@ -150,50 +98,25 @@ public class ProjectConfigHandler {
         try {
             pushJson(jsCallback, producer.get());
         } catch (Exception e) {
-            LOG.error("[ProjectConfigHandler] " + errorLogMessage + ": " + e.getMessage(), e);
+            LOG.error("[ProjectConfigHandler] " + errorLogMessage + "; errorClass="
+                    + e.getClass().getSimpleName(), e);
             if (fallback != null) {
                 pushJson(jsCallback, fallback);
             }
         }
     }
 
-    /**
-     * Read Boolean
-     *
-     * @param json json
-     * @param field field
-     * @param defaultValue default value
-     * @return boolean
-     */
     private boolean readBoolean(JsonObject json, String field, boolean defaultValue) {
         if (json == null || !json.has(field) || json.get(field).isJsonNull()) { return defaultValue; }
         return json.get(field).getAsBoolean();
     }
 
-    /**
-     * Read String
-     *
-     * @param json json
-     * @param field field
-     * @param defaultValue default value
-     * @return string
-     */
     private String readString(JsonObject json, String field, String defaultValue) {
         if (json == null || !json.has(field) || json.get(field).isJsonNull()) { return defaultValue; }
         return json.get(field).getAsString();
     }
 
-    /**
-     * Handle Boolean Toggle
-     *
-     * @param content content
-     * @param field field
-     * @param defaultValue default value
-     * @param logLabel log label
-     * @param mutation mutation
-     * @param jsCallback js callback
-     * @param errorMessage error message
-     */
+    /** Standard boolean-toggle setter: parse one field, apply mutation, log, echo back via {@code jsCallback}. */
     private void handleBooleanToggle(String content, String field, boolean defaultValue,
                                      String logLabel, ThrowingBooleanConsumer mutation,
                                      String jsCallback, String errorMessage) {
@@ -209,17 +132,7 @@ public class ProjectConfigHandler {
         }
     }
 
-    /**
-     * Handle Project Boolean Toggle
-     *
-     * @param content content
-     * @param field field
-     * @param defaultValue default value
-     * @param logLabel log label
-     * @param mutation mutation
-     * @param jsCallback js callback
-     * @param errorMessage error message
-     */
+    /** Project-scoped variant of {@link #handleBooleanToggle}; validates project path first. */
     private void handleProjectBooleanToggle(String content, String field, boolean defaultValue,
                                             String logLabel, ThrowingProjectBooleanConsumer mutation,
                                             String jsCallback, String errorMessage) {
@@ -242,10 +155,6 @@ public class ProjectConfigHandler {
 
     // ---- Working Directory -------------------------------------------------
 
-    /**
-     * Handle Get Working Directory
-     *
-     */
     public void handleGetWorkingDirectory() {
         try {
             String projectPath = context.getProject().getBasePath();
@@ -265,11 +174,6 @@ public class ProjectConfigHandler {
         }
     }
 
-    /**
-     * Handle Set Working Directory
-     *
-     * @param content content
-     */
     public void handleSetWorkingDirectory(String content) {
         try {
             String projectPath = context.getProject().getBasePath();
@@ -298,10 +202,6 @@ public class ProjectConfigHandler {
         }
     }
 
-    /**
-     * Handle Get Streaming Enabled
-     *
-     */
     public void handleGetStreamingEnabled() {
         respondWithJson("window.updateStreamingEnabled",
             () -> {
@@ -313,11 +213,6 @@ public class ProjectConfigHandler {
             "Failed to get streaming enabled");
     }
 
-    /**
-     * Handle Set Streaming Enabled
-     *
-     * @param content content
-     */
     public void handleSetStreamingEnabled(String content) {
         handleProjectBooleanToggle(content, "streamingEnabled", true, "streaming enabled",
             settingsService::setStreamingEnabled,
@@ -325,10 +220,6 @@ public class ProjectConfigHandler {
             "Failed to save streaming config");
     }
 
-    /**
-     * Handle Get Codex Sandbox Mode
-     *
-     */
     public void handleGetCodexSandboxMode() {
         respondWithJson("window.updateCodexSandboxMode",
             () -> jsonOf("sandboxMode", settingsService.getCodexSandboxMode(context.getProject().getBasePath())),
@@ -336,11 +227,6 @@ public class ProjectConfigHandler {
             "Failed to get Codex sandbox mode");
     }
 
-    /**
-     * Handle Set Codex Sandbox Mode
-     *
-     * @param content content
-     */
     public void handleSetCodexSandboxMode(String content) {
         try {
             String projectPath = context.getProject().getBasePath();
@@ -359,10 +245,39 @@ public class ProjectConfigHandler {
         }
     }
 
-    /**
-     * Handle Get Auto Open File Enabled
-     *
-     */
+    public void handleGetInvocationMode() {
+        respondWithJson("window.updateInvocationMode",
+            () -> jsonOf("invocationMode", settingsService.getClaudeInvocationMode()),
+            jsonOf("invocationMode", "sdk"),
+            "Failed to get Claude invocation mode");
+    }
+
+    public void handleSetInvocationMode(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            String mode = readString(json, "invocationMode", "sdk");
+            settingsService.setClaudeInvocationMode(mode);
+            pushJson("window.updateInvocationMode", jsonOf("invocationMode", settingsService.getClaudeInvocationMode()));
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set Claude invocation mode: " + e.getMessage(), e);
+            showError("Failed to save Claude invocation mode: " + e.getMessage());
+        }
+    }
+
+    public void handleSetCliPath(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            String path = readString(json, "claudeCliPath", "");
+            settingsService.setClaudeCliPath(path);
+            JsonObject response = new JsonObject();
+            response.addProperty("claudeCliPath", settingsService.getClaudeCliPath());
+            pushJson("window.updateClaudeCliPath", response);
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set Claude CLI path: " + e.getMessage(), e);
+            showError("Failed to save Claude CLI path: " + e.getMessage());
+        }
+    }
+
     public void handleGetAutoOpenFileEnabled() {
         respondWithJson("window.updateAutoOpenFileEnabled",
             () -> {
@@ -374,11 +289,6 @@ public class ProjectConfigHandler {
             "Failed to get auto open file enabled");
     }
 
-    /**
-     * Handle Set Auto Open File Enabled
-     *
-     * @param content content
-     */
     public void handleSetAutoOpenFileEnabled(String content) {
         handleProjectBooleanToggle(content, "autoOpenFileEnabled", false, "auto open file enabled",
             settingsService::setAutoOpenFileEnabled,
@@ -386,10 +296,51 @@ public class ProjectConfigHandler {
             "Failed to save auto open file config");
     }
 
+    public void handleGetPermissionDialogTimeout() {
+        respondWithJson("window.updatePermissionDialogTimeout",
+            () -> jsonOf("permissionDialogTimeoutSeconds", settingsService.getPermissionDialogTimeoutSeconds()),
+            jsonOf("permissionDialogTimeoutSeconds", CodemossSettingsService.DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS),
+            "Failed to get permission dialog timeout");
+    }
+
+    public void handleSetPermissionDialogTimeout(String content) {
+        try {
+            JsonObject response = setPermissionDialogTimeoutAndCreateResponse(content);
+            LOG.info("[ProjectConfigHandler] Set permission dialog timeout: "
+                    + response.get("permissionDialogTimeoutSeconds").getAsInt() + "s");
+            pushJson("window.updatePermissionDialogTimeout", response);
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set permission dialog timeout; errorClass="
+                    + e.getClass().getSimpleName(), e);
+            showError("Failed to save permission dialog timeout. See IDE log for details.");
+        }
+    }
+
+    JsonObject setPermissionDialogTimeoutAndCreateResponse(String content) throws Exception {
+        JsonObject json = gson.fromJson(content, JsonObject.class);
+        // Strict type check: only accept a JSON numeric primitive. Anything else
+        // (string, boolean, array, object, null, missing) falls back to default.
+        int seconds = CodemossSettingsService.DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS;
+        if (json != null && json.has("permissionDialogTimeoutSeconds")) {
+            JsonElement element = json.get("permissionDialogTimeoutSeconds");
+            if (element != null
+                    && element.isJsonPrimitive()
+                    && element.getAsJsonPrimitive().isNumber()) {
+                seconds = element.getAsInt();
+            }
+        }
+        settingsService.setPermissionDialogTimeoutSeconds(seconds);
+        int effectiveSeconds = settingsService.getPermissionDialogTimeoutSeconds();
+        return jsonOf("permissionDialogTimeoutSeconds", effectiveSeconds);
+    }
+
+<<<<<<< Updated upstream
     /**
      * Handle Get Send Shortcut
      *
      */
+=======
+>>>>>>> Stashed changes
     public void handleGetSendShortcut() {
         try {
             String sendShortcut = PropertiesComponent.getInstance().getValue(SEND_SHORTCUT_PROPERTY_KEY, "enter");
@@ -399,11 +350,6 @@ public class ProjectConfigHandler {
         }
     }
 
-    /**
-     * Handle Set Send Shortcut
-     *
-     * @param content content
-     */
     public void handleSetSendShortcut(String content) {
         try {
             JsonObject json = gson.fromJson(content, JsonObject.class);
@@ -421,10 +367,6 @@ public class ProjectConfigHandler {
         }
     }
 
-    /**
-     * Handle Get Commit Prompt
-     *
-     */
     public void handleGetCommitPrompt() {
         try {
             String commitPrompt = settingsService.getCommitPrompt();
@@ -441,11 +383,6 @@ public class ProjectConfigHandler {
         }
     }
 
-    /**
-     * Handle Set Commit Prompt
-     *
-     * @param content content
-     */
     public void handleSetCommitPrompt(String content) {
         try {
             JsonObject json = gson.fromJson(content, JsonObject.class);
@@ -478,10 +415,6 @@ public class ProjectConfigHandler {
         }
     }
 
-    /**
-     * Handle Get Prompt Enhancer Config
-     *
-     */
     public void handleGetPromptEnhancerConfig() {
         try {
             pushJson("window.updatePromptEnhancerConfig", settingsService.getPromptEnhancerConfig());
@@ -491,11 +424,6 @@ public class ProjectConfigHandler {
         }
     }
 
-    /**
-     * Handle Set Prompt Enhancer Config
-     *
-     * @param content content
-     */
     public void handleSetPromptEnhancerConfig(String content) {
         applyAiProviderConfig(content,
             settingsService::setPromptEnhancerConfig,
@@ -505,10 +433,6 @@ public class ProjectConfigHandler {
             "projectConfig.promptEnhancer.saveFailed");
     }
 
-    /**
-     * Handle Get Commit Ai Config
-     *
-     */
     public void handleGetCommitAiConfig() {
         try {
             pushJson("window.updateCommitAiConfig", settingsService.getCommitAiConfig());
@@ -518,11 +442,6 @@ public class ProjectConfigHandler {
         }
     }
 
-    /**
-     * Handle Set Commit Ai Config
-     *
-     * @param content content
-     */
     public void handleSetCommitAiConfig(String content) {
         applyAiProviderConfig(content,
             settingsService::setCommitAiConfig,
@@ -538,20 +457,9 @@ public class ProjectConfigHandler {
     }
 
     @FunctionalInterface
-    private interface ThrowingJsonObjectSupplier {
-        JsonObject get() throws Exception;
-    }
+    private interface ThrowingJsonObjectSupplier { JsonObject get() throws Exception; }
 
-    /**
-     * Apply Ai Provider Config
-     *
-     * @param content content
-     * @param setter setter
-     * @param getter getter
-     * @param jsCallback js callback
-     * @param errorLogMessage error log message
-     * @param errorBundleKey error bundle key
-     */
+    /** Shared logic for AI provider+models configs (prompt enhancer, commit AI, etc.). */
     private void applyAiProviderConfig(String content, AiProviderSetter setter,
                                        ThrowingJsonObjectSupplier getter,
                                        String jsCallback, String errorLogMessage, String errorBundleKey) {
@@ -569,10 +477,6 @@ public class ProjectConfigHandler {
         }
     }
 
-    /**
-     * Handle Get Project Commit Prompt
-     *
-     */
     public void handleGetProjectCommitPrompt() {
         try {
             String projectPath = context.getProject().getBasePath();
@@ -585,11 +489,6 @@ public class ProjectConfigHandler {
         }
     }
 
-    /**
-     * Handle Set Project Commit Prompt
-     *
-     * @param content content
-     */
     public void handleSetProjectCommitPrompt(String content) {
         try {
             String projectPath = context.getProject().getBasePath();
@@ -627,10 +526,6 @@ public class ProjectConfigHandler {
         }
     }
 
-    /**
-     * Handle Get Ide Theme
-     *
-     */
     public void handleGetIdeTheme() {
         try {
             String themeConfigJson = ThemeConfigService.getIdeThemeConfig().toString();
@@ -641,10 +536,6 @@ public class ProjectConfigHandler {
         }
     }
 
-    /**
-     * Handle Get Editor Font Config
-     *
-     */
     public void handleGetEditorFontConfig() {
         try {
             String fontConfigJson = FontConfigService.getEditorFontConfig().toString();
@@ -655,19 +546,10 @@ public class ProjectConfigHandler {
         }
     }
 
-    /**
-     * Handle Get Ui Font Config
-     *
-     */
     public void handleGetUiFontConfig() {
         dispatchUiFontConfigUpdate();
     }
 
-    /**
-     * Handle Set Ui Font Config
-     *
-     * @param content content
-     */
     public void handleSetUiFontConfig(String content) {
         try {
             JsonObject json = gson.fromJson(content, JsonObject.class);
@@ -690,10 +572,6 @@ public class ProjectConfigHandler {
         }
     }
 
-    /**
-     * Handle Browse Ui Font File
-     *
-     */
     public void handleBrowseUiFontFile() {
         ApplicationManager.getApplication().invokeLater(() -> {
             try {
@@ -712,11 +590,6 @@ public class ProjectConfigHandler {
         });
     }
 
-    /**
-     * Resolve Current Custom Font File
-     *
-     * @return virtual file
-     */
     private VirtualFile resolveCurrentCustomFontFile() {
         try {
             JsonObject persistedUiFont = settingsService.getUiFontConfig();
@@ -729,11 +602,6 @@ public class ProjectConfigHandler {
         return null;
     }
 
-    /**
-     * Save Selected Custom Font
-     *
-     * @param file file
-     */
     private void saveSelectedCustomFont(VirtualFile file) {
         if (file == null) { return; }
         String path = file.getPath();
@@ -752,10 +620,6 @@ public class ProjectConfigHandler {
         }
     }
 
-    /**
-     * Handle Get Commit Generation Enabled
-     *
-     */
     public void handleGetCommitGenerationEnabled() {
         respondWithJson("window.updateCommitGenerationEnabled",
             () -> jsonOf("commitGenerationEnabled", settingsService.getCommitGenerationEnabled()),
@@ -763,11 +627,6 @@ public class ProjectConfigHandler {
             "Failed to get commit generation enabled");
     }
 
-    /**
-     * Handle Set Commit Generation Enabled
-     *
-     * @param content content
-     */
     public void handleSetCommitGenerationEnabled(String content) {
         handleBooleanToggle(content, "commitGenerationEnabled", true, "commit generation enabled",
             settingsService::setCommitGenerationEnabled,
@@ -775,10 +634,6 @@ public class ProjectConfigHandler {
             "Failed to save AI commit generation config");
     }
 
-    /**
-     * Handle Get Ai Title Generation Enabled
-     *
-     */
     public void handleGetAiTitleGenerationEnabled() {
         respondWithJson("window.updateAiTitleGenerationEnabled",
             () -> jsonOf("aiTitleGenerationEnabled", settingsService.getAiTitleGenerationEnabled()),
@@ -786,11 +641,6 @@ public class ProjectConfigHandler {
             "Failed to get AI title generation enabled");
     }
 
-    /**
-     * Handle Set Ai Title Generation Enabled
-     *
-     * @param content content
-     */
     public void handleSetAiTitleGenerationEnabled(String content) {
         handleBooleanToggle(content, "aiTitleGenerationEnabled", true, "AI title generation enabled",
             settingsService::setAiTitleGenerationEnabled,
@@ -798,10 +648,6 @@ public class ProjectConfigHandler {
             "Failed to save AI title generation config");
     }
 
-    /**
-     * Handle Get Status Bar Widget Enabled
-     *
-     */
     public void handleGetStatusBarWidgetEnabled() {
         respondWithJson("window.updateStatusBarWidgetEnabled",
             () -> jsonOf("statusBarWidgetEnabled", settingsService.getStatusBarWidgetEnabled()),
@@ -809,11 +655,6 @@ public class ProjectConfigHandler {
             "Failed to get status bar widget enabled");
     }
 
-    /**
-     * Handle Set Status Bar Widget Enabled
-     *
-     * @param content content
-     */
     public void handleSetStatusBarWidgetEnabled(String content) {
         handleBooleanToggle(content, "statusBarWidgetEnabled", true, "status bar widget enabled",
             settingsService::setStatusBarWidgetEnabled,
@@ -821,10 +662,6 @@ public class ProjectConfigHandler {
             "Failed to save status bar config");
     }
 
-    /**
-     * Handle Get Task Completion Notification Enabled
-     *
-     */
     public void handleGetTaskCompletionNotificationEnabled() {
         respondWithJson("window.updateTaskCompletionNotificationEnabled",
             () -> jsonOf("taskCompletionNotificationEnabled", settingsService.getTaskCompletionNotificationEnabled()),
@@ -832,11 +669,6 @@ public class ProjectConfigHandler {
             "Failed to get task completion notification enabled");
     }
 
-    /**
-     * Handle Set Task Completion Notification Enabled
-     *
-     * @param content content
-     */
     public void handleSetTaskCompletionNotificationEnabled(String content) {
         // Default to disabled when payload is missing or the field is absent/null (opt-in feature).
         handleBooleanToggle(content, "taskCompletionNotificationEnabled", false, "task completion notification enabled",
@@ -845,10 +677,6 @@ public class ProjectConfigHandler {
             "Failed to save task completion notification setting");
     }
 
-    /**
-     * Dispatch Ui Font Config Update
-     *
-     */
     private void dispatchUiFontConfigUpdate() {
         try {
             String uiFontConfigJson = FontConfigService.getResolvedUiFontConfigJson(settingsService);
@@ -861,11 +689,7 @@ public class ProjectConfigHandler {
         }
     }
 
-    /**
-     * Handle Get Usage Statistics
-     *
-     * @param content content
-     */
+    /** Get usage statistics. Supports both Claude and Codex providers. */
     public void handleGetUsageStatistics(String content) {
         CompletableFuture.runAsync(() -> {
             try {
@@ -909,82 +733,6 @@ public class ProjectConfigHandler {
             } catch (Exception e) {
                 LOG.error("[ProjectConfigHandler] Failed to get usage statistics: " + e.getMessage(), e);
                 showError("Failed to get statistics: " + e.getMessage());
-            }
-        });
-    }
-
-    // ============================================================================
-    // Claude invocation mode (SDK / CLI)
-    // ============================================================================
-
-    /**
-     * Handle Get Invocation Mode
-     */
-    public void handleGetInvocationMode() {
-        respondWithJson("window.updateInvocationMode",
-            () -> {
-                String mode = settingsService.getClaudeInvocationMode();
-                String cliPath = settingsService.getClaudeCliPath();
-                com.google.gson.JsonObject obj = new com.google.gson.JsonObject();
-                obj.addProperty("invocationMode", mode);
-                obj.addProperty("cliPath", cliPath);
-                return obj;
-            },
-            jsonOf("invocationMode", "sdk"),
-            "Failed to get invocation mode");
-    }
-
-    /**
-     * Handle Set Invocation Mode
-     *
-     * @param content JSON with "invocationMode" field
-     */
-    public void handleSetInvocationMode(String content) {
-        ApplicationManager.getApplication().executeOnPooledThread(() -> {
-            try {
-                com.google.gson.JsonObject obj = gson.fromJson(content, com.google.gson.JsonObject.class);
-                String mode = obj.has("invocationMode") ? obj.get("invocationMode").getAsString() : "sdk";
-                settingsService.setClaudeInvocationMode(mode);
-                if (context.getSession() != null) {
-                    context.getSession().setClaudeInvocationMode(mode);
-                }
-                LOG.info("[ProjectConfigHandler] Set invocation mode: " + mode);
-                // Broadcast to all tabs in the project so every tab's session
-                // and frontend __CLAUDE_INVOCATION_MODE__ stay in sync.
-                com.github.claudecodegui.ui.toolwindow.ClaudeSDKToolWindow
-                        .broadcastInvocationMode(context.getProject(), mode);
-            } catch (Exception e) {
-                LOG.error("[ProjectConfigHandler] Failed to set invocation mode: " + e.getMessage(), e);
-                showError("Failed to save invocation mode: " + e.getMessage());
-            }
-        });
-    }
-
-    /**
-     * Handle Set CLI Path
-     *
-     * @param content JSON with "cliPath" field
-     */
-    public void handleSetCliPath(String content) {
-        ApplicationManager.getApplication().executeOnPooledThread(() -> {
-            try {
-                com.google.gson.JsonObject obj = gson.fromJson(content, com.google.gson.JsonObject.class);
-                String cliPath = obj.has("cliPath") ? obj.get("cliPath").getAsString() : "";
-                settingsService.setClaudeCliPath(cliPath);
-
-                // 更新 detector 缓存
-                if (cliPath != null && !cliPath.isEmpty()) {
-                    com.github.claudecodegui.provider.claude.ClaudeCliDetector.getInstance().setCliPath(cliPath);
-                } else {
-                    com.github.claudecodegui.provider.claude.ClaudeCliDetector.getInstance().clearCache();
-                }
-
-                LOG.info("[ProjectConfigHandler] Set CLI path: " + cliPath);
-                ApplicationManager.getApplication().invokeLater(() ->
-                    context.callJavaScript("window.updateCliPath", context.escapeJs(content)));
-            } catch (Exception e) {
-                LOG.error("[ProjectConfigHandler] Failed to set CLI path: " + e.getMessage(), e);
-                showError("Failed to save CLI path: " + e.getMessage());
             }
         });
     }

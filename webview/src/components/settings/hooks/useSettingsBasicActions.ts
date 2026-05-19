@@ -6,6 +6,10 @@ import type { CommitAiConfig, CommitAiProvider } from '../../../types/aiFeatureC
 import { DEFAULT_COMMIT_AI_CONFIG } from '../../../types/aiFeatureConfig';
 import type { PromptEnhancerConfig, PromptEnhancerProvider } from '../../../types/promptEnhancer';
 import { DEFAULT_PROMPT_ENHANCER_CONFIG } from '../../../types/promptEnhancer';
+import {
+  DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS,
+  clampPermissionDialogTimeoutSeconds,
+} from '../../../utils/permissionDialogTimeout';
 
 const sendToJava = (message: string) => {
   if (window.sendToJava) {
@@ -20,6 +24,8 @@ export interface UseSettingsBasicActionsProps {
   onSendShortcutChangeProp?: (shortcut: 'enter' | 'cmdEnter') => void;
   autoOpenFileEnabledProp?: boolean;
   onAutoOpenFileEnabledChangeProp?: (enabled: boolean) => void;
+  permissionDialogTimeoutSecondsProp?: number;
+  onPermissionDialogTimeoutChangeProp?: (seconds: number) => void;
 }
 
 export interface UseSettingsBasicActionsReturn {
@@ -54,6 +60,10 @@ export interface UseSettingsBasicActionsReturn {
   savingCommitPrompt: boolean;
   projectCommitPrompt: string;
   savingProjectCommitPrompt: boolean;
+  soundNotificationEnabled: boolean;
+  soundOnlyWhenUnfocused: boolean;
+  selectedSound: string;
+  customSoundPath: string;
   diffExpandedByDefault: boolean;
   historyCompletionEnabled: boolean;
   commitGenerationEnabled: boolean;
@@ -62,8 +72,6 @@ export interface UseSettingsBasicActionsReturn {
   taskCompletionNotificationEnabled: boolean;
   commitAiConfig: CommitAiConfig;
   promptEnhancerConfig: PromptEnhancerConfig;
-  invocationMode: 'sdk' | 'cli';
-  cliPath: string;
 
   // =========================================================================
   // Handler functions (public API for components)
@@ -77,20 +85,27 @@ export interface UseSettingsBasicActionsReturn {
   handleCodexSandboxModeChange: (mode: 'workspace-write' | 'danger-full-access') => void;
   handleSendShortcutChange: (shortcut: 'enter' | 'cmdEnter') => void;
   handleAutoOpenFileEnabledChange: (enabled: boolean) => void;
+  handleSoundNotificationEnabledChange: (enabled: boolean) => void;
+  handleSoundOnlyWhenUnfocusedChange: (enabled: boolean) => void;
+  handleSelectedSoundChange: (soundId: string) => void;
+  handleCustomSoundPathChange: (path: string) => void;
+  handleSaveCustomSoundPath: () => void;
+  handleTestSound: () => void;
+  handleBrowseSound: () => void;
   handleSaveCommitPrompt: () => void;
   handleSaveProjectCommitPrompt: () => void;
   handleCommitGenerationEnabledChange: (enabled: boolean) => void;
   handleAiTitleGenerationEnabledChange: (enabled: boolean) => void;
   handleStatusBarWidgetEnabledChange: (enabled: boolean) => void;
   handleTaskCompletionNotificationEnabledChange: (enabled: boolean) => void;
+  permissionDialogTimeoutSeconds: number;
+  handlePermissionDialogTimeoutChange: (seconds: number) => void;
   handleCommitAiProviderChange: (provider: CommitAiProvider) => void;
   handleCommitAiModelChange: (model: string) => void;
   handleCommitAiResetToDefault: () => void;
   handlePromptEnhancerProviderChange: (provider: PromptEnhancerProvider) => void;
   handlePromptEnhancerModelChange: (model: string) => void;
   handlePromptEnhancerResetToDefault: () => void;
-  handleInvocationModeChange: (mode: 'sdk' | 'cli') => void;
-  handleCliPathChange: (path: string) => void;
 
   // =========================================================================
   // @internal — State setters used only by useSettingsWindowCallbacks.
@@ -120,6 +135,10 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setSavingCommitPrompt: (saving: boolean) => void;
   /** @internal */ setProjectCommitPrompt: (prompt: string) => void;
   /** @internal */ setSavingProjectCommitPrompt: (saving: boolean) => void;
+  /** @internal */ setSoundNotificationEnabled: (enabled: boolean) => void;
+  /** @internal */ setSoundOnlyWhenUnfocused: (enabled: boolean) => void;
+  /** @internal */ setSelectedSound: (soundId: string) => void;
+  /** @internal */ setCustomSoundPath: (path: string) => void;
   /** @internal */ setDiffExpandedByDefault: (expanded: boolean) => void;
   /** @internal */ setHistoryCompletionEnabled: (enabled: boolean) => void;
   /** @internal */ setCommitGenerationEnabled: (enabled: boolean) => void;
@@ -128,8 +147,6 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setTaskCompletionNotificationEnabled: (enabled: boolean) => void;
   /** @internal */ setCommitAiConfig: (config: CommitAiConfig) => void;
   /** @internal */ setPromptEnhancerConfig: (config: PromptEnhancerConfig) => void;
-  /** @internal */ setInvocationMode: (mode: 'sdk' | 'cli') => void;
-  /** @internal */ setCliPath: (path: string) => void;
 }
 
 export function useSettingsBasicActions({
@@ -139,6 +156,8 @@ export function useSettingsBasicActions({
   onSendShortcutChangeProp,
   autoOpenFileEnabledProp,
   onAutoOpenFileEnabledChangeProp,
+  permissionDialogTimeoutSecondsProp,
+  onPermissionDialogTimeoutChangeProp,
 }: UseSettingsBasicActionsProps): UseSettingsBasicActionsReturn {
   // Node.js path
   const [nodePath, setNodePath] = useState('');
@@ -185,6 +204,12 @@ export function useSettingsBasicActions({
   const [projectCommitPrompt, setProjectCommitPrompt] = useState('');
   const [savingProjectCommitPrompt, setSavingProjectCommitPrompt] = useState(false);
 
+  // Sound notification configuration
+  const [soundNotificationEnabled, setSoundNotificationEnabled] = useState<boolean>(false);
+  const [soundOnlyWhenUnfocused, setSoundOnlyWhenUnfocused] = useState<boolean>(false);
+  const [selectedSound, setSelectedSound] = useState<string>('default');
+  const [customSoundPath, setCustomSoundPath] = useState<string>('');
+
   // Diff expanded by default configuration (localStorage-only)
   const [diffExpandedByDefault, setDiffExpandedByDefault] = useState<boolean>(() => {
     try {
@@ -212,16 +237,19 @@ export function useSettingsBasicActions({
   // Task completion notification toggle (default: false, opt-in feature)
   const [taskCompletionNotificationEnabled, setTaskCompletionNotificationEnabled] = useState<boolean>(false);
 
+  // Permission dialog timeout — owned by App.tsx; we treat the prop as authoritative.
+  // We intentionally do NOT keep a local copy: it would be dead state because the
+  // prop is always provided in production, and a divergent local copy could be read
+  // by accident in future refactors.
+  const permissionDialogTimeoutSeconds =
+    permissionDialogTimeoutSecondsProp ?? DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS;
+
   const [commitAiConfig, setCommitAiConfig] = useState<CommitAiConfig>(
     DEFAULT_COMMIT_AI_CONFIG
   );
   const [promptEnhancerConfig, setPromptEnhancerConfig] = useState<PromptEnhancerConfig>(
     DEFAULT_PROMPT_ENHANCER_CONFIG
   );
-
-  // Invocation mode (sdk / cli)
-  const [invocationMode, setInvocationMode] = useState<'sdk' | 'cli'>('sdk');
-  const [cliPath, setCliPath] = useState('');
 
   // Diff expanded by default handler
   useEffect(() => {
@@ -316,6 +344,49 @@ export function useSettingsBasicActions({
     }
   }, [onAutoOpenFileEnabledChangeProp]);
 
+  // Sound notification toggle change handler
+  const handleSoundNotificationEnabledChange = useCallback((enabled: boolean) => {
+    setSoundNotificationEnabled(enabled);
+    const payload = { enabled };
+    sendToJava(`set_sound_notification_enabled:${JSON.stringify(payload)}`);
+  }, []);
+
+  // Sound only-when-unfocused toggle change handler
+  const handleSoundOnlyWhenUnfocusedChange = useCallback((enabled: boolean) => {
+    setSoundOnlyWhenUnfocused(enabled);
+    const payload = { onlyWhenUnfocused: enabled };
+    sendToJava(`set_sound_only_when_unfocused:${JSON.stringify(payload)}`);
+  }, []);
+
+  // Selected sound change handler
+  const handleSelectedSoundChange = useCallback((soundId: string) => {
+    setSelectedSound(soundId);
+    const payload = { soundId };
+    sendToJava(`set_selected_sound:${JSON.stringify(payload)}`);
+  }, []);
+
+  // Custom sound path change handler
+  const handleCustomSoundPathChange = useCallback((path: string) => {
+    setCustomSoundPath(path);
+  }, []);
+
+  // Save custom sound path
+  const handleSaveCustomSoundPath = useCallback(() => {
+    const payload = { path: customSoundPath };
+    sendToJava(`set_custom_sound_path:${JSON.stringify(payload)}`);
+  }, [customSoundPath]);
+
+  // Test sound
+  const handleTestSound = useCallback(() => {
+    const payload = { soundId: selectedSound, path: customSoundPath };
+    sendToJava(`test_sound:${JSON.stringify(payload)}`);
+  }, [selectedSound, customSoundPath]);
+
+  // Browse sound file
+  const handleBrowseSound = useCallback(() => {
+    sendToJava('browse_sound_file:');
+  }, []);
+
   // AI commit generation toggle change handler
   const handleCommitGenerationEnabledChange = useCallback((enabled: boolean) => {
     setCommitGenerationEnabled(enabled);
@@ -343,6 +414,15 @@ export function useSettingsBasicActions({
     const payload = { taskCompletionNotificationEnabled: enabled };
     sendToJava(`set_task_completion_notification_enabled:${JSON.stringify(payload)}`);
   }, []);
+
+  // Permission dialog timeout change handler
+  const handlePermissionDialogTimeoutChange = useCallback((seconds: number) => {
+    const clamped = clampPermissionDialogTimeoutSeconds(seconds);
+    // App.tsx owns the canonical state and provides the callback in production.
+    onPermissionDialogTimeoutChangeProp?.(clamped);
+    const payload = { permissionDialogTimeoutSeconds: clamped };
+    sendToJava(`set_permission_dialog_timeout:${JSON.stringify(payload)}`);
+  }, [onPermissionDialogTimeoutChangeProp]);
 
   const handleCommitAiProviderChange = useCallback((provider: CommitAiProvider) => {
     const providerAvailable = commitAiConfig.availability[provider];
@@ -456,18 +536,6 @@ export function useSettingsBasicActions({
     sendToJava(`set_project_commit_prompt:${JSON.stringify(payload)}`);
   }, [projectCommitPrompt]);
 
-  // Invocation mode change handler
-  const handleInvocationModeChange = useCallback((mode: 'sdk' | 'cli') => {
-    setInvocationMode(mode);
-    sendToJava(`set_invocation_mode:${JSON.stringify({ invocationMode: mode })}`);
-  }, []);
-
-  // CLI path change handler
-  const handleCliPathChange = useCallback((path: string) => {
-    setCliPath(path);
-    sendToJava(`set_cli_path:${JSON.stringify({ cliPath: path })}`);
-  }, []);
-
   return {
     nodePath,
     setNodePath,
@@ -500,6 +568,14 @@ export function useSettingsBasicActions({
     setCommitPrompt,
     savingCommitPrompt,
     setSavingCommitPrompt,
+    soundNotificationEnabled,
+    setSoundNotificationEnabled,
+    soundOnlyWhenUnfocused,
+    setSoundOnlyWhenUnfocused,
+    selectedSound,
+    setSelectedSound,
+    customSoundPath,
+    setCustomSoundPath,
     diffExpandedByDefault,
     setDiffExpandedByDefault,
     historyCompletionEnabled,
@@ -513,6 +589,13 @@ export function useSettingsBasicActions({
     handleCodexSandboxModeChange,
     handleSendShortcutChange,
     handleAutoOpenFileEnabledChange,
+    handleSoundNotificationEnabledChange,
+    handleSoundOnlyWhenUnfocusedChange,
+    handleSelectedSoundChange,
+    handleCustomSoundPathChange,
+    handleSaveCustomSoundPath,
+    handleTestSound,
+    handleBrowseSound,
     handleSaveCommitPrompt,
     projectCommitPrompt,
     setProjectCommitPrompt,
@@ -531,6 +614,8 @@ export function useSettingsBasicActions({
     taskCompletionNotificationEnabled,
     setTaskCompletionNotificationEnabled,
     handleTaskCompletionNotificationEnabledChange,
+    permissionDialogTimeoutSeconds,
+    handlePermissionDialogTimeoutChange,
     commitAiConfig,
     setCommitAiConfig,
     handleCommitAiProviderChange,
@@ -541,11 +626,5 @@ export function useSettingsBasicActions({
     handlePromptEnhancerProviderChange,
     handlePromptEnhancerModelChange,
     handlePromptEnhancerResetToDefault,
-    invocationMode,
-    setInvocationMode,
-    cliPath,
-    setCliPath,
-    handleInvocationModeChange,
-    handleCliPathChange,
   };
 }

@@ -125,7 +125,9 @@ public class DaemonBridge {
                     return false;
                 }
 
-                ProcessBuilder pb = new ProcessBuilder(nodePath, daemonScript.getAbsolutePath());
+                List<String> daemonCmd = NodeDetector.buildNodeScriptCommand(
+                        nodePath, daemonScript.getAbsolutePath());
+                ProcessBuilder pb = new ProcessBuilder(daemonCmd);
                 pb.directory(bridgeDir);
 
                 // Configure environment

@@ -12,6 +12,9 @@ import { downloadJSON } from '../../../utils/exportMarkdown';
 import { releaseSessionTransition } from '../sessionTransition';
 import { drainAndRequestDependencyStatus } from '../settingsBootstrap';
 
+// Matches session-titles-service.cjs#updateTitle, which rejects longer titles.
+const CUSTOM_TITLE_MAX_LENGTH = 50;
+
 export function registerSessionAndSdkCallbacks(
   options: UseWindowCallbacksOptions,
   tRef: MutableRefObject<UseWindowCallbacksOptions['t']>,
@@ -27,6 +30,7 @@ export function registerSessionAndSdkCallbacks(
     customSessionTitleRef,
     currentSessionIdRef,
     updateHistoryTitle,
+    applyHistoryTitleLocal,
     setCustomSessionTitle,
   } = options;
 
@@ -41,7 +45,14 @@ export function registerSessionAndSdkCallbacks(
     // Orphaned title entries are harmless and cleaned up on session deletion.
     const title = customSessionTitleRef.current;
     if (title && oldId !== sessionId) {
-      updateHistoryTitle(sessionId, title);
+      // AI-generated titles can exceed the backend limit. Fall back to
+      // local-only update so the UI keeps the title visible without a
+      // silent backend write failure.
+      if (title.length <= CUSTOM_TITLE_MAX_LENGTH) {
+        updateHistoryTitle(sessionId, title);
+      } else {
+        applyHistoryTitleLocal(sessionId, title);
+      }
     }
   };
 
@@ -130,6 +141,6 @@ export function registerSessionAndSdkCallbacks(
     // stale events from overwriting the wrong session's title.
     if (currentSessionIdRef.current !== sessionId) return;
     setCustomSessionTitle(title.trim());
-    updateHistoryTitle(sessionId, title.trim());
+    applyHistoryTitleLocal(sessionId, title.trim());
   };
 }

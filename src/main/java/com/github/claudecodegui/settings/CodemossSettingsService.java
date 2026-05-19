@@ -30,171 +30,57 @@ import java.util.Set;
 /**
  * Codemoss configuration service (Facade pattern).
  * Delegates specific functionality to specialized managers.
- *
- * @author melon
  */
 public class CodemossSettingsService {
 
-    /**
-     * log.
-     */
     private static final Logger LOG = Logger.getInstance(CodemossSettingsService.class);
-    /**
-     * config version.
-     */
     private static final int CONFIG_VERSION = 2;
-    /**
-     * codex sandbox mode workspace write.
-     */
     private static final String CODEX_SANDBOX_MODE_WORKSPACE_WRITE = "workspace-write";
-    /**
-     * codex sandbox mode danger full access.
-     */
     private static final String CODEX_SANDBOX_MODE_DANGER_FULL_ACCESS = "danger-full-access";
-    /**
-     * ui font config key.
-     */
     private static final String UI_FONT_CONFIG_KEY = "uiFont";
-    /**
-     * ui font mode key.
-     */
     private static final String UI_FONT_MODE_KEY = "mode";
-    /**
-     * ui font custom path key.
-     */
     private static final String UI_FONT_CUSTOM_PATH_KEY = "customFontPath";
-    /**
-     * valid ui font modes.
-     */
+    private static final String CLAUDE_INVOCATION_MODE_KEY = "claudeInvocationMode";
+    private static final String CLAUDE_CLI_PATH_KEY = "claudeCliPath";
     private static final Set<String> VALID_UI_FONT_MODES = Set.of(
             FontConfigService.UI_FONT_MODE_FOLLOW_EDITOR,
             FontConfigService.UI_FONT_MODE_CUSTOM_FILE
     );
-    /**
-     * codex runtime access inactive.
-     */
     public static final String CODEX_RUNTIME_ACCESS_INACTIVE = "inactive";
-    /**
-     * codex runtime access managed.
-     */
     public static final String CODEX_RUNTIME_ACCESS_MANAGED = "managed";
-    /**
-     * codex runtime access cli login.
-     */
     public static final String CODEX_RUNTIME_ACCESS_CLI_LOGIN = "cli_login";
-    /**
-     * commit ai key.
-     */
     private static final String COMMIT_AI_KEY = "commitAi";
-    /**
-     * prompt enhancer key.
-     */
     private static final String PROMPT_ENHANCER_KEY = "promptEnhancer";
-    /**
-     * ai feature provider key.
-     */
     private static final String AI_FEATURE_PROVIDER_KEY = "provider";
-    /**
-     * ai feature models key.
-     */
     private static final String AI_FEATURE_MODELS_KEY = "models";
-    /**
-     * ai feature effective provider key.
-     */
     private static final String AI_FEATURE_EFFECTIVE_PROVIDER_KEY = "effectiveProvider";
-    /**
-     * ai feature resolution source key.
-     */
     private static final String AI_FEATURE_RESOLUTION_SOURCE_KEY = "resolutionSource";
-    /**
-     * ai feature availability key.
-     */
     private static final String AI_FEATURE_AVAILABILITY_KEY = "availability";
-    /**
-     * ai feature provider claude.
-     */
     private static final String AI_FEATURE_PROVIDER_CLAUDE = "claude";
-    /**
-     * ai feature provider codex.
-     */
     private static final String AI_FEATURE_PROVIDER_CODEX = "codex";
-    /**
-     * ai feature resolution manual.
-     */
     private static final String AI_FEATURE_RESOLUTION_MANUAL = "manual";
-    /**
-     * ai feature resolution auto.
-     */
     private static final String AI_FEATURE_RESOLUTION_AUTO = "auto";
-    /**
-     * ai feature resolution unavailable.
-     */
     private static final String AI_FEATURE_RESOLUTION_UNAVAILABLE = "unavailable";
-    /**
-     * default prompt enhancer claude model.
-     */
     private static final String DEFAULT_PROMPT_ENHANCER_CLAUDE_MODEL = "claude-sonnet-4-6";
-    /**
-     * default prompt enhancer codex model.
-     */
     private static final String DEFAULT_PROMPT_ENHANCER_CODEX_MODEL = "gpt-5.5";
-    /**
-     * default commit ai claude model.
-     */
     private static final String DEFAULT_COMMIT_AI_CLAUDE_MODEL = "claude-sonnet-4-6";
-    /**
-     * default commit ai codex model.
-     */
     private static final String DEFAULT_COMMIT_AI_CODEX_MODEL = "gpt-5.5";
-    /**
-     * gson.
-     */
+    private static final String USER_LANGUAGE_CONFIG_KEY = "language";
+
     private final Gson gson;
-    /**
-     * path manager.
-     */
+
+    // Managers
     private final ConfigPathManager pathManager;
-    /**
-     * claude settings manager.
-     */
     private final ClaudeSettingsManager claudeSettingsManager;
-    /**
-     * codex settings manager.
-     */
     private final CodexSettingsManager codexSettingsManager;
-    /**
-     * codex mcp server manager.
-     */
     private final CodexMcpServerManager codexMcpServerManager;
-    /**
-     * working directory manager.
-     */
     private final WorkingDirectoryManager workingDirectoryManager;
-    /**
-     * agent manager.
-     */
     private final AgentManager agentManager;
-    /**
-     * skill manager.
-     */
     private final SkillManager skillManager;
-    /**
-     * mcp server manager.
-     */
     private final McpServerManager mcpServerManager;
-    /**
-     * provider manager.
-     */
     private final ProviderManager providerManager;
-    /**
-     * codex provider manager.
-     */
     private final CodexProviderManager codexProviderManager;
 
-    /**
-     * Codemoss Settings Service
-     *
-     */
     public CodemossSettingsService() {
         this.gson = new GsonBuilder().setPrettyPrinting().serializeNulls().create();
 
@@ -317,8 +203,6 @@ public class CodemossSettingsService {
 
     /**
      * Get config file path (~/.codemoss/config.json).
-     *
-     * @return string
      */
     public String getConfigPath() {
         return pathManager.getConfigPath();
@@ -326,9 +210,6 @@ public class CodemossSettingsService {
 
     /**
      * Read the config file.
-     *
-     * @return json object
-     * @throws IOException
      */
     public JsonObject readConfig() throws IOException {
         String configPath = getConfigPath();
@@ -351,9 +232,6 @@ public class CodemossSettingsService {
 
     /**
      * Write the config file.
-     *
-     * @param config config
-     * @throws IOException
      */
     public void writeConfig(JsonObject config) throws IOException {
         pathManager.ensureConfigDirectory();
@@ -371,10 +249,6 @@ public class CodemossSettingsService {
         }
     }
 
-    /**
-     * Backup Config
-     *
-     */
     private void backupConfig() {
         try {
             Path configPath = pathManager.getConfigFilePath();
@@ -388,8 +262,6 @@ public class CodemossSettingsService {
 
     /**
      * Create default config.
-     *
-     * @return json object
      */
     private JsonObject createDefaultConfig() {
         JsonObject config = new JsonObject();
@@ -412,14 +284,46 @@ public class CodemossSettingsService {
         return config;
     }
 
-    // ==================== Claude Settings Management ====================
+    // ==================== Language Config Management ====================
 
     /**
-     * Get Current Claude Config
+     * Get the manually configured UI language.
      *
-     * @return json object
-     * @throws IOException
+     * @return configured language code, or null when the UI should follow the IDE language
      */
+    public String getUserLanguage() throws IOException {
+        JsonObject config = readConfig();
+        if (!config.has(USER_LANGUAGE_CONFIG_KEY) || config.get(USER_LANGUAGE_CONFIG_KEY).isJsonNull()) {
+            return null;
+        }
+        String language = config.get(USER_LANGUAGE_CONFIG_KEY).getAsString();
+        return language == null || language.trim().isEmpty() ? null : language.trim();
+    }
+
+    /**
+     * Persist the manually configured UI language.
+     *
+     * @param language supported UI language code
+     */
+    public void setUserLanguage(String language) throws IOException {
+        JsonObject config = readConfig();
+        config.addProperty(USER_LANGUAGE_CONFIG_KEY, language);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set user language: " + language);
+    }
+
+    /**
+     * Clear the manual UI language override so the webview follows the IDE language.
+     */
+    public void clearUserLanguage() throws IOException {
+        JsonObject config = readConfig();
+        config.remove(USER_LANGUAGE_CONFIG_KEY);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Cleared user language override");
+    }
+
+    // ==================== Claude Settings Management ====================
+
     public JsonObject getCurrentClaudeConfig() throws IOException {
         JsonObject currentConfig = claudeSettingsManager.getCurrentClaudeConfig();
 
@@ -448,123 +352,52 @@ public class CodemossSettingsService {
         return currentConfig;
     }
 
-    /**
-     * Read Claude Settings
-     *
-     * @return json object
-     * @throws IOException
-     */
     public JsonObject readClaudeSettings() throws IOException {
         return claudeSettingsManager.readClaudeSettings();
     }
 
-    /**
-     * Get Always Thinking Enabled From Claude Settings
-     *
-     * @return boolean
-     * @throws IOException
-     */
     public Boolean getAlwaysThinkingEnabledFromClaudeSettings() throws IOException {
         return claudeSettingsManager.getAlwaysThinkingEnabled();
     }
 
-    /**
-     * Set Always Thinking Enabled In Claude Settings
-     *
-     * @param enabled enabled
-     * @throws IOException
-     */
     public void setAlwaysThinkingEnabledInClaudeSettings(boolean enabled) throws IOException {
         claudeSettingsManager.setAlwaysThinkingEnabled(enabled);
     }
 
-    /**
-     * Set Always Thinking Enabled In Active Provider
-     *
-     * @param enabled enabled
-     * @return boolean
-     * @throws IOException
-     */
     public boolean setAlwaysThinkingEnabledInActiveProvider(boolean enabled) throws IOException {
         return providerManager.setAlwaysThinkingEnabledInActiveProvider(enabled);
     }
 
-    /**
-     * Apply Provider To Claude Settings
-     *
-     * @param provider provider
-     * @throws IOException
-     */
     public void applyProviderToClaudeSettings(JsonObject provider) throws IOException {
         claudeSettingsManager.applyProviderToClaudeSettings(provider);
     }
 
-    /**
-     * Apply Cli Login To Claude Settings
-     *
-     * @throws IOException
-     */
     public void applyCliLoginToClaudeSettings() throws IOException {
         claudeSettingsManager.applyCliLoginToClaudeSettings();
     }
 
-    /**
-     * Remove Cli Login From Claude Settings
-     *
-     * @throws IOException
-     */
     public void removeCliLoginFromClaudeSettings() throws IOException {
         claudeSettingsManager.removeCliLoginFromClaudeSettings();
     }
 
-    /**
-     * Read Cli Login Account Info
-     *
-     * @return json object
-     */
     public JsonObject readCliLoginAccountInfo() {
         return claudeSettingsManager.readCliLoginAccountInfo();
     }
 
-    /**
-     * Apply Active Provider To Claude Settings
-     *
-     * @throws IOException
-     */
     public void applyActiveProviderToClaudeSettings() throws IOException {
         providerManager.applyActiveProviderToClaudeSettings();
     }
 
     // ==================== Working Directory Management ====================
 
-    /**
-     * Get Custom Working Directory
-     *
-     * @param projectPath project path
-     * @return string
-     * @throws IOException
-     */
     public String getCustomWorkingDirectory(String projectPath) throws IOException {
         return workingDirectoryManager.getCustomWorkingDirectory(projectPath);
     }
 
-    /**
-     * Set Custom Working Directory
-     *
-     * @param projectPath project path
-     * @param customWorkingDir custom working dir
-     * @throws IOException
-     */
     public void setCustomWorkingDirectory(String projectPath, String customWorkingDir) throws IOException {
         workingDirectoryManager.setCustomWorkingDirectory(projectPath, customWorkingDir);
     }
 
-    /**
-     * Get All Working Directories
-     *
-     * @return map
-     * @throws IOException
-     */
     public Map<String, String> getAllWorkingDirectories() throws IOException {
         return workingDirectoryManager.getAllWorkingDirectories();
     }
@@ -575,7 +408,6 @@ public class CodemossSettingsService {
      * Get the commit AI prompt.
      *
      * @return commit prompt
-     * @throws IOException
      */
     public String getCommitPrompt() throws IOException {
         JsonObject config = readConfig();
@@ -593,7 +425,6 @@ public class CodemossSettingsService {
      * Set the commit AI prompt.
      *
      * @param prompt commit prompt
-     * @throws IOException
      */
     public void setCommitPrompt(String prompt) throws IOException {
         JsonObject config = readConfig();
@@ -610,7 +441,6 @@ public class CodemossSettingsService {
      *
      * @param projectPath project path
      * @return project commit prompt, empty string if not configured
-     * @throws IOException
      */
     public String getProjectCommitPrompt(String projectPath) throws IOException {
         if (projectPath == null) {
@@ -631,7 +461,6 @@ public class CodemossSettingsService {
      *
      * @param projectPath project path
      * @param prompt commit prompt
-     * @throws IOException
      */
     public void setProjectCommitPrompt(String projectPath, String prompt) throws IOException {
         if (projectPath == null) {
@@ -656,7 +485,6 @@ public class CodemossSettingsService {
      * Get persisted UI font configuration.
      *
      * @return normalized UI font configuration
-     * @throws IOException
      */
     public JsonObject getUiFontConfig() throws IOException {
         JsonObject config = readConfig();
@@ -671,7 +499,6 @@ public class CodemossSettingsService {
      *
      * @param mode requested mode
      * @param customFontPath custom font path for custom file mode
-     * @throws IOException
      */
     public void setUiFontConfig(String mode, String customFontPath) throws IOException {
         JsonObject config = readConfig();
@@ -681,6 +508,29 @@ public class CodemossSettingsService {
                 + ", customFontPath=" + customFontPath);
     }
 
+    // ==================== Permission Dialog Timeout Config Management ====================
+
+    public static final int DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS =
+            PermissionDialogTimeoutSettings.DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS;
+    public static final int MIN_PERMISSION_DIALOG_TIMEOUT_SECONDS =
+            PermissionDialogTimeoutSettings.MIN_PERMISSION_DIALOG_TIMEOUT_SECONDS;
+    public static final int MAX_PERMISSION_DIALOG_TIMEOUT_SECONDS =
+            PermissionDialogTimeoutSettings.MAX_PERMISSION_DIALOG_TIMEOUT_SECONDS;
+    public static final long PERMISSION_SAFETY_NET_BUFFER_SECONDS =
+            PermissionDialogTimeoutSettings.PERMISSION_SAFETY_NET_BUFFER_SECONDS;
+
+    public static int clampPermissionDialogTimeoutSeconds(int seconds) {
+        return PermissionDialogTimeoutSettings.clampPermissionDialogTimeoutSeconds(seconds);
+    }
+
+    public int getPermissionDialogTimeoutSeconds() throws IOException {
+        return PermissionDialogTimeoutSettings.getPermissionDialogTimeoutSeconds(this);
+    }
+
+    public void setPermissionDialogTimeoutSeconds(int seconds) throws IOException {
+        PermissionDialogTimeoutSettings.setPermissionDialogTimeoutSeconds(this, seconds);
+    }
+
     // ==================== Streaming Config Management ====================
 
     /**
@@ -688,7 +538,6 @@ public class CodemossSettingsService {
      *
      * @param projectPath project path
      * @return whether streaming is enabled
-     * @throws IOException
      */
     public boolean getStreamingEnabled(String projectPath) throws IOException {
         JsonObject config = readConfig();
@@ -713,23 +562,12 @@ public class CodemossSettingsService {
         return true;
     }
 
-    /**
-     * Create Default Ui Font Config
-     *
-     * @return json object
-     */
     private JsonObject createDefaultUiFontConfig() {
         JsonObject uiFont = new JsonObject();
         uiFont.addProperty(UI_FONT_MODE_KEY, FontConfigService.UI_FONT_MODE_FOLLOW_EDITOR);
         return uiFont;
     }
 
-    /**
-     * Normalize Ui Font Config
-     *
-     * @param rawConfig raw config
-     * @return json object
-     */
     private JsonObject normalizeUiFontConfig(JsonObject rawConfig) {
         if (rawConfig == null) {
             return createDefaultUiFontConfig();
@@ -743,13 +581,6 @@ public class CodemossSettingsService {
         return createUiFontConfig(requestedMode, customFontPath);
     }
 
-    /**
-     * Create Ui Font Config
-     *
-     * @param mode mode
-     * @param customFontPath custom font path
-     * @return json object
-     */
     private JsonObject createUiFontConfig(String mode, String customFontPath) {
         String normalizedMode = VALID_UI_FONT_MODES.contains(mode)
                 ? mode
@@ -771,7 +602,6 @@ public class CodemossSettingsService {
      *
      * @param projectPath project path
      * @param enabled     whether to enable
-     * @throws IOException
      */
     public void setStreamingEnabled(String projectPath, boolean enabled) throws IOException {
         JsonObject config = readConfig();
@@ -802,7 +632,6 @@ public class CodemossSettingsService {
      *
      * @param projectPath project path
      * @return whether auto-open file is enabled
-     * @throws IOException
      */
     public boolean getAutoOpenFileEnabled(String projectPath) throws IOException {
         JsonObject config = readConfig();
@@ -832,7 +661,6 @@ public class CodemossSettingsService {
      *
      * @param projectPath project path
      * @param enabled     whether to enable
-     * @throws IOException
      */
     public void setAutoOpenFileEnabled(String projectPath, boolean enabled) throws IOException {
         JsonObject config = readConfig();
@@ -863,7 +691,6 @@ public class CodemossSettingsService {
      *
      * @param projectPath project path
      * @return sandbox mode (workspace-write or danger-full-access)
-     * @throws IOException
      */
     public String getCodexSandboxMode(String projectPath) throws IOException {
         JsonObject config = readConfig();
@@ -893,7 +720,6 @@ public class CodemossSettingsService {
      *
      * @param projectPath project path
      * @param sandboxMode sandbox mode (workspace-write or danger-full-access)
-     * @throws IOException
      */
     public void setCodexSandboxMode(String projectPath, String sandboxMode) throws IOException {
         if (!isValidCodexSandboxMode(sandboxMode)) {
@@ -919,95 +745,41 @@ public class CodemossSettingsService {
         LOG.info("[CodemossSettings] Set Codex sandbox mode to " + sandboxMode + " for project: " + projectPath);
     }
 
-    /**
-     * Is Valid Codex Sandbox Mode
-     *
-     * @param mode mode
-     * @return boolean
-     */
     private boolean isValidCodexSandboxMode(String mode) {
         return CODEX_SANDBOX_MODE_WORKSPACE_WRITE.equals(mode)
                 || CODEX_SANDBOX_MODE_DANGER_FULL_ACCESS.equals(mode);
     }
 
-    /**
-     * Get Default Codex Sandbox Mode
-     *
-     * @return string
-     */
     private String getDefaultCodexSandboxMode() {
         return CODEX_SANDBOX_MODE_DANGER_FULL_ACCESS;
     }
 
     // ==================== Provider Management ====================
 
-    /**
-     * Get Claude Providers
-     *
-     * @return list
-     * @throws IOException
-     */
     public List<JsonObject> getClaudeProviders() throws IOException {
         return providerManager.getClaudeProviders();
     }
 
-    /**
-     * Get Active Claude Provider
-     *
-     * @return json object
-     * @throws IOException
-     */
     public JsonObject getActiveClaudeProvider() throws IOException {
         return providerManager.getActiveClaudeProvider();
     }
 
-    /**
-     * Add Claude Provider
-     *
-     * @param provider provider
-     * @throws IOException
-     */
     public void addClaudeProvider(JsonObject provider) throws IOException {
         providerManager.addClaudeProvider(provider);
     }
 
-    /**
-     * Save Claude Provider
-     *
-     * @param provider provider
-     * @throws IOException
-     */
     public void saveClaudeProvider(JsonObject provider) throws IOException {
         providerManager.saveClaudeProvider(provider);
     }
 
-    /**
-     * Update Claude Provider
-     *
-     * @param id id
-     * @param updates updates
-     * @throws IOException
-     */
     public void updateClaudeProvider(String id, JsonObject updates) throws IOException {
         providerManager.updateClaudeProvider(id, updates);
     }
 
-    /**
-     * Delete Claude Provider
-     *
-     * @param id id
-     * @return delete result
-     */
     public DeleteResult deleteClaudeProvider(String id) {
         return providerManager.deleteClaudeProvider(id);
     }
 
-    /**
-     * Delete Claude Provider With Exception
-     *
-     * @param id id
-     * @throws IOException
-     */
     @Deprecated
     public void deleteClaudeProviderWithException(String id) throws IOException {
         DeleteResult result = deleteClaudeProvider(id);
@@ -1016,315 +788,130 @@ public class CodemossSettingsService {
         }
     }
 
-    /**
-     * Switch Claude Provider
-     *
-     * @param id id
-     * @throws IOException
-     */
     public void switchClaudeProvider(String id) throws IOException {
         providerManager.switchClaudeProvider(id);
     }
 
-    /**
-     * Deactivate Claude Provider
-     *
-     * @throws IOException
-     */
     public void deactivateClaudeProvider() throws IOException {
         providerManager.deactivateClaudeProvider();
     }
 
-    /**
-     * Parse Providers From Cc Switch Db
-     *
-     * @param dbPath db path
-     * @return list
-     * @throws IOException
-     */
     public List<JsonObject> parseProvidersFromCcSwitchDb(String dbPath) throws IOException {
         return providerManager.parseProvidersFromCcSwitchDb(dbPath);
     }
 
-    /**
-     * Save Providers
-     *
-     * @param providers providers
-     * @return int
-     * @throws IOException
-     */
     public int saveProviders(List<JsonObject> providers) throws IOException {
         return providerManager.saveProviders(providers);
     }
 
-    /**
-     * Save Provider Order
-     *
-     * @param orderedIds ordered ids
-     * @throws IOException
-     */
     public void saveProviderOrder(List<String> orderedIds) throws IOException {
         providerManager.saveProviderOrder(orderedIds);
     }
 
-    /**
-     * Is Local Provider Active
-     *
-     * @return boolean
-     */
     public boolean isLocalProviderActive() {
         return providerManager.isLocalProviderActive();
     }
 
     // ==================== MCP Server Management ====================
 
-    /**
-     * Get Mcp Servers
-     *
-     * @return list
-     * @throws IOException
-     */
     public List<JsonObject> getMcpServers() throws IOException {
         return mcpServerManager.getMcpServers();
     }
 
-    /**
-     * Get Mcp Servers With Project Path
-     *
-     * @param projectPath project path
-     * @return list
-     * @throws IOException
-     */
     public List<JsonObject> getMcpServersWithProjectPath(String projectPath) throws IOException {
         return mcpServerManager.getMcpServersWithProjectPath(projectPath);
     }
 
-    /**
-     * Upsert Mcp Server
-     *
-     * @param server server
-     * @throws IOException
-     */
     public void upsertMcpServer(JsonObject server) throws IOException {
         mcpServerManager.upsertMcpServer(server);
     }
 
-    /**
-     * Upsert Mcp Server
-     *
-     * @param server server
-     * @param projectPath project path
-     * @throws IOException
-     */
     public void upsertMcpServer(JsonObject server, String projectPath) throws IOException {
         mcpServerManager.upsertMcpServer(server, projectPath);
     }
 
-    /**
-     * Delete Mcp Server
-     *
-     * @param serverId server id
-     * @return boolean
-     * @throws IOException
-     */
     public boolean deleteMcpServer(String serverId) throws IOException {
         return mcpServerManager.deleteMcpServer(serverId);
     }
 
-    /**
-     * Validate Mcp Server
-     *
-     * @param server server
-     * @return map
-     */
     public Map<String, Object> validateMcpServer(JsonObject server) {
         return mcpServerManager.validateMcpServer(server);
     }
 
     // ==================== Codex MCP Server Management ====================
 
-    /**
-     * Get Codex Mcp Server Manager
-     *
-     * @return codex mcp server manager
-     */
     public CodexMcpServerManager getCodexMcpServerManager() {
         return codexMcpServerManager;
     }
 
-    /**
-     * Get Codex Mcp Servers
-     *
-     * @return list
-     * @throws IOException
-     */
     public List<JsonObject> getCodexMcpServers() throws IOException {
         return codexMcpServerManager.getMcpServers();
     }
 
-    /**
-     * Upsert Codex Mcp Server
-     *
-     * @param server server
-     * @throws IOException
-     */
     public void upsertCodexMcpServer(JsonObject server) throws IOException {
         codexMcpServerManager.upsertMcpServer(server);
     }
 
-    /**
-     * Delete Codex Mcp Server
-     *
-     * @param serverId server id
-     * @return boolean
-     * @throws IOException
-     */
     public boolean deleteCodexMcpServer(String serverId) throws IOException {
         return codexMcpServerManager.deleteMcpServer(serverId);
     }
 
-    /**
-     * Validate Codex Mcp Server
-     *
-     * @param server server
-     * @return map
-     */
     public Map<String, Object> validateCodexMcpServer(JsonObject server) {
         return codexMcpServerManager.validateMcpServer(server);
     }
 
     // ==================== Skills Management ====================
 
-    /**
-     * Get Skills
-     *
-     * @return list
-     * @throws IOException
-     */
     public List<JsonObject> getSkills() throws IOException {
         return skillManager.getSkills();
     }
 
-    /**
-     * Upsert Skill
-     *
-     * @param skill skill
-     * @throws IOException
-     */
     public void upsertSkill(JsonObject skill) throws IOException {
         skillManager.upsertSkill(skill);
     }
 
-    /**
-     * Delete Skill
-     *
-     * @param id id
-     * @return boolean
-     * @throws IOException
-     */
     public boolean deleteSkill(String id) throws IOException {
         return skillManager.deleteSkill(id);
     }
 
-    /**
-     * Validate Skill
-     *
-     * @param skill skill
-     * @return map
-     */
     public Map<String, Object> validateSkill(JsonObject skill) {
         return skillManager.validateSkill(skill);
     }
 
-    /**
-     * Sync Skills To Claude Settings
-     *
-     * @throws IOException
-     */
     public void syncSkillsToClaudeSettings() throws IOException {
         skillManager.syncSkillsToClaudeSettings();
     }
 
     // ==================== Agents Management ====================
 
-    /**
-     * Get Agents
-     *
-     * @return list
-     * @throws IOException
-     */
     public List<JsonObject> getAgents() throws IOException {
         return agentManager.getAgents();
     }
 
-    /**
-     * Add Agent
-     *
-     * @param agent agent
-     * @throws IOException
-     */
     public void addAgent(JsonObject agent) throws IOException {
         agentManager.addAgent(agent);
     }
 
-    /**
-     * Update Agent
-     *
-     * @param id id
-     * @param updates updates
-     * @throws IOException
-     */
     public void updateAgent(String id, JsonObject updates) throws IOException {
         agentManager.updateAgent(id, updates);
     }
 
-    /**
-     * Delete Agent
-     *
-     * @param id id
-     * @return boolean
-     * @throws IOException
-     */
     public boolean deleteAgent(String id) throws IOException {
         return agentManager.deleteAgent(id);
     }
 
-    /**
-     * Get Agent
-     *
-     * @param id id
-     * @return json object
-     * @throws IOException
-     */
     public JsonObject getAgent(String id) throws IOException {
         return agentManager.getAgent(id);
     }
 
-    /**
-     * Get Selected Agent Id
-     *
-     * @return string
-     * @throws IOException
-     */
     public String getSelectedAgentId() throws IOException {
         return agentManager.getSelectedAgentId();
     }
 
-    /**
-     * Set Selected Agent Id
-     *
-     * @param agentId agent id
-     * @throws IOException
-     */
     public void setSelectedAgentId(String agentId) throws IOException {
         agentManager.setSelectedAgentId(agentId);
     }
 
-    /**
-     * Get Agent Manager
-     *
-     * @return agent manager
-     */
     public AgentManager getAgentManager() {
         return agentManager;
     }
@@ -1425,7 +1012,6 @@ public class CodemossSettingsService {
     /**
      * Get a PromptManager (defaults to GLOBAL scope).
      *
-     * @return abstract prompt manager
      * @deprecated Use {@link #getPromptManager(PromptScope, Project)} instead
      */
     @Deprecated
@@ -1436,8 +1022,6 @@ public class CodemossSettingsService {
     /**
      * Get prompts (defaults to GLOBAL scope).
      *
-     * @return list
-     * @throws IOException
      * @deprecated Use {@link #getPrompts(PromptScope, Project)} instead
      */
     @Deprecated
@@ -1448,8 +1032,6 @@ public class CodemossSettingsService {
     /**
      * Add a prompt (defaults to GLOBAL scope).
      *
-     * @param prompt prompt
-     * @throws IOException
      * @deprecated Use {@link #addPrompt(JsonObject, PromptScope, Project)} instead
      */
     @Deprecated
@@ -1460,9 +1042,6 @@ public class CodemossSettingsService {
     /**
      * Update a prompt (defaults to GLOBAL scope).
      *
-     * @param id id
-     * @param updates updates
-     * @throws IOException
      * @deprecated Use {@link #updatePrompt(String, JsonObject, PromptScope, Project)} instead
      */
     @Deprecated
@@ -1473,9 +1052,6 @@ public class CodemossSettingsService {
     /**
      * Delete a prompt (defaults to GLOBAL scope).
      *
-     * @param id id
-     * @return boolean
-     * @throws IOException
      * @deprecated Use {@link #deletePrompt(String, PromptScope, Project)} instead
      */
     @Deprecated
@@ -1486,14 +1062,182 @@ public class CodemossSettingsService {
     /**
      * Get a prompt by ID (defaults to GLOBAL scope).
      *
-     * @param id id
-     * @return json object
-     * @throws IOException
      * @deprecated Use {@link #getPrompt(String, PromptScope, Project)} instead
      */
     @Deprecated
     public JsonObject getPrompt(String id) throws IOException {
         return getPrompt(id, PromptScope.GLOBAL, null);
+    }
+
+    // ==================== Sound Notification Management ====================
+
+    /**
+     * Get whether sound notification is enabled.
+     *
+     * @return whether sound notification is enabled, default is false
+     */
+    public boolean getSoundNotificationEnabled() throws IOException {
+        JsonObject config = readConfig();
+
+        if (!config.has("soundNotification")) {
+            return false;
+        }
+
+        JsonObject soundConfig = config.getAsJsonObject("soundNotification");
+        if (soundConfig.has("enabled")) {
+            return soundConfig.get("enabled").getAsBoolean();
+        }
+
+        return false;
+    }
+
+    /**
+     * Set whether sound notification is enabled.
+     *
+     * @param enabled whether to enable
+     */
+    public void setSoundNotificationEnabled(boolean enabled) throws IOException {
+        JsonObject config = readConfig();
+
+        JsonObject soundConfig;
+        if (config.has("soundNotification")) {
+            soundConfig = config.getAsJsonObject("soundNotification");
+        } else {
+            soundConfig = new JsonObject();
+            config.add("soundNotification", soundConfig);
+        }
+
+        soundConfig.addProperty("enabled", enabled);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set sound notification enabled: " + enabled);
+    }
+
+    /**
+     * Get custom sound file path.
+     *
+     * @return custom sound path, null means use default sound
+     */
+    public String getCustomSoundPath() throws IOException {
+        JsonObject config = readConfig();
+
+        if (!config.has("soundNotification")) {
+            return null;
+        }
+
+        JsonObject soundConfig = config.getAsJsonObject("soundNotification");
+        if (soundConfig.has("customSoundPath") && !soundConfig.get("customSoundPath").isJsonNull()) {
+            return soundConfig.get("customSoundPath").getAsString();
+        }
+
+        return null;
+    }
+
+    /**
+     * Set custom sound file path.
+     *
+     * @param path file path, null means use default sound
+     */
+    public void setCustomSoundPath(String path) throws IOException {
+        JsonObject config = readConfig();
+
+        JsonObject soundConfig;
+        if (config.has("soundNotification")) {
+            soundConfig = config.getAsJsonObject("soundNotification");
+        } else {
+            soundConfig = new JsonObject();
+            config.add("soundNotification", soundConfig);
+        }
+
+        if (path == null || path.isEmpty()) {
+            soundConfig.remove("customSoundPath");
+        } else {
+            soundConfig.addProperty("customSoundPath", path);
+        }
+
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set custom sound path: " + path);
+    }
+
+    /**
+     * Get whether sound should only play when IDE window is not focused.
+     *
+     * @return whether only-when-unfocused is enabled, default is false
+     */
+    public boolean getSoundOnlyWhenUnfocused() throws IOException {
+        JsonObject config = readConfig();
+
+        if (!config.has("soundNotification")) {
+            return false;
+        }
+
+        JsonObject soundConfig = config.getAsJsonObject("soundNotification");
+        if (soundConfig.has("onlyWhenUnfocused")) {
+            return soundConfig.get("onlyWhenUnfocused").getAsBoolean();
+        }
+
+        return false;
+    }
+
+    /**
+     * Set whether sound should only play when IDE window is not focused.
+     *
+     * @param enabled whether to enable
+     */
+    public void setSoundOnlyWhenUnfocused(boolean enabled) throws IOException {
+        JsonObject config = readConfig();
+
+        JsonObject soundConfig;
+        if (config.has("soundNotification")) {
+            soundConfig = config.getAsJsonObject("soundNotification");
+        } else {
+            soundConfig = new JsonObject();
+            config.add("soundNotification", soundConfig);
+        }
+
+        soundConfig.addProperty("onlyWhenUnfocused", enabled);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set sound only when unfocused: " + enabled);
+    }
+
+    /**
+     * Get selected sound ID.
+     *
+     * @return sound ID (e.g. "default", "chime", "bell", "ding", "success", "custom"), defaults to "default"
+     */
+    public String getSelectedSound() throws IOException {
+        JsonObject config = readConfig();
+
+        if (!config.has("soundNotification")) {
+            return "default";
+        }
+
+        JsonObject soundConfig = config.getAsJsonObject("soundNotification");
+        if (soundConfig.has("selectedSound") && !soundConfig.get("selectedSound").isJsonNull()) {
+            return soundConfig.get("selectedSound").getAsString();
+        }
+
+        return "default";
+    }
+
+    /**
+     * Set selected sound ID.
+     *
+     * @param soundId sound ID, null or empty means "default"
+     */
+    public void setSelectedSound(String soundId) throws IOException {
+        JsonObject config = readConfig();
+
+        JsonObject soundConfig;
+        if (config.has("soundNotification")) {
+            soundConfig = config.getAsJsonObject("soundNotification");
+        } else {
+            soundConfig = new JsonObject();
+            config.add("soundNotification", soundConfig);
+        }
+
+        soundConfig.addProperty("selectedSound", (soundId == null || soundId.isEmpty()) ? "default" : soundId);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set selected sound: " + soundId);
     }
 
     // ==================== Task Completion Notification Management ====================
@@ -1502,7 +1246,6 @@ public class CodemossSettingsService {
      * Get whether task completion balloon notification is enabled.
      *
      * @return whether task completion notification is enabled, default is false (opt-in)
-     * @throws IOException
      */
     public boolean getTaskCompletionNotificationEnabled() throws IOException {
         JsonObject config = readConfig();
@@ -1518,7 +1261,6 @@ public class CodemossSettingsService {
      * Set whether task completion balloon notification is enabled.
      *
      * @param enabled whether to enable
-     * @throws IOException
      */
     public void setTaskCompletionNotificationEnabled(boolean enabled) throws IOException {
         JsonObject config = readConfig();
@@ -1533,7 +1275,6 @@ public class CodemossSettingsService {
      * Get whether AI commit message generation is enabled.
      *
      * @return whether commit generation is enabled, default is true
-     * @throws IOException
      */
     public boolean getCommitGenerationEnabled() throws IOException {
         JsonObject config = readConfig();
@@ -1549,7 +1290,6 @@ public class CodemossSettingsService {
      * Set whether AI commit message generation is enabled.
      *
      * @param enabled whether to enable
-     * @throws IOException
      */
     public void setCommitGenerationEnabled(boolean enabled) throws IOException {
         JsonObject config = readConfig();
@@ -1562,7 +1302,6 @@ public class CodemossSettingsService {
      * Get whether status bar widget is enabled.
      *
      * @return whether status bar widget is enabled, default is true
-     * @throws IOException
      */
     public boolean getStatusBarWidgetEnabled() throws IOException {
         JsonObject config = readConfig();
@@ -1578,7 +1317,6 @@ public class CodemossSettingsService {
      * Set whether status bar widget is enabled.
      *
      * @param enabled whether to enable
-     * @throws IOException
      */
     public void setStatusBarWidgetEnabled(boolean enabled) throws IOException {
         JsonObject config = readConfig();
@@ -1591,7 +1329,6 @@ public class CodemossSettingsService {
      * Get whether AI session title generation is enabled.
      *
      * @return whether AI title generation is enabled, default is true
-     * @throws IOException
      */
     public boolean getAiTitleGenerationEnabled() throws IOException {
         JsonObject config = readConfig();
@@ -1607,7 +1344,6 @@ public class CodemossSettingsService {
      * Set whether AI session title generation is enabled.
      *
      * @param enabled whether to enable
-     * @throws IOException
      */
     public void setAiTitleGenerationEnabled(boolean enabled) throws IOException {
         JsonObject config = readConfig();
@@ -1623,15 +1359,12 @@ public class CodemossSettingsService {
      *
      * <p>The returned object always includes:
      * <ul>
-     * <li>provider: manual override or null</li>
-     * <li>models: per-provider remembered models</li>
-     * <li>effectiveProvider: resolved runtime provider or null</li>
-     * <li>resolutionSource: manual/auto/unavailable</li>
-     * <li>availability: per-provider availability flags</li>
+     *     <li>provider: manual override or null</li>
+     *     <li>models: per-provider remembered models</li>
+     *     <li>effectiveProvider: resolved runtime provider or null</li>
+     *     <li>resolutionSource: manual/auto/unavailable</li>
+     *     <li>availability: per-provider availability flags</li>
      * </ul>
-     *
-     * @return json object
-     * @throws IOException
      */
     public JsonObject getPromptEnhancerConfig() throws IOException {
         return getAiFeatureConfig(
@@ -1647,7 +1380,6 @@ public class CodemossSettingsService {
      * @param provider manual provider override, null/blank to restore auto mode
      * @param claudeModel remembered Claude enhancer model
      * @param codexModel remembered Codex enhancer model
-     * @throws IOException
      */
     public void setPromptEnhancerConfig(String provider, String claudeModel, String codexModel) throws IOException {
         setAiFeatureConfig(
@@ -1661,12 +1393,6 @@ public class CodemossSettingsService {
         );
     }
 
-    /**
-     * Get Commit Ai Config
-     *
-     * @return json object
-     * @throws IOException
-     */
     public JsonObject getCommitAiConfig() throws IOException {
         return getAiFeatureConfig(
                 COMMIT_AI_KEY,
@@ -1675,14 +1401,6 @@ public class CodemossSettingsService {
         );
     }
 
-    /**
-     * Set Commit Ai Config
-     *
-     * @param provider provider
-     * @param claudeModel claude model
-     * @param codexModel codex model
-     * @throws IOException
-     */
     public void setCommitAiConfig(String provider, String claudeModel, String codexModel) throws IOException {
         setAiFeatureConfig(
                 COMMIT_AI_KEY,
@@ -1695,15 +1413,6 @@ public class CodemossSettingsService {
         );
     }
 
-    /**
-     * Get Ai Feature Config
-     *
-     * @param featureKey feature key
-     * @param defaultClaudeModel default claude model
-     * @param defaultCodexModel default codex model
-     * @return json object
-     * @throws IOException
-     */
     private JsonObject getAiFeatureConfig(
             String featureKey,
             String defaultClaudeModel,
@@ -1743,18 +1452,6 @@ public class CodemossSettingsService {
         return response;
     }
 
-    /**
-     * Set Ai Feature Config
-     *
-     * @param featureKey feature key
-     * @param provider provider
-     * @param claudeModel claude model
-     * @param codexModel codex model
-     * @param defaultClaudeModel default claude model
-     * @param defaultCodexModel default codex model
-     * @param featureLabel feature label
-     * @throws IOException
-     */
     private void setAiFeatureConfig(
             String featureKey,
             String provider,
@@ -1782,13 +1479,6 @@ public class CodemossSettingsService {
         LOG.info("[CodemossSettings] Set " + featureLabel + " config: provider=" + normalizedProvider);
     }
 
-    /**
-     * Get Ai Feature Root Object
-     *
-     * @param rootConfig root config
-     * @param featureKey feature key
-     * @return json object
-     */
     private JsonObject getAiFeatureRootObject(JsonObject rootConfig, String featureKey) {
         if (rootConfig.has(featureKey) && rootConfig.get(featureKey).isJsonObject()) {
             return rootConfig.getAsJsonObject(featureKey);
@@ -1796,11 +1486,6 @@ public class CodemossSettingsService {
         return new JsonObject();
     }
 
-    /**
-     * Build Ai Feature Availability
-     *
-     * @return json object
-     */
     private JsonObject buildAiFeatureAvailability() {
         JsonObject availability = new JsonObject();
         availability.addProperty(AI_FEATURE_PROVIDER_CLAUDE, isAiFeatureProviderAvailable(AI_FEATURE_PROVIDER_CLAUDE));
@@ -1808,12 +1493,6 @@ public class CodemossSettingsService {
         return availability;
     }
 
-    /**
-     * Is Ai Feature Provider Available
-     *
-     * @param provider provider
-     * @return boolean
-     */
     private boolean isAiFeatureProviderAvailable(String provider) {
         try {
             DependencyManager dependencyManager = new DependencyManager();
@@ -1827,14 +1506,6 @@ public class CodemossSettingsService {
         }
     }
 
-    /**
-     * Get Normalized Ai Feature Models
-     *
-     * @param featureConfig feature config
-     * @param defaultClaudeModel default claude model
-     * @param defaultCodexModel default codex model
-     * @return json object
-     */
     private JsonObject getNormalizedAiFeatureModels(
             JsonObject featureConfig,
             String defaultClaudeModel,
@@ -1855,15 +1526,6 @@ public class CodemossSettingsService {
         return createAiFeatureModels(null, null, defaultClaudeModel, defaultCodexModel);
     }
 
-    /**
-     * Create Ai Feature Models
-     *
-     * @param claudeModel claude model
-     * @param codexModel codex model
-     * @param defaultClaudeModel default claude model
-     * @param defaultCodexModel default codex model
-     * @return json object
-     */
     private JsonObject createAiFeatureModels(
             String claudeModel,
             String codexModel,
@@ -1882,14 +1544,6 @@ public class CodemossSettingsService {
         return models;
     }
 
-    /**
-     * Resolve Ai Feature Provider
-     *
-     * @param manualProvider manual provider
-     * @param claudeAvailable claude available
-     * @param codexAvailable codex available
-     * @return resolved ai feature provider
-     */
     private ResolvedAiFeatureProvider resolveAiFeatureProvider(
             String manualProvider,
             boolean claudeAvailable,
@@ -1913,12 +1567,6 @@ public class CodemossSettingsService {
         return new ResolvedAiFeatureProvider(null, AI_FEATURE_RESOLUTION_UNAVAILABLE);
     }
 
-    /**
-     * Normalize Ai Feature Provider
-     *
-     * @param provider provider
-     * @return string
-     */
     private String normalizeAiFeatureProvider(String provider) {
         if (provider == null) {
             return null;
@@ -1933,13 +1581,6 @@ public class CodemossSettingsService {
         return null;
     }
 
-    /**
-     * Normalize Ai Feature Model
-     *
-     * @param model model
-     * @param defaultValue default value
-     * @return string
-     */
     private String normalizeAiFeatureModel(String model, String defaultValue) {
         if (model == null) {
             return defaultValue;
@@ -1948,7 +1589,6 @@ public class CodemossSettingsService {
         return normalized.isEmpty() ? defaultValue : normalized;
     }
 
-    /** Resolved AI feature provider with its resolution source (manual / auto / unavailable). */
     private static class ResolvedAiFeatureProvider {
         private final String effectiveProvider;
         private final String resolutionSource;
@@ -1961,92 +1601,38 @@ public class CodemossSettingsService {
 
     // ==================== Codex Provider Management ====================
 
-    /**
-     * Get Codex Providers
-     *
-     * @return list
-     * @throws IOException
-     */
     public List<JsonObject> getCodexProviders() throws IOException {
         return codexProviderManager.getCodexProviders();
     }
 
-    /**
-     * Get Active Codex Provider
-     *
-     * @return json object
-     * @throws IOException
-     */
     public JsonObject getActiveCodexProvider() throws IOException {
         return codexProviderManager.getActiveCodexProvider();
     }
 
-    /**
-     * Add Codex Provider
-     *
-     * @param provider provider
-     * @throws IOException
-     */
     public void addCodexProvider(JsonObject provider) throws IOException {
         codexProviderManager.addCodexProvider(provider);
     }
 
-    /**
-     * Save Codex Provider
-     *
-     * @param provider provider
-     * @throws IOException
-     */
     public void saveCodexProvider(JsonObject provider) throws IOException {
         codexProviderManager.saveCodexProvider(provider);
     }
 
-    /**
-     * Update Codex Provider
-     *
-     * @param id id
-     * @param updates updates
-     * @throws IOException
-     */
     public void updateCodexProvider(String id, JsonObject updates) throws IOException {
         codexProviderManager.updateCodexProvider(id, updates);
     }
 
-    /**
-     * Delete Codex Provider
-     *
-     * @param id id
-     * @return delete result
-     */
     public DeleteResult deleteCodexProvider(String id) {
         return codexProviderManager.deleteCodexProvider(id);
     }
 
-    /**
-     * Switch Codex Provider
-     *
-     * @param id id
-     * @throws IOException
-     */
     public void switchCodexProvider(String id) throws IOException {
         codexProviderManager.switchCodexProvider(id);
     }
 
-    /**
-     * Apply Active Provider To Codex Settings
-     *
-     * @throws IOException
-     */
     public void applyActiveProviderToCodexSettings() throws IOException {
         codexProviderManager.applyActiveProviderToCodexSettings();
     }
 
-    /**
-     * Get Current Codex Config
-     *
-     * @return json object
-     * @throws IOException
-     */
     public JsonObject getCurrentCodexConfig() throws IOException {
         if (!isCodexLocalConfigAuthorized()) {
             return new JsonObject();
@@ -2054,11 +1640,6 @@ public class CodemossSettingsService {
         return codexProviderManager.getCurrentCodexConfig();
     }
 
-    /**
-     * Is Codex Cli Login Available
-     *
-     * @return boolean
-     */
     public boolean isCodexCliLoginAvailable() {
         try {
             if (!isCodexLocalConfigAuthorized()) {
@@ -2071,29 +1652,14 @@ public class CodemossSettingsService {
         }
     }
 
-    /**
-     * Apply Codex Cli Login To Settings
-     *
-     * @throws IOException
-     */
     public void applyCodexCliLoginToSettings() throws IOException {
         codexSettingsManager.applyCodexCliLoginToSettings();
     }
 
-    /**
-     * Remove Codex Cli Login From Settings
-     *
-     * @throws IOException
-     */
     public void removeCodexCliLoginFromSettings() throws IOException {
         codexSettingsManager.removeCodexCliLoginFromSettings();
     }
 
-    /**
-     * Read Codex Cli Login Account Info
-     *
-     * @return json object
-     */
     public JsonObject readCodexCliLoginAccountInfo() {
         try {
             if (!isCodexLocalConfigAuthorized()) {
@@ -2106,12 +1672,6 @@ public class CodemossSettingsService {
         }
     }
 
-    /**
-     * Is Codex Local Config Authorized
-     *
-     * @return boolean
-     * @throws IOException
-     */
     public boolean isCodexLocalConfigAuthorized() throws IOException {
         JsonObject config = readConfig();
         if (!config.has("codex") || !config.get("codex").isJsonObject()) {
@@ -2123,12 +1683,6 @@ public class CodemossSettingsService {
                 && codex.get("localConfigAuthorized").getAsBoolean();
     }
 
-    /**
-     * Set Codex Local Config Authorized
-     *
-     * @param authorized authorized
-     * @throws IOException
-     */
     public void setCodexLocalConfigAuthorized(boolean authorized) throws IOException {
         JsonObject config = readConfig();
         JsonObject codex;
@@ -2145,12 +1699,6 @@ public class CodemossSettingsService {
         writeConfig(config);
     }
 
-    /**
-     * Get Codex Runtime Access Mode
-     *
-     * @return string
-     * @throws IOException
-     */
     public String getCodexRuntimeAccessMode() throws IOException {
         JsonObject config = readConfig();
         if (!config.has("codex") || !config.get("codex").isJsonObject()) {
@@ -2178,82 +1726,50 @@ public class CodemossSettingsService {
         return CODEX_RUNTIME_ACCESS_INACTIVE;
     }
 
-    /**
-     * Save Codex Providers
-     *
-     * @param providers providers
-     * @return int
-     * @throws IOException
-     */
-    public int saveCodexProviders(List<JsonObject> providers) throws IOException {
-        return codexProviderManager.saveProviders(providers);
-    }
-
-    /**
-     * Save Codex Provider Order
-     *
-     * @param orderedIds ordered ids
-     * @throws IOException
-     */
-    public void saveCodexProviderOrder(List<String> orderedIds) throws IOException {
-        codexProviderManager.saveProviderOrder(orderedIds);
-    }
-
-    // ============================================================================
-    // Claude invocation mode settings
-    // ============================================================================
-
-    /**
-     * 获取 Claude 调用模式。
-     *
-     * @return 调用模式，"sdk"（默认）或 "cli"
-     * @throws IOException 读取配置失败
-     */
     public String getClaudeInvocationMode() throws IOException {
         JsonObject config = readConfig();
-        if (config.has("claudeInvocationMode") && !config.get("claudeInvocationMode").isJsonNull()) {
-            return config.get("claudeInvocationMode").getAsString();
+        if (config.has(CLAUDE_INVOCATION_MODE_KEY) && !config.get(CLAUDE_INVOCATION_MODE_KEY).isJsonNull()) {
+            String mode = config.get(CLAUDE_INVOCATION_MODE_KEY).getAsString();
+            if ("cli".equals(mode)) {
+                return "cli";
+            }
         }
         return "sdk";
     }
 
-    /**
-     * 设置 Claude 调用模式。
-     *
-     * @param mode 调用模式，"sdk" 或 "cli"
-     * @throws IOException 写入配置失败
-     */
     public void setClaudeInvocationMode(String mode) throws IOException {
         JsonObject config = readConfig();
-        config.addProperty("claudeInvocationMode", mode);
+        config.addProperty(CLAUDE_INVOCATION_MODE_KEY, "cli".equals(mode) ? "cli" : "sdk");
         writeConfig(config);
-        LOG.info("[CodemossSettings] Set claude invocation mode: " + mode);
+        LOG.info("[CodemossSettings] Set Claude invocation mode: " + getClaudeInvocationMode());
     }
 
-    /**
-     * 获取手动指定的 Claude CLI 路径。
-     *
-     * @return CLI 路径，空字符串表示未设置
-     * @throws IOException 读取配置失败
-     */
     public String getClaudeCliPath() throws IOException {
         JsonObject config = readConfig();
-        if (config.has("claudeCliPath") && !config.get("claudeCliPath").isJsonNull()) {
-            return config.get("claudeCliPath").getAsString();
+        if (!config.has(CLAUDE_CLI_PATH_KEY) || config.get(CLAUDE_CLI_PATH_KEY).isJsonNull()) {
+            return "";
         }
-        return "";
+        String path = config.get(CLAUDE_CLI_PATH_KEY).getAsString();
+        return path != null ? path.trim() : "";
     }
 
-    /**
-     * 设置 Claude CLI 路径（手动覆盖）。
-     *
-     * @param path CLI 可执行文件路径
-     * @throws IOException 写入配置失败
-     */
     public void setClaudeCliPath(String path) throws IOException {
         JsonObject config = readConfig();
-        config.addProperty("claudeCliPath", path != null ? path : "");
+        String normalized = path != null ? path.trim() : "";
+        if (normalized.isEmpty()) {
+            config.remove(CLAUDE_CLI_PATH_KEY);
+        } else {
+            config.addProperty(CLAUDE_CLI_PATH_KEY, normalized);
+        }
         writeConfig(config);
-        LOG.info("[CodemossSettings] Set claude CLI path: " + path);
+        LOG.info("[CodemossSettings] Set Claude CLI path: " + (normalized.isEmpty() ? "(auto)" : normalized));
+    }
+
+    public int saveCodexProviders(List<JsonObject> providers) throws IOException {
+        return codexProviderManager.saveProviders(providers);
+    }
+
+    public void saveCodexProviderOrder(List<String> orderedIds) throws IOException {
+        codexProviderManager.saveProviderOrder(orderedIds);
     }
 }

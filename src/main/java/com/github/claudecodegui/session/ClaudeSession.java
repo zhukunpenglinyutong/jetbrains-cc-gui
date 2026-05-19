@@ -506,6 +506,7 @@ public class ClaudeSession {
 
         return CompletableFuture.runAsync(() -> {
             try {
+                sendService.interruptRuntime(state.getProvider(), state.getChannelId(), state.getChannelId());
                 providerRouter.interruptChannel(state.getProvider(), state.getChannelId());
                 state.setError(null);  // Clear previous error state
                 state.setBusy(false);

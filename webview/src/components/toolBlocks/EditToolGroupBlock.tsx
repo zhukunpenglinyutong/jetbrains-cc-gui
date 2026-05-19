@@ -5,6 +5,7 @@ import { openFile, showDiff, refreshFile } from '../../utils/bridge';
 import { getFileIcon } from '../../utils/fileIcons';
 import { resolveToolTarget, getToolLineInfo } from '../../utils/toolPresentation';
 import { normalizeToolInput } from '../../utils/toolInputNormalization';
+import { useResolvedFileLinkTooltip } from '../../hooks/useResolvedFileLinkTooltip';
 
 interface EditItem {
   filePath: string;
@@ -221,6 +222,72 @@ function getFileIconSvg(fileName: string): string {
   return getFileIcon(extension ?? '', fileName);
 }
 
+interface EditFileItemProps {
+  item: EditItem;
+  onFileClick: (item: EditItem, e: React.MouseEvent) => void;
+  onShowDiff: (item: EditItem, e: React.MouseEvent) => void;
+  onRefresh: (filePath: string, e: React.MouseEvent) => void;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+}
+
+const EditFileItem = ({ item, onFileClick, onShowDiff, onRefresh, t }: EditFileItemProps) => {
+  const fileLinkTooltip = useResolvedFileLinkTooltip(item.filePath, item.displayPath);
+
+  return (
+    <div className="file-list-item" style={FILE_LIST_ITEM_STYLE}>
+      <span
+        style={FILE_ICON_STYLE}
+        dangerouslySetInnerHTML={{ __html: getFileIconSvg(item.fileName) }}
+      />
+      <span
+        className="clickable-file"
+        onClick={(e) => onFileClick(item, e)}
+        style={FILE_NAME_STYLE}
+        {...fileLinkTooltip}
+      >
+        {item.displayPath}
+      </span>
+
+      {(item.lineStart || item.additions > 0 || item.deletions > 0) && (
+        <span style={ITEM_STATS_STYLE}>
+          {item.lineStart && (
+            <span style={LINE_INFO_STYLE}>
+              {item.lineEnd && item.lineEnd !== item.lineStart
+                ? t('tools.lineRange', { start: item.lineStart, end: item.lineEnd })
+                : t('tools.lineSingle', { line: item.lineStart })}
+            </span>
+          )}
+          {item.additions > 0 && <span style={ADDED_TEXT_STYLE}>+{item.additions}</span>}
+          {item.additions > 0 && item.deletions > 0 && <span style={ITEM_STATS_SPACER_STYLE} />}
+          {item.deletions > 0 && <span style={DELETED_TEXT_STYLE}>-{item.deletions}</span>}
+        </span>
+      )}
+
+      <div style={ACTIONS_STYLE}>
+        <button
+          onClick={(e) => onShowDiff(item, e)}
+          title={t('tools.showDiffInIdea')}
+          className="edit-group-action-btn"
+        >
+          <span className="codicon codicon-diff" style={ACTION_ICON_STYLE} />
+        </button>
+        <button
+          onClick={(e) => onRefresh(item.openPath, e)}
+          title={t('tools.refreshFileInIdea')}
+          className="edit-group-action-btn"
+        >
+          <span className="codicon codicon-refresh" style={ACTION_ICON_STYLE} />
+        </button>
+      </div>
+
+      <div
+        className={`tool-status-indicator ${item.isError ? 'error' : item.isCompleted ? 'completed' : 'pending'}`}
+        style={STATUS_INDICATOR_STYLE}
+      />
+    </div>
+  );
+};
+
 const EditToolGroupBlock = ({ items }: EditToolGroupBlockProps) => {
   const [expanded, setExpanded] = useState(true);
   const { t } = useTranslation();
@@ -331,65 +398,14 @@ const EditToolGroupBlock = ({ items }: EditToolGroupBlockProps) => {
           style={detailsStyle}
         >
           {editItems.map((item, index) => (
-            <div
+            <EditFileItem
               key={index}
-              className="file-list-item"
-              style={FILE_LIST_ITEM_STYLE}
-            >
-              {/* File icon and name */}
-              <span
-                style={FILE_ICON_STYLE}
-                dangerouslySetInnerHTML={{ __html: getFileIconSvg(item.fileName) }}
-              />
-              <span
-                className="clickable-file"
-                onClick={(e) => handleFileClick(item, e)}
-                style={FILE_NAME_STYLE}
-                title={item.displayPath}
-              >
-                {item.displayPath}
-              </span>
-
-              {/* Diff stats */}
-              {(item.lineStart || item.additions > 0 || item.deletions > 0) && (
-                <span style={ITEM_STATS_STYLE}>
-                  {item.lineStart && (
-                    <span style={LINE_INFO_STYLE}>
-                      {item.lineEnd && item.lineEnd !== item.lineStart
-                        ? t('tools.lineRange', { start: item.lineStart, end: item.lineEnd })
-                        : t('tools.lineSingle', { line: item.lineStart })}
-                    </span>
-                  )}
-                  {item.additions > 0 && <span style={ADDED_TEXT_STYLE}>+{item.additions}</span>}
-                  {item.additions > 0 && item.deletions > 0 && <span style={ITEM_STATS_SPACER_STYLE} />}
-                  {item.deletions > 0 && <span style={DELETED_TEXT_STYLE}>-{item.deletions}</span>}
-                </span>
-              )}
-
-              {/* Action buttons */}
-              <div style={ACTIONS_STYLE}>
-                <button
-                  onClick={(e) => handleShowDiff(item, e)}
-                  title={t('tools.showDiffInIdea')}
-                  className="edit-group-action-btn"
-                >
-                  <span className="codicon codicon-diff" style={ACTION_ICON_STYLE} />
-                </button>
-                <button
-                  onClick={(e) => handleRefresh(item.openPath, e)}
-                  title={t('tools.refreshFileInIdea')}
-                  className="edit-group-action-btn"
-                >
-                  <span className="codicon codicon-refresh" style={ACTION_ICON_STYLE} />
-                </button>
-              </div>
-
-              {/* Status indicator */}
-              <div
-                className={`tool-status-indicator ${item.isError ? 'error' : item.isCompleted ? 'completed' : 'pending'}`}
-                style={STATUS_INDICATOR_STYLE}
-              />
-            </div>
+              item={item}
+              onFileClick={handleFileClick}
+              onShowDiff={handleShowDiff}
+              onRefresh={handleRefresh}
+              t={t}
+            />
           ))}
         </div>
       )}

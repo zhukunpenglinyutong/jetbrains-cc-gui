@@ -12,7 +12,6 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -75,9 +74,8 @@ class ClaudeRewindService {
                 stdinInput.addProperty("cwd", cwd != null ? cwd : "");
                 String stdinJson = gson.toJson(stdinInput);
 
-                List<String> command = new ArrayList<>();
-                command.add(node);
-                command.add(new File(workDir, CHANNEL_SCRIPT).getAbsolutePath());
+                String scriptPath = new File(workDir, CHANNEL_SCRIPT).getAbsolutePath();
+                List<String> command = NodeDetector.buildNodeScriptCommand(node, scriptPath);
                 command.add("claude");
                 command.add("rewindFiles");
 

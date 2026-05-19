@@ -23,7 +23,9 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
@@ -43,6 +45,8 @@ public class DependencyManager {
     private final Gson gson;
     private final NodeDetector nodeDetector;
     private final EnvironmentConfigurator envConfigurator;
+    /** Caches resolved WSL npm paths keyed by node path. Populated lazily on first lookup. */
+    private final Map<String, String> wslNpmPathCache = new ConcurrentHashMap<>();
 
     public DependencyManager() {
         this.gson = new GsonBuilder().setPrettyPrinting().create();
@@ -171,9 +175,8 @@ public class DependencyManager {
             String nodePath = nodeDetector.findNodeExecutable();
             String npmPath = getNpmPath(nodePath);
 
-            ProcessBuilder pb = new ProcessBuilder(
-                    npmPath, "view", sdk.getNpmPackage(), "version"
-            );
+            ProcessBuilder pb = new ProcessBuilder(buildNpmCommand(
+                    nodePath, npmPath, "view", sdk.getNpmPackage(), "version"));
             configureProcessEnvironment(pb);
 
             Process process = pb.start();
@@ -218,9 +221,8 @@ public class DependencyManager {
             String nodePath = nodeDetector.findNodeExecutable();
             String npmPath = getNpmPath(nodePath);
 
-            ProcessBuilder pb = new ProcessBuilder(
-                    npmPath, "view", sdk.getNpmPackage(), "versions", "--json"
-            );
+            ProcessBuilder pb = new ProcessBuilder(buildNpmCommand(
+                    nodePath, npmPath, "view", sdk.getNpmPackage(), "versions", "--json"));
             configureProcessEnvironment(pb);
 
             Process process = pb.start();
@@ -384,9 +386,16 @@ public class DependencyManager {
                 }
 
                 log.accept("Running npm install...");
+                boolean isWsl = NodeDetector.isWslPath(nodePath);
+                Path prefixDir = isWsl
+                        ? Paths.get(NodeDetector.convertToWslPath(normalizedSdkDir.toString()))
+                        : normalizedSdkDir;
                 List<String> command = NpmPermissionHelper.buildInstallCommandWithFallback(
-                        npmPath, normalizedSdkDir, packages, attempt
+                        npmPath, prefixDir, packages, attempt
                 );
+                if (isWsl) {
+                    command.add(0, "wsl");
+                }
                 log.accept("Command: " + String.join(" ", command));
 
                 ProcessBuilder pb = new ProcessBuilder(command);
@@ -595,6 +604,10 @@ public class DependencyManager {
      * Resolves the npm path based on the node path.
      */
     private String getNpmPath(String nodePath) {
+        if (NodeDetector.isWslPath(nodePath)) {
+            return resolveWslNpmPath(nodePath);
+        }
+
         String npmName = PlatformUtils.isWindows() ? "npm.cmd" : "npm";
 
         // 1. Try to find npm in the same directory as Node.js
@@ -625,6 +638,75 @@ public class DependencyManager {
 
         // 3. Fall back to the bare command name (usually works on Unix)
         return PlatformUtils.isWindows() ? npmName : "npm";
+    }
+
+    /**
+     * Resolves the npm path for a WSL node executable.
+     * <p>Resolution order (with the first success being cached for the session):
+     * <ol>
+     *   <li>{@code wsl which npm} — authoritative; works with nvm, Volta, and any
+     *       version manager that puts npm on the WSL user's {@code PATH}.</li>
+     *   <li>Co-located heuristic — assume {@code <nodeDir>/npm} (correct for official
+     *       installs and most nvm setups).</li>
+     *   <li>Bare {@code "npm"} — last resort; depends on WSL's {@code PATH}.</li>
+     * </ol>
+     */
+    private String resolveWslNpmPath(String nodePath) {
+        String cached = wslNpmPathCache.get(nodePath);
+        if (cached != null) {
+            return cached;
+        }
+        String resolved = queryWslWhichNpm();
+        if (resolved == null) {
+            int lastSlash = nodePath.lastIndexOf('/');
+            resolved = (lastSlash > 0) ? nodePath.substring(0, lastSlash) + "/npm" : "npm";
+            LOG.info("[DependencyManager] `wsl which npm` did not resolve npm; "
+                    + "falling back to co-located heuristic: " + resolved
+                    + " (Volta or non-standard layouts may need a custom node path)");
+        } else {
+            LOG.info("[DependencyManager] Resolved WSL npm via `wsl which npm`: " + resolved);
+        }
+        wslNpmPathCache.put(nodePath, resolved);
+        return resolved;
+    }
+
+    /**
+     * Executes {@code wsl which npm} once and returns the trimmed first stdout line, or null on failure.
+     */
+    private static String queryWslWhichNpm() {
+        try {
+            ProcessBuilder pb = new ProcessBuilder("wsl", "which", "npm");
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            String line;
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                line = reader.readLine();
+            }
+            if (!process.waitFor(5, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                return null;
+            }
+            if (process.exitValue() == 0 && line != null && !line.trim().isEmpty()) {
+                return line.trim();
+            }
+        } catch (Exception e) {
+            LOG.debug("[DependencyManager] `wsl which npm` failed: " + e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Builds an npm command list, prepending {@code "wsl"} when {@code nodePath} is a WSL path.
+     */
+    private static List<String> buildNpmCommand(String nodePath, String npmPath, String... args) {
+        List<String> command = new ArrayList<>();
+        if (NodeDetector.isWslPath(nodePath)) {
+            command.add("wsl");
+        }
+        command.add(npmPath);
+        Collections.addAll(command, args);
+        return command;
     }
 
     /**

@@ -38,14 +38,19 @@ interface Window {
   showLoading?: (value: string | boolean) => void;
 
   /**
-   * Show queue display state for the current turn.
+   * Show provider queue state.
    */
-  showQueueStatus?: (state: string, aheadCount: string | number) => void;
+  showQueueStatus?: (state: string, aheadCount?: string | number) => void;
 
   /**
    * Show thinking status
    */
   showThinkingStatus?: (value: string | boolean) => void;
+
+  /**
+   * Update cached invocation mode for Claude sends.
+   */
+  updateInvocationMode?: (json: string) => void;
 
   /**
    * Show conversation summary/compaction notice
@@ -122,16 +127,6 @@ interface Window {
     message: string;
     type?: 'success' | 'error' | 'warning' | 'info';
   };
-
-  /**
-   * Cached Claude invocation mode for chat-side feature gating.
-   */
-  __CLAUDE_INVOCATION_MODE__?: 'sdk' | 'cli';
-
-  /**
-   * Pending invocation mode payload received before callbacks were registered.
-   */
-  __pendingInvocationMode?: string;
 
   /**
    * Usage statistics update callback
@@ -280,11 +275,6 @@ interface Window {
   updateAutoOpenFileEnabled?: (json: string) => void;
 
   /**
-   * Update invocation mode setting (sdk / cli)
-   */
-  updateInvocationMode?: (json: string) => void;
-
-  /**
    * Update commit AI prompt configuration
    */
   updateCommitPrompt?: (json: string) => void;
@@ -293,6 +283,11 @@ interface Window {
    * Update project-level commit AI prompt configuration
    */
   updateProjectCommitPrompt?: (json: string) => void;
+
+  /**
+   * Update sound notification configuration
+   */
+  updateSoundNotificationConfig?: (json: string) => void;
 
   /**
    * Update AI commit generation enabled state
@@ -313,6 +308,11 @@ interface Window {
    * Update task completion notification enabled state
    */
   updateTaskCompletionNotificationEnabled?: (json: string) => void;
+
+  /**
+   * Update permission dialog timeout setting
+   */
+  updatePermissionDialogTimeout?: (json: string) => void;
 
   /**
    * Update current Claude config
@@ -343,6 +343,11 @@ interface Window {
    * Update linkify/navigation capabilities used by Markdown rendering.
    */
   updateLinkifyCapabilities?: (json: string) => void;
+
+  /**
+   * File path resolved callback - receives the resolved absolute path for a file link tooltip.
+   */
+  onFilePathResolved?: (json: string) => void;
 
   /**
    * Show success message
@@ -446,14 +451,16 @@ interface Window {
    */
   applyIdeaLanguageConfig?: (config: {
     language: string;
+    source?: string;
     ideaLocale?: string;
-  }) => void;
+  } | string) => void;
 
   /**
    * Pending language config before applyIdeaLanguageConfig is registered
    */
   __pendingLanguageConfig?: {
     language: string;
+    source?: string;
     ideaLocale?: string;
   };
 
@@ -699,6 +706,10 @@ interface Window {
   __minAcceptedUpdateSequence?: number;
   /** Cancel pending rAF-deferred updateMessages (set by messageCallbacks, called by onStreamEnd). */
   __cancelPendingUpdateMessages?: () => void;
+  /** Currently active streaming scope key: provider:tabId:turnId. */
+  __activeStreamScopeKey?: string | null;
+  /** Cached chat-side Claude invocation mode, populated by backend settings callback. */
+  __CLAUDE_INVOCATION_MODE__?: 'sdk' | 'cli';
 
   /**
    * Rewind result callback - returns the result of a rewind operation
@@ -804,6 +815,11 @@ interface Window {
    * Pending auto open file enabled status before React initialization
    */
   __pendingAutoOpenFileEnabled?: string;
+
+  /**
+   * Pending permission dialog timeout before React initialization
+   */
+  __pendingPermissionDialogTimeout?: string;
 
   __pendingPermissionDialogRequests?: string[];
 

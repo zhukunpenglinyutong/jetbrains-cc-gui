@@ -1,3 +1,71 @@
+##### **2026年5月19日（v0.4.3-Alpha2）**
+
+English:
+
+✨ Features
+- Add /context command for real-time context window usage visualization, showing token counts for system, tools, user, and assistant segments (by @gadfly3173)
+- Add session templates for lightweight reusable conversation starters; templates can be pinned, reordered, and applied to new sessions (by @swamy18)
+- Render sub_agent_compact summary as a collapsible notification block in the chat, replacing raw text with an expandable card (by @gadfly3173)
+- Add file path tooltip showing full absolute path on hover for file reference links (by @ywz626)
+- Add configurable permission dialog timeout with countdown display; opt-in via Settings → Basic → Behavior (by @ywz626)
+- Add WSL Node.js path support for Windows hosts running Claude/Codex via WSL, auto-detecting the WSL node binary (by @Gazoon007)
+- Add Codex expired session thread error detection with localized error message across all 10 supported locales
+
+🐛 Fixes
+- Fix user-initiated aborts being reported as errors instead of graceful completion in session history (by @GlMelon)
+- Fix local images not restored when replaying history sessions for both Claude and Codex providers (by @GlMelon)
+- Fix active provider being reset to default when loading a history session that was recorded under a different provider (by @GlMelon)
+- Fix streaming content overwritten by delayed backend snapshot; streaming output now takes priority to prevent display flicker (by @GlMelon)
+- Fix settings.json permission rules not respected in plan mode; allow/deny/ask rules now evaluated correctly during plan-mode tool calls (by @devlimits) (#1126)
+- Fix AI-generated session titles bypassing the 50-char rendering limit and causing layout overflow (by @devlimits) (#1133)
+- Fix assistant messages containing XML command tags incorrectly stripped from code examples (by @gadfly3173) (#1124)
+- Fix Haiku model environment variable mapping and add UI language preference persistence across sessions (by @gadfly3173) (#1153)
+- Fix Codex Windows taskkill parse noise appearing as output lines after task completion (by @lrk1314) (#1164)
+- Fix streaming updates rendering lag by switching from requestAnimationFrame to setTimeout for paint scheduling (by @devlimits) (#1166)
+- Fix Claude history fallback scan discarding the earliest session timestamp when multiple matches are found
+- Fix permission dialog countdown drift and keyboard shortcut collisions when multiple dialogs open simultaneously (by @ywz626) (#1152)
+- Fix ProviderManager WSL detection and consolidate node binary discovery across Claude and Codex providers (by @Gazoon007) (#1156)
+
+🔧 Improvements
+- Extract UserMessageSanitizer utility to strip injected system context from user-visible messages, improving history readability (by @GlMelon)
+- Refactor /context usage panel to extract helper functions and reduce JSX duplication
+- Add unit tests for Windows taskkill parse noise filter to prevent regressions
+- Remove dead permission helper code orphaned by #1121 refactor (by @devlimits)
+
+中文：
+
+✨ Features
+- 新增 /context 命令，实时可视化上下文窗口用量，分别展示 system、tools、user、assistant 各段 token 占比（by @gadfly3173）
+- 新增会话模板功能，支持创建轻量级可复用的对话起点，模板可置顶、排序并一键应用到新会话（by @swamy18）
+- 将 sub_agent_compact 摘要渲染为可折叠通知卡片，替代原始文本块，改善长摘要的阅读体验（by @gadfly3173）
+- 新增文件链接悬停 Tooltip，显示完整绝对路径，方便快速定位文件位置（by @ywz626）
+- 新增可配置权限弹窗超时倒计时，可在 设置 → 基础 → 行为 中开启（by @ywz626）
+- 新增 WSL Node.js 路径支持，Windows 用户通过 WSL 运行 Claude/Codex 时可自动探测 WSL 内的 node 二进制（by @Gazoon007）
+- 新增 Codex 过期会话线程错误检测，并在全部 10 个语言环境中提供本地化错误消息
+
+🐛 Fixes
+- 修复用户主动中断操作被记录为错误的问题，现在正确识别为正常终止（by @GlMelon）
+- 修复历史会话回放时本地图片无法恢复的问题，Claude 和 Codex 均已修复（by @GlMelon）
+- 修复加载跨 Provider 历史会话时，当前 Provider 被重置为默认值的问题（by @GlMelon）
+- 修复延迟到达的后端快照覆盖流式输出导致内容闪烁的问题，流式内容现在优先显示（by @GlMelon）
+- 修复 plan 模式下 settings.json 权限规则（allow/deny/ask）不生效的问题（by @devlimits）（#1126）
+- 修复 AI 生成的会话标题超出 50 字符渲染限制导致布局溢出的问题（by @devlimits）（#1133）
+- 修复代码示例中包含 XML 命令标签的助手消息被错误过滤掉的问题（by @gadfly3173）（#1124）
+- 修复 Haiku 模型环境变量映射错误，并新增 UI 语言偏好跨会话持久化（by @gadfly3173）（#1153）
+- 修复 Codex 在 Windows 上任务完成后 taskkill 输出被误识别为程序输出的问题（by @lrk1314）（#1164）
+- 修复流式内容渲染延迟问题，将 requestAnimationFrame 改为 setTimeout 调度绘制（by @devlimits）（#1166）
+- 修复 Claude 历史回退扫描路径中最早时间戳被丢弃的问题
+- 修复权限弹窗同时打开多个时倒计时漂移和键盘快捷键冲突的问题（by @ywz626）（#1152）
+- 修复 ProviderManager WSL 检测逻辑，统一 Claude 和 Codex 的 node 二进制发现路径（by @Gazoon007）（#1156）
+
+🔧 Improvements
+- 提取 UserMessageSanitizer 工具类，从用户可见消息中剥离注入的系统上下文，提升历史记录可读性（by @GlMelon）
+- 重构 /context 用量面板，提取 helper 函数并减少 JSX 重复
+- 新增 Windows taskkill 噪声过滤器的单元测试，防止回归
+- 清理 #1121 重构后遗留的废弃权限 helper 代码（by @devlimits）
+
+---
+
 ##### **2026年5月10日（v0.4.3-Alpha1）**
 
 English:
@@ -174,6 +242,7 @@ English:
 - Restore persisted Codex session history on startup
 - Surface sponsor support and community recommendations in the community settings page
 - Keep SDK version updates reachable from JCEF-based settings UI
+- Add lightweight reusable session templates for creating pre-configured sessions
 
 🐛 Fixes
 - Fix startup crash on IDEs that lack the reworked terminal menu
@@ -205,6 +274,7 @@ English:
 - 启动时恢复 Codex 持久化会话历史
 - 在社区设置页面展示赞助商支持和社区推荐
 - JCEF 设置界面中保持 SDK 版本更新入口可达
+- 新增轻量级可重用会话模板，用于创建预配置会话
 
 🐛 Fixes
 - 修复缺少重构终端菜单的 IDE 上启动崩溃问题

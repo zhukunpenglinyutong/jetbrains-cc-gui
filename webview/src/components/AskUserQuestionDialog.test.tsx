@@ -1,0 +1,221 @@
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import AskUserQuestionDialog, {
+  type AskUserQuestionRequest,
+} from './AskUserQuestionDialog';
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (_key: string, fallback?: string, _vars?: Record<string, unknown>) =>
+      typeof fallback === 'string' ? fallback : _key,
+  }),
+}));
+
+const buildRequest = (overrides: Partial<AskUserQuestionRequest> = {}): AskUserQuestionRequest => ({
+  requestId: 'req-test-1',
+  toolName: 'AskUserQuestion',
+  questions: [
+    {
+      question: 'Pick a color',
+      header: 'Color',
+      multiSelect: false,
+      options: [
+        { label: 'Red', description: '' },
+        { label: 'Blue', description: '' },
+      ],
+    },
+  ],
+  ...overrides,
+});
+
+describe('AskUserQuestionDialog countdown', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    // Drain any pending timers/microtasks scheduled by the dialog's effects
+    // before swapping back to real timers, otherwise leftover intervals can
+    // bleed into the next test and produce phantom onCancel calls.
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
+  // The countdown is the user-visible deadline. When it hits zero the dialog must
+  // call onCancel with the same requestId exactly once — duplicate cancels would
+  // make the backend receive contradictory IPC, and a missed cancel would leak
+  // the pending future on the Java side until the safety net fires (much later).
+
+  it('auto-cancels with the original requestId after timeoutSeconds elapses', () => {
+    const onCancel = vi.fn();
+    const onSubmit = vi.fn();
+    const request = buildRequest();
+
+    render(
+      <AskUserQuestionDialog
+        isOpen
+        request={request}
+        onSubmit={onSubmit}
+        onCancel={onCancel}
+        timeoutSeconds={30}
+      />,
+    );
+
+    expect(onCancel).not.toHaveBeenCalled();
+
+    // Advance 30s + a tick to make sure the final setInterval iteration and the
+    // subsequent auto-close effect both flush.
+    act(() => {
+      vi.advanceTimersByTime(30_000);
+    });
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onCancel).toHaveBeenCalledWith('req-test-1');
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('does not fire auto-cancel before the deadline', () => {
+    const onCancel = vi.fn();
+    const onSubmit = vi.fn();
+
+    render(
+      <AskUserQuestionDialog
+        isOpen
+        request={buildRequest()}
+        onSubmit={onSubmit}
+        onCancel={onCancel}
+        timeoutSeconds={30}
+      />,
+    );
+
+    // 29 seconds = one second short of expiry.
+    act(() => {
+      vi.advanceTimersByTime(29_000);
+    });
+
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it('manual cancel suppresses the auto-cancel that would otherwise fire after timeout', () => {
+    // This protects against a click+countdown race: if the user clicks cancel
+    // and the timer also expires shortly after, the backend must not receive
+    // two cancel messages.
+    const onCancel = vi.fn();
+    const onSubmit = vi.fn();
+
+    render(
+      <AskUserQuestionDialog
+        isOpen
+        request={buildRequest()}
+        onSubmit={onSubmit}
+        onCancel={onCancel}
+        timeoutSeconds={30}
+      />,
+    );
+
+    const cancelButton = screen.getByText('取消');
+    fireEvent.click(cancelButton);
+    expect(onCancel).toHaveBeenCalledTimes(1);
+
+    // Run the timer well past the deadline; the duplicate-response guard should bail.
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('invalid-format cancel suppresses the later auto-cancel', () => {
+    const onCancel = vi.fn();
+    const onSubmit = vi.fn();
+
+    render(
+      <AskUserQuestionDialog
+        isOpen
+        request={buildRequest({ questions: [] })}
+        onSubmit={onSubmit}
+        onCancel={onCancel}
+        timeoutSeconds={30}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('取消'));
+
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onCancel).toHaveBeenCalledWith('req-test-1');
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('submit suppresses the auto-cancel that would otherwise fire after timeout', () => {
+    const onCancel = vi.fn();
+    const onSubmit = vi.fn();
+
+    render(
+      <AskUserQuestionDialog
+        isOpen
+        request={buildRequest()}
+        onSubmit={onSubmit}
+        onCancel={onCancel}
+        timeoutSeconds={30}
+      />,
+    );
+
+    // Pick an option then submit
+    fireEvent.click(screen.getByText('Red'));
+    fireEvent.click(screen.getByText('提交'));
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+
+    // Now race the countdown past the deadline; the backend should not see a duplicate response.
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it('respects an updated timeoutSeconds prop (effect dep correctly includes it)', () => {
+    const onCancel = vi.fn();
+    const onSubmit = vi.fn();
+
+    const { rerender } = render(
+      <AskUserQuestionDialog
+        isOpen
+        request={buildRequest()}
+        onSubmit={onSubmit}
+        onCancel={onCancel}
+        timeoutSeconds={30}
+      />,
+    );
+
+    // Settings update mid-flight: bump the timeout to 60s.
+    rerender(
+      <AskUserQuestionDialog
+        isOpen
+        request={buildRequest()}
+        onSubmit={onSubmit}
+        onCancel={onCancel}
+        timeoutSeconds={60}
+      />,
+    );
+
+    // 30s — the OLD timeout — should NOT have fired auto-cancel. If
+    // timeoutSeconds were missing from the reset effect dependency list,
+    // the countdown would still be using 30 and we'd see a cancel here.
+    act(() => {
+      vi.advanceTimersByTime(30_000);
+    });
+    expect(onCancel).not.toHaveBeenCalled();
+
+    // Run out the remainder of the new 60s budget.
+    act(() => {
+      vi.advanceTimersByTime(30_000);
+    });
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+});

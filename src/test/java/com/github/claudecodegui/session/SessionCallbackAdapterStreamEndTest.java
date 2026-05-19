@@ -4,8 +4,8 @@ import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.LongConsumer;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.LongConsumer;
 
 import static org.junit.Assert.*;
 
@@ -164,7 +164,7 @@ public class SessionCallbackAdapterStreamEndTest {
 
         // Simulate what happens when flush(callback) is called:
         // The callback receives the sequence from the coalescer.
-        AtomicLong capturedSequence = new AtomicLong(-999);
+        final AtomicLong capturedSequence = new AtomicLong(-999);
         LongConsumer flushCallback = seq -> {
             capturedSequence.set(seq);
             jsTarget.callJavaScript("onStreamEnd", String.valueOf(seq));

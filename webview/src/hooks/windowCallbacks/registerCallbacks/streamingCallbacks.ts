@@ -12,6 +12,16 @@ import { sendBridgeEvent } from '../../../utils/bridge';
 import { THROTTLE_INTERVAL } from '../../useStreamingMessages';
 import { parseSequence } from '../parseSequence';
 import { getStreamEndHandlingMode } from '../messageSync';
+import {
+  clearStreamScopeState,
+  consumeScopedPendingUpdate,
+  getActiveStreamScopeKey,
+  getOrCreateStreamScopeState,
+  getStreamScopeKey,
+  getScopeLastActivityAt,
+  markScopeActivity,
+  setActiveStreamScopeKey,
+} from '../streamScopeState';
 
 /**
  * Timeout (ms) for detecting a stalled stream.  If no content/thinking delta
@@ -78,11 +88,12 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     clearStallWatchdog();
     window.__lastStreamActivityAt = Date.now();
     window.__stallWatchdogInterval = setInterval(() => {
-      if (!isStreamingRef.current) {
+      const activeScopeKey = getActiveStreamScopeKey();
+      if (!isStreamingRef.current || !activeScopeKey) {
         clearStallWatchdog();
         return;
       }
-      const elapsed = Date.now() - (window.__lastStreamActivityAt ?? 0);
+      const elapsed = Date.now() - getScopeLastActivityAt(activeScopeKey);
       if (elapsed >= STREAM_STALL_TIMEOUT_MS) {
         console.warn(
           `[StreamWatchdog] Stream stalled for ${elapsed}ms — forcing stream-end recovery`,
@@ -126,10 +137,28 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     streamingMessageIndexRef.current = -1;
     turnIdCounterRef.current += 1;
     streamingTurnIdRef.current = turnIdCounterRef.current;
+    const scopeKey = getStreamScopeKey(
+      options.currentProviderRef.current,
+      options.currentSessionIdRef.current,
+      streamingTurnIdRef.current,
+    );
+    setActiveStreamScopeKey(scopeKey);
+    const scopeState = getOrCreateStreamScopeState(scopeKey);
+    scopeState.content = '';
+    scopeState.thinking = '';
+    scopeState.messageIndex = -1;
+    scopeState.isStreaming = true;
+    scopeState.backendRendering = false;
+    scopeState.pendingUpdateJson = null;
+    scopeState.pendingUpdateSequence = null;
+    scopeState.pendingUpdateRaf = null;
+    scopeState.lastActivityAt = Date.now();
+    scopeState.minAcceptedSequence = 0;
     setMessages((prev) => {
       const last = prev[prev.length - 1];
       if (last?.type === 'assistant') {
         streamingMessageIndexRef.current = prev.length - 1;
+        scopeState.messageIndex = streamingMessageIndexRef.current;
         const updated = [...prev];
         updated[prev.length - 1] = {
           ...updated[prev.length - 1],
@@ -139,6 +168,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
         return updated;
       }
       streamingMessageIndexRef.current = prev.length;
+      scopeState.messageIndex = streamingMessageIndexRef.current;
       return [
         ...prev,
         {
@@ -211,11 +241,22 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     false,
   );
 
+  const getActiveScopeState = () => {
+    const scopeKey = getActiveStreamScopeKey();
+    return scopeKey ? getOrCreateStreamScopeState(scopeKey) : null;
+  };
+
   window.onContentDelta = (delta: string) => {
     if (window.__sessionTransitioning) return;
     if (!isStreamingRef.current) return;
     window.__lastStreamActivityAt = Date.now();
     streamingContentRef.current += delta;
+    const scopeState = getActiveScopeState();
+    if (scopeState) {
+      scopeState.content += delta;
+      scopeState.lastActivityAt = Date.now();
+      markScopeActivity(getActiveStreamScopeKey());
+    }
     scheduleContentRaf();
   };
 
@@ -224,6 +265,12 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     if (!isStreamingRef.current) return;
     window.__lastStreamActivityAt = Date.now();
     streamingThinkingRef.current += delta;
+    const scopeState = getActiveScopeState();
+    if (scopeState) {
+      scopeState.thinking += delta;
+      scopeState.lastActivityAt = Date.now();
+      markScopeActivity(getActiveStreamScopeKey());
+    }
     scheduleThinkingRaf();
   };
 
@@ -254,11 +301,16 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     }
 
     clearStallWatchdog();
+    const scopeKey = getActiveStreamScopeKey();
+    const scopeState = scopeKey ? getOrCreateStreamScopeState(scopeKey) : null;
     const parsedSequence = parseSequence(sequence);
     // Only update minAcceptedUpdateSequence for valid positive sequences.
     // The fallback path sends sequence=-1 which means "no sequence info" —
     // it should not participate in sequence tracking.
     if (parsedSequence != null && parsedSequence >= 0) {
+      if (scopeState) {
+        scopeState.minAcceptedSequence = Math.max(scopeState.minAcceptedSequence, parsedSequence);
+      }
       window.__minAcceptedUpdateSequence = Math.max(window.__minAcceptedUpdateSequence ?? 0, parsedSequence);
     }
     // Notify backend about stream completion for tab status indicator
@@ -267,6 +319,10 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     if (handlingMode === 'minimal') {
       if (typeof window.__cancelPendingUpdateMessages === 'function') {
         window.__cancelPendingUpdateMessages();
+      }
+      if (scopeKey) {
+        clearStreamScopeState(scopeKey);
+        setActiveStreamScopeKey(null);
       }
       setStreamingActive(false);
       setLoading(false);
@@ -282,27 +338,30 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     // show incomplete content (e.g., last delta missing) or duplicated content in raw blocks.
     let backendSnapshotContent: string | undefined;
     let backendSnapshotRaw: ClaudeRawMessage | string | undefined = undefined;
-    if (typeof window.__pendingUpdateJson === 'string' && window.__pendingUpdateJson.length > 0) {
-      try {
-        const parsed = JSON.parse(window.__pendingUpdateJson) as Array<Record<string, unknown>>;
-        for (let i = parsed.length - 1; i >= 0; i--) {
-          if (parsed[i]?.type === 'assistant') {
-            const rawContent = parsed[i].content;
-            const content = typeof rawContent === 'string' ? rawContent : '';
-            if (content) {
-              backendSnapshotContent = content;
-              const rawVal = parsed[i].raw;
-              if (rawVal != null && (typeof rawVal === 'object' || typeof rawVal === 'string')) {
-                backendSnapshotRaw = rawVal as ClaudeRawMessage | string;
+    if (scopeKey) {
+      const pending = consumeScopedPendingUpdate(scopeKey);
+      if (typeof pending.json === 'string' && pending.json.length > 0) {
+        try {
+          const parsed = JSON.parse(pending.json) as Array<Record<string, unknown>>;
+          for (let i = parsed.length - 1; i >= 0; i--) {
+            if (parsed[i]?.type === 'assistant') {
+              const rawContent = parsed[i].content;
+              const content = typeof rawContent === 'string' ? rawContent : '';
+              if (content) {
+                backendSnapshotContent = content;
+                const rawVal = parsed[i].raw;
+                if (rawVal != null && (typeof rawVal === 'object' || typeof rawVal === 'string')) {
+                  backendSnapshotRaw = rawVal as ClaudeRawMessage | string;
+                }
               }
+              break;
             }
-            break;
           }
+        } catch (error) {
+          // pending update JSON is produced internally by the bridge; a parse failure
+          // indicates an upstream contract violation worth surfacing for diagnosis.
+          console.warn('[Frontend] Failed to parse pending update on stream end:', error);
         }
-      } catch (error) {
-        // __pendingUpdateJson is produced internally by the bridge; a parse failure
-        // indicates an upstream contract violation worth surfacing for diagnosis.
-        console.warn('[Frontend] Failed to parse __pendingUpdateJson on stream end:', error);
       }
     }
 
@@ -389,6 +448,10 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     streamingContentRef.current = '';
     streamingThinkingRef.current = '';
     autoExpandedThinkingKeysRef.current.clear();
+    if (scopeKey) {
+      clearStreamScopeState(scopeKey);
+      setActiveStreamScopeKey(null);
+    }
 
     // Mark that streaming just ended - used by mergeConsecutiveAssistantMessages to
     // distinguish recently-ended streaming messages from true history messages.
@@ -464,6 +527,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
   window.onStreamingHeartbeat = () => {
     if (isStreamingRef.current && window.__lastStreamActivityAt !== undefined) {
       window.__lastStreamActivityAt = Date.now();
+      markScopeActivity(getActiveStreamScopeKey());
     }
   };
 

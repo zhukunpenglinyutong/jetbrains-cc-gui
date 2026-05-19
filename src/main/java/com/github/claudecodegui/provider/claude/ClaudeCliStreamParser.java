@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * - {"type":"assistant","message":{"content":[{"type":"tool_use",...}]}}
  * - {"type":"result","usage":{...},"result":"..."}
  */
-class ClaudeCliStreamParser {
+public class ClaudeCliStreamParser {
 
     private static final Logger LOG = Logger.getInstance(ClaudeCliStreamParser.class);
 
@@ -31,14 +31,14 @@ class ClaudeCliStreamParser {
     private boolean messageStarted;
     private boolean thinkingActive;
 
-    ClaudeCliStreamParser(Gson gson) {
+    public ClaudeCliStreamParser(Gson gson) {
         this.gson = gson;
     }
 
     /**
      * 每次新请求前重置状态。
      */
-    void resetState() {
+    public void resetState() {
         streamStarted = false;
         messageStarted = false;
         thinkingActive = false;
@@ -47,7 +47,7 @@ class ClaudeCliStreamParser {
     /**
      * 解析一行 stream-json 输出并分发到 callback。
      */
-    void parseLine(
+    public void parseLine(
             String line,
             MessageCallback callback,
             SDKResult result,
@@ -209,7 +209,7 @@ class ClaudeCliStreamParser {
             JsonObject block = elem.getAsJsonObject();
             String blockType = block.has("type") ? block.get("type").getAsString() : "";
             if ("tool_use".equals(blockType)) {
-                callback.onMessage("tool_result", block.toString());
+                callback.onMessage("tool_use", block.toString());
             }
             // text 类型的内容已通过 content_block_delta 接收，跳过
         }

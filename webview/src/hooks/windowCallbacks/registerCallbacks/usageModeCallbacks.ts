@@ -11,6 +11,7 @@ import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
 import type { PermissionMode } from '../../../components/ChatInputBox/types';
 import { isValidPermissionMode, normalizeClaudeModelId } from '../../../components/ChatInputBox/types';
 import { drainPendingSettings, startInitialSettingsRequest } from '../settingsBootstrap';
+import { clampPermissionDialogTimeoutSeconds } from '../../../utils/permissionDialogTimeout';
 
 export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): void {
   const {
@@ -28,6 +29,7 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
     setStreamingEnabledSetting,
     setSendShortcut,
     setAutoOpenFileEnabled,
+    setPermissionDialogTimeoutSeconds,
     currentProviderRef,
     syncActiveProviderModelMapping,
   } = options;
@@ -155,6 +157,16 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
       setAutoOpenFileEnabled(data.autoOpenFileEnabled ?? false);
     } catch (error) {
       console.error('[Frontend] Failed to parse auto open file enabled:', error);
+    }
+  };
+
+  window.updatePermissionDialogTimeout = (jsonStr: string) => {
+    try {
+      const data = JSON.parse(jsonStr);
+      setPermissionDialogTimeoutSeconds(clampPermissionDialogTimeoutSeconds(data.permissionDialogTimeoutSeconds));
+    } catch (error) {
+      const errorName = error instanceof Error ? error.name : 'UnknownError';
+      console.error(`[Frontend] Failed to parse permission dialog timeout payload: ${errorName}`);
     }
   };
 

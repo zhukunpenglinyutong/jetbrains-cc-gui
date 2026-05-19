@@ -5,12 +5,16 @@ import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.session.runtime.CliRequest;
+import com.github.claudecodegui.session.runtime.RuntimeKey;
+import com.github.claudecodegui.session.runtime.SessionRuntimeRouter;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -29,6 +33,7 @@ public class SessionSendService {
     private final ClaudeSDKBridge claudeSDKBridge;
     private final CodexSDKBridge codexSDKBridge;
     private final SessionContextService contextService;
+    private final SessionRuntimeRouter runtimeRouter;
 
     public SessionSendService(
             Project project,
@@ -50,11 +55,20 @@ public class SessionSendService {
         this.claudeSDKBridge = claudeSDKBridge;
         this.codexSDKBridge = codexSDKBridge;
         this.contextService = contextService;
+        this.runtimeRouter = new SessionRuntimeRouter(claudeSDKBridge, codexSDKBridge);
     }
 
     public void prepareContextCollector(EditorContextCollector contextCollector) {
         contextCollector.setPsiContextEnabled(state.isPsiContextEnabled());
         contextCollector.setAutoOpenFileEnabled(readAutoOpenFileEnabled());
+    }
+
+    public void interruptRuntime(String provider, String channelId, String tabId) {
+        runtimeRouter.interrupt(provider, channelId, tabId);
+    }
+
+    public void cleanupRuntimeTab(String tabId) {
+        runtimeRouter.cleanupTab(tabId);
     }
 
     public void updateSessionStateForSend(ClaudeSession.Message userMessage, String normalizedInput) {
@@ -213,18 +227,31 @@ public class SessionSendService {
         String contextAppend = contextService.buildCodexContextAppend(openedFilesJson, fileTagPaths);
         String finalInput = (input != null ? input : "") + contextAppend;
 
-        return codexSDKBridge.sendMessageWithDaemonPreferred(
+        RuntimeKey key = new RuntimeKey(
+                "codex",
                 channelId,
+                channelId,
+                state.getRuntimeSessionEpoch()
+        );
+        CliRequest request = new CliRequest(
+                key,
                 finalInput,
                 state.getSessionId(),
                 state.getCwd(),
                 attachments,
+                openedFilesJson,
+                fileTagPaths,
+                agentPrompt,
                 effectivePermissionMode,
                 state.getModel(),
-                agentPrompt,
                 state.getReasoningEffort(),
-                handler
-        ).thenApply(result -> null);
+                Map.of()
+        );
+
+        boolean useCliRuntime = CodemossSettingsService.CODEX_RUNTIME_ACCESS_MANAGED.equals(accessMode)
+                || CodemossSettingsService.CODEX_RUNTIME_ACCESS_CLI_LOGIN.equals(accessMode);
+
+        return runtimeRouter.sendCodex(useCliRuntime, request, handler).thenApply(result -> null);
     }
 
     private CompletableFuture<Void> sendToClaude(
@@ -264,7 +291,8 @@ public class SessionSendService {
                 + ", cwd=" + state.getCwd()
                 + ", model=" + currentModel);
 
-        return claudeSDKBridge.sendMessage(
+        return runtimeRouter.sendClaude(
+                        effectiveInvocationMode,
                         channelId,
                         input,
                         state.getSessionId(),
@@ -276,11 +304,9 @@ public class SessionSendService {
                         openedFilesJson,
                         agentPrompt,
                         streaming,
-                        false,
                         state.getReasoningEffort(),
-                        effectiveInvocationMode,
-                        handler
-                ).thenApply(result -> null);
+                handler
+        ).thenApply(result -> null);
     }
 
     private boolean readAutoOpenFileEnabled() {

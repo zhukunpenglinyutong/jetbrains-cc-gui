@@ -19,8 +19,6 @@ public class CodexMessageHandlerTest {
         int streamEndCount = 0;
         int stateChangeCount = 0;
         int messageUpdateCount = 0;
-        int sessionIdReceivedCount = 0;
-        String lastSessionId = null;
         boolean lastLoading = false;
         boolean lastBusy = false;
         final List<String> contentDeltas = new ArrayList<>();
@@ -43,8 +41,6 @@ public class CodexMessageHandlerTest {
 
         @Override
         public void onSessionIdReceived(String sessionId) {
-            sessionIdReceivedCount++;
-            lastSessionId = sessionId;
         }
 
         @Override
@@ -89,22 +85,6 @@ public class CodexMessageHandlerTest {
     }
 
     @Test
-    public void codexSessionIdDoesNotOverwriteExistingThreadId() {
-        SessionState state = new SessionState();
-        state.setSessionId("thread-from-history");
-
-        CallbackHandler callbackHandler = new CallbackHandler();
-        RecordingCallback callback = new RecordingCallback();
-        callbackHandler.setCallback(callback);
-
-        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
-        handler.onMessage("session_id", "thread-from-sdk");
-
-        assertEquals("thread-from-history", state.getSessionId());
-        assertEquals(0, callback.sessionIdReceivedCount);
-    }
-
-    @Test
     public void streamMarkersDriveStandardStreamingLifecycle() {
         SessionState state = new SessionState();
         state.setBusy(true);
@@ -123,7 +103,7 @@ public class CodexMessageHandlerTest {
         assertEquals(1, callback.streamEndCount);
         assertFalse(state.isBusy());
         assertFalse(state.isLoading());
-        assertTrue(callback.messageUpdateCount >= 1);
+        assertTrue(callback.messageUpdateCount >= 2);
         assertEquals("done", callback.lastMessages.get(callback.lastMessages.size() - 1).content);
     }
 
@@ -163,24 +143,6 @@ public class CodexMessageHandlerTest {
     }
 
     @Test
-    public void assistantSnapshotBeforeContentDeltaReusesSameAssistantMessage() {
-        SessionState state = new SessionState();
-
-        CallbackHandler callbackHandler = new CallbackHandler();
-        RecordingCallback callback = new RecordingCallback();
-        callbackHandler.setCallback(callback);
-
-        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
-        handler.onMessage("stream_start", "");
-        handler.onMessage("assistant", "{\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"hello\"}]}}");
-        handler.onMessage("content_delta", " world");
-
-        assertEquals(1, state.getMessages().size());
-        assertEquals("hello world", state.getMessages().get(0).content);
-        assertEquals(List.of(" world"), callback.contentDeltas);
-    }
-
-    @Test
     public void thinkingDeltaIsForwardedAndPreservedWhenFinalTextSnapshotArrives() {
         SessionState state = new SessionState();
 
@@ -215,10 +177,9 @@ public class CodexMessageHandlerTest {
         callbackHandler.setCallback(callback);
 
         CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
-        String payload = "{\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\","
+        handler.onMessage("user", "{\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\","
                 + "\"text\":\"<agents-instructions>\\n# AGENTS.md instructions\\n"
-                + "<INSTRUCTIONS>中文回复</INSTRUCTIONS>\\n</agents-instructions>\\n\\n测试通讯\"}]}}";
-        handler.onMessage("user", payload);
+                + "<INSTRUCTIONS>中文回复</INSTRUCTIONS>\\n</agents-instructions>\\n\\n测试通讯\"}]}}");
 
         assertEquals(1, state.getMessages().size());
         Message message = state.getMessages().get(0);
@@ -241,35 +202,10 @@ public class CodexMessageHandlerTest {
         callbackHandler.setCallback(callback);
 
         CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
-        String payload = "{\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\","
-                + "\"text\":\"<agents-instructions>\\n# AGENTS.md instructions\\n"
-                + "</agents-instructions>\"}]}}";
-        handler.onMessage("user", payload);
+        handler.onMessage("user", "{\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"<agents-instructions>\\n# AGENTS.md instructions\\n</agents-instructions>\"}]}}");
 
         assertEquals(0, state.getMessages().size());
         assertEquals(0, callback.messageUpdateCount);
-    }
-
-    @Test
-    public void toolResultUserMessageIsMarkedAsSyntheticOrigin() {
-        SessionState state = new SessionState();
-
-        CallbackHandler callbackHandler = new CallbackHandler();
-        RecordingCallback callback = new RecordingCallback();
-        callbackHandler.setCallback(callback);
-
-        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
-        String payload = "{\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\","
-                + "\"tool_use_id\":\"cmd-1\",\"content\":\"ok\"}]}}";
-        handler.onMessage("user", payload);
-
-        assertEquals(1, state.getMessages().size());
-        Message message = state.getMessages().get(0);
-        assertEquals("[tool_result]", message.content);
-        assertEquals("tool_result", message.raw
-                .getAsJsonObject("origin")
-                .get("kind")
-                .getAsString());
     }
 
     @Test

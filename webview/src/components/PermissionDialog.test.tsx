@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import PermissionDialog, { type PermissionRequest } from './PermissionDialog';
 import { resetLinkifyCapabilities, setLinkifyCapabilities } from '../utils/linkifyCapabilities';
 
@@ -25,9 +25,24 @@ vi.mock('react-i18next', () => ({
 }));
 
 describe('PermissionDialog', () => {
+  const buildRequest = (overrides: Partial<PermissionRequest> = {}): PermissionRequest => ({
+    channelId: 'perm-1',
+    toolName: 'bash',
+    inputs: {
+      cwd: 'src/components',
+      command: 'echo hello',
+    },
+    ...overrides,
+  });
+
   beforeEach(() => {
     resetLinkifyCapabilities();
     setLinkifyCapabilities({ classNavigationEnabled: true });
+  });
+
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
   });
 
   it('reuses MarkdownBlock linkify inside the command content area', () => {
@@ -63,5 +78,105 @@ describe('PermissionDialog', () => {
       }),
     ).toBeTruthy();
     expect(screen.getByRole('link', { name: 'https://example.com/docs' })).toBeTruthy();
+  });
+
+  it('auto-denies with the original channelId after timeoutSeconds elapses', () => {
+    vi.useFakeTimers();
+    const onApprove = vi.fn();
+    const onSkip = vi.fn();
+    const onApproveAlways = vi.fn();
+
+    render(
+      <PermissionDialog
+        isOpen
+        request={buildRequest()}
+        onApprove={onApprove}
+        onSkip={onSkip}
+        onApproveAlways={onApproveAlways}
+        timeoutSeconds={30}
+      />,
+    );
+
+    expect(onSkip).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(30_000);
+    });
+
+    expect(onSkip).toHaveBeenCalledTimes(1);
+    expect(onSkip).toHaveBeenCalledWith('perm-1');
+    expect(onApprove).not.toHaveBeenCalled();
+    expect(onApproveAlways).not.toHaveBeenCalled();
+  });
+
+  it('manual approval suppresses the later auto-deny', () => {
+    vi.useFakeTimers();
+    const onApprove = vi.fn();
+    const onSkip = vi.fn();
+    const onApproveAlways = vi.fn();
+
+    render(
+      <PermissionDialog
+        isOpen
+        request={buildRequest()}
+        onApprove={onApprove}
+        onSkip={onSkip}
+        onApproveAlways={onApproveAlways}
+        timeoutSeconds={30}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'permission.allow 1' }));
+    expect(onApprove).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+
+    expect(onApprove).toHaveBeenCalledTimes(1);
+    expect(onApprove).toHaveBeenCalledWith('perm-1');
+    expect(onSkip).not.toHaveBeenCalled();
+    expect(onApproveAlways).not.toHaveBeenCalled();
+  });
+
+  it('keeps the duplicate-response guard when timeoutSeconds changes after approval', () => {
+    vi.useFakeTimers();
+    const onApprove = vi.fn();
+    const onSkip = vi.fn();
+    const onApproveAlways = vi.fn();
+    const request = buildRequest();
+
+    const { rerender } = render(
+      <PermissionDialog
+        isOpen
+        request={request}
+        onApprove={onApprove}
+        onSkip={onSkip}
+        onApproveAlways={onApproveAlways}
+        timeoutSeconds={30}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'permission.allow 1' }));
+
+    rerender(
+      <PermissionDialog
+        isOpen
+        request={request}
+        onApprove={onApprove}
+        onSkip={onSkip}
+        onApproveAlways={onApproveAlways}
+        timeoutSeconds={60}
+      />,
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+
+    expect(onApprove).toHaveBeenCalledTimes(1);
+    expect(onApprove).toHaveBeenCalledWith('perm-1');
+    expect(onSkip).not.toHaveBeenCalled();
+    expect(onApproveAlways).not.toHaveBeenCalled();
   });
 });

@@ -50,6 +50,9 @@ interface SettingsViewProps {
   // Auto open file configuration (passed from App.tsx for state sync)
   autoOpenFileEnabled?: boolean;
   onAutoOpenFileEnabledChange?: (enabled: boolean) => void;
+  // Permission dialog timeout configuration (passed from App.tsx for state sync)
+  permissionDialogTimeoutSeconds?: number;
+  onPermissionDialogTimeoutChange?: (seconds: number) => void;
 }
 
 const SettingsView = ({
@@ -61,7 +64,9 @@ const SettingsView = ({
   sendShortcut: sendShortcutProp,
   onSendShortcutChange: onSendShortcutChangeProp,
   autoOpenFileEnabled: autoOpenFileEnabledProp,
-  onAutoOpenFileEnabledChange: onAutoOpenFileEnabledChangeProp
+  onAutoOpenFileEnabledChange: onAutoOpenFileEnabledChangeProp,
+  permissionDialogTimeoutSeconds: permissionDialogTimeoutSecondsProp,
+  onPermissionDialogTimeoutChange: onPermissionDialogTimeoutChangeProp,
 }: SettingsViewProps) => {
   const { t } = useTranslation();
   const isCodexMode = currentProvider === 'codex';
@@ -162,6 +167,8 @@ const SettingsView = ({
     taskCompletionNotificationEnabled,
     setTaskCompletionNotificationEnabled,
     handleTaskCompletionNotificationEnabledChange,
+    permissionDialogTimeoutSeconds,
+    handlePermissionDialogTimeoutChange,
     commitAiConfig,
     setCommitAiConfig,
     handleCommitAiProviderChange,
@@ -183,6 +190,8 @@ const SettingsView = ({
     onSendShortcutChangeProp,
     autoOpenFileEnabledProp,
     onAutoOpenFileEnabledChangeProp,
+    permissionDialogTimeoutSecondsProp,
+    onPermissionDialogTimeoutChangeProp,
   });
 
   // Use provider management hook
@@ -471,6 +480,8 @@ const SettingsView = ({
               onInvocationModeChange={handleInvocationModeChange}
               cliPath={cliPath}
               onCliPathChange={handleCliPathChange}
+              permissionDialogTimeoutSeconds={permissionDialogTimeoutSeconds}
+              onPermissionDialogTimeoutChange={handlePermissionDialogTimeoutChange}
             />
           </div>
 

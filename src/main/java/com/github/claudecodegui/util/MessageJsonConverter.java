@@ -193,6 +193,12 @@ public class MessageJsonConverter {
         copyFieldIfPresent(raw, transport, "type");
         copyFieldIfPresent(raw, transport, "isMeta");
         copyFieldIfPresent(raw, transport, "text");
+        // Compact-related fields for filtering compact summary messages
+        copyFieldIfPresent(raw, transport, "isCompactSummary");
+        copyFieldIfPresent(raw, transport, "isVisibleInTranscriptOnly");
+        copyFieldIfPresent(raw, transport, "summarizeMetadata");
+        // Origin field for distinguishing human input from synthetic messages
+        copyFieldIfPresent(raw, transport, "origin");
 
         if (raw.has("content")) {
             transport.add("content", raw.get("content").deepCopy());

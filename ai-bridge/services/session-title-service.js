@@ -165,7 +165,7 @@ function getSessionFilePath(sessionId, cwd) {
 /**
  * Resolve the Haiku model ID from settings.json, matching CLI behavior.
  * Uses resolveModelFromSettings which reads settings.env directly,
- * checking ANTHROPIC_SMALL_FAST_MODEL > ANTHROPIC_DEFAULT_HAIKU_MODEL > default.
+ * checking ANTHROPIC_DEFAULT_HAIKU_MODEL before falling back to the default.
  * @returns {string} Model ID
  */
 function resolveHaikuModel() {

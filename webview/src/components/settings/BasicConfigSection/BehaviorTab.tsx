@@ -1,5 +1,7 @@
 import styles from './style.module.less';
 import { useTranslation } from 'react-i18next';
+import { DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS } from '../../../utils/permissionDialogTimeout';
+import { PermissionDialogTimeoutSetting } from './PermissionDialogTimeoutSetting';
 
 export interface BehaviorTabProps {
   sendShortcut?: 'enter' | 'cmdEnter';
@@ -18,6 +20,8 @@ export interface BehaviorTabProps {
   onAiTitleGenerationEnabledChange?: (enabled: boolean) => void;
   taskCompletionNotificationEnabled?: boolean;
   onTaskCompletionNotificationEnabledChange?: (enabled: boolean) => void;
+  permissionDialogTimeoutSeconds?: number;
+  onPermissionDialogTimeoutChange?: (seconds: number) => void;
 }
 
 const BehaviorTab = ({
@@ -37,6 +41,8 @@ const BehaviorTab = ({
   onAiTitleGenerationEnabledChange = () => {},
   taskCompletionNotificationEnabled = false,
   onTaskCompletionNotificationEnabledChange = () => {},
+  permissionDialogTimeoutSeconds = DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS,
+  onPermissionDialogTimeoutChange = () => {},
 }: BehaviorTabProps) => {
   const { t } = useTranslation();
 
@@ -76,6 +82,11 @@ const BehaviorTab = ({
           </div>
         </div>
       </div>
+
+      <PermissionDialogTimeoutSetting
+        permissionDialogTimeoutSeconds={permissionDialogTimeoutSeconds}
+        onPermissionDialogTimeoutChange={onPermissionDialogTimeoutChange}
+      />
 
       {/* Streaming configuration */}
       <div className={styles.streamingSection}>

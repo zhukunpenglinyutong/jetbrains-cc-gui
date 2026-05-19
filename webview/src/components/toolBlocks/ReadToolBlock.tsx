@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { ToolInput, ToolResultBlock } from '../../types';
 import { useIsToolDenied } from '../../hooks/useIsToolDenied';
 import { openFile } from '../../utils/bridge';
+import { useResolvedFileLinkTooltip } from '../../hooks/useResolvedFileLinkTooltip';
 import { getFileIcon, getFolderIcon } from '../../utils/fileIcons';
 import { getToolLineInfo, resolveToolTarget } from '../../utils/toolPresentation';
 
@@ -85,6 +86,11 @@ const ReadToolBlock = ({ input, result, toolId }: ReadToolBlockProps) => {
   const iconClass = isDirectory ? 'codicon-folder' : 'codicon-file-code';
   const actionText = isDirectory ? t('permission.tools.readDirectory') : t('permission.tools.Read');
 
+  const fileLinkTooltip = useResolvedFileLinkTooltip(
+    !isDirectory ? filePath : undefined,
+    !isDirectory ? (target?.displayPath || filePath || undefined) : undefined,
+  );
+
   const handleFileClick = (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent bubbling to avoid triggering expand/collapse
     if (target?.isFile) {
@@ -131,7 +137,7 @@ const ReadToolBlock = ({ input, result, toolId }: ReadToolBlockProps) => {
           <span
             className={`tool-title-summary ${!isDirectory ? 'clickable-file' : ''}`}
             onClick={!isDirectory ? handleFileClick : undefined}
-            title={!isDirectory ? t('tools.clickToOpen', { filePath }) : undefined}
+            {...(!isDirectory ? fileLinkTooltip : {})}
             style={FILE_LINK_STYLE}
           >
             <span

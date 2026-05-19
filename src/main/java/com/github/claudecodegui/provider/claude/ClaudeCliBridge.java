@@ -5,6 +5,7 @@ import com.github.claudecodegui.bridge.ProcessManager;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.session.runtime.RuntimeKey;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.session.ClaudeSession.SessionCallback.QueueDisplayState;
 import com.google.gson.Gson;
@@ -27,7 +28,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Invokes Claude CLI directly as an OS child process.
  */
-class ClaudeCliBridge {
+public class ClaudeCliBridge {
 
     private static final Logger LOG = Logger.getInstance(ClaudeCliBridge.class);
     private static final String IMAGE_ATTACHMENT_HINT =
@@ -38,7 +39,7 @@ class ClaudeCliBridge {
     private final Gson gson;
     private final EnvironmentConfigurator envConfigurator;
 
-    ClaudeCliBridge(
+    public ClaudeCliBridge(
             ProcessManager processManager,
             ClaudeCliDetector cliDetector,
             Gson gson,
@@ -50,7 +51,29 @@ class ClaudeCliBridge {
         this.envConfigurator = envConfigurator;
     }
 
-    CompletableFuture<SDKResult> sendMessage(
+    public CompletableFuture<SDKResult> sendMessage(
+            String channelId,
+            String message,
+            String sessionId,
+            String runtimeSessionEpoch,
+            String cwd,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String model,
+            JsonObject openedFiles,
+            String agentPrompt,
+            Boolean streaming,
+            Boolean disableThinking,
+            String reasoningEffort,
+            MessageCallback callback
+    ) {
+        return sendMessage(null, channelId, message, sessionId, runtimeSessionEpoch, cwd,
+                attachments, permissionMode, model, openedFiles, agentPrompt,
+                streaming, disableThinking, reasoningEffort, callback);
+    }
+
+    public CompletableFuture<SDKResult> sendMessage(
+            RuntimeKey runtimeKey,
             String channelId,
             String message,
             String sessionId,
@@ -175,7 +198,11 @@ class ClaudeCliBridge {
 
                 process = processBuilder.start();
                 LOG.info("[CliBridge] CLI process started, pid=" + process.pid());
-                processManager.registerProcess(channelId, process);
+                if (runtimeKey != null) {
+                    processManager.registerProcess(runtimeKey, process);
+                } else {
+                    processManager.registerProcess(channelId, process);
+                }
                 streamParser.resetState();
 
                 try (BufferedReader reader = new BufferedReader(
@@ -199,7 +226,9 @@ class ClaudeCliBridge {
 
                 process.waitFor();
                 int exitCode = process.exitValue();
-                boolean wasInterrupted = processManager.wasInterrupted(channelId);
+                boolean wasInterrupted = runtimeKey != null
+                        ? processManager.wasInterrupted(runtimeKey)
+                        : processManager.wasInterrupted(channelId);
                 LOG.info("[CliBridge] Process exited, exitCode=" + exitCode + ", wasInterrupted=" + wasInterrupted);
 
                 result.finalResult = assistantContent.toString();
@@ -245,7 +274,11 @@ class ClaudeCliBridge {
                 // Don't override COMPLETED status in finally block - only set to NONE on error
                 // The success case is handled above where onComplete preserves COMPLETED state
                 if (process != null) {
-                    processManager.unregisterProcess(channelId, process);
+                    if (runtimeKey != null) {
+                        processManager.unregisterProcess(runtimeKey, process);
+                    } else {
+                        processManager.unregisterProcess(channelId, process);
+                    }
                     processManager.waitForProcessTermination(process);
                 }
             }

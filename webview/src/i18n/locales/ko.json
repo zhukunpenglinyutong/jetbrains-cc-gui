@@ -48,7 +48,6 @@
     "addAttachment": "첨부파일 추가",
     "stopGeneration": "생성 중지",
     "generatingResponse": "응답 생성 중",
-    "queueWaiting": "대기 중 (앞에 {{count}}개 작업 실행 중)",
     "elapsedTime": "경과 시간 {{time}}",
     "minutesAndSeconds": "{{minutes}}분 {{seconds}}초",
     "imagePreview": "미리보기",
@@ -90,7 +89,16 @@
     "attachmentsUploaded": "[첨부파일 업로드됨]",
     "streamingConnected": "{{provider}} 연결됨, 질문을 이해하는 중",
     "showEarlierMessages": "이전 메시지 {{count}}개 보기",
-    "totalDuration": "이번 응답 소요 시간"
+    "totalDuration": "이번 응답 소요 시간",
+    "compactSummary": {
+      "summarizedConversation": "요약된 대화",
+      "compactSummary": "대화 요약",
+      "messagesUpTo": "이 시점까지의 메시지 {{count}}개를 요약했습니다",
+      "messagesFrom": "이 시점 이후의 메시지 {{count}}개를 요약했습니다",
+      "userContext": "컨텍스트: \"{{context}}\"",
+      "expand": "요약 펼치기",
+      "collapse": "요약 접기"
+    }
   },
   "settings": {
     "title": "설정",
@@ -113,6 +121,7 @@
       },
       "language": {
         "label": "언어",
+        "followIde": "IDE 따르기",
         "simplifiedChinese": "简体中文",
         "traditionalChinese": "繁體中文",
         "english": "English",
@@ -136,15 +145,6 @@
         "label": "작업 디렉토리",
         "placeholder": "예: project1 또는 프로젝트 루트를 사용하려면 비워두세요",
         "hint": "Claude가 작업하는 디렉토리를 지정합니다. 상대 경로(프로젝트 루트 기준) 또는 절대 경로를 사용할 수 있습니다. 비워두면 프로젝트 루트를 사용합니다."
-      },
-      "invocationMode": {
-        "label": "호출 모드",
-        "sdk": "SDK 모드",
-        "sdkDesc": "Node.js SDK 통해, 모든 기능 사용 가능",
-        "cli": "CLI 모드",
-        "cliDesc": "직접 claude CLI, 프로세스 분리, 더 나은 메모리",
-        "cliPathPlaceholder": "비워두면 claude CLI 경로 자동 감지",
-        "hint": "CLI 모드는 각 세션을 독립적인 프로세스로 실행하여 자연스러운 메모리 분리를 제공하므로 다중 세션 동시성에 적합합니다."
       },
       "fontSize": {
         "label": "글꼴 크기",
@@ -212,11 +212,38 @@
         "cmdEnter": "⌘/Ctrl+Enter로 전송",
         "cmdEnterDesc": "⌘/Ctrl+Enter를 눌러 메시지 전송, Enter로 줄바꿈"
       },
+      "permissionDialogTimeout": {
+        "label": "권한 및 질문 대화 상자 제한 시간",
+        "unit": "초",
+        "hint": "Claude 질문 대화 상자와 권한 요청 대화 상자의 제한 시간을 설정합니다(30~3600초). 제한 시간이 지나면 대화 상자가 자동으로 닫히고 Claude가 계속 진행합니다."
+      },
       "chatBgColor": {
         "label": "채팅 배경",
         "custom": "사용자 지정",
         "reset": "초기화",
         "hint": "채팅 영역의 배경색을 사용자 지정합니다. 비워두면 테마 기본값을 따릅니다."
+      },
+      "soundNotification": {
+        "label": "작업 완료 알림음",
+        "enabled": "활성화",
+        "disabled": "비활성화",
+        "hint": "활성화하면 AI가 작업을 완료했을 때 알림음이 재생되어, 화면에서 떨어져 있을 때에도 알 수 있습니다.",
+        "onlyWhenUnfocused": "IDE가 포커스되지 않았을 때만 재생",
+        "onlyWhenUnfocusedHint": "활성화하면 IDE 창이 포커스되지 않았을 때만 알림음이 재생됩니다.",
+        "selectSound": "알림음",
+        "soundDefault": "기본",
+        "soundChime": "Chime",
+        "soundBell": "Bell",
+        "soundDing": "Ding",
+        "soundSuccess": "Success",
+        "soundCustom": "사용자 지정...",
+        "customSound": "사용자 지정 알림음 파일",
+        "customSoundPlaceholder": "오디오 파일 경로를 선택하거나 입력하세요",
+        "customSoundHint": "WAV, MP3, AIFF 형식 지원",
+        "testSound": "테스트",
+        "browse": "찾아보기",
+        "useDefault": "기본값 사용",
+        "customSoundSaved": "사용자 지정 알림음 저장됨"
       },
       "userMsgColor": {
         "label": "사용자 메시지 색상",
@@ -828,7 +855,8 @@
       "WebSearch": "웹 검색",
       "WebFetch": "웹 가져오기",
       "execute": "{{toolName}} 실행",
-      "readDirectory": "디렉토리 읽기"
+      "readDirectory": "디렉토리 읽기",
+      "timeoutWarning": "곧 답변해주세요, {{seconds}}초 후 대화상자가 닫힙니다"
     }
   },
   "askUserQuestion": {
@@ -1323,7 +1351,7 @@
       },
       "opus46_1m": {
         "label": "Opus 4.6",
-        "description": "긴 세션을 위한 Opus 4.6"
+        "description": "Opus 4.6 · 고성능 추론 모델"
       },
       "haiku45": {
         "label": "Haiku 4.5",
@@ -1552,5 +1580,33 @@
     "providerNotConfigured": "제공자가 설정되지 않았습니다",
     "providerNotConfiguredDesc": "아직 AI 제공자가 구성되지 않았거나 로컬 구성 사용 권한이 승인되지 않았습니다. 대화를 시작하기 전에 제공자 관리 설정에서 구성을 완료해주세요.",
     "goToProviderSettings": "설정으로 이동"
+  },
+  "errorDiagnostic": {
+    "copyCommand": "복사",
+    "copied": "복사됨",
+    "openDependencySettings": "종속성 관리 열기",
+    "recommended": "권장",
+    "codexThreadResume": {
+      "title": "세션 스레드가 더 이상 유효하지 않습니다",
+      "intro": "새 세션을 만들면 이 문제가 해결됩니다. 현재 세션의 스레드 ID가 Codex 서버에 더 이상 존재하지 않습니다.",
+      "reason": "Codex는 일정 시간이 지나면 오래된 스레드를 삭제하며, 이전 세션을 재개하려 할 때 이 오류가 발생할 수 있습니다."
+    },
+    "sdkNativeBinaryMissing": {
+      "title": "SDK 설치 불완전 — 네이티브 바이너리 누락",
+      "intro": "이것은 Taobao npm 미러의 알려진 문제입니다(플러그인 버그가 아님). 미러가 플랫폼별 파일을 완전히 동기화하지 않았습니다. 아래 방법 중 하나로 수동 해결할 수 있습니다:",
+      "reason": "Taobao 미러가 동기화를 완료하면 이 문제가 자동으로 사라집니다. 걱정하지 마세요.",
+      "solutions": {
+        "switchRegistry": {
+          "title": "방법 1: 임시로 공식 레지스트리로 전환 후 재설치",
+          "step0": "1. 터미널에서 실행 (npm 공식 레지스트리로 전환):",
+          "step1": "2. 플러그인 설정의 '종속성 관리'를 열고 재설치 클릭:",
+          "step2": "3. 재설치 완료 후 Taobao 미러로 복원:"
+        },
+        "downgrade": {
+          "title": "방법 2: 버전 롤백",
+          "step0": "'종속성 관리'에서 SDK 버전을 v0.2.112 또는 그 이전으로 전환하세요. 전환 후 IDEA를 재시작해야 합니다."
+        }
+      }
+    }
   }
 }

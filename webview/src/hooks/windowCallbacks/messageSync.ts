@@ -88,196 +88,142 @@ export const appendOptimisticMessageIfMissing = (
   prevList: ClaudeMessage[],
   nextList: ClaudeMessage[],
 ): ClaudeMessage[] => {
-  const optimisticMessages = prevList.filter((msg) => msg.type === 'user' && msg.isOptimistic);
-  if (optimisticMessages.length === 0) return nextList;
+  const lastPrev = prevList[prevList.length - 1];
+  if (!lastPrev?.isOptimistic) return nextList;
 
-  let result = nextList;
-  let changed = false;
-
-  for (const optimisticMsg of optimisticMessages) {
-    const matchedIndex = findOptimisticUserMatchIndex(result, optimisticMsg);
-    if (matchedIndex < 0) {
-      const insertionIndex = findOptimisticInsertionIndex(result);
-      result = [
-        ...result.slice(0, insertionIndex),
-        optimisticMsg,
-        ...result.slice(insertionIndex),
-      ];
-      changed = true;
-      continue;
-    }
-
-    const mergedMessage = mergeOptimisticAttachmentBlocks(optimisticMsg, result[matchedIndex]);
-    if (mergedMessage !== result[matchedIndex]) {
-      const copy = [...result];
-      copy[matchedIndex] = mergedMessage;
-      result = copy;
-      changed = true;
-    }
-  }
-
-  return changed ? result : nextList;
-};
-
-const findOptimisticUserMatchIndex = (
-  nextList: ClaudeMessage[],
-  optimisticMsg: ClaudeMessage,
-): number => {
+  const optimisticMsg = lastPrev;
   const optimisticText = getUserMessageComparableContent(optimisticMsg);
-  const optimisticTime = parseMessageTimestamp(optimisticMsg.timestamp);
+  const optimisticTime = getMessageTimestampMs(optimisticMsg) ?? Number.NaN;
 
-  const matchFn = (m: ClaudeMessage) =>
-    m.type === 'user' &&
-    getUserMessageComparableContent(m) === optimisticText &&
-    Number.isFinite(parseMessageTimestamp(m.timestamp)) &&
-    Number.isFinite(optimisticTime) &&
-    Math.abs(
-      parseMessageTimestamp(m.timestamp) - optimisticTime,
-    ) < OPTIMISTIC_MESSAGE_TIME_WINDOW;
+  const matchFn = (m: ClaudeMessage) => {
+    if (m.type !== 'user') return false;
+    if (getUserMessageComparableContent(m) !== optimisticText) return false;
+    const candidateTime = getMessageTimestampMs(m) ?? Number.NaN;
+    if (!Number.isFinite(candidateTime) || !Number.isFinite(optimisticTime)) return false;
+    return Math.abs(candidateTime - optimisticTime) < OPTIMISTIC_MESSAGE_TIME_WINDOW;
+  };
 
   let matchedIndex = nextList.findIndex(matchFn);
-  if (matchedIndex >= 0 || !optimisticText) {
-    return matchedIndex;
-  }
-
-  for (let i = nextList.length - 1; i >= 0; i -= 1) {
-    const candidate = nextList[i];
-    if (candidate?.type !== 'user') continue;
-    if (getUserMessageComparableContent(candidate) !== optimisticText) continue;
-    const candidateTime = parseMessageTimestamp(candidate.timestamp);
-    if (Number.isFinite(optimisticTime) && Number.isFinite(candidateTime) && candidateTime < optimisticTime) {
-      continue;
+  if (matchedIndex < 0 && optimisticText) {
+    for (let i = nextList.length - 1; i >= 0; i -= 1) {
+      const candidate = nextList[i];
+      if (candidate?.type !== 'user') continue;
+      if (getUserMessageComparableContent(candidate) !== optimisticText) continue;
+      const candidateTime = getMessageTimestampMs(candidate) ?? Number.NaN;
+      // Allow match when candidate is within time window (even if older than optimistic).
+      // This handles cases where Java's timestamp (number format) may differ from
+      // frontend's ISO string format due to clock skew or async processing delays.
+      // Reject only if candidate is significantly older (> time window) to avoid
+      // matching historical duplicate messages.
+      if (Number.isFinite(optimisticTime) && Number.isFinite(candidateTime) &&
+          optimisticTime - candidateTime > OPTIMISTIC_MESSAGE_TIME_WINDOW) {
+        continue;
+      }
+      matchedIndex = i;
+      break;
     }
-    matchedIndex = i;
-    break;
   }
-  return matchedIndex;
-};
-
-const findOptimisticInsertionIndex = (nextList: ClaudeMessage[]): number => {
-  if (nextList.length > 0 && (isToolOnlyMessage(nextList[0]) || isToolResultOnlyUserMessage(nextList[0]))) {
-    return 0;
+  if (matchedIndex < 0) {
+    // Guard against stale backend updates: if the optimistic message was
+    // created after the newest message in nextList, this update was
+    // generated before the user sent the message — a future update will
+    // include it. Don't append, otherwise the UI shows a duplicate until
+    // the real update arrives.
+    if (nextList.length > 0 && Number.isFinite(optimisticTime)) {
+      let maxNextTime = 0;
+      for (const m of nextList) {
+        const ts = getMessageTimestampMs(m) ?? 0;
+        if (Number.isFinite(ts) && ts > maxNextTime) {
+          maxNextTime = ts;
+        }
+      }
+      if (maxNextTime > 0 && optimisticTime > maxNextTime) {
+        return nextList;
+      }
+    }
+    return [...nextList, optimisticMsg];
   }
-  return nextList.length;
-};
 
-const mergeOptimisticAttachmentBlocks = (
-  optimisticMsg: ClaudeMessage,
-  backendMsg: ClaudeMessage,
-): ClaudeMessage => {
-  // Preserve attachment blocks from the optimistic message into the backend
-  // message's raw data; otherwise non-image file attachments won't be visible.
-  // Also preserve optimistic image blocks so the chat keeps the in-memory
-  // data: URLs when the backend response only carries resource URLs.
+  // Backend message matched the optimistic message.  Preserve attachment blocks
+  // from the optimistic message into the backend message's raw data; otherwise
+  // non-image file attachments won't be visible.
   const optimisticRaw = optimisticMsg.raw as any;
   const optimisticContent: unknown[] | undefined = optimisticRaw?.message?.content;
   if (Array.isArray(optimisticContent)) {
     const attachmentBlocks = optimisticContent.filter(
       (b: any) => b && typeof b === 'object' && b.type === 'attachment',
     );
-    const imageBlocks = optimisticContent.filter(
-      (b: any) => b && typeof b === 'object' && b.type === 'image',
-    );
-    if (attachmentBlocks.length > 0 || imageBlocks.length > 0) {
+    if (attachmentBlocks.length > 0) {
+      const backendMsg = nextList[matchedIndex];
       const backendRaw = (backendMsg.raw ?? {}) as any;
       const backendContent: unknown[] = Array.isArray(backendRaw?.message?.content)
         ? backendRaw.message.content
         : Array.isArray(backendRaw?.content)
           ? backendRaw.content
           : [];
-      const backendImageBlocks = backendContent.filter(
-        (b: any) => b && typeof b === 'object' && b.type === 'image',
-      );
-      const mergedBackendContent = backendImageBlocks.length > 0
-        ? mergeBackendImageBlocksWithOptimistic(backendContent, imageBlocks)
-        : [...imageBlocks, ...backendContent];
-      const mergedContent = [...attachmentBlocks, ...mergedBackendContent];
+      const mergedContent = [...attachmentBlocks, ...backendContent];
       const mergedRaw = {
         ...backendRaw,
         message: { ...(backendRaw?.message ?? {}), content: mergedContent },
       };
-      return { ...backendMsg, raw: mergedRaw };
+      const result = [...nextList];
+      result[matchedIndex] = { ...backendMsg, raw: mergedRaw };
+      return result;
     }
   }
-  return backendMsg;
+
+  return nextList;
 };
 
-const mergeBackendImageBlocksWithOptimistic = (
-  backendContent: unknown[],
-  optimisticImageBlocks: unknown[],
-): unknown[] => {
-  if (optimisticImageBlocks.length === 0) {
-    return backendContent;
-  }
-
-  let imageIndex = 0;
-  return backendContent.map((block) => {
-    if (!block || typeof block !== 'object' || (block as any).type !== 'image') {
-      return block;
-    }
-
-    const optimisticBlock = optimisticImageBlocks[imageIndex];
-    imageIndex += 1;
-    if (!optimisticBlock || typeof optimisticBlock !== 'object') {
-      return block;
-    }
-
-    return {
-      ...optimisticBlock as Record<string, unknown>,
-      ...block as Record<string, unknown>,
-      previewSrc: (block as any).previewSrc ?? (optimisticBlock as any).previewSrc ?? (optimisticBlock as any).src,
-      thumbnailSrc: (block as any).thumbnailSrc ?? (optimisticBlock as any).thumbnailSrc ?? (block as any).src ?? (optimisticBlock as any).src,
-      sourceKind: (block as any).sourceKind ?? (optimisticBlock as any).sourceKind,
-      localPath: (block as any).localPath ?? (optimisticBlock as any).localPath,
-    };
-  });
-};
-
-const UPLOADED_PLACEHOLDER_RE = /^\[Uploaded .+\]$/;
-
+/**
+ * Extract comparable text content from a user message for deduplication matching.
+ * Handles both direct content string and raw.message.content array format.
+ */
 const getUserMessageComparableContent = (message: ClaudeMessage): string => {
   if (message.type !== 'user') return message.content || '';
   const rawContent = (message.raw as any)?.message?.content ?? (message.raw as any)?.content;
   if (!Array.isArray(rawContent)) {
-    return stripUploadedPlaceholder(message.content || '');
+    return message.content || '';
   }
-  const hasImageBlocks = rawContent.some(
-    (block: any) => block && typeof block === 'object' && block.type === 'image',
-  );
   const rawText = rawContent
     .filter((block: any) => block && typeof block === 'object' && block.type === 'text' && typeof block.text === 'string')
     .map((block: any) => block.text)
     .join('\n');
-  const result = rawText || message.content || '';
-  if (hasImageBlocks) {
-    return stripUploadedPlaceholder(result);
-  }
-  return result;
+  return rawText || message.content || '';
 };
 
-function stripUploadedPlaceholder(text: string): string {
-  const trimmed = text.trim();
-  if (UPLOADED_PLACEHOLDER_RE.test(trimmed)) {
-    return '';
+/**
+ * Extract timestamp from a message, handling both formats:
+ * - Java Message.timestamp: number (milliseconds)
+ * - SDK message.raw.timestamp: string (ISO format)
+ *
+ * Returns milliseconds since epoch for consistent comparison.
+ */
+export const getMessageTimestampMs = (message: ClaudeMessage): number | undefined => {
+  // First check the raw.timestamp field (SDK source, ISO string format)
+  const rawTimestamp = (message.raw as any)?.timestamp;
+  if (rawTimestamp != null) {
+    if (typeof rawTimestamp === 'string') {
+      const parsed = new Date(rawTimestamp).getTime();
+      if (Number.isFinite(parsed)) return parsed;
+    } else if (typeof rawTimestamp === 'number' && Number.isFinite(rawTimestamp)) {
+      // Raw timestamp might already be milliseconds (numeric)
+      return rawTimestamp;
+    }
   }
-  return text;
-}
 
-const parseMessageTimestamp = (timestamp: unknown): number => {
-  if (typeof timestamp === 'number' && Number.isFinite(timestamp)) {
-    return timestamp;
-  }
-  if (typeof timestamp === 'string' && timestamp.trim()) {
-    const numeric = Number(timestamp);
-    if (Number.isFinite(numeric)) {
-      return numeric;
-    }
-    const parsed = Date.parse(timestamp);
-    if (Number.isFinite(parsed)) {
-      return parsed;
+  // Fall back to message.timestamp field (may be number from Java or string from frontend)
+  const timestamp = message.timestamp;
+  if (timestamp != null) {
+    if (typeof timestamp === 'number' && Number.isFinite(timestamp)) {
+      return timestamp;
+    } else if (typeof timestamp === 'string') {
+      const parsed = new Date(timestamp).getTime();
+      if (Number.isFinite(parsed)) return parsed;
     }
   }
-  return Number.NaN;
+
+  return undefined;
 };
 
 /**
@@ -318,9 +264,6 @@ const isTextLikeBlock = (block: unknown): block is Record<string, unknown> => {
   const t = (block as Record<string, unknown>).type;
   return t === 'text' || t === 'thinking';
 };
-
-const getTextLikeType = (block: Record<string, unknown>): string =>
-  block.type === 'thinking' ? 'thinking' : 'text';
 
 const getTextLikeLength = (block: Record<string, unknown>): number => {
   if (block.type === 'text') return typeof block.text === 'string' ? block.text.length : 0;
@@ -377,27 +320,19 @@ export const mergeRawBlocksDuringStreaming = (
 
   if (nextBlocks.length === 0) return nextRaw;
 
-  const prevTextLikeBlocks = prevBlocks.filter(isTextLikeBlock);
-  const prevTextLikeCursors: Record<string, number> = { text: 0, thinking: 0 };
+  let prevTextLikeIdx = 0;
   let changed = false;
 
   const mergedBlocks = nextBlocks.map((nextBlock) => {
     if (!isTextLikeBlock(nextBlock)) return nextBlock;
 
-    const nextType = getTextLikeType(nextBlock);
-    let matchedTypeIndex = -1;
-    let seenOfType = 0;
-    for (let i = 0; i < prevTextLikeBlocks.length; i += 1) {
-      if (getTextLikeType(prevTextLikeBlocks[i]) !== nextType) continue;
-      if (seenOfType === prevTextLikeCursors[nextType]) {
-        matchedTypeIndex = i;
-        break;
-      }
-      seenOfType += 1;
+    // Advance to the next text-like block in prev
+    while (prevTextLikeIdx < prevBlocks.length && !isTextLikeBlock(prevBlocks[prevTextLikeIdx])) {
+      prevTextLikeIdx += 1;
     }
-    prevTextLikeCursors[nextType] += 1;
 
-    const prevBlock = matchedTypeIndex >= 0 ? prevTextLikeBlocks[matchedTypeIndex] : undefined;
+    const prevBlock = prevBlocks[prevTextLikeIdx] as Record<string, unknown> | undefined;
+    prevTextLikeIdx += 1;
 
     if (!prevBlock) return nextBlock;
 
@@ -532,14 +467,6 @@ const isToolOnlyMessage = (message: ClaudeMessage): boolean => {
   return blocks.length > 0 && blocks.every((block) => block.type === 'tool_use' || block.type === 'tool_result');
 };
 
-const isToolResultOnlyUserMessage = (message: ClaudeMessage): boolean => {
-  if (message.type !== 'user') return false;
-  if ((message.content ?? '').trim() === '[tool_result]') return true;
-
-  const blocks = getMessageContentArray(message);
-  return blocks.length > 0 && blocks.every((block) => block.type === 'tool_result');
-};
-
 export const stripDuplicateTrailingToolMessages = (
   nextList: ClaudeMessage[],
   provider: string,
@@ -591,8 +518,10 @@ export const stripDuplicateTrailingToolMessages = (
  * When backend snapshots briefly shrink (e.g., Codex compaction or Claude
  * conversation summarization), preserve the newest in-memory turn locally
  * until the backend catches up, instead of wiping it from the UI.
- * FIX: Apply to all providers, not just Codex, to prevent message loss
- * during streaming end race conditions.
+ *
+ * KEY FIX: Applies to all providers (not just Codex), and filters out
+ * optimistic messages if nextList already contains a matching user message.
+ * This prevents duplicate display after compact operation.
  */
 export const preserveLatestMessagesOnShrink = (
   prevList: ClaudeMessage[],
@@ -608,43 +537,40 @@ export const preserveLatestMessagesOnShrink = (
 
   // Check if the preserved tail contains streaming/recent assistant messages
   const hasStreamingTail = preservedTail.some((msg) => msg.type === 'assistant' && (msg.isStreaming || !!msg.__turnId));
-  const hasRecentUserTail = preservedTail.some((msg) => msg.type === 'user');
+  const hasUserTail = preservedTail.some((msg) => msg.type === 'user');
 
   // Codex: always preserve shrink tail (handles compaction/summarization)
   // Other providers: only preserve if tail contains streaming/recent messages
-  if (provider !== 'codex' && !hasStreamingTail && !hasRecentUserTail) {
+  if (provider !== 'codex' && !hasStreamingTail && !hasUserTail) {
     return nextList;
   }
 
-  // Deduplicate user messages: remove tail user messages whose content
-  // already appears in nextList. This prevents duplicate user bubbles
-  // when an optimistic message was preserved but the backend snapshot
-  // now includes the confirmed user message.
-  const confirmedUserContents = new Set(
-    nextList
-      .filter((msg) => msg.type === 'user')
-      .map((msg) => getUserMessageComparableContent(msg))
-      .filter((content) => content.trim().length > 0),
-  );
-  const preservedUserContents = new Set<string>();
-  const duplicateSafeTail = preservedTail.filter((msg) => {
-    if (msg.type !== 'user') {
-      return true;
+  // FIX: Filter out optimistic messages from preservedTail if nextList already
+  // has a matching user message. This prevents duplicate display when compact
+  // sends a shorter list but includes the backend version of the optimistic.
+  const nextListUserTexts = new Set<string>();
+  for (const msg of nextList) {
+    if (msg.type === 'user') {
+      const text = getUserMessageComparableContent(msg);
+      if (text) nextListUserTexts.add(text);
     }
-    const comparable = getUserMessageComparableContent(msg);
-    if (!comparable.trim()) {
-      return true;
+  }
+
+  const filteredTail = preservedTail.filter((msg) => {
+    // Always preserve assistant and other non-user messages
+    if (msg.type !== 'user') return true;
+    // Don't preserve optimistic if nextList has matching content
+    if (msg.isOptimistic) {
+      const optimisticText = getUserMessageComparableContent(msg);
+      if (optimisticText && nextListUserTexts.has(optimisticText)) {
+        return false; // Skip this optimistic to avoid duplicate
+      }
     }
-    if (confirmedUserContents.has(comparable) || preservedUserContents.has(comparable)) {
-      return false;
-    }
-    preservedUserContents.add(comparable);
     return true;
   });
-  if (duplicateSafeTail.length === 0) {
-    return nextList;
-  }
-  return [...nextList, ...duplicateSafeTail];
+
+  if (filteredTail.length === 0) return nextList;
+  return [...nextList, ...filteredTail];
 };
 
 // ---------------------------------------------------------------------------

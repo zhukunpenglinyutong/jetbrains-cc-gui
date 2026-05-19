@@ -494,6 +494,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     sendToJava('get_status_bar_widget_enabled:');
     sendToJava('get_task_completion_notification_enabled:');
     sendToJava('get_invocation_mode:');
+    sendToJava('get_permission_dialog_timeout:');
 
     return () => {
       d().cleanupAgentsTimeout();

@@ -4,51 +4,30 @@ import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.handler.provider.ModelProviderHandler;
 
+import com.github.claudecodegui.util.LanguageConfigService;
 import com.github.claudecodegui.util.ThemeConfigService;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
 /**
  * Settings and usage statistics message handler.
  * Delegates to focused sub-handlers for each concern.
- *
- * @author melon
  */
 public class SettingsHandler extends BaseMessageHandler {
 
-    /**
-     * log.
-     */
     private static final Logger LOG = Logger.getInstance(SettingsHandler.class);
+    private final Gson gson = new Gson();
 
-    /**
-     * input history handler.
-     */
     private final InputHistoryHandler inputHistoryHandler;
-    /**
-     * usage push service.
-     */
+    private final SoundSettingsHandler soundSettingsHandler;
     private final UsagePushService usagePushService;
-    /**
-     * permission mode handler.
-     */
     private final PermissionModeHandler permissionModeHandler;
-    /**
-     * model provider handler.
-     */
     private final ModelProviderHandler modelProviderHandler;
-    /**
-     * node path handler.
-     */
     private final NodePathHandler nodePathHandler;
-    /**
-     * project config handler.
-     */
     private final ProjectConfigHandler projectConfigHandler;
 
-    /**
-     * supported types.
-     */
     private static final String[] SUPPORTED_TYPES = {
         "get_mode",
         "set_mode",
@@ -66,12 +45,17 @@ public class SettingsHandler extends BaseMessageHandler {
         "browse_ui_font_file",
         "get_streaming_enabled",
         "set_streaming_enabled",
+        "get_invocation_mode",
+        "set_invocation_mode",
+        "set_cli_path",
         "get_codex_sandbox_mode",
         "set_codex_sandbox_mode",
         "get_send_shortcut",
         "set_send_shortcut",
         "get_auto_open_file_enabled",
         "set_auto_open_file_enabled",
+        "get_permission_dialog_timeout",
+        "set_permission_dialog_timeout",
         "get_commit_generation_enabled",
         "set_commit_generation_enabled",
         "get_status_bar_widget_enabled",
@@ -91,19 +75,24 @@ public class SettingsHandler extends BaseMessageHandler {
         "record_input_history",
         "delete_input_history_item",
         "clear_input_history",
-        "get_invocation_mode",
-        "set_invocation_mode",
-        "set_cli_path"
+        // Sound notification configuration
+        "get_sound_notification_config",
+        "set_sound_notification_enabled",
+        "set_sound_only_when_unfocused",
+        "set_selected_sound",
+        "set_custom_sound_path",
+        "test_sound",
+        "browse_sound_file",
+        // User language preference
+        "set_user_language",
+        "get_user_language",
+        "clear_user_language"
     };
 
-    /**
-     * Settings Handler
-     *
-     * @param context context
-     */
     public SettingsHandler(HandlerContext context) {
         super(context);
         this.inputHistoryHandler = new InputHistoryHandler(context);
+        this.soundSettingsHandler = new SoundSettingsHandler(context);
         this.usagePushService = new UsagePushService(context);
         this.permissionModeHandler = new PermissionModeHandler(context);
         this.modelProviderHandler = new ModelProviderHandler(context, usagePushService);
@@ -115,7 +104,6 @@ public class SettingsHandler extends BaseMessageHandler {
 
     /**
      * Register theme change listener.
-     *
      */
     private void registerThemeChangeListener() {
         ThemeConfigService.registerThemeChangeListener(themeConfig -> {
@@ -125,23 +113,11 @@ public class SettingsHandler extends BaseMessageHandler {
         });
     }
 
-    /**
-     * Get Supported Types
-     *
-     * @return string[]
-     */
     @Override
     public String[] getSupportedTypes() {
         return SUPPORTED_TYPES;
     }
 
-    /**
-     * Handle
-     *
-     * @param type type
-     * @param content content
-     * @return boolean
-     */
     @Override
     public boolean handle(String type, String content) {
         switch (type) {
@@ -197,6 +173,15 @@ public class SettingsHandler extends BaseMessageHandler {
             case "set_streaming_enabled":
                 projectConfigHandler.handleSetStreamingEnabled(content);
                 return true;
+            case "get_invocation_mode":
+                projectConfigHandler.handleGetInvocationMode();
+                return true;
+            case "set_invocation_mode":
+                projectConfigHandler.handleSetInvocationMode(content);
+                return true;
+            case "set_cli_path":
+                projectConfigHandler.handleSetCliPath(content);
+                return true;
             case "get_codex_sandbox_mode":
                 projectConfigHandler.handleGetCodexSandboxMode();
                 return true;
@@ -214,6 +199,12 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_auto_open_file_enabled":
                 projectConfigHandler.handleSetAutoOpenFileEnabled(content);
+                return true;
+            case "get_permission_dialog_timeout":
+                projectConfigHandler.handleGetPermissionDialogTimeout();
+                return true;
+            case "set_permission_dialog_timeout":
+                projectConfigHandler.handleSetPermissionDialogTimeout(content);
                 return true;
             case "get_commit_generation_enabled":
                 projectConfigHandler.handleGetCommitGenerationEnabled();
@@ -279,15 +270,37 @@ public class SettingsHandler extends BaseMessageHandler {
             case "clear_input_history":
                 inputHistoryHandler.handleClearInputHistory();
                 return true;
-            // Invocation mode (SDK / CLI)
-            case "get_invocation_mode":
-                projectConfigHandler.handleGetInvocationMode();
+            // Sound notification configuration
+            case "get_sound_notification_config":
+                soundSettingsHandler.handleGetSoundNotificationConfig();
                 return true;
-            case "set_invocation_mode":
-                projectConfigHandler.handleSetInvocationMode(content);
+            case "set_sound_notification_enabled":
+                soundSettingsHandler.handleSetSoundNotificationEnabled(content);
                 return true;
-            case "set_cli_path":
-                projectConfigHandler.handleSetCliPath(content);
+            case "set_sound_only_when_unfocused":
+                soundSettingsHandler.handleSetSoundOnlyWhenUnfocused(content);
+                return true;
+            case "set_selected_sound":
+                soundSettingsHandler.handleSetSelectedSound(content);
+                return true;
+            case "set_custom_sound_path":
+                soundSettingsHandler.handleSetCustomSoundPath(content);
+                return true;
+            case "test_sound":
+                soundSettingsHandler.handleTestSound(content);
+                return true;
+            case "browse_sound_file":
+                soundSettingsHandler.handleBrowseSoundFile();
+                return true;
+            // User language preference
+            case "set_user_language":
+                handleSetUserLanguage(content);
+                return true;
+            case "get_user_language":
+                handleGetUserLanguage();
+                return true;
+            case "clear_user_language":
+                handleClearUserLanguage();
                 return true;
             default:
                 return false;
@@ -295,10 +308,63 @@ public class SettingsHandler extends BaseMessageHandler {
     }
 
     /**
+     * Handle set_user_language: save user's manual language preference.
+     * On failure, push the authoritative config back so the webview can roll
+     * back its optimistic UI update.
+     */
+    private void handleSetUserLanguage(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            String language = json.has("language") && !json.get("language").isJsonNull()
+                    ? json.get("language").getAsString() : null;
+            if (language == null || language.isEmpty()) {
+                LOG.warn("[SettingsHandler] set_user_language rejected: empty language");
+                pushLanguageConfig();
+                return;
+            }
+            LanguageConfigService.setUserLanguage(context.getSettingsService(), language);
+            LOG.info("[SettingsHandler] Saved user language preference: " + language);
+            pushLanguageConfig();
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to save user language: " + e.getMessage(), e);
+            pushLanguageConfig();
+        }
+    }
+
+    /**
+     * Handle get_user_language: return user's saved language preference.
+     */
+    private void handleGetUserLanguage() {
+        String userLanguage = LanguageConfigService.getUserLanguage(context.getSettingsService());
+        JsonObject response = new JsonObject();
+        response.addProperty("language", userLanguage != null ? userLanguage : "");
+        response.addProperty("manuallySet", userLanguage != null);
+        callJavaScript("window.onUserLanguage", escapeJs(response.toString()));
+    }
+
+    /**
+     * Handle clear_user_language: clear user's manual language preference.
+     * Pushes the authoritative config on both success and failure so the
+     * webview always reflects the persisted state.
+     */
+    private void handleClearUserLanguage() {
+        try {
+            LanguageConfigService.clearUserLanguage(context.getSettingsService());
+            LOG.info("[SettingsHandler] Cleared user language preference");
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to clear user language: " + e.getMessage(), e);
+        } finally {
+            pushLanguageConfig();
+        }
+    }
+
+    private void pushLanguageConfig() {
+        JsonObject languageConfig = LanguageConfigService.getLanguageConfig(context.getSettingsService());
+        callJavaScript("window.applyIdeaLanguageConfig", escapeJs(languageConfig.toString()));
+    }
+
+    /**
      * Expose getModelContextLimit for callers that previously used the static method on SettingsHandler.
-     *
-     * @param model model
-     * @return int
      */
     public static int getModelContextLimit(String model) {
         return ModelProviderHandler.getModelContextLimit(model);

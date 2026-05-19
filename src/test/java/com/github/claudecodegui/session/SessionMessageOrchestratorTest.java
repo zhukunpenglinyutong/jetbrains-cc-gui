@@ -1,4 +1,5 @@
 package com.github.claudecodegui.session;
+
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;

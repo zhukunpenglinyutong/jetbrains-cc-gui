@@ -9,6 +9,8 @@ import {
   mergeConsecutiveAssistantMessages,
   isTaskNotificationOnlyMessage,
   hasNonHumanOrigin,
+  isCompactRelatedMessage,
+  isCompactCommandMessage,
   MESSAGE_TYPES,
 } from '../utils/messageUtils';
 import type { ClaudeContentBlock, ClaudeMessage, ClaudeRawMessage } from '../types';
@@ -117,14 +119,29 @@ export function useMessageProcessing({ messages, currentSessionId, t }: UseMessa
     );
 
     const visible: ClaudeMessage[] = [];
+
     for (const message of merged) {
+      // ── Compact summary → notification ─────────────────────────────────
+      // Must happen before shouldShowMessage because isCompactSummary
+      // messages are filtered out there. Show as left-aligned collapsible
+      // notification block with title, metadata, and expandable summary.
+      // /compact command messages pass through to shouldShowMessage where
+      // hasCommandMessageTag returns true → rendered as normal user message.
+      // stdout messages are hidden by HIDDEN_OUTPUT_TAGS filter.
+      if (message.type === MESSAGE_TYPES.USER && isCompactRelatedMessage(message) && !isTaskNotificationOnlyMessage(message)) {
+        const raw = message.raw;
+        const isCompactSummary = raw && typeof raw === 'object' && 'isCompactSummary' in raw && raw.isCompactSummary;
+        if (isCompactSummary) {
+          visible.push({ ...message, type: MESSAGE_TYPES.NOTIFICATION });
+          continue;
+        }
+      }
+
+      // ── Standard visibility + type transforms ──────────────────────────
       if (shouldShowMessageCached(message)) {
-        // Transform task_notification messages to have specific type
         if (message.type === MESSAGE_TYPES.USER && isTaskNotificationOnlyMessage(message)) {
           visible.push({ ...message, type: MESSAGE_TYPES.TASK_NOTIFICATION });
         }
-        // Transform other non-human origin messages
-        // to 'notification' type for left-aligned display
         else if (message.type === MESSAGE_TYPES.USER && hasNonHumanOrigin(message)) {
           visible.push({ ...message, type: MESSAGE_TYPES.NOTIFICATION });
         } else {
@@ -132,10 +149,35 @@ export function useMessageProcessing({ messages, currentSessionId, t }: UseMessa
         }
       }
     }
+
+    // Post-process: ensure /compact command appears before its compact
+    // summary notification. In CLI output the isCompactSummary message can
+    // precede the /compact command in the JSONL file, so after filtering
+    // intermediate messages they may end up adjacent in the wrong order:
+    // [notification, /compact user]. Swap them.
+    //
+    // Assumption: each /compact invocation produces exactly one summary, so
+    // we only ever need to swap a single adjacent pair per cluster. After a
+    // swap we advance by 2 (via `i += 2`) to avoid re-considering the just-
+    // swapped notification as the `curr` of the next iteration, which would
+    // otherwise undo the swap if a second compact pair follows immediately.
+    for (let i = 0; i < visible.length - 1; i++) {
+      const curr = visible[i];
+      const next = visible[i + 1];
+      const currRaw = curr.raw;
+      if (curr.type === MESSAGE_TYPES.NOTIFICATION
+        && currRaw && typeof currRaw === 'object' && currRaw.isCompactSummary
+        && next.type === MESSAGE_TYPES.USER && isCompactCommandMessage(next)) {
+        visible[i] = next;
+        visible[i + 1] = curr;
+        i++; // Skip the swapped pair to keep ordering stable for chained compacts
+      }
+    }
+
     return visible;
-    // Note: isTaskNotificationOnlyMessage and hasNonHumanOrigin are stable module-level
-    // pure functions imported from messageUtils — their references never change,
-    // so they don't need to be in the dependency array.
+    // Note: isTaskNotificationOnlyMessage, hasNonHumanOrigin, isCompactRelatedMessage
+    // are stable module-level pure functions imported from messageUtils — their references
+    // never change, so they don't need to be in the dependency array.
   }, [messages, shouldShowMessageCached, normalizeBlocks]);
 
   return {
