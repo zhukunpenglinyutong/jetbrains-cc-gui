@@ -179,4 +179,88 @@ describe('PermissionDialog', () => {
     expect(onSkip).not.toHaveBeenCalled();
     expect(onApproveAlways).not.toHaveBeenCalled();
   });
+
+  // The dialog overlay sits above the chat input but the keydown listener is on
+  // window, so without the editable-target guard a stray Enter in any input
+  // (chat box, settings, etc.) would silently auto-approve the pending tool call.
+  it('ignores Enter when focus is on an INPUT element', () => {
+    const onApprove = vi.fn();
+    const onSkip = vi.fn();
+    const onApproveAlways = vi.fn();
+
+    render(
+      <PermissionDialog
+        isOpen
+        request={buildRequest()}
+        onApprove={onApprove}
+        onSkip={onSkip}
+        onApproveAlways={onApproveAlways}
+      />,
+    );
+
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+    try {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    } finally {
+      input.remove();
+    }
+
+    expect(onApprove).not.toHaveBeenCalled();
+    expect(onSkip).not.toHaveBeenCalled();
+    expect(onApproveAlways).not.toHaveBeenCalled();
+  });
+
+  it('ignores option-shortcut digits (1/2/3) when focus is on an INPUT element', () => {
+    const onApprove = vi.fn();
+    const onSkip = vi.fn();
+    const onApproveAlways = vi.fn();
+
+    render(
+      <PermissionDialog
+        isOpen
+        request={buildRequest()}
+        onApprove={onApprove}
+        onSkip={onSkip}
+        onApproveAlways={onApproveAlways}
+      />,
+    );
+
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+    try {
+      for (const key of ['1', '2', '3']) {
+        input.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+      }
+    } finally {
+      input.remove();
+    }
+
+    expect(onApprove).not.toHaveBeenCalled();
+    expect(onApproveAlways).not.toHaveBeenCalled();
+    expect(onSkip).not.toHaveBeenCalled();
+  });
+
+  it('still honors Enter when no editable element has focus', () => {
+    const onApprove = vi.fn();
+    const onSkip = vi.fn();
+    const onApproveAlways = vi.fn();
+
+    render(
+      <PermissionDialog
+        isOpen
+        request={buildRequest()}
+        onApprove={onApprove}
+        onSkip={onSkip}
+        onApproveAlways={onApproveAlways}
+      />,
+    );
+
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    expect(onApprove).toHaveBeenCalledTimes(1);
+    expect(onApprove).toHaveBeenCalledWith('perm-1');
+  });
 });

@@ -5,6 +5,7 @@ import { useDialogCountdownTimeout } from '../hooks/useDialogCountdownTimeout';
 import { DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS } from '../utils/permissionDialogTimeout';
 import MarkdownBlock from './MarkdownBlock';
 import { useDialogResize } from '../hooks/useDialogResize';
+import { isEditableEventTarget } from '../utils/isEditableEventTarget';
 
 export interface PermissionRequest {
   channelId: string;
@@ -77,6 +78,10 @@ const PermissionDialog = ({
     }
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isEditableEventTarget(e.target)) {
+        return;
+      }
+
       if (e.key === '1') {
         handleApprove();
       } else if (e.key === '2') {

@@ -102,6 +102,23 @@ export function isWindowsTaskkillParseNoise(message) {
     /[\uFFFD]{2,}/.test(item);
 }
 
+export function isWindowsTaskkillParseNoise(message) {
+  if (typeof message !== 'string') return false;
+  if (!message.startsWith('Failed to parse item:')) return false;
+
+  const item = message.substring('Failed to parse item:'.length).trim();
+  if (!item) return false;
+
+  const hasPidPair = /\bPID\s+\d+\b[\s\S]*\bPID\s+\d+\b/i.test(item);
+  if (!hasPidPair) return false;
+
+  return /SUCCESS/i.test(item) ||
+    /terminated/i.test(item) ||
+    /process/i.test(item) ||
+    /[\u6210\u529f\u7ec8\u6b62\u8fdb\u7a0b\u5b50]/.test(item) ||
+    /[\uFFFD]{2,}/.test(item);
+}
+
 function toolUseMsg(id, name, input) {
   return { type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id, name, input }] } };
 }
@@ -901,6 +918,8 @@ export async function processCodexEventStream(events, state, config) {
       /aborted|abort|cancel|interrupt/i.test(streamErrorMessage)
     )) {
       logInfo('PERM_DEBUG', `Suppress streamed turn abort after command denial: ${streamErrorMessage}`);
+    } else if (state.turnCompleted && isWindowsTaskkillParseNoise(streamErrorMessage)) {
+      console.warn('[DEBUG] Suppressed post-completion Codex taskkill parse noise:', streamErrorMessage);
     } else if (shouldSuppressCodexStreamParseErrorAfterCompletion(streamErrorMessage, state)) {
       logWarn('CODEX_JSON_STREAM', `Suppress post-completion Windows termination noise: ${streamErrorMessage}`);
     } else if (state.turnCompleted && isWindowsTaskkillParseNoise(streamErrorMessage)) {
