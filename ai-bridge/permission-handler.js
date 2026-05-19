@@ -8,6 +8,8 @@
 
 import {
   debugLog,
+  describeAnswersForLog,
+  describeInputForLog,
   requestAskUserQuestionAnswers,
   requestPermissionFromJava,
   requestPlanApproval,
@@ -92,21 +94,24 @@ export { requestPlanApproval, requestPermissionFromJava };
  */
 export async function canUseTool(toolName, input, options = {}) {
   const callStartTime = Date.now();
-  console.log('[PERM_DEBUG][CAN_USE_TOOL] ========== CALLED ==========');
-  console.log('[PERM_DEBUG][CAN_USE_TOOL] toolName:', toolName);
-  console.log('[PERM_DEBUG][CAN_USE_TOOL] input:', JSON.stringify(input));
-  console.log('[PERM_DEBUG][CAN_USE_TOOL] options:', options ? 'present' : 'undefined');
-  debugLog('CAN_USE_TOOL', `Called with tool: ${toolName}`, { input });
+  debugLog('CAN_USE_TOOL', '========== CALLED ==========');
+  debugLog('CAN_USE_TOOL', `toolName: ${toolName}`);
+  debugLog('CAN_USE_TOOL', 'inputMetadata', describeInputForLog(input));
+  debugLog('CAN_USE_TOOL', `options: ${options ? 'present' : 'undefined'}`);
+  debugLog('CAN_USE_TOOL', `Called with tool: ${toolName}`, describeInputForLog(input));
 
   // Special handling for the AskUserQuestion tool
   if (toolName === 'AskUserQuestion') {
-    debugLog('ASK_USER_QUESTION', 'Handling AskUserQuestion tool', { input });
+    debugLog('ASK_USER_QUESTION', 'Handling AskUserQuestion tool', describeInputForLog(input));
 
     const answers = await requestAskUserQuestionAnswers(input);
     const elapsed = Date.now() - callStartTime;
 
     if (answers !== null) {
-      debugLog('ASK_USER_QUESTION_SUCCESS', 'User provided answers', { answers, elapsed: `${elapsed}ms` });
+      debugLog('ASK_USER_QUESTION_SUCCESS', 'User provided answers', {
+        ...describeAnswersForLog(answers),
+        elapsed: `${elapsed}ms`
+      });
       return {
         behavior: 'allow',
         updatedInput: {
@@ -126,7 +131,7 @@ export async function canUseTool(toolName, input, options = {}) {
   // Rewrite paths like /tmp to the project root directory
   const rewriteResult = rewriteToolInputPaths(toolName, input);
   if (rewriteResult.changed) {
-    debugLog('PATH_REWRITE', `Paths were rewritten for tool: ${toolName}`, { input });
+    debugLog('PATH_REWRITE', `Paths were rewritten for tool: ${toolName}`, describeInputForLog(input));
   }
 
   // Deny if no tool name is provided
@@ -141,7 +146,10 @@ export async function canUseTool(toolName, input, options = {}) {
   // Check for dangerous paths before allowing
   const filePath = input.file_path || input.path;
   if (filePath && isDangerousPath(filePath)) {
-    debugLog('SECURITY', `Dangerous path detected, denying`, { path: filePath });
+    debugLog('SECURITY', 'Dangerous path detected, denying', {
+      toolName,
+      pathLength: String(filePath).length,
+    });
     return {
       behavior: 'deny',
       message: `Access to ${filePath} is not allowed for security reasons`

@@ -2,7 +2,6 @@ package com.github.claudecodegui.settings;
 
 import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import org.junit.After;
 import org.junit.Test;
 
@@ -13,7 +12,6 @@ import java.nio.file.Path;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
