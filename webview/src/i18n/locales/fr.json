@@ -121,6 +121,7 @@
       },
       "language": {
         "label": "Langue de l'interface",
+        "followIde": "Suivre l'IDE",
         "simplifiedChinese": "简体中文",
         "traditionalChinese": "繁體中文",
         "english": "English",

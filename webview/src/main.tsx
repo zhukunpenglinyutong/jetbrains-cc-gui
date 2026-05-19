@@ -414,16 +414,19 @@ function applyLanguageConfig(rawConfig: { language: string; source?: string; ide
 
   debugLog('[Main] Applying language config:', config, 'target language:', targetLanguage, 'source:', source);
 
+  const selectionMode = source === 'user' ? 'manual' : 'followIdea';
+
   i18n.changeLanguage(targetLanguage)
     .then(() => {
       localStorage.setItem('language', targetLanguage);
-      if (source === 'user') {
-        localStorage.setItem('languageSelectionMode', 'manual');
-      } else {
-        localStorage.setItem('languageSelectionMode', 'followIdea');
-      }
+      localStorage.setItem('languageSelectionMode', selectionMode);
       // Migrate from legacy 'languageManuallySet' key to 'languageSelectionMode'
       localStorage.removeItem('languageManuallySet');
+      // Notify subscribers (e.g. AppearanceTab) of the authoritative config so
+      // they can resync even when i18n.language did not change.
+      window.dispatchEvent(new CustomEvent('language-config-applied', {
+        detail: { language: targetLanguage, selectionMode },
+      }));
       debugLog('[Main] Applied language:', targetLanguage, 'source:', source ?? 'idea');
     })
     .catch((error) => {

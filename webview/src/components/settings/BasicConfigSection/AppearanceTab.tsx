@@ -165,11 +165,16 @@ const AppearanceTab = ({
   }, [uiFontConfig]);
 
   useEffect(() => {
-    setLanguageSelection(
-      localStorage.getItem('languageSelectionMode') === 'followIdea'
-        ? FOLLOW_IDEA_LANGUAGE
-        : (i18n.language || 'zh')
-    );
+    const resync = () => {
+      setLanguageSelection(
+        localStorage.getItem('languageSelectionMode') === 'followIdea'
+          ? FOLLOW_IDEA_LANGUAGE
+          : (i18n.language || 'zh')
+      );
+    };
+    resync();
+    window.addEventListener('language-config-applied', resync);
+    return () => window.removeEventListener('language-config-applied', resync);
   }, [i18n.language]);
 
   const resolvedTheme = useMemo(() => {
@@ -281,7 +286,7 @@ const AppearanceTab = ({
   ];
 
   const languageOptions = [
-    { value: FOLLOW_IDEA_LANGUAGE, label: 'settings.basic.theme.system' },
+    { value: FOLLOW_IDEA_LANGUAGE, label: 'settings.basic.language.followIde' },
     { value: 'zh', label: 'settings.basic.language.simplifiedChinese' },
     { value: 'zh-TW', label: 'settings.basic.language.traditionalChinese' },
     { value: 'en', label: 'settings.basic.language.english' },
@@ -296,11 +301,12 @@ const AppearanceTab = ({
 
   const handleLanguageChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const language = event.target.value;
+    // Optimistic UI update. Java owns the persisted config and pushes the
+    // authoritative state back via applyIdeaLanguageConfig, which is the
+    // single writer for localStorage language keys.
     setLanguageSelection(language);
 
     if (language === FOLLOW_IDEA_LANGUAGE) {
-      localStorage.setItem('languageSelectionMode', 'followIdea');
-      localStorage.removeItem('languageManuallySet');
       if (window.sendToJava) {
         window.sendToJava('clear_user_language:');
       }
@@ -308,11 +314,6 @@ const AppearanceTab = ({
     }
 
     i18n.changeLanguage(language);
-    localStorage.setItem('language', language);
-    localStorage.setItem('languageSelectionMode', 'manual');
-    localStorage.removeItem('languageManuallySet');
-
-    // Notify Java backend to save language preference persistently
     if (window.sendToJava) {
       window.sendToJava(`set_user_language:${JSON.stringify({ language })}`);
     }

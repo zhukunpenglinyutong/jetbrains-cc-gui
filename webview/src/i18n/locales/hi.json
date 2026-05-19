@@ -121,6 +121,7 @@
       },
       "language": {
         "label": "इंटरफ़ेस भाषा",
+        "followIde": "IDE का अनुसरण करें",
         "simplifiedChinese": "简体中文",
         "traditionalChinese": "繁體中文",
         "english": "English",

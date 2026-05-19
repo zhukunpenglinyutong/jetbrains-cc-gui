@@ -289,19 +289,25 @@ public class SettingsHandler extends BaseMessageHandler {
 
     /**
      * Handle set_user_language: save user's manual language preference.
+     * On failure, push the authoritative config back so the webview can roll
+     * back its optimistic UI update.
      */
     private void handleSetUserLanguage(String content) {
         try {
             JsonObject json = gson.fromJson(content, JsonObject.class);
             String language = json.has("language") && !json.get("language").isJsonNull()
                     ? json.get("language").getAsString() : null;
-            if (language != null && !language.isEmpty()) {
-                LanguageConfigService.setUserLanguage(context.getSettingsService(), language);
-                LOG.info("[SettingsHandler] Saved user language preference: " + language);
+            if (language == null || language.isEmpty()) {
+                LOG.warn("[SettingsHandler] set_user_language rejected: empty language");
                 pushLanguageConfig();
+                return;
             }
+            LanguageConfigService.setUserLanguage(context.getSettingsService(), language);
+            LOG.info("[SettingsHandler] Saved user language preference: " + language);
+            pushLanguageConfig();
         } catch (Exception e) {
             LOG.error("[SettingsHandler] Failed to save user language: " + e.getMessage(), e);
+            pushLanguageConfig();
         }
     }
 
@@ -318,14 +324,17 @@ public class SettingsHandler extends BaseMessageHandler {
 
     /**
      * Handle clear_user_language: clear user's manual language preference.
+     * Pushes the authoritative config on both success and failure so the
+     * webview always reflects the persisted state.
      */
     private void handleClearUserLanguage() {
         try {
             LanguageConfigService.clearUserLanguage(context.getSettingsService());
             LOG.info("[SettingsHandler] Cleared user language preference");
-            pushLanguageConfig();
         } catch (Exception e) {
             LOG.error("[SettingsHandler] Failed to clear user language: " + e.getMessage(), e);
+        } finally {
+            pushLanguageConfig();
         }
     }
 

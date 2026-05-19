@@ -121,6 +121,7 @@
       },
       "language": {
         "label": "界面语言",
+        "followIde": "跟随 IDE",
         "simplifiedChinese": "简体中文",
         "traditionalChinese": "繁體中文",
         "english": "English",
