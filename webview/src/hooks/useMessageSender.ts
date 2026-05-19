@@ -219,6 +219,7 @@ export function useMessageSender({
             type: 'image',
             src: `data:${att.mediaType};base64,${att.data}`,
             mediaType: att.mediaType,
+            sourceKind: 'base64',
           });
         } else {
           blocks.push({
@@ -271,6 +272,7 @@ export function useMessageSender({
           })),
           agent: agentInfo,
           fileTags: fileTagsInfo,
+          invocationMode: currentProvider === 'claude' ? getClaudeInvocationMode() : undefined,
           permissionMode: effectivePermissionMode,
         });
         sendBridgeEvent('send_message_with_attachments', payload);
@@ -280,6 +282,7 @@ export function useMessageSender({
           text,
           agent: agentInfo,
           fileTags: fileTagsInfo,
+          invocationMode: currentProvider === 'claude' ? getClaudeInvocationMode() : undefined,
           permissionMode: effectivePermissionMode,
         });
         sendBridgeEvent('send_message', fallbackPayload);
@@ -289,6 +292,7 @@ export function useMessageSender({
         text,
         agent: agentInfo,
         fileTags: fileTagsInfo,
+        invocationMode: currentProvider === 'claude' ? getClaudeInvocationMode() : undefined,
         permissionMode: effectivePermissionMode,
       });
       sendBridgeEvent('send_message', payload);

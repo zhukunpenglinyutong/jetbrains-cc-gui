@@ -1,4 +1,7 @@
+// @vitest-environment happy-dom
+
 import { act, renderHook } from '@testing-library/react';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { useMessageSender } from './useMessageSender';
 import type { UseMessageSenderOptions } from './useMessageSender';
 

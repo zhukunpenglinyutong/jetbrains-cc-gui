@@ -323,6 +323,113 @@ describe('appendOptimisticMessageIfMissing', () => {
     const hasAttachment = raw.message.content.some((b: any) => b.type === 'attachment');
     expect(hasAttachment).toBe(true);
   });
+
+  it('merges image blocks from optimistic message into matched backend message', () => {
+    const ts = new Date().toISOString();
+    const imageBlock = { type: 'image', src: 'data:image/png;base64,abc123', mediaType: 'image/png' };
+    const optimistic = makeUserMsg('hello', {
+      isOptimistic: true,
+      timestamp: ts,
+      raw: {
+        message: {
+          content: [imageBlock, { type: 'text', text: 'hello' }],
+        },
+      } as any,
+    });
+    const backendMsg = makeUserMsg('hello', { timestamp: ts });
+
+    const result = appendOptimisticMessageIfMissing([optimistic], [backendMsg]);
+    const raw = result[0].raw as any;
+    expect(Array.isArray(raw?.message?.content)).toBe(true);
+    const mergedImage = raw.message.content.find((b: any) => b.type === 'image');
+    expect(mergedImage?.src).toBe(imageBlock.src);
+  });
+
+  it('deduplicates optimistic image block when backend message already contains the same image slot', () => {
+    const ts = new Date().toISOString();
+    const optimisticImage = {
+      type: 'image',
+      src: 'data:image/png;base64,abc123',
+      mediaType: 'image/png',
+    };
+    const backendImage = {
+      type: 'image',
+      src: '/api/attachments/thumb-1',
+      previewSrc: '/api/attachments/full-1',
+      thumbnailSrc: '/api/attachments/thumb-1',
+      mediaType: 'image/png',
+    };
+    const optimistic = makeUserMsg('hello', {
+      isOptimistic: true,
+      timestamp: ts,
+      raw: {
+        message: {
+          content: [optimisticImage, { type: 'text', text: 'hello' }],
+        },
+      } as any,
+    });
+    const backendMsg = makeUserMsg('hello', {
+      timestamp: ts,
+      raw: {
+        message: {
+          content: [backendImage, { type: 'text', text: 'hello' }],
+        },
+      } as any,
+    });
+
+    const result = appendOptimisticMessageIfMissing([optimistic], [backendMsg]);
+    const raw = result[0].raw as any;
+    const imageBlocks = raw.message.content.filter((b: any) => b.type === 'image');
+    expect(imageBlocks).toHaveLength(1);
+    expect(imageBlocks[0]?.src).toBe(backendImage.src);
+    expect(imageBlocks[0]?.previewSrc).toBe(backendImage.previewSrc);
+    expect(imageBlocks[0]?.thumbnailSrc).toBe(backendImage.thumbnailSrc);
+  });
+
+  it('matches image-only optimistic message with backend [Uploaded ...] placeholder text', () => {
+    const ts = new Date().toISOString();
+    const imageBlock = { type: 'image', src: 'data:image/png;base64,abc123', mediaType: 'image/png' };
+    const optimistic = makeUserMsg('', {
+      isOptimistic: true,
+      timestamp: ts,
+      raw: {
+        message: {
+          content: [imageBlock],
+        },
+      } as any,
+    });
+    const backendMsg = makeUserMsg('[Uploaded Attachments: screenshot.png]', {
+      timestamp: ts,
+      raw: {
+        message: {
+          content: [
+            { type: 'image', src: 'https://cc-gui-attachment.local/abc.png', mediaType: 'image/png' },
+            { type: 'text', text: '[Uploaded Attachments: screenshot.png]' },
+          ],
+        },
+      } as any,
+    });
+
+    const result = appendOptimisticMessageIfMissing([optimistic], [backendMsg]);
+    expect(result).toHaveLength(1);
+    // Merged message should have image blocks
+    const raw = result[0].raw as any;
+    const imageBlocks = raw.message.content.filter((b: any) => b.type === 'image');
+    expect(imageBlocks.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('does not strip user-typed text that starts with [Uploaded', () => {
+    const ts = new Date().toISOString();
+    const optimistic = makeUserMsg('[Uploaded my custom message', {
+      isOptimistic: true,
+      timestamp: ts,
+    });
+    const backendMsg = makeUserMsg('[Uploaded my custom message', { timestamp: ts });
+
+    const result = appendOptimisticMessageIfMissing([optimistic], [backendMsg]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe(backendMsg);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -887,5 +994,38 @@ describe('preserveStreamingAssistantContent — raw blocks protection', () => {
     expect(blocks[0].type).toBe('thinking');
     expect((blocks[0].thinking as string).length).toBe(longThinking.length);
     expect(blocks[1].text).toBe('answer');
+  });
+
+  it('does not merge previous thinking content into a backend text block by position', () => {
+    const prev = [makeAssistantMsg('answer', {
+      isStreaming: true,
+      raw: {
+        message: {
+          content: [
+            { type: 'thinking', thinking: 'complete thinking' },
+            { type: 'text', text: 'answer' },
+          ],
+        },
+      } as any,
+    })];
+    const next = [makeAssistantMsg('ans', {
+      raw: {
+        message: {
+          content: [
+            { type: 'text', text: 'ans' },
+          ],
+        },
+      } as any,
+    })];
+
+    const result = preserveStreamingAssistantContent(
+      prev, next, ref(true), ref('answer'),
+      findLastAssistantIndex, patchAssistantForStreaming,
+    );
+
+    const blocks = (result[0].raw as any)?.message?.content as any[];
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].type).toBe('text');
+    expect(blocks[0].text).toBe('answer');
   });
 });

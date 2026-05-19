@@ -167,20 +167,31 @@ const mergeOptimisticAttachmentBlocks = (
 ): ClaudeMessage => {
   // Preserve attachment blocks from the optimistic message into the backend
   // message's raw data; otherwise non-image file attachments won't be visible.
+  // Also preserve optimistic image blocks so the chat keeps the in-memory
+  // data: URLs when the backend response only carries resource URLs.
   const optimisticRaw = optimisticMsg.raw as any;
   const optimisticContent: unknown[] | undefined = optimisticRaw?.message?.content;
   if (Array.isArray(optimisticContent)) {
     const attachmentBlocks = optimisticContent.filter(
       (b: any) => b && typeof b === 'object' && b.type === 'attachment',
     );
-    if (attachmentBlocks.length > 0) {
+    const imageBlocks = optimisticContent.filter(
+      (b: any) => b && typeof b === 'object' && b.type === 'image',
+    );
+    if (attachmentBlocks.length > 0 || imageBlocks.length > 0) {
       const backendRaw = (backendMsg.raw ?? {}) as any;
       const backendContent: unknown[] = Array.isArray(backendRaw?.message?.content)
         ? backendRaw.message.content
         : Array.isArray(backendRaw?.content)
           ? backendRaw.content
           : [];
-      const mergedContent = [...attachmentBlocks, ...backendContent];
+      const backendImageBlocks = backendContent.filter(
+        (b: any) => b && typeof b === 'object' && b.type === 'image',
+      );
+      const mergedBackendContent = backendImageBlocks.length > 0
+        ? mergeBackendImageBlocksWithOptimistic(backendContent, imageBlocks)
+        : [...imageBlocks, ...backendContent];
+      const mergedContent = [...attachmentBlocks, ...mergedBackendContent];
       const mergedRaw = {
         ...backendRaw,
         message: { ...(backendRaw?.message ?? {}), content: mergedContent },
@@ -191,18 +202,66 @@ const mergeOptimisticAttachmentBlocks = (
   return backendMsg;
 };
 
+const mergeBackendImageBlocksWithOptimistic = (
+  backendContent: unknown[],
+  optimisticImageBlocks: unknown[],
+): unknown[] => {
+  if (optimisticImageBlocks.length === 0) {
+    return backendContent;
+  }
+
+  let imageIndex = 0;
+  return backendContent.map((block) => {
+    if (!block || typeof block !== 'object' || (block as any).type !== 'image') {
+      return block;
+    }
+
+    const optimisticBlock = optimisticImageBlocks[imageIndex];
+    imageIndex += 1;
+    if (!optimisticBlock || typeof optimisticBlock !== 'object') {
+      return block;
+    }
+
+    return {
+      ...optimisticBlock as Record<string, unknown>,
+      ...block as Record<string, unknown>,
+      previewSrc: (block as any).previewSrc ?? (optimisticBlock as any).previewSrc ?? (optimisticBlock as any).src,
+      thumbnailSrc: (block as any).thumbnailSrc ?? (optimisticBlock as any).thumbnailSrc ?? (block as any).src ?? (optimisticBlock as any).src,
+      sourceKind: (block as any).sourceKind ?? (optimisticBlock as any).sourceKind,
+      localPath: (block as any).localPath ?? (optimisticBlock as any).localPath,
+    };
+  });
+};
+
+const UPLOADED_PLACEHOLDER_RE = /^\[Uploaded .+\]$/;
+
 const getUserMessageComparableContent = (message: ClaudeMessage): string => {
   if (message.type !== 'user') return message.content || '';
   const rawContent = (message.raw as any)?.message?.content ?? (message.raw as any)?.content;
   if (!Array.isArray(rawContent)) {
-    return message.content || '';
+    return stripUploadedPlaceholder(message.content || '');
   }
+  const hasImageBlocks = rawContent.some(
+    (block: any) => block && typeof block === 'object' && block.type === 'image',
+  );
   const rawText = rawContent
     .filter((block: any) => block && typeof block === 'object' && block.type === 'text' && typeof block.text === 'string')
     .map((block: any) => block.text)
     .join('\n');
-  return rawText || message.content || '';
+  const result = rawText || message.content || '';
+  if (hasImageBlocks) {
+    return stripUploadedPlaceholder(result);
+  }
+  return result;
 };
+
+function stripUploadedPlaceholder(text: string): string {
+  const trimmed = text.trim();
+  if (UPLOADED_PLACEHOLDER_RE.test(trimmed)) {
+    return '';
+  }
+  return text;
+}
 
 const parseMessageTimestamp = (timestamp: unknown): number => {
   if (typeof timestamp === 'number' && Number.isFinite(timestamp)) {
@@ -260,6 +319,9 @@ const isTextLikeBlock = (block: unknown): block is Record<string, unknown> => {
   return t === 'text' || t === 'thinking';
 };
 
+const getTextLikeType = (block: Record<string, unknown>): string =>
+  block.type === 'thinking' ? 'thinking' : 'text';
+
 const getTextLikeLength = (block: Record<string, unknown>): number => {
   if (block.type === 'text') return typeof block.text === 'string' ? block.text.length : 0;
   if (block.type === 'thinking') {
@@ -315,19 +377,27 @@ export const mergeRawBlocksDuringStreaming = (
 
   if (nextBlocks.length === 0) return nextRaw;
 
-  let prevTextLikeIdx = 0;
+  const prevTextLikeBlocks = prevBlocks.filter(isTextLikeBlock);
+  const prevTextLikeCursors: Record<string, number> = { text: 0, thinking: 0 };
   let changed = false;
 
   const mergedBlocks = nextBlocks.map((nextBlock) => {
     if (!isTextLikeBlock(nextBlock)) return nextBlock;
 
-    // Advance to the next text-like block in prev
-    while (prevTextLikeIdx < prevBlocks.length && !isTextLikeBlock(prevBlocks[prevTextLikeIdx])) {
-      prevTextLikeIdx += 1;
+    const nextType = getTextLikeType(nextBlock);
+    let matchedTypeIndex = -1;
+    let seenOfType = 0;
+    for (let i = 0; i < prevTextLikeBlocks.length; i += 1) {
+      if (getTextLikeType(prevTextLikeBlocks[i]) !== nextType) continue;
+      if (seenOfType === prevTextLikeCursors[nextType]) {
+        matchedTypeIndex = i;
+        break;
+      }
+      seenOfType += 1;
     }
+    prevTextLikeCursors[nextType] += 1;
 
-    const prevBlock = prevBlocks[prevTextLikeIdx] as Record<string, unknown> | undefined;
-    prevTextLikeIdx += 1;
+    const prevBlock = matchedTypeIndex >= 0 ? prevTextLikeBlocks[matchedTypeIndex] : undefined;
 
     if (!prevBlock) return nextBlock;
 
