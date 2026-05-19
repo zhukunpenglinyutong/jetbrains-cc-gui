@@ -5,6 +5,7 @@ import com.github.claudecodegui.bridge.ProcessManager;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.session.ClaudeSession.SessionCallback.QueueDisplayState;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -29,6 +30,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 class ClaudeCliBridge {
 
     private static final Logger LOG = Logger.getInstance(ClaudeCliBridge.class);
+    private static final String IMAGE_ATTACHMENT_HINT =
+            "The user has attached the image(s) above. Please use the Read tool to view them.";
 
     private final ProcessManager processManager;
     private final ClaudeCliDetector cliDetector;
@@ -115,7 +118,11 @@ class ClaudeCliBridge {
                             continue;
                         }
 
-                        tempFiles.add(tempFile);
+                        // Only track for cleanup if this is a temp file, not a persisted attachment
+                        if (attachment.localPath == null
+                                || !tempFile.getAbsolutePath().equals(attachment.localPath)) {
+                            tempFiles.add(tempFile);
+                        }
                         File parentDir = tempFile.getParentFile();
                         if (parentDir != null && parentDir.isDirectory()) {
                             String dirPath = parentDir.getAbsolutePath();
@@ -126,11 +133,12 @@ class ClaudeCliBridge {
 
                         String safePath = tempFile.getAbsolutePath().replace('\\', '/');
                         if (isImageAttachment(attachment)) {
-                            promptBuilder.append("\n\n[Attached image: ")
-                                    .append(attachment.fileName)
-                                    .append("]\nPlease use the Read tool to read the file at: ")
+                            promptBuilder.append("\n\n[Image #")
+                                    .append(i + 1)
+                                    .append(": ")
                                     .append(safePath)
-                                    .append("\nThen answer the user's question about this image.");
+                                    .append("]\n")
+                                    .append(IMAGE_ATTACHMENT_HINT);
                         } else {
                             promptBuilder.append("\n\n[Attached file: ")
                                     .append(attachment.fileName)
@@ -208,7 +216,8 @@ class ClaudeCliBridge {
                         if (!result.success) {
                             result.success = true;
                         }
-                        callback.onQueueDisplayStateChanged(QueueDisplayState.NONE, 0);
+                        // Don't override COMPLETED status - ClaudeMessageHandler.handleStreamEnd()
+                        // already set it to COMPLETED when stream_end was received
                         callback.onComplete(result);
                     } else {
                         String errorMsg = "CLI process exited with code: " + exitCode;
@@ -233,7 +242,8 @@ class ClaudeCliBridge {
                 return result;
             } finally {
                 cleanupTempFiles(tempFiles);
-                callback.onQueueDisplayStateChanged(QueueDisplayState.NONE, 0);
+                // Don't override COMPLETED status in finally block - only set to NONE on error
+                // The success case is handled above where onComplete preserves COMPLETED state
                 if (process != null) {
                     processManager.unregisterProcess(channelId, process);
                     processManager.waitForProcessTermination(process);
@@ -269,9 +279,10 @@ class ClaudeCliBridge {
         command.add("--include-partial-messages");
         command.add("--dangerously-skip-permissions");
 
-        if (model != null && !model.isEmpty()) {
+        String cliModel = resolveCliModel(model);
+        if (cliModel != null && !cliModel.isEmpty()) {
             command.add("--model");
-            command.add(model);
+            command.add(cliModel);
         }
 
         if (reasoningEffort != null && !reasoningEffort.isEmpty()) {
@@ -294,6 +305,69 @@ class ClaudeCliBridge {
         command.add("--");
         command.add(message);
         return command;
+    }
+
+    private String resolveCliModel(String selectedModel) {
+        try {
+            JsonObject claudeSettings = new CodemossSettingsService().readClaudeSettings();
+            if (claudeSettings == null || !claudeSettings.has("env") || !claudeSettings.get("env").isJsonObject()) {
+                return selectedModel;
+            }
+            String resolved = resolveMappedClaudeModel(selectedModel, claudeSettings.getAsJsonObject("env"));
+            if (resolved != null && !resolved.equals(selectedModel)) {
+                LOG.info("[CliBridge] Resolved CLI model mapping: " + selectedModel + " -> " + resolved);
+            }
+            return resolved;
+        } catch (Exception e) {
+            LOG.warn("[CliBridge] Failed to resolve CLI model mapping: " + e.getMessage());
+            return selectedModel;
+        }
+    }
+
+    static String resolveMappedClaudeModel(String selectedModel, JsonObject env) {
+        if (selectedModel == null || selectedModel.isBlank() || env == null) {
+            return selectedModel;
+        }
+
+        String mainModel = readEnvValue(env, "ANTHROPIC_MODEL");
+        if (mainModel != null) {
+            return mainModel;
+        }
+
+        String normalized = selectedModel.replaceFirst("(?i)\\[1m\\]$", "").toLowerCase();
+        if (!normalized.startsWith("claude-") && !normalized.startsWith("claude_")) {
+            return selectedModel;
+        }
+
+        if (normalized.contains("opus")) {
+            String mappedOpus = readEnvValue(env, "ANTHROPIC_DEFAULT_OPUS_MODEL");
+            return mappedOpus != null ? mappedOpus : selectedModel;
+        }
+        if (normalized.contains("haiku")) {
+            String mappedHaiku = readEnvValue(env, "ANTHROPIC_SMALL_FAST_MODEL");
+            if (mappedHaiku == null) {
+                mappedHaiku = readEnvValue(env, "ANTHROPIC_DEFAULT_HAIKU_MODEL");
+            }
+            return mappedHaiku != null ? mappedHaiku : selectedModel;
+        }
+        if (normalized.contains("sonnet")) {
+            String mappedSonnet = readEnvValue(env, "ANTHROPIC_DEFAULT_SONNET_MODEL");
+            return mappedSonnet != null ? mappedSonnet : selectedModel;
+        }
+
+        return selectedModel;
+    }
+
+    private static String readEnvValue(JsonObject env, String key) {
+        if (env == null || key == null || !env.has(key) || env.get(key).isJsonNull()) {
+            return null;
+        }
+        String value = env.get(key).getAsString();
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private File writeAttachmentToTempFile(ClaudeSession.Attachment attachment, String channelId) {

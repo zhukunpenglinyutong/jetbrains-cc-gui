@@ -92,34 +92,38 @@ class ClaudeRequestParamsBuilder {
             obj.put("fileName", att.fileName);
             obj.put("mediaType", att.mediaType);
 
-            // 图片类型：写入临时文件，只传路径
             String mt = att.mediaType != null ? att.mediaType : "";
-            if (mt.startsWith("image/") && att.data != null && !att.data.isEmpty()) {
-                try {
-                    File imageFile = null;
-                    if (att.localPath != null && !att.localPath.isEmpty()) {
-                        File persisted = new File(att.localPath);
-                        if (persisted.isFile()) {
-                            imageFile = persisted;
+            if (mt.startsWith("image/")) {
+                boolean resolved = false;
+
+                // Prefer persisted attachment path (data may be null after persistence)
+                if (att.localPath != null && !att.localPath.isEmpty()) {
+                    File persisted = new File(att.localPath);
+                    if (persisted.isFile()) {
+                        obj.put("path", persisted.getAbsolutePath());
+                        resolved = true;
+                    }
+                }
+
+                // Fallback: write base64 data to temp file
+                if (!resolved && att.data != null && !att.data.isEmpty()) {
+                    try {
+                        File tempFile = writeBase64ToTempFile(att.data, mt);
+                        if (tempFile != null) {
+                            obj.put("path", tempFile.getAbsolutePath());
+                            tempFiles.add(tempFile);
+                            resolved = true;
                         }
+                    } catch (Exception e) {
+                        LOG.warn("[ClaudeParams] Failed to write image temp file, falling back to inline base64", e);
                     }
-                    if (imageFile == null) {
-                        imageFile = writeBase64ToTempFile(att.data, mt);
-                    }
-                    if (imageFile != null) {
-                        obj.put("path", imageFile.getAbsolutePath());
-                        if (att.localPath == null || !imageFile.getAbsolutePath().equals(att.localPath)) {
-                            tempFiles.add(imageFile);
-                        }
-                    } else {
-                        // 写入失败，回退到内联 base64
-                        obj.put("data", att.data);
-                    }
-                } catch (Exception e) {
-                    LOG.warn("[ClaudeParams] Failed to write image temp file, falling back to inline base64", e);
+                }
+
+                // Last resort: inline base64
+                if (!resolved && att.data != null && !att.data.isEmpty()) {
                     obj.put("data", att.data);
                 }
-            } else {
+            } else if (att.data != null && !att.data.isEmpty()) {
                 obj.put("data", att.data);
             }
 

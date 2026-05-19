@@ -63,6 +63,29 @@ public class ClaudeSessionQueryServiceTest {
     }
 
     @Test
+    public void normalizeClaudeHistoryMessageRestoresBareImagePathLines() throws IOException {
+        Path imagePath = Files.createTempFile("claude-history-bare-image", ".png");
+        try {
+            Files.write(imagePath, "png-bytes".getBytes(StandardCharsets.UTF_8));
+
+            JsonObject normalized = ClaudeSessionQueryService.normalizeClaudeHistoryMessage(
+                    createUserMessage("Analyze this image\n\n" + imagePath)
+            );
+
+            JsonArray contentBlocks = normalized.getAsJsonObject("message").getAsJsonArray("content");
+            assertEquals(2, contentBlocks.size());
+            JsonObject imageBlock = contentBlocks.get(0).getAsJsonObject();
+            assertEquals("image", imageBlock.get("type").getAsString());
+            assertEquals("resource_url", imageBlock.get("sourceKind").getAsString());
+            assertEquals(imagePath.toAbsolutePath().toString(), imageBlock.get("localPath").getAsString());
+            assertEquals("text", contentBlocks.get(1).getAsJsonObject().get("type").getAsString());
+            assertEquals("Analyze this image", contentBlocks.get(1).getAsJsonObject().get("text").getAsString());
+        } finally {
+            Files.deleteIfExists(imagePath);
+        }
+    }
+
+    @Test
     public void normalizeClaudeHistoryMessageStripsAppendedProjectModulesContext() throws IOException {
         Path imagePath = Files.createTempFile("claude-history-image-context", ".png");
         try {

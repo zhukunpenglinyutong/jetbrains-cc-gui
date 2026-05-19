@@ -29,9 +29,13 @@ class ClaudeSessionQueryService {
     private static final String CHANNEL_SCRIPT = "channel-manager.js";
     private static final int PROCESS_TIMEOUT_SECONDS = 30;
     private static final Pattern VALID_SESSION_ID = Pattern.compile("[a-zA-Z0-9_\\-]+");
-    private static final Pattern IMAGE_REFERENCE_PATTERN = Pattern.compile("(?m)^\\[Image #\\d+:\\s*(.+?)\\]\\s*$");
+    private static final Pattern IMAGE_REFERENCE_PATTERN = Pattern.compile(
+            "(?im)^\\s*(?:\\[Image #\\d+:\\s*)?((?:[a-z]:[/\\\\]|/).+?\\.(?:png|jpe?g|gif|webp|bmp|svg))(?:\\])?\\s*$"
+    );
     private static final String IMAGE_ATTACHMENT_HINT =
             "The user has attached the image(s) above. Please use the Read tool to view them.";
+    private static final String IMAGE_ATTACHMENT_CONTENT_HINT =
+            "The user attached the image file(s) above. Use the image content to answer the request.";
 
     private final Logger log;
     private final Gson gson;
@@ -292,6 +296,7 @@ class ClaudeSessionQueryService {
         String normalized = text.replace("\r\n", "\n");
         normalized = normalized.replace("\r", "\n");
         normalized = normalized.replace(IMAGE_ATTACHMENT_HINT, "");
+        normalized = normalized.replace(IMAGE_ATTACHMENT_CONTENT_HINT, "");
         normalized = UserMessageSanitizer.sanitizeUserFacingText(normalized);
         normalized = normalized.replaceAll("(?m)^[ \\t]+$", "");
         normalized = normalized.replaceAll("\n{3,}", "\n\n");

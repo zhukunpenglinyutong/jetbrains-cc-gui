@@ -228,6 +228,8 @@ public final class AttachmentStorageService {
             imageBlock.addProperty("previewSrc", original.url());
             imageBlock.addProperty("thumbnailSrc", thumbnail != null ? thumbnail.url() : original.url());
             imageBlock.addProperty("mediaType", mediaType);
+            imageBlock.addProperty("sourceKind", "resource_url");
+            imageBlock.addProperty("localPath", path.toAbsolutePath().toString());
             imageBlock.addProperty("alt", path.getFileName() != null ? path.getFileName().toString() : "image");
             return imageBlock;
         } catch (Exception e) {
