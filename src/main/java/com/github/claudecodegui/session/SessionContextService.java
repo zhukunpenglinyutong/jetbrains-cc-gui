@@ -2,6 +2,7 @@ package com.github.claudecodegui.session;
 
 import com.github.claudecodegui.service.RunConfigMonitorService;
 import com.github.claudecodegui.terminal.TerminalMonitorService;
+import com.github.claudecodegui.util.AttachmentStorageService;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
@@ -372,6 +373,14 @@ public class SessionContextService {
     }
 
     private JsonObject createImageBlock(ClaudeSession.Attachment att) {
+        if (att.localPath != null && !att.localPath.isBlank()) {
+            JsonObject pathBlock = AttachmentStorageService.getInstance()
+                    .createImageBlockFromPath(att.localPath);
+            if (pathBlock != null) {
+                return pathBlock;
+            }
+        }
+
         JsonObject imageBlock = new JsonObject();
         imageBlock.addProperty("type", "image");
 
@@ -383,6 +392,10 @@ public class SessionContextService {
             imageBlock.addProperty("previewSrc", att.resourceUrl);
             imageBlock.addProperty("thumbnailSrc", displayUrl);
             imageBlock.addProperty("mediaType", att.mediaType);
+            imageBlock.addProperty("sourceKind", "resource_url");
+            if (att.localPath != null && !att.localPath.isBlank()) {
+                imageBlock.addProperty("localPath", att.localPath);
+            }
             if (att.fileName != null && !att.fileName.isBlank()) {
                 imageBlock.addProperty("alt", att.fileName);
             }
@@ -392,6 +405,7 @@ public class SessionContextService {
             source.addProperty("media_type", att.mediaType);
             source.addProperty("data", att.data);
             imageBlock.add("source", source);
+            imageBlock.addProperty("sourceKind", "base64");
         }
 
         return imageBlock;

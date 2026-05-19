@@ -241,6 +241,7 @@ public class ClaudeChatWindow {
 
         this.chatWindowDelegate = new ChatWindowDelegate(createDelegateHost());
         chatWindowDelegate.loadPermissionModeFromSettings();
+        chatWindowDelegate.loadInvocationModeFromSettings();
         chatWindowDelegate.loadNodePathFromSettings();
         chatWindowDelegate.syncActiveProvider();
         chatWindowDelegate.initializeHandlers();
@@ -462,6 +463,9 @@ public class ClaudeChatWindow {
         }
         if (savedState.model != null && !savedState.model.trim().isEmpty()) {
             session.setModel(savedState.model);
+        }
+        if (savedState.claudeInvocationMode != null && !savedState.claudeInvocationMode.trim().isEmpty()) {
+            session.setClaudeInvocationMode(savedState.claudeInvocationMode);
         }
         if (savedState.reasoningEffort != null && !savedState.reasoningEffort.trim().isEmpty()) {
             session.setReasoningEffort(savedState.reasoningEffort);
@@ -836,6 +840,7 @@ public class ClaudeChatWindow {
         snapshot.cwd = session.getCwd();
         snapshot.model = session.getModel();
         snapshot.permissionMode = session.getPermissionMode();
+        snapshot.claudeInvocationMode = session.getClaudeInvocationMode();
         snapshot.reasoningEffort = session.getReasoningEffort();
 
         TabStateService.getInstance(project).saveTabSessionState(tabIndex, snapshot);
@@ -907,30 +912,8 @@ public class ClaudeChatWindow {
 
         boolean lastBridgeOwner = SharedBridgeReferenceCounter.release(project);
         if (lastBridgeOwner) {
-            try {
-                if (claudeSDKBridge != null) {
-                    int activeCount = claudeSDKBridge.getActiveProcessCount();
-                    if (activeCount > 0) {
-                        LOG.info("Cleaning up " + activeCount + " active Claude process(es)...");
-                    }
-                    claudeSDKBridge.cleanupAllProcesses();
-                }
-            } catch (Exception e) {
-                LOG.warn("Failed to clean up Claude processes: " + e.getMessage());
-            }
-
-            try {
-                if (codexSDKBridge != null) {
-                    int activeCount = codexSDKBridge.getActiveProcessCount();
-                    if (activeCount > 0) {
-                        LOG.info("Cleaning up " + activeCount + " active Codex process(es)...");
-                    }
-                    codexSDKBridge.cleanupAllProcesses();
-                }
-            } catch (Exception e) {
-                LOG.warn("Failed to clean up Codex processes: " + e.getMessage());
-            }
             ProjectBridgeRegistry.remove(project);
+            scheduleBridgeProcessCleanup(claudeSDKBridge, codexSDKBridge, project.getName());
         }
 
         try {
@@ -947,6 +930,50 @@ public class ClaudeChatWindow {
         }
 
         LOG.info("Window resources fully cleaned up, project: " + project.getName());
+    }
+
+    private static void scheduleBridgeProcessCleanup(
+            ClaudeSDKBridge claudeBridge,
+            CodexSDKBridge codexBridge,
+            String projectName
+    ) {
+        LOG.info("Scheduling async bridge process cleanup, project: " + projectName);
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            LOG.info("Starting async bridge process cleanup, project: " + projectName);
+            cleanupClaudeProcesses(claudeBridge);
+            cleanupCodexProcesses(codexBridge);
+            LOG.info("Async bridge process cleanup finished, project: " + projectName);
+        });
+    }
+
+    private static void cleanupClaudeProcesses(ClaudeSDKBridge claudeBridge) {
+        if (claudeBridge == null) {
+            return;
+        }
+        try {
+            int activeCount = claudeBridge.getActiveProcessCount();
+            if (activeCount > 0) {
+                LOG.info("Cleaning up " + activeCount + " active Claude process(es)...");
+            }
+            claudeBridge.cleanupAllProcesses();
+        } catch (Exception e) {
+            LOG.warn("Failed to clean up Claude processes: " + e.getMessage());
+        }
+    }
+
+    private static void cleanupCodexProcesses(CodexSDKBridge codexBridge) {
+        if (codexBridge == null) {
+            return;
+        }
+        try {
+            int activeCount = codexBridge.getActiveProcessCount();
+            if (activeCount > 0) {
+                LOG.info("Cleaning up " + activeCount + " active Codex process(es)...");
+            }
+            codexBridge.cleanupAllProcesses();
+        } catch (Exception e) {
+            LOG.warn("Failed to clean up Codex processes: " + e.getMessage());
+        }
     }
 
     // ==================== Host Interface Factories ====================

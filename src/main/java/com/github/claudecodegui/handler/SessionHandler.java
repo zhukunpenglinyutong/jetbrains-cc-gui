@@ -103,14 +103,15 @@ public class SessionHandler extends BaseMessageHandler {
      * [FIX] Now parses JSON format to extract text, agent info and file tags
      */
     private void handleSendMessage(String content) {
-        String nodeVersion = this.resolveNodeVersion();
-        if (nodeVersion == null) {
+        boolean requiresNodeRuntime = !isClaudeCliMode(extractInvocationMode(content));
+        String nodeVersion = requiresNodeRuntime ? this.resolveNodeVersion() : null;
+        if (requiresNodeRuntime && nodeVersion == null) {
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("addErrorMessage", escapeJs("未检测到有效的 Node.js 版本，请在设置中配置或重新打开工具窗口。"));
             });
             return;
         }
-        if (!NodeDetector.isVersionSupported(nodeVersion)) {
+        if (requiresNodeRuntime && !NodeDetector.isVersionSupported(nodeVersion)) {
             int minVersion = NodeDetector.MIN_NODE_MAJOR_VERSION;
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("addErrorMessage", escapeJs(
@@ -124,6 +125,7 @@ public class SessionHandler extends BaseMessageHandler {
         String agentPrompt = null;
         java.util.List<String> fileTagPaths = null;
         String requestedPermissionMode = null;
+        String requestedInvocationMode = null;
         try {
             Gson gson = new Gson();
             JsonObject payload = gson.fromJson(content, JsonObject.class);
@@ -165,6 +167,15 @@ public class SessionHandler extends BaseMessageHandler {
                     LOG.warn("[SessionHandler] Ignoring invalid permissionMode from payload: " + mode);
                 }
             }
+
+            if (payload != null && payload.has("invocationMode") && !payload.get("invocationMode").isJsonNull()) {
+                String mode = payload.get("invocationMode").getAsString();
+                if (SessionState.isValidClaudeInvocationMode(mode)) {
+                    requestedInvocationMode = mode;
+                } else {
+                    LOG.warn("[SessionHandler] Ignoring invalid invocationMode from payload: " + mode);
+                }
+            }
         } catch (Exception e) {
             // If parsing fails, treat content as plain text (backward compatibility)
             LOG.debug("[SessionHandler] Message is plain text, not JSON: " + e.getMessage());
@@ -175,6 +186,7 @@ public class SessionHandler extends BaseMessageHandler {
         final String finalAgentPrompt = agentPrompt;
         final java.util.List<String> finalFileTagPaths = fileTagPaths;
         final String finalRequestedPermissionMode = requestedPermissionMode;
+        final String finalRequestedInvocationMode = requestedInvocationMode;
 
         CompletableFuture.runAsync(() -> {
             String currentWorkingDir = determineWorkingDirectory();
@@ -192,7 +204,8 @@ public class SessionHandler extends BaseMessageHandler {
             }
 
             // [FIX] Pass agent prompt and file tags directly to session
-            context.getSession().send(finalPrompt, finalAgentPrompt, finalFileTagPaths, finalRequestedPermissionMode)
+            context.getSession().send(finalPrompt, finalAgentPrompt, finalFileTagPaths,
+                    finalRequestedPermissionMode, finalRequestedInvocationMode)
                 .thenRun(() -> {
                 })
                 .exceptionally(ex -> {
@@ -249,6 +262,9 @@ public class SessionHandler extends BaseMessageHandler {
                             attachment.resourceUrl = persisted.resourceUrl();
                             attachment.thumbnailUrl = persisted.thumbnailUrl();
                             attachment.attachmentHash = persisted.hash();
+                            // Image is now on disk — free the base64 string from the pipeline.
+                            // Downstream (SDK/CLI) reads from localPath; display uses resourceUrl.
+                            attachment.data = null;
                         }
                     }
                     atts.add(attachment);
@@ -258,6 +274,7 @@ public class SessionHandler extends BaseMessageHandler {
             // [FIX] Extract agent prompt from the payload for per-tab agent selection
             String agentPrompt = null;
             String requestedPermissionMode = null;
+            String requestedInvocationMode = null;
             if (payload != null && payload.has("agent") && !payload.get("agent").isJsonNull()) {
                 JsonObject agent = payload.getAsJsonObject("agent");
                 if (agent.has("prompt") && !agent.get("prompt").isJsonNull()) {
@@ -292,7 +309,16 @@ public class SessionHandler extends BaseMessageHandler {
                 }
             }
 
-            sendMessageWithAttachments(text, atts, agentPrompt, fileTagPaths, requestedPermissionMode);
+            if (payload != null && payload.has("invocationMode") && !payload.get("invocationMode").isJsonNull()) {
+                String mode = payload.get("invocationMode").getAsString();
+                if (SessionState.isValidClaudeInvocationMode(mode)) {
+                    requestedInvocationMode = mode;
+                } else {
+                    LOG.warn("[SessionHandler] Ignoring invalid invocationMode from attachment payload: " + mode);
+                }
+            }
+
+            sendMessageWithAttachments(text, atts, agentPrompt, fileTagPaths, requestedPermissionMode, requestedInvocationMode);
         } catch (Exception e) {
             LOG.error("[SessionHandler] 解析附件负载失败: " + e.getMessage(), e);
             handleSendMessage(content);
@@ -308,17 +334,19 @@ public class SessionHandler extends BaseMessageHandler {
         List<ClaudeSession.Attachment> attachments,
         String agentPrompt,
         java.util.List<String> fileTagPaths,
-        String requestedPermissionMode
+        String requestedPermissionMode,
+        String requestedInvocationMode
     ) {
         // Version check (consistent with handleSendMessage)
-        String nodeVersion = this.resolveNodeVersion();
-        if (nodeVersion == null) {
+        boolean requiresNodeRuntime = !isClaudeCliMode(requestedInvocationMode);
+        String nodeVersion = requiresNodeRuntime ? this.resolveNodeVersion() : null;
+        if (requiresNodeRuntime && nodeVersion == null) {
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("addErrorMessage", escapeJs("未检测到有效的 Node.js 版本，请在设置中配置或重新打开工具窗口。"));
             });
             return;
         }
-        if (!NodeDetector.isVersionSupported(nodeVersion)) {
+        if (requiresNodeRuntime && !NodeDetector.isVersionSupported(nodeVersion)) {
             int minVersion = NodeDetector.MIN_NODE_MAJOR_VERSION;
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("addErrorMessage", escapeJs(
@@ -330,6 +358,7 @@ public class SessionHandler extends BaseMessageHandler {
         final String finalAgentPrompt = agentPrompt;
         final java.util.List<String> finalFileTagPaths = fileTagPaths;
         final String finalRequestedPermissionMode = requestedPermissionMode;
+        final String finalRequestedInvocationMode = requestedInvocationMode;
 
         CompletableFuture.runAsync(() -> {
             String currentWorkingDir = determineWorkingDirectory();
@@ -346,7 +375,8 @@ public class SessionHandler extends BaseMessageHandler {
             }
 
             // [FIX] Pass agent prompt and file tags directly to session
-            context.getSession().send(prompt, attachments, finalAgentPrompt, finalFileTagPaths, finalRequestedPermissionMode)
+            context.getSession().send(prompt, attachments, finalAgentPrompt, finalFileTagPaths,
+                    finalRequestedPermissionMode, finalRequestedInvocationMode)
                 .thenRun(() -> {
                 })
                 .exceptionally(ex -> {
@@ -383,6 +413,40 @@ public class SessionHandler extends BaseMessageHandler {
         context.getSession().restart().thenRun(() -> {
             ApplicationManager.getApplication().invokeLater(() -> {});
         });
+    }
+
+    private String extractInvocationMode(String content) {
+        try {
+            JsonObject payload = new Gson().fromJson(content, JsonObject.class);
+            if (payload != null && payload.has("invocationMode") && !payload.get("invocationMode").isJsonNull()) {
+                String mode = payload.get("invocationMode").getAsString();
+                if (SessionState.isValidClaudeInvocationMode(mode)) {
+                    return mode;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    private boolean isClaudeCliMode(String requestedInvocationMode) {
+        ClaudeSession currentSession = context.getSession();
+        String provider = currentSession != null ? currentSession.getProvider() : context.getCurrentProvider();
+        if (!"claude".equals(provider)) {
+            return false;
+        }
+        if (SessionState.isValidClaudeInvocationMode(requestedInvocationMode)) {
+            return "cli".equals(requestedInvocationMode.trim());
+        }
+        if (currentSession != null && "cli".equals(currentSession.getClaudeInvocationMode())) {
+            return true;
+        }
+        try {
+            return "cli".equals(new com.github.claudecodegui.settings.CodemossSettingsService().getClaudeInvocationMode());
+        } catch (Exception e) {
+            LOG.debug("[SessionHandler] Failed to resolve Claude invocation mode: " + e.getMessage());
+            return false;
+        }
     }
 
     /**

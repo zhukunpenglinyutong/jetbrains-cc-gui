@@ -35,7 +35,6 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
     private final ClaudeRewindService rewindService;
     private final ClaudeDaemonRequestExecutor daemonRequestExecutor;
     private final ClaudeCliBridge cliBridge;
-    private volatile String invocationMode = "sdk";
 
     public ClaudeSDKBridge() {
         super(ClaudeSDKBridge.class);
@@ -80,7 +79,6 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 gson,
                 envConfigurator
         );
-        refreshInvocationMode();
     }
 
     /**
@@ -134,21 +132,28 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
     }
 
     public void refreshInvocationMode() {
+        // Invocation mode is resolved per request. This method remains for
+        // compatibility with older handlers that call it after settings changes.
+    }
+
+    private String resolveInvocationMode(String requestedInvocationMode) {
+        if ("cli".equals(requestedInvocationMode)) {
+            return "cli";
+        }
+        if ("sdk".equals(requestedInvocationMode)) {
+            return "sdk";
+        }
         try {
-            this.invocationMode = new CodemossSettingsService().getClaudeInvocationMode();
+            String configured = new CodemossSettingsService().getClaudeInvocationMode();
+            return "cli".equals(configured) ? "cli" : "sdk";
         } catch (Exception e) {
-            LOG.debug("[ClaudeSDKBridge] Failed to refresh invocation mode: " + e.getMessage());
-            this.invocationMode = "sdk";
+            LOG.debug("[ClaudeSDKBridge] Failed to resolve invocation mode: " + e.getMessage());
+            return "sdk";
         }
     }
 
     private boolean isCliInvocationModeCached() {
-        String mode = invocationMode;
-        if (mode == null || mode.isEmpty()) {
-            refreshInvocationMode();
-            mode = invocationMode;
-        }
-        return "cli".equals(mode);
+        return "cli".equals(resolveInvocationMode(null));
     }
 
     @Override
@@ -167,7 +172,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
         if (db != null && db.isAlive()) {
             LOG.info("[ClaudeSDKBridge] Sending daemon abort for channel: " + channelId);
             try {
-                db.sendAbort();
+                db.sendAbort(channelId);
             } catch (Exception e) {
                 LOG.error("[ClaudeSDKBridge] Daemon abort failed: " + e.getMessage());
             }
@@ -427,48 +432,27 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 + ", isCliMode=" + isCliInvocationModeCached());
 
         // CLI 模式：直接调用 claude CLI 二进制，不经过 Node.js
-        // 但图片附件需要回退到 daemon/per-process 模式，因为 CLI -p 模式的 Read tool
-        // 处理图片时存在已知 bug (GitHub #25960)：会幻觉内容而非正确解读图片
-        boolean hasImageAttachments = attachments != null && attachments.stream().anyMatch(
-                att -> att.mediaType != null && att.mediaType.startsWith("image/"));
-        if (isCliInvocationModeCached() && !hasImageAttachments) {
+        if (isCliInvocationModeCached()) {
             LOG.info("[ClaudeSDKBridge] Using CLI mode, forwarding to cliBridge with "
                     + (attachments != null ? attachments.size() : 0) + " attachments");
-            return cliBridge.sendMessage(
-                    channelId, message, sessionId, runtimeSessionEpoch, cwd,
+            return sendViaCliBridge(channelId, message, sessionId, runtimeSessionEpoch, cwd,
                     attachments, permissionMode, model, openedFiles, agentPrompt,
-                    streaming, disableThinking, reasoningEffort, callback
-            );
-        } else if (isCliInvocationModeCached() && hasImageAttachments) {
-            LOG.info("[ClaudeSDKBridge] CLI mode has image attachments, falling back to daemon/per-process mode");
+                    streaming, disableThinking, reasoningEffort, callback);
         }
 
         // Try daemon mode first (avoids per-request Node.js process spawning)
-        DaemonBridge db = daemonCoordinator.getDaemonBridge();
+        DaemonBridge db = getDaemonBridgeForSend();
         if (db != null) {
-            return sendMessageViaDaemon(db, channelId, message, sessionId, runtimeSessionEpoch, cwd,
+            return sendViaDaemonBridge(db, channelId, message, sessionId, runtimeSessionEpoch, cwd,
                     attachments, permissionMode, model, openedFiles, agentPrompt,
                     streaming, disableThinking, reasoningEffort, callback);
         }
 
         // Fallback: per-process mode (spawns a new Node.js process per request)
         LOG.info("[ClaudeSDKBridge] Using per-process mode (daemon not available)");
-        return processInvoker.sendMessage(
-                channelId,
-                message,
-                sessionId,
-                runtimeSessionEpoch,
-                cwd,
-                attachments,
-                permissionMode,
-                model,
-                openedFiles,
-                agentPrompt,
-                streaming,
-                disableThinking,
-                reasoningEffort,
-                callback
-        );
+        return sendViaProcessInvoker(channelId, message, sessionId, runtimeSessionEpoch, cwd,
+                attachments, permissionMode, model, openedFiles, agentPrompt,
+                streaming, disableThinking, reasoningEffort, callback);
     }
 
     /**
@@ -476,6 +460,48 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
      */
     public List<JsonObject> getSessionMessages(String sessionId, String cwd) {
         return sessionQueryService.getSessionMessages(sessionId, cwd);
+    }
+
+    public CompletableFuture<SDKResult> sendMessage(
+            String channelId,
+            String message,
+            String sessionId,
+            String runtimeSessionEpoch,
+            String cwd,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String model,
+            JsonObject openedFiles,
+            String agentPrompt,
+            Boolean streaming,
+            Boolean disableThinking,
+            String reasoningEffort,
+            String invocationMode,
+            MessageCallback callback
+    ) {
+        String effectiveInvocationMode = resolveInvocationMode(invocationMode);
+        LOG.info("[ClaudeSDKBridge] Explicit invocation mode for channel " + channelId + ": " + effectiveInvocationMode);
+
+        if ("cli".equals(effectiveInvocationMode)) {
+            return sendViaCliBridge(channelId, message, sessionId, runtimeSessionEpoch, cwd,
+                    attachments, permissionMode, model, openedFiles, agentPrompt,
+                    streaming, disableThinking, reasoningEffort, callback);
+        }
+
+        DaemonBridge db = getDaemonBridgeForSend();
+        if (db != null) {
+            return sendViaDaemonBridge(db, channelId, message, sessionId, runtimeSessionEpoch, cwd,
+                    attachments, permissionMode, model, openedFiles, agentPrompt,
+                    streaming, disableThinking, reasoningEffort, callback);
+        }
+
+        return sendViaProcessInvoker(channelId, message, sessionId, runtimeSessionEpoch, cwd,
+                attachments, permissionMode, model, openedFiles, agentPrompt,
+                streaming, disableThinking, reasoningEffort, callback);
+    }
+
+    protected DaemonBridge getDaemonBridgeForSend() {
+        return daemonCoordinator.getDaemonBridge();
     }
 
     public JsonObject getLatestClaudeUserMessage(String sessionId, String cwd) {
@@ -657,6 +683,94 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
     ) {
         return daemonRequestExecutor.sendMessageViaDaemon(
                 daemon,
+                channelId,
+                message,
+                sessionId,
+                runtimeSessionEpoch,
+                cwd,
+                attachments,
+                permissionMode,
+                model,
+                openedFiles,
+                agentPrompt,
+                streaming,
+                disableThinking,
+                reasoningEffort,
+                callback
+        );
+    }
+
+    /**
+     * Testable hook for CLI routing.
+     */
+    protected CompletableFuture<SDKResult> sendViaCliBridge(
+            String channelId,
+            String message,
+            String sessionId,
+            String runtimeSessionEpoch,
+            String cwd,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String model,
+            JsonObject openedFiles,
+            String agentPrompt,
+            Boolean streaming,
+            Boolean disableThinking,
+            String reasoningEffort,
+            MessageCallback callback
+    ) {
+        return cliBridge.sendMessage(
+                channelId, message, sessionId, runtimeSessionEpoch, cwd,
+                attachments, permissionMode, model, openedFiles, agentPrompt,
+                streaming, disableThinking, reasoningEffort, callback
+        );
+    }
+
+    /**
+     * Testable hook for daemon routing.
+     */
+    protected CompletableFuture<SDKResult> sendViaDaemonBridge(
+            DaemonBridge daemon,
+            String channelId,
+            String message,
+            String sessionId,
+            String runtimeSessionEpoch,
+            String cwd,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String model,
+            JsonObject openedFiles,
+            String agentPrompt,
+            Boolean streaming,
+            Boolean disableThinking,
+            String reasoningEffort,
+            MessageCallback callback
+    ) {
+        return sendMessageViaDaemon(daemon, channelId, message, sessionId, runtimeSessionEpoch, cwd,
+                attachments, permissionMode, model, openedFiles, agentPrompt,
+                streaming, disableThinking, reasoningEffort, callback);
+    }
+
+    /**
+     * Testable hook for per-process routing.
+     */
+    protected CompletableFuture<SDKResult> sendViaProcessInvoker(
+            String channelId,
+            String message,
+            String sessionId,
+            String runtimeSessionEpoch,
+            String cwd,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String model,
+            JsonObject openedFiles,
+            String agentPrompt,
+            Boolean streaming,
+            Boolean disableThinking,
+            String reasoningEffort,
+            MessageCallback callback
+    ) {
+        return processInvoker.sendMessage(
                 channelId,
                 message,
                 sessionId,

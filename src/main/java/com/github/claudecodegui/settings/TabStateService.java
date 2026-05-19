@@ -184,6 +184,7 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
         public String cwd;
         public String model;
         public String permissionMode;
+        public String claudeInvocationMode;
         public String reasoningEffort;
 
         public TabSessionState copy() {
@@ -193,6 +194,7 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
             copy.cwd = this.cwd;
             copy.model = this.model;
             copy.permissionMode = this.permissionMode;
+            copy.claudeInvocationMode = this.claudeInvocationMode;
             copy.reasoningEffort = this.reasoningEffort;
             return copy;
         }

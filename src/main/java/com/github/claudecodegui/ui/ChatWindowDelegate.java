@@ -163,6 +163,19 @@ public class ChatWindowDelegate {
         }
     }
 
+    public void loadInvocationModeFromSettings() {
+        try {
+            String mode = new CodemossSettingsService().getClaudeInvocationMode();
+            ClaudeSession session = host.getSession();
+            if (mode != null && session != null) {
+                session.setClaudeInvocationMode(mode);
+                LOG.info("Loaded invocation mode from settings: " + mode);
+            }
+        } catch (Exception e) {
+            LOG.warn("Failed to load invocation mode: " + e.getMessage());
+        }
+    }
+
     public void savePermissionModeToSettings(String mode) {
         try {
             PropertiesComponent props = PropertiesComponent.getInstance();

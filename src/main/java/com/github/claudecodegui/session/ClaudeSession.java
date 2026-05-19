@@ -360,7 +360,17 @@ public class ClaudeSession {
      * requestedPermissionMode priority: payload > sessionMode > default.
      */
     public CompletableFuture<Void> send(String input, String agentPrompt, List<String> fileTagPaths, String requestedPermissionMode) {
-        return send(input, null, agentPrompt, fileTagPaths, requestedPermissionMode);
+        return send(input, null, agentPrompt, fileTagPaths, requestedPermissionMode, null);
+    }
+
+    public CompletableFuture<Void> send(
+            String input,
+            String agentPrompt,
+            List<String> fileTagPaths,
+            String requestedPermissionMode,
+            String requestedInvocationMode
+    ) {
+        return send(input, null, agentPrompt, fileTagPaths, requestedPermissionMode, requestedInvocationMode);
     }
 
     /**
@@ -410,6 +420,17 @@ public class ClaudeSession {
             List<String> fileTagPaths,
             String requestedPermissionMode
     ) {
+        return send(input, attachments, agentPrompt, fileTagPaths, requestedPermissionMode, null);
+    }
+
+    public CompletableFuture<Void> send(
+            String input,
+            List<Attachment> attachments,
+            String agentPrompt,
+            List<String> fileTagPaths,
+            String requestedPermissionMode,
+            String requestedInvocationMode
+    ) {
         LOG.info("[ClaudeSession][DIAG] send() called, attachments="
                 + (attachments == null ? "NULL" : attachments.size()));
         if (attachments != null) {
@@ -429,6 +450,7 @@ public class ClaudeSession {
         final String finalAgentPrompt = agentPrompt;
         final List<String> finalFileTagPaths = fileTagPaths;
         final String finalRequestedPermissionMode = requestedPermissionMode;
+        final String finalRequestedInvocationMode = requestedInvocationMode;
 
         return launchClaude().thenCompose(chId -> {
             if (!state.isPendingSendOperationCurrent(sendInvalidationEpoch)) {
@@ -447,7 +469,8 @@ public class ClaudeSession {
                         openedFilesJson,
                         finalAgentPrompt,
                         finalFileTagPaths,
-                        finalRequestedPermissionMode
+                        finalRequestedPermissionMode,
+                        finalRequestedInvocationMode
                 );
             }).thenCompose(v -> {
                 if (!state.isPendingSendOperationCurrent(sendInvalidationEpoch)) {
@@ -656,6 +679,15 @@ public class ClaudeSession {
      */
     public String getProvider() {
         return state.getProvider();
+    }
+
+    public String getClaudeInvocationMode() {
+        return state.getClaudeInvocationMode();
+    }
+
+    public void setClaudeInvocationMode(String invocationMode) {
+        state.setClaudeInvocationMode(invocationMode);
+        LOG.info("Claude invocation mode updated to: " + state.getClaudeInvocationMode());
     }
 
     /**

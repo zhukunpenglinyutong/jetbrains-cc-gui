@@ -88,7 +88,8 @@ public class SessionSendService {
             JsonObject openedFilesJson,
             String externalAgentPrompt,
             List<String> fileTagPaths,
-            String requestedPermissionMode
+            String requestedPermissionMode,
+            String requestedInvocationMode
     ) {
         String agentPrompt = externalAgentPrompt;
         if (agentPrompt == null) {
@@ -126,7 +127,11 @@ public class SessionSendService {
             );
         }
 
-        return sendToClaude(channelId, input, attachments, openedFilesJson, agentPrompt, effectivePermissionMode);
+        String effectiveInvocationMode = resolveEffectiveClaudeInvocationMode(requestedInvocationMode);
+        state.setClaudeInvocationMode(effectiveInvocationMode);
+
+        return sendToClaude(channelId, input, attachments, openedFilesJson, agentPrompt,
+                effectivePermissionMode, effectiveInvocationMode);
     }
 
     public static String normalizeRequestedPermissionMode(String mode) {
@@ -165,6 +170,21 @@ public class SessionSendService {
             return null;
         }
         return ClaudeCodeGuiBundle.message("error.codexLocalAccessNotAuthorized");
+    }
+
+    public static String resolveEffectiveClaudeInvocationMode(String requestedMode) {
+        if (SessionState.isValidClaudeInvocationMode(requestedMode)) {
+            return requestedMode.trim();
+        }
+        try {
+            String configured = new CodemossSettingsService().getClaudeInvocationMode();
+            if (SessionState.isValidClaudeInvocationMode(configured)) {
+                return configured.trim();
+            }
+        } catch (Exception e) {
+            LOG.warn("[ModeSync][Backend] Failed to read Claude invocation mode, defaulting to sdk: " + e.getMessage());
+        }
+        return "sdk";
     }
 
     private CompletableFuture<Void> sendToCodex(
@@ -213,7 +233,8 @@ public class SessionSendService {
             List<ClaudeSession.Attachment> attachments,
             JsonObject openedFilesJson,
             String agentPrompt,
-            String effectivePermissionMode
+            String effectivePermissionMode,
+            String effectiveInvocationMode
     ) {
         LOG.info("[SessionSendService][DIAG] sendToClaude called, attachments="
                 + (attachments == null ? "NULL" : attachments.size()));
@@ -257,6 +278,7 @@ public class SessionSendService {
                         streaming,
                         false,
                         state.getReasoningEffort(),
+                        effectiveInvocationMode,
                         handler
                 ).thenApply(result -> null);
     }

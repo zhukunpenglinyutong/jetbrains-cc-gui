@@ -945,10 +945,14 @@ public class ProjectConfigHandler {
                 com.google.gson.JsonObject obj = gson.fromJson(content, com.google.gson.JsonObject.class);
                 String mode = obj.has("invocationMode") ? obj.get("invocationMode").getAsString() : "sdk";
                 settingsService.setClaudeInvocationMode(mode);
-                context.getClaudeSDKBridge().refreshInvocationMode();
+                if (context.getSession() != null) {
+                    context.getSession().setClaudeInvocationMode(mode);
+                }
                 LOG.info("[ProjectConfigHandler] Set invocation mode: " + mode);
-                ApplicationManager.getApplication().invokeLater(() ->
-                    context.callJavaScript("window.updateInvocationMode", context.escapeJs(content)));
+                // Broadcast to all tabs in the project so every tab's session
+                // and frontend __CLAUDE_INVOCATION_MODE__ stay in sync.
+                com.github.claudecodegui.ui.toolwindow.ClaudeSDKToolWindow
+                        .broadcastInvocationMode(context.getProject(), mode);
             } catch (Exception e) {
                 LOG.error("[ProjectConfigHandler] Failed to set invocation mode: " + e.getMessage(), e);
                 showError("Failed to save invocation mode: " + e.getMessage());
