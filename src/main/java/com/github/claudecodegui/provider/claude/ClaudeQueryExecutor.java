@@ -69,9 +69,8 @@ class ClaudeQueryExecutor {
                 return result;
             }
 
-            List<String> command = new ArrayList<>();
-            command.add(node);
-            command.add(NODE_SCRIPT);
+            List<String> command = NodeDetector.buildNodeScriptCommand(
+                    node, new File(workDir, NODE_SCRIPT).getAbsolutePath());
 
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.directory(workDir);

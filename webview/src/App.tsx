@@ -36,6 +36,7 @@ import { useSession } from './contexts/SessionContext';
 import { useUIState } from './contexts/UIStateContext';
 import { useDialogs } from './contexts/DialogContext';
 import { AppDialogs } from './components/AppDialogs';
+import { DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS } from './utils/permissionDialogTimeout';
 
 const App = () => {
   const { t } = useTranslation();
@@ -82,6 +83,9 @@ const App = () => {
     toasts, addToast, dismissToast, clearToasts,
     setContextInfo,
   } = useUIState();
+
+  // ── Permission dialog timeout (synced with backend config) ──
+  const [permissionDialogTimeoutSeconds, setPermissionDialogTimeoutSeconds] = useState(DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS);
 
   // ── Local refs (don't trigger re-render, kept in App.tsx) ──
   const isFirstMountRef = useRef(true);
@@ -235,6 +239,7 @@ const App = () => {
     closeContextUsageDialog,
     customSessionTitleRef, currentSessionIdRef, updateHistoryTitle, applyHistoryTitleLocal,
     setCustomSessionTitle,
+    setPermissionDialogTimeoutSeconds,
   });
 
   // ── Message processing ──
@@ -388,6 +393,8 @@ const App = () => {
           onSendShortcutChange={handleSendShortcutChange}
           autoOpenFileEnabled={autoOpenFileEnabled}
           onAutoOpenFileEnabledChange={handleAutoOpenFileEnabledChange}
+          permissionDialogTimeoutSeconds={permissionDialogTimeoutSeconds}
+          onPermissionDialogTimeoutChange={setPermissionDialogTimeoutSeconds}
         />
       ) : currentView === 'chat' ? (
         <ChatScreen
@@ -475,6 +482,7 @@ const App = () => {
         onRewindConfirm={handleRewindConfirm}
         onRewindCancel={handleRewindCancel}
         currentProvider={currentProvider}
+        permissionDialogTimeoutSeconds={permissionDialogTimeoutSeconds}
       />
     </>
   );

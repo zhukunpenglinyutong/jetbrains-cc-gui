@@ -57,7 +57,7 @@ const sampleData: ContextUsageData = {
   agents: [],
   skills: undefined,
   isAutoCompactEnabled: true,
-  autoCompactThreshold: 80,
+  autoCompactThreshold: 1600, // 80% of 2000 maxTokens
 };
 
 describe('ContextUsageDialog', () => {

@@ -121,7 +121,7 @@ export function registerMessageCallbacks(
   // (e.g., HMR, parent re-render), the previous pending rAF is cancelled
   // first — preventing stale closures from executing.
   if (window.__pendingUpdateRaf != null) {
-    cancelAnimationFrame(window.__pendingUpdateRaf);
+    clearTimeout(window.__pendingUpdateRaf);
     window.__pendingUpdateRaf = null;
     window.__pendingUpdateJson = null;
     window.__pendingUpdateSequence = null;
@@ -135,7 +135,7 @@ export function registerMessageCallbacks(
   // streaming refs are cleared.
   const cancelPendingUpdateMessages = () => {
     if (pendingUpdateRaf !== null) {
-      cancelAnimationFrame(pendingUpdateRaf);
+      clearTimeout(pendingUpdateRaf);
     }
     pendingUpdateRaf = null;
     pendingUpdateJson = null;
@@ -390,7 +390,7 @@ export function registerMessageCallbacks(
       window.__pendingUpdateJson = json;
       window.__pendingUpdateSequence = sequence;
       if (pendingUpdateRaf === null) {
-        const rafId = requestAnimationFrame(() => {
+        const timerId = setTimeout(() => {
           pendingUpdateRaf = null;
           window.__pendingUpdateRaf = null;
           const latestJson = pendingUpdateJson;
@@ -402,9 +402,9 @@ export function registerMessageCallbacks(
           if (latestJson) {
             processUpdateMessages(latestJson, latestSequence);
           }
-        });
-        pendingUpdateRaf = rafId;
-        window.__pendingUpdateRaf = rafId;
+        }, 16);
+        pendingUpdateRaf = timerId as unknown as number;
+        window.__pendingUpdateRaf = timerId as unknown as number;
       }
       return;
     }
@@ -551,7 +551,7 @@ export function registerMessageCallbacks(
     // Cancel any pending deferred updateMessages to prevent stale data from
     // being applied after messages are cleared.
     if (pendingUpdateRaf !== null) {
-      cancelAnimationFrame(pendingUpdateRaf);
+      clearTimeout(pendingUpdateRaf);
       pendingUpdateRaf = null;
       pendingUpdateJson = null;
       pendingUpdateSequence = null;

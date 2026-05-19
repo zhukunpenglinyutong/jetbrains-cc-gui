@@ -147,7 +147,7 @@ final class AdditionalDirectoryResolver {
 
         if (userHome != null && !userHome.isEmpty()) {
             try {
-                Path userSettings = Paths.get(userHome, ".claude", "settings.json");
+                Path userSettings = Paths.get(userHome, ".claude", "settings.json").toAbsolutePath().normalize();
                 JsonObject user = SlashCommandJsonReader.readJsonObject(userSettings);
                 if (user != null) {
                     settings.add(user);

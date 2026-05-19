@@ -162,14 +162,12 @@ export function createPreToolUseHook(permissionModeState, cwd = null, onModeChan
         }
       }
 
-      // Step 2: Safe always-allow tools are auto-approved (includes AskUserQuestion,
-      // TodoWrite, Task*, EnterPlanMode, Glob, Grep, Read, LSP, etc.
-      // NOTE: WebFetch/WebSearch/Skill are NOT here — they go through plan mode allowed or canUseTool)
+      // Step 2: Safe always-allow tools yield to SDK so settings.json deny rules can fire.
       if (SAFE_ALWAYS_ALLOW_TOOLS.has(toolName)) {
         return {
           hookSpecificOutput: {
             hookEventName: 'PreToolUse',
-            permissionDecision: 'allow'
+            permissionDecision: 'continue'
           }
         };
       }
@@ -263,7 +261,7 @@ export function createPreToolUseHook(permissionModeState, cwd = null, onModeChan
         return {
           hookSpecificOutput: {
             hookEventName: 'PreToolUse',
-            permissionDecision: 'allow'
+            permissionDecision: 'continue'
           }
         };
       }
@@ -273,7 +271,7 @@ export function createPreToolUseHook(permissionModeState, cwd = null, onModeChan
         return {
           hookSpecificOutput: {
             hookEventName: 'PreToolUse',
-            permissionDecision: 'allow'
+            permissionDecision: 'continue'
           }
         };
       }

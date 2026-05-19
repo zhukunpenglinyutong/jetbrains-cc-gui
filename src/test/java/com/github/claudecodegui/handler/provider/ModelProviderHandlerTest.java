@@ -32,6 +32,16 @@ public class ModelProviderHandlerTest {
     }
 
     @Test
+    public void shouldIgnoreSmallFastModelForHaikuResolution() {
+        JsonObject env = new JsonObject();
+        env.addProperty("ANTHROPIC_SMALL_FAST_MODEL", "legacy-haiku-proxy");
+
+        String resolved = ModelProviderHandler.resolveConfiguredClaudeModel("claude-haiku-4-5", env);
+
+        assertEquals("claude-haiku-4-5", resolved);
+    }
+
+    @Test
     public void shouldNotApplySonnetMappingToAlreadyCustomModelIds() {
         JsonObject env = new JsonObject();
         env.addProperty("ANTHROPIC_DEFAULT_SONNET_MODEL", "glm-4.7");

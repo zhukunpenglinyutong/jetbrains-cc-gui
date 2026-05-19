@@ -359,7 +359,8 @@ public class PlatformUtils {
                 ProcessBuilder pb = new ProcessBuilder(
                         "taskkill", "/F", "/T", "/PID", String.valueOf(pid)
                 );
-                pb.redirectErrorStream(true);
+                pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
+                pb.redirectError(ProcessBuilder.Redirect.DISCARD);
                 Process killer = pb.start();
                 boolean finished = killer.waitFor(5, TimeUnit.SECONDS);
                 if (!finished) {
@@ -428,7 +429,8 @@ public class PlatformUtils {
                 ProcessBuilder pb = new ProcessBuilder(
                         "taskkill", "/F", "/T", "/PID", String.valueOf(pid)
                 );
-                pb.redirectErrorStream(true);
+                pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
+                pb.redirectError(ProcessBuilder.Redirect.DISCARD);
                 Process killer = pb.start();
                 return killer.waitFor(5, TimeUnit.SECONDS);
             } else {

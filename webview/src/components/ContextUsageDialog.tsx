@@ -307,9 +307,9 @@ const ContextUsageDialog = memo(function ContextUsageDialog({
           </span>
           {isAutoCompactEnabled && (
             <span className="context-usage-autocompact">
-              {autoCompactThreshold
+              {autoCompactThreshold && rawMaxTokens > 0
                 ? t('contextUsage.autoCompactEnabledWithThreshold', {
-                    threshold: autoCompactThreshold,
+                    threshold: Math.round((autoCompactThreshold / rawMaxTokens) * 100),
                     defaultValue: 'Auto-compact: enabled ({{threshold}}%)',
                   })
                 : t('contextUsage.autoCompactEnabled', {

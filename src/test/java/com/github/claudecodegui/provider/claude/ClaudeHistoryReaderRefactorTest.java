@@ -25,7 +25,9 @@ public class ClaudeHistoryReaderRefactorTest {
                     line(
                             "2026-03-10T10:01:00Z",
                             "assistant",
-                            "\"message\":{\"role\":\"assistant\",\"model\":\"claude-sonnet-4-6\",\"usage\":{\"input_tokens\":1000,\"output_tokens\":250,\"cache_creation_input_tokens\":400,\"cache_read_input_tokens\":50}}"
+                            "\"message\":{\"role\":\"assistant\",\"model\":\"claude-sonnet-4-6\","
+                                    + "\"usage\":{\"input_tokens\":1000,\"output_tokens\":250,"
+                                    + "\"cache_creation_input_tokens\":400,\"cache_read_input_tokens\":50}}"
                     )
             );
 
@@ -41,7 +43,8 @@ public class ClaudeHistoryReaderRefactorTest {
             assertEquals(1, stats.dailyUsage.size());
             assertEquals(400, stats.dailyUsage.get(0).usage.cacheWriteTokens);
             assertEquals(50, stats.dailyUsage.get(0).usage.cacheReadTokens);
-            assertEquals(0.007265, stats.estimatedCost, 0.0000001);
+            // 1000*3.0 + 250*15.0 + 400*3.75 + 50*0.30 (all /1M) = 0.008265
+            assertEquals(0.008265, stats.estimatedCost, 0.0000001);
             assertFalse(stats.byModel.isEmpty());
         } finally {
             deleteDirectory(projectsDir);
@@ -59,7 +62,9 @@ public class ClaudeHistoryReaderRefactorTest {
                     line(
                             "2026-03-10T10:01:00Z",
                             "assistant",
-                            "\"message\":{\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"usage\":{\"input_tokens\":250000,\"output_tokens\":1000,\"cache_creation_input_tokens\":10000,\"cache_read_input_tokens\":5000}}"
+                            "\"message\":{\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\","
+                                    + "\"usage\":{\"input_tokens\":250000,\"output_tokens\":1000,"
+                                    + "\"cache_creation_input_tokens\":10000,\"cache_read_input_tokens\":5000}}"
                     )
             );
 

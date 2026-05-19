@@ -300,6 +300,11 @@ interface Window {
   updateTaskCompletionNotificationEnabled?: (json: string) => void;
 
   /**
+   * Update permission dialog timeout setting
+   */
+  updatePermissionDialogTimeout?: (json: string) => void;
+
+  /**
    * Update current Claude config
    */
   updateCurrentClaudeConfig?: (json: string) => void;
@@ -436,14 +441,16 @@ interface Window {
    */
   applyIdeaLanguageConfig?: (config: {
     language: string;
+    source?: string;
     ideaLocale?: string;
-  }) => void;
+  } | string) => void;
 
   /**
    * Pending language config before applyIdeaLanguageConfig is registered
    */
   __pendingLanguageConfig?: {
     language: string;
+    source?: string;
     ideaLocale?: string;
   };
 
@@ -793,6 +800,11 @@ interface Window {
    * Pending auto open file enabled status before React initialization
    */
   __pendingAutoOpenFileEnabled?: string;
+
+  /**
+   * Pending permission dialog timeout before React initialization
+   */
+  __pendingPermissionDialogTimeout?: string;
 
   __pendingPermissionDialogRequests?: string[];
 

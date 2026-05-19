@@ -195,9 +195,8 @@ class ClaudeMcpQueryService {
                 return new MarkerResult(null, "", System.currentTimeMillis() - startTime);
             }
 
-            List<String> command = new ArrayList<>();
-            command.add(node);
-            command.add(new File(bridgeDir, CHANNEL_SCRIPT).getAbsolutePath());
+            String scriptPath = new File(bridgeDir, CHANNEL_SCRIPT).getAbsolutePath();
+            List<String> command = NodeDetector.buildNodeScriptCommand(node, scriptPath);
             command.add("claude");
             command.add(commandName);
 

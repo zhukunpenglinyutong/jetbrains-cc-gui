@@ -121,6 +121,7 @@
       },
       "language": {
         "label": "界面语言",
+        "followIde": "跟随 IDE",
         "simplifiedChinese": "简体中文",
         "traditionalChinese": "繁體中文",
         "english": "English",
@@ -230,6 +231,11 @@
         "enterDesc": "按 Enter 发送消息，Shift+Enter 换行",
         "cmdEnter": "⌘/Ctrl+Enter 发送",
         "cmdEnterDesc": "按 ⌘/Ctrl+Enter 发送消息，Enter 换行"
+      },
+      "permissionDialogTimeout": {
+        "label": "权限与提问对话框超时时间",
+        "unit": "秒",
+        "hint": "设置 Claude 提问对话框和权限请求对话框的超时时间（30~3600 秒）。超时后对话框将自动关闭，Claude 会继续执行。"
       },
       "chatBgColor": {
         "label": "聊天背景色",
@@ -952,7 +958,8 @@
       "WebSearch": "网页搜索",
       "WebFetch": "获取网页",
       "execute": "执行 {{toolName}}",
-      "readDirectory": "读取目录"
+      "readDirectory": "读取目录",
+      "timeoutWarning": "请尽快回答，对话框将在 {{seconds}} 秒后自动关闭"
     }
   },
   "askUserQuestion": {
@@ -1496,7 +1503,7 @@
       },
       "opus46_1m": {
         "label": "Opus 4.6",
-        "description": "Opus 4.6 长会话模式"
+        "description": "Opus 4.6 · 高性能推理模型"
       },
       "haiku45": {
         "label": "Haiku 4.5",
@@ -1757,5 +1764,33 @@
     "providerNotConfigured": "供应商未配置",
     "providerNotConfiguredDesc": "尚未配置 AI 供应商或未授权使用本地配置，请先在供应商管理设置中完成配置后再开始对话。",
     "goToProviderSettings": "前往设置"
+  },
+  "errorDiagnostic": {
+    "copyCommand": "复制",
+    "copied": "已复制",
+    "openDependencySettings": "打开依赖管理",
+    "recommended": "推荐",
+    "codexThreadResume": {
+      "title": "会话线程已失效",
+      "intro": "新建会话即可解决此问题。当前会话的线程 ID 在 Codex 服务端已不存在。",
+      "reason": "Codex 服务端会在一段时间后清除旧线程，继续上一次会话时可能触发此错误。"
+    },
+    "sdkNativeBinaryMissing": {
+      "title": "SDK 安装不完整 — 缺少 native 二进制文件",
+      "intro": "这是淘宝 npm 镜像源的已知问题（非插件 bug）。镜像源未完整同步 platform 文件。可手动按以下方案处理：",
+      "reason": "淘宝源同步完成后此问题会自动消失，无需担心。",
+      "solutions": {
+        "switchRegistry": {
+          "title": "方案一：临时切换官方源重装",
+          "step0": "1. 在终端运行（切换到 npm 官方源）：",
+          "step1": "2. 打开插件设置中的「依赖管理」，点击重装：",
+          "step2": "3. 重装完成后，切回淘宝源："
+        },
+        "downgrade": {
+          "title": "方案二：版本回退",
+          "step0": "在「依赖管理」中将 SDK 版本切换到 v0.2.112 或更早版本，切换后需要重启 IDEA。"
+        }
+      }
+    }
   }
 }

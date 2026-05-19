@@ -121,6 +121,7 @@
       },
       "language": {
         "label": "Language",
+        "followIde": "Follow IDE",
         "simplifiedChinese": "简体中文",
         "traditionalChinese": "繁體中文",
         "english": "English",
@@ -230,6 +231,11 @@
         "enterDesc": "Press Enter to send message, Shift+Enter for new line",
         "cmdEnter": "⌘/Ctrl+Enter to Send",
         "cmdEnterDesc": "Press ⌘/Ctrl+Enter to send message, Enter for new line"
+      },
+      "permissionDialogTimeout": {
+        "label": "Permission & Question Dialog Timeout",
+        "unit": "seconds",
+        "hint": "Set the timeout for Claude question dialogs and permission request dialogs (30~3600 seconds). After timeout, the dialog will close automatically and Claude will continue."
       },
       "chatBgColor": {
         "label": "Chat Background",
@@ -947,7 +953,8 @@
       "WebSearch": "Web Search",
       "WebFetch": "Fetch Web",
       "execute": "Execute {{toolName}}",
-      "readDirectory": "Read Directory"
+      "readDirectory": "Read Directory",
+      "timeoutWarning": "Please answer soon, dialog will close in {{seconds}} seconds"
     }
   },
   "askUserQuestion": {
@@ -1491,7 +1498,7 @@
       },
       "opus46_1m": {
         "label": "Opus 4.6",
-        "description": "Opus 4.6 for long sessions"
+        "description": "Opus 4.6 · High-performance reasoning model"
       },
       "haiku45": {
         "label": "Haiku 4.5",
@@ -1752,5 +1759,33 @@
     "providerNotConfigured": "Provider Not Configured",
     "providerNotConfiguredDesc": "No AI provider is configured yet, or access to the local configuration has not been authorized. Please complete setup in Provider Management settings before starting a conversation.",
     "goToProviderSettings": "Go to Settings"
+  },
+  "errorDiagnostic": {
+    "copyCommand": "Copy",
+    "copied": "Copied",
+    "openDependencySettings": "Open Dependency Settings",
+    "recommended": "Recommended",
+    "codexThreadResume": {
+      "title": "Session thread is no longer valid",
+      "intro": "Creating a new session will resolve this issue. The thread ID for the current session no longer exists on the Codex server.",
+      "reason": "Codex clears old threads after a period of time, which can trigger this error when resuming a previous session."
+    },
+    "sdkNativeBinaryMissing": {
+      "title": "SDK installation incomplete — native binary missing",
+      "intro": "This is a known issue with the Taobao npm mirror (not a plugin bug). The mirror hasn't fully synchronized the platform-specific files. You can resolve it manually with either of the options below:",
+      "reason": "This issue will disappear automatically once the Taobao mirror finishes syncing — no further action needed.",
+      "solutions": {
+        "switchRegistry": {
+          "title": "Option 1: Temporarily switch to the official registry and reinstall",
+          "step0": "1. Run this in your terminal (switch to the official npm registry):",
+          "step1": "2. Open the plugin's Dependency Management settings and click Reinstall:",
+          "step2": "3. After the reinstall completes, switch back to the Taobao mirror:"
+        },
+        "downgrade": {
+          "title": "Option 2: Roll back to an older version",
+          "step0": "In Dependency Management, switch the SDK version to v0.2.112 or earlier. Restart IDEA after switching."
+        }
+      }
+    }
   }
 }
