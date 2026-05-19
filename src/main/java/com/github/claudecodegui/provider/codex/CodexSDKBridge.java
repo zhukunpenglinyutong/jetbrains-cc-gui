@@ -110,7 +110,6 @@ public class CodexSDKBridge extends BaseSDKBridge {
 
     @Override
     protected void configureProviderEnv(Map<String, String> env, String stdinJson) {
-        env.put("CODEX_USE_STDIN", "true");
     }
 
     @Override
@@ -485,7 +484,6 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 // Configure environment variables
                 Map<String, String> env = pb.environment();
                 envConfigurator.configureTempDir(env, processTempDir);
-                env.put("CODEX_USE_STDIN", "true");
 
                 // Set model via environment variable if specified
                 if (model != null && !model.isEmpty()) {
@@ -1092,7 +1090,6 @@ public class CodexSDKBridge extends BaseSDKBridge {
     }
 
     private void populateCodexRuntimeEnv(Map<String, String> env, String cwd, String permissionMode, String model, String category) {
-        env.put("CODEX_USE_STDIN", "true");
         if (model != null && !model.isEmpty()) {
             env.put("CODEX_MODEL", model);
         }
