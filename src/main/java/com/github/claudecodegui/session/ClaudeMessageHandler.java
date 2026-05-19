@@ -14,6 +14,7 @@ import com.intellij.openapi.project.Project;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Claude message callback handler.
@@ -54,6 +55,26 @@ public class ClaudeMessageHandler implements MessageCallback {
     // Written on SDK callback thread, read on EDT via invokeLater() happens-before.
     private volatile boolean textSegmentActive = false;
     private volatile boolean thinkingSegmentActive = false;
+
+    private static final String INTERNAL_TOOL_OUTPUT_MARKER = "output:";
+    private final StringBuilder pendingContentDeltaForInternalTool = new StringBuilder();
+    private boolean internalImageToolOutputActive = false;
+
+    private enum ContentDeltaRouteType {
+        HOLD,
+        TEXT,
+        THINKING
+    }
+
+    private static class ContentDeltaRoute {
+        final ContentDeltaRouteType type;
+        final String content;
+
+        ContentDeltaRoute(ContentDeltaRouteType type, String content) {
+            this.type = type;
+            this.content = content;
+        }
+    }
 
     /**
      * Constructor.
@@ -352,6 +373,7 @@ public class ClaudeMessageHandler implements MessageCallback {
                     }
                 }
             }
+            boolean shouldNotifyMessageUpdate = !isStreaming || hasToolUse;
 
             // Tool calls act as segment boundaries: subsequent text/thinking should go into new blocks
             if (hasToolUse) {
@@ -360,10 +382,12 @@ public class ClaudeMessageHandler implements MessageCallback {
                 thinkingSegmentActive = toolSeg.thinkingActive;
             }
 
-            // Assistant messages carry structural changes (tool_use blocks, thinking
-            // blocks, segment boundaries). Unlike text deltas these MUST be pushed to
-            // the frontend so tool cards and collapsible thinking sections render.
-            callbackHandler.notifyMessageUpdate(state.getMessages());
+            // Tool snapshots carry structural changes that the delta channel cannot
+            // represent. Pure thinking/text progress is already rendered via deltas
+            // and is finalized by stream_end.
+            if (shouldNotifyMessageUpdate) {
+                callbackHandler.notifyMessageUpdate(state.getMessages());
+            }
 
             // Update status bar with usage from the final assistant message (matches CLI's PP1 behavior).
             // This ensures the displayed value matches what resume shows from JSONL history.
@@ -446,6 +470,22 @@ public class ClaudeMessageHandler implements MessageCallback {
      * Handle incremental content delta in streaming mode.
      */
     private void handleContentDelta(String content) {
+        if (content == null || content.isEmpty()) {
+            return;
+        }
+
+        ContentDeltaRoute route = routeContentDelta(content);
+        if (route.type == ContentDeltaRouteType.HOLD) {
+            return;
+        }
+        if (route.type == ContentDeltaRouteType.THINKING) {
+            handleThinkingDelta(route.content);
+            return;
+        }
+        processTextContentDelta(route.content);
+    }
+
+    private void processTextContentDelta(String content) {
         if (content == null || content.isEmpty()) {
             return;
         }
@@ -634,10 +674,13 @@ public class ClaudeMessageHandler implements MessageCallback {
         if (!isStreaming) {
             return;
         }
+        flushPendingContentDeltaAsText();
         currentAssistantMessage = null;
         assistantContent.setLength(0);
         textSegmentActive = false;
         thinkingSegmentActive = false;
+        internalImageToolOutputActive = false;
+        pendingContentDeltaForInternalTool.setLength(0);
         replayDedup.reset();
         LOG.debug("New turn started in agentic session, reset message state for new assistant message");
     }
@@ -744,10 +787,13 @@ public class ClaudeMessageHandler implements MessageCallback {
      */
     private void handleStreamEnd() {
         LOG.debug("Stream ended");
+        flushPendingContentDeltaAsText();
         isStreaming = false;  // Mark streaming as inactive
         streamEndedThisTurn = true;
         textSegmentActive = false;
         thinkingSegmentActive = false;
+        internalImageToolOutputActive = false;
+        pendingContentDeltaForInternalTool.setLength(0);
         replayDedup.reset();
 
         // Reset thinking state — stream end is the definitive boundary for a turn.
@@ -802,9 +848,12 @@ public class ClaudeMessageHandler implements MessageCallback {
             // CRITICAL: Only notify frontend when delta was actually applied.
             // Frontend has no dedup and will accumulate, causing duplication.
             callbackHandler.notifyThinkingDelta(novelContent);
-            // Thinking blocks are structural: the frontend renders them from
-            // raw blocks in collapsible UI sections, so raw must stay in sync.
-            callbackHandler.notifyMessageUpdate(state.getMessages());
+            // During streaming, onThinkingDelta drives the visible thinking
+            // block. Full message snapshots are reserved for structural changes
+            // and stream end to avoid racing cumulative frontend buffers.
+            if (!isStreaming) {
+                callbackHandler.notifyMessageUpdate(state.getMessages());
+            }
         } else {
             LOG.debug("Skipping duplicate thinking delta (len=" + content.length() + ")");
         }
@@ -1064,5 +1113,86 @@ public class ClaudeMessageHandler implements MessageCallback {
 
         target.addProperty("thinking", existing + delta);
         return true;
+    }
+
+    private ContentDeltaRoute routeContentDelta(String content) {
+        if (internalImageToolOutputActive) {
+            return new ContentDeltaRoute(ContentDeltaRouteType.THINKING, content);
+        }
+
+        pendingContentDeltaForInternalTool.append(content);
+        String candidate = pendingContentDeltaForInternalTool.toString();
+
+        if (isInternalImageToolOutput(candidate)) {
+            internalImageToolOutputActive = true;
+            pendingContentDeltaForInternalTool.setLength(0);
+            return new ContentDeltaRoute(ContentDeltaRouteType.THINKING, candidate);
+        }
+
+        if (hasRecentUserImageMessage() && isPotentialInternalToolOutputPrefix(candidate)) {
+            return new ContentDeltaRoute(ContentDeltaRouteType.HOLD, "");
+        }
+
+        pendingContentDeltaForInternalTool.setLength(0);
+        return new ContentDeltaRoute(ContentDeltaRouteType.TEXT, candidate);
+    }
+
+    private boolean isInternalImageToolOutput(String text) {
+        return hasRecentUserImageMessage()
+                && normalizeInternalToolMarkerPrefix(text).contains(INTERNAL_TOOL_OUTPUT_MARKER);
+    }
+
+    private boolean isPotentialInternalToolOutputPrefix(String text) {
+        String normalized = normalizeInternalToolMarkerPrefix(text);
+        return normalized.isEmpty()
+                || INTERNAL_TOOL_OUTPUT_MARKER.startsWith(normalized)
+                || normalized.contains("tool");
+    }
+
+    private String normalizeInternalToolMarkerPrefix(String text) {
+        String normalized = text == null ? "" : text.toLowerCase(Locale.ROOT).stripLeading();
+        while (!normalized.isEmpty()) {
+            char ch = normalized.charAt(0);
+            if (ch == '*' || ch == '#' || ch == '>' || ch == '-' || ch == '`' || Character.isWhitespace(ch)) {
+                normalized = normalized.substring(1).stripLeading();
+                continue;
+            }
+            break;
+        }
+        return normalized;
+    }
+
+    private boolean hasRecentUserImageMessage() {
+        List<Message> messages = state.getMessagesReference();
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            Message message = messages.get(i);
+            if (message.type == Message.Type.ASSISTANT) {
+                break;
+            }
+            if (message.type == Message.Type.USER && userMessageContainsImage(message)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean userMessageContainsImage(Message message) {
+        if (message == null) {
+            return false;
+        }
+        if (message.raw != null && messageParser.hasImageContent(message.raw)) {
+            return true;
+        }
+        String content = message.content;
+        return content != null && content.contains("[Image #");
+    }
+
+    private void flushPendingContentDeltaAsText() {
+        if (pendingContentDeltaForInternalTool.length() == 0) {
+            return;
+        }
+        String pending = pendingContentDeltaForInternalTool.toString();
+        pendingContentDeltaForInternalTool.setLength(0);
+        processTextContentDelta(pending);
     }
 }

@@ -18,12 +18,13 @@ import static org.junit.Assert.assertTrue;
 public class ClaudeMessageHandlerDedupTest {
 
     private RecordingCallbackHandler callbackHandler;
+    private SessionState state;
     private ClaudeMessageHandler handler;
 
     @Before
     public void setUp() {
         callbackHandler = new RecordingCallbackHandler();
-        SessionState state = new SessionState();
+        state = new SessionState();
         MessageParser messageParser = new MessageParser();
         MessageMerger messageMerger = new MessageMerger();
         Gson gson = new GsonBuilder().create();
@@ -202,6 +203,20 @@ public class ClaudeMessageHandlerDedupTest {
                 List.of("Let me think"), callbackHandler.thinkingDeltas);
     }
 
+    @Test
+    public void handleThinkingDelta_doesNotPushFullMessageUpdatesDuringStreaming() {
+        handler.onMessage("stream_start", "");
+        callbackHandler.clear();
+
+        handler.onMessage("thinking_delta", "first ");
+        handler.onMessage("thinking_delta", "second");
+
+        assertEquals("Thinking deltas should still stream through the delta channel",
+                List.of("first ", "second"), callbackHandler.thinkingDeltas);
+        assertEquals("Full message snapshots during thinking deltas duplicate frontend buffers",
+                0, callbackHandler.messageUpdateCount);
+    }
+
     /**
      * Test that syncedContentOffset is reset on stream end.
      */
@@ -294,6 +309,75 @@ public class ClaudeMessageHandlerDedupTest {
                 List.of("A"), callbackHandler.contentDeltas);
     }
 
+    @Test
+    public void handleContentDelta_routesZaiAnalyzeImageToolOutputToThinking() {
+        handler.onMessage("stream_start", "");
+        addImageUserMessage();
+        callbackHandler.clear();
+
+        handler.onMessage("content_delta", "Z.ai Built-in Tool: analyze_image\n");
+        handler.onMessage("content_delta", "Output: screen analysis");
+
+        assertTrue("Z.ai image tool output should not stream as chat content",
+                callbackHandler.contentDeltas.isEmpty());
+        assertEquals("Z.ai image tool output should stream through thinking",
+                List.of("Z.ai Built-in Tool: analyze_image\nOutput: screen analysis"),
+                callbackHandler.thinkingDeltas);
+    }
+
+    @Test
+    public void handleContentDelta_routesGenericImageToolOutputToThinking() {
+        handler.onMessage("stream_start", "");
+        addImageUserMessage();
+        callbackHandler.clear();
+
+        handler.onMessage("content_delta", "Read Image Tool\n");
+        handler.onMessage("content_delta", "Output: screen analysis");
+
+        assertTrue("Image tool output should not stream as chat content",
+                callbackHandler.contentDeltas.isEmpty());
+        assertEquals("Image tool output should stream through thinking",
+                List.of("Read Image Tool\nOutput: screen analysis"),
+                callbackHandler.thinkingDeltas);
+    }
+
+    @Test
+    public void handleContentDelta_doesNotRouteOutputWithoutImageContext() {
+        handler.onMessage("stream_start", "");
+        callbackHandler.clear();
+
+        handler.onMessage("content_delta", "Output: final answer");
+
+        assertEquals("Normal text should stream as chat content without image context",
+                List.of("Output: final answer"), callbackHandler.contentDeltas);
+        assertTrue("Normal text should not become thinking without image context",
+                callbackHandler.thinkingDeltas.isEmpty());
+    }
+
+    @Test
+    public void handleContentDelta_flushesPartialMarkerAsTextWhenItIsNotZaiToolOutput() {
+        handler.onMessage("stream_start", "");
+        callbackHandler.clear();
+
+        handler.onMessage("content_delta", "Z");
+        assertEquals("Normal text should not be delayed for provider-specific marker matching",
+                List.of("Z"), callbackHandler.contentDeltas);
+
+        handler.onMessage("content_delta", "ebra");
+
+        assertEquals("Non-marker text should be released as normal content",
+                List.of("Z", "ebra"), callbackHandler.contentDeltas);
+        assertTrue("Non-marker text should not become thinking",
+                callbackHandler.thinkingDeltas.isEmpty());
+    }
+
+    private void addImageUserMessage() {
+        state.addMessage(new ClaudeSession.Message(
+                ClaudeSession.Message.Type.USER,
+                "[Image #1: C:\\temp\\screen.png]"
+        ));
+    }
+
     /**
      * Recording callback handler that captures all notifications for testing.
      * Extends CallbackHandler and overrides relevant methods.
@@ -303,10 +387,12 @@ public class ClaudeMessageHandlerDedupTest {
         final List<String> thinkingDeltas = new ArrayList<>();
         int streamStartCount = 0;
         int streamEndCount = 0;
+        int messageUpdateCount = 0;
 
         void clear() {
             contentDeltas.clear();
             thinkingDeltas.clear();
+            messageUpdateCount = 0;
         }
 
         @Override
@@ -317,6 +403,11 @@ public class ClaudeMessageHandlerDedupTest {
         @Override
         public void notifyThinkingDelta(String delta) {
             thinkingDeltas.add(delta);
+        }
+
+        @Override
+        public void notifyMessageUpdate(List<ClaudeSession.Message> messages) {
+            messageUpdateCount++;
         }
 
         @Override
