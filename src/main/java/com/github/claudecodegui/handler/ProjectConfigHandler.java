@@ -334,13 +334,10 @@ public class ProjectConfigHandler {
         return jsonOf("permissionDialogTimeoutSeconds", effectiveSeconds);
     }
 
-<<<<<<< Updated upstream
     /**
      * Handle Get Send Shortcut
      *
      */
-=======
->>>>>>> Stashed changes
     public void handleGetSendShortcut() {
         try {
             String sendShortcut = PropertiesComponent.getInstance().getValue(SEND_SHORTCUT_PROPERTY_KEY, "enter");

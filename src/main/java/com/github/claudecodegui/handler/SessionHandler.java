@@ -103,7 +103,7 @@ public class SessionHandler extends BaseMessageHandler {
      * [FIX] Now parses JSON format to extract text, agent info and file tags
      */
     private void handleSendMessage(String content) {
-        boolean requiresNodeRuntime = !isClaudeCliMode(extractInvocationMode(content));
+        boolean requiresNodeRuntime = !isCliModeActive(extractInvocationMode(content));
         String nodeVersion = requiresNodeRuntime ? this.resolveNodeVersion() : null;
         if (requiresNodeRuntime && nodeVersion == null) {
             ApplicationManager.getApplication().invokeLater(() -> {
@@ -338,7 +338,7 @@ public class SessionHandler extends BaseMessageHandler {
         String requestedInvocationMode
     ) {
         // Version check (consistent with handleSendMessage)
-        boolean requiresNodeRuntime = !isClaudeCliMode(requestedInvocationMode);
+        boolean requiresNodeRuntime = !isCliModeActive(requestedInvocationMode);
         String nodeVersion = requiresNodeRuntime ? this.resolveNodeVersion() : null;
         if (requiresNodeRuntime && nodeVersion == null) {
             ApplicationManager.getApplication().invokeLater(() -> {
@@ -429,9 +429,14 @@ public class SessionHandler extends BaseMessageHandler {
         return null;
     }
 
-    private boolean isClaudeCliMode(String requestedInvocationMode) {
+    private boolean isCliModeActive(String requestedInvocationMode) {
         ClaudeSession currentSession = context.getSession();
         String provider = currentSession != null ? currentSession.getProvider() : context.getCurrentProvider();
+
+        if ("codex".equals(provider)) {
+            return true;
+        }
+
         if (!"claude".equals(provider)) {
             return false;
         }

@@ -43,4 +43,20 @@ public class SessionSendServiceTest {
         assertNull(SessionSendService.getCodexRuntimeAccessError("managed"));
         assertNull(SessionSendService.getCodexRuntimeAccessError("cli_login"));
     }
+
+    @Test
+    public void resolveEffectiveClaudeInvocationModeKeepsRequestedCliMode() {
+        assertEquals(
+                "cli",
+                SessionSendService.resolveEffectiveClaudeInvocationMode("cli")
+        );
+    }
+
+    @Test
+    public void resolveEffectiveClaudeInvocationModeKeepsRequestedSdkMode() {
+        assertEquals(
+                "sdk",
+                SessionSendService.resolveEffectiveClaudeInvocationMode("sdk")
+        );
+    }
 }

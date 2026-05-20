@@ -151,8 +151,9 @@ final class SlashCommandPathPolicy {
             Path path = Paths.get(trimmedPath);
             if (path.isAbsolute() || path.getRoot() != null
                     || trimmedPath.startsWith("/") || trimmedPath.startsWith("\\")) {
-            return pluginDir.resolve(path).normalize();
+                return pluginDir.resolve(path).normalize();
             }
+            return pluginDir.resolve(path).normalize();
         } catch (Exception e) {
             return null;
         }

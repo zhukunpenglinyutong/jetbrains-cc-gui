@@ -469,7 +469,9 @@ public class SessionLifecycleManager {
 
         newSession.setSessionInfo(null, workingDirectory);
         LOG.info(successLogPrefix + workingDirectory + ", epoch=" + newSession.getRuntimeSessionEpoch());
-        host.getClaudeSDKBridge().prewarmDaemonAsync(workingDirectory, newSession.getRuntimeSessionEpoch());
+        if (shouldPrewarmClaudeDaemon(newSession)) {
+            host.getClaudeSDKBridge().prewarmDaemonAsync(workingDirectory, newSession.getRuntimeSessionEpoch());
+        }
         fetchSlashCommandsOnStartup();
 
         ApplicationManager.getApplication().invokeLater(() -> {

@@ -72,6 +72,8 @@ export interface UseSettingsBasicActionsReturn {
   taskCompletionNotificationEnabled: boolean;
   commitAiConfig: CommitAiConfig;
   promptEnhancerConfig: PromptEnhancerConfig;
+  invocationMode: 'sdk' | 'cli';
+  cliPath: string;
 
   // =========================================================================
   // Handler functions (public API for components)
@@ -106,6 +108,8 @@ export interface UseSettingsBasicActionsReturn {
   handlePromptEnhancerProviderChange: (provider: PromptEnhancerProvider) => void;
   handlePromptEnhancerModelChange: (model: string) => void;
   handlePromptEnhancerResetToDefault: () => void;
+  handleInvocationModeChange: (mode: 'sdk' | 'cli') => void;
+  handleCliPathChange: (path: string) => void;
 
   // =========================================================================
   // @internal — State setters used only by useSettingsWindowCallbacks.
@@ -147,6 +151,8 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setTaskCompletionNotificationEnabled: (enabled: boolean) => void;
   /** @internal */ setCommitAiConfig: (config: CommitAiConfig) => void;
   /** @internal */ setPromptEnhancerConfig: (config: PromptEnhancerConfig) => void;
+  /** @internal */ setInvocationMode: (mode: 'sdk' | 'cli') => void;
+  /** @internal */ setCliPath: (path: string) => void;
 }
 
 export function useSettingsBasicActions({
@@ -250,6 +256,10 @@ export function useSettingsBasicActions({
   const [promptEnhancerConfig, setPromptEnhancerConfig] = useState<PromptEnhancerConfig>(
     DEFAULT_PROMPT_ENHANCER_CONFIG
   );
+
+  // Invocation mode configuration
+  const [invocationMode, setInvocationMode] = useState<'sdk' | 'cli'>('cli');
+  const [cliPath, setCliPath] = useState<string>('');
 
   // Diff expanded by default handler
   useEffect(() => {
@@ -522,6 +532,18 @@ export function useSettingsBasicActions({
     })}`);
   }, [promptEnhancerConfig]);
 
+  const handleInvocationModeChange = useCallback((mode: 'sdk' | 'cli') => {
+    setInvocationMode(mode);
+    const payload = { invocationMode: mode };
+    sendToJava(`set_invocation_mode:${JSON.stringify(payload)}`);
+  }, []);
+
+  const handleCliPathChange = useCallback((path: string) => {
+    setCliPath(path);
+    const payload = { cliPath: path };
+    sendToJava(`set_cli_path:${JSON.stringify(payload)}`);
+  }, []);
+
   // Commit AI prompt save handler
   const handleSaveCommitPrompt = useCallback(() => {
     setSavingCommitPrompt(true);
@@ -626,5 +648,11 @@ export function useSettingsBasicActions({
     handlePromptEnhancerProviderChange,
     handlePromptEnhancerModelChange,
     handlePromptEnhancerResetToDefault,
+    invocationMode,
+    setInvocationMode,
+    cliPath,
+    setCliPath,
+    handleInvocationModeChange,
+    handleCliPathChange,
   };
 }

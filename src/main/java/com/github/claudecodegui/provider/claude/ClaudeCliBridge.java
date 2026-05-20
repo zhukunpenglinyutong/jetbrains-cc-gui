@@ -31,8 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class ClaudeCliBridge {
 
     private static final Logger LOG = Logger.getInstance(ClaudeCliBridge.class);
-    private static final String IMAGE_ATTACHMENT_HINT =
-            "The user has attached the image(s) above. Please use the Read tool to view them.";
+    private static final int CLI_DIAGNOSTIC_MAX_CHARS = 4000;
 
     private final ProcessManager processManager;
     private final ClaudeCliDetector cliDetector;
@@ -93,6 +92,7 @@ public class ClaudeCliBridge {
         return CompletableFuture.supplyAsync(() -> {
             SDKResult result = new SDKResult();
             StringBuilder assistantContent = new StringBuilder();
+            StringBuilder cliDiagnostic = new StringBuilder();
             AtomicBoolean hadSendError = new AtomicBoolean(false);
             long startTime = System.currentTimeMillis();
             Process process = null;
@@ -117,11 +117,10 @@ public class ClaudeCliBridge {
                     return result;
                 }
 
-                String fullPrompt = message != null ? message : "";
-                List<String> addDirs = new ArrayList<>();
+                String fullPrompt = enrichPromptWithContext(message, openedFiles, agentPrompt);
                 if (attachments != null && !attachments.isEmpty()) {
                     LOG.info("[CliBridge][DIAG] Processing " + attachments.size() + " attachments");
-                    StringBuilder promptBuilder = new StringBuilder(fullPrompt);
+                    List<ClaudeCliAttachmentPrompt.ResolvedAttachment> resolvedAttachments = new ArrayList<>();
                     for (int i = 0; i < attachments.size(); i++) {
                         ClaudeSession.Attachment attachment = attachments.get(i);
                         if (attachment == null) {
@@ -146,62 +145,49 @@ public class ClaudeCliBridge {
                                 || !tempFile.getAbsolutePath().equals(attachment.localPath)) {
                             tempFiles.add(tempFile);
                         }
-                        File parentDir = tempFile.getParentFile();
-                        if (parentDir != null && parentDir.isDirectory()) {
-                            String dirPath = parentDir.getAbsolutePath();
-                            if (!addDirs.contains(dirPath)) {
-                                addDirs.add(dirPath);
-                            }
-                        }
-
-                        String safePath = tempFile.getAbsolutePath().replace('\\', '/');
-                        if (isImageAttachment(attachment)) {
-                            promptBuilder.append("\n\n[Image #")
-                                    .append(i + 1)
-                                    .append(": ")
-                                    .append(safePath)
-                                    .append("]\n")
-                                    .append(IMAGE_ATTACHMENT_HINT);
-                        } else {
-                            promptBuilder.append("\n\n[Attached file: ")
-                                    .append(attachment.fileName)
-                                    .append("]\nPlease use the Read tool to read the file at: ")
-                                    .append(safePath);
-                        }
+                        resolvedAttachments.add(new ClaudeCliAttachmentPrompt.ResolvedAttachment(
+                                i + 1,
+                                attachment,
+                                tempFile
+                        ));
                     }
-                    fullPrompt = promptBuilder.toString();
-                }
-
-                List<String> command = buildCliCommand(cliPath, fullPrompt, sessionId, model, reasoningEffort, addDirs);
-                LOG.info("[CliBridge][DIAG] fullPrompt length=" + fullPrompt.length() + ", addDirs=" + addDirs);
-                LOG.info("[CliBridge][DIAG] fullPrompt content: "
-                        + (fullPrompt.length() > 500 ? fullPrompt.substring(0, 500) + "..." : fullPrompt));
-                if (suppressThinking) {
-                    LOG.info("[CliBridge] disableThinking requested; Claude CLI has no native no-thinking flag, suppressing thinking events in parser");
-                }
-                LOG.info("[CliBridge] Command: " + String.join(" ", command));
-
-                ProcessBuilder processBuilder = new ProcessBuilder(command);
-                processBuilder.redirectErrorStream(true);
-
-                if (cwd != null && !cwd.isEmpty()) {
-                    File workDir = new File(cwd);
-                    if (workDir.exists()) {
-                        processBuilder.directory(workDir);
+                    ClaudeCliAttachmentPrompt.Rendered rendered =
+                            ClaudeCliAttachmentPrompt.render(fullPrompt, resolvedAttachments);
+                    fullPrompt = rendered.prompt();
+                    List<String> addDirs = rendered.addDirs();
+                    List<String> command = buildCliCommand(cliPath, fullPrompt, sessionId, model, reasoningEffort, addDirs);
+                    LOG.info("[CliBridge][DIAG] fullPrompt length=" + fullPrompt.length() + ", addDirs=" + addDirs);
+                    LOG.info("[CliBridge][DIAG] fullPrompt content: "
+                            + (fullPrompt.length() > 500 ? fullPrompt.substring(0, 500) + "..." : fullPrompt));
+                    if (suppressThinking) {
+                        LOG.info("[CliBridge] disableThinking requested; Claude CLI has no native no-thinking flag, suppressing thinking events in parser");
                     }
-                }
+                    LOG.info("[CliBridge] Command: " + String.join(" ", command));
 
-                Map<String, String> env = processBuilder.environment();
-                env.put("NO_COLOR", "1");
-                envConfigurator.configureProjectPath(env, cwd);
-                envConfigurator.configurePermissionEnv(env);
-
-                process = processBuilder.start();
-                LOG.info("[CliBridge] CLI process started, pid=" + process.pid());
-                if (runtimeKey != null) {
-                    processManager.registerProcess(runtimeKey, process);
+                    process = startProcess(
+                            command,
+                            cwd,
+                            envConfigurator,
+                            runtimeKey,
+                            channelId
+                    );
                 } else {
-                    processManager.registerProcess(channelId, process);
+                    List<String> command = buildCliCommand(cliPath, fullPrompt, sessionId, model, reasoningEffort, List.of());
+                    LOG.info("[CliBridge][DIAG] fullPrompt length=" + fullPrompt.length() + ", addDirs=[]");
+                    LOG.info("[CliBridge][DIAG] fullPrompt content: "
+                            + (fullPrompt.length() > 500 ? fullPrompt.substring(0, 500) + "..." : fullPrompt));
+                    if (suppressThinking) {
+                        LOG.info("[CliBridge] disableThinking requested; Claude CLI has no native no-thinking flag, suppressing thinking events in parser");
+                    }
+                    LOG.info("[CliBridge] Command: " + String.join(" ", command));
+
+                    process = startProcess(
+                            command,
+                            cwd,
+                            envConfigurator,
+                            runtimeKey,
+                            channelId
+                    );
                 }
                 streamParser.resetState();
 
@@ -212,6 +198,7 @@ public class ClaudeCliBridge {
                         if (line.trim().isEmpty()) {
                             continue;
                         }
+                        appendCliDiagnosticLine(cliDiagnostic, line);
                         LOG.debug("[CliBridge] Received line: " + line);
                         streamParser.parseLine(
                                 line,
@@ -249,7 +236,7 @@ public class ClaudeCliBridge {
                         // already set it to COMPLETED when stream_end was received
                         callback.onComplete(result);
                     } else {
-                        String errorMsg = "CLI process exited with code: " + exitCode;
+                        String errorMsg = buildCliExitError(exitCode, cliDiagnostic);
                         result.success = false;
                         result.error = errorMsg;
                         callback.onQueueDisplayStateChanged(QueueDisplayState.NONE, 0);
@@ -295,6 +282,39 @@ public class ClaudeCliBridge {
         });
     }
 
+    static void appendCliDiagnosticLine(StringBuilder diagnostic, String line) {
+        if (diagnostic == null || line == null || line.isBlank()) {
+            return;
+        }
+        if (diagnostic.length() > 0) {
+            diagnostic.append('\n');
+        }
+        diagnostic.append(line);
+        int overflow = diagnostic.length() - CLI_DIAGNOSTIC_MAX_CHARS;
+        if (overflow > 0) {
+            diagnostic.delete(0, overflow);
+        }
+    }
+
+    static String buildCliExitError(int exitCode, StringBuilder diagnostic) {
+        String message = "CLI process exited with code: " + exitCode;
+        if (diagnostic == null || diagnostic.toString().trim().isEmpty()) {
+            return message;
+        }
+        return message + "\n\nDetails:\n" + diagnostic.toString().trim();
+    }
+
+    String enrichPromptWithContext(String message, JsonObject openedFiles, String agentPrompt) {
+        StringBuilder prompt = new StringBuilder(message != null ? message : "");
+        if (openedFiles != null && openedFiles.size() > 0) {
+            prompt.append("\n\n## Opened Files Context\n\n").append(gson.toJson(openedFiles));
+        }
+        if (agentPrompt != null && !agentPrompt.isBlank()) {
+            prompt.append("\n\n## Agent Role and Instructions\n\n").append(agentPrompt);
+        }
+        return prompt.toString();
+    }
+
     private List<String> buildCliCommand(
             String cliPath,
             String message,
@@ -338,6 +358,38 @@ public class ClaudeCliBridge {
         command.add("--");
         command.add(message);
         return command;
+    }
+
+    private Process startProcess(
+            List<String> command,
+            String cwd,
+            EnvironmentConfigurator configurator,
+            RuntimeKey runtimeKey,
+            String channelId
+    ) throws Exception {
+        ProcessBuilder processBuilder = new ProcessBuilder(command);
+        processBuilder.redirectErrorStream(true);
+
+        if (cwd != null && !cwd.isEmpty()) {
+            File workDir = new File(cwd);
+            if (workDir.exists()) {
+                processBuilder.directory(workDir);
+            }
+        }
+
+        Map<String, String> env = processBuilder.environment();
+        env.put("NO_COLOR", "1");
+        configurator.configureProjectPath(env, cwd);
+        configurator.configurePermissionEnv(env);
+
+        Process process = processBuilder.start();
+        LOG.info("[CliBridge] CLI process started, pid=" + process.pid());
+        if (runtimeKey != null) {
+            processManager.registerProcess(runtimeKey, process);
+        } else {
+            processManager.registerProcess(channelId, process);
+        }
+        return process;
     }
 
     private String resolveCliModel(String selectedModel) {
