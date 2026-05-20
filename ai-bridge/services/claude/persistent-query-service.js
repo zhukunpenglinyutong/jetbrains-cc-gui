@@ -16,7 +16,7 @@ import { buildIDEContextPrompt } from '../system-prompts.js';
 import { buildQuickFixPrompt } from '../quickfix-prompts.js';
 import { registerActiveQueryResult, removeSession } from './message-service.js';
 import { normalizePermissionMode } from './permission-mode.js';
-import { truncateString } from './message-output-filter.js';
+import { redactSecrets, truncateString } from './message-output-filter.js';
 import {
   beginRuntimeTurn,
   cleanupStaleAnonymousRuntimes,
@@ -381,15 +381,18 @@ async function executeTurn(runtime, requestContext, turnMeta) {
 function emitSendError(runtime, error, requestContext) {
   const payload = {
     success: false,
-    error: error?.message || String(error),
+    error: redactSecrets(error?.message || String(error)),
     details: {}
   };
 
   if (error?.code) payload.details.code = error.code;
-  if (error?.stack) payload.details.stack = truncateString(error.stack, 2000);
+  // Stack traces and SDK stderr can carry Authorization headers, Bearer
+  // tokens, or sk-/ghp_ keys when the SDK throws on auth errors. Redact
+  // these before they reach the UI / Java logs.
+  if (error?.stack) payload.details.stack = redactSecrets(truncateString(error.stack, 2000));
 
   if (runtime?.stderrLines?.length) {
-    const sdkErrorText = runtime.stderrLines.slice(-10).join('\n');
+    const sdkErrorText = redactSecrets(runtime.stderrLines.slice(-10).join('\n'));
     payload.error = `SDK-STDERR:\n\`\`\`\n${sdkErrorText}\n\`\`\`\n\n${payload.error}`;
     payload.details.sdkError = sdkErrorText;
   }
@@ -455,6 +458,15 @@ function shouldRecreateRuntimeForModel(runtime, modelId) {
   return contextWindowChanged || runtimeModelUnknown;
 }
 
+/**
+ * Temporarily set `CLAUDE_CODE_DISABLE_1M_CONTEXT` for the duration of `operation`.
+ *
+ * NOT concurrency-safe: mutates a process-global env var. If two callers run in
+ * parallel the second one captures the first one's mutation as its "original"
+ * and will fail to restore the true baseline. Callers must serialize on the
+ * daemon's request queue (which is already single-threaded per process) and
+ * MUST NOT wrap parallel operations.
+ */
 async function withScopedContextWindowPreference(modelId, operation) {
   const envKey = 'CLAUDE_CODE_DISABLE_1M_CONTEXT';
   const hadOriginalValue = Object.prototype.hasOwnProperty.call(process.env, envKey);

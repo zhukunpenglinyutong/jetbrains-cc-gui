@@ -515,6 +515,46 @@ public class EnvironmentConfigurator {
     }
 
     /**
+     * Allowlist of shells that may be invoked to source the user's login env.
+     * `$SHELL` is read from the process environment which is technically attacker-influenced;
+     * restricting to this set prevents a hostile parent from pointing us at an arbitrary binary
+     * (e.g. a script in /tmp) under the guise of a login shell.
+     */
+    private static final Set<String> ALLOWED_LOGIN_SHELLS = Set.of(
+            "/bin/zsh",
+            "/bin/bash",
+            "/bin/sh",
+            "/usr/bin/zsh",
+            "/usr/bin/bash",
+            "/usr/bin/sh",
+            "/usr/local/bin/zsh",
+            "/usr/local/bin/bash",
+            "/opt/homebrew/bin/zsh",
+            "/opt/homebrew/bin/bash"
+    );
+
+    /**
+     * Resolve a login shell binary to invoke, honoring `$SHELL` only when it points
+     * at an allowlisted executable. Returns {@code null} when no acceptable shell exists.
+     */
+    String resolveLoginShell() {
+        String shell = System.getenv("SHELL");
+        if (shell != null && !shell.isEmpty() && ALLOWED_LOGIN_SHELLS.contains(shell)) {
+            return shell;
+        }
+        if (shell != null && !shell.isEmpty()) {
+            LOG.warn("[Codex] $SHELL=" + shell + " is not in allowlist; falling back to /bin/zsh");
+        }
+        // Prefer zsh (macOS default) then bash; only return a candidate that actually exists.
+        for (String candidate : new String[]{"/bin/zsh", "/bin/bash", "/bin/sh"}) {
+            if (new File(candidate).canExecute()) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    /**
      * Get environment variable by executing a login shell (macOS/Linux).
      * This captures environment variables set in .zshrc, .bash_profile, etc.
      *
@@ -530,9 +570,10 @@ public class EnvironmentConfigurator {
 
         // Use login + interactive shell to get full environment
         // fnm and other version managers require interactive shell to load .zshrc
-        String shell = System.getenv("SHELL");
-        if (shell == null || shell.isEmpty()) {
-            shell = "/bin/zsh"; // Default to zsh on macOS
+        String shell = resolveLoginShell();
+        if (shell == null) {
+            LOG.warn("[Codex] No allowlisted login shell available; skipping env lookup for: " + envName);
+            return null;
         }
 
         List<String> command = new ArrayList<>();

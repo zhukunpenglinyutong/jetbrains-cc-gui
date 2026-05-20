@@ -702,8 +702,23 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
       linkifyHtml(doc.body, linkifyCapabilities);
 
       return doc.body.innerHTML.trim();
-    } catch {
-      return content;
+    } catch (e) {
+      // If marked/DOMPurify throws, never return raw `content` to
+      // dangerouslySetInnerHTML — escape HTML special chars so any malicious
+      // payload renders as literal text instead of executable markup.
+      if (typeof console !== 'undefined' && console.error) {
+        console.error('[MarkdownBlock] Render failed, falling back to escaped text:', e);
+      }
+      return content.replace(/[&<>"']/g, (ch) => {
+        switch (ch) {
+          case '&': return '&amp;';
+          case '<': return '&lt;';
+          case '>': return '&gt;';
+          case '"': return '&quot;';
+          case "'": return '&#39;';
+          default: return ch;
+        }
+      });
     }
   }, [content, isStreaming, i18n.language, linkifyCapabilities, t]);
 
