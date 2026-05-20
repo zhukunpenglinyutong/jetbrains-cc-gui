@@ -19,6 +19,7 @@ import com.intellij.ui.content.ContentManager;
 import com.intellij.ui.content.ContentManagerEvent;
 import com.intellij.ui.content.ContentManagerListener;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
 import java.awt.*;
@@ -103,6 +104,27 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
     static void unregisterContentMapping(Content content) {
         contentToWindowMap.remove(content);
+    }
+
+    /**
+     * Finds the content associated with a session ID in the current project.
+     *
+     * /fork uses this lookup to derive source-tab display context before naming the branch title.
+     * The static mapping includes both tool-window and detached windows, so detached source
+     * sessions are not missed.
+     *
+     * @return the matching content, or null when no session is found.
+     */
+    public static @Nullable Content findContentForSession(@NotNull Project project, @NotNull String sessionId) {
+        for (Map.Entry<Content, ClaudeChatWindow> entry : contentToWindowMap.entrySet()) {
+            ClaudeChatWindow window = entry.getValue();
+            if (window != null
+                    && project.equals(window.getProject())
+                    && sessionId.equals(window.getSessionId())) {
+                return entry.getKey();
+            }
+        }
+        return null;
     }
 
     private static Set<ClaudeChatWindow> collectProjectChatWindows(@NotNull Project project) {

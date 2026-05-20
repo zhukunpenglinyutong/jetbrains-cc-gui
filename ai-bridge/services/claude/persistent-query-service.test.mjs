@@ -112,6 +112,42 @@ test('fixed thinking tokens remain configured when no reasoningEffort is provide
   assert.equal(context.maxThinkingTokens, 10000);
 });
 
+test('forkSession is passed with resume options for forked requests', async () => {
+  const context = await __testing.buildRequestContext({
+    sessionId: 'source-session',
+    runtimeSessionEpoch: 'epoch-fork',
+    cwd: process.cwd(),
+    message: 'continue from branch',
+    forkSession: true
+  }, false);
+
+  assert.equal(context.forkSession, true);
+  assert.equal(context.options.resume, 'source-session');
+  assert.equal(context.options.forkSession, true);
+  assert.doesNotMatch(context.runtimeSignature, /"forkSession":true/);
+});
+
+test('forked persistent turn does not generate an AI title that overwrites the seeded fork title', async () => {
+  const factory = createSequencedQueryFactory([
+    { done: false, value: { type: 'system', session_id: 'forked-session' } },
+    { done: false, value: { type: 'result', is_error: false } }
+  ]);
+  __testing.setQueryFn(factory.queryFn);
+
+  const context = await __testing.buildRequestContext({
+    sessionId: 'source-session',
+    runtimeSessionEpoch: 'epoch-fork-title',
+    cwd: process.cwd(),
+    message: 'first fork turn',
+    forkSession: true
+  }, false);
+
+  const runtime = await __testing.acquireRuntime(context);
+  await __testing.executeTurn(runtime, context);
+
+  assert.equal(runtime.titleGenerationAttempted, false);
+});
+
 test('anonymous runtime is isolated by runtimeSessionEpoch', async () => {
   const factory = createQueryFactory();
   __testing.setQueryFn(factory.queryFn);
@@ -219,6 +255,107 @@ test('restore-history continuation keeps runtime bound to restored session after
 
   assert.equal(restoredRuntime, restoredRuntimeAgain);
   assert.equal(__testing.getRuntimeForSession('hist-restore'), restoredRuntime);
+});
+
+test('forked requests create a new runtime without rebinding the source session', async () => {
+  const factory = createQueryFactory();
+  __testing.setQueryFn(factory.queryFn);
+
+  const sourceContext = await __testing.buildRequestContext({
+    sessionId: 'source-session',
+    runtimeSessionEpoch: 'epoch-source',
+    cwd: process.cwd(),
+    message: 'normal continuation'
+  }, false);
+  const sourceRuntime = await __testing.acquireRuntime(sourceContext);
+
+  const forkContext = await __testing.buildRequestContext({
+    sessionId: 'source-session',
+    runtimeSessionEpoch: 'epoch-source',
+    cwd: process.cwd(),
+    message: 'branch continuation',
+    forkSession: true
+  }, false);
+  const forkRuntime = await __testing.acquireRuntime(forkContext);
+
+  assert.notEqual(forkRuntime, sourceRuntime);
+  assert.equal(forkRuntime.sessionId, null);
+  assert.equal(__testing.getRuntimeForSession('source-session'), sourceRuntime);
+
+  __testing.registerRuntimeSession(forkRuntime, 'forked-session');
+  const forkFollowUpContext = await __testing.buildRequestContext({
+    sessionId: 'forked-session',
+    runtimeSessionEpoch: 'epoch-source',
+    cwd: process.cwd(),
+    message: 'continue forked branch'
+  }, false);
+  const forkFollowUpRuntime = await __testing.acquireRuntime(forkFollowUpContext);
+
+  assert.equal(forkFollowUpRuntime, forkRuntime);
+  assert.equal(factory.runtimes.length, 2);
+});
+
+test('forked turn without a new SDK session ID does not rebind the source session', async () => {
+  const factory = createSequencedQueryFactory([
+    { done: false, value: { type: 'result', is_error: false } }
+  ]);
+  __testing.setQueryFn(factory.queryFn);
+
+  const sourceContext = await __testing.buildRequestContext({
+    sessionId: 'source-session',
+    runtimeSessionEpoch: 'epoch-source-missing-id',
+    cwd: process.cwd(),
+    message: 'normal continuation'
+  }, false);
+  const sourceRuntime = await __testing.acquireRuntime(sourceContext);
+
+  const forkContext = await __testing.buildRequestContext({
+    sessionId: 'source-session',
+    runtimeSessionEpoch: 'epoch-source-missing-id',
+    cwd: process.cwd(),
+    message: 'branch continuation',
+    forkSession: true
+  }, false);
+  const forkRuntime = await __testing.acquireRuntime(forkContext);
+
+  await assert.rejects(
+    __testing.executeTurn(forkRuntime, forkContext),
+    /Fork request completed without a new session ID/
+  );
+  assert.equal(forkRuntime.sessionId, null);
+  assert.equal(__testing.getRuntimeForSession('source-session'), sourceRuntime);
+});
+
+test('forked turn that receives the source session ID does not rebind the source session', async () => {
+  const factory = createSequencedQueryFactory([
+    { done: false, value: { type: 'system', session_id: 'source-session' } },
+    { done: false, value: { type: 'result', is_error: false } }
+  ]);
+  __testing.setQueryFn(factory.queryFn);
+
+  const sourceContext = await __testing.buildRequestContext({
+    sessionId: 'source-session',
+    runtimeSessionEpoch: 'epoch-source-same-id',
+    cwd: process.cwd(),
+    message: 'normal continuation'
+  }, false);
+  const sourceRuntime = await __testing.acquireRuntime(sourceContext);
+
+  const forkContext = await __testing.buildRequestContext({
+    sessionId: 'source-session',
+    runtimeSessionEpoch: 'epoch-source-same-id',
+    cwd: process.cwd(),
+    message: 'branch continuation',
+    forkSession: true
+  }, false);
+  const forkRuntime = await __testing.acquireRuntime(forkContext);
+
+  await assert.rejects(
+    __testing.executeTurn(forkRuntime, forkContext),
+    /Fork request completed without a new session ID/
+  );
+  assert.equal(forkRuntime.sessionId, null);
+  assert.equal(__testing.getRuntimeForSession('source-session'), sourceRuntime);
 });
 
 test('active session runtime is not disposed by idle cleanup while a turn is executing', async () => {

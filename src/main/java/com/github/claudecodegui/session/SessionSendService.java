@@ -85,7 +85,8 @@ public class SessionSendService {
             JsonObject openedFilesJson,
             String externalAgentPrompt,
             List<String> fileTagPaths,
-            String requestedPermissionMode
+            String requestedPermissionMode,
+            boolean forkSession
     ) {
         String agentPrompt = externalAgentPrompt;
         if (agentPrompt == null) {
@@ -123,7 +124,7 @@ public class SessionSendService {
             );
         }
 
-        return sendToClaude(channelId, input, attachments, openedFilesJson, agentPrompt, effectivePermissionMode);
+        return sendToClaude(channelId, input, attachments, openedFilesJson, agentPrompt, effectivePermissionMode, forkSession);
     }
 
     public static String normalizeRequestedPermissionMode(String mode) {
@@ -210,7 +211,8 @@ public class SessionSendService {
             List<ClaudeSession.Attachment> attachments,
             JsonObject openedFilesJson,
             String agentPrompt,
-            String effectivePermissionMode
+            String effectivePermissionMode,
+            boolean forkSession
     ) {
         ClaudeMessageHandler handler = new ClaudeMessageHandler(
                 project,
@@ -243,6 +245,7 @@ public class SessionSendService {
                         streaming,
                         false,
                         state.getReasoningEffort(),
+                        forkSession,
                         handler
                 ).thenApply(result -> null);
     }

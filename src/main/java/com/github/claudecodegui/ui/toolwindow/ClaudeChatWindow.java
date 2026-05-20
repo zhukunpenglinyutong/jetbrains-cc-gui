@@ -14,6 +14,7 @@ import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.session.SessionCallbackAdapter;
 import com.github.claudecodegui.session.SessionLifecycleManager;
 import com.github.claudecodegui.session.SessionLoadService;
+import com.github.claudecodegui.session.SessionState;
 import com.github.claudecodegui.session.StreamMessageCoalescer;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.settings.TabStateService;
@@ -36,6 +37,7 @@ import com.intellij.ui.jcef.JBCefBrowser;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.Collections;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -45,6 +47,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class ClaudeChatWindow {
 
     private static final Logger LOG = Logger.getInstance(ClaudeChatWindow.class);
+    private static final String FORK_TITLE_SUFFIX = "[fork]";
 
     private final JPanel mainPanel;
     private final ClaudeSDKBridge claudeSDKBridge;
@@ -56,6 +59,11 @@ public class ClaudeChatWindow {
     private Content parentContent;
     private String originalTabName;
     private volatile String sessionId = null;
+
+    // Seeded by setForkContext and consumed once during frontend state replay.
+    // The title must be sent after setSessionId(sourceSessionId), otherwise the frontend
+    // drops title updates whose session ID does not match the current session.
+    private volatile String pendingForkTitle = null;
 
     private JBCefBrowser browser;
     private ClaudeSession session;
@@ -378,6 +386,103 @@ public class ClaudeChatWindow {
         }
     }
 
+    /**
+     * Configures this tab as a branch of the given source session.
+     * It loads the source JSONL into the tab, marks the next send as a pending fork,
+     * and lets the SDK return the real branch session ID on the first user message.
+     * <p>
+     * The SDK is not called with an empty prompt here because empty queries are rejected
+     * and would create a confusing blank conversation entry even if accepted.
+     */
+    public void setForkContext(String sourceSessionId) {
+        setForkContext(sourceSessionId, null);
+    }
+
+    public void setForkContext(String sourceSessionId, String forkTitle) {
+        if (!SessionState.isValidSessionId(sourceSessionId)) {
+            LOG.warn("[Fork] setForkContext called with invalid sourceSessionId, ignoring");
+            return;
+        }
+        String normalizedSourceSessionId = sourceSessionId.trim();
+        if (session == null) {
+            LOG.warn("[Fork] setForkContext called before session was initialized; cannot fork");
+            return;
+        }
+
+        String suppliedForkTitle = forkTitle != null ? forkTitle.trim() : "";
+        this.pendingForkTitle = suppliedForkTitle.isEmpty()
+                ? buildForkTitleFromSource(normalizedSourceSessionId)
+                : suppliedForkTitle;
+
+        // Load the source history so the branch tab visibly starts from the fork point.
+        TabStateService.TabSessionState forkState = new TabStateService.TabSessionState();
+        forkState.sessionId = normalizedSourceSessionId;
+        forkState.provider = "claude";
+        forkState.cwd = session.getCwd();
+        forkState.model = session.getModel();
+        forkState.permissionMode = session.getPermissionMode();
+        forkState.reasoningEffort = session.getReasoningEffort();
+        restorePersistedTabSessionState(forkState, true);
+
+        // The next send must use resume+forkSession so the SDK creates a new branch session ID.
+        session.setPendingForkOnNextSend(true);
+        chatWindowDelegate.replayPendingForkTitleIfReady();
+
+        LOG.info("[Fork] Configured tab to fork from session: " + normalizedSourceSessionId
+                + " (cwd=" + forkState.cwd + ", hasPendingTitle=" + (this.pendingForkTitle != null) + ")");
+    }
+
+    /**
+     * Derives a branch title from the source tab's first user message.
+     *
+     * The webview title fallback uses customSessionTitle ?? firstUserMessage[0..15],
+     * so this mirrors that truncation before appending the fork suffix.
+     *
+     * When the source tab or message is unavailable, the bare [fork] marker is enough
+     * to distinguish the branch tab from a normal restored session.
+     */
+    private String buildForkTitleFromSource(String sourceSessionId) {
+        try {
+            Content sourceContent = ClaudeSDKToolWindow.findContentForSession(project, sourceSessionId);
+            if (sourceContent == null) {
+                LOG.debug("[Fork] No source content found for sessionId=" + sourceSessionId
+                        + ", falling back to bare [fork]");
+                return FORK_TITLE_SUFFIX;
+            }
+            ClaudeChatWindow sourceWindow = ClaudeSDKToolWindow.getChatWindowForContent(sourceContent);
+            if (sourceWindow == null || sourceWindow.getSession() == null) {
+                LOG.debug("[Fork] No source window/session for sessionId=" + sourceSessionId);
+                return FORK_TITLE_SUFFIX;
+            }
+            for (ClaudeSession.Message msg : sourceWindow.getSession().getMessages()) {
+                if (msg.type != ClaudeSession.Message.Type.USER || msg.content == null) {
+                    continue;
+                }
+                String text = msg.content.trim();
+                if (text.isEmpty()) {
+                    continue;
+                }
+                String base = text.length() > 15 ? text.substring(0, 15) + "..." : text;
+                return ForkTitleFormatter.buildForkTitle(base, Collections.emptyList());
+            }
+            LOG.debug("[Fork] Source session has no user message yet, falling back to bare [fork]");
+        } catch (Exception e) {
+            LOG.warn("[Fork] Failed to derive fork title from source session " + sourceSessionId
+                    + ": " + e.getMessage());
+        }
+        return FORK_TITLE_SUFFIX;
+    }
+
+    /**
+     * Consumes the branch title seeded by {@link #setForkContext(String)}.
+     * Called after frontend_ready so the frontend has already received setSessionId(sourceSessionId).
+     */
+    public String popPendingForkTitle() {
+        String value = this.pendingForkTitle;
+        this.pendingForkTitle = null;
+        return value;
+    }
+
     public void loadRestoredHistoryIfNeeded() {
         if (session == null) {
             return;
@@ -446,6 +551,12 @@ public class ClaudeChatWindow {
     private static final java.util.regex.Pattern SAFE_JS_FUNCTION_NAME =
             java.util.regex.Pattern.compile("^[a-zA-Z_$][a-zA-Z0-9_$.]*$");
 
+    /**
+     * Calls a JavaScript function in the JCEF browser.
+     * <p><strong>SECURITY:</strong> All args must be pre-escaped with {@link JsUtils#escapeJs(String)}
+     * before passing. This method wraps args in single quotes without additional escaping;
+     * unescaped user-controlled data creates a JS-injection vulnerability.
+     */
     void callJavaScript(String functionName, String... args) {
         if (disposed || browser == null) {
             LOG.warn("Cannot call JS function " + functionName + ": disposed=" + disposed + ", browser=" + (browser == null ? "null" : "exists"));
@@ -455,6 +566,15 @@ public class ClaudeChatWindow {
         if (functionName == null || !SAFE_JS_FUNCTION_NAME.matcher(functionName).matches()) {
             LOG.error("Invalid JavaScript function name rejected: " + functionName);
             return;
+        }
+
+        if (args != null) {
+            for (String arg : args) {
+                if (looksUnescaped(arg)) {
+                    LOG.warn(buildUnescapedJavaScriptArgumentWarning(functionName, arg));
+                    break;
+                }
+            }
         }
 
         ApplicationManager.getApplication().invokeLater(() -> {
@@ -494,6 +614,34 @@ public class ClaudeChatWindow {
         });
     }
 
+    static String buildUnescapedJavaScriptArgumentWarning(String functionName, String arg) {
+        int length = arg != null ? arg.length() : 0;
+        return "callJavaScript arg looks unescaped for '" + functionName
+                + "'. Callers must use JsUtils.escapeJs(). length=" + length;
+    }
+
+    static String buildWebviewConsoleLogMessage(String logType, String... args) {
+        return buildWebviewConsoleLogMessage(logType, args != null ? args.length : 0);
+    }
+
+    static String buildWebviewConsoleLogMessage(String logType, int argCount) {
+        return "[Webview] " + logType + " args=" + argCount;
+    }
+
+    /**
+     * Heuristic to detect strings that likely have not been JS-escaped.
+     * Returns true when the arg contains dangerous chars (single quotes, newlines)
+     * without common escape sequences that would indicate prior escaping.
+     */
+    private static boolean looksUnescaped(String arg) {
+        if (arg == null || arg.isEmpty()) {
+            return false;
+        }
+        boolean hasDangerous = arg.indexOf('\'') >= 0 || arg.indexOf('\n') >= 0 || arg.indexOf('\r') >= 0;
+        boolean hasEscapeSeq = arg.contains("\\'") || arg.contains("\\\\") || arg.contains("\\n");
+        return hasDangerous && !hasEscapeSeq;
+    }
+
     void handleJavaScriptMessage(String message) {
         if (message.startsWith("{\"type\":\"console.")) {
             try {
@@ -501,18 +649,14 @@ public class ClaudeChatWindow {
                 String logType = json.get("type").getAsString();
                 JsonArray args = json.getAsJsonArray("args");
 
-                StringBuilder logMessage = new StringBuilder("[Webview] ");
-                for (int i = 0; i < args.size(); i++) {
-                    if (i > 0) { logMessage.append(" "); }
-                    logMessage.append(args.get(i).toString());
-                }
+                String logMessage = buildWebviewConsoleLogMessage(logType, args.size());
 
                 if ("console.error".equals(logType)) {
-                    LOG.warn(logMessage.toString());
+                    LOG.warn(logMessage);
                 } else if ("console.warn".equals(logType)) {
-                    LOG.info(logMessage.toString());
+                    LOG.info(logMessage);
                 } else {
-                    LOG.debug(logMessage.toString());
+                    LOG.debug(logMessage);
                 }
             } catch (Exception e) {
                 LOG.warn("Failed to parse console log: " + e.getMessage());
@@ -973,6 +1117,11 @@ public class ClaudeChatWindow {
             @Override
             public void persistTabSessionState() {
                 ClaudeChatWindow.this.persistTabSessionState();
+            }
+
+            @Override
+            public String popPendingForkTitle() {
+                return ClaudeChatWindow.this.popPendingForkTitle();
             }
         };
     }

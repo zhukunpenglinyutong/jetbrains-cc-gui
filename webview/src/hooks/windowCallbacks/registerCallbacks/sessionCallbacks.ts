@@ -37,6 +37,7 @@ export function registerSessionAndSdkCallbacks(
   window.setSessionId = (sessionId: string) => {
     const oldId = currentSessionIdRef.current;
     releaseSessionTransition();
+    currentSessionIdRef.current = sessionId;
     setCurrentSessionId(sessionId);
 
     // B-011 + B-014: Persist custom title under the real SDK session ID.
@@ -135,12 +136,21 @@ export function registerSessionAndSdkCallbacks(
   // AI Title Callback
   // =========================================================================
 
+  window.seedForkSessionTitle = (title: string) => {
+    if (!title || !title.trim()) return;
+    const trimmedTitle = title.trim();
+    customSessionTitleRef.current = trimmedTitle;
+    setCustomSessionTitle(trimmedTitle);
+  };
+
   window.updateSessionTitle = (sessionId: string, title: string) => {
     if (!title || !title.trim() || !sessionId) return;
     // Only apply the title if it matches the current session to prevent
     // stale events from overwriting the wrong session's title.
     if (currentSessionIdRef.current !== sessionId) return;
-    setCustomSessionTitle(title.trim());
-    applyHistoryTitleLocal(sessionId, title.trim());
+    const trimmedTitle = title.trim();
+    customSessionTitleRef.current = trimmedTitle;
+    setCustomSessionTitle(trimmedTitle);
+    applyHistoryTitleLocal(sessionId, trimmedTitle);
   };
 }

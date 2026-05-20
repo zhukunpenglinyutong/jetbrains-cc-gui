@@ -29,7 +29,7 @@ export function createTurnState(requestContext, runtime) {
     lastThinkingContent: '',
     textBlockContentByIndex: new Map(),
     thinkingBlockContentByIndex: new Map(),
-    finalSessionId: requestContext.requestedSessionId || runtime?.sessionId || '',
+    finalSessionId: requestContext.forkSession ? '' : (requestContext.requestedSessionId || runtime?.sessionId || ''),
     accumulatedUsage: null
   };
 }

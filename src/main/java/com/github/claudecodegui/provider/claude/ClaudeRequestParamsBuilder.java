@@ -33,7 +33,8 @@ class ClaudeRequestParamsBuilder {
             String agentPrompt,
             Boolean streaming,
             Boolean disableThinking,
-            String reasoningEffort
+            String reasoningEffort,
+            Boolean forkSession
     ) {
         JsonObject params = new JsonObject();
         params.addProperty("message", message);
@@ -62,6 +63,9 @@ class ClaudeRequestParamsBuilder {
         }
         if (reasoningEffort != null && !reasoningEffort.trim().isEmpty()) {
             params.addProperty("reasoningEffort", reasoningEffort);
+        }
+        if (Boolean.TRUE.equals(forkSession)) {
+            params.addProperty("forkSession", true);
         }
 
         return params;

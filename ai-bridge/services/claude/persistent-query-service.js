@@ -26,6 +26,7 @@ import {
   acquireRuntime,
   applyDynamicControls,
   buildRuntimeSignature,
+  describeRuntimeSignature,
   endRuntimeTurn,
   resetCachedQueryFn,
   setCachedQueryFn,
@@ -113,7 +114,7 @@ function resolveRequestModelState(modelId, settingsEnv) {
   };
 }
 
-function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId, mcpServers) {
+function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId, forkSession, mcpServers) {
   return {
     cwd: workingDirectory,
     permissionMode,
@@ -137,7 +138,8 @@ function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxTh
       preset: 'claude_code',
       ...(systemPromptAppend && { append: systemPromptAppend })
     },
-    ...(requestedSessionId && { resume: requestedSessionId })
+    ...(requestedSessionId && { resume: requestedSessionId }),
+    ...(requestedSessionId && forkSession && { forkSession: true })
   };
 }
 
@@ -176,6 +178,7 @@ async function buildRequestContext(params, withAttachments, overrides = {}) {
   const runtimeSessionEpoch = (typeof params.runtimeSessionEpoch === 'string' && params.runtimeSessionEpoch.trim() !== '')
     ? params.runtimeSessionEpoch.trim()
     : null;
+  const forkSession = requestedSessionId !== null && params.forkSession === true;
 
   const workingDirectory = selectWorkingDirectory(params.cwd || null);
   try {
@@ -199,7 +202,7 @@ async function buildRequestContext(params, withAttachments, overrides = {}) {
 
   const options = buildQueryOptions(
     workingDirectory, sdkModelName, permissionMode,
-    maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId,
+    maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId, forkSession,
     mcpServers
   );
 
@@ -208,11 +211,13 @@ async function buildRequestContext(params, withAttachments, overrides = {}) {
   const runtimeSignature = buildRuntimeSignature(options, systemPromptAppend, streamingEnabled, runtimeSessionEpoch);
   console.log('[LIFECYCLE] buildRequestContext sessionId=' + (requestedSessionId || '(new)')
     + ' epoch=' + (runtimeSessionEpoch || '(none)')
-    + ' signature=' + runtimeSignature);
+    + ' fork=' + forkSession
+    + ' ' + describeRuntimeSignature(runtimeSignature));
 
   return {
     requestedSessionId,
     runtimeSessionEpoch,
+    forkSession,
     streamingEnabled,
     options,
     userMessage,
@@ -299,6 +304,10 @@ async function executeTurn(runtime, requestContext, turnMeta) {
       processToolResultMessages(msg);
 
       if (msg?.type === 'system' && msg.session_id) {
+        if (requestContext.forkSession && msg.session_id === requestContext.requestedSessionId) {
+          console.warn('[LIFECYCLE] Ignoring fork session_id that matches source session');
+          continue;
+        }
         turnState.finalSessionId = msg.session_id;
         console.log('[SESSION_ID]', msg.session_id);
         registerRuntimeSession(runtime, msg.session_id, { registerActiveQueryResult, removeSession });
@@ -320,7 +329,13 @@ async function executeTurn(runtime, requestContext, turnMeta) {
       turnState.streamEnded = true;
     }
 
-    const finalSessionId = turnState.finalSessionId || runtime.sessionId || requestContext.requestedSessionId || '';
+    const finalSessionId = turnState.finalSessionId
+      || runtime.sessionId
+      || (requestContext.forkSession ? '' : requestContext.requestedSessionId)
+      || '';
+    if (requestContext.forkSession && (!finalSessionId || finalSessionId === requestContext.requestedSessionId)) {
+      throw new Error('Fork request completed without a new session ID');
+    }
     if (finalSessionId) {
       registerRuntimeSession(runtime, finalSessionId, { registerActiveQueryResult, removeSession });
     }
@@ -331,9 +346,9 @@ async function executeTurn(runtime, requestContext, turnMeta) {
       sessionId: finalSessionId
     }));
 
-    // Fire-and-forget: generate AI title for new sessions (not resumes).
-    // titleGenerationAttempted prevents duplicate calls when a second message
-    // arrives before the first Haiku API response completes.
+    // Fire-and-forget: generate AI title for brand-new sessions only.
+    // Fork titles are seeded by the IDE from the source session title, so generating
+    // another title here would overwrite the [fork] marker after the first fork turn.
     // The flag is reset if generateSessionTitle reports a transient failure
     // so a future turn may retry; permanent skips (e.g. CLI login mode) keep
     // the flag set to avoid endless retries.
@@ -673,6 +688,9 @@ export const __testing = {
   },
   async executeTurn(runtime, requestContext, turnMeta = null) {
     return executeTurn(runtime, requestContext, turnMeta);
+  },
+  registerRuntimeSession(runtime, sessionId) {
+    return registerRuntimeSession(runtime, sessionId, { registerActiveQueryResult, removeSession });
   },
   async cleanupAnonymousRuntimes() {
     return cleanupStaleAnonymousRuntimes({ registerActiveQueryResult, removeSession });

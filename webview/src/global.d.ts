@@ -470,6 +470,12 @@ interface Window {
   updateCommitAiConfig?: (json: string) => void;
 
   /**
+   * Seed the current fork tab title without writing it to source session history.
+   * @param title - The fork title text to carry into the next SDK session ID
+   */
+  seedForkSessionTitle?: (title: string) => void;
+
+  /**
    * Update session title (called when AI generates a title).
    * @param sessionId - The session ID the title belongs to
    * @param title - The generated title text

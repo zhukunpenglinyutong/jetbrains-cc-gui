@@ -13,6 +13,7 @@ export const NEW_SESSION_COMMANDS = new Set(['/new', '/clear', '/reset']);
 export const RESUME_COMMANDS = new Set(['/resume', '/continue']);
 export const PLAN_COMMANDS = new Set(['/plan']);
 export const CONTEXT_COMMANDS = new Set(['/context']);
+export const FORK_COMMANDS = new Set(['/fork']);
 
 // Hoisted regex to avoid creating new RegExp on every call
 const WHITESPACE_REGEX = /\s+/;
@@ -22,6 +23,11 @@ function createContextUsageRequestId(): string {
     return crypto.randomUUID();
   }
   return `context-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function getCommandToken(text: string): string | null {
+  if (!text.startsWith('/')) return null;
+  return text.split(WHITESPACE_REGEX)[0].toLowerCase();
 }
 
 export interface UseMessageSenderOptions {
@@ -45,6 +51,8 @@ export interface UseMessageSenderOptions {
   setStreamingActive: React.Dispatch<React.SetStateAction<boolean>>;
   setSettingsInitialTab: React.Dispatch<React.SetStateAction<any>>;
   setCurrentView: React.Dispatch<React.SetStateAction<ViewMode>>;
+  currentSessionId: string | null;
+  currentSessionTitle?: string | null;
   forceCreateNewSession: () => void;
   handleModeSelect?: (mode: PermissionMode) => void;
   longContextEnabled?: boolean;
@@ -76,6 +84,8 @@ export function useMessageSender({
   setStreamingActive,
   setSettingsInitialTab,
   setCurrentView,
+  currentSessionId,
+  currentSessionTitle,
   forceCreateNewSession,
   handleModeSelect,
   longContextEnabled,
@@ -164,6 +174,60 @@ export function useMessageSender({
   }, [currentProvider, selectedModel, longContextEnabled, addToast, t, openContextUsageDialog, closeContextUsageDialog]);
 
   /**
+   * Check for the /fork slash command.
+   *
+   * /fork opens a new branch tab via the fork_session bridge event. The source
+   * session stays unchanged, and the first message in the new tab triggers the
+   * SDK resume+forkSession path that creates the real branch session ID.
+   *
+   * Trailing text after /fork is ignored instead of being sent to Claude. A toast
+   * makes that visible for users who still type the old "/fork prompt" shape.
+   */
+  const checkForkCommand = useCallback((text: string): boolean => {
+    if (!text.startsWith('/')) return false;
+    const command = getCommandToken(text);
+    if (command === null || !FORK_COMMANDS.has(command)) return false;
+
+    if (currentProvider !== 'claude') {
+      addToast(t('chat.commandProviderOnly', {
+        command: '/fork',
+        provider: 'Claude',
+        defaultValue: '/fork is only available for Claude provider',
+      }), 'warning');
+      return true;
+    }
+    if (!currentSessionId) {
+      addToast(t('chat.forkRequiresSession', {
+        defaultValue: 'Cannot fork before a Claude session has been created.',
+      }), 'warning');
+      return true;
+    }
+
+    // Warn without blocking: trailing text is discarded and must not be sent as a chat message.
+    const rawToken = text.split(WHITESPACE_REGEX)[0];
+    const trailing = text.slice(rawToken.length).trim();
+    if (trailing.length > 0) {
+      addToast(t('chat.forkIgnoresPrompt', {
+        defaultValue: '/fork opens a new branch tab. The text after /fork was ignored — type your message in the new tab.',
+      }), 'info');
+    }
+
+    const trimmedTitle = currentSessionTitle?.trim();
+    const newSessionTitle = t('common.newSession').trim();
+    const sourceTitle = trimmedTitle && trimmedTitle !== newSessionTitle ? trimmedTitle : undefined;
+    const sent = sendBridgeEvent('fork_session', JSON.stringify({
+      sourceSessionId: currentSessionId,
+      ...(sourceTitle ? { sourceTitle } : {}),
+    }));
+    if (!sent) {
+      addToast(t('chat.bridgeUnavailable', {
+        defaultValue: 'Bridge is not available right now',
+      }), 'error');
+    }
+    return true;
+  }, [currentProvider, currentSessionId, currentSessionTitle, addToast, t]);
+
+  /**
    * Check for unimplemented slash commands
    */
   const checkUnimplementedCommand = useCallback((text: string): boolean => {
@@ -231,6 +295,12 @@ export function useMessageSender({
 
   /**
    * Send message to backend
+   *
+   * Fork branching is handled at the IDE level (see checkForkCommand → fork_session event),
+   * which opens a new tab with a pendingFork flag on the Java session. Subsequent send_message
+   * payloads from that tab do NOT carry forkSession=true; the Java side picks up the flag from
+   * SessionState. Keeping forkSession out of this payload prevents accidental double-forking
+   * in tabs that already have pendingFork set.
    */
   const sendMessageToBackend = useCallback((
     text: string,
@@ -292,6 +362,8 @@ export function useMessageSender({
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
 
     if (!text && !hasAttachments) return;
+
+    if (checkForkCommand(text)) return;
 
     // Check SDK status
     if (!sdkStatusLoaded) {
@@ -370,7 +442,10 @@ export function useMessageSender({
       absolutePath: tag.absolutePath,
     })) : null;
 
-    // Send message to backend
+    // Send message to backend. Fork branching is handled separately by
+    // checkForkCommand (via fork_session event), so the regular send path
+    // never carries forkSession=true any more \u2014 the Java side picks up the
+    // pendingFork flag from SessionState when present.
     sendMessageToBackend(text, attachments, agentInfo, fileTagsInfo, permissionMode);
   }, [
     sdkStatusLoaded,
@@ -378,6 +453,7 @@ export function useMessageSender({
     currentProvider,
     permissionMode,
     selectedAgent,
+    checkForkCommand,
     buildUserContentBlocks,
     sendMessageToBackend,
     addToast,
@@ -402,12 +478,15 @@ export function useMessageSender({
     // Check context usage command (/context)
     if (checkContextCommand(text)) return;
 
+    // Check fork command (/fork) \u2014 opens a new branch tab; never enqueues a normal message.
+    if (checkForkCommand(text)) return;
+
     // Check for unimplemented commands
     if (checkUnimplementedCommand(text)) return;
 
     // Execute message
     executeMessage(content, attachments);
-  }, [checkNewSessionCommand, checkLocalCommand, checkContextCommand, checkUnimplementedCommand, executeMessage]);
+  }, [checkNewSessionCommand, checkLocalCommand, checkContextCommand, checkForkCommand, checkUnimplementedCommand, executeMessage]);
 
   /**
    * Interrupt the current session

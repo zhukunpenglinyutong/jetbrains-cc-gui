@@ -8,8 +8,17 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class SlashCommandSourceScannersTest {
+
+    @Test
+    public void claudeBuiltinsIncludeForkCommand() {
+        List<SlashCommandRegistry.SlashCommand> commands = SlashCommandRegistry.CLAUDE_BUILTIN;
+
+        assertTrue(commands.stream().anyMatch(command ->
+                "/fork".equals(command.name()) && "builtin".equals(command.source())));
+    }
 
     @Test
     public void managedSkillScannerReadsConditionalSkillsFromManagedDirectory() throws IOException {

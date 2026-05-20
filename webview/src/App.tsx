@@ -24,6 +24,7 @@ import {
   RESUME_COMMANDS,
   PLAN_COMMANDS,
   CONTEXT_COMMANDS,
+  FORK_COMMANDS,
 } from './hooks/useMessageSender';
 import { applyDiffTheme, getStoredDiffTheme } from './utils/diffTheme';
 import type { Attachment, ChatInputBoxHandle } from './components/ChatInputBox/types';
@@ -41,7 +42,7 @@ import { DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS } from './utils/permissionDia
 const App = () => {
   const { t } = useTranslation();
 
-  // ── Dialog management (extracted to DialogContext, stage 4 of TASK-P1-01) ──
+  // ── Dialog management ──
   // Open* / set* are still needed by hooks (useWindowCallbacks, useRewindHandlers).
   // Display state (permissionDialogOpen / askUserQuestionDialogOpen / etc.) is
   // consumed directly inside <AppDialogs> via useDialogs().
@@ -56,7 +57,7 @@ const App = () => {
     isRewinding, setIsRewinding, setRewindSelectDialogOpen,
   } = useDialogs();
 
-  // ── Messages flow state (extracted to MessagesContext, stage 1 of TASK-P1-01) ──
+  // ── Messages flow state ──
   // Display state (loadingStartTime / isThinking) is consumed inside <ChatScreen>.
   const {
     messages, setMessages,
@@ -67,7 +68,7 @@ const App = () => {
     streamingActive, setStreamingActive,
   } = useMessages();
 
-  // ── Session state (extracted to SessionContext, stage 2 of TASK-P1-01) ──
+  // ── Session state ──
   const {
     currentSessionId, setCurrentSessionId,
     customSessionTitle, setCustomSessionTitle,
@@ -75,7 +76,7 @@ const App = () => {
     currentSessionIdRef, customSessionTitleRef,
   } = useSession();
 
-  // ── UI state (extracted to UIStateContext, stage 3 of TASK-P1-01) ──
+  // ── UI state ──
   // Dialog visibility (addModelDialog / changelog) is consumed inside AppDialogs.
   const {
     currentView, setCurrentView,
@@ -248,6 +249,17 @@ const App = () => {
     mergedMessages, sentAttachmentsRef,
   } = useMessageProcessing({ messages, currentSessionId, t });
 
+  // ── Chat-view computations ──
+  const {
+    findToolResult, getToolResultRaw,
+    fileChangeMgmt,
+    filteredFileChanges, subagents, globalTodos, rewindableMessages, sessionTitle,
+  } = useChatComputations({
+    t, messages, mergedMessages, customSessionTitle, streamingActive, currentProvider,
+    currentSessionId, currentSessionIdRef,
+    getMessageText, getContentBlocks,
+  });
+
   // ── Message sender ──
   // Wrap handleProviderSelect to also clear messages and input (like creating a new session)
   const wrappedHandleProviderSelect = useCallback((providerId: string) => {
@@ -268,6 +280,8 @@ const App = () => {
     isUserAtBottomRef, userPausedRef, isStreamingRef,
     setMessages, setLoading, setLoadingStartTime, setStreamingActive,
     setSettingsInitialTab, setCurrentView,
+    currentSessionId,
+    currentSessionTitle: sessionTitle,
     forceCreateNewSession,
     handleModeSelect,
     longContextEnabled,
@@ -306,8 +320,8 @@ const App = () => {
         addToast(t('chat.planModeEnabled', { defaultValue: 'Plan mode enabled' }), 'info');
         return;
       }
-      // /context - handled locally even while loading
-      if (CONTEXT_COMMANDS.has(command)) {
+      // /context and /fork are handled locally even while loading (/fork is Claude only)
+      if (CONTEXT_COMMANDS.has(command) || FORK_COMMANDS.has(command)) {
         hookHandleSubmit(content, attachments);
         return;
       }
@@ -319,17 +333,6 @@ const App = () => {
     }
     hookHandleSubmit(content, attachments);
   }, [loading, enqueueMessage, hookHandleSubmit, forceCreateNewSession, currentProvider, handleModeSelect, setCurrentView, addToast, t]);
-
-  // ── Chat-view computations (stage 5 of TASK-P1-01) ──
-  const {
-    findToolResult, getToolResultRaw,
-    fileChangeMgmt,
-    filteredFileChanges, subagents, globalTodos, rewindableMessages, sessionTitle,
-  } = useChatComputations({
-    t, messages, mergedMessages, customSessionTitle, streamingActive, currentProvider,
-    currentSessionId, currentSessionIdRef,
-    getMessageText, getContentBlocks,
-  });
 
   const { handleUndoFile, handleDiscardAll: handleDiscardAllRaw, handleKeepAll } = fileChangeMgmt;
   const onDiscardAll = useCallback(

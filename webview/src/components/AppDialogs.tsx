@@ -68,7 +68,7 @@ export interface AppDialogsProps {
  * Renders all top-level dialogs.
  * Permission / ask-user / plan / rewind / changelog / add-model state is read
  * from DialogContext and UIStateContext directly to avoid prop drilling 25+
- * fields from App.tsx (stage 4-5 of TASK-P1-01).
+ * fields from App.tsx.
  */
 export const AppDialogs = ({
   showNewSessionConfirm,

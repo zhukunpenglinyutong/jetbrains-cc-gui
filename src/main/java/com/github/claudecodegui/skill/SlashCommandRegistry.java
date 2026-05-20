@@ -54,6 +54,7 @@ public final class SlashCommandRegistry {
             new SlashCommand("/init", "Initialize a new CLAUDE.md file with codebase documentation", "builtin"),
             new SlashCommand("/plan", "Switch to plan mode", "builtin"),
             new SlashCommand("/resume", "Resume a previous conversation", "builtin"),
+            new SlashCommand("/fork", "Create a new branch from the current conversation", "builtin"),
             new SlashCommand("/review", "Review a pull request", "builtin"),
             // Bundled skills (userInvocable, no ANT-only restriction)
             new SlashCommand("/batch", "Execute large-scale changes in parallel across isolated worktrees", "bundled"),
