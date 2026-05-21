@@ -10,7 +10,7 @@ import {
   resolveModelFromSettings,
   setModelEnvironmentVariables
 } from '../../utils/model-utils.js';
-import { emitClaudeLimitsIfDue } from '../../utils/usage-limits.js';
+import { emitClaudeLimitsIfDue, resetClaudeCache } from '../../utils/usage-limits.js';
 import { canUseTool } from '../../permission-handler.js';
 import { buildContentBlocks, loadAttachments } from './attachment-service.js';
 import { buildIDEContextPrompt } from '../system-prompts.js';
@@ -323,6 +323,7 @@ async function executeTurn(runtime, requestContext, turnMeta) {
       sessionId: finalSessionId
     }));
 
+    resetClaudeCache();
     emitClaudeLimitsIfDue().catch(() => {});
 
     // Fire-and-forget: generate AI title for new sessions (not resumes).
