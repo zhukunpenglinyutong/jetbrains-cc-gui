@@ -56,7 +56,9 @@ public class ClaudeCliSession {
             StringBuilder diagnostic = new StringBuilder();
             try {
                 String cliPath = ClaudeCliDetector.getInstance().findCliExecutable();
-                if (cliPath == null) throw new IllegalStateException("Claude CLI not found");
+                if (cliPath == null) {
+                    throw new IllegalStateException("Claude CLI not found");
+                }
 
                 // 解析附件:图片落盘以供 prompt 引用,文档读为文本
                 String sessionKey = sessionId != null ? sessionId : "epoch-" + tabId;
@@ -73,7 +75,9 @@ public class ClaudeCliSession {
                 pb.redirectErrorStream(true);
                 if (request.cwd() != null && !request.cwd().isBlank()) {
                     File cwd = new File(request.cwd());
-                    if (cwd.isDirectory()) pb.directory(cwd);
+                    if (cwd.isDirectory()) {
+                        pb.directory(cwd);
+                    }
                 }
                 pb.environment().put("NO_COLOR", "1");
                 envConfigurator.configurePermissionEnv(pb.environment());
@@ -109,7 +113,9 @@ public class ClaudeCliSession {
 
     public void interrupt() {
         CliProcessHandle h = activeHandle;
-        if (h != null) h.interrupt();
+        if (h != null) {
+            h.interrupt();
+        }
     }
 
     public void dispose() {
@@ -160,7 +166,9 @@ public class ClaudeCliSession {
                 new InputStreamReader(activeHandle.process().getInputStream(), StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                if (line.isBlank()) continue;
+                if (line.isBlank()) {
+                    continue;
+                }
                 appendDiagnostic(diagnostic, line);
                 parser.parseLine(line, mcb, result, assistantContent, hadError, false);
 
@@ -190,16 +198,24 @@ public class ClaudeCliSession {
     }
 
     private static void appendDiagnostic(StringBuilder buf, String line) {
-        if (buf == null || line == null || line.isBlank()) return;
-        if (buf.length() > 0) buf.append('\n');
+        if (buf == null || line == null || line.isBlank()) {
+            return;
+        }
+        if (buf.length() > 0) {
+            buf.append('\n');
+        }
         buf.append(line);
         int overflow = buf.length() - DIAGNOSTIC_MAX_CHARS;
-        if (overflow > 0) buf.delete(0, overflow);
+        if (overflow > 0) {
+            buf.delete(0, overflow);
+        }
     }
 
     private static String buildExitError(int exitCode, StringBuilder diagnostic) {
         String base = "Claude CLI exited with code: " + exitCode;
-        if (diagnostic == null) return base;
+        if (diagnostic == null) {
+            return base;
+        }
         String trimmed = diagnostic.toString().trim();
         return trimmed.isEmpty() ? base : base + "\n\nDetails:\n" + trimmed;
     }
@@ -293,7 +309,9 @@ public class ClaudeCliSession {
         }
         if (request.fileTagPaths() != null && !request.fileTagPaths().isEmpty()) {
             sb.append("\n\n## Referenced Files\n\n");
-            for (String p : request.fileTagPaths()) sb.append("- ").append(p).append('\n');
+            for (String p : request.fileTagPaths()) {
+                sb.append("- ").append(p).append('\n');
+            }
         }
         if (request.agentPrompt() != null && !request.agentPrompt().isBlank()) {
             sb.append("\n\n## Agent Role and Instructions\n\n").append(request.agentPrompt());
@@ -305,7 +323,9 @@ public class ClaudeCliSession {
     private List<String> collectAddDirs(List<CliAttachmentHandler.ContentBlock> blocks) {
         Set<String> dirs = new LinkedHashSet<>();
         for (CliAttachmentHandler.ContentBlock block : blocks) {
-            if (block.kind() != CliAttachmentHandler.ContentBlock.Kind.IMAGE || block.file() == null) continue;
+            if (block.kind() != CliAttachmentHandler.ContentBlock.Kind.IMAGE || block.file() == null) {
+                continue;
+            }
             File parent = block.file().getParentFile();
             if (parent != null && parent.isDirectory()) {
                 dirs.add(parent.getAbsolutePath());
@@ -317,14 +337,18 @@ public class ClaudeCliSession {
     private static void cleanupTempFiles(List<File> files) {
         for (File f : files) {
             try {
-                if (f != null && f.exists()) f.delete();
+                if (f != null && f.exists()) {
+                    f.delete();
+                }
             } catch (Exception ignored) {
             }
         }
     }
 
     private static String getString(JsonObject obj, String key) {
-        if (obj == null || !obj.has(key) || obj.get(key).isJsonNull()) return null;
+        if (obj == null || !obj.has(key) || obj.get(key).isJsonNull()) {
+            return null;
+        }
         return obj.get(key).getAsString();
     }
 }

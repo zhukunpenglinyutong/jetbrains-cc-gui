@@ -32,18 +32,26 @@ public class CliSessionManager {
     public void interrupt(String tabId, String provider) {
         if ("claude".equals(provider)) {
             ClaudeCliSession s = claudeSessions.get(tabId);
-            if (s != null) s.interrupt();
+            if (s != null) {
+                s.interrupt();
+            }
         } else if ("codex".equals(provider)) {
             CodexCliSession s = codexSessions.get(tabId);
-            if (s != null) s.interrupt();
+            if (s != null) {
+                s.interrupt();
+            }
         }
     }
 
     public void disposeTab(String tabId) {
         ClaudeCliSession cs = claudeSessions.remove(tabId);
-        if (cs != null) cs.dispose();
+        if (cs != null) {
+            cs.dispose();
+        }
         CodexCliSession xs = codexSessions.remove(tabId);
-        if (xs != null) xs.dispose();
+        if (xs != null) {
+            xs.dispose();
+        }
     }
 
     // ── private ──────────────────────────────────────────────────────────────

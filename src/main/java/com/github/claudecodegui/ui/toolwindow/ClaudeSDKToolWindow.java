@@ -5,7 +5,6 @@ import com.github.claudecodegui.settings.TabStateService;
 import com.github.claudecodegui.startup.BridgePreloader;
 import com.github.claudecodegui.ui.detached.DetachedWindowManager;
 import com.github.claudecodegui.session.ClaudeSession;
-import com.github.claudecodegui.util.JsUtils;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;

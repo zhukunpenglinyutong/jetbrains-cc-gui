@@ -60,7 +60,9 @@ public class CodexCliSession {
                 pb.redirectErrorStream(true);
                 if (request.cwd() != null && !request.cwd().isBlank()) {
                     File cwd = new File(request.cwd());
-                    if (cwd.isDirectory()) pb.directory(cwd);
+                    if (cwd.isDirectory()) {
+                        pb.directory(cwd);
+                    }
                 }
                 pb.environment().put("NO_COLOR", "1");
                 if (!request.extraEnv().isEmpty()) {
@@ -78,7 +80,9 @@ public class CodexCliSession {
                         new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                     String line;
                     while ((line = reader.readLine()) != null) {
-                        if (!line.isBlank()) parseEvent(line, callback, assistantContent);
+                        if (!line.isBlank()) {
+                            parseEvent(line, callback, assistantContent);
+                        }
                     }
                 }
 
@@ -110,7 +114,9 @@ public class CodexCliSession {
 
     public void interrupt() {
         CliProcessHandle h = activeHandle;
-        if (h != null) h.interrupt();
+        if (h != null) {
+            h.interrupt();
+        }
     }
 
     public void dispose() {
@@ -127,9 +133,13 @@ public class CodexCliSession {
     private void parseEvent(String line, CliSessionCallback callback, StringBuilder assistantContent) {
         try {
             JsonObject event = gson.fromJson(line, JsonObject.class);
-            if (event == null) return;
+            if (event == null) {
+                return;
+            }
             String type = getString(event, "type");
-            if (type == null) return;
+            if (type == null) {
+                return;
+            }
 
             switch (type) {
                 case "thread.started" -> {
@@ -165,7 +175,9 @@ public class CodexCliSession {
                 }
                 case "error" -> {
                     String msg = getString(event, "message");
-                    if (msg == null) msg = event.toString();
+                    if (msg == null) {
+                        msg = event.toString();
+                    }
                     callback.onError(msg);
                 }
                 default -> {
@@ -287,7 +299,9 @@ public class CodexCliSession {
         }
         if (!request.fileTagPaths().isEmpty()) {
             sb.append("\n\n## Referenced Files\n\n");
-            for (String p : request.fileTagPaths()) sb.append("- ").append(p).append('\n');
+            for (String p : request.fileTagPaths()) {
+                sb.append("- ").append(p).append('\n');
+            }
         }
         if (request.agentPrompt() != null && !request.agentPrompt().isBlank()) {
             sb.append("\n\n## Agent Role and Instructions\n\n").append(request.agentPrompt());
@@ -304,7 +318,9 @@ public class CodexCliSession {
     }
 
     private static String getString(JsonObject obj, String key) {
-        if (obj == null || !obj.has(key) || obj.get(key).isJsonNull()) return null;
+        if (obj == null || !obj.has(key) || obj.get(key).isJsonNull()) {
+            return null;
+        }
         JsonElement el = obj.get(key);
         return el.isJsonPrimitive() ? el.getAsString() : el.toString();
     }
@@ -312,7 +328,9 @@ public class CodexCliSession {
     private static void cleanupTempFiles(List<File> files) {
         for (File f : files) {
             try {
-                if (f != null && f.exists()) f.delete();
+                if (f != null && f.exists()) {
+                    f.delete();
+                }
             } catch (Exception ignored) {
             }
         }

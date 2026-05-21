@@ -39,21 +39,29 @@ public class CliAttachmentHandler {
             List<File> tempFiles
     ) {
         List<ContentBlock> blocks = new ArrayList<>();
-        if (attachments == null || attachments.isEmpty()) return blocks;
+        if (attachments == null || attachments.isEmpty()) {
+            return blocks;
+        }
 
         for (ClaudeSession.Attachment att : attachments) {
-            if (att == null) continue;
+            if (att == null) {
+                continue;
+            }
             try {
                 if (isImage(att)) {
                     File file = resolvePersistentImageFile(provider, sessionKey, att);
-                    if (file == null) file = resolveToFile(att, tempFiles);
+                    if (file == null) {
+                        file = resolveToFile(att, tempFiles);
+                    }
                     if (file != null && file.isFile()) {
                         blocks.add(new ContentBlock(ContentBlock.Kind.IMAGE, att.mediaType, file, null));
                     }
                 } else {
                     // 文档/文本：读取内容作为 text block
                     String text = resolveTextContent(att);
-                    if (text == null) continue;
+                    if (text == null) {
+                        continue;
+                    }
                     blocks.add(new ContentBlock(ContentBlock.Kind.TEXT,
                             null, null,
                             "[File: " + att.fileName + "]\n" + text));
@@ -75,10 +83,14 @@ public class CliAttachmentHandler {
             List<File> tempFiles
     ) throws Exception {
         List<File> files = new ArrayList<>();
-        if (attachments == null || attachments.isEmpty()) return files;
+        if (attachments == null || attachments.isEmpty()) {
+            return files;
+        }
 
         for (ClaudeSession.Attachment att : attachments) {
-            if (att == null || !isImage(att)) continue;
+            if (att == null || !isImage(att)) {
+                continue;
+            }
             File file = resolveToFile(att, tempFiles);
             if (file != null && file.isFile()) {
                 files.add(file);
@@ -94,16 +106,22 @@ public class CliAttachmentHandler {
         // 优先复用 attachment 自带的 localPath（持久化历史回显场景）
         if (att.localPath != null && !att.localPath.isBlank()) {
             File existing = new File(att.localPath);
-            if (existing.isFile()) return existing;
+            if (existing.isFile()) {
+                return existing;
+            }
         }
         String base64 = resolveBase64(att);
-        if (base64 == null) return null;
+        if (base64 == null) {
+            return null;
+        }
         try {
             AttachmentStorageService.PersistedAttachment persisted =
                     storage.persistImageAttachment(provider, sessionKey, att.fileName, att.mediaType, base64);
             if (persisted != null && persisted.localPath() != null) {
                 File f = new File(persisted.localPath());
-                if (f.isFile()) return f;
+                if (f.isFile()) {
+                    return f;
+                }
             }
         } catch (Exception e) {
             LOG.warn("[CliAttachmentHandler] persist image failed: " + att.fileName, e);
@@ -112,7 +130,9 @@ public class CliAttachmentHandler {
     }
 
     private String resolveBase64(ClaudeSession.Attachment att) {
-        if (att.data != null && !att.data.isBlank()) return att.data;
+        if (att.data != null && !att.data.isBlank()) {
+            return att.data;
+        }
         if (att.localPath != null && !att.localPath.isBlank()) {
             try {
                 byte[] bytes = Files.readAllBytes(new File(att.localPath).toPath());
@@ -144,9 +164,13 @@ public class CliAttachmentHandler {
     private File resolveToFile(ClaudeSession.Attachment att, List<File> tempFiles) throws Exception {
         if (att.localPath != null && !att.localPath.isBlank()) {
             File f = new File(att.localPath);
-            if (f.isFile()) return f;
+            if (f.isFile()) {
+                return f;
+            }
         }
-        if (att.data == null || att.data.isBlank()) return null;
+        if (att.data == null || att.data.isBlank()) {
+            return null;
+        }
         File tmp = File.createTempFile("cli-att-", getExt(att.mediaType, att.fileName));
         byte[] data = Base64.getDecoder().decode(att.data);
         try (FileOutputStream fos = new FileOutputStream(tmp)) {
@@ -157,8 +181,12 @@ public class CliAttachmentHandler {
     }
 
     public static boolean isImage(ClaudeSession.Attachment att) {
-        if (att.mediaType != null && att.mediaType.startsWith("image/")) return true;
-        if (att.fileName == null) return false;
+        if (att.mediaType != null && att.mediaType.startsWith("image/")) {
+            return true;
+        }
+        if (att.fileName == null) {
+            return false;
+        }
         String lower = att.fileName.toLowerCase(Locale.ROOT);
         return lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg")
                 || lower.endsWith(".gif") || lower.endsWith(".webp") || lower.endsWith(".bmp");
@@ -168,10 +196,18 @@ public class CliAttachmentHandler {
         if (fileName != null && fileName.contains(".")) {
             return fileName.substring(fileName.lastIndexOf('.'));
         }
-        if (mediaType == null) return ".png";
-        if (mediaType.contains("jpeg") || mediaType.contains("jpg")) return ".jpg";
-        if (mediaType.contains("gif")) return ".gif";
-        if (mediaType.contains("webp")) return ".webp";
+        if (mediaType == null) {
+            return ".png";
+        }
+        if (mediaType.contains("jpeg") || mediaType.contains("jpg")) {
+            return ".jpg";
+        }
+        if (mediaType.contains("gif")) {
+            return ".gif";
+        }
+        if (mediaType.contains("webp")) {
+            return ".webp";
+        }
         return ".png";
     }
 

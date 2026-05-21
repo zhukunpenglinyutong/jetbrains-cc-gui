@@ -90,7 +90,9 @@ public class SessionRuntimeRouter {
         JsonObject result = new JsonObject();
         result.addProperty("success", true);
         result.addProperty("channelId", channelId);
-        if (sessionId != null) result.addProperty("sessionId", sessionId);
+        if (sessionId != null) {
+            result.addProperty("sessionId", sessionId);
+        }
         return result;
     }
 

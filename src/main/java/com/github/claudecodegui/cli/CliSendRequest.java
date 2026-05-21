@@ -26,8 +26,12 @@ public record CliSendRequest(
         Map<String, String> extraEnv
 ) {
     public CliSendRequest {
-        if (tabId == null || tabId.isBlank()) throw new IllegalArgumentException("tabId required");
-        if (provider == null || provider.isBlank()) throw new IllegalArgumentException("provider required");
+        if (tabId == null || tabId.isBlank()) {
+            throw new IllegalArgumentException("tabId required");
+        }
+        if (provider == null || provider.isBlank()) {
+            throw new IllegalArgumentException("provider required");
+        }
         message = message != null ? message : "";
         attachments = attachments != null ? List.copyOf(attachments) : Collections.emptyList();
         fileTagPaths = fileTagPaths != null ? List.copyOf(fileTagPaths) : Collections.emptyList();

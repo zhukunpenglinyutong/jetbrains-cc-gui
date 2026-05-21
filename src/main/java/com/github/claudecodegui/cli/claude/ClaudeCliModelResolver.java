@@ -27,13 +27,19 @@ final class ClaudeCliModelResolver {
     }
 
     static String resolveMapped(String selectedModel, JsonObject env) {
-        if (selectedModel == null || selectedModel.isBlank() || env == null) return selectedModel;
+        if (selectedModel == null || selectedModel.isBlank() || env == null) {
+            return selectedModel;
+        }
 
         String mainModel = readEnvValue(env, "ANTHROPIC_MODEL");
-        if (mainModel != null) return mainModel;
+        if (mainModel != null) {
+            return mainModel;
+        }
 
         String normalized = selectedModel.replaceFirst("(?i)\\[1m\\]$", "").toLowerCase();
-        if (!normalized.startsWith("claude-") && !normalized.startsWith("claude_")) return selectedModel;
+        if (!normalized.startsWith("claude-") && !normalized.startsWith("claude_")) {
+            return selectedModel;
+        }
 
         if (normalized.contains("opus")) {
             String m = readEnvValue(env, "ANTHROPIC_DEFAULT_OPUS_MODEL");
@@ -41,7 +47,9 @@ final class ClaudeCliModelResolver {
         }
         if (normalized.contains("haiku")) {
             String m = readEnvValue(env, "ANTHROPIC_SMALL_FAST_MODEL");
-            if (m == null) m = readEnvValue(env, "ANTHROPIC_DEFAULT_HAIKU_MODEL");
+            if (m == null) {
+                m = readEnvValue(env, "ANTHROPIC_DEFAULT_HAIKU_MODEL");
+            }
             return m != null ? m : selectedModel;
         }
         if (normalized.contains("sonnet")) {
@@ -52,9 +60,13 @@ final class ClaudeCliModelResolver {
     }
 
     private static String readEnvValue(JsonObject env, String key) {
-        if (env == null || key == null || !env.has(key) || env.get(key).isJsonNull()) return null;
+        if (env == null || key == null || !env.has(key) || env.get(key).isJsonNull()) {
+            return null;
+        }
         String value = env.get(key).getAsString();
-        if (value == null) return null;
+        if (value == null) {
+            return null;
+        }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
     }

@@ -63,11 +63,17 @@ public final class CodexCliCommandUtils {
 
     static Map<String, String> sanitizeEnv(Map<String, String> env) {
         Map<String, String> result = new LinkedHashMap<>();
-        if (env == null) return result;
+        if (env == null) {
+            return result;
+        }
         for (Map.Entry<String, String> entry : env.entrySet()) {
             String key = entry.getKey();
-            if (key == null || key.trim().isEmpty()) continue;
-            if (PROTECTED_ENV_KEYS.contains(key.toUpperCase(Locale.ROOT))) continue;
+            if (key == null || key.trim().isEmpty()) {
+                continue;
+            }
+            if (PROTECTED_ENV_KEYS.contains(key.toUpperCase(Locale.ROOT))) {
+                continue;
+            }
             result.put(key, entry.getValue());
         }
         return result;
