@@ -147,7 +147,16 @@ public class SessionHandler extends BaseMessageHandler {
                 for (int i = 0; i < fileTagsArray.size(); i++) {
                     JsonObject fileTag = fileTagsArray.get(i).getAsJsonObject();
                     if (fileTag.has("absolutePath") && !fileTag.get("absolutePath").isJsonNull()) {
-                        fileTagPaths.add(fileTag.get("absolutePath").getAsString());
+                        String path = fileTag.get("absolutePath").getAsString();
+                        // Preserve line range from displayPath (e.g., "file.ts#L10-20")
+                        if (fileTag.has("displayPath") && !fileTag.get("displayPath").isJsonNull()) {
+                            String display = fileTag.get("displayPath").getAsString();
+                            int hashIdx = display.indexOf("#L");
+                            if (hashIdx >= 0) {
+                                path = path + display.substring(hashIdx);
+                            }
+                        }
+                        fileTagPaths.add(path);
                     }
                 }
                 if (!fileTagPaths.isEmpty()) {
@@ -266,7 +275,16 @@ public class SessionHandler extends BaseMessageHandler {
                 for (int i = 0; i < fileTagsArray.size(); i++) {
                     JsonObject fileTag = fileTagsArray.get(i).getAsJsonObject();
                     if (fileTag.has("absolutePath") && !fileTag.get("absolutePath").isJsonNull()) {
-                        fileTagPaths.add(fileTag.get("absolutePath").getAsString());
+                        String path = fileTag.get("absolutePath").getAsString();
+                        // Preserve line range from displayPath (e.g., "file.ts#L10-20")
+                        if (fileTag.has("displayPath") && !fileTag.get("displayPath").isJsonNull()) {
+                            String display = fileTag.get("displayPath").getAsString();
+                            int hashIdx = display.indexOf("#L");
+                            if (hashIdx >= 0) {
+                                path = path + display.substring(hashIdx);
+                            }
+                        }
+                        fileTagPaths.add(path);
                     }
                 }
                 if (!fileTagPaths.isEmpty()) {

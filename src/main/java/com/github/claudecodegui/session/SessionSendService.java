@@ -123,7 +123,7 @@ public class SessionSendService {
             );
         }
 
-        return sendToClaude(channelId, input, attachments, openedFilesJson, agentPrompt, effectivePermissionMode);
+        return sendToClaude(channelId, input, attachments, openedFilesJson, agentPrompt, fileTagPaths, effectivePermissionMode);
     }
 
     public static String normalizeRequestedPermissionMode(String mode) {
@@ -210,6 +210,7 @@ public class SessionSendService {
             List<ClaudeSession.Attachment> attachments,
             JsonObject openedFilesJson,
             String agentPrompt,
+            List<String> fileTagPaths,
             String effectivePermissionMode
     ) {
         ClaudeMessageHandler handler = new ClaudeMessageHandler(
@@ -221,6 +222,11 @@ public class SessionSendService {
                 gson
         );
 
+        // Inject file content context for @file references (reads from editor Document if unsaved)
+        String contextAppend = contextService.buildCodexContextAppend(openedFilesJson, fileTagPaths);
+        String textContext = contextService.buildContextFromText(input);
+        String finalInput = (input != null ? input : "") + contextAppend + textContext;
+
         Boolean streaming = readStreamingEnabled();
         final String runtimeSessionEpoch = state.getRuntimeSessionEpoch();
         final String currentModel = state.getModel();
@@ -231,7 +237,7 @@ public class SessionSendService {
 
         return claudeSDKBridge.sendMessage(
                         channelId,
-                        input,
+                        finalInput,
                         state.getSessionId(),
                         runtimeSessionEpoch,
                         state.getCwd(),
