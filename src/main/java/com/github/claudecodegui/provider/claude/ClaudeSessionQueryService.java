@@ -188,7 +188,7 @@ class ClaudeSessionQueryService {
 
         JsonElement contentElement = message.get("content");
         if (contentElement.isJsonPrimitive() && contentElement.getAsJsonPrimitive().isString()) {
-            ClaudeImageReferenceRewrite rewrite = rewriteClaudeImageReferenceText(contentElement.getAsString());
+            ClaudeImageReferenceRewrite rewrite = rewriteClaudeImageReferenceText(contentElement.getAsString(), false);
             if (!rewrite.changed) {
                 return originalMessage;
             }
@@ -203,6 +203,11 @@ class ClaudeSessionQueryService {
         }
 
         JsonArray originalBlocks = contentElement.getAsJsonArray();
+        // When the persisted content already carries image blocks (typical for
+        // SDK-mode writes where buildContentBlocks emits both an image block and a
+        // "[Image #N: path]" text reference), suppress creating duplicate image
+        // blocks from those text markers. Otherwise the same image renders twice.
+        boolean alreadyHasImageBlock = containsImageBlock(originalBlocks);
         JsonArray rebuiltBlocks = new JsonArray();
         boolean changed = false;
 
@@ -218,7 +223,8 @@ class ClaudeSessionQueryService {
                 continue;
             }
 
-            ClaudeImageReferenceRewrite rewrite = rewriteClaudeImageReferenceText(block.get("text").getAsString());
+            ClaudeImageReferenceRewrite rewrite = rewriteClaudeImageReferenceText(
+                    block.get("text").getAsString(), alreadyHasImageBlock);
             if (!rewrite.changed) {
                 rebuiltBlocks.add(block.deepCopy());
                 continue;
@@ -239,6 +245,19 @@ class ClaudeSessionQueryService {
         return normalizedMessage;
     }
 
+    private static boolean containsImageBlock(JsonArray blocks) {
+        for (JsonElement element : blocks) {
+            if (!element.isJsonObject()) {
+                continue;
+            }
+            JsonObject block = element.getAsJsonObject();
+            if (block.has("type") && "image".equals(block.get("type").getAsString())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static boolean isTextBlock(JsonObject block) {
         return block.has("type")
                 && "text".equals(block.get("type").getAsString())
@@ -246,7 +265,7 @@ class ClaudeSessionQueryService {
                 && !block.get("text").isJsonNull();
     }
 
-    private static ClaudeImageReferenceRewrite rewriteClaudeImageReferenceText(String text) {
+    private static ClaudeImageReferenceRewrite rewriteClaudeImageReferenceText(String text, boolean suppressImageBlockCreation) {
         if (text == null) {
             return ClaudeImageReferenceRewrite.unchanged(null);
         }
@@ -257,11 +276,19 @@ class ClaudeSessionQueryService {
         int lastEnd = 0;
         boolean sawReference = false;
         boolean restoredImage = false;
+        boolean strippedReference = false;
 
         while (matcher.find()) {
             remainingText.append(text, lastEnd, matcher.start());
             lastEnd = matcher.end();
             sawReference = true;
+
+            if (suppressImageBlockCreation) {
+                // The persisted message already carries an image block; only erase
+                // the inline "[Image #N: path]" marker so the text reads cleanly.
+                strippedReference = true;
+                continue;
+            }
 
             String imagePath = matcher.group(1) != null ? matcher.group(1).trim() : "";
             JsonObject imageBlock = createLocalImageBlock(imagePath);
@@ -273,7 +300,7 @@ class ClaudeSessionQueryService {
             }
         }
 
-        if (!sawReference || !restoredImage) {
+        if (!sawReference || (!restoredImage && !strippedReference)) {
             String sanitized = normalizeRemainingText(text);
             if (sanitized.equals(text)) {
                 return ClaudeImageReferenceRewrite.unchanged(text);

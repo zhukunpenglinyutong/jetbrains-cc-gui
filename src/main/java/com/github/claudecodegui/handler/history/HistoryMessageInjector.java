@@ -27,6 +27,14 @@ public class HistoryMessageInjector {
 
     private static final Logger LOG = Logger.getInstance(HistoryMessageInjector.class);
 
+    /**
+     * Maximum gap between two adjacent Codex user records that are still treated
+     * as the same SDK double-write. 500 ms comfortably covers the small jitter
+     * between the rollout's response_item and event_msg entries while leaving
+     * real back-to-back user messages alone.
+     */
+    private static final long DUPLICATE_USER_MESSAGE_WINDOW_MILLIS = 500L;
+
     private final HandlerContext context;
 
     HistoryMessageInjector(HandlerContext context) {
@@ -196,20 +204,119 @@ public class HistoryMessageInjector {
             return false;
         }
 
-        String previousTimestamp = getStringProperty(previous, "timestamp");
-        String incomingTimestamp = getStringProperty(incoming, "timestamp");
-        if (previousTimestamp == null || !previousTimestamp.equals(incomingTimestamp)) {
+        // tool_result entries are one-to-one with their originating tool_use via
+        // `tool_use_id`; the SDK never double-writes a single tool_result, and two
+        // batch-run outputs returning within the dedup time window have identical
+        // placeholder content ("[tool_result]"). Treating them as duplicates would
+        // drop the trailing tool_result and leave its tool_use stuck on the
+        // pending spinner. Skip dedup whenever either side carries a tool_result.
+        if (hasToolResultContentBlock(previous) || hasToolResultContentBlock(incoming)) {
             return false;
         }
 
         String previousContent = getStringProperty(previous, "content");
         String incomingContent = getStringProperty(incoming, "content");
-        return previousContent != null
-            && normalizeDuplicateUserContent(previousContent).equals(normalizeDuplicateUserContent(incomingContent));
+        if (previousContent == null
+            || !normalizeDuplicateUserContent(previousContent).equals(normalizeDuplicateUserContent(incomingContent))) {
+            return false;
+        }
+
+        // Codex SDK writes the same user turn twice into rollout: a `response_item`
+        // whose text is wrapped with `<image name=[Image #N]>...</image>`, and an
+        // `event_msg` whose `local_images` carries the real image path. When either
+        // record exposes an image signal (text marker or content block), they are
+        // mirror writes of the same turn and should be deduplicated regardless of
+        // whether their timestamps line up to the millisecond.
+        if (hasInlineImageMarker(previousContent) || hasInlineImageMarker(incomingContent)
+            || hasImageContentBlock(previous) || hasImageContentBlock(incoming)) {
+            return true;
+        }
+
+        // Otherwise fall back to a tight timestamp window so we still catch SDK
+        // double-writes for text-only turns without accidentally merging two
+        // identical user messages typed seconds apart.
+        return timestampsWithinWindow(previous, incoming, DUPLICATE_USER_MESSAGE_WINDOW_MILLIS);
     }
 
     private static JsonObject preferRicherUserMessage(JsonObject previous, JsonObject incoming) {
+        // Prefer the variant that carries an actual image content block so the
+        // history view shows the rendered image rather than the `<image>` wrapper.
+        boolean previousHasImage = hasImageContentBlock(previous);
+        boolean incomingHasImage = hasImageContentBlock(incoming);
+        if (previousHasImage != incomingHasImage) {
+            return previousHasImage ? previous : incoming;
+        }
         return getRawContentBlockCount(incoming) > getRawContentBlockCount(previous) ? incoming : previous;
+    }
+
+    private static boolean hasInlineImageMarker(String content) {
+        return content != null && content.contains("<image");
+    }
+
+    private static boolean hasImageContentBlock(JsonObject message) {
+        JsonArray contentBlocks = extractRawContentBlocks(message);
+        if (contentBlocks == null) {
+            return false;
+        }
+        for (JsonElement element : contentBlocks) {
+            if (!element.isJsonObject()) {
+                continue;
+            }
+            JsonObject block = element.getAsJsonObject();
+            if (block.has("type") && "image".equals(block.get("type").getAsString())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasToolResultContentBlock(JsonObject message) {
+        JsonArray contentBlocks = extractRawContentBlocks(message);
+        if (contentBlocks == null) {
+            return false;
+        }
+        for (JsonElement element : contentBlocks) {
+            if (!element.isJsonObject()) {
+                continue;
+            }
+            JsonObject block = element.getAsJsonObject();
+            if (block.has("type") && "tool_result".equals(block.get("type").getAsString())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static JsonArray extractRawContentBlocks(JsonObject message) {
+        if (message == null || !message.has("raw") || !message.get("raw").isJsonObject()) {
+            return null;
+        }
+        JsonObject raw = message.getAsJsonObject("raw");
+        if (raw.has("content") && raw.get("content").isJsonArray()) {
+            return raw.getAsJsonArray("content");
+        }
+        if (raw.has("message") && raw.get("message").isJsonObject()) {
+            JsonObject rawMessage = raw.getAsJsonObject("message");
+            if (rawMessage.has("content") && rawMessage.get("content").isJsonArray()) {
+                return rawMessage.getAsJsonArray("content");
+            }
+        }
+        return null;
+    }
+
+    private static boolean timestampsWithinWindow(JsonObject previous, JsonObject incoming, long windowMillis) {
+        String prev = getStringProperty(previous, "timestamp");
+        String curr = getStringProperty(incoming, "timestamp");
+        if (prev == null || curr == null) {
+            return false;
+        }
+        try {
+            long prevMillis = java.time.Instant.parse(prev).toEpochMilli();
+            long currMillis = java.time.Instant.parse(curr).toEpochMilli();
+            return Math.abs(currMillis - prevMillis) <= windowMillis;
+        } catch (Exception ignored) {
+            return prev.equals(curr);
+        }
     }
 
     private static String normalizeDuplicateUserContent(String content) {
