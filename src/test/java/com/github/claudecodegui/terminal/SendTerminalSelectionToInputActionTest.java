@@ -143,6 +143,7 @@ public class SendTerminalSelectionToInputActionTest {
         return new AnActionEvent(null, dataContext, "TestPlace", new Presentation(), new TestActionManager(), 0);
     }
 
+    @SuppressWarnings("removal")
     private static DataContext createTerminalViewContext(Object terminalView) {
         DataKey<Object> terminalViewKey = DataKey.create("TerminalView");
         return dataId -> terminalViewKey.getName().equals(dataId) ? terminalView : null;

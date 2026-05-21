@@ -1,6 +1,7 @@
 package com.github.claudecodegui.session.runtime;
 
-import com.github.claudecodegui.bridge.ProcessManager;
+import com.github.claudecodegui.cli.CliSendRequest;
+import com.github.claudecodegui.cli.CliSessionManager;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
@@ -14,19 +15,16 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Selects the session runtime without exposing provider bridge details to send orchestration.
+ * CLI mode routes to the new CliSessionManager (zero SDK dependency).
+ * SDK mode routes to SdkSessionRuntime (ai-bridge daemon).
  */
 public class SessionRuntimeRouter {
     private final SdkSessionRuntime sdkRuntime;
-    private final CliSessionRuntime cliRuntime;
-    private final ProcessManager cliProcessManager;
+    private final CliSessionManager cliManager;
 
     public SessionRuntimeRouter(ClaudeSDKBridge claudeSDKBridge, CodexSDKBridge codexSDKBridge) {
-        this.cliProcessManager = new ProcessManager();
         this.sdkRuntime = new SdkSessionRuntime(claudeSDKBridge, codexSDKBridge);
-        this.cliRuntime = new CliSessionRuntime(Map.of(
-                "claude", new ClaudeCliAdapter(claudeSDKBridge, cliProcessManager),
-                "codex", new CodexCliAdapter(cliProcessManager, codexSDKBridge)
-        ));
+        this.cliManager = new CliSessionManager();
     }
 
     public CompletableFuture<SDKResult> sendClaude(
@@ -46,38 +44,15 @@ public class SessionRuntimeRouter {
             MessageCallback callback
     ) {
         if ("cli".equals(invocationMode)) {
-            RuntimeKey key = new RuntimeKey("claude", channelId, resolveTabId(channelId), runtimeSessionEpoch);
-            return cliRuntime.send(new CliRequest(
-                    key,
-                    message,
-                    sessionId,
-                    cwd,
-                    attachments,
-                    openedFiles,
-                    List.of(),
-                    agentPrompt,
-                    permissionMode,
-                    model,
-                    reasoningEffort,
-                    Map.of()
+            String tabId = resolveTabId(channelId);
+            return cliManager.send(new CliSendRequest(
+                    tabId, "claude", message, sessionId, cwd,
+                    attachments, openedFiles, List.of(),
+                    agentPrompt, permissionMode, model, reasoningEffort, Map.of()
             ), callback);
         }
-
-        return sdkRuntime.sendClaude(
-                channelId,
-                message,
-                sessionId,
-                runtimeSessionEpoch,
-                cwd,
-                attachments,
-                permissionMode,
-                model,
-                openedFiles,
-                agentPrompt,
-                streaming,
-                reasoningEffort,
-                callback
-        );
+        return sdkRuntime.sendClaude(channelId, message, sessionId, runtimeSessionEpoch, cwd,
+                attachments, permissionMode, model, openedFiles, agentPrompt, streaming, reasoningEffort, callback);
     }
 
     public CompletableFuture<SDKResult> sendCodex(
@@ -86,37 +61,45 @@ public class SessionRuntimeRouter {
             MessageCallback callback
     ) {
         if (useCliRuntime) {
-            return cliRuntime.send(cliRequest, callback);
+            String tabId = resolveTabId(cliRequest.key().channelId());
+            return cliManager.send(new CliSendRequest(
+                    tabId, "codex",
+                    cliRequest.message(),
+                    cliRequest.sessionIdOrThreadId(),
+                    cliRequest.cwd(),
+                    cliRequest.attachments(),
+                    cliRequest.openedFiles(),
+                    cliRequest.fileTagPaths(),
+                    cliRequest.agentPrompt(),
+                    cliRequest.permissionMode(),
+                    cliRequest.model(),
+                    cliRequest.reasoningEffort(),
+                    cliRequest.env()
+            ), callback);
         }
         return sdkRuntime.sendCodex(
-                cliRequest.key().channelId(),
-                cliRequest.message(),
-                cliRequest.sessionIdOrThreadId(),
-                cliRequest.cwd(),
-                cliRequest.attachments(),
-                cliRequest.permissionMode(),
-                cliRequest.model(),
-                cliRequest.agentPrompt(),
-                cliRequest.reasoningEffort(),
-                callback
-        );
+                cliRequest.key().channelId(), cliRequest.message(),
+                cliRequest.sessionIdOrThreadId(), cliRequest.cwd(),
+                cliRequest.attachments(), cliRequest.permissionMode(),
+                cliRequest.model(), cliRequest.agentPrompt(),
+                cliRequest.reasoningEffort(), callback);
     }
 
     public JsonObject launch(String provider, String channelId, String tabId, String runtimeSessionEpoch, String sessionId, String cwd) {
-        RuntimeKey key = new RuntimeKey(provider, channelId, resolveTabId(tabId != null ? tabId : channelId), runtimeSessionEpoch);
-        return cliRuntime.launch(key, sessionId, cwd);
+        // CLI mode: no-op launch (session starts on first send)
+        JsonObject result = new JsonObject();
+        result.addProperty("success", true);
+        result.addProperty("channelId", channelId);
+        if (sessionId != null) result.addProperty("sessionId", sessionId);
+        return result;
     }
 
     public void interrupt(String provider, String channelId, String tabId) {
-        cliProcessManager.interruptChannel(provider, channelId, tabId);
+        cliManager.interrupt(resolveTabId(tabId != null ? tabId : channelId), provider);
     }
 
     public void cleanupTab(String tabId) {
-        cliProcessManager.cleanupTab(tabId);
-    }
-
-    public ProcessManager getCliProcessManager() {
-        return cliProcessManager;
+        cliManager.disposeTab(resolveTabId(tabId));
     }
 
     private static String resolveTabId(String value) {
