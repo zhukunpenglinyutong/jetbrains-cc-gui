@@ -21,6 +21,25 @@ export type SkillType = 'file' | 'directory';
 export type SkillScope = 'global' | 'local' | 'user' | 'repo';
 
 /**
+ * Remote skill update interval
+ */
+export type RemoteSkillUpdateInterval = 'manual' | 'hourly' | 'daily' | 'weekly';
+
+/**
+ * Remote skill configuration
+ */
+export interface RemoteSkillConfig {
+  /** Remote URL */
+  url: string;
+  /** Update interval */
+  updateInterval: RemoteSkillUpdateInterval;
+  /** Last update timestamp */
+  lastUpdated?: number;
+  /** Next scheduled update timestamp */
+  nextUpdate?: number;
+}
+
+/**
  * Skill configuration
  */
 export interface Skill {
@@ -44,6 +63,8 @@ export interface Skill {
   createdAt?: string;
   /** Modification time */
   modifiedAt?: string;
+  /** Remote skill configuration (if loaded from remote) */
+  remote?: RemoteSkillConfig;
 }
 
 /**
@@ -75,3 +96,17 @@ export type SkillFilter = 'all' | 'global' | 'local' | 'user' | 'repo';
  * Skills enabled status filter
  */
 export type SkillEnabledFilter = 'all' | 'enabled' | 'disabled';
+
+/**
+ * Batch import result from navigation directory
+ */
+export interface BatchImportResult {
+  success: boolean;
+  total: number;
+  succeeded: number;
+  failed: number;
+  successList: string[];
+  failureList: string[];
+  errorMessages: string[];
+  error?: string;
+}

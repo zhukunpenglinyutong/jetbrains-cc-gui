@@ -1018,3 +1018,213 @@
     background: rgba(156, 163, 175, 0.15);
     color: var(--text-tertiary);
 }
+
+/* ==================== Remote Skills Styles ==================== */
+
+/* Remote skill dialog */
+.remote-skill-dialog {
+    max-width: 540px;
+}
+
+.remote-skill-dialog .form-section {
+    margin-bottom: 20px;
+}
+
+.remote-skill-dialog .form-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.remote-skill-dialog .form-label .required {
+    color: var(--color-error);
+}
+
+.remote-skill-dialog .form-input,
+.remote-skill-dialog .form-select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border-primary);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 13px;
+    box-sizing: border-box;
+}
+
+.remote-skill-dialog .form-input:focus,
+.remote-skill-dialog .form-select:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+.remote-skill-dialog .form-input::placeholder {
+    color: var(--text-placeholder);
+}
+
+.remote-skill-dialog .form-error {
+    color: var(--color-error);
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.remote-skill-dialog .form-hint {
+    color: var(--text-tertiary);
+    font-size: 11px;
+    margin-top: 4px;
+}
+
+.remote-skill-dialog .scope-badge-container {
+    display: inline-flex;
+}
+
+/* Import mode toggle */
+.remote-skill-dialog .import-mode-toggle {
+    display: flex;
+    gap: 16px;
+    padding: 8px 0;
+}
+
+.remote-skill-dialog .mode-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.remote-skill-dialog .mode-option input[type="radio"] {
+    cursor: pointer;
+}
+
+.remote-skill-dialog .mode-option:has(input:checked) {
+    color: var(--accent-primary);
+    font-weight: 500;
+}
+
+/* Dropdown separator */
+.dropdown-menu .dropdown-separator {
+    height: 1px;
+    background: var(--border-primary);
+    margin: 4px 0;
+}
+
+/* Remote skill info section in card */
+.skill-card .remote-info-section {
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    border: 1px solid var(--border-primary);
+}
+
+.skill-card .remote-info-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent-primary);
+}
+
+.skill-card .remote-info-header .codicon {
+    font-size: 14px;
+}
+
+.skill-card .remote-info-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 12px;
+}
+
+.skill-card .remote-info-row:last-child {
+    margin-bottom: 0;
+}
+
+.skill-card .remote-field-label {
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+    min-width: 80px;
+}
+
+.skill-card .remote-url {
+    color: var(--accent-primary);
+    text-decoration: none;
+    word-break: break-all;
+    flex: 1;
+}
+
+.skill-card .remote-url:hover {
+    text-decoration: underline;
+}
+
+.skill-card .remote-time {
+    color: var(--text-secondary);
+    flex: 1;
+}
+
+.skill-card .remote-interval-select {
+    flex: 1;
+    padding: 4px 8px;
+    border: 1px solid var(--border-primary);
+    border-radius: 4px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.skill-card .remote-interval-select:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+.skill-card .action-btn.update-btn:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+/* Dropdown menu general styles */
+.add-dropdown {
+    position: relative;
+}
+
+.dropdown-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 4px;
+    min-width: 200px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 100;
+    overflow: hidden;
+}
+
+.dropdown-menu .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.dropdown-menu .dropdown-item:hover {
+    background: var(--bg-hover);
+}
+
+.dropdown-menu .dropdown-item .codicon {
+    font-size: 14px;
+    color: var(--text-secondary);
+}

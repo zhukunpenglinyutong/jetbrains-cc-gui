@@ -81,6 +81,9 @@
         <!-- Monitor Run/Debug Service Output -->
         <postStartupActivity implementation="com.github.claudecodegui.service.RunConfigMonitorService"/>
 
+        <!-- Remote Skill Auto-Update Scheduler -->
+        <postStartupActivity implementation="com.github.claudecodegui.RemoteSkillScheduler"/>
+
         <!-- StatusBar widget for task notification -->
         <statusBarWidgetFactory id="ClaudeStatusBarWidget"
                                 implementation="com.github.claudecodegui.notifications.ClaudeStatusBarWidget$Factory"/>

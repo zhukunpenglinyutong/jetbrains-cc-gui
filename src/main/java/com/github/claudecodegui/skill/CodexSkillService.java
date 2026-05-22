@@ -3,6 +3,8 @@ package com.github.claudecodegui.skill;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.settings.CodexSettingsManager;
 import com.github.claudecodegui.util.PlatformUtils;
+import com.github.claudecodegui.RemoteSkillService;
+import com.github.claudecodegui.RemoteSkillService.RemoteSkillConfig;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -216,6 +218,17 @@ public class CodexSkillService {
                 skill.addProperty("name", entry.getName());
                 skill.addProperty("userInvocable", false);
                 skill.addProperty("warning", "invalid_frontmatter");
+            }
+
+            // Add remote configuration if this is a remote skill
+            RemoteSkillConfig remoteConfig = RemoteSkillService.getRemoteConfig(entry.getName(), scope);
+            if (remoteConfig != null) {
+                JsonObject remote = new JsonObject();
+                remote.addProperty("url", remoteConfig.url);
+                remote.addProperty("updateInterval", remoteConfig.updateInterval);
+                remote.addProperty("lastUpdated", remoteConfig.lastUpdated);
+                remote.addProperty("nextUpdate", remoteConfig.nextUpdate);
+                skill.add("remote", remote);
             }
 
             // Store skillPath (SKILL.md path) for config.toml operations
@@ -644,6 +657,9 @@ public class CodexSkillService {
         if (skillPath != null) {
             cleanupConfigTomlEntry(skillPath);
         }
+
+        // Delete remote configuration if exists
+        RemoteSkillService.deleteRemoteConfig(name, scope);
 
         result.addProperty("success", true);
         return result;

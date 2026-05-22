@@ -1,6 +1,8 @@
 package com.github.claudecodegui.skill;
 
 import com.github.claudecodegui.util.PlatformUtils;
+import com.github.claudecodegui.RemoteSkillService;
+import com.github.claudecodegui.RemoteSkillService.RemoteSkillConfig;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -113,7 +115,7 @@ public class SkillService {
         if (!dir.exists()) {
             boolean created = dir.mkdirs();
             if (created) {
-                LOG.info("[Skills] 创建目录: " + dirPath);
+                LOG.info("[Skills] Creating directory: " + dirPath);
             }
             return created;
         }
@@ -165,7 +167,7 @@ public class SkillService {
     public static JsonObject getSkillsByScope(String scope, String workspaceRoot) {
         String dir = "global".equals(scope) ? getGlobalSkillsDir() : getLocalSkillsDir(workspaceRoot);
         if (dir == null) {
-            LOG.warn("[Skills] 无法获取 " + scope + " Skills 目录");
+            LOG.warn("[Skills] Cannot get " + scope + " Skills directory");
             return new JsonObject();
         }
         return scanSkillsDirectory(dir, scope, true);
@@ -183,7 +185,7 @@ public class SkillService {
         File dir = new File(dirPath);
 
         if (!dir.exists()) {
-            LOG.info("[Skills] " + scope + " Skills 目录不存在: " + dirPath);
+            LOG.info("[Skills] " + scope + " Skills directory does not exist: " + dirPath);
             return skills;
         }
 
@@ -230,13 +232,24 @@ public class SkillService {
                 skill.addProperty("createdAt", attrs.creationTime().toString());
                 skill.addProperty("modifiedAt", attrs.lastModifiedTime().toString());
             } catch (IOException e) {
-                LOG.warn("[Skills] 读取文件属性失败: " + entry.getAbsolutePath());
+                LOG.warn("[Skills] Failed to read file attributes: " + entry.getAbsolutePath());
+            }
+
+            // Add remote configuration if this is a remote skill
+            RemoteSkillConfig remoteConfig = RemoteSkillService.getRemoteConfig(entry.getName(), scope);
+            if (remoteConfig != null) {
+                JsonObject remote = new JsonObject();
+                remote.addProperty("url", remoteConfig.url);
+                remote.addProperty("updateInterval", remoteConfig.updateInterval);
+                remote.addProperty("lastUpdated", remoteConfig.lastUpdated);
+                remote.addProperty("nextUpdate", remoteConfig.nextUpdate);
+                skill.add("remote", remote);
             }
 
             skills.add(id, skill);
         }
 
-        LOG.info("[Skills] 从 " + scope + " 目录获取到 " + skills.size() + " 个 Skills (enabled=" + enabled + "): " + dirPath);
+        LOG.info("[Skills] Got " + skills.size() + " Skills from " + scope + " directory (enabled=" + enabled + "): " + dirPath);
         return skills;
     }
 
@@ -267,7 +280,7 @@ public class SkillService {
         String targetDir = "global".equals(scope) ? getGlobalSkillsDir() : getLocalSkillsDir(workspaceRoot);
         if (targetDir == null) {
             result.addProperty("success", false);
-            result.addProperty("error", "无法获取 " + scope + " Skills 目录");
+            result.addProperty("error", "Cannot get " + scope + " Skills directory");
             return result;
         }
 
@@ -276,10 +289,10 @@ public class SkillService {
         if (!targetDirFile.exists()) {
             if (!targetDirFile.mkdirs()) {
                 result.addProperty("success", false);
-                result.addProperty("error", "无法创建 Skills 目录: " + targetDir);
+                result.addProperty("error", "Cannot create Skills directory: " + targetDir);
                 return result;
             }
-            LOG.info("[Skills] 创建 " + scope + " Skills 目录: " + targetDir);
+            LOG.info("[Skills] Created " + scope + " Skills directory: " + targetDir);
         }
 
         for (String sourcePath : sourcePaths) {
@@ -287,7 +300,7 @@ public class SkillService {
             if (!source.exists()) {
                 JsonObject err = new JsonObject();
                 err.addProperty("path", sourcePath);
-                err.addProperty("error", "源路径不存在");
+                err.addProperty("error", "Source path does not exist");
                 errors.add(err);
                 continue;
             }
@@ -299,7 +312,7 @@ public class SkillService {
             if (targetPath.exists()) {
                 JsonObject err = new JsonObject();
                 err.addProperty("path", sourcePath);
-                err.addProperty("error", "已存在同名 Skill: " + name);
+                err.addProperty("error", "Skill with same name already exists: " + name);
                 errors.add(err);
                 continue;
             }
@@ -328,14 +341,14 @@ public class SkillService {
                 }
 
                 imported.add(skill);
-                LOG.info("[Skills] 成功导入 " + scope + " Skill: " + name);
+                LOG.info("[Skills] Successfully imported " + scope + " Skill: " + name);
 
             } catch (IOException e) {
                 JsonObject err = new JsonObject();
                 err.addProperty("path", sourcePath);
-                err.addProperty("error", "复制失败: " + e.getMessage());
+                err.addProperty("error", "Copy failed: " + e.getMessage());
                 errors.add(err);
-                LOG.error("[Skills] 导入 Skill 失败: " + e.getMessage());
+                LOG.error("[Skills] Failed to import Skill: " + e.getMessage());
             }
         }
 
@@ -377,7 +390,7 @@ public class SkillService {
 
         if (dir == null) {
             result.addProperty("success", false);
-            result.addProperty("error", "无法获取 " + scope + " Skills 目录");
+            result.addProperty("error", "Cannot get " + scope + " Skills directory");
             return result;
         }
 
@@ -385,7 +398,7 @@ public class SkillService {
 
         if (!targetPath.exists()) {
             result.addProperty("success", false);
-            result.addProperty("error", "Skill 不存在: " + name);
+            result.addProperty("error", "Skill does not exist: " + name);
             return result;
         }
 
@@ -395,12 +408,16 @@ public class SkillService {
             } else {
                 Files.delete(targetPath.toPath());
             }
+
+            // Delete remote configuration if exists
+            RemoteSkillService.deleteRemoteConfig(name, scope);
+
             result.addProperty("success", true);
-            LOG.info("[Skills] 成功删除 " + scope + " Skill: " + name + " (enabled=" + enabled + ")");
+            LOG.info("[Skills] Successfully deleted " + scope + " Skill: " + name + " (enabled=" + enabled + ")");
         } catch (IOException e) {
             result.addProperty("success", false);
-            result.addProperty("error", "删除失败: " + e.getMessage());
-            LOG.error("[Skills] 删除 Skill 失败: " + e.getMessage());
+            result.addProperty("error", "Delete failed: " + e.getMessage());
+            LOG.error("[Skills] Failed to delete Skill: " + e.getMessage());
         }
 
         return result;
@@ -443,7 +460,7 @@ public class SkillService {
 
         if (sourceDir == null || targetDir == null) {
             result.addProperty("success", false);
-            result.addProperty("error", "无法获取 " + scope + " Skills 目录");
+            result.addProperty("error", "Cannot get " + scope + " Skills directory");
             return result;
         }
 
@@ -480,7 +497,7 @@ public class SkillService {
             result.addProperty("scope", scope);
             result.addProperty("enabled", true);
             result.addProperty("path", target.getAbsolutePath());
-            LOG.info("[Skills] 成功启用 " + scope + " Skill: " + name);
+            LOG.info("[Skills] Successfully enabled " + scope + " Skill: " + name);
         } catch (IOException e) {
             // If ATOMIC_MOVE fails (cross-filesystem), fall back to copy-then-delete
             try {
@@ -530,7 +547,7 @@ public class SkillService {
 
         if (sourceDir == null || targetDir == null) {
             result.addProperty("success", false);
-            result.addProperty("error", "无法获取 " + scope + " Skills 目录");
+            result.addProperty("error", "Cannot get " + scope + " Skills directory");
             return result;
         }
 
@@ -567,7 +584,7 @@ public class SkillService {
             result.addProperty("scope", scope);
             result.addProperty("enabled", false);
             result.addProperty("path", target.getAbsolutePath());
-            LOG.info("[Skills] 成功停用 " + scope + " Skill: " + name);
+            LOG.info("[Skills] Successfully disabled " + scope + " Skill: " + name);
         } catch (IOException e) {
             // If ATOMIC_MOVE fails (cross-filesystem), fall back to copy-then-delete
             try {
