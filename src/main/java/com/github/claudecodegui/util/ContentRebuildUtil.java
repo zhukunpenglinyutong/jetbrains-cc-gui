@@ -21,9 +21,12 @@ public final class ContentRebuildUtil {
      * Note: if the file was modified by a linter/formatter, newString may not match exactly.
      * In that case, whitespace-normalized matching is attempted; if that also fails, the
      * operation is skipped and processing continues.
+     *
+     * @return result containing the rebuilt content and whether all operations matched exactly
      */
-    public static String rebuildBeforeContent(String afterContent, JsonArray edits) {
+    public static ContentRebuildResult rebuildBeforeContent(String afterContent, JsonArray edits) {
         String content = afterContent;
+        boolean exact = true;
 
         // Iterate over edit operations in reverse order
         for (int i = edits.size() - 1; i >= 0; i--) {
@@ -32,18 +35,67 @@ public final class ContentRebuildUtil {
             String newString = edit.has("newString") ? edit.get("newString").getAsString() : "";
             boolean replaceAll = edit.has("replaceAll") && edit.get("replaceAll").getAsBoolean();
 
+            String before = content;
             if (replaceAll) {
                 content = reverseReplaceAll(content, oldString, newString);
             } else {
                 content = reverseReplaceSingle(content, oldString, newString);
             }
+            if (exact) {
+                exact = wasExactMatch(before, content, oldString, newString, replaceAll);
+            }
         }
 
-        LOG.info("Successfully rebuilt before content (" + edits.size() + " operations)");
-        return content;
+        LOG.info("Rebuilt before content (" + edits.size() + " operations, exact=" + exact + ")");
+        return new ContentRebuildResult(content, exact);
+    }
+
+    /**
+     * Check whether the reverse operation used exact matching.
+     * Returns false (not exact) for:
+     * - empty newString with non-empty oldString (indexOf("")==0 / replace("",x) are catastrophic)
+     * - operation skipped (content unchanged, newString non-empty)
+     * - fuzzy/normalized match (newString not found verbatim in before)
+     * - non-replaceAll with newString appearing multiple times (ambiguous which to reverse)
+     */
+    private static boolean wasExactMatch(
+            String before, String after, String oldString, String newString, boolean replaceAll
+    ) {
+        // Empty newString with non-empty oldString: indexOf("")==0 always "matches",
+        // replace("",x) inserts between every char — both catastrophic, never exact
+        if (newString.isEmpty()) {
+            return oldString.isEmpty(); // both empty = true no-op; delete reverse = not exact
+        }
+
+        // Content unchanged means the operation was skipped
+        if (before.equals(after)) {
+            return false;
+        }
+
+        // Content changed — verify newString was found verbatim (exact match path, not fuzzy)
+        if (!before.contains(newString)) {
+            return false;
+        }
+
+        // For non-replaceAll: newString appearing multiple times means indexOf picked
+        // an arbitrary occurrence — ambiguous, not reliably exact
+        if (!replaceAll) {
+            int first = before.indexOf(newString);
+            if (before.indexOf(newString, first + 1) >= 0) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static String reverseReplaceAll(String content, String oldString, String newString) {
+        // Guard: empty newString → contains("")==true, replace("",x) inserts between every char
+        if (newString.isEmpty()) {
+            LOG.warn("rebuildBeforeContent: empty newString in replaceAll reverse, skipping operation");
+            return content;
+        }
+
         // First try exact match
         if (content.contains(newString)) {
             return content.replace(newString, oldString);
@@ -67,9 +119,20 @@ public final class ContentRebuildUtil {
     }
 
     private static String reverseReplaceSingle(String content, String oldString, String newString) {
+        // Guard: empty newString → indexOf("")==0 inserts oldString at position 0
+        if (newString.isEmpty()) {
+            LOG.warn("rebuildBeforeContent: empty newString in single reverse, skipping operation");
+            return content;
+        }
+
         // First try exact match
         int index = content.indexOf(newString);
         if (index >= 0) {
+            // Guard: ambiguous if newString appears multiple times — skip rather than guess
+            if (content.indexOf(newString, index + 1) >= 0) {
+                LOG.warn("rebuildBeforeContent: newString appears multiple times, skipping operation");
+                return content;
+            }
             return content.substring(0, index) + oldString + content.substring(index + newString.length());
         }
 

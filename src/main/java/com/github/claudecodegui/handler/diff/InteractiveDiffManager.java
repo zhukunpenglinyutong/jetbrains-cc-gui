@@ -138,7 +138,10 @@ public class InteractiveDiffManager {
         DiffContentFactory contentFactory = DiffContentFactory.getInstance();
 
         // Left side: original content before modifications (read-only)
-        DiffContent originalDiffContent = contentFactory.create(project, originalContent, fileType);
+        // Use LightVirtualFile to associate the file name for better syntax analysis in IDEs like Rider
+        LightVirtualFile originalFile = new LightVirtualFile(fileName, fileType, originalContent);
+        originalFile.setDetectedLineSeparator("\n");
+        DiffContent originalDiffContent = contentFactory.create(project, originalFile);
 
         // Right side: proposed content after modifications (editable)
         DocumentContent proposedDiffContent = contentFactory.createDocument(project, proposedFile);
@@ -165,9 +168,10 @@ public class InteractiveDiffManager {
 
         // Set read-only flags based on request:
         // Left side (original) is always read-only.
-        // Right side (proposed) is read-only when request.isReadOnly() is true
-        // (e.g., permission review flow where user can only accept/reject).
-        boolean[] readOnly = {true, request.isReadOnly()};
+        // Right side (proposed) is read-only when:
+        //   - request.isReadOnly() (permission review flow), or
+        //   - request.isApproximateBaseline() (baseline is unreliable for editing)
+        boolean[] readOnly = {true, request.isReadOnly() || request.isApproximateBaseline()};
         diffRequest.putUserData(DiffUserDataKeys.FORCE_READ_ONLY_CONTENTS, readOnly);
         diffRequest.putUserData(DiffUserDataKeys.PREFERRED_FOCUS_SIDE, Side.RIGHT);
 
