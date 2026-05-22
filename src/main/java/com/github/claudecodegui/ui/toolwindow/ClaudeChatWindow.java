@@ -517,12 +517,20 @@ public class ClaudeChatWindow {
             return;
         }
         deferredHistoryRestoreSessionId = null;
+        long startNanos = System.nanoTime();
+        String tabDescriptor = TabPerformanceLogger.describeTab(getCurrentTabName(), savedState.sessionId);
+        LOG.info("[TabPerf] Restored history load started: " + tabDescriptor);
 
         session.loadFromServer().thenRun(() -> ApplicationManager.getApplication().invokeLater(() -> {
+            long elapsedMs = TabPerformanceLogger.elapsedMillis(startNanos);
+            LOG.info("[TabPerf] Restored history load finished in " + elapsedMs + "ms: " + tabDescriptor);
             if (!disposed) {
                 callJavaScript("historyLoadComplete");
             }
         })).exceptionally(ex -> {
+            long elapsedMs = TabPerformanceLogger.elapsedMillis(startNanos);
+            LOG.warn("[TabPerf] Restored history load failed after " + elapsedMs + "ms: "
+                    + tabDescriptor + ", error=" + ex.getMessage(), ex);
             LOG.warn("[TabRestore] Failed to load persisted tab history: " + ex.getMessage(), ex);
             ApplicationManager.getApplication().invokeLater(() -> {
                 if (!disposed) {
@@ -866,6 +874,9 @@ public class ClaudeChatWindow {
 
     public synchronized void dispose() {
         if (this.disposed) { return; }
+        long disposeStartNanos = System.nanoTime();
+        String tabDescriptor = TabPerformanceLogger.describeTab(getCurrentTabName(),
+                session != null ? session.getSessionId() : null);
         this.disposed = true;
 
         chatWindowDelegate.dispose();
@@ -909,7 +920,10 @@ public class ClaudeChatWindow {
         ClaudeSDKToolWindow.unregisterWindow(project, this);
 
         try {
+            long sessionDisposeStartNanos = System.nanoTime();
             if (session != null) { session.dispose(); }
+            LOG.info("[TabPerf] Session dispose returned in "
+                    + TabPerformanceLogger.elapsedMillis(sessionDisposeStartNanos) + "ms: " + tabDescriptor);
         } catch (Exception e) {
             LOG.warn("Failed to clean up session: " + e.getMessage());
         }
@@ -922,7 +936,10 @@ public class ClaudeChatWindow {
 
         try {
             if (browser != null) {
+                long browserDisposeStartNanos = System.nanoTime();
                 browser.dispose();
+                LOG.info("[TabPerf] Browser dispose returned in "
+                        + TabPerformanceLogger.elapsedMillis(browserDisposeStartNanos) + "ms: " + tabDescriptor);
                 browser = null;
             }
         } catch (Exception e) {
@@ -933,6 +950,8 @@ public class ClaudeChatWindow {
             messageDispatcher.clear();
         }
 
+        LOG.info("[TabPerf] ClaudeChatWindow.dispose returned in "
+                + TabPerformanceLogger.elapsedMillis(disposeStartNanos) + "ms: " + tabDescriptor);
         LOG.info("Window resources fully cleaned up, project: " + project.getName());
     }
 
@@ -943,9 +962,12 @@ public class ClaudeChatWindow {
     ) {
         LOG.info("Scheduling async bridge process cleanup, project: " + projectName);
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            long cleanupStartNanos = System.nanoTime();
             LOG.info("Starting async bridge process cleanup, project: " + projectName);
             cleanupClaudeProcesses(claudeBridge);
             cleanupCodexProcesses(codexBridge);
+            LOG.info("[TabPerf] Async bridge process cleanup finished in "
+                    + TabPerformanceLogger.elapsedMillis(cleanupStartNanos) + "ms, project: " + projectName);
             LOG.info("Async bridge process cleanup finished, project: " + projectName);
         });
     }
@@ -955,11 +977,14 @@ public class ClaudeChatWindow {
             return;
         }
         try {
+            long cleanupStartNanos = System.nanoTime();
             int activeCount = claudeBridge.getActiveProcessCount();
             if (activeCount > 0) {
                 LOG.info("Cleaning up " + activeCount + " active Claude process(es)...");
             }
             claudeBridge.cleanupAllProcesses();
+            LOG.info("[TabPerf] Claude bridge cleanup returned in "
+                    + TabPerformanceLogger.elapsedMillis(cleanupStartNanos) + "ms");
         } catch (Exception e) {
             LOG.warn("Failed to clean up Claude processes: " + e.getMessage());
         }
@@ -970,14 +995,24 @@ public class ClaudeChatWindow {
             return;
         }
         try {
+            long cleanupStartNanos = System.nanoTime();
             int activeCount = codexBridge.getActiveProcessCount();
             if (activeCount > 0) {
                 LOG.info("Cleaning up " + activeCount + " active Codex process(es)...");
             }
             codexBridge.cleanupAllProcesses();
+            LOG.info("[TabPerf] Codex bridge cleanup returned in "
+                    + TabPerformanceLogger.elapsedMillis(cleanupStartNanos) + "ms");
         } catch (Exception e) {
             LOG.warn("Failed to clean up Codex processes: " + e.getMessage());
         }
+    }
+
+    String getCurrentTabName() {
+        if (parentContent != null && parentContent.getDisplayName() != null && !parentContent.getDisplayName().trim().isEmpty()) {
+            return parentContent.getDisplayName();
+        }
+        return originalTabName;
     }
 
     // ==================== Host Interface Factories ====================

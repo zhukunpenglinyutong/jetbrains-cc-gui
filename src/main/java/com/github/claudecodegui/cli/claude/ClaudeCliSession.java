@@ -11,6 +11,7 @@ import com.github.claudecodegui.provider.claude.ClaudeCliDetector;
 import com.github.claudecodegui.provider.claude.ClaudeCliStreamParser;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
+import com.github.claudecodegui.ui.toolwindow.TabPerformanceLogger;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
@@ -115,13 +116,22 @@ public class ClaudeCliSession {
     public void interrupt() {
         CliProcessHandle h = activeHandle;
         if (h != null) {
+            long startNanos = System.nanoTime();
             h.interrupt();
+            LOG.info("[TabPerf] ClaudeCliSession.interrupt returned in "
+                    + TabPerformanceLogger.elapsedMillis(startNanos) + "ms: tab=" + tabId);
         }
     }
 
     public void dispose() {
+        long startNanos = System.nanoTime();
         interrupt();
+        long cleanupStartNanos = System.nanoTime();
         mcpConfig.cleanup();
+        LOG.info("[TabPerf] ClaudeCliSession MCP cleanup returned in "
+                + TabPerformanceLogger.elapsedMillis(cleanupStartNanos) + "ms: tab=" + tabId);
+        LOG.info("[TabPerf] ClaudeCliSession.dispose returned in "
+                + TabPerformanceLogger.elapsedMillis(startNanos) + "ms: tab=" + tabId);
     }
 
     public String getSessionId() {
@@ -146,9 +156,6 @@ public class ClaudeCliSession {
                     sessionId = content;
                 }
                 callback.onMessage(type, content);
-                if ("content_delta".equals(type) || "content".equals(type)) {
-                    assistantContent.append(content);
-                }
             }
 
             @Override

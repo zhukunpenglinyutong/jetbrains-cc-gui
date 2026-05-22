@@ -4,6 +4,7 @@ import com.github.claudecodegui.cli.claude.ClaudeCliSession;
 import com.github.claudecodegui.cli.codex.CodexCliSession;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
+import com.github.claudecodegui.ui.toolwindow.TabPerformanceLogger;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.util.concurrent.CompletableFuture;
@@ -44,14 +45,23 @@ public class CliSessionManager {
     }
 
     public void disposeTab(String tabId) {
+        long startNanos = System.nanoTime();
         ClaudeCliSession cs = claudeSessions.remove(tabId);
         if (cs != null) {
+            long claudeDisposeStartNanos = System.nanoTime();
             cs.dispose();
+            LOG.info("[TabPerf] Claude CLI session dispose returned in "
+                    + TabPerformanceLogger.elapsedMillis(claudeDisposeStartNanos) + "ms: tab=" + tabId);
         }
         CodexCliSession xs = codexSessions.remove(tabId);
         if (xs != null) {
+            long codexDisposeStartNanos = System.nanoTime();
             xs.dispose();
+            LOG.info("[TabPerf] Codex CLI session dispose returned in "
+                    + TabPerformanceLogger.elapsedMillis(codexDisposeStartNanos) + "ms: tab=" + tabId);
         }
+        LOG.info("[TabPerf] CliSessionManager.disposeTab returned in "
+                + TabPerformanceLogger.elapsedMillis(startNanos) + "ms: tab=" + tabId);
     }
 
     // ── private ──────────────────────────────────────────────────────────────
