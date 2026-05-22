@@ -188,7 +188,8 @@ public class SessionSendService {
         }
 
         String contextAppend = contextService.buildCodexContextAppend(openedFilesJson, fileTagPaths);
-        String finalInput = (input != null ? input : "") + contextAppend;
+        String textContext = contextService.buildContextFromText(input);
+        String finalInput = (input != null ? input : "") + contextAppend + textContext;
 
         return codexSDKBridge.sendMessage(
                 channelId,
