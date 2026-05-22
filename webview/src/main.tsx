@@ -7,8 +7,7 @@ import { UIStateProvider } from './contexts/UIStateContext';
 import { DialogProvider } from './contexts/DialogContext';
 import './codicon.css';
 import './styles/app.less';
-import './i18n/config';
-import i18n from './i18n/config';
+import i18n, { normalizeUiLanguage } from './i18n/config';
 import { setupSlashCommandsCallback } from './components/ChatInputBox/providers/slashCommandProvider';
 import { setupDollarCommandsCallback } from './components/ChatInputBox/providers/dollarCommandProvider';
 import { applyLinkifyCapabilitiesPayload } from './utils/linkifyCapabilities';
@@ -409,8 +408,7 @@ function applyLanguageConfig(rawConfig: { language: string; source?: string; ide
   const { language, source } = config;
 
   // Validate that the language code is supported
-  const supportedLanguages = ['zh', 'en', 'zh-TW', 'hi', 'es', 'fr', 'ja', 'ru', 'ko', 'pt-BR'];
-  const targetLanguage = supportedLanguages.includes(language) ? language : 'en';
+  const targetLanguage = normalizeUiLanguage(language);
 
   debugLog('[Main] Applying language config:', config, 'target language:', targetLanguage, 'source:', source);
 
@@ -662,6 +660,10 @@ waitForBridge(() => {
 
   debugLog('[Main] Sending frontend_ready signal');
   sendBridgeEvent('frontend_ready');
+
+  const currentUiLanguage = normalizeUiLanguage(localStorage.getItem('language') || i18n.language);
+  debugLog('[Main] Syncing UI language to backend:', currentUiLanguage);
+  sendBridgeEvent('set_ui_language', JSON.stringify({ language: currentUiLanguage }));
 
   debugLog('[Main] Sending refresh_slash_commands request');
   sendBridgeEvent('refresh_slash_commands');

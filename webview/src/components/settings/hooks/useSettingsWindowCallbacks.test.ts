@@ -20,6 +20,8 @@ describe('useSettingsWindowCallbacks', () => {
     setSavingWorkingDirectory: vi.fn(),
     setCommitPrompt: vi.fn(),
     setSavingCommitPrompt: vi.fn(),
+    setProjectCommitPrompt: vi.fn(),
+    setSavingProjectCommitPrompt: vi.fn(),
     setCommitAiConfig: vi.fn(),
     setPromptEnhancerConfig: vi.fn(),
     setProjectCommitPrompt: vi.fn(),

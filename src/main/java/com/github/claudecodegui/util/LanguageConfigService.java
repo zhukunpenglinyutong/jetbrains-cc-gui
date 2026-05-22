@@ -45,6 +45,10 @@ public class LanguageConfigService {
             return "zh";  // Simplified Chinese
         }
 
+        if ("pt".equals(language) && "BR".equals(country)) {
+            return "pt-BR";
+        }
+
         // Direct mapping for other languages
         switch (language) {
             case "en":
@@ -182,10 +186,17 @@ public class LanguageConfigService {
      * @return the language code (zh, en, zh-TW, hi, es, fr, ja, ru, ko, pt-BR)
      */
     public static String getCurrentLanguage(CodemossSettingsService settingsService) {
+        // User-selected language must win over IDEA locale and UI sync state.
         String userLanguage = getUserLanguage(settingsService);
         if (userLanguage != null && !userLanguage.isEmpty()) {
             return userLanguage;
         }
+
+        String syncedUiLanguage = getSyncedUiLanguage();
+        if (syncedUiLanguage != null && !syncedUiLanguage.isBlank()) {
+            return syncedUiLanguage;
+        }
+
         try {
             Locale currentLocale = DynamicBundle.getLocale();
             return mapIdeaLocaleToI18n(currentLocale);
@@ -193,5 +204,23 @@ public class LanguageConfigService {
             LOG.error("[LanguageConfig] Failed to get current language: " + e.getMessage());
             return "en";
         }
+    }
+
+    public static String getCurrentLanguage() {
+        return getCurrentLanguage(new CodemossSettingsService());
+    }
+
+
+    private static String getSyncedUiLanguage() {
+        try {
+            String uiLanguage = new CodemossSettingsService().getUiLanguage();
+            if (uiLanguage != null && !uiLanguage.isBlank()) {
+                LOG.debug("[LanguageConfig] Using synced UI language: " + uiLanguage);
+                return uiLanguage;
+            }
+        } catch (Exception e) {
+            LOG.debug("[LanguageConfig] Failed to read synced UI language: " + e.getMessage());
+        }
+        return null;
     }
 }

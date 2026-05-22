@@ -1,9 +1,11 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CLAUDE_MODELS, CODEX_MODELS } from '../../ChatInputBox/types';
 import { ProviderModelIcon } from '../../shared/ProviderModelIcon';
 import type { AiFeatureConfig, AiFeatureProvider } from '../../../types/aiFeatureConfig';
 import styles from './style.module.less';
+
+const OTHER_MODEL_OPTION = '__other__';
 
 interface AiFeatureProviderModelPanelProps {
   config: AiFeatureConfig;
@@ -31,6 +33,12 @@ const AiFeatureProviderModelPanel = ({
     ?? fallbackProvider;
   const statusProvider = config.effectiveProvider ?? config.provider ?? fallbackProvider;
   const modelOptions = selectedProvider === 'codex' ? CODEX_MODELS : CLAUDE_MODELS;
+  const modelOptionIds = useMemo(() => new Set(modelOptions.map((model) => model.id)), [modelOptions]);
+  const currentModel = config.models[selectedProvider] ?? '';
+  const [selectedModelOption, setSelectedModelOption] = useState(() => (
+    modelOptionIds.has(currentModel) ? currentModel : OTHER_MODEL_OPTION
+  ));
+  const [customModelValue, setCustomModelValue] = useState(currentModel);
   const isAutoMode = config.provider == null;
   const statusText = config.resolutionSource === 'auto'
     ? t(`${settingsKeyPrefix}.currentProviderAuto`, {
@@ -47,6 +55,35 @@ const AiFeatureProviderModelPanel = ({
   const getProviderLabel = useCallback((provider: AiFeatureProvider) => {
     return t(`${providerKeyPrefix}.${provider}`);
   }, [t, providerKeyPrefix]);
+
+  useEffect(() => {
+    if (modelOptionIds.has(currentModel)) {
+      setSelectedModelOption(currentModel);
+      setCustomModelValue(currentModel);
+      return;
+    }
+
+    setSelectedModelOption(OTHER_MODEL_OPTION);
+    setCustomModelValue(currentModel);
+  }, [currentModel, modelOptionIds]);
+
+  const handleModelSelectChange = useCallback((value: string) => {
+    if (value === OTHER_MODEL_OPTION) {
+      setSelectedModelOption(OTHER_MODEL_OPTION);
+      setCustomModelValue((previousValue) => previousValue || currentModel);
+      return;
+    }
+
+    setSelectedModelOption(value);
+    setCustomModelValue(value);
+    onModelChange(value);
+  }, [currentModel, onModelChange]);
+
+  const handleCustomModelChange = useCallback((value: string) => {
+    setSelectedModelOption(OTHER_MODEL_OPTION);
+    setCustomModelValue(value);
+    onModelChange(value);
+  }, [onModelChange]);
 
   return (
     <div className={styles.panel}>
@@ -74,8 +111,8 @@ const AiFeatureProviderModelPanel = ({
           <select
             id={`${settingsKeyPrefix}-model`}
             className={styles.modelSelect}
-            value={config.models[selectedProvider]}
-            onChange={(e) => onModelChange(e.target.value)}
+            value={selectedModelOption}
+            onChange={(e) => handleModelSelectChange(e.target.value)}
             aria-label={t(`${settingsKeyPrefix}.modelLabel`)}
           >
             {modelOptions.map((model) => (
@@ -83,9 +120,35 @@ const AiFeatureProviderModelPanel = ({
                 {model.label}
               </option>
             ))}
+            <option value={OTHER_MODEL_OPTION}>
+              {t(`${settingsKeyPrefix}.otherModelOption`)}
+            </option>
           </select>
           <span className={`codicon codicon-chevron-down ${styles.selectArrow}`} />
         </div>
+
+        {selectedModelOption === OTHER_MODEL_OPTION && (
+          <div className={styles.customModelSection}>
+            <label
+              className={styles.customModelLabel}
+              htmlFor={`${settingsKeyPrefix}-custom-model`}
+            >
+              {t(`${settingsKeyPrefix}.customModelLabel`)}
+            </label>
+            <input
+              id={`${settingsKeyPrefix}-custom-model`}
+              className={styles.customModelInput}
+              value={customModelValue}
+              onChange={(e) => handleCustomModelChange(e.target.value)}
+              placeholder={t(`${settingsKeyPrefix}.customModelPlaceholder`)}
+              aria-label={t(`${settingsKeyPrefix}.customModelLabel`)}
+            />
+            <small className={styles.customModelHint}>
+              <span className="codicon codicon-info" />
+              <span>{t(`${settingsKeyPrefix}.customModelHint`)}</span>
+            </small>
+          </div>
+        )}
       </div>
 
       <div className={styles.actionsRow} data-testid="ai-feature-actions-row">

@@ -5,6 +5,10 @@ import AppearanceTab from './AppearanceTab';
 const changeLanguageMock = vi.fn();
 
 vi.mock('react-i18next', () => ({
+  initReactI18next: {
+    type: '3rdParty',
+    init: vi.fn(),
+  },
   useTranslation: () => ({
     t: (key: string) => key,
     i18n: {
@@ -17,6 +21,7 @@ vi.mock('react-i18next', () => ({
 describe('AppearanceTab ui font selector', () => {
   afterEach(() => {
     localStorage.clear();
+    vi.clearAllMocks();
   });
 
   const renderAppearanceTab = () => render(
@@ -66,7 +71,6 @@ describe('AppearanceTab ui font selector', () => {
   it('delegates manual language selection to Java without touching localStorage', () => {
     const sendToJava = vi.fn();
     window.sendToJava = sendToJava;
-    changeLanguageMock.mockClear();
     localStorage.setItem('languageSelectionMode', 'followIdea');
 
     renderAppearanceTab();

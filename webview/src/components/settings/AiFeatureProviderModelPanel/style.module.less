@@ -11,6 +11,20 @@
   min-width: 0;
 }
 
+.customModelSection {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.customModelLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+
 .selectWrap {
   position: relative;
   display: flex;
@@ -79,6 +93,34 @@
   padding: 0 36px 0 12px;
 }
 
+.customModelInput {
+  width: 100%;
+  height: 36px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  padding: 0 12px;
+  min-width: 0;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: var(--border-hover);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 1px var(--accent-primary);
+  }
+
+  &::placeholder {
+    color: var(--text-placeholder);
+  }
+}
+
 .resetBtn {
   flex: 0 0 auto;
   height: 36px;
@@ -141,4 +183,25 @@
   pointer-events: none;
   color: var(--text-tertiary);
   font-size: 12px;
+}
+
+.customModelHint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1.4;
+
+  .codicon {
+    flex: 0 0 auto;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 640px) {
+  .selectGroup {
+    grid-template-columns: 1fr;
+  }
 }

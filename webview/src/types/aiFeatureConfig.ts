@@ -22,7 +22,40 @@ export interface AiFeatureConfig {
 
 export type CommitAiProvider = AiFeatureProvider;
 export type CommitAiResolutionSource = AiFeatureResolutionSource;
-export type CommitAiConfig = AiFeatureConfig;
+export type CommitGenerationMode = 'prompt' | 'skill';
+export type CommitLanguageMode =
+  | 'auto'
+  | 'en'
+  | 'zh'
+  | 'zh-TW'
+  | 'ko'
+  | 'ja'
+  | 'es'
+  | 'fr'
+  | 'hi'
+  | 'ru'
+  | 'pt-BR';
+
+export interface CommitSkillOption {
+  ref: string;
+  name: string;
+  description?: string;
+  source?: 'builtin' | 'claude' | 'codex' | string;
+  scope?: string;
+  path?: string;
+  skillPath?: string;
+  enabled?: boolean;
+  builtin?: boolean;
+}
+
+export interface CommitAiConfig extends AiFeatureConfig {
+  generationMode?: CommitGenerationMode;
+  skillRef?: string;
+  language?: CommitLanguageMode;
+  availableSkills?: CommitSkillOption[];
+}
+
+export const DEFAULT_COMMIT_SKILL_REF = 'builtin:git-commit';
 
 export const DEFAULT_COMMIT_AI_CONFIG: CommitAiConfig = {
   provider: null,
@@ -36,4 +69,8 @@ export const DEFAULT_COMMIT_AI_CONFIG: CommitAiConfig = {
     claude: false,
     codex: false,
   },
+  generationMode: 'prompt',
+  skillRef: DEFAULT_COMMIT_SKILL_REF,
+  language: 'auto',
+  availableSkills: [],
 };

@@ -7,6 +7,8 @@ import com.github.claudecodegui.util.SystemNotificationService;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.intellij.notification.NotificationGroupManager;
+import com.intellij.notification.NotificationType;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import org.jetbrains.annotations.NotNull;
@@ -180,10 +182,12 @@ public class ClaudeNotifier {
 
     public static void showError(@NotNull Project project, String message) {
         show(project, "Claude [ERR]", message, 8000);
+        showBalloon(project, message, NotificationType.ERROR);
     }
 
     public static void showWarning(@NotNull Project project, String message) {
         show(project, "Claude [WARN]", message, 6000);
+        showBalloon(project, message, NotificationType.WARNING);
     }
 
     public static void clearStatus(@NotNull Project project) {
@@ -251,6 +255,22 @@ public class ClaudeNotifier {
             ClaudeStatusBarWidget widget = ClaudeStatusBarWidget.Factory.getWidget(project);
             if (widget != null) {
                 widget.show(text, tooltip, duration);
+            }
+        });
+    }
+
+    private static void showBalloon(@NotNull Project project, String message, NotificationType type) {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (project.isDisposed()) {
+                return;
+            }
+            try {
+                NotificationGroupManager.getInstance()
+                        .getNotificationGroup("CC GUI Notifications")
+                        .createNotification(message, type)
+                        .notify(project);
+            } catch (Exception e) {
+                // Fallback silently to the status bar update if balloon delivery fails.
             }
         });
     }

@@ -11,10 +11,17 @@ import ru from './locales/ru.json';
 import ko from './locales/ko.json';
 import ptBR from './locales/pt-BR.json';
 
+export const SUPPORTED_UI_LANGUAGES = ['zh', 'en', 'zh-TW', 'hi', 'es', 'fr', 'ja', 'ru', 'ko', 'pt-BR'] as const;
+
+export const normalizeUiLanguage = (language?: string | null): string => {
+  if (!language) return 'en';
+  return (SUPPORTED_UI_LANGUAGES as readonly string[]).includes(language) ? language : 'en';
+};
+
 // Retrieve the saved language from localStorage; default to English if not set
 const getInitialLanguage = (): string => {
   const savedLanguage = localStorage.getItem('language');
-  return savedLanguage || 'en'; // Default to English
+  return normalizeUiLanguage(savedLanguage); // Default to English
 };
 
 i18n
