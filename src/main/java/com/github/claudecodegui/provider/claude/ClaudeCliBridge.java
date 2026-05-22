@@ -2,6 +2,7 @@ package com.github.claudecodegui.provider.claude;
 
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.ProcessManager;
+import com.github.claudecodegui.cli.common.CliErrorFormatter;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.session.ClaudeSession;
@@ -98,7 +99,7 @@ public class ClaudeCliBridge {
             Process process = null;
             ClaudeCliStreamParser streamParser = new ClaudeCliStreamParser(gson);
             List<File> tempFiles = new ArrayList<>();
-            boolean suppressThinking = Boolean.TRUE.equals(disableThinking);
+            boolean suppressThinking = false;
 
             // PR #1191 review M1: keep entry log at info but never include prompt body / attachment data.
             LOG.info("[CliBridge] sendMessage entry, attachments="
@@ -161,8 +162,8 @@ public class ClaudeCliBridge {
                     LOG.debug("[CliBridge] fullPrompt length=" + fullPrompt.length() + ", addDirs=" + addDirs);
                     LOG.debug("[CliBridge] fullPrompt content: "
                             + (fullPrompt.length() > 500 ? fullPrompt.substring(0, 500) + "..." : fullPrompt));
-                    if (suppressThinking) {
-                        LOG.info("[CliBridge] disableThinking requested; Claude CLI has no native no-thinking flag, suppressing thinking events in parser");
+                    if (Boolean.TRUE.equals(disableThinking)) {
+                        LOG.info("[CliBridge] disableThinking requested, but Claude CLI output will keep thinking events to preserve CLI/SDK parity");
                     }
                     LOG.debug("[CliBridge] Command: " + String.join(" ", command));
 
@@ -179,8 +180,8 @@ public class ClaudeCliBridge {
                     LOG.debug("[CliBridge] fullPrompt length=" + fullPrompt.length() + ", addDirs=[]");
                     LOG.debug("[CliBridge] fullPrompt content: "
                             + (fullPrompt.length() > 500 ? fullPrompt.substring(0, 500) + "..." : fullPrompt));
-                    if (suppressThinking) {
-                        LOG.info("[CliBridge] disableThinking requested; Claude CLI has no native no-thinking flag, suppressing thinking events in parser");
+                    if (Boolean.TRUE.equals(disableThinking)) {
+                        LOG.info("[CliBridge] disableThinking requested, but Claude CLI output will keep thinking events to preserve CLI/SDK parity");
                     }
                     LOG.debug("[CliBridge] Command: " + String.join(" ", command));
 
@@ -253,11 +254,11 @@ public class ClaudeCliBridge {
                 return result;
             } catch (Exception e) {
                 result.success = false;
-                result.error = e.getMessage();
+                result.error = CliErrorFormatter.formatError("Claude", e.getMessage());
                 errorAlreadyReported.set(true);
                 LOG.error("[CliBridge] Execution failed", e);
                 callback.onQueueDisplayStateChanged(QueueDisplayState.NONE, 0);
-                callback.onError(e.getMessage());
+                callback.onError(result.error);
                 return result;
             } finally {
                 cleanupTempFiles(tempFiles);
@@ -312,25 +313,11 @@ public class ClaudeCliBridge {
     }
 
     static void appendCliDiagnosticLine(StringBuilder diagnostic, String line) {
-        if (diagnostic == null || line == null || line.isBlank()) {
-            return;
-        }
-        if (diagnostic.length() > 0) {
-            diagnostic.append('\n');
-        }
-        diagnostic.append(line);
-        int overflow = diagnostic.length() - CLI_DIAGNOSTIC_MAX_CHARS;
-        if (overflow > 0) {
-            diagnostic.delete(0, overflow);
-        }
+        CliErrorFormatter.appendDiagnosticLine(diagnostic, line, CLI_DIAGNOSTIC_MAX_CHARS);
     }
 
     static String buildCliExitError(int exitCode, StringBuilder diagnostic) {
-        String message = "CLI process exited with code: " + exitCode;
-        if (diagnostic == null || diagnostic.toString().trim().isEmpty()) {
-            return message;
-        }
-        return message + "\n\nDetails:\n" + diagnostic.toString().trim();
+        return CliErrorFormatter.formatExitError("Claude", exitCode, diagnostic);
     }
 
     String enrichPromptWithContext(String message, JsonObject openedFiles, String agentPrompt) {

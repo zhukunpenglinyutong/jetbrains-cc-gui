@@ -14,7 +14,8 @@ public class ClaudeCliBridgeDiagnosticsTest {
 
         String error = ClaudeCliBridge.buildCliExitError(1, diagnostic);
 
-        assertTrue(error.contains("CLI process exited with code: 1"));
+        assertTrue(error.contains("Claude CLI 请求失败"));
+        assertTrue(error.contains("Claude CLI exited with code: 1"));
         assertTrue(error.contains("Details:"));
         assertTrue(error.contains("Authentication failed"));
         assertTrue(error.contains("Run claude auth login"));
