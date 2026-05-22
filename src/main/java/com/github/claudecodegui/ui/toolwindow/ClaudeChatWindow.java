@@ -8,6 +8,7 @@ import com.github.claudecodegui.handler.PermissionHandler;
 import com.github.claudecodegui.permission.PermissionService;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.provider.opencode.OpenCodeSDKBridge;
 import com.github.claudecodegui.provider.common.DaemonBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.session.ClaudeSession;
@@ -49,6 +50,7 @@ public class ClaudeChatWindow {
     private final JPanel mainPanel;
     private final ClaudeSDKBridge claudeSDKBridge;
     private final CodexSDKBridge codexSDKBridge;
+    private final OpenCodeSDKBridge openCodeSDKBridge;
     private final Project project;
     private final CodemossSettingsService settingsService;
     private final HtmlLoader htmlLoader;
@@ -92,6 +94,7 @@ public class ClaudeChatWindow {
         this.project = project;
         this.claudeSDKBridge = new ClaudeSDKBridge();
         this.codexSDKBridge = new CodexSDKBridge();
+        this.openCodeSDKBridge = new OpenCodeSDKBridge();
         this.settingsService = new CodemossSettingsService();
         this.htmlLoader = new HtmlLoader(getClass());
         this.mainPanel = new JPanel(new BorderLayout());
@@ -129,7 +132,7 @@ public class ClaudeChatWindow {
                 () -> streamCoalescer.isStreamActive()
         );
 
-        this.session = new ClaudeSession(project, claudeSDKBridge, codexSDKBridge);
+        this.session = new ClaudeSession(project, claudeSDKBridge, codexSDKBridge, openCodeSDKBridge);
 
         this.chatWindowDelegate = new ChatWindowDelegate(createDelegateHost());
         chatWindowDelegate.loadPermissionModeFromSettings();
@@ -152,6 +155,11 @@ public class ClaudeChatWindow {
             @Override
             public CodexSDKBridge getCodexSDKBridge() {
                 return codexSDKBridge;
+            }
+
+            @Override
+            public OpenCodeSDKBridge getOpenCodeSDKBridge() {
+                return openCodeSDKBridge;
             }
 
             @Override
@@ -321,6 +329,10 @@ public class ClaudeChatWindow {
 
     public CodexSDKBridge getCodexSDKBridge() {
         return codexSDKBridge;
+    }
+
+    public OpenCodeSDKBridge getOpenCodeSDKBridge() {
+        return openCodeSDKBridge;
     }
 
     /**
@@ -860,6 +872,11 @@ public class ClaudeChatWindow {
             @Override
             public CodexSDKBridge getCodexSDKBridge() {
                 return codexSDKBridge;
+            }
+
+            @Override
+            public OpenCodeSDKBridge getOpenCodeSDKBridge() {
+                return openCodeSDKBridge;
             }
 
             @Override

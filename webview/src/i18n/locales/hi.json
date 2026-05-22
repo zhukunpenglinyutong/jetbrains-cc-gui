@@ -275,6 +275,8 @@
       "claudeSdkDescription": "Claude AI सुविधाओं के लिए आवश्यक। Claude Code SDK और संबंधित निर्भरताएं शामिल हैं।",
       "codexSdkName": "Codex SDK",
       "codexSdkDescription": "Codex AI सुविधाओं के लिए आवश्यक। OpenAI Codex SDK शामिल है।",
+      "opencodeSdkName": "opencode SDK",
+      "opencodeSdkDescription": "opencode AI सुविधाओं के लिए आवश्यक। @opencode-ai/sdk शामिल है।",
       "loading": "निर्भरता स्थिति लोड हो रही है...",
       "install": "इंस्टॉल करें",
       "installing": "इंस्टॉल हो रहा है...",

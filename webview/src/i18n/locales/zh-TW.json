@@ -275,6 +275,8 @@
       "claudeSdkDescription": "Claude AI 功能所需。包含 Claude Code SDK 及相關依賴。",
       "codexSdkName": "Codex SDK",
       "codexSdkDescription": "Codex AI 功能所需。包含 OpenAI Codex SDK。",
+      "opencodeSdkName": "opencode SDK",
+      "opencodeSdkDescription": "opencode AI 功能所需。包含 @opencode-ai/sdk。",
       "loading": "正在載入依賴狀態...",
       "install": "安裝",
       "installing": "安裝中...",

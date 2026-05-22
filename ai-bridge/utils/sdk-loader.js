@@ -27,6 +27,10 @@ const SDK_DEFINITIONS = {
     CODEX: {
         id: 'codex-sdk',
         npmPackage: '@openai/codex-sdk'
+    },
+    OPENCODE: {
+        id: 'opencode-sdk',
+        npmPackage: '@opencode-ai/sdk'
     }
 };
 
@@ -129,6 +133,21 @@ export function isCodexSdkAvailable() {
     const sdkPath = getPackageDirFromRoot(getSdkRootDir(sdkId), npmPackage);
     const exists = existsSync(sdkPath);
     console.log('[sdk-loader] isCodexSdkAvailable:', {
+        path: sdkPath,
+        exists: exists
+    });
+    return exists;
+}
+
+/**
+ * Check whether the opencode SDK is available.
+ */
+export function isOpenCodeSdkAvailable() {
+    const sdkId = 'opencode-sdk';
+    const npmPackage = '@opencode-ai/sdk';
+    const sdkPath = getPackageDirFromRoot(getSdkRootDir(sdkId), npmPackage);
+    const exists = existsSync(sdkPath);
+    console.log('[sdk-loader] isOpenCodeSdkAvailable:', {
         path: sdkPath,
         exists: exists
     });
@@ -239,6 +258,45 @@ export async function loadCodexSdk() {
 }
 
 /**
+ * Dynamically load the opencode SDK.
+ * @returns {Promise<{createOpencodeClient?: Function, createOpencodeServer?: Function, ...}>}
+ * @throws {Error} If the SDK is not installed
+ */
+export async function loadOpenCodeSdk() {
+    if (sdkCache.has('opencode')) {
+        return sdkCache.get('opencode');
+    }
+
+    if (loadingPromises.has('opencode')) {
+        return loadingPromises.get('opencode');
+    }
+
+    const sdkRootDir = getSdkRootDir('opencode-sdk');
+    const sdkPath = getPackageDirFromRoot(sdkRootDir, '@opencode-ai/sdk');
+
+    if (!existsSync(sdkPath)) {
+        throw new Error('SDK_NOT_INSTALLED:opencode');
+    }
+
+    const loadPromise = (async () => {
+        try {
+            const resolvedUrl = resolveExternalPackageUrl('@opencode-ai/sdk', sdkRootDir);
+            const sdk = await import(resolvedUrl);
+
+            sdkCache.set('opencode', sdk);
+            return sdk;
+        } catch (error) {
+            throw new Error(`Failed to load opencode SDK: ${error.message}`);
+        } finally {
+            loadingPromises.delete('opencode');
+        }
+    })();
+
+    loadingPromises.set('opencode', loadPromise);
+    return loadPromise;
+}
+
+/**
  * Load the base Anthropic SDK (used as an API fallback)
  * @returns {Promise<{Anthropic: Class}>}
  */
@@ -327,6 +385,7 @@ export function getSdkStatus() {
     // Uses the same path resolution logic as DependencyManager
     const claudeInstalled = isClaudeSdkAvailable();
     const codexInstalled = isCodexSdkAvailable();
+    const opencodeInstalled = isOpenCodeSdkAvailable();
 
     return {
         claude: {
@@ -336,6 +395,10 @@ export function getSdkStatus() {
         codex: {
             installed: codexInstalled,
             path: getPackageDirFromRoot(getSdkRootDir('codex-sdk'), '@openai/codex-sdk')
+        },
+        opencode: {
+            installed: opencodeInstalled,
+            path: getPackageDirFromRoot(getSdkRootDir('opencode-sdk'), '@opencode-ai/sdk')
         }
     };
 }
@@ -350,7 +413,7 @@ export function clearSdkCache() {
 
 /**
  * Verify that the SDK is installed, throwing a user-friendly error if not
- * @param {string} provider - 'claude' or 'codex'
+ * @param {string} provider - 'claude', 'codex', or 'opencode'
  * @throws {Error} If the SDK is not installed
  */
 export function requireSdk(provider) {
@@ -365,6 +428,13 @@ export function requireSdk(provider) {
         const error = new Error('Codex SDK not installed. Please install via Settings > Dependencies.');
         error.code = 'SDK_NOT_INSTALLED';
         error.provider = 'codex';
+        throw error;
+    }
+
+    if (provider === 'opencode' && !isOpenCodeSdkAvailable()) {
+        const error = new Error('opencode SDK not installed. Please install via Settings > Dependencies.');
+        error.code = 'SDK_NOT_INSTALLED';
+        error.provider = 'opencode';
         throw error;
     }
 }

@@ -5,6 +5,7 @@ import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.provider.opencode.OpenCodeSDKBridge;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
@@ -28,6 +29,7 @@ public class SessionSendService {
     private final Gson gson;
     private final ClaudeSDKBridge claudeSDKBridge;
     private final CodexSDKBridge codexSDKBridge;
+    private final OpenCodeSDKBridge openCodeSDKBridge;
     private final SessionContextService contextService;
 
     public SessionSendService(
@@ -39,6 +41,7 @@ public class SessionSendService {
             Gson gson,
             ClaudeSDKBridge claudeSDKBridge,
             CodexSDKBridge codexSDKBridge,
+            OpenCodeSDKBridge openCodeSDKBridge,
             SessionContextService contextService
     ) {
         this.project = project;
@@ -49,6 +52,7 @@ public class SessionSendService {
         this.gson = gson;
         this.claudeSDKBridge = claudeSDKBridge;
         this.codexSDKBridge = codexSDKBridge;
+        this.openCodeSDKBridge = openCodeSDKBridge;
         this.contextService = contextService;
     }
 
@@ -111,19 +115,24 @@ public class SessionSendService {
                         + ", effective=" + effectivePermissionMode
         );
 
-        if ("codex".equals(currentProvider)) {
-            return sendToCodex(
-                    channelId,
-                    input,
-                    attachments,
-                    openedFilesJson,
-                    agentPrompt,
-                    fileTagPaths,
-                    effectivePermissionMode
-            );
+        switch (normalizeProvider(currentProvider)) {
+            case "claude":
+                return sendToClaude(channelId, input, attachments, openedFilesJson, agentPrompt, effectivePermissionMode);
+            case "codex":
+                return sendToCodex(
+                        channelId,
+                        input,
+                        attachments,
+                        openedFilesJson,
+                        agentPrompt,
+                        fileTagPaths,
+                        effectivePermissionMode
+                );
+            case "opencode":
+                return sendToOpenCode(channelId, input, attachments, agentPrompt, effectivePermissionMode);
+            default:
+                return failUnsupportedProvider(currentProvider);
         }
-
-        return sendToClaude(channelId, input, attachments, openedFilesJson, agentPrompt, effectivePermissionMode);
     }
 
     public static String normalizeRequestedPermissionMode(String mode) {
@@ -154,6 +163,22 @@ public class SessionSendService {
             return "default";
         }
         return resolvedMode;
+    }
+
+    private String normalizeProvider(String provider) {
+        return provider == null || provider.trim().isEmpty() ? "claude" : provider.trim().toLowerCase();
+    }
+
+    private CompletableFuture<Void> failUnsupportedProvider(String provider) {
+        String error = "Unsupported provider: " + provider;
+        LOG.warn("[Provider] " + error);
+        state.setError(error);
+        state.setBusy(false);
+        state.setLoading(false);
+        state.addMessage(new ClaudeSession.Message(ClaudeSession.Message.Type.ERROR, error));
+        callbackFacade.notifyMessageUpdate(state.getMessages());
+        callbackFacade.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+        return CompletableFuture.completedFuture(null);
     }
 
     public static String getCodexRuntimeAccessError(String accessMode) {
@@ -200,6 +225,31 @@ public class SessionSendService {
                 state.getModel(),
                 agentPrompt,
                 state.getReasoningEffort(),
+                handler
+        ).thenApply(result -> null);
+    }
+
+    private CompletableFuture<Void> sendToOpenCode(
+            String channelId,
+            String input,
+            List<ClaudeSession.Attachment> attachments,
+            String agentPrompt,
+            String effectivePermissionMode
+    ) {
+        if (openCodeSDKBridge == null) {
+            return failUnsupportedProvider("opencode");
+        }
+
+        OpenCodeMessageHandler handler = new OpenCodeMessageHandler(state, callbackFacade.getCallbackHandler());
+        return openCodeSDKBridge.sendMessage(
+                channelId,
+                input,
+                state.getSessionId(),
+                state.getCwd(),
+                attachments,
+                effectivePermissionMode,
+                state.getModel(),
+                agentPrompt,
                 handler
         ).thenApply(result -> null);
     }

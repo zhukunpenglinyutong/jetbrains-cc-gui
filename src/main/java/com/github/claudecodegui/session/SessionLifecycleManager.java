@@ -7,6 +7,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.handler.SettingsHandler;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.provider.opencode.OpenCodeSDKBridge;
 import com.github.claudecodegui.skill.SlashCommandRegistry;
 import com.github.claudecodegui.util.JsUtils;
 import com.github.claudecodegui.util.PlatformUtils;
@@ -40,6 +41,8 @@ public class SessionLifecycleManager {
         ClaudeSDKBridge getClaudeSDKBridge();
 
         CodexSDKBridge getCodexSDKBridge();
+
+        OpenCodeSDKBridge getOpenCodeSDKBridge();
 
         ClaudeSession getSession();
 
@@ -243,7 +246,7 @@ public class SessionLifecycleManager {
             }
 
             ClaudeSession newSession = new ClaudeSession(
-                    host.getProject(), host.getClaudeSDKBridge(), host.getCodexSDKBridge());
+                    host.getProject(), host.getClaudeSDKBridge(), host.getCodexSDKBridge(), host.getOpenCodeSDKBridge());
             newSession.setPermissionMode(previousPermissionMode);
             newSession.setProvider(provider != null && !provider.trim().isEmpty() ? provider : previousProvider);
             newSession.setModel(previousModel);
@@ -258,8 +261,7 @@ public class SessionLifecycleManager {
                                     ? projectPath : determineWorkingDirectory();
             newSession.setSessionInfo(sessionId, workingDir);
 
-            // Prewarm daemon runtime for the historical session so /context and first message are fast
-            host.getClaudeSDKBridge().prewarmDaemonAsync(workingDir, newSession.getRuntimeSessionEpoch(), sessionId);
+            prewarmClaudeIfNeeded(newSession, workingDir, sessionId);
 
             newSession.loadFromServer().thenRun(() -> ApplicationManager.getApplication().invokeLater(() -> {
                 host.callJavaScript("historyLoadComplete");
@@ -433,7 +435,12 @@ public class SessionLifecycleManager {
     }
 
     private ClaudeSession createDefaultSession() {
-        return new ClaudeSession(host.getProject(), host.getClaudeSDKBridge(), host.getCodexSDKBridge());
+        return new ClaudeSession(
+                host.getProject(),
+                host.getClaudeSDKBridge(),
+                host.getCodexSDKBridge(),
+                host.getOpenCodeSDKBridge()
+        );
     }
 
     private void completeNewSessionBootstrap(ClaudeSession newSession, String workingDirectory, String successLogPrefix) {
@@ -445,7 +452,7 @@ public class SessionLifecycleManager {
 
         newSession.setSessionInfo(null, workingDirectory);
         LOG.info(successLogPrefix + workingDirectory + ", epoch=" + newSession.getRuntimeSessionEpoch());
-        host.getClaudeSDKBridge().prewarmDaemonAsync(workingDirectory, newSession.getRuntimeSessionEpoch());
+        prewarmClaudeIfNeeded(newSession, workingDirectory, null);
         fetchSlashCommandsOnStartup();
 
         ApplicationManager.getApplication().invokeLater(() -> {
@@ -457,5 +464,16 @@ public class SessionLifecycleManager {
                     JsUtils.escapeJs(ClaudeCodeGuiBundle.message("toast.newSessionCreatedReady")));
             resetTokenUsage();
         });
+    }
+
+    private void prewarmClaudeIfNeeded(ClaudeSession session, String workingDirectory, String sessionId) {
+        if (session == null || !"claude".equals(session.getProvider())) {
+            return;
+        }
+        if (sessionId != null && !sessionId.trim().isEmpty()) {
+            host.getClaudeSDKBridge().prewarmDaemonAsync(workingDirectory, session.getRuntimeSessionEpoch(), sessionId);
+        } else {
+            host.getClaudeSDKBridge().prewarmDaemonAsync(workingDirectory, session.getRuntimeSessionEpoch());
+        }
     }
 }

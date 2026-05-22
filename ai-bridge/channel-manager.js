@@ -10,6 +10,7 @@
  * Provider:
  *   claude - Claude Agent SDK (@anthropic-ai/claude-agent-sdk)
  *   codex  - Codex SDK (@openai/codex-sdk)
+ *   opencode - opencode SDK (@opencode-ai/sdk)
  *
  * Commands:
  *   send                - Send a message (parameters passed via stdin as JSON)
@@ -26,7 +27,13 @@
 import { readStdinData } from './utils/stdin-utils.js';
 import { handleClaudeCommand } from './channels/claude-channel.js';
 import { handleCodexCommand } from './channels/codex-channel.js';
-import { getSdkStatus, isClaudeSdkAvailable, isCodexSdkAvailable } from './utils/sdk-loader.js';
+import { handleOpenCodeCommand } from './channels/opencode-channel.js';
+import {
+  getSdkStatus,
+  isClaudeSdkAvailable,
+  isCodexSdkAvailable,
+  isOpenCodeSdkAvailable
+} from './utils/sdk-loader.js';
 import { injectNetworkEnvVars, configureCliIdentity } from './config/api-config.js';
 
 // Sync proxy/TLS settings from ~/.claude/settings.json BEFORE any network
@@ -104,6 +111,14 @@ async function handleSystemCommand(command, args, stdinData) {
       }));
       break;
 
+    case 'checkOpenCodeSdk':
+      // Check if opencode SDK is available
+      console.log(JSON.stringify({
+        success: true,
+        available: isOpenCodeSdkAvailable()
+      }));
+      break;
+
     default:
       console.log(JSON.stringify({
         success: false,
@@ -116,6 +131,7 @@ async function handleSystemCommand(command, args, stdinData) {
 const providerHandlers = {
   claude: handleClaudeCommand,
   codex: handleCodexCommand,
+  opencode: handleOpenCodeCommand,
   system: handleSystemCommand
 };
 
@@ -126,7 +142,7 @@ const providerHandlers = {
     // Validate provider
     console.log('[DIAG-EXEC] Validating provider...');
     if (!provider || !providerHandlers[provider]) {
-      console.error('Invalid provider. Use "claude", "codex", or "system"');
+      console.error('Invalid provider. Use "claude", "codex", "opencode", or "system"');
       console.log(JSON.stringify({
         success: false,
         error: 'Invalid provider: ' + provider

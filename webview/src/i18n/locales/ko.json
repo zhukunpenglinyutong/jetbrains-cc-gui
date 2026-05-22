@@ -297,6 +297,8 @@
       "claudeSdkDescription": "Claude AI 기능에 필요합니다. Claude Code SDK 및 관련 의존성을 포함합니다.",
       "codexSdkName": "Codex SDK",
       "codexSdkDescription": "Codex AI 기능에 필요합니다. OpenAI Codex SDK를 포함합니다.",
+      "opencodeSdkName": "opencode SDK",
+      "opencodeSdkDescription": "opencode AI 기능에 필요합니다. @opencode-ai/sdk를 포함합니다.",
       "loading": "의존성 상태 로딩 중...",
       "install": "설치",
       "installing": "설치 중...",

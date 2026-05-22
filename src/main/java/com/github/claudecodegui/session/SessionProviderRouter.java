@@ -2,6 +2,7 @@ package com.github.claudecodegui.session;
 
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.provider.opencode.OpenCodeSDKBridge;
 import com.google.gson.JsonObject;
 
 import java.util.List;
@@ -13,31 +14,74 @@ public class SessionProviderRouter {
 
     private final ClaudeSDKBridge claudeSDKBridge;
     private final CodexSDKBridge codexSDKBridge;
+    private final OpenCodeSDKBridge openCodeSDKBridge;
 
     public SessionProviderRouter(ClaudeSDKBridge claudeSDKBridge, CodexSDKBridge codexSDKBridge) {
+        this(claudeSDKBridge, codexSDKBridge, null);
+    }
+
+    public SessionProviderRouter(
+            ClaudeSDKBridge claudeSDKBridge,
+            CodexSDKBridge codexSDKBridge,
+            OpenCodeSDKBridge openCodeSDKBridge
+    ) {
         this.claudeSDKBridge = claudeSDKBridge;
         this.codexSDKBridge = codexSDKBridge;
+        this.openCodeSDKBridge = openCodeSDKBridge;
     }
 
     public JsonObject launchChannel(String provider, String channelId, String sessionId, String cwd) {
-        if ("codex".equals(provider)) {
-            return codexSDKBridge.launchChannel(channelId, sessionId, cwd);
+        switch (normalizeProvider(provider)) {
+            case "claude":
+                return claudeSDKBridge.launchChannel(channelId, sessionId, cwd);
+            case "codex":
+                return codexSDKBridge.launchChannel(channelId, sessionId, cwd);
+            case "opencode":
+                requireOpenCodeBridge();
+                return openCodeSDKBridge.launchChannel(channelId, sessionId, cwd);
+            default:
+                throw new IllegalArgumentException("Unsupported provider: " + provider);
         }
-        return claudeSDKBridge.launchChannel(channelId, sessionId, cwd);
     }
 
     public void interruptChannel(String provider, String channelId) {
-        if ("codex".equals(provider)) {
-            codexSDKBridge.interruptChannel(channelId);
-            return;
+        switch (normalizeProvider(provider)) {
+            case "claude":
+                claudeSDKBridge.interruptChannel(channelId);
+                return;
+            case "codex":
+                codexSDKBridge.interruptChannel(channelId);
+                return;
+            case "opencode":
+                requireOpenCodeBridge();
+                openCodeSDKBridge.interruptChannel(channelId);
+                return;
+            default:
+                throw new IllegalArgumentException("Unsupported provider: " + provider);
         }
-        claudeSDKBridge.interruptChannel(channelId);
     }
 
     public List<JsonObject> getSessionMessages(String provider, String sessionId, String cwd) {
-        if ("codex".equals(provider)) {
-            return codexSDKBridge.getSessionMessages(sessionId, cwd);
+        switch (normalizeProvider(provider)) {
+            case "claude":
+                return claudeSDKBridge.getSessionMessages(sessionId, cwd);
+            case "codex":
+                return codexSDKBridge.getSessionMessages(sessionId, cwd);
+            case "opencode":
+                requireOpenCodeBridge();
+                return openCodeSDKBridge.getSessionMessages(sessionId, cwd);
+            default:
+                throw new IllegalArgumentException("Unsupported provider: " + provider);
         }
-        return claudeSDKBridge.getSessionMessages(sessionId, cwd);
+    }
+
+    private String normalizeProvider(String provider) {
+        return provider == null || provider.trim().isEmpty() ? "claude" : provider.trim().toLowerCase();
+    }
+
+    private void requireOpenCodeBridge() {
+        if (openCodeSDKBridge == null) {
+            throw new IllegalStateException("opencode bridge is not configured");
+        }
     }
 }

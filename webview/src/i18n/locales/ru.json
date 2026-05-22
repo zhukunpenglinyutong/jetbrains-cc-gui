@@ -275,6 +275,8 @@
       "claudeSdkDescription": "Необходим для функций Claude AI. Включает Claude Code SDK и связанные зависимости.",
       "codexSdkName": "Codex SDK",
       "codexSdkDescription": "Необходим для функций Codex AI. Включает OpenAI Codex SDK.",
+      "opencodeSdkName": "opencode SDK",
+      "opencodeSdkDescription": "Необходим для функций opencode AI. Включает @opencode-ai/sdk.",
       "loading": "Загрузка статуса зависимостей...",
       "install": "Установить",
       "installing": "Установка...",
