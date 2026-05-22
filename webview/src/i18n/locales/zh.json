@@ -160,6 +160,15 @@
         "placeholder": "例如 project1 或留空使用项目根目录",
         "hint": "指定 Claude 工作的目录。可以使用相对路径（相对于项目根目录）或绝对路径。留空则使用项目根目录。"
       },
+      "invocationMode": {
+        "label": "调用模式",
+        "sdk": "SDK 模式",
+        "sdkDesc": "通过内置桥接与常驻运行时调用，状态反馈更完整，兼容性更好。",
+        "cli": "CLI 模式",
+        "cliDesc": "直接调用本地 CLI，可复用本机环境与登录态，但能力和输出受 CLI 本身限制。",
+        "cliPathPlaceholder": "可选：指定 Claude CLI 可执行文件路径，留空则自动检测",
+        "hint": "切换后新请求将按所选模式发起。CLI 模式下部分能力可能与 SDK 模式存在差异。"
+      },
       "fontSize": {
         "label": "字体大小",
         "level1": "小（80%）",

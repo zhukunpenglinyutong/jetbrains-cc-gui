@@ -404,7 +404,11 @@ public class ChatWindowDelegate {
 
     @Deprecated
     public void updateTabLoadingState(boolean loading) {
-        updateTabStatus(loading ? TabAnswerStatus.PROCESSING : TabAnswerStatus.IDLE);
+        if (loading) {
+            updateTabStatus(TabAnswerStatus.PROCESSING);
+        } else if (currentTabStatus != TabAnswerStatus.COMPLETED) {
+            updateTabStatus(TabAnswerStatus.IDLE);
+        }
     }
 
     private static Icon createStatusDotIcon(Color color) {
