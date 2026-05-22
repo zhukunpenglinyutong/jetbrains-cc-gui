@@ -100,7 +100,8 @@ public class ClaudeCliBridge {
             List<File> tempFiles = new ArrayList<>();
             boolean suppressThinking = Boolean.TRUE.equals(disableThinking);
 
-            LOG.info("[CliBridge][DIAG] sendMessage entry, attachments="
+            // PR #1191 review M1: keep entry log at info but never include prompt body / attachment data.
+            LOG.info("[CliBridge] sendMessage entry, attachments="
                     + (attachments == null ? "NULL" : attachments.size())
                     + ", message length=" + (message != null ? message.length() : 0)
                     + ", runtimeSessionEpoch=" + (runtimeSessionEpoch != null ? runtimeSessionEpoch : "(none)"));
@@ -119,7 +120,7 @@ public class ClaudeCliBridge {
 
                 String fullPrompt = enrichPromptWithContext(message, openedFiles, agentPrompt);
                 if (attachments != null && !attachments.isEmpty()) {
-                    LOG.info("[CliBridge][DIAG] Processing " + attachments.size() + " attachments");
+                    LOG.debug("[CliBridge] Processing " + attachments.size() + " attachments");
                     List<ClaudeCliAttachmentPrompt.ResolvedAttachment> resolvedAttachments = new ArrayList<>();
                     for (int i = 0; i < attachments.size(); i++) {
                         ClaudeSession.Attachment attachment = attachments.get(i);
@@ -127,14 +128,14 @@ public class ClaudeCliBridge {
                             continue;
                         }
 
-                        LOG.info("[CliBridge][DIAG] Attachment[" + i + "]: fileName=" + attachment.fileName
+                        LOG.debug("[CliBridge] Attachment[" + i + "]: fileName=" + attachment.fileName
                                 + ", mediaType=" + attachment.mediaType
                                 + ", localPath=" + attachment.localPath
                                 + ", data=" + (attachment.data != null ? attachment.data.length() + "chars" : "null")
                                 + ", isImage=" + isImageAttachment(attachment));
 
                         File tempFile = writeAttachmentToTempFile(attachment, channelId);
-                        LOG.info("[CliBridge][DIAG] writeAttachmentToTempFile returned: "
+                        LOG.debug("[CliBridge] writeAttachmentToTempFile returned: "
                                 + (tempFile != null ? tempFile.getAbsolutePath() : "NULL"));
                         if (tempFile == null) {
                             continue;
@@ -155,14 +156,15 @@ public class ClaudeCliBridge {
                             ClaudeCliAttachmentPrompt.render(fullPrompt, resolvedAttachments);
                     fullPrompt = rendered.prompt();
                     List<String> addDirs = rendered.addDirs();
-                    List<String> command = buildCliCommand(cliPath, fullPrompt, sessionId, model, reasoningEffort, addDirs);
-                    LOG.info("[CliBridge][DIAG] fullPrompt length=" + fullPrompt.length() + ", addDirs=" + addDirs);
-                    LOG.info("[CliBridge][DIAG] fullPrompt content: "
+                    List<String> command = buildCliCommand(cliPath, fullPrompt, sessionId, model,
+                            reasoningEffort, permissionMode, addDirs);
+                    LOG.debug("[CliBridge] fullPrompt length=" + fullPrompt.length() + ", addDirs=" + addDirs);
+                    LOG.debug("[CliBridge] fullPrompt content: "
                             + (fullPrompt.length() > 500 ? fullPrompt.substring(0, 500) + "..." : fullPrompt));
                     if (suppressThinking) {
                         LOG.info("[CliBridge] disableThinking requested; Claude CLI has no native no-thinking flag, suppressing thinking events in parser");
                     }
-                    LOG.info("[CliBridge] Command: " + String.join(" ", command));
+                    LOG.debug("[CliBridge] Command: " + String.join(" ", command));
 
                     process = startProcess(
                             command,
@@ -172,14 +174,15 @@ public class ClaudeCliBridge {
                             channelId
                     );
                 } else {
-                    List<String> command = buildCliCommand(cliPath, fullPrompt, sessionId, model, reasoningEffort, List.of());
-                    LOG.info("[CliBridge][DIAG] fullPrompt length=" + fullPrompt.length() + ", addDirs=[]");
-                    LOG.info("[CliBridge][DIAG] fullPrompt content: "
+                    List<String> command = buildCliCommand(cliPath, fullPrompt, sessionId, model,
+                            reasoningEffort, permissionMode, List.of());
+                    LOG.debug("[CliBridge] fullPrompt length=" + fullPrompt.length() + ", addDirs=[]");
+                    LOG.debug("[CliBridge] fullPrompt content: "
                             + (fullPrompt.length() > 500 ? fullPrompt.substring(0, 500) + "..." : fullPrompt));
                     if (suppressThinking) {
                         LOG.info("[CliBridge] disableThinking requested; Claude CLI has no native no-thinking flag, suppressing thinking events in parser");
                     }
-                    LOG.info("[CliBridge] Command: " + String.join(" ", command));
+                    LOG.debug("[CliBridge] Command: " + String.join(" ", command));
 
                     process = startProcess(
                             command,
@@ -282,6 +285,32 @@ public class ClaudeCliBridge {
         });
     }
 
+    /**
+     * Applies the user-selected permission mode to the CLI command.
+     * Safety contract:
+     *   - "bypassPermissions"            -> --dangerously-skip-permissions (explicit opt-in only)
+     *   - "default"/"acceptEdits"/"plan" -> --permission-mode &lt;mode&gt;
+     *   - null / blank / unknown         -> defaults to "acceptEdits" (auto-accept file edits,
+     *                                       still prompts for shell commands), NEVER full bypass.
+     * This avoids silently running every CLI request with full bypass when callers forget to
+     * thread a permissionMode through (see PR #1191 review C1).
+     */
+    public static void applyPermissionMode(List<String> command, String permissionMode) {
+        if ("bypassPermissions".equals(permissionMode)) {
+            command.add("--dangerously-skip-permissions");
+            return;
+        }
+        String mode = permissionMode;
+        if (mode == null || mode.isBlank()) {
+            mode = "acceptEdits";
+        } else if (!"default".equals(mode) && !"acceptEdits".equals(mode) && !"plan".equals(mode)) {
+            // Unknown value -> fall back to safe default rather than echoing it raw to the CLI.
+            mode = "acceptEdits";
+        }
+        command.add("--permission-mode");
+        command.add(mode);
+    }
+
     static void appendCliDiagnosticLine(StringBuilder diagnostic, String line) {
         if (diagnostic == null || line == null || line.isBlank()) {
             return;
@@ -321,6 +350,7 @@ public class ClaudeCliBridge {
             String sessionId,
             String model,
             String reasoningEffort,
+            String permissionMode,
             List<String> addDirs
     ) {
         List<String> command = new ArrayList<>();
@@ -330,7 +360,7 @@ public class ClaudeCliBridge {
         command.add("stream-json");
         command.add("--verbose");
         command.add("--include-partial-messages");
-        command.add("--dangerously-skip-permissions");
+        applyPermissionMode(command, permissionMode);
 
         String cliModel = resolveCliModel(model);
         if (cliModel != null && !cliModel.isEmpty()) {

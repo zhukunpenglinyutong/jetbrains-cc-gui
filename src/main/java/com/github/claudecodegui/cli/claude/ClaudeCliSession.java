@@ -6,6 +6,7 @@ import com.github.claudecodegui.cli.CliSessionCallback;
 import com.github.claudecodegui.cli.common.CliAttachmentHandler;
 import com.github.claudecodegui.cli.common.CliMcpConfig;
 import com.github.claudecodegui.cli.common.CliProcessHandle;
+import com.github.claudecodegui.provider.claude.ClaudeCliBridge;
 import com.github.claudecodegui.provider.claude.ClaudeCliDetector;
 import com.github.claudecodegui.provider.claude.ClaudeCliStreamParser;
 import com.github.claudecodegui.provider.common.MessageCallback;
@@ -240,15 +241,7 @@ public class ClaudeCliSession {
         cmd.add("--verbose");
         cmd.add("--include-partial-messages");
 
-        String permMode = request.permissionMode();
-        if ("bypassPermissions".equals(permMode)) {
-            cmd.add("--dangerously-skip-permissions");
-        } else if (permMode != null && !permMode.isBlank()) {
-            cmd.add("--permission-mode");
-            cmd.add(permMode);
-        } else {
-            cmd.add("--dangerously-skip-permissions");
-        }
+        ClaudeCliBridge.applyPermissionMode(cmd, request.permissionMode());
 
         String model = ClaudeCliModelResolver.resolve(request.model());
         if (model != null && !model.isBlank()) {

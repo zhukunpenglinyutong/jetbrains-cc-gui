@@ -8,9 +8,10 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Locale;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.util.Map;
 
 /**
  * Registers persisted attachment files behind opaque JCEF-served URLs.
@@ -20,7 +21,22 @@ public final class AttachmentResourceService {
     public static final String ATTACHMENT_RESOURCE_ORIGIN = "https://cc-gui-attachment.local";
 
     private static final String ATTACHMENT_RESOURCE_HOST = "cc-gui-attachment.local";
-    private static final ConcurrentMap<String, AttachmentResource> ATTACHMENT_RESOURCES = new ConcurrentHashMap<>();
+
+    /**
+     * Bounded LRU registry of attachment resources. Capped so that a long-running
+     * session that registers many attachments cannot grow this map without bound
+     * (PR #1191 review H3). Older entries are evicted when capacity is exceeded;
+     * the underlying files keep existing on disk and can be re-registered if
+     * referenced again.
+     */
+    private static final int MAX_REGISTERED_RESOURCES = 1024;
+    private static final Map<String, AttachmentResource> ATTACHMENT_RESOURCES =
+            Collections.synchronizedMap(new LinkedHashMap<String, AttachmentResource>(64, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, AttachmentResource> eldest) {
+                    return size() > MAX_REGISTERED_RESOURCES;
+                }
+            });
 
     private AttachmentResourceService() {
     }

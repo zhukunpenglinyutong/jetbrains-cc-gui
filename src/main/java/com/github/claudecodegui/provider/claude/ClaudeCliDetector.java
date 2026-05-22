@@ -288,16 +288,62 @@ public class ClaudeCliDetector {
         return null;
     }
 
+    /**
+     * Sets the user-configured CLI path. Validates basic safety:
+     * - must be absolute
+     * - must point to a regular existing file (not a directory)
+     * - on Unix must be executable
+     * - file name must match the expected Claude CLI binary name
+     * Invalid paths are rejected (cache stays unchanged + warning logged).
+     * Pass null/blank to clear the cached path and force re-detection.
+     * (PR #1191 review H2.)
+     */
     public void setCliPath(String path) {
         synchronized (this) {
-            this.cachedCliPath = path;
-            this.detectionAttempted = path != null;
-            if (path != null && !path.isBlank()) {
-                this.cachedCliVersion = verifyCliPath(path);
-            } else {
+            if (path == null || path.isBlank()) {
+                this.cachedCliPath = null;
+                this.detectionAttempted = false;
                 this.cachedCliVersion = null;
+                return;
             }
+            String trimmed = path.trim();
+            if (!isValidCliPath(trimmed)) {
+                LOG.warn("[ClaudeCliDetector] Rejected unsafe Claude CLI path: " + trimmed);
+                return;
+            }
+            this.cachedCliPath = trimmed;
+            this.detectionAttempted = true;
+            this.cachedCliVersion = verifyCliPath(trimmed);
         }
+    }
+
+    /**
+     * Lightweight whitelist check for user-supplied CLI paths. Designed to stop the
+     * settings UI from accidentally pointing the detector at an arbitrary binary
+     * (e.g. /bin/sh) and then having verifyCliPath() execute it.
+     */
+    static boolean isValidCliPath(String path) {
+        if (path == null || path.isBlank()) {
+            return false;
+        }
+        File file = new File(path);
+        if (!file.isAbsolute() || !file.isFile()) {
+            return false;
+        }
+        if (!PlatformUtils.isWindows() && !file.canExecute()) {
+            return false;
+        }
+        String name = file.getName().toLowerCase(java.util.Locale.ROOT);
+        // Accept "claude", "claude.cmd", "claude.exe", or "claude*.sh" style; reject everything else.
+        return name.equals("claude")
+                || name.equals("claude.cmd")
+                || name.equals("claude.exe")
+                || name.equals("claude.bat")
+                || (name.startsWith("claude") && (name.endsWith(".cmd")
+                        || name.endsWith(".exe")
+                        || name.endsWith(".bat")
+                        || name.endsWith(".sh")
+                        || !name.contains(".")));
     }
 
     public String getCachedVersion() {

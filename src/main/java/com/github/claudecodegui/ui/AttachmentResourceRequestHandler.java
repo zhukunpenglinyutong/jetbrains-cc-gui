@@ -70,6 +70,9 @@ final class AttachmentResourceRequestHandler extends CefRequestHandlerAdapter {
                 return true;
             } catch (IOException e) {
                 LOG.warn("[AttachmentResource] Failed to open attachment resource: " + resource.path(), e);
+                // PR #1191 review H4: defensively close any partially-opened stream so we
+                // never leak a file handle when processRequest returns false.
+                closeStream();
                 return false;
             }
         }
