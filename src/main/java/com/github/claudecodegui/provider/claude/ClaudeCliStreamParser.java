@@ -133,9 +133,7 @@ public class ClaudeCliStreamParser {
                     JsonObject block = event.getAsJsonObject("content_block");
                     String blockType = block.has("type") ? block.get("type").getAsString() : "";
                     if ("thinking".equals(blockType)) {
-                        if (!suppressThinking) {
-                            callback.onMessage("thinking", "");
-                        }
+                        callback.onMessage("thinking", "");
                         thinkingActive = true;
                     }
                 }
@@ -155,7 +153,7 @@ public class ClaudeCliStreamParser {
                             break;
                         case "thinking_delta":
                             String thinking = delta.has("thinking") ? delta.get("thinking").getAsString() : "";
-                            if (!thinking.isEmpty() && !suppressThinking) {
+                            if (!thinking.isEmpty()) {
                                 callback.onMessage("thinking_delta", thinking);
                             }
                             break;
