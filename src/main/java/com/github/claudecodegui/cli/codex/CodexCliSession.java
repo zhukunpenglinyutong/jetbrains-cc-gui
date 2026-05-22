@@ -2,6 +2,7 @@ package com.github.claudecodegui.cli.codex;
 
 import com.github.claudecodegui.cli.CliSendRequest;
 import com.github.claudecodegui.cli.CliSessionCallback;
+import com.github.claudecodegui.cli.CliSessionExecutor;
 import com.github.claudecodegui.cli.common.CliAttachmentHandler;
 import com.github.claudecodegui.cli.common.CliErrorFormatter;
 import com.github.claudecodegui.cli.common.CliMcpConfig;
@@ -60,6 +61,13 @@ public class CodexCliSession {
             + "|the filename, directory name, or volume label syntax is incorrect"
             + "|unexpected token|missing .+|parsererror|exception).*$"
     );
+    // 非 JSON 的 CLI 错误/诊断行（HTTP 错误、网络错误、重试等）
+    private static final Pattern CLI_ERROR_KEYWORD_PATTERN = Pattern.compile(
+            "(?i)\\b(?:error|failed|failure|exception|timeout|timed.out|retry|exceeded"
+            + "|refused|denied|unauthorized|forbidden|not.found|too.many.requests"
+            + "|rate.limit|quota|abort|fatal|panic|unexpected.status"
+            + "|[45]\\d{2}\\b)\\b"
+    );
 
     private final String tabId;
     private final Gson gson = new Gson();
@@ -82,7 +90,7 @@ public class CodexCliSession {
     }
 
     public CompletableFuture<Void> send(CliSendRequest request, CliSessionCallback callback) {
-        return CompletableFuture.runAsync(() -> {
+        return CliSessionExecutor.runAsync(() -> {
             List<File> tempFiles = new ArrayList<>();
             StringBuilder diagnostic = new StringBuilder();
             StringBuilder cliError = new StringBuilder();
@@ -140,7 +148,7 @@ public class CodexCliSession {
                         callback.onComplete(true, assistantContent.toString(), null);
                     }
                 } else {
-                    String err = buildExitError(exitCode, diagnostic);
+                    String err = buildExitError(exitCode, diagnostic, cliError);
                     callback.onError(err);
                     callback.onComplete(false, assistantContent.toString(), err);
                 }
@@ -753,10 +761,19 @@ public class CodexCliSession {
         if (trimmed.isEmpty()) {
             return false;
         }
+        // 纯噪声行（只有 CLI 装饰字符）
+        if (CliErrorFormatter.isCliNoiseLine(trimmed)) {
+            return true;
+        }
         if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
             return false;
         }
         if ("Reading additional input from stdin...".equals(trimmed)) {
+            return true;
+        }
+        // 去掉 CLI 前缀后检查错误关键词
+        String cleaned = CliErrorFormatter.stripCliPrefix(trimmed);
+        if (!cleaned.isEmpty() && CLI_ERROR_KEYWORD_PATTERN.matcher(cleaned).find()) {
             return true;
         }
         if (POWERSHELL_PROFILE_ERROR_PATTERN.matcher(trimmed).find()) {
@@ -779,8 +796,11 @@ public class CodexCliSession {
         return DIAGNOSTIC_GENERIC_PATTERN.matcher(trimmed).matches();
     }
 
-    private static String buildExitError(int exitCode, StringBuilder diagnostic) {
-        return CliErrorFormatter.formatExitError("Codex", exitCode, diagnostic);
+    private static String buildExitError(int exitCode, StringBuilder diagnostic, StringBuilder cliError) {
+        // cliError 仅包含错误/诊断相关行，优先使用
+        CharSequence effectiveDiagnostic = (cliError != null && !cliError.isEmpty())
+                ? cliError : diagnostic;
+        return CliErrorFormatter.formatExitError("Codex", exitCode, effectiveDiagnostic);
     }
 
     private static void cleanupTempFiles(List<File> files) {

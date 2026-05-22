@@ -13,6 +13,8 @@ public final class CliErrorFormatter {
     private static final Pattern STATUS_PATTERN = Pattern.compile("(?i)\\b(?:unexpected status\\s+)?([45]\\d{2})\\b");
     private static final Pattern URL_PATTERN = Pattern.compile("(?i)\\burl:\\s*(\\S+)");
     private static final Pattern REQUEST_ID_PATTERN = Pattern.compile("(?i)\\brequest id:\\s*([\\w.-]+)");
+    // CLI 进度指示器/装饰性前缀字符（◇ ◆ ● ○ ✔ ✖ ℹ ⚠ → 等）
+    private static final Pattern CLI_NOISE_PREFIX = Pattern.compile("^[◇◆●○✔✖ℹ⚠✗✓→⏳⏺▸▹◉⬥⬦\\s]+");
 
     private CliErrorFormatter() {
     }
@@ -48,10 +50,14 @@ public final class CliErrorFormatter {
         if (diagnostic == null || line == null || line.isBlank()) {
             return;
         }
+        String stripped = stripCliPrefix(line.trim());
+        if (stripped.isEmpty()) {
+            return;
+        }
         if (diagnostic.length() > 0) {
             diagnostic.append('\n');
         }
-        diagnostic.append(line.trim());
+        diagnostic.append(stripped);
         int overflow = diagnostic.length() - Math.max(1, maxChars);
         if (overflow > 0) {
             diagnostic.delete(0, overflow);
@@ -146,9 +152,9 @@ public final class CliErrorFormatter {
         String[] lines = raw.split("\\R");
         Set<String> unique = new LinkedHashSet<>();
         for (String line : lines) {
-            String trimmed = line == null ? "" : line.trim();
-            if (!trimmed.isEmpty()) {
-                unique.add(trimmed);
+            String stripped = line == null ? "" : stripCliPrefix(line.trim());
+            if (!stripped.isEmpty()) {
+                unique.add(stripped);
             }
         }
         return String.join("\n", unique);
@@ -158,6 +164,23 @@ public final class CliErrorFormatter {
         int idx = details.indexOf('\n');
         String line = idx >= 0 ? details.substring(0, idx) : details;
         return line.length() > 160 ? line.substring(0, 160) + "..." : line;
+    }
+
+    public static String stripCliPrefix(String line) {
+        if (line == null || line.isEmpty()) {
+            return line;
+        }
+        return CLI_NOISE_PREFIX.matcher(line).replaceFirst("");
+    }
+
+    /**
+     * 判断一行文本在去掉 CLI 装饰前缀后是否为空（纯噪声行）。
+     */
+    public static boolean isCliNoiseLine(String line) {
+        if (line == null || line.isBlank()) {
+            return true;
+        }
+        return stripCliPrefix(line.trim()).isEmpty();
     }
 
     private static String stripTrailingPunctuation(String value) {

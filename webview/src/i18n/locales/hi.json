@@ -34,6 +34,7 @@
     "emptyMessage": "खाली संदेश",
     "clickToPreview": "पूर्वावलोकन के लिए क्लिक करें",
     "userUploadedImage": "उपयोगकर्ता द्वारा अपलोड की गई छवि",
+    "imageLoadFailed": "छवि लोड करने में विफल",
     "inputPlaceholder": "@फाइल संदर्भ, #एजेंट बुलाएं, Enter भेजने के लिए",
     "inputPlaceholderEnter": "@फाइल संदर्भ, #एजेंट बुलाएं, Enter भेजने के लिए",
     "inputPlaceholderCmdEnter": "@फाइल संदर्भ, #एजेंट बुलाएं, ⌘Enter भेजने के लिए",

@@ -3,10 +3,11 @@ package com.github.claudecodegui.cli.claude;
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.cli.CliSendRequest;
 import com.github.claudecodegui.cli.CliSessionCallback;
+import com.github.claudecodegui.cli.CliSessionExecutor;
 import com.github.claudecodegui.cli.common.CliAttachmentHandler;
+import com.github.claudecodegui.cli.common.CliErrorFormatter;
 import com.github.claudecodegui.cli.common.CliMcpConfig;
 import com.github.claudecodegui.cli.common.CliProcessHandle;
-import com.github.claudecodegui.provider.claude.ClaudeCliBridge;
 import com.github.claudecodegui.provider.claude.ClaudeCliDetector;
 import com.github.claudecodegui.provider.claude.ClaudeCliStreamParser;
 import com.github.claudecodegui.provider.common.MessageCallback;
@@ -53,7 +54,7 @@ public class ClaudeCliSession {
     }
 
     public CompletableFuture<Void> send(CliSendRequest request, CliSessionCallback callback) {
-        return CompletableFuture.runAsync(() -> {
+        return CliSessionExecutor.runAsync(() -> {
             List<File> tempFiles = new ArrayList<>();
             StringBuilder diagnostic = new StringBuilder();
             try {
@@ -140,8 +141,6 @@ public class ClaudeCliSession {
 
     // ── output reading ───────────────────────────────────────────────────────
 
-    private static final int DIAGNOSTIC_MAX_CHARS = 4000;
-
     private void readOutput(CliSessionCallback callback, StringBuilder diagnostic) throws Exception {
         ClaudeCliStreamParser parser = new ClaudeCliStreamParser(gson);
         parser.resetState();
@@ -177,7 +176,7 @@ public class ClaudeCliSession {
                 if (line.isBlank()) {
                     continue;
                 }
-                appendDiagnostic(diagnostic, line);
+                CliErrorFormatter.appendDiagnosticLine(diagnostic, line);
                 parser.parseLine(line, mcb, result, assistantContent, hadError, false);
 
                 // result 事件 = 本轮结束
@@ -205,27 +204,8 @@ public class ClaudeCliSession {
         }
     }
 
-    private static void appendDiagnostic(StringBuilder buf, String line) {
-        if (buf == null || line == null || line.isBlank()) {
-            return;
-        }
-        if (!buf.isEmpty()) {
-            buf.append('\n');
-        }
-        buf.append(line);
-        int overflow = buf.length() - DIAGNOSTIC_MAX_CHARS;
-        if (overflow > 0) {
-            buf.delete(0, overflow);
-        }
-    }
-
     private static String buildExitError(int exitCode, StringBuilder diagnostic) {
-        String base = "Claude CLI exited with code: " + exitCode;
-        if (diagnostic == null) {
-            return base;
-        }
-        String trimmed = diagnostic.toString().trim();
-        return trimmed.isEmpty() ? base : base + "\n\nDetails:\n" + trimmed;
+        return CliErrorFormatter.formatExitError("Claude", exitCode, diagnostic);
     }
 
     private boolean isResultLine(String line) {
@@ -248,7 +228,7 @@ public class ClaudeCliSession {
         cmd.add("--verbose");
         cmd.add("--include-partial-messages");
 
-        ClaudeCliBridge.applyPermissionMode(cmd, request.permissionMode());
+        ClaudeCliPermissionMode.apply(cmd, request.permissionMode());
 
         String model = ClaudeCliModelResolver.resolve(request.model());
         if (model != null && !model.isBlank()) {

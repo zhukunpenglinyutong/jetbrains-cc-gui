@@ -2,6 +2,7 @@ package com.github.claudecodegui.cli.common;
 
 import org.junit.Test;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -33,5 +34,51 @@ public class CliErrorFormatterTest {
         assertTrue(formatted.contains("网关或上游服务超时 (504)"));
         assertTrue(formatted.contains("Codex CLI exited with code: 1"));
         assertFalse(formatted.contains("Codex CLI exited with code: 1\nCodex CLI exited with code: 1"));
+    }
+
+    @Test
+    public void diamondPrefixStrippedFromErrorOutput() {
+        // CLI 输出中 ◇ 前缀应被剥离，不影响状态码检测
+        String raw = "◇ exceeded retry limit, last status: 429 Too Many Requests, "
+                + "request id: cde7e86f-f759-4b95-80b7-1578df4eab00";
+
+        String formatted = CliErrorFormatter.formatExitError("Codex", 1, raw);
+
+        assertTrue(formatted.contains("请求过于频繁 (429)"));
+        assertTrue(formatted.contains("cde7e86f-f759-4b95-80b7-1578df4eab00"));
+        assertFalse(formatted.contains("◇"));
+    }
+
+    @Test
+    public void pureNoiseLinesAreFilteredFromDiagnostic() {
+        // 纯 ◇ 噪声行应被过滤，不占环形缓冲区空间
+        StringBuilder diagnostic = new StringBuilder();
+        CliErrorFormatter.appendDiagnosticLine(diagnostic, "◇◇◇◇◇◇◇◇◇◇");
+        CliErrorFormatter.appendDiagnosticLine(diagnostic, "◇◇◇");
+        CliErrorFormatter.appendDiagnosticLine(diagnostic, "exceeded retry limit, last status: 429 Too Many Requests");
+
+        String formatted = CliErrorFormatter.formatExitError("Codex", 1, diagnostic);
+
+        assertTrue(formatted.contains("请求过于频繁 (429)"));
+        assertFalse(formatted.contains("◇"));
+    }
+
+    @Test
+    public void stripCliPrefixRemovesLeadingSymbols() {
+        assertEquals("error message", CliErrorFormatter.stripCliPrefix("◇ error message"));
+        assertEquals("error message", CliErrorFormatter.stripCliPrefix("  ◆  error message"));
+        assertEquals("error", CliErrorFormatter.stripCliPrefix("✔ error"));
+        assertEquals("", CliErrorFormatter.stripCliPrefix("◇◇◇"));
+        assertEquals("normal text", CliErrorFormatter.stripCliPrefix("normal text"));
+    }
+
+    @Test
+    public void isCliNoiseLineDetectsPureNoise() {
+        assertTrue(CliErrorFormatter.isCliNoiseLine("◇◇◇◇◇◇◇◇◇◇"));
+        assertTrue(CliErrorFormatter.isCliNoiseLine("  ◆◆◆  "));
+        assertTrue(CliErrorFormatter.isCliNoiseLine(null));
+        assertTrue(CliErrorFormatter.isCliNoiseLine(""));
+        assertFalse(CliErrorFormatter.isCliNoiseLine("◇ error text"));
+        assertFalse(CliErrorFormatter.isCliNoiseLine("normal output"));
     }
 }

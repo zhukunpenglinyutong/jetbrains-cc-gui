@@ -156,6 +156,28 @@ export function ContentBlockRenderer({
   }
 
   if (block.type === 'image' && block.src) {
+    const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+      const img = e.currentTarget;
+      if (img.dataset.fallback) return;
+      const src = block.src ?? '';
+      // resource_url 失败时尝试降级到原始 src
+      if (block.thumbnailSrc && img.src !== src && !src.startsWith('data:')) {
+        img.dataset.fallback = 'true';
+        img.src = src;
+        return;
+      }
+      img.dataset.fallback = 'failed';
+      img.alt = t('chat.imageLoadFailed');
+      img.style.display = 'none';
+      const placeholder = img.nextElementSibling;
+      if (placeholder && placeholder.classList.contains('image-load-failed')) return;
+      const span = document.createElement('span');
+      span.className = 'image-load-failed';
+      span.textContent = t('chat.imageLoadFailed');
+      span.style.cssText = 'color:var(--text-secondary);font-size:12px;padding:8px;';
+      img.parentElement?.appendChild(span);
+    };
+
     const handleImagePreview = () => {
       const previewRoot = document.getElementById('image-preview-root');
       const previewSrc = block.previewSrc || block.src;
@@ -201,6 +223,7 @@ export function ContentBlockRenderer({
           src={block.thumbnailSrc || block.src}
           alt={t('chat.userUploadedImage')}
           style={getImageStyle(messageType === 'user')}
+          onError={handleImageError}
         />
       </div>
     );

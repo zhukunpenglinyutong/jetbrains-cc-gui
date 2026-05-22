@@ -1,4 +1,4 @@
-package com.github.claudecodegui.provider.claude;
+package com.github.claudecodegui.cli.claude;
 
 import org.junit.Test;
 
@@ -10,56 +10,42 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Pins the safety contract of {@link ClaudeCliBridge#applyPermissionMode(List, String)}.
- *
- * <p>Regression guard for PR #1191 review item C1: prior to the fix, the CLI bridge
- * unconditionally added {@code --dangerously-skip-permissions} to every spawned
- * Claude CLI process, silently bypassing every permission gate. The new contract
- * is:
- *
- * <ul>
- *   <li>{@code "bypassPermissions"} is the ONLY value that yields
- *       {@code --dangerously-skip-permissions}.</li>
- *   <li>Any other recognized value ({@code default}, {@code acceptEdits},
- *       {@code plan}) is forwarded as {@code --permission-mode &lt;value&gt;}.</li>
- *   <li>{@code null}, blank, or unknown values fall back to a safe default
- *       ({@code acceptEdits}) — never to full bypass.</li>
- * </ul>
+ * Pins the safety contract of {@link ClaudeCliPermissionMode#apply(List, String)}.
  */
-public class ClaudeCliBridgePermissionModeTest {
+public class ClaudeCliPermissionModeTest {
 
     @Test
     public void bypassPermissionsIsOnlyValueThatSkipsAllChecks() {
         List<String> cmd = new ArrayList<>();
-        ClaudeCliBridge.applyPermissionMode(cmd, "bypassPermissions");
+        ClaudeCliPermissionMode.apply(cmd, "bypassPermissions");
         assertEquals(List.of("--dangerously-skip-permissions"), cmd);
     }
 
     @Test
     public void defaultModeIsForwardedAsPermissionModeFlag() {
         List<String> cmd = new ArrayList<>();
-        ClaudeCliBridge.applyPermissionMode(cmd, "default");
+        ClaudeCliPermissionMode.apply(cmd, "default");
         assertEquals(List.of("--permission-mode", "default"), cmd);
     }
 
     @Test
     public void acceptEditsModeIsForwardedAsPermissionModeFlag() {
         List<String> cmd = new ArrayList<>();
-        ClaudeCliBridge.applyPermissionMode(cmd, "acceptEdits");
+        ClaudeCliPermissionMode.apply(cmd, "acceptEdits");
         assertEquals(List.of("--permission-mode", "acceptEdits"), cmd);
     }
 
     @Test
     public void planModeIsForwardedAsPermissionModeFlag() {
         List<String> cmd = new ArrayList<>();
-        ClaudeCliBridge.applyPermissionMode(cmd, "plan");
+        ClaudeCliPermissionMode.apply(cmd, "plan");
         assertEquals(List.of("--permission-mode", "plan"), cmd);
     }
 
     @Test
     public void nullPermissionModeFallsBackToAcceptEditsNotBypass() {
         List<String> cmd = new ArrayList<>();
-        ClaudeCliBridge.applyPermissionMode(cmd, null);
+        ClaudeCliPermissionMode.apply(cmd, null);
         assertFalse("null must NEVER fall back to full bypass",
                 cmd.contains("--dangerously-skip-permissions"));
         assertEquals(List.of("--permission-mode", "acceptEdits"), cmd);
@@ -68,7 +54,7 @@ public class ClaudeCliBridgePermissionModeTest {
     @Test
     public void blankPermissionModeFallsBackToAcceptEditsNotBypass() {
         List<String> cmd = new ArrayList<>();
-        ClaudeCliBridge.applyPermissionMode(cmd, "   ");
+        ClaudeCliPermissionMode.apply(cmd, "   ");
         assertFalse(cmd.contains("--dangerously-skip-permissions"));
         assertEquals(List.of("--permission-mode", "acceptEdits"), cmd);
     }
@@ -76,7 +62,7 @@ public class ClaudeCliBridgePermissionModeTest {
     @Test
     public void unknownPermissionModeFallsBackToAcceptEditsNotEchoedRaw() {
         List<String> cmd = new ArrayList<>();
-        ClaudeCliBridge.applyPermissionMode(cmd, "letMeDoWhateverIWant");
+        ClaudeCliPermissionMode.apply(cmd, "letMeDoWhateverIWant");
         assertFalse("unknown value must NOT be echoed raw to the CLI",
                 cmd.contains("letMeDoWhateverIWant"));
         assertFalse(cmd.contains("--dangerously-skip-permissions"));
@@ -85,10 +71,8 @@ public class ClaudeCliBridgePermissionModeTest {
 
     @Test
     public void caseSensitiveBypassDoesNotMatchVariants() {
-        // Only exact "bypassPermissions" triggers the dangerous flag — defends against
-        // accidental case drift like "BypassPermissions" silently bypassing.
         List<String> cmd = new ArrayList<>();
-        ClaudeCliBridge.applyPermissionMode(cmd, "BypassPermissions");
+        ClaudeCliPermissionMode.apply(cmd, "BypassPermissions");
         assertFalse(cmd.contains("--dangerously-skip-permissions"));
         assertTrue(cmd.contains("--permission-mode"));
     }

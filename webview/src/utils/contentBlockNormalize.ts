@@ -346,7 +346,7 @@ export function normalizeBlocks(
         // 2. Frontend direct format: { type: 'image', src: 'data:...', mediaType: '...' }
         if (source && typeof source === 'object') {
           const st = source.type;
-          if (st === 'base64' && typeof source.data === 'string') {
+          if (st === 'base64' && typeof source.data === 'string' && source.data.length > 0) {
             const mt = typeof source.media_type === 'string' ? source.media_type : 'image/png';
             src = `data:${mt};base64,${source.data}`;
             mediaType = mt;

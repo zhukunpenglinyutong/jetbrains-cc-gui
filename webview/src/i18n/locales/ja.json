@@ -34,6 +34,7 @@
     "emptyMessage": "メッセージが空です",
     "clickToPreview": "クリックしてプレビュー",
     "userUploadedImage": "ユーザーがアップロードした画像",
+    "imageLoadFailed": "画像の読み込みに失敗しました",
     "inputPlaceholder": "@でファイルを参照、#でエージェントを呼び出し、Enterで送信",
     "inputPlaceholderEnter": "@でファイルを参照、#でエージェントを呼び出し、Enterで送信",
     "inputPlaceholderCmdEnter": "@でファイルを参照、#でエージェントを呼び出し、⌘Enterで送信",

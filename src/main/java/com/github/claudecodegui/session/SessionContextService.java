@@ -2,6 +2,7 @@ package com.github.claudecodegui.session;
 
 import com.github.claudecodegui.service.RunConfigMonitorService;
 import com.github.claudecodegui.terminal.TerminalMonitorService;
+import com.github.claudecodegui.util.AttachmentResourceService;
 import com.github.claudecodegui.util.AttachmentStorageService;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -385,11 +386,23 @@ public class SessionContextService {
         imageBlock.addProperty("type", "image");
 
         if (att.resourceUrl != null && !att.resourceUrl.isBlank()) {
-            String displayUrl = att.thumbnailUrl != null && !att.thumbnailUrl.isBlank()
-                    ? att.thumbnailUrl
-                    : att.resourceUrl;
+            // 验证 resourceUrl 仍在 LRU 缓存中，否则尝试重新注册 localPath
+            String resourceUrl = att.resourceUrl;
+            String thumbnailUrl = att.thumbnailUrl;
+            if (AttachmentResourceService.resolveAttachmentUrl(resourceUrl) == null
+                    && att.localPath != null && !att.localPath.isBlank()) {
+                JsonObject reRegistered = AttachmentStorageService.getInstance()
+                        .createImageBlockFromPath(att.localPath);
+                if (reRegistered != null) {
+                    return reRegistered;
+                }
+            }
+
+            String displayUrl = thumbnailUrl != null && !thumbnailUrl.isBlank()
+                    ? thumbnailUrl
+                    : resourceUrl;
             imageBlock.addProperty("src", displayUrl);
-            imageBlock.addProperty("previewSrc", att.resourceUrl);
+            imageBlock.addProperty("previewSrc", resourceUrl);
             imageBlock.addProperty("thumbnailSrc", displayUrl);
             imageBlock.addProperty("mediaType", att.mediaType);
             imageBlock.addProperty("sourceKind", "resource_url");

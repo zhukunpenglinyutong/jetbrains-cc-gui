@@ -1,18 +1,19 @@
-package com.github.claudecodegui.provider.claude;
+package com.github.claudecodegui.cli.claude;
 
+import com.github.claudecodegui.cli.common.CliErrorFormatter;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
 
-public class ClaudeCliBridgeDiagnosticsTest {
+public class ClaudeCliDiagnosticsTest {
 
     @Test
     public void includesCliOutputInNonZeroExitError() {
         StringBuilder diagnostic = new StringBuilder();
-        ClaudeCliBridge.appendCliDiagnosticLine(diagnostic, "Authentication failed");
-        ClaudeCliBridge.appendCliDiagnosticLine(diagnostic, "Run claude auth login");
+        CliErrorFormatter.appendDiagnosticLine(diagnostic, "Authentication failed");
+        CliErrorFormatter.appendDiagnosticLine(diagnostic, "Run claude auth login");
 
-        String error = ClaudeCliBridge.buildCliExitError(1, diagnostic);
+        String error = CliErrorFormatter.formatExitError("Claude", 1, diagnostic);
 
         assertTrue(error.contains("Claude CLI 请求失败"));
         assertTrue(error.contains("Claude CLI exited with code: 1"));

@@ -34,6 +34,7 @@
     "emptyMessage": "Пустое сообщение",
     "clickToPreview": "Нажмите для просмотра",
     "userUploadedImage": "Загружено изображение",
+    "imageLoadFailed": "Не удалось загрузить изображение",
     "inputPlaceholder": "@файлы, #агенты, Enter — отправить",
     "inputPlaceholderEnter": "@файлы, #агенты, Enter — отправить",
     "inputPlaceholderCmdEnter": "@файлы, #агенты, ⌘Enter — отправить",

@@ -34,6 +34,7 @@
     "emptyMessage": "Empty message",
     "clickToPreview": "Click to preview",
     "userUploadedImage": "User uploaded image",
+    "imageLoadFailed": "Failed to load image",
     "inputPlaceholder": "@reference files, #invoke agents, !insert prompts, Enter to send",
     "inputPlaceholderEnter": "@reference files, #invoke agents, !insert prompts, Enter to send",
     "inputPlaceholderCmdEnter": "@reference files, #invoke agents, !insert prompts, ⌘Enter to send",

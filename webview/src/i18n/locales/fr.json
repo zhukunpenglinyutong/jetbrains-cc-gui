@@ -34,6 +34,7 @@
     "emptyMessage": "Message vide",
     "clickToPreview": "Cliquer pour prévisualiser",
     "userUploadedImage": "Image téléchargée par l'utilisateur",
+    "imageLoadFailed": "Échec du chargement de l'image",
     "inputPlaceholder": "@référencer fichiers, #invoquer agents, Entrée pour envoyer",
     "inputPlaceholderEnter": "@référencer fichiers, #invoquer agents, Entrée pour envoyer",
     "inputPlaceholderCmdEnter": "@référencer fichiers, #invoquer agents, ⌘Entrée pour envoyer",

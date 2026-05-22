@@ -303,6 +303,7 @@ public class CodexCliSessionTest {
         Method method = CodexCliSession.class.getDeclaredMethod(
                 "buildExitError",
                 int.class,
+                StringBuilder.class,
                 StringBuilder.class
         );
         method.setAccessible(true);
@@ -312,7 +313,7 @@ public class CodexCliSessionTest {
                 .append("url: https://gongyiapi.mossx.ai/responses, ")
                 .append("request id: req-503");
 
-        String error = (String) method.invoke(null, 1, diagnostic);
+        String error = (String) method.invoke(null, 1, diagnostic, null);
 
         assertTrue(error.contains("Codex CLI 请求失败"));
         assertTrue(error.contains("服务暂时不可用 (503)"));

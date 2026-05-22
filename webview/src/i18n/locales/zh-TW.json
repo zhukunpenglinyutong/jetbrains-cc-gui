@@ -34,6 +34,7 @@
     "emptyMessage": "空訊息",
     "clickToPreview": "點選預覽大圖",
     "userUploadedImage": "使用者上傳的圖片",
+    "imageLoadFailed": "圖片載入失敗",
     "inputPlaceholder": "@引用檔案，#喚起智能體，Enter 發送",
     "inputPlaceholderEnter": "@引用檔案，#喚起智能體，Enter 發送",
     "inputPlaceholderCmdEnter": "@引用檔案，#喚起智能體，⌘Enter 發送",

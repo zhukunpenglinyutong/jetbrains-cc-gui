@@ -34,6 +34,7 @@
     "emptyMessage": "Mensagem vazia",
     "clickToPreview": "Clique para visualizar",
     "userUploadedImage": "Imagem enviada pelo usuário",
+    "imageLoadFailed": "Falha ao carregar imagem",
     "inputPlaceholder": "@referenciar arquivos, #invocar agentes, !inserir prompts, Enter para enviar",
     "inputPlaceholderEnter": "@referenciar arquivos, #invocar agentes, !inserir prompts, Enter para enviar",
     "inputPlaceholderCmdEnter": "@referenciar arquivos, #invocar agentes, !inserir prompts, ⌘Enter para enviar",

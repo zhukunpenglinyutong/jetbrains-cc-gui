@@ -44,7 +44,6 @@ public class CodexSDKBridge extends BaseSDKBridge {
     private String apiKey = null;
     private static final String SANDBOX_MODE_WORKSPACE_WRITE = "workspace-write";
     private static final String SANDBOX_MODE_DANGER_FULL_ACCESS = "danger-full-access";
-    private static final String SANDBOX_MODE_READ_ONLY = "read-only";
     private static final String APPROVAL_POLICY_NEVER = "never";
     private static final String APPROVAL_POLICY_ON_REQUEST = "on-request";
     private static final String APPROVAL_POLICY_UNTRUSTED = "untrusted";

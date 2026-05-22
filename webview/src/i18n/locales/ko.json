@@ -34,6 +34,7 @@
     "emptyMessage": "빈 메시지",
     "clickToPreview": "클릭하여 미리보기",
     "userUploadedImage": "사용자가 이미지를 업로드했습니다",
+    "imageLoadFailed": "이미지 로드 실패",
     "inputPlaceholder": "@파일 참조, #에이전트 호출, !프롬프트 삽입, Enter로 전송",
     "inputPlaceholderEnter": "@파일 참조, #에이전트 호출, !프롬프트 삽입, Enter로 전송",
     "inputPlaceholderCmdEnter": "@파일 참조, #에이전트 호출, !프롬프트 삽입, ⌘Enter로 전송",
