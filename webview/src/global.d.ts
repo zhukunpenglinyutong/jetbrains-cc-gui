@@ -48,9 +48,19 @@ interface Window {
   showThinkingStatus?: (value: string | boolean) => void;
 
   /**
-   * Update cached invocation mode for Claude sends.
+   * Update configured default invocation mode.
    */
   updateInvocationMode?: (json: string) => void;
+
+    /**
+     * Update cached session invocation mode for Claude sends.
+     */
+    updateSessionInvocationMode?: (json: string) => void;
+
+    /**
+     * Update session-scoped runtime state from the backend authority.
+     */
+    updateSessionRuntimeState?: (json: string) => void;
 
   /**
    * Show conversation summary/compaction notice
@@ -709,7 +719,7 @@ interface Window {
   /** Currently active streaming scope key: provider:tabId:turnId. */
   __activeStreamScopeKey?: string | null;
   /** Cached chat-side Claude invocation mode, populated by backend settings callback. */
-  __CLAUDE_INVOCATION_MODE__?: 'sdk' | 'cli';
+  __CLAUDE_INVOCATION_MODE__?: 'sdk' | 'cli' | 'unknown';
 
   /**
    * Rewind result callback - returns the result of a rewind operation
@@ -815,6 +825,11 @@ interface Window {
    * Pending auto open file enabled status before React initialization
    */
   __pendingAutoOpenFileEnabled?: string;
+
+    /**
+     * Pending session runtime state before callbacks are registered.
+     */
+    __pendingSessionRuntimeState?: string;
 
   /**
    * Pending permission dialog timeout before React initialization

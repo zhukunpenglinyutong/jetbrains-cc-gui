@@ -141,6 +141,41 @@ describe('useMessageSender - /context command', () => {
     );
   });
 
+    it('blocks normal Claude messages while invocation mode is unknown', () => {
+        window.__CLAUDE_INVOCATION_MODE__ = 'unknown';
+        const addToast = vi.fn();
+        const opts = createOptions({addToast});
+
+        const {result} = renderHook(() => useMessageSender(opts));
+
+        act(() => {
+            result.current.handleSubmit('hello');
+        });
+
+        expect(window.sendToJava).not.toHaveBeenCalled();
+        expect(addToast).toHaveBeenCalledWith(
+            expect.stringContaining('Invocation mode'),
+            'error',
+        );
+    });
+
+    it('does not include permissionMode in normal send payload', () => {
+        const opts = createOptions({
+            currentProvider: 'codex',
+            permissionMode: 'bypassPermissions',
+        });
+        const {result} = renderHook(() => useMessageSender(opts));
+
+        act(() => {
+            result.current.handleSubmit('hello');
+        });
+
+        const calls = (window.sendToJava as any).mock.calls.map(([payload]: [string]) => payload);
+        const sendMessageCall = calls.find((payload: string) => payload.startsWith('send_message:'));
+        const payload = JSON.parse(sendMessageCall!.substring('send_message:'.length));
+        expect(payload).not.toHaveProperty('permissionMode');
+    });
+
   it('closes dialog with error toast when bridge is unavailable', () => {
     // Don't set window.sendToJava → bridge unavailable
     delete (window as any).sendToJava;

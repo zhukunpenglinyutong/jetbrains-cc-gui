@@ -8,6 +8,7 @@ import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.diagnostic.Logger;
 
 import java.util.List;
 import java.util.Map;
@@ -19,6 +20,8 @@ import java.util.concurrent.CompletableFuture;
  * SDK mode routes to SdkSessionRuntime (ai-bridge daemon).
  */
 public class SessionRuntimeRouter {
+    private static final Logger LOG = Logger.getInstance(SessionRuntimeRouter.class);
+
     private final SdkSessionRuntime sdkRuntime;
     private final CliSessionManager cliManager;
 
@@ -45,6 +48,7 @@ public class SessionRuntimeRouter {
     ) {
         if ("cli".equals(invocationMode)) {
             String tabId = resolveTabId(channelId);
+            LOG.info("[CliConcurrencyDiag][RuntimeRouter] routing Claude to CLI" + ": tabId=" + tabId + ", channelId=" + channelId + ", sessionId=" + (sessionId != null ? sessionId : "(new)") + ", epoch=" + runtimeSessionEpoch + ", cwd=" + (cwd != null ? cwd : "(none)") + ", thread=" + Thread.currentThread().getName());
             return cliManager.send(new CliSendRequest(
                     tabId, "claude", message, sessionId, cwd,
                     attachments, openedFiles, List.of(),

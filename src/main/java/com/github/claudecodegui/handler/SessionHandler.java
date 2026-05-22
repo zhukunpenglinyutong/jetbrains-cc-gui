@@ -158,7 +158,8 @@ public class SessionHandler extends BaseMessageHandler {
                 }
             }
 
-            // Extract requested permission mode from payload (optional, backward compatible)
+            // Legacy compatibility only. Normal webview sends do not use permissionMode;
+            // SessionSendService resolves session mode before requested mode.
             if (payload != null && payload.has("permissionMode") && !payload.get("permissionMode").isJsonNull()) {
                 String mode = payload.get("permissionMode").getAsString();
                 if (SessionState.isValidPermissionMode(mode)) {
@@ -187,8 +188,11 @@ public class SessionHandler extends BaseMessageHandler {
         final java.util.List<String> finalFileTagPaths = fileTagPaths;
         final String finalRequestedPermissionMode = requestedPermissionMode;
         final String finalRequestedInvocationMode = requestedInvocationMode;
+        ClaudeSession currentSession = context.getSession();
+        LOG.info("[CliConcurrencyDiag][SessionHandler] accepted send_message" + ": provider=" + (currentSession != null ? currentSession.getProvider() : context.getCurrentProvider()) + ", requestedInvocationMode=" + (finalRequestedInvocationMode != null ? finalRequestedInvocationMode : "(none)") + ", sessionId=" + (currentSession != null ? currentSession.getSessionId() : "(none)") + ", channelId=" + (currentSession != null ? currentSession.getChannelId() : "(none)") + ", promptChars=" + finalPrompt.length() + ", thread=" + Thread.currentThread().getName());
 
         CompletableFuture.runAsync(() -> {
+            long dispatchStartNanos = System.nanoTime();
             String currentWorkingDir = determineWorkingDirectory();
             String previousCwd = context.getSession().getCwd();
 
@@ -204,6 +208,7 @@ public class SessionHandler extends BaseMessageHandler {
             }
 
             // [FIX] Pass agent prompt and file tags directly to session
+            LOG.info("[CliConcurrencyDiag][SessionHandler] invoking session.send" + ": provider=" + context.getSession().getProvider() + ", invocationMode=" + (finalRequestedInvocationMode != null ? finalRequestedInvocationMode : context.getSession().getClaudeInvocationMode()) + ", sessionId=" + context.getSession().getSessionId() + ", channelId=" + context.getSession().getChannelId() + ", elapsedMs=" + ((System.nanoTime() - dispatchStartNanos) / 1_000_000) + ", thread=" + Thread.currentThread().getName());
             context.getSession().send(finalPrompt, finalAgentPrompt, finalFileTagPaths,
                     finalRequestedPermissionMode, finalRequestedInvocationMode)
                 .thenRun(() -> {
@@ -300,6 +305,8 @@ public class SessionHandler extends BaseMessageHandler {
                 }
             }
 
+            // Legacy compatibility only. Normal webview sends do not use permissionMode;
+            // SessionSendService resolves session mode before requested mode.
             if (payload != null && payload.has("permissionMode") && !payload.get("permissionMode").isJsonNull()) {
                 String mode = payload.get("permissionMode").getAsString();
                 if (SessionState.isValidPermissionMode(mode)) {
@@ -359,8 +366,11 @@ public class SessionHandler extends BaseMessageHandler {
         final java.util.List<String> finalFileTagPaths = fileTagPaths;
         final String finalRequestedPermissionMode = requestedPermissionMode;
         final String finalRequestedInvocationMode = requestedInvocationMode;
+        ClaudeSession currentSession = context.getSession();
+        LOG.info("[CliConcurrencyDiag][SessionHandler] accepted send_message_with_attachments" + ": provider=" + (currentSession != null ? currentSession.getProvider() : context.getCurrentProvider()) + ", requestedInvocationMode=" + (finalRequestedInvocationMode != null ? finalRequestedInvocationMode : "(none)") + ", sessionId=" + (currentSession != null ? currentSession.getSessionId() : "(none)") + ", channelId=" + (currentSession != null ? currentSession.getChannelId() : "(none)") + ", promptChars=" + prompt.length() + ", attachmentCount=" + (attachments != null ? attachments.size() : 0) + ", thread=" + Thread.currentThread().getName());
 
         CompletableFuture.runAsync(() -> {
+            long dispatchStartNanos = System.nanoTime();
             String currentWorkingDir = determineWorkingDirectory();
             String previousCwd = context.getSession().getCwd();
             if (!currentWorkingDir.equals(previousCwd)) {
@@ -375,6 +385,7 @@ public class SessionHandler extends BaseMessageHandler {
             }
 
             // [FIX] Pass agent prompt and file tags directly to session
+            LOG.info("[CliConcurrencyDiag][SessionHandler] invoking session.send with attachments" + ": provider=" + context.getSession().getProvider() + ", invocationMode=" + (finalRequestedInvocationMode != null ? finalRequestedInvocationMode : context.getSession().getClaudeInvocationMode()) + ", sessionId=" + context.getSession().getSessionId() + ", channelId=" + context.getSession().getChannelId() + ", elapsedMs=" + ((System.nanoTime() - dispatchStartNanos) / 1_000_000) + ", thread=" + Thread.currentThread().getName());
             context.getSession().send(prompt, attachments, finalAgentPrompt, finalFileTagPaths,
                     finalRequestedPermissionMode, finalRequestedInvocationMode)
                 .thenRun(() -> {

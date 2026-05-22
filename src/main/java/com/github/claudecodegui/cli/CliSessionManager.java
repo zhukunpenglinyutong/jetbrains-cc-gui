@@ -69,6 +69,7 @@ public class CliSessionManager {
     private CompletableFuture<SDKResult> sendClaude(CliSendRequest request, MessageCallback callback) {
         ClaudeCliSession session = claudeSessions.computeIfAbsent(
                 request.tabId(), ClaudeCliSession::new);
+        LOG.info("[CliConcurrencyDiag][CliSessionManager] sendClaude" + ": tabId=" + request.tabId() + ", sessionId=" + (request.sessionId() != null ? request.sessionId() : "(new)") + ", activeTabs=" + claudeSessions.size() + ", thread=" + Thread.currentThread().getName());
         return session.send(request, adapt(callback))
                 .thenApply(v -> SDKResult.success(null))
                 .exceptionally(ex -> {

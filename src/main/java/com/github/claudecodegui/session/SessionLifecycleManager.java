@@ -81,13 +81,7 @@ public class SessionLifecycleManager {
         LOG.info("Creating new session...");
 
         ClaudeSession oldSession = host.getSession();
-        ClaudeSession defaultSession = createDefaultSession();
-        String previousPermissionMode = (oldSession != null) ? oldSession.getPermissionMode() : defaultSession.getPermissionMode();
-        String previousProvider = (oldSession != null) ? oldSession.getProvider() : defaultSession.getProvider();
-        String previousModel = (oldSession != null) ? oldSession.getModel() : defaultSession.getModel();
-        String previousInvocationMode = (oldSession != null) ? oldSession.getClaudeInvocationMode() : readClaudeInvocationMode();
-        LOG.info("Preserving session state: mode=" + previousPermissionMode
-                         + ", provider=" + previousProvider + ", model=" + previousModel);
+        LOG.info("Creating new session from backend runtime defaults");
 
         host.invalidateSessionCallbacks();
         host.getStreamCoalescer().resetStreamState();
@@ -110,12 +104,6 @@ public class SessionLifecycleManager {
             });
 
             ClaudeSession newSession = createDefaultSession();
-            newSession.setPermissionMode(previousPermissionMode);
-            newSession.setProvider(previousProvider);
-            newSession.setModel(previousModel);
-            newSession.setClaudeInvocationMode(previousInvocationMode);
-            LOG.info("Restored session state to new session: mode=" + previousPermissionMode
-                             + ", provider=" + previousProvider + ", model=" + previousModel);
 
             completeNewSessionBootstrap(newSession, determineWorkingDirectory(),
                     "New session created successfully, working directory: ");
@@ -263,6 +251,7 @@ public class SessionLifecycleManager {
             String workingDir = (projectPath != null && new File(projectPath).exists())
                                     ? projectPath : determineWorkingDirectory();
             newSession.setSessionInfo(sessionId, workingDir);
+            pushSessionRuntimeState(newSession);
 
             // Prewarm daemon runtime for SDK sessions so /context and first message are fast.
             if (shouldPrewarmClaudeDaemon(newSession)) {
@@ -457,7 +446,43 @@ public class SessionLifecycleManager {
     }
 
     private ClaudeSession createDefaultSession() {
-        return new ClaudeSession(host.getProject(), host.getClaudeSDKBridge(), host.getCodexSDKBridge());
+        ClaudeSession session = new ClaudeSession(host.getProject(), host.getClaudeSDKBridge(), host.getCodexSDKBridge());
+        initializeSessionRuntimeDefaults(session);
+        return session;
+    }
+
+    private void initializeSessionRuntimeDefaults(ClaudeSession session) {
+        String provider = readDefaultProvider();
+        session.setProvider(provider);
+        session.setPermissionMode(readDefaultPermissionMode(provider));
+        session.setModel(readDefaultModel(provider));
+        session.setClaudeInvocationMode(readClaudeInvocationMode());
+    }
+
+    private String readDefaultProvider() {
+        String provider = host.getHandlerContext().getCurrentProvider();
+        if (SessionState.VALID_PROVIDERS.contains(provider)) {
+            return provider;
+        }
+        return "claude";
+    }
+
+    private String readDefaultModel(String provider) {
+        String model = host.getHandlerContext().getCurrentModel();
+        if (model != null && !model.trim().isEmpty()) {
+            return model.trim();
+        }
+        return "codex".equals(provider) ? "gpt-5.3-codex" : "claude-sonnet-4-6";
+    }
+
+    private String readDefaultPermissionMode(String provider) {
+        String mode = PropertiesComponent.getInstance().getValue(PERMISSION_MODE_PROPERTY_KEY);
+        if (mode == null || mode.trim().isEmpty() || !SessionState.isValidPermissionMode(mode)) {
+            mode = "bypassPermissions";
+        } else {
+            mode = mode.trim();
+        }
+        return "codex".equals(provider) && "plan".equals(mode) ? "default" : mode;
     }
 
     private void completeNewSessionBootstrap(ClaudeSession newSession, String workingDirectory, String successLogPrefix) {
@@ -473,6 +498,7 @@ public class SessionLifecycleManager {
             host.getClaudeSDKBridge().prewarmDaemonAsync(workingDirectory, newSession.getRuntimeSessionEpoch());
         }
         fetchSlashCommandsOnStartup();
+        pushSessionRuntimeState(newSession);
 
         ApplicationManager.getApplication().invokeLater(() -> {
             // Release the frontend session transition guard so updateMessages works again.
@@ -483,5 +509,20 @@ public class SessionLifecycleManager {
                     JsUtils.escapeJs(ClaudeCodeGuiBundle.message("toast.newSessionCreatedReady")));
             resetTokenUsage();
         });
+    }
+
+    private void pushSessionRuntimeState(ClaudeSession session) {
+        if (session == null) {
+            return;
+        }
+        JsonObject payload = new JsonObject();
+        payload.addProperty("provider", session.getProvider());
+        payload.addProperty("model", session.getModel());
+        payload.addProperty("permissionMode", session.getPermissionMode());
+        if ("claude".equals(session.getProvider()) && session.getClaudeInvocationMode() != null) {
+            payload.addProperty("claudeInvocationMode", session.getClaudeInvocationMode());
+        }
+        String json = new Gson().toJson(payload);
+        ApplicationManager.getApplication().invokeLater(() -> host.callJavaScript("window.updateSessionRuntimeState", JsUtils.escapeJs(json)));
     }
 }

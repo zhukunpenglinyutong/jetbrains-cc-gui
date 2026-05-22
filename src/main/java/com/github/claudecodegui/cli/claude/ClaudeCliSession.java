@@ -53,65 +53,8 @@ public class ClaudeCliSession {
         this.mcpConfig.initialize();
     }
 
-    public CompletableFuture<Void> send(CliSendRequest request, CliSessionCallback callback) {
-        return CliSessionExecutor.runAsync(() -> {
-            List<File> tempFiles = new ArrayList<>();
-            StringBuilder diagnostic = new StringBuilder();
-            try {
-                String cliPath = ClaudeCliDetector.getInstance().findCliExecutable();
-                if (cliPath == null) {
-                    throw new IllegalStateException("Claude CLI not found");
-                }
-
-                // 解析附件:图片落盘以供 prompt 引用,文档读为文本
-                String sessionKey = sessionId != null ? sessionId : "epoch-" + tabId;
-                List<CliAttachmentHandler.ContentBlock> blocks =
-                        attachmentHandler.processForClaude(request.provider(), sessionKey, request.attachments(), tempFiles);
-
-                String prompt = buildPrompt(request, blocks);
-                List<String> addDirs = collectAddDirs(blocks);
-
-                List<String> cmd = buildCommand(cliPath, request, prompt, addDirs);
-                LOG.info("[ClaudeCliSession][" + tabId + "] Command: " + String.join(" ", cmd));
-
-                ProcessBuilder pb = new ProcessBuilder(cmd);
-                pb.redirectErrorStream(true);
-                if (request.cwd() != null && !request.cwd().isBlank()) {
-                    File cwd = new File(request.cwd());
-                    if (cwd.isDirectory()) {
-                        pb.directory(cwd);
-                    }
-                }
-                pb.environment().put("NO_COLOR", "1");
-                envConfigurator.configurePermissionEnv(pb.environment());
-                envConfigurator.configureProjectPath(pb.environment(), request.cwd());
-
-                Process process = pb.start();
-                process.getOutputStream().close();
-                activeHandle = new CliProcessHandle(process, "claude-tab-" + tabId);
-
-                readOutput(callback, diagnostic);
-
-                process.waitFor();
-                int exitCode = process.exitValue();
-                boolean interrupted = activeHandle.wasInterrupted();
-
-                if (interrupted) {
-                    callback.onComplete(false, null, "User interrupted");
-                } else if (exitCode != 0) {
-                    String err = buildExitError(exitCode, diagnostic);
-                    callback.onError(err);
-                    callback.onComplete(false, null, err);
-                }
-            } catch (Exception e) {
-                LOG.warn("[ClaudeCliSession][" + tabId + "] send failed", e);
-                callback.onError(e.getMessage());
-                callback.onComplete(false, null, e.getMessage());
-            } finally {
-                activeHandle = null;
-                cleanupTempFiles(tempFiles);
-            }
-        });
+    private static long elapsedMillis(long startNanos) {
+        return (System.nanoTime() - startNanos) / 1_000_000;
     }
 
     public void interrupt() {
@@ -141,67 +84,12 @@ public class ClaudeCliSession {
 
     // ── output reading ───────────────────────────────────────────────────────
 
-    private void readOutput(CliSessionCallback callback, StringBuilder diagnostic) throws Exception {
-        ClaudeCliStreamParser parser = new ClaudeCliStreamParser(gson);
-        parser.resetState();
-        StringBuilder assistantContent = new StringBuilder();
-        SDKResult result = new SDKResult();
-        AtomicBoolean hadError = new AtomicBoolean(false);
-
-        MessageCallback mcb = new MessageCallback() {
-            @Override
-            public void onMessage(String type, String content) {
-                if ("session_id".equals(type) && content != null && !content.isBlank()) {
-                    sessionId = content;
-                }
-                callback.onMessage(type, content);
-            }
-
-            @Override
-            public void onError(String error) {
-                hadError.set(true);
-                callback.onError(error);
-            }
-
-            @Override
-            public void onComplete(SDKResult r) {
-                // 由 readOutput 统一触发
-            }
-        };
-
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(activeHandle.process().getInputStream(), StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                if (line.isBlank()) {
-                    continue;
-                }
-                CliErrorFormatter.appendDiagnosticLine(diagnostic, line);
-                parser.parseLine(line, mcb, result, assistantContent, hadError, false);
-
-                // result 事件 = 本轮结束
-                if (isResultLine(line)) {
-                    if (sessionId != null) {
-                        callback.onMessage("session_id", sessionId);
-                    }
-                    callback.onComplete(!hadError.get(), assistantContent.toString(),
-                            hadError.get() ? result.error : null);
-                    return;
-                }
-            }
+    private static String previewLine(String line) {
+        if (line == null) {
+            return "";
         }
-
-        // 进程 stdout 结束但没有 result 事件
-        boolean interrupted = activeHandle.wasInterrupted();
-        if (interrupted) {
-            callback.onComplete(false, assistantContent.toString(), "User interrupted");
-        } else if (!hadError.get() && !assistantContent.isEmpty()) {
-            callback.onMessage("stream_end", "");
-            callback.onMessage("message_end", "");
-            callback.onComplete(true, assistantContent.toString(), null);
-        } else {
-            callback.onComplete(result.success, assistantContent.toString(), result.error);
-        }
+        String compact = line.replace('\n', ' ').replace('\r', ' ');
+        return compact.length() > 240 ? compact.substring(0, 240) + "..." : compact;
     }
 
     private static String buildExitError(int exitCode, StringBuilder diagnostic) {
@@ -330,5 +218,138 @@ public class ClaudeCliSession {
             return null;
         }
         return obj.get(key).getAsString();
+    }
+
+    public CompletableFuture<Void> send(CliSendRequest request, CliSessionCallback callback) {
+        return CliSessionExecutor.runAsync(() -> {
+            long sendStartNanos = System.nanoTime();
+            List<File> tempFiles = new ArrayList<>();
+            StringBuilder diagnostic = new StringBuilder();
+            try {
+                LOG.info("[CliConcurrencyDiag][ClaudeCliSession] send task started" + ": tabId=" + tabId + ", requestSessionId=" + (request.sessionId() != null ? request.sessionId() : "(new)") + ", currentSessionId=" + (sessionId != null ? sessionId : "(none)") + ", cwd=" + (request.cwd() != null ? request.cwd() : "(none)") + ", thread=" + Thread.currentThread().getName());
+                String cliPath = ClaudeCliDetector.getInstance().findCliExecutable();
+                if (cliPath == null) {
+                    throw new IllegalStateException("Claude CLI not found");
+                }
+
+                // 解析附件:图片落盘以供 prompt 引用,文档读为文本
+                String sessionKey = sessionId != null ? sessionId : "epoch-" + tabId;
+                List<CliAttachmentHandler.ContentBlock> blocks =
+                        attachmentHandler.processForClaude(request.provider(), sessionKey, request.attachments(), tempFiles);
+
+                String prompt = buildPrompt(request, blocks);
+                List<String> addDirs = collectAddDirs(blocks);
+
+                List<String> cmd = buildCommand(cliPath, request, prompt, addDirs);
+                LOG.info("[ClaudeCliSession][" + tabId + "] Command: " + String.join(" ", cmd));
+
+                ProcessBuilder pb = new ProcessBuilder(cmd);
+                pb.redirectErrorStream(true);
+                if (request.cwd() != null && !request.cwd().isBlank()) {
+                    File cwd = new File(request.cwd());
+                    if (cwd.isDirectory()) {
+                        pb.directory(cwd);
+                    }
+                }
+                pb.environment().put("NO_COLOR", "1");
+                envConfigurator.configurePermissionEnv(pb.environment());
+                envConfigurator.configureProjectPath(pb.environment(), request.cwd());
+
+                LOG.info("[CliConcurrencyDiag][ClaudeCliSession] starting process" + ": tabId=" + tabId + ", elapsedMs=" + elapsedMillis(sendStartNanos) + ", thread=" + Thread.currentThread().getName());
+                Process process = pb.start();
+                LOG.info("[CliConcurrencyDiag][ClaudeCliSession] process started" + ": tabId=" + tabId + ", elapsedMs=" + elapsedMillis(sendStartNanos) + ", thread=" + Thread.currentThread().getName());
+                process.getOutputStream().close();
+                activeHandle = new CliProcessHandle(process, "claude-tab-" + tabId);
+
+                readOutput(callback, diagnostic, sendStartNanos);
+
+                process.waitFor();
+                int exitCode = process.exitValue();
+                boolean interrupted = activeHandle.wasInterrupted();
+                LOG.info("[CliConcurrencyDiag][ClaudeCliSession] process exited" + ": tabId=" + tabId + ", exitCode=" + exitCode + ", interrupted=" + interrupted + ", elapsedMs=" + elapsedMillis(sendStartNanos) + ", thread=" + Thread.currentThread().getName());
+
+                if (interrupted) {
+                    callback.onComplete(false, null, "User interrupted");
+                } else if (exitCode != 0) {
+                    String err = buildExitError(exitCode, diagnostic);
+                    callback.onError(err);
+                    callback.onComplete(false, null, err);
+                }
+            } catch (Exception e) {
+                LOG.warn("[ClaudeCliSession][" + tabId + "] send failed", e);
+                callback.onError(e.getMessage());
+                callback.onComplete(false, null, e.getMessage());
+            } finally {
+                activeHandle = null;
+                cleanupTempFiles(tempFiles);
+            }
+        });
+    }
+
+    private void readOutput(CliSessionCallback callback, StringBuilder diagnostic, long sendStartNanos) throws Exception {
+        ClaudeCliStreamParser parser = new ClaudeCliStreamParser(gson);
+        parser.resetState();
+        StringBuilder assistantContent = new StringBuilder();
+        SDKResult result = new SDKResult();
+        AtomicBoolean hadError = new AtomicBoolean(false);
+        AtomicBoolean firstOutputLogged = new AtomicBoolean(false);
+
+        MessageCallback mcb = new MessageCallback() {
+            @Override
+            public void onMessage(String type, String content) {
+                if ("session_id".equals(type) && content != null && !content.isBlank()) {
+                    sessionId = content;
+                }
+                callback.onMessage(type, content);
+            }
+
+            @Override
+            public void onError(String error) {
+                hadError.set(true);
+                callback.onError(error);
+            }
+
+            @Override
+            public void onComplete(SDKResult r) {
+                // 由 readOutput 统一触发
+            }
+        };
+
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(activeHandle.process().getInputStream(), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (firstOutputLogged.compareAndSet(false, true)) {
+                    LOG.info("[CliConcurrencyDiag][ClaudeCliSession] first stdout line" + ": tabId=" + tabId + ", elapsedMs=" + elapsedMillis(sendStartNanos) + ", preview=" + previewLine(line) + ", thread=" + Thread.currentThread().getName());
+                }
+                if (line.isBlank()) {
+                    continue;
+                }
+                CliErrorFormatter.appendDiagnosticLine(diagnostic, line);
+                parser.parseLine(line, mcb, result, assistantContent, hadError, false);
+
+                // result 事件 = 本轮结束
+                if (isResultLine(line)) {
+                    if (sessionId != null) {
+                        callback.onMessage("session_id", sessionId);
+                    }
+                    callback.onComplete(!hadError.get(), assistantContent.toString(),
+                            hadError.get() ? result.error : null);
+                    return;
+                }
+            }
+        }
+
+        // 进程 stdout 结束但没有 result 事件
+        boolean interrupted = activeHandle.wasInterrupted();
+        if (interrupted) {
+            callback.onComplete(false, assistantContent.toString(), "User interrupted");
+        } else if (!hadError.get() && !assistantContent.isEmpty()) {
+            callback.onMessage("stream_end", "");
+            callback.onMessage("message_end", "");
+            callback.onComplete(true, assistantContent.toString(), null);
+        } else {
+            callback.onComplete(result.success, assistantContent.toString(), result.error);
+        }
     }
 }

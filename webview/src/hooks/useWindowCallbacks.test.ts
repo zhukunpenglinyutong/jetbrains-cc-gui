@@ -35,6 +35,7 @@ describe('useWindowCallbacks integration', () => {
     setUsageMaxTokens: vi.fn(),
     setSubagentHistories: vi.fn(),
     setPermissionMode: vi.fn(),
+      setCurrentProvider: vi.fn(),
     setClaudePermissionMode: vi.fn(),
     setCodexPermissionMode: vi.fn(),
     setSelectedClaudeModel: vi.fn(),
@@ -373,7 +374,7 @@ describe('useWindowCallbacks integration', () => {
     expect(opts.setMessages).toHaveBeenCalled();
   });
 
-  it('requests invocation mode on mount and updates cached chat-side invocation mode', () => {
+    it('requests session runtime state on mount and updates cached chat-side invocation mode', () => {
     vi.useFakeTimers();
     const opts = createOptions();
     renderHook(() => useWindowCallbacks(opts));
@@ -382,15 +383,38 @@ describe('useWindowCallbacks integration', () => {
       vi.runAllTimers();
     });
 
-    expect(window.sendToJava).toHaveBeenCalledWith('get_invocation_mode:');
+        expect(window.sendToJava).toHaveBeenCalledWith('get_session_runtime_state:');
 
     act(() => {
-      window.updateInvocationMode?.(JSON.stringify({ invocationMode: 'cli' }));
+        window.updateSessionRuntimeState?.(JSON.stringify({
+            provider: 'claude',
+            model: 'claude-sonnet-4-6',
+            permissionMode: 'default',
+            claudeInvocationMode: 'cli',
+        }));
     });
 
     expect(window.__CLAUDE_INVOCATION_MODE__).toBe('cli');
     vi.useRealTimers();
   });
+
+    it('updateSessionRuntimeState hydrates Codex provider model and mode from backend session state', () => {
+        const opts = createOptions();
+        renderHook(() => useWindowCallbacks(opts));
+
+        act(() => {
+            window.updateSessionRuntimeState?.(JSON.stringify({
+                provider: 'codex',
+                model: 'gpt-5.3-codex',
+                permissionMode: 'plan',
+            }));
+        });
+
+        expect(opts.setCurrentProvider).toHaveBeenCalledWith('codex');
+        expect(opts.setPermissionMode).toHaveBeenCalled();
+        expect(opts.setCodexPermissionMode).toHaveBeenCalled();
+        expect(opts.setSelectedCodexModel).toHaveBeenCalledWith('gpt-5.3-codex');
+    });
 
   it('patchMessageUuid updates the latest unresolved user message using raw text fallback', () => {
     const opts = createOptions({
@@ -613,9 +637,9 @@ describe('useWindowCallbacks integration', () => {
   });
 
   it('clearMessages cancels pending scoped updateMessages rAF', () => {
-    const cancelAnimationFrame = vi.fn();
-    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 42));
-    vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrame);
+      const clearTimeoutMock = vi.fn();
+      vi.stubGlobal('setTimeout', vi.fn(() => 42));
+      vi.stubGlobal('clearTimeout', clearTimeoutMock);
 
     const opts = createOptions({
       isStreamingRef: { current: true },
@@ -638,7 +662,7 @@ describe('useWindowCallbacks integration', () => {
       window.clearMessages?.();
     });
 
-    expect(cancelAnimationFrame).toHaveBeenCalledWith(42);
+      expect(clearTimeoutMock).toHaveBeenCalledWith(42);
     expect(window.__pendingUpdateRaf).toBeNull();
   });
 

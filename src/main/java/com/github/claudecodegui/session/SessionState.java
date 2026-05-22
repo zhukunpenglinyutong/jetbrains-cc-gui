@@ -21,6 +21,7 @@ public class SessionState {
      */
     public static final Set<String> VALID_PERMISSION_MODES;
     public static final Set<String> VALID_CLAUDE_INVOCATION_MODES;
+    public static final Set<String> VALID_PROVIDERS;
     static {
         Set<String> modes = new HashSet<>();
         modes.add("default");
@@ -34,6 +35,11 @@ public class SessionState {
         invocationModes.add("sdk");
         invocationModes.add("cli");
         VALID_CLAUDE_INVOCATION_MODES = Collections.unmodifiableSet(invocationModes);
+
+        Set<String> providers = new HashSet<>();
+        providers.add("claude");
+        providers.add("codex");
+        VALID_PROVIDERS = Collections.unmodifiableSet(providers);
     }
 
     /**
@@ -75,7 +81,7 @@ public class SessionState {
     private volatile String permissionMode = "bypassPermissions";
     private volatile String model = "claude-sonnet-4-6";
     private volatile String provider = "claude";
-    private volatile String claudeInvocationMode = "sdk";
+    private volatile String claudeInvocationMode = null;
     // Reasoning effort (thinking depth)
     private volatile String reasoningEffort = "high";
 
@@ -237,16 +243,23 @@ public class SessionState {
     }
 
     public void setProvider(String provider) {
-        this.provider = provider;
+        if (provider == null) {
+            return;
+        }
+        String trimmed = provider.trim();
+        if (VALID_PROVIDERS.contains(trimmed)) {
+            this.provider = trimmed;
+        }
     }
 
     public void setClaudeInvocationMode(String claudeInvocationMode) {
         if (claudeInvocationMode == null) {
-            this.claudeInvocationMode = "sdk";
             return;
         }
         String trimmed = claudeInvocationMode.trim();
-        this.claudeInvocationMode = VALID_CLAUDE_INVOCATION_MODES.contains(trimmed) ? trimmed : "sdk";
+        if (VALID_CLAUDE_INVOCATION_MODES.contains(trimmed)) {
+            this.claudeInvocationMode = trimmed;
+        }
     }
 
     public void setReasoningEffort(String reasoningEffort) {

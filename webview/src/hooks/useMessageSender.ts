@@ -24,8 +24,14 @@ function createContextUsageRequestId(): string {
   return `context-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function getClaudeInvocationMode(): 'sdk' | 'cli' {
-  return window.__CLAUDE_INVOCATION_MODE__ === 'cli' ? 'cli' : 'sdk';
+function getClaudeInvocationMode(): 'sdk' | 'cli' | undefined {
+  if (window.__CLAUDE_INVOCATION_MODE__ === 'cli') return 'cli';
+  if (window.__CLAUDE_INVOCATION_MODE__ === 'sdk') return 'sdk';
+  return undefined;
+}
+
+function isClaudeInvocationModeKnown(): boolean {
+  return window.__CLAUDE_INVOCATION_MODE__ === 'cli' || window.__CLAUDE_INVOCATION_MODE__ === 'sdk';
 }
 
 export interface UseMessageSenderOptions {
@@ -64,7 +70,6 @@ export function useMessageSender({
   addToast,
   currentProvider,
   selectedModel,
-  permissionMode,
   selectedAgent,
   sdkStatusLoaded,
   currentSdkInstalled,
@@ -248,18 +253,9 @@ export function useMessageSender({
     text: string,
     attachments: Attachment[] | undefined,
     agentInfo: { id: string; name: string; prompt?: string } | null,
-    fileTagsInfo: { displayPath: string; absolutePath: string }[] | null,
-    requestedPermissionMode: PermissionMode
+    fileTagsInfo: { displayPath: string; absolutePath: string }[] | null
   ) => {
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
-    const effectivePermissionMode: PermissionMode = currentProvider === 'codex' && requestedPermissionMode === 'plan'
-      ? 'default'
-      : requestedPermissionMode;
-    console.debug('[ModeSync][Frontend] send request mode', {
-      provider: currentProvider,
-      requestedMode: requestedPermissionMode,
-      effectiveMode: effectivePermissionMode,
-    });
 
     if (hasAttachments) {
       try {
@@ -273,7 +269,6 @@ export function useMessageSender({
           agent: agentInfo,
           fileTags: fileTagsInfo,
           invocationMode: currentProvider === 'claude' ? getClaudeInvocationMode() : undefined,
-          permissionMode: effectivePermissionMode,
         });
         sendBridgeEvent('send_message_with_attachments', payload);
       } catch (error) {
@@ -283,7 +278,6 @@ export function useMessageSender({
           agent: agentInfo,
           fileTags: fileTagsInfo,
           invocationMode: currentProvider === 'claude' ? getClaudeInvocationMode() : undefined,
-          permissionMode: effectivePermissionMode,
         });
         sendBridgeEvent('send_message', fallbackPayload);
       }
@@ -293,7 +287,6 @@ export function useMessageSender({
         agent: agentInfo,
         fileTags: fileTagsInfo,
         invocationMode: currentProvider === 'claude' ? getClaudeInvocationMode() : undefined,
-        permissionMode: effectivePermissionMode,
       });
       sendBridgeEvent('send_message', payload);
     }
@@ -307,6 +300,15 @@ export function useMessageSender({
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
 
     if (!text && !hasAttachments) return;
+
+    if (currentProvider === 'claude' && !isClaudeInvocationModeKnown()) {
+      addToast(t('chat.invocationModeRequired', {
+        defaultValue: 'Invocation mode is not loaded. Please choose SDK or CLI mode in Settings before sending.',
+      }), 'error');
+      setSettingsInitialTab('basic');
+      setCurrentView('settings');
+      return;
+    }
 
     // Check SDK status
     if (!sdkStatusLoaded) {
@@ -368,9 +370,6 @@ export function useMessageSender({
       }
     });
 
-    // Sync provider setting
-    sendBridgeEvent('set_provider', currentProvider);
-
     // Build agent info
     const agentInfo = selectedAgent ? {
       id: selectedAgent.id,
@@ -386,12 +385,11 @@ export function useMessageSender({
     })) : null;
 
     // Send message to backend
-    sendMessageToBackend(text, attachments, agentInfo, fileTagsInfo, permissionMode);
+    sendMessageToBackend(text, attachments, agentInfo, fileTagsInfo);
   }, [
     sdkStatusLoaded,
     currentSdkInstalled,
     currentProvider,
-    permissionMode,
     selectedAgent,
     buildUserContentBlocks,
     sendMessageToBackend,

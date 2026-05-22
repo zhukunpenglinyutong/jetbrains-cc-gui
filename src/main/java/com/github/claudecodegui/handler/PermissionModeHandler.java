@@ -61,17 +61,7 @@ public class PermissionModeHandler {
      */
     public void handleSetMode(String content) {
         try {
-            String mode = content;
-            if (content != null && !content.isEmpty()) {
-                try {
-                    JsonObject json = gson.fromJson(content, JsonObject.class);
-                    if (json.has("mode")) {
-                        mode = json.get("mode").getAsString();
-                    }
-                } catch (Exception e) {
-                    // content itself is the mode
-                }
-            }
+            String mode = parseMode(content);
 
             // Check if session exists
             if (context.getSession() != null) {
@@ -88,5 +78,34 @@ public class PermissionModeHandler {
         } catch (Exception e) {
             LOG.error("[PermissionModeHandler] Failed to set mode: " + e.getMessage(), e);
         }
+    }
+
+    public void handleSetSessionMode(String content) {
+        try {
+            String mode = parseMode(content);
+            if (context.getSession() != null) {
+                context.getSession().setPermissionMode(mode);
+                com.github.claudecodegui.notifications.ClaudeNotifier.setMode(context.getProject(), mode);
+            } else {
+                LOG.warn("[PermissionModeHandler] Session is null; cannot set session permission mode");
+            }
+        } catch (Exception e) {
+            LOG.error("[PermissionModeHandler] Failed to set session mode: " + e.getMessage(), e);
+        }
+    }
+
+    private String parseMode(String content) {
+        String mode = content;
+        if (content != null && !content.isEmpty()) {
+            try {
+                JsonObject json = gson.fromJson(content, JsonObject.class);
+                if (json.has("mode")) {
+                    mode = json.get("mode").getAsString();
+                }
+            } catch (Exception e) {
+                // content itself is the mode
+            }
+        }
+        return mode;
     }
 }

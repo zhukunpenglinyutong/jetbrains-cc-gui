@@ -437,6 +437,8 @@ export function registerMessageCallbacks(
   };
 
   window.showLoading = (value) => {
+      if (window.__sessionTransitioning) return;
+
     const isLoading = isTruthy(value);
 
     // FIX: Ignore loading=false during streaming — onStreamEnd handles it uniformly.
@@ -604,6 +606,12 @@ export function registerMessageCallbacks(
   // Also clear stream-ended markers since history messages don't have __turnId
   window.historyLoadComplete = () => {
     releaseSessionTransition();
+      resetTransientUiState();
+      setLoading(false);
+      setLoadingStartTime(null);
+      setIsThinking(false);
+      options.setQueueDisplayState('NONE');
+      options.setQueueAheadCount(0);
     const pendingToast = window.__pendingSessionTransitionToast;
     if (pendingToast) {
       window.__pendingSessionTransitionToast = undefined;

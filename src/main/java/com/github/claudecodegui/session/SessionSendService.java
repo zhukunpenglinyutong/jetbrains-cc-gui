@@ -95,6 +95,70 @@ public class SessionSendService {
         callbackFacade.notifyQueueDisplayStateChanged(state.getQueueDisplayState(), state.getQueueAheadCount());
     }
 
+    public static String resolveEffectivePermissionMode(String provider, String requestedMode, String sessionMode) {
+        String resolvedMode = normalizeRequestedPermissionMode(sessionMode);
+        if (resolvedMode == null) {
+            resolvedMode = requestedMode;
+        }
+        if (resolvedMode == null) {
+            resolvedMode = "default";
+        }
+
+        if ("codex".equals(provider) && "plan".equals(resolvedMode)) {
+            return "default";
+        }
+        return resolvedMode;
+    }
+
+    public static String normalizeRequestedPermissionMode(String mode) {
+        if (mode == null) {
+            return null;
+        }
+        String trimmed = mode.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        if (SessionState.isValidPermissionMode(trimmed)) {
+            return trimmed;
+        }
+        LOG.warn("[ModeSync][Backend] Invalid requested permissionMode ignored: " + mode);
+        return null;
+    }
+
+    public static String resolveEffectiveClaudeInvocationMode(String requestedMode) {
+        return resolveEffectiveClaudeInvocationMode(requestedMode, null);
+    }
+
+    public static String getCodexRuntimeAccessError(String accessMode) {
+        if (CodemossSettingsService.CODEX_RUNTIME_ACCESS_MANAGED.equals(accessMode)
+                || CodemossSettingsService.CODEX_RUNTIME_ACCESS_CLI_LOGIN.equals(accessMode)) {
+            return null;
+        }
+        return ClaudeCodeGuiBundle.message("error.codexLocalAccessNotAuthorized");
+    }
+
+    public static String resolveEffectiveClaudeInvocationMode(String requestedMode, String sessionMode) {
+        String normalizedSessionMode = SessionState.isValidClaudeInvocationMode(sessionMode) ? sessionMode.trim() : null;
+
+        if (normalizedSessionMode != null) {
+            return normalizedSessionMode;
+        }
+
+        if (SessionState.isValidClaudeInvocationMode(requestedMode)) {
+            return requestedMode.trim();
+        }
+
+        try {
+            String configured = new CodemossSettingsService().getClaudeInvocationMode();
+            if (SessionState.isValidClaudeInvocationMode(configured)) {
+                return configured.trim();
+            }
+        } catch (Exception e) {
+            LOG.warn("[ModeSync][Backend] Failed to read Claude invocation mode, defaulting to sdk: " + e.getMessage());
+        }
+        return "sdk";
+    }
+
     public CompletableFuture<Void> sendMessageToProvider(
             String channelId,
             String input,
@@ -141,64 +205,11 @@ public class SessionSendService {
             );
         }
 
-        String effectiveInvocationMode = resolveEffectiveClaudeInvocationMode(requestedInvocationMode);
+        String effectiveInvocationMode = resolveEffectiveClaudeInvocationMode(requestedInvocationMode, state.getClaudeInvocationMode());
         state.setClaudeInvocationMode(effectiveInvocationMode);
 
         return sendToClaude(channelId, input, attachments, openedFilesJson, agentPrompt,
                 effectivePermissionMode, effectiveInvocationMode);
-    }
-
-    public static String normalizeRequestedPermissionMode(String mode) {
-        if (mode == null) {
-            return null;
-        }
-        String trimmed = mode.trim();
-        if (trimmed.isEmpty()) {
-            return null;
-        }
-        if (SessionState.isValidPermissionMode(trimmed)) {
-            return trimmed;
-        }
-        LOG.warn("[ModeSync][Backend] Invalid requested permissionMode ignored: " + mode);
-        return null;
-    }
-
-    public static String resolveEffectivePermissionMode(String provider, String requestedMode, String sessionMode) {
-        String resolvedMode = requestedMode;
-        if (resolvedMode == null) {
-            resolvedMode = normalizeRequestedPermissionMode(sessionMode);
-        }
-        if (resolvedMode == null) {
-            resolvedMode = "default";
-        }
-
-        if ("codex".equals(provider) && "plan".equals(resolvedMode)) {
-            return "default";
-        }
-        return resolvedMode;
-    }
-
-    public static String getCodexRuntimeAccessError(String accessMode) {
-        if (CodemossSettingsService.CODEX_RUNTIME_ACCESS_MANAGED.equals(accessMode)
-                || CodemossSettingsService.CODEX_RUNTIME_ACCESS_CLI_LOGIN.equals(accessMode)) {
-            return null;
-        }
-        return ClaudeCodeGuiBundle.message("error.codexLocalAccessNotAuthorized");
-    }
-
-    public static String resolveEffectiveClaudeInvocationMode(String requestedMode) {
-        if (SessionState.isValidClaudeInvocationMode(requestedMode)) {
-            return requestedMode.trim();
-        }
-        try {
-            String configured = new CodemossSettingsService().getClaudeInvocationMode();
-            if (SessionState.isValidClaudeInvocationMode(configured)) {
-                return configured.trim();
-            }
-        } catch (Exception e) {
-            LOG.warn("[ModeSync][Backend] Failed to read Claude invocation mode, defaulting to sdk: " + e.getMessage());
-        }
-        return "sdk";
     }
 
     private CompletableFuture<Void> sendToCodex(

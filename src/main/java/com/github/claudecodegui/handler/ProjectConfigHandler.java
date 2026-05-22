@@ -5,6 +5,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.action.SendShortcutSync;
+import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.provider.claude.ClaudeHistoryReader;
 import com.github.claudecodegui.provider.codex.CodexHistoryReader;
 import com.github.claudecodegui.util.FontConfigService;
@@ -250,6 +251,47 @@ public class ProjectConfigHandler {
             () -> jsonOf("invocationMode", settingsService.getClaudeInvocationMode()),
             jsonOf("invocationMode", "sdk"),
             "Failed to get Claude invocation mode");
+    }
+
+    public void handleGetSessionInvocationMode() {
+        respondWithJson("window.updateSessionInvocationMode", () -> {
+            String mode = context.getSession() != null ? context.getSession().getClaudeInvocationMode() : null;
+            if (mode == null || mode.isBlank()) {
+                mode = settingsService.getClaudeInvocationMode();
+            }
+            return jsonOf("invocationMode", mode);
+        }, jsonOf("invocationMode", "unknown"), "Failed to get Claude session invocation mode");
+    }
+
+    public void handleGetSessionRuntimeState() {
+        respondWithJson("window.updateSessionRuntimeState", this::buildSessionRuntimeStateJson, null, "Failed to get session runtime state");
+    }
+
+    public JsonObject buildSessionRuntimeStateJson() throws Exception {
+        ClaudeSession session = context.getSession();
+        String provider = session != null ? session.getProvider() : context.getCurrentProvider();
+        String model = session != null ? session.getModel() : context.getCurrentModel();
+        String permissionMode = session != null ? session.getPermissionMode() : readDefaultPermissionMode(provider);
+        String invocationMode = session != null ? session.getClaudeInvocationMode() : settingsService.getClaudeInvocationMode();
+
+        JsonObject response = new JsonObject();
+        response.addProperty("provider", provider);
+        response.addProperty("model", model);
+        response.addProperty("permissionMode", permissionMode);
+        if ("claude".equals(provider)) {
+            response.addProperty("claudeInvocationMode", invocationMode);
+        }
+        return response;
+    }
+
+    private String readDefaultPermissionMode(String provider) {
+        String mode = PropertiesComponent.getInstance().getValue(PermissionModeHandler.PERMISSION_MODE_PROPERTY_KEY);
+        if (mode == null || mode.trim().isEmpty()) {
+            mode = "bypassPermissions";
+        } else {
+            mode = mode.trim();
+        }
+        return "codex".equals(provider) && "plan".equals(mode) ? "default" : mode;
     }
 
     public void handleSetInvocationMode(String content) {

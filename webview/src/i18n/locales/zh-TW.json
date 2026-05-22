@@ -82,6 +82,7 @@
     "disabled": "已停用",
     "sdkNotInstalled": "{{provider}} SDK 尚未安裝，請先安裝 SDK 才能開始對話",
     "sdkStatusLoading": "Checking SDK status...",
+    "invocationModeRequired": "尚未讀取到 Claude 呼叫模式，請先在設定中選擇 SDK 或 CLI 模式後再傳送。",
     "openSourceBanner": "本專案保證100%開源（謹防盜版項目）",
     "goInstallSdk": "前往安裝",
     "commandNotImplemented": "`{{command}}` 功能尚未實現。",

@@ -662,6 +662,11 @@ public class ClaudeChatWindow {
         String type = parts[0];
         String content = parts.length > 1 ? parts[1] : "";
 
+        if ("send_message".equals(type) || "send_message_with_attachments".equals(type)) {
+            ClaudeSession currentSession = session;
+            LOG.info("[CliConcurrencyDiag][Webview->Java] received " + type + ": tab=" + getCurrentTabName() + ", contentIndex=" + getTabIndex() + ", sessionId=" + (currentSession != null ? currentSession.getSessionId() : "(none)") + ", channelId=" + (currentSession != null ? currentSession.getChannelId() : "(none)") + ", provider=" + (currentSession != null ? currentSession.getProvider() : "(none)") + ", payloadChars=" + content.length() + ", thread=" + Thread.currentThread().getName());
+        }
+
         if (messageDispatcher.dispatch(type, content)) {
             return;
         }

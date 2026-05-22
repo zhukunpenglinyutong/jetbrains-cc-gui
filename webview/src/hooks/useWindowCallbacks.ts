@@ -41,6 +41,7 @@ export interface UseWindowCallbacksOptions {
   setUsagePercentage: React.Dispatch<React.SetStateAction<number>>;
   setUsageUsedTokens: React.Dispatch<React.SetStateAction<number | undefined>>;
   setUsageMaxTokens: React.Dispatch<React.SetStateAction<number | undefined>>;
+    setCurrentProvider: React.Dispatch<React.SetStateAction<string>>;
   setPermissionMode: React.Dispatch<React.SetStateAction<PermissionMode>>;
   setClaudePermissionMode: React.Dispatch<React.SetStateAction<PermissionMode>>;
   setCodexPermissionMode: React.Dispatch<React.SetStateAction<PermissionMode>>;
@@ -117,7 +118,7 @@ export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
   const { t } = options;
 
   if (!window.__CLAUDE_INVOCATION_MODE__) {
-    window.__CLAUDE_INVOCATION_MODE__ = 'sdk';
+      window.__CLAUDE_INVOCATION_MODE__ = 'unknown';
   }
 
   // Store t in ref to avoid stale closures

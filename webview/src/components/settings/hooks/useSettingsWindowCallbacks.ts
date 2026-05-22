@@ -340,12 +340,13 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     };
 
     // Invocation mode callback
+      const previousUpdateInvocationMode = window.updateInvocationMode;
     window.updateInvocationMode = (jsonStr: string) => {
       try {
+          previousUpdateInvocationMode?.(jsonStr);
         const data = JSON.parse(jsonStr);
         const mode = data.invocationMode;
         if (mode === 'sdk' || mode === 'cli') {
-          window.__CLAUDE_INVOCATION_MODE__ = mode;
           d().setInvocationMode(mode);
         }
         if (data.cliPath !== undefined) {
@@ -528,7 +529,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.updateAiTitleGenerationEnabled = undefined;
       window.updateStatusBarWidgetEnabled = undefined;
       window.updateTaskCompletionNotificationEnabled = undefined;
-      window.updateInvocationMode = undefined;
+        window.updateInvocationMode = previousUpdateInvocationMode;
       window.updateAgents = previousUpdateAgents;
       window.agentOperationResult = undefined;
       window.agentImportPreviewResult = undefined;

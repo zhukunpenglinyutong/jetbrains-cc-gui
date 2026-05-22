@@ -96,12 +96,12 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
       const codexMode: PermissionMode = mode === 'plan' ? 'default' : mode;
       setPermissionMode(codexMode);
       setCodexPermissionMode(codexMode);
-      sendBridgeEvent('set_mode', codexMode);
+        sendBridgeEvent('set_session_mode', codexMode);
       return;
     }
     setPermissionMode(mode);
     setClaudePermissionMode(mode);
-    sendBridgeEvent('set_mode', mode);
+      sendBridgeEvent('set_session_mode', mode);
   }, [currentProvider, setCodexPermissionMode, setClaudePermissionMode]);
 
   const handleModelSelect = useCallback((modelId: string) => {
@@ -109,27 +109,27 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
       const strippedModelId = strip1MContextSuffix(modelId);
       const normalizedModelId = normalizeClaudeModelId(strippedModelId);
       setSelectedClaudeModel(normalizedModelId);
-      sendBridgeEvent('set_model', apply1MContextSuffix(normalizedModelId, longContextEnabled));
+        sendBridgeEvent('set_session_model', apply1MContextSuffix(normalizedModelId, longContextEnabled));
     } else if (currentProvider === 'codex') {
       setSelectedCodexModel(modelId);
-      sendBridgeEvent('set_model', modelId);
+        sendBridgeEvent('set_session_model', modelId);
     }
   }, [currentProvider, longContextEnabled, setSelectedClaudeModel, setSelectedCodexModel]);
 
   const handleProviderSelect = useCallback((providerId: string) => {
     setCurrentProvider(providerId);
-    sendBridgeEvent('set_provider', providerId);
+      sendBridgeEvent('set_session_provider', providerId);
 
     const modeToSet: PermissionMode = providerId === 'codex'
       ? (codexPermissionMode === 'plan' ? 'default' : codexPermissionMode)
       : claudePermissionMode;
     setPermissionMode(modeToSet);
-    sendBridgeEvent('set_mode', modeToSet);
+      sendBridgeEvent('set_session_mode', modeToSet);
 
     const newModel = providerId === 'codex'
       ? selectedCodexModel
       : apply1MContextSuffix(selectedClaudeModel, longContextEnabled);
-    sendBridgeEvent('set_model', newModel);
+      sendBridgeEvent('set_session_model', newModel);
   }, [
     claudePermissionMode,
     codexPermissionMode,
@@ -141,7 +141,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
   const handleLongContextChange = useCallback((enabled: boolean) => {
     setLongContextEnabled(enabled);
     if (currentProvider === 'claude') {
-      sendBridgeEvent('set_model', apply1MContextSuffix(selectedClaudeModel, enabled));
+        sendBridgeEvent('set_session_model', apply1MContextSuffix(selectedClaudeModel, enabled));
     }
   }, [currentProvider, selectedClaudeModel, setLongContextEnabled]);
 

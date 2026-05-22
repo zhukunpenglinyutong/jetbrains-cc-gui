@@ -107,9 +107,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
     }
 
     /**
-     * Broadcast invocation mode change to all tabs in the project.
-     * Updates both the Java session state and the frontend window.__CLAUDE_INVOCATION_MODE__
-     * for every tab, so subsequent sends from any tab use the correct mode.
+     * Broadcast the saved default invocation mode to frontend settings views.
+     * Existing chat sessions keep their session-scoped invocation mode; the
+     * updated default applies when a new session is created.
      */
     public static void broadcastInvocationMode(@NotNull Project project, @NotNull String mode) {
         Set<ClaudeChatWindow> windows = collectProjectChatWindows(project);
@@ -119,10 +119,6 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         for (ClaudeChatWindow window : windows) {
             try {
-                ClaudeSession session = window.getSession();
-                if (session != null) {
-                    session.setClaudeInvocationMode(mode);
-                }
                 String escaped = com.github.claudecodegui.util.JsUtils.escapeJs(json);
                 window.callJavaScript("window.updateInvocationMode", escaped);
             } catch (Exception e) {

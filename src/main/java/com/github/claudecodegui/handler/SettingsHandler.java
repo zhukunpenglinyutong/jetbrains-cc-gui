@@ -30,9 +30,9 @@ public class SettingsHandler extends BaseMessageHandler {
 
     private static final String[] SUPPORTED_TYPES = {
         "get_mode",
-        "set_mode",
-        "set_model",
-        "set_provider",
+        "set_mode", "set_session_mode",
+        "set_model", "set_session_model",
+        "set_provider", "set_session_provider",
         "set_reasoning_effort",
         "get_node_path",
         "set_node_path",
@@ -45,7 +45,7 @@ public class SettingsHandler extends BaseMessageHandler {
         "browse_ui_font_file",
         "get_streaming_enabled",
         "set_streaming_enabled",
-        "get_invocation_mode",
+        "get_invocation_mode", "get_session_invocation_mode", "get_session_runtime_state",
         "set_invocation_mode",
         "set_cli_path",
         "get_codex_sandbox_mode",
@@ -128,12 +128,21 @@ public class SettingsHandler extends BaseMessageHandler {
             case "set_mode":
                 permissionModeHandler.handleSetMode(content);
                 return true;
+            case "set_session_mode":
+                permissionModeHandler.handleSetSessionMode(content);
+                return true;
             // Model and provider
             case "set_model":
                 modelProviderHandler.handleSetModel(content);
                 return true;
+            case "set_session_model":
+                modelProviderHandler.handleSetSessionModel(content);
+                return true;
             case "set_provider":
                 modelProviderHandler.handleSetProvider(content);
+                return true;
+            case "set_session_provider":
+                modelProviderHandler.handleSetSessionProvider(content);
                 return true;
             case "set_reasoning_effort":
                 modelProviderHandler.handleSetReasoningEffort(content);
@@ -175,6 +184,12 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "get_invocation_mode":
                 projectConfigHandler.handleGetInvocationMode();
+                return true;
+            case "get_session_invocation_mode":
+                projectConfigHandler.handleGetSessionInvocationMode();
+                return true;
+            case "get_session_runtime_state":
+                projectConfigHandler.handleGetSessionRuntimeState();
                 return true;
             case "set_invocation_mode":
                 projectConfigHandler.handleSetInvocationMode(content);
