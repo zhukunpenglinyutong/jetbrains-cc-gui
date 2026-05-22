@@ -411,7 +411,7 @@ public class ClaudeChatWindow {
 
         String suppliedForkTitle = forkTitle != null ? forkTitle.trim() : "";
         this.pendingForkTitle = suppliedForkTitle.isEmpty()
-                ? buildForkTitleFromSource(normalizedSourceSessionId)
+                ? buildForkTitleFromSource(project, normalizedSourceSessionId)
                 : suppliedForkTitle;
 
         // Load the source history so the branch tab visibly starts from the fork point.
@@ -441,7 +441,7 @@ public class ClaudeChatWindow {
      * When the source tab or message is unavailable, the bare [fork] marker is enough
      * to distinguish the branch tab from a normal restored session.
      */
-    private String buildForkTitleFromSource(String sourceSessionId) {
+    public static String buildForkTitleFromSource(Project project, String sourceSessionId) {
         try {
             Content sourceContent = ClaudeSDKToolWindow.findContentForSession(project, sourceSessionId);
             if (sourceContent == null) {

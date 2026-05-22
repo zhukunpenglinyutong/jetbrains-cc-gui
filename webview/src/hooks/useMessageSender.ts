@@ -363,8 +363,6 @@ export function useMessageSender({
 
     if (!text && !hasAttachments) return;
 
-    if (checkForkCommand(text)) return;
-
     // Check SDK status
     if (!sdkStatusLoaded) {
       addToast(t('chat.sdkStatusLoading'), 'info');
@@ -453,7 +451,6 @@ export function useMessageSender({
     currentProvider,
     permissionMode,
     selectedAgent,
-    checkForkCommand,
     buildUserContentBlocks,
     sendMessageToBackend,
     addToast,

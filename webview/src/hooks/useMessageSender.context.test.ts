@@ -244,7 +244,7 @@ describe('useMessageSender - /context command', () => {
     expect(call).toMatch(/^fork_session:/);
   });
 
-  it('executeMessage still treats /fork as a local action when replayed from the queue', () => {
+  it('executeMessage does not open a fork tab directly', () => {
     const opts = createOptions();
 
     const { result } = renderHook(() => useMessageSender(opts));
@@ -254,8 +254,8 @@ describe('useMessageSender - /context command', () => {
     });
 
     const calls = (window.sendToJava as any).mock.calls.map((call: string[]) => call[0]);
-    expect(calls.some((call: string) => call.startsWith('fork_session:'))).toBe(true);
-    expect(calls.some((call: string) => call.startsWith('send_message:'))).toBe(false);
+    expect(calls.some((call: string) => call.startsWith('fork_session:'))).toBe(false);
+    expect(calls.some((call: string) => call.startsWith('send_message:'))).toBe(true);
   });
 
   it('warns and does not fire fork_session without an existing Claude session', () => {

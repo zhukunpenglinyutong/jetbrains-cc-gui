@@ -20,13 +20,14 @@ import com.intellij.ui.content.ContentFactory;
 import com.intellij.ui.content.ContentManager;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Tab management handler
@@ -92,7 +93,7 @@ public class TabHandler extends BaseMessageHandler {
 
         if (!isValidSourceSessionId(sourceSessionId)) {
             LOG.warn("[TabHandler] fork_session payload has invalid sourceSessionId, ignoring");
-            callJavaScript("addErrorMessage", escapeJs("无法从源会话 fork：缺少 sourceSessionId"));
+            callJavaScript("addErrorMessage", escapeJs(getInvalidSourceSessionIdMessage(sourceSessionId)));
             return;
         }
         String currentSessionId = context.getSession() != null ? context.getSession().getSessionId() : null;
@@ -105,7 +106,10 @@ public class TabHandler extends BaseMessageHandler {
         LOG.info("[TabHandler] Forking new tab from source session: " + sourceSessionId);
         Project project = context.getProject();
         final String forkSourceId = sourceSessionId.trim();
-        final String forkSourceTitle = sourceTitle;
+        String suppliedTitle = sourceTitle != null ? sourceTitle.trim() : "";
+        final String forkSourceTitle = suppliedTitle.isEmpty()
+                ? ClaudeChatWindow.buildForkTitleFromSource(project, forkSourceId)
+                : suppliedTitle;
         CompletableFuture
                 .supplyAsync(() -> reserveForkTitle(project, forkSourceTitle))
                 .thenAccept(forkTitle -> createNewTabInternal(forkSourceId, forkTitle))
@@ -126,44 +130,80 @@ public class TabHandler extends BaseMessageHandler {
                 && sourceSessionId.equals(currentSessionId);
     }
 
+    static String getInvalidSourceSessionIdMessage(String sourceSessionId) {
+        String normalized = sourceSessionId != null ? sourceSessionId.trim() : "";
+        if (normalized.isEmpty()) {
+            return "无法从源会话 fork：缺少 sourceSessionId";
+        }
+        return "无法从源会话 fork：sourceSessionId 无效";
+    }
+
     static void addReservedForkTitle(Project project, String forkTitle) {
         if (project == null || forkTitle == null || forkTitle.trim().isEmpty()) {
             return;
         }
-        RESERVED_FORK_TITLES.computeIfAbsent(project, ignored -> ConcurrentHashMap.newKeySet()).add(forkTitle);
+        synchronized (RESERVED_FORK_TITLES) {
+            getOrCreateReservedForkTitles(project).add(forkTitle);
+        }
     }
 
     static void releaseReservedForkTitle(Project project, String forkTitle) {
         if (project == null || forkTitle == null || forkTitle.trim().isEmpty()) {
             return;
         }
-        Set<String> reservedTitles = RESERVED_FORK_TITLES.get(project);
-        if (reservedTitles == null) {
-            return;
-        }
-        reservedTitles.remove(forkTitle);
-        if (reservedTitles.isEmpty()) {
-            RESERVED_FORK_TITLES.remove(project);
+        synchronized (RESERVED_FORK_TITLES) {
+            Set<String> reservedTitles = RESERVED_FORK_TITLES.get(project);
+            if (reservedTitles == null) {
+                return;
+            }
+            reservedTitles.remove(forkTitle);
+            if (reservedTitles.isEmpty()) {
+                RESERVED_FORK_TITLES.remove(project);
+            }
         }
     }
 
     static Set<String> getReservedForkTitlesSnapshot(Project project) {
+        if (project == null) {
+            return Collections.emptySet();
+        }
+        synchronized (RESERVED_FORK_TITLES) {
+            Set<String> reservedTitles = RESERVED_FORK_TITLES.get(project);
+            return reservedTitles == null ? Collections.emptySet() : Set.copyOf(reservedTitles);
+        }
+    }
+
+    static String reserveForkTitle(Project project, String sourceTitle, Collection<String> persistedTitles) {
+        String normalizedSourceTitle = sourceTitle != null ? sourceTitle.trim() : "";
+
+        synchronized (RESERVED_FORK_TITLES) {
+            List<String> existingTitles = new ArrayList<>();
+            if (persistedTitles != null) {
+                existingTitles.addAll(persistedTitles);
+            }
+            if (project != null) {
+                existingTitles.addAll(getOrCreateReservedForkTitles(project));
+            }
+
+            String forkTitle = ForkTitleFormatter.buildForkTitle(normalizedSourceTitle, existingTitles);
+            if (project != null) {
+                getOrCreateReservedForkTitles(project).add(forkTitle);
+            }
+            return forkTitle;
+        }
+    }
+
+    private static Set<String> getOrCreateReservedForkTitles(Project project) {
         Set<String> reservedTitles = RESERVED_FORK_TITLES.get(project);
-        return reservedTitles == null ? Collections.emptySet() : Set.copyOf(reservedTitles);
+        if (reservedTitles == null) {
+            reservedTitles = new HashSet<>();
+            RESERVED_FORK_TITLES.put(project, reservedTitles);
+        }
+        return reservedTitles;
     }
 
     private String reserveForkTitle(Project project, String sourceTitle) {
-        String normalizedSourceTitle = sourceTitle != null ? sourceTitle.trim() : "";
-        if (normalizedSourceTitle.isEmpty()) {
-            return null;
-        }
-
-        List<String> existingTitles = new ArrayList<>(loadPersistedSessionTitles());
-        existingTitles.addAll(getReservedForkTitlesSnapshot(project));
-
-        String forkTitle = ForkTitleFormatter.buildForkTitle(normalizedSourceTitle, existingTitles);
-        addReservedForkTitle(project, forkTitle);
-        return forkTitle;
+        return reserveForkTitle(project, sourceTitle, loadPersistedSessionTitles());
     }
 
     private List<String> loadPersistedSessionTitles() {

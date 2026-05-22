@@ -4,6 +4,7 @@ import com.intellij.openapi.project.Project;
 import org.junit.Test;
 
 import java.lang.reflect.Proxy;
+import java.util.Collections;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
@@ -45,6 +46,44 @@ public class TabHandlerTest {
         assertFalse(TabHandler.isValidSourceSessionId("a".repeat(129)));
         assertFalse(TabHandler.isValidSourceSessionId(""));
         assertFalse(TabHandler.isValidSourceSessionId(null));
+    }
+
+    @Test
+    public void getInvalidSourceSessionIdMessageDistinguishesMissingFromInvalid() {
+        assertEquals("无法从源会话 fork：缺少 sourceSessionId", TabHandler.getInvalidSourceSessionIdMessage(null));
+        assertEquals("无法从源会话 fork：缺少 sourceSessionId", TabHandler.getInvalidSourceSessionIdMessage(""));
+        assertEquals("无法从源会话 fork：sourceSessionId 无效", TabHandler.getInvalidSourceSessionIdMessage("../session"));
+    }
+
+    @Test
+    public void reserveForkTitleUsesExistingReservationsBeforeAddingNewTitle() {
+        Project project = createProject("project-reservation");
+
+        String first = TabHandler.reserveForkTitle(project, "测试消息", Collections.emptyList());
+        String second = TabHandler.reserveForkTitle(project, "测试消息", Collections.emptyList());
+
+        assertEquals("测试消息[fork]", first);
+        assertEquals("测试消息[fork 2]", second);
+        assertEquals(Set.of(first, second), TabHandler.getReservedForkTitlesSnapshot(project));
+
+        TabHandler.releaseReservedForkTitle(project, first);
+        TabHandler.releaseReservedForkTitle(project, second);
+        assertEquals(Set.of(), TabHandler.getReservedForkTitlesSnapshot(project));
+    }
+
+    @Test
+    public void reserveForkTitleUsesReservationsForMissingSourceTitleFallback() {
+        Project project = createProject("project-empty-title-reservation");
+
+        String first = TabHandler.reserveForkTitle(project, "", Collections.emptyList());
+        String second = TabHandler.reserveForkTitle(project, null, Collections.emptyList());
+
+        assertEquals("[fork]", first);
+        assertEquals("[fork 2]", second);
+        assertEquals(Set.of(first, second), TabHandler.getReservedForkTitlesSnapshot(project));
+
+        TabHandler.releaseReservedForkTitle(project, first);
+        TabHandler.releaseReservedForkTitle(project, second);
     }
 
     private static Project createProject(String name) {

@@ -26,10 +26,6 @@ public final class ForkTitleFormatter {
      */
     public static String buildForkTitle(String sourceTitle, Collection<String> existingTitles) {
         String rootTitle = normalizeRootTitle(sourceTitle);
-        if (rootTitle.isEmpty()) {
-            return "[" + FORK_LABEL + "]";
-        }
-
         int nextIndex = findNextForkIndex(rootTitle, existingTitles);
         String suffix = nextIndex <= 1 ? "[" + FORK_LABEL + "]" : "[" + FORK_LABEL + " " + nextIndex + "]";
         return truncateRootForSuffix(rootTitle, suffix) + suffix;

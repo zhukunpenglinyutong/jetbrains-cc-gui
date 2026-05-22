@@ -50,4 +50,11 @@ public class ForkTitleFormatterTest {
         assertTrue(firstFork.length() <= 50);
         assertTrue(secondFork.length() <= 50);
     }
+
+    @Test
+    public void buildForkTitle_incrementsBareForkTitlesWhenSourceTitleIsEmpty() {
+        assertEquals("[fork]", ForkTitleFormatter.buildForkTitle("", Collections.emptyList()));
+        assertEquals("[fork 2]", ForkTitleFormatter.buildForkTitle("", Arrays.asList("[fork]")));
+        assertEquals("[fork 3]", ForkTitleFormatter.buildForkTitle(null, Arrays.asList("[fork]", "[fork 2]")));
+    }
 }
