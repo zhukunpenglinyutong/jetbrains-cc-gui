@@ -103,6 +103,39 @@ dependencies {
         }
 
         instrumentationTools()
+
+        // IDEs to verify the plugin against (used by `verifyPlugin` task).
+        // Mirrors what JetBrains Marketplace runs so we can catch binary
+        // incompatibility (e.g. new abstract methods in JCEF) before upload.
+        pluginVerifier()
+    }
+}
+
+intellijPlatform {
+    pluginVerification {
+        // Local verifier is stricter than the marketplace about descriptor
+        // name characters (rejects the Chinese parens in "CC GUI（Claude or
+        // Codex）"). The marketplace accepts that name, so we limit local
+        // failures to actual binary/internal API compatibility issues.
+        failureLevel = [
+            org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,
+            org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel.INTERNAL_API_USAGES
+        ]
+
+        // PythonCore is pinned to 243.x for compileOnly use across the
+        // sinceBuild=233 .. untilBuild=263.* range. Verifier on 262.x EAP
+        // cannot resolve com.jetbrains.python classes from a 243.x PythonCore,
+        // so we mark the package as external — references from the optional
+        // python-features.xml content module are guarded by the optional
+        // dependency on com.intellij.modules.python at runtime.
+        externalPrefixes = ['com.jetbrains.python']
+
+        ides {
+            // 2026.2 EAP build 262.6228.19 – the exact build that surfaced
+            // the CefResourceHandler / PluginManagerCore issues during
+            // marketplace verification.
+            ide('IU', '262.6228.19')
+        }
     }
 }
 

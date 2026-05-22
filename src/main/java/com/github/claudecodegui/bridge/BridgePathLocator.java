@@ -2,7 +2,7 @@ package com.github.claudecodegui.bridge;
 
 import com.github.claudecodegui.util.PlatformUtils;
 import com.intellij.ide.plugins.IdeaPluginDescriptor;
-import com.intellij.ide.plugins.PluginManagerCore;
+import com.intellij.ide.plugins.PluginManager;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.extensions.PluginId;
@@ -64,8 +64,10 @@ final class BridgePathLocator {
 
     static void addPluginCandidates(List<File> possibleDirs) {
         try {
+            // findEnabledPlugin is sufficient here: we look up our own plugin,
+            // and running code implies the plugin is enabled.
             PluginId pluginId = PluginId.getId(PlatformUtils.getPluginId());
-            IdeaPluginDescriptor descriptor = PluginManagerCore.getPlugin(pluginId);
+            IdeaPluginDescriptor descriptor = PluginManager.getInstance().findEnabledPlugin(pluginId);
             if (descriptor != null) {
                 File pluginDir = descriptor.getPluginPath().toFile();
                 addCandidate(possibleDirs, new File(pluginDir, SDK_DIR_NAME));

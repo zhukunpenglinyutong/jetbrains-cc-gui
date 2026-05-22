@@ -8,6 +8,7 @@ import org.cef.callback.CefCallback;
 import org.cef.handler.CefLoadHandler;
 import org.cef.handler.CefRequestHandlerAdapter;
 import org.cef.handler.CefResourceHandler;
+import org.cef.handler.CefResourceHandlerAdapter;
 import org.cef.handler.CefResourceRequestHandler;
 import org.cef.handler.CefResourceRequestHandlerAdapter;
 import org.cef.misc.BoolRef;
@@ -58,7 +59,13 @@ final class UiFontResourceRequestHandler extends CefRequestHandlerAdapter {
         return resourceRequestHandler;
     }
 
-    private static final class FontResourceHandler implements CefResourceHandler {
+    /**
+     * Extends {@link CefResourceHandlerAdapter} rather than implementing
+     * {@link CefResourceHandler} directly so that future JCEF versions can add
+     * abstract methods (e.g. {@code open}/{@code read}/{@code skip} introduced
+     * in newer CEF builds) without breaking binary compatibility.
+     */
+    private static final class FontResourceHandler extends CefResourceHandlerAdapter {
         private final UiFontResourceService.FontResource resource;
         private InputStream stream;
 
@@ -129,7 +136,12 @@ final class UiFontResourceRequestHandler extends CefRequestHandlerAdapter {
         }
     }
 
-    private static final class MissingFontResourceHandler implements CefResourceHandler {
+    /**
+     * Extends {@link CefResourceHandlerAdapter} rather than implementing
+     * {@link CefResourceHandler} directly so that future JCEF versions can add
+     * abstract methods without breaking binary compatibility.
+     */
+    private static final class MissingFontResourceHandler extends CefResourceHandlerAdapter {
         @Override
         public boolean processRequest(CefRequest request, CefCallback callback) {
             callback.Continue();

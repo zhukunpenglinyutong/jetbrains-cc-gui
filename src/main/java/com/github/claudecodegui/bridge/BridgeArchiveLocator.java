@@ -2,7 +2,7 @@ package com.github.claudecodegui.bridge;
 
 import com.github.claudecodegui.util.PlatformUtils;
 import com.intellij.ide.plugins.IdeaPluginDescriptor;
-import com.intellij.ide.plugins.PluginManagerCore;
+import com.intellij.ide.plugins.PluginManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.extensions.PluginId;
 
@@ -45,31 +45,53 @@ final class BridgeArchiveLocator {
      * Resolve the {@link IdeaPluginDescriptor} that contains ai-bridge.zip,
      * falling back to a name/id-based scan of all loaded plugins when the
      * primary id lookup fails.
+     *
+     * <p>The primary lookup uses {@code findEnabledPlugin}, which is sufficient
+     * because we are looking up our own plugin (running code means enabled).
+     * The fallback scan exists for dev sandbox scenarios where the plugin id
+     * detected at runtime may not match the descriptor registered with the
+     * platform.
      */
     static IdeaPluginDescriptor resolveDescriptor() {
-        PluginId pluginId = PluginId.getId(PlatformUtils.getPluginId());
-        LOG.info("[BridgeResolver] Plugin ID: " + PlatformUtils.getPluginId());
-        IdeaPluginDescriptor descriptor = PluginManagerCore.getPlugin(pluginId);
+        String expectedId = PlatformUtils.getPluginId();
+        PluginId pluginId = PluginId.getId(expectedId);
+        LOG.info("[BridgeResolver] Plugin ID: " + expectedId);
+        IdeaPluginDescriptor descriptor = PluginManager.getInstance().findEnabledPlugin(pluginId);
         if (descriptor != null) {
             return descriptor;
         }
 
-        LOG.warn("[BridgeResolver] Cannot get plugin descriptor by PluginId: " + PlatformUtils.getPluginId());
+        LOG.warn("[BridgeResolver] Cannot get plugin descriptor by PluginId: " + expectedId);
 
-        // Try to find by iterating through all plugins
-        for (IdeaPluginDescriptor plugin : PluginManagerCore.getPlugins()) {
+        // Fallback: scan all plugins. PluginManager.getPlugins() is @Deprecated but
+        // remains the only public API for enumerating all plugins; verifier treats
+        // it as a deprecation warning, not an INTERNAL_API_USAGES failure.
+        // Match priority: (1) exact id, (2) id contains "claude", (3) name contains "Claude".
+        IdeaPluginDescriptor idMatch = null;
+        IdeaPluginDescriptor nameMatch = null;
+        for (IdeaPluginDescriptor plugin : PluginManager.getPlugins()) {
             String id = plugin.getPluginId().getIdString();
             String name = plugin.getName();
-            // Match by plugin ID or name
-            if (id.contains("claude") || id.contains("Claude") ||
-                (name != null && (name.contains("Claude") || name.contains("claude")))) {
-                LOG.debug("[BridgeResolver] Found candidate plugin: id=" + id + ", name=" + name + ", path=" + plugin.getPluginPath());
-                File candidateDir = plugin.getPluginPath().toFile();
-                File candidateArchive = new File(candidateDir, SDK_ARCHIVE_NAME);
-                if (candidateArchive.exists()) {
-                    LOG.debug("[BridgeResolver] Found ai-bridge.zip in candidate plugin: " + candidateArchive.getAbsolutePath());
-                    return plugin;
-                }
+
+            if (expectedId.equals(id)) {
+                LOG.debug("[BridgeResolver] Exact id match: " + id + ", path=" + plugin.getPluginPath());
+                return plugin;
+            }
+            if (idMatch == null && (id.contains("claude") || id.contains("Claude"))) {
+                idMatch = plugin;
+            } else if (nameMatch == null && name != null && (name.contains("Claude") || name.contains("claude"))) {
+                nameMatch = plugin;
+            }
+        }
+
+        IdeaPluginDescriptor candidate = idMatch != null ? idMatch : nameMatch;
+        if (candidate != null) {
+            LOG.debug("[BridgeResolver] Fuzzy match: id=" + candidate.getPluginId().getIdString()
+                    + ", name=" + candidate.getName() + ", path=" + candidate.getPluginPath());
+            File candidateArchive = new File(candidate.getPluginPath().toFile(), SDK_ARCHIVE_NAME);
+            if (candidateArchive.exists()) {
+                LOG.debug("[BridgeResolver] Found ai-bridge.zip in candidate plugin: " + candidateArchive.getAbsolutePath());
+                return candidate;
             }
         }
 
