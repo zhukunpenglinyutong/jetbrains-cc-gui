@@ -320,6 +320,16 @@ public class CodexCliSessionTest {
         assertTrue(error.contains("req-503"));
     }
 
+    @Test(expected = NoSuchMethodException.class)
+    public void legacyThreeArgumentParseEventOverloadIsRemoved() throws Exception {
+        CodexCliSession.class.getDeclaredMethod(
+                "parseEvent",
+                String.class,
+                CliSessionCallback.class,
+                StringBuilder.class
+        );
+    }
+
     private static void invokeParseEvent(
             CodexCliSession session,
             String line,

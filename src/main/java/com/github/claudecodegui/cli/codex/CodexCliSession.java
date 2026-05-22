@@ -172,10 +172,6 @@ public class CodexCliSession {
 
     // ── event parsing ────────────────────────────────────────────────────────
 
-    private void parseEvent(String line, CliSessionCallback callback, StringBuilder assistantContent) {
-        parseEvent(line, callback, assistantContent, null);
-    }
-
     private void parseEvent(
             String line,
             CliSessionCallback callback,
