@@ -48,6 +48,7 @@
     "addAttachment": "新增附件",
     "stopGeneration": "停止生成",
     "generatingResponse": "正在生成響應",
+    "queueWaiting": "佇列中，前面還有 {{count}} 條等待",
     "elapsedTime": "已用 {{time}}",
     "minutesAndSeconds": "{{minutes}} 分 {{seconds}} 秒",
     "imagePreview": "預覽",
@@ -132,6 +133,15 @@
         "russian": "Русский",
         "korean": "한국어",
         "portuguese": "Português (Brasil)"
+      },
+      "invocationMode": {
+        "label": "呼叫模式",
+        "sdk": "SDK 模式",
+        "sdkDesc": "使用官方 SDK 整合（預設，穩定，支援權限確認）",
+        "cli": "CLI 模式",
+        "cliDesc": "直接呼叫本機 Claude CLI",
+        "cliPathPlaceholder": "Claude CLI 可執行檔案路徑（留空自動偵測）",
+        "hint": "CLI 模式不支援 thinking / /context 等部分功能，權限模式跟隨上方設定。"
       },
       "nodePath": {
         "label": "Node.js 路徑",

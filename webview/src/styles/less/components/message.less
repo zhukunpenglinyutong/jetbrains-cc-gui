@@ -990,6 +990,29 @@
     line-height: 1.4;
 }
 
+@keyframes streaming-connect-enter {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+        filter: blur(2px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+        filter: blur(0);
+    }
+}
+
+.streaming-connect-enter {
+    animation: streaming-connect-enter 350ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .streaming-connect-enter {
+        animation-duration: 0.01ms;
+    }
+}
+
 @keyframes thinking-pulse {
     0%, 100% {
         opacity: 1;

@@ -85,6 +85,7 @@ public class SessionLifecycleManager {
         String previousPermissionMode = (oldSession != null) ? oldSession.getPermissionMode() : defaultSession.getPermissionMode();
         String previousProvider = (oldSession != null) ? oldSession.getProvider() : defaultSession.getProvider();
         String previousModel = (oldSession != null) ? oldSession.getModel() : defaultSession.getModel();
+        String previousInvocationMode = (oldSession != null) ? oldSession.getClaudeInvocationMode() : readClaudeInvocationMode();
         LOG.info("Preserving session state: mode=" + previousPermissionMode
                          + ", provider=" + previousProvider + ", model=" + previousModel);
 
@@ -112,6 +113,7 @@ public class SessionLifecycleManager {
             newSession.setPermissionMode(previousPermissionMode);
             newSession.setProvider(previousProvider);
             newSession.setModel(previousModel);
+            newSession.setClaudeInvocationMode(previousInvocationMode);
             LOG.info("Restored session state to new session: mode=" + previousPermissionMode
                              + ", provider=" + previousProvider + ", model=" + previousModel);
 
@@ -208,11 +210,13 @@ public class SessionLifecycleManager {
         String previousPermissionMode;
         String previousProvider;
         String previousModel;
+        String previousInvocationMode;
 
         if (oldSession != null) {
             previousPermissionMode = oldSession.getPermissionMode();
             previousProvider = oldSession.getProvider();
             previousModel = oldSession.getModel();
+            previousInvocationMode = oldSession.getClaudeInvocationMode();
         } else {
             PropertiesComponent props = PropertiesComponent.getInstance();
             String savedMode = props.getValue(PERMISSION_MODE_PROPERTY_KEY);
@@ -221,6 +225,7 @@ public class SessionLifecycleManager {
                                              ? savedMode.trim() : defaultSession.getPermissionMode();
             previousProvider = defaultSession.getProvider();
             previousModel = defaultSession.getModel();
+            previousInvocationMode = readClaudeInvocationMode();
         }
         LOG.info("Preserving session state when loading history: mode=" + previousPermissionMode
                          + ", provider=" + previousProvider + ", model=" + previousModel);
@@ -247,6 +252,7 @@ public class SessionLifecycleManager {
             newSession.setPermissionMode(previousPermissionMode);
             newSession.setProvider(provider != null && !provider.trim().isEmpty() ? provider : previousProvider);
             newSession.setModel(previousModel);
+            newSession.setClaudeInvocationMode(previousInvocationMode);
             LOG.info("Restored session state to loaded session: mode=" + previousPermissionMode
                              + ", provider=" + newSession.getProvider() + ", model=" + previousModel);
 
@@ -258,8 +264,10 @@ public class SessionLifecycleManager {
                                     ? projectPath : determineWorkingDirectory();
             newSession.setSessionInfo(sessionId, workingDir);
 
-            // Prewarm daemon runtime for the historical session so /context and first message are fast
-            host.getClaudeSDKBridge().prewarmDaemonAsync(workingDir, newSession.getRuntimeSessionEpoch(), sessionId);
+            // Prewarm daemon runtime for SDK sessions so /context and first message are fast.
+            if (shouldPrewarmClaudeDaemon(newSession)) {
+                host.getClaudeSDKBridge().prewarmDaemonAsync(workingDir, newSession.getRuntimeSessionEpoch(), sessionId);
+            }
 
             newSession.loadFromServer().thenRun(() -> ApplicationManager.getApplication().invokeLater(() -> {
                 host.callJavaScript("historyLoadComplete");
@@ -428,6 +436,22 @@ public class SessionLifecycleManager {
         }
     }
 
+    private boolean shouldPrewarmClaudeDaemon(ClaudeSession session) {
+        return session != null
+                && "claude".equals(session.getProvider())
+                && !"cli".equals(session.getClaudeInvocationMode());
+    }
+
+    private String readClaudeInvocationMode() {
+        try {
+            String mode = new CodemossSettingsService().getClaudeInvocationMode();
+            return SessionState.isValidClaudeInvocationMode(mode) ? mode : "sdk";
+        } catch (Exception e) {
+            LOG.warn("Failed to read Claude invocation mode, defaulting to sdk: " + e.getMessage());
+            return "sdk";
+        }
+    }
+
     private String getCurrentEditorFilePath() {
         return com.github.claudecodegui.util.EditorFileUtils.getCurrentEditorFilePath(this.host.getProject());
     }
@@ -445,7 +469,9 @@ public class SessionLifecycleManager {
 
         newSession.setSessionInfo(null, workingDirectory);
         LOG.info(successLogPrefix + workingDirectory + ", epoch=" + newSession.getRuntimeSessionEpoch());
-        host.getClaudeSDKBridge().prewarmDaemonAsync(workingDirectory, newSession.getRuntimeSessionEpoch());
+        if (shouldPrewarmClaudeDaemon(newSession)) {
+            host.getClaudeSDKBridge().prewarmDaemonAsync(workingDirectory, newSession.getRuntimeSessionEpoch());
+        }
         fetchSlashCommandsOnStartup();
 
         ApplicationManager.getApplication().invokeLater(() -> {

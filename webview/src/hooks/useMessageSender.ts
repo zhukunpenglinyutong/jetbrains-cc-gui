@@ -24,6 +24,10 @@ function createContextUsageRequestId(): string {
   return `context-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function getClaudeInvocationMode(): 'sdk' | 'cli' {
+  return window.__CLAUDE_INVOCATION_MODE__ === 'cli' ? 'cli' : 'sdk';
+}
+
 export interface UseMessageSenderOptions {
   t: TFunction;
   addToast: (message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
@@ -139,6 +143,13 @@ export function useMessageSender({
         return true;
       }
 
+      if (getClaudeInvocationMode() === 'cli') {
+        addToast(t('chat.contextUsageUnavailableInCliMode', {
+          defaultValue: 'Context usage is unavailable in Claude CLI mode. Switch invocation mode to SDK to use /context.',
+        }), 'warning');
+        return true;
+      }
+
       const requestId = createContextUsageRequestId();
 
       // Open dialog with loading state immediately
@@ -208,6 +219,7 @@ export function useMessageSender({
             type: 'image',
             src: `data:${att.mediaType};base64,${att.data}`,
             mediaType: att.mediaType,
+            sourceKind: 'base64',
           });
         } else {
           blocks.push({
@@ -260,6 +272,7 @@ export function useMessageSender({
           })),
           agent: agentInfo,
           fileTags: fileTagsInfo,
+          invocationMode: currentProvider === 'claude' ? getClaudeInvocationMode() : undefined,
           permissionMode: effectivePermissionMode,
         });
         sendBridgeEvent('send_message_with_attachments', payload);
@@ -269,6 +282,7 @@ export function useMessageSender({
           text,
           agent: agentInfo,
           fileTags: fileTagsInfo,
+          invocationMode: currentProvider === 'claude' ? getClaudeInvocationMode() : undefined,
           permissionMode: effectivePermissionMode,
         });
         sendBridgeEvent('send_message', fallbackPayload);
@@ -278,6 +292,7 @@ export function useMessageSender({
         text,
         agent: agentInfo,
         fileTags: fileTagsInfo,
+        invocationMode: currentProvider === 'claude' ? getClaudeInvocationMode() : undefined,
         permissionMode: effectivePermissionMode,
       });
       sendBridgeEvent('send_message', payload);
@@ -410,9 +425,19 @@ export function useMessageSender({
   }, [checkNewSessionCommand, checkLocalCommand, checkContextCommand, checkUnimplementedCommand, executeMessage]);
 
   /**
-   * Interrupt the current session
+   * Interrupt the current session.
+   *
+   * Calls the canonical onStreamEnd callback to atomically clean up all
+   * streaming state (refs, buffers, turn tracking) and stamps
+   * __streamEndProcessedTurnId so the backend's delayed onStreamEnd
+   * (from handleInterruptSession) becomes a no-op via the idempotency guard.
    */
   const interruptSession = useCallback(() => {
+    if (typeof window.onStreamEnd === 'function') {
+      window.onStreamEnd();
+    }
+    // Safety net: ensure loading/streaming are reset even when onStreamEnd
+    // ran in 'skip' mode (no active streaming turn to end).
     setLoading(false);
     setLoadingStartTime(null);
     setStreamingActive(false);

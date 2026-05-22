@@ -23,9 +23,12 @@ import java.util.function.Supplier;
 
 /**
  * Queries MCP server status and tool metadata through the Node bridge.
+ * Status results are cached for 30 seconds to avoid spawning a Node.js
+ * process on every frontend poll.
  */
 class ClaudeMcpQueryService {
 
+    private static final long STATUS_CACHE_TTL_MS = 30_000L; // 30 seconds
     private static final String CHANNEL_SCRIPT = "channel-manager.js";
     private static final String MCP_STATUS_CHANNEL_ID = "__mcp_status__";
     private static final String MCP_TOOLS_CHANNEL_ID = "__mcp_tools__";
@@ -37,6 +40,11 @@ class ClaudeMcpQueryService {
     private final ProcessManager processManager;
     private final EnvironmentConfigurator envConfigurator;
     private final ClaudeJsonOutputExtractor outputExtractor;
+
+    // Cache for MCP server status queries (keyed by cwd)
+    private volatile String cachedStatusCwd;
+    private volatile List<JsonObject> cachedStatusResult;
+    private volatile long cachedStatusTimestamp = 0;
 
     ClaudeMcpQueryService(
             Logger log,
@@ -57,6 +65,15 @@ class ClaudeMcpQueryService {
     }
 
     CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd) {
+        // Return cached result if fresh
+        List<JsonObject> cached = cachedStatusResult;
+        String cachedCwd = cachedStatusCwd;
+        if (cached != null && cwd != null && cwd.equals(cachedCwd)
+                && System.currentTimeMillis() - cachedStatusTimestamp < STATUS_CACHE_TTL_MS) {
+            log.debug("[McpStatus] Returning cached status (" + cached.size() + " servers)");
+            return CompletableFuture.completedFuture(cached);
+        }
+
         return CompletableFuture.supplyAsync(() -> {
             log.info("[McpStatus] Starting getMcpServerStatus, cwd=" + cwd);
 
@@ -79,6 +96,9 @@ class ClaudeMcpQueryService {
                         servers.add(server.getAsJsonObject());
                     }
                     log.info("[McpStatus] Successfully parsed " + servers.size() + " MCP servers in " + result.elapsedMs + "ms");
+                    cachedStatusCwd = cwd;
+                    cachedStatusResult = servers;
+                    cachedStatusTimestamp = System.currentTimeMillis();
                     return servers;
                 } catch (Exception e) {
                     log.warn("[McpStatus] Failed to parse MCP status JSON: " + e.getMessage());
@@ -97,6 +117,9 @@ class ClaudeMcpQueryService {
                             servers.add(server.getAsJsonObject());
                         }
                         log.info("[McpStatus] Fallback marker parse: " + servers.size() + " servers");
+                        cachedStatusCwd = cwd;
+                        cachedStatusResult = servers;
+                        cachedStatusTimestamp = System.currentTimeMillis();
                         return servers;
                     } catch (Exception e) {
                         log.debug("[McpStatus] Fallback marker parse failed: " + e.getMessage());
@@ -119,6 +142,11 @@ class ClaudeMcpQueryService {
                 }
             }
 
+            if (!servers.isEmpty()) {
+                cachedStatusCwd = cwd;
+                cachedStatusResult = servers;
+                cachedStatusTimestamp = System.currentTimeMillis();
+            }
             return servers;
         });
     }
@@ -240,7 +268,7 @@ class ClaudeMcpQueryService {
 
             long elapsed = System.currentTimeMillis() - startTime;
             if (process.isAlive()) {
-                PlatformUtils.terminateProcess(process);
+                PlatformUtils.terminateProcessAndWait(process, 3, TimeUnit.SECONDS);
             }
 
             return new MarkerResult(markerJson.get(), output.toString().trim(), elapsed);
@@ -248,15 +276,15 @@ class ClaudeMcpQueryService {
             log.error(logPrefix + " Exception: " + e.getMessage());
             return new MarkerResult(null, "", System.currentTimeMillis() - startTime);
         } finally {
-            if (process != null) {
-                try {
-                    if (process.isAlive()) {
-                        PlatformUtils.terminateProcess(process);
+                if (process != null) {
+                    try {
+                        if (process.isAlive()) {
+                            PlatformUtils.terminateProcessAndWait(process, 3, TimeUnit.SECONDS);
+                        }
+                    } finally {
+                        processManager.unregisterProcess(channelId, process);
                     }
-                } finally {
-                    processManager.unregisterProcess(channelId, process);
                 }
-            }
         }
     }
 

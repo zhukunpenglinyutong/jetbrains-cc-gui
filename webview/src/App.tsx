@@ -63,6 +63,7 @@ const App = () => {
     subagentHistories, setSubagentHistories,
     setStatus,
     loading, setLoading, setLoadingStartTime,
+    setQueueDisplayState, setQueueAheadCount,
     setIsThinking,
     streamingActive, setStreamingActive,
   } = useMessages();
@@ -212,6 +213,7 @@ const App = () => {
   useWindowCallbacks({
     t, addToast, clearToasts,
     setMessages, setStatus, setLoading, setLoadingStartTime,
+    setQueueDisplayState, setQueueAheadCount,
     setIsThinking, setStreamingActive, setHistoryData,
     setCurrentSessionId, setUsagePercentage, setUsageUsedTokens, setUsageMaxTokens,
     setPermissionMode, setClaudePermissionMode, setCodexPermissionMode,

@@ -251,6 +251,13 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
     }
 
     const currentLastThinking = getThinkingText(blocks[lastThinkingIdx]);
+    if (
+      thinkingIndices.length === 1 &&
+      currentLastThinking &&
+      !thinking.startsWith(currentLastThinking)
+    ) {
+      return blocks;
+    }
     if (currentLastThinking === desiredLastThinking) {
       return blocks;
     }

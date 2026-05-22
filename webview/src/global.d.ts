@@ -38,9 +38,19 @@ interface Window {
   showLoading?: (value: string | boolean) => void;
 
   /**
+   * Show provider queue state.
+   */
+  showQueueStatus?: (state: string, aheadCount?: string | number) => void;
+
+  /**
    * Show thinking status
    */
   showThinkingStatus?: (value: string | boolean) => void;
+
+  /**
+   * Update cached invocation mode for Claude sends.
+   */
+  updateInvocationMode?: (json: string) => void;
 
   /**
    * Show conversation summary/compaction notice
@@ -692,9 +702,14 @@ interface Window {
   __pendingUpdateRaf?: number | null;
   __pendingUpdateJson?: string | null;
   __pendingUpdateSequence?: number | null;
+  __streamingDeltaRenderingFrame?: number;
   __minAcceptedUpdateSequence?: number;
   /** Cancel pending rAF-deferred updateMessages (set by messageCallbacks, called by onStreamEnd). */
   __cancelPendingUpdateMessages?: () => void;
+  /** Currently active streaming scope key: provider:tabId:turnId. */
+  __activeStreamScopeKey?: string | null;
+  /** Cached chat-side Claude invocation mode, populated by backend settings callback. */
+  __CLAUDE_INVOCATION_MODE__?: 'sdk' | 'cli';
 
   /**
    * Rewind result callback - returns the result of a rewind operation

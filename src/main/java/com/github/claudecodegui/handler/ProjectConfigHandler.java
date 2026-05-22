@@ -85,7 +85,14 @@ public class ProjectConfigHandler {
         return obj;
     }
 
-    /** Run a getter and push the JSON payload; on error, push {@code fallback} so the UI always gets a response. */
+    /**
+     * Respond With Json
+     *
+     * @param jsCallback js callback
+     * @param producer producer
+     * @param fallback fallback
+     * @param errorLogMessage error log message
+     */
     private void respondWithJson(String jsCallback, ThrowingJsonSupplier producer, JsonElement fallback,
                                  String errorLogMessage) {
         try {
@@ -238,6 +245,39 @@ public class ProjectConfigHandler {
         }
     }
 
+    public void handleGetInvocationMode() {
+        respondWithJson("window.updateInvocationMode",
+            () -> jsonOf("invocationMode", settingsService.getClaudeInvocationMode()),
+            jsonOf("invocationMode", "sdk"),
+            "Failed to get Claude invocation mode");
+    }
+
+    public void handleSetInvocationMode(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            String mode = readString(json, "invocationMode", "sdk");
+            settingsService.setClaudeInvocationMode(mode);
+            pushJson("window.updateInvocationMode", jsonOf("invocationMode", settingsService.getClaudeInvocationMode()));
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set Claude invocation mode: " + e.getMessage(), e);
+            showError("Failed to save Claude invocation mode: " + e.getMessage());
+        }
+    }
+
+    public void handleSetCliPath(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            String path = readString(json, "claudeCliPath", "");
+            settingsService.setClaudeCliPath(path);
+            JsonObject response = new JsonObject();
+            response.addProperty("claudeCliPath", settingsService.getClaudeCliPath());
+            pushJson("window.updateClaudeCliPath", response);
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set Claude CLI path: " + e.getMessage(), e);
+            showError("Failed to save Claude CLI path: " + e.getMessage());
+        }
+    }
+
     public void handleGetAutoOpenFileEnabled() {
         respondWithJson("window.updateAutoOpenFileEnabled",
             () -> {
@@ -294,6 +334,10 @@ public class ProjectConfigHandler {
         return jsonOf("permissionDialogTimeoutSeconds", effectiveSeconds);
     }
 
+    /**
+     * Handle Get Send Shortcut
+     *
+     */
     public void handleGetSendShortcut() {
         try {
             String sendShortcut = PropertiesComponent.getInstance().getValue(SEND_SHORTCUT_PROPERTY_KEY, "enter");

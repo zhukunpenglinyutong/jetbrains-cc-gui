@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Session state management.
@@ -19,6 +20,7 @@ public class SessionState {
      * Shared across SessionHandler (payload validation) and ClaudeSession (mode resolution).
      */
     public static final Set<String> VALID_PERMISSION_MODES;
+    public static final Set<String> VALID_CLAUDE_INVOCATION_MODES;
     static {
         Set<String> modes = new HashSet<>();
         modes.add("default");
@@ -27,6 +29,11 @@ public class SessionState {
         modes.add("autoEdit");
         modes.add("bypassPermissions");
         VALID_PERMISSION_MODES = Collections.unmodifiableSet(modes);
+
+        Set<String> invocationModes = new HashSet<>();
+        invocationModes.add("sdk");
+        invocationModes.add("cli");
+        VALID_CLAUDE_INVOCATION_MODES = Collections.unmodifiableSet(invocationModes);
     }
 
     /**
@@ -34,6 +41,10 @@ public class SessionState {
      */
     public static boolean isValidPermissionMode(String mode) {
         return mode != null && VALID_PERMISSION_MODES.contains(mode.trim());
+    }
+
+    public static boolean isValidClaudeInvocationMode(String mode) {
+        return mode != null && VALID_CLAUDE_INVOCATION_MODES.contains(mode.trim());
     }
 
     // Session identifiers
@@ -45,6 +56,9 @@ public class SessionState {
     private boolean busy = false;
     private boolean loading = false;
     private String error = null;
+    private ClaudeSession.SessionCallback.QueueDisplayState queueDisplayState =
+            ClaudeSession.SessionCallback.QueueDisplayState.NONE;
+    private int queueAheadCount = 0;
 
     // Message history
     private final List<ClaudeSession.Message> messages = new ArrayList<>();
@@ -61,6 +75,7 @@ public class SessionState {
     private volatile String permissionMode = "bypassPermissions";
     private volatile String model = "claude-sonnet-4-6";
     private volatile String provider = "claude";
+    private volatile String claudeInvocationMode = "sdk";
     // Reasoning effort (thinking depth)
     private volatile String reasoningEffort = "high";
 
@@ -69,6 +84,7 @@ public class SessionState {
 
     // PSI context collection toggle
     private boolean psiContextEnabled = true;
+    private final AtomicLong pendingSendInvalidationEpoch = new AtomicLong(0);
 
     // Getters
     public String getSessionId() {
@@ -89,6 +105,14 @@ public class SessionState {
 
     public String getError() {
         return error;
+    }
+
+    public ClaudeSession.SessionCallback.QueueDisplayState getQueueDisplayState() {
+        return queueDisplayState;
+    }
+
+    public int getQueueAheadCount() {
+        return queueAheadCount;
     }
 
     public List<ClaudeSession.Message> getMessages() {
@@ -123,6 +147,10 @@ public class SessionState {
         return provider;
     }
 
+    public String getClaudeInvocationMode() {
+        return claudeInvocationMode;
+    }
+
     public String getReasoningEffort() {
         return reasoningEffort;
     }
@@ -139,6 +167,18 @@ public class SessionState {
 
     public boolean isPsiContextEnabled() {
         return psiContextEnabled;
+    }
+
+    public long capturePendingSendInvalidationEpoch() {
+        return pendingSendInvalidationEpoch.get();
+    }
+
+    public long invalidatePendingSendOperations() {
+        return pendingSendInvalidationEpoch.incrementAndGet();
+    }
+
+    public boolean isPendingSendOperationCurrent(long epoch) {
+        return pendingSendInvalidationEpoch.get() == epoch;
     }
 
     // Setters
@@ -160,6 +200,16 @@ public class SessionState {
 
     public void setError(String error) {
         this.error = error;
+    }
+
+    public void setQueueDisplayState(ClaudeSession.SessionCallback.QueueDisplayState queueDisplayState) {
+        this.queueDisplayState = queueDisplayState != null
+                ? queueDisplayState
+                : ClaudeSession.SessionCallback.QueueDisplayState.NONE;
+    }
+
+    public void setQueueAheadCount(int queueAheadCount) {
+        this.queueAheadCount = Math.max(0, queueAheadCount);
     }
 
     public void setSummary(String summary) {
@@ -188,6 +238,15 @@ public class SessionState {
 
     public void setProvider(String provider) {
         this.provider = provider;
+    }
+
+    public void setClaudeInvocationMode(String claudeInvocationMode) {
+        if (claudeInvocationMode == null) {
+            this.claudeInvocationMode = "sdk";
+            return;
+        }
+        String trimmed = claudeInvocationMode.trim();
+        this.claudeInvocationMode = VALID_CLAUDE_INVOCATION_MODES.contains(trimmed) ? trimmed : "sdk";
     }
 
     public void setReasoningEffort(String reasoningEffort) {

@@ -30,7 +30,7 @@ checkstyle {
 }
 
 group = 'com.github.idea-claude-code-gui'
-version = '0.4.3'
+version = '0.4.0-Alpha1'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -245,6 +245,8 @@ tasks.named('jarSearchableOptions') {
 tasks.named('runIde') {
     jvmArgumentProviders.add({
         [
+            // Move Java heap above 4GB to free low address space for native memory
+            '-XX:HeapBaseMinAddress=4g',
             '-Djcef.sandbox.enable=false',
             // Disable automatic plugin unloading (prevents unloading when file changes are detected)
             '-Didea.auto.reload.plugins=false',

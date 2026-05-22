@@ -40,6 +40,8 @@ public class CodemossSettingsService {
     private static final String UI_FONT_CONFIG_KEY = "uiFont";
     private static final String UI_FONT_MODE_KEY = "mode";
     private static final String UI_FONT_CUSTOM_PATH_KEY = "customFontPath";
+    private static final String CLAUDE_INVOCATION_MODE_KEY = "claudeInvocationMode";
+    private static final String CLAUDE_CLI_PATH_KEY = "claudeCliPath";
     private static final Set<String> VALID_UI_FONT_MODES = Set.of(
             FontConfigService.UI_FONT_MODE_FOLLOW_EDITOR,
             FontConfigService.UI_FONT_MODE_CUSTOM_FILE
@@ -1722,6 +1724,45 @@ public class CodemossSettingsService {
         }
 
         return CODEX_RUNTIME_ACCESS_INACTIVE;
+    }
+
+    public String getClaudeInvocationMode() throws IOException {
+        JsonObject config = readConfig();
+        if (config.has(CLAUDE_INVOCATION_MODE_KEY) && !config.get(CLAUDE_INVOCATION_MODE_KEY).isJsonNull()) {
+            String mode = config.get(CLAUDE_INVOCATION_MODE_KEY).getAsString();
+            if ("cli".equals(mode)) {
+                return "cli";
+            }
+        }
+        return "sdk";
+    }
+
+    public void setClaudeInvocationMode(String mode) throws IOException {
+        JsonObject config = readConfig();
+        config.addProperty(CLAUDE_INVOCATION_MODE_KEY, "cli".equals(mode) ? "cli" : "sdk");
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set Claude invocation mode: " + getClaudeInvocationMode());
+    }
+
+    public String getClaudeCliPath() throws IOException {
+        JsonObject config = readConfig();
+        if (!config.has(CLAUDE_CLI_PATH_KEY) || config.get(CLAUDE_CLI_PATH_KEY).isJsonNull()) {
+            return "";
+        }
+        String path = config.get(CLAUDE_CLI_PATH_KEY).getAsString();
+        return path != null ? path.trim() : "";
+    }
+
+    public void setClaudeCliPath(String path) throws IOException {
+        JsonObject config = readConfig();
+        String normalized = path != null ? path.trim() : "";
+        if (normalized.isEmpty()) {
+            config.remove(CLAUDE_CLI_PATH_KEY);
+        } else {
+            config.addProperty(CLAUDE_CLI_PATH_KEY, normalized);
+        }
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set Claude CLI path: " + (normalized.isEmpty() ? "(auto)" : normalized));
     }
 
     public int saveCodexProviders(List<JsonObject> providers) throws IOException {

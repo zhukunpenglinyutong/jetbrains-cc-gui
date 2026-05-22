@@ -69,21 +69,14 @@ interface BasicConfigSectionProps {
   // AI title generation configuration
   aiTitleGenerationEnabled?: boolean;
   onAiTitleGenerationEnabledChange?: (enabled: boolean) => void;
-  // Sound notification configuration
-  soundNotificationEnabled?: boolean;
-  onSoundNotificationEnabledChange?: (enabled: boolean) => void;
-  soundOnlyWhenUnfocused?: boolean;
-  onSoundOnlyWhenUnfocusedChange?: (enabled: boolean) => void;
-  selectedSound?: string;
-  onSelectedSoundChange?: (soundId: string) => void;
-  customSoundPath?: string;
-  onCustomSoundPathChange?: (path: string) => void;
-  onSaveCustomSoundPath?: () => void;
-  onTestSound?: () => void;
-  onBrowseSound?: () => void;
   // Task completion notification configuration
   taskCompletionNotificationEnabled?: boolean;
   onTaskCompletionNotificationEnabledChange?: (enabled: boolean) => void;
+  // Invocation mode configuration
+  invocationMode?: 'sdk' | 'cli';
+  onInvocationModeChange?: (mode: 'sdk' | 'cli') => void;
+  cliPath?: string;
+  onCliPathChange?: (path: string) => void;
   // Permission dialog timeout configuration
   permissionDialogTimeoutSeconds?: number;
   onPermissionDialogTimeoutChange?: (seconds: number) => void;
@@ -149,17 +142,6 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onStatusBarWidgetEnabledChange={props.onStatusBarWidgetEnabledChange}
           aiTitleGenerationEnabled={props.aiTitleGenerationEnabled}
           onAiTitleGenerationEnabledChange={props.onAiTitleGenerationEnabledChange}
-          soundNotificationEnabled={props.soundNotificationEnabled}
-          onSoundNotificationEnabledChange={props.onSoundNotificationEnabledChange}
-          soundOnlyWhenUnfocused={props.soundOnlyWhenUnfocused}
-          onSoundOnlyWhenUnfocusedChange={props.onSoundOnlyWhenUnfocusedChange}
-          selectedSound={props.selectedSound}
-          onSelectedSoundChange={props.onSelectedSoundChange}
-          customSoundPath={props.customSoundPath}
-          onCustomSoundPathChange={props.onCustomSoundPathChange}
-          onSaveCustomSoundPath={props.onSaveCustomSoundPath}
-          onTestSound={props.onTestSound}
-          onBrowseSound={props.onBrowseSound}
           taskCompletionNotificationEnabled={props.taskCompletionNotificationEnabled}
           onTaskCompletionNotificationEnabledChange={props.onTaskCompletionNotificationEnabledChange}
           permissionDialogTimeoutSeconds={props.permissionDialogTimeoutSeconds}
@@ -179,6 +161,10 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onWorkingDirectoryChange={props.onWorkingDirectoryChange}
           onSaveWorkingDirectory={props.onSaveWorkingDirectory}
           savingWorkingDirectory={props.savingWorkingDirectory}
+          invocationMode={props.invocationMode}
+          onInvocationModeChange={props.onInvocationModeChange}
+          cliPath={props.cliPath}
+          onCliPathChange={props.onCliPathChange}
         />
       )}
     </div>

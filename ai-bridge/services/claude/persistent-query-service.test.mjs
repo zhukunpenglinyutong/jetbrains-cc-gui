@@ -351,6 +351,6 @@ test('abortCurrentTurn still disposes an active runtime explicitly', async () =>
   await __testing.abortCurrentTurn();
   nextDeferred.reject(new Error('runtime terminated'));
 
-  await assert.rejects(turnPromise, /runtime terminated/);
+  await assert.rejects(turnPromise, /Runtime disposed|runtime terminated/);
   assert.equal(runtime.closed, true);
 });

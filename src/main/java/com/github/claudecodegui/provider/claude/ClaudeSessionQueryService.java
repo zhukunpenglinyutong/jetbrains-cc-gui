@@ -1,6 +1,7 @@
 package com.github.claudecodegui.provider.claude;
 
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
+import com.github.claudecodegui.util.AttachmentStorageService;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.util.UserMessageSanitizer;
 import com.google.gson.Gson;
@@ -12,11 +13,8 @@ import com.intellij.openapi.diagnostic.Logger;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
@@ -31,9 +29,13 @@ class ClaudeSessionQueryService {
     private static final String CHANNEL_SCRIPT = "channel-manager.js";
     private static final int PROCESS_TIMEOUT_SECONDS = 30;
     private static final Pattern VALID_SESSION_ID = Pattern.compile("[a-zA-Z0-9_\\-]+");
-    private static final Pattern IMAGE_REFERENCE_PATTERN = Pattern.compile("(?m)^\\[Image #\\d+:\\s*(.+?)\\]\\s*$");
+    private static final Pattern IMAGE_REFERENCE_PATTERN = Pattern.compile(
+            "(?im)^\\s*(?:\\[Image #\\d+:\\s*)?((?:[a-z]:[/\\\\]|/).+?\\.(?:png|jpe?g|gif|webp|bmp|svg))(?:\\])?\\s*$"
+    );
     private static final String IMAGE_ATTACHMENT_HINT =
             "The user has attached the image(s) above. Please use the Read tool to view them.";
+    private static final String IMAGE_ATTACHMENT_CONTENT_HINT =
+            "The user attached the image file(s) above. Use the image content to answer the request.";
 
     private final Logger log;
     private final Gson gson;
@@ -186,7 +188,7 @@ class ClaudeSessionQueryService {
 
         JsonElement contentElement = message.get("content");
         if (contentElement.isJsonPrimitive() && contentElement.getAsJsonPrimitive().isString()) {
-            ClaudeImageReferenceRewrite rewrite = rewriteClaudeImageReferenceText(contentElement.getAsString());
+            ClaudeImageReferenceRewrite rewrite = rewriteClaudeImageReferenceText(contentElement.getAsString(), false);
             if (!rewrite.changed) {
                 return originalMessage;
             }
@@ -201,6 +203,11 @@ class ClaudeSessionQueryService {
         }
 
         JsonArray originalBlocks = contentElement.getAsJsonArray();
+        // When the persisted content already carries image blocks (typical for
+        // SDK-mode writes where buildContentBlocks emits both an image block and a
+        // "[Image #N: path]" text reference), suppress creating duplicate image
+        // blocks from those text markers. Otherwise the same image renders twice.
+        boolean alreadyHasImageBlock = containsImageBlock(originalBlocks);
         JsonArray rebuiltBlocks = new JsonArray();
         boolean changed = false;
 
@@ -216,7 +223,8 @@ class ClaudeSessionQueryService {
                 continue;
             }
 
-            ClaudeImageReferenceRewrite rewrite = rewriteClaudeImageReferenceText(block.get("text").getAsString());
+            ClaudeImageReferenceRewrite rewrite = rewriteClaudeImageReferenceText(
+                    block.get("text").getAsString(), alreadyHasImageBlock);
             if (!rewrite.changed) {
                 rebuiltBlocks.add(block.deepCopy());
                 continue;
@@ -237,6 +245,19 @@ class ClaudeSessionQueryService {
         return normalizedMessage;
     }
 
+    private static boolean containsImageBlock(JsonArray blocks) {
+        for (JsonElement element : blocks) {
+            if (!element.isJsonObject()) {
+                continue;
+            }
+            JsonObject block = element.getAsJsonObject();
+            if (block.has("type") && "image".equals(block.get("type").getAsString())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static boolean isTextBlock(JsonObject block) {
         return block.has("type")
                 && "text".equals(block.get("type").getAsString())
@@ -244,7 +265,7 @@ class ClaudeSessionQueryService {
                 && !block.get("text").isJsonNull();
     }
 
-    private static ClaudeImageReferenceRewrite rewriteClaudeImageReferenceText(String text) {
+    private static ClaudeImageReferenceRewrite rewriteClaudeImageReferenceText(String text, boolean suppressImageBlockCreation) {
         if (text == null) {
             return ClaudeImageReferenceRewrite.unchanged(null);
         }
@@ -255,11 +276,19 @@ class ClaudeSessionQueryService {
         int lastEnd = 0;
         boolean sawReference = false;
         boolean restoredImage = false;
+        boolean strippedReference = false;
 
         while (matcher.find()) {
             remainingText.append(text, lastEnd, matcher.start());
             lastEnd = matcher.end();
             sawReference = true;
+
+            if (suppressImageBlockCreation) {
+                // The persisted message already carries an image block; only erase
+                // the inline "[Image #N: path]" marker so the text reads cleanly.
+                strippedReference = true;
+                continue;
+            }
 
             String imagePath = matcher.group(1) != null ? matcher.group(1).trim() : "";
             JsonObject imageBlock = createLocalImageBlock(imagePath);
@@ -271,7 +300,7 @@ class ClaudeSessionQueryService {
             }
         }
 
-        if (!sawReference || !restoredImage) {
+        if (!sawReference || (!restoredImage && !strippedReference)) {
             String sanitized = normalizeRemainingText(text);
             if (sanitized.equals(text)) {
                 return ClaudeImageReferenceRewrite.unchanged(text);
@@ -293,6 +322,7 @@ class ClaudeSessionQueryService {
         String normalized = text.replace("\r\n", "\n");
         normalized = normalized.replace("\r", "\n");
         normalized = normalized.replace(IMAGE_ATTACHMENT_HINT, "");
+        normalized = normalized.replace(IMAGE_ATTACHMENT_CONTENT_HINT, "");
         normalized = UserMessageSanitizer.sanitizeUserFacingText(normalized);
         normalized = normalized.replaceAll("(?m)^[ \\t]+$", "");
         normalized = normalized.replaceAll("\n{3,}", "\n\n");
@@ -312,57 +342,7 @@ class ClaudeSessionQueryService {
     }
 
     private static JsonObject createLocalImageBlock(String imagePath) {
-        if (imagePath == null || imagePath.isBlank()) {
-            return null;
-        }
-
-        try {
-            Path path = Path.of(imagePath);
-            if (!Files.isRegularFile(path)) {
-                return null;
-            }
-
-            String mediaType = Files.probeContentType(path);
-            if (mediaType == null || mediaType.isBlank()) {
-                mediaType = guessImageMediaType(path);
-            }
-            if (mediaType == null || mediaType.isBlank()) {
-                mediaType = "image/png";
-            }
-
-            String base64Data = Base64.getEncoder().encodeToString(Files.readAllBytes(path));
-            JsonObject imageBlock = new JsonObject();
-            imageBlock.addProperty("type", "image");
-            imageBlock.addProperty("src", "data:" + mediaType + ";base64," + base64Data);
-            imageBlock.addProperty("mediaType", mediaType);
-            imageBlock.addProperty("alt", path.getFileName() != null ? path.getFileName().toString() : "image");
-            return imageBlock;
-        } catch (Exception ignored) {
-            return null;
-        }
-    }
-
-    private static String guessImageMediaType(Path path) {
-        String fileName = path.getFileName() != null ? path.getFileName().toString().toLowerCase() : "";
-        if (fileName.endsWith(".png")) {
-            return "image/png";
-        }
-        if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
-            return "image/jpeg";
-        }
-        if (fileName.endsWith(".gif")) {
-            return "image/gif";
-        }
-        if (fileName.endsWith(".webp")) {
-            return "image/webp";
-        }
-        if (fileName.endsWith(".bmp")) {
-            return "image/bmp";
-        }
-        if (fileName.endsWith(".svg")) {
-            return "image/svg+xml";
-        }
-        return null;
+        return AttachmentStorageService.getInstance().createImageBlockFromPath(imagePath);
     }
 
     private static final class ClaudeImageReferenceRewrite {

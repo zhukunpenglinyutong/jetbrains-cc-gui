@@ -83,6 +83,13 @@ public class ClaudeSession {
      * Callback interface for session events.
      */
     public interface SessionCallback {
+        enum QueueDisplayState {
+            NONE,
+            QUEUED,
+            PROCESSING,
+            COMPLETED
+        }
+
         void onMessageUpdate(List<Message> messages);
 
         void onStateChange(boolean busy, boolean loading, String error);
@@ -109,6 +116,9 @@ public class ClaudeSession {
         default void onStreamEnd() {
         }
 
+        default void onStreamCompleted() {
+        }
+
         default void onContentDelta(String delta) {
         }
 
@@ -119,6 +129,9 @@ public class ClaudeSession {
         }
 
         default void onUserMessageUuidPatched(String content, String uuid) {
+        }
+
+        default void onQueueDisplayStateChanged(QueueDisplayState state, int aheadCount) {
         }
     }
 
@@ -347,7 +360,17 @@ public class ClaudeSession {
      * requestedPermissionMode priority: payload > sessionMode > default.
      */
     public CompletableFuture<Void> send(String input, String agentPrompt, List<String> fileTagPaths, String requestedPermissionMode) {
-        return send(input, null, agentPrompt, fileTagPaths, requestedPermissionMode);
+        return send(input, null, agentPrompt, fileTagPaths, requestedPermissionMode, null);
+    }
+
+    public CompletableFuture<Void> send(
+            String input,
+            String agentPrompt,
+            List<String> fileTagPaths,
+            String requestedPermissionMode,
+            String requestedInvocationMode
+    ) {
+        return send(input, null, agentPrompt, fileTagPaths, requestedPermissionMode, requestedInvocationMode);
     }
 
     /**
@@ -397,28 +420,64 @@ public class ClaudeSession {
             List<String> fileTagPaths,
             String requestedPermissionMode
     ) {
+        return send(input, attachments, agentPrompt, fileTagPaths, requestedPermissionMode, null);
+    }
+
+    public CompletableFuture<Void> send(
+            String input,
+            List<Attachment> attachments,
+            String agentPrompt,
+            List<String> fileTagPaths,
+            String requestedPermissionMode,
+            String requestedInvocationMode
+    ) {
+        LOG.info("[ClaudeSession][DIAG] send() called, attachments="
+                + (attachments == null ? "NULL" : attachments.size()));
+        if (attachments != null) {
+            for (int i = 0; i < attachments.size(); i++) {
+                Attachment att = attachments.get(i);
+                LOG.info("[ClaudeSession][DIAG] att[" + i + "]: fileName=" + att.fileName
+                        + ", localPath=" + att.localPath
+                        + ", data=" + (att.data != null ? att.data.length() + "chars" : "null")
+                        + ", resourceUrl=" + att.resourceUrl);
+            }
+        }
         String normalizedInput = (input != null) ? input.trim() : "";
         Message userMessage = contextService.buildUserMessage(normalizedInput, attachments);
         sendService.updateSessionStateForSend(userMessage, normalizedInput);
+        final long sendInvalidationEpoch = state.capturePendingSendInvalidationEpoch();
 
         final String finalAgentPrompt = agentPrompt;
         final List<String> finalFileTagPaths = fileTagPaths;
         final String finalRequestedPermissionMode = requestedPermissionMode;
+        final String finalRequestedInvocationMode = requestedInvocationMode;
 
         return launchClaude().thenCompose(chId -> {
+            if (!state.isPendingSendOperationCurrent(sendInvalidationEpoch)) {
+                return CompletableFuture.completedFuture(null);
+            }
             sendService.prepareContextCollector(contextCollector);
 
-            return contextCollector.collectContext().thenCompose(openedFilesJson ->
-                    sendService.sendMessageToProvider(
-                            chId,
-                            userMessage.content,
-                            attachments,
-                            openedFilesJson,
-                            finalAgentPrompt,
-                            finalFileTagPaths,
-                            finalRequestedPermissionMode
-                    )
-            ).thenCompose(v -> syncUserMessageUuidsAfterSend());
+            return contextCollector.collectContext().thenCompose(openedFilesJson -> {
+                if (!state.isPendingSendOperationCurrent(sendInvalidationEpoch)) {
+                    return CompletableFuture.completedFuture(null);
+                }
+                return sendService.sendMessageToProvider(
+                        chId,
+                        userMessage.content,
+                        attachments,
+                        openedFilesJson,
+                        finalAgentPrompt,
+                        finalFileTagPaths,
+                        finalRequestedPermissionMode,
+                        finalRequestedInvocationMode
+                );
+            }).thenCompose(v -> {
+                if (!state.isPendingSendOperationCurrent(sendInvalidationEpoch)) {
+                    return CompletableFuture.completedFuture(null);
+                }
+                return syncUserMessageUuidsAfterSend();
+            });
         }).exceptionally(ex -> {
             state.setError(ex.getMessage());
             state.setBusy(false);
@@ -436,12 +495,18 @@ public class ClaudeSession {
      * Interrupt the current execution.
      */
     public CompletableFuture<Void> interrupt() {
+        state.invalidatePendingSendOperations();
         if (state.getChannelId() == null) {
+            state.setError(null);
+            state.setBusy(false);
+            state.setLoading(false);
+            callbackFacade.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
             return CompletableFuture.completedFuture(null);
         }
 
         return CompletableFuture.runAsync(() -> {
             try {
+                sendService.interruptRuntime(state.getProvider(), state.getChannelId(), state.getChannelId());
                 providerRouter.interruptChannel(state.getProvider(), state.getChannelId());
                 state.setError(null);  // Clear previous error state
                 state.setBusy(false);
@@ -488,12 +553,58 @@ public class ClaudeSession {
         public String fileName;
         public String mediaType;
         public String data; // Base64 encoded data
+        public String localPath;
+        public String resourceUrl;
+        public String thumbnailUrl;
+        public String attachmentHash;
 
         public Attachment(String fileName, String mediaType, String data) {
             this.fileName = fileName;
             this.mediaType = mediaType;
             this.data = data;
         }
+
+        public Attachment(
+                String fileName,
+                String mediaType,
+                String data,
+                String localPath,
+                String resourceUrl,
+                String thumbnailUrl,
+                String attachmentHash
+        ) {
+            this.fileName = fileName;
+            this.mediaType = mediaType;
+            this.data = data;
+            this.localPath = localPath;
+            this.resourceUrl = resourceUrl;
+            this.thumbnailUrl = thumbnailUrl;
+            this.attachmentHash = attachmentHash;
+        }
+    }
+
+    /**
+     * Dispose this session, releasing all held resources and breaking reference chains.
+     * Must be called when the associated tab/window is closed to prevent memory leaks.
+     */
+    public void dispose() {
+        LOG.info("[ClaudeSession] Disposing session, channelId=" + state.getChannelId());
+        providerRouter.cleanupProviderSession(state.getProvider(), state.getSessionId(), state.getCwd());
+
+        // Interrupt any active request
+        try {
+            interrupt();
+        } catch (Exception e) {
+            LOG.debug("[ClaudeSession] Interrupt during dispose failed: " + e.getMessage());
+        }
+
+        // Clear callback reference to break: PermissionManager -> lambda -> callbackFacade -> UI
+        callbackFacade.setCallback(null);
+
+        // Clear permission callback to break reference chain
+        permissionManager.setOnPermissionRequestedCallback(null);
+
+        state.setChannelId(null);
     }
 
     /**
@@ -569,6 +680,15 @@ public class ClaudeSession {
      */
     public String getProvider() {
         return state.getProvider();
+    }
+
+    public String getClaudeInvocationMode() {
+        return state.getClaudeInvocationMode();
+    }
+
+    public void setClaudeInvocationMode(String invocationMode) {
+        state.setClaudeInvocationMode(invocationMode);
+        LOG.info("Claude invocation mode updated to: " + state.getClaudeInvocationMode());
     }
 
     /**

@@ -5,6 +5,8 @@ import type { ClaudeContentBlock, ClaudeRawMessage } from '../types';
 // Constants - avoid magic strings throughout the codebase
 // ---------------------------------------------------------------------------
 
+const UPLOADED_PLACEHOLDER_RE = /^\[Uploaded .+\]$/;
+
 export const MESSAGE_TYPES = {
   USER: 'user',
   ASSISTANT: 'assistant',
@@ -359,7 +361,18 @@ export function normalizeBlocks(
         }
 
         if (src) {
-          blocks.push({ type: 'image', src, mediaType });
+          blocks.push({
+            type: 'image',
+            src,
+            mediaType,
+            alt: typeof candidate.alt === 'string' ? candidate.alt as string : undefined,
+            previewSrc: typeof candidate.previewSrc === 'string' ? candidate.previewSrc as string : src,
+            thumbnailSrc: typeof candidate.thumbnailSrc === 'string' ? candidate.thumbnailSrc as string : src,
+            sourceKind: typeof candidate.sourceKind === 'string'
+              ? candidate.sourceKind as 'base64' | 'resource_url'
+              : src.startsWith('data:') ? 'base64' : 'resource_url',
+            localPath: typeof candidate.localPath === 'string' ? candidate.localPath as string : undefined,
+          });
         }
       } else if (type === 'attachment') {
         blocks.push({
@@ -369,6 +382,13 @@ export function normalizeBlocks(
         });
       }
     });
+
+    // Strip "[Uploaded ...]" placeholder text when image blocks are present,
+    // since the image blocks already represent the attachment visually.
+    if (blocks.some(b => b.type === 'image')) {
+      return blocks.filter(b => !(b.type === 'text' && UPLOADED_PLACEHOLDER_RE.test((b.text ?? '').trim())));
+    }
+
     return blocks;
   };
 

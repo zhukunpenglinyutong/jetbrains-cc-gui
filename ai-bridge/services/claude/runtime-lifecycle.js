@@ -60,6 +60,18 @@ export async function disposeRuntime(runtime, callbacks) {
   runtime.closed = true;
   runtime.activeTurnCount = 0;
 
+  // 触发中断信号，立即打断 executeTurn 中挂起的 query.next()
+  // 这确保串行队列不会因为 SDK query 未响应而永久阻塞后续请求
+  const abortReject = runtime._turnAbortReject;
+  if (abortReject) {
+    runtime._turnAbortReject = null;
+    try {
+      abortReject('Runtime disposed');
+    } catch (_) {
+      // Promise rejection 由 executeTurn 的 catch 处理
+    }
+  }
+
   try {
     runtime.inputStream.done();
   } catch (err) {
@@ -218,10 +230,16 @@ export async function acquireRuntime(requestContext, callbacks) {
   await cleanupAnonymousFromRegistry((runtime) => disposeRuntime(runtime, callbacks));
 
   let runtime = findRuntimeForRequest(requestContext);
+  const foundBySessionId = !!(runtime && requestContext.requestedSessionId);
 
-  if (runtime && runtime.runtimeSignature !== requestContext.runtimeSignature) {
+  if (runtime && !foundBySessionId && runtime.runtimeSignature !== requestContext.runtimeSignature) {
     await disposeRuntime(runtime, callbacks);
     runtime = null;
+  }
+
+  if (runtime && foundBySessionId && runtime.runtimeSignature !== requestContext.runtimeSignature) {
+    console.log('[LIFECYCLE] signatureMismatch on session-bound runtime sessionId=' + requestContext.requestedSessionId
+      + ' — keeping runtime to prevent session split');
   }
 
   if (runtime && requestContext.runtimeSessionEpoch && runtime.runtimeSessionEpoch !== requestContext.runtimeSessionEpoch) {

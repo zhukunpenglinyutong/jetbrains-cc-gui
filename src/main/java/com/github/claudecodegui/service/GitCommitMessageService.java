@@ -476,7 +476,7 @@ Footer 包含：
 
             // CodexSDKBridge.sendMessage requires 10 parameters:
             // (channelId, message, threadId, cwd, attachments, permissionMode, model, agentPrompt, reasoningEffort, callback)
-            bridge.sendMessage(
+            bridge.sendMessageWithDaemonPreferred(
                 "git-commit-message",      // channelId
                 prompt,                     // message
                 null,                       // threadId (null = new session)

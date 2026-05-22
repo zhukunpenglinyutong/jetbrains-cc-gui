@@ -144,6 +144,7 @@ public class CopySelectionReferenceActionTest {
         return createDataContext(editor, virtualFile, null);
     }
 
+    @SuppressWarnings("removal")
     private static DataContext createDataContext(Editor editor, VirtualFile virtualFile, Project project) {
         return dataId -> {
             if (CommonDataKeys.EDITOR.getName().equals(dataId)) {

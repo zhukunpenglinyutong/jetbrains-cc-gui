@@ -91,6 +91,24 @@ export const startModeRequest = (): void => {
 };
 
 /**
+ * Request the current Claude invocation mode from the backend.
+ */
+export const startInvocationModeRequest = (): void => {
+  let retryCount = 0;
+  const requestInvocationMode = () => {
+    if (window.sendToJava) {
+      sendBridgeEvent('get_invocation_mode');
+    } else {
+      retryCount++;
+      if (retryCount < MAX_RETRIES) {
+        setTimeout(requestInvocationMode, 100);
+      }
+    }
+  };
+  setTimeout(requestInvocationMode, 200);
+};
+
+/**
  * Request the thinking-enabled setting from the backend.
  */
 export const startThinkingEnabledRequest = (): void => {
@@ -155,6 +173,12 @@ export const drainPendingSettings = (): void => {
     const pending = w.__pendingModeReceived as string;
     delete w.__pendingModeReceived;
     window.onModeReceived?.(pending);
+  }
+
+  if (w.__pendingInvocationMode) {
+    const pending = w.__pendingInvocationMode as string;
+    delete w.__pendingInvocationMode;
+    window.updateInvocationMode?.(pending);
   }
 };
 

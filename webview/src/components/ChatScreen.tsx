@@ -135,7 +135,10 @@ export const ChatScreen = ({
   messageQueue, onRemoveFromQueue,
 }: ChatScreenProps) => {
   const { t } = useTranslation();
-  const { messages, loading, isThinking, streamingActive, loadingStartTime, subagentHistories } = useMessages();
+  const {
+    messages, loading, isThinking, streamingActive, loadingStartTime,
+    queueDisplayState, queueAheadCount, subagentHistories,
+  } = useMessages();
   const { currentSessionId } = useSession();
   const {
     setSettingsInitialTab, setCurrentView,
@@ -175,6 +178,8 @@ export const ChatScreen = ({
                   isThinking={isThinking}
                   loading={loading}
                   loadingStartTime={loadingStartTime}
+                  queueDisplayState={queueDisplayState}
+                  queueAheadCount={queueAheadCount}
                   t={t}
                   getMessageText={getMessageText}
                   getContentBlocks={getContentBlocks}

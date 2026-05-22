@@ -73,6 +73,10 @@ public class SessionCallbackFacade {
         callbackHandler.notifyStreamEnd();
     }
 
+    public void notifyStreamCompleted() {
+        callbackHandler.notifyStreamCompleted();
+    }
+
     public void notifyContentDelta(String delta) {
         callbackHandler.notifyContentDelta(delta);
     }
@@ -87,5 +91,9 @@ public class SessionCallbackFacade {
 
     public void notifyUserMessageUuidPatched(String content, String uuid) {
         callbackHandler.notifyUserMessageUuidPatched(content, uuid);
+    }
+
+    public void notifyQueueDisplayStateChanged(ClaudeSession.SessionCallback.QueueDisplayState state, int aheadCount) {
+        callbackHandler.notifyQueueDisplayStateChanged(state, aheadCount);
     }
 }

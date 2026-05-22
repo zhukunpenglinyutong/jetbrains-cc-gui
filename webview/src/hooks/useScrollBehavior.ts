@@ -51,6 +51,7 @@ export function useScrollBehavior({
   // fires right after handleWheel and resets isUserAtBottomRef to true
   // because the viewport is still within the 100px threshold.
   const userPausedRef = useRef(false);
+  const scheduledScrollRafRef = useRef<number | null>(null);
 
   const syncScrollAnchoring = useCallback(() => {
     const container = messagesContainerRef.current;
@@ -117,6 +118,27 @@ export function useScrollBehavior({
       isAutoScrollingRef.current = false;
     });
   }, []);
+
+  const scheduleScrollToBottom = useCallback(() => {
+    if (scheduledScrollRafRef.current !== null) return;
+
+    scheduledScrollRafRef.current = requestAnimationFrame(() => {
+      scheduledScrollRafRef.current = null;
+      const container = messagesContainerRef.current;
+      if (!container) return;
+
+      const shouldStickToBottom = !userPausedRef.current && isUserAtBottomRef.current;
+      if (userPausedRef.current) {
+        syncScrollAnchoring();
+        return;
+      }
+      if (shouldStickToBottom) {
+        scrollToBottom();
+        return;
+      }
+      syncUserAtBottomState(container);
+    });
+  }, [scrollToBottom, syncScrollAnchoring, syncUserAtBottomState]);
 
   // Warm up layout after window regains focus (macOS JCEF drops GPU layers
   // when the window is in the background, causing a scroll stutter on return)
@@ -205,69 +227,30 @@ export function useScrollBehavior({
     const observedElement = messagesEndRef.current?.parentElement ?? container.firstElementChild;
     if (!(observedElement instanceof HTMLElement)) return;
 
-    let resizeRafId: number | null = null;
     const observer = new ResizeObserver(() => {
-      if (resizeRafId !== null) {
-        cancelAnimationFrame(resizeRafId);
-      }
-      resizeRafId = requestAnimationFrame(() => {
-        resizeRafId = null;
-        // Read current state from refs — these are updated by other effects/handlers
-        const shouldStickToBottom = !userPausedRef.current && isUserAtBottomRef.current;
-        if (userPausedRef.current) {
-          syncScrollAnchoring();
-          return;
-        }
-        if (shouldStickToBottom) {
-          scrollToBottom();
-          return;
-        }
-        syncUserAtBottomState(container);
-      });
+      scheduleScrollToBottom();
     });
 
     observer.observe(observedElement);
     return () => {
       observer.disconnect();
-      if (resizeRafId !== null) {
-        cancelAnimationFrame(resizeRafId);
-      }
     };
-  }, [currentView, scrollToBottom, syncScrollAnchoring, syncUserAtBottomState]);
+  }, [currentView, scheduleScrollToBottom]);
 
   // Auto-scroll: follow latest content when user is at bottom
   // Includes streaming, expanded thinking blocks, loading indicator, etc.
-  // During streaming, debounce with rAF to coalesce rapid state changes
-  // from multiple update channels (onContentDelta + updateMessages) into
-  // a single scroll-to-bottom per frame, preventing visual jitter.
-  const scrollDebounceRef = useRef<number | null>(null);
-
   useLayoutEffect(() => {
     if (currentView !== 'chat') return;
     syncScrollAnchoring();
     if (userPausedRef.current) return;
     if (!isUserAtBottomRef.current) return;
+    scheduleScrollToBottom();
+  }, [currentView, messages, expandedThinking, loading, streamingActive, scheduleScrollToBottom, syncScrollAnchoring]);
 
-    if (streamingActive) {
-      if (scrollDebounceRef.current !== null) {
-        cancelAnimationFrame(scrollDebounceRef.current);
-      }
-      scrollDebounceRef.current = requestAnimationFrame(() => {
-        scrollDebounceRef.current = null;
-        if (!userPausedRef.current && isUserAtBottomRef.current) {
-          scrollToBottom();
-        }
-      });
-    } else {
-      scrollToBottom();
-    }
-  }, [currentView, messages, expandedThinking, loading, streamingActive, scrollToBottom, syncScrollAnchoring]);
-
-  // Cleanup scroll debounce on unmount
   useEffect(() => {
     return () => {
-      if (scrollDebounceRef.current !== null) {
-        cancelAnimationFrame(scrollDebounceRef.current);
+      if (scheduledScrollRafRef.current !== null) {
+        cancelAnimationFrame(scheduledScrollRafRef.current);
       }
     };
   }, []);

@@ -1,6 +1,5 @@
 package com.github.claudecodegui.ui;
 
-import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.handler.AgentHandler;
@@ -43,12 +42,10 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.jcef.JBCefBrowser;
-import com.intellij.util.concurrency.AppExecutorUtil;
-
 import javax.swing.*;
+import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.util.List;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Delegates for initialization setup and runtime operations:
@@ -59,11 +56,12 @@ public class ChatWindowDelegate {
     private static final Logger LOG = Logger.getInstance(ChatWindowDelegate.class);
     private static final String NODE_PATH_PROPERTY_KEY = "claude.code.node.path";
     private static final String PERMISSION_MODE_PROPERTY_KEY = "claude.code.permission.mode";
-    private static final int STATUS_RESET_DELAY_SECONDS = 5;
+
 
     public enum TabAnswerStatus {
         IDLE,
-        ANSWERING,
+        QUEUED,
+        PROCESSING,
         COMPLETED
     }
 
@@ -100,7 +98,7 @@ public class ChatWindowDelegate {
 
     private final DelegateHost host;
     private TabAnswerStatus currentTabStatus = TabAnswerStatus.IDLE;
-    private ScheduledFuture<?> statusResetTask;
+
     private volatile String pendingQuickFixPrompt = null;
     private volatile MessageCallback pendingQuickFixCallback = null;
 
@@ -162,6 +160,19 @@ public class ChatWindowDelegate {
             }
         } catch (Exception e) {
             LOG.warn("Failed to load permission mode: " + e.getMessage());
+        }
+    }
+
+    public void loadInvocationModeFromSettings() {
+        try {
+            String mode = new CodemossSettingsService().getClaudeInvocationMode();
+            ClaudeSession session = host.getSession();
+            if (mode != null && session != null) {
+                session.setClaudeInvocationMode(mode);
+                LOG.info("Loaded invocation mode from settings: " + mode);
+            }
+        } catch (Exception e) {
+            LOG.warn("Failed to load invocation mode: " + e.getMessage());
         }
     }
 
@@ -270,8 +281,12 @@ public class ChatWindowDelegate {
             @Override public void onTabStatusChanged(String statusStr) {
                 TabAnswerStatus status;
                 switch (statusStr) {
+                    case "queued":
+                        status = TabAnswerStatus.QUEUED;
+                        break;
+                    case "processing":
                     case "answering":
-                        status = TabAnswerStatus.ANSWERING;
+                        status = TabAnswerStatus.PROCESSING;
                         break;
                     case "completed":
                         status = TabAnswerStatus.COMPLETED;
@@ -348,11 +363,6 @@ public class ChatWindowDelegate {
 
         currentTabStatus = status;
 
-        if (statusResetTask != null && !statusResetTask.isDone()) {
-            statusResetTask.cancel(false);
-            statusResetTask = null;
-        }
-
         ApplicationManager.getApplication().invokeLater(() -> {
             String tabName = originalTabName;
             String currentDisplayName = parentContent.getDisplayName();
@@ -366,24 +376,25 @@ public class ChatWindowDelegate {
 
             String displayName;
             switch (status) {
-                case ANSWERING:
-                    displayName = tabName + "...";
-                    LOG.debug("[TabStatus] Set answering state for tab: " + displayName);
+                case QUEUED:
+                    displayName = tabName;
+                    parentContent.setIcon(createStatusDotIcon(new Color(0xD98E04)));
+                    LOG.debug("[TabStatus] Set queued state for tab: " + displayName);
+                    break;
+                case PROCESSING:
+                    displayName = tabName;
+                    parentContent.setIcon(createStatusDotIcon(new Color(0x2F7DFF)));
+                    LOG.debug("[TabStatus] Set processing state for tab: " + displayName);
                     break;
                 case COMPLETED:
-                    String completedText = ClaudeCodeGuiBundle.message("tab.status.completed");
-                    displayName = tabName + " (" + completedText + ")";
+                    displayName = tabName;
+                    parentContent.setIcon(createStatusDotIcon(new Color(0x2FA35B)));
                     LOG.debug("[TabStatus] Set completed state for tab: " + displayName);
-
-                    statusResetTask = AppExecutorUtil.getAppScheduledExecutorService().schedule(() -> {
-                        ApplicationManager.getApplication().invokeLater(() -> {
-                            updateTabStatus(TabAnswerStatus.IDLE);
-                        });
-                    }, STATUS_RESET_DELAY_SECONDS, TimeUnit.SECONDS);
                     break;
                 case IDLE:
                 default:
                     displayName = tabName;
+                    parentContent.setIcon(null);
                     LOG.debug("[TabStatus] Restored idle state for tab: " + displayName);
                     break;
             }
@@ -393,7 +404,24 @@ public class ChatWindowDelegate {
 
     @Deprecated
     public void updateTabLoadingState(boolean loading) {
-        updateTabStatus(loading ? TabAnswerStatus.ANSWERING : TabAnswerStatus.IDLE);
+        if (loading) {
+            updateTabStatus(TabAnswerStatus.PROCESSING);
+        } else if (currentTabStatus != TabAnswerStatus.COMPLETED) {
+            updateTabStatus(TabAnswerStatus.IDLE);
+        }
+    }
+
+    private static Icon createStatusDotIcon(Color color) {
+        BufferedImage image = new BufferedImage(10, 10, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2 = image.createGraphics();
+        try {
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(color);
+            g2.fillOval(1, 1, 8, 8);
+        } finally {
+            g2.dispose();
+        }
+        return new ImageIcon(image);
     }
 
     public void sendQuickFixMessage(String prompt, boolean isQuickFix, MessageCallback callback) {
@@ -526,10 +554,5 @@ public class ChatWindowDelegate {
     }
 
     public void dispose() {
-        if (statusResetTask != null && !statusResetTask.isDone()) {
-            statusResetTask.cancel(false);
-            statusResetTask = null;
-            LOG.debug("[TabStatus] Cancelled pending status reset task");
-        }
     }
 }

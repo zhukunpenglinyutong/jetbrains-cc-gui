@@ -113,6 +113,15 @@ public class CallbackHandler {
     }
 
     /**
+     * Notify that the provider completed a streaming turn, without waiting for frontend flush.
+     */
+    public void notifyStreamCompleted() {
+        if (callback != null) {
+            callback.onStreamCompleted();
+        }
+    }
+
+    /**
      * Notify of a content delta (handled by the existing onContentDelta callback).
      */
     public void notifyContentDelta(String delta) {
@@ -145,6 +154,12 @@ public class CallbackHandler {
     public void notifyUserMessageUuidPatched(String content, String uuid) {
         if (callback != null) {
             callback.onUserMessageUuidPatched(content, uuid);
+        }
+    }
+
+    public void notifyQueueDisplayStateChanged(ClaudeSession.SessionCallback.QueueDisplayState state, int aheadCount) {
+        if (callback != null) {
+            callback.onQueueDisplayStateChanged(state, aheadCount);
         }
     }
 }

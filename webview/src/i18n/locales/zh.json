@@ -48,6 +48,7 @@
     "addAttachment": "添加附件",
     "stopGeneration": "停止生成",
     "generatingResponse": "正在生成响应",
+    "queueWaiting": "队列中，前面还有 {{count}} 条等待",
     "elapsedTime": "已用 {{time}}",
     "minutesAndSeconds": "{{minutes}} 分 {{seconds}} 秒",
     "imagePreview": "预览",
@@ -133,6 +134,15 @@
         "korean": "한국어",
         "portuguese": "Português (Brasil)"
       },
+      "invocationMode": {
+        "label": "调用模式",
+        "sdk": "SDK 模式",
+        "sdkDesc": "使用官方 SDK 集成（默认，稳定，支持权限确认）",
+        "cli": "CLI 模式",
+        "cliDesc": "直接调用本地 Claude CLI",
+        "cliPathPlaceholder": "Claude CLI 可执行文件路径（留空自动检测）",
+        "hint": "CLI 模式不支持 thinking / /context 等部分能力，权限模式跟随上方设置。"
+      },
       "nodePath": {
         "label": "Node.js 路径",
         "placeholder": "Windows: C:\\Program Files\\nodejs\\node.exe (必须以 .exe 结尾) | macOS/Linux: /usr/local/bin/node",
@@ -149,6 +159,15 @@
         "label": "工作目录",
         "placeholder": "例如 project1 或留空使用项目根目录",
         "hint": "指定 Claude 工作的目录。可以使用相对路径（相对于项目根目录）或绝对路径。留空则使用项目根目录。"
+      },
+      "invocationMode": {
+        "label": "调用模式",
+        "sdk": "SDK 模式",
+        "sdkDesc": "通过内置桥接与常驻运行时调用，状态反馈更完整，兼容性更好。",
+        "cli": "CLI 模式",
+        "cliDesc": "直接调用本地 CLI，可复用本机环境与登录态，但能力和输出受 CLI 本身限制。",
+        "cliPathPlaceholder": "可选：指定 Claude CLI 可执行文件路径，留空则自动检测",
+        "hint": "切换后新请求将按所选模式发起。CLI 模式下部分能力可能与 SDK 模式存在差异。"
       },
       "fontSize": {
         "label": "字体大小",

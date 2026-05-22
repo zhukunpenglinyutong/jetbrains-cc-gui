@@ -1,4 +1,7 @@
+// @vitest-environment happy-dom
+
 import { act, renderHook } from '@testing-library/react';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { useMessageSender } from './useMessageSender';
 import type { UseMessageSenderOptions } from './useMessageSender';
 
@@ -36,6 +39,7 @@ describe('useMessageSender - /context command', () => {
 
   beforeEach(() => {
     window.sendToJava = vi.fn();
+    window.__CLAUDE_INVOCATION_MODE__ = 'sdk';
   });
 
   it('sends get_context_usage with base model when longContext is disabled', () => {
@@ -115,6 +119,24 @@ describe('useMessageSender - /context command', () => {
     expect(addToast).toHaveBeenCalledTimes(1);
     expect(addToast).toHaveBeenCalledWith(
       expect.stringContaining('Claude'),
+      'warning',
+    );
+  });
+
+  it('shows warning toast and does not send bridge event in Claude CLI mode', () => {
+    window.__CLAUDE_INVOCATION_MODE__ = 'cli';
+    const addToast = vi.fn();
+    const opts = createOptions({ addToast });
+
+    const { result } = renderHook(() => useMessageSender(opts));
+
+    act(() => {
+      result.current.handleSubmit('/context');
+    });
+
+    expect(window.sendToJava).not.toHaveBeenCalled();
+    expect(addToast).toHaveBeenCalledWith(
+      expect.stringContaining('CLI mode'),
       'warning',
     );
   });

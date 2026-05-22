@@ -1,5 +1,7 @@
 package com.github.claudecodegui.provider.common;
 
+import com.github.claudecodegui.session.ClaudeSession;
+
 /**
  * SDK message callback interface.
  * Used for streaming responses from AI providers (Claude/Codex).
@@ -26,4 +28,7 @@ public interface MessageCallback {
      * @param result The final result
      */
     void onComplete(SDKResult result);
+
+    default void onQueueDisplayStateChanged(ClaudeSession.SessionCallback.QueueDisplayState state, int aheadCount) {
+    }
 }

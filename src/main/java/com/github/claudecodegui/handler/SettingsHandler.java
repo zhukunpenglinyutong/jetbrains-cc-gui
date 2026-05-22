@@ -45,6 +45,9 @@ public class SettingsHandler extends BaseMessageHandler {
         "browse_ui_font_file",
         "get_streaming_enabled",
         "set_streaming_enabled",
+        "get_invocation_mode",
+        "set_invocation_mode",
+        "set_cli_path",
         "get_codex_sandbox_mode",
         "set_codex_sandbox_mode",
         "get_send_shortcut",
@@ -169,6 +172,15 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_streaming_enabled":
                 projectConfigHandler.handleSetStreamingEnabled(content);
+                return true;
+            case "get_invocation_mode":
+                projectConfigHandler.handleGetInvocationMode();
+                return true;
+            case "set_invocation_mode":
+                projectConfigHandler.handleSetInvocationMode(content);
+                return true;
+            case "set_cli_path":
+                projectConfigHandler.handleSetCliPath(content);
                 return true;
             case "get_codex_sandbox_mode":
                 projectConfigHandler.handleGetCodexSandboxMode();

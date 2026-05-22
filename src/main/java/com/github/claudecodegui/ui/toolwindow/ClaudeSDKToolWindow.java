@@ -4,6 +4,7 @@ import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.settings.TabStateService;
 import com.github.claudecodegui.startup.BridgePreloader;
 import com.github.claudecodegui.ui.detached.DetachedWindowManager;
+import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
@@ -103,6 +104,32 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
     static void unregisterContentMapping(Content content) {
         contentToWindowMap.remove(content);
+    }
+
+    /**
+     * Broadcast invocation mode change to all tabs in the project.
+     * Updates both the Java session state and the frontend window.__CLAUDE_INVOCATION_MODE__
+     * for every tab, so subsequent sends from any tab use the correct mode.
+     */
+    public static void broadcastInvocationMode(@NotNull Project project, @NotNull String mode) {
+        Set<ClaudeChatWindow> windows = collectProjectChatWindows(project);
+        com.google.gson.JsonObject payload = new com.google.gson.JsonObject();
+        payload.addProperty("invocationMode", mode);
+        String json = payload.toString();
+
+        for (ClaudeChatWindow window : windows) {
+            try {
+                ClaudeSession session = window.getSession();
+                if (session != null) {
+                    session.setClaudeInvocationMode(mode);
+                }
+                String escaped = com.github.claudecodegui.util.JsUtils.escapeJs(json);
+                window.callJavaScript("window.updateInvocationMode", escaped);
+            } catch (Exception e) {
+                LOG.warn("[Broadcast] Failed to update invocation mode for tab: " + e.getMessage());
+            }
+        }
+        LOG.info("[Broadcast] Invocation mode '" + mode + "' broadcast to " + windows.size() + " tab(s)");
     }
 
     private static Set<ClaudeChatWindow> collectProjectChatWindows(@NotNull Project project) {
@@ -299,7 +326,14 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             public void selectionChanged(@NotNull ContentManagerEvent event) {
                 ClaudeChatWindow window = contentToWindowMap.get(event.getContent());
                 if (window != null) {
+                    long startNanos = System.nanoTime();
+                    String tabDescriptor = TabPerformanceLogger.describeTab(
+                            event.getContent().getDisplayName(),
+                            window.getSession().getSessionId());
+                    LOG.info("[TabPerf] Tab selection changed: " + tabDescriptor);
                     window.loadRestoredHistoryIfNeeded();
+                    LOG.info("[TabPerf] selectionChanged handler returned in "
+                            + TabPerformanceLogger.elapsedMillis(startNanos) + "ms: " + tabDescriptor);
                 }
             }
 
@@ -320,9 +354,14 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
                 ClaudeChatWindow window = contentToWindowMap.get(removedContent);
                 if (window != null) {
+                    long startNanos = System.nanoTime();
                     LOG.info("[TabManager] Disposing ClaudeChatWindow for removed tab: "
                         + removedContent.getDisplayName());
                     window.dispose();
+                    LOG.info("[TabPerf] contentRemoved dispose returned in "
+                            + TabPerformanceLogger.elapsedMillis(startNanos) + "ms: "
+                            + TabPerformanceLogger.describeTab(removedContent.getDisplayName(),
+                            window.getSession().getSessionId()));
                 }
             }
 
