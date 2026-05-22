@@ -10,18 +10,11 @@ import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Computable;
 
-import com.intellij.openapi.editor.Document;
-import com.intellij.openapi.fileEditor.FileDocumentManager;
-import com.intellij.openapi.vfs.LocalFileSystem;
-import com.intellij.openapi.vfs.VirtualFile;
-import org.jetbrains.annotations.Nullable;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -424,134 +417,7 @@ public class SessionContextService {
         return "[Uploaded Attachments: " + String.join(", ", names) + "]";
     }
 
-    /**
-     * Scan message text for @file references (e.g., @/path/to/file#L10-20),
-     * read their content via readFileContent() (Document-aware), and return
-     * a context block. Returns empty string if no file references found.
-     */
-    String buildContextFromText(String messageText) {
-        if (messageText == null || messageText.isEmpty()) {
-            return "";
-        }
-        Pattern fileRefPattern = Pattern.compile("@(\\S+)");
-        Matcher matcher = fileRefPattern.matcher(messageText);
-        StringBuilder sb = new StringBuilder();
-        boolean hasContent = false;
-
-        while (matcher.find()) {
-            String matchedPath = matcher.group(1);
-            if (matchedPath.startsWith("terminal://") || matchedPath.startsWith("service://")) {
-                continue;
-            }
-            String fileContent = readFileContent(matchedPath);
-            if (fileContent != null && !fileContent.isEmpty()) {
-                if (!hasContent) {
-                    sb.append("\n\n## Referenced Files\n\n");
-                    sb.append("The following files were referenced by the user:\n\n");
-                    hasContent = true;
-                }
-                String extension = getFileExtension(matchedPath.contains("#")
-                    ? matchedPath.substring(0, matchedPath.indexOf("#")) : matchedPath);
-                sb.append("### `").append(matchedPath).append("`\n\n");
-                sb.append("```").append(extension).append("\n");
-                sb.append(fileContent);
-                if (!fileContent.endsWith("\n")) {
-                    sb.append("\n");
-                }
-                sb.append("```\n\n");
-            }
-        }
-
-        return sb.toString();
-    }
-
     private String readFileContent(String filePath) {
-        // Parse optional line range suffix (e.g., /path/file.ts#L10-20 or /path/file.ts#L10)
-        String cleanPath = filePath;
-        int startLine = -1;
-        int endLine = -1;
-
-        int hashLIdx = filePath.indexOf("#L");
-        if (hashLIdx >= 0) {
-            cleanPath = filePath.substring(0, hashLIdx);
-            String range = filePath.substring(hashLIdx + 2);
-            int dashIdx = range.indexOf('-');
-            try {
-                if (dashIdx >= 0) {
-                    startLine = Integer.parseInt(range.substring(0, dashIdx));
-                    endLine = Integer.parseInt(range.substring(dashIdx + 1));
-                } else {
-                    startLine = Integer.parseInt(range);
-                    endLine = startLine;
-                }
-            } catch (NumberFormatException e) {
-                LOG.warn("[Codex Context] Invalid line range in path: " + filePath);
-            }
-        }
-
-        // Try IntelliJ Document first (captures unsaved editor changes)
-        String fileContent = readFromDocument(cleanPath);
-
-        // Fall back to disk if no Document available
-        if (fileContent == null) {
-            fileContent = readFromDisk(cleanPath);
-        }
-
-        if (fileContent == null) {
-            return null;
-        }
-
-        // Apply line range filtering
-        if (startLine >= 0 && endLine >= 0) {
-            fileContent = extractLines(fileContent, startLine, endLine);
-        }
-
-        return fileContent;
-    }
-
-    /**
-     * Read file content from IntelliJ's in-memory Document.
-     * Returns null if the file is not open in any editor.
-     */
-    @Nullable
-    private String readFromDocument(String filePath) {
-        try {
-            return ApplicationManager.getApplication().runReadAction((Computable<String>) () -> {
-                VirtualFile vf = LocalFileSystem.getInstance().findFileByPath(filePath);
-                if (vf == null) {
-                    LOG.info("[Codex Context] readFromDocument: VirtualFile not found for " + filePath);
-                    return null;
-                }
-
-                Document document = FileDocumentManager.getInstance().getDocument(vf);
-                if (document == null) {
-                    LOG.info("[Codex Context] readFromDocument: Document not found for " + filePath);
-                    return null;
-                }
-
-                long docLength = document.getTextLength();
-                if (docLength > maxFileSizeBytes) {
-                    String fullText = document.getText();
-                    String truncated = fullText.substring(0, Math.min(fullText.length(), maxFileSizeBytes));
-                    LOG.info("[Codex Context] readFromDocument: SUCCESS truncated for " + filePath
-                            + " (" + (maxFileSizeBytes / 1024) + "KB of " + (docLength / 1024) + "KB)");
-                    return truncated + "\n\n... (file truncated, showing first "
-                            + (maxFileSizeBytes / 1024) + "KB of " + (docLength / 1024) + "KB)";
-                }
-                String text = document.getText();
-                return text;
-            });
-        } catch (Exception e) {
-            LOG.warn("[Codex Context] Failed to read from Document: " + filePath + ", error: " + e.getMessage());
-            return null;
-        }
-    }
-
-    /**
-     * Read file content from disk (fallback when file is not open in any editor).
-     */
-    @Nullable
-    private String readFromDisk(String filePath) {
         try {
             File file = new File(filePath);
             if (!file.exists() || !file.isFile() || !file.canRead()) {
@@ -577,33 +443,12 @@ public class SessionContextService {
                 return null;
             }
 
-            String fileContent = Files.readString(file.toPath(), StandardCharsets.UTF_8);
-            LOG.info("[Codex Context] Read from disk: " + filePath + " (" + fileSize + " bytes)");
-            return fileContent;
+            String content = Files.readString(file.toPath(), StandardCharsets.UTF_8);
+            LOG.info("[Codex Context] Read file content: " + filePath + " (" + fileSize + " bytes)");
+            return content;
         } catch (Exception e) {
             LOG.warn("[Codex Context] Failed to read file: " + filePath + ", error: " + e.getMessage());
             return null;
-        }
-    }
-
-    /**
-     * Extract a specific line range from content. Lines are 1-indexed.
-     */
-    private String extractLines(String fileContent, int startLine, int endLine) {
-        if (fileContent == null || startLine < 1 || endLine < startLine) {
-            return fileContent;
-        }
-        try {
-            String[] lines = fileContent.split("\n", -1);
-            int startIdx = Math.min(startLine - 1, lines.length - 1);
-            int endIdx = Math.min(endLine, lines.length);
-            if (startIdx >= endIdx) {
-                return "";
-            }
-            return String.join("\n", Arrays.copyOfRange(lines, startIdx, endIdx));
-        } catch (Exception e) {
-            LOG.warn("[Codex Context] Failed to extract lines: " + e.getMessage());
-            return fileContent;
         }
     }
 

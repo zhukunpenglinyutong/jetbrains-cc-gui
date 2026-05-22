@@ -7,11 +7,19 @@ import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.editor.Document;
+import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.openapi.vfs.VirtualFile;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Owns message-send orchestration while ClaudeSession remains the public session facade.
@@ -87,6 +95,8 @@ public class SessionSendService {
             List<String> fileTagPaths,
             String requestedPermissionMode
     ) {
+        saveReferencedFiles(input);
+
         String agentPrompt = externalAgentPrompt;
         if (agentPrompt == null) {
             agentPrompt = getAgentPrompt();
@@ -123,7 +133,7 @@ public class SessionSendService {
             );
         }
 
-        return sendToClaude(channelId, input, attachments, openedFilesJson, agentPrompt, fileTagPaths, effectivePermissionMode);
+        return sendToClaude(channelId, input, attachments, openedFilesJson, agentPrompt, effectivePermissionMode);
     }
 
     public static String normalizeRequestedPermissionMode(String mode) {
@@ -188,8 +198,7 @@ public class SessionSendService {
         }
 
         String contextAppend = contextService.buildCodexContextAppend(openedFilesJson, fileTagPaths);
-        String textContext = contextService.buildContextFromText(input);
-        String finalInput = (input != null ? input : "") + contextAppend + textContext;
+        String finalInput = (input != null ? input : "") + contextAppend;
 
         return codexSDKBridge.sendMessage(
                 channelId,
@@ -211,7 +220,6 @@ public class SessionSendService {
             List<ClaudeSession.Attachment> attachments,
             JsonObject openedFilesJson,
             String agentPrompt,
-            List<String> fileTagPaths,
             String effectivePermissionMode
     ) {
         ClaudeMessageHandler handler = new ClaudeMessageHandler(
@@ -223,11 +231,6 @@ public class SessionSendService {
                 gson
         );
 
-        // Inject file content context for @file references (reads from editor Document if unsaved)
-        String contextAppend = contextService.buildCodexContextAppend(openedFilesJson, fileTagPaths);
-        String textContext = contextService.buildContextFromText(input);
-        String finalInput = (input != null ? input : "") + contextAppend + textContext;
-
         Boolean streaming = readStreamingEnabled();
         final String runtimeSessionEpoch = state.getRuntimeSessionEpoch();
         final String currentModel = state.getModel();
@@ -238,7 +241,7 @@ public class SessionSendService {
 
         return claudeSDKBridge.sendMessage(
                         channelId,
-                        finalInput,
+                        input,
                         state.getSessionId(),
                         runtimeSessionEpoch,
                         state.getCwd(),
@@ -252,6 +255,45 @@ public class SessionSendService {
                         state.getReasoningEffort(),
                         handler
                 ).thenApply(result -> null);
+    }
+
+    private void saveReferencedFiles(String messageText) {
+        if (messageText == null || messageText.isEmpty()) {
+            return;
+        }
+
+        List<Document> unsavedDocs = new ArrayList<>();
+        Pattern fileRefPattern = Pattern.compile("@(\\S+)");
+        Matcher matcher = fileRefPattern.matcher(messageText);
+
+        ApplicationManager.getApplication().runReadAction(() -> {
+            FileDocumentManager fdm = FileDocumentManager.getInstance();
+            while (matcher.find()) {
+                String matchedPath = matcher.group(1);
+                if (matchedPath.startsWith("terminal://") || matchedPath.startsWith("service://")) {
+                    continue;
+                }
+                String cleanPath = matchedPath.replaceFirst("#L\\d+(-\\d+)?$", "");
+                VirtualFile vf = LocalFileSystem.getInstance().findFileByPath(cleanPath);
+                if (vf == null) {
+                    continue;
+                }
+                Document doc = fdm.getDocument(vf);
+                if (doc != null && fdm.isDocumentUnsaved(doc)) {
+                    unsavedDocs.add(doc);
+                }
+            }
+        });
+
+        if (!unsavedDocs.isEmpty()) {
+            ApplicationManager.getApplication().invokeAndWait(() -> {
+                FileDocumentManager fdm = FileDocumentManager.getInstance();
+                for (Document doc : unsavedDocs) {
+                    fdm.saveDocument(doc);
+                }
+            });
+            LOG.info("[AutoSave] Saved " + unsavedDocs.size() + " unsaved file(s) referenced by @ mentions");
+        }
     }
 
     private boolean readAutoOpenFileEnabled() {
