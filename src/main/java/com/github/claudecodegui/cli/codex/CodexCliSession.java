@@ -44,10 +44,21 @@ public class CodexCliSession {
             "(?i)^\\s*[^\\s:][^:]{0,120}:\\s*$"
     );
     private static final Pattern DIAGNOSTIC_BODY_PATTERN = Pattern.compile(
-            "(?i)^(?:Line \\||\\d+\\s*\\|\\s*.+|\\|\\s*[~^]+.*|\\|\\s*(?:Cannot find path|The term|Could not find|Cannot bind argument|A positional parameter cannot be found|The system cannot find the file specified|Access is denied|The directory name is invalid|The filename, directory name, or volume label syntax is incorrect|Unexpected token|Missing .+|ParserError|Exception|Error).*)$"
+            "(?i)^(?:Line \\||\\d+\\s*\\|\\s*.+|\\|\\s*[~^]+.*"
+            + "|\\|\\s*(?:Cannot find path|The term|Could not find|Cannot bind argument"
+            + "|A positional parameter cannot be found|The system cannot find the file specified"
+            + "|Access is denied|The directory name is invalid"
+            + "|The filename, directory name, or volume label syntax is incorrect"
+            + "|Unexpected token|Missing .+|ParserError|Exception|Error).*)$"
     );
     private static final Pattern DIAGNOSTIC_GENERIC_PATTERN = Pattern.compile(
-            "(?i)^\\s*.*\\b(?:not recognized as the name of a cmdlet|cannot find path|could not find a part of the path|file .* cannot be loaded|cannot bind argument|a positional parameter cannot be found|the system cannot find the file specified|access is denied|the directory name is invalid|the filename, directory name, or volume label syntax is incorrect|unexpected token|missing .+|parsererror|exception).*$"
+            "(?i)^\\s*.*\\b(?:not recognized as the name of a cmdlet|cannot find path"
+            + "|could not find a part of the path|file .* cannot be loaded"
+            + "|cannot bind argument|a positional parameter cannot be found"
+            + "|the system cannot find the file specified|access is denied"
+            + "|the directory name is invalid"
+            + "|the filename, directory name, or volume label syntax is incorrect"
+            + "|unexpected token|missing .+|parsererror|exception).*$"
     );
 
     private final String tabId;
