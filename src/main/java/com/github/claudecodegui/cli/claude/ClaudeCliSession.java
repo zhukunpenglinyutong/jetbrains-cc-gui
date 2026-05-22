@@ -196,7 +196,7 @@ public class ClaudeCliSession {
         boolean interrupted = activeHandle.wasInterrupted();
         if (interrupted) {
             callback.onComplete(false, assistantContent.toString(), "User interrupted");
-        } else if (!hadError.get() && assistantContent.length() > 0) {
+        } else if (!hadError.get() && !assistantContent.isEmpty()) {
             callback.onMessage("stream_end", "");
             callback.onMessage("message_end", "");
             callback.onComplete(true, assistantContent.toString(), null);
@@ -209,7 +209,7 @@ public class ClaudeCliSession {
         if (buf == null || line == null || line.isBlank()) {
             return;
         }
-        if (buf.length() > 0) {
+        if (!buf.isEmpty()) {
             buf.append('\n');
         }
         buf.append(line);

@@ -119,7 +119,7 @@ public class CodexCliSession {
                 if (interrupted) {
                     callback.onComplete(false, assistantContent.toString(), "User interrupted");
                 } else if (exitCode == 0) {
-                    if (cliError.length() > 0) {
+                    if (!cliError.isEmpty()) {
                         String err = CliErrorFormatter.formatError("Codex", cliError.toString());
                         callback.onError(err);
                         callback.onComplete(false, assistantContent.toString(), err);
@@ -211,9 +211,7 @@ public class CodexCliSession {
                     callback.onMessage("stream_start", "");
                     callback.onMessage("message_start", "");
                 }
-                case "turn.started" -> {
-                    callback.onMessage("message_start", "");
-                }
+                case "turn.started" -> callback.onMessage("message_start", "");
                 case "item.started", "item.updated", "item.completed" -> {
                     if (event.has("item") && event.get("item").isJsonObject()) {
                         JsonObject item = event.getAsJsonObject("item");
