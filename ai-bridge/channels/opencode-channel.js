@@ -3,6 +3,7 @@
  */
 import {
   abortSession as openCodeAbortSession,
+  getSessionMessages as openCodeGetSessionMessages,
   sendMessage as openCodeSendMessage
 } from '../services/opencode/message-service.js';
 
@@ -39,7 +40,15 @@ export async function handleOpenCodeCommand(command, args, stdinData) {
 
     case 'abort': {
       const sessionId = stdinData?.sessionId || args[0] || '';
-      await openCodeAbortSession(sessionId);
+      const cwd = stdinData?.cwd || args[1] || '';
+      await openCodeAbortSession(sessionId, cwd);
+      break;
+    }
+
+    case 'getSessionMessages': {
+      const sessionId = stdinData?.sessionId || args[0] || '';
+      const cwd = stdinData?.cwd || args[1] || '';
+      await openCodeGetSessionMessages(sessionId, cwd);
       break;
     }
 
@@ -49,5 +58,5 @@ export async function handleOpenCodeCommand(command, args, stdinData) {
 }
 
 export function getOpenCodeCommandList() {
-  return ['send', 'abort'];
+  return ['send', 'abort', 'getSessionMessages'];
 }

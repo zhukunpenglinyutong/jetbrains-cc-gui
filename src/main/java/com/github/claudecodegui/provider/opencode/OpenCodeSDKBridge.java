@@ -7,21 +7,28 @@ import com.github.claudecodegui.session.ClaudeSession;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
-import java.util.Collections;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * opencode SDK bridge.
  *
- * The provider is registered now so routing and dependency management can treat
- * opencode as a peer provider. The Node bridge currently returns an explicit
- * not-implemented error until the HTTP session/event implementation lands.
+ * Uses the user-installed opencode CLI through @opencode-ai/sdk. Provider auth,
+ * model selection, and LLM configuration stay owned by the user's opencode
+ * installation/config.
  */
 public class OpenCodeSDKBridge extends BaseSDKBridge {
+
+    private static final int SESSION_QUERY_TIMEOUT_SECONDS = 30;
 
     public OpenCodeSDKBridge() {
         super(OpenCodeSDKBridge.class);
@@ -70,7 +77,11 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
                     String msgType = msg.has("type") && !msg.get("type").isJsonNull()
                             ? msg.get("type").getAsString()
                             : "unknown";
-                    callback.onMessage(msgType, jsonStr);
+                    if ("status".equals(msgType) && msg.has("message") && !msg.get("message").isJsonNull()) {
+                        callback.onMessage(msgType, msg.get("message").getAsString());
+                    } else {
+                        callback.onMessage(msgType, jsonStr);
+                    }
                 }
             } catch (Exception ignored) {
             }
@@ -128,7 +139,88 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
     }
 
     public List<JsonObject> getSessionMessages(String sessionId, String cwd) {
-        return Collections.emptyList();
+        try {
+            JsonObject jsonResult = runSessionMessagesQuery(sessionId, cwd);
+            if (!jsonResult.has("success") || !jsonResult.get("success").getAsBoolean()) {
+                String error = jsonResult.has("error") && !jsonResult.get("error").isJsonNull()
+                        ? jsonResult.get("error").getAsString()
+                        : "Unknown opencode session history error";
+                LOG.warn("[OpenCodeSDKBridge] Failed to get session messages: " + error);
+                return List.of();
+            }
+
+            List<JsonObject> messages = new ArrayList<>();
+            if (jsonResult.has("messages") && jsonResult.get("messages").isJsonArray()) {
+                JsonArray array = jsonResult.getAsJsonArray("messages");
+                for (var element : array) {
+                    if (element != null && element.isJsonObject()) {
+                        messages.add(element.getAsJsonObject());
+                    }
+                }
+            }
+            return messages;
+        } catch (Exception e) {
+            LOG.warn("[OpenCodeSDKBridge] Failed to load opencode session messages: " + e.getMessage(), e);
+            return List.of();
+        }
+    }
+
+    private JsonObject runSessionMessagesQuery(String sessionId, String cwd) throws Exception {
+        if (sessionId == null || sessionId.trim().isEmpty()) {
+            throw new IllegalArgumentException("sessionId is required");
+        }
+
+        String node = nodeDetector.findNodeExecutable();
+        File bridgeDir = getDirectoryResolver().findSdkDir();
+        if (bridgeDir == null || !bridgeDir.exists()) {
+            throw new RuntimeException("Bridge directory not ready or invalid");
+        }
+
+        List<String> command = buildBaseCommand("getSessionMessages");
+        command.add(sessionId);
+        command.add(cwd != null ? cwd : "");
+
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.directory(bridgeDir);
+        pb.redirectErrorStream(true);
+        envConfigurator.updateProcessEnvironment(pb, node);
+
+        Process process = pb.start();
+        StringBuilder output = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+            }
+        }
+
+        boolean finished = process.waitFor(SESSION_QUERY_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        if (!finished) {
+            process.destroyForcibly();
+            throw new RuntimeException("opencode session query timed out after "
+                    + SESSION_QUERY_TIMEOUT_SECONDS + " seconds");
+        }
+
+        String jsonLine = extractLastJsonLine(output.toString());
+        if (jsonLine == null) {
+            throw new RuntimeException("Failed to extract JSON from opencode session query output");
+        }
+        return gson.fromJson(jsonLine, JsonObject.class);
+    }
+
+    private String extractLastJsonLine(String output) {
+        if (output == null || output.trim().isEmpty()) {
+            return null;
+        }
+        String[] lines = output.split("\\R");
+        for (int i = lines.length - 1; i >= 0; i--) {
+            String line = lines[i].trim();
+            if (line.startsWith("{") && line.endsWith("}")) {
+                return line;
+            }
+        }
+        return null;
     }
 
     private JsonArray buildAttachments(List<ClaudeSession.Attachment> attachments) {

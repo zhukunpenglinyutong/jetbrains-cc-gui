@@ -22,6 +22,32 @@ export function normalizeOpenCodeSdkError(error) {
     };
   }
 
+  if (
+    error?.code === 'ENOENT'
+    || /spawn opencode ENOENT/i.test(message)
+    || /opencode.*ENOENT/i.test(message)
+    || /command not found: opencode/i.test(message)
+  ) {
+    return {
+      code: 'OPENCODE_CLI_NOT_FOUND',
+      error: 'opencode CLI not found. Install opencode and make sure the IDE process PATH can find the opencode executable.'
+    };
+  }
+
+  if (/Timeout waiting for server to start/i.test(message)) {
+    return {
+      code: 'OPENCODE_SERVER_START_TIMEOUT',
+      error: message
+    };
+  }
+
+  if (/401|Unauthorized|Authentication required/i.test(message)) {
+    return {
+      code: 'OPENCODE_SERVER_UNAUTHORIZED',
+      error: 'opencode server rejected the request. Check OPENCODE_SERVER_PASSWORD/OPENCODE_SERVER_USERNAME in the IDE environment or clear them for the managed local server.'
+    };
+  }
+
   return {
     code: 'OPENCODE_ERROR',
     error: message
