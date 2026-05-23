@@ -22,6 +22,7 @@ import {
 const DEFAULT_HOSTNAME = '127.0.0.1';
 const DEFAULT_PORT = 0;
 const DEFAULT_START_TIMEOUT_MS = 10000;
+const MAX_TOOL_RESULT_CHARS = 20000;
 const PLAN_MODE_PERMISSION_DENIED =
   'opencode permission denied because the chat is in plan mode.';
 
@@ -58,6 +59,26 @@ function emitThinkingDelta(delta) {
 
 function emitSendError(errorPayload) {
   emitMarker('[SEND_ERROR]', JSON.stringify(errorPayload));
+}
+
+function toolUseMsg(id, name, input) {
+  return {
+    type: 'assistant',
+    message: {
+      role: 'assistant',
+      content: [{ type: 'tool_use', id, name, input }]
+    }
+  };
+}
+
+function toolResultMsg(toolUseId, isError, content) {
+  return {
+    type: 'user',
+    message: {
+      role: 'user',
+      content: [{ type: 'tool_result', tool_use_id: toolUseId, is_error: isError, content }]
+    }
+  };
 }
 
 function delay(ms) {
@@ -171,6 +192,237 @@ function formatOpenCodeError(error, fallback = 'opencode request failed') {
   } catch {
     return fallback;
   }
+}
+
+function truncateForDisplay(value, maxChars = MAX_TOOL_RESULT_CHARS) {
+  const text = typeof value === 'string' ? value : JSON.stringify(value ?? '');
+  if (text.length <= maxChars) {
+    return text;
+  }
+  const omitted = text.length - maxChars;
+  return `${text.slice(0, maxChars)}\n[opencode tool output truncated: omitted ${omitted} chars]`;
+}
+
+function asRecord(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+function pickString(...values) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value;
+    }
+  }
+  return '';
+}
+
+function normalizeOpenCodeToolName(tool) {
+  const name = typeof tool === 'string' ? tool.trim() : '';
+  if (name === 'write') {
+    return 'write_file';
+  }
+  if (name === 'websearch') {
+    return 'search';
+  }
+  return name || 'opencode_tool';
+}
+
+function parseUnifiedPatchToStrings(patch) {
+  if (typeof patch !== 'string' || !patch.trim()) {
+    return { oldString: '', newString: '' };
+  }
+
+  const oldLines = [];
+  const newLines = [];
+  for (const line of patch.split(/\r?\n/)) {
+    if (
+      !line ||
+      line.startsWith('diff --git ') ||
+      line.startsWith('index ') ||
+      line.startsWith('@@') ||
+      line.startsWith('--- ') ||
+      line.startsWith('+++ ') ||
+      line.startsWith('\\ No newline')
+    ) {
+      continue;
+    }
+    if (line.startsWith('-')) {
+      oldLines.push(line.slice(1));
+    } else if (line.startsWith('+')) {
+      newLines.push(line.slice(1));
+    } else if (line.startsWith(' ')) {
+      const text = line.slice(1);
+      oldLines.push(text);
+      newLines.push(text);
+    }
+  }
+
+  return {
+    oldString: oldLines.join('\n'),
+    newString: newLines.join('\n')
+  };
+}
+
+function normalizeOpenCodeToolInput(part) {
+  const state = asRecord(part?.state);
+  const metadata = { ...asRecord(state.metadata), ...asRecord(part?.metadata) };
+  const filediff = asRecord(metadata.filediff);
+  const input = { ...asRecord(state.input) };
+
+  const filePath = pickString(
+    input.file_path,
+    input.filePath,
+    input.path,
+    input.target_file,
+    input.targetFile,
+    filediff.file,
+    filediff.filePath
+  );
+  if (filePath) {
+    input.file_path = filePath;
+  }
+
+  const patch = pickString(metadata.diff, filediff.patch, input.patch, input.patchText);
+  if (patch && !input.patch) {
+    input.patch = patch;
+  }
+
+  const parsedPatch = parseUnifiedPatchToStrings(patch);
+  const oldString = pickString(
+    input.old_string,
+    input.oldString,
+    filediff.before,
+    parsedPatch.oldString
+  );
+  const newString = pickString(
+    input.new_string,
+    input.newString,
+    input.content,
+    filediff.after,
+    parsedPatch.newString
+  );
+  if (oldString) {
+    input.old_string = oldString;
+  }
+  if (newString) {
+    input.new_string = newString;
+  }
+
+  return input;
+}
+
+function openCodeToolUseId(part) {
+  return pickString(part?.callID, part?.callId, part?.id);
+}
+
+function openCodeToolResultContent(part) {
+  const state = asRecord(part?.state);
+  const output = state.status === 'error' ? state.error : state.output;
+  const fallback = pickString(state.title, part?.tool) || '(no output)';
+  const content = pickString(output) || fallback;
+  return truncateForDisplay(content);
+}
+
+function emitOpenCodeToolUse(ctx, part) {
+  if (!part || part.type !== 'tool') {
+    return '';
+  }
+  const toolUseId = openCodeToolUseId(part);
+  if (!toolUseId) {
+    return '';
+  }
+  const toolName = normalizeOpenCodeToolName(part.tool);
+  const input = normalizeOpenCodeToolInput(part);
+  const signature = JSON.stringify({ toolName, input });
+  if (!ctx.emittedToolUseIds.has(toolUseId) || ctx.toolUseSignatures.get(toolUseId) !== signature) {
+    emitMessage(toolUseMsg(toolUseId, toolName, input));
+    ctx.emittedToolUseIds.add(toolUseId);
+    ctx.toolUseSignatures.set(toolUseId, signature);
+  }
+  return toolUseId;
+}
+
+function emitOpenCodeToolResult(ctx, part) {
+  const toolUseId = emitOpenCodeToolUse(ctx, part);
+  if (!toolUseId || ctx.emittedToolResultIds.has(toolUseId)) {
+    return;
+  }
+  const status = part?.state?.status;
+  if (status !== 'completed' && status !== 'error') {
+    return;
+  }
+  emitMessage(toolResultMsg(
+    toolUseId,
+    status === 'error',
+    openCodeToolResultContent(part)
+  ));
+  ctx.emittedToolResultIds.add(toolUseId);
+}
+
+function normalizeOpenCodeDiff(diff) {
+  const candidate = asRecord(diff);
+  const filePath = pickString(candidate.file, candidate.filePath, candidate.relativePath, candidate.path);
+  const patch = pickString(candidate.patch, candidate.diff);
+  const parsedPatch = parseUnifiedPatchToStrings(patch);
+  const oldString = pickString(candidate.before, parsedPatch.oldString);
+  const newString = pickString(candidate.after, parsedPatch.newString);
+  if (!filePath || (!oldString && !newString && !patch)) {
+    return null;
+  }
+  return {
+    filePath,
+    patch,
+    oldString,
+    newString,
+    status: typeof candidate.status === 'string' ? candidate.status : undefined,
+    additions: typeof candidate.additions === 'number' ? candidate.additions : undefined,
+    deletions: typeof candidate.deletions === 'number' ? candidate.deletions : undefined
+  };
+}
+
+function stableHash(text) {
+  const value = typeof text === 'string' ? text : JSON.stringify(text ?? '');
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = ((hash << 5) - hash + value.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+function emitOpenCodeDiffMessages(ctx, diffs, source = 'opencode') {
+  if (!Array.isArray(diffs)) {
+    return 0;
+  }
+
+  let emitted = 0;
+  diffs.forEach((rawDiff, index) => {
+    const diff = normalizeOpenCodeDiff(rawDiff);
+    if (!diff) {
+      return;
+    }
+    const signature = `${source}:${diff.filePath}:${diff.patch || diff.oldString}:${diff.newString}`;
+    if (ctx.emittedDiffIds.has(signature)) {
+      return;
+    }
+    ctx.emittedDiffIds.add(signature);
+
+    const safeFile = diff.filePath.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 80);
+    const toolUseId = `opencode_diff_${ctx.sessionRef.id || 'session'}_${index}_${stableHash(signature)}_${safeFile}`;
+    emitMessage(toolUseMsg(toolUseId, 'edit', {
+      file_path: diff.filePath,
+      old_string: diff.oldString,
+      new_string: diff.newString,
+      patch: diff.patch,
+      source,
+      status: diff.status,
+      additions: diff.additions,
+      deletions: diff.deletions
+    }));
+    emitMessage(toolResultMsg(toolUseId, false, 'File change recorded'));
+    emitted += 1;
+  });
+
+  return emitted;
 }
 
 function extractSessionId(session) {
@@ -429,6 +681,30 @@ function normalizeOpenCodeMessage(item) {
   for (const part of item?.parts || []) {
     const kind = partKind(part);
     const text = partText(part);
+    if (kind === 'tool') {
+      const toolUseId = openCodeToolUseId(part);
+      if (!toolUseId) {
+        continue;
+      }
+      content.push({
+        type: 'tool_use',
+        id: toolUseId,
+        name: normalizeOpenCodeToolName(part.tool),
+        input: normalizeOpenCodeToolInput(part)
+      });
+
+      const status = part?.state?.status;
+      if (status === 'completed' || status === 'error') {
+        content.push({
+          type: 'tool_result',
+          tool_use_id: toolUseId,
+          is_error: status === 'error',
+          content: openCodeToolResultContent(part)
+        });
+      }
+      continue;
+    }
+
     if (!text || (kind !== 'text' && !isReasoningPart(kind))) {
       continue;
     }
@@ -492,6 +768,10 @@ function createEventContext(runtime, cwd, permissionMode, sessionRef) {
     permissionMode,
     sessionRef,
     partTypes: new Map(),
+    emittedToolUseIds: new Set(),
+    emittedToolResultIds: new Set(),
+    toolUseSignatures: new Map(),
+    emittedDiffIds: new Set(),
     repliedPermissions: new Set(),
     rejectedQuestions: new Set(),
     sawContentDelta: false
@@ -550,6 +830,20 @@ async function handleOpenCodeEvent(event, ctx) {
       }
 
       if (part.type === 'tool' && part.tool) {
+        emitOpenCodeToolUse(ctx, part);
+        emitOpenCodeToolResult(ctx, part);
+        if (part.state?.status === 'completed' || part.state?.status === 'error') {
+          const metadata = { ...asRecord(part.state?.metadata), ...asRecord(part.metadata) };
+          const fileDiffs = [];
+          if (metadata.filediff) {
+            fileDiffs.push(metadata.filediff);
+          }
+          if (Array.isArray(metadata.files)) {
+            fileDiffs.push(...metadata.files);
+          }
+          emitOpenCodeDiffMessages(ctx, fileDiffs, `tool:${openCodeToolUseId(part) || part.id || part.tool}`);
+        }
+
         const status = part.state?.status ? ` (${part.state.status})` : '';
         emitStatus(`opencode tool: ${part.tool}${status}`);
       }
@@ -591,6 +885,11 @@ async function handleOpenCodeEvent(event, ctx) {
         code: 'OPENCODE_SESSION_ERROR',
         error: formatOpenCodeError(props.error, 'opencode session error')
       });
+      break;
+    }
+
+    case 'session.diff': {
+      emitOpenCodeDiffMessages(ctx, props.diff, 'session.diff');
       break;
     }
 
@@ -843,4 +1142,9 @@ export async function listModels(cwd = '') {
   }
 }
 
-export { normalizeOpenCodeModels };
+export {
+  createEventContext,
+  handleOpenCodeEvent,
+  normalizeOpenCodeMessage,
+  normalizeOpenCodeModels
+};

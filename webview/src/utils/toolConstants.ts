@@ -7,7 +7,7 @@
 export const READ_TOOL_NAMES = new Set(['read', 'read_file', 'read_multiple_files']);
 
 // Edit/file modification tools
-export const EDIT_TOOL_NAMES = new Set(['edit', 'edit_file', 'replace_string', 'write_to_file']);
+export const EDIT_TOOL_NAMES = new Set(['edit', 'edit_file', 'replace_string', 'write', 'write_file', 'write_to_file']);
 
 // Bash/command execution tools
 export const BASH_TOOL_NAMES = new Set(['bash', 'run_terminal_cmd', 'exec_command', 'execute_command', 'shell_command']);
