@@ -28,7 +28,7 @@ export interface SubagentInfo {
   status: SubagentStatus;
   /** Message index where this subagent was invoked */
   messageIndex: number;
-  /** Stable runtime agent id returned by Claude Code, used to locate sidechain logs */
+  /** Stable runtime id used for provider-specific subagent history lookup */
   agentId?: string;
   /** Total runtime in milliseconds */
   totalDurationMs?: number;

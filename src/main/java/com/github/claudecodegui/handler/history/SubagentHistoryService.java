@@ -9,6 +9,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
+import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.IOException;
@@ -16,7 +17,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
@@ -42,11 +45,18 @@ class SubagentHistoryService {
         String agentId = getString(request, "agentId");
         String toolUseId = getString(request, "toolUseId");
         String description = getString(request, "description");
+        String provider = normalizeProvider(getString(request, "provider"), context.getCurrentProvider());
 
         JsonObject response = new JsonObject();
         response.addProperty("toolUseId", toolUseId);
         response.addProperty("agentId", agentId);
         response.addProperty("sessionId", sessionId);
+        response.addProperty("provider", provider);
+
+        if ("opencode".equals(provider)) {
+            handleLoadOpenCodeSubagentSession(request, response);
+            return;
+        }
 
         try {
             validateId("sessionId", sessionId);
@@ -76,6 +86,44 @@ class SubagentHistoryService {
         sendResponse(response);
     }
 
+    private void handleLoadOpenCodeSubagentSession(JsonObject request, JsonObject response) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                String childSessionId = getOpenCodeSubagentSessionId(request);
+                if (childSessionId == null || childSessionId.isEmpty()) {
+                    throw new IllegalArgumentException("opencode subagent session id unavailable");
+                }
+                validateId("subagentSessionId", childSessionId);
+
+                if (context.getOpenCodeSDKBridge() == null) {
+                    throw new IllegalStateException("opencode bridge is not available");
+                }
+
+                String cwd = resolveCwd();
+                List<JsonObject> messages = context.getOpenCodeSDKBridge().getSessionMessages(childSessionId, cwd);
+                JsonArray messageArray = new JsonArray();
+                for (JsonObject message : messages) {
+                    if (message != null) {
+                        messageArray.add(message);
+                    }
+                }
+
+                response.addProperty("success", true);
+                response.addProperty("agentId", childSessionId);
+                response.addProperty("subagentSessionId", childSessionId);
+                response.addProperty("parentSessionId", getString(request, "sessionId"));
+                response.addProperty("sessionId", childSessionId);
+                response.add("messages", messageArray);
+            } catch (Exception e) {
+                LOG.warn("[SubagentHistory] Failed to load opencode subagent history: " + e.getMessage());
+                response.addProperty("success", false);
+                response.addProperty("error", e.getMessage() != null ? e.getMessage() : "Unknown error");
+            }
+
+            sendResponse(response);
+        }, AppExecutorUtil.getAppExecutorService());
+    }
+
     private JsonObject parseRequest(String content) {
         if (content == null || content.trim().isEmpty()) {
             return new JsonObject();
@@ -88,6 +136,20 @@ class SubagentHistoryService {
             return null;
         }
         return object.get(key).getAsString();
+    }
+
+    private static String normalizeProvider(String provider, String fallback) {
+        String candidate = provider == null || provider.isBlank() ? fallback : provider;
+        return candidate == null || candidate.isBlank() ? "claude" : candidate.trim().toLowerCase();
+    }
+
+    private static String getOpenCodeSubagentSessionId(JsonObject request) {
+        String subagentSessionId = getString(request, "subagentSessionId");
+        if (subagentSessionId != null && !subagentSessionId.isBlank()) {
+            return subagentSessionId.trim();
+        }
+        String agentId = getString(request, "agentId");
+        return agentId != null ? agentId.trim() : null;
     }
 
     private static void validateId(String name, String value) {
@@ -162,6 +224,17 @@ class SubagentHistoryService {
             throw new IllegalStateException("Project base path is null");
         }
         return PathUtils.sanitizePath(basePath);
+    }
+
+    private String resolveCwd() {
+        if (context.getSession() != null && context.getSession().getCwd() != null
+                && !context.getSession().getCwd().isBlank()) {
+            return context.getSession().getCwd();
+        }
+        if (context.getProject() != null && context.getProject().getBasePath() != null) {
+            return context.getProject().getBasePath();
+        }
+        return "";
     }
 
     private JsonArray readJsonl(Path file) throws IOException {

@@ -59,6 +59,17 @@ function extractPromptFromItems(items: unknown): string | undefined {
   return undefined;
 }
 
+function normalizeAgentId(input: ToolInputRecord): string | undefined {
+  return (
+    (typeof input.agentId === 'string' && input.agentId.trim()) ? input.agentId :
+    (typeof input.agent_id === 'string' && input.agent_id.trim()) ? input.agent_id :
+    (typeof input.subagent_session_id === 'string' && input.subagent_session_id.trim()) ? input.subagent_session_id :
+    (typeof input.subagentSessionId === 'string' && input.subagentSessionId.trim()) ? input.subagentSessionId :
+    (typeof input.sessionId === 'string' && input.sessionId.trim()) ? input.sessionId :
+    undefined
+  );
+}
+
 function normalizeSpawnAgentInput(input: ToolInputRecord): ToolInput {
   const prompt =
     (typeof input.prompt === 'string' && input.prompt.trim()) ? input.prompt :
@@ -76,6 +87,7 @@ function normalizeSpawnAgentInput(input: ToolInputRecord): ToolInput {
     ...input,
     subagent_type: subagentType,
     prompt,
+    agentId: normalizeAgentId(input),
     description:
       (typeof input.description === 'string' && input.description.trim()) ? input.description :
       (typeof input.message === 'string' && input.message.trim()) ? input.message :
@@ -102,6 +114,7 @@ function normalizeAgentTaskInput(input: ToolInputRecord): ToolInput {
     ...input,
     subagent_type: subagentType,
     prompt,
+    agentId: normalizeAgentId(input),
     description:
       (typeof input.description === 'string' && input.description.trim()) ? input.description :
       (typeof input.title === 'string' && input.title.trim()) ? input.title :

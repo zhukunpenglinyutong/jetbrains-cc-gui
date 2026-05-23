@@ -76,15 +76,21 @@ const SubagentList = memo(({ subagents, histories = {}, currentSessionId, curren
   useEffect(() => { subagentsRef.current = subagents; }, [subagents]);
   useEffect(() => { historiesRef.current = histories; }, [histories]);
 
+  const canLoadSubagent = useCallback((subagent: SubagentInfo) => (
+    Boolean(currentSessionId) && (currentProvider !== 'opencode' || Boolean(subagent.agentId))
+  ), [currentProvider, currentSessionId]);
+
   const requestHistory = useCallback((subagent: SubagentInfo) => {
-    if (!currentSessionId || currentProvider === 'opencode') return;
+    if (!canLoadSubagent(subagent)) return;
     sendBridgeEvent('load_subagent_session', JSON.stringify({
       sessionId: currentSessionId,
+      provider: currentProvider,
       agentId: subagent.agentId,
+      subagentSessionId: currentProvider === 'opencode' ? subagent.agentId : undefined,
       description: subagent.description,
       toolUseId: subagent.id,
     }));
-  }, [currentProvider, currentSessionId]);
+  }, [canLoadSubagent, currentProvider, currentSessionId]);
 
   useEffect(() => {
     if (!expandedId) return;
@@ -108,8 +114,6 @@ const SubagentList = memo(({ subagents, histories = {}, currentSessionId, curren
     setExpandedId((prev) => (prev === id ? null : id));
   }, []);
 
-  const canLoad = Boolean(currentSessionId) && currentProvider !== 'opencode';
-
   if (subagents.length === 0) {
     return <div className="status-panel-empty">{t('statusPanel.noSubagents')}</div>;
   }
@@ -127,7 +131,7 @@ const SubagentList = memo(({ subagents, histories = {}, currentSessionId, curren
             subagent={subagent}
             isExpanded={expandedId === subagent.id}
             history={history}
-            canLoad={canLoad}
+            canLoad={canLoadSubagent(subagent)}
             onToggle={handleToggleRow}
             t={t}
           />

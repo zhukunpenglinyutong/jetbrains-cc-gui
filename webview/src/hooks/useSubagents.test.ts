@@ -113,6 +113,7 @@ describe('extractSubagentsFromMessages', () => {
               agent: 'explore',
               title: 'Inspect renderer',
               message: 'Inspect renderer task details',
+              sessionId: 'ses_child',
             },
           }],
         },
@@ -128,6 +129,7 @@ describe('extractSubagentsFromMessages', () => {
       type: 'explore',
       description: 'Inspect renderer',
       prompt: 'Inspect renderer task details',
+      agentId: 'ses_child',
       status: 'running',
     });
   });

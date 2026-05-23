@@ -78,7 +78,33 @@ describe('TaskExecutionBlock polling', () => {
     expect(container.querySelector('.task-details')).toBeTruthy();
   });
 
-  it('does not request Claude subagent history for opencode task tools', () => {
+  it('requests opencode subagent history when a child session id is available', () => {
+    const { container } = render(
+      <TaskExecutionBlock
+        name="task"
+        toolId="task-1"
+        currentProvider="opencode"
+        input={{
+          description: 'Inspect render path',
+          subagent_type: 'explore',
+          agentId: 'ses_child',
+        }}
+      />,
+    );
+
+    fireEvent.click(container.querySelector('.task-header') as HTMLElement);
+
+    expect(mockSendBridgeEvent).toHaveBeenCalledWith(
+      'load_subagent_session',
+      expect.stringContaining('"provider":"opencode"'),
+    );
+    expect(mockSendBridgeEvent).toHaveBeenCalledWith(
+      'load_subagent_session',
+      expect.stringContaining('"subagentSessionId":"ses_child"'),
+    );
+  });
+
+  it('does not request opencode subagent history without a child session id', () => {
     const { container } = render(
       <TaskExecutionBlock
         name="task"
@@ -93,10 +119,7 @@ describe('TaskExecutionBlock polling', () => {
 
     fireEvent.click(container.querySelector('.task-header') as HTMLElement);
 
-    expect(mockSendBridgeEvent).not.toHaveBeenCalledWith(
-      'load_subagent_session',
-      expect.any(String),
-    );
+    expect(mockSendBridgeEvent).not.toHaveBeenCalledWith('load_subagent_session', expect.any(String));
     expect(container.querySelector('.subagent-loading-card')?.textContent).toContain('subagent.process.unavailable');
   });
 

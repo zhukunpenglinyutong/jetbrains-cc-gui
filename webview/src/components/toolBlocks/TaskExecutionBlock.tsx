@@ -145,15 +145,27 @@ const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, resul
     reasoningEffort: _reasoningEffortCamel,
     nickname: _nickname,
     name: _inputName,
-    agent_id: _agentId,
-    agentId: _agentIdCamel,
+    agent_id: inputAgentIdSnake,
+    agentId: inputAgentIdCamel,
     agent_path: _agentPath,
     agentPath: _agentPathCamel,
+    subagent_session_id: inputSubagentSessionIdSnake,
+    subagentSessionId: inputSubagentSessionIdCamel,
+    sessionId: inputSessionId,
+    sessionID: inputSessionID,
     ...rest
   } = input;
   const spawnMeta = isSpawnAgent ? parseSpawnAgentMeta(input, result) : {};
   const agentToolMeta = !isSpawnAgent ? parseAgentToolMeta(getToolResultRaw, toolId) : {};
-  const agentId = spawnMeta.agentId ?? agentToolMeta.agentId;
+  const inputAgentId = [
+    inputAgentIdCamel,
+    inputAgentIdSnake,
+    inputSubagentSessionIdCamel,
+    inputSubagentSessionIdSnake,
+    inputSessionId,
+    inputSessionID,
+  ].find((value): value is string => typeof value === 'string' && value.trim().length > 0)?.trim();
+  const agentId = spawnMeta.agentId ?? agentToolMeta.agentId ?? inputAgentId;
   const identityLabel = spawnMeta.nickname || (typeof subagentType === 'string' && subagentType ? subagentType : undefined);
   const modelSummary = [spawnMeta.model, spawnMeta.reasoningEffort].filter(Boolean).join(' ');
   const shortAgentId = shortenAgentId(agentId);
@@ -162,17 +174,19 @@ const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, resul
   const isCompleted = result !== undefined && result !== null;
   const isError = isCompleted && result?.is_error === true;
   const history = (toolId ? getSubagentHistory(toolId) : undefined) ?? (agentId ? getSubagentHistory(agentId) : undefined);
-  const canLoadSubagentHistory = currentProvider !== 'opencode';
+  const canLoadSubagentHistory = currentProvider !== 'opencode' || Boolean(agentId);
 
   useEffect(() => {
     if (!expanded || !isAgentTool || !currentSessionId || !toolId || history || !canLoadSubagentHistory) return;
     sendBridgeEvent('load_subagent_session', JSON.stringify({
       sessionId: currentSessionId,
+      provider: currentProvider,
       agentId,
+      subagentSessionId: currentProvider === 'opencode' ? agentId : undefined,
       description: typeof description === 'string' ? description : undefined,
       toolUseId: toolId,
     }));
-  }, [agentId, canLoadSubagentHistory, currentSessionId, description, expanded, history, isAgentTool, toolId]);
+  }, [agentId, canLoadSubagentHistory, currentProvider, currentSessionId, description, expanded, history, isAgentTool, toolId]);
 
   const shouldPollHistory = expanded
     && isAgentTool
@@ -190,13 +204,15 @@ const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, resul
     const timer = window.setInterval(() => {
       sendBridgeEvent('load_subagent_session', JSON.stringify({
         sessionId: currentSessionId,
+        provider: currentProvider,
         agentId,
+        subagentSessionId: currentProvider === 'opencode' ? agentId : undefined,
         description: typeof description === 'string' ? description : undefined,
         toolUseId: toolId,
       }));
     }, 2_000);
     return () => window.clearInterval(timer);
-  }, [agentId, currentSessionId, description, shouldPollHistory, toolId]);
+  }, [agentId, currentProvider, currentSessionId, description, shouldPollHistory, toolId]);
 
   return (
     <div className="task-container">

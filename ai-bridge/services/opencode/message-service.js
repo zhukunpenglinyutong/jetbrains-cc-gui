@@ -368,6 +368,19 @@ function normalizeOpenCodeToolInput(part, cwd = '') {
     if (prompt) {
       input.prompt = prompt;
     }
+
+    const subagentSessionId = pickString(
+      input.subagent_session_id,
+      input.subagentSessionId,
+      input.sessionId,
+      input.sessionID,
+      metadata.sessionId,
+      metadata.sessionID
+    );
+    if (subagentSessionId) {
+      input.subagent_session_id = subagentSessionId;
+      input.agentId = input.agentId || subagentSessionId;
+    }
   }
 
   const filePath = pickString(

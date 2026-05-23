@@ -67,6 +67,15 @@ function extractResultMetadata(
   };
 }
 
+function getNonEmptyString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
 export function extractSubagentsFromMessages(
   messages: ClaudeMessage[],
   getContentBlocks: (message: ClaudeMessage) => ClaudeContentBlock[],
@@ -97,6 +106,14 @@ export function extractSubagentsFromMessages(
       const subagentType = String((input.subagent_type as string) ?? (input.subagentType as string) ?? 'Unknown');
       const description = String((input.description as string) ?? '');
       const prompt = String((input.prompt as string) ?? '');
+      const inputAgentId = getNonEmptyString(
+        input.agentId,
+        input.agent_id,
+        input.subagent_session_id,
+        input.subagentSessionId,
+        input.sessionId,
+        input.sessionID,
+      );
 
       // Check tool result to determine status
       const toolUseId = block.id ?? '';
@@ -112,6 +129,7 @@ export function extractSubagentsFromMessages(
         status,
         messageIndex,
         ...resultMetadata,
+        agentId: resultMetadata.agentId ?? inputAgentId,
       });
     });
   });

@@ -140,7 +140,9 @@ test('opencode task tool input and subagent metadata are preserved', async () =>
   assert.deepEqual(toolUse.message.content[0].input, {
     prompt: 'Inspect renderer task details',
     description: 'Inspect renderer',
-    subagent_type: 'explore'
+    subagent_type: 'explore',
+    subagent_session_id: 'ses_child',
+    agentId: 'ses_child'
   });
   assert.deepEqual(toolResult.toolUseResult, {
     agentId: 'ses_child',
