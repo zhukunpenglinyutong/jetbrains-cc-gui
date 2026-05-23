@@ -425,34 +425,46 @@ public class SessionContextService {
     }
 
     /**
-     * Scan message text for @file references (e.g., @/path/to/file#L10-20),
-     * read their content via readFileContent() (Document-aware), and return
-     * a context block. Returns empty string if no file references found.
+     * Scan message text for @file references (e.g., @/path/to/file#L10-20).
+     * Only injects context for files with unsaved editor changes — already-saved
+     * files are left to the SDK's normal disk read. Returns empty string if no
+     * unsaved file references are found.
      */
     String buildContextFromText(String messageText) {
         if (messageText == null || messageText.isEmpty()) {
             return "";
         }
+
+        // Collect @file references from message text
+        List<String> fileRefs = new ArrayList<>();
         Pattern fileRefPattern = Pattern.compile("@(\\S+)");
         Matcher matcher = fileRefPattern.matcher(messageText);
-        StringBuilder sb = new StringBuilder();
-        boolean hasContent = false;
-
         while (matcher.find()) {
             String matchedPath = matcher.group(1);
-            if (matchedPath.startsWith("terminal://") || matchedPath.startsWith("service://")) {
-                continue;
+            if (!matchedPath.startsWith("terminal://") && !matchedPath.startsWith("service://")) {
+                fileRefs.add(matchedPath);
             }
-            String fileContent = readFileContent(matchedPath);
+        }
+        if (fileRefs.isEmpty()) {
+            return "";
+        }
+
+        // Only inject context for unsaved files
+        List<String> unsavedRefs = filterUnsavedFiles(fileRefs);
+        if (unsavedRefs.isEmpty()) {
+            return "";
+        }
+
+        // Build context block
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n\n## Referenced Files (unsaved changes)\n\n");
+
+        for (String path : unsavedRefs) {
+            String fileContent = readFileContent(path);
             if (fileContent != null && !fileContent.isEmpty()) {
-                if (!hasContent) {
-                    sb.append("\n\n## Referenced Files\n\n");
-                    sb.append("The following files were referenced by the user:\n\n");
-                    hasContent = true;
-                }
-                String extension = getFileExtension(matchedPath.contains("#")
-                    ? matchedPath.substring(0, matchedPath.indexOf("#")) : matchedPath);
-                sb.append("### `").append(matchedPath).append("`\n\n");
+                String extension = getFileExtension(path.contains("#L")
+                    ? path.substring(0, path.indexOf("#L")) : path);
+                sb.append("### `").append(path).append("`\n\n");
                 sb.append("```").append(extension).append("\n");
                 sb.append(fileContent);
                 if (!fileContent.endsWith("\n")) {
@@ -463,6 +475,30 @@ public class SessionContextService {
         }
 
         return sb.toString();
+    }
+
+    /**
+     * From the given list of @file reference strings, return only those whose
+     * corresponding editor Document has unsaved changes. Performs all lookups
+     * in a single read action.
+     */
+    private List<String> filterUnsavedFiles(List<String> fileRefs) {
+        return ApplicationManager.getApplication().runReadAction((Computable<List<String>>) () -> {
+            FileDocumentManager fdm = FileDocumentManager.getInstance();
+            List<String> unsaved = new ArrayList<>();
+            for (String ref : fileRefs) {
+                String cleanPath = ref.contains("#L") ? ref.substring(0, ref.indexOf("#L")) : ref;
+                VirtualFile vf = LocalFileSystem.getInstance().findFileByPath(cleanPath);
+                if (vf == null) {
+                    continue;
+                }
+                Document doc = fdm.getDocument(vf);
+                if (doc != null && fdm.isDocumentUnsaved(doc)) {
+                    unsaved.add(ref);
+                }
+            }
+            return unsaved;
+        });
     }
 
     private String readFileContent(String filePath) {
