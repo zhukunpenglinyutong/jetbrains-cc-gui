@@ -11,13 +11,19 @@ import { tmpdir } from 'os';
 import { basename, join } from 'path';
 import { pathToFileURL } from 'url';
 
+import { requestPermissionFromJava } from '../../permission-ipc.js';
 import { ensureOpenCodeSdk, normalizeOpenCodeSdkError } from './opencode-utils.js';
+import {
+  buildOpenCodePermissionDialogRequest,
+  shouldAutoAllowOpenCodePermission,
+  shouldAutoRejectOpenCodePermission
+} from './opencode-permissions.js';
 
 const DEFAULT_HOSTNAME = '127.0.0.1';
 const DEFAULT_PORT = 0;
 const DEFAULT_START_TIMEOUT_MS = 10000;
-const PERMISSION_UI_MISSING =
-  'opencode permission UI is not implemented in this plugin yet.';
+const PLAN_MODE_PERMISSION_DENIED =
+  'opencode permission denied because the chat is in plan mode.';
 
 function emitMarker(marker, payload) {
   if (payload === undefined) {
@@ -257,13 +263,6 @@ async function buildPromptParts(message, attachments) {
   };
 }
 
-function shouldAutoAllowPermission(permissionMode) {
-  const normalized = typeof permissionMode === 'string' ? permissionMode.trim() : '';
-  return normalized === 'bypassPermissions'
-    || normalized === 'acceptEdits'
-    || normalized === 'autoEdit';
-}
-
 function withDirectory(url, cwd) {
   if (cwd && cwd.trim()) {
     url.searchParams.set('directory', cwd.trim());
@@ -295,10 +294,19 @@ async function replyToPermission(runtime, cwd, permission, permissionMode) {
     return;
   }
 
-  const allow = shouldAutoAllowPermission(permissionMode);
-  const body = allow
-    ? { reply: 'once' }
-    : { reply: 'reject', message: PERMISSION_UI_MISSING };
+  const label = permission.permission || permission.patterns?.join(', ') || requestId;
+  let body;
+  if (shouldAutoAllowOpenCodePermission(permission.permission, permissionMode)) {
+    body = { reply: 'once' };
+  } else if (shouldAutoRejectOpenCodePermission(permission.permission, permissionMode)) {
+    body = { reply: 'reject', message: PLAN_MODE_PERMISSION_DENIED };
+  } else {
+    const dialogRequest = buildOpenCodePermissionDialogRequest(permission, cwd);
+    const allowed = await requestPermissionFromJava(dialogRequest.toolName, dialogRequest.inputs);
+    body = allowed
+      ? { reply: 'once' }
+      : { reply: 'reject', message: `User denied permission for ${dialogRequest.toolName} tool` };
+  }
 
   await postJson(
     runtime.baseUrl,
@@ -307,8 +315,7 @@ async function replyToPermission(runtime, cwd, permission, permissionMode) {
     body
   );
 
-  const label = permission.permission || permission.patterns?.join(', ') || requestId;
-  emitStatus(allow
+  emitStatus(body.reply === 'once'
     ? `Allowed opencode permission once: ${label}`
     : `Rejected opencode permission: ${label}`);
 }
