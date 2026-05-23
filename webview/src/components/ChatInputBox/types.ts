@@ -169,6 +169,10 @@ export interface SelectedAgent {
   id: string;
   name: string;
   prompt?: string;
+  description?: string;
+  provider?: 'custom' | 'opencode';
+  mode?: string;
+  agentID?: string;
 }
 
 // ============================================================

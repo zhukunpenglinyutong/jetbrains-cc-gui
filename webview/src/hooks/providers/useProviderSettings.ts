@@ -4,6 +4,7 @@ import { sendBridgeEvent } from '../../utils/bridge';
 import { writeClaudeModelMapping } from '../../utils/claudeModelMapping';
 import type { ProviderConfig } from '../../types/provider';
 import type { SelectedAgent } from '../../components/ChatInputBox/types';
+import { isOpenCodeSelectedAgent } from '../../components/ChatInputBox/openCodeAgents';
 
 export interface UseProviderSettingsOptions {
   addToast: (message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
@@ -67,15 +68,20 @@ export function useProviderSettings({ addToast, t }: UseProviderSettingsOptions)
   const handleAgentSelect = useCallback((agent: SelectedAgent | null) => {
     setSelectedAgent(agent);
     if (agent) {
+      if (isOpenCodeSelectedAgent(agent)) {
+        return;
+      }
       sendBridgeEvent('set_selected_agent', JSON.stringify({
         id: agent.id,
         name: agent.name,
         prompt: agent.prompt,
       }));
     } else {
-      sendBridgeEvent('set_selected_agent', '');
+      if (!isOpenCodeSelectedAgent(selectedAgent)) {
+        sendBridgeEvent('set_selected_agent', '');
+      }
     }
-  }, []);
+  }, [selectedAgent]);
 
   const handleStreamingEnabledChange = useCallback((enabled: boolean) => {
     setStreamingEnabledSetting(enabled);

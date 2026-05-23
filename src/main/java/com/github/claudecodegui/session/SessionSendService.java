@@ -91,15 +91,18 @@ public class SessionSendService {
             List<String> fileTagPaths,
             String requestedPermissionMode
     ) {
+        String currentProvider = state.getProvider();
+        String normalizedProvider = normalizeProvider(currentProvider);
         String agentPrompt = externalAgentPrompt;
-        if (agentPrompt == null) {
+        if (agentPrompt == null && !"opencode".equals(normalizedProvider)) {
             agentPrompt = getAgentPrompt();
             LOG.info("[Agent] Using agent from global setting (fallback)");
+        } else if (agentPrompt == null) {
+            LOG.info("[Agent] No opencode agent selected; using opencode default agent");
         } else {
             LOG.info("[Agent] Using agent from message (per-tab selection)");
         }
 
-        String currentProvider = state.getProvider();
         String sessionModeBeforeSend = state.getPermissionMode();
         String normalizedRequestedMode = normalizeRequestedPermissionMode(requestedPermissionMode);
         String effectivePermissionMode = resolveEffectivePermissionMode(
@@ -115,7 +118,7 @@ public class SessionSendService {
                         + ", effective=" + effectivePermissionMode
         );
 
-        switch (normalizeProvider(currentProvider)) {
+        switch (normalizedProvider) {
             case "claude":
                 return sendToClaude(channelId, input, attachments, openedFilesJson, agentPrompt, effectivePermissionMode);
             case "codex":

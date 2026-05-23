@@ -45,6 +45,7 @@ import { DEBOUNCE_TIMING } from '../../constants/performance.js';
 import { SessionContext } from '../../contexts/SessionContext.js';
 import { ContextMenu } from '../ContextMenu';
 import { useContextMenu, copySelection, pasteAtCursor, insertNewline } from '../../hooks/useContextMenu.js';
+import { selectedAgentForProvider } from './openCodeAgents.js';
 import './styles.css';
 
 /**
@@ -114,6 +115,10 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
     const { t } = useTranslation();
 
     const { showOpenSourceBanner, handleDismissOpenSourceBanner } = useOpenSourceBannerState();
+    const selectedAgentForCurrentProvider = useMemo(
+      () => selectedAgentForProvider(selectedAgent, currentProvider),
+      [selectedAgent, currentProvider]
+    );
     const {
       attachments,
       setInternalAttachments,
@@ -602,7 +607,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
           showUsage={showUsage}
           onClearContext={handleClearFileContext}
           onAddAttachment={handleAddAttachment}
-          selectedAgent={selectedAgent}
+          selectedAgent={selectedAgentForCurrentProvider}
           onClearAgent={() => onAgentSelect?.(null)}
           hasMessages={hasMessages}
           onRewind={onRewind}
@@ -711,7 +716,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
           onToggleThinking={onToggleThinking}
           streamingEnabled={streamingEnabled}
           onStreamingEnabledChange={onStreamingEnabledChange}
-          selectedAgent={selectedAgent}
+          selectedAgent={selectedAgentForCurrentProvider}
           onAgentSelect={(agent) => onAgentSelect?.(agent)}
           onOpenAgentSettings={onOpenAgentSettings}
           onAddModel={onOpenModelSettings}

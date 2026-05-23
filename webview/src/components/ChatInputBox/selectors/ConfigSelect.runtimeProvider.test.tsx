@@ -15,6 +15,10 @@ vi.mock('../providers/agentProvider', () => ({
   agentProvider: vi.fn(async () => []),
 }));
 
+vi.mock('../providers/openCodeAgentProvider', () => ({
+  openCodeAgentProvider: vi.fn(async () => []),
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, options?: string | Record<string, string>) => ({

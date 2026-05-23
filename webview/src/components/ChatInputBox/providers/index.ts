@@ -22,6 +22,12 @@ export {
 export type { AgentItem } from './agentProvider';
 
 export {
+  openCodeAgentProvider,
+  setupOpenCodeAgentsCallback,
+  resetOpenCodeAgentsState,
+} from './openCodeAgentProvider';
+
+export {
   promptProvider,
   promptToDropdownItem,
   setupPromptsCallback,

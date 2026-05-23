@@ -177,6 +177,18 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
         }
     }
 
+    public JsonObject listAgents(String cwd) {
+        try {
+            return runJsonCommand("listAgents", List.of(cwd != null ? cwd : ""));
+        } catch (Exception e) {
+            LOG.warn("[OpenCodeSDKBridge] Failed to list opencode agents: " + e.getMessage(), e);
+            JsonObject error = new JsonObject();
+            error.addProperty("success", false);
+            error.addProperty("error", e.getMessage());
+            return error;
+        }
+    }
+
     private JsonObject runSessionMessagesQuery(String sessionId, String cwd) throws Exception {
         if (sessionId == null || sessionId.trim().isEmpty()) {
             throw new IllegalArgumentException("sessionId is required");

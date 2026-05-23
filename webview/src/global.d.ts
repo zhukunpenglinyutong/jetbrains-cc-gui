@@ -151,6 +151,11 @@ interface Window {
   updateOpenCodeModels?: (json: string) => void;
 
   /**
+   * Update dynamically discovered opencode agents.
+   */
+  updateOpenCodeAgents?: (json: string) => void;
+
+  /**
    * Show permission dialog
    */
   showPermissionDialog?: (json: string) => void;

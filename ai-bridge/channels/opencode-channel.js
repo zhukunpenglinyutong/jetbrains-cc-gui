@@ -4,6 +4,7 @@
 import {
   abortSession as openCodeAbortSession,
   getSessionMessages as openCodeGetSessionMessages,
+  listAgents as openCodeListAgents,
   listModels as openCodeListModels,
   sendMessage as openCodeSendMessage
 } from '../services/opencode/message-service.js';
@@ -59,11 +60,17 @@ export async function handleOpenCodeCommand(command, args, stdinData) {
       break;
     }
 
+    case 'listAgents': {
+      const cwd = stdinData?.cwd || args[0] || '';
+      await openCodeListAgents(cwd);
+      break;
+    }
+
     default:
       throw new Error(`Unknown opencode command: ${command}`);
   }
 }
 
 export function getOpenCodeCommandList() {
-  return ['send', 'abort', 'getSessionMessages', 'listModels'];
+  return ['send', 'abort', 'getSessionMessages', 'listModels', 'listAgents'];
 }

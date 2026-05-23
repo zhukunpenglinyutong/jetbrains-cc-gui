@@ -12,6 +12,10 @@ export interface AgentItem {
   id: string;
   name: string;
   prompt?: string;
+  description?: string;
+  provider?: 'custom' | 'opencode';
+  mode?: string;
+  agentID?: string;
 }
 
 // ============================================================================
@@ -172,7 +176,8 @@ function filterAgents(agents: AgentItem[], query: string): AgentItem[] {
   const lowerQuery = query.toLowerCase();
   return agents.filter(agent =>
     agent.name.toLowerCase().includes(lowerQuery) ||
-    agent.prompt?.toLowerCase().includes(lowerQuery)
+    agent.prompt?.toLowerCase().includes(lowerQuery) ||
+    agent.description?.toLowerCase().includes(lowerQuery)
   );
 }
 
@@ -259,8 +264,10 @@ export function agentToDropdownItem(agent: AgentItem): DropdownItemData {
   return {
     id: agent.id,
     label: agent.name,
-    description: agent.prompt ?
-      (agent.prompt.length > 60 ? agent.prompt.substring(0, 60) + '...' : agent.prompt) :
+    description: (agent.description || agent.prompt) ?
+      ((agent.description || agent.prompt || '').length > 60
+        ? (agent.description || agent.prompt || '').substring(0, 60) + '...'
+        : (agent.description || agent.prompt || '')) :
       undefined,
     icon: 'codicon-robot',
     type: 'agent',

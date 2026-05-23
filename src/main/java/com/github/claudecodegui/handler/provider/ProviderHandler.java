@@ -36,7 +36,8 @@ public class ProviderHandler extends BaseMessageHandler {
             "get_active_codex_provider",
             "sort_codex_providers",
             // opencode discovery operations
-            "get_opencode_models"
+            "get_opencode_models",
+            "get_opencode_agents"
     };
 
     private final ClaudeProviderOperations claudeOps;
@@ -132,6 +133,9 @@ public class ProviderHandler extends BaseMessageHandler {
                 return true;
             case "get_opencode_models":
                 openCodeOps.handleGetOpenCodeModels();
+                return true;
+            case "get_opencode_agents":
+                openCodeOps.handleGetOpenCodeAgents();
                 return true;
             default:
                 return false;

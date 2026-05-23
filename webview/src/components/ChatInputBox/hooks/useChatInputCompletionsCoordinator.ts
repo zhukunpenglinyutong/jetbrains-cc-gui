@@ -11,6 +11,7 @@ import {
   dollarCommandToDropdownItem,
   fileReferenceProvider,
   fileToDropdownItem,
+  openCodeAgentProvider,
   promptProvider,
   promptToDropdownItem,
   slashCommandProvider,
@@ -29,7 +30,7 @@ interface UseChatInputCompletionsCoordinatorOptions {
   closeAllCompletionsRef: MutableRefObject<() => void>;
   handleInputRef: MutableRefObject<() => void>;
   currentProvider: string;
-  onAgentSelect?: (agent: { id: string; name: string; prompt?: string } | null) => void;
+  onAgentSelect?: (agent: AgentItem | null) => void;
   onOpenAgentSettings?: () => void;
   onOpenPromptSettings?: () => void;
 }
@@ -115,7 +116,7 @@ export function useChatInputCompletionsCoordinator({
 
   const agentCompletion = useCompletionDropdown<AgentItem>({
     trigger: '#',
-    provider: agentProvider,
+    provider: currentProvider === 'opencode' ? openCodeAgentProvider : agentProvider,
     toDropdownItem: agentToDropdownItem,
     onSelect: (agent, query) => {
       if (
@@ -129,7 +130,7 @@ export function useChatInputCompletionsCoordinator({
       if (agent.id === '__create_new__') {
         onOpenAgentSettings?.();
       } else {
-        onAgentSelect?.({ id: agent.id, name: agent.name, prompt: agent.prompt });
+        onAgentSelect?.(agent);
       }
 
       if (!editableRef.current || !query) return;

@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import Switch from 'antd/es/switch';
 import { agentProvider, CREATE_NEW_AGENT_ID, EMPTY_STATE_ID, type AgentItem } from '../providers/agentProvider';
+import { openCodeAgentProvider } from '../providers/openCodeAgentProvider';
+import { selectedAgentForProvider } from '../openCodeAgents';
 import type { SelectedAgent } from '../types';
 import { RuntimeProviderSelect } from './RuntimeProviderSelect';
 import { NodeProcessSelect } from './NodeProcessSelect';
@@ -150,6 +152,7 @@ export const ConfigSelect = ({
   const [showToast, setShowToast] = useState(false);
   const [nodeProcessTotals, setNodeProcessTotals] = useState<{ all: number; orphan: number }>({ all: 0, orphan: 0 });
   const supportsRuntimeProviderSwitch = currentProvider === 'claude' || currentProvider === 'codex';
+  const displayedSelectedAgent = selectedAgentForProvider(selectedAgent, currentProvider);
 
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -174,26 +177,31 @@ export const ConfigSelect = ({
 
     setAgentsLoading(true);
     try {
-      const list = await agentProvider('', controller.signal);
+      const provider = currentProvider === 'opencode' ? openCodeAgentProvider : agentProvider;
+      const list = await provider('', controller.signal);
       if (controller.signal.aborted) return;
       setAgentItems(list);
     } catch (error) {
       if ((error as Error).name === 'AbortError') return;
-      setAgentItems([{
+      const failedItem: AgentItem = {
         id: EMPTY_STATE_ID,
         name: t('settings.agent.loadFailed'),
         prompt: '',
-      }, {
-        id: CREATE_NEW_AGENT_ID,
-        name: t('settings.agent.createAgent'),
-        prompt: '',
-      }]);
+        provider: currentProvider === 'opencode' ? 'opencode' : 'custom',
+      };
+      setAgentItems(currentProvider === 'opencode'
+        ? [failedItem]
+        : [failedItem, {
+          id: CREATE_NEW_AGENT_ID,
+          name: t('settings.agent.createAgent'),
+          prompt: '',
+        }]);
     } finally {
       if (!controller.signal.aborted) {
         setAgentsLoading(false);
       }
     }
-  }, []);
+  }, [currentProvider, t]);
 
   const showProviderToast = useCallback((providerName: string) => {
     if (toastTimerRef.current !== undefined) {
@@ -294,7 +302,8 @@ export const ConfigSelect = ({
         agentItems.map((agent) => {
           const isInfo = agent.id === EMPTY_STATE_ID;
           const isCreate = agent.id === CREATE_NEW_AGENT_ID;
-          const isSelected = !!selectedAgent && selectedAgent.id === agent.id;
+          const isSelected = !!displayedSelectedAgent && displayedSelectedAgent.id === agent.id;
+          const description = agent.description || agent.prompt;
 
           return (
             <div
@@ -312,7 +321,15 @@ export const ConfigSelect = ({
                   return;
                 }
 
-                onAgentSelect?.({ id: agent.id, name: agent.name, prompt: agent.prompt });
+                onAgentSelect?.({
+                  id: agent.id,
+                  name: agent.name,
+                  prompt: agent.prompt,
+                  description: agent.description,
+                  provider: agent.provider,
+                  mode: agent.mode,
+                  agentID: agent.agentID,
+                });
                 setIsOpen(false);
                 setActiveSubmenu('none');
               }}
@@ -320,9 +337,9 @@ export const ConfigSelect = ({
               <span className={`codicon ${isCreate ? 'codicon-add' : isInfo ? 'codicon-info' : 'codicon-robot'}`} />
               <div style={AGENT_BODY_STYLE}>
                 <span style={AGENT_NAME_STYLE}>{agent.name}</span>
-                {agent.prompt ? (
+                {description ? (
                   <span className="model-description" style={AGENT_DESC_STYLE}>
-                    {agent.prompt.length > 60 ? agent.prompt.substring(0, 60) + '...' : agent.prompt}
+                    {description.length > 60 ? description.substring(0, 60) + '...' : description}
                   </span>
                 ) : isCreate ? (
                   <span className="model-description" style={AGENT_DESC_PLAIN_STYLE}>{t('settings.agent.createAgentHint')}</span>
@@ -364,9 +381,9 @@ export const ConfigSelect = ({
             <span className="codicon codicon-robot" />
             <div style={ITEM_INFO_STYLE}>
               <span>{t('settings.agent.title')}</span>
-              {selectedAgent?.name ? (
+              {displayedSelectedAgent?.name ? (
                 <span className="model-description" style={AGENT_DESC_PLAIN_STYLE}>
-                  {selectedAgent.name}
+                  {displayedSelectedAgent.name}
                 </span>
               ) : null}
             </div>

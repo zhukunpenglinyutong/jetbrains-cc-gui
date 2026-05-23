@@ -27,6 +27,8 @@ const PLAN_MODE_PERMISSION_DENIED =
   'opencode permission denied because the chat is in plan mode.';
 const WINDOWS_ABSOLUTE_PATH = /^[A-Za-z]:[\\/]/;
 const NATIVE_FILE_EDIT_TOOLS = new Set(['edit', 'write_file', 'write_to_file']);
+const OPENCODE_DEFAULT_AGENT_ID = 'opencode-default';
+const OPENCODE_AGENT_PREFIX = 'opencode:';
 
 function emitMarker(marker, payload) {
   if (payload === undefined) {
@@ -586,6 +588,137 @@ function parseOpenCodeModel(model) {
   };
 }
 
+function isSafeOpenCodeAgentName(value) {
+  return /^[A-Za-z0-9_.-]+$/.test(value);
+}
+
+function normalizeOpenCodeAgentMarker(agent) {
+  if (typeof agent !== 'string') {
+    return '';
+  }
+
+  const trimmed = agent.trim();
+  if (!trimmed.startsWith(OPENCODE_AGENT_PREFIX)) {
+    return '';
+  }
+
+  const agentName = trimmed.slice(OPENCODE_AGENT_PREFIX.length).trim();
+  if (
+    !agentName ||
+    agentName === OPENCODE_DEFAULT_AGENT_ID ||
+    agentName === '__default__'
+  ) {
+    return '';
+  }
+  return isSafeOpenCodeAgentName(agentName) ? agentName : '';
+}
+
+function resolveOpenCodePromptOptions(permissionMode = '', agent = '') {
+  if (permissionMode === 'plan') {
+    return { agent: 'plan' };
+  }
+
+  const markedAgent = normalizeOpenCodeAgentMarker(agent);
+  if (markedAgent) {
+    return { agent: markedAgent };
+  }
+
+  const trimmed = typeof agent === 'string' ? agent.trim() : '';
+  if (!trimmed) {
+    return {};
+  }
+  if (trimmed === OPENCODE_DEFAULT_AGENT_ID) {
+    return {};
+  }
+
+  return { system: trimmed };
+}
+
+function normalizeOpenCodeAgent(rawAgent, configPayload = {}) {
+  const candidate = asRecord(rawAgent);
+  const name = pickString(candidate.name, candidate.id);
+  if (!name || !isSafeOpenCodeAgentName(name)) {
+    return null;
+  }
+
+  const mode = pickString(candidate.mode) || 'all';
+  if (mode === 'subagent' || candidate.hidden === true) {
+    return null;
+  }
+
+  const configuredDefault = typeof configPayload?.default_agent === 'string'
+    ? configPayload.default_agent.trim()
+    : '';
+  const isDefault = configuredDefault ? name === configuredDefault : name === 'build';
+  const description = pickString(candidate.description) || `${mode} opencode agent`;
+
+  return {
+    id: `${OPENCODE_AGENT_PREFIX}${name}`,
+    name,
+    label: name,
+    description,
+    provider: 'opencode',
+    agentID: name,
+    mode,
+    prompt: `${OPENCODE_AGENT_PREFIX}${name}`,
+    isDefault,
+    native: candidate.native === true || candidate.builtIn === true
+  };
+}
+
+function normalizeOpenCodeAgents(agentPayload = [], configPayload = {}) {
+  const configuredDefault = typeof configPayload?.default_agent === 'string'
+    ? configPayload.default_agent.trim()
+    : '';
+  const agents = [{
+    id: OPENCODE_DEFAULT_AGENT_ID,
+    name: 'opencode default',
+    label: 'opencode default',
+    description: configuredDefault
+      ? `Uses ${configuredDefault} from opencode config.`
+      : 'Uses the default agent configured in opencode.',
+    provider: 'opencode',
+    agentID: '',
+    mode: 'primary',
+    isDefault: true,
+    native: true
+  }];
+  const seen = new Set(agents.map((agent) => agent.id));
+
+  for (const rawAgent of Array.isArray(agentPayload) ? agentPayload : []) {
+    const agent = normalizeOpenCodeAgent(rawAgent, configPayload);
+    if (!agent || seen.has(agent.id)) {
+      continue;
+    }
+    seen.add(agent.id);
+    agents.push(agent);
+  }
+
+  for (const fallback of [
+    {
+      name: 'build',
+      description: 'The default agent. Executes tools based on configured permissions.',
+      mode: 'primary',
+      native: true
+    },
+    {
+      name: 'plan',
+      description: 'Plan mode. Disallows all edit tools.',
+      mode: 'primary',
+      native: true
+    }
+  ]) {
+    const agent = normalizeOpenCodeAgent(fallback, configPayload);
+    if (!agent || seen.has(agent.id)) {
+      continue;
+    }
+    seen.add(agent.id);
+    agents.push(agent);
+  }
+
+  return agents;
+}
+
 function normalizeOpenCodeModels(providerPayload = {}, configPayload = {}) {
   const configuredDefault = typeof configPayload?.model === 'string'
     ? configPayload.model.trim()
@@ -1128,9 +1261,7 @@ export async function sendMessage(
     if (parsedModel) {
       body.model = parsedModel;
     }
-    if (agent && agent.trim()) {
-      body.system = agent.trim();
-    }
+    Object.assign(body, resolveOpenCodePromptOptions(permissionMode, agent));
 
     const response = await unwrapSdkResult(
       runtime.client.session.prompt({
@@ -1263,9 +1394,44 @@ export async function listModels(cwd = '') {
   }
 }
 
+export async function listAgents(cwd = '') {
+  let runtime = null;
+  try {
+    runtime = await createOpenCodeRuntime(cwd);
+    const query = directoryQuery(cwd);
+    const config = await unwrapSdkResult(
+      runtime.client.config.get({ query }),
+      'get opencode config'
+    );
+    const agents = await unwrapSdkResult(
+      runtime.client.app.agents({ query }),
+      'list opencode agents'
+    );
+
+    console.log(JSON.stringify({
+      success: true,
+      cwd,
+      defaultAgent: typeof config?.default_agent === 'string' ? config.default_agent : '',
+      agents: normalizeOpenCodeAgents(agents, config)
+    }));
+  } catch (error) {
+    console.log(JSON.stringify({
+      success: false,
+      error: normalizeOpenCodeSdkError(error).error,
+      agents: normalizeOpenCodeAgents()
+    }));
+  } finally {
+    if (runtime) {
+      await runtime.close().catch(() => {});
+    }
+  }
+}
+
 export {
   createEventContext,
   handleOpenCodeEvent,
   normalizeOpenCodeMessage,
-  normalizeOpenCodeModels
+  normalizeOpenCodeAgents,
+  normalizeOpenCodeModels,
+  resolveOpenCodePromptOptions
 };

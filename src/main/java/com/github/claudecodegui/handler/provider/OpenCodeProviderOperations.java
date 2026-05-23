@@ -27,6 +27,14 @@ public class OpenCodeProviderOperations {
     }
 
     public void handleGetOpenCodeModels() {
+        runDiscovery("models", "window.updateOpenCodeModels", (bridge, cwd) -> bridge.listModels(cwd));
+    }
+
+    public void handleGetOpenCodeAgents() {
+        runDiscovery("agents", "window.updateOpenCodeAgents", (bridge, cwd) -> bridge.listAgents(cwd));
+    }
+
+    private void runDiscovery(String label, String callbackName, OpenCodeDiscovery discovery) {
         String cwd = null;
         if (context.getSession() != null) {
             cwd = context.getSession().getCwd();
@@ -43,20 +51,25 @@ public class OpenCodeProviderOperations {
                 payload.addProperty("success", false);
                 payload.addProperty("error", "opencode bridge is not available");
             } else {
-                payload = context.getOpenCodeSDKBridge().listModels(finalCwd);
+                payload = discovery.run(context.getOpenCodeSDKBridge(), finalCwd);
             }
 
             String json = GSON.toJson(payload);
             ApplicationManager.getApplication().invokeLater(() -> {
                 try {
-                    context.callJavaScript("window.updateOpenCodeModels", context.escapeJs(json));
+                    context.callJavaScript(callbackName, context.escapeJs(json));
                 } catch (Exception e) {
-                    LOG.warn("[OpenCodeProviderOperations] Failed to deliver opencode models: " + e.getMessage());
+                    LOG.warn("[OpenCodeProviderOperations] Failed to deliver opencode " + label + ": " + e.getMessage());
                 }
             });
         }, AppExecutorUtil.getAppExecutorService()).exceptionally(ex -> {
-            LOG.error("[OpenCodeProviderOperations] Failed to get opencode models: " + ex.getMessage(), ex);
+            LOG.error("[OpenCodeProviderOperations] Failed to get opencode " + label + ": " + ex.getMessage(), ex);
             return null;
         });
+    }
+
+    @FunctionalInterface
+    private interface OpenCodeDiscovery {
+        JsonObject run(com.github.claudecodegui.provider.opencode.OpenCodeSDKBridge bridge, String cwd);
     }
 }
