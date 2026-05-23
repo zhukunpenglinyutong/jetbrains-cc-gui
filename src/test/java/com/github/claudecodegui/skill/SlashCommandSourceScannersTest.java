@@ -123,7 +123,7 @@ public class SlashCommandSourceScannersTest {
                     ]
                   }
                 }
-                """.formatted(installDir)
+                """.formatted(installDir.toString().replace("\\", "\\\\"))
         );
         Files.writeString(
                 installDir.resolve(".claude-plugin").resolve("plugin.json"),

@@ -9,6 +9,7 @@ import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.dependency.DependencyManager;
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.provider.common.BaseSDKBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
@@ -19,8 +20,10 @@ import java.io.File;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -48,7 +51,31 @@ public class CodexSDKBridge extends BaseSDKBridge {
     private static final String ENV_CODEX_CI = "CODEX_CI";
     private static final String ENV_CODEX_SANDBOX_NETWORK_DISABLED = "CODEX_SANDBOX_NETWORK_DISABLED";
     private static final long MCP_TOOLS_TIMEOUT_MS = 65_000;
+    private static final int MAX_ENV_VAR_VALUE_LENGTH = 16 * 1024;
     private final CodexHistoryReader historyReader;
+    private final CodemossSettingsService settingsService = new CodemossSettingsService();
+
+    private static final Set<String> PROTECTED_ENV_KEYS = new HashSet<>();
+    static {
+        PROTECTED_ENV_KEYS.add("CODEX_USE_STDIN");
+        PROTECTED_ENV_KEYS.add("CODEX_MODEL");
+        PROTECTED_ENV_KEYS.add("CODEX_SANDBOX_MODE");
+        PROTECTED_ENV_KEYS.add("CODEX_SANDBOX");
+        PROTECTED_ENV_KEYS.add("CODEX_APPROVAL_POLICY");
+        PROTECTED_ENV_KEYS.add("CODEX_CI");
+        PROTECTED_ENV_KEYS.add("CODEX_SANDBOX_NETWORK_DISABLED");
+        PROTECTED_ENV_KEYS.add("CODEX_HOME");
+        PROTECTED_ENV_KEYS.add("CLAUDE_SESSION_ID");
+        PROTECTED_ENV_KEYS.add("CLAUDE_PERMISSION_DIR");
+        PROTECTED_ENV_KEYS.add("HOME");
+        PROTECTED_ENV_KEYS.add("PATH");
+        PROTECTED_ENV_KEYS.add("TMPDIR");
+        PROTECTED_ENV_KEYS.add("TEMP");
+        PROTECTED_ENV_KEYS.add("TMP");
+        PROTECTED_ENV_KEYS.add("IDEA_PROJECT_PATH");
+        PROTECTED_ENV_KEYS.add("PROJECT_PATH");
+        PROTECTED_ENV_KEYS.add("CLAUDE_USE_STDIN");
+    }
 
     public CodexSDKBridge() {
         super(CodexSDKBridge.class);
@@ -72,6 +99,59 @@ public class CodexSDKBridge extends BaseSDKBridge {
     @Override
     protected void configureProviderEnv(Map<String, String> env, String stdinJson) {
         env.put("CODEX_USE_STDIN", "true");
+    }
+
+    /**
+     * Inject custom environment variables from the active Codex provider.
+     * Skips any keys that match protected built-in variable names.
+     *
+     * @param env      ProcessBuilder environment map
+     * @param category "message" or "mcp" to select the correct env var list
+     */
+    private void injectCustomEnvVars(Map<String, String> env, String category) {
+        JsonObject activeProvider;
+        try {
+            activeProvider = settingsService.getActiveCodexProvider();
+        } catch (Exception e) {
+            LOG.error("[Codex] Failed to load active provider for env var injection (category=" + category + ")", e);
+            return;
+        }
+
+        if (activeProvider == null) {
+            return;
+        }
+
+        String field = "message".equals(category) ? "messageEnvVars" : "mcpEnvVars";
+        if (!activeProvider.has(field) || !activeProvider.get(field).isJsonArray()) {
+            return;
+        }
+
+        JsonArray envVars = activeProvider.getAsJsonArray(field);
+        for (JsonElement el : envVars) {
+            if (!el.isJsonObject()) { continue; }
+            JsonObject entry = el.getAsJsonObject();
+            if (!entry.has("key") || !entry.has("value")) { continue; }
+
+            try {
+                String key = entry.get("key").getAsString().trim();
+                String value = entry.get("value").getAsString();
+
+                if (key.isEmpty()) { continue; }
+                if (PROTECTED_ENV_KEYS.contains(key.toUpperCase())) {
+                    LOG.warn("[Codex] Skipping protected env var: " + key);
+                    continue;
+                }
+                if (value.length() > MAX_ENV_VAR_VALUE_LENGTH) {
+                    LOG.warn("[Codex] Skipping env var '" + key + "': value exceeds " +
+                            MAX_ENV_VAR_VALUE_LENGTH + " bytes");
+                    continue;
+                }
+                env.put(key, value);
+                LOG.debug("[Codex] Injected custom env var: " + key);
+            } catch (Exception e) {
+                LOG.warn("[Codex] Failed to inject single env var entry: " + e.getMessage());
+            }
+        }
     }
 
     @Override
@@ -347,9 +427,8 @@ public class CodexSDKBridge extends BaseSDKBridge {
 
                 String stdinJson = gson.toJson(stdinInput);
 
-                List<String> command = new ArrayList<>();
-                command.add(node);
-                command.add(new File(bridgeDir, CHANNEL_SCRIPT).getAbsolutePath());
+                String scriptPath = new File(bridgeDir, CHANNEL_SCRIPT).getAbsolutePath();
+                List<String> command = NodeDetector.buildNodeScriptCommand(node, scriptPath);
                 command.add("codex");
                 command.add("send");
 
@@ -419,6 +498,10 @@ public class CodexSDKBridge extends BaseSDKBridge {
 
                 // Configure Codex-specific env vars from ~/.codex/config.toml
                 envConfigurator.configureCodexEnv(env);
+
+                // Inject custom "message" env vars from active provider
+                injectCustomEnvVars(env, "message");
+
                 LOG.info("[Codex] Final Node permission env snapshot: CODEX_SANDBOX_MODE=" +
                         env.get(ENV_CODEX_SANDBOX_MODE) + ", CODEX_SANDBOX=" +
                         env.get(ENV_CODEX_SANDBOX) + ", CODEX_CI=" + env.get(ENV_CODEX_CI) +
@@ -547,9 +630,8 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 }
                 String stdinJson = gson.toJson(stdinInput);
 
-                List<String> command = new ArrayList<>();
-                command.add(node);
-                command.add(new File(bridgeDir, CHANNEL_SCRIPT).getAbsolutePath());
+                String scriptPath = new File(bridgeDir, CHANNEL_SCRIPT).getAbsolutePath();
+                List<String> command = NodeDetector.buildNodeScriptCommand(node, scriptPath);
                 command.add("codex");
                 command.add("getMcpServerTools");
 
@@ -558,6 +640,9 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 pb.redirectErrorStream(true);
                 envConfigurator.updateProcessEnvironment(pb, node);
                 pb.environment().put("CODEX_USE_STDIN", "true");
+
+                // Inject custom "mcp" env vars from active provider
+                injectCustomEnvVars(pb.environment(), "mcp");
 
                 process = pb.start();
                 processManager.registerProcess("__codex_mcp_tools__", process);

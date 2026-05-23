@@ -14,7 +14,6 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -84,6 +83,7 @@ class ClaudeProcessInvoker {
             StringBuilder assistantContent = new StringBuilder();
             AtomicBoolean hadSendError = new AtomicBoolean(false);
             AtomicReference<String> lastNodeError = new AtomicReference<>(null);
+            long startTime = System.currentTimeMillis();
 
             try {
                 String node = nodeDetector.findNodeExecutable();
@@ -120,9 +120,8 @@ class ClaudeProcessInvoker {
                 log.debug("[PROMPT] Sending to Node.js (" + stdinJson.length() + " chars):\n" + preview);
 
                 boolean hasAttachments = stdinInput.has("attachments");
-                List<String> command = new ArrayList<>();
-                command.add(node);
-                command.add(new File(workDir, CHANNEL_SCRIPT).getAbsolutePath());
+                String scriptPath = new File(workDir, CHANNEL_SCRIPT).getAbsolutePath();
+                List<String> command = NodeDetector.buildNodeScriptCommand(node, scriptPath);
                 command.add(PROVIDER_NAME);
                 command.add(hasAttachments ? "sendWithAttachments" : "send");
 
@@ -169,6 +168,9 @@ class ClaudeProcessInvoker {
                     result.messageCount = result.messages.size();
 
                     if (wasInterrupted) {
+                        long elapsed = System.currentTimeMillis() - startTime;
+                        log.info("[ProcessInvoker] Request was interrupted by user (elapsed: " + elapsed + "ms)");
+                        result.error = "User interrupted";
                         callback.onComplete(result);
                     } else if (!hadSendError.get()) {
                         result.success = exitCode == 0;

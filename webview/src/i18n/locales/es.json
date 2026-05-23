@@ -89,7 +89,16 @@
     "attachmentsUploaded": "[Archivos adjuntos cargados]",
     "streamingConnected": "{{provider}} conectado, entendiendo tu pregunta",
     "showEarlierMessages": "Mostrar {{count}} mensajes anteriores",
-    "totalDuration": "Esta respuesta tardó"
+    "totalDuration": "Esta respuesta tardó",
+    "compactSummary": {
+      "summarizedConversation": "Conversación resumida",
+      "compactSummary": "Resumen compacto",
+      "messagesUpTo": "Se resumieron {{count}} mensajes hasta este punto",
+      "messagesFrom": "Se resumieron {{count}} mensajes desde este punto",
+      "userContext": "Contexto: \"{{context}}\"",
+      "expand": "Expandir resumen",
+      "collapse": "Contraer resumen"
+    }
   },
   "settings": {
     "title": "Configuración",
@@ -112,6 +121,7 @@
       },
       "language": {
         "label": "Idioma de interfaz",
+        "followIde": "Seguir IDE",
         "simplifiedChinese": "简体中文",
         "traditionalChinese": "繁體中文",
         "english": "English",
@@ -202,6 +212,11 @@
         "cmdEnter": "⌘/Ctrl+Enter para enviar",
         "cmdEnterDesc": "Presiona ⌘/Ctrl+Enter para enviar mensaje, Enter para nueva línea"
       },
+      "permissionDialogTimeout": {
+        "label": "Tiempo de espera de diálogos de permisos y preguntas",
+        "unit": "segundos",
+        "hint": "Establece el tiempo de espera para los diálogos de preguntas de Claude y los diálogos de solicitud de permisos (30~3600 segundos). Después del tiempo de espera, el diálogo se cerrará automáticamente y Claude continuará."
+      },
       "chatBgColor": {
         "label": "Color de fondo del chat",
         "custom": "Personalizado",
@@ -281,6 +296,11 @@
         "label": "Additional Prompt",
         "placeholder": "Add your extra requirements here, e.g., generate commit in English, include issue number, etc...",
         "hint": "The plugin has built-in CCG Commits specification prompts. Content you add here will be used as additional requirements, and AI will prioritize your instructions."
+      },
+      "projectPrompt": {
+        "label": "Prompt adicional específico del proyecto",
+        "placeholder": "Añade aquí requisitos específicos del proyecto, por ejemplo: el scope debe usar el nombre del módulo, el body del commit debe incluir el alcance del impacto, etc...",
+        "hint": "Este prompt solo se aplica al proyecto actual y se combina con el prompt adicional global. Cuando hay conflicto, el prompt del proyecto prevalece. Se pueden configurar proyectos diferentes de forma independiente."
       },
       "codeReview": {
         "comingSoon": "Coming Soon",
@@ -569,7 +589,19 @@
         "cliLoginDisableMessage": "Esto restaurara su config.toml anterior y cambiara a autenticacion por clave API.",
         "modelIdRequired": "Model ID is required",
         "modelIdInvalid": "Invalid model ID format (only letters, numbers, dots, hyphens, underscores, slashes and colons allowed)",
-        "modelIdDuplicate": "Model ID already exists"
+        "modelIdDuplicate": "Model ID already exists",
+        "envVarsTitle": "Environment Variables",
+        "messageEnvLabel": "Message Environment Variables",
+        "messageEnvHint": "Custom environment variables injected into the Codex message subprocess",
+        "mcpEnvLabel": "MCP Environment Variables",
+        "mcpEnvHint": "Custom environment variables injected into the MCP tool discovery subprocess",
+        "envKeyPlaceholder": "ENV_KEY",
+        "envValuePlaceholder": "value",
+        "addEnvVar": "Add Variable",
+        "envKeyInvalid": "Invalid key name (must start with letter/underscore, alphanumeric only)",
+        "envKeyProtected": "Cannot set built-in variable: {{key}}",
+        "envKeyDuplicate": "Duplicate key: {{key}}",
+        "envValueTooLong": "Valor demasiado largo (máx. {{max}} caracteres)"
       }
     },
     "agent": {
@@ -707,7 +739,8 @@
       "WebSearch": "Búsqueda web",
       "WebFetch": "Obtener web",
       "execute": "Ejecutar {{toolName}}",
-      "readDirectory": "Leer directorio"
+      "readDirectory": "Leer directorio",
+      "timeoutWarning": "Por favor responde pronto, el diálogo se cerrará en {{seconds}} segundos"
     }
   },
   "askUserQuestion": {
@@ -1201,7 +1234,7 @@
       },
       "opus46_1m": {
         "label": "Opus 4.6",
-        "description": "Opus 4.6 para sesiones largas"
+        "description": "Opus 4.6 · Modelo de razonamiento de alto rendimiento"
       },
       "haiku45": {
         "label": "Haiku 4.5",
@@ -1430,5 +1463,33 @@
     "providerNotConfigured": "Proveedor no configurado",
     "providerNotConfiguredDesc": "Todavía no hay ningún proveedor de IA configurado o no se ha autorizado el uso de la configuración local. Completa la configuración en Gestión de proveedores antes de iniciar una conversación.",
     "goToProviderSettings": "Ir a Configuración"
+  },
+  "errorDiagnostic": {
+    "copyCommand": "Copiar",
+    "copied": "Copiado",
+    "openDependencySettings": "Abrir Gestión de dependencias",
+    "recommended": "Recomendado",
+    "codexThreadResume": {
+      "title": "El hilo de sesión ya no es válido",
+      "intro": "Crear una nueva sesión resolverá este problema. El ID de hilo de la sesión actual ya no existe en el servidor de Codex.",
+      "reason": "Codex elimina los hilos antiguos después de un tiempo, lo que puede provocar este error al reanudar una sesión anterior."
+    },
+    "sdkNativeBinaryMissing": {
+      "title": "Instalación del SDK incompleta — falta el binario nativo",
+      "intro": "Este es un problema conocido del mirror npm de Taobao (no es un error del plugin). El mirror no ha sincronizado completamente los archivos específicos de la plataforma. Puedes resolverlo manualmente con cualquiera de las siguientes opciones:",
+      "reason": "Este problema desaparecerá automáticamente cuando el mirror de Taobao termine de sincronizarse — no es necesario hacer nada más.",
+      "solutions": {
+        "switchRegistry": {
+          "title": "Opción 1: Cambia temporalmente al registro oficial y reinstala",
+          "step0": "1. Ejecuta en tu terminal (cambiar al registro oficial de npm):",
+          "step1": "2. Abre la configuración de Gestión de dependencias del plugin y haz clic en Reinstalar:",
+          "step2": "3. Una vez completada la reinstalación, vuelve al mirror de Taobao:"
+        },
+        "downgrade": {
+          "title": "Opción 2: Volver a una versión anterior",
+          "step0": "En Gestión de dependencias, cambia la versión del SDK a v0.2.112 o anterior. Reinicia IDEA después del cambio."
+        }
+      }
+    }
   }
 }

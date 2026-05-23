@@ -182,17 +182,6 @@
   transform: translate(var(--tooltip-tx), -100%);
 }
 
-.tooltip-popup::before {
-  content: '';
-  position: absolute;
-  top: 100%;
-  /* Use CSS variable to control arrow position, defaults to 50% (centered) */
-  left: var(--arrow-left, 50%);
-  transform: translateX(-50%);
-  border: 6px solid transparent;
-  border-top-color: var(--dropdown-border);
-}
-
 @keyframes tooltip-fade-in {
   from { opacity: 0; transform: translate(var(--tooltip-tx), -80%); }
   to { opacity: 1; transform: translate(var(--tooltip-tx), -100%); }
@@ -208,10 +197,6 @@
   /* Override transform */
   transform: translate(0, -100%);
   animation: tooltip-bar-fade-in 0.2s forwards;
-}
-
-.tooltip-bar::before {
-  display: none;
 }
 
 @keyframes tooltip-bar-fade-in {

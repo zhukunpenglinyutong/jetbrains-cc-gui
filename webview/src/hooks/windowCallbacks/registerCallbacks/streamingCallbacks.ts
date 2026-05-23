@@ -317,10 +317,10 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     // Snapshot streaming state BEFORE clearing refs - used for post-stream merge guard
     const endedStreamingTurnId = streamingTurnIdRef.current;
     const endedStreamingMessageIndex = streamingMessageIndexRef.current;
-    // Use the more complete content between streaming ref and backend snapshot
-    const endedStreamingContent = (backendSnapshotContent && backendSnapshotContent.length > streamingContentRef.current.length)
-      ? backendSnapshotContent
-      : streamingContentRef.current;
+    // FIX: Prioritize streaming content over backend snapshot to prevent digit loss
+    // Streaming content has all the latest deltas (including the final one just flushed).
+    // Backend snapshot might be from an earlier coalescer push and may be incomplete.
+    const endedStreamingContent = streamingContentRef.current || backendSnapshotContent || '';
     const endedBackendRaw = backendSnapshotRaw;
 
     // Helper to measure total text length from raw blocks (for comparing completeness).

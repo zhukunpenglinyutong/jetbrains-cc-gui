@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import { normalizePermissionMode } from './permission-mode.js';
 import {
+  redactSecrets,
   truncateErrorContent,
   truncateString,
   truncateToolResultBlock
@@ -42,4 +43,47 @@ test('truncateToolResultBlock truncates string and array payloads', () => {
   assert.match(truncatedStringBlock.content, /truncated, original length/);
   assert.notEqual(truncatedArrayBlock.content[0].text, longText);
   assert.match(truncatedArrayBlock.content[0].text, /truncated, original length/);
+});
+
+test('redactSecrets masks Anthropic / OpenAI keys', () => {
+  assert.match(
+    redactSecrets('Auth failed: sk-ant-api03-abcdef1234567890abcdefABCDEF_XYZ'),
+    /sk-ant-\*\*\*REDACTED\*\*\*/,
+  );
+  assert.match(
+    redactSecrets('Failed call with key sk-proj-1234567890abcdef'),
+    /sk-proj-\*\*\*REDACTED\*\*\*/,
+  );
+});
+
+test('redactSecrets masks Bearer / Authorization / x-api-key headers', () => {
+  const stderr = [
+    'Authorization: Bearer abcdef1234567890XYZ',
+    'x-api-key: sk-Real-KEY-1234567890',
+    'api_key="another-secret-1234567890abcd"',
+  ].join('\n');
+  const cleaned = redactSecrets(stderr);
+  assert.match(cleaned, /Bearer \*\*\*REDACTED\*\*\*/);
+  assert.match(cleaned, /x-api-key:\s*\*\*\*REDACTED\*\*\*/i);
+  assert.match(cleaned, /api_key="\*\*\*REDACTED\*\*\*/);
+  assert.doesNotMatch(cleaned, /abcdef1234567890XYZ/);
+});
+
+test('redactSecrets masks GitHub tokens', () => {
+  // Realistic GitHub token shapes (ghp_ classic ≥ 36 chars, github_pat_ fine-grained ≥ 80 chars)
+  const text = 'fetch failed: ghp_1234567890abcdefABCDEF12345 / '
+    + 'github_pat_11AAAAAAA0aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789abcdefghijklmnopqrstuvwxyz';
+  const cleaned = redactSecrets(text);
+  // ghp_/gho_/ghs_ collapse to bare ***REDACTED*** (full mask)
+  assert.match(cleaned, /fetch failed: \*\*\*REDACTED\*\*\* \//);
+  // github_pat_ preserves its label
+  assert.match(cleaned, /github_pat_\*\*\*REDACTED\*\*\*/);
+  assert.doesNotMatch(cleaned, /1234567890abcdef/);
+  assert.doesNotMatch(cleaned, /AAAAAAA0aBcDe/);
+});
+
+test('redactSecrets is a no-op for benign text', () => {
+  assert.equal(redactSecrets('User-friendly error message'), 'User-friendly error message');
+  assert.equal(redactSecrets(null), null);
+  assert.equal(redactSecrets(undefined), undefined);
 });

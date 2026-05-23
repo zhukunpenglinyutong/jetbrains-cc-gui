@@ -97,7 +97,10 @@ describe('useSessionManagement', () => {
     });
 
     expect(window.sendToJava).toHaveBeenNthCalledWith(1, 'interrupt_session:');
-    expect(window.sendToJava).toHaveBeenNthCalledWith(2, 'load_session:history-1');
+    expect(window.sendToJava).toHaveBeenNthCalledWith(
+      2,
+      'load_session:{"sessionId":"history-1","provider":"claude"}'
+    );
     expect(window.__sessionTransitioning).toBe(true);
     expect(window.__sessionTransitionToken).toBeTruthy();
     expect(mocks.clearToasts).toHaveBeenCalledTimes(1);
@@ -313,6 +316,31 @@ describe('useSessionManagement', () => {
     expect(mocks.setUsageUsedTokens).toHaveBeenCalledWith(undefined);
   });
 
+  it('forceCreateNewSessionWithProvider resets session and applies target provider before recreating', () => {
+    const mocks = createMocks();
+
+    const { result } = renderHook(() =>
+      useSessionManagement({
+        messages: [{ type: 'assistant', content: 'old', timestamp: new Date().toISOString() }],
+        loading: false,
+        historyData: null,
+        currentSessionId: 'active-session',
+        ...mocks,
+        t,
+      })
+    );
+
+    act(() => {
+      result.current.forceCreateNewSessionWithProvider('codex');
+    });
+
+    expect(window.sendToJava).toHaveBeenNthCalledWith(1, 'set_provider:codex');
+    expect(window.sendToJava).toHaveBeenNthCalledWith(2, 'create_new_session:');
+    expect(window.__sessionTransitioning).toBe(true);
+    expect(mocks.setMessages).toHaveBeenCalledWith([]);
+    expect(mocks.setCurrentSessionId).toHaveBeenCalledWith(null);
+  });
+
   it('shows confirm dialog when creating new session with existing messages', () => {
     const mocks = createMocks();
 
@@ -440,7 +468,7 @@ describe('useSessionManagement', () => {
     // Should NOT send interrupt when not loading
     const calls = (window.sendToJava as any).mock.calls.map((c: any) => c[0]);
     expect(calls).not.toContain('interrupt_session:');
-    expect(calls).toContain('load_session:hist-2');
+    expect(calls).toContain('load_session:{"sessionId":"hist-2","provider":"claude"}');
 
     // But should still set transition guard
     expect(window.__sessionTransitioning).toBe(true);
@@ -449,6 +477,44 @@ describe('useSessionManagement', () => {
     expect(mocks.setMessages).toHaveBeenCalledWith([]);
     expect(mocks.setCurrentSessionId).toHaveBeenCalledWith('hist-2');
     expect(mocks.setCustomSessionTitle).toHaveBeenCalledWith(null);
+  });
+
+  it('loadHistorySession sends explicit provider when provided by history item', () => {
+    const historyData = {
+      success: true,
+      sessions: [
+        {
+          sessionId: 'hist-codex',
+          title: 'Codex Session',
+          provider: 'codex',
+          model: 'gpt-5.4',
+          messageCount: 2,
+          lastTimestamp: Date.now(),
+        },
+      ],
+      total: 2,
+    } as unknown as HistoryData;
+
+    const mocks = createMocks();
+
+    const { result } = renderHook(() =>
+      useSessionManagement({
+        messages: [],
+        loading: false,
+        historyData,
+        currentSessionId: null,
+        ...mocks,
+        t,
+      })
+    );
+
+    act(() => {
+      result.current.loadHistorySession('hist-codex', 'codex');
+    });
+
+    expect(window.sendToJava).toHaveBeenCalledWith(
+      'load_session:{"sessionId":"hist-codex","provider":"codex"}'
+    );
   });
 
   it('all transition paths reset usage tokens', () => {

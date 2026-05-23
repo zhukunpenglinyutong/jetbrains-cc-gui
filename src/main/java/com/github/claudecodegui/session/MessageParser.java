@@ -23,8 +23,9 @@ public class MessageParser {
             return null;
         }
 
-        // Filter out command messages
-        if (shouldFilterCommandMessage(msg)) {
+        // Filter out command messages - only for user messages
+        // Assistant messages may contain these tags in code examples
+        if (shouldFilterCommandMessage(msg, type)) {
             return null;
         }
 
@@ -34,6 +35,9 @@ public class MessageParser {
             if (content == null || content.trim().isEmpty()) {
                 if (hasToolResult(msg)) {
                     return new ClaudeSession.Message(ClaudeSession.Message.Type.USER, "[tool_result]", msg);
+                }
+                if (hasImageContent(msg)) {
+                    return new ClaudeSession.Message(ClaudeSession.Message.Type.USER, "", msg);
                 }
                 return null;
             }
@@ -48,8 +52,15 @@ public class MessageParser {
 
     /**
      * Check whether a command message should be filtered out.
+     * Only applies to user messages - assistant messages may contain
+     * command tags in code examples and should not be filtered.
      */
-    private boolean shouldFilterCommandMessage(JsonObject msg) {
+    private boolean shouldFilterCommandMessage(JsonObject msg, String type) {
+        // Only filter user messages - assistant messages may contain command tags in code examples
+        if (!"user".equals(type)) {
+            return false;
+        }
+
         if (!msg.has("message") || !msg.get("message").isJsonObject()) {
             return false;
         }
@@ -100,6 +111,14 @@ public class MessageParser {
      * Check whether the message contains a tool_result.
      */
     public boolean hasToolResult(JsonObject msg) {
+        return hasContentBlockType(msg, "tool_result");
+    }
+
+    public boolean hasImageContent(JsonObject msg) {
+        return hasContentBlockType(msg, "image");
+    }
+
+    private boolean hasContentBlockType(JsonObject msg, String blockType) {
         if (!msg.has("message") || !msg.get("message").isJsonObject()) {
             return false;
         }
@@ -114,7 +133,7 @@ public class MessageParser {
             JsonElement element = contentArray.get(i);
             if (element.isJsonObject()) {
                 JsonObject block = element.getAsJsonObject();
-                if (block.has("type") && "tool_result".equals(block.get("type").getAsString())) {
+                if (block.has("type") && blockType.equals(block.get("type").getAsString())) {
                     return true;
                 }
             }

@@ -63,6 +63,7 @@ public class CodemossSettingsService {
     private static final String DEFAULT_PROMPT_ENHANCER_CODEX_MODEL = "gpt-5.5";
     private static final String DEFAULT_COMMIT_AI_CLAUDE_MODEL = "claude-sonnet-4-6";
     private static final String DEFAULT_COMMIT_AI_CODEX_MODEL = "gpt-5.5";
+    private static final String USER_LANGUAGE_CONFIG_KEY = "language";
 
     private final Gson gson;
 
@@ -281,6 +282,44 @@ public class CodemossSettingsService {
         return config;
     }
 
+    // ==================== Language Config Management ====================
+
+    /**
+     * Get the manually configured UI language.
+     *
+     * @return configured language code, or null when the UI should follow the IDE language
+     */
+    public String getUserLanguage() throws IOException {
+        JsonObject config = readConfig();
+        if (!config.has(USER_LANGUAGE_CONFIG_KEY) || config.get(USER_LANGUAGE_CONFIG_KEY).isJsonNull()) {
+            return null;
+        }
+        String language = config.get(USER_LANGUAGE_CONFIG_KEY).getAsString();
+        return language == null || language.trim().isEmpty() ? null : language.trim();
+    }
+
+    /**
+     * Persist the manually configured UI language.
+     *
+     * @param language supported UI language code
+     */
+    public void setUserLanguage(String language) throws IOException {
+        JsonObject config = readConfig();
+        config.addProperty(USER_LANGUAGE_CONFIG_KEY, language);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set user language: " + language);
+    }
+
+    /**
+     * Clear the manual UI language override so the webview follows the IDE language.
+     */
+    public void clearUserLanguage() throws IOException {
+        JsonObject config = readConfig();
+        config.remove(USER_LANGUAGE_CONFIG_KEY);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Cleared user language override");
+    }
+
     // ==================== Claude Settings Management ====================
 
     public JsonObject getCurrentClaudeConfig() throws IOException {
@@ -395,6 +434,49 @@ public class CodemossSettingsService {
         LOG.info("[CodemossSettings] Set commit prompt: " + prompt);
     }
 
+    /**
+     * Get project-level commit AI prompt.
+     *
+     * @param projectPath project path
+     * @return project commit prompt, empty string if not configured
+     */
+    public String getProjectCommitPrompt(String projectPath) throws IOException {
+        if (projectPath == null) {
+            return "";
+        }
+        JsonObject config = readConfig();
+        if (config.has("projectCommitPrompt")) {
+            JsonObject projectPrompts = config.getAsJsonObject("projectCommitPrompt");
+            if (projectPrompts.has(projectPath)) {
+                return projectPrompts.get(projectPath).getAsString();
+            }
+        }
+        return "";
+    }
+
+    /**
+     * Set project-level commit AI prompt.
+     *
+     * @param projectPath project path
+     * @param prompt commit prompt
+     */
+    public void setProjectCommitPrompt(String projectPath, String prompt) throws IOException {
+        if (projectPath == null) {
+            return;
+        }
+        JsonObject config = readConfig();
+        JsonObject projectPrompts;
+        if (config.has("projectCommitPrompt")) {
+            projectPrompts = config.getAsJsonObject("projectCommitPrompt");
+        } else {
+            projectPrompts = new JsonObject();
+            config.add("projectCommitPrompt", projectPrompts);
+        }
+        projectPrompts.addProperty(projectPath, prompt);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set project commit prompt for project: " + projectPath);
+    }
+
     // ==================== UI Font Config Management ====================
 
     /**
@@ -422,6 +504,29 @@ public class CodemossSettingsService {
         writeConfig(config);
         LOG.debug("[CodemossSettings] Set UI font config: mode=" + mode
                 + ", customFontPath=" + customFontPath);
+    }
+
+    // ==================== Permission Dialog Timeout Config Management ====================
+
+    public static final int DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS =
+            PermissionDialogTimeoutSettings.DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS;
+    public static final int MIN_PERMISSION_DIALOG_TIMEOUT_SECONDS =
+            PermissionDialogTimeoutSettings.MIN_PERMISSION_DIALOG_TIMEOUT_SECONDS;
+    public static final int MAX_PERMISSION_DIALOG_TIMEOUT_SECONDS =
+            PermissionDialogTimeoutSettings.MAX_PERMISSION_DIALOG_TIMEOUT_SECONDS;
+    public static final long PERMISSION_SAFETY_NET_BUFFER_SECONDS =
+            PermissionDialogTimeoutSettings.PERMISSION_SAFETY_NET_BUFFER_SECONDS;
+
+    public static int clampPermissionDialogTimeoutSeconds(int seconds) {
+        return PermissionDialogTimeoutSettings.clampPermissionDialogTimeoutSeconds(seconds);
+    }
+
+    public int getPermissionDialogTimeoutSeconds() throws IOException {
+        return PermissionDialogTimeoutSettings.getPermissionDialogTimeoutSeconds(this);
+    }
+
+    public void setPermissionDialogTimeoutSeconds(int seconds) throws IOException {
+        PermissionDialogTimeoutSettings.setPermissionDialogTimeoutSeconds(this, seconds);
     }
 
     // ==================== Streaming Config Management ====================

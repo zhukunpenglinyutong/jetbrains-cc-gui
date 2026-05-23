@@ -1,6 +1,9 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatCountdown } from '../utils/helpers';
+import { useDialogCountdownTimeout } from '../hooks/useDialogCountdownTimeout';
+import { DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS } from '../utils/permissionDialogTimeout';
+import { isEditableEventTarget } from '../utils/isEditableEventTarget';
 import './AskUserQuestionDialog.css';
 
 // Special marker to identify the "Other" option
@@ -8,10 +11,6 @@ const OTHER_OPTION_MARKER = '__OTHER__';
 
 // Maximum length limit for custom input
 const MAX_CUSTOM_INPUT_LENGTH = 2000;
-
-// Timeout configuration (kept in sync with backend PermissionHandler.java and permission-handler.js)
-const TIMEOUT_SECONDS = 300; // 5 minutes
-const WARNING_THRESHOLD_SECONDS = 30; // Show warning when 30 seconds remain
 
 export interface QuestionOption {
   label: string;
@@ -36,6 +35,7 @@ interface AskUserQuestionDialogProps {
   request: AskUserQuestionRequest | null;
   onSubmit: (requestId: string, answers: Record<string, string | string[]>) => void;
   onCancel: (requestId: string) => void;
+  timeoutSeconds?: number;
 }
 
 function normalizeQuestion(raw: any): Question | null {
@@ -63,39 +63,39 @@ const AskUserQuestionDialog = ({
   request,
   onSubmit,
   onCancel,
+  timeoutSeconds = DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS,
 }: AskUserQuestionDialogProps) => {
   const { t } = useTranslation();
-  // Store answers for each question: question -> selectedLabel(s)
   const [answers, setAnswers] = useState<Record<string, Set<string>>>({});
-  // Store custom input text for each question: question -> customText
   const [customInputs, setCustomInputs] = useState<Record<string, string>>({});
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  // Controls whether the dialog is collapsed (compact mode)
   const [isCollapsed, setIsCollapsed] = useState(false);
-  // Remaining countdown seconds
-  const [remainingSeconds, setRemainingSeconds] = useState(TIMEOUT_SECONDS);
-  // Whether to show timeout warning
-  const isTimeWarning = remainingSeconds <= WARNING_THRESHOLD_SECONDS && remainingSeconds > 0;
-  // Whether the dialog has timed out
-  const isTimedOut = remainingSeconds <= 0;
 
   const customInputRef = useRef<HTMLTextAreaElement>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const normalizedQuestions = (Array.isArray(request?.questions) ? request!.questions : [])
-    .map(normalizeQuestion)
-    .filter(Boolean) as Question[];
-
-  // Handle cancel action
-  const handleCancel = useCallback(() => {
+  const handleTimeout = useCallback(() => {
     if (request) {
       onCancel(request.requestId);
     }
   }, [request, onCancel]);
 
-  // Reset state - reinitialize when request changes
+  const { remainingSeconds, isTimeWarning, markSubmitted } = useDialogCountdownTimeout({
+    isOpen,
+    requestKey: request?.requestId,
+    timeoutSeconds,
+    onTimeout: handleTimeout,
+  });
+  const normalizedQuestions = (Array.isArray(request?.questions) ? request!.questions : [])
+    .map(normalizeQuestion)
+    .filter(Boolean) as Question[];
+
+  const handleCancel = useCallback(() => {
+    if (request && markSubmitted()) {
+      onCancel(request.requestId);
+    }
+  }, [request, markSubmitted, onCancel]);
+
   useEffect(() => {
     if (isOpen && request) {
-      // Initialize answer state
       const questions = (Array.isArray(request.questions) ? request.questions : [])
         .map(normalizeQuestion)
         .filter(Boolean) as Question[];
@@ -109,10 +109,7 @@ const AskUserQuestionDialog = ({
       setAnswers(initialAnswers);
       setCustomInputs(initialCustomInputs);
       setCurrentQuestionIndex(0);
-      // Reset collapse state to ensure dialog is expanded when opened
       setIsCollapsed(false);
-      // Reset countdown
-      setRemainingSeconds(TIMEOUT_SECONDS);
     }
   }, [isOpen, request?.requestId]);
 
@@ -121,6 +118,10 @@ const AskUserQuestionDialog = ({
     if (!isOpen || !request) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isEditableEventTarget(e.target)) {
+        return;
+      }
+
       if (e.key === 'Escape') {
         handleCancel();
       }
@@ -128,48 +129,6 @@ const AskUserQuestionDialog = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, request, handleCancel]);
-
-  // Countdown timer
-  useEffect(() => {
-    // Helper function to clear the timer
-    const clearTimer = () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-
-    // If dialog is not open or there is no request, clean up and exit
-    if (!isOpen || !request) {
-      clearTimer();
-      return;
-    }
-
-    // Clear previous timer (prevent duplicates)
-    clearTimer();
-
-    // Start countdown
-    timerRef.current = setInterval(() => {
-      setRemainingSeconds((prev) => {
-        if (prev <= 1) {
-          // Timed out, clear timer
-          clearTimer();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    // Cleanup function
-    return clearTimer;
-  }, [isOpen, request?.requestId]);
-
-  // Auto-close on timeout
-  useEffect(() => {
-    if (isTimedOut && isOpen && request) {
-      handleCancel();
-    }
-  }, [isTimedOut, isOpen, request, handleCancel]);
 
   if (!isOpen || !request) {
     return null;
@@ -186,7 +145,7 @@ const AskUserQuestionDialog = ({
             {t('askUserQuestion.invalidFormat', '问题数据格式不支持，请取消后重试。')}
           </p>
           <div className="ask-user-question-dialog-actions">
-            <button className="action-button secondary" onClick={() => onCancel(request.requestId)}>
+            <button className="action-button secondary" onClick={handleCancel}>
               {t('askUserQuestion.cancel', '取消')}
             </button>
           </div>
@@ -214,7 +173,7 @@ const AskUserQuestionDialog = ({
             {t('askUserQuestion.loading', '正在加载问题...')}
           </p>
           <div className="ask-user-question-dialog-actions">
-            <button className="action-button secondary" onClick={() => onCancel(request.requestId)}>
+            <button className="action-button secondary" onClick={handleCancel}>
               {t('askUserQuestion.cancel', '取消')}
             </button>
           </div>
@@ -282,6 +241,8 @@ const AskUserQuestionDialog = ({
   };
 
   const handleSubmitFinal = () => {
+    if (!markSubmitted()) return;
+
     const formattedAnswers: Record<string, string | string[]> = {};
     normalizedQuestions.forEach((q) => {
       const selectedSet = answers[q.question] || new Set<string>();

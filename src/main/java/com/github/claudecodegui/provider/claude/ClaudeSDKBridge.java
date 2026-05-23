@@ -13,6 +13,7 @@ import java.io.File;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -103,7 +104,19 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
      * Prewarm daemon asynchronously to reduce first-message latency.
      */
     public void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch) {
-        daemonCoordinator.prewarmDaemonAsync(cwd, runtimeSessionEpoch);
+        daemonCoordinator.prewarmDaemonAsync(cwd, runtimeSessionEpoch, null);
+    }
+
+    /**
+     * Prewarm daemon asynchronously for a specific session.
+     * Creates a runtime that loads the session's context via --resume.
+     *
+     * @param cwd Working directory
+     * @param runtimeSessionEpoch Session epoch for cache invalidation
+     * @param sessionId The historical session ID to resume
+     */
+    public void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch, String sessionId) {
+        daemonCoordinator.prewarmDaemonAsync(cwd, runtimeSessionEpoch, sessionId);
     }
 
     public void resetPersistentRuntime(String runtimeSessionEpoch) {
@@ -452,6 +465,112 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
 
     public CompletableFuture<JsonObject> rewindFiles(String sessionId, String userMessageId) {
         return rewindFiles(sessionId, userMessageId, null);
+    }
+
+    // ============================================================================
+    // Context usage query
+    // ============================================================================
+
+    /**
+     * Get context window usage breakdown from the active Claude runtime.
+     * Calls the SDK's getContextUsage() API via the daemon process.
+     *
+     * @param sessionId The session ID to query context for
+     * @param cwd Working directory
+     * @param model The model ID to use for the runtime (e.g., "claude-opus-4-7")
+     * @return CompletableFuture with context usage data as JsonObject
+     */
+    public CompletableFuture<JsonObject> getContextUsage(String sessionId, String cwd, String model) {
+        DaemonBridge db = this.daemonCoordinator.getDaemonBridge();
+        if (db == null) {
+            JsonObject error = new JsonObject();
+            error.addProperty("success", false);
+            error.addProperty("error", "Daemon not available. Context usage requires daemon mode.");
+            return CompletableFuture.completedFuture(error);
+        }
+
+        JsonObject params = new JsonObject();
+        if (sessionId != null && !sessionId.isEmpty()) {
+            params.addProperty("sessionId", sessionId);
+        }
+        if (cwd != null && !cwd.isEmpty()) {
+            params.addProperty("cwd", cwd);
+        }
+        if (model != null && !model.isEmpty()) {
+            params.addProperty("model", model);
+        }
+
+        AtomicReference<JsonObject> resultRef = new AtomicReference<>();
+        CompletableFuture<JsonObject> resultFuture = new CompletableFuture<>();
+
+        DaemonBridge.DaemonOutputCallback callback = new DaemonBridge.DaemonOutputCallback() {
+            @Override
+            public void onLine(String line) {
+                try {
+                    JsonObject parsed = ClaudeSDKBridge.this.gson.fromJson(line, JsonObject.class);
+                    resultRef.set(parsed);
+                } catch (Exception ignored) {
+                }
+            }
+            @Override
+            public void onStderr(String text) { }
+            @Override
+            public void onError(String error) {
+                if (!resultFuture.isDone()) {
+                    JsonObject err = new JsonObject();
+                    err.addProperty("success", false);
+                    err.addProperty("error", error);
+                    resultFuture.complete(err);
+                }
+            }
+            @Override
+            public void onComplete(boolean success) {
+                if (!resultFuture.isDone()) {
+                    if (success) {
+                        JsonObject result = resultRef.get();
+                        if (result != null) {
+                            resultFuture.complete(result);
+                        } else {
+                            JsonObject err = new JsonObject();
+                            err.addProperty("success", false);
+                            err.addProperty("error", "No response received");
+                            resultFuture.complete(err);
+                        }
+                    } else {
+                        JsonObject err = new JsonObject();
+                        err.addProperty("success", false);
+                        err.addProperty("error", "getContextUsage command failed");
+                        resultFuture.complete(err);
+                    }
+                }
+            }
+        };
+
+        try {
+            CompletableFuture<Boolean> commandFuture = db.sendCommand("claude.getContextUsage", params, callback);
+            commandFuture.exceptionally(ex -> {
+                if (!resultFuture.isDone()) {
+                    JsonObject err = new JsonObject();
+                    err.addProperty("success", false);
+                    err.addProperty("error", ex.getMessage());
+                    resultFuture.complete(err);
+                }
+                return false;
+            });
+        } catch (Exception e) {
+            LOG.error("[ClaudeSDKBridge] getContextUsage failed: " + e.getMessage(), e);
+            JsonObject err = new JsonObject();
+            err.addProperty("success", false);
+            err.addProperty("error", e.getMessage());
+            return CompletableFuture.completedFuture(err);
+        }
+
+        return resultFuture.orTimeout(180, TimeUnit.SECONDS).exceptionally(ex -> {
+            JsonObject err = new JsonObject();
+            err.addProperty("success", false);
+            err.addProperty("error", "getContextUsage timed out after 180 seconds (SDK may be loading)");
+            return err;
+        });
     }
 
     // ============================================================================

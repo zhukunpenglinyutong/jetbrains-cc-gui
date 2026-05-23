@@ -36,30 +36,45 @@ export function mapModelIdToSdkName(modelId) {
  *
  * Priority: ANTHROPIC_MODEL (global override) > ANTHROPIC_DEFAULT_*_MODEL > original modelId
  *
- * @param {string} modelId - Internal model ID from frontend (e.g. 'claude-sonnet-4-6')
+ * IMPORTANT: The `[1m]` suffix on the input modelId is preserved across the mapping.
+ * The 1M context window is selected by the Claude Code SDK based on whether the
+ * model name ends with `[1m]` (it reads `process.env.ANTHROPIC_DEFAULT_*_MODEL`).
+ * Stripping the suffix during settings resolution silently disables the 1M toggle
+ * for any provider whose mapping value doesn't already carry `[1m]` (most third-party
+ * presets like zhipu/kimi/qwen/minimax/xiaomi). If the mapped value already ends in
+ * `[1m]`, it's kept as-is so we don't double-append.
+ *
+ * @param {string} modelId - Internal model ID from frontend (e.g. 'claude-sonnet-4-6' or 'claude-sonnet-4-6[1m]')
  * @param {object} userEnv - The env object from settings.json (settings.env)
- * @returns {string} The resolved model name for API calls
+ * @returns {string} The resolved model name for API calls, with the `[1m]` suffix preserved
  */
 export function resolveModelFromSettings(modelId, userEnv) {
   if (!modelId || !userEnv) return modelId;
 
   const lowerModel = modelId.toLowerCase();
+  const requestHas1M = /\[1m\]$/i.test(modelId);
+  // Preserve the [1m] suffix from the original modelId across settings mapping.
+  // If the mapped value already carries [1m], don't double-append it.
+  const applySuffix = (mapped) => {
+    if (!requestHas1M) return mapped;
+    return /\[1m\]$/i.test(mapped) ? mapped : `${mapped}[1m]`;
+  };
 
   // ANTHROPIC_MODEL is a global override that applies to all model types
   if (userEnv.ANTHROPIC_MODEL && String(userEnv.ANTHROPIC_MODEL).trim()) {
-    return String(userEnv.ANTHROPIC_MODEL).trim();
+    return applySuffix(String(userEnv.ANTHROPIC_MODEL).trim());
   }
 
   // Check model-specific env vars based on the internal model ID's type
   if (lowerModel.includes('opus')) {
     const mapped = userEnv.ANTHROPIC_DEFAULT_OPUS_MODEL;
     if (mapped && String(mapped).trim()) {
-      return String(mapped).trim();
+      return applySuffix(String(mapped).trim());
     }
   } else if (lowerModel.includes('haiku')) {
-    const mapped = userEnv.ANTHROPIC_SMALL_FAST_MODEL ?? userEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL;
+    const mapped = userEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL;
     if (mapped && String(mapped).trim()) {
-      return String(mapped).trim();
+      return applySuffix(String(mapped).trim());
     }
   } else if (lowerModel.includes('sonnet')) {
     // Only apply sonnet mapping when the model ID actually contains 'sonnet'.
@@ -67,7 +82,7 @@ export function resolveModelFromSettings(modelId, userEnv) {
     // remapped to the sonnet setting, as they are already the intended model name.
     const mapped = userEnv.ANTHROPIC_DEFAULT_SONNET_MODEL;
     if (mapped && String(mapped).trim()) {
-      return String(mapped).trim();
+      return applySuffix(String(mapped).trim());
     }
   }
   // For non-Anthropic model IDs that don't contain 'opus'/'haiku'/'sonnet',
@@ -101,14 +116,16 @@ export function setModelEnvironmentVariables(modelId, baseModelId) {
   // that doesn't contain 'opus'/'haiku'/'sonnet'.
   const lowerBase = (baseModelId || modelId).toLowerCase();
 
+  process.env.ANTHROPIC_MODEL = modelId;
+
   // Set the corresponding environment variable based on model type
   // so the SDK knows which specific version to use
   if (lowerBase.includes('opus')) {
     process.env.ANTHROPIC_DEFAULT_OPUS_MODEL = modelId;
     console.log('[MODEL_ENV] Set ANTHROPIC_DEFAULT_OPUS_MODEL =', modelId);
   } else if (lowerBase.includes('haiku')) {
-    process.env.ANTHROPIC_SMALL_FAST_MODEL = modelId;
-    console.log('[MODEL_ENV] Set ANTHROPIC_SMALL_FAST_MODEL =', modelId);
+    process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = modelId;
+    console.log('[MODEL_ENV] Set ANTHROPIC_DEFAULT_HAIKU_MODEL =', modelId);
   } else {
     // Covers 'sonnet' and any non-Anthropic model names (e.g. 'qwen3.5-plus', 'deepseek-v3')
     // Since mapModelIdToSdkName() defaults to 'sonnet' for unknown models,

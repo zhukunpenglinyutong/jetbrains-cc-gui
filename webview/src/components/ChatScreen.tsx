@@ -184,6 +184,10 @@ export const ChatScreen = ({
                   onMessageNodeRef={onMessageNodeRef}
                   onCollapsedCountChange={setAnchorCollapsedCount}
                   onNavigateToProviderSettings={onNavigateToProviderSettings}
+                  onNavigateToDependencySettings={() => {
+                    setSettingsInitialTab('dependencies');
+                    setCurrentView('settings');
+                  }}
                   currentProvider={currentProvider}
                 />
               </ToolResultRawContext.Provider>

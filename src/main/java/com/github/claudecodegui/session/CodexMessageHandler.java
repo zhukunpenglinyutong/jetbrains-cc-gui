@@ -375,8 +375,14 @@ public class CodexMessageHandler implements MessageCallback {
      * Detect Codex internal command messages that must not be shown to the user.
      * Codex prepends instruction blocks to user input; strip them before checking command tags
      * so those hidden blocks do not mask the user's real message.
+     * Only filter user messages - assistant messages may contain these tags in code examples.
      */
     private boolean isFilteredCommandMessage(com.google.gson.JsonObject msg, Message.Type messageType) {
+        // Only filter user messages - assistant messages may contain command tags in code examples
+        if (messageType != Message.Type.USER) {
+            return false;
+        }
+
         if (!msg.has("message") || !msg.get("message").isJsonObject()) {
             return false;
         }
@@ -390,9 +396,7 @@ public class CodexMessageHandler implements MessageCallback {
             return false;
         }
 
-        String filterContent = messageType == Message.Type.USER
-            ? CodexMessageConverter.stripSystemTags(contentStr)
-            : contentStr;
+        String filterContent = CodexMessageConverter.stripSystemTags(contentStr);
         boolean hasCommandMessage = contentStr.contains("<command-message>")
             && contentStr.contains("</command-message>");
         if (hasCommandMessage) {

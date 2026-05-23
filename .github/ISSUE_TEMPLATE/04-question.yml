@@ -1,0 +1,87 @@
+name: ❓ 使用咨询 / Question
+description: 使用问题、配置咨询 / Usage questions or configuration help
+title: "[Question] "
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **使用问题建议先查看：**
+        - [README](https://github.com/zhukunpenglinyutong/jetbrains-cc-gui#readme)
+        - [CHANGELOG](https://github.com/zhukunpenglinyutong/jetbrains-cc-gui/blob/main/CHANGELOG.md)
+        - [已关闭的 issue](https://github.com/zhukunpenglinyutong/jetbrains-cc-gui/issues?q=is%3Aissue+is%3Aclosed)
+        - 12 个 tracking issues（#1093-#1104）
+
+        如果还是没找到答案，请填写以下信息。
+        If you can't find an answer, please fill in the details below.
+
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: 提交前确认 / Pre-submission Checklist
+      options:
+        - label: 我已查看 README 和 CHANGELOG / I have checked README and CHANGELOG
+          required: true
+        - label: 我已搜索现有 issue / I have searched existing issues
+          required: true
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: 插件版本 / Plugin Version
+      placeholder: "例如 / e.g. v0.4.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: ide-os
+    attributes:
+      label: IDE + 操作系统 / IDE + OS
+      options:
+        - IntelliJ IDEA + Windows
+        - IntelliJ IDEA + macOS
+        - IntelliJ IDEA + Linux
+        - PyCharm + Windows
+        - PyCharm + macOS
+        - PyCharm + Linux
+        - WebStorm + Windows
+        - WebStorm + macOS
+        - 其他 / Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: 你的问题 / Your Question
+      description: 清晰、具体地描述你想了解什么 / Clear and specific question
+      placeholder: |
+        例如：
+        - 如何配置 MCP 服务器在多个项目之间共享？
+        - 怎么切换 Provider？
+        - XX 功能在哪里设置？
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: 你已经尝试过 / What You've Tried
+      description: 说明你已经查过哪些资料、试过什么操作
+      placeholder: |
+        例如：
+        - 我看了 README 但没找到关于 XX 的说明
+        - 我尝试在设置里找 YY 选项但没看到
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图 / Screenshots
+      description: 帮助我们理解你的场景（可选）
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 补充信息 / Additional Context

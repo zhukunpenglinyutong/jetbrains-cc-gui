@@ -23,6 +23,7 @@ import {
   NEW_SESSION_COMMANDS,
   RESUME_COMMANDS,
   PLAN_COMMANDS,
+  CONTEXT_COMMANDS,
 } from './hooks/useMessageSender';
 import { applyDiffTheme, getStoredDiffTheme } from './utils/diffTheme';
 import type { Attachment, ChatInputBoxHandle } from './components/ChatInputBox/types';
@@ -35,6 +36,7 @@ import { useSession } from './contexts/SessionContext';
 import { useUIState } from './contexts/UIStateContext';
 import { useDialogs } from './contexts/DialogContext';
 import { AppDialogs } from './components/AppDialogs';
+import { DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS } from './utils/permissionDialogTimeout';
 
 const App = () => {
   const { t } = useTranslation();
@@ -47,6 +49,9 @@ const App = () => {
     openPermissionDialog,
     openAskUserQuestionDialog,
     openPlanApprovalDialog,
+    openContextUsageDialog,
+    updateContextUsageData,
+    closeContextUsageDialog,
     setRewindDialogOpen, setCurrentRewindRequest,
     isRewinding, setIsRewinding, setRewindSelectDialogOpen,
   } = useDialogs();
@@ -78,6 +83,9 @@ const App = () => {
     toasts, addToast, dismissToast, clearToasts,
     setContextInfo,
   } = useUIState();
+
+  // ── Permission dialog timeout (synced with backend config) ──
+  const [permissionDialogTimeoutSeconds, setPermissionDialogTimeoutSeconds] = useState(DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS);
 
   // ── Local refs (don't trigger re-render, kept in App.tsx) ──
   const isFirstMountRef = useRef(true);
@@ -185,10 +193,11 @@ const App = () => {
     showNewSessionConfirm, showInterruptConfirm,
     suppressNextStatusToastRef,
     createNewSession, forceCreateNewSession,
+    forceCreateNewSessionWithProvider,
     handleConfirmNewSession, handleCancelNewSession,
     handleConfirmInterrupt, handleCancelInterrupt,
     loadHistorySession, deleteHistorySession, deleteHistorySessions, exportHistorySession,
-    toggleFavoriteSession, updateHistoryTitle,
+    toggleFavoriteSession, updateHistoryTitle, applyHistoryTitleLocal,
   } = useSessionManagement({
     messages, loading, historyData, currentSessionId,
     setHistoryData, setMessages, setCurrentView, setCurrentSessionId,
@@ -226,8 +235,11 @@ const App = () => {
     getOrCreateStreamingAssistantIndex, patchAssistantForStreaming,
     syncActiveProviderModelMapping,
     openPermissionDialog, openAskUserQuestionDialog, openPlanApprovalDialog,
-    customSessionTitleRef, currentSessionIdRef, updateHistoryTitle,
+    openContextUsageDialog, updateContextUsageData,
+    closeContextUsageDialog,
+    customSessionTitleRef, currentSessionIdRef, updateHistoryTitle, applyHistoryTitleLocal,
     setCustomSessionTitle,
+    setPermissionDialogTimeoutSeconds,
   });
 
   // ── Message processing ──
@@ -239,10 +251,10 @@ const App = () => {
   // ── Message sender ──
   // Wrap handleProviderSelect to also clear messages and input (like creating a new session)
   const wrappedHandleProviderSelect = useCallback((providerId: string) => {
-    setMessages([]);
     chatInputRef.current?.clear();
     handleProviderSelect(providerId);
-  }, [handleProviderSelect]);
+    forceCreateNewSessionWithProvider(providerId);
+  }, [forceCreateNewSessionWithProvider, handleProviderSelect]);
 
   const {
     handleSubmit: hookHandleSubmit,
@@ -250,7 +262,7 @@ const App = () => {
     interruptSession,
   } = useMessageSender({
     t, addToast,
-    currentProvider, permissionMode, selectedAgent,
+    currentProvider, selectedModel, permissionMode, selectedAgent,
     sdkStatusLoaded, currentSdkInstalled,
     sentAttachmentsRef, chatInputRef, messagesContainerRef,
     isUserAtBottomRef, userPausedRef, isStreamingRef,
@@ -258,6 +270,9 @@ const App = () => {
     setSettingsInitialTab, setCurrentView,
     forceCreateNewSession,
     handleModeSelect,
+    longContextEnabled,
+    openContextUsageDialog,
+    closeContextUsageDialog,
   });
 
   // ── Message queue ──
@@ -285,14 +300,15 @@ const App = () => {
         setCurrentView('history');
         return;
       }
-      // /plan - switch to plan mode
-      if (PLAN_COMMANDS.has(command)) {
-        if (currentProvider === 'codex') {
-          addToast(t('chat.planModeNotAvailableForCodex', { defaultValue: 'Plan mode is not available for Codex provider' }), 'warning');
-        } else {
-          handleModeSelect('plan');
-          addToast(t('chat.planModeEnabled', { defaultValue: 'Plan mode enabled' }), 'info');
-        }
+      // /plan - switch to plan mode (Claude only; Codex sends as normal text)
+      if (PLAN_COMMANDS.has(command) && currentProvider === 'claude') {
+        handleModeSelect('plan');
+        addToast(t('chat.planModeEnabled', { defaultValue: 'Plan mode enabled' }), 'info');
+        return;
+      }
+      // /context - handled locally even while loading
+      if (CONTEXT_COMMANDS.has(command)) {
+        hookHandleSubmit(content, attachments);
         return;
       }
     }
@@ -377,6 +393,8 @@ const App = () => {
           onSendShortcutChange={handleSendShortcutChange}
           autoOpenFileEnabled={autoOpenFileEnabled}
           onAutoOpenFileEnabledChange={handleAutoOpenFileEnabledChange}
+          permissionDialogTimeoutSeconds={permissionDialogTimeoutSeconds}
+          onPermissionDialogTimeoutChange={setPermissionDialogTimeoutSeconds}
         />
       ) : currentView === 'chat' ? (
         <ChatScreen
@@ -464,6 +482,7 @@ const App = () => {
         onRewindConfirm={handleRewindConfirm}
         onRewindCancel={handleRewindCancel}
         currentProvider={currentProvider}
+        permissionDialogTimeoutSeconds={permissionDialogTimeoutSeconds}
       />
     </>
   );

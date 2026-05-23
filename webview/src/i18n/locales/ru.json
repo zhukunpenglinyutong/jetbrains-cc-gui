@@ -89,7 +89,16 @@
     "attachmentsUploaded": "[Вложения загружены]",
     "streamingConnected": "{{provider}} обрабатывает запрос",
     "showEarlierMessages": "Показать предыдущие сообщения ({{count}})",
-    "totalDuration": "Этот ответ занял"
+    "totalDuration": "Этот ответ занял",
+    "compactSummary": {
+      "summarizedConversation": "Сводка беседы",
+      "compactSummary": "Краткое резюме",
+      "messagesUpTo": "Сведено {{count}} сообщений до этого момента",
+      "messagesFrom": "Сведено {{count}} сообщений начиная с этого момента",
+      "userContext": "Контекст: «{{context}}»",
+      "expand": "Развернуть сводку",
+      "collapse": "Свернуть сводку"
+    }
   },
   "settings": {
     "title": "Настройки",
@@ -112,6 +121,7 @@
       },
       "language": {
         "label": "Язык",
+        "followIde": "Следовать IDE",
         "simplifiedChinese": "简体中文",
         "traditionalChinese": "繁體中文",
         "english": "English",
@@ -202,6 +212,11 @@
         "cmdEnter": "⌘/Ctrl+Enter для отправки",
         "cmdEnterDesc": "⌘/Ctrl+Enter для отправки сообщения, Enter для новой строки"
       },
+      "permissionDialogTimeout": {
+        "label": "Таймаут диалогов разрешений и вопросов",
+        "unit": "секунд",
+        "hint": "Установите таймаут для диалогов вопросов Claude и диалогов запроса разрешений (30~3600 секунд). После таймаута диалог закроется автоматически, и Claude продолжит работу."
+      },
       "chatBgColor": {
         "label": "Цвет фона чата",
         "custom": "Пользовательский",
@@ -281,6 +296,11 @@
         "label": "Дополнительный промпт",
         "placeholder": "Добавьте дополнительные требования, например, генерировать коммит на английском, включать номер issue и т.д...",
         "hint": "Плагин содержит встроенные промпты для CCG Commits. Ваш текст будет использован как дополнительные требования, и AI отдаст приоритет вашим указаниям."
+      },
+      "projectPrompt": {
+        "label": "Дополнительный промпт для проекта",
+        "placeholder": "Добавьте здесь требования, специфичные для проекта, например: scope должен содержать имя модуля, body коммита должен включать область влияния и т.д...",
+        "hint": "Этот промпт применяется только к текущему проекту и объединяется с глобальным дополнительным промптом. При противоречии приоритет отдаётся промпту проекта. Разные проекты можно настраивать независимо."
       },
       "codeReview": {
         "comingSoon": "Скоро",
@@ -581,7 +601,19 @@
         "cliLoginDisableMessage": "Это восстановит ваш предыдущий config.toml и переключит на API ключ.",
         "modelIdRequired": "ID модели обязателен",
         "modelIdInvalid": "Некорректный формат ID модели (допускаются буквы, цифры, точки, дефисы, подчёркивания, слэши и двоеточия)",
-        "modelIdDuplicate": "ID модели уже существует"
+        "modelIdDuplicate": "ID модели уже существует",
+        "envVarsTitle": "Environment Variables",
+        "messageEnvLabel": "Message Environment Variables",
+        "messageEnvHint": "Custom environment variables injected into the Codex message subprocess",
+        "mcpEnvLabel": "MCP Environment Variables",
+        "mcpEnvHint": "Custom environment variables injected into the MCP tool discovery subprocess",
+        "envKeyPlaceholder": "ENV_KEY",
+        "envValuePlaceholder": "value",
+        "addEnvVar": "Add Variable",
+        "envKeyInvalid": "Invalid key name (must start with letter/underscore, alphanumeric only)",
+        "envKeyProtected": "Cannot set built-in variable: {{key}}",
+        "envKeyDuplicate": "Duplicate key: {{key}}",
+        "envValueTooLong": "Значение слишком длинное (макс. {{max}} символов)"
       }
     },
     "agent": {
@@ -734,7 +766,8 @@
       "WebSearch": "Ищу в интернете",
       "WebFetch": "Загружаю из сети",
       "execute": "Выполняю {{toolName}}",
-      "readDirectory": "Читаю директорию"
+      "readDirectory": "Читаю директорию",
+      "timeoutWarning": "Ответьте в течение {{seconds}} сек, иначе диалог закроется"
     }
   },
   "askUserQuestion": {
@@ -1227,7 +1260,7 @@
       },
       "opus46_1m": {
         "label": "Opus 4.6",
-        "description": "Opus 4.6 для длинных чатов"
+        "description": "Opus 4.6 · Высокопроизводительная модель рассуждений"
       },
       "haiku45": {
         "label": "Haiku 4.5",
@@ -1456,5 +1489,33 @@
     "providerNotConfigured": "Провайдер не настроен",
     "providerNotConfiguredDesc": "Провайдер ИИ ещё не настроен или доступ к локальной конфигурации не авторизован. Перед началом диалога завершите настройку в разделе управления провайдерами.",
     "goToProviderSettings": "Перейти к настройкам"
+  },
+  "errorDiagnostic": {
+    "copyCommand": "Копировать",
+    "copied": "Скопировано",
+    "openDependencySettings": "Открыть управление зависимостями",
+    "recommended": "Рекомендуется",
+    "codexThreadResume": {
+      "title": "Поток сеанса больше не действителен",
+      "intro": "Создание нового сеанса решит эту проблему. Идентификатор потока текущего сеанса больше не существует на сервере Codex.",
+      "reason": "Codex удаляет старые потоки по истечении времени, что может вызвать эту ошибку при возобновлении предыдущего сеанса."
+    },
+    "sdkNativeBinaryMissing": {
+      "title": "Установка SDK не завершена — отсутствует нативный бинарник",
+      "intro": "Это известная проблема зеркала npm Taobao (не баг плагина). Зеркало не полностью синхронизировало платформо-зависимые файлы. Вы можете решить это вручную одним из способов ниже:",
+      "reason": "Эта проблема исчезнет автоматически, когда зеркало Taobao завершит синхронизацию — никаких дополнительных действий не требуется.",
+      "solutions": {
+        "switchRegistry": {
+          "title": "Вариант 1: временно переключиться на официальный реестр и переустановить",
+          "step0": "1. Выполните в терминале (переключение на официальный реестр npm):",
+          "step1": "2. Откройте настройки управления зависимостями плагина и нажмите «Переустановить»:",
+          "step2": "3. После завершения переустановки переключитесь обратно на зеркало Taobao:"
+        },
+        "downgrade": {
+          "title": "Вариант 2: откатить на более раннюю версию",
+          "step0": "В управлении зависимостями переключите версию SDK на v0.2.112 или более раннюю. После переключения перезапустите IDEA."
+        }
+      }
+    }
   }
 }

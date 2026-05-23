@@ -89,7 +89,16 @@
     "attachmentsUploaded": "[अटैचमेंट अपलोड हो गए]",
     "streamingConnected": "{{provider}} कनेक्ट हो गया, आपके प्रश्न को समझ रहा है",
     "showEarlierMessages": "{{count}} पुराने संदेश दिखाएं",
-    "totalDuration": "इस जवाब में लगा समय"
+    "totalDuration": "इस जवाब में लगा समय",
+    "compactSummary": {
+      "summarizedConversation": "सारांशित वार्तालाप",
+      "compactSummary": "संक्षिप्त सारांश",
+      "messagesUpTo": "इस बिंदु तक के {{count}} संदेश सारांशित किए गए",
+      "messagesFrom": "इस बिंदु से आगे के {{count}} संदेश सारांशित किए गए",
+      "userContext": "संदर्भ: \"{{context}}\"",
+      "expand": "सारांश विस्तृत करें",
+      "collapse": "सारांश संक्षिप्त करें"
+    }
   },
   "settings": {
     "title": "सेटिंग्स",
@@ -112,6 +121,7 @@
       },
       "language": {
         "label": "इंटरफ़ेस भाषा",
+        "followIde": "IDE का अनुसरण करें",
         "simplifiedChinese": "简体中文",
         "traditionalChinese": "繁體中文",
         "english": "English",
@@ -202,6 +212,11 @@
         "cmdEnter": "⌘/Ctrl+Enter से भेजें",
         "cmdEnterDesc": "संदेश भेजने के लिए ⌘/Ctrl+Enter दबाएं, नई पंक्ति के लिए Enter"
       },
+      "permissionDialogTimeout": {
+        "label": "अनुमति और प्रश्न संवाद टाइमआउट",
+        "unit": "सेकंड",
+        "hint": "Claude प्रश्न संवाद और अनुमति अनुरोध संवाद के लिए टाइमआउट सेट करें (30~3600 सेकंड)। टाइमआउट के बाद, संवाद स्वचालित रूप से बंद हो जाएगा और Claude जारी रहेगा।"
+      },
       "chatBgColor": {
         "label": "चैट पृष्ठभूमि रंग",
         "custom": "कस्टम",
@@ -281,6 +296,11 @@
         "label": "Additional Prompt",
         "placeholder": "Add your extra requirements here, e.g., generate commit in English, include issue number, etc...",
         "hint": "The plugin has built-in CCG Commits specification prompts. Content you add here will be used as additional requirements, and AI will prioritize your instructions."
+      },
+      "projectPrompt": {
+        "label": "प्रोजेक्ट-विशिष्ट अतिरिक्त प्रॉम्प्ट",
+        "placeholder": "यहाँ प्रोजेक्ट-विशिष्ट आवश्यकताएँ जोड़ें, जैसे: scope में मॉड्यूल नाम का उपयोग करें, commit body में प्रभाव क्षेत्र शामिल करें, आदि...",
+        "hint": "यह प्रॉम्प्ट केवल वर्तमान प्रोजेक्ट पर लागू होता है और वैश्विक अतिरिक्त प्रॉम्प्ट के साथ मिलकर जोड़ा जाता है। जब दोनों में विरोध हो, तो प्रोजेक्ट प्रॉम्प्ट को प्राथमिकता दी जाती है। विभिन्न प्रोजेक्ट्स को स्वतंत्र रूप से कॉन्फ़िगर किया जा सकता है।"
       },
       "codeReview": {
         "comingSoon": "Coming Soon",
@@ -569,7 +589,19 @@
         "cliLoginDisableMessage": "यह पुराने config.toml को पुनर्स्थापित करेगा और API की प्रमाणीकरण पर स्विच करेगा।",
         "modelIdRequired": "Model ID is required",
         "modelIdInvalid": "Invalid model ID format (only letters, numbers, dots, hyphens, underscores, slashes and colons allowed)",
-        "modelIdDuplicate": "Model ID already exists"
+        "modelIdDuplicate": "Model ID already exists",
+        "envVarsTitle": "Environment Variables",
+        "messageEnvLabel": "Message Environment Variables",
+        "messageEnvHint": "Custom environment variables injected into the Codex message subprocess",
+        "mcpEnvLabel": "MCP Environment Variables",
+        "mcpEnvHint": "Custom environment variables injected into the MCP tool discovery subprocess",
+        "envKeyPlaceholder": "ENV_KEY",
+        "envValuePlaceholder": "value",
+        "addEnvVar": "Add Variable",
+        "envKeyInvalid": "Invalid key name (must start with letter/underscore, alphanumeric only)",
+        "envKeyProtected": "Cannot set built-in variable: {{key}}",
+        "envKeyDuplicate": "Duplicate key: {{key}}",
+        "envValueTooLong": "मान बहुत लंबा है (अधिकतम {{max}} अक्षर)"
       }
     },
     "agent": {
@@ -707,7 +739,8 @@
       "WebSearch": "वेब खोज",
       "WebFetch": "वेब प्राप्त करें",
       "execute": "{{toolName}} निष्पादित करें",
-      "readDirectory": "निर्देशिका पढ़ें"
+      "readDirectory": "निर्देशिका पढ़ें",
+      "timeoutWarning": "कृपया जल्द उत्तर दें, डायलॉग {{seconds}} सेकंड में स्वचालित रूप से बंद हो जाएगा"
     }
   },
   "askUserQuestion": {
@@ -1200,7 +1233,7 @@
       },
       "opus46_1m": {
         "label": "Opus 4.6",
-        "description": "Opus 4.6 लंबे सत्रों के लिए"
+        "description": "Opus 4.6 · उच्च-प्रदर्शन तर्क मॉडल"
       },
       "haiku45": {
         "label": "Haiku 4.5",
@@ -1429,5 +1462,33 @@
     "providerNotConfigured": "प्रदाता कॉन्फ़िगर नहीं है",
     "providerNotConfiguredDesc": "अभी तक कोई AI प्रदाता कॉन्फ़िगर नहीं किया गया है, या स्थानीय कॉन्फ़िगरेशन के उपयोग की अनुमति नहीं दी गई है। बातचीत शुरू करने से पहले कृपया प्रदाता प्रबंधन सेटिंग्स में सेटअप पूरा करें।",
     "goToProviderSettings": "सेटिंग्स पर जाएं"
+  },
+  "errorDiagnostic": {
+    "copyCommand": "कॉपी करें",
+    "copied": "कॉपी किया गया",
+    "openDependencySettings": "निर्भरता प्रबंधन खोलें",
+    "recommended": "अनुशंसित",
+    "codexThreadResume": {
+      "title": "सत्र थ्रेड अब मान्य नहीं है",
+      "intro": "नया सत्र बनाने से यह समस्या हल हो जाएगी। वर्तमान सत्र का थ्रेड ID Codex सर्वर पर अब मौजूद नहीं है।",
+      "reason": "Codex कुछ समय बाद पुराने थ्रेड को हटा देता है, जिससे पिछले सत्र को फिर से शुरू करते समय यह त्रुटि हो सकती है।"
+    },
+    "sdkNativeBinaryMissing": {
+      "title": "SDK स्थापना अधूरी — नेटिव बाइनरी अनुपस्थित",
+      "intro": "यह Taobao npm मिरर की एक ज्ञात समस्या है (प्लगइन बग नहीं)। मिरर ने प्लेटफ़ॉर्म-विशिष्ट फ़ाइलों को पूरी तरह सिंक नहीं किया है। आप नीचे दिए गए विकल्पों में से किसी एक से इसे मैन्युअल रूप से हल कर सकते हैं:",
+      "reason": "Taobao मिरर के सिंक पूरा होने पर यह समस्या स्वतः ही गायब हो जाएगी — चिंता की कोई बात नहीं है।",
+      "solutions": {
+        "switchRegistry": {
+          "title": "विकल्प 1: अस्थायी रूप से आधिकारिक रजिस्ट्री पर स्विच करें और पुनः इंस्टॉल करें",
+          "step0": "1. अपने टर्मिनल में चलाएं (आधिकारिक npm रजिस्ट्री पर स्विच करें):",
+          "step1": "2. प्लगइन की निर्भरता प्रबंधन सेटिंग्स खोलें और पुनः इंस्टॉल पर क्लिक करें:",
+          "step2": "3. पुनः इंस्टॉलेशन पूरा होने के बाद, Taobao मिरर पर वापस स्विच करें:"
+        },
+        "downgrade": {
+          "title": "विकल्प 2: पुराने संस्करण पर वापस जाएं",
+          "step0": "निर्भरता प्रबंधन में SDK संस्करण को v0.2.112 या उससे पहले के संस्करण पर स्विच करें। स्विच करने के बाद IDEA को पुनरारंभ करें।"
+        }
+      }
+    }
   }
 }

@@ -13,6 +13,8 @@ import { STORAGE_KEYS } from '../types/provider';
 import { CHANGELOG_DATA } from '../version/changelog';
 import { useDialogs } from '../contexts/DialogContext';
 import { useUIState } from '../contexts/UIStateContext';
+import ContextUsageDialog from './ContextUsageDialog';
+import { DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS } from '../utils/permissionDialogTimeout';
 
 /**
  * Wrapper that manages plugin-level custom models for the add-model dialog.
@@ -58,6 +60,8 @@ export interface AppDialogsProps {
   onRewindCancel: ComponentProps<typeof RewindDialog>['onCancel'];
   /** Provider id for the add-model dialog (lives in useModelProviderState). */
   currentProvider: string;
+  /** Permission dialog timeout in seconds (from backend config). */
+  permissionDialogTimeoutSeconds?: number;
 }
 
 /**
@@ -79,6 +83,7 @@ export const AppDialogs = ({
   onRewindConfirm,
   onRewindCancel,
   currentProvider,
+  permissionDialogTimeoutSeconds = DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS,
 }: AppDialogsProps) => {
   const { t } = useTranslation();
   const {
@@ -89,6 +94,7 @@ export const AppDialogs = ({
     planApprovalDialogOpen, currentPlanApprovalRequest,
     handlePlanApprovalApprove, handlePlanApprovalReject,
     rewindSelectDialogOpen, rewindDialogOpen, currentRewindRequest, isRewinding,
+    contextUsageDialogOpen, contextUsageIsLoading, contextUsageData, closeContextUsageDialog,
   } = useDialogs();
   const {
     showChangelogDialog, closeChangelogDialog,
@@ -121,18 +127,21 @@ export const AppDialogs = ({
         onApprove={handlePermissionApprove}
         onSkip={handlePermissionSkip}
         onApproveAlways={handlePermissionApproveAlways}
+        timeoutSeconds={permissionDialogTimeoutSeconds}
       />
       <AskUserQuestionDialog
         isOpen={askUserQuestionDialogOpen}
         request={currentAskUserQuestionRequest}
         onSubmit={handleAskUserQuestionSubmit}
         onCancel={handleAskUserQuestionCancel}
+        timeoutSeconds={permissionDialogTimeoutSeconds}
       />
       <PlanApprovalDialog
         isOpen={planApprovalDialogOpen}
         request={currentPlanApprovalRequest}
         onApprove={handlePlanApprovalApprove}
         onReject={handlePlanApprovalReject}
+        timeoutSeconds={permissionDialogTimeoutSeconds}
       />
       <RewindSelectDialog
         isOpen={rewindSelectDialogOpen}
@@ -157,6 +166,14 @@ export const AppDialogs = ({
         onClose={() => setAddModelDialogOpen(false)}
         currentProvider={currentProvider}
       />
+      {contextUsageDialogOpen ? (
+        <ContextUsageDialog
+          isOpen={contextUsageDialogOpen}
+          isLoading={contextUsageIsLoading}
+          data={contextUsageData}
+          onClose={closeContextUsageDialog}
+        />
+      ) : null}
     </>
   );
 };

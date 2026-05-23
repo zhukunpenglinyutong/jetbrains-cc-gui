@@ -290,7 +290,7 @@ public class WebviewInitializer {
                     LOG.info("[UiFontSync] UI font config injected into frontend");
 
                     // Pass IDEA language configuration to the frontend
-                    String languageConfig = LanguageConfigService.getLanguageConfigJson();
+                    String languageConfig = LanguageConfigService.getLanguageConfigJson(host.getHandlerContext().getSettingsService());
                     LOG.info("[LanguageSync] Retrieved language config: " + languageConfig);
                     String languageConfigInjection = String.format(
                         "if (window.applyIdeaLanguageConfig) { window.applyIdeaLanguageConfig(%s); } " +

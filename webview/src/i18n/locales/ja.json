@@ -89,7 +89,16 @@
     "attachmentsUploaded": "[添付ファイルがアップロードされました]",
     "streamingConnected": "{{provider}}に接続しました、質問を理解しています",
     "showEarlierMessages": "以前の{{count}}件のメッセージを表示",
-    "totalDuration": "今回の応答時間"
+    "totalDuration": "今回の応答時間",
+    "compactSummary": {
+      "summarizedConversation": "要約された会話",
+      "compactSummary": "会話の要約",
+      "messagesUpTo": "この時点までの{{count}}件のメッセージを要約しました",
+      "messagesFrom": "この時点以降の{{count}}件のメッセージを要約しました",
+      "userContext": "コンテキスト：「{{context}}」",
+      "expand": "要約を展開",
+      "collapse": "要約を折りたたむ"
+    }
   },
   "settings": {
     "title": "設定",
@@ -112,6 +121,7 @@
       },
       "language": {
         "label": "言語",
+        "followIde": "IDE に従う",
         "simplifiedChinese": "简体中文",
         "traditionalChinese": "繁體中文",
         "english": "English",
@@ -202,6 +212,11 @@
         "cmdEnter": "⌘/Ctrl+Enterで送信",
         "cmdEnterDesc": "⌘/Ctrl+Enterでメッセージを送信、Enterで改行"
       },
+      "permissionDialogTimeout": {
+        "label": "権限と質問ダイアログのタイムアウト",
+        "unit": "秒",
+        "hint": "Claudeの質問ダイアログと権限リクエストダイアログのタイムアウト時間を設定します（30~3600秒）。タイムアウト後、ダイアログは自動的に閉じられ、Claudeは続行します。"
+      },
       "chatBgColor": {
         "label": "チャット背景色",
         "custom": "カスタム",
@@ -281,6 +296,11 @@
         "label": "Additional Prompt",
         "placeholder": "Add your extra requirements here, e.g., generate commit in English, include issue number, etc...",
         "hint": "The plugin has built-in CCG Commits specification prompts. Content you add here will be used as additional requirements, and AI will prioritize your instructions."
+      },
+      "projectPrompt": {
+        "label": "プロジェクト固有の追加プロンプト",
+        "placeholder": "現在のプロジェクト固有の要件をここに追加してください。例：scopeにはモジュール名を使用、commit bodyに影響範囲を含めるなど...",
+        "hint": "このプロンプトは現在のプロジェクトにのみ適用され、グローバル追加プロンプトと同時に結合されます。両者の内容が矛盾する場合、プロジェクトプロンプトが優先されます。異なるプロジェクトを独立して設定できます。"
       },
       "codeReview": {
         "comingSoon": "Coming Soon",
@@ -574,7 +594,19 @@
         "cliLoginDisableMessage": "以前の config.toml を復元し、API Key 認証に切り替えます。",
         "modelIdRequired": "Model ID is required",
         "modelIdInvalid": "Invalid model ID format (only letters, numbers, dots, hyphens, underscores, slashes and colons allowed)",
-        "modelIdDuplicate": "Model ID already exists"
+        "modelIdDuplicate": "Model ID already exists",
+        "envVarsTitle": "Environment Variables",
+        "messageEnvLabel": "Message Environment Variables",
+        "messageEnvHint": "Custom environment variables injected into the Codex message subprocess",
+        "mcpEnvLabel": "MCP Environment Variables",
+        "mcpEnvHint": "Custom environment variables injected into the MCP tool discovery subprocess",
+        "envKeyPlaceholder": "ENV_KEY",
+        "envValuePlaceholder": "value",
+        "addEnvVar": "Add Variable",
+        "envKeyInvalid": "Invalid key name (must start with letter/underscore, alphanumeric only)",
+        "envKeyProtected": "Cannot set built-in variable: {{key}}",
+        "envKeyDuplicate": "Duplicate key: {{key}}",
+        "envValueTooLong": "値が長すぎます（最大 {{max}} 文字）"
       }
     },
     "agent": {
@@ -712,7 +744,8 @@
       "WebSearch": "ウェブ検索",
       "WebFetch": "ウェブ取得",
       "execute": "{{toolName}}を実行",
-      "readDirectory": "ディレクトリを読み取る"
+      "readDirectory": "ディレクトリを読み取る",
+      "timeoutWarning": "お早めにご回答ください。ダイアログは {{seconds}} 秒後に自動的に閉じます"
     }
   },
   "askUserQuestion": {
@@ -1212,7 +1245,7 @@
       },
       "opus46_1m": {
         "label": "Opus 4.6",
-        "description": "Opus 4.6 長時間セッション向け"
+        "description": "Opus 4.6 · 高性能推論モデル"
       },
       "haiku45": {
         "label": "Haiku 4.5",
@@ -1435,5 +1468,33 @@
     "providerNotConfigured": "プロバイダー未設定",
     "providerNotConfiguredDesc": "AIプロバイダーがまだ設定されていないか、ローカル設定の使用が許可されていません。会話を開始する前に、プロバイダー管理設定でセットアップを完了してください。",
     "goToProviderSettings": "設定へ"
+  },
+  "errorDiagnostic": {
+    "copyCommand": "コピー",
+    "copied": "コピー済み",
+    "openDependencySettings": "依存関係管理を開く",
+    "recommended": "推奨",
+    "codexThreadResume": {
+      "title": "セッションスレッドが無効です",
+      "intro": "新しいセッションを作成することでこの問題を解決できます。現在のセッションのスレッド ID は Codex サーバーに存在しなくなりました。",
+      "reason": "Codex は一定時間後に古いスレッドを削除するため、前のセッションを再開しようとするとこのエラーが発生することがあります。"
+    },
+    "sdkNativeBinaryMissing": {
+      "title": "SDK のインストールが不完全 — ネイティブバイナリが見つかりません",
+      "intro": "これは Taobao npm ミラーの既知の問題です（プラグインのバグではありません）。ミラーが platform 固有のファイルを完全に同期していません。以下のいずれかの方法で手動で対応できます：",
+      "reason": "Taobao ミラーが同期を完了すると、この問題は自動的に解消されます。心配する必要はありません。",
+      "solutions": {
+        "switchRegistry": {
+          "title": "方法 1：一時的に公式レジストリに切り替えて再インストール",
+          "step0": "1. ターミナルで実行（npm 公式レジストリへ切り替え）：",
+          "step1": "2. プラグインの「依存関係管理」設定を開き、再インストールをクリック：",
+          "step2": "3. 再インストール完了後、Taobao ミラーに戻す："
+        },
+        "downgrade": {
+          "title": "方法 2：バージョンをロールバック",
+          "step0": "「依存関係管理」で SDK バージョンを v0.2.112 以前に切り替えてください。切り替え後は IDEA の再起動が必要です。"
+        }
+      }
+    }
   }
 }

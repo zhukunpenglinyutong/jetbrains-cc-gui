@@ -4,6 +4,8 @@ import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock } from '../../t
 
 import MarkdownBlock from '../MarkdownBlock';
 import { ProviderNotConfiguredCard, isProviderNotConfiguredError } from './ProviderNotConfiguredCard';
+import { ErrorDiagnosticCard } from './ErrorDiagnosticCard';
+import { matchErrorPattern } from '../../utils/errorMatcher';
 import {
   EditToolBlock,
   EditToolGroupBlock,
@@ -32,6 +34,7 @@ export interface MessageItemProps {
   extractMarkdownContent: (message: ClaudeMessage) => string;
   onNodeRef?: (id: string, node: HTMLDivElement | null) => void;
   onNavigateToProviderSettings?: () => void;
+  onNavigateToDependencySettings?: () => void;
   toolResultSignature?: string;
   /** Current active provider id (e.g. 'claude', 'codex'); drives the streaming-connect label. */
   currentProvider?: string;
@@ -227,6 +230,7 @@ export const MessageItem = memo(function MessageItem({
   extractMarkdownContent,
   onNodeRef,
   onNavigateToProviderSettings,
+  onNavigateToDependencySettings,
   toolResultSignature: _toolResultSignature,
   currentProvider,
 }: MessageItemProps): React.ReactElement {
@@ -368,6 +372,12 @@ export const MessageItem = memo(function MessageItem({
   }, [message.type, messageKey, onNodeRef]);
 
   const isProviderNotConfigured = message.type === 'error' && isProviderNotConfiguredError(getMessageText(message));
+  const errorDiagnosticPattern = useMemo(
+    () => (message.type === 'error' && !isProviderNotConfigured
+      ? matchErrorPattern(getMessageText(message))
+      : null),
+    [message, isProviderNotConfigured, getMessageText]
+  );
 
   const renderGroupedBlocks = () => {
     if (message.type === 'error') {
@@ -379,7 +389,18 @@ export const MessageItem = memo(function MessageItem({
           />
         );
       }
-      return <MarkdownBlock content={getMessageText(message)} />;
+      return (
+        <>
+          <MarkdownBlock content={getMessageText(message)} />
+          {errorDiagnosticPattern && (
+            <ErrorDiagnosticCard
+              t={t}
+              pattern={errorDiagnosticPattern}
+              onNavigateToDependencySettings={onNavigateToDependencySettings}
+            />
+          )}
+        </>
+      );
     }
 
     if (isEmptyStreamingPlaceholder) {
@@ -580,8 +601,9 @@ export const MessageItem = memo(function MessageItem({
         />
       )}
 
-      {/* Role label for non-user/assistant messages */}
-      {message.type !== 'assistant' && message.type !== 'user' && (
+      {/* Role label for non-user/assistant messages — hidden for notification types */}
+      {message.type !== 'assistant' && message.type !== 'user'
+        && message.type !== 'notification' && message.type !== 'task_notification' && (
         <div className="message-role-label">
           {message.type}
         </div>

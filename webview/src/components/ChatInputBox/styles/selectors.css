@@ -195,7 +195,6 @@
 .selector-option .model-description {
   font-size: 11px;
   color: var(--text-secondary);
-  font-style: italic;
   font-family: inherit;
   margin-top: 2px;
 }
@@ -203,7 +202,6 @@
 .selector-option .mode-description {
   font-size: 11px;
   color: var(--text-secondary);
-  font-style: italic;
   font-family: inherit;
   margin-top: 2px;
 }

@@ -84,9 +84,10 @@
     white-space: pre-wrap;
 }
 
-/* System notification messages: left-aligned, no bubble (task_notification + non-human origin) */
+/* System notification messages: left-aligned, no bubble (task_notification + compact_notification + non-human origin) */
 .message.task_notification,
-.message.notification {
+.message.notification,
+.message.compact_notification {
     background-color: transparent;
     border-left: none;
     align-items: flex-start;
@@ -94,7 +95,8 @@
 }
 
 .message.task_notification .message-content,
-.message.notification .message-content {
+.message.notification .message-content,
+.message.compact_notification .message-content {
     background-color: transparent;
     padding: 0;
     border-radius: 0;
@@ -347,6 +349,194 @@
     &:active {
         background: var(--color-provider-card-action-active-bg);
     }
+}
+
+/* Error Diagnostic Card — overlay below the original error message
+   for known errors that have well-defined user-side resolutions. */
+.error-diagnostic-card {
+    margin-top: 10px;
+    background: var(--color-provider-card-bg);
+    border: 1px solid var(--color-provider-card-border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.error-diagnostic-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.error-diagnostic-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: var(--color-provider-card-icon-bg);
+    color: var(--color-provider-card-accent);
+    flex-shrink: 0;
+}
+
+.error-diagnostic-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--color-provider-card-accent);
+}
+
+.error-diagnostic-intro {
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.error-diagnostic-solution {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    background: var(--color-provider-card-action-bg);
+    border-radius: 6px;
+    border: 1px solid var(--color-provider-card-action-border);
+}
+
+.error-diagnostic-solution-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.error-diagnostic-solution-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.error-diagnostic-recommended-badge {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--color-provider-card-accent);
+    color: rgba(0, 0, 0, 0.8);
+    line-height: 1.4;
+}
+
+.error-diagnostic-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.error-diagnostic-step {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.error-diagnostic-step-text {
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.error-diagnostic-command {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    background: var(--bg-code, rgba(0, 0, 0, 0.25));
+    border: 1px solid var(--color-provider-card-border);
+    border-radius: 6px;
+    overflow: hidden;
+    min-width: 0;
+}
+
+.error-diagnostic-command-text {
+    flex: 1;
+    padding: 8px 12px;
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+    font-size: 12px;
+    color: var(--text-primary);
+    word-break: break-all;
+    white-space: pre-wrap;
+    background: transparent;
+    border: none;
+    line-height: 1.5;
+}
+
+.error-diagnostic-copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: var(--color-provider-card-action-bg);
+    border: none;
+    border-left: 1px solid var(--color-provider-card-border);
+    color: var(--color-provider-card-accent);
+    font-size: 11.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    flex-shrink: 0;
+
+    &:hover {
+        background: var(--color-provider-card-action-hover-bg);
+    }
+
+    &:active {
+        background: var(--color-provider-card-action-active-bg);
+    }
+
+    &.copied {
+        color: var(--color-provider-card-accent);
+    }
+}
+
+.error-diagnostic-copy-label {
+    user-select: none;
+}
+
+.error-diagnostic-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    align-self: flex-start;
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--color-provider-card-action-border);
+    background: var(--color-provider-card-action-bg);
+    color: var(--color-provider-card-accent);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+
+    &:hover {
+        background: var(--color-provider-card-action-hover-bg);
+        border-color: var(--color-provider-card-action-hover-border);
+    }
+
+    &:active {
+        background: var(--color-provider-card-action-active-bg);
+    }
+}
+
+.error-diagnostic-reason {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    margin: 0;
+    padding: 8px 10px;
+    background: var(--color-provider-card-icon-bg);
+    border-radius: 4px;
+    border-left: 2px solid var(--color-provider-card-accent);
 }
 
 /* AI Indicator Dot */
@@ -1038,6 +1228,32 @@
     to { opacity: 1; transform: translateY(-50%) translateX(0); }
 }
 
+/* File link hover tooltip */
+.file-link-tooltip {
+    position: fixed;
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    border: 1px solid var(--border-secondary);
+    box-shadow: var(--shadow-sm);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.4;
+    max-width: 400px;
+    width: max-content;
+    white-space: normal;
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    pointer-events: none !important;
+    z-index: 100;
+    animation: file-link-tooltip-fade-in 0.15s ease;
+}
+
+@keyframes file-link-tooltip-fade-in {
+    from { opacity: 0; margin-top: -4px; }
+    to { opacity: 1; margin-top: 0; }
+}
+
 /* Hide anchor rail on narrow panels (IntelliJ side panels can be small) */
 @media (max-width: 400px) {
     .messages-anchor-rail {
@@ -1116,4 +1332,109 @@
     .task-notification-icon {
         color: var(--text-tertiary);
     }
+}
+
+/* Compact Notification Block - matching CLI's compact output display */
+.compact-notification-block {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px 0;
+}
+
+.compact-notification-header {
+    font-size: 13px;
+    color: var(--text-primary);
+    line-height: 1.5;
+}
+
+.compact-notification-items {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-left: 8px;
+}
+
+.compact-notification-item {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    font-size: 12.5px;
+    line-height: 1.5;
+}
+
+.compact-notification-prefix {
+    color: var(--text-tertiary);
+    font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);
+    flex-shrink: 0;
+}
+
+.compact-notification-text {
+    color: var(--text-secondary);
+}
+
+/* Compact Summary Block - collapsed by default, matching thinking-block pattern */
+.compact-summary-block {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px 0;
+}
+
+.compact-summary-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    user-select: none;
+    transition: opacity 0.2s;
+}
+
+.compact-summary-title:hover {
+    opacity: 0.8;
+}
+
+.compact-summary-icon {
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+.compact-summary-toggle {
+    font-size: 10px;
+    opacity: 0.8;
+}
+
+.compact-summary-metadata {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-left: 16px;
+    font-size: 12px;
+    color: var(--text-tertiary);
+}
+
+.compact-summary-meta-count {
+    opacity: var(--opacity-subtle, 0.8);
+}
+
+.compact-summary-meta-context {
+    opacity: var(--opacity-muted, 0.7);
+}
+
+.compact-summary-content {
+    padding-left: 12px;
+    border-left: 2px solid var(--border-primary);
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    max-width: 100%;
+    overflow-wrap: break-word;
+}
+
+.compact-summary-content .markdown-block {
+    font-size: 12.5px;
+    color: var(--text-secondary);
 }

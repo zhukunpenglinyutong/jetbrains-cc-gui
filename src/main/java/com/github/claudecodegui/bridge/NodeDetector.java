@@ -547,12 +547,130 @@ public class NodeDetector {
         if ("node".equals(path)) {
             return true;
         }
+        // For WSL paths (Unix-style), extract basename manually
+        if (isWslPath(path)) {
+            int lastSlash = path.lastIndexOf('/');
+            String name = (lastSlash >= 0) ? path.substring(lastSlash + 1) : path;
+            return "node".equalsIgnoreCase(name);
+        }
         String name = new File(path).getName().toLowerCase();
         return "node".equals(name) || "node.exe".equals(name);
     }
 
     /**
+     * Checks whether the given path is a WSL (Unix-style) path on a Windows host.
+     * A WSL path starts with '/' and the host OS is Windows.
+     *
+     * @param path the path to check
+     * @return true if it looks like a WSL path on Windows
+     */
+    public static boolean isWslPath(String path) {
+        return PlatformUtils.isWindows()
+                && path != null
+                && !path.isEmpty()
+                && path.charAt(0) == '/';
+    }
+
+    /**
+     * Builds the base of a WSL-aware command list for running a Node.js script file.
+     * When {@code nodePath} is a WSL path, prepends {@code "wsl"} and converts
+     * {@code scriptPath} to a WSL-accessible format via {@link #convertToWslPath}.
+     * Callers may append additional arguments to the returned list.
+     *
+     * <p>Use this instead of repeating the {@code isWslPath} guard inline:
+     * <pre>
+     *     List&lt;String&gt; command = NodeDetector.buildNodeScriptCommand(node, scriptPath);
+     *     command.add("myProvider");
+     *     command.add("myAction");
+     *     ProcessBuilder pb = new ProcessBuilder(command);
+     * </pre>
+     *
+     * @param nodePath   Node.js executable path (may be a WSL Unix-style path on Windows)
+     * @param scriptPath path to the Node.js script file
+     * @return mutable command list
+     */
+    public static List<String> buildNodeScriptCommand(String nodePath, String scriptPath) {
+        List<String> command = new ArrayList<>();
+        if (isWslPath(nodePath)) {
+            command.add("wsl");
+            command.add(nodePath);
+            command.add(convertToWslPath(scriptPath));
+        } else {
+            command.add(nodePath);
+            command.add(scriptPath);
+        }
+        return command;
+    }
+
+    /**
+     * Builds a WSL-aware command list for running an inline Node.js script via {@code -e <script>}.
+     * When {@code nodePath} is a WSL path, prepends {@code "wsl"}. The script body is passed through
+     * as-is; callers are responsible for any path conversion within the script.
+     *
+     * <p>Use this when invoking Node with inline code rather than a script file.
+     *
+     * @param nodePath   Node.js executable path (may be a WSL Unix-style path on Windows)
+     * @param scriptBody inline JavaScript to execute
+     * @return mutable command list
+     */
+    public static List<String> buildNodeInlineCommand(String nodePath, String scriptBody) {
+        List<String> command = new ArrayList<>();
+        if (isWslPath(nodePath)) {
+            command.add("wsl");
+        }
+        command.add(nodePath);
+        command.add("-e");
+        command.add(scriptBody);
+        return command;
+    }
+
+    /**
+     * Converts a Windows file path to a WSL-accessible path.
+     * For example: "C:\Users\foo\bar" becomes "/mnt/c/Users/foo/bar".
+     * UNC paths like "\\wsl.localhost\Ubuntu\home\..." are converted to "/home/...".
+     * If the path is already a Unix-style path, it is returned as-is.
+     *
+     * @param windowsPath the Windows path to convert
+     * @return the WSL-accessible path
+     */
+    public static String convertToWslPath(String windowsPath) {
+        if (windowsPath == null || windowsPath.isEmpty()) {
+            return windowsPath;
+        }
+        // Already a Unix path
+        if (windowsPath.charAt(0) == '/') {
+            return windowsPath;
+        }
+        // UNC WSL path: \\wsl.localhost\<distro>\<path> or \\wsl$\<distro>\<path>
+        if (windowsPath.startsWith("\\\\wsl")) {
+            // Strip the \\<host>\<distro> prefix and keep the path inside the distro.
+            // normalized: //wsl.localhost/Ubuntu/home/... or //wsl$/Ubuntu/home/...
+            String normalized = windowsPath.replace('\\', '/');
+            int distroNameStart = normalized.indexOf('/', 2);        // index of '/' before <distro>
+            if (distroNameStart > 0) {
+                int distroPathStart = normalized.indexOf('/', distroNameStart + 1); // index of '/' after <distro>
+                if (distroPathStart > 0) {
+                    return normalized.substring(distroPathStart);    // /home/...
+                }
+            }
+        }
+        // Drive letter path: C:\Users\... -> /mnt/c/Users/...
+        if (windowsPath.length() >= 2 && windowsPath.charAt(1) == ':') {
+            char drive = Character.toLowerCase(windowsPath.charAt(0));
+            String rest = windowsPath.substring(2).replace('\\', '/');
+            // Ensure separator between drive letter and remainder for inputs like "C:Users\foo"
+            if (rest.isEmpty() || rest.charAt(0) != '/') {
+                rest = "/" + rest;
+            }
+            return "/mnt/" + drive + rest;
+        }
+        // Fallback: just replace backslashes
+        return windowsPath.replace('\\', '/');
+    }
+
+    /**
      * Verifies whether a Node.js path is usable.
+     * For WSL paths on Windows, uses 'wsl' command to verify.
      *
      * @param path Node.js executable path
      * @return version string if usable, otherwise null
@@ -563,7 +681,12 @@ public class NodeDetector {
             return null;
         }
         try {
-            ProcessBuilder pb = new ProcessBuilder(path, "--version");
+            ProcessBuilder pb;
+            if (isWslPath(path)) {
+                pb = new ProcessBuilder("wsl", path, "--version");
+            } else {
+                pb = new ProcessBuilder(path, "--version");
+            }
             Process process = pb.start();
 
             String version = null;
@@ -737,6 +860,7 @@ public class NodeDetector {
     /**
      * Verify and cache a Node.js path.
      * Returns the detection result and updates the shared cache.
+     * Supports WSL paths on Windows (paths starting with '/').
      *
      * @param path Node.js executable path to verify
      * @return NodeDetectionResult with verification details
@@ -749,12 +873,14 @@ public class NodeDetector {
         // Check binary name before attempting execution
         if (!isValidNodeBinaryName(path)) {
             String hint = PlatformUtils.isWindows()
-                    ? "Windows 下路径必须以 node.exe 结尾，例如：C:\\Program Files\\nodejs\\node.exe"
+                    ? "Windows 下路径必须以 node 或 node.exe 结尾，例如：C:\\Program Files\\nodejs\\node.exe 或 /usr/bin/node (WSL)"
                     : "路径必须以 node 结尾，例如：/usr/local/bin/node";
             return NodeDetectionResult.failure("路径格式无效：" + hint);
         }
         // Check file existence before attempting execution
-        if (!"node".equals(path) && !new File(path).exists()) {
+        // Skip File.exists() check for WSL paths since Java's File class on Windows
+        // cannot resolve Unix-style paths; verification will be done via 'wsl' command.
+        if (!"node".equals(path) && !isWslPath(path) && !new File(path).exists()) {
             return NodeDetectionResult.failure("文件不存在，请检查路径是否正确：" + path);
         }
         String version = verifyNodePath(path);
@@ -762,7 +888,10 @@ public class NodeDetector {
         if (version != null) {
             result = NodeDetectionResult.success(path, version, NodeDetectionResult.DetectionMethod.KNOWN_PATH);
         } else {
-            result = NodeDetectionResult.failure("无法验证指定的 Node.js 路径: " + path);
+            String errorMsg = isWslPath(path)
+                    ? "无法通过 WSL 验证指定的 Node.js 路径: " + path + "（请确认 WSL 已安装且路径正确）"
+                    : "无法验证指定的 Node.js 路径: " + path;
+            result = NodeDetectionResult.failure(errorMsg);
         }
         cacheDetection(result);
         return result;

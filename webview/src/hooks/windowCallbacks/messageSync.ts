@@ -93,18 +93,15 @@ export const appendOptimisticMessageIfMissing = (
 
   const optimisticMsg = lastPrev;
   const optimisticText = getUserMessageComparableContent(optimisticMsg);
-  const optimisticTime = optimisticMsg.timestamp
-    ? new Date(optimisticMsg.timestamp).getTime()
-    : Number.NaN;
+  const optimisticTime = getMessageTimestampMs(optimisticMsg) ?? Number.NaN;
 
-  const matchFn = (m: ClaudeMessage) =>
-    m.type === 'user' &&
-    getUserMessageComparableContent(m) === optimisticText &&
-    m.timestamp &&
-    optimisticMsg.timestamp &&
-    Math.abs(
-      new Date(m.timestamp).getTime() - new Date(optimisticMsg.timestamp).getTime(),
-    ) < OPTIMISTIC_MESSAGE_TIME_WINDOW;
+  const matchFn = (m: ClaudeMessage) => {
+    if (m.type !== 'user') return false;
+    if (getUserMessageComparableContent(m) !== optimisticText) return false;
+    const candidateTime = getMessageTimestampMs(m) ?? Number.NaN;
+    if (!Number.isFinite(candidateTime) || !Number.isFinite(optimisticTime)) return false;
+    return Math.abs(candidateTime - optimisticTime) < OPTIMISTIC_MESSAGE_TIME_WINDOW;
+  };
 
   let matchedIndex = nextList.findIndex(matchFn);
   if (matchedIndex < 0 && optimisticText) {
@@ -112,8 +109,14 @@ export const appendOptimisticMessageIfMissing = (
       const candidate = nextList[i];
       if (candidate?.type !== 'user') continue;
       if (getUserMessageComparableContent(candidate) !== optimisticText) continue;
-      const candidateTime = candidate.timestamp ? new Date(candidate.timestamp).getTime() : Number.NaN;
-      if (Number.isFinite(optimisticTime) && Number.isFinite(candidateTime) && candidateTime < optimisticTime) {
+      const candidateTime = getMessageTimestampMs(candidate) ?? Number.NaN;
+      // Allow match when candidate is within time window (even if older than optimistic).
+      // This handles cases where Java's timestamp (number format) may differ from
+      // frontend's ISO string format due to clock skew or async processing delays.
+      // Reject only if candidate is significantly older (> time window) to avoid
+      // matching historical duplicate messages.
+      if (Number.isFinite(optimisticTime) && Number.isFinite(candidateTime) &&
+          optimisticTime - candidateTime > OPTIMISTIC_MESSAGE_TIME_WINDOW) {
         continue;
       }
       matchedIndex = i;
@@ -121,6 +124,23 @@ export const appendOptimisticMessageIfMissing = (
     }
   }
   if (matchedIndex < 0) {
+    // Guard against stale backend updates: if the optimistic message was
+    // created after the newest message in nextList, this update was
+    // generated before the user sent the message — a future update will
+    // include it. Don't append, otherwise the UI shows a duplicate until
+    // the real update arrives.
+    if (nextList.length > 0 && Number.isFinite(optimisticTime)) {
+      let maxNextTime = 0;
+      for (const m of nextList) {
+        const ts = getMessageTimestampMs(m) ?? 0;
+        if (Number.isFinite(ts) && ts > maxNextTime) {
+          maxNextTime = ts;
+        }
+      }
+      if (maxNextTime > 0 && optimisticTime > maxNextTime) {
+        return nextList;
+      }
+    }
     return [...nextList, optimisticMsg];
   }
 
@@ -155,6 +175,10 @@ export const appendOptimisticMessageIfMissing = (
   return nextList;
 };
 
+/**
+ * Extract comparable text content from a user message for deduplication matching.
+ * Handles both direct content string and raw.message.content array format.
+ */
 const getUserMessageComparableContent = (message: ClaudeMessage): string => {
   if (message.type !== 'user') return message.content || '';
   const rawContent = (message.raw as any)?.message?.content ?? (message.raw as any)?.content;
@@ -166,6 +190,40 @@ const getUserMessageComparableContent = (message: ClaudeMessage): string => {
     .map((block: any) => block.text)
     .join('\n');
   return rawText || message.content || '';
+};
+
+/**
+ * Extract timestamp from a message, handling both formats:
+ * - Java Message.timestamp: number (milliseconds)
+ * - SDK message.raw.timestamp: string (ISO format)
+ *
+ * Returns milliseconds since epoch for consistent comparison.
+ */
+export const getMessageTimestampMs = (message: ClaudeMessage): number | undefined => {
+  // First check the raw.timestamp field (SDK source, ISO string format)
+  const rawTimestamp = (message.raw as any)?.timestamp;
+  if (rawTimestamp != null) {
+    if (typeof rawTimestamp === 'string') {
+      const parsed = new Date(rawTimestamp).getTime();
+      if (Number.isFinite(parsed)) return parsed;
+    } else if (typeof rawTimestamp === 'number' && Number.isFinite(rawTimestamp)) {
+      // Raw timestamp might already be milliseconds (numeric)
+      return rawTimestamp;
+    }
+  }
+
+  // Fall back to message.timestamp field (may be number from Java or string from frontend)
+  const timestamp = message.timestamp;
+  if (timestamp != null) {
+    if (typeof timestamp === 'number' && Number.isFinite(timestamp)) {
+      return timestamp;
+    } else if (typeof timestamp === 'string') {
+      const parsed = new Date(timestamp).getTime();
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+
+  return undefined;
 };
 
 /**
@@ -460,8 +518,10 @@ export const stripDuplicateTrailingToolMessages = (
  * When backend snapshots briefly shrink (e.g., Codex compaction or Claude
  * conversation summarization), preserve the newest in-memory turn locally
  * until the backend catches up, instead of wiping it from the UI.
- * FIX: Apply to all providers, not just Codex, to prevent message loss
- * during streaming end race conditions.
+ *
+ * KEY FIX: Applies to all providers (not just Codex), and filters out
+ * optimistic messages if nextList already contains a matching user message.
+ * This prevents duplicate display after compact operation.
  */
 export const preserveLatestMessagesOnShrink = (
   prevList: ClaudeMessage[],
@@ -477,15 +537,40 @@ export const preserveLatestMessagesOnShrink = (
 
   // Check if the preserved tail contains streaming/recent assistant messages
   const hasStreamingTail = preservedTail.some((msg) => msg.type === 'assistant' && (msg.isStreaming || !!msg.__turnId));
-  const hasRecentUserTail = preservedTail.some((msg) => msg.type === 'user');
+  const hasUserTail = preservedTail.some((msg) => msg.type === 'user');
 
   // Codex: always preserve shrink tail (handles compaction/summarization)
   // Other providers: only preserve if tail contains streaming/recent messages
-  if (provider !== 'codex' && !hasStreamingTail && !hasRecentUserTail) {
+  if (provider !== 'codex' && !hasStreamingTail && !hasUserTail) {
     return nextList;
   }
 
-  return [...nextList, ...preservedTail];
+  // FIX: Filter out optimistic messages from preservedTail if nextList already
+  // has a matching user message. This prevents duplicate display when compact
+  // sends a shorter list but includes the backend version of the optimistic.
+  const nextListUserTexts = new Set<string>();
+  for (const msg of nextList) {
+    if (msg.type === 'user') {
+      const text = getUserMessageComparableContent(msg);
+      if (text) nextListUserTexts.add(text);
+    }
+  }
+
+  const filteredTail = preservedTail.filter((msg) => {
+    // Always preserve assistant and other non-user messages
+    if (msg.type !== 'user') return true;
+    // Don't preserve optimistic if nextList has matching content
+    if (msg.isOptimistic) {
+      const optimisticText = getUserMessageComparableContent(msg);
+      if (optimisticText && nextListUserTexts.has(optimisticText)) {
+        return false; // Skip this optimistic to avoid duplicate
+      }
+    }
+    return true;
+  });
+
+  if (filteredTail.length === 0) return nextList;
+  return [...nextList, ...filteredTail];
 };
 
 // ---------------------------------------------------------------------------
