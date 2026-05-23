@@ -23,6 +23,7 @@
  * - Persistent session state across requests
  */
 
+import { execFileSync } from 'node:child_process';
 import { createInterface } from 'readline';
 import { handleClaudeCommand } from './channels/claude-channel.js';
 import { handleCodexCommand } from './channels/codex-channel.js';
@@ -38,6 +39,31 @@ import {
 } from './services/claude/persistent-query-service.js';
 import { injectNetworkEnvVars } from './config/api-config.js';
 import { cleanupStaleTempImages } from './services/claude/attachment-service.js';
+
+// =============================================================================
+// WSL Login PATH Fix (must run before any subprocess spawns)
+// =============================================================================
+
+// The daemon is launched by the plugin via `wsl node daemon.js`, which
+// inherits only a minimal system PATH — no ~/.cargo/bin, ~/.local/bin, nvm,
+// etc. Fix it once here so every subprocess this daemon spawns (Claude Bash
+// tool, Codex, MCP servers, any future tool) automatically inherits the
+// user's full login PATH without any Java-side probing that could freeze the IDE.
+if (process.platform === 'linux' && !process.env.__AI_BRIDGE_PATH_PROBED) {
+  try {
+    const loginPath = execFileSync('bash', ['-lc', 'printf %s "$PATH"'], {
+      timeout: 3000,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    if (loginPath && loginPath.includes('/home/')) {
+      process.env.PATH = loginPath;
+    }
+  } catch {
+    // bash -lc failed or timed out; keep whatever PATH wsl gave us.
+  }
+  process.env.__AI_BRIDGE_PATH_PROBED = '1';
+}
 
 // =============================================================================
 // Network Environment Setup (must run before any HTTPS connection)
