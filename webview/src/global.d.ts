@@ -146,6 +146,11 @@ interface Window {
   onModelConfirmed?: (modelId: string, provider: string) => void;
 
   /**
+   * Update dynamically discovered opencode models.
+   */
+  updateOpenCodeModels?: (json: string) => void;
+
+  /**
    * Show permission dialog
    */
   showPermissionDialog?: (json: string) => void;

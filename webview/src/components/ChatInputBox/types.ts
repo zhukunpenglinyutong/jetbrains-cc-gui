@@ -394,9 +394,8 @@ export const CODEX_MODELS: ModelInfo[] = [
 export const OPENCODE_DEFAULT_MODEL_ID = 'opencode-default';
 
 /**
- * opencode uses the user's configured provider/model from the opencode CLI.
- * Keep a single explicit UI entry so provider switching does not inherit the
- * previous Claude/Codex model state.
+ * Fallback entry for opencode. The toolbar replaces this with provider/model
+ * discovery from the user-managed opencode CLI when available.
  */
 export const OPENCODE_MODELS: ModelInfo[] = [
   {

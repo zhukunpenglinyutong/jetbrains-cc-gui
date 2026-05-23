@@ -28,7 +28,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class OpenCodeSDKBridge extends BaseSDKBridge {
 
-    private static final int SESSION_QUERY_TIMEOUT_SECONDS = 30;
+    private static final int QUERY_TIMEOUT_SECONDS = 30;
 
     public OpenCodeSDKBridge() {
         super(OpenCodeSDKBridge.class);
@@ -165,20 +165,38 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
         }
     }
 
+    public JsonObject listModels(String cwd) {
+        try {
+            return runJsonCommand("listModels", List.of(cwd != null ? cwd : ""));
+        } catch (Exception e) {
+            LOG.warn("[OpenCodeSDKBridge] Failed to list opencode models: " + e.getMessage(), e);
+            JsonObject error = new JsonObject();
+            error.addProperty("success", false);
+            error.addProperty("error", e.getMessage());
+            return error;
+        }
+    }
+
     private JsonObject runSessionMessagesQuery(String sessionId, String cwd) throws Exception {
         if (sessionId == null || sessionId.trim().isEmpty()) {
             throw new IllegalArgumentException("sessionId is required");
         }
 
+        return runJsonCommand("getSessionMessages", List.of(
+                sessionId,
+                cwd != null ? cwd : ""
+        ));
+    }
+
+    private JsonObject runJsonCommand(String action, List<String> args) throws Exception {
         String node = nodeDetector.findNodeExecutable();
         File bridgeDir = getDirectoryResolver().findSdkDir();
         if (bridgeDir == null || !bridgeDir.exists()) {
             throw new RuntimeException("Bridge directory not ready or invalid");
         }
 
-        List<String> command = buildBaseCommand("getSessionMessages");
-        command.add(sessionId);
-        command.add(cwd != null ? cwd : "");
+        List<String> command = buildBaseCommand(action);
+        command.addAll(args);
 
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.directory(bridgeDir);
@@ -186,6 +204,24 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
         envConfigurator.updateProcessEnvironment(pb, node);
 
         Process process = pb.start();
+        CompletableFuture<String> outputFuture = CompletableFuture.supplyAsync(() -> readProcessOutput(process));
+
+        boolean finished = process.waitFor(QUERY_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        if (!finished) {
+            process.destroyForcibly();
+            outputFuture.cancel(true);
+            throw new RuntimeException("opencode query timed out after "
+                    + QUERY_TIMEOUT_SECONDS + " seconds");
+        }
+
+        String jsonLine = extractLastJsonLine(outputFuture.get(5, TimeUnit.SECONDS));
+        if (jsonLine == null) {
+            throw new RuntimeException("Failed to extract JSON from opencode query output");
+        }
+        return gson.fromJson(jsonLine, JsonObject.class);
+    }
+
+    private String readProcessOutput(Process process) {
         StringBuilder output = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
@@ -193,20 +229,10 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
             while ((line = reader.readLine()) != null) {
                 output.append(line).append("\n");
             }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to read opencode query output", e);
         }
-
-        boolean finished = process.waitFor(SESSION_QUERY_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-        if (!finished) {
-            process.destroyForcibly();
-            throw new RuntimeException("opencode session query timed out after "
-                    + SESSION_QUERY_TIMEOUT_SECONDS + " seconds");
-        }
-
-        String jsonLine = extractLastJsonLine(output.toString());
-        if (jsonLine == null) {
-            throw new RuntimeException("Failed to extract JSON from opencode session query output");
-        }
-        return gson.fromJson(jsonLine, JsonObject.class);
+        return output.toString();
     }
 
     private String extractLastJsonLine(String output) {

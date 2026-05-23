@@ -215,6 +215,68 @@ function parseOpenCodeModel(model) {
   };
 }
 
+function normalizeOpenCodeModels(providerPayload = {}, configPayload = {}) {
+  const configuredDefault = typeof configPayload?.model === 'string'
+    ? configPayload.model.trim()
+    : '';
+  const models = [{
+    id: 'opencode-default',
+    label: 'opencode default',
+    description: configuredDefault
+      ? `Uses ${configuredDefault} from opencode config.`
+      : 'Uses the provider and model configured in opencode.',
+    isDefault: true
+  }];
+  const seen = new Set(models.map((model) => model.id));
+  const providers = Array.isArray(providerPayload?.providers) ? providerPayload.providers : [];
+  const defaults = providerPayload?.default && typeof providerPayload.default === 'object'
+    ? providerPayload.default
+    : {};
+
+  for (const provider of providers) {
+    if (!provider || typeof provider !== 'object' || !provider.id) {
+      continue;
+    }
+    const providerID = String(provider.id);
+    const providerName = provider.name ? String(provider.name) : providerID;
+    const providerModels = provider.models && typeof provider.models === 'object'
+      ? provider.models
+      : {};
+
+    for (const [modelKey, rawModel] of Object.entries(providerModels)) {
+      const model = rawModel && typeof rawModel === 'object' ? rawModel : {};
+      if (model.enabled === false) {
+        continue;
+      }
+      const modelID = String(model.id || modelKey);
+      if (!modelID) {
+        continue;
+      }
+      const id = `${providerID}/${modelID}`;
+      if (seen.has(id)) {
+        continue;
+      }
+      seen.add(id);
+
+      const label = model.name ? String(model.name) : modelID;
+      const status = model.status && model.status !== 'active' ? ` · ${model.status}` : '';
+      const defaultForProvider = defaults[providerID] === modelID;
+      models.push({
+        id,
+        label,
+        description: `${providerName}${defaultForProvider ? ' · provider default' : ''}${status}`,
+        providerID,
+        modelID,
+        providerName,
+        isDefault: false,
+        isProviderDefault: defaultForProvider
+      });
+    }
+  }
+
+  return models;
+}
+
 function sanitizeAttachmentName(name, index) {
   const candidate = typeof name === 'string' && name.trim()
     ? basename(name.trim()).replace(/[\\/:*?"<>|]/g, '_')
@@ -747,3 +809,38 @@ export async function getSessionMessages(sessionId = '', cwd = '') {
     }
   }
 }
+
+export async function listModels(cwd = '') {
+  let runtime = null;
+  try {
+    runtime = await createOpenCodeRuntime(cwd);
+    const query = directoryQuery(cwd);
+    const config = await unwrapSdkResult(
+      runtime.client.config.get({ query }),
+      'get opencode config'
+    );
+    const providers = await unwrapSdkResult(
+      runtime.client.config.providers({ query }),
+      'list opencode providers'
+    );
+
+    console.log(JSON.stringify({
+      success: true,
+      cwd,
+      defaultModel: typeof config?.model === 'string' ? config.model : '',
+      models: normalizeOpenCodeModels(providers, config)
+    }));
+  } catch (error) {
+    console.log(JSON.stringify({
+      success: false,
+      error: normalizeOpenCodeSdkError(error).error,
+      models: normalizeOpenCodeModels()
+    }));
+  } finally {
+    if (runtime) {
+      await runtime.close().catch(() => {});
+    }
+  }
+}
+
+export { normalizeOpenCodeModels };

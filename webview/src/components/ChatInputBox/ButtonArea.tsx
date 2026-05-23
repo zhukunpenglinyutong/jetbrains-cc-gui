@@ -6,6 +6,8 @@ import { CLAUDE_MODELS, CODEX_MODELS, OPENCODE_MODELS } from './types';
 import { STORAGE_KEYS, validateCodexCustomModels } from '../../types/provider';
 import type { CodexCustomModel } from '../../types/provider';
 import { readClaudeModelMapping } from '../../utils/claudeModelMapping';
+import { sendBridgeEvent } from '../../utils/bridge';
+import { ensureSelectedOpenCodeModel, parseOpenCodeModelPayload } from './openCodeModels';
 
 /**
  * Get custom Codex model list from localStorage
@@ -99,6 +101,7 @@ export const ButtonArea = ({
   // Track changes to custom models in localStorage
   // When localStorage changes, updating this version number triggers useMemo recalculation
   const [customModelsVersion, setCustomModelsVersion] = useState(0);
+  const [openCodeModels, setOpenCodeModels] = useState<ModelInfo[]>(OPENCODE_MODELS);
 
   // Listen for localStorage changes (cross-tab sync + same-tab custom events)
   useEffect(() => {
@@ -123,6 +126,30 @@ export const ButtonArea = ({
       window.removeEventListener('localStorageChange', handleCustomStorageChange as EventListener);
     };
   }, []);
+
+  useEffect(() => {
+    if (currentProvider !== 'opencode' || typeof window === 'undefined') {
+      return;
+    }
+
+    let disposed = false;
+    const previousCallback = window.updateOpenCodeModels;
+    const updateOpenCodeModels = (json: string) => {
+      if (!disposed) {
+        setOpenCodeModels(parseOpenCodeModelPayload(json));
+      }
+    };
+
+    window.updateOpenCodeModels = updateOpenCodeModels;
+    sendBridgeEvent('get_opencode_models');
+
+    return () => {
+      disposed = true;
+      if (window.updateOpenCodeModels === updateOpenCodeModels) {
+        window.updateOpenCodeModels = previousCallback;
+      }
+    };
+  }, [currentProvider]);
 
   /**
    * Apply model name mapping
@@ -165,7 +192,7 @@ export const ButtonArea = ({
       return [...customModels, ...filteredBuiltIn];
     }
     if (currentProvider === 'opencode') {
-      return OPENCODE_MODELS;
+      return ensureSelectedOpenCodeModel(openCodeModels, selectedModel);
     }
     if (typeof window === 'undefined' || !window.localStorage) {
       return CLAUDE_MODELS;
@@ -191,7 +218,7 @@ export const ButtonArea = ({
     const customIds = new Set(customModels.map(m => m.id));
     const filteredBuiltIn = builtInModels.filter(m => !customIds.has(m.id));
     return [...customModels, ...filteredBuiltIn];
-  }, [currentProvider, applyModelMapping, customModelsVersion]);
+  }, [currentProvider, applyModelMapping, customModelsVersion, openCodeModels, selectedModel]);
 
   /**
    * Handle submit button click

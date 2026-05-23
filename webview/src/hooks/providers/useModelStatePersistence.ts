@@ -4,7 +4,6 @@ import {
   CLAUDE_MODELS,
   CODEX_MODELS,
   OPENCODE_DEFAULT_MODEL_ID,
-  OPENCODE_MODELS,
   isValidPermissionMode,
   normalizeClaudeModelId,
   apply1MContextSuffix,
@@ -148,11 +147,9 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           setSelectedCodexModel(state.codexModel);
         }
 
-        if (
-          OPENCODE_MODELS.find(m => m.id === state.openCodeModel)
-        ) {
-          restoredOpenCodeModel = state.openCodeModel;
-          setSelectedOpenCodeModel(state.openCodeModel);
+        if (typeof state.openCodeModel === 'string' && state.openCodeModel.trim().length > 0) {
+          restoredOpenCodeModel = state.openCodeModel.trim();
+          setSelectedOpenCodeModel(restoredOpenCodeModel);
         }
       }
 

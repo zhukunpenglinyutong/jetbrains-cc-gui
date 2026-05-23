@@ -6,7 +6,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 /**
  * Provider management message handler.
  * Handles provider CRUD operations and switching.
- * Supports both Claude and Codex providers.
+ * Supports Claude, Codex, and opencode provider-adjacent operations.
  */
 public class ProviderHandler extends BaseMessageHandler {
 
@@ -34,11 +34,14 @@ public class ProviderHandler extends BaseMessageHandler {
             "switch_codex_provider",
             "revoke_codex_local_config_authorization",
             "get_active_codex_provider",
-            "sort_codex_providers"
+            "sort_codex_providers",
+            // opencode discovery operations
+            "get_opencode_models"
     };
 
     private final ClaudeProviderOperations claudeOps;
     private final CodexProviderOperations codexOps;
+    private final OpenCodeProviderOperations openCodeOps;
     private final ProviderImportExportSupport importExportSupport;
     private final ProviderOrderingService orderingService;
 
@@ -46,6 +49,7 @@ public class ProviderHandler extends BaseMessageHandler {
         super(context);
         this.claudeOps = new ClaudeProviderOperations(context);
         this.codexOps = new CodexProviderOperations(context);
+        this.openCodeOps = new OpenCodeProviderOperations(context);
         this.importExportSupport = new ProviderImportExportSupport(context, claudeOps);
         this.orderingService = new ProviderOrderingService(context, claudeOps, codexOps);
     }
@@ -125,6 +129,9 @@ public class ProviderHandler extends BaseMessageHandler {
                 return true;
             case "sort_codex_providers":
                 orderingService.handleSortCodexProviders(content);
+                return true;
+            case "get_opencode_models":
+                openCodeOps.handleGetOpenCodeModels();
                 return true;
             default:
                 return false;
