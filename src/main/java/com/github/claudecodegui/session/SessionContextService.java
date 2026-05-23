@@ -460,6 +460,10 @@ public class SessionContextService {
         sb.append("\n\n## Referenced Files (unsaved changes)\n\n");
 
         for (String path : unsavedRefs) {
+            // Skip injection if the #L range content matches disk (unsaved changes are elsewhere)
+            if (isUnchangedLineRange(path)) {
+                continue;
+            }
             String fileContent = readFileContent(path);
             if (fileContent != null && !fileContent.isEmpty()) {
                 String extension = getFileExtension(path.contains("#L")
@@ -499,6 +503,57 @@ public class SessionContextService {
             }
             return unsaved;
         });
+    }
+
+    /**
+     * For a @file#L10-20 reference, check whether the specific line range content
+     * matches between the editor Document and disk. Returns true when lines are
+     * identical (no need to inject context). Returns false if no #L range is
+     * present, or if the Document content differs from disk (injection needed).
+     */
+    private boolean isUnchangedLineRange(String path) {
+        int hashLIdx = path.indexOf("#L");
+        if (hashLIdx < 0) {
+            return false;
+        }
+
+        String cleanPath = path.substring(0, hashLIdx);
+        String range = path.substring(hashLIdx + 2);
+        int dashIdx = range.indexOf('-');
+        int startLine;
+        int endLine;
+
+        try {
+            if (dashIdx >= 0) {
+                startLine = Integer.parseInt(range.substring(0, dashIdx));
+                endLine = Integer.parseInt(range.substring(dashIdx + 1));
+            } else {
+                startLine = endLine = Integer.parseInt(range);
+            }
+        } catch (NumberFormatException e) {
+            LOG.warn("[Codex Context] Invalid line range: " + path);
+            return false;
+        }
+
+        String docContent = readFromDocument(cleanPath);
+        String diskContent = readFromDisk(cleanPath);
+
+        if (docContent == null && diskContent == null) {
+            return true;
+        }
+        if (docContent == null || diskContent == null) {
+            return false;
+        }
+
+        String docLines = extractLines(docContent, startLine, endLine);
+        String diskLines = extractLines(diskContent, startLine, endLine);
+
+        boolean unchanged = docLines != null && docLines.equals(diskLines);
+        if (unchanged) {
+            LOG.info("[Codex Context] Lines " + startLine + "-" + endLine
+                    + " unchanged for " + cleanPath + ", skip injection");
+        }
+        return unchanged;
     }
 
     private String readFileContent(String filePath) {
