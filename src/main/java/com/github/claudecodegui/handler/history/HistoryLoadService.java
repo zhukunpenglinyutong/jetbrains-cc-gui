@@ -37,7 +37,7 @@ class HistoryLoadService {
     /**
      * Load and inject history data into the frontend (including favorite info).
      *
-     * @param provider the provider identifier ("claude" or "codex")
+     * @param provider the provider identifier ("claude", "codex", or "opencode")
      */
     void handleLoadHistoryData(String provider) {
         CompletableFuture.runAsync(() -> {
@@ -60,6 +60,14 @@ class HistoryLoadService {
                     CodexHistoryReader codexReader = new CodexHistoryReader();
                     historyJson = codexReader.getSessionsForProjectAsJson(projectPath);
                     LOG.info("[HistoryHandler] CodexHistoryReader 返回的 JSON 长度: " + historyJson.length());
+                } else if ("opencode".equals(provider)) {
+                    LOG.info("[HistoryHandler] 使用 opencode session API 读取 opencode 会话 (项目: " + projectPath + ")");
+                    if (context.getOpenCodeSDKBridge() == null) {
+                        throw new IllegalStateException("opencode SDK bridge is not available");
+                    }
+                    JsonObject opencodeHistory = context.getOpenCodeSDKBridge().listSessions(projectPath);
+                    historyJson = new Gson().toJson(opencodeHistory);
+                    LOG.info("[HistoryHandler] opencode session API 返回的 JSON 长度: " + historyJson.length());
                 } else {
                     // Default: use ClaudeHistoryReader to read Claude sessions
                     LOG.info("[HistoryHandler] 使用 ClaudeHistoryReader 读取 Claude 会话");
@@ -125,7 +133,7 @@ class HistoryLoadService {
      * Deep search history records.
      * Clears cache and reloads complete history from the file system.
      *
-     * @param provider the provider identifier ("claude" or "codex")
+     * @param provider the provider identifier ("claude", "codex", or "opencode")
      */
     void handleDeepSearchHistory(String provider) {
         String projectPath = context.getProject().getBasePath();
@@ -135,6 +143,8 @@ class HistoryLoadService {
             if ("codex".equals(provider)) {
                 SessionIndexCache.getInstance().clearAllCodexCache();
                 SessionIndexManager.getInstance().clearAllCodexIndex();
+            } else if ("opencode".equals(provider)) {
+                LOG.info("[HistoryHandler] opencode 历史通过 session API 加载，无本地索引缓存需要清理");
             } else if (projectPath != null) {
                 SessionIndexCache.getInstance().clearProject(projectPath);
                 SessionIndexManager.getInstance().clearProjectIndex("claude", projectPath);

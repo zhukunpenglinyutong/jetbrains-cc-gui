@@ -3,8 +3,10 @@
  */
 import {
   abortSession as openCodeAbortSession,
+  deleteSession as openCodeDeleteSession,
   getSessionMessages as openCodeGetSessionMessages,
   listAgents as openCodeListAgents,
+  listSessions as openCodeListSessions,
   listModels as openCodeListModels,
   sendMessage as openCodeSendMessage
 } from '../services/opencode/message-service.js';
@@ -47,6 +49,13 @@ export async function handleOpenCodeCommand(command, args, stdinData) {
       break;
     }
 
+    case 'deleteSession': {
+      const sessionId = stdinData?.sessionId || args[0] || '';
+      const cwd = stdinData?.cwd || args[1] || '';
+      await openCodeDeleteSession(sessionId, cwd);
+      break;
+    }
+
     case 'getSessionMessages': {
       const sessionId = stdinData?.sessionId || args[0] || '';
       const cwd = stdinData?.cwd || args[1] || '';
@@ -57,6 +66,12 @@ export async function handleOpenCodeCommand(command, args, stdinData) {
     case 'listModels': {
       const cwd = stdinData?.cwd || args[0] || '';
       await openCodeListModels(cwd);
+      break;
+    }
+
+    case 'listSessions': {
+      const cwd = stdinData?.cwd || args[0] || '';
+      await openCodeListSessions(cwd);
       break;
     }
 
@@ -72,5 +87,5 @@ export async function handleOpenCodeCommand(command, args, stdinData) {
 }
 
 export function getOpenCodeCommandList() {
-  return ['send', 'abort', 'getSessionMessages', 'listModels', 'listAgents'];
+  return ['send', 'abort', 'deleteSession', 'getSessionMessages', 'listSessions', 'listModels', 'listAgents'];
 }

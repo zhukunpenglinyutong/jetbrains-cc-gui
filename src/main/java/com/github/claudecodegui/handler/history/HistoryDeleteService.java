@@ -178,8 +178,11 @@ class HistoryDeleteService {
         if ("codex".equals(currentProvider)) {
             return new DeleteResult(deleteCodexSession(sessionId), 0);
         }
-
         String projectPath = context.getProject().getBasePath();
+        if ("opencode".equals(currentProvider)) {
+            return new DeleteResult(deleteOpenCodeSession(sessionId, projectPath), 0);
+        }
+
         if (projectPath == null) {
             LOG.warn("[HistoryHandler] Project base path is null, cannot delete Claude session");
             return new DeleteResult(false, 0);
@@ -187,6 +190,28 @@ class HistoryDeleteService {
 
         int[] result = deleteClaudeSession(sessionId, projectPath);
         return new DeleteResult(result[0] == 1, result[1]);
+    }
+
+    private boolean deleteOpenCodeSession(String sessionId, String projectPath) {
+        if (projectPath == null) {
+            LOG.warn("[HistoryHandler] Project base path is null, cannot delete opencode session");
+            return false;
+        }
+        if (context.getOpenCodeSDKBridge() == null) {
+            LOG.warn("[HistoryHandler] opencode SDK bridge is not available, cannot delete opencode session");
+            return false;
+        }
+
+        JsonObject result = context.getOpenCodeSDKBridge().deleteSession(sessionId, projectPath);
+        if (result != null && result.has("success") && result.get("success").getAsBoolean()) {
+            return true;
+        }
+
+        String error = result != null && result.has("error") && !result.get("error").isJsonNull()
+                ? result.get("error").getAsString()
+                : "unknown opencode delete error";
+        LOG.warn("[HistoryHandler] opencode session delete failed: " + error);
+        return false;
     }
 
     private boolean deleteCodexSession(String sessionId) throws java.io.IOException {
@@ -303,6 +328,8 @@ class HistoryDeleteService {
             if ("codex".equals(currentProvider)) {
                 SessionIndexCache.getInstance().clearAllCodexCache();
                 SessionIndexManager.getInstance().clearAllCodexIndex();
+            } else if ("opencode".equals(currentProvider)) {
+                LOG.debug("[HistoryHandler] opencode history has no local index cache to clear");
             } else if (projectPath != null) {
                 SessionIndexCache.getInstance().clearProject(projectPath);
                 SessionIndexManager.getInstance().clearProjectIndex("claude", projectPath);

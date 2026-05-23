@@ -23,7 +23,7 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Service for loading session messages and injecting them into the frontend.
- * Handles both Claude and Codex session loading.
+ * Handles Claude, Codex, and provider-routed session loading.
  */
 public class HistoryMessageInjector {
 
@@ -68,7 +68,7 @@ public class HistoryMessageInjector {
             // Codex session: read session info and restore session state
             loadCodexSession(resolvedSessionId);
         } else {
-            // Claude session: use existing callback mechanism
+            // Claude/opencode sessions: use provider-routed callback mechanism
             if (sessionLoadCallback != null) {
                 sessionLoadCallback.onLoadSession(resolvedSessionId, projectPath, provider);
             } else {

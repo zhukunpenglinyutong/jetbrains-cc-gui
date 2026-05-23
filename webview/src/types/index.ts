@@ -92,7 +92,7 @@ export interface HistorySessionSummary {
   lastTimestamp?: string;
   isFavorited?: boolean;
   favoritedAt?: number;
-  provider?: string; // 'claude' or 'codex'
+  provider?: string; // 'claude', 'codex', or 'opencode'
   fileSize?: number;
 }
 

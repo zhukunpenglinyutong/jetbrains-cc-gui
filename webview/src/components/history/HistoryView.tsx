@@ -60,7 +60,7 @@ const EMPTY_HINT_STYLE: React.CSSProperties = {
 
 interface HistoryViewProps {
   historyData: HistoryData | null;
-  currentProvider?: string; // Current provider (claude or codex)
+  currentProvider?: string; // Current provider (claude, codex, or opencode)
   onLoadSession: (sessionId: string, provider?: string) => void;
   onDeleteSession: (sessionId: string) => void; // Delete session callback
   onDeleteSessions: (sessionIds: string[]) => void; // Batch delete sessions callback

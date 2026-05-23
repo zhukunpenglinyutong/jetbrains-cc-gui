@@ -22,6 +22,8 @@ import {
 const DEFAULT_HOSTNAME = '127.0.0.1';
 const DEFAULT_PORT = 0;
 const DEFAULT_START_TIMEOUT_MS = 10000;
+const DEFAULT_HISTORY_LIMIT = 200;
+const DEFAULT_HISTORY_COUNT_CONCURRENCY = 4;
 const MAX_TOOL_RESULT_CHARS = 20000;
 const PLAN_MODE_PERMISSION_DENIED =
   'opencode permission denied because the chat is in plan mode.';
@@ -103,6 +105,36 @@ function delay(ms) {
 
 function directoryQuery(cwd) {
   return cwd && cwd.trim() ? { directory: cwd.trim() } : undefined;
+}
+
+function historyListQuery(cwd) {
+  return {
+    ...(directoryQuery(cwd) || {}),
+    scope: 'project',
+    roots: true,
+    limit: parsePositiveInteger(process.env.OPENCODE_HISTORY_LIMIT, DEFAULT_HISTORY_LIMIT)
+  };
+}
+
+function shouldCountOpenCodeHistoryMessages() {
+  const value = (process.env.OPENCODE_HISTORY_MESSAGE_COUNTS || 'true').trim().toLowerCase();
+  return value !== 'false' && value !== '0' && value !== 'off';
+}
+
+async function mapWithConcurrency(items, concurrency, mapper) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.max(1, Math.min(concurrency, items.length));
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex++;
+      results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+    }
+  }
+
+  await Promise.all(Array.from({ length: workerCount }, worker));
+  return results;
 }
 
 function parsePositiveInteger(value, fallback) {
@@ -909,6 +941,138 @@ function normalizeOpenCodeModels(providerPayload = {}, configPayload = {}) {
   return models;
 }
 
+function normalizeOpenCodeTimestamp(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) {
+      return numeric;
+    }
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  return 0;
+}
+
+function normalizeOpenCodeMessageCount(session, sessionId, messageCounts) {
+  const directCount = Number.parseInt(session?.messageCount, 10);
+  if (Number.isFinite(directCount) && directCount >= 0) {
+    return directCount;
+  }
+
+  if (messageCounts instanceof Map && messageCounts.has(sessionId)) {
+    const mappedCount = Number.parseInt(messageCounts.get(sessionId), 10);
+    return Number.isFinite(mappedCount) && mappedCount >= 0 ? mappedCount : 0;
+  }
+
+  return 0;
+}
+
+function normalizeOpenCodeSession(rawSession, messageCounts) {
+  const session = asRecord(rawSession);
+  const sessionId = pickString(session.id, session.sessionID, session.sessionId);
+  if (!sessionId) {
+    return null;
+  }
+
+  const time = asRecord(session.time);
+  const model = asRecord(session.model);
+  const summary = asRecord(session.summary);
+  const lastTimestamp = normalizeOpenCodeTimestamp(
+    time.updated ?? session.updated ?? time.created ?? session.created
+  );
+  const firstTimestamp = normalizeOpenCodeTimestamp(
+    time.created ?? session.created ?? time.updated ?? session.updated
+  );
+  const messageCount = normalizeOpenCodeMessageCount(session, sessionId, messageCounts);
+
+  const normalized = {
+    sessionId,
+    title: pickString(session.title, session.slug, sessionId),
+    messageCount,
+    lastTimestamp,
+    firstTimestamp,
+    fileSize: 0,
+    provider: 'opencode',
+    cwd: pickString(session.directory, session.cwd)
+  };
+
+  if (model.id || model.providerID || session.agent || session.path || summary.files) {
+    normalized.opencode = {
+      model,
+      agent: pickString(session.agent),
+      path: pickString(session.path),
+      summary
+    };
+  }
+
+  return normalized;
+}
+
+function normalizeOpenCodeSessions(sessionPayload = [], messageCounts = new Map()) {
+  const sessionsById = new Map();
+
+  for (const rawSession of Array.isArray(sessionPayload) ? sessionPayload : []) {
+    const candidate = asRecord(rawSession);
+    if (candidate.parentID || candidate.parentId) {
+      continue;
+    }
+
+    const session = normalizeOpenCodeSession(candidate, messageCounts);
+    if (!session) {
+      continue;
+    }
+
+    const existing = sessionsById.get(session.sessionId);
+    if (!existing || (session.lastTimestamp || 0) > (existing.lastTimestamp || 0)) {
+      sessionsById.set(session.sessionId, session);
+    }
+  }
+
+  return Array.from(sessionsById.values()).sort((left, right) => (
+    (right.lastTimestamp || 0) - (left.lastTimestamp || 0)
+  ));
+}
+
+async function countOpenCodeSessionMessages(client, cwd, sessionId) {
+  try {
+    const messages = await unwrapSdkResult(
+      client.session.messages({
+        path: { id: sessionId },
+        query: directoryQuery(cwd)
+      }),
+      'count opencode session messages'
+    );
+    return Array.isArray(messages) ? messages.length : 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function countOpenCodeHistoryMessages(client, cwd, sessions) {
+  if (!shouldCountOpenCodeHistoryMessages() || !Array.isArray(sessions) || sessions.length === 0) {
+    return new Map();
+  }
+
+  const sessionIds = Array.from(new Set(
+    sessions
+      .map((session) => pickString(session?.id, session?.sessionID, session?.sessionId))
+      .filter(Boolean)
+  ));
+  const concurrency = parsePositiveInteger(
+    process.env.OPENCODE_HISTORY_COUNT_CONCURRENCY,
+    DEFAULT_HISTORY_COUNT_CONCURRENCY
+  );
+  const counts = await mapWithConcurrency(sessionIds, concurrency, async (sessionId) => [
+    sessionId,
+    await countOpenCodeSessionMessages(client, cwd, sessionId)
+  ]);
+
+  return new Map(counts);
+}
+
 function sanitizeAttachmentName(name, index) {
   const candidate = typeof name === 'string' && name.trim()
     ? basename(name.trim()).replace(/[\\/:*?"<>|]/g, '_')
@@ -1464,6 +1628,37 @@ export async function abortSession(sessionId = '', cwd = '') {
   }
 }
 
+export async function deleteSession(sessionId = '', cwd = '') {
+  let runtime = null;
+  try {
+    const normalizedSessionId = sessionId && sessionId.trim();
+    if (!normalizedSessionId) {
+      throw new Error('sessionId is required to delete an opencode session');
+    }
+
+    runtime = await createOpenCodeRuntime(cwd);
+    await unwrapSdkResult(
+      runtime.client.session.delete({
+        path: { id: normalizedSessionId },
+        query: directoryQuery(cwd)
+      }),
+      'delete opencode session'
+    );
+
+    console.log(JSON.stringify({ success: true, sessionId: normalizedSessionId }));
+  } catch (error) {
+    console.log(JSON.stringify({
+      success: false,
+      error: normalizeOpenCodeSdkError(error).error,
+      sessionId
+    }));
+  } finally {
+    if (runtime) {
+      await runtime.close().catch(() => {});
+    }
+  }
+}
+
 export async function getSessionMessages(sessionId = '', cwd = '') {
   let runtime = null;
   try {
@@ -1491,6 +1686,39 @@ export async function getSessionMessages(sessionId = '', cwd = '') {
       success: false,
       error: normalizeOpenCodeSdkError(error).error,
       sessionId
+    }));
+  } finally {
+    if (runtime) {
+      await runtime.close().catch(() => {});
+    }
+  }
+}
+
+export async function listSessions(cwd = '') {
+  let runtime = null;
+  try {
+    runtime = await createOpenCodeRuntime(cwd);
+    const sessions = await unwrapSdkResult(
+      runtime.client.session.list({
+        query: historyListQuery(cwd)
+      }),
+      'list opencode sessions'
+    );
+    const messageCounts = await countOpenCodeHistoryMessages(runtime.client, cwd, sessions);
+    const normalizedSessions = normalizeOpenCodeSessions(sessions, messageCounts);
+
+    console.log(JSON.stringify({
+      success: true,
+      cwd,
+      sessions: normalizedSessions,
+      total: normalizedSessions.reduce((sum, session) => sum + (session.messageCount || 0), 0)
+    }));
+  } catch (error) {
+    console.log(JSON.stringify({
+      success: false,
+      error: normalizeOpenCodeSdkError(error).error,
+      sessions: [],
+      total: 0
     }));
   } finally {
     if (runtime) {
@@ -1571,5 +1799,6 @@ export {
   normalizeOpenCodeMessage,
   normalizeOpenCodeAgents,
   normalizeOpenCodeModels,
+  normalizeOpenCodeSessions,
   resolveOpenCodePromptOptions
 };
