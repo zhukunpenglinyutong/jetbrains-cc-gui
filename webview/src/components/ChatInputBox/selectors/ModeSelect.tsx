@@ -11,7 +11,27 @@ const DROPDOWN_STYLE: React.CSSProperties = {
   marginBottom: '4px',
   zIndex: 10000,
 };
-const MODE_INFO_STYLE: React.CSSProperties = { display: 'flex', flexDirection: 'column', flex: 1 };
+const MODE_INFO_STYLE: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  flex: 1,
+  overflow: 'hidden',
+  minWidth: 0 // This is important for text truncation to work
+};
+
+const MODE_LABEL_STYLE: React.CSSProperties = {
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis'
+};
+
+const MODE_DESCRIPTION_STYLE: React.CSSProperties = {
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  fontSize: '12px',
+  color: 'var(--text-secondary)'
+};
 
 function getModeOptionStyle(disabled: boolean): React.CSSProperties {
   return {
@@ -130,10 +150,10 @@ export const ModeSelect = ({ value, onChange, provider }: ModeSelectProps) => {
               style={getModeOptionStyle(!!mode.disabled)}
             >
               <span className={`codicon ${mode.icon}`} />
-              <div style={MODE_INFO_STYLE}>
-                <span>{getModeText(mode.id, 'label')}</span>
-                <span className="mode-description">{getModeText(mode.id, 'description')}</span>
-              </div>
+               <div style={MODE_INFO_STYLE}>
+                 <span style={MODE_LABEL_STYLE}>{getModeText(mode.id, 'label')}</span>
+                 <span style={MODE_DESCRIPTION_STYLE}>{getModeText(mode.id, 'description')}</span>
+               </div>
               {mode.id === value && (
                 <span className="codicon codicon-check check-mark" />
               )}
