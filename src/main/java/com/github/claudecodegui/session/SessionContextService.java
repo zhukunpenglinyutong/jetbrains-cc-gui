@@ -455,17 +455,20 @@ public class SessionContextService {
             return "";
         }
 
-        // Build context block
+        // Build context block (only if at least one file actually needs injection)
         StringBuilder sb = new StringBuilder();
-        sb.append("\n\n## Referenced Files (unsaved changes)\n\n");
+        boolean hasContent = false;
 
         for (String path : unsavedRefs) {
-            // Skip injection if the #L range content matches disk (unsaved changes are elsewhere)
             if (isUnchangedLineRange(path)) {
                 continue;
             }
             String fileContent = readFileContent(path);
             if (fileContent != null && !fileContent.isEmpty()) {
+                if (!hasContent) {
+                    sb.append("\n\n## Referenced Files (unsaved changes)\n\n");
+                    hasContent = true;
+                }
                 String extension = getFileExtension(path.contains("#L")
                     ? path.substring(0, path.indexOf("#L")) : path);
                 sb.append("### `").append(path).append("`\n\n");
