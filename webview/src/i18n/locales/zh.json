@@ -12,6 +12,7 @@
     "close": "关闭",
     "newSession": "新会话",
     "newTab": "新标签页",
+    "dontAskAgain": "不再提示",
     "history": "历史记录",
     "settings": "设置",
     "thinking": "思考",
@@ -293,6 +294,12 @@
         "custom": "自定义",
         "reset": "恢复默认",
         "hint": "自定义您的消息背景颜色，留空则跟随主题默认颜色"
+      },
+      "newSessionConfirm": {
+        "label": "新建会话时二次确认",
+        "enabled": "已开启",
+        "disabled": "已关闭",
+        "hint": "关闭后，在已有消息的会话中点击新建将直接创建，不再弹出确认窗口"
       }
     },
     "providers": "供应商管理",

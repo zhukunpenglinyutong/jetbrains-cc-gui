@@ -12,6 +12,7 @@
     "close": "Close",
     "newSession": "New Session",
     "newTab": "New Tab",
+    "dontAskAgain": "Don't ask again",
     "history": "History",
     "settings": "Settings",
     "thinking": "Thinking",
@@ -293,6 +294,12 @@
         "custom": "Custom",
         "reset": "Reset",
         "hint": "Customize the background color of your messages. Leave empty to follow the theme default."
+      },
+      "newSessionConfirm": {
+        "label": "New Session Confirmation",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "When disabled, creating a new session in a conversation with existing messages will skip the confirmation dialog."
       }
     },
     "providers": "Provider Management",

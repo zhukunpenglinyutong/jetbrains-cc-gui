@@ -12,6 +12,7 @@
     "close": "닫기",
     "newSession": "새 세션",
     "newTab": "새 탭",
+    "dontAskAgain": "다시 묻지 않음",
     "history": "히스토리",
     "settings": "설정",
     "thinking": "생각 중",
@@ -266,6 +267,12 @@
         "custom": "사용자 지정",
         "reset": "초기화",
         "hint": "내 메시지의 배경색을 사용자 지정합니다. 비워두면 테마 기본값을 따릅니다."
+      },
+      "newSessionConfirm": {
+        "label": "새 세션 생성 확인",
+        "enabled": "활성화",
+        "disabled": "비활성화",
+        "hint": "비활성화하면 메시지가 있는 세션에서 새로 만들기를 선택할 때 확인 대화 상자 없이 바로 새 세션을 만듭니다."
       }
     },
     "providers": "제공자 관리",

@@ -10,6 +10,11 @@ import {
   DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS,
   clampPermissionDialogTimeoutSeconds,
 } from '../../../utils/permissionDialogTimeout';
+import {
+  getSkipNewSessionConfirm,
+  SKIP_NEW_SESSION_CONFIRM_EVENT,
+  type SkipNewSessionConfirmChangedDetail,
+} from '../../../utils/skipNewSessionConfirm';
 
 const sendToJava = (message: string) => {
   if (window.sendToJava) {
@@ -66,6 +71,8 @@ export interface UseSettingsBasicActionsReturn {
   customSoundPath: string;
   diffExpandedByDefault: boolean;
   historyCompletionEnabled: boolean;
+  /** Whether to skip the "create new session with existing messages" confirm dialog. */
+  skipNewSessionConfirm: boolean;
   commitGenerationEnabled: boolean;
   aiTitleGenerationEnabled: boolean;
   statusBarWidgetEnabled: boolean;
@@ -141,6 +148,7 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setCustomSoundPath: (path: string) => void;
   /** @internal */ setDiffExpandedByDefault: (expanded: boolean) => void;
   /** @internal */ setHistoryCompletionEnabled: (enabled: boolean) => void;
+  /** @internal */ setSkipNewSessionConfirm: (enabled: boolean) => void;
   /** @internal */ setCommitGenerationEnabled: (enabled: boolean) => void;
   /** @internal */ setAiTitleGenerationEnabled: (enabled: boolean) => void;
   /** @internal */ setStatusBarWidgetEnabled: (enabled: boolean) => void;
@@ -224,6 +232,23 @@ export function useSettingsBasicActions({
     const saved = localStorage.getItem('historyCompletionEnabled');
     return saved !== 'false'; // Enabled by default
   });
+
+  // "Skip new-session confirm dialog" preference (localStorage-only, default: false).
+  // Synced bidirectionally with the dialog checkbox via CustomEvent so toggling
+  // either surface (dialog or settings page) updates the other immediately.
+  const [skipNewSessionConfirm, setSkipNewSessionConfirm] = useState<boolean>(() =>
+    getSkipNewSessionConfirm()
+  );
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const custom = event as CustomEvent<SkipNewSessionConfirmChangedDetail>;
+      if (custom.detail && typeof custom.detail.enabled === 'boolean') {
+        setSkipNewSessionConfirm(custom.detail.enabled);
+      }
+    };
+    window.addEventListener(SKIP_NEW_SESSION_CONFIRM_EVENT, handler);
+    return () => window.removeEventListener(SKIP_NEW_SESSION_CONFIRM_EVENT, handler);
+  }, []);
 
   // AI commit generation toggle (default: true)
   const [commitGenerationEnabled, setCommitGenerationEnabled] = useState<boolean>(true);
@@ -580,6 +605,8 @@ export function useSettingsBasicActions({
     setDiffExpandedByDefault,
     historyCompletionEnabled,
     setHistoryCompletionEnabled,
+    skipNewSessionConfirm,
+    setSkipNewSessionConfirm,
     handleSaveNodePath,
     handleSaveWorkingDirectory,
     handleUiFontSelectionChange,

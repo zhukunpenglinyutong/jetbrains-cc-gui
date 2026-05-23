@@ -12,6 +12,7 @@
     "close": "Cerrar",
     "newSession": "Nueva sesión",
     "newTab": "Nueva pestaña",
+    "dontAskAgain": "No volver a preguntar",
     "history": "Historial",
     "settings": "Configuración",
     "thinking": "Pensando",
@@ -244,6 +245,12 @@
         "custom": "Personalizado",
         "reset": "Restablecer",
         "hint": "Personalizar el color de fondo de sus mensajes. Dejar vacío para seguir el tema predeterminado."
+      },
+      "newSessionConfirm": {
+        "label": "Confirmación de nueva sesión",
+        "enabled": "Habilitado",
+        "disabled": "Deshabilitado",
+        "hint": "Cuando está deshabilitado, crear una nueva sesión en una conversación con mensajes existentes omitirá el cuadro de confirmación."
       }
     },
     "providers": "Gestión de proveedores",

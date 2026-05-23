@@ -12,6 +12,7 @@
     "close": "Fermer",
     "newSession": "Nouvelle session",
     "newTab": "Nouvel onglet",
+    "dontAskAgain": "Ne plus demander",
     "history": "Historique",
     "settings": "Paramètres",
     "thinking": "Réflexion",
@@ -244,6 +245,12 @@
         "custom": "Personnalisé",
         "reset": "Réinitialiser",
         "hint": "Personnaliser la couleur de fond de vos messages. Laisser vide pour suivre le thème par défaut."
+      },
+      "newSessionConfirm": {
+        "label": "Confirmation de nouvelle session",
+        "enabled": "Activé",
+        "disabled": "Désactivé",
+        "hint": "Lorsqu'elle est désactivée, créer une nouvelle session dans une conversation contenant des messages se fera directement, sans afficher la boîte de dialogue de confirmation."
       }
     },
     "providers": "Gestion des fournisseurs",

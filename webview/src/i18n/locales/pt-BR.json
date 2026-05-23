@@ -12,6 +12,7 @@
     "close": "Fechar",
     "newSession": "Nova Sessão",
     "newTab": "Nova Aba",
+    "dontAskAgain": "Não perguntar novamente",
     "history": "Histórico",
     "settings": "Configurações",
     "thinking": "Pensando",
@@ -289,6 +290,12 @@
         "custom": "Personalizado",
         "reset": "Redefinir",
         "hint": "Personalize a cor de fundo das suas mensagens. Deixe vazio para seguir o padrão do tema."
+      },
+      "newSessionConfirm": {
+        "label": "Confirmação de Nova Sessão",
+        "enabled": "Ativado",
+        "disabled": "Desativado",
+        "hint": "Quando desativado, criar uma nova sessão em uma conversa com mensagens existentes irá pular a caixa de confirmação."
       }
     },
     "providers": "Gerenciamento de Provedores",

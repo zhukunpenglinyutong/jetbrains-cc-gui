@@ -69,6 +69,9 @@ interface BasicConfigSectionProps {
   // AI title generation configuration
   aiTitleGenerationEnabled?: boolean;
   onAiTitleGenerationEnabledChange?: (enabled: boolean) => void;
+  // New-session confirm dialog (positive semantics: true = shown)
+  newSessionConfirmEnabled?: boolean;
+  onNewSessionConfirmEnabledChange?: (enabled: boolean) => void;
   // Sound notification configuration
   soundNotificationEnabled?: boolean;
   onSoundNotificationEnabledChange?: (enabled: boolean) => void;
@@ -149,6 +152,8 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onStatusBarWidgetEnabledChange={props.onStatusBarWidgetEnabledChange}
           aiTitleGenerationEnabled={props.aiTitleGenerationEnabled}
           onAiTitleGenerationEnabledChange={props.onAiTitleGenerationEnabledChange}
+          newSessionConfirmEnabled={props.newSessionConfirmEnabled}
+          onNewSessionConfirmEnabledChange={props.onNewSessionConfirmEnabledChange}
           soundNotificationEnabled={props.soundNotificationEnabled}
           onSoundNotificationEnabledChange={props.onSoundNotificationEnabledChange}
           soundOnlyWhenUnfocused={props.soundOnlyWhenUnfocused}

@@ -89,6 +89,14 @@ export interface BehaviorTabProps {
   onStatusBarWidgetEnabledChange?: (enabled: boolean) => void;
   aiTitleGenerationEnabled?: boolean;
   onAiTitleGenerationEnabledChange?: (enabled: boolean) => void;
+  /**
+   * Whether the "create new session with existing messages" confirm dialog is
+   * enabled (i.e. shown). Positive semantics: `true` = dialog shows, `false` =
+   * silently create the new session. Default `true` to preserve safer behaviour
+   * for upgrading users.
+   */
+  newSessionConfirmEnabled?: boolean;
+  onNewSessionConfirmEnabledChange?: (enabled: boolean) => void;
   soundNotificationEnabled?: boolean;
   onSoundNotificationEnabledChange?: (enabled: boolean) => void;
   soundOnlyWhenUnfocused?: boolean;
@@ -121,6 +129,8 @@ const BehaviorTab = ({
   onStatusBarWidgetEnabledChange = () => {},
   aiTitleGenerationEnabled = true,
   onAiTitleGenerationEnabledChange = () => {},
+  newSessionConfirmEnabled = true,
+  onNewSessionConfirmEnabledChange = () => {},
   soundNotificationEnabled = false,
   onSoundNotificationEnabledChange = () => {},
   soundOnlyWhenUnfocused = false,
@@ -369,6 +379,34 @@ const BehaviorTab = ({
         <small className={styles.formHint}>
           <span className="codicon codicon-info" />
           <span>{t('settings.other.aiTitleGeneration.hint')}</span>
+        </small>
+      </div>
+
+      {/* New-session confirm dialog toggle.
+          Positive semantics throughout (no inversions in JSX) — the storage
+          layer in utils/skipNewSessionConfirm.ts owns the negation. */}
+      <div className={styles.streamingSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-comment-discussion" />
+          <span className={styles.fieldLabel}>{t('settings.basic.newSessionConfirm.label')}</span>
+        </div>
+        <label className={styles.toggleWrapper}>
+          <input
+            type="checkbox"
+            className={styles.toggleInput}
+            checked={newSessionConfirmEnabled}
+            onChange={(e) => onNewSessionConfirmEnabledChange(e.target.checked)}
+          />
+          <span className={styles.toggleSlider} />
+          <span className={styles.toggleLabel}>
+            {newSessionConfirmEnabled
+              ? t('settings.basic.newSessionConfirm.enabled')
+              : t('settings.basic.newSessionConfirm.disabled')}
+          </span>
+        </label>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>{t('settings.basic.newSessionConfirm.hint')}</span>
         </small>
       </div>
 
