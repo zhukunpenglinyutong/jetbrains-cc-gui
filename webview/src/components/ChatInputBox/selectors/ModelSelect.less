@@ -1,0 +1,52 @@
+/* ModelSelect component styles */
+
+.selector-dropdown {
+  background: var(--dropdown-bg);
+  border: 1px solid var(--dropdown-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  width: 400px;
+  min-width: 300px;
+  
+  /* Scrollbar styles */
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: var(--scrollbar-track-bg);
+    border-radius: 4px;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb-bg);
+    border-radius: 4px;
+    
+    &:hover {
+      background: var(--scrollbar-thumb-hover-bg);
+    }
+  }
+}
+
+.selector-empty {
+  padding: 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* Search input styles */
+.ant-input {
+  background: var(--input-bg) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+  
+  &:hover, &:focus {
+    border-color: var(--border-hover) !important;
+    box-shadow: none !important;
+  }
+  
+  &::placeholder {
+    color: var(--text-placeholder) !important;
+  }
+}

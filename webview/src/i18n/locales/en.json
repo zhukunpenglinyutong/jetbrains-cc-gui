@@ -1508,6 +1508,8 @@
   },
   "models": {
     "addModel": "Add Model",
+    "searchPlaceholder": "Search models...",
+    "noModelsFound": "No models found",
     "longContext": {
       "label": "1M",
       "shortLabel": "1M context",

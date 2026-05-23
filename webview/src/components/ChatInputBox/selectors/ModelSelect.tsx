@@ -5,6 +5,8 @@ import type { ModelInfo } from '../types';
 import { readClaudeModelMapping } from '../../../utils/claudeModelMapping';
 import { ProviderModelIcon } from '../../shared/ProviderModelIcon';
 import Switch from 'antd/es/switch';
+import Input from 'antd/es/input';
+import './ModelSelect.less';
 
 const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
 const CHEVRON_ICON_STYLE: React.CSSProperties = { fontSize: '10px', marginLeft: '2px' };
@@ -14,6 +16,18 @@ const DROPDOWN_STYLE: React.CSSProperties = {
   left: 0,
   marginBottom: '4px',
   zIndex: 10000,
+  maxHeight: '400px',
+  overflowY: 'auto'
+};
+
+const SEARCH_INPUT_STYLE: React.CSSProperties = {
+  padding: '8px 12px',
+  width: '100%',
+  boxSizing: 'border-box',
+  border: 'none',
+  borderBottom: '1px solid var(--border-color)',
+  background: 'var(--dropdown-bg)',
+  color: 'var(--text-primary)'
 };
 const MODEL_OPTION_INFO_STYLE: React.CSSProperties = { display: 'flex', flexDirection: 'column', flex: 1 };
 const LONG_CONTEXT_OPTION_STYLE: React.CSSProperties = { justifyContent: 'space-between', cursor: 'default' };
@@ -129,6 +143,7 @@ const resolveModelIdForIcon = (
 export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, currentProvider = 'claude', onAddModel, longContextEnabled = true, onLongContextChange }: ModelSelectProps) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -199,7 +214,15 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
   const handleSelect = useCallback((modelId: string) => {
     onChange(modelId);
     setIsOpen(false);
+    setSearchTerm('');
   }, [onChange]);
+
+  const filteredModels = models.filter(model => {
+    const label = getModelLabel(model, false).toLowerCase();
+    const description = getModelDescription(model)?.toLowerCase() || '';
+    const search = searchTerm.toLowerCase();
+    return label.includes(search) || description.includes(search) || model.id.toLowerCase().includes(search);
+  });
 
   /**
    * Close on outside click
@@ -253,29 +276,40 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
           className="selector-dropdown"
           style={DROPDOWN_STYLE}
         >
-          {models.map((model) => (
-            <div
-              key={model.id}
-              className={`selector-option ${isSelectedModel(model.id) ? 'selected' : ''}`}
-              onClick={() => handleSelect(model.id)}
-            >
-              <ProviderModelIcon
-                providerId={currentProvider}
-                modelId={resolveModelIdForIcon(model.id, modelMapping, MODEL_ID_TO_MAPPING_KEY)}
-                size={16}
-                colored
-              />
-              <div style={MODEL_OPTION_INFO_STYLE}>
-                <span>{getModelLabel(model, false)}</span>
-                {getModelDescription(model) && (
-                  <span className="model-description">{getModelDescription(model)}</span>
+          <Input
+            style={SEARCH_INPUT_STYLE}
+            placeholder={t('models.searchPlaceholder')}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            autoFocus
+          />
+          {filteredModels.length > 0 ? (
+            filteredModels.map((model) => (
+              <div
+                key={model.id}
+                className={`selector-option ${isSelectedModel(model.id) ? 'selected' : ''}`}
+                onClick={() => handleSelect(model.id)}
+              >
+                <ProviderModelIcon
+                  providerId={currentProvider}
+                  modelId={resolveModelIdForIcon(model.id, modelMapping, MODEL_ID_TO_MAPPING_KEY)}
+                  size={16}
+                  colored
+                />
+                <div style={MODEL_OPTION_INFO_STYLE}>
+                  <span>{getModelLabel(model, false)}</span>
+                  {getModelDescription(model) && (
+                    <span className="model-description">{getModelDescription(model)}</span>
+                  )}
+                </div>
+                {isSelectedModel(model.id) && (
+                  <span className="codicon codicon-check check-mark" />
                 )}
               </div>
-              {isSelectedModel(model.id) && (
-                <span className="codicon codicon-check check-mark" />
-              )}
-            </div>
-          ))}
+            ))
+          ) : (
+            <div className="selector-empty">{t('models.noModelsFound')}</div>
+          )}
           {currentProvider === 'claude' && onLongContextChange && (
             <>
               <div className="selector-divider" />
