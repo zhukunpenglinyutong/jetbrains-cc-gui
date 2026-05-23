@@ -224,3 +224,64 @@ test('opencode history normalization preserves completed tool parts', () => {
     }
   ]);
 });
+
+test('opencode history normalization restores apply_patch diffs as edit blocks', () => {
+  const normalized = normalizeOpenCodeMessage({
+    info: {
+      id: 'msg_assistant_1',
+      role: 'assistant',
+      path: { cwd: '/repo', root: '/repo' }
+    },
+    parts: [
+      toolPart({
+        callID: 'call_patch_1',
+        tool: 'apply_patch',
+        state: {
+          status: 'completed',
+          input: {
+            patchText: [
+              '*** Begin Patch',
+              '*** Update File: src/app.ts',
+              '@@',
+              '-const value = 1',
+              '+const value = 2',
+              '*** End Patch'
+            ].join('\n')
+          },
+          output: 'Success. Updated the following files:\nM src/app.ts',
+          title: 'apply_patch',
+          metadata: {
+            files: [{
+              filePath: '/repo/src/app.ts',
+              relativePath: 'src/app.ts',
+              patch: '@@ -1 +1 @@\n-const value = 1\n+const value = 2\n',
+              additions: 1,
+              deletions: 1
+            }]
+          },
+          time: { start: 1, end: 2 }
+        }
+      })
+    ]
+  });
+
+  assert.equal(normalized.message.content.length, 2);
+  assert.deepEqual(normalized.message.content[0], {
+    type: 'tool_use',
+    id: normalized.message.content[0].id,
+    name: 'edit',
+    input: {
+      file_path: '/repo/src/app.ts',
+      old_string: 'const value = 1',
+      new_string: 'const value = 2',
+      patch: '@@ -1 +1 @@\n-const value = 1\n+const value = 2\n',
+      workdir: '/repo',
+      source: 'tool:call_patch_1',
+      status: undefined,
+      additions: 1,
+      deletions: 1
+    }
+  });
+  assert.equal(normalized.message.content[1].type, 'tool_result');
+  assert.equal(normalized.message.content[1].tool_use_id, normalized.message.content[0].id);
+});

@@ -68,7 +68,7 @@ function toolUseMsg(id, name, input) {
     type: 'assistant',
     message: {
       role: 'assistant',
-      content: [{ type: 'tool_use', id, name, input }]
+      content: [toolUseBlock(id, name, input)]
     }
   };
 }
@@ -78,9 +78,17 @@ function toolResultMsg(toolUseId, isError, content) {
     type: 'user',
     message: {
       role: 'user',
-      content: [{ type: 'tool_result', tool_use_id: toolUseId, is_error: isError, content }]
+      content: [toolResultBlock(toolUseId, isError, content)]
     }
   };
+}
+
+function toolUseBlock(id, name, input) {
+  return { type: 'tool_use', id, name, input };
+}
+
+function toolResultBlock(toolUseId, isError, content) {
+  return { type: 'tool_result', tool_use_id: toolUseId, is_error: isError, content };
 }
 
 function delay(ms) {
@@ -469,6 +477,73 @@ function emitOpenCodeDiffMessages(ctx, diffs, source = 'opencode') {
   return emitted;
 }
 
+function openCodeToolMetadata(part) {
+  const state = asRecord(part?.state);
+  return { ...asRecord(state.metadata), ...asRecord(part?.metadata) };
+}
+
+function openCodeToolDiffs(part) {
+  const metadata = openCodeToolMetadata(part);
+  const fileDiffs = [];
+  if (metadata.filediff) {
+    fileDiffs.push(metadata.filediff);
+  }
+  if (Array.isArray(metadata.files)) {
+    fileDiffs.push(...metadata.files);
+  }
+  return fileDiffs;
+}
+
+function syntheticDiffBlocksForTool(part, cwd) {
+  const status = part?.state?.status;
+  if (status !== 'completed' && status !== 'error') {
+    return [];
+  }
+
+  const normalizedInput = normalizeOpenCodeToolInput(part, cwd);
+  if (!shouldEmitSyntheticDiffForTool(part, normalizedInput)) {
+    return [];
+  }
+
+  const fileDiffs = openCodeToolDiffs(part);
+  if (fileDiffs.length === 0) {
+    return [];
+  }
+
+  const blocks = [];
+  const seen = new Set();
+  const source = `tool:${openCodeToolUseId(part) || part?.id || part?.tool || 'opencode_tool'}`;
+  fileDiffs.forEach((rawDiff, index) => {
+    const diff = normalizeOpenCodeDiff(rawDiff, cwd);
+    if (!diff) {
+      return;
+    }
+    const fileSignature = normalizePathForSignature(diff.filePath, cwd);
+    const signature = `${fileSignature}:${diff.patch || diff.oldString}:${diff.newString}`;
+    if (seen.has(signature)) {
+      return;
+    }
+    seen.add(signature);
+
+    const safeFile = diff.filePath.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 80);
+    const toolUseId = `opencode_diff_${openCodeToolUseId(part) || part?.id || 'history'}_${index}_${stableHash(signature)}_${safeFile}`;
+    blocks.push(toolUseBlock(toolUseId, 'edit', {
+      file_path: diff.filePath,
+      old_string: diff.oldString,
+      new_string: diff.newString,
+      patch: diff.patch,
+      workdir: cwd || undefined,
+      source,
+      status: diff.status,
+      additions: diff.additions,
+      deletions: diff.deletions
+    }));
+    blocks.push(toolResultBlock(toolUseId, false, 'File change recorded'));
+  });
+
+  return blocks;
+}
+
 function extractSessionId(session) {
   if (!session || typeof session !== 'object') {
     return '';
@@ -731,6 +806,11 @@ function normalizeOpenCodeMessage(item) {
       if (!toolUseId) {
         continue;
       }
+      const syntheticDiffBlocks = syntheticDiffBlocksForTool(part, cwd);
+      if (syntheticDiffBlocks.length > 0) {
+        content.push(...syntheticDiffBlocks);
+        continue;
+      }
       content.push({
         type: 'tool_use',
         id: toolUseId,
@@ -879,14 +959,7 @@ async function handleOpenCodeEvent(event, ctx) {
         emitOpenCodeToolUse(ctx, part, normalizedInput);
         emitOpenCodeToolResult(ctx, part, normalizedInput);
         if (part.state?.status === 'completed' || part.state?.status === 'error') {
-          const metadata = { ...asRecord(part.state?.metadata), ...asRecord(part.metadata) };
-          const fileDiffs = [];
-          if (metadata.filediff) {
-            fileDiffs.push(metadata.filediff);
-          }
-          if (Array.isArray(metadata.files)) {
-            fileDiffs.push(...metadata.files);
-          }
+          const fileDiffs = openCodeToolDiffs(part);
           if (shouldEmitSyntheticDiffForTool(part, normalizedInput)) {
             emitOpenCodeDiffMessages(ctx, fileDiffs, `tool:${openCodeToolUseId(part) || part.id || part.tool}`);
           }
