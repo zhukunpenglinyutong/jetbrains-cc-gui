@@ -6,6 +6,12 @@ interface CompletionLike {
   close: () => void;
 }
 
+function getRuntimeProviderDisplayName(provider: string): string {
+  if (provider === 'codex') return 'Codex';
+  if (provider === 'opencode') return 'opencode';
+  return 'Claude Code';
+}
+
 export interface UseSubmitHandlerOptions {
   getTextContent: () => string;
   attachments: Attachment[];
@@ -80,7 +86,7 @@ export function useSubmitHandler({
     if (!sdkInstalled) {
       addToast?.(
         t('chat.sdkNotInstalled', {
-          provider: currentProvider === 'codex' ? 'Codex' : 'Claude Code',
+          provider: getRuntimeProviderDisplayName(currentProvider),
         }) +
           ' ' +
           t('chat.goInstallSdk'),

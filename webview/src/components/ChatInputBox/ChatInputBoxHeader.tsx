@@ -61,6 +61,12 @@ export function ChatInputBoxHeader({
   autoOpenFileEnabled?: boolean;
   onRequestEnableFileContext?: () => void;
 }) {
+  const providerDisplayName = currentProvider === 'codex'
+    ? 'Codex'
+    : currentProvider === 'opencode'
+      ? 'opencode'
+      : 'Claude Code';
+
   return (
     <>
       {/* Open source banner */}
@@ -90,7 +96,7 @@ export function ChatInputBoxHeader({
             {sdkStatusLoading
               ? t('chat.sdkStatusLoading')
               : t('chat.sdkNotInstalled', {
-                  provider: currentProvider === 'codex' ? 'Codex' : 'Claude Code',
+                  provider: providerDisplayName,
                 })}
           </span>
           {!sdkStatusLoading && (
@@ -143,4 +149,3 @@ export function ChatInputBoxHeader({
     </>
   );
 }
-

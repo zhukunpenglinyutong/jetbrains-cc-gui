@@ -11,4 +11,12 @@ describe('ProviderModelIcon', () => {
     expect(container.querySelector('[aria-label="XiaomiMiMo"]')).toBeTruthy();
     expect(container.querySelector('title')?.textContent).toBe('XiaomiMiMo');
   });
+
+  it('renders the opencode icon for opencode provider IDs', () => {
+    const { container } = render(
+      <ProviderModelIcon providerId="opencode" colored />,
+    );
+
+    expect(container.querySelector('[aria-label="opencode"]')).toBeTruthy();
+  });
 });

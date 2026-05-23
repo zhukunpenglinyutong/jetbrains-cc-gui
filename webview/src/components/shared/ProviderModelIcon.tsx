@@ -43,6 +43,7 @@ import OpenRouterMono from '@lobehub/icons/es/OpenRouter/components/Mono';
 import YiColor from '@lobehub/icons/es/Yi/components/Color';
 import YiMono from '@lobehub/icons/es/Yi/components/Mono';
 import XiaomiMiMoMono from '@lobehub/icons/es/XiaomiMiMo/components/Mono';
+import OpenCodeMono from '@lobehub/icons/es/OpenCode/components/Mono';
 import type { ReactElement } from 'react';
 import { resolveIconVendor, type ModelVendor } from '../../utils/modelIconMapping';
 
@@ -57,7 +58,7 @@ export interface ProviderModelIconProps {
   colored?: boolean;
 }
 
-function getXiaomiWrapperStyle(size: number): React.CSSProperties {
+function getSquareIconWrapperStyle(size: number): React.CSSProperties {
   return {
     alignItems: 'center',
     background: '#000',
@@ -81,9 +82,25 @@ const XiaomiMiMoIcon = (size: number, colored: boolean): ReactElement => {
     <span
       aria-label="XiaomiMiMo"
       role="img"
-      style={getXiaomiWrapperStyle(size)}
+      style={getSquareIconWrapperStyle(size)}
     >
       <XiaomiMiMoMono size={Math.max(1, Math.round(size * 0.72))} />
+    </span>
+  );
+};
+
+const OpenCodeIcon = (size: number, colored: boolean): ReactElement => {
+  if (!colored) {
+    return <OpenCodeMono size={size} />;
+  }
+
+  return (
+    <span
+      aria-label="opencode"
+      role="img"
+      style={getSquareIconWrapperStyle(size)}
+    >
+      <OpenCodeMono size={Math.max(1, Math.round(size * 0.75))} />
     </span>
   );
 };
@@ -136,6 +153,8 @@ const VENDOR_ICON_MAP: Record<
     <OpenRouterMono size={size} />,
   yi: (size, colored) =>
     colored ? <YiColor size={size} /> : <YiMono size={size} />,
+  opencode: (size, colored) =>
+    OpenCodeIcon(size, colored),
 };
 
 /**

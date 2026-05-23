@@ -12,6 +12,13 @@ const PROVIDER_BADGE_STYLE: React.CSSProperties = {
   verticalAlign: 'middle',
 };
 
+function getProviderTitle(provider: string): string {
+  if (provider === 'claude') return 'Claude';
+  if (provider === 'codex') return 'Codex';
+  if (provider === 'opencode') return 'opencode';
+  return provider;
+}
+
 const HIGHLIGHT_MARK_STYLE: React.CSSProperties = {
   backgroundColor: '#ffd700',
   color: '#000',
@@ -211,7 +218,7 @@ export const HistoryListItem = memo(({
             <span
               className="history-provider-badge"
               style={PROVIDER_BADGE_STYLE}
-              title={session.provider === 'claude' ? 'Claude' : 'Codex'}
+              title={getProviderTitle(session.provider)}
             >
               <ProviderModelIcon providerId={session.provider} size={20} colored />
             </span>

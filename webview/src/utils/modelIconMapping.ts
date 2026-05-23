@@ -29,7 +29,8 @@ export type ModelVendor =
   | 'cohere'
   | 'grok'
   | 'openrouter'
-  | 'yi';
+  | 'yi'
+  | 'opencode';
 
 /**
  * Pattern rules for matching model IDs to vendors.
@@ -59,6 +60,7 @@ const MODEL_VENDOR_PATTERNS: ReadonlyArray<readonly [RegExp, ModelVendor]> = [
   [/llama|meta[-/]/i, 'meta'],
   [/cohere|command[-\s]?[ra]/i, 'cohere'],
   [/grok/i, 'grok'],
+  [/opencode/i, 'opencode'],
 ];
 
 /**
@@ -76,6 +78,7 @@ const PROVIDER_TO_VENDOR: Record<string, ModelVendor> = {
   minimax: 'minimax',
   xiaomi: 'xiaomi',
   openrouter: 'openrouter',
+  opencode: 'opencode',
 };
 
 /**

@@ -96,6 +96,16 @@ describe('ConfigSelect runtime provider submenu', () => {
     expect(window.sendToJava).toHaveBeenCalledWith('switch_codex_provider:{"id":"codex-proxy"}');
   });
 
+  it('hides runtime provider submenu for opencode', () => {
+    render(<ConfigSelect currentProvider="opencode" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Configure/i }));
+
+    expect(screen.queryByText('Switch provider')).toBeNull();
+    expect(window.sendToJava).not.toHaveBeenCalledWith('get_providers:');
+    expect(window.sendToJava).not.toHaveBeenCalledWith('get_codex_providers:');
+  });
+
   it('refreshes selected provider when backend confirms active provider change', async () => {
     render(<ConfigSelect currentProvider="claude" />);
 

@@ -3,6 +3,8 @@ import { sendBridgeEvent } from '../../utils/bridge';
 import {
   CLAUDE_MODELS,
   CODEX_MODELS,
+  OPENCODE_DEFAULT_MODEL_ID,
+  OPENCODE_MODELS,
   isValidPermissionMode,
   normalizeClaudeModelId,
   apply1MContextSuffix,
@@ -30,8 +32,10 @@ export interface UseModelStatePersistenceOptions {
   setCurrentProvider: (value: string) => void;
   setSelectedClaudeModel: (value: string) => void;
   setSelectedCodexModel: (value: string) => void;
+  setSelectedOpenCodeModel: (value: string) => void;
   setClaudePermissionMode: (value: PermissionMode) => void;
   setCodexPermissionMode: (value: PermissionMode) => void;
+  setOpenCodePermissionMode: (value: PermissionMode) => void;
   setPermissionMode: (value: PermissionMode) => void;
   setLongContextEnabled: (value: boolean) => void;
   setReasoningEffort: (value: ReasoningEffort) => void;
@@ -39,8 +43,10 @@ export interface UseModelStatePersistenceOptions {
   currentProvider: string;
   selectedClaudeModel: string;
   selectedCodexModel: string;
+  selectedOpenCodeModel: string;
   claudePermissionMode: PermissionMode;
   codexPermissionMode: PermissionMode;
+  openCodePermissionMode: PermissionMode;
   longContextEnabled: boolean;
   reasoningEffort: ReasoningEffort;
 }
@@ -51,7 +57,7 @@ export interface UseModelStatePersistenceOptions {
  *     to the backend (retrying until the JCEF bridge is ready).
  *  2. On change: re-save the snapshot to localStorage.
  *
- * Save uses `JSON.stringify` of the seven persisted keys; load applies
+ * Save uses a single JSON snapshot of provider state; load applies
  * defensive validation (custom models lookup, permission mode allowlist,
  * reasoning effort allowlist) before invoking the slice setters.
  */
@@ -60,16 +66,20 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     setCurrentProvider,
     setSelectedClaudeModel,
     setSelectedCodexModel,
+    setSelectedOpenCodeModel,
     setClaudePermissionMode,
     setCodexPermissionMode,
+    setOpenCodePermissionMode,
     setPermissionMode,
     setLongContextEnabled,
     setReasoningEffort,
     currentProvider,
     selectedClaudeModel,
     selectedCodexModel,
+    selectedOpenCodeModel,
     claudePermissionMode,
     codexPermissionMode,
+    openCodePermissionMode,
     longContextEnabled,
     reasoningEffort,
   } = options;
@@ -83,14 +93,16 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
       let restoredProvider = 'claude';
       let restoredClaudeModel = CLAUDE_MODELS[0].id;
       let restoredCodexModel = CODEX_MODELS[0].id;
+      let restoredOpenCodeModel = OPENCODE_DEFAULT_MODEL_ID;
       let restoredClaudePermissionMode: PermissionMode = 'bypassPermissions';
       let restoredCodexPermissionMode: PermissionMode = 'default';
+      let restoredOpenCodePermissionMode: PermissionMode = 'default';
       let restoredLongContextEnabled = true;
 
       if (saved) {
         const state = JSON.parse(saved);
 
-        if (['claude', 'codex'].includes(state.provider)) {
+        if (['claude', 'codex', 'opencode'].includes(state.provider)) {
           restoredProvider = state.provider;
           setCurrentProvider(state.provider);
         }
@@ -102,6 +114,9 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           restoredCodexPermissionMode = state.codexPermissionMode === 'plan'
             ? 'default'
             : state.codexPermissionMode;
+        }
+        if (isValidPermissionMode(state.openCodePermissionMode)) {
+          restoredOpenCodePermissionMode = state.openCodePermissionMode;
         }
 
         if (typeof state.longContextEnabled === 'boolean') {
@@ -132,13 +147,23 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           restoredCodexModel = state.codexModel;
           setSelectedCodexModel(state.codexModel);
         }
+
+        if (
+          OPENCODE_MODELS.find(m => m.id === state.openCodeModel)
+        ) {
+          restoredOpenCodeModel = state.openCodeModel;
+          setSelectedOpenCodeModel(state.openCodeModel);
+        }
       }
 
       const initialPermissionMode: PermissionMode = restoredProvider === 'codex'
         ? restoredCodexPermissionMode
-        : restoredClaudePermissionMode;
+        : restoredProvider === 'opencode'
+          ? restoredOpenCodePermissionMode
+          : restoredClaudePermissionMode;
       setClaudePermissionMode(restoredClaudePermissionMode);
       setCodexPermissionMode(restoredCodexPermissionMode);
+      setOpenCodePermissionMode(restoredOpenCodePermissionMode);
       setPermissionMode(initialPermissionMode);
 
       let syncRetryCount = 0;
@@ -149,7 +174,9 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           sendBridgeEvent('set_provider', restoredProvider);
           const modelToSync = restoredProvider === 'codex'
             ? restoredCodexModel
-            : apply1MContextSuffix(restoredClaudeModel, restoredLongContextEnabled);
+            : restoredProvider === 'opencode'
+              ? restoredOpenCodeModel
+              : apply1MContextSuffix(restoredClaudeModel, restoredLongContextEnabled);
           sendBridgeEvent('set_model', modelToSync);
           sendBridgeEvent('set_mode', initialPermissionMode);
         } else {
@@ -173,8 +200,10 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
         provider: currentProvider,
         claudeModel: selectedClaudeModel,
         codexModel: selectedCodexModel,
+        openCodeModel: selectedOpenCodeModel,
         claudePermissionMode,
         codexPermissionMode,
+        openCodePermissionMode,
         longContextEnabled,
         reasoningEffort,
       }));
@@ -185,8 +214,10 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     currentProvider,
     selectedClaudeModel,
     selectedCodexModel,
+    selectedOpenCodeModel,
     claudePermissionMode,
     codexPermissionMode,
+    openCodePermissionMode,
     longContextEnabled,
     reasoningEffort,
   ]);

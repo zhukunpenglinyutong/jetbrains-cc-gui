@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { ModelSelect } from './ModelSelect';
-import { CLAUDE_MODELS, CODEX_MODELS } from '../types';
+import { AVAILABLE_PROVIDERS, CLAUDE_MODELS, CODEX_MODELS, OPENCODE_MODELS } from '../types';
 import type { ModelInfo } from '../types';
 import { STORAGE_KEYS } from '../../../types/provider';
 
@@ -91,5 +91,13 @@ describe('ModelSelect', () => {
       'gpt-5.2',
       'gpt-5.1-codex-mini',
     ]);
+  });
+
+  it('opencode uses a single CLI-managed model placeholder', () => {
+    expect(OPENCODE_MODELS.map((model) => model.id)).toEqual(['opencode-default']);
+  });
+
+  it('opencode is selectable as a provider', () => {
+    expect(AVAILABLE_PROVIDERS.find((provider) => provider.id === 'opencode')?.enabled).toBe(true);
   });
 });

@@ -4,12 +4,14 @@ import { sendBridgeEvent } from '../utils/bridge';
 import {
   apply1MContextSuffix,
   normalizeClaudeModelId,
+  OPENCODE_DEFAULT_MODEL_ID,
   strip1MContextSuffix,
 } from '../components/ChatInputBox/types';
 import type { PermissionMode } from '../components/ChatInputBox/types';
 import { isSpecialProviderId } from '../types/provider';
 import { useClaudeProvider } from './providers/useClaudeProvider';
 import { useCodexProvider } from './providers/useCodexProvider';
+import { useOpenCodeProvider } from './providers/useOpenCodeProvider';
 import { useUsageTracking } from './providers/useUsageTracking';
 import { useProviderSettings } from './providers/useProviderSettings';
 import { useModelStatePersistence } from './providers/useModelStatePersistence';
@@ -49,6 +51,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
   // ── Provider-specific sub-hooks ──
   const claude = useClaudeProvider();
   const codex = useCodexProvider();
+  const opencode = useOpenCodeProvider();
   const { isSdkInstalled, ...usage } = useUsageTracking();
   const settings = useProviderSettings({ addToast, t });
 
@@ -63,28 +66,40 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     codexPermissionMode, setCodexPermissionMode,
     reasoningEffort, setReasoningEffort,
   } = codex;
+  const {
+    selectedOpenCodeModel, setSelectedOpenCodeModel,
+    openCodePermissionMode, setOpenCodePermissionMode,
+  } = opencode;
 
   // ── Persistence: load on mount + save on change ──
   useModelStatePersistence({
     setCurrentProvider,
     setSelectedClaudeModel,
     setSelectedCodexModel,
+    setSelectedOpenCodeModel,
     setClaudePermissionMode,
     setCodexPermissionMode,
+    setOpenCodePermissionMode,
     setPermissionMode,
     setLongContextEnabled,
     setReasoningEffort,
     currentProvider,
     selectedClaudeModel,
     selectedCodexModel,
+    selectedOpenCodeModel,
     claudePermissionMode,
     codexPermissionMode,
+    openCodePermissionMode,
     longContextEnabled,
     reasoningEffort,
   });
 
   // ── Computed values ──
-  const selectedModel = currentProvider === 'codex' ? selectedCodexModel : selectedClaudeModel;
+  const selectedModel = currentProvider === 'codex'
+    ? selectedCodexModel
+    : currentProvider === 'opencode'
+      ? selectedOpenCodeModel
+      : selectedClaudeModel;
   const currentSdkInstalled = useMemo(
     () => isSdkInstalled(currentProvider),
     [isSdkInstalled, currentProvider],
@@ -99,10 +114,16 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
       sendBridgeEvent('set_mode', codexMode);
       return;
     }
+    if (currentProvider === 'opencode') {
+      setPermissionMode(mode);
+      setOpenCodePermissionMode(mode);
+      sendBridgeEvent('set_mode', mode);
+      return;
+    }
     setPermissionMode(mode);
     setClaudePermissionMode(mode);
     sendBridgeEvent('set_mode', mode);
-  }, [currentProvider, setCodexPermissionMode, setClaudePermissionMode]);
+  }, [currentProvider, setCodexPermissionMode, setClaudePermissionMode, setOpenCodePermissionMode]);
 
   const handleModelSelect = useCallback((modelId: string) => {
     if (currentProvider === 'claude') {
@@ -113,8 +134,11 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     } else if (currentProvider === 'codex') {
       setSelectedCodexModel(modelId);
       sendBridgeEvent('set_model', modelId);
+    } else if (currentProvider === 'opencode') {
+      setSelectedOpenCodeModel(modelId);
+      sendBridgeEvent('set_model', modelId);
     }
-  }, [currentProvider, longContextEnabled, setSelectedClaudeModel, setSelectedCodexModel]);
+  }, [currentProvider, longContextEnabled, setSelectedClaudeModel, setSelectedCodexModel, setSelectedOpenCodeModel]);
 
   const handleProviderSelect = useCallback((providerId: string) => {
     setCurrentProvider(providerId);
@@ -122,18 +146,24 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
 
     const modeToSet: PermissionMode = providerId === 'codex'
       ? (codexPermissionMode === 'plan' ? 'default' : codexPermissionMode)
-      : claudePermissionMode;
+      : providerId === 'opencode'
+        ? openCodePermissionMode
+        : claudePermissionMode;
     setPermissionMode(modeToSet);
     sendBridgeEvent('set_mode', modeToSet);
 
     const newModel = providerId === 'codex'
       ? selectedCodexModel
-      : apply1MContextSuffix(selectedClaudeModel, longContextEnabled);
+      : providerId === 'opencode'
+        ? selectedOpenCodeModel || OPENCODE_DEFAULT_MODEL_ID
+        : apply1MContextSuffix(selectedClaudeModel, longContextEnabled);
     sendBridgeEvent('set_model', newModel);
   }, [
     claudePermissionMode,
     codexPermissionMode,
+    openCodePermissionMode,
     selectedCodexModel,
+    selectedOpenCodeModel,
     selectedClaudeModel,
     longContextEnabled,
   ]);

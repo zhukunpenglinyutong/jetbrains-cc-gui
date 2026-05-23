@@ -17,4 +17,10 @@ describe('modelIconMapping', () => {
     expect(resolveIconVendor('claude', 'mimo-v2.5-pro')).toBe('xiaomi');
     expect(resolveIconVendor('xiaomi')).toBe('xiaomi');
   });
+
+  it('resolves opencode provider and placeholder model ids', () => {
+    expect(resolveModelVendor('opencode-default')).toBe('opencode');
+    expect(resolveIconVendor('opencode')).toBe('opencode');
+    expect(resolveIconVendor('opencode', 'opencode-default')).toBe('opencode');
+  });
 });

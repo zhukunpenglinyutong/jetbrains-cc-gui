@@ -149,6 +149,7 @@ export const ConfigSelect = ({
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
   const [nodeProcessTotals, setNodeProcessTotals] = useState<{ all: number; orphan: number }>({ all: 0, orphan: 0 });
+  const supportsRuntimeProviderSwitch = currentProvider === 'claude' || currentProvider === 'codex';
 
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -376,35 +377,39 @@ export const ConfigSelect = ({
             {activeSubmenu === 'agent' && renderAgentSubmenu()}
           </div>
 
-          <div className="selector-divider" />
+          {supportsRuntimeProviderSwitch && (
+            <>
+              <div className="selector-divider" />
 
-          {/* Runtime Provider Item */}
-          <div
-            className="selector-option"
-            onMouseEnter={() => setActiveSubmenu('runtimeProvider')}
-            onMouseLeave={() => setActiveSubmenu('none')}
-            style={SELECTOR_OPTION_RELATIVE_STYLE}
-          >
-            <span className="codicon codicon-vm-connect" />
-            <div style={ITEM_INFO_STYLE}>
-              <span>{t('config.runtimeProvider.title')}</span>
-            </div>
-            <div style={ARROW_CONTAINER_STYLE}>
-              <span className="codicon codicon-chevron-right" style={ARROW_ICON_STYLE} />
-            </div>
+              {/* Runtime Provider Item */}
+              <div
+                className="selector-option"
+                onMouseEnter={() => setActiveSubmenu('runtimeProvider')}
+                onMouseLeave={() => setActiveSubmenu('none')}
+                style={SELECTOR_OPTION_RELATIVE_STYLE}
+              >
+                <span className="codicon codicon-vm-connect" />
+                <div style={ITEM_INFO_STYLE}>
+                  <span>{t('config.runtimeProvider.title')}</span>
+                </div>
+                <div style={ARROW_CONTAINER_STYLE}>
+                  <span className="codicon codicon-chevron-right" style={ARROW_ICON_STYLE} />
+                </div>
 
-            {activeSubmenu === 'runtimeProvider' && (
-              <RuntimeProviderSelect
-                currentProvider={currentProvider}
-                embedded
-                onProviderSwitched={showProviderToast}
-                onClose={() => {
-                  setIsOpen(false);
-                  setActiveSubmenu('none');
-                }}
-              />
-            )}
-          </div>
+                {activeSubmenu === 'runtimeProvider' && (
+                  <RuntimeProviderSelect
+                    currentProvider={currentProvider}
+                    embedded
+                    onProviderSwitched={showProviderToast}
+                    onClose={() => {
+                      setIsOpen(false);
+                      setActiveSubmenu('none');
+                    }}
+                  />
+                )}
+              </div>
+            </>
+          )}
 
           <div className="selector-divider" />
 

@@ -17,6 +17,12 @@ export const CONTEXT_COMMANDS = new Set(['/context']);
 // Hoisted regex to avoid creating new RegExp on every call
 const WHITESPACE_REGEX = /\s+/;
 
+function getRuntimeProviderDisplayName(provider: string): string {
+  if (provider === 'codex') return 'Codex';
+  if (provider === 'opencode') return 'opencode';
+  return 'Claude Code';
+}
+
 function createContextUsageRequestId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -300,7 +306,7 @@ export function useMessageSender({
     }
     if (!currentSdkInstalled) {
       addToast(
-        t('chat.sdkNotInstalled', { provider: currentProvider === 'codex' ? 'Codex' : 'Claude Code' }) + ' ' + t('chat.goInstallSdk'),
+        t('chat.sdkNotInstalled', { provider: getRuntimeProviderDisplayName(currentProvider) }) + ' ' + t('chat.goInstallSdk'),
         'warning'
       );
       setSettingsInitialTab('dependencies');
