@@ -114,12 +114,15 @@ test('opencode edit metadata is normalized for existing diff UI', async () => {
     }, ctx);
   });
 
-  const [toolUse] = messagePayloads(lines);
+  const toolMessages = messagePayloads(lines).filter((message) => message.type !== 'status');
+  const [toolUse] = toolMessages;
+  assert.equal(toolMessages.length, 2);
   assert.equal(toolUse.message.content[0].type, 'tool_use');
   assert.equal(toolUse.message.content[0].name, 'edit');
   assert.deepEqual(toolUse.message.content[0].input, {
     filePath: '/repo/src/app.ts',
     file_path: '/repo/src/app.ts',
+    workdir: '/repo',
     old_string: 'const value = 1',
     new_string: 'const value = 2'
   });
@@ -147,9 +150,40 @@ test('opencode session.diff emits synthetic edit tool messages', async () => {
   assert.equal(messages[0].message.content[0].type, 'tool_use');
   assert.equal(messages[0].message.content[0].name, 'edit');
   assert.equal(messages[0].message.content[0].input.file_path, '/repo/src/app.ts');
+  assert.equal(messages[0].message.content[0].input.workdir, '/repo');
   assert.equal(messages[0].message.content[0].input.old_string, 'const value = 1');
   assert.equal(messages[0].message.content[0].input.new_string, 'const value = 2');
   assert.equal(messages[1].message.content[0].type, 'tool_result');
+});
+
+test('opencode session.diff deduplicates equivalent relative and absolute paths', async () => {
+  const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
+  const lines = await captureConsole(async () => {
+    await handleOpenCodeEvent({
+      type: 'session.diff',
+      properties: {
+        sessionID: 'ses_test',
+        diff: [{
+          file: 'src/app.ts',
+          patch: '@@ -1 +1 @@\n-const value = 1\n+const value = 2\n'
+        }]
+      }
+    }, ctx);
+    await handleOpenCodeEvent({
+      type: 'session.diff',
+      properties: {
+        sessionID: 'ses_test',
+        diff: [{
+          file: '/repo/src/app.ts',
+          patch: '@@ -1 +1 @@\n-const value = 1\n+const value = 2\n'
+        }]
+      }
+    }, ctx);
+  });
+
+  const messages = messagePayloads(lines);
+  assert.equal(messages.length, 2);
+  assert.equal(messages[0].message.content[0].input.file_path, '/repo/src/app.ts');
 });
 
 test('opencode history normalization preserves completed tool parts', () => {

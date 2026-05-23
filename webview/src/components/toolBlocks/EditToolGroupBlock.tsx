@@ -115,6 +115,76 @@ const FILE_LIST_ITEM_STYLE: React.CSSProperties = {
   gap: '8px',
 };
 
+const WINDOWS_DRIVE_REGEX = /^[A-Za-z]:[\\\/]/;
+
+const isProbablyAbsolutePath = (filePath: string): boolean => {
+  return filePath.startsWith('/') || filePath.startsWith('\\') || WINDOWS_DRIVE_REGEX.test(filePath);
+};
+
+const normalizeComparablePath = (filePath: string): string => {
+  return filePath.trim().replace(/\\/g, '/').replace(/\/+$/, '');
+};
+
+const pathsReferToSameTarget = (first: string, second: string): boolean => {
+  const left = normalizeComparablePath(first);
+  const right = normalizeComparablePath(second);
+  if (!left || !right) {
+    return false;
+  }
+  if (left === right) {
+    return true;
+  }
+
+  const leftAbsolute = isProbablyAbsolutePath(left);
+  const rightAbsolute = isProbablyAbsolutePath(right);
+  if (leftAbsolute === rightAbsolute) {
+    return false;
+  }
+
+  const absolutePath = leftAbsolute ? left : right;
+  const relativePath = leftAbsolute ? right : left;
+  const normalizedRelative = relativePath.replace(/^\.?\//, '');
+  return normalizedRelative.length > 0 && absolutePath.endsWith(`/${normalizedRelative}`);
+};
+
+const mergeEditItems = (existing: EditItem, next: EditItem): EditItem => {
+  const existingAbsolute = isProbablyAbsolutePath(existing.openPath);
+  const nextAbsolute = isProbablyAbsolutePath(next.openPath);
+  const primary = !existingAbsolute && nextAbsolute ? next : existing;
+  const secondary = primary === existing ? next : existing;
+
+  return {
+    ...primary,
+    oldString: primary.oldString || secondary.oldString,
+    newString: primary.newString || secondary.newString,
+    additions: Math.max(primary.additions, secondary.additions),
+    deletions: Math.max(primary.deletions, secondary.deletions),
+    lineStart: primary.lineStart ?? secondary.lineStart,
+    lineEnd: primary.lineEnd ?? secondary.lineEnd,
+    isCompleted: primary.isCompleted || secondary.isCompleted,
+    isError: primary.isError || secondary.isError,
+  };
+};
+
+function dedupeEditItems(items: EditItem[]): EditItem[] {
+  const deduped: EditItem[] = [];
+
+  items.forEach((item) => {
+    const duplicateIndex = deduped.findIndex((existing) =>
+      pathsReferToSameTarget(existing.openPath, item.openPath)
+    );
+
+    if (duplicateIndex === -1) {
+      deduped.push(item);
+      return;
+    }
+
+    deduped[duplicateIndex] = mergeEditItems(deduped[duplicateIndex], item);
+  });
+
+  return deduped;
+}
+
 /**
  * Compute diff statistics (additions and deletions count)
  */
@@ -297,9 +367,10 @@ const EditToolGroupBlock = ({ items }: EditToolGroupBlockProps) => {
 
   // Parse all items
   const editItems = useMemo(() => {
-    return items
+    const parsedItems = items
       .map(item => parseEditItem(item))
       .filter((item): item is EditItem => item !== null);
+    return dedupeEditItems(parsedItems);
   }, [items]);
 
   // Auto-refresh completed files in IDEA

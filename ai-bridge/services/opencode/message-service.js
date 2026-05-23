@@ -8,7 +8,7 @@
  */
 import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
-import { basename, join } from 'path';
+import { basename, isAbsolute, join, resolve } from 'path';
 import { pathToFileURL } from 'url';
 
 import { requestPermissionFromJava } from '../../permission-ipc.js';
@@ -25,6 +25,8 @@ const DEFAULT_START_TIMEOUT_MS = 10000;
 const MAX_TOOL_RESULT_CHARS = 20000;
 const PLAN_MODE_PERMISSION_DENIED =
   'opencode permission denied because the chat is in plan mode.';
+const WINDOWS_ABSOLUTE_PATH = /^[A-Za-z]:[\\/]/;
+const NATIVE_FILE_EDIT_TOOLS = new Set(['edit', 'write_file', 'write_to_file']);
 
 function emitMarker(marker, payload) {
   if (payload === undefined) {
@@ -227,6 +229,23 @@ function normalizeOpenCodeToolName(tool) {
   return name || 'opencode_tool';
 }
 
+function isAbsoluteProjectPath(filePath) {
+  return isAbsolute(filePath) || WINDOWS_ABSOLUTE_PATH.test(filePath);
+}
+
+function resolveProjectPath(filePath, cwd) {
+  const path = typeof filePath === 'string' ? filePath.trim() : '';
+  if (!path || !cwd || isAbsoluteProjectPath(path)) {
+    return path;
+  }
+  return resolve(cwd, path);
+}
+
+function normalizePathForSignature(filePath, cwd) {
+  const resolvedPath = resolveProjectPath(filePath, cwd);
+  return resolvedPath.replace(/\\/g, '/').replace(/\/+$/, '');
+}
+
 function parseUnifiedPatchToStrings(patch) {
   if (typeof patch !== 'string' || !patch.trim()) {
     return { oldString: '', newString: '' };
@@ -263,7 +282,7 @@ function parseUnifiedPatchToStrings(patch) {
   };
 }
 
-function normalizeOpenCodeToolInput(part) {
+function normalizeOpenCodeToolInput(part, cwd = '') {
   const state = asRecord(part?.state);
   const metadata = { ...asRecord(state.metadata), ...asRecord(part?.metadata) };
   const filediff = asRecord(metadata.filediff);
@@ -279,7 +298,10 @@ function normalizeOpenCodeToolInput(part) {
     filediff.filePath
   );
   if (filePath) {
-    input.file_path = filePath;
+    input.file_path = resolveProjectPath(filePath, cwd);
+    if (cwd && !input.workdir) {
+      input.workdir = cwd;
+    }
   }
 
   const patch = pickString(metadata.diff, filediff.patch, input.patch, input.patchText);
@@ -311,6 +333,23 @@ function normalizeOpenCodeToolInput(part) {
   return input;
 }
 
+function hasNativeFileEditInput(input) {
+  return Boolean(
+    input.file_path &&
+      (
+        typeof input.old_string === 'string' ||
+        typeof input.new_string === 'string' ||
+        typeof input.patch === 'string' ||
+        typeof input.content === 'string'
+      )
+  );
+}
+
+function shouldEmitSyntheticDiffForTool(part, normalizedInput) {
+  const toolName = normalizeOpenCodeToolName(part?.tool);
+  return !NATIVE_FILE_EDIT_TOOLS.has(toolName) || !hasNativeFileEditInput(normalizedInput);
+}
+
 function openCodeToolUseId(part) {
   return pickString(part?.callID, part?.callId, part?.id);
 }
@@ -323,7 +362,7 @@ function openCodeToolResultContent(part) {
   return truncateForDisplay(content);
 }
 
-function emitOpenCodeToolUse(ctx, part) {
+function emitOpenCodeToolUse(ctx, part, normalizedInput = undefined) {
   if (!part || part.type !== 'tool') {
     return '';
   }
@@ -332,7 +371,7 @@ function emitOpenCodeToolUse(ctx, part) {
     return '';
   }
   const toolName = normalizeOpenCodeToolName(part.tool);
-  const input = normalizeOpenCodeToolInput(part);
+  const input = normalizedInput || normalizeOpenCodeToolInput(part, ctx.cwd);
   const signature = JSON.stringify({ toolName, input });
   if (!ctx.emittedToolUseIds.has(toolUseId) || ctx.toolUseSignatures.get(toolUseId) !== signature) {
     emitMessage(toolUseMsg(toolUseId, toolName, input));
@@ -342,8 +381,8 @@ function emitOpenCodeToolUse(ctx, part) {
   return toolUseId;
 }
 
-function emitOpenCodeToolResult(ctx, part) {
-  const toolUseId = emitOpenCodeToolUse(ctx, part);
+function emitOpenCodeToolResult(ctx, part, normalizedInput = undefined) {
+  const toolUseId = emitOpenCodeToolUse(ctx, part, normalizedInput);
   if (!toolUseId || ctx.emittedToolResultIds.has(toolUseId)) {
     return;
   }
@@ -359,9 +398,12 @@ function emitOpenCodeToolResult(ctx, part) {
   ctx.emittedToolResultIds.add(toolUseId);
 }
 
-function normalizeOpenCodeDiff(diff) {
+function normalizeOpenCodeDiff(diff, cwd = '') {
   const candidate = asRecord(diff);
-  const filePath = pickString(candidate.file, candidate.filePath, candidate.relativePath, candidate.path);
+  const filePath = resolveProjectPath(
+    pickString(candidate.file, candidate.filePath, candidate.relativePath, candidate.path),
+    cwd
+  );
   const patch = pickString(candidate.patch, candidate.diff);
   const parsedPatch = parseUnifiedPatchToStrings(patch);
   const oldString = pickString(candidate.before, parsedPatch.oldString);
@@ -396,11 +438,12 @@ function emitOpenCodeDiffMessages(ctx, diffs, source = 'opencode') {
 
   let emitted = 0;
   diffs.forEach((rawDiff, index) => {
-    const diff = normalizeOpenCodeDiff(rawDiff);
+    const diff = normalizeOpenCodeDiff(rawDiff, ctx.cwd);
     if (!diff) {
       return;
     }
-    const signature = `${source}:${diff.filePath}:${diff.patch || diff.oldString}:${diff.newString}`;
+    const fileSignature = normalizePathForSignature(diff.filePath, ctx.cwd);
+    const signature = `${fileSignature}:${diff.patch || diff.oldString}:${diff.newString}`;
     if (ctx.emittedDiffIds.has(signature)) {
       return;
     }
@@ -413,6 +456,7 @@ function emitOpenCodeDiffMessages(ctx, diffs, source = 'opencode') {
       old_string: diff.oldString,
       new_string: diff.newString,
       patch: diff.patch,
+      workdir: ctx.cwd || undefined,
       source,
       status: diff.status,
       additions: diff.additions,
@@ -676,6 +720,7 @@ function isReasoningPart(kind) {
 function normalizeOpenCodeMessage(item) {
   const info = item?.info || item?.message || item;
   const role = info?.role === 'user' ? 'user' : 'assistant';
+  const cwd = pickString(info?.path?.cwd, info?.path?.root, info?.cwd);
   const content = [];
 
   for (const part of item?.parts || []) {
@@ -690,7 +735,7 @@ function normalizeOpenCodeMessage(item) {
         type: 'tool_use',
         id: toolUseId,
         name: normalizeOpenCodeToolName(part.tool),
-        input: normalizeOpenCodeToolInput(part)
+        input: normalizeOpenCodeToolInput(part, cwd)
       });
 
       const status = part?.state?.status;
@@ -830,8 +875,9 @@ async function handleOpenCodeEvent(event, ctx) {
       }
 
       if (part.type === 'tool' && part.tool) {
-        emitOpenCodeToolUse(ctx, part);
-        emitOpenCodeToolResult(ctx, part);
+        const normalizedInput = normalizeOpenCodeToolInput(part, ctx.cwd);
+        emitOpenCodeToolUse(ctx, part, normalizedInput);
+        emitOpenCodeToolResult(ctx, part, normalizedInput);
         if (part.state?.status === 'completed' || part.state?.status === 'error') {
           const metadata = { ...asRecord(part.state?.metadata), ...asRecord(part.metadata) };
           const fileDiffs = [];
@@ -841,7 +887,9 @@ async function handleOpenCodeEvent(event, ctx) {
           if (Array.isArray(metadata.files)) {
             fileDiffs.push(...metadata.files);
           }
-          emitOpenCodeDiffMessages(ctx, fileDiffs, `tool:${openCodeToolUseId(part) || part.id || part.tool}`);
+          if (shouldEmitSyntheticDiffForTool(part, normalizedInput)) {
+            emitOpenCodeDiffMessages(ctx, fileDiffs, `tool:${openCodeToolUseId(part) || part.id || part.tool}`);
+          }
         }
 
         const status = part.state?.status ? ` (${part.state.status})` : '';
