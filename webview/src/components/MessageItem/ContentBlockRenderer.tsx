@@ -129,6 +129,7 @@ export interface ContentBlockRendererProps {
   t: TFunction;
   onToggleThinking: () => void;
   findToolResult: (toolId: string | undefined, messageIndex: number) => ToolResultBlock | null | undefined;
+  currentProvider?: string;
 }
 
 export function ContentBlockRenderer({
@@ -143,6 +144,7 @@ export function ContentBlockRenderer({
   t,
   onToggleThinking,
   findToolResult,
+  currentProvider,
 }: ContentBlockRendererProps): React.ReactElement | null {
   if (block.type === 'text') {
     return messageType === 'user' ? (
@@ -265,6 +267,7 @@ export function ContentBlockRenderer({
           result={findToolResult(block.id, messageIndex)}
           toolId={block.id}
           isStreaming={isStreaming}
+          currentProvider={currentProvider}
         />
       );
     }

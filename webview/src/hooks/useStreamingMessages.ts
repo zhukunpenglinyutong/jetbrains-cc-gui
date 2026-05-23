@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import type { ClaudeMessage } from '../types';
+import { getStructuralBlockSignature } from '../utils/toolBlockSignature';
 
 /** A single block inside `raw.message.content`. */
 interface ContentBlock {
@@ -87,16 +88,6 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
     const msg = rawObj.message as Record<string, unknown> | undefined;
     const blocks = rawObj.content ?? msg?.content;
     return Array.isArray(blocks) ? blocks : [];
-  };
-
-  const getStructuralBlockSignature = (block: ContentBlock): string => {
-    if (block.type === 'tool_use') {
-      return `tool_use:${block.id ?? ''}:${block.name ?? ''}`;
-    }
-    if (block.type === 'tool_result') {
-      return `tool_result:${block.tool_use_id ?? ''}:${block.is_error === true ? '1' : '0'}`;
-    }
-    return String(block.type ?? '');
   };
 
   const syncTextBlocksWithContent = (blocks: ContentBlock[], content: string): ContentBlock[] => {

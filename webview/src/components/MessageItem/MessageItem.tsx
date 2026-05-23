@@ -530,6 +530,7 @@ export const MessageItem = memo(function MessageItem({
                 t={t}
                 onToggleThinking={() => {}}
                 findToolResult={findToolResult}
+                currentProvider={currentProvider}
               />
             </div>
           );
@@ -558,6 +559,7 @@ export const MessageItem = memo(function MessageItem({
             t={t}
             onToggleThinking={() => toggleThinking(blockIndex)}
             findToolResult={findToolResult}
+            currentProvider={currentProvider}
           />
         </div>
       );

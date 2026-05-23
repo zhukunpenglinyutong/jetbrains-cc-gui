@@ -78,6 +78,28 @@ describe('TaskExecutionBlock polling', () => {
     expect(container.querySelector('.task-details')).toBeTruthy();
   });
 
+  it('does not request Claude subagent history for opencode task tools', () => {
+    const { container } = render(
+      <TaskExecutionBlock
+        name="task"
+        toolId="task-1"
+        currentProvider="opencode"
+        input={{
+          description: 'Inspect render path',
+          subagent_type: 'explore',
+        }}
+      />,
+    );
+
+    fireEvent.click(container.querySelector('.task-header') as HTMLElement);
+
+    expect(mockSendBridgeEvent).not.toHaveBeenCalledWith(
+      'load_subagent_session',
+      expect.any(String),
+    );
+    expect(container.querySelector('.subagent-loading-card')?.textContent).toContain('subagent.process.unavailable');
+  });
+
   it('stops polling once a tool result marks the agent task completed', () => {
     const clearIntervalSpy = vi.spyOn(window, 'clearInterval');
 

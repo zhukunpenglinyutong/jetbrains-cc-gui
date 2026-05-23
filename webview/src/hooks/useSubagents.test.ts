@@ -98,4 +98,37 @@ describe('extractSubagentsFromMessages', () => {
     });
     expect(subagents[0].toolStats).toMatchObject({ readCount: 4 });
   });
+
+  it('normalizes opencode task input aliases for the status panel', () => {
+    const messages: ClaudeMessage[] = [{
+      type: 'assistant',
+      content: '',
+      raw: {
+        message: {
+          content: [{
+            type: 'tool_use',
+            id: 'task_opencode',
+            name: 'task',
+            input: {
+              agent: 'explore',
+              title: 'Inspect renderer',
+              message: 'Inspect renderer task details',
+            },
+          }],
+        },
+      },
+    }];
+
+    const subagents = extractSubagentsFromMessages(
+      messages, getContentBlocks, findToolResult(messages), getToolResultRaw(messages),
+    );
+
+    expect(subagents).toHaveLength(1);
+    expect(subagents[0]).toMatchObject({
+      type: 'explore',
+      description: 'Inspect renderer',
+      prompt: 'Inspect renderer task details',
+      status: 'running',
+    });
+  });
 });

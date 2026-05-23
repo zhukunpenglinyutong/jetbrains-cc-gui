@@ -24,6 +24,7 @@ import {
 import { releaseSessionTransition } from '../sessionTransition';
 import { parseSequence } from '../parseSequence';
 import { collectUnresolvedToolUseIds } from './streamingCallbacks';
+import { getStructuralBlockSignature } from '../../../utils/toolBlockSignature';
 
 const isTruthy = (v: unknown) => v === true || v === 'true';
 
@@ -48,17 +49,7 @@ function getStructuralRawBlockSignature(
     const type = typeof block.type === 'string' ? block.type : '';
     if (type === 'text' || type === 'thinking') continue;
 
-    if (type === 'tool_use') {
-      parts.push(`tu:${block.id ?? ''}:${block.name ?? ''}`);
-    } else if (type === 'tool_result') {
-      parts.push(`tr:${block.tool_use_id ?? ''}:${block.is_error === true ? '1' : '0'}`);
-    } else if (type === 'attachment') {
-      parts.push(`at:${block.fileName ?? ''}:${block.mediaType ?? ''}`);
-    } else if (type === 'image') {
-      parts.push(`im:${block.src ?? ''}:${block.mediaType ?? ''}`);
-    } else {
-      parts.push(type);
-    }
+    parts.push(getStructuralBlockSignature(block));
   }
 
   return parts.join('|');

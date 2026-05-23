@@ -85,6 +85,102 @@ test('opencode tool updates emit tool_use and tool_result blocks', async () => {
   });
 });
 
+test('opencode task tool input and subagent metadata are preserved', async () => {
+  const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
+  const lines = await captureConsole(async () => {
+    await handleOpenCodeEvent({
+      type: 'message.part.updated',
+      properties: {
+        part: toolPart({
+          tool: 'task',
+          state: {
+            status: 'running',
+            input: {
+              prompt: 'Inspect renderer task details',
+              description: 'Inspect renderer',
+              subagent_type: 'explore'
+            },
+            title: 'Inspect renderer',
+            metadata: {
+              sessionId: 'ses_child'
+            },
+            time: { start: 1 }
+          }
+        })
+      }
+    }, ctx);
+    await handleOpenCodeEvent({
+      type: 'message.part.updated',
+      properties: {
+        part: toolPart({
+          tool: 'task',
+          state: {
+            status: 'completed',
+            input: {
+              prompt: 'Inspect renderer task details',
+              description: 'Inspect renderer',
+              subagent_type: 'explore'
+            },
+            output: 'task_id: ses_child\n\n<task_result>\nDone\n</task_result>',
+            title: 'Inspect renderer',
+            metadata: {
+              sessionId: 'ses_child',
+              toolCalls: 3
+            },
+            time: { start: 1, end: 2 }
+          }
+        })
+      }
+    }, ctx);
+  });
+
+  const messages = messagePayloads(lines);
+  const toolUse = messages.find((message) => message.type === 'assistant');
+  const toolResult = messages.find((message) => message.type === 'user');
+  assert.deepEqual(toolUse.message.content[0].input, {
+    prompt: 'Inspect renderer task details',
+    description: 'Inspect renderer',
+    subagent_type: 'explore'
+  });
+  assert.deepEqual(toolResult.toolUseResult, {
+    agentId: 'ses_child',
+    subagentSessionId: 'ses_child',
+    agentType: 'explore',
+    description: 'Inspect renderer',
+    totalToolUseCount: 3
+  });
+});
+
+test('opencode task raw pending input is normalized', async () => {
+  const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
+  const lines = await captureConsole(async () => {
+    await handleOpenCodeEvent({
+      type: 'message.part.updated',
+      properties: {
+        part: toolPart({
+          tool: 'task',
+          state: {
+            status: 'pending',
+            input: {},
+            raw: JSON.stringify({
+              prompt: 'Inspect renderer task details',
+              description: 'Inspect renderer',
+              subagent_type: 'explore'
+            })
+          }
+        })
+      }
+    }, ctx);
+  });
+
+  const [toolUse] = messagePayloads(lines).filter((message) => message.type === 'assistant');
+  assert.deepEqual(toolUse.message.content[0].input, {
+    prompt: 'Inspect renderer task details',
+    description: 'Inspect renderer',
+    subagent_type: 'explore'
+  });
+});
+
 test('opencode edit metadata is normalized for existing diff UI', async () => {
   const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
   const lines = await captureConsole(async () => {

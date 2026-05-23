@@ -83,6 +83,32 @@ function normalizeSpawnAgentInput(input: ToolInputRecord): ToolInput {
   };
 }
 
+function normalizeAgentTaskInput(input: ToolInputRecord): ToolInput {
+  const prompt =
+    (typeof input.prompt === 'string' && input.prompt.trim()) ? input.prompt :
+    (typeof input.message === 'string' && input.message.trim()) ? input.message :
+    (typeof input.text === 'string' && input.text.trim()) ? input.text :
+    extractPromptFromItems(input.items);
+
+  const subagentType =
+    (typeof input.subagent_type === 'string' && input.subagent_type.trim()) ? input.subagent_type :
+    (typeof input.subagentType === 'string' && input.subagentType.trim()) ? input.subagentType :
+    (typeof input.agent === 'string' && input.agent.trim()) ? input.agent :
+    (typeof input.agent_type === 'string' && input.agent_type.trim()) ? input.agent_type :
+    (typeof input.agentType === 'string' && input.agentType.trim()) ? input.agentType :
+    'general';
+
+  return {
+    ...input,
+    subagent_type: subagentType,
+    prompt,
+    description:
+      (typeof input.description === 'string' && input.description.trim()) ? input.description :
+      (typeof input.title === 'string' && input.title.trim()) ? input.title :
+      (typeof prompt === 'string' ? prompt : undefined),
+  };
+}
+
 export function normalizeToolInput(name: string | undefined, input: ToolInput | undefined): ToolInput | undefined {
   if (!input) return input;
 
@@ -127,6 +153,10 @@ export function normalizeToolInput(name: string | undefined, input: ToolInput | 
 
   if (normalizedName === 'spawn_agent') {
     return normalizeSpawnAgentInput(inputRecord);
+  }
+
+  if (normalizedName === 'task' || normalizedName === 'agent') {
+    return normalizeAgentTaskInput(inputRecord);
   }
 
   return inputRecord;

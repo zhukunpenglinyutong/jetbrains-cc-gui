@@ -266,6 +266,7 @@ export const ChatScreen = ({
           subagents={subagents}
           subagentHistories={subagentHistories}
           currentSessionId={currentSessionId}
+          currentProvider={currentProvider}
           expanded={statusPanelExpanded}
           isStreaming={streamingActive}
           onUndoFile={onUndoFile}
@@ -345,4 +346,3 @@ export const ChatScreen = ({
     </>
   );
 };
-

@@ -728,6 +728,80 @@ describe('useWindowCallbacks integration', () => {
     expect(nextMessages[0].__turnId).toBe(7);
   });
 
+  it('accepts streaming updateMessages when an existing tool_use input changes', () => {
+    vi.stubGlobal('setTimeout', (callback: () => void) => {
+      callback();
+      return 1 as unknown as ReturnType<typeof setTimeout>;
+    });
+    vi.stubGlobal('clearTimeout', vi.fn());
+
+    const extractRawBlocks = (raw: unknown) => {
+      if (!raw || typeof raw !== 'object') return [];
+      const rawObj = raw as { content?: unknown; message?: { content?: unknown } };
+      const blocks = rawObj.content ?? rawObj.message?.content;
+      return Array.isArray(blocks) ? blocks : [];
+    };
+    const opts = createOptions({
+      currentProviderRef: { current: 'opencode' },
+      isStreamingRef: { current: true },
+      streamingTurnIdRef: { current: 8 },
+      extractRawBlocks,
+      patchAssistantForStreaming: (msg: ClaudeMessage) => ({
+        ...msg,
+        __turnId: 8,
+        isStreaming: true,
+      }),
+    });
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.updateMessages!(JSON.stringify([
+        {
+          type: 'assistant',
+          content: '',
+          timestamp: '2026-04-02T10:00:00.000Z',
+          raw: {
+            message: {
+              content: [
+                {
+                  type: 'tool_use',
+                  id: 'task-1',
+                  name: 'task',
+                  input: {
+                    subagent_type: 'explore',
+                    description: 'Inspect renderer',
+                  },
+                },
+              ],
+            },
+          },
+        },
+      ]));
+    });
+
+    const updater = (opts.setMessages as any).mock.calls[0][0] as (messages: ClaudeMessage[]) => ClaudeMessage[];
+    const nextMessages = updater([
+      {
+        type: 'assistant',
+        content: '',
+        timestamp: '2026-04-02T10:00:00.000Z',
+        __turnId: 8,
+        isStreaming: true,
+        raw: {
+          message: {
+            content: [{ type: 'tool_use', id: 'task-1', name: 'task', input: {} }],
+          },
+        } as any,
+      },
+    ]);
+
+    const blocks = (nextMessages[0].raw as any).message.content;
+    expect(blocks[0].input).toMatchObject({
+      subagent_type: 'explore',
+      description: 'Inspect renderer',
+    });
+  });
+
   it('reuses replayed in-progress assistant when stream restarts after webview reload', () => {
     const opts = createOptions();
     renderHook(() => useWindowCallbacks(opts));

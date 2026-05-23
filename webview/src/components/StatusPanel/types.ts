@@ -8,6 +8,7 @@ export interface StatusPanelProps {
   subagents: SubagentInfo[];
   subagentHistories?: Record<string, SubagentHistoryResponse>;
   currentSessionId?: string | null;
+  currentProvider?: string;
   /** Whether the panel is expanded */
   expanded?: boolean;
   /** Whether the conversation is currently streaming (active) */

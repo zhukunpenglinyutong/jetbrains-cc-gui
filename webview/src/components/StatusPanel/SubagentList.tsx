@@ -10,6 +10,7 @@ interface SubagentListProps {
   subagents: SubagentInfo[];
   histories?: Record<string, SubagentHistoryResponse>;
   currentSessionId?: string | null;
+  currentProvider?: string;
   isStreaming?: boolean;
 }
 
@@ -64,7 +65,7 @@ const SubagentRow = memo(({ subagent, isExpanded, history, canLoad, onToggle, t 
 
 SubagentRow.displayName = 'SubagentRow';
 
-const SubagentList = memo(({ subagents, histories = {}, currentSessionId, isStreaming = false }: SubagentListProps) => {
+const SubagentList = memo(({ subagents, histories = {}, currentSessionId, currentProvider, isStreaming = false }: SubagentListProps) => {
   const { t } = useTranslation();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -76,14 +77,14 @@ const SubagentList = memo(({ subagents, histories = {}, currentSessionId, isStre
   useEffect(() => { historiesRef.current = histories; }, [histories]);
 
   const requestHistory = useCallback((subagent: SubagentInfo) => {
-    if (!currentSessionId) return;
+    if (!currentSessionId || currentProvider === 'opencode') return;
     sendBridgeEvent('load_subagent_session', JSON.stringify({
       sessionId: currentSessionId,
       agentId: subagent.agentId,
       description: subagent.description,
       toolUseId: subagent.id,
     }));
-  }, [currentSessionId]);
+  }, [currentProvider, currentSessionId]);
 
   useEffect(() => {
     if (!expandedId) return;
@@ -107,7 +108,7 @@ const SubagentList = memo(({ subagents, histories = {}, currentSessionId, isStre
     setExpandedId((prev) => (prev === id ? null : id));
   }, []);
 
-  const canLoad = Boolean(currentSessionId);
+  const canLoad = Boolean(currentSessionId) && currentProvider !== 'opencode';
 
   if (subagents.length === 0) {
     return <div className="status-panel-empty">{t('statusPanel.noSubagents')}</div>;

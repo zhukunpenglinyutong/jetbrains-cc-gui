@@ -75,14 +75,18 @@ function toolUseMsg(id, name, input) {
   };
 }
 
-function toolResultMsg(toolUseId, isError, content) {
-  return {
+function toolResultMsg(toolUseId, isError, content, metadata = undefined) {
+  const message = {
     type: 'user',
     message: {
       role: 'user',
       content: [toolResultBlock(toolUseId, isError, content)]
     }
   };
+  if (metadata && Object.keys(metadata).length > 0) {
+    message.toolUseResult = metadata;
+  }
+  return message;
 }
 
 function toolUseBlock(id, name, input) {
@@ -219,6 +223,24 @@ function asRecord(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }
 
+function parseJsonRecord(value) {
+  if (!value) {
+    return {};
+  }
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    return value;
+  }
+  if (typeof value !== 'string' || !value.trim()) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return asRecord(parsed);
+  } catch {
+    return {};
+  }
+}
+
 function pickString(...values) {
   for (const value of values) {
     if (typeof value === 'string' && value.trim()) {
@@ -296,7 +318,57 @@ function normalizeOpenCodeToolInput(part, cwd = '') {
   const state = asRecord(part?.state);
   const metadata = { ...asRecord(state.metadata), ...asRecord(part?.metadata) };
   const filediff = asRecord(metadata.filediff);
-  const input = { ...asRecord(state.input) };
+  const raw = parseJsonRecord(state.raw);
+  const rawDirectInput = { ...raw };
+  delete rawDirectInput.args;
+  delete rawDirectInput.input;
+  delete rawDirectInput.parameters;
+  const rawInput = {
+    ...rawDirectInput,
+    ...asRecord(raw.args),
+    ...asRecord(raw.input),
+    ...asRecord(raw.parameters)
+  };
+  const input = {
+    ...rawInput,
+    ...asRecord(metadata.args),
+    ...asRecord(metadata.input),
+    ...asRecord(part?.args),
+    ...asRecord(part?.input),
+    ...asRecord(state.input)
+  };
+  const toolName = normalizeOpenCodeToolName(part?.tool);
+
+  if (toolName === 'task' || toolName === 'agent' || toolName === 'spawn_agent') {
+    const subagentType = pickString(
+      input.subagent_type,
+      input.subagentType,
+      input.agent,
+      input.agent_type,
+      input.agentType,
+      metadata.subagent_type,
+      metadata.subagentType
+    );
+    if (subagentType) {
+      input.subagent_type = subagentType;
+    }
+
+    const description = pickString(
+      input.description,
+      input.title,
+      metadata.description,
+      metadata.title,
+      state.title
+    );
+    if (description) {
+      input.description = description;
+    }
+
+    const prompt = pickString(input.prompt, input.message, input.text, metadata.prompt);
+    if (prompt) {
+      input.prompt = prompt;
+    }
+  }
 
   const filePath = pickString(
     input.file_path,
@@ -372,6 +444,48 @@ function openCodeToolResultContent(part) {
   return truncateForDisplay(content);
 }
 
+function taskSessionIdFromOutput(output) {
+  const text = typeof output === 'string' ? output : '';
+  const match = text.match(/^task_id:\s*([A-Za-z0-9_-]+)/m);
+  return match?.[1] || '';
+}
+
+function openCodeToolResultMetadata(part, normalizedInput = undefined) {
+  const toolName = normalizeOpenCodeToolName(part?.tool);
+  if (toolName !== 'task' && toolName !== 'agent' && toolName !== 'spawn_agent') {
+    return undefined;
+  }
+
+  const state = asRecord(part?.state);
+  const metadata = { ...asRecord(state.metadata), ...asRecord(part?.metadata) };
+  const input = normalizedInput || normalizeOpenCodeToolInput(part);
+  const agentId = pickString(
+    metadata.agentId,
+    metadata.agentID,
+    metadata.sessionId,
+    metadata.sessionID,
+    taskSessionIdFromOutput(state.output)
+  );
+  const result = {};
+  if (agentId) {
+    result.agentId = agentId;
+    result.subagentSessionId = agentId;
+  }
+  const agentType = pickString(input.subagent_type, input.subagentType, metadata.subagent_type);
+  if (agentType) {
+    result.agentType = agentType;
+  }
+  const description = pickString(input.description, metadata.description, state.title);
+  if (description) {
+    result.description = description;
+  }
+  const totalToolUseCount = metadata.toolcalls ?? metadata.toolCalls ?? metadata.calls;
+  if (typeof totalToolUseCount === 'number' && Number.isFinite(totalToolUseCount)) {
+    result.totalToolUseCount = totalToolUseCount;
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
 function emitOpenCodeToolUse(ctx, part, normalizedInput = undefined) {
   if (!part || part.type !== 'tool') {
     return '';
@@ -403,7 +517,8 @@ function emitOpenCodeToolResult(ctx, part, normalizedInput = undefined) {
   emitMessage(toolResultMsg(
     toolUseId,
     status === 'error',
-    openCodeToolResultContent(part)
+    openCodeToolResultContent(part),
+    openCodeToolResultMetadata(part, normalizedInput)
   ));
   ctx.emittedToolResultIds.add(toolUseId);
 }
@@ -930,6 +1045,7 @@ function normalizeOpenCodeMessage(item) {
   const role = info?.role === 'user' ? 'user' : 'assistant';
   const cwd = pickString(info?.path?.cwd, info?.path?.root, info?.cwd);
   const content = [];
+  let toolUseResult;
 
   for (const part of item?.parts || []) {
     const kind = partKind(part);
@@ -944,15 +1060,20 @@ function normalizeOpenCodeMessage(item) {
         content.push(...syntheticDiffBlocks);
         continue;
       }
+      const normalizedInput = normalizeOpenCodeToolInput(part, cwd);
       content.push({
         type: 'tool_use',
         id: toolUseId,
         name: normalizeOpenCodeToolName(part.tool),
-        input: normalizeOpenCodeToolInput(part, cwd)
+        input: normalizedInput
       });
 
       const status = part?.state?.status;
       if (status === 'completed' || status === 'error') {
+        const resultMetadata = openCodeToolResultMetadata(part, normalizedInput);
+        if (resultMetadata && !toolUseResult) {
+          toolUseResult = resultMetadata;
+        }
         content.push({
           type: 'tool_result',
           tool_use_id: toolUseId,
@@ -972,7 +1093,7 @@ function normalizeOpenCodeMessage(item) {
     });
   }
 
-  return {
+  const normalized = {
     type: role,
     message: {
       id: info?.id || info?.messageID || '',
@@ -984,6 +1105,10 @@ function normalizeOpenCodeMessage(item) {
       parts: item?.parts || []
     }
   };
+  if (toolUseResult) {
+    normalized.toolUseResult = toolUseResult;
+  }
+  return normalized;
 }
 
 function emitAssistantMessageFromResponse(response) {

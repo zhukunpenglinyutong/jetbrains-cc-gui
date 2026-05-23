@@ -17,6 +17,7 @@ interface TaskExecutionBlockProps {
   result?: ToolResultBlock | null;
   toolId?: string;
   isStreaming?: boolean;
+  currentProvider?: string;
 }
 
 type SpawnAgentMeta = {
@@ -121,7 +122,7 @@ function shortenAgentId(agentId?: string): string | undefined {
   return agentId.length > 8 ? `${agentId.slice(0, 8)}…` : agentId;
 }
 
-const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, result, toolId, isStreaming = false }: TaskExecutionBlockProps) {
+const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, result, toolId, isStreaming = false, currentProvider }: TaskExecutionBlockProps) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const getSubagentHistory = useSubagentHistoryGetter();
@@ -161,16 +162,17 @@ const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, resul
   const isCompleted = result !== undefined && result !== null;
   const isError = isCompleted && result?.is_error === true;
   const history = (toolId ? getSubagentHistory(toolId) : undefined) ?? (agentId ? getSubagentHistory(agentId) : undefined);
+  const canLoadSubagentHistory = currentProvider !== 'opencode';
 
   useEffect(() => {
-    if (!expanded || !isAgentTool || !currentSessionId || !toolId || history) return;
+    if (!expanded || !isAgentTool || !currentSessionId || !toolId || history || !canLoadSubagentHistory) return;
     sendBridgeEvent('load_subagent_session', JSON.stringify({
       sessionId: currentSessionId,
       agentId,
       description: typeof description === 'string' ? description : undefined,
       toolUseId: toolId,
     }));
-  }, [agentId, currentSessionId, description, expanded, history, isAgentTool, toolId]);
+  }, [agentId, canLoadSubagentHistory, currentSessionId, description, expanded, history, isAgentTool, toolId]);
 
   const shouldPollHistory = expanded
     && isAgentTool
@@ -178,7 +180,8 @@ const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, resul
     && Boolean(toolId)
     && isStreaming
     && !isCompleted
-    && !history;
+    && !history
+    && canLoadSubagentHistory;
 
   // Poll subagent history only while the tool is still actively streaming and
   // we have not received history yet. Avoid keeping idle intervals alive.
@@ -270,7 +273,7 @@ const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, resul
                 totalToolUseCount={agentToolMeta.totalToolUseCount}
                 resultText={extractResultText(result)}
                 history={history}
-                canLoad={Boolean(currentSessionId)}
+                canLoad={Boolean(currentSessionId) && canLoadSubagentHistory}
               />
             )}
 
