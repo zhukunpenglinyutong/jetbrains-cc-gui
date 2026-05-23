@@ -309,56 +309,111 @@ def skipWebviewBuild = (project.findProperty('skipWebview') ?: 'false').toString
 // Get custom Node.js path from local properties
 def localNodePath = getLocalProperty('node.path')
 
+def isWindowsOs = System.getProperty('os.name').toLowerCase().contains('windows')
+
+def npmExecutableNames = {
+    return isWindowsOs ? ['npm.cmd', 'npm.exe', 'npm'] : ['npm']
+}
+
+def findFirstExistingExecutable = { List<File> candidates ->
+    return candidates.find { it != null && it.exists() && it.isFile() }
+}
+
+def npmCandidatesInDirectory = { File dir ->
+    if (dir == null) {
+        return []
+    }
+    return npmExecutableNames().collect { new File(dir, it) }
+}
+
+def resolveNpmFromNodePath = { String nodePath ->
+    if (!nodePath) {
+        return null
+    }
+
+    def nodeFile = file(nodePath)
+    if (nodeFile.isFile()) {
+        return findFirstExistingExecutable(npmCandidatesInDirectory(nodeFile.parentFile))
+    }
+
+    if (nodeFile.isDirectory()) {
+        def candidates = []
+        candidates.addAll(npmCandidatesInDirectory(new File(nodeFile, 'bin')))
+        candidates.addAll(npmCandidatesInDirectory(nodeFile))
+        return findFirstExistingExecutable(candidates)
+    }
+
+    return null
+}
+
+def resolveNpmExecutable = {
+    def localNpm = resolveNpmFromNodePath(localNodePath)
+    if (localNpm != null) {
+        return localNpm
+    }
+
+    def pathCandidates = []
+    def currentPath = System.getenv('PATH') ?: ''
+    currentPath.split(java.util.regex.Pattern.quote(File.pathSeparator)).each { pathEntry ->
+        if (pathEntry != null && !pathEntry.trim().isEmpty()) {
+            pathCandidates.addAll(npmCandidatesInDirectory(new File(pathEntry)))
+        }
+    }
+    def pathNpm = findFirstExistingExecutable(pathCandidates)
+    if (pathNpm != null) {
+        return pathNpm
+    }
+
+    def userHome = System.getProperty('user.home')
+    def commonCandidates = []
+    if (userHome != null && !userHome.trim().isEmpty()) {
+        commonCandidates.addAll(npmCandidatesInDirectory(new File(userHome, '.volta/bin')))
+        commonCandidates.addAll(npmCandidatesInDirectory(new File(userHome, '.asdf/shims')))
+
+        def nvmVersionsDir = new File(userHome, '.nvm/versions/node')
+        if (nvmVersionsDir.exists() && nvmVersionsDir.isDirectory()) {
+            def nvmCandidates = []
+            nvmVersionsDir.listFiles()?.each { versionDir ->
+                nvmCandidates.addAll(npmCandidatesInDirectory(new File(versionDir, 'bin')))
+            }
+            nvmCandidates = nvmCandidates.findAll { it.exists() && it.isFile() }
+                .sort { a, b -> b.lastModified() <=> a.lastModified() }
+            commonCandidates.addAll(nvmCandidates)
+        }
+    }
+
+    commonCandidates.addAll(npmCandidatesInDirectory(new File('/opt/homebrew/bin')))
+    commonCandidates.addAll(npmCandidatesInDirectory(new File('/usr/local/bin')))
+    commonCandidates.addAll(npmCandidatesInDirectory(new File('/usr/bin')))
+
+    return findFirstExistingExecutable(commonCandidates)
+}
+
+def configureNpmEnvironment = { ExecSpec spec, File npmExecutable ->
+    if (npmExecutable != null && npmExecutable.parentFile != null) {
+        def currentPath = System.getenv('PATH') ?: ''
+        spec.environment 'PATH', "${npmExecutable.parentFile.absolutePath}${File.pathSeparator}${currentPath}"
+    }
+}
+
 tasks.register('buildWebview', Exec) {
     workingDir webviewDir
     environment 'VITE_ENABLE_VCONSOLE', enableVConsoleInWebview ? 'true' : 'false'
 
     // Determine npm command path with robust detection
-    def npmCommand = 'npm'
+    def npmExecutable = resolveNpmExecutable()
+    def npmCommand = npmExecutable != null ? npmExecutable.absolutePath : (isWindowsOs ? 'npm.cmd' : 'npm')
     if (localNodePath) {
-        def nodeFile = file(localNodePath)
-        def npmExecutable = null
-        def pathToAdd = null
-
-        if (nodeFile.isFile()) {
-            // localNodePath points to node executable (e.g., /usr/local/bin/node)
-            // npm should be in the same directory
-            def binDir = nodeFile.parentFile
-            def npmInSameDir = new File(binDir, 'npm')
-            if (npmInSameDir.exists()) {
-                npmExecutable = npmInSameDir
-                pathToAdd = binDir.absolutePath
-            }
-        } else if (nodeFile.isDirectory()) {
-            // localNodePath points to a directory, check multiple possible locations
-            // Case 1: bin/npm (standard installation like /usr/local/node/bin/npm)
-            def npmInBin = new File(nodeFile, 'bin/npm')
-            // Case 2: npm directly in directory (e.g., /usr/local/bin/npm)
-            def npmInDir = new File(nodeFile, 'npm')
-
-            if (npmInBin.exists()) {
-                npmExecutable = npmInBin
-                pathToAdd = new File(nodeFile, 'bin').absolutePath
-            } else if (npmInDir.exists()) {
-                npmExecutable = npmInDir
-                pathToAdd = nodeFile.absolutePath
-            }
-        }
-
-        if (npmExecutable != null) {
-            npmCommand = npmExecutable.absolutePath
-            println "Using npm executable: ${npmCommand}"
-        }
-
-        if (pathToAdd != null) {
-            def currentPath = System.getenv('PATH') ?: ''
-            environment 'PATH', "${pathToAdd}${File.pathSeparator}${currentPath}"
-        }
-
         println "Using custom Node.js path: ${localNodePath}"
     }
+    if (npmExecutable != null) {
+        configureNpmEnvironment(delegate, npmExecutable)
+        println "Using npm executable: ${npmCommand}"
+    } else {
+        println "Using npm from PATH: ${npmCommand}"
+    }
 
-    if (System.getProperty('os.name').toLowerCase().contains('windows')) {
+    if (isWindowsOs) {
         commandLine 'cmd', '/c', npmCommand, 'run', 'build'
     } else {
         commandLine npmCommand, 'run', 'build'
@@ -382,26 +437,38 @@ tasks.named('processResources') {
     mustRunAfter('buildWebview')
 }
 
+tasks.register('installAiBridgeDependencies', Exec) {
+    onlyIf { aiBridgeDir.exists() && !new File(aiBridgeDir, 'node_modules').exists() }
+    workingDir aiBridgeDir
+
+    def npmExecutable = resolveNpmExecutable()
+    String npmCmd = npmExecutable != null ? npmExecutable.absolutePath : (isWindowsOs ? 'npm.cmd' : 'npm')
+    configureNpmEnvironment(delegate, npmExecutable)
+
+    if (isWindowsOs) {
+        commandLine 'cmd', '/c', npmCmd, 'install', '--silent', '--loglevel=error'
+    } else {
+        commandLine npmCmd, 'install', '--silent', '--loglevel=error'
+    }
+
+    doFirst { println 'Installing ai-bridge npm dependencies...' }
+    doLast { println 'ai-bridge npm dependencies installed.' }
+}
+
 // Use system zip command to package ai-bridge, preserving file permissions
 tasks.register('packageAiBridge', Exec) {
+    dependsOn('installAiBridgeDependencies')
     onlyIf { aiBridgeDir.exists() }
 
     // Switch to ai-bridge directory for packaging, avoiding inclusion of top-level directory
     workingDir aiBridgeDir
 
-    // Ensure output directory exists and dependencies are installed
+    // Ensure output directory exists
     doFirst {
         aiBridgePackDir.mkdirs()
         // Delete old zip file
         if (aiBridgeArchive.exists()) {
             aiBridgeArchive.delete()
-        }
-        // Install npm dependencies if node_modules doesn't exist
-        if (!new File(aiBridgeDir, 'node_modules').exists()) {
-            println 'Installing ai-bridge npm dependencies...'
-            String npmCmd = System.getProperty('os.name').toLowerCase().contains('windows') ? 'npm.cmd' : 'npm'
-            exec { commandLine npmCmd, 'install', '--silent', '--loglevel=error'; workingDir = aiBridgeDir }
-            println 'ai-bridge npm dependencies installed.'
         }
     }
 
