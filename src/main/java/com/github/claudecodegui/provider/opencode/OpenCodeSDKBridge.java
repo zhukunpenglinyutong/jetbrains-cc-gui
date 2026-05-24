@@ -298,7 +298,7 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
 
     public JsonObject listModels(String cwd) {
         try {
-            return runJsonCommand("listModels", List.of(cwd != null ? cwd : ""));
+            return runJsonProcessCommand("listModels", List.of(cwd != null ? cwd : ""));
         } catch (Exception e) {
             LOG.warn("[OpenCodeSDKBridge] Failed to list opencode models: " + e.getMessage(), e);
             JsonObject error = new JsonObject();
@@ -310,7 +310,7 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
 
     public JsonObject listSessions(String cwd) {
         try {
-            return runJsonCommand("listSessions", List.of(cwd != null ? cwd : ""));
+            return runJsonProcessCommand("listSessions", List.of(cwd != null ? cwd : ""));
         } catch (Exception e) {
             LOG.warn("[OpenCodeSDKBridge] Failed to list opencode sessions: " + e.getMessage(), e);
             JsonObject error = new JsonObject();
@@ -337,7 +337,7 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
 
     public JsonObject listAgents(String cwd) {
         try {
-            return runJsonCommand("listAgents", List.of(cwd != null ? cwd : ""));
+            return runJsonProcessCommand("listAgents", List.of(cwd != null ? cwd : ""));
         } catch (Exception e) {
             LOG.warn("[OpenCodeSDKBridge] Failed to list opencode agents: " + e.getMessage(), e);
             JsonObject error = new JsonObject();
