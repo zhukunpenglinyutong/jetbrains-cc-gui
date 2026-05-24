@@ -31,6 +31,8 @@ const WINDOWS_ABSOLUTE_PATH = /^[A-Za-z]:[\\/]/;
 const NATIVE_FILE_EDIT_TOOLS = new Set(['edit', 'write_file', 'write_to_file']);
 const OPENCODE_DEFAULT_AGENT_ID = 'opencode-default';
 const OPENCODE_AGENT_PREFIX = 'opencode:';
+const persistentRuntimes = new Map();
+const activeOpenCodeTurns = new Set();
 
 function emitMarker(marker, payload) {
   if (payload === undefined) {
@@ -206,6 +208,94 @@ async function createOpenCodeRuntime(cwd) {
     ownedServer: true,
     close: async () => server.close()
   };
+}
+
+function shouldUsePersistentRuntime(options = {}) {
+  if (options?.persistentRuntime === true) {
+    return true;
+  }
+  const value = (process.env.OPENCODE_PERSISTENT_RUNTIME || '').trim().toLowerCase();
+  return value === 'true' || value === '1' || value === 'on';
+}
+
+function persistentRuntimeKey(cwd) {
+  const baseUrl = (process.env.OPENCODE_BASE_URL || '').trim();
+  return JSON.stringify({
+    cwd: cwd || '',
+    baseUrl,
+    hostname: process.env.OPENCODE_HOSTNAME || DEFAULT_HOSTNAME,
+    port: parsePositiveInteger(process.env.OPENCODE_PORT, DEFAULT_PORT),
+    username: process.env.OPENCODE_SERVER_USERNAME || 'opencode',
+    password: process.env.OPENCODE_SERVER_PASSWORD || '',
+    startTimeout: parsePositiveInteger(
+      process.env.OPENCODE_SERVER_START_TIMEOUT_MS,
+      DEFAULT_START_TIMEOUT_MS
+    )
+  });
+}
+
+async function getPersistentOpenCodeRuntime(cwd) {
+  const key = persistentRuntimeKey(cwd);
+  const existing = persistentRuntimes.get(key);
+  if (existing) {
+    return existing;
+  }
+
+  const runtimePromise = createOpenCodeRuntime(cwd).catch((error) => {
+    persistentRuntimes.delete(key);
+    throw error;
+  });
+  persistentRuntimes.set(key, runtimePromise);
+  return runtimePromise;
+}
+
+async function acquireOpenCodeRuntime(cwd, options = {}) {
+  if (shouldUsePersistentRuntime(options)) {
+    return getPersistentOpenCodeRuntime(cwd);
+  }
+  return createOpenCodeRuntime(cwd);
+}
+
+async function releaseOpenCodeRuntime(runtime, options = {}) {
+  if (!runtime || shouldUsePersistentRuntime(options)) {
+    return;
+  }
+  await runtime.close().catch(() => {});
+}
+
+export async function shutdownPersistentOpenCodeRuntimes() {
+  const runtimes = Array.from(persistentRuntimes.values());
+  persistentRuntimes.clear();
+  await Promise.all(runtimes.map(async (runtimePromise) => {
+    try {
+      const runtime = await runtimePromise;
+      await runtime.close().catch(() => {});
+    } catch {
+      // Ignore runtimes that failed while starting.
+    }
+  }));
+}
+
+export async function abortCurrentOpenCodeTurn() {
+  const aborts = [];
+  for (const turn of Array.from(activeOpenCodeTurns)) {
+    turn.aborted = true;
+    if (turn.eventAbortController) {
+      turn.eventAbortController.abort();
+    }
+    if (turn.runtime && turn.sessionId) {
+      aborts.push(
+        unwrapSdkResult(
+          turn.runtime.client.session.abort({
+            path: { id: turn.sessionId },
+            query: directoryQuery(turn.cwd)
+          }),
+          'abort active opencode session'
+        ).catch(() => {})
+      );
+    }
+  }
+  await Promise.all(aborts);
 }
 
 async function unwrapSdkResult(result, operation) {
@@ -1520,19 +1610,30 @@ export async function sendMessage(
   permissionMode = '',
   model = '',
   agent = '',
-  attachments = []
+  attachments = [],
+  options = {}
 ) {
   let runtime = null;
   let cleanupAttachments = async () => {};
   let eventAbortController = null;
   let eventTask = null;
+  const activeTurn = {
+    runtime: null,
+    cwd,
+    sessionId: sessionId && sessionId.trim() ? sessionId.trim() : '',
+    eventAbortController: null,
+    aborted: false
+  };
+  activeOpenCodeTurns.add(activeTurn);
 
   try {
-    runtime = await createOpenCodeRuntime(cwd);
+    runtime = await acquireOpenCodeRuntime(cwd, options);
+    activeTurn.runtime = runtime;
 
     const sessionRef = { id: sessionId && sessionId.trim() ? sessionId.trim() : '' };
     const eventContext = createEventContext(runtime, cwd, permissionMode, sessionRef);
     eventAbortController = new AbortController();
+    activeTurn.eventAbortController = eventAbortController;
 
     let readyEvents;
     const eventReady = new Promise((resolve) => {
@@ -1547,8 +1648,12 @@ export async function sendMessage(
     await Promise.race([eventReady, delay(1500)]);
 
     sessionRef.id = await createOrResolveSession(runtime.client, sessionRef.id, cwd);
+    activeTurn.sessionId = sessionRef.id;
     if (!sessionRef.id) {
       throw new Error('opencode did not return a session id');
+    }
+    if (activeTurn.aborted) {
+      throw new Error('User interrupted');
     }
 
     emitMarker('[THREAD_ID]', sessionRef.id);
@@ -1582,8 +1687,11 @@ export async function sendMessage(
     emitMarker('[STREAM_END]');
     emitMarker('[MESSAGE_END]');
   } catch (error) {
-    emitSendError(normalizeOpenCodeSdkError(error));
+    if (!activeTurn.aborted) {
+      emitSendError(normalizeOpenCodeSdkError(error));
+    }
   } finally {
+    activeOpenCodeTurns.delete(activeTurn);
     if (eventAbortController) {
       eventAbortController.abort();
     }
@@ -1591,13 +1699,11 @@ export async function sendMessage(
       await eventTask.catch(() => {});
     }
     await cleanupAttachments().catch(() => {});
-    if (runtime) {
-      await runtime.close().catch(() => {});
-    }
+    await releaseOpenCodeRuntime(runtime, options);
   }
 }
 
-export async function abortSession(sessionId = '', cwd = '') {
+export async function abortSession(sessionId = '', cwd = '', options = {}) {
   let runtime = null;
   try {
     const normalizedSessionId = sessionId && sessionId.trim();
@@ -1605,7 +1711,7 @@ export async function abortSession(sessionId = '', cwd = '') {
       throw new Error('sessionId is required to abort an opencode session');
     }
 
-    runtime = await createOpenCodeRuntime(cwd);
+    runtime = await acquireOpenCodeRuntime(cwd, options);
     await unwrapSdkResult(
       runtime.client.session.abort({
         path: { id: normalizedSessionId },
@@ -1622,13 +1728,11 @@ export async function abortSession(sessionId = '', cwd = '') {
       sessionId
     }));
   } finally {
-    if (runtime) {
-      await runtime.close().catch(() => {});
-    }
+    await releaseOpenCodeRuntime(runtime, options);
   }
 }
 
-export async function deleteSession(sessionId = '', cwd = '') {
+export async function deleteSession(sessionId = '', cwd = '', options = {}) {
   let runtime = null;
   try {
     const normalizedSessionId = sessionId && sessionId.trim();
@@ -1636,7 +1740,7 @@ export async function deleteSession(sessionId = '', cwd = '') {
       throw new Error('sessionId is required to delete an opencode session');
     }
 
-    runtime = await createOpenCodeRuntime(cwd);
+    runtime = await acquireOpenCodeRuntime(cwd, options);
     await unwrapSdkResult(
       runtime.client.session.delete({
         path: { id: normalizedSessionId },
@@ -1653,13 +1757,11 @@ export async function deleteSession(sessionId = '', cwd = '') {
       sessionId
     }));
   } finally {
-    if (runtime) {
-      await runtime.close().catch(() => {});
-    }
+    await releaseOpenCodeRuntime(runtime, options);
   }
 }
 
-export async function getSessionMessages(sessionId = '', cwd = '') {
+export async function getSessionMessages(sessionId = '', cwd = '', options = {}) {
   let runtime = null;
   try {
     const normalizedSessionId = sessionId && sessionId.trim();
@@ -1667,7 +1769,7 @@ export async function getSessionMessages(sessionId = '', cwd = '') {
       throw new Error('sessionId is required to get opencode session messages');
     }
 
-    runtime = await createOpenCodeRuntime(cwd);
+    runtime = await acquireOpenCodeRuntime(cwd, options);
     const messages = await unwrapSdkResult(
       runtime.client.session.messages({
         path: { id: normalizedSessionId },
@@ -1688,16 +1790,14 @@ export async function getSessionMessages(sessionId = '', cwd = '') {
       sessionId
     }));
   } finally {
-    if (runtime) {
-      await runtime.close().catch(() => {});
-    }
+    await releaseOpenCodeRuntime(runtime, options);
   }
 }
 
-export async function listSessions(cwd = '') {
+export async function listSessions(cwd = '', options = {}) {
   let runtime = null;
   try {
-    runtime = await createOpenCodeRuntime(cwd);
+    runtime = await acquireOpenCodeRuntime(cwd, options);
     const sessions = await unwrapSdkResult(
       runtime.client.session.list({
         query: historyListQuery(cwd)
@@ -1721,25 +1821,25 @@ export async function listSessions(cwd = '') {
       total: 0
     }));
   } finally {
-    if (runtime) {
-      await runtime.close().catch(() => {});
-    }
+    await releaseOpenCodeRuntime(runtime, options);
   }
 }
 
-export async function listModels(cwd = '') {
+export async function listModels(cwd = '', options = {}) {
   let runtime = null;
   try {
-    runtime = await createOpenCodeRuntime(cwd);
+    runtime = await acquireOpenCodeRuntime(cwd, options);
     const query = directoryQuery(cwd);
-    const config = await unwrapSdkResult(
-      runtime.client.config.get({ query }),
-      'get opencode config'
-    );
-    const providers = await unwrapSdkResult(
-      runtime.client.config.providers({ query }),
-      'list opencode providers'
-    );
+    const [config, providers] = await Promise.all([
+      unwrapSdkResult(
+        runtime.client.config.get({ query }),
+        'get opencode config'
+      ),
+      unwrapSdkResult(
+        runtime.client.config.providers({ query }),
+        'list opencode providers'
+      )
+    ]);
 
     console.log(JSON.stringify({
       success: true,
@@ -1754,25 +1854,25 @@ export async function listModels(cwd = '') {
       models: normalizeOpenCodeModels()
     }));
   } finally {
-    if (runtime) {
-      await runtime.close().catch(() => {});
-    }
+    await releaseOpenCodeRuntime(runtime, options);
   }
 }
 
-export async function listAgents(cwd = '') {
+export async function listAgents(cwd = '', options = {}) {
   let runtime = null;
   try {
-    runtime = await createOpenCodeRuntime(cwd);
+    runtime = await acquireOpenCodeRuntime(cwd, options);
     const query = directoryQuery(cwd);
-    const config = await unwrapSdkResult(
-      runtime.client.config.get({ query }),
-      'get opencode config'
-    );
-    const agents = await unwrapSdkResult(
-      runtime.client.app.agents({ query }),
-      'list opencode agents'
-    );
+    const [config, agents] = await Promise.all([
+      unwrapSdkResult(
+        runtime.client.config.get({ query }),
+        'get opencode config'
+      ),
+      unwrapSdkResult(
+        runtime.client.app.agents({ query }),
+        'list opencode agents'
+      )
+    ]);
 
     console.log(JSON.stringify({
       success: true,
@@ -1787,9 +1887,7 @@ export async function listAgents(cwd = '') {
       agents: normalizeOpenCodeAgents()
     }));
   } finally {
-    if (runtime) {
-      await runtime.close().catch(() => {});
-    }
+    await releaseOpenCodeRuntime(runtime, options);
   }
 }
 

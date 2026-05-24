@@ -45,6 +45,7 @@ public class DaemonBridge {
     private final NodeDetector nodeDetector;
     private final BridgeDirectoryResolver directoryResolver;
     private final EnvironmentConfigurator envConfigurator;
+    private final Map<String, String> extraEnvironment;
     // Daemon process state
     private volatile Process daemonProcess;
     private volatile BufferedWriter daemonStdin;
@@ -76,9 +77,19 @@ public class DaemonBridge {
             BridgeDirectoryResolver directoryResolver,
             EnvironmentConfigurator envConfigurator
     ) {
+        this(nodeDetector, directoryResolver, envConfigurator, Map.of());
+    }
+
+    public DaemonBridge(
+            NodeDetector nodeDetector,
+            BridgeDirectoryResolver directoryResolver,
+            EnvironmentConfigurator envConfigurator,
+            Map<String, String> extraEnvironment
+    ) {
         this.nodeDetector = nodeDetector;
         this.directoryResolver = directoryResolver;
         this.envConfigurator = envConfigurator;
+        this.extraEnvironment = extraEnvironment != null ? Map.copyOf(extraEnvironment) : Map.of();
     }
 
     // =========================================================================
@@ -129,6 +140,7 @@ public class DaemonBridge {
                 // Configure environment
                 Map<String, String> env = pb.environment();
                 envConfigurator.updateProcessEnvironment(pb, nodePath);
+                env.putAll(extraEnvironment);
 
                 // Keep stderr separate for debugging
                 pb.redirectErrorStream(false);

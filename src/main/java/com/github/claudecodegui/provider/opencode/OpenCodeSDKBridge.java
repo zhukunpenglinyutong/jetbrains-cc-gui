@@ -1,6 +1,7 @@
 package com.github.claudecodegui.provider.opencode;
 
 import com.github.claudecodegui.provider.common.BaseSDKBridge;
+import com.github.claudecodegui.provider.common.DaemonBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.session.ClaudeSession;
@@ -12,10 +13,12 @@ import java.io.File;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -29,6 +32,10 @@ import java.util.concurrent.atomic.AtomicReference;
 public class OpenCodeSDKBridge extends BaseSDKBridge {
 
     private static final int QUERY_TIMEOUT_SECONDS = 30;
+    private static final long DAEMON_RETRY_DELAY_MS = 60_000;
+    private final Object daemonLock = new Object();
+    private volatile DaemonBridge daemonBridge;
+    private volatile long daemonRetryAfter = 0;
 
     public OpenCodeSDKBridge() {
         super(OpenCodeSDKBridge.class);
@@ -129,6 +136,11 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
         stdinInput.addProperty("agent", agent != null ? agent : "");
         stdinInput.add("attachments", buildAttachments(attachments));
 
+        DaemonBridge db = getDaemonBridge();
+        if (db != null) {
+            return sendMessageViaDaemon(db, channelId, stdinInput, callback);
+        }
+
         return executeStreamingCommand(
                 channelId,
                 buildBaseCommand("send"),
@@ -136,6 +148,125 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
                 cwd,
                 callback
         );
+    }
+
+    private CompletableFuture<SDKResult> sendMessageViaDaemon(
+            DaemonBridge daemon,
+            String channelId,
+            JsonObject params,
+            MessageCallback callback
+    ) {
+        return CompletableFuture.supplyAsync(() -> {
+            SDKResult result = new SDKResult();
+            StringBuilder assistantContent = new StringBuilder();
+            AtomicBoolean hadSendError = new AtomicBoolean(false);
+            AtomicBoolean wasAborted = new AtomicBoolean(false);
+            AtomicReference<String> lastNodeError = new AtomicReference<>(null);
+
+            try {
+                params.addProperty("persistentRuntime", true);
+                params.add("env", buildDaemonEnv());
+
+                CompletableFuture<Boolean> commandFuture = daemon.sendCommand(
+                        "opencode.send",
+                        params,
+                        new DaemonBridge.DaemonOutputCallback() {
+                            @Override
+                            public void onLine(String line) {
+                                if (line.startsWith("[UNCAUGHT_ERROR]")
+                                        || line.startsWith("[UNHANDLED_REJECTION]")
+                                        || line.startsWith("[COMMAND_ERROR]")
+                                        || line.startsWith("[STARTUP_ERROR]")
+                                        || line.startsWith("[ERROR]")) {
+                                    LOG.warn("[Node.js ERROR] " + line);
+                                    lastNodeError.set(line);
+                                }
+                                processOutputLine(line, callback, result, assistantContent, hadSendError, lastNodeError);
+                            }
+
+                            @Override
+                            public void onStderr(String text) {
+                                if (text != null && text.startsWith("[SEND_ERROR]")) {
+                                    processOutputLine(text, callback, result, assistantContent, hadSendError, lastNodeError);
+                                    return;
+                                }
+                                LOG.debug("[opencode daemon:stderr] " + text);
+                            }
+
+                            @Override
+                            public void onError(String error) {
+                                if (!hadSendError.get()) {
+                                    result.success = false;
+                                    result.error = error;
+                                }
+                            }
+
+                            @Override
+                            public void onAbort() {
+                                wasAborted.set(true);
+                                onComplete(false);
+                            }
+
+                            @Override
+                            public void onComplete(boolean success) {
+                            }
+                        }
+                );
+
+                Boolean success;
+                while (true) {
+                    try {
+                        success = commandFuture.get(30, TimeUnit.SECONDS);
+                        break;
+                    } catch (TimeoutException timeout) {
+                        if (!daemon.isAlive()) {
+                            throw new RuntimeException("opencode daemon process is not alive while waiting for response", timeout);
+                        }
+                        LOG.info("[OpenCodeSDKBridge] opencode daemon request still running for channel: " + channelId);
+                    }
+                }
+
+                result.finalResult = assistantContent.toString();
+                result.messageCount = result.messages.size();
+
+                if (!hadSendError.get()) {
+                    result.success = success != null && success;
+                    if (result.success) {
+                        callback.onComplete(result);
+                    } else if (wasAborted.get()) {
+                        result.error = "User interrupted";
+                        callback.onComplete(result);
+                    } else {
+                        String errorMsg = result.error != null ? result.error : "opencode daemon command failed";
+                        String nodeErr = lastNodeError.get();
+                        if (nodeErr != null && !nodeErr.isEmpty()) {
+                            errorMsg += "\n\nDetails: " + nodeErr;
+                        }
+                        result.error = errorMsg;
+                        callback.onError(errorMsg);
+                    }
+                }
+
+                return result;
+            } catch (Exception e) {
+                if (wasAborted.get()) {
+                    result.success = false;
+                    result.error = "User interrupted";
+                    callback.onComplete(result);
+                } else if (!hadSendError.get()) {
+                    result.success = false;
+                    result.error = e.getMessage();
+                    callback.onError(result.error);
+                }
+                return result;
+            }
+        }).exceptionally(ex -> {
+            SDKResult errorResult = new SDKResult();
+            errorResult.success = false;
+            errorResult.error = ex.getCause() != null ? ex.getCause().getMessage() : ex.getMessage();
+            callback.onError(errorResult.error);
+            return errorResult;
+        });
     }
 
     public List<JsonObject> getSessionMessages(String sessionId, String cwd) {
@@ -228,6 +359,107 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
     }
 
     private JsonObject runJsonCommand(String action, List<String> args) throws Exception {
+        DaemonBridge db = getDaemonBridge();
+        if (db != null) {
+            try {
+                return runJsonDaemonCommand(db, action, args);
+            } catch (Exception e) {
+                LOG.warn("[OpenCodeSDKBridge] Daemon opencode " + action
+                        + " failed, falling back to per-process query: " + e.getMessage());
+            }
+        }
+
+        return runJsonProcessCommand(action, args);
+    }
+
+    private JsonObject runJsonDaemonCommand(DaemonBridge daemon, String action, List<String> args) throws Exception {
+        JsonObject params = buildJsonCommandParams(action, args);
+        params.addProperty("persistentRuntime", true);
+        params.add("env", buildDaemonEnv());
+
+        AtomicReference<JsonObject> resultRef = new AtomicReference<>();
+        AtomicReference<String> errorRef = new AtomicReference<>();
+        CompletableFuture<Boolean> commandFuture = daemon.sendCommand(
+                "opencode." + action,
+                params,
+                new DaemonBridge.DaemonOutputCallback() {
+                    @Override
+                    public void onLine(String line) {
+                        JsonObject parsed = parseJsonLine(line);
+                        if (parsed != null) {
+                            resultRef.set(parsed);
+                        }
+                    }
+
+                    @Override
+                    public void onStderr(String text) {
+                        LOG.debug("[opencode daemon:stderr] " + text);
+                    }
+
+                    @Override
+                    public void onError(String error) {
+                        errorRef.set(error);
+                    }
+
+                    @Override
+                    public void onComplete(boolean success) {
+                    }
+                }
+        );
+
+        boolean success;
+        try {
+            success = Boolean.TRUE.equals(commandFuture.get(QUERY_TIMEOUT_SECONDS, TimeUnit.SECONDS));
+        } catch (TimeoutException timeout) {
+            shutdownDaemon();
+            throw new RuntimeException("opencode daemon query timed out after "
+                    + QUERY_TIMEOUT_SECONDS + " seconds", timeout);
+        }
+
+        JsonObject result = resultRef.get();
+        if (result != null) {
+            return result;
+        }
+        if (!success && errorRef.get() != null) {
+            throw new RuntimeException(errorRef.get());
+        }
+        throw new RuntimeException("No JSON response received from opencode daemon");
+    }
+
+    private JsonObject parseJsonLine(String line) {
+        if (line == null) {
+            return null;
+        }
+        String trimmed = line.trim();
+        if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
+            return null;
+        }
+        try {
+            return gson.fromJson(trimmed, JsonObject.class);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private JsonObject buildJsonCommandParams(String action, List<String> args) {
+        JsonObject params = new JsonObject();
+        switch (action) {
+            case "deleteSession":
+            case "getSessionMessages":
+                params.addProperty("sessionId", args.size() > 0 ? args.get(0) : "");
+                params.addProperty("cwd", args.size() > 1 ? args.get(1) : "");
+                break;
+            case "listModels":
+            case "listSessions":
+            case "listAgents":
+            default:
+                params.addProperty("cwd", args.size() > 0 ? args.get(0) : "");
+                break;
+        }
+        return params;
+    }
+
+    private JsonObject runJsonProcessCommand(String action, List<String> args) throws Exception {
         String node = nodeDetector.findNodeExecutable();
         File bridgeDir = getDirectoryResolver().findSdkDir();
         if (bridgeDir == null || !bridgeDir.exists()) {
@@ -258,6 +490,94 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
             throw new RuntimeException("Failed to extract JSON from opencode query output");
         }
         return gson.fromJson(jsonLine, JsonObject.class);
+    }
+
+    private DaemonBridge getDaemonBridge() {
+        DaemonBridge current = daemonBridge;
+        if (current != null && current.isAlive()) {
+            return current;
+        }
+        if (System.currentTimeMillis() < daemonRetryAfter) {
+            return null;
+        }
+
+        synchronized (daemonLock) {
+            current = daemonBridge;
+            if (current != null && current.isAlive()) {
+                return current;
+            }
+
+            daemonRetryAfter = System.currentTimeMillis() + DAEMON_RETRY_DELAY_MS;
+            try {
+                if (current != null) {
+                    current.stop();
+                }
+                DaemonBridge newBridge = new DaemonBridge(
+                        nodeDetector,
+                        getDirectoryResolver(),
+                        envConfigurator,
+                        Map.of("AI_BRIDGE_DAEMON_PRELOAD", "opencode")
+                );
+                if (newBridge.start()) {
+                    daemonBridge = newBridge;
+                    daemonRetryAfter = 0;
+                    LOG.info("[OpenCodeSDKBridge] opencode daemon bridge started successfully");
+                    return newBridge;
+                }
+                LOG.warn("[OpenCodeSDKBridge] Failed to start opencode daemon, using per-process mode");
+            } catch (Exception e) {
+                LOG.warn("[OpenCodeSDKBridge] opencode daemon init failed: " + e.getMessage());
+            }
+            return null;
+        }
+    }
+
+    private void shutdownDaemon() {
+        DaemonBridge current = daemonBridge;
+        if (current != null) {
+            current.stop();
+            daemonBridge = null;
+            daemonRetryAfter = 0;
+        }
+    }
+
+    private JsonObject buildDaemonEnv() {
+        Map<String, String> env = new HashMap<>();
+        env.put("OPENCODE_USE_STDIN", "true");
+        envConfigurator.configurePermissionEnv(env);
+
+        JsonObject json = new JsonObject();
+        for (Map.Entry<String, String> entry : env.entrySet()) {
+            if (entry.getValue() != null) {
+                json.addProperty(entry.getKey(), entry.getValue());
+            }
+        }
+        return json;
+    }
+
+    @Override
+    public void interruptChannel(String channelId) {
+        DaemonBridge db = daemonBridge;
+        if (db != null && db.isAlive()) {
+            try {
+                db.sendAbort();
+            } catch (Exception e) {
+                LOG.warn("[OpenCodeSDKBridge] opencode daemon abort failed: " + e.getMessage());
+            }
+        }
+        super.interruptChannel(channelId);
+    }
+
+    @Override
+    public void cleanupAllProcesses() {
+        shutdownDaemon();
+        super.cleanupAllProcesses();
+    }
+
+    @Override
+    public void setNodeExecutable(String path) {
+        shutdownDaemon();
+        super.setNodeExecutable(path);
     }
 
     private String readProcessOutput(Process process) {

@@ -3,7 +3,7 @@
 /**
  * AI Bridge Daemon Process
  *
- * Long-running Node.js process that pre-loads the Claude SDK once and handles
+ * Long-running Node.js process that pre-loads provider SDKs and handles
  * multiple requests over stdin/stdout using NDJSON protocol.
  *
  * Protocol (stdin, one JSON per line):
@@ -18,7 +18,7 @@
  *   {"id":"2","type":"heartbeat","ts":1234567890}           // heartbeat response
  *
  * Key advantages over per-request spawning:
- * - SDK loaded once at startup (~2-5s saved per request)
+ * - Provider SDKs loaded once at startup (~2-5s saved per request)
  * - Process always warm (no cold start)
  * - Persistent session state across requests
  */
@@ -26,7 +26,13 @@
 import { createInterface } from 'readline';
 import { handleClaudeCommand } from './channels/claude-channel.js';
 import { handleCodexCommand } from './channels/codex-channel.js';
-import { loadClaudeSdk, isClaudeSdkAvailable } from './utils/sdk-loader.js';
+import { handleOpenCodeCommand } from './channels/opencode-channel.js';
+import {
+  loadClaudeSdk,
+  isClaudeSdkAvailable,
+  loadOpenCodeSdk,
+  isOpenCodeSdkAvailable
+} from './utils/sdk-loader.js';
 import {
   sendMessagePersistent,
   sendMessageWithAttachmentsPersistent,
@@ -36,6 +42,10 @@ import {
   resetRuntimePersistent,
   getContextUsagePersistent
 } from './services/claude/persistent-query-service.js';
+import {
+  abortCurrentOpenCodeTurn,
+  shutdownPersistentOpenCodeRuntimes
+} from './services/opencode/message-service.js';
 import { injectNetworkEnvVars } from './config/api-config.js';
 import { cleanupStaleTempImages } from './services/claude/attachment-service.js';
 
@@ -218,13 +228,17 @@ try {
 // =============================================================================
 
 async function preloadSdks() {
+  const preloadMode = (process.env.AI_BRIDGE_DAEMON_PRELOAD || 'claude').trim().toLowerCase();
+  const shouldPreloadClaude = preloadMode === 'claude' || preloadMode === 'all' || preloadMode === '';
+  const shouldPreloadOpenCode = preloadMode === 'opencode' || preloadMode === 'all';
+
   try {
-    if (isClaudeSdkAvailable()) {
+    if (shouldPreloadClaude && isClaudeSdkAvailable()) {
       sendDaemonEvent('sdk_loading', { provider: 'claude' });
       await loadClaudeSdk();
       sdkPreloaded = true;
       sendDaemonEvent('sdk_loaded', { provider: 'claude' });
-    } else {
+    } else if (shouldPreloadClaude) {
       sendDaemonEvent('sdk_unavailable', { provider: 'claude' });
     }
   } catch (e) {
@@ -232,6 +246,37 @@ async function preloadSdks() {
       provider: 'claude',
       error: e.message,
     });
+  }
+
+  try {
+    if (shouldPreloadOpenCode && isOpenCodeSdkAvailable()) {
+      sendDaemonEvent('sdk_loading', { provider: 'opencode' });
+      await loadOpenCodeSdk();
+      sdkPreloaded = true;
+      sendDaemonEvent('sdk_loaded', { provider: 'opencode' });
+    } else if (shouldPreloadOpenCode) {
+      sendDaemonEvent('sdk_unavailable', { provider: 'opencode' });
+    }
+  } catch (e) {
+    sendDaemonEvent('sdk_load_error', {
+      provider: 'opencode',
+      error: e.message,
+    });
+  }
+}
+
+async function shutdownAllPersistentRuntimes() {
+  const results = await Promise.allSettled([
+    shutdownPersistentRuntimes(),
+    shutdownPersistentOpenCodeRuntimes()
+  ]);
+  for (const result of results) {
+    if (result.status === 'rejected') {
+      _originalStderrWrite(
+        `[daemon] Failed to shutdown persistent runtime: ${result.reason?.message || result.reason}\n`,
+        'utf8'
+      );
+    }
   }
 }
 
@@ -273,7 +318,7 @@ async function processRequest(request) {
 
   // --- Graceful shutdown ---
   if (method === 'shutdown') {
-    await shutdownPersistentRuntimes();
+    await shutdownAllPersistentRuntimes();
     sendDaemonEvent('shutdown', { reason: 'requested' });
     writeRawLine({ id: id || '0', done: true, success: true });
     isDaemonMode = false;
@@ -341,6 +386,10 @@ async function processRequest(request) {
           break;
         case 'codex':
           await handleCodexCommand(command, [], stdinData);
+          break;
+        case 'opencode':
+          stdinData.persistentRuntime = true;
+          await handleOpenCodeCommand(command, [], stdinData);
           break;
         default:
           throw new Error(`Unknown provider: ${provider}`);
@@ -479,6 +528,12 @@ async function processRequest(request) {
             'utf8'
           );
         });
+        abortCurrentOpenCodeTurn().catch((e) => {
+          _originalStderrWrite(
+            `[daemon] opencode abort error: ${e.message}\n`,
+            'utf8'
+          );
+        });
       }
       writeRawLine({ id: request.id || '0', done: true, success: true });
       return;
@@ -505,11 +560,7 @@ async function processRequest(request) {
     // unref() so this timer doesn't prevent natural exit if cleanup finishes fast
     forceExitTimer.unref();
 
-    try {
-      await shutdownPersistentRuntimes();
-    } catch (e) {
-      _originalStderrWrite(`[daemon] Failed to shutdown persistent runtimes: ${e.message}\n`, 'utf8');
-    }
+    await shutdownAllPersistentRuntimes();
     clearTimeout(forceExitTimer);
     sendDaemonEvent('shutdown', { reason: 'stdin_closed' });
     isDaemonMode = false;
@@ -558,11 +609,15 @@ async function processRequest(request) {
         `[daemon] Parent process (ppid=${initialPpid}) is gone (current ppid=${currentPpid}), exiting\n`,
         'utf8'
       );
-      // Parent is dead — skip graceful cleanup to exit immediately.
-      // sendDaemonEvent/shutdownPersistentRuntimes are intentionally omitted:
-      // the Java side cannot receive events, and the OS will reclaim sockets on exit.
+      // Parent is dead — skip events, but still close owned child processes
+      // such as managed `opencode serve` before exiting.
       isDaemonMode = false;
-      _originalExit(0);
+      const forceExitTimer = setTimeout(() => _originalExit(0), 2000);
+      forceExitTimer.unref();
+      shutdownAllPersistentRuntimes().finally(() => {
+        clearTimeout(forceExitTimer);
+        _originalExit(0);
+      });
     }
   }, PPID_CHECK_INTERVAL_MS);
   ppidMonitor.unref();

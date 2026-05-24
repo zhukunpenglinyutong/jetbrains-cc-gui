@@ -18,6 +18,10 @@ import {
  * @param {object|null} stdinData
  */
 export async function handleOpenCodeCommand(command, args, stdinData) {
+  const options = {
+    persistentRuntime: stdinData?.persistentRuntime === true
+  };
+
   switch (command) {
     case 'send': {
       const {
@@ -37,7 +41,8 @@ export async function handleOpenCodeCommand(command, args, stdinData) {
         permissionMode,
         model,
         agent,
-        attachments
+        attachments,
+        options
       );
       break;
     }
@@ -45,39 +50,39 @@ export async function handleOpenCodeCommand(command, args, stdinData) {
     case 'abort': {
       const sessionId = stdinData?.sessionId || args[0] || '';
       const cwd = stdinData?.cwd || args[1] || '';
-      await openCodeAbortSession(sessionId, cwd);
+      await openCodeAbortSession(sessionId, cwd, options);
       break;
     }
 
     case 'deleteSession': {
       const sessionId = stdinData?.sessionId || args[0] || '';
       const cwd = stdinData?.cwd || args[1] || '';
-      await openCodeDeleteSession(sessionId, cwd);
+      await openCodeDeleteSession(sessionId, cwd, options);
       break;
     }
 
     case 'getSessionMessages': {
       const sessionId = stdinData?.sessionId || args[0] || '';
       const cwd = stdinData?.cwd || args[1] || '';
-      await openCodeGetSessionMessages(sessionId, cwd);
+      await openCodeGetSessionMessages(sessionId, cwd, options);
       break;
     }
 
     case 'listModels': {
       const cwd = stdinData?.cwd || args[0] || '';
-      await openCodeListModels(cwd);
+      await openCodeListModels(cwd, options);
       break;
     }
 
     case 'listSessions': {
       const cwd = stdinData?.cwd || args[0] || '';
-      await openCodeListSessions(cwd);
+      await openCodeListSessions(cwd, options);
       break;
     }
 
     case 'listAgents': {
       const cwd = stdinData?.cwd || args[0] || '';
-      await openCodeListAgents(cwd);
+      await openCodeListAgents(cwd, options);
       break;
     }
 
