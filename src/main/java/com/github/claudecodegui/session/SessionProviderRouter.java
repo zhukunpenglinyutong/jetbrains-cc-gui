@@ -1,8 +1,10 @@
 package com.github.claudecodegui.session;
 
+import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.opencode.OpenCodeSDKBridge;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.google.gson.JsonObject;
 
 import java.util.List;
@@ -38,6 +40,7 @@ public class SessionProviderRouter {
                 return codexSDKBridge.launchChannel(channelId, sessionId, cwd);
             case "opencode":
                 requireOpenCodeBridge();
+                requireOpenCodeAuthorized();
                 return openCodeSDKBridge.launchChannel(channelId, sessionId, cwd);
             default:
                 throw new IllegalArgumentException("Unsupported provider: " + provider);
@@ -69,6 +72,7 @@ public class SessionProviderRouter {
                 return codexSDKBridge.getSessionMessages(sessionId, cwd);
             case "opencode":
                 requireOpenCodeBridge();
+                requireOpenCodeAuthorized();
                 return openCodeSDKBridge.getSessionMessages(sessionId, cwd);
             default:
                 throw new IllegalArgumentException("Unsupported provider: " + provider);
@@ -83,5 +87,16 @@ public class SessionProviderRouter {
         if (openCodeSDKBridge == null) {
             throw new IllegalStateException("opencode bridge is not configured");
         }
+    }
+
+    private void requireOpenCodeAuthorized() {
+        try {
+            if (new CodemossSettingsService().isOpenCodeLocalConfigAuthorized()) {
+                return;
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to read opencode authorization state", e);
+        }
+        throw new IllegalStateException(ClaudeCodeGuiBundle.message("error.openCodeLocalAccessNotAuthorized"));
     }
 }

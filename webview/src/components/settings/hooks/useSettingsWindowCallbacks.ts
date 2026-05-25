@@ -45,6 +45,8 @@ export interface SettingsWindowCallbacksDeps {
   setLoading: (loading: boolean) => void;
   setCodexLoading: (loading: boolean) => void;
   setCodexConfigLoading: (loading: boolean) => void;
+  setOpenCodeAuthorized: (authorized: boolean) => void;
+  setOpenCodeLoading: (loading: boolean) => void;
   // AI feature toggle setters
   setCommitGenerationEnabled?: (enabled: boolean) => void;
   setAiTitleGenerationEnabled?: (enabled: boolean) => void;
@@ -61,6 +63,7 @@ export interface SettingsWindowCallbacksDeps {
   updateActiveProvider: (provider: ProviderConfig) => void;
   loadProviders: () => void;
   loadCodexProviders: () => void;
+  loadOpenCodeAuthorization: () => void;
   loadAgents: () => void;
   updateAgents: (agents: AgentConfig[]) => void;
   handleAgentOperationResult: (result: any) => void;
@@ -480,9 +483,25 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
     };
 
+    window.updateOpenCodeAuthorization = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        d().setOpenCodeAuthorized(data?.authorized === true);
+        d().setOpenCodeLoading(false);
+        if (data?.changed === true) {
+          sendToJava('get_commit_ai_config:');
+          sendToJava('get_prompt_enhancer_config:');
+        }
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse opencode authorization state:', error);
+        d().setOpenCodeLoading(false);
+      }
+    };
+
     // Initial data loading
     d().loadProviders();
     d().loadCodexProviders();
+    d().loadOpenCodeAuthorization();
     d().loadAgents();
     // Note: loadPrompts is now handled by PromptSection component
     d().loadPrompts?.();
@@ -544,6 +563,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.promptImportPreviewResult = undefined;
       window.promptImportResult = undefined;
       window.updateCurrentCodexConfig = undefined;
+      window.updateOpenCodeAuthorization = undefined;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t]);

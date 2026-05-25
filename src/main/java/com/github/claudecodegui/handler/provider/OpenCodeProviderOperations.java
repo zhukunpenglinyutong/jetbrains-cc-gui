@@ -1,6 +1,7 @@
 package com.github.claudecodegui.handler.provider;
 
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
@@ -26,6 +27,38 @@ public class OpenCodeProviderOperations {
         this.context = context;
     }
 
+    public void handleGetOpenCodeAuthorization() {
+        deliverAuthorizationState(false);
+    }
+
+    public void handleAuthorizeOpenCode() {
+        try {
+            context.getSettingsService().setOpenCodeLocalConfigAuthorized(true);
+            deliverAuthorizationState(true);
+            ApplicationManager.getApplication().invokeLater(() -> context.callJavaScript(
+                    "window.showSwitchSuccess",
+                    context.escapeJs(ClaudeCodeGuiBundle.message("toast.openCodeLocalConfigAuthorizationEnabled"))));
+        } catch (Exception e) {
+            LOG.error("[OpenCodeProviderOperations] Failed to authorize opencode access: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() ->
+                    context.callJavaScript("window.showError", context.escapeJs(e.getMessage())));
+        }
+    }
+
+    public void handleRevokeOpenCodeAuthorization() {
+        try {
+            context.getSettingsService().setOpenCodeLocalConfigAuthorized(false);
+            deliverAuthorizationState(true);
+            ApplicationManager.getApplication().invokeLater(() -> context.callJavaScript(
+                    "window.showSwitchSuccess",
+                    context.escapeJs(ClaudeCodeGuiBundle.message("toast.openCodeLocalConfigAuthorizationRevoked"))));
+        } catch (Exception e) {
+            LOG.error("[OpenCodeProviderOperations] Failed to revoke opencode access: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() ->
+                    context.callJavaScript("window.showError", context.escapeJs(e.getMessage())));
+        }
+    }
+
     public void handleGetOpenCodeModels() {
         runDiscovery("models", "window.updateOpenCodeModels", (bridge, cwd) -> bridge.listModels(cwd));
     }
@@ -46,7 +79,9 @@ public class OpenCodeProviderOperations {
 
         CompletableFuture.runAsync(() -> {
             JsonObject payload;
-            if (context.getOpenCodeSDKBridge() == null) {
+            if (!isOpenCodeAuthorized()) {
+                payload = failurePayload(ClaudeCodeGuiBundle.message("error.openCodeLocalAccessNotAuthorized"));
+            } else if (context.getOpenCodeSDKBridge() == null) {
                 payload = new JsonObject();
                 payload.addProperty("success", false);
                 payload.addProperty("error", "opencode bridge is not available");
@@ -66,6 +101,31 @@ public class OpenCodeProviderOperations {
             LOG.error("[OpenCodeProviderOperations] Failed to get opencode " + label + ": " + ex.getMessage(), ex);
             return null;
         });
+    }
+
+    private void deliverAuthorizationState(boolean changed) {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("authorized", isOpenCodeAuthorized());
+        payload.addProperty("changed", changed);
+        String json = GSON.toJson(payload);
+        ApplicationManager.getApplication().invokeLater(() ->
+                context.callJavaScript("window.updateOpenCodeAuthorization", context.escapeJs(json)));
+    }
+
+    private boolean isOpenCodeAuthorized() {
+        try {
+            return context.getSettingsService().isOpenCodeLocalConfigAuthorized();
+        } catch (Exception e) {
+            LOG.warn("[OpenCodeProviderOperations] Failed to read opencode authorization state: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private JsonObject failurePayload(String error) {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("success", false);
+        payload.addProperty("error", error);
+        return payload;
     }
 
     @FunctionalInterface

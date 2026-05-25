@@ -549,6 +549,17 @@ Footer 包含：
      * Call the opencode API.
      */
     protected void callOpenCodeAPI(String prompt, String model, CommitMessageCallback callback) {
+        try {
+            if (!settingsService.isOpenCodeLocalConfigAuthorized()) {
+                callback.onError(ClaudeCodeGuiBundle.message("error.openCodeLocalAccessNotAuthorized"));
+                return;
+            }
+        } catch (Exception e) {
+            LOG.warn("Failed to read opencode authorization state", e);
+            callback.onError(ClaudeCodeGuiBundle.message("error.openCodeLocalAccessNotAuthorized"));
+            return;
+        }
+
         OpenCodeSDKBridge bridge = new OpenCodeSDKBridge();
         try {
             StringBuilder result = new StringBuilder();

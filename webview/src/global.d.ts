@@ -156,6 +156,11 @@ interface Window {
   updateOpenCodeAgents?: (json: string) => void;
 
   /**
+   * Update explicit opencode runtime authorization state.
+   */
+  updateOpenCodeAuthorization?: (json: string) => void;
+
+  /**
    * Show permission dialog
    */
   showPermissionDialog?: (json: string) => void;

@@ -95,6 +95,10 @@ class SubagentHistoryService {
                 }
                 validateId("subagentSessionId", childSessionId);
 
+                if (!context.getSettingsService().isOpenCodeLocalConfigAuthorized()) {
+                    throw new IllegalStateException("opencode access is not authorized");
+                }
+
                 if (context.getOpenCodeSDKBridge() == null) {
                     throw new IllegalStateException("opencode bridge is not available");
                 }

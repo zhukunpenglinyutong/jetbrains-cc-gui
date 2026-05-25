@@ -35,7 +35,10 @@ public class ProviderHandler extends BaseMessageHandler {
             "revoke_codex_local_config_authorization",
             "get_active_codex_provider",
             "sort_codex_providers",
-            // opencode discovery operations
+            // opencode authorization and discovery operations
+            "get_opencode_authorization",
+            "authorize_opencode",
+            "revoke_opencode_authorization",
             "get_opencode_models",
             "get_opencode_agents"
     };
@@ -130,6 +133,15 @@ public class ProviderHandler extends BaseMessageHandler {
                 return true;
             case "sort_codex_providers":
                 orderingService.handleSortCodexProviders(content);
+                return true;
+            case "get_opencode_authorization":
+                openCodeOps.handleGetOpenCodeAuthorization();
+                return true;
+            case "authorize_opencode":
+                openCodeOps.handleAuthorizeOpenCode();
+                return true;
+            case "revoke_opencode_authorization":
+                openCodeOps.handleRevokeOpenCodeAuthorization();
                 return true;
             case "get_opencode_models":
                 openCodeOps.handleGetOpenCodeModels();

@@ -297,6 +297,10 @@ public class CodemossSettingsService {
         codex.addProperty("localConfigAuthorized", false);
         config.add("codex", codex);
 
+        JsonObject opencode = new JsonObject();
+        opencode.addProperty("localConfigAuthorized", false);
+        config.add("opencode", opencode);
+
         return config;
     }
 
@@ -1557,7 +1561,7 @@ public class CodemossSettingsService {
                 return getActiveCodexProvider() != null && dependencyManager.isInstalled("codex-sdk");
             }
             if (AI_FEATURE_PROVIDER_OPENCODE.equals(provider)) {
-                return dependencyManager.isInstalled("opencode-sdk");
+                return isOpenCodeLocalConfigAuthorized() && dependencyManager.isInstalled("opencode-sdk");
             }
             return getActiveClaudeProvider() != null && dependencyManager.isInstalled("claude-sdk");
         } catch (Exception e) {
@@ -1800,6 +1804,31 @@ public class CodemossSettingsService {
         }
 
         codex.addProperty("localConfigAuthorized", authorized);
+        writeConfig(config);
+    }
+
+    public boolean isOpenCodeLocalConfigAuthorized() throws IOException {
+        JsonObject config = readConfig();
+        if (!config.has("opencode") || !config.get("opencode").isJsonObject()) {
+            return false;
+        }
+        JsonObject opencode = config.getAsJsonObject("opencode");
+        return opencode.has("localConfigAuthorized")
+                && !opencode.get("localConfigAuthorized").isJsonNull()
+                && opencode.get("localConfigAuthorized").getAsBoolean();
+    }
+
+    public void setOpenCodeLocalConfigAuthorized(boolean authorized) throws IOException {
+        JsonObject config = readConfig();
+        JsonObject opencode;
+        if (config.has("opencode") && config.get("opencode").isJsonObject()) {
+            opencode = config.getAsJsonObject("opencode");
+        } else {
+            opencode = new JsonObject();
+            config.add("opencode", opencode);
+        }
+
+        opencode.addProperty("localConfigAuthorized", authorized);
         writeConfig(config);
     }
 

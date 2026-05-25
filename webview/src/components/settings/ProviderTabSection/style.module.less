@@ -104,6 +104,32 @@
   }
 }
 
+.providerListContainer {
+  display: flex;
+  flex-direction: column;
+}
+
+.tempNotice {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-tertiary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+
+  :global(.codicon) {
+    font-size: 48px;
+    opacity: 0.5;
+    margin-bottom: 16px;
+    display: block;
+  }
+
+  p {
+    margin: 0;
+    font-size: 14px;
+  }
+}
+
 /* Responsive */
 @media (max-width: 480px) {
   .providerTabSection {

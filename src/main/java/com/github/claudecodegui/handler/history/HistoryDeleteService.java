@@ -197,6 +197,15 @@ class HistoryDeleteService {
             LOG.warn("[HistoryHandler] Project base path is null, cannot delete opencode session");
             return false;
         }
+        try {
+            if (!context.getSettingsService().isOpenCodeLocalConfigAuthorized()) {
+                LOG.warn("[HistoryHandler] opencode access is not authorized, cannot delete opencode session");
+                return false;
+            }
+        } catch (Exception e) {
+            LOG.warn("[HistoryHandler] Failed to read opencode authorization state: " + e.getMessage());
+            return false;
+        }
         if (context.getOpenCodeSDKBridge() == null) {
             LOG.warn("[HistoryHandler] opencode SDK bridge is not available, cannot delete opencode session");
             return false;

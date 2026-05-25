@@ -192,6 +192,10 @@ public class SessionSendService {
         return ClaudeCodeGuiBundle.message("error.codexLocalAccessNotAuthorized");
     }
 
+    public static String getOpenCodeRuntimeAccessError(boolean authorized) {
+        return authorized ? null : ClaudeCodeGuiBundle.message("error.openCodeLocalAccessNotAuthorized");
+    }
+
     private CompletableFuture<Void> sendToCodex(
             String channelId,
             String input,
@@ -244,6 +248,19 @@ public class SessionSendService {
         }
 
         OpenCodeMessageHandler handler = new OpenCodeMessageHandler(state, callbackFacade.getCallbackHandler());
+        boolean authorized = false;
+        try {
+            authorized = new CodemossSettingsService().isOpenCodeLocalConfigAuthorized();
+        } catch (Exception e) {
+            LOG.warn("[OpenCode] Failed to resolve local authorization state: " + e.getMessage());
+        }
+
+        String accessError = getOpenCodeRuntimeAccessError(authorized);
+        if (accessError != null) {
+            handler.onError(accessError);
+            return CompletableFuture.completedFuture(null);
+        }
+
         return openCodeSDKBridge.sendMessage(
                 channelId,
                 input,

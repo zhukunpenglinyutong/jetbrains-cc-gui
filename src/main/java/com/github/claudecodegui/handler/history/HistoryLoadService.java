@@ -5,6 +5,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.cache.SessionIndexCache;
 import com.github.claudecodegui.cache.SessionIndexManager;
+import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.provider.claude.ClaudeHistoryReader;
 import com.github.claudecodegui.provider.codex.CodexHistoryReader;
 import com.google.gson.Gson;
@@ -62,6 +63,9 @@ class HistoryLoadService {
                     LOG.info("[HistoryHandler] CodexHistoryReader 返回的 JSON 长度: " + historyJson.length());
                 } else if ("opencode".equals(provider)) {
                     LOG.info("[HistoryHandler] 使用 opencode session API 读取 opencode 会话 (项目: " + projectPath + ")");
+                    if (!context.getSettingsService().isOpenCodeLocalConfigAuthorized()) {
+                        throw new IllegalStateException(ClaudeCodeGuiBundle.message("error.openCodeLocalAccessNotAuthorized"));
+                    }
                     if (context.getOpenCodeSDKBridge() == null) {
                         throw new IllegalStateException("opencode SDK bridge is not available");
                     }

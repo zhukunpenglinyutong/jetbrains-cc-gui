@@ -33,6 +33,8 @@ describe('useSettingsWindowCallbacks', () => {
     setLoading: vi.fn(),
     setCodexLoading: vi.fn(),
     setCodexConfigLoading: vi.fn(),
+    setOpenCodeAuthorized: vi.fn(),
+    setOpenCodeLoading: vi.fn(),
     setSoundNotificationEnabled: vi.fn(),
     setSoundOnlyWhenUnfocused: vi.fn(),
     setSelectedSound: vi.fn(),
@@ -41,6 +43,7 @@ describe('useSettingsWindowCallbacks', () => {
     updateActiveProvider: vi.fn(),
     loadProviders: vi.fn(),
     loadCodexProviders: vi.fn(),
+    loadOpenCodeAuthorization: vi.fn(),
     loadAgents: vi.fn(),
     updateAgents: vi.fn(),
     handleAgentOperationResult: vi.fn(),
@@ -66,6 +69,7 @@ describe('useSettingsWindowCallbacks', () => {
 
     expect(deps.loadProviders).toHaveBeenCalledTimes(1);
     expect(deps.loadCodexProviders).toHaveBeenCalledTimes(1);
+    expect(deps.loadOpenCodeAuthorization).toHaveBeenCalledTimes(1);
     expect(deps.loadAgents).toHaveBeenCalledTimes(1);
     expect(window.sendToJava).not.toHaveBeenCalledWith('get_current_claude_config:');
     expect(window.sendToJava).toHaveBeenCalledWith('get_node_path:');
@@ -127,6 +131,22 @@ describe('useSettingsWindowCallbacks', () => {
 
     expect(deps.setCommitAiConfig).toHaveBeenCalledWith(payload);
     expect(deps.setPromptEnhancerConfig).not.toHaveBeenCalled();
+  });
+
+  it('registers opencode authorization callback and refreshes AI feature configs after changes', () => {
+    const deps = createDeps();
+
+    renderHook(() => useSettingsWindowCallbacks(deps));
+
+    window.updateOpenCodeAuthorization?.(JSON.stringify({
+      authorized: true,
+      changed: true,
+    }));
+
+    expect(deps.setOpenCodeAuthorized).toHaveBeenCalledWith(true);
+    expect(deps.setOpenCodeLoading).toHaveBeenCalledWith(false);
+    expect(window.sendToJava).toHaveBeenCalledWith('get_commit_ai_config:');
+    expect(window.sendToJava).toHaveBeenCalledWith('get_prompt_enhancer_config:');
   });
 
   it('registers ui font callback and updates ui font state from backend payload', () => {

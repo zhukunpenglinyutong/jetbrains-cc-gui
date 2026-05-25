@@ -304,14 +304,15 @@
       }
     },
     "providers": "Provider Management",
-    "providersDesc": "Manage Claude and Codex API provider configurations and switch between different API service providers",
+    "providersDesc": "Manage Claude, Codex, and OpenCode provider access and switch between different AI runtimes",
     "promptEnhancer": {
       "title": "Prompt Enhancer",
       "description": "Choose which provider and model should be used when enhancing prompts before sending them."
     },
     "providerTab": {
       "claude": "Claude Code",
-      "codex": "Codex"
+      "codex": "Codex",
+      "opencode": "OpenCode"
     },
     "pluginModels": {
       "title": "Custom Models",
@@ -721,6 +722,19 @@
         "envKeyProtected": "Cannot set built-in variable: {{key}}",
         "envKeyDuplicate": "Duplicate key: {{key}}",
         "envValueTooLong": "Value too long (max {{max}} characters)"
+      }
+    },
+    "opencodeProvider": {
+      "accessTitle": "Local OpenCode Runtime",
+      "providerName": "OpenCode CLI",
+      "providerDescription": "Use your installed opencode executable and existing OpenCode provider configuration.",
+      "authorized": "Authorized",
+      "dialog": {
+        "authorizeTitle": "Authorize OpenCode Access",
+        "authorizeMessage": "The plugin may start or connect to your local OpenCode runtime and use your existing OpenCode configuration.",
+        "authorizeDetail": "The plugin will not install OpenCode or write provider/auth configuration. You can revoke this authorization at any time.",
+        "revokeTitle": "Revoke OpenCode Authorization",
+        "revokeMessage": "The plugin will stop starting or connecting to OpenCode. Your OpenCode configuration remains unchanged."
       }
     },
     "agent": {

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CodexProviderConfig } from '../../types/provider';
 import { ToastContainer } from '../Toast';
@@ -254,6 +254,24 @@ const SettingsView = ({
     onSuccess: (msg) => addToast(msg, 'success'),
   });
 
+  const [openCodeAuthorized, setOpenCodeAuthorized] = useState(false);
+  const [openCodeLoading, setOpenCodeLoading] = useState(false);
+
+  const loadOpenCodeAuthorization = useCallback(() => {
+    setOpenCodeLoading(true);
+    window.sendToJava?.('get_opencode_authorization:');
+  }, []);
+
+  const handleAuthorizeOpenCode = useCallback(() => {
+    setOpenCodeLoading(true);
+    window.sendToJava?.('authorize_opencode:');
+  }, []);
+
+  const handleRevokeOpenCodeAuthorization = useCallback(() => {
+    setOpenCodeLoading(true);
+    window.sendToJava?.('revoke_opencode_authorization:');
+  }, []);
+
   // Use agent management hook
   const {
     agents,
@@ -310,10 +328,13 @@ const SettingsView = ({
     setLoading,
     setCodexLoading,
     setCodexConfigLoading,
+    setOpenCodeAuthorized,
+    setOpenCodeLoading,
     updateProviders,
     updateActiveProvider,
     loadProviders,
     loadCodexProviders,
+    loadOpenCodeAuthorization,
     loadAgents,
     updateAgents,
     handleAgentOperationResult,
@@ -527,12 +548,16 @@ const SettingsView = ({
               codexProviders={codexProviders}
               codexLoading={codexLoading}
               onAddCodexProvider={handleAddCodexProvider}
-                onEditCodexProvider={handleEditCodexProvider}
-                onDeleteCodexProvider={handleDeleteCodexProvider}
-                onSwitchCodexProvider={handleSwitchCodexProvider}
-                onRevokeCodexLocalConfigAuthorization={handleRevokeCodexLocalConfigAuthorization}
-                addToast={addToast}
-              />
+              onEditCodexProvider={handleEditCodexProvider}
+              onDeleteCodexProvider={handleDeleteCodexProvider}
+              onSwitchCodexProvider={handleSwitchCodexProvider}
+              onRevokeCodexLocalConfigAuthorization={handleRevokeCodexLocalConfigAuthorization}
+              openCodeAuthorized={openCodeAuthorized}
+              openCodeLoading={openCodeLoading}
+              onAuthorizeOpenCode={handleAuthorizeOpenCode}
+              onRevokeOpenCodeAuthorization={handleRevokeOpenCodeAuthorization}
+              addToast={addToast}
+            />
           </div>
 
           {/* SDK dependency management */}
