@@ -44,7 +44,7 @@ export function ensureSelectedOpenCodeModel(
 ): ModelInfo[] {
   const baseModels = models.length > 0 ? models : OPENCODE_MODELS;
   const selectedId = asNonEmptyString(selectedModel);
-  if (!selectedId || baseModels.some((model) => model.id === selectedId)) {
+  if (!selectedId || selectedId === 'opencode-default' || baseModels.some((model) => model.id === selectedId)) {
     return baseModels;
   }
 

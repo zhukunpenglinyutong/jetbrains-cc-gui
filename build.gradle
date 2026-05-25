@@ -459,6 +459,12 @@ tasks.register('installAiBridgeDependencies', Exec) {
 tasks.register('packageAiBridge', Exec) {
     dependsOn('installAiBridgeDependencies')
     onlyIf { aiBridgeDir.exists() }
+    inputs.files(fileTree(aiBridgeDir) {
+        exclude 'node_modules/.pnpm/**'
+        exclude 'node_modules/@anthropic-ai/**'
+        exclude 'node_modules/@openai/**'
+    })
+    outputs.files(aiBridgeArchive, aiBridgeHashFile)
 
     // Switch to ai-bridge directory for packaging, avoiding inclusion of top-level directory
     workingDir aiBridgeDir
@@ -564,6 +570,7 @@ tasks.matching { it.name.startsWith('prepareSandbox') }.configureEach {
     // Declare ai-bridge files as task inputs so changes to JS source
     // invalidate the UP-TO-DATE check and ensure doLast (copy/cleanup) runs.
     inputs.files(aiBridgeArchive, aiBridgeHashFile)
+    outputs.upToDateWhen { false }
     def sandboxRootProvider = layout.buildDirectory.dir('idea-sandbox')
     // Capture needed file references during configuration phase
     def archiveSource = aiBridgeArchive
@@ -585,9 +592,9 @@ tasks.matching { it.name.startsWith('prepareSandbox') }.configureEach {
             pluginDirs.add(directPluginDir)
         }
 
-        // Versioned plugin directories (IC-*/plugins/, PC-*/plugins/, etc.)
+        // Versioned plugin directories (IC-*/plugins/, IU-*/plugins/, PC-*/plugins/, etc.)
         sandboxRoot.listFiles()?.each { file ->
-            if (file.isDirectory() && file.name.matches(/[A-Z]+-\d+\.\d+\.\d+/)) {
+            if (file.isDirectory() && file.name.matches(/[A-Z]+-\d+\.\d+(?:\.\d+)?/)) {
                 def versionedPluginDir = new File(file, "plugins/${pluginName}")
                 if (versionedPluginDir.exists() || versionedPluginDir.parentFile.exists()) {
                     pluginDirs.add(versionedPluginDir)

@@ -51,4 +51,8 @@ describe('openCodeModels', () => {
       },
     ]);
   });
+
+  it('does not duplicate the opencode default placeholder', () => {
+    expect(ensureSelectedOpenCodeModel(OPENCODE_MODELS, 'opencode-default')).toEqual(OPENCODE_MODELS);
+  });
 });
