@@ -396,9 +396,10 @@ export const CODEX_MODELS: ModelInfo[] = [
 ];
 
 export const OPENCODE_DEFAULT_MODEL_ID = 'opencode-default';
+export const OPENCODE_SELECTED_MODEL_ID = 'opencode-selected';
 
 /**
- * Fallback entry for opencode. The toolbar replaces this with provider/model
+ * Fallback entries for opencode. The toolbar replaces these with provider/model
  * discovery from the user-managed opencode CLI when available.
  */
 export const OPENCODE_MODELS: ModelInfo[] = [
@@ -406,6 +407,11 @@ export const OPENCODE_MODELS: ModelInfo[] = [
     id: OPENCODE_DEFAULT_MODEL_ID,
     label: 'opencode default',
     description: 'Uses the provider and model configured in opencode.',
+  },
+  {
+    id: OPENCODE_SELECTED_MODEL_ID,
+    label: 'currently selected',
+    description: 'Uses the model currently selected in the chat window.',
   },
 ];
 

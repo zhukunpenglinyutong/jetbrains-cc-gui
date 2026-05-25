@@ -404,7 +404,19 @@ Footer 包含：
             return null;
         }
         String model = models.get(provider).getAsString().trim();
-        return model.isEmpty() ? null : model;
+        if (model.isEmpty()) {
+            return null;
+        }
+        // Resolve "opencode-selected" to the model currently active in the chat window
+        if (com.github.claudecodegui.settings.CodemossSettingsService.OPENCODE_SELECTED_MODEL.equals(model)) {
+            String current = settingsService.getCurrentOpenCodeModel();
+            if (current != null && !current.isEmpty()) {
+                LOG.info("[GitCommitMessage] Resolved opencode-selected to: " + current);
+                return current;
+            }
+            LOG.warn("[GitCommitMessage] opencode-selected resolved but no current model set, falling back to: " + model);
+        }
+        return model;
     }
 
     /**

@@ -93,8 +93,8 @@ describe('ModelSelect', () => {
     ]);
   });
 
-  it('opencode uses a single CLI-managed model placeholder', () => {
-    expect(OPENCODE_MODELS.map((model) => model.id)).toEqual(['opencode-default']);
+  it('opencode exposes default and session-selected model placeholders', () => {
+    expect(OPENCODE_MODELS.map((model) => model.id)).toEqual(['opencode-default', 'opencode-selected']);
   });
 
   it('opencode is selectable as a provider', () => {

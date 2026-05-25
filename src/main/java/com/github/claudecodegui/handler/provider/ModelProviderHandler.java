@@ -80,6 +80,7 @@ public class ModelProviderHandler {
 
             LOG.info("[ModelProviderHandler] Setting model to: " + model);
             context.setCurrentModel(model);
+            context.getSettingsService().setCurrentOpenCodeModel(model);
 
             if (context.getSession() != null) {
                 context.getSession().setModel(model);

@@ -5,6 +5,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.ProcessManager;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
@@ -386,6 +387,22 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
         LOG.info("[PromptEnhancer] Starting AI service call for prompt enhancement");
         LOG.info("[PromptEnhancer] Original prompt: " + originalPrompt);
         LOG.info("[PromptEnhancer] Using provider: " + describePromptEnhancerConfig(promptEnhancerConfig));
+
+        // Resolve "opencode-selected" to the model currently active in the chat window
+        if (promptEnhancerConfig != null
+                && promptEnhancerConfig.has("models")
+                && promptEnhancerConfig.get("models").isJsonObject()) {
+            JsonObject models = promptEnhancerConfig.getAsJsonObject("models");
+            if (models.has("opencode")
+                    && !models.get("opencode").isJsonNull()
+                    && CodemossSettingsService.OPENCODE_SELECTED_MODEL.equals(models.get("opencode").getAsString())) {
+                String resolved = context.getCurrentModel();
+                if (resolved != null && !resolved.isEmpty()) {
+                    models.addProperty("opencode", resolved);
+                    LOG.info("[PromptEnhancer] Resolved opencode-selected to: " + resolved);
+                }
+            }
+        }
 
         try {
             // Call AI service using a Node.js script

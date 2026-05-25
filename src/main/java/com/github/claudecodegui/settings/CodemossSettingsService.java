@@ -66,6 +66,7 @@ public class CodemossSettingsService {
     private static final String DEFAULT_COMMIT_AI_CLAUDE_MODEL = "claude-sonnet-4-6";
     private static final String DEFAULT_COMMIT_AI_CODEX_MODEL = "gpt-5.5";
     private static final String DEFAULT_COMMIT_AI_OPENCODE_MODEL = "opencode-default";
+    public static final String OPENCODE_SELECTED_MODEL = "opencode-selected";
     private static final String USER_LANGUAGE_CONFIG_KEY = "language";
 
     private final Gson gson;
@@ -81,6 +82,20 @@ public class CodemossSettingsService {
     private final McpServerManager mcpServerManager;
     private final ProviderManager providerManager;
     private final CodexProviderManager codexProviderManager;
+
+    // Runtime-transient: stores the model currently selected in the chat window.
+    // Updated by ModelProviderHandler on set_model; read by feature services
+    // (GitCommitMessageService, PromptEnhancerHandler) when the feature config
+    // has model=OPENCODE_SELECTED_MODEL.
+    private volatile String currentOpenCodeModel = DEFAULT_COMMIT_AI_OPENCODE_MODEL;
+
+    public void setCurrentOpenCodeModel(String model) {
+        this.currentOpenCodeModel = model;
+    }
+
+    public String getCurrentOpenCodeModel() {
+        return currentOpenCodeModel;
+    }
 
     public CodemossSettingsService() {
         this.gson = new GsonBuilder().setPrettyPrinting().serializeNulls().create();
