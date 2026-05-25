@@ -34,9 +34,11 @@ export const DEFAULT_COMMIT_AI_CONFIG: CommitAiConfig = {
   models: {
     claude: DEFAULT_AI_FEATURE_MODELS.claude,
     codex: DEFAULT_AI_FEATURE_MODELS.codex,
+    opencode: DEFAULT_AI_FEATURE_MODELS.opencode,
   },
   availability: {
     claude: false,
     codex: false,
+    opencode: false,
   },
 };

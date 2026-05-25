@@ -398,7 +398,7 @@ public class ProjectConfigHandler {
     public void handleSetCommitAiConfig(String content) {
         applyAiProviderConfig(content,
             (provider, claudeModel, codexModel, opencodeModel) ->
-                    settingsService.setCommitAiConfig(provider, claudeModel, codexModel),
+                    settingsService.setCommitAiConfig(provider, claudeModel, codexModel, opencodeModel),
             settingsService::getCommitAiConfig,
             "window.updateCommitAiConfig",
             "Failed to set commit AI config",

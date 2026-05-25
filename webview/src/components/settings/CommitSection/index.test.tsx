@@ -46,7 +46,7 @@ describe('CommitSection', () => {
     expect(screen.getByText('settings.commit.description')).toBeTruthy();
     expect(screen.getByTestId('commit-ai-provider-card')).toBeTruthy();
     expect(screen.getAllByRole('combobox')).toHaveLength(2);
-    expect(screen.queryByRole('option', { name: /opencode/i })).toBeNull();
+    expect(screen.getByRole('option', { name: /opencode/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'settings.commit.providerModel.resetToDefault' })).toBeTruthy();
     expect(screen.getByDisplayValue('use english')).toBeTruthy();
     expect(screen.queryByText('settings.commit.codeReview.label')).toBeNull();

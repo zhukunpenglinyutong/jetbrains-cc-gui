@@ -48,6 +48,7 @@ const CommitSection = ({
           settingsKeyPrefix="settings.commit.providerModel"
           providerKeyPrefix="settings.basic.promptEnhancer.provider"
           fallbackProvider="codex"
+          providers={['claude', 'codex', 'opencode']}
           onProviderChange={onCommitAiProviderChange}
           onModelChange={onCommitAiModelChange}
           onResetToDefault={onCommitAiResetToDefault}

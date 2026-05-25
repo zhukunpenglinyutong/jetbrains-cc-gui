@@ -43,8 +43,10 @@ public class CodemossSettingsServiceCommitAiConfigTest {
         assertEquals("auto", config.get("resolutionSource").getAsString());
         assertTrue(config.getAsJsonObject("availability").get("claude").getAsBoolean());
         assertTrue(config.getAsJsonObject("availability").get("codex").getAsBoolean());
+        assertFalse(config.getAsJsonObject("availability").get("opencode").getAsBoolean());
         assertEquals("claude-sonnet-4-6", config.getAsJsonObject("models").get("claude").getAsString());
         assertEquals("gpt-5.5", config.getAsJsonObject("models").get("codex").getAsString());
+        assertEquals("opencode-default", config.getAsJsonObject("models").get("opencode").getAsString());
     }
 
     @Test
@@ -63,6 +65,7 @@ public class CodemossSettingsServiceCommitAiConfigTest {
         assertEquals("auto", config.get("resolutionSource").getAsString());
         assertTrue(config.getAsJsonObject("availability").get("claude").getAsBoolean());
         assertFalse(config.getAsJsonObject("availability").get("codex").getAsBoolean());
+        assertFalse(config.getAsJsonObject("availability").get("opencode").getAsBoolean());
     }
 
     @Test
@@ -75,7 +78,7 @@ public class CodemossSettingsServiceCommitAiConfigTest {
 
         CodemossSettingsService service = new CodemossSettingsService();
 
-        invokeSetCommitAiConfig(service, "claude", "claude-opus-4-7", "gpt-5.4");
+        invokeSetCommitAiConfig(service, "claude", "claude-opus-4-7", "gpt-5.4", "opencode-default");
         JsonObject config = invokeGetCommitAiConfig(service);
 
         assertEquals("claude", config.get("provider").getAsString());
@@ -83,6 +86,7 @@ public class CodemossSettingsServiceCommitAiConfigTest {
         assertEquals("manual", config.get("resolutionSource").getAsString());
         assertEquals("claude-opus-4-7", config.getAsJsonObject("models").get("claude").getAsString());
         assertEquals("gpt-5.4", config.getAsJsonObject("models").get("codex").getAsString());
+        assertEquals("opencode-default", config.getAsJsonObject("models").get("opencode").getAsString());
     }
 
     @Test
@@ -93,7 +97,7 @@ public class CodemossSettingsServiceCommitAiConfigTest {
 
         CodemossSettingsService service = new CodemossSettingsService();
 
-        invokeSetCommitAiConfig(service, "claude", "claude-opus-4-7", "gpt-5.4");
+        invokeSetCommitAiConfig(service, "claude", "claude-opus-4-7", "gpt-5.4", "opencode-default");
         JsonObject config = invokeGetCommitAiConfig(service);
 
         assertEquals("claude", config.get("provider").getAsString());
@@ -101,6 +105,7 @@ public class CodemossSettingsServiceCommitAiConfigTest {
         assertEquals("unavailable", config.get("resolutionSource").getAsString());
         assertFalse(config.getAsJsonObject("availability").get("claude").getAsBoolean());
         assertFalse(config.getAsJsonObject("availability").get("codex").getAsBoolean());
+        assertFalse(config.getAsJsonObject("availability").get("opencode").getAsBoolean());
     }
 
     @Test
@@ -114,7 +119,7 @@ public class CodemossSettingsServiceCommitAiConfigTest {
         CodemossSettingsService service = new CodemossSettingsService();
         invokeSetPromptEnhancerConfig(service, "claude", "claude-opus-4-6", "gpt-5.4");
 
-        invokeSetCommitAiConfig(service, "codex", "claude-opus-4-7", "gpt-5.5");
+        invokeSetCommitAiConfig(service, "codex", "claude-opus-4-7", "gpt-5.5", "opencode-default");
 
         JsonObject promptEnhancerConfig = invokeGetPromptEnhancerConfig(service);
         JsonObject commitAiConfig = invokeGetCommitAiConfig(service);
@@ -126,6 +131,7 @@ public class CodemossSettingsServiceCommitAiConfigTest {
         assertEquals("codex", commitAiConfig.get("provider").getAsString());
         assertEquals("gpt-5.5", commitAiConfig.getAsJsonObject("models").get("codex").getAsString());
         assertEquals("claude-opus-4-7", commitAiConfig.getAsJsonObject("models").get("claude").getAsString());
+        assertEquals("opencode-default", commitAiConfig.getAsJsonObject("models").get("opencode").getAsString());
     }
 
     private JsonObject invokeGetCommitAiConfig(CodemossSettingsService service) throws Exception {
@@ -143,7 +149,8 @@ public class CodemossSettingsServiceCommitAiConfigTest {
             CodemossSettingsService service,
             String provider,
             String claudeModel,
-            String codexModel
+            String codexModel,
+            String opencodeModel
     ) throws Exception {
         Method method;
         try {
@@ -151,13 +158,14 @@ public class CodemossSettingsServiceCommitAiConfigTest {
                     "setCommitAiConfig",
                     String.class,
                     String.class,
+                    String.class,
                     String.class
             );
         } catch (NoSuchMethodException e) {
-            fail("CodemossSettingsService should expose setCommitAiConfig(provider, claudeModel, codexModel)");
+            fail("CodemossSettingsService should expose setCommitAiConfig(provider, claudeModel, codexModel, opencodeModel)");
             throw e;
         }
-        method.invoke(service, provider, claudeModel, codexModel);
+        method.invoke(service, provider, claudeModel, codexModel, opencodeModel);
     }
 
     private JsonObject invokeGetPromptEnhancerConfig(CodemossSettingsService service) throws Exception {

@@ -488,7 +488,7 @@ export function useSettingsBasicActions({
   }, [commitAiConfig]);
 
   const handleCommitAiResetToDefault = useCallback(() => {
-    const effectiveProvider = firstAvailableAiProvider(commitAiConfig.availability, ['codex', 'claude']);
+    const effectiveProvider = firstAvailableAiProvider(commitAiConfig.availability, ['codex', 'claude', 'opencode']);
     const nextConfig: CommitAiConfig = {
       ...commitAiConfig,
       provider: null,

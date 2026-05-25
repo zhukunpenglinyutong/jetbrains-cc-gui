@@ -11,10 +11,12 @@ describe('useSettingsBasicActions', () => {
     models: {
       claude: 'claude-sonnet-4-6',
       codex: 'gpt-5.5',
+      opencode: 'opencode-default',
     },
     availability: {
       claude: true,
       codex: true,
+      opencode: true,
     },
   };
 
@@ -38,7 +40,7 @@ describe('useSettingsBasicActions', () => {
     expect(result.current.commitAiConfig.provider).toBe('claude');
     expect(result.current.promptEnhancerConfig).toEqual(promptEnhancerBefore);
     expect(window.sendToJava).toHaveBeenCalledWith(
-      'set_commit_ai_config:{"provider":"claude","models":{"claude":"claude-sonnet-4-6","codex":"gpt-5.5"}}'
+      'set_commit_ai_config:{"provider":"claude","models":{"claude":"claude-sonnet-4-6","codex":"gpt-5.5","opencode":"opencode-default"}}'
     );
   });
 
@@ -63,7 +65,7 @@ describe('useSettingsBasicActions', () => {
     expect(result.current.commitAiConfig.models.codex).toBe('gpt-5.4');
     expect(result.current.promptEnhancerConfig).toEqual(promptEnhancerBefore);
     expect(window.sendToJava).toHaveBeenCalledWith(
-      'set_commit_ai_config:{"provider":"codex","models":{"claude":"claude-sonnet-4-6","codex":"gpt-5.4"}}'
+      'set_commit_ai_config:{"provider":"codex","models":{"claude":"claude-sonnet-4-6","codex":"gpt-5.4","opencode":"opencode-default"}}'
     );
   });
 

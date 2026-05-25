@@ -5,6 +5,7 @@ import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.provider.opencode.OpenCodeSDKBridge;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
@@ -30,6 +31,7 @@ public class GitCommitMessageService {
     private static final int MAX_DIFF_LENGTH = 4000; // Limit diff length to avoid exceeding token limits
     private static final String PROVIDER_CLAUDE = "claude";
     private static final String PROVIDER_CODEX = "codex";
+    private static final String PROVIDER_OPENCODE = "opencode";
 
     /**
      * Built-in commit prompt (based on CCG Commits specification).
@@ -364,6 +366,11 @@ Footer 包含：
             return;
         }
 
+        if (PROVIDER_OPENCODE.equals(effectiveProvider)) {
+            callOpenCodeAPI(prompt, getResolvedCommitAiModel(commitAiConfig, PROVIDER_OPENCODE), callback);
+            return;
+        }
+
         if (PROVIDER_CODEX.equals(effectiveProvider)) {
             callCodexAPI(prompt, getResolvedCommitAiModel(commitAiConfig, PROVIDER_CODEX), callback);
             return;
@@ -522,6 +529,61 @@ Footer 包含：
         } catch (Exception e) {
             bridge.cleanupAllProcesses();
             LOG.error("Failed to call Codex API", e);
+            callback.onError(ClaudeCodeGuiBundle.message("commit.callApiFailed") + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * Call the opencode API.
+     */
+    protected void callOpenCodeAPI(String prompt, String model, CommitMessageCallback callback) {
+        OpenCodeSDKBridge bridge = new OpenCodeSDKBridge();
+        try {
+            StringBuilder result = new StringBuilder();
+
+            bridge.sendMessage(
+                "git-commit-message",      // channelId
+                prompt,                     // message
+                null,                       // sessionId (null = new session)
+                project.getBasePath(),      // cwd
+                null,                       // attachments
+                null,                       // permissionMode
+                model,                      // model
+                null,                       // agent
+                new MessageCallback() {
+                    @Override
+                    public void onMessage(String type, String content) {
+                        if ("content".equals(type) || "assistant".equals(type) || "text".equals(type)) {
+                            if (!isThinkingContent(content)) {
+                                result.append(content);
+                            }
+                        }
+                    }
+
+                    @Override
+                    public void onError(String error) {
+                        bridge.cleanupAllProcesses();
+                        callback.onError(error);
+                    }
+
+                    @Override
+                    public void onComplete(SDKResult sdkResult) {
+                        bridge.cleanupAllProcesses();
+                        String commitMessage = result.length() > 0
+                                ? result.toString().trim()
+                                : sdkResult.finalResult.trim();
+
+                        if (commitMessage.isEmpty()) {
+                            callback.onError(ClaudeCodeGuiBundle.message("commit.emptyMessage"));
+                        } else {
+                            callback.onSuccess(cleanupCommitMessage(commitMessage));
+                        }
+                    }
+                }
+            );
+        } catch (Exception e) {
+            bridge.cleanupAllProcesses();
+            LOG.error("Failed to call opencode API", e);
             callback.onError(ClaudeCodeGuiBundle.message("commit.callApiFailed") + ": " + e.getMessage());
         }
     }

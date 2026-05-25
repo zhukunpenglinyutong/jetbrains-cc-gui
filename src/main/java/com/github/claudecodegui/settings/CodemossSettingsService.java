@@ -65,6 +65,7 @@ public class CodemossSettingsService {
     private static final String DEFAULT_PROMPT_ENHANCER_OPENCODE_MODEL = "opencode-default";
     private static final String DEFAULT_COMMIT_AI_CLAUDE_MODEL = "claude-sonnet-4-6";
     private static final String DEFAULT_COMMIT_AI_CODEX_MODEL = "gpt-5.5";
+    private static final String DEFAULT_COMMIT_AI_OPENCODE_MODEL = "opencode-default";
     private static final String USER_LANGUAGE_CONFIG_KEY = "language";
 
     private final Gson gson;
@@ -1407,22 +1408,22 @@ public class CodemossSettingsService {
                 COMMIT_AI_KEY,
                 DEFAULT_COMMIT_AI_CLAUDE_MODEL,
                 DEFAULT_COMMIT_AI_CODEX_MODEL,
-                null,
-                false
+                DEFAULT_COMMIT_AI_OPENCODE_MODEL,
+                true
         );
     }
 
-    public void setCommitAiConfig(String provider, String claudeModel, String codexModel) throws IOException {
+    public void setCommitAiConfig(String provider, String claudeModel, String codexModel, String opencodeModel) throws IOException {
         setAiFeatureConfig(
                 COMMIT_AI_KEY,
                 provider,
                 claudeModel,
                 codexModel,
-                null,
+                opencodeModel,
                 DEFAULT_COMMIT_AI_CLAUDE_MODEL,
                 DEFAULT_COMMIT_AI_CODEX_MODEL,
-                null,
-                false,
+                DEFAULT_COMMIT_AI_OPENCODE_MODEL,
+                true,
                 "commit AI"
         );
     }
