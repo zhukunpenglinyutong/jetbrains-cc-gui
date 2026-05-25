@@ -41,11 +41,14 @@ public class CliAttachmentHandler {
     ) {
         List<ContentBlock> blocks = new ArrayList<>();
         if (attachments == null || attachments.isEmpty()) {
+            LOG.info("[ClaudeImageDiag][CliAttachmentHandler] processForClaude: no attachments" + ", provider=" + provider + ", sessionKey=" + sessionKey);
             return blocks;
         }
+        LOG.info("[ClaudeImageDiag][CliAttachmentHandler] processForClaude: attachments=" + attachments.size() + ", provider=" + provider + ", sessionKey=" + sessionKey);
 
         for (ClaudeSession.Attachment att : attachments) {
             if (att == null) {
+                LOG.warn("[ClaudeImageDiag][CliAttachmentHandler] skip null attachment");
                 continue;
             }
             try {
@@ -56,21 +59,28 @@ public class CliAttachmentHandler {
                     }
                     if (file != null && file.isFile()) {
                         blocks.add(new ContentBlock(ContentBlock.Kind.IMAGE, att.mediaType, file, null));
+                        LOG.info("[ClaudeImageDiag][CliAttachmentHandler] image block created: fileName=" + att.fileName + ", mediaType=" + att.mediaType + ", localPath=" + att.localPath + ", resolvedFile=" + file.getAbsolutePath() + ", exists=" + file.isFile() + ", data=" + (att.data != null ? att.data.length() + "chars" : "null"));
+                    } else {
+                        LOG.warn("[ClaudeImageDiag][CliAttachmentHandler] image attachment could not resolve to file: fileName=" + att.fileName + ", mediaType=" + att.mediaType + ", localPath=" + att.localPath + ", data=" + (att.data != null ? att.data.length() + "chars" : "null"));
                     }
                 } else {
                     // 文档/文本：读取内容作为 text block
                     String text = resolveTextContent(att);
                     if (text == null) {
+                        LOG.warn("[ClaudeImageDiag][CliAttachmentHandler] text attachment could not resolve content: fileName=" + att.fileName + ", mediaType=" + att.mediaType + ", localPath=" + att.localPath);
                         continue;
                     }
                     blocks.add(new ContentBlock(ContentBlock.Kind.TEXT,
                             null, null,
                             "[File: " + att.fileName + "]\n" + text));
+                    LOG.info("[ClaudeImageDiag][CliAttachmentHandler] text block created: fileName=" + att.fileName + ", mediaType=" + att.mediaType + ", textChars=" + text.length());
                 }
             } catch (Exception e) {
                 LOG.warn("[CliAttachmentHandler] Failed to process attachment: " + att.fileName, e);
+                LOG.warn("[ClaudeImageDiag][CliAttachmentHandler] exception while processing attachment: fileName=" + att.fileName + ", mediaType=" + att.mediaType + ", localPath=" + att.localPath, e);
             }
         }
+        LOG.info("[ClaudeImageDiag][CliAttachmentHandler] processForClaude result: blocks=" + blocks.size());
         return blocks;
     }
 
@@ -222,7 +232,8 @@ public class CliAttachmentHandler {
 
     /**
      * content block 描述。
-     * IMAGE: file = 真实磁盘文件路径（prompt 中以 "Referenced image: <abs_path>" 引用，并通过 --add-dir 授权父目录）。
+     * IMAGE: file = 真实磁盘文件路径（prompt 中以 "[Image #N: <abs_path>]" 锚定历史，
+     * 并提示 CLI 用 Read 读取；通过 --add-dir 授权父目录）。
      * TEXT:  text = 文档纯文本内容。
      */
     public record ContentBlock(Kind kind, String mediaType, File file, String text) {

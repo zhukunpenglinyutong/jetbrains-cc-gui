@@ -1,8 +1,8 @@
 package com.github.claudecodegui.provider.claude;
 
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
-import com.github.claudecodegui.util.AttachmentStorageService;
 import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.util.AttachmentStorageService;
 import com.github.claudecodegui.util.UserMessageSanitizer;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -17,9 +17,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.function.Supplier;
 
 /**
  * Reads persisted Claude session history via the Node bridge.
@@ -36,6 +36,7 @@ class ClaudeSessionQueryService {
             "The user has attached the image(s) above. Please use the Read tool to view them.";
     private static final String IMAGE_ATTACHMENT_CONTENT_HINT =
             "The user attached the image file(s) above. Use the image content to answer the request.";
+    private static final Pattern CLI_IMAGE_READ_INSTRUCTION_PATTERN = Pattern.compile("(?im)^\\s*Use the Read tool to inspect this image file, then answer using its visible content:\\s*" + "(?:[a-z]:[/\\\\]|/).+?\\.(?:png|jpe?g|gif|webp|bmp|svg)\\s*$");
 
     private final Logger log;
     private final Gson gson;
@@ -323,6 +324,7 @@ class ClaudeSessionQueryService {
         normalized = normalized.replace("\r", "\n");
         normalized = normalized.replace(IMAGE_ATTACHMENT_HINT, "");
         normalized = normalized.replace(IMAGE_ATTACHMENT_CONTENT_HINT, "");
+        normalized = CLI_IMAGE_READ_INSTRUCTION_PATTERN.matcher(normalized).replaceAll("");
         normalized = UserMessageSanitizer.sanitizeUserFacingText(normalized);
         normalized = normalized.replaceAll("(?m)^[ \\t]+$", "");
         normalized = normalized.replaceAll("\n{3,}", "\n\n");

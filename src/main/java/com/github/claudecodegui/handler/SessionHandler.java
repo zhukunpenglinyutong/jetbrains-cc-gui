@@ -1,12 +1,11 @@
 package com.github.claudecodegui.handler;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
-
-import com.github.claudecodegui.session.ClaudeSession;
-import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.model.NodeDetectionResult;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
+import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.session.SessionState;
 import com.github.claudecodegui.util.AttachmentStorageService;
 import com.github.claudecodegui.util.PlatformUtils;
@@ -241,6 +240,7 @@ public class SessionHandler extends BaseMessageHandler {
             java.util.List<ClaudeSession.Attachment> atts = new java.util.ArrayList<>();
             if (payload != null && payload.has("attachments") && payload.get("attachments").isJsonArray()) {
                 JsonArray arr = payload.getAsJsonArray("attachments");
+                LOG.info("[ClaudeImageDiag][SessionHandler] received attachment payload: count=" + arr.size() + ", textChars=" + text.length());
                 String provider = context.getSession() != null ? context.getSession().getProvider() : context.getCurrentProvider();
                 String currentSessionId = context.getSession() != null ? context.getSession().getSessionId() : null;
                 String runtimeEpoch = context.getSession() != null ? context.getSession().getRuntimeSessionEpoch() : null;
@@ -258,6 +258,7 @@ public class SessionHandler extends BaseMessageHandler {
                     String data = a.has("data") && !a.get("data").isJsonNull()
                                           ? a.get("data").getAsString()
                                           : "";
+                    LOG.info("[ClaudeImageDiag][SessionHandler] payload att[" + i + "]: fileName=" + fileName + ", mediaType=" + mediaType + ", dataChars=" + (data != null ? data.length() : 0) + ", provider=" + provider + ", sessionKey=" + sessionKey);
                     ClaudeSession.Attachment attachment = new ClaudeSession.Attachment(fileName, mediaType, data);
                     if (mediaType.startsWith("image/") && !data.isBlank()) {
                         AttachmentStorageService.PersistedAttachment persisted = AttachmentStorageService.getInstance()
@@ -270,10 +271,17 @@ public class SessionHandler extends BaseMessageHandler {
                             // Image is now on disk — free the base64 string from the pipeline.
                             // Downstream (SDK/CLI) reads from localPath; display uses resourceUrl.
                             attachment.data = null;
+                            LOG.info("[ClaudeImageDiag][SessionHandler] persisted image att[" + i + "]: localPath=" + attachment.localPath + ", resourceUrl=" + attachment.resourceUrl + ", thumbnailUrl=" + attachment.thumbnailUrl + ", hash=" + attachment.attachmentHash);
+                        } else {
+                            LOG.warn("[ClaudeImageDiag][SessionHandler] image persistence returned null for att[" + i + "]: fileName=" + fileName + ", mediaType=" + mediaType);
                         }
+                    } else if (mediaType.startsWith("image/")) {
+                        LOG.warn("[ClaudeImageDiag][SessionHandler] image attachment has no base64 data: att[" + i + "], fileName=" + fileName);
                     }
                     atts.add(attachment);
                 }
+            } else {
+                LOG.info("[ClaudeImageDiag][SessionHandler] no attachments array in payload for send_message_with_attachments");
             }
 
             // [FIX] Extract agent prompt from the payload for per-tab agent selection

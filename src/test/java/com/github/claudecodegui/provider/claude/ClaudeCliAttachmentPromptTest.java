@@ -13,7 +13,7 @@ import static org.junit.Assert.assertTrue;
 public class ClaudeCliAttachmentPromptTest {
 
     @Test
-    public void rendersImageAttachmentAsReferencedImageWithAllowedDirectory() {
+    public void rendersImageAttachmentWithReadToolInstructionAndAllowedDirectory() {
         ClaudeSession.Attachment attachment =
                 new ClaudeSession.Attachment("screen.png", "image/png", null);
         File image = new File("C:\\Users\\32979\\.codemoss\\attachments\\store\\abc123.png");
@@ -23,9 +23,9 @@ public class ClaudeCliAttachmentPromptTest {
                 List.of(new ClaudeCliAttachmentPrompt.ResolvedAttachment(1, attachment, image))
         );
 
-        assertTrue(rendered.prompt().contains("Referenced image: "));
-        assertTrue(rendered.prompt().contains("C:/Users/32979/.codemoss/attachments/store/abc123.png"));
-        assertFalse(rendered.prompt().contains("Please use the Read tool to view"));
+        assertTrue(rendered.prompt().contains("[Image #1: C:/Users/32979/.codemoss/attachments/store/abc123.png]"));
+        assertTrue(rendered.prompt().contains("Use the Read tool to inspect this image file, then answer using its visible content: " + "C:/Users/32979/.codemoss/attachments/store/abc123.png"));
+        assertFalse(rendered.prompt().contains("Referenced image:"));
         assertEquals(List.of(new File("C:\\Users\\32979\\.codemoss\\attachments\\store").getAbsolutePath()), rendered.addDirs());
     }
 

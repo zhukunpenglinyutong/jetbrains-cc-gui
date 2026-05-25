@@ -12,7 +12,7 @@ import java.util.Locale;
  */
 final class ClaudeCliAttachmentPrompt {
 
-    static final String IMAGE_ATTACHMENT_HINT = "Referenced image: ";
+    static final String IMAGE_ATTACHMENT_PREFIX = "[Image #";
 
     private ClaudeCliAttachmentPrompt() {
     }
@@ -42,10 +42,9 @@ final class ClaudeCliAttachmentPrompt {
             ClaudeSession.Attachment attachment = resolved.attachment();
             String safePath = toPromptPath(file);
             if (isImageAttachment(attachment)) {
-                promptBuilder.append("\n\n[Image #")
-                        .append(resolved.displayIndex())
-                        .append("]\n")
-                        .append(IMAGE_ATTACHMENT_HINT)
+                promptBuilder.append("\n\n").append(IMAGE_ATTACHMENT_PREFIX)
+                        .append(resolved.displayIndex()).append(": ").append(safePath)
+                        .append("]\n").append("Use the Read tool to inspect this image file, then answer using its visible content: ")
                         .append(safePath);
             } else {
                 promptBuilder.append("\n\n[Attached file: ")

@@ -20,6 +20,7 @@ import com.intellij.openapi.diagnostic.Logger;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -92,6 +93,14 @@ public class ClaudeCliSession {
         return compact.length() > 240 ? compact.substring(0, 240) + "..." : compact;
     }
 
+    private static String previewPrompt(String prompt) {
+        if (prompt == null) {
+            return "";
+        }
+        String compact = prompt.replace('\n', ' ').replace('\r', ' ');
+        return compact.length() > 500 ? compact.substring(0, 500) + "..." : compact;
+    }
+
     private static String buildExitError(int exitCode, StringBuilder diagnostic) {
         return CliErrorFormatter.formatExitError("Claude", exitCode, diagnostic);
     }
@@ -150,23 +159,26 @@ public class ClaudeCliSession {
             cmd.add(resumeId);
         }
 
-        // 消息作为位置参数
-        cmd.add("--");
-        cmd.add(prompt);
         return cmd;
+    }
+
+    private static void writePromptToStdin(Process process, String prompt) throws Exception {
+        try (OutputStreamWriter writer = new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8)) {
+            writer.write(prompt != null ? prompt : "");
+            writer.flush();
+        }
     }
 
     private String buildPrompt(CliSendRequest request, List<CliAttachmentHandler.ContentBlock> blocks) {
         StringBuilder sb = new StringBuilder(request.message() != null ? request.message() : "");
 
-        // 附件：图片用文件路径引用，文档用文本内容
+        // 附件：图片保留 [Image #N: path] 历史锚点，并显式提示 Claude CLI 用 Read 读取真实文件。
         int imageIndex = 0;
         for (CliAttachmentHandler.ContentBlock block : blocks) {
             if (block.kind() == CliAttachmentHandler.ContentBlock.Kind.IMAGE) {
                 imageIndex++;
                 String path = block.file().getAbsolutePath().replace('\\', '/');
-                sb.append("\n\n[Image #").append(imageIndex).append("]\n")
-                        .append("Referenced image: ").append(path);
+                sb.append("\n\n[Image #").append(imageIndex).append(": ").append(path).append("]\n").append("Use the Read tool to inspect this image file, then answer using its visible content: ").append(path);
             } else if (block.text() != null) {
                 sb.append("\n\n").append(block.text());
             }
@@ -239,9 +251,16 @@ public class ClaudeCliSession {
 
                 String prompt = buildPrompt(request, blocks);
                 List<String> addDirs = collectAddDirs(blocks);
+                int imageBlockCount = 0;
+                for (CliAttachmentHandler.ContentBlock block : blocks) {
+                    if (block.kind() == CliAttachmentHandler.ContentBlock.Kind.IMAGE) {
+                        imageBlockCount++;
+                    }
+                }
+                LOG.info("[ClaudeImageDiag][ClaudeCliSession] prompt prepared: tabId=" + tabId + ", requestAttachments=" + (request.attachments() != null ? request.attachments().size() : 0) + ", contentBlocks=" + blocks.size() + ", imageBlocks=" + imageBlockCount + ", addDirs=" + addDirs + ", promptViaStdin=true" + ", containsReadInstruction=" + prompt.contains("Use the Read tool to inspect this image file") + ", promptPreview=" + previewPrompt(prompt));
 
                 List<String> cmd = buildCommand(cliPath, request, prompt, addDirs);
-                LOG.info("[ClaudeCliSession][" + tabId + "] Command: " + String.join(" ", cmd));
+                LOG.info("[ClaudeCliSession][" + tabId + "] Command (prompt via stdin): " + String.join(" ", cmd));
 
                 ProcessBuilder pb = new ProcessBuilder(cmd);
                 pb.redirectErrorStream(true);
@@ -258,7 +277,8 @@ public class ClaudeCliSession {
                 LOG.info("[CliConcurrencyDiag][ClaudeCliSession] starting process" + ": tabId=" + tabId + ", elapsedMs=" + elapsedMillis(sendStartNanos) + ", thread=" + Thread.currentThread().getName());
                 Process process = pb.start();
                 LOG.info("[CliConcurrencyDiag][ClaudeCliSession] process started" + ": tabId=" + tabId + ", elapsedMs=" + elapsedMillis(sendStartNanos) + ", thread=" + Thread.currentThread().getName());
-                process.getOutputStream().close();
+                writePromptToStdin(process, prompt);
+                LOG.info("[CliConcurrencyDiag][ClaudeCliSession] prompt written to stdin" + ": tabId=" + tabId + ", promptChars=" + prompt.length() + ", elapsedMs=" + elapsedMillis(sendStartNanos) + ", thread=" + Thread.currentThread().getName());
                 activeHandle = new CliProcessHandle(process, "claude-tab-" + tabId);
 
                 readOutput(callback, diagnostic, sendStartNanos);
