@@ -397,7 +397,8 @@ public class ProjectConfigHandler {
 
     public void handleSetCommitAiConfig(String content) {
         applyAiProviderConfig(content,
-            settingsService::setCommitAiConfig,
+            (provider, claudeModel, codexModel, opencodeModel) ->
+                    settingsService.setCommitAiConfig(provider, claudeModel, codexModel),
             settingsService::getCommitAiConfig,
             "window.updateCommitAiConfig",
             "Failed to set commit AI config",
@@ -406,7 +407,7 @@ public class ProjectConfigHandler {
 
     @FunctionalInterface
     private interface AiProviderSetter {
-        void apply(String provider, String claudeModel, String codexModel) throws Exception;
+        void apply(String provider, String claudeModel, String codexModel, String opencodeModel) throws Exception;
     }
 
     @FunctionalInterface
@@ -422,7 +423,12 @@ public class ProjectConfigHandler {
             JsonObject models = json != null && json.has("models") && json.get("models").isJsonObject()
                     ? json.getAsJsonObject("models")
                     : new JsonObject();
-            setter.apply(provider, readString(models, "claude", null), readString(models, "codex", null));
+            setter.apply(
+                    provider,
+                    readString(models, "claude", null),
+                    readString(models, "codex", null),
+                    readString(models, "opencode", null)
+            );
             pushJson(jsCallback, getter.get());
         } catch (Exception e) {
             LOG.error("[ProjectConfigHandler] " + errorLogMessage + ": " + e.getMessage(), e);

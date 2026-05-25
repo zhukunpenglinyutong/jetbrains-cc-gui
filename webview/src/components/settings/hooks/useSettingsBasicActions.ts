@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 export type { UiFontConfig } from '../../../types/uiFontConfig';
 import type { UiFontConfig } from '../../../types/uiFontConfig';
-import type { CommitAiConfig, CommitAiProvider } from '../../../types/aiFeatureConfig';
+import type { AiFeatureProvider, CommitAiConfig, CommitAiProvider } from '../../../types/aiFeatureConfig';
 import { DEFAULT_COMMIT_AI_CONFIG } from '../../../types/aiFeatureConfig';
 import type { PromptEnhancerConfig, PromptEnhancerProvider } from '../../../types/promptEnhancer';
 import { DEFAULT_PROMPT_ENHANCER_CONFIG } from '../../../types/promptEnhancer';
@@ -21,6 +21,13 @@ const sendToJava = (message: string) => {
     window.sendToJava(message);
   }
 };
+
+function firstAvailableAiProvider(
+  availability: PromptEnhancerConfig['availability'],
+  providers: AiFeatureProvider[]
+): AiFeatureProvider | null {
+  return providers.find((provider) => Boolean(availability[provider])) ?? null;
+}
 
 export interface UseSettingsBasicActionsProps {
   streamingEnabledProp?: boolean;
@@ -481,13 +488,12 @@ export function useSettingsBasicActions({
   }, [commitAiConfig]);
 
   const handleCommitAiResetToDefault = useCallback(() => {
+    const effectiveProvider = firstAvailableAiProvider(commitAiConfig.availability, ['codex', 'claude']);
     const nextConfig: CommitAiConfig = {
       ...commitAiConfig,
       provider: null,
-      effectiveProvider: commitAiConfig.availability.codex
-        ? 'codex'
-        : (commitAiConfig.availability.claude ? 'claude' : null),
-      resolutionSource: commitAiConfig.availability.codex || commitAiConfig.availability.claude
+      effectiveProvider,
+      resolutionSource: effectiveProvider
         ? 'auto'
         : 'unavailable',
     };
@@ -530,13 +536,12 @@ export function useSettingsBasicActions({
   }, [promptEnhancerConfig]);
 
   const handlePromptEnhancerResetToDefault = useCallback(() => {
+    const effectiveProvider = firstAvailableAiProvider(promptEnhancerConfig.availability, ['codex', 'claude', 'opencode']);
     const nextConfig: PromptEnhancerConfig = {
       ...promptEnhancerConfig,
       provider: null,
-      effectiveProvider: promptEnhancerConfig.availability.codex
-        ? 'codex'
-        : (promptEnhancerConfig.availability.claude ? 'claude' : null),
-      resolutionSource: promptEnhancerConfig.availability.codex || promptEnhancerConfig.availability.claude
+      effectiveProvider,
+      resolutionSource: effectiveProvider
         ? 'auto'
         : 'unavailable',
     };

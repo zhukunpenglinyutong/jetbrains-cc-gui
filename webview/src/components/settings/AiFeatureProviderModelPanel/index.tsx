@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CLAUDE_MODELS, CODEX_MODELS } from '../../ChatInputBox/types';
+import { CLAUDE_MODELS, CODEX_MODELS, OPENCODE_MODELS } from '../../ChatInputBox/types';
 import { ProviderModelIcon } from '../../shared/ProviderModelIcon';
 import type { AiFeatureConfig, AiFeatureProvider } from '../../../types/aiFeatureConfig';
 import styles from './style.module.less';
@@ -10,6 +10,7 @@ interface AiFeatureProviderModelPanelProps {
   settingsKeyPrefix: string;
   providerKeyPrefix: string;
   fallbackProvider?: AiFeatureProvider;
+  providers?: AiFeatureProvider[];
   onProviderChange?: (provider: AiFeatureProvider) => void;
   onModelChange?: (model: string) => void;
   onResetToDefault?: () => void;
@@ -20,6 +21,7 @@ const AiFeatureProviderModelPanel = ({
   settingsKeyPrefix,
   providerKeyPrefix,
   fallbackProvider = 'codex',
+  providers = ['claude', 'codex'],
   onProviderChange = () => {},
   onModelChange = () => {},
   onResetToDefault = () => {},
@@ -30,7 +32,12 @@ const AiFeatureProviderModelPanel = ({
     ?? config.effectiveProvider
     ?? fallbackProvider;
   const statusProvider = config.effectiveProvider ?? config.provider ?? fallbackProvider;
-  const modelOptions = selectedProvider === 'codex' ? CODEX_MODELS : CLAUDE_MODELS;
+  const modelOptions = selectedProvider === 'opencode'
+    ? OPENCODE_MODELS
+    : selectedProvider === 'codex'
+      ? CODEX_MODELS
+      : CLAUDE_MODELS;
+  const selectedModel = config.models[selectedProvider] ?? modelOptions[0]?.id ?? '';
   const isAutoMode = config.provider == null;
   const statusText = config.resolutionSource === 'auto'
     ? t(`${settingsKeyPrefix}.currentProviderAuto`, {
@@ -61,7 +68,7 @@ const AiFeatureProviderModelPanel = ({
             onChange={(e) => onProviderChange(e.target.value as AiFeatureProvider)}
             aria-label={t(`${settingsKeyPrefix}.label`)}
           >
-            {(['claude', 'codex'] as AiFeatureProvider[]).map((provider) => (
+            {providers.map((provider) => (
               <option key={provider} value={provider} disabled={!config.availability[provider]}>
                 {getProviderLabel(provider)}{!config.availability[provider] ? ` (${t(`${settingsKeyPrefix}.providerUnavailable`)})` : ''}
               </option>
@@ -74,7 +81,7 @@ const AiFeatureProviderModelPanel = ({
           <select
             id={`${settingsKeyPrefix}-model`}
             className={styles.modelSelect}
-            value={config.models[selectedProvider]}
+            value={selectedModel}
             onChange={(e) => onModelChange(e.target.value)}
             aria-label={t(`${settingsKeyPrefix}.modelLabel`)}
           >

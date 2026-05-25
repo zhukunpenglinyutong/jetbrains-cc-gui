@@ -32,6 +32,7 @@ const PromptEnhancerSection = ({
           settingsKeyPrefix="settings.basic.promptEnhancer"
           providerKeyPrefix="settings.basic.promptEnhancer.provider"
           fallbackProvider="claude"
+          providers={['claude', 'codex', 'opencode']}
           onProviderChange={onPromptEnhancerProviderChange}
           onModelChange={onPromptEnhancerModelChange}
           onResetToDefault={onPromptEnhancerResetToDefault}

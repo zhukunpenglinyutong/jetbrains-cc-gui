@@ -429,6 +429,9 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
             if (promptEnhancerConfig != null) {
                 stdinInput.add("promptEnhancerConfig", promptEnhancerConfig);
             }
+            if (context.getProject() != null && context.getProject().getBasePath() != null) {
+                stdinInput.addProperty("cwd", context.getProject().getBasePath());
+            }
 
             // Delegate to the runner so that:
             //  1. The process is registered with ProcessManager (cleanup on shutdown).

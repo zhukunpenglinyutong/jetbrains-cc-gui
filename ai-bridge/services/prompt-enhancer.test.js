@@ -16,16 +16,41 @@ test('resolvePromptEnhancerRuntimeConfig prefers Codex when auto mode has both p
       models: {
         claude: 'claude-sonnet-4-6',
         codex: 'gpt-5.5',
+        opencode: 'opencode-default',
       },
       availability: {
         claude: true,
         codex: true,
+        opencode: false,
       },
     },
   });
 
   assert.equal(resolved.provider, 'codex');
   assert.equal(resolved.model, 'gpt-5.5');
+});
+
+test('resolvePromptEnhancerRuntimeConfig supports opencode effective provider', () => {
+  const resolved = resolvePromptEnhancerRuntimeConfig({
+    promptEnhancerConfig: {
+      provider: 'opencode',
+      effectiveProvider: 'opencode',
+      resolutionSource: 'manual',
+      models: {
+        claude: 'claude-sonnet-4-6',
+        codex: 'gpt-5.5',
+        opencode: 'opencode-default',
+      },
+      availability: {
+        claude: false,
+        codex: false,
+        opencode: true,
+      },
+    },
+  });
+
+  assert.equal(resolved.provider, 'opencode');
+  assert.equal(resolved.model, 'opencode-default');
 });
 
 test('resolvePromptEnhancerRuntimeConfig throws a strict error when manual provider is unavailable', () => {
@@ -38,10 +63,12 @@ test('resolvePromptEnhancerRuntimeConfig throws a strict error when manual provi
         models: {
           claude: 'claude-opus-4-7',
           codex: 'gpt-5.4',
+          opencode: 'opencode-default',
         },
         availability: {
           claude: false,
           codex: true,
+          opencode: false,
         },
       },
     }),

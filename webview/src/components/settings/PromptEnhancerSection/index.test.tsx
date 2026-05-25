@@ -38,6 +38,7 @@ describe('PromptEnhancerSection', () => {
     expect(screen.getByText('settings.promptEnhancer.description')).toBeTruthy();
     expect(screen.getByTestId('prompt-enhancer-provider-card')).toBeTruthy();
     expect(screen.getAllByRole('combobox')).toHaveLength(2);
+    expect(screen.getByRole('option', { name: 'settings.basic.promptEnhancer.provider.opencode (settings.basic.promptEnhancer.providerUnavailable)' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'settings.basic.promptEnhancer.resetToDefault' })).toBeTruthy();
   });
 

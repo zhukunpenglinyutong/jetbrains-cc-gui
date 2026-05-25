@@ -1,6 +1,6 @@
 /**
  * Prompt Enhancement Service.
- * Routes enhancement requests to Claude or Codex based on prompt enhancer config.
+ * Routes enhancement requests to Claude, Codex, or opencode based on prompt enhancer config.
  *
  * Supports context information:
  * - User selected code snippets
@@ -16,11 +16,22 @@ import {
   isClaudeSdkAvailable,
   loadCodexSdk,
   isCodexSdkAvailable,
+  isOpenCodeSdkAvailable,
 } from '../utils/sdk-loader.js';
 import { setupApiKey, buildCliEnv } from '../config/api-config.js';
 import { mapModelIdToSdkName } from '../utils/model-utils.js';
 import { getRealHomeDir } from '../utils/path-utils.js';
 import { buildCodexCliEnvironment } from './codex/codex-utils.js';
+import {
+  createOpenCodeRuntime,
+  directoryQuery,
+  extractOpenCodeAssistantText,
+  extractSessionId,
+  releaseOpenCodeRuntime,
+  resolveOpenCodePromptModel,
+  unwrapSdkResult,
+} from './opencode/message-service.js';
+import { normalizeOpenCodeSdkError } from './opencode/opencode-utils.js';
 
 let claudeSdk = null;
 let codexSdk = null;
@@ -32,10 +43,12 @@ const DEFAULT_PROMPT_ENHANCER_CONFIG = {
   models: {
     claude: 'claude-sonnet-4-6',
     codex: 'gpt-5.5',
+    opencode: 'opencode-default',
   },
   availability: {
     claude: false,
     codex: false,
+    opencode: false,
   },
 };
 
@@ -230,19 +243,25 @@ function normalizePromptEnhancerConfig(config) {
     return structuredClone(DEFAULT_PROMPT_ENHANCER_CONFIG);
   }
 
+  const validProvider = (provider) => (
+    provider === 'claude' || provider === 'codex' || provider === 'opencode'
+  );
+
   return {
-    provider: config.provider === 'claude' || config.provider === 'codex' ? config.provider : null,
-    effectiveProvider: config.effectiveProvider === 'claude' || config.effectiveProvider === 'codex'
+    provider: validProvider(config.provider) ? config.provider : null,
+    effectiveProvider: validProvider(config.effectiveProvider)
       ? config.effectiveProvider
       : null,
     resolutionSource: typeof config.resolutionSource === 'string' ? config.resolutionSource : 'auto',
     models: {
       claude: config.models?.claude || DEFAULT_PROMPT_ENHANCER_CONFIG.models.claude,
       codex: config.models?.codex || DEFAULT_PROMPT_ENHANCER_CONFIG.models.codex,
+      opencode: config.models?.opencode || DEFAULT_PROMPT_ENHANCER_CONFIG.models.opencode,
     },
     availability: {
       claude: Boolean(config.availability?.claude),
       codex: Boolean(config.availability?.codex),
+      opencode: Boolean(config.availability?.opencode),
     },
   };
 }
@@ -259,6 +278,15 @@ export function resolvePromptEnhancerRuntimeConfig({ promptEnhancerConfig, legac
   const config = normalizePromptEnhancerConfig(promptEnhancerConfig);
   const claudeSdkInstalled = isClaudeSdkAvailable();
   const codexSdkInstalled = isCodexSdkAvailable();
+  const openCodeSdkInstalled = isOpenCodeSdkAvailable();
+
+  if (config.effectiveProvider === 'opencode') {
+    return {
+      provider: 'opencode',
+      model: config.models.opencode || DEFAULT_PROMPT_ENHANCER_CONFIG.models.opencode,
+      resolutionSource: config.resolutionSource,
+    };
+  }
 
   if (config.effectiveProvider === 'codex') {
     return {
@@ -290,11 +318,18 @@ export function resolvePromptEnhancerRuntimeConfig({ promptEnhancerConfig, legac
     throw new Error('Claude Code prompt enhancer is unavailable because no active Claude Code provider is configured.');
   }
 
-  if (!codexSdkInstalled && !claudeSdkInstalled) {
-    throw new Error('No available prompt enhancer provider is configured because both Claude Code and Codex SDKs are not installed.');
+  if (config.provider === 'opencode') {
+    if (!openCodeSdkInstalled) {
+      throw new Error('opencode prompt enhancer is unavailable because the opencode SDK is not installed. Please install it in Settings > Dependencies.');
+    }
+    throw new Error('opencode prompt enhancer is unavailable because no active opencode runtime is configured.');
   }
 
-  throw new Error('No available prompt enhancer provider is configured. Please configure Codex or Claude Code in Settings.');
+  if (!codexSdkInstalled && !claudeSdkInstalled && !openCodeSdkInstalled) {
+    throw new Error('No available prompt enhancer provider is configured because Claude Code, Codex, and opencode SDKs are not installed.');
+  }
+
+  throw new Error('No available prompt enhancer provider is configured. Please configure Codex, Claude Code, or opencode in Settings.');
 }
 
 async function enhancePromptWithClaude(originalPrompt, systemPrompt, model, context) {
@@ -432,7 +467,71 @@ async function enhancePromptWithCodex(originalPrompt, systemPrompt, model, conte
   throw new Error('Codex enhancement response is empty');
 }
 
-async function enhancePrompt(originalPrompt, systemPrompt, runtimeConfig, context) {
+async function enhancePromptWithOpenCode(originalPrompt, systemPrompt, model, context, cwd) {
+  let runtime = null;
+  try {
+    const workingDirectory = cwd || getRealHomeDir();
+    runtime = await createOpenCodeRuntime(workingDirectory);
+    const systemPromptText = (systemPrompt || '').trim();
+    const fullPrompt = [
+      buildFullPrompt(originalPrompt, context),
+      '',
+      'Remember: output only the optimized prompt text with no explanation.',
+    ].join('\n');
+    console.log(`[PromptEnhancer] Full prompt length: ${fullPrompt.length}`);
+
+    const session = await unwrapSdkResult(
+      runtime.client.session.create({
+        query: directoryQuery(workingDirectory),
+        body: {}
+      }),
+      'create opencode prompt enhancer session'
+    );
+    const sessionId = extractSessionId(session);
+    if (!sessionId) {
+      throw new Error('opencode did not return a session id');
+    }
+
+    const body = {
+      parts: [{ type: 'text', text: fullPrompt }]
+    };
+    const parsedModel = await resolveOpenCodePromptModel(runtime.client, workingDirectory, model);
+    if (parsedModel) {
+      body.model = parsedModel;
+    }
+    if (systemPromptText) {
+      body.system = systemPromptText;
+    }
+
+    console.log(`[PromptEnhancer] Calling opencode with model: ${model || 'opencode default'}`);
+    const response = await unwrapSdkResult(
+      runtime.client.session.prompt({
+        path: { id: sessionId },
+        query: directoryQuery(workingDirectory),
+        body
+      }),
+      'run opencode prompt enhancer'
+    );
+
+    const responseText = extractOpenCodeAssistantText(response).trim();
+    console.log(`[PromptEnhancer] opencode response text length: ${responseText.length}`);
+    if (responseText) {
+      return responseText;
+    }
+
+    throw new Error('opencode enhancement response is empty');
+  } catch (error) {
+    const normalized = normalizeOpenCodeSdkError(error);
+    throw new Error(normalized.error || error.message || String(error));
+  } finally {
+    await releaseOpenCodeRuntime(runtime).catch(() => {});
+  }
+}
+
+async function enhancePrompt(originalPrompt, systemPrompt, runtimeConfig, context, cwd) {
+  if (runtimeConfig.provider === 'opencode') {
+    return enhancePromptWithOpenCode(originalPrompt, systemPrompt, runtimeConfig.model, context, cwd);
+  }
   if (runtimeConfig.provider === 'codex') {
     return enhancePromptWithCodex(originalPrompt, systemPrompt, runtimeConfig.model, context);
   }
@@ -440,7 +539,7 @@ async function enhancePrompt(originalPrompt, systemPrompt, runtimeConfig, contex
 }
 
 export async function runPromptEnhancerRequest(data) {
-  const { prompt, systemPrompt, legacyModel, context, promptEnhancerConfig } = data;
+  const { prompt, systemPrompt, legacyModel, context, promptEnhancerConfig, cwd } = data;
 
   if (!prompt) {
     return '';
@@ -452,7 +551,7 @@ export async function runPromptEnhancerRequest(data) {
   });
   console.log(`[PromptEnhancer] Resolved provider: ${runtimeConfig.provider}, model: ${runtimeConfig.model}, source: ${runtimeConfig.resolutionSource}`);
 
-  return enhancePrompt(prompt, systemPrompt, runtimeConfig, context);
+  return enhancePrompt(prompt, systemPrompt, runtimeConfig, context, cwd);
 }
 
 async function main() {

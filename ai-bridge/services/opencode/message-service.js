@@ -1594,8 +1594,25 @@ function normalizeOpenCodeMessage(item) {
 }
 
 function emitAssistantMessageFromResponse(response) {
-  if (!response || !Array.isArray(response.parts)) {
+  const textParts = extractOpenCodeAssistantTextParts(response);
+  if (textParts.length === 0) {
     return;
+  }
+
+  emitMessage({
+    type: 'assistant',
+    message: {
+      id: response.info?.id || '',
+      role: 'assistant',
+      content: textParts
+    },
+    opencode: response
+  });
+}
+
+function extractOpenCodeAssistantTextParts(response) {
+  if (!response || !Array.isArray(response.parts)) {
+    return [];
   }
 
   const textParts = [];
@@ -1611,19 +1628,14 @@ function emitAssistantMessageFromResponse(response) {
     });
   }
 
-  if (textParts.length === 0) {
-    return;
-  }
+  return textParts;
+}
 
-  emitMessage({
-    type: 'assistant',
-    message: {
-      id: response.info?.id || '',
-      role: 'assistant',
-      content: textParts
-    },
-    opencode: response
-  });
+function extractOpenCodeAssistantText(response) {
+  return extractOpenCodeAssistantTextParts(response)
+    .filter((part) => part.type === 'text')
+    .map((part) => part.text)
+    .join('');
 }
 
 function createEventContext(runtime, cwd, permissionMode, sessionRef) {
@@ -2106,13 +2118,20 @@ export async function listAgents(cwd = '', options = {}) {
 }
 
 export {
+  createOpenCodeRuntime,
+  directoryQuery,
   createEventContext,
+  extractOpenCodeAssistantText,
+  extractSessionId,
   handleOpenCodeEvent,
   listOpenCodeModelProviders,
   normalizeOpenCodeMessage,
   normalizeOpenCodeAgents,
   parseOpenCodeModel,
+  releaseOpenCodeRuntime,
   normalizeOpenCodeModels,
   normalizeOpenCodeSessions,
+  resolveOpenCodePromptModel,
+  unwrapSdkResult,
   resolveOpenCodePromptOptions
 };

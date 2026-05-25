@@ -1,9 +1,10 @@
-export type AiFeatureProvider = 'claude' | 'codex';
+export type AiFeatureProvider = 'claude' | 'codex' | 'opencode';
 export type AiFeatureResolutionSource = 'manual' | 'auto' | 'unavailable';
 
 export const DEFAULT_AI_FEATURE_MODELS = {
   claude: 'claude-sonnet-4-6',
   codex: 'gpt-5.5',
+  opencode: 'opencode-default',
 } as const;
 
 export interface AiFeatureConfig {
@@ -13,10 +14,12 @@ export interface AiFeatureConfig {
   models: {
     claude: string;
     codex: string;
+    opencode?: string;
   };
   availability: {
     claude: boolean;
     codex: boolean;
+    opencode?: boolean;
   };
 }
 

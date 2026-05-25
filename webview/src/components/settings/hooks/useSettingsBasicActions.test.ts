@@ -66,4 +66,40 @@ describe('useSettingsBasicActions', () => {
       'set_commit_ai_config:{"provider":"codex","models":{"claude":"claude-sonnet-4-6","codex":"gpt-5.4"}}'
     );
   });
+
+  it('updates prompt enhancer opencode provider and model', () => {
+    const { result } = renderHook(() => useSettingsBasicActions({}));
+
+    act(() => {
+      result.current.setPromptEnhancerConfig({
+        provider: null,
+        effectiveProvider: 'opencode',
+        resolutionSource: 'auto',
+        models: {
+          claude: 'claude-sonnet-4-6',
+          codex: 'gpt-5.5',
+          opencode: 'opencode-default',
+        },
+        availability: {
+          claude: false,
+          codex: false,
+          opencode: true,
+        },
+      });
+    });
+
+    act(() => {
+      result.current.handlePromptEnhancerProviderChange('opencode');
+    });
+
+    act(() => {
+      result.current.handlePromptEnhancerModelChange('opencode-default');
+    });
+
+    expect(result.current.promptEnhancerConfig.provider).toBe('opencode');
+    expect(result.current.promptEnhancerConfig.models.opencode).toBe('opencode-default');
+    expect(window.sendToJava).toHaveBeenCalledWith(
+      'set_prompt_enhancer_config:{"provider":"opencode","models":{"claude":"claude-sonnet-4-6","codex":"gpt-5.5","opencode":"opencode-default"}}'
+    );
+  });
 });

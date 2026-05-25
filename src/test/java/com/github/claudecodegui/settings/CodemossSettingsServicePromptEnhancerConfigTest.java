@@ -43,8 +43,10 @@ public class CodemossSettingsServicePromptEnhancerConfigTest {
         assertEquals("auto", config.get("resolutionSource").getAsString());
         assertTrue(config.getAsJsonObject("availability").get("claude").getAsBoolean());
         assertTrue(config.getAsJsonObject("availability").get("codex").getAsBoolean());
+        assertFalse(config.getAsJsonObject("availability").get("opencode").getAsBoolean());
         assertEquals("claude-sonnet-4-6", config.getAsJsonObject("models").get("claude").getAsString());
         assertEquals("gpt-5.5", config.getAsJsonObject("models").get("codex").getAsString());
+        assertEquals("opencode-default", config.getAsJsonObject("models").get("opencode").getAsString());
     }
 
     @Test
@@ -63,6 +65,27 @@ public class CodemossSettingsServicePromptEnhancerConfigTest {
         assertEquals("auto", config.get("resolutionSource").getAsString());
         assertTrue(config.getAsJsonObject("availability").get("claude").getAsBoolean());
         assertFalse(config.getAsJsonObject("availability").get("codex").getAsBoolean());
+        assertFalse(config.getAsJsonObject("availability").get("opencode").getAsBoolean());
+    }
+
+    @Test
+    public void shouldDefaultToOpenCodeWhenOnlyOpenCodeIsAvailable() throws Exception {
+        Path tempHome = Files.createTempDirectory("prompt-enhancer-default-opencode-home");
+        useTemporaryHomeDirectory(tempHome);
+        writeConfig(tempHome, "", "");
+        installSdk(tempHome, "opencode-sdk", "@opencode-ai/sdk", "1.15.7");
+
+        CodemossSettingsService service = new CodemossSettingsService();
+
+        JsonObject config = invokeGetPromptEnhancerConfig(service);
+
+        assertTrue(config.get("provider").isJsonNull());
+        assertEquals("opencode", config.get("effectiveProvider").getAsString());
+        assertEquals("auto", config.get("resolutionSource").getAsString());
+        assertFalse(config.getAsJsonObject("availability").get("claude").getAsBoolean());
+        assertFalse(config.getAsJsonObject("availability").get("codex").getAsBoolean());
+        assertTrue(config.getAsJsonObject("availability").get("opencode").getAsBoolean());
+        assertEquals("opencode-default", config.getAsJsonObject("models").get("opencode").getAsString());
     }
 
     @Test
@@ -75,7 +98,7 @@ public class CodemossSettingsServicePromptEnhancerConfigTest {
 
         CodemossSettingsService service = new CodemossSettingsService();
 
-        invokeSetPromptEnhancerConfig(service, "claude", "claude-opus-4-7", "gpt-5.4");
+        invokeSetPromptEnhancerConfig(service, "claude", "claude-opus-4-7", "gpt-5.4", "opencode-default");
         JsonObject config = invokeGetPromptEnhancerConfig(service);
 
         assertEquals("claude", config.get("provider").getAsString());
@@ -83,6 +106,25 @@ public class CodemossSettingsServicePromptEnhancerConfigTest {
         assertEquals("manual", config.get("resolutionSource").getAsString());
         assertEquals("claude-opus-4-7", config.getAsJsonObject("models").get("claude").getAsString());
         assertEquals("gpt-5.4", config.getAsJsonObject("models").get("codex").getAsString());
+        assertEquals("opencode-default", config.getAsJsonObject("models").get("opencode").getAsString());
+    }
+
+    @Test
+    public void shouldPersistManualOpenCodeProviderAndModel() throws Exception {
+        Path tempHome = Files.createTempDirectory("prompt-enhancer-manual-opencode-home");
+        useTemporaryHomeDirectory(tempHome);
+        writeConfig(tempHome, "", "");
+        installSdk(tempHome, "opencode-sdk", "@opencode-ai/sdk", "1.15.7");
+
+        CodemossSettingsService service = new CodemossSettingsService();
+
+        invokeSetPromptEnhancerConfig(service, "opencode", "claude-sonnet-4-6", "gpt-5.5", "opencode-default");
+        JsonObject config = invokeGetPromptEnhancerConfig(service);
+
+        assertEquals("opencode", config.get("provider").getAsString());
+        assertEquals("opencode", config.get("effectiveProvider").getAsString());
+        assertEquals("manual", config.get("resolutionSource").getAsString());
+        assertEquals("opencode-default", config.getAsJsonObject("models").get("opencode").getAsString());
     }
 
     @Test
@@ -101,6 +143,7 @@ public class CodemossSettingsServicePromptEnhancerConfigTest {
         assertEquals("unavailable", config.get("resolutionSource").getAsString());
         assertFalse(config.getAsJsonObject("availability").get("claude").getAsBoolean());
         assertFalse(config.getAsJsonObject("availability").get("codex").getAsBoolean());
+        assertFalse(config.getAsJsonObject("availability").get("opencode").getAsBoolean());
     }
 
     private JsonObject invokeGetPromptEnhancerConfig(CodemossSettingsService service) throws Exception {
@@ -120,19 +163,30 @@ public class CodemossSettingsServicePromptEnhancerConfigTest {
             String claudeModel,
             String codexModel
     ) throws Exception {
+        invokeSetPromptEnhancerConfig(service, provider, claudeModel, codexModel, null);
+    }
+
+    private void invokeSetPromptEnhancerConfig(
+            CodemossSettingsService service,
+            String provider,
+            String claudeModel,
+            String codexModel,
+            String opencodeModel
+    ) throws Exception {
         Method method;
         try {
             method = CodemossSettingsService.class.getMethod(
                     "setPromptEnhancerConfig",
                     String.class,
                     String.class,
+                    String.class,
                     String.class
             );
         } catch (NoSuchMethodException e) {
-            fail("CodemossSettingsService should expose setPromptEnhancerConfig(provider, claudeModel, codexModel)");
+            fail("CodemossSettingsService should expose setPromptEnhancerConfig(provider, claudeModel, codexModel, opencodeModel)");
             throw e;
         }
-        method.invoke(service, provider, claudeModel, codexModel);
+        method.invoke(service, provider, claudeModel, codexModel, opencodeModel);
     }
 
     private void useTemporaryHomeDirectory(Path tempHome) throws Exception {

@@ -114,4 +114,35 @@ describe('AiFeatureProviderModelPanel', () => {
 
     expect(onModelChange).toHaveBeenCalledWith('gpt-5.4');
   });
+
+  it('renders opencode provider with opencode default model when enabled', () => {
+    render(
+      <AiFeatureProviderModelPanel
+        config={{
+          ...config,
+          provider: 'opencode',
+          effectiveProvider: 'opencode',
+          resolutionSource: 'manual',
+          models: {
+            ...config.models,
+            opencode: 'opencode-default',
+          },
+          availability: {
+            ...config.availability,
+            opencode: true,
+          },
+        }}
+        settingsKeyPrefix="settings.basic.promptEnhancer"
+        providerKeyPrefix="settings.basic.promptEnhancer.provider"
+        providers={['claude', 'codex', 'opencode']}
+        onProviderChange={vi.fn()}
+        onModelChange={vi.fn()}
+        onResetToDefault={vi.fn()}
+      />
+    );
+
+    const [providerSelect, modelSelect] = screen.getAllByRole('combobox') as HTMLSelectElement[];
+    expect(providerSelect.value).toBe('opencode');
+    expect(modelSelect.value).toBe('opencode-default');
+  });
 });
