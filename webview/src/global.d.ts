@@ -156,6 +156,11 @@ interface Window {
   updateOpenCodeAgents?: (json: string) => void;
 
   /**
+   * Update dynamically discovered opencode slash commands.
+   */
+  updateOpenCodeCommands?: (json: string) => void;
+
+  /**
    * Update explicit opencode runtime authorization state.
    */
   updateOpenCodeAuthorization?: (json: string) => void;

@@ -13,6 +13,12 @@ export {
 } from './slashCommandProvider';
 
 export {
+  openCodeSlashCommandProvider,
+  setupOpenCodeSlashCommandsCallback,
+  resetOpenCodeSlashCommandsState,
+} from './openCodeSlashCommandProvider';
+
+export {
   agentProvider,
   agentToDropdownItem,
   setupAgentsCallback,

@@ -12,6 +12,7 @@ import {
   fileReferenceProvider,
   fileToDropdownItem,
   openCodeAgentProvider,
+  openCodeSlashCommandProvider,
   promptProvider,
   promptToDropdownItem,
   slashCommandProvider,
@@ -99,7 +100,7 @@ export function useChatInputCompletionsCoordinator({
 
   const commandCompletion = useCompletionDropdown<CommandItem>({
     trigger: '/',
-    provider: slashCommandProvider,
+    provider: currentProvider === 'opencode' ? openCodeSlashCommandProvider : slashCommandProvider,
     toDropdownItem: commandToDropdownItem,
     onSelect: (command, query) => {
       if (!editableRef.current || !query) return;

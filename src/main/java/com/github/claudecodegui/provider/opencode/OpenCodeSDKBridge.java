@@ -348,6 +348,18 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
         }
     }
 
+    public JsonObject listCommands(String cwd) {
+        try {
+            return runJsonProcessCommand("listCommands", List.of(cwd != null ? cwd : ""));
+        } catch (Exception e) {
+            LOG.warn("[OpenCodeSDKBridge] Failed to list opencode commands: " + e.getMessage(), e);
+            JsonObject error = new JsonObject();
+            error.addProperty("success", false);
+            error.addProperty("error", e.getMessage());
+            return error;
+        }
+    }
+
     public JsonObject listMcpServers(String cwd) {
         try {
             return runJsonCommand("listMcpServers", List.of(cwd != null ? cwd : ""));
@@ -499,6 +511,7 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
             case "listModels":
             case "listSessions":
             case "listAgents":
+            case "listCommands":
             case "listMcpServers":
             case "listMcpServerStatus":
             default:

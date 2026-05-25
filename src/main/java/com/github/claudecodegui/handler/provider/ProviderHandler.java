@@ -40,7 +40,8 @@ public class ProviderHandler extends BaseMessageHandler {
             "authorize_opencode",
             "revoke_opencode_authorization",
             "get_opencode_models",
-            "get_opencode_agents"
+            "get_opencode_agents",
+            "get_opencode_commands"
     };
 
     private final ClaudeProviderOperations claudeOps;
@@ -148,6 +149,9 @@ public class ProviderHandler extends BaseMessageHandler {
                 return true;
             case "get_opencode_agents":
                 openCodeOps.handleGetOpenCodeAgents();
+                return true;
+            case "get_opencode_commands":
+                openCodeOps.handleGetOpenCodeCommands();
                 return true;
             default:
                 return false;

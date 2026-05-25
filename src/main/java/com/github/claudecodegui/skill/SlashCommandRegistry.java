@@ -165,6 +165,11 @@ public final class SlashCommandRegistry {
      */
     public static List<SlashCommand> getCommands(String provider, String cwd, String currentFilePath) {
         boolean isCodex = "codex".equalsIgnoreCase(provider);
+        boolean isOpenCode = "opencode".equalsIgnoreCase(provider);
+
+        if (isOpenCode) {
+            return List.of();
+        }
 
         List<SlashCommand> builtins = isCodex ? CODEX_BUILTIN : CLAUDE_BUILTIN;
         String userHome = resolveUserHome();

@@ -67,6 +67,10 @@ public class OpenCodeProviderOperations {
         runDiscovery("agents", "window.updateOpenCodeAgents", (bridge, cwd) -> bridge.listAgents(cwd));
     }
 
+    public void handleGetOpenCodeCommands() {
+        runDiscovery("commands", "window.updateOpenCodeCommands", (bridge, cwd) -> bridge.listCommands(cwd));
+    }
+
     private void runDiscovery(String label, String callbackName, OpenCodeDiscovery discovery) {
         String cwd = null;
         if (context.getSession() != null) {

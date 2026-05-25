@@ -69,6 +69,17 @@ public class SlashCommandSourceScannersTest {
     }
 
     @Test
+    public void opencodeCommandsDoNotUseClaudeRegistry() {
+        List<SlashCommandRegistry.SlashCommand> commands = SlashCommandRegistry.getCommands(
+                "opencode",
+                "",
+                null
+        );
+
+        assertEquals(0, commands.size());
+    }
+
+    @Test
     public void pluginCommandScannerDiscoversSafePluginPathsAndPrefixesCommands() throws IOException {
         Path root = Files.createTempDirectory("slash-command-plugin-scanner");
         Path home = Files.createDirectories(root.resolve("home"));

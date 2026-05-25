@@ -302,6 +302,26 @@ export async function slashCommandProvider(
 }
 
 export function commandToDropdownItem(command: CommandItem): DropdownItemData {
+  if (command.kind === 'section-header') {
+    return {
+      id: command.id,
+      label: command.label,
+      type: 'section-header',
+      data: { command },
+    };
+  }
+
+  if (command.id === '__loading__' || command.id === '__error__') {
+    return {
+      id: command.id,
+      label: command.label,
+      description: command.description,
+      icon: command.id === '__error__' ? 'codicon-warning' : 'codicon-loading',
+      type: 'info',
+      data: { command },
+    };
+  }
+
   return {
     id: command.id,
     label: command.label,

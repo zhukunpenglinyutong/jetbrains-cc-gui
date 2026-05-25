@@ -34,6 +34,7 @@ const WINDOWS_ABSOLUTE_PATH = /^[A-Za-z]:[\\/]/;
 const NATIVE_FILE_EDIT_TOOLS = new Set(['edit', 'write_file', 'write_to_file']);
 const OPENCODE_DEFAULT_AGENT_ID = 'opencode-default';
 const OPENCODE_AGENT_PREFIX = 'opencode:';
+const OPENCODE_COMMAND_PREFIX = 'opencode-command:';
 const persistentRuntimes = new Map();
 const activeOpenCodeTurns = new Set();
 
@@ -938,6 +939,10 @@ function isSafeOpenCodeAgentName(value) {
   return /^[A-Za-z0-9_.-]+$/.test(value);
 }
 
+function isSafeOpenCodeCommandName(value) {
+  return /^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/.test(value);
+}
+
 function normalizeOpenCodeAgentMarker(agent) {
   if (typeof agent !== 'string') {
     return '';
@@ -978,6 +983,101 @@ function resolveOpenCodePromptOptions(permissionMode = '', agent = '') {
   }
 
   return { system: trimmed };
+}
+
+function normalizeOpenCodeCommand(rawCommand) {
+  const candidate = asRecord(rawCommand);
+  const name = pickString(candidate.name, candidate.id);
+  if (!name || !isSafeOpenCodeCommandName(name)) {
+    return null;
+  }
+  if (candidate.source === 'skill') {
+    return null;
+  }
+
+  const source = pickString(candidate.source) || 'command';
+  const description = pickString(candidate.description);
+  const label = `/${name}`;
+  const sourceSuffix = source === 'mcp' ? ' [mcp]' : '';
+
+  return {
+    id: `${OPENCODE_COMMAND_PREFIX}${name}`,
+    name,
+    label,
+    description: description ? `${description}${sourceSuffix}` : sourceSuffix.trim(),
+    category: source === 'mcp' ? 'mcp' : 'opencode',
+    source,
+    provider: 'opencode',
+    native: true,
+    hints: Array.isArray(candidate.hints)
+      ? candidate.hints.filter((hint) => typeof hint === 'string')
+      : []
+  };
+}
+
+function normalizeOpenCodeCommands(commandPayload = []) {
+  const seen = new Set();
+  const commands = [];
+  for (const rawCommand of Array.isArray(commandPayload) ? commandPayload : []) {
+    const command = normalizeOpenCodeCommand(rawCommand);
+    if (!command || seen.has(command.name)) {
+      continue;
+    }
+    seen.add(command.name);
+    commands.push(command);
+  }
+  commands.sort((a, b) => a.label.localeCompare(b.label));
+  return commands;
+}
+
+function parseOpenCodeSlashCommand(message) {
+  const text = typeof message === 'string' ? message : '';
+  if (!text.startsWith('/')) {
+    return null;
+  }
+
+  const firstLineEnd = text.indexOf('\n');
+  const firstLine = firstLineEnd === -1 ? text : text.slice(0, firstLineEnd);
+  const match = firstLine.match(/^\/(\S+)(?:\s+(.*))?$/);
+  if (!match) {
+    return null;
+  }
+
+  const command = match[1];
+  if (!isSafeOpenCodeCommandName(command)) {
+    return null;
+  }
+
+  const firstLineArguments = match[2] || '';
+  const restOfInput = firstLineEnd === -1 ? '' : text.slice(firstLineEnd + 1);
+  return {
+    command,
+    arguments: firstLineArguments + (restOfInput ? `\n${restOfInput}` : '')
+  };
+}
+
+async function resolveOpenCodeSlashCommand(client, cwd, message) {
+  const parsed = parseOpenCodeSlashCommand(message);
+  if (!parsed) {
+    return null;
+  }
+
+  try {
+    const commands = normalizeOpenCodeCommands(await unwrapSdkResult(
+      client.command.list({ query: directoryQuery(cwd) }),
+      'list opencode commands'
+    ));
+    return commands.some((command) => command.name === parsed.command) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function formatOpenCodeCommandModel(parsedModel) {
+  if (!parsedModel?.providerID || !parsedModel?.modelID) {
+    return '';
+  }
+  return `${parsedModel.providerID}/${parsedModel.modelID}`;
 }
 
 function normalizeOpenCodeAgent(rawAgent, configPayload = {}) {
@@ -2348,24 +2448,54 @@ export async function sendMessage(
     emitMarker('[MESSAGE_START]');
     emitMarker('[STREAM_START]');
 
-    const promptParts = await buildPromptParts(message, attachments);
+    const parsedModel = await resolveOpenCodePromptModel(runtime.client, cwd, model);
+    const slashCommand = await resolveOpenCodeSlashCommand(runtime.client, cwd, message);
+    const promptParts = await buildPromptParts(slashCommand ? '' : message, attachments);
     cleanupAttachments = promptParts.cleanup;
 
-    const body = { parts: promptParts.parts };
-    const parsedModel = await resolveOpenCodePromptModel(runtime.client, cwd, model);
-    if (parsedModel) {
-      body.model = parsedModel;
-    }
-    Object.assign(body, resolveOpenCodePromptOptions(permissionMode, agent));
+    let response;
+    if (slashCommand) {
+      const promptOptions = resolveOpenCodePromptOptions(permissionMode, agent);
+      const fileParts = promptParts.parts.filter((part) => part.type === 'file');
+      const commandBody = {
+        command: slashCommand.command,
+        arguments: slashCommand.arguments
+      };
+      const commandModel = formatOpenCodeCommandModel(parsedModel);
+      if (commandModel) {
+        commandBody.model = commandModel;
+      }
+      if (promptOptions.agent) {
+        commandBody.agent = promptOptions.agent;
+      }
+      if (fileParts.length > 0) {
+        commandBody.parts = fileParts;
+      }
 
-    const response = await unwrapSdkResult(
-      runtime.client.session.prompt({
-        path: { id: sessionRef.id },
-        query: directoryQuery(cwd),
-        body
-      }),
-      'send opencode prompt'
-    );
+      response = await unwrapSdkResult(
+        runtime.client.session.command({
+          path: { id: sessionRef.id },
+          query: directoryQuery(cwd),
+          body: commandBody
+        }),
+        'send opencode command'
+      );
+    } else {
+      const body = { parts: promptParts.parts };
+      if (parsedModel) {
+        body.model = parsedModel;
+      }
+      Object.assign(body, resolveOpenCodePromptOptions(permissionMode, agent));
+
+      response = await unwrapSdkResult(
+        runtime.client.session.prompt({
+          path: { id: sessionRef.id },
+          query: directoryQuery(cwd),
+          body
+        }),
+        'send opencode prompt'
+      );
+    }
 
     if (responseHasOpenCodeError(response)) {
       emitContextSendError(eventContext, {
@@ -2595,6 +2725,31 @@ export async function listAgents(cwd = '', options = {}) {
   }
 }
 
+export async function listCommands(cwd = '', options = {}) {
+  let runtime = null;
+  try {
+    runtime = await acquireOpenCodeRuntime(cwd, options);
+    const commands = await unwrapSdkResult(
+      runtime.client.command.list({ query: directoryQuery(cwd) }),
+      'list opencode commands'
+    );
+
+    console.log(JSON.stringify({
+      success: true,
+      cwd,
+      commands: normalizeOpenCodeCommands(commands)
+    }));
+  } catch (error) {
+    console.log(JSON.stringify({
+      success: false,
+      error: normalizeOpenCodeSdkError(error).error,
+      commands: []
+    }));
+  } finally {
+    await releaseOpenCodeRuntime(runtime, options);
+  }
+}
+
 export async function listMcpServers(cwd = '', options = {}) {
   let runtime = null;
   try {
@@ -2788,6 +2943,7 @@ export {
   listOpenCodeModelProviders,
   normalizeOpenCodeMessage,
   normalizeOpenCodeAgents,
+  normalizeOpenCodeCommands,
   normalizeOpenCodeMcpServers,
   normalizeOpenCodeMcpStatusList,
   normalizeOpenCodeMcpTools,
@@ -2796,6 +2952,7 @@ export {
   releaseOpenCodeRuntime,
   normalizeOpenCodeModels,
   normalizeOpenCodeSessions,
+  parseOpenCodeSlashCommand,
   resolveOpenCodePromptModel,
   unwrapSdkResult,
   resolveOpenCodePromptOptions

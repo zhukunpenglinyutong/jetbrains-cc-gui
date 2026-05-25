@@ -7,6 +7,7 @@ import {
   getMcpServerTools as openCodeGetMcpServerTools,
   getSessionMessages as openCodeGetSessionMessages,
   listAgents as openCodeListAgents,
+  listCommands as openCodeListCommands,
   listMcpServerStatus as openCodeListMcpServerStatus,
   listMcpServers as openCodeListMcpServers,
   listSessions as openCodeListSessions,
@@ -89,6 +90,12 @@ export async function handleOpenCodeCommand(command, args, stdinData) {
       break;
     }
 
+    case 'listCommands': {
+      const cwd = stdinData?.cwd || args[0] || '';
+      await openCodeListCommands(cwd, options);
+      break;
+    }
+
     case 'listMcpServers': {
       const cwd = stdinData?.cwd || args[0] || '';
       await openCodeListMcpServers(cwd, options);
@@ -114,5 +121,5 @@ export async function handleOpenCodeCommand(command, args, stdinData) {
 }
 
 export function getOpenCodeCommandList() {
-  return ['send', 'abort', 'deleteSession', 'getSessionMessages', 'listSessions', 'listModels', 'listAgents', 'listMcpServers', 'listMcpServerStatus', 'getMcpServerTools'];
+  return ['send', 'abort', 'deleteSession', 'getSessionMessages', 'listSessions', 'listModels', 'listAgents', 'listCommands', 'listMcpServers', 'listMcpServerStatus', 'getMcpServerTools'];
 }

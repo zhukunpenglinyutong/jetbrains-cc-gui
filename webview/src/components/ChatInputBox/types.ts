@@ -132,6 +132,14 @@ export interface CommandItem {
   description?: string;
   /** Category */
   category?: string;
+  /** Non-selectable grouping row */
+  kind?: 'section-header';
+  /** Runtime provider that owns this command */
+  provider?: 'opencode';
+  /** OpenCode command name without slash */
+  commandName?: string;
+  /** Source reported by the provider */
+  source?: string;
 }
 
 /**
