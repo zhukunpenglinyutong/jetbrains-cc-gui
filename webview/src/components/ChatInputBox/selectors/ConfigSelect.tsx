@@ -48,6 +48,14 @@ const SUBMENU_STYLE: React.CSSProperties = {
 };
 
 const LOADING_OPTION_STYLE: React.CSSProperties = { cursor: 'default' };
+const SECTION_HEADER_STYLE: React.CSSProperties = {
+  cursor: 'default',
+  fontSize: '11px',
+  fontWeight: 600,
+  color: 'var(--text-secondary)',
+  textTransform: 'uppercase',
+  letterSpacing: 0,
+};
 
 const AGENT_BODY_STYLE: React.CSSProperties = {
   display: 'flex',
@@ -300,6 +308,19 @@ export const ConfigSelect = ({
         </div>
       ) : (
         agentItems.map((agent) => {
+          if (agent.kind === 'section-header') {
+            return (
+              <div
+                key={agent.id}
+                className="selector-option disabled"
+                style={SECTION_HEADER_STYLE}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <span>{agent.name}</span>
+              </div>
+            );
+          }
+
           const isInfo = agent.id === EMPTY_STATE_ID;
           const isCreate = agent.id === CREATE_NEW_AGENT_ID;
           const isSelected = !!displayedSelectedAgent && displayedSelectedAgent.id === agent.id;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   isOpenCodeSelectedAgent,
+  mergeOpenCodeAgentGroups,
   parseOpenCodeAgentPayload,
   selectedAgentForProvider,
 } from './openCodeAgents';
@@ -33,6 +34,7 @@ describe('openCodeAgents', () => {
         name: 'opencode default',
         description: 'Uses reviewer from opencode config.',
         provider: 'opencode',
+        group: 'opencode-native',
       },
       {
         id: 'opencode:reviewer',
@@ -40,6 +42,7 @@ describe('openCodeAgents', () => {
         description: 'Review focused agent.',
         prompt: 'opencode:reviewer',
         provider: 'opencode',
+        group: 'opencode-native',
         mode: 'all',
         agentID: 'reviewer',
       },
@@ -66,11 +69,55 @@ describe('openCodeAgents', () => {
       name: 'Reviewer',
       prompt: 'Review carefully.',
     };
+    const openCodeScopedCustomAgent: SelectedAgent = {
+      id: 'opencode-custom:custom-reviewer',
+      name: 'Reviewer',
+      prompt: 'Review carefully.',
+      provider: 'opencode',
+      mode: 'custom',
+    };
 
     expect(isOpenCodeSelectedAgent(opencodeAgent)).toBe(true);
     expect(selectedAgentForProvider(opencodeAgent, 'opencode')).toBe(opencodeAgent);
     expect(selectedAgentForProvider(opencodeAgent, 'claude')).toBeNull();
     expect(selectedAgentForProvider(customAgent, 'opencode')).toBeNull();
     expect(selectedAgentForProvider(customAgent, 'claude')).toBe(customAgent);
+    expect(isOpenCodeSelectedAgent(openCodeScopedCustomAgent)).toBe(true);
+    expect(selectedAgentForProvider(openCodeScopedCustomAgent, 'opencode')).toBe(openCodeScopedCustomAgent);
+    expect(selectedAgentForProvider(openCodeScopedCustomAgent, 'claude')).toBeNull();
+  });
+
+  it('groups native opencode and custom agents for the opencode picker', () => {
+    const grouped = mergeOpenCodeAgentGroups(
+      [
+        {
+          id: 'opencode:build',
+          name: 'build',
+          prompt: 'opencode:build',
+          provider: 'opencode',
+        },
+      ],
+      [
+        {
+          id: 'custom-reviewer',
+          name: 'Reviewer',
+          prompt: 'Review carefully.',
+          provider: 'custom',
+        },
+      ]
+    );
+
+    expect(grouped.map((agent) => agent.id)).toEqual([
+      '__opencode_native_agents__',
+      'opencode:build',
+      '__opencode_custom_agents__',
+      'opencode-custom:custom-reviewer',
+    ]);
+    expect(grouped[0].kind).toBe('section-header');
+    expect(grouped[3]).toMatchObject({
+      provider: 'opencode',
+      mode: 'custom',
+      prompt: 'Review carefully.',
+    });
   });
 });

@@ -16,6 +16,8 @@ export interface AgentItem {
   provider?: 'custom' | 'opencode';
   mode?: string;
   agentID?: string;
+  kind?: 'section-header';
+  group?: 'opencode-native' | 'codemoss-custom';
 }
 
 // ============================================================================
@@ -65,6 +67,7 @@ export function setupAgentsCallback() {
           id: agent.id,
           name: agent.name,
           prompt: agent.prompt,
+          provider: 'custom',
         }));
       }
 
@@ -237,6 +240,15 @@ export async function agentProvider(
 }
 
 export function agentToDropdownItem(agent: AgentItem): DropdownItemData {
+  if (agent.kind === 'section-header') {
+    return {
+      id: agent.id,
+      label: agent.name,
+      type: 'section-header',
+      data: { agent },
+    };
+  }
+
   // Special handling for loading and empty states
   if (agent.id === '__loading__' || agent.id === '__empty__' || agent.id === EMPTY_STATE_ID) {
     return {

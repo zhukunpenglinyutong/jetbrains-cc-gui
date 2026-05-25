@@ -28,6 +28,13 @@ interface CompletionDropdownState {
   navigationMode: 'keyboard' | 'mouse';
 }
 
+function selectableRawIndexes(items: DropdownItemData[]): number[] {
+  return items
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => item.type !== 'separator' && item.type !== 'section-header' && item.type !== 'info')
+    .map(({ index }) => index);
+}
+
 /**
  * useCompletionDropdown - Unified completion dropdown hook
  * Supports debounced search, race condition protection, keyboard navigation
@@ -186,9 +193,10 @@ export function useCompletionDropdown<T>({
    * Select active item
    */
   const selectActive = useCallback(() => {
-    const { activeIndex, rawItems, triggerQuery } = stateRef.current;
-    if (activeIndex >= 0 && activeIndex < rawItems.length) {
-      const item = rawItems[activeIndex] as T;
+    const { activeIndex, items, rawItems, triggerQuery } = stateRef.current;
+    const rawIndex = selectableRawIndexes(items)[activeIndex];
+    if (rawIndex !== undefined && rawIndex >= 0 && rawIndex < rawItems.length) {
+      const item = rawItems[rawIndex] as T;
       onSelect(item, triggerQuery);
       close();
     }
@@ -198,9 +206,10 @@ export function useCompletionDropdown<T>({
    * Select item by index
    */
   const selectIndex = useCallback((index: number) => {
-    const { rawItems, triggerQuery } = stateRef.current;
-    if (index >= 0 && index < rawItems.length) {
-      const item = rawItems[index] as T;
+    const { items, rawItems, triggerQuery } = stateRef.current;
+    const rawIndex = selectableRawIndexes(items)[index];
+    if (rawIndex !== undefined && rawIndex >= 0 && rawIndex < rawItems.length) {
+      const item = rawItems[rawIndex] as T;
       onSelect(item, triggerQuery);
       close();
     }
@@ -219,7 +228,7 @@ export function useCompletionDropdown<T>({
     const { items } = currentState;
     // Filter selectable items (exclude separators and headers)
     const selectableCount = items.filter(
-      i => i.type !== 'separator' && i.type !== 'section-header'
+      i => i.type !== 'separator' && i.type !== 'section-header' && i.type !== 'info'
     ).length;
 
     switch (e.key) {

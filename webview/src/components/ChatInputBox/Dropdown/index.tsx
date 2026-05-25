@@ -148,9 +148,9 @@ export const CompletionDropdown = ({
     onMouseEnter?.(index);
   }, [onMouseEnter]);
 
-  // Filter selectable items (exclude separators and section headers)
+  // Filter selectable items (exclude separators, section headers, and info rows)
   const selectableItems = items.filter(
-    item => item.type !== 'separator' && item.type !== 'section-header'
+    item => item.type !== 'separator' && item.type !== 'section-header' && item.type !== 'info'
   );
 
   return (
@@ -181,7 +181,7 @@ export const CompletionDropdown = ({
                 isActive={isActive}
                 onClick={() => handleSelect(item, selectableIndex)}
                 onMouseEnter={() => {
-                  if (item.type !== 'separator' && item.type !== 'section-header') {
+                  if (item.type !== 'separator' && item.type !== 'section-header' && item.type !== 'info') {
                     handleMouseEnter(selectableIndex);
                   }
                 }}

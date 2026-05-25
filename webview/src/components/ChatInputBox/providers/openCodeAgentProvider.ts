@@ -1,8 +1,12 @@
 import { sendBridgeEvent } from '../../../utils/bridge';
 import i18n from '../../../i18n/config';
 import { debugError, debugLog, debugWarn } from '../../../utils/debug.js';
-import { parseOpenCodeAgentPayload } from '../openCodeAgents';
-import { EMPTY_STATE_ID, type AgentItem } from './agentProvider';
+import {
+  hasSelectableOpenCodeAgents,
+  mergeOpenCodeAgentGroups,
+  parseOpenCodeAgentPayload
+} from '../openCodeAgents';
+import { agentProvider, EMPTY_STATE_ID, type AgentItem } from './agentProvider';
 
 type LoadingState = 'idle' | 'loading' | 'success' | 'failed';
 
@@ -167,22 +171,28 @@ export async function openCodeAgentProvider(
     await waitForAgents(signal, LOADING_TIMEOUT).catch(() => {});
   }
 
+  const customAgents = await agentProvider(query, signal).catch((error) => {
+    debugWarn('[OpenCodeAgentProvider] Failed to load Codemoss custom agents: ' + String(error));
+    return [] as AgentItem[];
+  });
+
   if (loadingState !== 'success') {
-    return [{
+    return mergeOpenCodeAgentGroups([{
       id: EMPTY_STATE_ID,
       name: retryCount >= MAX_RETRY_COUNT ? i18n.t('settings.agent.loadFailed') : i18n.t('settings.agent.noAgentsDropdown'),
       provider: 'opencode',
-    }];
+    }], customAgents);
   }
 
   const filtered = cachedAgents.length > 0 ? filterAgents(cachedAgents, query) : [];
-  if (filtered.length === 0) {
-    return [{
+  const merged = mergeOpenCodeAgentGroups(filtered, customAgents);
+  if (!hasSelectableOpenCodeAgents(merged)) {
+    return mergeOpenCodeAgentGroups([{
       id: EMPTY_STATE_ID,
       name: i18n.t('settings.agent.noAgentsDropdown'),
       provider: 'opencode',
-    }];
+    }], customAgents);
   }
 
-  return filtered;
+  return merged;
 }
