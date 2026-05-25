@@ -338,6 +338,11 @@ public class ClaudeChatWindow {
             public void setFetchedSlashCommandsCount(int count) {
                 fetchedSlashCommandsCount = count;
             }
+
+            @Override
+            public void resetTabStatus() {
+                chatWindowDelegate.updateTabStatus(ChatWindowDelegate.TabAnswerStatus.IDLE);
+            }
         });
 
         this.editorContextTracker = new EditorContextTracker(project, new EditorContextTracker.ContextCallback() {
