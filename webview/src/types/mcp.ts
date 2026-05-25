@@ -44,6 +44,7 @@ export interface McpApps {
   claude: boolean;
   codex: boolean;
   gemini: boolean;
+  opencode?: boolean;
 }
 
 /**

@@ -3,7 +3,7 @@
  * Provides utility functions for server status queries, icons, colors, etc.
  */
 
-import type { McpServer, McpServerStatusInfo } from '../types';
+import type { McpProviderKind, McpServer, McpServerStatusInfo } from '../types';
 
 // ============================================================================
 // Icon color configuration
@@ -61,17 +61,21 @@ export function getServerStatusInfo(
 /**
  * Check whether the server is enabled
  * @param server - Server object
- * @param isCodexMode - Whether in Codex mode
+ * @param providerKind - Provider configuration source
  * @returns Whether enabled
  */
-export function isServerEnabled(server: McpServer, isCodexMode: boolean): boolean {
+export function isServerEnabled(server: McpServer, providerKind: McpProviderKind): boolean {
   if (server.enabled !== undefined) {
     return server.enabled;
   }
   // Check provider-specific apps field
-  return isCodexMode
-    ? server.apps?.codex !== false
-    : server.apps?.claude !== false;
+  if (providerKind === 'codex') {
+    return server.apps?.codex !== false;
+  }
+  if (providerKind === 'opencode') {
+    return server.apps?.opencode !== false;
+  }
+  return server.apps?.claude !== false;
 }
 
 // ============================================================================
@@ -82,16 +86,16 @@ export function isServerEnabled(server: McpServer, isCodexMode: boolean): boolea
  * Get the status icon
  * @param server - Server object
  * @param status - Server status
- * @param isCodexMode - Whether in Codex mode
+ * @param providerKind - Provider configuration source
  * @returns Icon class name
  */
 export function getStatusIcon(
   server: McpServer,
   status: McpServerStatusInfo['status'] | undefined,
-  isCodexMode: boolean
+  providerKind: McpProviderKind
 ): string {
   // Show disabled icon if the server is disabled
-  if (!isServerEnabled(server, isCodexMode)) {
+  if (!isServerEnabled(server, providerKind)) {
     return 'codicon-circle-slash';
   }
 
@@ -113,16 +117,16 @@ export function getStatusIcon(
  * Get the status color
  * @param server - Server object
  * @param status - Server status
- * @param isCodexMode - Whether in Codex mode
+ * @param providerKind - Provider configuration source
  * @returns Color value
  */
 export function getStatusColor(
   server: McpServer,
   status: McpServerStatusInfo['status'] | undefined,
-  isCodexMode: boolean
+  providerKind: McpProviderKind
 ): string {
   // Show gray if the server is disabled
-  if (!isServerEnabled(server, isCodexMode)) {
+  if (!isServerEnabled(server, providerKind)) {
     return '#9CA3AF';
   }
 
@@ -144,18 +148,18 @@ export function getStatusColor(
  * Get the status text
  * @param server - Server object
  * @param status - Server status
- * @param isCodexMode - Whether in Codex mode
+ * @param providerKind - Provider configuration source
  * @param t - Translation function
  * @returns Status text
  */
 export function getStatusText(
   server: McpServer,
   status: McpServerStatusInfo['status'] | undefined,
-  isCodexMode: boolean,
+  providerKind: McpProviderKind,
   t: (key: string) => string
 ): string {
   // Show "Disabled" if the server is disabled
-  if (!isServerEnabled(server, isCodexMode)) {
+  if (!isServerEnabled(server, providerKind)) {
     return t('mcp.disabled');
   }
 

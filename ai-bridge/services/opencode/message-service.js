@@ -24,6 +24,7 @@ const DEFAULT_PORT = 0;
 const DEFAULT_START_TIMEOUT_MS = 10000;
 const DEFAULT_HISTORY_LIMIT = 200;
 const DEFAULT_HISTORY_COUNT_CONCURRENCY = 4;
+const DEFAULT_MCP_STATUS_TIMEOUT_MS = 35000;
 const MAX_TOOL_RESULT_CHARS = 20000;
 const DEFAULT_EVENT_DRAIN_IDLE_MS = 300;
 const PLAN_MODE_PERMISSION_DENIED =
@@ -1435,6 +1436,149 @@ function normalizeOpenCodeSessions(sessionPayload = [], messageCounts = new Map(
   ));
 }
 
+function redactRecordValues(record) {
+  const source = asRecord(record);
+  return Object.fromEntries(Object.keys(source).map((key) => [key, '***']));
+}
+
+function normalizeOpenCodeMcpServerSpec(config) {
+  const serverConfig = asRecord(config);
+  const type = typeof serverConfig.type === 'string' ? serverConfig.type : '';
+
+  if (type === 'local') {
+    const commandParts = Array.isArray(serverConfig.command)
+      ? serverConfig.command.map((part) => String(part)).filter(Boolean)
+      : [];
+    const spec = {
+      type: 'stdio',
+      command: commandParts[0] || '',
+      args: commandParts.slice(1)
+    };
+    if (serverConfig.environment) {
+      spec.env = redactRecordValues(serverConfig.environment);
+    }
+    if (serverConfig.timeout !== undefined) {
+      spec.timeout = serverConfig.timeout;
+    }
+    return spec;
+  }
+
+  if (type === 'remote') {
+    const spec = {
+      type: 'http',
+      url: typeof serverConfig.url === 'string' ? serverConfig.url : ''
+    };
+    if (serverConfig.headers) {
+      spec.headers = redactRecordValues(serverConfig.headers);
+    }
+    if (serverConfig.timeout !== undefined) {
+      spec.timeout = serverConfig.timeout;
+    }
+    return spec;
+  }
+
+  return {};
+}
+
+function normalizeOpenCodeMcpStatus(statusValue, configValue = {}) {
+  const status = asRecord(statusValue);
+  const config = asRecord(configValue);
+  const rawStatus = typeof status.status === 'string'
+    ? status.status
+    : config.enabled === false
+      ? 'disabled'
+      : 'unknown';
+
+  switch (rawStatus) {
+    case 'connected':
+      return 'connected';
+    case 'failed':
+      return 'failed';
+    case 'needs_auth':
+    case 'needs_client_registration':
+      return 'needs-auth';
+    case 'disabled':
+    default:
+      return 'pending';
+  }
+}
+
+function normalizeOpenCodeMcpError(statusValue) {
+  const status = asRecord(statusValue);
+  return pickString(status.error, status.message);
+}
+
+function sanitizeOpenCodeMcpConfig(config) {
+  const serverConfig = asRecord(config);
+  const sanitized = {};
+  if (typeof serverConfig.type === 'string') {
+    sanitized.type = serverConfig.type;
+  }
+  if (serverConfig.enabled !== undefined) {
+    sanitized.enabled = serverConfig.enabled;
+  }
+  if (serverConfig.timeout !== undefined) {
+    sanitized.timeout = serverConfig.timeout;
+  }
+  return sanitized;
+}
+
+function normalizeOpenCodeMcpServers(configPayload = {}, statusPayload = {}) {
+  const mcpConfig = asRecord(configPayload?.mcp);
+  const statuses = asRecord(statusPayload);
+  const ids = Array.from(new Set([
+    ...Object.keys(mcpConfig),
+    ...Object.keys(statuses)
+  ])).sort((left, right) => left.localeCompare(right));
+
+  return ids.map((id) => {
+    const config = asRecord(mcpConfig[id]);
+    const status = asRecord(statuses[id]);
+    const enabled = config.enabled !== false && status.status !== 'disabled';
+    return {
+      id,
+      name: id,
+      server: normalizeOpenCodeMcpServerSpec(config),
+      apps: {
+        claude: false,
+        codex: false,
+        gemini: false,
+        opencode: true
+      },
+      enabled,
+      readOnly: true,
+      provider: 'opencode',
+      opencode: {
+        status,
+        config: sanitizeOpenCodeMcpConfig(config)
+      }
+    };
+  });
+}
+
+function normalizeOpenCodeMcpStatusList(configPayload = {}, statusPayload = {}) {
+  const mcpConfig = asRecord(configPayload?.mcp);
+  const statuses = asRecord(statusPayload);
+  const ids = Array.from(new Set([
+    ...Object.keys(mcpConfig),
+    ...Object.keys(statuses)
+  ])).sort((left, right) => left.localeCompare(right));
+
+  return ids.map((id) => {
+    const status = asRecord(statuses[id]);
+    const normalized = {
+      name: id,
+      status: normalizeOpenCodeMcpStatus(status, mcpConfig[id]),
+      opencode: status
+    };
+    const error = normalizeOpenCodeMcpError(status);
+    if (error) {
+      normalized.error = error;
+    }
+    return normalized;
+  });
+}
+
 async function countOpenCodeSessionMessages(client, cwd, sessionId) {
   try {
     const messages = await unwrapSdkResult(
@@ -1542,6 +1686,33 @@ async function postJson(baseUrl, path, cwd, body = undefined) {
   if (!response.ok) {
     const responseText = await response.text().catch(() => '');
     throw new Error(`${path} failed with HTTP ${response.status}: ${responseText || response.statusText}`);
+  }
+}
+
+async function getJsonWithTimeout(baseUrl, path, cwd, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const url = withDirectory(new URL(path, baseUrl), cwd);
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: buildAuthHeaders() || {},
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      const responseText = await response.text().catch(() => '');
+      throw new Error(`${path} failed with HTTP ${response.status}: ${responseText || response.statusText}`);
+    }
+
+    return response.json();
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error(`${path} timed out after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -2347,6 +2518,65 @@ export async function listAgents(cwd = '', options = {}) {
   }
 }
 
+export async function listMcpServers(cwd = '', options = {}) {
+  let runtime = null;
+  try {
+    runtime = await acquireOpenCodeRuntime(cwd, options);
+    const query = directoryQuery(cwd);
+    const config = await unwrapSdkResult(
+      runtime.client.config.get({ query }),
+      'get opencode config'
+    );
+
+    console.log(JSON.stringify({
+      success: true,
+      cwd,
+      servers: normalizeOpenCodeMcpServers(config, {}),
+      status: normalizeOpenCodeMcpStatusList(config, {})
+    }));
+  } catch (error) {
+    console.log(JSON.stringify({
+      success: false,
+      error: normalizeOpenCodeSdkError(error).error,
+      servers: [],
+      status: []
+    }));
+  } finally {
+    await releaseOpenCodeRuntime(runtime, options);
+  }
+}
+
+export async function listMcpServerStatus(cwd = '', options = {}) {
+  let runtime = null;
+  try {
+    runtime = await acquireOpenCodeRuntime(cwd, options);
+    const query = directoryQuery(cwd);
+    const config = await unwrapSdkResult(
+      runtime.client.config.get({ query }),
+      'get opencode config'
+    ).catch(() => ({}));
+    const timeoutMs = parsePositiveInteger(
+      process.env.OPENCODE_MCP_STATUS_TIMEOUT_MS,
+      DEFAULT_MCP_STATUS_TIMEOUT_MS
+    );
+    const status = await getJsonWithTimeout(runtime.baseUrl, '/mcp', cwd, timeoutMs);
+
+    console.log(JSON.stringify({
+      success: true,
+      cwd,
+      status: normalizeOpenCodeMcpStatusList(config, status)
+    }));
+  } catch (error) {
+    console.log(JSON.stringify({
+      success: false,
+      error: normalizeOpenCodeSdkError(error).error,
+      status: []
+    }));
+  } finally {
+    await releaseOpenCodeRuntime(runtime, options);
+  }
+}
+
 export {
   createOpenCodeRuntime,
   directoryQuery,
@@ -2357,6 +2587,8 @@ export {
   listOpenCodeModelProviders,
   normalizeOpenCodeMessage,
   normalizeOpenCodeAgents,
+  normalizeOpenCodeMcpServers,
+  normalizeOpenCodeMcpStatusList,
   parseOpenCodeModel,
   releaseOpenCodeRuntime,
   normalizeOpenCodeModels,

@@ -16,7 +16,7 @@ import { ToastContainer, type ToastMessage } from '../Toast';
 import { copyToClipboard } from '../../utils/copyUtils';
 
 // Types and utility functions
-import type { McpSettingsSectionProps, RefreshLog, McpTool } from './types';
+import type { McpProviderKind, McpSettingsSectionProps, RefreshLog, McpTool } from './types';
 import { getCacheKeys, getToolIcon } from './utils';
 
 // Hooks
@@ -32,13 +32,28 @@ import { ServerCard } from './ServerCard';
  */
 export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSectionProps) {
   const { t } = useTranslation();
-  const isCodexMode = currentProvider === 'codex';
+  const providerKind: McpProviderKind = currentProvider === 'codex'
+    ? 'codex'
+    : currentProvider === 'opencode'
+      ? 'opencode'
+      : 'claude';
+  const isOpenCodeMode = providerKind === 'opencode';
+  const isReadOnly = isOpenCodeMode;
+  const supportsTools = !isOpenCodeMode;
 
   // Generate message type prefix based on provider
-  const messagePrefix = useMemo(() => (isCodexMode ? 'codex_' : ''), [isCodexMode]);
+  const messagePrefix = useMemo(() => {
+    if (providerKind === 'codex') {
+      return 'codex_';
+    }
+    if (providerKind === 'opencode') {
+      return 'opencode_';
+    }
+    return '';
+  }, [providerKind]);
 
   // Get provider-specific cache keys
-  const cacheKeys = useMemo(() => getCacheKeys(isCodexMode ? 'codex' : 'claude'), [isCodexMode]);
+  const cacheKeys = useMemo(() => getCacheKeys(providerKind), [providerKind]);
 
   // Dropdown menu state
   const [showDropdown, setShowDropdown] = useState(false);
@@ -115,7 +130,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
     loadServerStatus,
     loadServerTools,
   } = useServerData({
-    isCodexMode,
+    providerKind,
     messagePrefix,
     cacheKeys,
     t,
@@ -129,7 +144,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
     handleRefreshSingleServer,
     handleToggleServer,
   } = useServerManagement({
-    isCodexMode,
+    providerKind,
     messagePrefix,
     cacheKeys,
     setServerTools,
@@ -163,7 +178,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
       }
 
       // Automatically load tool list when expanded.
-      if (server && !serverTools[serverId]) {
+      if (supportsTools && server && !serverTools[serverId]) {
         loadServerTools(server, false);
       }
     } else {
@@ -171,7 +186,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
       newExpanded.delete(serverId);
       setExpandedServers(newExpanded);
     }
-  }, [servers, expandedServers, serverTools, cacheKeys, setExpandedServers, loadServerTools]);
+  }, [servers, expandedServers, serverTools, cacheKeys, supportsTools, setExpandedServers, loadServerTools]);
 
   // Edit server
   const handleEdit = useCallback((server: McpServer) => {
@@ -251,9 +266,10 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
       tags: preset.tags,
       server: { ...preset.server },
       apps: {
-        claude: !isCodexMode,
-        codex: isCodexMode,
+        claude: providerKind === 'claude',
+        codex: providerKind === 'codex',
         gemini: false,
+        opencode: providerKind === 'opencode',
       },
       homepage: preset.homepage,
       docs: preset.docs,
@@ -267,7 +283,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
     }, 100);
 
     setShowPresetDialog(false);
-  }, [isCodexMode, messagePrefix, addToast, t, loadServers]);
+  }, [providerKind, messagePrefix, addToast, t, loadServers]);
 
   // Copy URL
   const handleCopyUrl = useCallback(async (url: string) => {
@@ -349,25 +365,27 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
           >
             <span className={`codicon codicon-sync ${loading || statusLoading ? 'spinning' : ''}`}></span>
           </button>
-          <div className="add-dropdown" ref={dropdownRef}>
-            <button className="add-btn" onClick={() => setShowDropdown(!showDropdown)}>
-              <span className="codicon codicon-add"></span>
-              {t('mcp.add')}
-              <span className="codicon codicon-chevron-down"></span>
-            </button>
-            {showDropdown && (
-              <div className="dropdown-menu">
-                <div className="dropdown-item" onClick={handleAddManual}>
-                  <span className="codicon codicon-json"></span>
-                  {t('mcp.manualConfig')}
+          {!isReadOnly && (
+            <div className="add-dropdown" ref={dropdownRef}>
+              <button className="add-btn" onClick={() => setShowDropdown(!showDropdown)}>
+                <span className="codicon codicon-add"></span>
+                {t('mcp.add')}
+                <span className="codicon codicon-chevron-down"></span>
+              </button>
+              {showDropdown && (
+                <div className="dropdown-menu">
+                  <div className="dropdown-item" onClick={handleAddManual}>
+                    <span className="codicon codicon-json"></span>
+                    {t('mcp.manualConfig')}
+                  </div>
+                  <div className="dropdown-item" onClick={handleAddFromMarket}>
+                    <span className="codicon codicon-extensions"></span>
+                    {t('mcp.addFromMarket')}
+                  </div>
                 </div>
-                <div className="dropdown-item" onClick={handleAddFromMarket}>
-                  <span className="codicon codicon-extensions"></span>
-                  {t('mcp.addFromMarket')}
-                </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -382,7 +400,9 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
                   key={server.id}
                   server={server}
                   isExpanded={expandedServers.has(server.id)}
-                  isCodexMode={isCodexMode}
+                  providerKind={providerKind}
+                  readOnly={isReadOnly || server.readOnly === true}
+                  supportsTools={supportsTools}
                   serverStatus={serverStatus}
                   refreshState={serverRefreshStates[server.id]}
                   toolsInfo={serverTools[server.id]}
@@ -404,7 +424,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
                 <div className="empty-state">
                   <span className="codicon codicon-server"></span>
                   <p>{t('mcp.noServers')}</p>
-                  <p className="hint">{t('mcp.addServerHint')}</p>
+                  {!isReadOnly && <p className="hint">{t('mcp.addServerHint')}</p>}
                 </div>
               )}
             </div>

@@ -4,12 +4,12 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import type { McpServer, McpServerStatusInfo, ServerToolsState, RefreshLog, CacheKeys } from '../types';
+import type { McpProviderKind, McpServer, McpServerStatusInfo, ServerToolsState, RefreshLog, CacheKeys } from '../types';
 import { sendToJava } from '../../../utils/bridge';
 import { readCache, readToolsCache, writeCache } from '../utils';
 
 export interface UseServerDataOptions {
-  isCodexMode: boolean;
+  providerKind: McpProviderKind;
   messagePrefix: string;
   cacheKeys: CacheKeys;
   t: (key: string, options?: Record<string, unknown>) => string;
@@ -41,7 +41,7 @@ export interface UseServerDataReturn {
  * Server Data Loading and Initialization Hook
  */
 export function useServerData({
-  isCodexMode,
+  providerKind,
   messagePrefix,
   cacheKeys,
   t,
@@ -57,6 +57,11 @@ export function useServerData({
 
   // Refs
   const refreshTimersRef = useRef<number[]>([]);
+  const providerLabel = providerKind === 'codex'
+    ? 'Codex'
+    : providerKind === 'opencode'
+      ? 'OpenCode'
+      : 'Claude';
 
   // Load server list
   const loadServers = useCallback(() => {
@@ -80,10 +85,10 @@ export function useServerData({
       undefined,
       undefined,
       `get_${messagePrefix}mcp_server_status request to backend`,
-      `Querying MCP server connection status via ${isCodexMode ? 'Codex' : 'Claude'} SDK`
+      `Querying MCP server connection status via ${providerLabel} SDK`
     );
     sendToJava(`get_${messagePrefix}mcp_server_status`, {});
-  }, [messagePrefix, isCodexMode, t, onLog]);
+  }, [messagePrefix, providerLabel, t, onLog]);
 
   // Load server tools list
   const loadServerTools = useCallback((server: McpServer, forceRefresh = false) => {
@@ -132,6 +137,84 @@ export function useServerData({
     sendToJava(`get_${messagePrefix}mcp_server_tools`, { serverId: server.id, forceRefresh });
   }, [cacheKeys, messagePrefix, t, onLog]);
 
+  // Register server list/status callbacks before issuing initial backend requests.
+  useEffect(() => {
+    const handleServerListUpdate = (jsonStr: string) => {
+      try {
+        const serverList: McpServer[] = JSON.parse(jsonStr);
+        setServers(serverList);
+        setLoading(false);
+        // Persist to cache so subsequent mounts can load instantly
+        writeCache(cacheKeys.SERVERS, serverList);
+        onLog(t('mcp.logs.loadedServersSuccess', { count: serverList.length }), 'success');
+      } catch (error) {
+        console.error('[McpSettings] Failed to parse servers:', error);
+        setLoading(false);
+        onLog(t('mcp.logs.loadedServersFailed', { error: String(error) }), 'error');
+      }
+    };
+
+    const handleServerStatusUpdate = (jsonStr: string) => {
+      try {
+        const statusList: McpServerStatusInfo[] = JSON.parse(jsonStr);
+        const statusMap = new Map<string, McpServerStatusInfo>();
+        statusList.forEach((status) => {
+          statusMap.set(status.name, status);
+        });
+        setServerStatus(statusMap);
+        setStatusLoading(false);
+        // Persist status to cache
+        writeCache(cacheKeys.STATUS, statusList);
+
+        const statusCount = {
+          connected: statusList.filter(s => s.status === 'connected').length,
+          failed: statusList.filter(s => s.status === 'failed').length,
+          pending: statusList.filter(s => s.status === 'pending').length,
+          needsAuth: statusList.filter(s => s.status === 'needs-auth').length
+        };
+
+        onLog(
+          t('mcp.logs.statusUpdateComplete', {
+            total: statusList.length,
+            connected: statusCount.connected,
+            failed: statusCount.failed,
+            pending: statusCount.pending,
+            needsAuth: statusCount.needsAuth
+          }),
+          statusCount.failed > 0 ? 'warning' : 'success'
+        );
+      } catch (error) {
+        console.error('[McpSettings] Failed to parse server status:', error);
+        setStatusLoading(false);
+        onLog(t('mcp.logs.loadedStatusFailed', { error: String(error) }), 'error');
+      }
+    };
+
+    if (providerKind === 'codex') {
+      window.updateCodexMcpServers = handleServerListUpdate;
+      window.updateCodexMcpServerStatus = handleServerStatusUpdate;
+    } else if (providerKind === 'opencode') {
+      window.updateOpenCodeMcpServers = handleServerListUpdate;
+      window.updateOpenCodeMcpServerStatus = handleServerStatusUpdate;
+    } else {
+      window.updateMcpServers = handleServerListUpdate;
+      window.updateMcpServerStatus = handleServerStatusUpdate;
+    }
+
+    return () => {
+      if (providerKind === 'codex') {
+        window.updateCodexMcpServers = undefined;
+        window.updateCodexMcpServerStatus = undefined;
+      } else if (providerKind === 'opencode') {
+        window.updateOpenCodeMcpServers = undefined;
+        window.updateOpenCodeMcpServerStatus = undefined;
+      } else {
+        window.updateMcpServers = undefined;
+        window.updateMcpServerStatus = undefined;
+      }
+    };
+  }, [providerKind, cacheKeys, t, onLog]);
+
   // Initialization and data loading
   useEffect(() => {
     const clearRefreshTimers = () => {
@@ -153,7 +236,7 @@ export function useServerData({
         }
       }
 
-      if (!isCodexMode) {
+      if (providerKind !== 'codex') {
         const cachedStatus = readCache<McpServerStatusInfo[]>(cacheKeys.STATUS, cacheKeys);
         if (cachedStatus && cachedStatus.length > 0) {
           const statusMap = new Map<string, McpServerStatusInfo>();
@@ -209,80 +292,7 @@ export function useServerData({
     return () => {
       clearRefreshTimers();
     };
-  }, [cacheKeys, isCodexMode, loadServers, loadServerStatus, t, onLog]);
-
-  // Register server list update callback
-  useEffect(() => {
-    const handleServerListUpdate = (jsonStr: string) => {
-      try {
-        const serverList: McpServer[] = JSON.parse(jsonStr);
-        setServers(serverList);
-        setLoading(false);
-        // Persist to cache so subsequent mounts can load instantly
-        writeCache(cacheKeys.SERVERS, serverList);
-        onLog(t('mcp.logs.loadedServersSuccess', { count: serverList.length }), 'success');
-      } catch (error) {
-        console.error('[McpSettings] Failed to parse servers:', error);
-        setLoading(false);
-        onLog(t('mcp.logs.loadedServersFailed', { error: String(error) }), 'error');
-      }
-    };
-
-    const handleServerStatusUpdate = (jsonStr: string) => {
-      try {
-        const statusList: McpServerStatusInfo[] = JSON.parse(jsonStr);
-        const statusMap = new Map<string, McpServerStatusInfo>();
-        statusList.forEach((status) => {
-          statusMap.set(status.name, status);
-        });
-        setServerStatus(statusMap);
-        setStatusLoading(false);
-        // Persist status to cache
-        writeCache(cacheKeys.STATUS, statusList);
-
-        const statusCount = {
-          connected: statusList.filter(s => s.status === 'connected').length,
-          failed: statusList.filter(s => s.status === 'failed').length,
-          pending: statusList.filter(s => s.status === 'pending').length,
-          needsAuth: statusList.filter(s => s.status === 'needs-auth').length
-        };
-
-        onLog(
-          t('mcp.logs.statusUpdateComplete', {
-            total: statusList.length,
-            connected: statusCount.connected,
-            failed: statusCount.failed,
-            pending: statusCount.pending,
-            needsAuth: statusCount.needsAuth
-          }),
-          statusCount.failed > 0 ? 'warning' : 'success'
-        );
-      } catch (error) {
-        console.error('[McpSettings] Failed to parse server status:', error);
-        setStatusLoading(false);
-        onLog(t('mcp.logs.loadedStatusFailed', { error: String(error) }), 'error');
-      }
-    };
-
-    // Register callbacks
-    if (isCodexMode) {
-      window.updateCodexMcpServers = handleServerListUpdate;
-      window.updateCodexMcpServerStatus = handleServerStatusUpdate;
-    } else {
-      window.updateMcpServers = handleServerListUpdate;
-      window.updateMcpServerStatus = handleServerStatusUpdate;
-    }
-
-    return () => {
-      if (isCodexMode) {
-        window.updateCodexMcpServers = undefined;
-        window.updateCodexMcpServerStatus = undefined;
-      } else {
-        window.updateMcpServers = undefined;
-        window.updateMcpServerStatus = undefined;
-      }
-    };
-  }, [isCodexMode, t, onLog]);
+  }, [cacheKeys, providerKind, loadServers, loadServerStatus, t, onLog]);
 
   return {
     // State

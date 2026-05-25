@@ -4,13 +4,13 @@
  */
 
 import { useState, useCallback } from 'react';
-import type { McpServer, ServerToolsState, ServerRefreshState, RefreshLog, CacheKeys } from '../types';
+import type { McpProviderKind, McpServer, ServerToolsState, ServerRefreshState, RefreshLog, CacheKeys } from '../types';
 import { sendToJava } from '../../../utils/bridge';
 import { clearToolsCache, clearAllToolsCache } from '../utils';
 import type { ToastMessage } from '../../Toast';
 
 export interface UseServerManagementOptions {
-  isCodexMode: boolean;
+  providerKind: McpProviderKind;
   messagePrefix: string;
   cacheKeys: CacheKeys;
   setServerTools: React.Dispatch<React.SetStateAction<ServerToolsState>>;
@@ -33,7 +33,7 @@ export interface UseServerManagementReturn {
  * Server Management Operations Hook
  */
 export function useServerManagement({
-  isCodexMode,
+  providerKind,
   messagePrefix,
   cacheKeys,
   setServerTools,
@@ -101,7 +101,13 @@ export function useServerManagement({
 
   // Toggle server enabled state
   const handleToggleServer = useCallback((server: McpServer, enabled: boolean) => {
+    if (providerKind === 'opencode') {
+      onToast('OpenCode MCP servers are managed by opencode.', 'info');
+      return;
+    }
+
     // Set apps based on current provider mode
+    const isCodexMode = providerKind === 'codex';
     const updatedServer: McpServer = {
       ...server,
       enabled,
@@ -124,7 +130,7 @@ export function useServerManagement({
 
     loadServers();
     loadServerStatus();
-  }, [isCodexMode, messagePrefix, onToast, t, loadServers, loadServerStatus]);
+  }, [providerKind, messagePrefix, onToast, t, loadServers, loadServerStatus]);
 
   return {
     serverRefreshStates,

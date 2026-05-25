@@ -228,6 +228,16 @@ interface Window {
   updateCodexMcpServerStatus?: (json: string) => void;
 
   /**
+   * Update OpenCode MCP servers list
+   */
+  updateOpenCodeMcpServers?: (json: string) => void;
+
+  /**
+   * Update OpenCode MCP server connection status
+   */
+  updateOpenCodeMcpServerStatus?: (json: string) => void;
+
+  /**
    * Codex MCP server toggled callback
    */
   codexMcpServerToggled?: (json: string) => void;

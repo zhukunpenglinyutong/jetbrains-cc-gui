@@ -4,14 +4,16 @@
  */
 
 import type { McpServer, McpServerStatusInfo } from '../../types/mcp';
-import type { ServerRefreshState, ServerToolsState, McpTool } from './types';
+import type { McpProviderKind, ServerRefreshState, ServerToolsState, McpTool } from './types';
 import { getServerStatusInfo, getStatusIcon, getStatusColor, getStatusText, getIconColor, getServerInitial, isServerEnabled } from './utils';
 import { ServerToolsPanel } from './ServerToolsPanel';
 
 export interface ServerCardProps {
   server: McpServer;
   isExpanded: boolean;
-  isCodexMode: boolean;
+  providerKind: McpProviderKind;
+  readOnly?: boolean;
+  supportsTools?: boolean;
   serverStatus: Map<string, McpServerStatusInfo>;
   refreshState?: ServerRefreshState[string];
   toolsInfo?: ServerToolsState[string];
@@ -33,7 +35,9 @@ export interface ServerCardProps {
 export function ServerCard({
   server,
   isExpanded,
-  isCodexMode,
+  providerKind,
+  readOnly = false,
+  supportsTools = true,
   serverStatus,
   toolsInfo,
   t,
@@ -52,11 +56,11 @@ export function ServerCard({
     status === 'pending' && (toolsInfo?.tools?.length ?? 0) > 0
       ? 'connected'
       : status;
-  const enabled = isServerEnabled(server, isCodexMode);
+  const enabled = isServerEnabled(server, providerKind);
   const isConnected = effectiveStatus === 'connected';
 
   const iconStyle: React.CSSProperties = { background: getIconColor(server.id) };
-  const statusColorStyle: React.CSSProperties = { color: getStatusColor(server, effectiveStatus, isCodexMode) };
+  const statusColorStyle: React.CSSProperties = { color: getStatusColor(server, effectiveStatus, providerKind) };
 
   return (
     <div
@@ -74,53 +78,61 @@ export function ServerCard({
           <span
             className="status-indicator"
             style={statusColorStyle}
-            title={getStatusText(server, effectiveStatus, isCodexMode, t)}
+            title={getStatusText(server, effectiveStatus, providerKind, t)}
           >
-            <span className={`codicon ${getStatusIcon(server, effectiveStatus, isCodexMode)}`}></span>
+            <span className={`codicon ${getStatusIcon(server, effectiveStatus, providerKind)}`}></span>
           </span>
         </div>
         <div className="header-right-section" onClick={(e) => e.stopPropagation()}>
           {/* Edit button */}
-          <button
-            className="icon-btn edit-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit();
-            }}
-            title={t('chat.editConfig')}
-          >
-            <span className="codicon codicon-edit"></span>
-          </button>
+          {!readOnly && (
+            <button
+              className="icon-btn edit-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              title={t('chat.editConfig')}
+            >
+              <span className="codicon codicon-edit"></span>
+            </button>
+          )}
           {/* Copy button */}
-          <button
-            className="icon-btn copy-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              onCopy();
-            }}
-            title={t('chat.copyConfig')}
-          >
-            <span className="codicon codicon-copy"></span>
-          </button>
+          {!readOnly && (
+            <button
+              className="icon-btn copy-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onCopy();
+              }}
+              title={t('chat.copyConfig')}
+            >
+              <span className="codicon codicon-copy"></span>
+            </button>
+          )}
           {/* Delete button */}
-          <button
-            className="icon-btn delete-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            title={t('chat.deleteServer')}
-          >
-            <span className="codicon codicon-trash"></span>
-          </button>
-          <label className="toggle-switch">
-            <input
-              type="checkbox"
-              checked={enabled}
-              onChange={(e) => onToggleServer(e.target.checked)}
-            />
-            <span className="toggle-slider"></span>
-          </label>
+          {!readOnly && (
+            <>
+              <button
+                className="icon-btn delete-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                }}
+                title={t('chat.deleteServer')}
+              >
+                <span className="codicon codicon-trash"></span>
+              </button>
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={enabled}
+                  onChange={(e) => onToggleServer(e.target.checked)}
+                />
+                <span className="toggle-slider"></span>
+              </label>
+            </>
+          )}
         </div>
       </div>
 
@@ -135,8 +147,8 @@ export function ServerCard({
                 className="info-value status-value"
                 style={statusColorStyle}
               >
-                <span className={`codicon ${getStatusIcon(server, effectiveStatus, isCodexMode)}`}></span>
-                {' '}{getStatusText(server, effectiveStatus, isCodexMode, t)}
+                <span className={`codicon ${getStatusIcon(server, effectiveStatus, providerKind)}`}></span>
+                {' '}{getStatusText(server, effectiveStatus, providerKind, t)}
               </span>
             </div>
             {statusInfo?.serverInfo && (
@@ -174,14 +186,15 @@ export function ServerCard({
           </div>
 
           {/* Tools list panel */}
-          <ServerToolsPanel
-            toolsInfo={toolsInfo}
-            isConnected={isConnected}
-            isCodexMode={isCodexMode}
-            t={t}
-            onLoadTools={onLoadTools}
-            onToolHover={onToolHover}
-          />
+          {supportsTools && (
+            <ServerToolsPanel
+              toolsInfo={toolsInfo}
+              isConnected={isConnected}
+              t={t}
+              onLoadTools={onLoadTools}
+              onToolHover={onToolHover}
+            />
+          )}
 
           {/* Tags */}
           {server.tags && server.tags.length > 0 && (

@@ -9,8 +9,10 @@ import type { McpServer, McpServerStatusInfo } from '../../types/mcp';
 // ============================================================================
 
 export interface McpSettingsSectionProps {
-  currentProvider?: 'claude' | 'codex' | string;
+  currentProvider?: 'claude' | 'codex' | 'opencode' | string;
 }
+
+export type McpProviderKind = 'claude' | 'codex' | 'opencode';
 
 // ============================================================================
 // Cache Types

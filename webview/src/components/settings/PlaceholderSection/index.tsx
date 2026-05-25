@@ -4,7 +4,7 @@ import styles from './style.module.less';
 
 interface PlaceholderSectionProps {
   type: 'permissions' | 'mcp' | 'agents' | 'skills';
-  currentProvider?: 'claude' | 'codex' | string;
+  currentProvider?: 'claude' | 'codex' | 'opencode' | string;
 }
 
 const PlaceholderSection = ({ type, currentProvider }: PlaceholderSectionProps) => {

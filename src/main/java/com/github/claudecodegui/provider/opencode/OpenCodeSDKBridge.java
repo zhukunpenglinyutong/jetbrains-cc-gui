@@ -32,6 +32,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class OpenCodeSDKBridge extends BaseSDKBridge {
 
     private static final int QUERY_TIMEOUT_SECONDS = 30;
+    private static final int MCP_STATUS_QUERY_TIMEOUT_SECONDS = 45;
     private static final long DAEMON_RETRY_DELAY_MS = 60_000;
     private final Object daemonLock = new Object();
     private volatile DaemonBridge daemonBridge;
@@ -347,6 +348,30 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
         }
     }
 
+    public JsonObject listMcpServers(String cwd) {
+        try {
+            return runJsonCommand("listMcpServers", List.of(cwd != null ? cwd : ""));
+        } catch (Exception e) {
+            LOG.warn("[OpenCodeSDKBridge] Failed to list opencode MCP servers: " + e.getMessage(), e);
+            JsonObject error = new JsonObject();
+            error.addProperty("success", false);
+            error.addProperty("error", e.getMessage());
+            return error;
+        }
+    }
+
+    public JsonObject listMcpServerStatus(String cwd) {
+        try {
+            return runJsonCommand("listMcpServerStatus", List.of(cwd != null ? cwd : ""));
+        } catch (Exception e) {
+            LOG.warn("[OpenCodeSDKBridge] Failed to list opencode MCP server status: " + e.getMessage(), e);
+            JsonObject error = new JsonObject();
+            error.addProperty("success", false);
+            error.addProperty("error", e.getMessage());
+            return error;
+        }
+    }
+
     private JsonObject runSessionMessagesQuery(String sessionId, String cwd) throws Exception {
         if (sessionId == null || sessionId.trim().isEmpty()) {
             throw new IllegalArgumentException("sessionId is required");
@@ -408,12 +433,13 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
         );
 
         boolean success;
+        int timeoutSeconds = jsonCommandTimeoutSeconds(action);
         try {
-            success = Boolean.TRUE.equals(commandFuture.get(QUERY_TIMEOUT_SECONDS, TimeUnit.SECONDS));
+            success = Boolean.TRUE.equals(commandFuture.get(timeoutSeconds, TimeUnit.SECONDS));
         } catch (TimeoutException timeout) {
             shutdownDaemon();
             throw new RuntimeException("opencode daemon query timed out after "
-                    + QUERY_TIMEOUT_SECONDS + " seconds", timeout);
+                    + timeoutSeconds + " seconds", timeout);
         }
 
         JsonObject result = resultRef.get();
@@ -452,6 +478,8 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
             case "listModels":
             case "listSessions":
             case "listAgents":
+            case "listMcpServers":
+            case "listMcpServerStatus":
             default:
                 params.addProperty("cwd", args.size() > 0 ? args.get(0) : "");
                 break;
@@ -477,12 +505,13 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
         Process process = pb.start();
         CompletableFuture<String> outputFuture = CompletableFuture.supplyAsync(() -> readProcessOutput(process));
 
-        boolean finished = process.waitFor(QUERY_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        int timeoutSeconds = jsonCommandTimeoutSeconds(action);
+        boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
         if (!finished) {
             process.destroyForcibly();
             outputFuture.cancel(true);
             throw new RuntimeException("opencode query timed out after "
-                    + QUERY_TIMEOUT_SECONDS + " seconds");
+                    + timeoutSeconds + " seconds");
         }
 
         String jsonLine = extractLastJsonLine(outputFuture.get(5, TimeUnit.SECONDS));
@@ -490,6 +519,12 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
             throw new RuntimeException("Failed to extract JSON from opencode query output");
         }
         return gson.fromJson(jsonLine, JsonObject.class);
+    }
+
+    private int jsonCommandTimeoutSeconds(String action) {
+        return "listMcpServerStatus".equals(action)
+                ? MCP_STATUS_QUERY_TIMEOUT_SECONDS
+                : QUERY_TIMEOUT_SECONDS;
     }
 
     private DaemonBridge getDaemonBridge() {
