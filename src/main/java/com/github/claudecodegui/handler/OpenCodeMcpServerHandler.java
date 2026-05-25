@@ -110,23 +110,38 @@ public class OpenCodeMcpServerHandler extends BaseMessageHandler {
 
     private void handleGetMcpServerTools(String content) {
         Gson gson = new Gson();
-        String serverId = "";
         try {
             JsonObject json = gson.fromJson(content, JsonObject.class);
-            if (json != null && json.has("serverId") && !json.get("serverId").isJsonNull()) {
-                serverId = json.get("serverId").getAsString();
+            if (json == null || !json.has("serverId") || json.get("serverId").isJsonNull()) {
+                sendToolsError("", "Missing required field: serverId", gson);
+                return;
             }
-        } catch (Exception ignored) {
-        }
+            String serverId = json.get("serverId").getAsString();
 
-        JsonObject result = new JsonObject();
-        result.addProperty("serverId", serverId);
-        result.addProperty("error", "opencode MCP tool listing is not available through the current /mcp endpoint");
-        result.add("tools", new JsonArray());
-        String json = gson.toJson(result);
-        ApplicationManager.getApplication().invokeLater(() ->
-            callJavaScript("window.updateMcpServerTools", escapeJs(json))
-        );
+            if (!isOpenCodeLocalConfigAuthorized()) {
+                sendToolsError(serverId, "OpenCode local config access is not authorized", gson);
+                return;
+            }
+
+            CompletableFuture.supplyAsync(
+                    () -> context.getOpenCodeSDKBridge().getMcpServerTools(serverId, getProjectPath()),
+                    AppExecutorUtil.getAppExecutorService()
+                )
+                .thenAccept(result -> {
+                    String resultJson = gson.toJson(result);
+                    ApplicationManager.getApplication().invokeLater(() ->
+                        callJavaScript("window.updateMcpServerTools", escapeJs(resultJson))
+                    );
+                })
+                .exceptionally(e -> {
+                    LOG.warn("[OpenCodeMcpServerHandler] Failed to get opencode MCP server tools: " + e.getMessage(), e);
+                    sendToolsError(serverId, e.getMessage(), gson);
+                    return null;
+                });
+        } catch (Exception e) {
+            LOG.warn("[OpenCodeMcpServerHandler] Failed to get opencode MCP server tools: " + e.getMessage(), e);
+            sendToolsError("", e.getMessage(), gson);
+        }
     }
 
     private CompletableFuture<JsonObject> queryMcpServerStatus(String cwd) {
@@ -194,6 +209,17 @@ public class OpenCodeMcpServerHandler extends BaseMessageHandler {
         String json = new Gson().toJson(status);
         ApplicationManager.getApplication().invokeLater(() ->
             callJavaScript("window.updateOpenCodeMcpServerStatus", escapeJs(json))
+        );
+    }
+
+    private void sendToolsError(String serverId, String errorMessage, Gson gson) {
+        JsonObject result = new JsonObject();
+        result.addProperty("serverId", serverId != null ? serverId : "");
+        result.addProperty("error", errorMessage != null ? errorMessage : "Unknown error");
+        result.add("tools", new JsonArray());
+        String json = gson.toJson(result);
+        ApplicationManager.getApplication().invokeLater(() ->
+            callJavaScript("window.updateMcpServerTools", escapeJs(json))
         );
     }
 }

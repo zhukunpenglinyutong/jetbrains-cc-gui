@@ -12,6 +12,7 @@ import { basename, isAbsolute, join, resolve } from 'path';
 import { pathToFileURL } from 'url';
 
 import { requestPermissionFromJava } from '../../permission-ipc.js';
+import { getMcpServerTools as getMcpServerToolsImpl } from '../claude/mcp-status/index.js';
 import { ensureOpenCodeSdk, normalizeOpenCodeSdkError } from './opencode-utils.js';
 import {
   buildOpenCodePermissionDialogRequest,
@@ -1523,6 +1524,77 @@ function sanitizeOpenCodeMcpConfig(config) {
   return sanitized;
 }
 
+function sanitizeOpenCodeMcpIdentifier(value) {
+  return String(value || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+function normalizeOpenCodeToolSchema(tool) {
+  const candidate = tool?.inputSchema || tool?.parameters || tool?.jsonSchema;
+  const schema = asRecord(candidate);
+  return Object.keys(schema).length > 0 ? schema : undefined;
+}
+
+function normalizeOpenCodeMcpTools(serverId, toolPayload = []) {
+  const prefix = `${sanitizeOpenCodeMcpIdentifier(serverId)}_`;
+  return (Array.isArray(toolPayload) ? toolPayload : [])
+    .map((rawTool) => {
+      const tool = asRecord(rawTool);
+      const id = pickString(tool.id, tool.name);
+      if (!id || !id.startsWith(prefix)) {
+        return null;
+      }
+
+      const name = id.slice(prefix.length) || id;
+      const normalized = {
+        name,
+        description: pickString(tool.description)
+      };
+      const inputSchema = normalizeOpenCodeToolSchema(tool);
+      if (inputSchema) {
+        normalized.inputSchema = inputSchema;
+      }
+      return normalized;
+    })
+    .filter(Boolean)
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function normalizeOpenCodeMcpToolIds(serverId, idsPayload = []) {
+  const prefix = `${sanitizeOpenCodeMcpIdentifier(serverId)}_`;
+  return (Array.isArray(idsPayload) ? idsPayload : [])
+    .map((id) => String(id || ''))
+    .filter((id) => id.startsWith(prefix))
+    .map((id) => ({ name: id.slice(prefix.length) || id }))
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function normalizeOpenCodeMcpProbeConfig(config) {
+  const serverConfig = asRecord(config);
+  if (serverConfig.type === 'local') {
+    const commandParts = Array.isArray(serverConfig.command)
+      ? serverConfig.command.map((part) => String(part)).filter(Boolean)
+      : [];
+    return {
+      type: 'stdio',
+      command: commandParts[0] || '',
+      args: commandParts.slice(1),
+      env: asRecord(serverConfig.environment),
+      timeout: serverConfig.timeout
+    };
+  }
+
+  if (serverConfig.type === 'remote') {
+    return {
+      type: 'http',
+      url: typeof serverConfig.url === 'string' ? serverConfig.url : '',
+      headers: asRecord(serverConfig.headers),
+      timeout: serverConfig.timeout
+    };
+  }
+
+  return {};
+}
+
 function normalizeOpenCodeMcpServers(configPayload = {}, statusPayload = {}) {
   const mcpConfig = asRecord(configPayload?.mcp);
   const statuses = asRecord(statusPayload);
@@ -1689,11 +1761,16 @@ async function postJson(baseUrl, path, cwd, body = undefined) {
   }
 }
 
-async function getJsonWithTimeout(baseUrl, path, cwd, timeoutMs) {
+async function getJsonWithTimeout(baseUrl, path, cwd, timeoutMs, query = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const url = withDirectory(new URL(path, baseUrl), cwd);
+    for (const [key, value] of Object.entries(query || {})) {
+      if (value !== undefined && value !== null && String(value).trim()) {
+        url.searchParams.set(key, String(value));
+      }
+    }
     const response = await fetch(url, {
       method: 'GET',
       headers: buildAuthHeaders() || {},
@@ -2577,6 +2654,130 @@ export async function listMcpServerStatus(cwd = '', options = {}) {
   }
 }
 
+export async function getMcpServerTools(serverId = '', cwd = '', options = {}) {
+  const id = typeof serverId === 'string' ? serverId.trim() : '';
+  if (!id) {
+    console.log(JSON.stringify({
+      success: false,
+      serverId: '',
+      error: 'Missing serverId',
+      tools: []
+    }));
+    return;
+  }
+
+  let runtime = null;
+  const errors = [];
+  try {
+    runtime = await acquireOpenCodeRuntime(cwd, options);
+    const query = directoryQuery(cwd);
+    const [config, providers] = await Promise.all([
+      unwrapSdkResult(
+        runtime.client.config.get({ query }),
+        'get opencode config'
+      ),
+      listOpenCodeModelProviders(runtime.client, query).catch((error) => {
+        errors.push(`provider discovery failed: ${normalizeOpenCodeSdkError(error).error}`);
+        return {};
+      })
+    ]);
+
+    const timeoutMs = parsePositiveInteger(
+      process.env.OPENCODE_MCP_TOOLS_TIMEOUT_MS,
+      DEFAULT_MCP_STATUS_TIMEOUT_MS
+    );
+    const resolvedModel = parseOpenCodeModel(resolveOpenCodeDefaultModelId(providers, config).id);
+
+    if (resolvedModel) {
+      try {
+        const tools = normalizeOpenCodeMcpTools(
+          id,
+          await getJsonWithTimeout(runtime.baseUrl, '/experimental/tool', cwd, timeoutMs, {
+            provider: resolvedModel.providerID,
+            model: resolvedModel.modelID
+          })
+        );
+        if (tools.length > 0) {
+          const result = {
+            success: true,
+            serverId: id,
+            serverName: id,
+            tools,
+            source: 'opencode-experimental-tool'
+          };
+          console.log(JSON.stringify(result));
+          return;
+        }
+      } catch (error) {
+        errors.push(`/experimental/tool failed: ${normalizeOpenCodeSdkError(error).error}`);
+      }
+    } else {
+      errors.push('No concrete opencode provider/model available for /experimental/tool');
+    }
+
+    try {
+      const tools = normalizeOpenCodeMcpToolIds(
+        id,
+        await getJsonWithTimeout(runtime.baseUrl, '/experimental/tool/ids', cwd, timeoutMs)
+      );
+      if (tools.length > 0) {
+        const result = {
+          success: true,
+          serverId: id,
+          serverName: id,
+          tools,
+          source: 'opencode-experimental-tool-ids'
+        };
+        console.log(JSON.stringify(result));
+        return;
+      }
+    } catch (error) {
+      errors.push(`/experimental/tool/ids failed: ${normalizeOpenCodeSdkError(error).error}`);
+    }
+
+    if (!runtime.ownedServer) {
+      throw new Error('OpenCode experimental tool endpoints did not expose MCP tools; direct config probing is disabled for external OpenCode servers');
+    }
+
+    const mcpConfig = asRecord(config?.mcp);
+    const targetConfig = asRecord(mcpConfig[id]);
+    if (!Object.keys(targetConfig).length) {
+      throw new Error(`OpenCode MCP server not found: ${id}`);
+    }
+    if (targetConfig.enabled === false) {
+      throw new Error(`OpenCode MCP server is disabled: ${id}`);
+    }
+
+    const probeConfig = normalizeOpenCodeMcpProbeConfig(targetConfig);
+    const toolsResult = await getMcpServerToolsImpl(id, probeConfig);
+    const tools = Array.isArray(toolsResult?.tools) ? toolsResult.tools : [];
+    const hasError = !!toolsResult?.error;
+    const result = {
+      success: !hasError || tools.length > 0,
+      serverId: id,
+      serverName: toolsResult?.name || id,
+      tools,
+      error: toolsResult?.error || null,
+      source: 'opencode-config-probe'
+    };
+    if (errors.length > 0) {
+      result.experimentalErrors = errors;
+    }
+
+    console.log(JSON.stringify(result));
+  } catch (error) {
+    const message = normalizeOpenCodeSdkError(error).error;
+    console.log(JSON.stringify({
+      success: false,
+      serverId: id,
+      error: errors.length > 0 ? `${message}; ${errors.join('; ')}` : message,
+      tools: []
+    }));
+  } finally {
+    await releaseOpenCodeRuntime(runtime, options);
+  }
+}
+
 export {
   createOpenCodeRuntime,
   directoryQuery,
@@ -2589,6 +2790,8 @@ export {
   normalizeOpenCodeAgents,
   normalizeOpenCodeMcpServers,
   normalizeOpenCodeMcpStatusList,
+  normalizeOpenCodeMcpTools,
+  normalizeOpenCodeMcpToolIds,
   parseOpenCodeModel,
   releaseOpenCodeRuntime,
   normalizeOpenCodeModels,

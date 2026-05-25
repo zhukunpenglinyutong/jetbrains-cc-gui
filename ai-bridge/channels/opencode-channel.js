@@ -4,6 +4,7 @@
 import {
   abortSession as openCodeAbortSession,
   deleteSession as openCodeDeleteSession,
+  getMcpServerTools as openCodeGetMcpServerTools,
   getSessionMessages as openCodeGetSessionMessages,
   listAgents as openCodeListAgents,
   listMcpServerStatus as openCodeListMcpServerStatus,
@@ -100,11 +101,18 @@ export async function handleOpenCodeCommand(command, args, stdinData) {
       break;
     }
 
+    case 'getMcpServerTools': {
+      const serverId = stdinData?.serverId || args[0] || '';
+      const cwd = stdinData?.cwd || args[1] || '';
+      await openCodeGetMcpServerTools(serverId, cwd, options);
+      break;
+    }
+
     default:
       throw new Error(`Unknown opencode command: ${command}`);
   }
 }
 
 export function getOpenCodeCommandList() {
-  return ['send', 'abort', 'deleteSession', 'getSessionMessages', 'listSessions', 'listModels', 'listAgents', 'listMcpServers', 'listMcpServerStatus'];
+  return ['send', 'abort', 'deleteSession', 'getSessionMessages', 'listSessions', 'listModels', 'listAgents', 'listMcpServers', 'listMcpServerStatus', 'getMcpServerTools'];
 }

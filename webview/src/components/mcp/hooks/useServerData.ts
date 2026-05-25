@@ -283,6 +283,7 @@ export function useServerData({
 
     if (hasCache) {
       onLog(t('mcp.logs.usingCacheStrategy'), 'info');
+      loadServerStatus();
     } else {
       onLog(t('mcp.logs.firstLoad'), 'info');
       loadServers();

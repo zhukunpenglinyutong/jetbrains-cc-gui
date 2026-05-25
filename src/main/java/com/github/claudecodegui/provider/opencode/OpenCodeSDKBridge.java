@@ -372,6 +372,23 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
         }
     }
 
+    public JsonObject getMcpServerTools(String serverId, String cwd) {
+        try {
+            return runJsonCommand("getMcpServerTools", List.of(
+                    serverId != null ? serverId : "",
+                    cwd != null ? cwd : ""
+            ));
+        } catch (Exception e) {
+            LOG.warn("[OpenCodeSDKBridge] Failed to get opencode MCP server tools: " + e.getMessage(), e);
+            JsonObject error = new JsonObject();
+            error.addProperty("success", false);
+            error.addProperty("serverId", serverId != null ? serverId : "");
+            error.addProperty("error", e.getMessage());
+            error.add("tools", new JsonArray());
+            return error;
+        }
+    }
+
     private JsonObject runSessionMessagesQuery(String sessionId, String cwd) throws Exception {
         if (sessionId == null || sessionId.trim().isEmpty()) {
             throw new IllegalArgumentException("sessionId is required");
@@ -473,6 +490,10 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
             case "deleteSession":
             case "getSessionMessages":
                 params.addProperty("sessionId", args.size() > 0 ? args.get(0) : "");
+                params.addProperty("cwd", args.size() > 1 ? args.get(1) : "");
+                break;
+            case "getMcpServerTools":
+                params.addProperty("serverId", args.size() > 0 ? args.get(0) : "");
                 params.addProperty("cwd", args.size() > 1 ? args.get(1) : "");
                 break;
             case "listModels":

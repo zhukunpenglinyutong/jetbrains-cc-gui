@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 
 import {
   normalizeOpenCodeMcpServers,
-  normalizeOpenCodeMcpStatusList
+  normalizeOpenCodeMcpStatusList,
+  normalizeOpenCodeMcpToolIds,
+  normalizeOpenCodeMcpTools
 } from './message-service.js';
 
 test('opencode MCP normalization merges config with /mcp status', () => {
@@ -67,5 +69,54 @@ test('opencode MCP normalization maps failures with error details', () => {
       },
       error: 'spawn ENOENT',
     },
+  ]);
+});
+
+test('opencode MCP tool normalization filters tools by sanitized server prefix', () => {
+  const tools = normalizeOpenCodeMcpTools('my.server', [
+    {
+      id: 'my_server_search',
+      description: 'Search things',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string' },
+        },
+        required: ['query'],
+      },
+    },
+    {
+      id: 'other_server_search',
+      description: 'Wrong server',
+      parameters: { type: 'object' },
+    },
+    {
+      id: 'my_server_read_file',
+      description: 'Read a file',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          path: { type: 'string' },
+        },
+      },
+    },
+  ]);
+
+  assert.deepEqual(tools.map((tool) => tool.name), ['read_file', 'search']);
+  assert.equal(tools[1].description, 'Search things');
+  assert.deepEqual(tools[1].inputSchema.required, ['query']);
+});
+
+test('opencode MCP tool ID normalization supports ids endpoint fallback', () => {
+  const tools = normalizeOpenCodeMcpToolIds('intellij', [
+    'bash',
+    'intellij_find_files_by_name_keyword',
+    'intellij_get_file_problems',
+    'puppeteer_click',
+  ]);
+
+  assert.deepEqual(tools, [
+    { name: 'find_files_by_name_keyword' },
+    { name: 'get_file_problems' },
   ]);
 });

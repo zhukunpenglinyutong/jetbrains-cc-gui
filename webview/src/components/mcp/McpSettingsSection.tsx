@@ -39,7 +39,7 @@ export function McpSettingsSection({ currentProvider = 'claude' }: McpSettingsSe
       : 'claude';
   const isOpenCodeMode = providerKind === 'opencode';
   const isReadOnly = isOpenCodeMode;
-  const supportsTools = !isOpenCodeMode;
+  const supportsTools = true;
 
   // Generate message type prefix based on provider
   const messagePrefix = useMemo(() => {
