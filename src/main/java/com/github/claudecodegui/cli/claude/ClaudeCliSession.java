@@ -237,6 +237,7 @@ public class ClaudeCliSession {
             long sendStartNanos = System.nanoTime();
             List<File> tempFiles = new ArrayList<>();
             StringBuilder diagnostic = new StringBuilder();
+            AtomicBoolean completedWithStructuredError = new AtomicBoolean(false);
             try {
                 LOG.info("[CliConcurrencyDiag][ClaudeCliSession] send task started" + ": tabId=" + tabId + ", requestSessionId=" + (request.sessionId() != null ? request.sessionId() : "(new)") + ", currentSessionId=" + (sessionId != null ? sessionId : "(none)") + ", cwd=" + (request.cwd() != null ? request.cwd() : "(none)") + ", thread=" + Thread.currentThread().getName());
                 String cliPath = ClaudeCliDetector.getInstance().findCliExecutable();
@@ -281,7 +282,7 @@ public class ClaudeCliSession {
                 LOG.info("[CliConcurrencyDiag][ClaudeCliSession] prompt written to stdin" + ": tabId=" + tabId + ", promptChars=" + prompt.length() + ", elapsedMs=" + elapsedMillis(sendStartNanos) + ", thread=" + Thread.currentThread().getName());
                 activeHandle = new CliProcessHandle(process, "claude-tab-" + tabId);
 
-                readOutput(callback, diagnostic, sendStartNanos);
+                readOutput(callback, diagnostic, sendStartNanos, completedWithStructuredError);
 
                 process.waitFor();
                 int exitCode = process.exitValue();
@@ -290,7 +291,7 @@ public class ClaudeCliSession {
 
                 if (interrupted) {
                     callback.onComplete(false, null, "User interrupted");
-                } else if (exitCode != 0) {
+                } else if (exitCode != 0 && !completedWithStructuredError.get()) {
                     String err = buildExitError(exitCode, diagnostic);
                     callback.onError(err);
                     callback.onComplete(false, null, err);
@@ -306,7 +307,7 @@ public class ClaudeCliSession {
         });
     }
 
-    private void readOutput(CliSessionCallback callback, StringBuilder diagnostic, long sendStartNanos) throws Exception {
+    private void readOutput(CliSessionCallback callback, StringBuilder diagnostic, long sendStartNanos, AtomicBoolean completedWithStructuredError) throws Exception {
         ClaudeCliStreamParser parser = new ClaudeCliStreamParser(gson);
         parser.resetState();
         StringBuilder assistantContent = new StringBuilder();
@@ -353,8 +354,9 @@ public class ClaudeCliSession {
                     if (sessionId != null) {
                         callback.onMessage("session_id", sessionId);
                     }
-                    callback.onComplete(!hadError.get(), assistantContent.toString(),
-                            hadError.get() ? result.error : null);
+                    boolean success = !hadError.get() && result.success;
+                    completedWithStructuredError.set(!success && result.error != null && !result.error.isBlank());
+                    callback.onComplete(success, success ? assistantContent.toString() : null, success ? null : result.error);
                     return;
                 }
             }
@@ -372,4 +374,5 @@ public class ClaudeCliSession {
             callback.onComplete(result.success, assistantContent.toString(), result.error);
         }
     }
+
 }

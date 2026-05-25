@@ -21,7 +21,6 @@ public class SettingsHandler extends BaseMessageHandler {
     private final Gson gson = new Gson();
 
     private final InputHistoryHandler inputHistoryHandler;
-    private final SoundSettingsHandler soundSettingsHandler;
     private final UsagePushService usagePushService;
     private final PermissionModeHandler permissionModeHandler;
     private final ModelProviderHandler modelProviderHandler;
@@ -75,14 +74,6 @@ public class SettingsHandler extends BaseMessageHandler {
         "record_input_history",
         "delete_input_history_item",
         "clear_input_history",
-        // Sound notification configuration
-        "get_sound_notification_config",
-        "set_sound_notification_enabled",
-        "set_sound_only_when_unfocused",
-        "set_selected_sound",
-        "set_custom_sound_path",
-        "test_sound",
-        "browse_sound_file",
         // User language preference
         "set_user_language",
         "get_user_language",
@@ -92,7 +83,6 @@ public class SettingsHandler extends BaseMessageHandler {
     public SettingsHandler(HandlerContext context) {
         super(context);
         this.inputHistoryHandler = new InputHistoryHandler(context);
-        this.soundSettingsHandler = new SoundSettingsHandler(context);
         this.usagePushService = new UsagePushService(context);
         this.permissionModeHandler = new PermissionModeHandler(context);
         this.modelProviderHandler = new ModelProviderHandler(context, usagePushService);
@@ -284,28 +274,6 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "clear_input_history":
                 inputHistoryHandler.handleClearInputHistory();
-                return true;
-            // Sound notification configuration
-            case "get_sound_notification_config":
-                soundSettingsHandler.handleGetSoundNotificationConfig();
-                return true;
-            case "set_sound_notification_enabled":
-                soundSettingsHandler.handleSetSoundNotificationEnabled(content);
-                return true;
-            case "set_sound_only_when_unfocused":
-                soundSettingsHandler.handleSetSoundOnlyWhenUnfocused(content);
-                return true;
-            case "set_selected_sound":
-                soundSettingsHandler.handleSetSelectedSound(content);
-                return true;
-            case "set_custom_sound_path":
-                soundSettingsHandler.handleSetCustomSoundPath(content);
-                return true;
-            case "test_sound":
-                soundSettingsHandler.handleTestSound(content);
-                return true;
-            case "browse_sound_file":
-                soundSettingsHandler.handleBrowseSoundFile();
                 return true;
             // User language preference
             case "set_user_language":

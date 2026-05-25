@@ -1,10 +1,11 @@
 package com.github.claudecodegui.ui.toolwindow;
 
 import com.github.claudecodegui.action.SendShortcutSync;
-import com.github.claudecodegui.handler.core.HandlerContext;
-import com.github.claudecodegui.handler.history.HistoryHandler;
-import com.github.claudecodegui.handler.core.MessageDispatcher;
 import com.github.claudecodegui.handler.PermissionHandler;
+import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.handler.core.MessageDispatcher;
+import com.github.claudecodegui.handler.history.HistoryHandler;
+import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.permission.PermissionService;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
@@ -17,7 +18,6 @@ import com.github.claudecodegui.session.SessionCallbackAdapter;
 import com.github.claudecodegui.session.SessionLifecycleManager;
 import com.github.claudecodegui.session.SessionLoadService;
 import com.github.claudecodegui.session.StreamMessageCoalescer;
-import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.settings.TabStateService;
 import com.github.claudecodegui.ui.ChatWindowDelegate;
@@ -39,9 +39,10 @@ import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentManager;
 import com.intellij.ui.jcef.JBCefBrowser;
 
-import javax.swing.*;
-import java.awt.*;
+import java.awt.BorderLayout;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import javax.swing.JPanel;
 
 /**
  * Chat window instance. Coordinates UI components, session management,

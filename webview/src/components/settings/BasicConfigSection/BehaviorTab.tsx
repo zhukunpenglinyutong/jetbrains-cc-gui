@@ -1,7 +1,7 @@
 import styles from './style.module.less';
-import { useTranslation } from 'react-i18next';
-import { DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS } from '../../../utils/permissionDialogTimeout';
-import { PermissionDialogTimeoutSetting } from './PermissionDialogTimeoutSetting';
+import {useTranslation} from 'react-i18next';
+import {DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS} from '../../../utils/permissionDialogTimeout';
+import {PermissionDialogTimeoutSetting} from './PermissionDialogTimeoutSetting';
 
 export interface BehaviorTabProps {
   sendShortcut?: 'enter' | 'cmdEnter';
@@ -26,17 +26,6 @@ export interface BehaviorTabProps {
    */
   newSessionConfirmEnabled?: boolean;
   onNewSessionConfirmEnabledChange?: (enabled: boolean) => void;
-  soundNotificationEnabled?: boolean;
-  onSoundNotificationEnabledChange?: (enabled: boolean) => void;
-  soundOnlyWhenUnfocused?: boolean;
-  onSoundOnlyWhenUnfocusedChange?: (enabled: boolean) => void;
-  selectedSound?: string;
-  onSelectedSoundChange?: (soundId: string) => void;
-  customSoundPath?: string;
-  onCustomSoundPathChange?: (path: string) => void;
-  onSaveCustomSoundPath?: () => void;
-  onTestSound?: () => void;
-  onBrowseSound?: () => void;
   taskCompletionNotificationEnabled?: boolean;
   onTaskCompletionNotificationEnabledChange?: (enabled: boolean) => void;
   permissionDialogTimeoutSeconds?: number;
@@ -60,17 +49,6 @@ const BehaviorTab = ({
   onAiTitleGenerationEnabledChange = () => {},
   newSessionConfirmEnabled = true,
   onNewSessionConfirmEnabledChange = () => {},
-  soundNotificationEnabled = false,
-  onSoundNotificationEnabledChange = () => {},
-  soundOnlyWhenUnfocused = false,
-  onSoundOnlyWhenUnfocusedChange = () => {},
-  selectedSound = 'default',
-  onSelectedSoundChange = () => {},
-  customSoundPath = '',
-  onCustomSoundPathChange = () => {},
-  onSaveCustomSoundPath = () => {},
-  onTestSound = () => {},
-  onBrowseSound = () => {},
   taskCompletionNotificationEnabled = false,
   onTaskCompletionNotificationEnabledChange = () => {},
   permissionDialogTimeoutSeconds = DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS,
@@ -330,107 +308,6 @@ const BehaviorTab = ({
         </small>
       </div>
 
-      {/* Sound notification */}
-      <div className={styles.streamingSection}>
-        <div className={styles.fieldHeader}>
-          <span className="codicon codicon-unmute" />
-          <span className={styles.fieldLabel}>{t('settings.basic.soundNotification.label')}</span>
-        </div>
-        <label className={styles.toggleWrapper}>
-          <input
-            type="checkbox"
-            className={styles.toggleInput}
-            checked={soundNotificationEnabled}
-            onChange={(e) => onSoundNotificationEnabledChange(e.target.checked)}
-          />
-          <span className={styles.toggleSlider} />
-          <span className={styles.toggleLabel}>
-            {soundNotificationEnabled
-              ? t('settings.basic.soundNotification.enabled')
-              : t('settings.basic.soundNotification.disabled')}
-          </span>
-        </label>
-        <small className={styles.formHint}>
-          <span className="codicon codicon-info" />
-          <span>{t('settings.basic.soundNotification.hint')}</span>
-        </small>
-
-        {soundNotificationEnabled && (
-          <div className={styles.customSoundSection}>
-            <div className={styles.soundOnlyWhenUnfocusedSection}>
-              <div className={styles.fieldHeader}>
-                <span className="codicon codicon-eye-closed" />
-                <span className={styles.fieldLabel}>{t('settings.basic.soundNotification.onlyWhenUnfocused')}</span>
-              </div>
-              <label className={styles.toggleWrapper}>
-                <input
-                  type="checkbox"
-                  className={styles.toggleInput}
-                  checked={soundOnlyWhenUnfocused}
-                  onChange={(e) => onSoundOnlyWhenUnfocusedChange(e.target.checked)}
-                />
-                <span className={styles.toggleSlider} />
-                <span className={styles.toggleLabel}>
-                  {soundOnlyWhenUnfocused
-                    ? t('settings.basic.soundNotification.enabled')
-                    : t('settings.basic.soundNotification.disabled')}
-                </span>
-              </label>
-              <small className={styles.formHint}>
-                <span className="codicon codicon-info" />
-                <span>{t('settings.basic.soundNotification.onlyWhenUnfocusedHint')}</span>
-              </small>
-            </div>
-
-            <div className={styles.fieldHeader}>
-              <span className="codicon codicon-library" />
-              <span className={styles.fieldLabel}>{t('settings.basic.soundNotification.selectSound')}</span>
-            </div>
-            <SoundSelectUpward
-              value={selectedSound}
-              onChange={onSelectedSoundChange}
-              options={soundOptions}
-              onTestSound={onTestSound}
-              testSoundLabel={t('settings.basic.soundNotification.testSound')}
-            />
-
-            {selectedSound === 'custom' && (
-              <div className={styles.customSoundFileSection}>
-                <div className={styles.fieldHeader}>
-                  <span className="codicon codicon-file-media" />
-                  <span className={styles.fieldLabel}>{t('settings.basic.soundNotification.customSound')}</span>
-                </div>
-                <div className={styles.nodePathInputWrapper}>
-                  <input
-                    type="text"
-                    className={styles.nodePathInput}
-                    placeholder={t('settings.basic.soundNotification.customSoundPlaceholder')}
-                    value={customSoundPath}
-                    onChange={(e) => onCustomSoundPathChange(e.target.value)}
-                  />
-                  <button
-                    className={styles.saveBtn}
-                    onClick={onBrowseSound}
-                    title={t('settings.basic.soundNotification.browse')}
-                  >
-                    <span className="codicon codicon-folder-opened" />
-                  </button>
-                  <button
-                    className={styles.saveBtn}
-                    onClick={onSaveCustomSoundPath}
-                  >
-                    {t('common.save')}
-                  </button>
-                </div>
-                <small className={styles.formHint}>
-                  <span className="codicon codicon-info" />
-                  <span>{t('settings.basic.soundNotification.customSoundHint')}</span>
-                </small>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
     </div>
   );
 };

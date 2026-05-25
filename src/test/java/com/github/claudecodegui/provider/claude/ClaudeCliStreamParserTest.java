@@ -1,5 +1,6 @@
 package com.github.claudecodegui.provider.claude;
 
+import com.github.claudecodegui.cli.common.CliErrorFormatter;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.google.gson.Gson;
@@ -127,6 +128,23 @@ public class ClaudeCliStreamParserTest {
         assertEquals(List.of("Built-in Tool: inspect_asset\nExecuting on server", "Output: internal result"), callback.contentsOfType("thinking_delta"));
         assertEquals(List.of("Output: final user-facing answer"), callback.contentsOfType("content_delta"));
         assertEquals("Output: final user-facing answer", assistantContent.toString());
+    }
+
+    @Test
+    public void errorResultDoesNotEmitAssistantContentAndMarksFailure() {
+        ClaudeCliStreamParser parser = new ClaudeCliStreamParser(new Gson());
+        RecordingCallback callback = new RecordingCallback();
+        SDKResult result = new SDKResult();
+        StringBuilder assistantContent = new StringBuilder();
+
+        String line = "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":true," + "\"api_error_status\":429," + "\"result\":\"API Error: Request rejected (429) · [1308][已达到 5 小时的使用上限。]\"}";
+
+        parser.parseLine(line, callback, result, assistantContent, new AtomicBoolean(false), false);
+
+        assertTrue(callback.contentsOfType("content").isEmpty());
+        assertEquals("", assistantContent.toString());
+        assertFalse(result.success);
+        assertEquals(CliErrorFormatter.formatError("Claude", "API Error: Request rejected (429) · [1308][已达到 5 小时的使用上限。]"), result.error);
     }
 
     private static class RecordingCallback implements MessageCallback {

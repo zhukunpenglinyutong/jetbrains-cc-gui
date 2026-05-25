@@ -2,8 +2,8 @@ package com.github.claudecodegui.provider.claude;
 
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.NodeDetector;
-import com.github.claudecodegui.util.AttachmentStorageService;
 import com.github.claudecodegui.bridge.ProcessManager;
+import com.github.claudecodegui.util.AttachmentStorageService;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.github.claudecodegui.util.UserMessageSanitizer;
 import com.google.gson.Gson;

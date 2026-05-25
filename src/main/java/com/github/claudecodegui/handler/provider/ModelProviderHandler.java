@@ -120,6 +120,7 @@ public class ModelProviderHandler {
     public void handleSetProvider(String content) {
         try {
             String provider = parseProvider(content);
+            String previousProvider = context.getCurrentProvider();
 
             LOG.info("[ModelProviderHandler] Setting provider to: " + provider);
             context.setCurrentProvider(provider);
@@ -159,6 +160,9 @@ public class ModelProviderHandler {
             usagePushService.refreshContextBar();
         } catch (Exception e) {
             LOG.error("[ModelProviderHandler] Failed to set session provider: " + e.getMessage(), e);
+        }
+    }
+
     /**
      * Pure decision predicate: should we shut down the Claude daemon when the
      * tab provider transitions from {@code previousProvider} to {@code newProvider}?
