@@ -2,7 +2,9 @@ import React, { useRef, useState, useEffect, useCallback, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getFileIcon } from '../../utils/fileIcons';
 import { TokenIndicator } from './TokenIndicator';
+import { LimitRing } from './LimitRing';
 import type { SelectedAgent } from './types';
+import type { UsageLimits } from '../../hooks/providers/useUsageTracking';
 
 const HIDDEN_INPUT_STYLE: React.CSSProperties = { display: 'none' };
 const CURSOR_DEFAULT_STYLE: React.CSSProperties = { cursor: 'default' };
@@ -40,6 +42,8 @@ interface ContextBarProps {
   autoOpenFileEnabled?: boolean;
   /** Callback to enable file context (called from placeholder click) */
   onRequestEnableFileContext?: () => void;
+  /** Usage limits for rendering LimitRing indicators */
+  usageLimits?: UsageLimits | null;
 }
 
 export const ContextBar: React.FC<ContextBarProps> = memo(({
@@ -60,6 +64,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
   onToggleStatusPanel,
   autoOpenFileEnabled = false,
   onRequestEnableFileContext,
+  usageLimits = null,
 }) => {
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -165,7 +170,37 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
             />
           </div>
         )}
-        
+
+        {/* Usage Limit Rings */}
+        {usageLimits?.provider === 'claude' && usageLimits.fiveHour && (
+          <LimitRing
+            percent={usageLimits.fiveHour.percent}
+            label="5h"
+            resetsAt={usageLimits.fiveHour.resetsAt ?? null}
+          />
+        )}
+        {usageLimits?.provider === 'claude' && usageLimits.sevenDay && (
+          <LimitRing
+            percent={usageLimits.sevenDay.percent}
+            label="7d"
+            resetsAt={usageLimits.sevenDay.resetsAt ?? null}
+          />
+        )}
+        {usageLimits?.provider === 'codex' && usageLimits.primaryWindow && (
+          <LimitRing
+            percent={usageLimits.primaryWindow.percent}
+            label="5h"
+            resetsAt={usageLimits.primaryWindow.resetsAt ?? null}
+          />
+        )}
+        {usageLimits?.provider === 'codex' && usageLimits.secondaryWindow && (
+          <LimitRing
+            percent={usageLimits.secondaryWindow.percent}
+            label="7d"
+            resetsAt={usageLimits.secondaryWindow.resetsAt ?? null}
+          />
+        )}
+
         {/* Hidden file input */}
         <input
           ref={fileInputRef}
@@ -175,7 +210,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
           onChange={handleFileChange}
           style={HIDDEN_INPUT_STYLE}
         />
-        
+
         <div className="context-tool-divider" />
       </div>
 
@@ -192,13 +227,13 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
           />
           <span className="context-text">
             <span dir="ltr">
-              {selectedAgent.name.length > 3 
-                ? `${selectedAgent.name.slice(0, 3)}...` 
+              {selectedAgent.name.length > 3
+                ? `${selectedAgent.name.slice(0, 3)}...`
                 : selectedAgent.name}
             </span>
           </span>
-          <span 
-            className="codicon codicon-close context-close" 
+          <span
+            className="codicon codicon-close context-close"
             onClick={onClearAgent}
             title="Remove agent"
           />

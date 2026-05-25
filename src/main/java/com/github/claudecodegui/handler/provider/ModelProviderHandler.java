@@ -126,6 +126,7 @@ public class ModelProviderHandler {
 
             refreshSlashCommandsForProvider(provider);
             usagePushService.refreshContextBar();
+            refreshLimitsForProvider(provider);
         } catch (Exception e) {
             LOG.error("[ModelProviderHandler] Failed to set provider: " + e.getMessage(), e);
         }
@@ -253,6 +254,36 @@ public class ModelProviderHandler {
 
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private void refreshLimitsForProvider(String provider) {
+        boolean isCodex = "codex".equalsIgnoreCase(provider);
+
+        // 1. Show last known data immediately (best-effort, no API wait)
+        String cached = isCodex
+                ? com.github.claudecodegui.util.UsageLimitsCache.loadCodex()
+                : com.github.claudecodegui.util.UsageLimitsCache.loadClaude();
+        if (cached != null) {
+            ApplicationManager.getApplication().invokeLater(() ->
+                context.callJavaScript("window.onUsageLimitsUpdate", context.escapeJs(cached))
+            );
+        }
+
+        // 2. Hit the endpoint only when data is stale
+        boolean stale = isCodex
+                ? com.github.claudecodegui.util.UsageLimitsCache.isCodexStale()
+                : com.github.claudecodegui.util.UsageLimitsCache.isClaudeStale();
+        if (!stale) {
+            return;
+        }
+
+        String method = isCodex ? "codex.refreshLimits" : "claude.refreshLimits";
+        context.getClaudeSDKBridge().sendLimitsCommand(method, json -> {
+            com.github.claudecodegui.util.UsageLimitsCache.save(json);
+            ApplicationManager.getApplication().invokeLater(() ->
+                context.callJavaScript("window.onUsageLimitsUpdate", context.escapeJs(json))
+            );
+        });
     }
 
     public static int getModelContextLimit(String model) {

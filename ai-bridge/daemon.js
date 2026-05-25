@@ -121,11 +121,18 @@ process.stdout.write = function (chunk, encoding, callback) {
   }
 
   // Non-JSON output without a request context (e.g., SDK debug logs during preload)
-  // Wrap as a daemon log event so Java's NDJSON parser can handle it
+  // Route [LIMITS] as a structured daemon event; everything else as a log.
   if (trimmed.length > 0) {
     const lines = text.split('\n');
     for (const line of lines) {
-      if (line.trim().length > 0) {
+      const tl = line.trim();
+      if (!tl.length) continue;
+      if (tl.startsWith('[LIMITS]')) {
+        try {
+          const payload = JSON.parse(tl.substring('[LIMITS]'.length).trim());
+          writeRawLine({ type: 'daemon', event: 'limits', payload });
+        } catch { /* ignore malformed limits output */ }
+      } else {
         writeRawLine({ type: 'daemon', event: 'log', message: line });
       }
     }

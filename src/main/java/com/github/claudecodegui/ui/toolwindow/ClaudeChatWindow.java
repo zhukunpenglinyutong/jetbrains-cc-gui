@@ -23,6 +23,7 @@ import com.github.claudecodegui.ui.WebviewInitializer;
 import com.github.claudecodegui.ui.WebviewWatchdog;
 import com.github.claudecodegui.util.HtmlLoader;
 import com.github.claudecodegui.util.JsUtils;
+import com.github.claudecodegui.util.UsageLimitsCache;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -378,6 +379,25 @@ public class ClaudeChatWindow {
         }
     }
 
+    public void onTabActivated() {
+        if (session == null || disposed) {
+            return;
+        }
+        String provider = session.getProvider();
+        boolean isCodex = "codex".equalsIgnoreCase(provider);
+        String cached = isCodex
+                ? UsageLimitsCache.loadCodex()
+                : UsageLimitsCache.loadClaude();
+        if (cached != null) {
+            final String json = cached;
+            ApplicationManager.getApplication().invokeLater(() -> {
+                if (!disposed) {
+                    callJavaScript("window.onUsageLimitsUpdate", JsUtils.escapeJs(json));
+                }
+            });
+        }
+    }
+
     public void loadRestoredHistoryIfNeeded() {
         if (session == null) {
             return;
@@ -684,6 +704,9 @@ public class ClaudeChatWindow {
         chatWindowDelegate.dispose();
         editorContextTracker.dispose();
         streamCoalescer.dispose();
+        if (session != null) {
+            session.dispose();
+        }
         if (sessionCallbackAdapter != null) {
             sessionCallbackAdapter.dispose();
         }

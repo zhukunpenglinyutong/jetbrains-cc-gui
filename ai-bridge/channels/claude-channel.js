@@ -16,6 +16,7 @@ import {
   getSessionMessages as claudeGetSessionMessages,
   getLatestUserMessage as claudeGetLatestUserMessage
 } from '../services/claude/session-service.js';
+import { emitClaudeLimitsIfDue, resetClaudeCache } from '../utils/usage-limits.js';
 
 /**
  * Execute a Claude specific command.
@@ -102,6 +103,12 @@ export async function handleClaudeCommand(command, args, stdinData) {
 
     case 'resetRuntime': {
       await claudeResetRuntimePersistent(stdinData || {});
+      break;
+    }
+
+    case 'refreshLimits': {
+      resetClaudeCache();
+      await emitClaudeLimitsIfDue();
       break;
     }
 
