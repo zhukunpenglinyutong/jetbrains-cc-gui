@@ -235,6 +235,63 @@ public class CodexMessageConverterTest {
         assertEquals("unknown", toolUse.get("id").getAsString());
     }
 
+    // ---- convertFunctionCallToToolUse: cmd -> command mapping for history replay ----
+
+    @Test
+    public void execCommandHistoryMapsCmdToCommand() {
+        // Codex history stores exec_command arguments with `cmd` field, but
+        // BashToolGroupBlock.parseBashItem reads input.command. Without mapping
+        // the timeline rows render blank when replaying a Codex history session.
+        JsonObject payload = new JsonObject();
+        payload.addProperty("type", "function_call");
+        payload.addProperty("name", "exec_command");
+        payload.addProperty("call_id", "call-cmd-1");
+        payload.addProperty("arguments",
+                "{\"cmd\":\"sed -n '1,10p' README.md\",\"workdir\":\"/tmp/x\",\"yield_time_ms\":1000}");
+
+        JsonObject result = CodexMessageConverter.convertFunctionCallToToolUse(payload, "2026-05-22T08:13:18Z");
+
+        JsonObject toolUse = extractFirstBlock(result);
+        assertEquals("exec_command", toolUse.get("name").getAsString());
+        JsonObject input = toolUse.getAsJsonObject("input");
+        // Original cmd is preserved (downstream tooling may still rely on it)
+        assertEquals("sed -n '1,10p' README.md", input.get("cmd").getAsString());
+        // New command field powers BashToolGroupBlock / BashToolBlock rendering
+        assertEquals("sed -n '1,10p' README.md", input.get("command").getAsString());
+    }
+
+    @Test
+    public void shellCommandHistoryMapsCmdToCommandWhenNotRenamed() {
+        // shell_command stays as shell_command (not renamed to glob/read) when
+        // the cmd doesn't match the ls/cat/grep patterns. Still needs the mapping.
+        JsonObject payload = new JsonObject();
+        payload.addProperty("type", "function_call");
+        payload.addProperty("name", "shell_command");
+        payload.addProperty("call_id", "call-cmd-2");
+        payload.addProperty("arguments", "{\"cmd\":\"npm test\"}");
+
+        JsonObject result = CodexMessageConverter.convertFunctionCallToToolUse(payload, null);
+
+        JsonObject toolUse = extractFirstBlock(result);
+        assertEquals("npm test", toolUse.getAsJsonObject("input").get("command").getAsString());
+    }
+
+    @Test
+    public void execCommandPreservesExistingCommandField() {
+        // Defensive: if upstream already supplies command, do not overwrite it.
+        JsonObject payload = new JsonObject();
+        payload.addProperty("type", "function_call");
+        payload.addProperty("name", "exec_command");
+        payload.addProperty("call_id", "call-cmd-3");
+        payload.addProperty("arguments", "{\"cmd\":\"raw\",\"command\":\"already-set\"}");
+
+        JsonObject result = CodexMessageConverter.convertFunctionCallToToolUse(payload, null);
+
+        JsonObject input = extractFirstBlock(result).getAsJsonObject("input");
+        assertEquals("already-set", input.get("command").getAsString());
+        assertEquals("raw", input.get("cmd").getAsString());
+    }
+
     // ---- helpers ----
 
     private static JsonObject extractFirstToolResult(JsonObject frontendMsg) {

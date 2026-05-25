@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -8,6 +8,13 @@ interface ConfirmDialogProps {
   cancelText?: string;
   onConfirm: () => void;
   onCancel: () => void;
+  /**
+   * Optional extra content rendered inside the dialog body, beneath the message
+   * and above the footer. Used by AppDialogs to inject a "don't ask again"
+   * checkbox for the new-session confirm dialog. Other call sites leave this
+   * undefined and the dialog renders exactly as before.
+   */
+  children?: ReactNode;
 }
 
 const ConfirmDialog = ({
@@ -18,6 +25,7 @@ const ConfirmDialog = ({
   cancelText = '取消',
   onConfirm,
   onCancel,
+  children,
 }: ConfirmDialogProps) => {
   useEffect(() => {
     if (isOpen) {
@@ -43,6 +51,7 @@ const ConfirmDialog = ({
         </div>
         <div className="confirm-dialog-body">
           <p className="confirm-dialog-message">{message}</p>
+          {children}
         </div>
         <div className="confirm-dialog-footer">
           <button className="confirm-dialog-button cancel-button" onClick={onCancel}>

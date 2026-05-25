@@ -12,6 +12,7 @@
     "close": "閉じる",
     "newSession": "新規セッション",
     "newTab": "新しいタブ",
+    "dontAskAgain": "次回から表示しない",
     "history": "履歴",
     "settings": "設定",
     "thinking": "思考中",
@@ -91,6 +92,22 @@
     "streamingConnected": "{{provider}}に接続しました、質問を理解しています",
     "showEarlierMessages": "以前の{{count}}件のメッセージを表示",
     "totalDuration": "今回の応答時間",
+    "search": {
+      "ariaLabel": "会話内を検索",
+      "placeholder": "会話内を検索...",
+      "next": "次の一致 (Enter)",
+      "previous": "前の一致 (Shift+Enter)",
+      "close": "閉じる (Esc)",
+      "counter": "{{current}}/{{total}}",
+      "noResults": "結果なし",
+      "searching": "検索中...",
+      "expandedHint": "以前のメッセージを {{count}} 件展開しました",
+      "matchCase": "大文字と小文字を区別 (Alt+C)",
+      "wholeWord": "単語単位で検索 (Alt+W)",
+      "regex": "正規表現 (Alt+R)",
+      "invalidRegex": "無効な正規表現",
+      "openTooltip": "会話内を検索 (Cmd/Ctrl+F)"
+    },
     "compactSummary": {
       "summarizedConversation": "要約された会話",
       "compactSummary": "会話の要約",
@@ -229,6 +246,12 @@
         "custom": "カスタム",
         "reset": "デフォルトに戻す",
         "hint": "メッセージの背景色をカスタマイズします。空欄の場合はテーマのデフォルト色に従います。"
+      },
+      "newSessionConfirm": {
+        "label": "新規セッション作成の確認",
+        "enabled": "有効",
+        "disabled": "無効",
+        "hint": "無効にすると、メッセージが存在するセッションで新規作成を選択した際、確認ダイアログを表示せず直接新規セッションを作成します。"
       }
     },
     "providers": "プロバイダー管理",
@@ -807,6 +830,44 @@
       "loading": "プロバイダーを読み込み中...",
       "empty": "利用可能なプロバイダーがありません",
       "switched": "{{provider}} に切り替えました"
+    },
+    "nodeProcesses": {
+      "title": "Node プロセス管理",
+      "badge": "{{total}} 個のプロセス",
+      "badgeWithOrphan": "{{total}} 個 · 孤児 {{orphan}} ⚠",
+      "summary": "合計: {{total}} · 孤児: {{orphan}}",
+      "loading": "プロセスを読み込み中...",
+      "empty": "アクティブな Node プロセスはありません",
+      "refresh": "更新",
+      "groups": {
+        "daemon": "デーモンプロセス",
+        "channel": "進行中の会話",
+        "orphan": "孤児プロセス"
+      },
+      "kind": {
+        "daemonShort": "Daemon",
+        "channelShort": "会話",
+        "orphanShort": "孤児"
+      },
+      "kill": "終了",
+      "interrupt": "中断",
+      "restart": "再起動",
+      "pending": "処理中...",
+      "killAll": "孤児を全てクリーンアップ ({{count}})",
+      "killHint": "この Node プロセスを強制終了",
+      "killAllHint": "検出された孤児プロセスを全て終了",
+      "restartHint": "デーモンを停止。次のメッセージで自動的に新しいデーモンが起動します",
+      "killConfirmTitle": "このプロセスを終了しますか？",
+      "killConfirm": "PID {{pid}} を終了しますか？進行中の会話は失われる可能性があります。",
+      "restartConfirmTitle": "デーモンを再起動しますか？",
+      "restartConfirm": "デーモンを再起動しますか？進行中の会話は中断されます。",
+      "killAllConfirmTitle": "孤児プロセスを全てクリーンアップしますか？",
+      "killAllConfirm": "孤児プロセス {{count}} 件すべてを終了しますか？",
+      "killSuccess": "プロセスを終了しました",
+      "killAllSuccess": "{{count}} 件の孤児プロセスをクリーンアップしました",
+      "restartSuccess": "デーモンを停止しました。次のメッセージで新しいインスタンスが自動起動します",
+      "killFailed": "終了失敗: {{error}}",
+      "activeRequests": "進行中 {{count}} 件"
     },
     "link": "リンク"
   },

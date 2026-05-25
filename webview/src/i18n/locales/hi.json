@@ -12,6 +12,7 @@
     "close": "बंद करें",
     "newSession": "नया सत्र",
     "newTab": "नया टैब",
+    "dontAskAgain": "फिर से न पूछें",
     "history": "इतिहास",
     "settings": "सेटिंग्स",
     "thinking": "सोच रहा है",
@@ -91,6 +92,22 @@
     "streamingConnected": "{{provider}} कनेक्ट हो गया, आपके प्रश्न को समझ रहा है",
     "showEarlierMessages": "{{count}} पुराने संदेश दिखाएं",
     "totalDuration": "इस जवाब में लगा समय",
+    "search": {
+      "ariaLabel": "बातचीत में खोजें",
+      "placeholder": "बातचीत में खोजें...",
+      "next": "अगला मिलान (Enter)",
+      "previous": "पिछला मिलान (Shift+Enter)",
+      "close": "बंद करें (Esc)",
+      "counter": "{{current}}/{{total}}",
+      "noResults": "कोई परिणाम नहीं",
+      "searching": "खोज रहे हैं...",
+      "expandedHint": "{{count}} पुराने संदेश विस्तृत किए गए",
+      "matchCase": "केस मिलान (Alt+C)",
+      "wholeWord": "पूरा शब्द (Alt+W)",
+      "regex": "नियमित अभिव्यक्ति (Alt+R)",
+      "invalidRegex": "अमान्य रेगेक्स",
+      "openTooltip": "बातचीत में खोजें (Cmd/Ctrl+F)"
+    },
     "compactSummary": {
       "summarizedConversation": "सारांशित वार्तालाप",
       "compactSummary": "संक्षिप्त सारांश",
@@ -229,6 +246,12 @@
         "custom": "कस्टम",
         "reset": "रीसेट करें",
         "hint": "अपने संदेशों की पृष्ठभूमि रंग को अनुकूलित करें। थीम डिफ़ॉल्ट का पालन करने के लिए खाली छोड़ दें।"
+      },
+      "newSessionConfirm": {
+        "label": "नया सत्र पुष्टि",
+        "enabled": "सक्षम",
+        "disabled": "अक्षम",
+        "hint": "अक्षम होने पर, मौजूदा संदेशों वाले सत्र में नया बनाने पर पुष्टि संवाद नहीं दिखेगा।"
       }
     },
     "providers": "प्रदाता प्रबंधन",
@@ -802,6 +825,44 @@
       "loading": "प्रदाता लोड हो रहे हैं...",
       "empty": "कोई प्रदाता उपलब्ध नहीं",
       "switched": "{{provider}} पर स्विच किया गया"
+    },
+    "nodeProcesses": {
+      "title": "Node प्रक्रिया प्रबंधक",
+      "badge": "{{total}} प्रक्रियाएं",
+      "badgeWithOrphan": "{{total}} · {{orphan}} अनाथ ⚠",
+      "summary": "कुल: {{total}} · अनाथ: {{orphan}}",
+      "loading": "प्रक्रियाएं लोड हो रही हैं...",
+      "empty": "कोई सक्रिय Node प्रक्रिया नहीं",
+      "refresh": "रीफ्रेश",
+      "groups": {
+        "daemon": "डेमन प्रक्रियाएं",
+        "channel": "सक्रिय बातचीत",
+        "orphan": "अनाथ प्रक्रियाएं"
+      },
+      "kind": {
+        "daemonShort": "Daemon",
+        "channelShort": "चैनल",
+        "orphanShort": "अनाथ"
+      },
+      "kill": "समाप्त",
+      "interrupt": "रोकें",
+      "restart": "पुनः आरंभ",
+      "pending": "प्रसंस्करण...",
+      "killAll": "सभी अनाथ हटाएं ({{count}})",
+      "killHint": "इस Node प्रक्रिया को बलपूर्वक समाप्त करें",
+      "killAllHint": "सभी पहचानी गई अनाथ प्रक्रियाओं को समाप्त करें",
+      "restartHint": "डेमन रोकें; अगला संदेश नया डेमन स्वतः शुरू करेगा",
+      "killConfirmTitle": "इस प्रक्रिया को समाप्त करें?",
+      "killConfirm": "PID {{pid}} समाप्त करें? चालू बातचीत खो सकती है।",
+      "restartConfirmTitle": "डेमन पुनः आरंभ करें?",
+      "restartConfirm": "डेमन पुनः आरंभ करें? सक्रिय बातचीत बाधित होगी।",
+      "killAllConfirmTitle": "सभी अनाथ प्रक्रियाओं को साफ़ करें?",
+      "killAllConfirm": "सभी {{count}} अनाथ प्रक्रियाओं को समाप्त करें?",
+      "killSuccess": "प्रक्रिया समाप्त की गई",
+      "killAllSuccess": "{{count}} अनाथ प्रक्रिया(एं) साफ की गईं",
+      "restartSuccess": "डेमन रोका गया; अगले संदेश पर नया उदाहरण स्वतः शुरू होगा",
+      "killFailed": "समाप्त करने में विफल: {{error}}",
+      "activeRequests": "{{count}} चालू"
     },
     "link": "लिंक"
   },

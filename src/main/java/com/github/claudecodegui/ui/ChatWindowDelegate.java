@@ -12,6 +12,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.handler.history.HistoryHandler;
 import com.github.claudecodegui.handler.McpServerHandler;
 import com.github.claudecodegui.handler.core.MessageDispatcher;
+import com.github.claudecodegui.handler.NodeProcessHandler;
 import com.github.claudecodegui.handler.PermissionHandler;
 import com.github.claudecodegui.handler.PromptEnhancerHandler;
 import com.github.claudecodegui.handler.PromptHandler;
@@ -274,6 +275,7 @@ public class ChatWindowDelegate {
         messageDispatcher.registerHandler(new UndoFileHandler(handlerContext));
         messageDispatcher.registerHandler(new DependencyHandler(handlerContext));
         messageDispatcher.registerHandler(new ClipboardHandler(handlerContext));
+        messageDispatcher.registerHandler(new NodeProcessHandler(handlerContext));
 
         messageDispatcher.registerHandler(new WindowEventHandler(handlerContext, new WindowEventHandler.Callback() {
             @Override public void onHeartbeat(String content) { host.getWebviewWatchdog().handleHeartbeat(content); }

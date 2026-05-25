@@ -954,4 +954,158 @@ describe('useWindowCallbacks integration', () => {
       expect(window.__streamEndProcessedTurnId).toBeUndefined();
     });
   });
+
+  // ===== Interrupted tool_use cleanup on stream end =====
+  describe('onStreamEnd marks unresolved tool_use as interrupted', () => {
+    /**
+     * Builds opts whose setMessages mock actually runs the updater against a
+     * shared messages buffer, so the production reducer logic is exercised.
+     */
+    const createOptsWithMessages = (messages: ClaudeMessage[]) => {
+      const buffer = { current: messages };
+      const setMessages = vi.fn((value: ClaudeMessage[] | ((prev: ClaudeMessage[]) => ClaudeMessage[])) => {
+        buffer.current = typeof value === 'function'
+          ? (value as (prev: ClaudeMessage[]) => ClaudeMessage[])(buffer.current)
+          : value;
+      });
+      const opts = createOptions({ setMessages: setMessages as never });
+      opts.streamingTurnIdRef.current = 0;
+      opts.turnIdCounterRef.current = 0;
+      return { opts, buffer };
+    };
+
+    it('adds tool_use IDs without matching tool_result to __deniedToolIds', () => {
+      // Setup: last assistant has 3 tool_use blocks, but the following user
+      // message only carries the first one's tool_result. This mirrors the
+      // <turn_aborted> scenario where Codex interrupted mid-batch.
+      const assistantWithThreeTools: ClaudeMessage = {
+        type: 'assistant',
+        content: 'running batch',
+        raw: {
+          content: [
+            { type: 'tool_use', id: 'tool-1', name: 'bash', input: { command: 'echo a' } },
+            { type: 'tool_use', id: 'tool-2', name: 'bash', input: { command: 'echo b' } },
+            { type: 'tool_use', id: 'tool-3', name: 'bash', input: { command: 'echo c' } },
+          ],
+        } as never,
+        timestamp: new Date().toISOString(),
+      };
+      const userWithOneResult: ClaudeMessage = {
+        type: 'user',
+        content: '',
+        raw: {
+          content: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'ok' }],
+        } as never,
+        timestamp: new Date().toISOString(),
+      };
+      const { opts } = createOptsWithMessages([assistantWithThreeTools, userWithOneResult]);
+      renderHook(() => useWindowCallbacks(opts));
+
+      act(() => { window.onStreamStart!(); });
+      act(() => { window.onStreamEnd!('5'); });
+
+      expect(window.__deniedToolIds?.has('tool-1')).toBe(false);
+      expect(window.__deniedToolIds?.has('tool-2')).toBe(true);
+      expect(window.__deniedToolIds?.has('tool-3')).toBe(true);
+    });
+
+    it('does not pollute __deniedToolIds when every tool_use has a tool_result', () => {
+      const assistant: ClaudeMessage = {
+        type: 'assistant',
+        content: '',
+        raw: {
+          content: [
+            { type: 'tool_use', id: 'tool-x', name: 'bash', input: { command: 'ls' } },
+          ],
+        } as never,
+        timestamp: new Date().toISOString(),
+      };
+      const user: ClaudeMessage = {
+        type: 'user',
+        content: '',
+        raw: {
+          content: [{ type: 'tool_result', tool_use_id: 'tool-x', content: 'done' }],
+        } as never,
+        timestamp: new Date().toISOString(),
+      };
+      const { opts } = createOptsWithMessages([assistant, user]);
+      renderHook(() => useWindowCallbacks(opts));
+
+      act(() => { window.onStreamStart!(); });
+      act(() => { window.onStreamEnd!('5'); });
+
+      expect(window.__deniedToolIds?.has('tool-x')).toBe(false);
+    });
+
+    it('historyLoadComplete scans ALL turns and marks orphan tool_use as denied', () => {
+      // Simulates loading a Codex history with two aborted batches across
+      // separate turns. The "lastTurn" heuristic used by onStreamEnd would
+      // miss the first batch — historyLoadComplete must use scope='all'.
+      const turnA: ClaudeMessage = {
+        type: 'assistant',
+        content: 'batch A',
+        raw: {
+          content: [
+            { type: 'tool_use', id: 'A-1', name: 'bash', input: { command: 'a1' } },
+            { type: 'tool_use', id: 'A-2', name: 'bash', input: { command: 'a2' } },
+          ],
+        } as never,
+        timestamp: new Date().toISOString(),
+      };
+      const turnAResults: ClaudeMessage = {
+        type: 'user',
+        content: '',
+        raw: { content: [{ type: 'tool_result', tool_use_id: 'A-1', content: 'ok' }] } as never,
+        timestamp: new Date().toISOString(),
+      };
+      const turnB: ClaudeMessage = {
+        type: 'assistant',
+        content: 'batch B',
+        raw: {
+          content: [
+            { type: 'tool_use', id: 'B-1', name: 'bash', input: { command: 'b1' } },
+          ],
+        } as never,
+        timestamp: new Date().toISOString(),
+      };
+      // No tool_result for B-1 either.
+
+      const buffer = { current: [turnA, turnAResults, turnB] as ClaudeMessage[] };
+      const setMessages = vi.fn((value: ClaudeMessage[] | ((prev: ClaudeMessage[]) => ClaudeMessage[])) => {
+        buffer.current = typeof value === 'function'
+          ? (value as (prev: ClaudeMessage[]) => ClaudeMessage[])(buffer.current)
+          : value;
+      });
+      const opts = createOptions({ setMessages: setMessages as never });
+      renderHook(() => useWindowCallbacks(opts));
+
+      act(() => { window.historyLoadComplete!(); });
+
+      // A-1 is resolved (has tool_result), A-2 and B-1 are orphans from two turns
+      expect(window.__deniedToolIds?.has('A-1')).toBe(false);
+      expect(window.__deniedToolIds?.has('A-2')).toBe(true);
+      expect(window.__deniedToolIds?.has('B-1')).toBe(true);
+    });
+
+    it('onPermissionDenied still marks unresolved tool_use (regression guard)', () => {
+      // Sanity check that refactoring onPermissionDenied to share the helper
+      // did not change its observable behavior.
+      const assistant: ClaudeMessage = {
+        type: 'assistant',
+        content: '',
+        raw: {
+          content: [
+            { type: 'tool_use', id: 'denied-1', name: 'bash', input: { command: 'rm' } },
+          ],
+        } as never,
+        timestamp: new Date().toISOString(),
+      };
+      const { opts } = createOptsWithMessages([assistant]);
+      renderHook(() => useWindowCallbacks(opts));
+
+      act(() => { window.onPermissionDenied!(); });
+
+      expect(window.__deniedToolIds?.has('denied-1')).toBe(true);
+    });
+  });
 });

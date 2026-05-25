@@ -592,6 +592,18 @@ interface Window {
   updateActiveCodexProvider?: (json: string) => void;
 
   /**
+   * Update Node process management snapshot.
+   * Payload: { snapshotAt, totals: { daemon, channel, orphan, all }, processes: NodeProcessInfo[] }
+   */
+  updateNodeProcesses?: (json: string) => void;
+
+  /**
+   * Result of a kill_node_process / kill_all_orphans / restart_node_daemon call.
+   * Payload: { pid?, success?, killed?, restart?, error? }
+   */
+  nodeProcessKillResult?: (json: string) => void;
+
+  /**
    * Update current Codex config (from ~/.codex/)
    */
   updateCurrentCodexConfig?: (json: string) => void;

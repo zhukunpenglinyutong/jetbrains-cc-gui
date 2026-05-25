@@ -457,6 +457,21 @@ public class CodexMessageConverter {
             }
         }
 
+        // Map Codex protocol field `cmd` to frontend-expected `command` for shell-like tools.
+        // The live path emits {command, description} via handleCommandExecution, so this
+        // branch only fires when replaying Codex history (function_call payload retains `cmd`).
+        // Without this mapping BashToolGroupBlock renders blank timeline rows because
+        // parseBashItem only reads input.command.
+        if (("exec_command".equals(toolName) || "shell_command".equals(toolName))
+                && toolInput != null && toolInput.isJsonObject()) {
+            JsonObject inputObj = toolInput.getAsJsonObject();
+            if (inputObj.has("cmd") && !inputObj.has("command")) {
+                JsonObject enriched = inputObj.deepCopy();
+                enriched.add("command", inputObj.get("cmd"));
+                toolInput = enriched;
+            }
+        }
+
         // Enrich incremental writes with the previously discovered destination path.
         if ("write".equals(toolName) && toolInput != null && toolInput.isJsonObject()) {
             JsonObject inputObj = toolInput.getAsJsonObject();

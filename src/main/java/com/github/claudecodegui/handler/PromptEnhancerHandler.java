@@ -4,6 +4,7 @@ import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
+import com.github.claudecodegui.bridge.ProcessManager;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
@@ -17,14 +18,11 @@ import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.fileEditor.TextEditor;
 import com.intellij.openapi.vfs.VirtualFile;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -41,6 +39,12 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
     private static final Logger LOG = Logger.getInstance(PromptEnhancerHandler.class);
     private final Gson gson = new Gson();
     private final EnvironmentConfigurator envConfigurator = new EnvironmentConfigurator();
+
+    // Hard timeout for the enhancement Node.js process. Without this, a network-stalled
+    // SDK call would block the calling thread forever and leak the child process.
+    private static final long ENHANCE_TIMEOUT_SECONDS = 60;
+    // Grace window after the process exits, for the async reader thread to drain stdout.
+    private static final long READER_DRAIN_SECONDS = 5;
 
     // Number of context lines to capture before and after the cursor
     private static final int CURSOR_CONTEXT_LINES = 10;
@@ -412,17 +416,13 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
             // Set environment variables
             envConfigurator.updateProcessEnvironment(pb, nodeExecutable);
 
-            Process process = pb.start();
-            LOG.info("[PromptEnhancer] Node.js process started");
-
-            // Send request data to stdin (including context information)
+            // Build stdin payload
             JsonObject stdinInput = new JsonObject();
             stdinInput.addProperty("prompt", originalPrompt);
             stdinInput.addProperty("systemPrompt", ENHANCE_SYSTEM_PROMPT);
             if (legacyModel != null && !legacyModel.isEmpty()) {
                 stdinInput.addProperty("legacyModel", legacyModel);
             }
-            // Add context information
             if (contextObj != null) {
                 stdinInput.add("context", contextObj);
             }
@@ -430,31 +430,37 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
                 stdinInput.add("promptEnhancerConfig", promptEnhancerConfig);
             }
 
-            try (OutputStreamWriter writer = new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8)) {
-                writer.write(gson.toJson(stdinInput));
-                writer.flush();
-            }
-
-            // Read the response
+            // Delegate to the runner so that:
+            //  1. The process is registered with ProcessManager (cleanup on shutdown).
+            //  2. A hard 60s timeout actually kills hung Node processes.
+            //  3. The process is unregistered + force-killed in finally on every exit path.
+            // The original code lacked all three, leaking child processes forever when
+            // the SDK call hung on a stalled network connection.
+            ProcessManager processManager = context.getClaudeSDKBridge().getProcessManager();
             StringBuilder response = new StringBuilder();
             StringBuilder allOutput = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    allOutput.append(line).append("\n");
-                    // Print all output for debugging
-                    LOG.info("[PromptEnhancer] Node.js: " + line);
-                    if (line.startsWith("[ENHANCED]")) {
-                        // Decode the special marker, restore newlines
-                        String enhancedText = line.substring("[ENHANCED]".length()).trim();
-                        enhancedText = enhancedText.replace("{{NEWLINE}}", "\n");
-                        response.append(enhancedText);
-                    }
-                }
+            try {
+                int exitCode = PromptEnhancerProcessRunner.runWithProcessManager(
+                        pb,
+                        processManager,
+                        gson.toJson(stdinInput),
+                        ENHANCE_TIMEOUT_SECONDS,
+                        READER_DRAIN_SECONDS,
+                        line -> {
+                            allOutput.append(line).append("\n");
+                            LOG.info("[PromptEnhancer] Node.js: " + line);
+                            if (line.startsWith("[ENHANCED]")) {
+                                String enhancedText = line.substring("[ENHANCED]".length()).trim();
+                                enhancedText = enhancedText.replace("{{NEWLINE}}", "\n");
+                                response.append(enhancedText);
+                            }
+                        }
+                );
+                LOG.info("[PromptEnhancer] Node.js process exit code: " + exitCode);
+            } catch (TimeoutException te) {
+                LOG.warn("[PromptEnhancer] " + te.getMessage());
+                return null;
             }
-
-            int exitCode = process.waitFor();
-            LOG.info("[PromptEnhancer] Node.js process exit code: " + exitCode);
 
             if (response.length() == 0 && allOutput.length() > 0) {
                 LOG.warn("[PromptEnhancer] [ENHANCED] marker not found, full output:\n" + allOutput);

@@ -23,6 +23,7 @@ import {
 } from '../messageSync';
 import { releaseSessionTransition } from '../sessionTransition';
 import { parseSequence } from '../parseSequence';
+import { collectUnresolvedToolUseIds } from './streamingCallbacks';
 
 const isTruthy = (v: unknown) => v === true || v === 'true';
 
@@ -619,8 +620,23 @@ export function registerMessageCallbacks(
     }
     window.__lastStreamEndedTurnId = undefined;
     window.__lastStreamEndedAt = undefined;
+    // FIX: A replayed session may include aborted turns where some function_call
+    // entries never received a function_call_output (user pressed STOP, write_stdin
+    // was filtered out, etc.). Without this scan, BashToolGroupBlock / EditToolGroupBlock
+    // render those tool_use blocks as perpetual loading spinners because parseBashItem
+    // treats `result == null` as "still running". onStreamEnd is NEVER fired during
+    // history replay, so the equivalent cleanup there does not help here.
+    if (!window.__deniedToolIds) {
+      window.__deniedToolIds = new Set<string>();
+    }
     setMessages((prev) => {
       if (prev.length === 0) return prev;
+      const orphanIds = collectUnresolvedToolUseIds(prev, 'all');
+      for (const id of orphanIds) {
+        window.__deniedToolIds!.add(id);
+      }
+      // Shallow copy forces ChatMessages to re-render so the now-denied IDs are
+      // picked up by BashToolGroupBlock's deniedToolIds prop.
       return prev.map(m => ({ ...m }));
     });
   };

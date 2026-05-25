@@ -67,6 +67,32 @@
     color: var(--text-primary);
 }
 
+/**
+ * "Don't ask again" checkbox row, rendered inside .confirm-dialog-body
+ * via the optional `children` slot on ConfirmDialog. Currently only used by
+ * the new-session confirm dialog (see AppDialogs.tsx).
+ */
+.confirm-dialog-dont-ask-again {
+    margin-top: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+
+    input[type='checkbox'] {
+        margin: 0;
+        cursor: pointer;
+        accent-color: var(--color-dialog-button-primary);
+    }
+
+    &:hover {
+        color: var(--text-primary);
+    }
+}
+
 .confirm-dialog-footer {
     padding: 12px 20px;
     border-top: 1px solid var(--color-dialog-border);

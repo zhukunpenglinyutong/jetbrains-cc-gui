@@ -12,6 +12,7 @@
     "close": "Fechar",
     "newSession": "Nova Sessão",
     "newTab": "Nova Aba",
+    "dontAskAgain": "Não perguntar novamente",
     "history": "Histórico",
     "settings": "Configurações",
     "thinking": "Pensando",
@@ -91,6 +92,22 @@
     "streamingConnected": "{{provider}} conectado, entendendo sua pergunta",
     "showEarlierMessages": "Mostrar {{count}} mensagens anteriores",
     "totalDuration": "Esta resposta levou",
+    "search": {
+      "ariaLabel": "Pesquisar na conversa",
+      "placeholder": "Pesquisar na conversa…",
+      "next": "Próxima correspondência (Enter)",
+      "previous": "Correspondência anterior (Shift+Enter)",
+      "close": "Fechar (Esc)",
+      "counter": "{{current}}/{{total}}",
+      "noResults": "Sem resultados",
+      "searching": "Pesquisando…",
+      "expandedHint": "{{count}} mensagens anteriores expandidas",
+      "matchCase": "Diferenciar maiúsculas (Alt+C)",
+      "wholeWord": "Palavra inteira (Alt+W)",
+      "regex": "Expressão regular (Alt+R)",
+      "invalidRegex": "Regex inválida",
+      "openTooltip": "Pesquisar na conversa (Cmd/Ctrl+F)"
+    },
     "compactSummary": {
       "summarizedConversation": "Conversa resumida",
       "compactSummary": "Resumo compacto",
@@ -274,6 +291,12 @@
         "custom": "Personalizado",
         "reset": "Redefinir",
         "hint": "Personalize a cor de fundo das suas mensagens. Deixe vazio para seguir o padrão do tema."
+      },
+      "newSessionConfirm": {
+        "label": "Confirmação de Nova Sessão",
+        "enabled": "Ativado",
+        "disabled": "Desativado",
+        "hint": "Quando desativado, criar uma nova sessão em uma conversa com mensagens existentes irá pular a caixa de confirmação."
       }
     },
     "providers": "Gerenciamento de Provedores",
@@ -972,6 +995,44 @@
       "loading": "Carregando provedores...",
       "empty": "Nenhum provedor disponível",
       "switched": "Alternado para {{provider}}"
+    },
+    "nodeProcesses": {
+      "title": "Gerenciador de processos Node",
+      "badge": "{{total}} processos",
+      "badgeWithOrphan": "{{total}} · {{orphan}} órfão ⚠",
+      "summary": "Total: {{total}} · Órfãos: {{orphan}}",
+      "loading": "Carregando processos...",
+      "empty": "Nenhum processo Node ativo",
+      "refresh": "Atualizar",
+      "groups": {
+        "daemon": "Processos daemon",
+        "channel": "Conversas em andamento",
+        "orphan": "Processos órfãos"
+      },
+      "kind": {
+        "daemonShort": "Daemon",
+        "channelShort": "Canal",
+        "orphanShort": "Órfão"
+      },
+      "kill": "Encerrar",
+      "interrupt": "Interromper",
+      "restart": "Reiniciar",
+      "pending": "Processando...",
+      "killAll": "Limpar órfãos ({{count}})",
+      "killHint": "Forçar a finalização deste processo Node",
+      "killAllHint": "Encerrar todos os processos órfãos detectados",
+      "restartHint": "Para o daemon; a próxima mensagem iniciará um novo automaticamente",
+      "killConfirmTitle": "Encerrar este processo?",
+      "killConfirm": "Encerrar o processo PID {{pid}}? Conversas em andamento podem ser perdidas.",
+      "restartConfirmTitle": "Reiniciar o daemon?",
+      "restartConfirm": "Reiniciar o daemon? Conversas ativas serão interrompidas.",
+      "killAllConfirmTitle": "Limpar todos os processos órfãos?",
+      "killAllConfirm": "Encerrar todos os {{count}} processos órfãos?",
+      "killSuccess": "Processo encerrado",
+      "killAllSuccess": "{{count}} processo(s) órfão(s) limpos",
+      "restartSuccess": "Daemon parado; uma nova instância iniciará automaticamente na próxima mensagem",
+      "killFailed": "Falha ao encerrar: {{error}}",
+      "activeRequests": "{{count}} em andamento"
     },
     "link": "Link"
   },

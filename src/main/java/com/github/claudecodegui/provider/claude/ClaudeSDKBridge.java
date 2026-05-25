@@ -57,7 +57,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 envConfigurator, jsonOutputExtractor
         );
         this.sessionQueryService = new ClaudeSessionQueryService(
-                LOG, gson, nodeDetector, sdkDirSupplier,
+                LOG, gson, nodeDetector, sdkDirSupplier, processManager,
                 envConfigurator, jsonOutputExtractor
         );
         this.mcpQueryService = new ClaudeMcpQueryService(
@@ -94,6 +94,15 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
      */
     public void shutdownDaemon() {
         daemonCoordinator.shutdownDaemon();
+    }
+
+    /**
+     * Returns the currently active daemon bridge (or null if no daemon is running).
+     * Read-only access for the Node process management panel — do not start/stop
+     * via this reference; use shutdownDaemon() or sendCommand() through the bridge instead.
+     */
+    public DaemonBridge getCurrentDaemonBridgeForInspection() {
+        return daemonCoordinator.getCurrentDaemonBridge();
     }
 
     public void prewarmDaemonAsync(String cwd) {

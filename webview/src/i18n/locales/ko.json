@@ -12,6 +12,7 @@
     "close": "닫기",
     "newSession": "새 세션",
     "newTab": "새 탭",
+    "dontAskAgain": "다시 묻지 않음",
     "history": "히스토리",
     "settings": "설정",
     "thinking": "생각 중",
@@ -91,6 +92,22 @@
     "streamingConnected": "{{provider}} 연결됨, 질문을 이해하는 중",
     "showEarlierMessages": "이전 메시지 {{count}}개 보기",
     "totalDuration": "이번 응답 소요 시간",
+    "search": {
+      "ariaLabel": "대화에서 검색",
+      "placeholder": "대화에서 검색...",
+      "next": "다음 일치 (Enter)",
+      "previous": "이전 일치 (Shift+Enter)",
+      "close": "닫기 (Esc)",
+      "counter": "{{current}}/{{total}}",
+      "noResults": "결과 없음",
+      "searching": "검색 중...",
+      "expandedHint": "이전 메시지 {{count}}개를 펼쳤습니다",
+      "matchCase": "대소문자 구분 (Alt+C)",
+      "wholeWord": "단어 단위 일치 (Alt+W)",
+      "regex": "정규식 (Alt+R)",
+      "invalidRegex": "유효하지 않은 정규식",
+      "openTooltip": "대화에서 검색 (Cmd/Ctrl+F)"
+    },
     "compactSummary": {
       "summarizedConversation": "요약된 대화",
       "compactSummary": "대화 요약",
@@ -251,6 +268,12 @@
         "custom": "사용자 지정",
         "reset": "초기화",
         "hint": "내 메시지의 배경색을 사용자 지정합니다. 비워두면 테마 기본값을 따릅니다."
+      },
+      "newSessionConfirm": {
+        "label": "새 세션 생성 확인",
+        "enabled": "활성화",
+        "disabled": "비활성화",
+        "hint": "비활성화하면 메시지가 있는 세션에서 새로 만들기를 선택할 때 확인 대화 상자 없이 바로 새 세션을 만듭니다."
       }
     },
     "providers": "제공자 관리",
@@ -918,6 +941,44 @@
       "loading": "제공자 로드 중...",
       "empty": "사용 가능한 제공자 없음",
       "switched": "{{provider}}(으)로 전환됨"
+    },
+    "nodeProcesses": {
+      "title": "Node 프로세스 관리",
+      "badge": "{{total}}개 프로세스",
+      "badgeWithOrphan": "{{total}}개 · 고아 {{orphan}} ⚠",
+      "summary": "전체: {{total}} · 고아: {{orphan}}",
+      "loading": "프로세스 로드 중...",
+      "empty": "활성 Node 프로세스가 없습니다",
+      "refresh": "새로고침",
+      "groups": {
+        "daemon": "데몬 프로세스",
+        "channel": "진행 중인 대화",
+        "orphan": "고아 프로세스"
+      },
+      "kind": {
+        "daemonShort": "Daemon",
+        "channelShort": "대화",
+        "orphanShort": "고아"
+      },
+      "kill": "종료",
+      "interrupt": "중단",
+      "restart": "재시작",
+      "pending": "처리 중...",
+      "killAll": "모든 고아 정리 ({{count}})",
+      "killHint": "이 Node 프로세스를 강제 종료",
+      "killAllHint": "감지된 모든 고아 프로세스 종료",
+      "restartHint": "데몬을 정지합니다. 다음 메시지에서 자동으로 새 데몬이 시작됩니다",
+      "killConfirmTitle": "이 프로세스를 종료하시겠습니까?",
+      "killConfirm": "PID {{pid}}을(를) 종료하시겠습니까? 진행 중인 대화가 손실될 수 있습니다.",
+      "restartConfirmTitle": "데몬을 재시작하시겠습니까?",
+      "restartConfirm": "데몬을 재시작하시겠습니까? 진행 중인 대화가 중단됩니다.",
+      "killAllConfirmTitle": "모든 고아 프로세스를 정리하시겠습니까?",
+      "killAllConfirm": "고아 프로세스 {{count}}개를 모두 종료하시겠습니까?",
+      "killSuccess": "프로세스가 종료되었습니다",
+      "killAllSuccess": "고아 프로세스 {{count}}개를 정리했습니다",
+      "restartSuccess": "데몬이 중지되었습니다. 다음 메시지에서 새 인스턴스가 자동 시작됩니다",
+      "killFailed": "종료 실패: {{error}}",
+      "activeRequests": "진행 중 {{count}}건"
     },
     "link": "링크"
   },

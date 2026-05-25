@@ -20,6 +20,7 @@ import PromptEnhancerSection from './PromptEnhancerSection';
 import OtherSettingsSection from './OtherSettingsSection';
 import { SkillsSettingsSection } from '../skills';
 import SettingsDialogs from './SettingsDialogs';
+import { setNewSessionConfirmEnabled as persistNewSessionConfirmEnabled } from '../../utils/skipNewSessionConfirm';
 
 // Import custom hooks
 import {
@@ -140,6 +141,8 @@ const SettingsView = ({
     setDiffExpandedByDefault,
     historyCompletionEnabled,
     setHistoryCompletionEnabled,
+    skipNewSessionConfirm,
+    setSkipNewSessionConfirm,
     handleSaveNodePath,
     handleSaveWorkingDirectory,
     handleUiFontSelectionChange,
@@ -474,6 +477,25 @@ const SettingsView = ({
               }}
               aiTitleGenerationEnabled={aiTitleGenerationEnabled}
               onAiTitleGenerationEnabledChange={handleAiTitleGenerationEnabledChange}
+              newSessionConfirmEnabled={!skipNewSessionConfirm}
+              onNewSessionConfirmEnabledChange={(enabled) => {
+                // Optimistic local update so the toggle reflects instantly even if
+                // the CustomEvent loops back. persistNewSessionConfirmEnabled writes
+                // to localStorage and dispatches the sync event for other surfaces.
+                setSkipNewSessionConfirm(!enabled);
+                persistNewSessionConfirmEnabled(enabled);
+              }}
+              soundNotificationEnabled={soundNotificationEnabled}
+              onSoundNotificationEnabledChange={handleSoundNotificationEnabledChange}
+              soundOnlyWhenUnfocused={soundOnlyWhenUnfocused}
+              onSoundOnlyWhenUnfocusedChange={handleSoundOnlyWhenUnfocusedChange}
+              selectedSound={selectedSound}
+              onSelectedSoundChange={handleSelectedSoundChange}
+              customSoundPath={customSoundPath}
+              onCustomSoundPathChange={handleCustomSoundPathChange}
+              onSaveCustomSoundPath={handleSaveCustomSoundPath}
+              onTestSound={handleTestSound}
+              onBrowseSound={handleBrowseSound}
               taskCompletionNotificationEnabled={taskCompletionNotificationEnabled}
               onTaskCompletionNotificationEnabledChange={handleTaskCompletionNotificationEnabledChange}
               invocationMode={invocationMode}

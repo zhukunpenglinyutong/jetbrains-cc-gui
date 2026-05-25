@@ -5,6 +5,12 @@ import Switch from 'antd/es/switch';
 import { agentProvider, CREATE_NEW_AGENT_ID, EMPTY_STATE_ID, type AgentItem } from '../providers/agentProvider';
 import type { SelectedAgent } from '../types';
 import { RuntimeProviderSelect } from './RuntimeProviderSelect';
+import { NodeProcessSelect } from './NodeProcessSelect';
+import {
+  fetchNodeProcesses,
+  subscribeNodeProcesses,
+  type NodeProcessSnapshot,
+} from '../../../utils/nodeProcessCapabilities';
 
 interface ConfigSelectProps {
   alwaysThinkingEnabled?: boolean;
@@ -137,11 +143,12 @@ export const ConfigSelect = ({
 }: ConfigSelectProps) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
-  const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'agent' | 'runtimeProvider'>('none');
+  const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'agent' | 'runtimeProvider' | 'nodeProcesses'>('none');
   const [agentItems, setAgentItems] = useState<AgentItem[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
+  const [nodeProcessTotals, setNodeProcessTotals] = useState<{ all: number; orphan: number }>({ all: 0, orphan: 0 });
 
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -197,6 +204,35 @@ export const ConfigSelect = ({
       setShowToast(false);
     }, 1500);
   }, [t]);
+
+  const showGenericToast = useCallback((message: string) => {
+    if (!message) return;
+    if (toastTimerRef.current !== undefined) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+    setToastMessage(message);
+    setShowToast(true);
+    toastTimerRef.current = window.setTimeout(() => {
+      setShowToast(false);
+    }, 1800);
+  }, []);
+
+  // Subscribe to node process snapshots so the badge counter stays in sync
+  // with whatever the panel (or other consumers) see.
+  useEffect(() => {
+    const unsubscribe = subscribeNodeProcesses((snapshot: NodeProcessSnapshot) => {
+      setNodeProcessTotals({ all: snapshot.totals.all, orphan: snapshot.totals.orphan });
+    });
+    return unsubscribe;
+  }, []);
+
+  // Refresh node process counts whenever the main menu opens, so the badge
+  // is accurate before the user even hovers over the submenu.
+  useEffect(() => {
+    if (isOpen) {
+      fetchNodeProcesses();
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -362,6 +398,49 @@ export const ConfigSelect = ({
                 currentProvider={currentProvider}
                 embedded
                 onProviderSwitched={showProviderToast}
+                onClose={() => {
+                  setIsOpen(false);
+                  setActiveSubmenu('none');
+                }}
+              />
+            )}
+          </div>
+
+          <div className="selector-divider" />
+
+          {/* Node Process Management Item */}
+          <div
+            className="selector-option"
+            onMouseEnter={() => setActiveSubmenu('nodeProcesses')}
+            onMouseLeave={() => setActiveSubmenu('none')}
+            style={SELECTOR_OPTION_RELATIVE_STYLE}
+          >
+            <span className="codicon codicon-server-process" />
+            <div style={ITEM_INFO_STYLE}>
+              <span>{t('config.nodeProcesses.title', { defaultValue: 'Node 进程管理' })}</span>
+              {nodeProcessTotals.all > 0 ? (
+                <span className="model-description" style={AGENT_DESC_PLAIN_STYLE}>
+                  {nodeProcessTotals.orphan > 0
+                    ? t('config.nodeProcesses.badgeWithOrphan', {
+                        total: nodeProcessTotals.all,
+                        orphan: nodeProcessTotals.orphan,
+                        defaultValue: '{{total}} 个 · {{orphan}} 孤立 ⚠',
+                      })
+                    : t('config.nodeProcesses.badge', {
+                        total: nodeProcessTotals.all,
+                        defaultValue: '{{total}} 个进程',
+                      })}
+                </span>
+              ) : null}
+            </div>
+            <div style={ARROW_CONTAINER_STYLE}>
+              <span className="codicon codicon-chevron-right" style={ARROW_ICON_STYLE} />
+            </div>
+
+            {activeSubmenu === 'nodeProcesses' && (
+              <NodeProcessSelect
+                embedded
+                onToast={showGenericToast}
                 onClose={() => {
                   setIsOpen(false);
                   setActiveSubmenu('none');

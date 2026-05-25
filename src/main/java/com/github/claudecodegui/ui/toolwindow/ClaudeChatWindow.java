@@ -446,6 +446,18 @@ public class ClaudeChatWindow {
         return sessionId;
     }
 
+    /**
+     * Returns the provider this tab is currently using ("claude" or "codex").
+     * Used by NodeProcessRegistry to label processes with the user-facing provider
+     * rather than the underlying SDK type (a Claude daemon may still be alive
+     * after the user switched the tab to Codex — the panel reflects the tab's
+     * intent, not the lingering SDK).
+     */
+    public String getCurrentProvider() {
+        HandlerContext ctx = this.handlerContext;
+        return ctx != null ? ctx.getCurrentProvider() : "claude";
+    }
+
     public ClaudeSession getSession() {
         return session;
     }

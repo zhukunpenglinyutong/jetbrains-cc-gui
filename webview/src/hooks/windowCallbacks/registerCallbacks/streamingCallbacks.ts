@@ -7,7 +7,7 @@
 
 import { startTransition } from 'react';
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
-import type { ClaudeRawMessage } from '../../../types';
+import type { ClaudeMessage, ClaudeRawMessage } from '../../../types';
 import { sendBridgeEvent } from '../../../utils/bridge';
 import { THROTTLE_INTERVAL } from '../../useStreamingMessages';
 import { parseSequence } from '../parseSequence';
@@ -22,6 +22,104 @@ import {
   markScopeActivity,
   setActiveStreamScopeKey,
 } from '../streamScopeState';
+
+/**
+ * Scans assistant messages containing tool_use blocks and returns IDs that have
+ * no matching tool_result anywhere in the conversation.
+ *
+ * scope: 'lastTurn'  — only inspect the most recent assistant tool_use group and
+ *                       its immediate user follow-up (default; used by
+ *                       onPermissionDenied + onStreamEnd, where only the active
+ *                       turn can have stragglers).
+ * scope: 'all'       — collect every tool_use ID across the whole message list
+ *                       and check against every tool_result block anywhere.
+ *                       Required by historyLoadComplete because a replayed
+ *                       Codex session may contain multiple aborted turns whose
+ *                       missing results would otherwise be invisible to the
+ *                       lastTurn heuristic.
+ *
+ * Without this, tool blocks like BashToolGroupBlock keep rendering pending
+ * spinners forever because parseBashItem treats `result == null` as "still
+ * running".
+ */
+export function collectUnresolvedToolUseIds(
+  messages: ClaudeMessage[],
+  scope: 'lastTurn' | 'all' = 'lastTurn',
+): string[] {
+  const idsToAdd: string[] = [];
+  try {
+    if (scope === 'all') {
+      // Pass 1: gather every tool_result id present anywhere in the conversation.
+      const resolvedIds = new Set<string>();
+      for (const msg of messages) {
+        if (!msg.raw) continue;
+        const rawObj = typeof msg.raw === 'string' ? JSON.parse(msg.raw) : msg.raw;
+        const content = rawObj?.content ?? rawObj?.message?.content;
+        if (!Array.isArray(content)) continue;
+        for (const block of content as Array<{ type?: string; tool_use_id?: string }>) {
+          if (block?.type === 'tool_result' && block.tool_use_id) {
+            resolvedIds.add(block.tool_use_id);
+          }
+        }
+      }
+      // Pass 2: flag every assistant tool_use without a matching result.
+      for (const msg of messages) {
+        if (msg.type !== 'assistant' || !msg.raw) continue;
+        const rawObj = typeof msg.raw === 'string' ? JSON.parse(msg.raw) : msg.raw;
+        const content = rawObj?.content ?? rawObj?.message?.content;
+        if (!Array.isArray(content)) continue;
+        for (const block of content as Array<{ type?: string; id?: string }>) {
+          if (block?.type === 'tool_use' && block.id
+              && !resolvedIds.has(block.id)
+              && !window.__deniedToolIds?.has(block.id)) {
+            idsToAdd.push(block.id);
+          }
+        }
+      }
+      return idsToAdd;
+    }
+
+    // scope === 'lastTurn'
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.type !== 'assistant' || !msg.raw) continue;
+      const rawObj = typeof msg.raw === 'string' ? JSON.parse(msg.raw) : msg.raw;
+      const content = rawObj.content || rawObj.message?.content;
+      if (!Array.isArray(content)) continue;
+
+      const toolUses = content.filter(
+        (block: { type?: string; id?: string }) =>
+          block.type === 'tool_use' && block.id,
+      ) as Array<{ type: string; id: string; name?: string }>;
+      if (toolUses.length === 0) continue;
+
+      const nextMsg = messages[i + 1];
+      const existingResultIds = new Set<string>();
+      if (nextMsg?.type === 'user' && nextMsg.raw) {
+        const nextRaw =
+          typeof nextMsg.raw === 'string' ? JSON.parse(nextMsg.raw) : nextMsg.raw;
+        const nextContent = nextRaw.content || nextRaw.message?.content;
+        if (Array.isArray(nextContent)) {
+          nextContent.forEach((block: { type?: string; tool_use_id?: string }) => {
+            if (block.type === 'tool_result' && block.tool_use_id) {
+              existingResultIds.add(block.tool_use_id);
+            }
+          });
+        }
+      }
+
+      for (const tu of toolUses) {
+        if (!existingResultIds.has(tu.id) && !window.__deniedToolIds?.has(tu.id)) {
+          idsToAdd.push(tu.id);
+        }
+      }
+      break;
+    }
+  } catch (e) {
+    console.error('[Frontend] Error in collectUnresolvedToolUseIds:', e);
+  }
+  return idsToAdd;
+}
 
 /**
  * Timeout (ms) for detecting a stalled stream.  If no content/thinking delta
@@ -517,6 +615,29 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     setLoadingStartTime(null);
     setIsThinking(false);
 
+    // FIX: When stream ends (normal completion, user interrupt, or backend abort),
+    // any tool_use without a matching tool_result will otherwise render as a
+    // perpetual loading spinner in BashToolGroupBlock / EditToolGroupBlock /
+    // ReadToolGroupBlock. Treat them as interrupted by reusing the denied-tool
+    // mechanism so the UI shows a definitive (error) state instead of pending.
+    //
+    // For a normal turn the SDK delivers all tool_results before onStreamEnd,
+    // so collectUnresolvedToolUseIds returns []. The cost is only paid when the
+    // turn was actually cut short (interrupt / <turn_aborted>).
+    if (!window.__deniedToolIds) {
+      window.__deniedToolIds = new Set<string>();
+    }
+    let interruptedIds: string[] = [];
+    setMessages((currentMessages) => {
+      interruptedIds = collectUnresolvedToolUseIds(currentMessages);
+      // Return a new reference only when there is something to surface — avoids
+      // an extra ChatMessages re-render on the hot path of every normal turn.
+      return interruptedIds.length > 0 ? [...currentMessages] : currentMessages;
+    });
+    for (const id of interruptedIds) {
+      window.__deniedToolIds.add(id);
+    }
+
     // Mark this turn as processed — idempotency guard for dual-path delivery
     window.__streamEndProcessedTurnId = endedStreamingTurnId;
     window.__streamingDeltaRenderingFrame = undefined;
@@ -537,54 +658,9 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
       window.__deniedToolIds = new Set<string>();
     }
 
-    const idsToAdd: string[] = [];
-
+    let idsToAdd: string[] = [];
     setMessages((currentMessages) => {
-      try {
-        for (let i = currentMessages.length - 1; i >= 0; i--) {
-          const msg = currentMessages[i];
-          if (msg.type === 'assistant' && msg.raw) {
-            const rawObj = typeof msg.raw === 'string' ? JSON.parse(msg.raw) : msg.raw;
-            const content = rawObj.content || rawObj.message?.content;
-
-            if (Array.isArray(content)) {
-              const toolUses = content.filter(
-                (block: { type?: string; id?: string }) =>
-                  block.type === 'tool_use' && block.id,
-              ) as Array<{ type: string; id: string; name?: string }>;
-
-              if (toolUses.length > 0) {
-                const nextMsg = currentMessages[i + 1];
-                const existingResultIds = new Set<string>();
-
-                if (nextMsg?.type === 'user' && nextMsg.raw) {
-                  const nextRaw =
-                    typeof nextMsg.raw === 'string' ? JSON.parse(nextMsg.raw) : nextMsg.raw;
-                  const nextContent = nextRaw.content || nextRaw.message?.content;
-                  if (Array.isArray(nextContent)) {
-                    nextContent.forEach((block: { type?: string; tool_use_id?: string }) => {
-                      if (block.type === 'tool_result' && block.tool_use_id) {
-                        existingResultIds.add(block.tool_use_id);
-                      }
-                    });
-                  }
-                }
-
-                for (const tu of toolUses) {
-                  if (!existingResultIds.has(tu.id)) {
-                    idsToAdd.push(tu.id);
-                  }
-                }
-
-                break;
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.error('[Frontend] Error in onPermissionDenied:', e);
-      }
-
+      idsToAdd = collectUnresolvedToolUseIds(currentMessages);
       return [...currentMessages];
     });
 

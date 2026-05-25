@@ -18,6 +18,25 @@ export interface BehaviorTabProps {
   onStatusBarWidgetEnabledChange?: (enabled: boolean) => void;
   aiTitleGenerationEnabled?: boolean;
   onAiTitleGenerationEnabledChange?: (enabled: boolean) => void;
+  /**
+   * Whether the "create new session with existing messages" confirm dialog is
+   * enabled (i.e. shown). Positive semantics: `true` = dialog shows, `false` =
+   * silently create the new session. Default `true` to preserve safer behaviour
+   * for upgrading users.
+   */
+  newSessionConfirmEnabled?: boolean;
+  onNewSessionConfirmEnabledChange?: (enabled: boolean) => void;
+  soundNotificationEnabled?: boolean;
+  onSoundNotificationEnabledChange?: (enabled: boolean) => void;
+  soundOnlyWhenUnfocused?: boolean;
+  onSoundOnlyWhenUnfocusedChange?: (enabled: boolean) => void;
+  selectedSound?: string;
+  onSelectedSoundChange?: (soundId: string) => void;
+  customSoundPath?: string;
+  onCustomSoundPathChange?: (path: string) => void;
+  onSaveCustomSoundPath?: () => void;
+  onTestSound?: () => void;
+  onBrowseSound?: () => void;
   taskCompletionNotificationEnabled?: boolean;
   onTaskCompletionNotificationEnabledChange?: (enabled: boolean) => void;
   permissionDialogTimeoutSeconds?: number;
@@ -39,6 +58,19 @@ const BehaviorTab = ({
   onStatusBarWidgetEnabledChange = () => {},
   aiTitleGenerationEnabled = true,
   onAiTitleGenerationEnabledChange = () => {},
+  newSessionConfirmEnabled = true,
+  onNewSessionConfirmEnabledChange = () => {},
+  soundNotificationEnabled = false,
+  onSoundNotificationEnabledChange = () => {},
+  soundOnlyWhenUnfocused = false,
+  onSoundOnlyWhenUnfocusedChange = () => {},
+  selectedSound = 'default',
+  onSelectedSoundChange = () => {},
+  customSoundPath = '',
+  onCustomSoundPathChange = () => {},
+  onSaveCustomSoundPath = () => {},
+  onTestSound = () => {},
+  onBrowseSound = () => {},
   taskCompletionNotificationEnabled = false,
   onTaskCompletionNotificationEnabledChange = () => {},
   permissionDialogTimeoutSeconds = DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS,
@@ -268,6 +300,136 @@ const BehaviorTab = ({
           <span className="codicon codicon-info" />
           <span>{t('settings.other.aiTitleGeneration.hint')}</span>
         </small>
+      </div>
+
+      {/* New-session confirm dialog toggle.
+          Positive semantics throughout (no inversions in JSX) — the storage
+          layer in utils/skipNewSessionConfirm.ts owns the negation. */}
+      <div className={styles.streamingSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-comment-discussion" />
+          <span className={styles.fieldLabel}>{t('settings.basic.newSessionConfirm.label')}</span>
+        </div>
+        <label className={styles.toggleWrapper}>
+          <input
+            type="checkbox"
+            className={styles.toggleInput}
+            checked={newSessionConfirmEnabled}
+            onChange={(e) => onNewSessionConfirmEnabledChange(e.target.checked)}
+          />
+          <span className={styles.toggleSlider} />
+          <span className={styles.toggleLabel}>
+            {newSessionConfirmEnabled
+              ? t('settings.basic.newSessionConfirm.enabled')
+              : t('settings.basic.newSessionConfirm.disabled')}
+          </span>
+        </label>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>{t('settings.basic.newSessionConfirm.hint')}</span>
+        </small>
+      </div>
+
+      {/* Sound notification */}
+      <div className={styles.streamingSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-unmute" />
+          <span className={styles.fieldLabel}>{t('settings.basic.soundNotification.label')}</span>
+        </div>
+        <label className={styles.toggleWrapper}>
+          <input
+            type="checkbox"
+            className={styles.toggleInput}
+            checked={soundNotificationEnabled}
+            onChange={(e) => onSoundNotificationEnabledChange(e.target.checked)}
+          />
+          <span className={styles.toggleSlider} />
+          <span className={styles.toggleLabel}>
+            {soundNotificationEnabled
+              ? t('settings.basic.soundNotification.enabled')
+              : t('settings.basic.soundNotification.disabled')}
+          </span>
+        </label>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>{t('settings.basic.soundNotification.hint')}</span>
+        </small>
+
+        {soundNotificationEnabled && (
+          <div className={styles.customSoundSection}>
+            <div className={styles.soundOnlyWhenUnfocusedSection}>
+              <div className={styles.fieldHeader}>
+                <span className="codicon codicon-eye-closed" />
+                <span className={styles.fieldLabel}>{t('settings.basic.soundNotification.onlyWhenUnfocused')}</span>
+              </div>
+              <label className={styles.toggleWrapper}>
+                <input
+                  type="checkbox"
+                  className={styles.toggleInput}
+                  checked={soundOnlyWhenUnfocused}
+                  onChange={(e) => onSoundOnlyWhenUnfocusedChange(e.target.checked)}
+                />
+                <span className={styles.toggleSlider} />
+                <span className={styles.toggleLabel}>
+                  {soundOnlyWhenUnfocused
+                    ? t('settings.basic.soundNotification.enabled')
+                    : t('settings.basic.soundNotification.disabled')}
+                </span>
+              </label>
+              <small className={styles.formHint}>
+                <span className="codicon codicon-info" />
+                <span>{t('settings.basic.soundNotification.onlyWhenUnfocusedHint')}</span>
+              </small>
+            </div>
+
+            <div className={styles.fieldHeader}>
+              <span className="codicon codicon-library" />
+              <span className={styles.fieldLabel}>{t('settings.basic.soundNotification.selectSound')}</span>
+            </div>
+            <SoundSelectUpward
+              value={selectedSound}
+              onChange={onSelectedSoundChange}
+              options={soundOptions}
+              onTestSound={onTestSound}
+              testSoundLabel={t('settings.basic.soundNotification.testSound')}
+            />
+
+            {selectedSound === 'custom' && (
+              <div className={styles.customSoundFileSection}>
+                <div className={styles.fieldHeader}>
+                  <span className="codicon codicon-file-media" />
+                  <span className={styles.fieldLabel}>{t('settings.basic.soundNotification.customSound')}</span>
+                </div>
+                <div className={styles.nodePathInputWrapper}>
+                  <input
+                    type="text"
+                    className={styles.nodePathInput}
+                    placeholder={t('settings.basic.soundNotification.customSoundPlaceholder')}
+                    value={customSoundPath}
+                    onChange={(e) => onCustomSoundPathChange(e.target.value)}
+                  />
+                  <button
+                    className={styles.saveBtn}
+                    onClick={onBrowseSound}
+                    title={t('settings.basic.soundNotification.browse')}
+                  >
+                    <span className="codicon codicon-folder-opened" />
+                  </button>
+                  <button
+                    className={styles.saveBtn}
+                    onClick={onSaveCustomSoundPath}
+                  >
+                    {t('common.save')}
+                  </button>
+                </div>
+                <small className={styles.formHint}>
+                  <span className="codicon codicon-info" />
+                  <span>{t('settings.basic.soundNotification.customSoundHint')}</span>
+                </small>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

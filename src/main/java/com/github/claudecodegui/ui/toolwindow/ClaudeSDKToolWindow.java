@@ -143,6 +143,15 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         return windows;
     }
 
+    /**
+     * Public version of {@link #collectProjectChatWindows(Project)} for NodeProcessRegistry.
+     * Returns all chat windows belonging to the given project, including tab windows
+     * and detached floating windows.
+     */
+    public static Set<ClaudeChatWindow> getAllChatWindowsForProject(@NotNull Project project) {
+        return collectProjectChatWindows(project);
+    }
+
     private static Set<ClaudeChatWindow> collectAllChatWindows() {
         Set<ClaudeChatWindow> windows = Collections.newSetFromMap(new java.util.IdentityHashMap<>());
         windows.addAll(instances.values());

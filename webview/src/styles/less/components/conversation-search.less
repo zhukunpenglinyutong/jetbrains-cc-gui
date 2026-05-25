@@ -1,0 +1,201 @@
+/* ================================
+ * Conversation in-page search panel
+ * ================================ */
+
+/* Highlight color tokens — defined once, both themes pick up via fallbacks below. */
+:root, [data-theme="dark"] {
+    --color-search-match-bg: rgba(255, 235, 59, 0.30);
+    --color-search-match-current-bg: rgba(255, 167, 38, 0.50);
+    --color-search-match-current-border: #ffa726;
+    --color-search-block-border: #ffa726;
+}
+
+[data-theme="light"] {
+    --color-search-match-bg: rgba(255, 213, 79, 0.55);
+    --color-search-match-current-bg: rgba(255, 152, 0, 0.55);
+    --color-search-match-current-border: #ff9800;
+    --color-search-block-border: #ff9800;
+}
+
+/* Floating panel anchored to the messages container top-right.
+ * Width grew to 460 in v0.4.4 to host the three mode toggles + counter
+ * + nav + close in one row without crowding the input. */
+.cc-search-panel {
+    position: absolute;
+    top: 12px;
+    right: 18px;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px;
+    width: 460px;
+    max-width: calc(100% - 36px);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-secondary);
+    border-radius: 6px;
+    box-shadow: var(--shadow-md);
+    color: var(--text-primary);
+    font-size: 12px;
+    user-select: none;
+}
+
+.cc-search-icon {
+    flex: 0 0 auto;
+    font-size: 14px;
+    color: var(--text-tertiary);
+}
+
+.cc-search-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 24px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: 4px;
+    color: var(--text-primary);
+    padding: 0 6px;
+    font-size: 12px;
+    outline: none;
+    transition: border-color 120ms ease;
+
+    &:focus {
+        border-color: var(--accent-primary);
+    }
+
+    &.is-no-results {
+        border-color: var(--color-warning);
+    }
+}
+
+.cc-search-counter {
+    flex: 0 0 auto;
+    min-width: 38px;
+    text-align: right;
+    color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
+    font-size: 11px;
+
+    &.is-error {
+        color: var(--color-error);
+    }
+}
+
+/* Mode toggles (Aa / Whole-word / .*). Stay narrower than nav buttons so
+ * they read as a tight modifier cluster, not separate primary actions. */
+.cc-search-toggle {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 0;
+    transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+
+    &:hover {
+        background: var(--bg-hover);
+        color: var(--text-primary);
+    }
+
+    &.is-active {
+        background: var(--color-button-accent-hover-bg);
+        border-color: var(--accent-primary);
+        color: var(--accent-primary);
+    }
+
+    .codicon {
+        font-size: 14px;
+    }
+}
+
+.cc-search-btn {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 0;
+    transition: background-color 120ms ease, color 120ms ease;
+
+    &:hover:not(:disabled) {
+        background: var(--bg-hover);
+        color: var(--text-primary);
+    }
+
+    &:active:not(:disabled) {
+        background: var(--bg-active);
+    }
+
+    &:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    .codicon {
+        font-size: 14px;
+    }
+}
+
+.cc-search-hint {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    padding: 4px 8px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-secondary);
+    border-radius: 4px;
+    color: var(--text-tertiary);
+    font-size: 11px;
+    white-space: nowrap;
+    box-shadow: var(--shadow-sm);
+    pointer-events: none;
+}
+
+/* ================================
+ * Highlight marks
+ * Sit inside the messages container, injected via TreeWalker.
+ * ================================ */
+
+mark.cc-search-match {
+    background-color: var(--color-search-match-bg);
+    color: inherit;
+    padding: 0;
+    border-radius: 2px;
+    /* Don't break inline layout in tight code paragraphs. */
+    box-shadow: 0 0 0 1px transparent;
+    transition: background-color 120ms ease, box-shadow 120ms ease;
+
+    &.is-current {
+        background-color: var(--color-search-match-current-bg);
+        box-shadow: 0 0 0 2px var(--color-search-match-current-border);
+    }
+}
+
+/* Code blocks: keep hljs span colors intact, just add a 2px outline. */
+pre.cc-search-block-match {
+    position: relative;
+    outline: 2px solid var(--color-search-block-border);
+    outline-offset: -2px;
+    transition: outline-color 120ms ease, box-shadow 120ms ease;
+
+    &.is-current {
+        box-shadow: 0 0 0 1px var(--color-search-match-current-border);
+    }
+}
+
+/* The messages-shell is the floating-panel positioning context. */
+.messages-shell {
+    position: relative;
+}

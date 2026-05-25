@@ -305,6 +305,23 @@ public class DaemonBridge {
     }
 
     /**
+     * Returns the underlying daemon Process for inspection by NodeProcessRegistry.
+     * May be null when no daemon is running. Callers must NOT destroy/kill through
+     * this reference — always go through stop() to keep state consistent.
+     */
+    public Process getDaemonProcessForInspection() {
+        return daemonProcess;
+    }
+
+    /**
+     * Returns the number of in-flight requests currently being processed by the daemon.
+     * Used by the management panel to indicate daemon load.
+     */
+    public int getActiveRequestCount() {
+        return activeRequestCount.get();
+    }
+
+    /**
      * Ensure the daemon is running, starting it if necessary.
      */
     public boolean ensureRunning() {
