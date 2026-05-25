@@ -25,6 +25,7 @@ const DEFAULT_START_TIMEOUT_MS = 10000;
 const DEFAULT_HISTORY_LIMIT = 200;
 const DEFAULT_HISTORY_COUNT_CONCURRENCY = 4;
 const MAX_TOOL_RESULT_CHARS = 20000;
+const DEFAULT_EVENT_DRAIN_IDLE_MS = 300;
 const PLAN_MODE_PERMISSION_DENIED =
   'opencode permission denied because the chat is in plan mode.';
 const WINDOWS_ABSOLUTE_PATH = /^[A-Za-z]:[\\/]/;
@@ -67,6 +68,13 @@ function emitThinkingDelta(delta) {
 
 function emitSendError(errorPayload) {
   emitMarker('[SEND_ERROR]', JSON.stringify(errorPayload));
+}
+
+function emitContextSendError(ctx, errorPayload) {
+  if (ctx) {
+    ctx.sawSendError = true;
+  }
+  emitSendError(errorPayload);
 }
 
 function toolUseMsg(id, name, input) {
@@ -310,20 +318,67 @@ async function unwrapSdkResult(result, operation) {
 }
 
 function formatOpenCodeError(error, fallback = 'opencode request failed') {
+  const seen = new Set();
+
+  function fromValue(value) {
+    if (!value) {
+      return '';
+    }
+    if (typeof value === 'string') {
+      return value;
+    }
+    if (typeof value !== 'object') {
+      return '';
+    }
+    if (seen.has(value)) {
+      return '';
+    }
+    seen.add(value);
+
+    const candidates = [
+      value.data?.message,
+      value.error?.data?.message,
+      value.error?.message,
+      value.message,
+      value.reason,
+      value.statusText,
+      value.name,
+      value.data?.error,
+      value.error,
+      value.cause,
+      value.responseBody,
+      value.data?.responseBody
+    ];
+
+    for (const candidate of candidates) {
+      const message = fromValue(candidate);
+      if (message) {
+        return message;
+      }
+    }
+
+    if (Array.isArray(value.issues)) {
+      const issues = value.issues.map(fromValue).filter(Boolean);
+      if (issues.length > 0) {
+        return issues.join('\n');
+      }
+    }
+    if (Array.isArray(value.details)) {
+      const details = value.details.map(fromValue).filter(Boolean);
+      if (details.length > 0) {
+        return details.join('\n');
+      }
+    }
+
+    return '';
+  }
+
   if (!error) {
     return fallback;
   }
-  if (typeof error === 'string') {
-    return error;
-  }
-  if (error.data && typeof error.data.message === 'string' && error.data.message) {
-    return error.data.message;
-  }
-  if (typeof error.message === 'string' && error.message) {
-    return error.message;
-  }
-  if (typeof error.name === 'string' && error.name) {
-    return error.name;
+  const formatted = fromValue(error);
+  if (formatted) {
+    return formatted;
   }
   try {
     return JSON.stringify(error);
@@ -579,6 +634,39 @@ function openCodeToolResultContent(part) {
   return truncateForDisplay(content);
 }
 
+function openCodeToolExitCode(part) {
+  const metadata = openCodeToolMetadata(part);
+  const candidates = [metadata.exit, metadata.exitCode, metadata.code];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+      return candidate;
+    }
+    if (typeof candidate === 'string' && candidate.trim() && /^-?\d+$/.test(candidate.trim())) {
+      return Number.parseInt(candidate.trim(), 10);
+    }
+  }
+  return undefined;
+}
+
+function isOpenCodeToolResultError(part) {
+  const status = part?.state?.status;
+  if (status === 'error') {
+    return true;
+  }
+  if (status !== 'completed') {
+    return false;
+  }
+
+  const metadata = openCodeToolMetadata(part);
+  if (metadata.error === true) {
+    return true;
+  }
+
+  const toolName = normalizeOpenCodeToolName(part?.tool);
+  const exitCode = openCodeToolExitCode(part);
+  return toolName === 'bash' && typeof exitCode === 'number' && exitCode !== 0;
+}
+
 function taskSessionIdFromOutput(output) {
   const text = typeof output === 'string' ? output : '';
   const match = text.match(/^task_id:\s*([A-Za-z0-9_-]+)/m);
@@ -649,12 +737,18 @@ function emitOpenCodeToolResult(ctx, part, normalizedInput = undefined) {
   if (status !== 'completed' && status !== 'error') {
     return;
   }
+  const isError = isOpenCodeToolResultError(part);
   emitMessage(toolResultMsg(
     toolUseId,
-    status === 'error',
+    isError,
     openCodeToolResultContent(part),
     openCodeToolResultMetadata(part, normalizedInput)
   ));
+  if (isError) {
+    const exitCode = openCodeToolExitCode(part);
+    const suffix = typeof exitCode === 'number' ? ` (exit ${exitCode})` : '';
+    ctx.lastToolError = `${normalizeOpenCodeToolName(part?.tool)}${suffix}: ${openCodeToolResultContent(part)}`;
+  }
   ctx.emittedToolResultIds.add(toolUseId);
 }
 
@@ -1559,7 +1653,7 @@ function normalizeOpenCodeMessage(item) {
         content.push({
           type: 'tool_result',
           tool_use_id: toolUseId,
-          is_error: status === 'error',
+          is_error: isOpenCodeToolResultError(part),
           content: openCodeToolResultContent(part)
         });
       }
@@ -1596,7 +1690,7 @@ function normalizeOpenCodeMessage(item) {
 function emitAssistantMessageFromResponse(response) {
   const textParts = extractOpenCodeAssistantTextParts(response);
   if (textParts.length === 0) {
-    return;
+    return false;
   }
 
   emitMessage({
@@ -1608,6 +1702,7 @@ function emitAssistantMessageFromResponse(response) {
     },
     opencode: response
   });
+  return true;
 }
 
 function extractOpenCodeAssistantTextParts(response) {
@@ -1651,8 +1746,108 @@ function createEventContext(runtime, cwd, permissionMode, sessionRef) {
     emittedDiffIds: new Set(),
     repliedPermissions: new Set(),
     rejectedQuestions: new Set(),
-    sawContentDelta: false
+    streamedTextByPartId: new Map(),
+    sawContentDelta: false,
+    sawAssistantOutput: false,
+    sawSendError: false,
+    lastActivityAt: Date.now(),
+    lastToolError: ''
   };
+}
+
+function markOpenCodeActivity(ctx) {
+  ctx.lastActivityAt = Date.now();
+}
+
+function responseHasOpenCodeError(response) {
+  return Boolean(response?.info?.error || response?.error);
+}
+
+function responseOpenCodeError(response) {
+  return response?.info?.error || response?.error;
+}
+
+function responseHasAssistantText(response) {
+  return extractOpenCodeAssistantTextParts(response).some((part) => (
+    part.type === 'text' && typeof part.text === 'string' && part.text.trim()
+  ));
+}
+
+function emitOpenCodePartTextTail(ctx, part) {
+  const kind = partKind(part);
+  if (kind !== 'text' && !isReasoningPart(kind)) {
+    return false;
+  }
+  if (!part?.time?.end) {
+    return false;
+  }
+
+  const text = partText(part);
+  if (!text) {
+    return false;
+  }
+
+  const partId = pickString(part.id, part.partID);
+  const previous = partId ? ctx.streamedTextByPartId.get(partId) || '' : '';
+  let delta = '';
+  if (!previous) {
+    delta = text;
+  } else if (text.startsWith(previous)) {
+    delta = text.slice(previous.length);
+  }
+
+  if (!delta) {
+    if (partId) {
+      ctx.streamedTextByPartId.set(partId, text);
+    }
+    return false;
+  }
+
+  if (isReasoningPart(kind)) {
+    emitThinkingDelta(delta);
+  } else {
+    ctx.sawContentDelta = true;
+    ctx.sawAssistantOutput = true;
+    emitContentDelta(delta);
+  }
+  if (partId) {
+    ctx.streamedTextByPartId.set(partId, text);
+  }
+  return true;
+}
+
+function emitOpenCodeEmptyResponseFallback(ctx) {
+  const detail = ctx.lastToolError
+    ? `Last failed tool: ${truncateForDisplay(ctx.lastToolError, 1000)}`
+    : '';
+  const text = [
+    '[WARNING] OpenCode completed the turn without an assistant text response.',
+    'Check the tool results above for the last visible output.',
+    detail
+  ].filter(Boolean).join('\n');
+
+  emitMessage({
+    type: 'assistant',
+    message: {
+      role: 'assistant',
+      content: [{ type: 'text', text }]
+    }
+  });
+  ctx.sawAssistantOutput = true;
+}
+
+async function waitForOpenCodeEventDrain(ctx, activeTurn) {
+  const idleMs = parsePositiveInteger(
+    process.env.OPENCODE_EVENT_DRAIN_IDLE_MS,
+    DEFAULT_EVENT_DRAIN_IDLE_MS
+  );
+  while (!activeTurn.aborted && !ctx.sawSendError) {
+    const idleFor = Date.now() - ctx.lastActivityAt;
+    if (idleFor >= idleMs) {
+      return;
+    }
+    await delay(Math.max(10, Math.min(50, idleMs - idleFor)));
+  }
 }
 
 function eventProperties(event) {
@@ -1698,6 +1893,7 @@ async function handleOpenCodeEvent(event, ctx) {
   if (!shouldHandleSessionEvent(ctx, props)) {
     return;
   }
+  markOpenCodeActivity(ctx);
 
   switch (type) {
     case 'message.part.updated': {
@@ -1717,8 +1913,11 @@ async function handleOpenCodeEvent(event, ctx) {
           }
         }
 
-        const status = part.state?.status ? ` (${part.state.status})` : '';
+        const resultStatus = isOpenCodeToolResultError(part) ? 'error' : part.state?.status;
+        const status = resultStatus ? ` (${resultStatus})` : '';
         emitStatus(`opencode tool: ${part.tool}${status}`);
+      } else {
+        emitOpenCodePartTextTail(ctx, part);
       }
       break;
     }
@@ -1733,10 +1932,15 @@ async function handleOpenCodeEvent(event, ctx) {
       }
 
       const partType = ctx.partTypes.get(props.partID);
+      if (props.partID) {
+        const previous = ctx.streamedTextByPartId.get(props.partID) || '';
+        ctx.streamedTextByPartId.set(props.partID, previous + delta);
+      }
       if (isReasoningPart(partType)) {
         emitThinkingDelta(delta);
       } else {
         ctx.sawContentDelta = true;
+        ctx.sawAssistantOutput = true;
         emitContentDelta(delta);
       }
       break;
@@ -1745,7 +1949,7 @@ async function handleOpenCodeEvent(event, ctx) {
     case 'message.updated': {
       const info = props.info || props.message || {};
       if (info.role === 'assistant' && info.error) {
-        emitSendError({
+        emitContextSendError(ctx, {
           code: 'OPENCODE_SESSION_ERROR',
           error: formatOpenCodeError(info.error, 'opencode assistant message failed')
         });
@@ -1754,7 +1958,7 @@ async function handleOpenCodeEvent(event, ctx) {
     }
 
     case 'session.error': {
-      emitSendError({
+      emitContextSendError(ctx, {
         code: 'OPENCODE_SESSION_ERROR',
         error: formatOpenCodeError(props.error, 'opencode session error')
       });
@@ -1791,8 +1995,9 @@ async function handleOpenCodeEvent(event, ctx) {
   }
 }
 
-async function consumeEvents(client, ctx, signal, onReady) {
+async function consumeEvents(client, ctx, signal, onReady, onSubscribeError = undefined) {
   let subscription;
+  let ready = false;
   try {
     subscription = await client.event.subscribe({
       query: directoryQuery(ctx.cwd),
@@ -1801,6 +2006,7 @@ async function consumeEvents(client, ctx, signal, onReady) {
       onSseEvent: () => onReady()
     });
 
+    ready = true;
     onReady();
     for await (const event of subscription.stream) {
       if (signal.aborted) {
@@ -1810,7 +2016,11 @@ async function consumeEvents(client, ctx, signal, onReady) {
     }
   } catch (error) {
     if (!signal.aborted) {
-      emitStatus(`opencode event stream ended: ${error.message || String(error)}`);
+      const message = formatOpenCodeError(error, 'opencode event stream ended');
+      emitStatus(`opencode event stream ended: ${message}`);
+      if (!ready && typeof onSubscribeError === 'function') {
+        onSubscribeError(error);
+      }
     }
   }
 }
@@ -1863,16 +2073,19 @@ export async function sendMessage(
     activeTurn.eventAbortController = eventAbortController;
 
     let readyEvents;
-    const eventReady = new Promise((resolve) => {
+    let rejectEventReady;
+    const eventReady = new Promise((resolve, reject) => {
       readyEvents = resolve;
+      rejectEventReady = reject;
     });
     eventTask = consumeEvents(
       runtime.client,
       eventContext,
       eventAbortController.signal,
-      readyEvents
+      readyEvents,
+      rejectEventReady
     );
-    await Promise.race([eventReady, delay(1500)]);
+    await eventReady;
 
     sessionRef.id = await createOrResolveSession(runtime.client, sessionRef.id, cwd);
     activeTurn.sessionId = sessionRef.id;
@@ -1906,13 +2119,30 @@ export async function sendMessage(
       'send opencode prompt'
     );
 
-    if (!eventContext.sawContentDelta) {
-      emitAssistantMessageFromResponse(response);
+    if (responseHasOpenCodeError(response)) {
+      emitContextSendError(eventContext, {
+        code: 'OPENCODE_SESSION_ERROR',
+        error: formatOpenCodeError(responseOpenCodeError(response), 'opencode assistant message failed')
+      });
     }
 
-    await delay(100);
-    emitMarker('[STREAM_END]');
-    emitMarker('[MESSAGE_END]');
+    if (!eventContext.sawContentDelta) {
+      eventContext.sawAssistantOutput = emitAssistantMessageFromResponse(response)
+        || eventContext.sawAssistantOutput;
+    } else if (responseHasAssistantText(response)) {
+      eventContext.sawAssistantOutput = true;
+    }
+
+    await waitForOpenCodeEventDrain(eventContext, activeTurn);
+
+    if (!eventContext.sawSendError && !eventContext.sawAssistantOutput) {
+      emitOpenCodeEmptyResponseFallback(eventContext);
+    }
+
+    if (!eventContext.sawSendError) {
+      emitMarker('[STREAM_END]');
+      emitMarker('[MESSAGE_END]');
+    }
   } catch (error) {
     if (!activeTurn.aborted) {
       emitSendError(normalizeOpenCodeSdkError(error));

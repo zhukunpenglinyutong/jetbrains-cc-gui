@@ -27,6 +27,18 @@ function messagePayloads(lines) {
     .map((line) => JSON.parse(line.slice('[MESSAGE] '.length)));
 }
 
+function contentDeltas(lines) {
+  return lines
+    .filter((line) => line.startsWith('[CONTENT_DELTA] '))
+    .map((line) => JSON.parse(line.slice('[CONTENT_DELTA] '.length)));
+}
+
+function sendErrors(lines) {
+  return lines
+    .filter((line) => line.startsWith('[SEND_ERROR] '))
+    .map((line) => JSON.parse(line.slice('[SEND_ERROR] '.length)));
+}
+
 function toolPart(overrides = {}) {
   return {
     id: 'prt_tool_1',
@@ -83,6 +95,92 @@ test('opencode tool updates emit tool_use and tool_result blocks', async () => {
     is_error: false,
     content: 'ok'
   });
+});
+
+test('opencode shell tools with nonzero exit emit error tool results', async () => {
+  const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
+  const lines = await captureConsole(async () => {
+    await handleOpenCodeEvent({
+      type: 'message.part.updated',
+      properties: {
+        part: toolPart({
+          state: {
+            status: 'completed',
+            input: { command: 'git diff --no-stat', description: 'Check diff' },
+            output: 'fatal: unrecognized argument: --no-stat',
+            title: 'Check diff',
+            metadata: { exit: 129 },
+            time: { start: 1, end: 2 }
+          }
+        })
+      }
+    }, ctx);
+  });
+
+  const messages = messagePayloads(lines);
+  const toolResult = messages.find((message) => message.type === 'user');
+  const status = messages.find((message) => message.type === 'status');
+  assert.equal(toolResult.message.content[0].is_error, true);
+  assert.equal(toolResult.message.content[0].content, 'fatal: unrecognized argument: --no-stat');
+  assert.equal(status.message, 'opencode tool: bash (error)');
+  assert.match(ctx.lastToolError, /exit 129/);
+});
+
+test('opencode final text part fills missing streaming deltas', async () => {
+  const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
+  const lines = await captureConsole(async () => {
+    await handleOpenCodeEvent({
+      type: 'message.part.delta',
+      properties: {
+        sessionID: 'ses_test',
+        messageID: 'msg_assistant_1',
+        partID: 'prt_text_1',
+        field: 'text',
+        delta: 'hel'
+      }
+    }, ctx);
+    await handleOpenCodeEvent({
+      type: 'message.part.updated',
+      properties: {
+        sessionID: 'ses_test',
+        part: {
+          id: 'prt_text_1',
+          sessionID: 'ses_test',
+          messageID: 'msg_assistant_1',
+          type: 'text',
+          text: 'hello',
+          time: { start: 1, end: 2 }
+        }
+      }
+    }, ctx);
+  });
+
+  assert.deepEqual(contentDeltas(lines), ['hel', 'lo']);
+  assert.equal(ctx.sawAssistantOutput, true);
+});
+
+test('opencode session.error emits structured send error', async () => {
+  const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
+  const lines = await captureConsole(async () => {
+    await handleOpenCodeEvent({
+      type: 'session.error',
+      properties: {
+        sessionID: 'ses_test',
+        error: {
+          name: 'APIError',
+          data: {
+            message: 'provider timed out'
+          }
+        }
+      }
+    }, ctx);
+  });
+
+  assert.deepEqual(sendErrors(lines), [{
+    code: 'OPENCODE_SESSION_ERROR',
+    error: 'provider timed out'
+  }]);
+  assert.equal(ctx.sawSendError, true);
 });
 
 test('opencode task tool input and subagent metadata are preserved', async () => {
