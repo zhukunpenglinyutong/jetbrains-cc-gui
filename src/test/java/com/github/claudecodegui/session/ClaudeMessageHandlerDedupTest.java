@@ -310,34 +310,28 @@ public class ClaudeMessageHandlerDedupTest {
     }
 
     @Test
-    public void handleContentDelta_routesZaiAnalyzeImageToolOutputToThinking() {
+    public void handleContentDelta_doesNotClassifyToolTraceTextWithoutParserSignal() {
         handler.onMessage("stream_start", "");
-        addImageUserMessage();
         callbackHandler.clear();
 
-        handler.onMessage("content_delta", "Z.ai Built-in Tool: analyze_image\n");
+        handler.onMessage("content_delta", "Built-in Tool: inspect_asset\n");
         handler.onMessage("content_delta", "Output: screen analysis");
 
-        assertTrue("Z.ai image tool output should not stream as chat content",
-                callbackHandler.contentDeltas.isEmpty());
-        assertEquals("Z.ai image tool output should stream through thinking",
-                List.of("Z.ai Built-in Tool: analyze_image\nOutput: screen analysis"),
-                callbackHandler.thinkingDeltas);
+        assertEquals("Message handler should not guess tool trace text from content deltas", List.of("Built-in Tool: inspect_asset\n", "Output: screen analysis"), callbackHandler.contentDeltas);
+        assertTrue("Parser-classified thinking_delta is the only route to thinking", callbackHandler.thinkingDeltas.isEmpty());
     }
 
     @Test
-    public void handleContentDelta_routesGenericImageToolOutputToThinking() {
+    public void handleThinkingDelta_streamsParserClassifiedToolTraceToThinking() {
         handler.onMessage("stream_start", "");
-        addImageUserMessage();
         callbackHandler.clear();
 
-        handler.onMessage("content_delta", "Read Image Tool\n");
-        handler.onMessage("content_delta", "Output: screen analysis");
+        handler.onMessage("thinking_delta", "Built-in Tool: inspect_asset\n");
+        handler.onMessage("thinking_delta", "Output: screen analysis");
 
-        assertTrue("Image tool output should not stream as chat content",
+        assertTrue("Parser-classified tool trace should not stream as chat content",
                 callbackHandler.contentDeltas.isEmpty());
-        assertEquals("Image tool output should stream through thinking",
-                List.of("Read Image Tool\nOutput: screen analysis"),
+        assertEquals("Parser-classified tool trace should stream through thinking", List.of("Built-in Tool: inspect_asset\n", "Output: screen analysis"),
                 callbackHandler.thinkingDeltas);
     }
 
@@ -355,7 +349,7 @@ public class ClaudeMessageHandlerDedupTest {
     }
 
     @Test
-    public void handleContentDelta_flushesPartialMarkerAsTextWhenItIsNotZaiToolOutput() {
+    public void handleContentDelta_doesNotDelayProviderLikePrefixes() {
         handler.onMessage("stream_start", "");
         callbackHandler.clear();
 
@@ -369,13 +363,6 @@ public class ClaudeMessageHandlerDedupTest {
                 List.of("Z", "ebra"), callbackHandler.contentDeltas);
         assertTrue("Non-marker text should not become thinking",
                 callbackHandler.thinkingDeltas.isEmpty());
-    }
-
-    private void addImageUserMessage() {
-        state.addMessage(new ClaudeSession.Message(
-                ClaudeSession.Message.Type.USER,
-                "[Image #1: C:\\temp\\screen.png]"
-        ));
     }
 
     /**

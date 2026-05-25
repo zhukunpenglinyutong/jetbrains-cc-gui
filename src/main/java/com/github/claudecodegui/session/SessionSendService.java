@@ -1,13 +1,13 @@
 package com.github.claudecodegui.session;
 
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
-import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.session.runtime.CliRequest;
 import com.github.claudecodegui.session.runtime.RuntimeKey;
 import com.github.claudecodegui.session.runtime.SessionRuntimeRouter;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
@@ -276,12 +276,14 @@ public class SessionSendService {
     ) {
         LOG.info("[SessionSendService][DIAG] sendToClaude called, attachments="
                 + (attachments == null ? "NULL" : attachments.size()));
+        LOG.info("[ClaudeImageDiag][SessionSendService] sendToClaude route: invocationMode=" + effectiveInvocationMode + ", provider=" + state.getProvider() + ", sessionId=" + (state.getSessionId() != null ? state.getSessionId() : "(new)") + ", attachments=" + (attachments == null ? "NULL" : attachments.size()));
         if (attachments != null) {
             for (int i = 0; i < attachments.size(); i++) {
                 ClaudeSession.Attachment att = attachments.get(i);
                 LOG.info("[SessionSendService][DIAG] att[" + i + "]: fileName=" + att.fileName
                         + ", localPath=" + att.localPath
                         + ", data=" + (att.data != null ? att.data.length() + "chars" : "null"));
+                LOG.info("[ClaudeImageDiag][SessionSendService] att[" + i + "]: fileName=" + att.fileName + ", mediaType=" + att.mediaType + ", localPath=" + att.localPath + ", resourceUrl=" + att.resourceUrl + ", data=" + (att.data != null ? att.data.length() + "chars" : "null"));
             }
         }
         ClaudeMessageHandler handler = new ClaudeMessageHandler(

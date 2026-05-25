@@ -1,10 +1,10 @@
 package com.github.claudecodegui.session;
 
-import com.github.claudecodegui.session.ClaudeSession.Message;
 import com.github.claudecodegui.handler.SettingsHandler;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
+import com.github.claudecodegui.session.ClaudeSession.Message;
 import com.github.claudecodegui.util.TokenUsageUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -14,7 +14,6 @@ import com.intellij.openapi.project.Project;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 /**
  * Claude message callback handler.
@@ -55,26 +54,6 @@ public class ClaudeMessageHandler implements MessageCallback {
     // Written on SDK callback thread, read on EDT via invokeLater() happens-before.
     private volatile boolean textSegmentActive = false;
     private volatile boolean thinkingSegmentActive = false;
-
-    private static final String INTERNAL_TOOL_OUTPUT_MARKER = "output:";
-    private final StringBuilder pendingContentDeltaForInternalTool = new StringBuilder();
-    private boolean internalImageToolOutputActive = false;
-
-    private enum ContentDeltaRouteType {
-        HOLD,
-        TEXT,
-        THINKING
-    }
-
-    private static class ContentDeltaRoute {
-        final ContentDeltaRouteType type;
-        final String content;
-
-        ContentDeltaRoute(ContentDeltaRouteType type, String content) {
-            this.type = type;
-            this.content = content;
-        }
-    }
 
     /**
      * Constructor.
@@ -473,22 +452,6 @@ public class ClaudeMessageHandler implements MessageCallback {
         if (content == null || content.isEmpty()) {
             return;
         }
-
-        ContentDeltaRoute route = routeContentDelta(content);
-        if (route.type == ContentDeltaRouteType.HOLD) {
-            return;
-        }
-        if (route.type == ContentDeltaRouteType.THINKING) {
-            handleThinkingDelta(route.content);
-            return;
-        }
-        processTextContentDelta(route.content);
-    }
-
-    private void processTextContentDelta(String content) {
-        if (content == null || content.isEmpty()) {
-            return;
-        }
         // If previously thinking, content output means thinking is complete
         if (isThinking) {
             isThinking = false;
@@ -674,13 +637,10 @@ public class ClaudeMessageHandler implements MessageCallback {
         if (!isStreaming) {
             return;
         }
-        flushPendingContentDeltaAsText();
         currentAssistantMessage = null;
         assistantContent.setLength(0);
         textSegmentActive = false;
         thinkingSegmentActive = false;
-        internalImageToolOutputActive = false;
-        pendingContentDeltaForInternalTool.setLength(0);
         replayDedup.reset();
         LOG.debug("New turn started in agentic session, reset message state for new assistant message");
     }
@@ -787,13 +747,10 @@ public class ClaudeMessageHandler implements MessageCallback {
      */
     private void handleStreamEnd() {
         LOG.debug("Stream ended");
-        flushPendingContentDeltaAsText();
         isStreaming = false;  // Mark streaming as inactive
         streamEndedThisTurn = true;
         textSegmentActive = false;
         thinkingSegmentActive = false;
-        internalImageToolOutputActive = false;
-        pendingContentDeltaForInternalTool.setLength(0);
         replayDedup.reset();
 
         // Reset thinking state — stream end is the definitive boundary for a turn.
@@ -1115,84 +1072,4 @@ public class ClaudeMessageHandler implements MessageCallback {
         return true;
     }
 
-    private ContentDeltaRoute routeContentDelta(String content) {
-        if (internalImageToolOutputActive) {
-            return new ContentDeltaRoute(ContentDeltaRouteType.THINKING, content);
-        }
-
-        pendingContentDeltaForInternalTool.append(content);
-        String candidate = pendingContentDeltaForInternalTool.toString();
-
-        if (isInternalImageToolOutput(candidate)) {
-            internalImageToolOutputActive = true;
-            pendingContentDeltaForInternalTool.setLength(0);
-            return new ContentDeltaRoute(ContentDeltaRouteType.THINKING, candidate);
-        }
-
-        if (hasRecentUserImageMessage() && isPotentialInternalToolOutputPrefix(candidate)) {
-            return new ContentDeltaRoute(ContentDeltaRouteType.HOLD, "");
-        }
-
-        pendingContentDeltaForInternalTool.setLength(0);
-        return new ContentDeltaRoute(ContentDeltaRouteType.TEXT, candidate);
-    }
-
-    private boolean isInternalImageToolOutput(String text) {
-        return hasRecentUserImageMessage()
-                && normalizeInternalToolMarkerPrefix(text).contains(INTERNAL_TOOL_OUTPUT_MARKER);
-    }
-
-    private boolean isPotentialInternalToolOutputPrefix(String text) {
-        String normalized = normalizeInternalToolMarkerPrefix(text);
-        return normalized.isEmpty()
-                || INTERNAL_TOOL_OUTPUT_MARKER.startsWith(normalized)
-                || normalized.contains("tool");
-    }
-
-    private String normalizeInternalToolMarkerPrefix(String text) {
-        String normalized = text == null ? "" : text.toLowerCase(Locale.ROOT).stripLeading();
-        while (!normalized.isEmpty()) {
-            char ch = normalized.charAt(0);
-            if (ch == '*' || ch == '#' || ch == '>' || ch == '-' || ch == '`' || Character.isWhitespace(ch)) {
-                normalized = normalized.substring(1).stripLeading();
-                continue;
-            }
-            break;
-        }
-        return normalized;
-    }
-
-    private boolean hasRecentUserImageMessage() {
-        List<Message> messages = state.getMessagesReference();
-        for (int i = messages.size() - 1; i >= 0; i--) {
-            Message message = messages.get(i);
-            if (message.type == Message.Type.ASSISTANT) {
-                break;
-            }
-            if (message.type == Message.Type.USER && userMessageContainsImage(message)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean userMessageContainsImage(Message message) {
-        if (message == null) {
-            return false;
-        }
-        if (message.raw != null && messageParser.hasImageContent(message.raw)) {
-            return true;
-        }
-        String content = message.content;
-        return content != null && content.contains("[Image #");
-    }
-
-    private void flushPendingContentDeltaAsText() {
-        if (pendingContentDeltaForInternalTool.length() == 0) {
-            return;
-        }
-        String pending = pendingContentDeltaForInternalTool.toString();
-        pendingContentDeltaForInternalTool.setLength(0);
-        processTextContentDelta(pending);
-    }
 }
