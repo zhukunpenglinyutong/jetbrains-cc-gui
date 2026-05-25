@@ -30,13 +30,23 @@ public class EnvironmentConfigurator {
     private static final Logger LOG = Logger.getInstance(EnvironmentConfigurator.class);
     private static final String CLAUDE_PERMISSION_ENV = "CLAUDE_PERMISSION_DIR";
     private static final String CLAUDE_SESSION_ID_ENV = "CLAUDE_SESSION_ID";
+    private static final String CLAUDE_PERMISSION_SAFETY_NET_ENV = "CLAUDE_PERMISSION_SAFETY_NET_MS";
     private static final String CODEX_HOME_ENV = "CODEX_HOME";
 
+    private final CodemossSettingsService settingsService;
     private volatile String cachedPermissionDir = null;
     private volatile String sessionId = null;
 
     // Cache for Codex env_key values from config.toml
     private volatile Map<String, String> cachedCodexEnvVars = null;
+
+    public EnvironmentConfigurator() {
+        this(new CodemossSettingsService());
+    }
+
+    EnvironmentConfigurator(CodemossSettingsService settingsService) {
+        this.settingsService = settingsService;
+    }
 
     /**
      * Updates the process environment variables, ensuring PATH includes the Node.js directory.
@@ -168,6 +178,19 @@ public class EnvironmentConfigurator {
         if (sid != null) {
             env.put(CLAUDE_SESSION_ID_ENV, sid);
         }
+        env.put(CLAUDE_PERMISSION_SAFETY_NET_ENV, String.valueOf(getPermissionSafetyNetMs()));
+    }
+
+    long getPermissionSafetyNetMs() {
+        try {
+            long timeoutSeconds = settingsService.getPermissionDialogTimeoutSeconds();
+            return (timeoutSeconds + CodemossSettingsService.PERMISSION_SAFETY_NET_BUFFER_SECONDS) * 1000L;
+        } catch (Exception e) {
+            LOG.warn("[EnvironmentConfigurator] Failed to read permission timeout for Node safety net; errorClass="
+                    + e.getClass().getSimpleName());
+            return (CodemossSettingsService.DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS
+                    + CodemossSettingsService.PERMISSION_SAFETY_NET_BUFFER_SECONDS) * 1000L;
+        }
     }
 
     /**
@@ -203,6 +226,12 @@ public class EnvironmentConfigurator {
 
     /**
      * Gets the permission directory path.
+     *
+     * The directory is created with restrictive permissions (POSIX 0700 on Unix-like
+     * filesystems) because it carries permission IPC payloads and tmpdir is shared
+     * across all users on multi-user systems. On Windows / non-POSIX filesystems we
+     * fall back to default permissions: tmpdir on Windows is per-user, and the file
+     * names contain unguessable request IDs, so other-user access is already gated.
      */
     public String getPermissionDirectory() {
         String cached = this.cachedPermissionDir;
@@ -213,11 +242,29 @@ public class EnvironmentConfigurator {
         Path dir = Paths.get(System.getProperty("java.io.tmpdir"), "claude-permission");
         try {
             Files.createDirectories(dir);
+            hardenPermissionDirectory(dir);
         } catch (IOException e) {
             LOG.error("[EnvironmentConfigurator] Failed to prepare permission dir: " + dir + " (" + e.getMessage() + ")");
         }
         cachedPermissionDir = dir.toAbsolutePath().toString();
         return cachedPermissionDir;
+    }
+
+    /**
+     * Tightens the permission-IPC directory to owner-only access on POSIX systems.
+     * Silent no-op on filesystems that don't support POSIX file permissions.
+     */
+    private void hardenPermissionDirectory(Path dir) {
+        try {
+            if (!Files.getFileStore(dir).supportsFileAttributeView(java.nio.file.attribute.PosixFileAttributeView.class)) {
+                return;
+            }
+            Files.setPosixFilePermissions(dir,
+                    java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"));
+        } catch (UnsupportedOperationException | IOException ignored) {
+            // Filesystem (e.g. Windows NTFS, FAT32) does not support POSIX perms.
+            // The directory still inherits the user's tmpdir ACL, which is acceptable.
+        }
     }
 
     /**
@@ -468,6 +515,46 @@ public class EnvironmentConfigurator {
     }
 
     /**
+     * Allowlist of shells that may be invoked to source the user's login env.
+     * `$SHELL` is read from the process environment which is technically attacker-influenced;
+     * restricting to this set prevents a hostile parent from pointing us at an arbitrary binary
+     * (e.g. a script in /tmp) under the guise of a login shell.
+     */
+    private static final Set<String> ALLOWED_LOGIN_SHELLS = Set.of(
+            "/bin/zsh",
+            "/bin/bash",
+            "/bin/sh",
+            "/usr/bin/zsh",
+            "/usr/bin/bash",
+            "/usr/bin/sh",
+            "/usr/local/bin/zsh",
+            "/usr/local/bin/bash",
+            "/opt/homebrew/bin/zsh",
+            "/opt/homebrew/bin/bash"
+    );
+
+    /**
+     * Resolve a login shell binary to invoke, honoring `$SHELL` only when it points
+     * at an allowlisted executable. Returns {@code null} when no acceptable shell exists.
+     */
+    String resolveLoginShell() {
+        String shell = System.getenv("SHELL");
+        if (shell != null && !shell.isEmpty() && ALLOWED_LOGIN_SHELLS.contains(shell)) {
+            return shell;
+        }
+        if (shell != null && !shell.isEmpty()) {
+            LOG.warn("[Codex] $SHELL=" + shell + " is not in allowlist; falling back to /bin/zsh");
+        }
+        // Prefer zsh (macOS default) then bash; only return a candidate that actually exists.
+        for (String candidate : new String[]{"/bin/zsh", "/bin/bash", "/bin/sh"}) {
+            if (new File(candidate).canExecute()) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    /**
      * Get environment variable by executing a login shell (macOS/Linux).
      * This captures environment variables set in .zshrc, .bash_profile, etc.
      *
@@ -483,9 +570,10 @@ public class EnvironmentConfigurator {
 
         // Use login + interactive shell to get full environment
         // fnm and other version managers require interactive shell to load .zshrc
-        String shell = System.getenv("SHELL");
-        if (shell == null || shell.isEmpty()) {
-            shell = "/bin/zsh"; // Default to zsh on macOS
+        String shell = resolveLoginShell();
+        if (shell == null) {
+            LOG.warn("[Codex] No allowlisted login shell available; skipping env lookup for: " + envName);
+            return null;
         }
 
         List<String> command = new ArrayList<>();

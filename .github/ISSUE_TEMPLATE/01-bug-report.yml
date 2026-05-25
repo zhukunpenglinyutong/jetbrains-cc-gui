@@ -1,0 +1,169 @@
+name: 🐛 Bug 报告 / Bug Report
+description: 报告功能异常、崩溃、错误等问题 / Report a bug, crash, or unexpected behavior
+title: "[Bug] "
+labels: ["bugfix"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！为了让我们更快定位和修复问题，请如实填写下方信息。
+        Thanks for reporting! Please fill in the details below so we can fix it faster.
+
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: 提交前确认 / Pre-submission Checklist
+      description: 请勾选所有项 / Please check all items
+      options:
+        - label: 我已搜索过现有 issue 和 12 个 tracking issues（#1093-#1104）/ I have searched existing issues
+          required: true
+        - label: 我已尝试更新到最新版本 / I have tried the latest version
+          required: true
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: 插件版本 / Plugin Version
+      description: 在 IDE → Settings → Plugins 中可查看
+      placeholder: "例如 / e.g. v0.4.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: ide-type
+    attributes:
+      label: IDE 类型 / IDE Type
+      options:
+        - IntelliJ IDEA Community
+        - IntelliJ IDEA Ultimate
+        - PyCharm Community
+        - PyCharm Professional
+        - WebStorm
+        - GoLand
+        - Rider
+        - PhpStorm
+        - RubyMine
+        - CLion
+        - Android Studio
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: ide-version
+    attributes:
+      label: IDE 版本 / IDE Version
+      description: 在 Help → About 中可查看
+      placeholder: "例如 / e.g. 2025.3.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: 操作系统 / Operating System
+      options:
+        - Windows 10
+        - Windows 11
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Linux (Ubuntu/Debian)
+        - Linux (Other)
+        - WSL (Windows Subsystem for Linux)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: AI Provider
+      description: 你正在使用哪个 AI 工具？
+      options:
+        - Claude Code (官方 API)
+        - Claude Code (第三方中转 API)
+        - Codex (官方)
+        - Codex (第三方中转 API)
+        - 都遇到 / Both
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js 版本 / Node.js Version
+      description: 在终端运行 `node -v` 查看
+      placeholder: "例如 / e.g. v20.10.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述 / Bug Description
+      description: 清晰、简洁地描述遇到的问题 / Clear and concise description
+      placeholder: "我点击 XX 按钮时，发生了 YY..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤 / Steps to Reproduce
+      description: 详细的复现步骤，每一步都要写清楚 / Detailed steps to reproduce
+      value: |
+        1.
+        2.
+        3.
+        4.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为 / Expected Behavior
+      placeholder: "我期望发生..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为 / Actual Behavior
+      placeholder: "实际发生了..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: cli-works
+    attributes:
+      label: 是否在官方 CLI 中可以正常工作？/ Does the official CLI work?
+      description: 即直接运行 claude 或 codex 命令是否正常
+      options:
+        - 是 - CLI 正常，仅插件有问题 / Yes - CLI works, only plugin has issue
+        - 否 - CLI 也有同样问题 / No - CLI has the same issue
+        - 没测试过 / Not tested
+        - 不适用 / N/A
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 错误日志 / Error Logs
+      description: |
+        请粘贴控制台/日志中的错误信息（在 Help → Show Log in Files 中可找到日志）。
+        可粘贴长文本，会自动格式化为代码块。
+      render: shell
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图 / Screenshots
+      description: 直接拖入图片或粘贴（Ctrl+V）/ Drag images here or paste with Ctrl+V
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 补充信息 / Additional Context
+      description: 其他相关信息，例如最近做过哪些操作、配置变更等

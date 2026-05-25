@@ -79,13 +79,20 @@ public class ProjectConfigHandler {
         return obj;
     }
 
+    private static JsonObject jsonOf(String key, int value) {
+        JsonObject obj = new JsonObject();
+        obj.addProperty(key, value);
+        return obj;
+    }
+
     /** Run a getter and push the JSON payload; on error, push {@code fallback} so the UI always gets a response. */
     private void respondWithJson(String jsCallback, ThrowingJsonSupplier producer, JsonElement fallback,
                                  String errorLogMessage) {
         try {
             pushJson(jsCallback, producer.get());
         } catch (Exception e) {
-            LOG.error("[ProjectConfigHandler] " + errorLogMessage + ": " + e.getMessage(), e);
+            LOG.error("[ProjectConfigHandler] " + errorLogMessage + "; errorClass="
+                    + e.getClass().getSimpleName(), e);
             if (fallback != null) {
                 pushJson(jsCallback, fallback);
             }
@@ -249,6 +256,44 @@ public class ProjectConfigHandler {
             "Failed to save auto open file config");
     }
 
+    public void handleGetPermissionDialogTimeout() {
+        respondWithJson("window.updatePermissionDialogTimeout",
+            () -> jsonOf("permissionDialogTimeoutSeconds", settingsService.getPermissionDialogTimeoutSeconds()),
+            jsonOf("permissionDialogTimeoutSeconds", CodemossSettingsService.DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS),
+            "Failed to get permission dialog timeout");
+    }
+
+    public void handleSetPermissionDialogTimeout(String content) {
+        try {
+            JsonObject response = setPermissionDialogTimeoutAndCreateResponse(content);
+            LOG.info("[ProjectConfigHandler] Set permission dialog timeout: "
+                    + response.get("permissionDialogTimeoutSeconds").getAsInt() + "s");
+            pushJson("window.updatePermissionDialogTimeout", response);
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set permission dialog timeout; errorClass="
+                    + e.getClass().getSimpleName(), e);
+            showError("Failed to save permission dialog timeout. See IDE log for details.");
+        }
+    }
+
+    JsonObject setPermissionDialogTimeoutAndCreateResponse(String content) throws Exception {
+        JsonObject json = gson.fromJson(content, JsonObject.class);
+        // Strict type check: only accept a JSON numeric primitive. Anything else
+        // (string, boolean, array, object, null, missing) falls back to default.
+        int seconds = CodemossSettingsService.DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS;
+        if (json != null && json.has("permissionDialogTimeoutSeconds")) {
+            JsonElement element = json.get("permissionDialogTimeoutSeconds");
+            if (element != null
+                    && element.isJsonPrimitive()
+                    && element.getAsJsonPrimitive().isNumber()) {
+                seconds = element.getAsInt();
+            }
+        }
+        settingsService.setPermissionDialogTimeoutSeconds(seconds);
+        int effectiveSeconds = settingsService.getPermissionDialogTimeoutSeconds();
+        return jsonOf("permissionDialogTimeoutSeconds", effectiveSeconds);
+    }
+
     public void handleGetSendShortcut() {
         try {
             String sendShortcut = PropertiesComponent.getInstance().getValue(SEND_SHORTCUT_PROPERTY_KEY, "enter");
@@ -278,7 +323,14 @@ public class ProjectConfigHandler {
     public void handleGetCommitPrompt() {
         try {
             String commitPrompt = settingsService.getCommitPrompt();
-            pushJson("window.updateCommitPrompt", jsonOf("commitPrompt", commitPrompt));
+            String projectPath = context.getProject().getBasePath();
+            String projectCommitPrompt = projectPath != null
+                    ? settingsService.getProjectCommitPrompt(projectPath)
+                    : "";
+            JsonObject payload = new JsonObject();
+            payload.addProperty("commitPrompt", commitPrompt);
+            payload.addProperty("projectCommitPrompt", projectCommitPrompt);
+            pushJson("window.updateCommitPrompt", payload);
         } catch (Exception e) {
             LOG.error("[ProjectConfigHandler] Failed to get commit prompt: " + e.getMessage(), e);
         }
@@ -375,6 +427,55 @@ public class ProjectConfigHandler {
         } catch (Exception e) {
             LOG.error("[ProjectConfigHandler] " + errorLogMessage + ": " + e.getMessage(), e);
             showError(ClaudeCodeGuiBundle.message(errorBundleKey, e.getMessage()));
+        }
+    }
+
+    public void handleGetProjectCommitPrompt() {
+        try {
+            String projectPath = context.getProject().getBasePath();
+            String projectCommitPrompt = projectPath != null
+                    ? settingsService.getProjectCommitPrompt(projectPath)
+                    : "";
+            pushJson("window.updateProjectCommitPrompt", jsonOf("projectCommitPrompt", projectCommitPrompt));
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to get project commit prompt: " + e.getMessage(), e);
+        }
+    }
+
+    public void handleSetProjectCommitPrompt(String content) {
+        try {
+            String projectPath = context.getProject().getBasePath();
+            if (projectPath == null) {
+                showError("Cannot resolve project path");
+                return;
+            }
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            if (json == null || !json.has("prompt")) {
+                LOG.warn("[ProjectConfigHandler] Invalid project commit prompt request: missing prompt field");
+                return;
+            }
+            String prompt = json.get("prompt").getAsString();
+            if (prompt == null) {
+                showError("Prompt cannot be empty");
+                return;
+            }
+            prompt = prompt.trim();
+            final int MAX_PROMPT_LENGTH = 10000;
+            if (prompt.length() > MAX_PROMPT_LENGTH) {
+                LOG.warn("[ProjectConfigHandler] Project commit prompt too long: " + prompt.length() + " characters");
+                showError("Prompt length must not exceed " + MAX_PROMPT_LENGTH + " characters");
+                return;
+            }
+            final String validatedPrompt = prompt;
+            settingsService.setProjectCommitPrompt(projectPath, validatedPrompt);
+            LOG.info("[ProjectConfigHandler] Set project commit prompt, length: " + validatedPrompt.length() + ", project: " + projectPath);
+            JsonObject response = new JsonObject();
+            response.addProperty("projectCommitPrompt", validatedPrompt);
+            response.addProperty("saved", true);
+            pushJson("window.updateProjectCommitPrompt", response);
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set project commit prompt: " + e.getMessage(), e);
+            showError("Failed to save project commit prompt: " + e.getMessage());
         }
     }
 

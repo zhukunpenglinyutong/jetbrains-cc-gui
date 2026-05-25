@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createInitialEventState,
+  isWindowsTaskkillParseNoise,
   processCodexEventStream,
 } from './codex-event-handler.js';
 
@@ -80,4 +81,52 @@ test('Codex item.updated agent_message emits incremental content deltas before c
       content: [{ type: 'text', text: 'Hello' }],
     },
   });
+});
+
+test('isWindowsTaskkillParseNoise: matches English SUCCESS taskkill output', () => {
+  const message =
+    'Failed to parse item: SUCCESS: The process with PID 12345 (child process of PID 67890) has been terminated.';
+  assert.equal(isWindowsTaskkillParseNoise(message), true);
+});
+
+test('isWindowsTaskkillParseNoise: matches Chinese 成功 taskkill output', () => {
+  const message = 'Failed to parse item: 成功: 进程 PID 12345 (PID 67890 的子进程) 已被终止';
+  assert.equal(isWindowsTaskkillParseNoise(message), true);
+});
+
+test('isWindowsTaskkillParseNoise: matches mojibake (replacement char) with PID pair', () => {
+  const message = 'Failed to parse item: ���: PID 12345 PID 67890 ��';
+  assert.equal(isWindowsTaskkillParseNoise(message), true);
+});
+
+test('isWindowsTaskkillParseNoise: ignores message without "Failed to parse item:" prefix', () => {
+  const message = 'SUCCESS: process PID 12345 (child PID 67890) terminated';
+  assert.equal(isWindowsTaskkillParseNoise(message), false);
+});
+
+test('isWindowsTaskkillParseNoise: ignores message with only a single PID', () => {
+  const message = 'Failed to parse item: SUCCESS: process PID 12345 terminated';
+  assert.equal(isWindowsTaskkillParseNoise(message), false);
+});
+
+test('isWindowsTaskkillParseNoise: ignores real Codex parse errors without taskkill keywords', () => {
+  const message = 'Failed to parse item: {"id":"msg-1","type":"agent_message"';
+  assert.equal(isWindowsTaskkillParseNoise(message), false);
+});
+
+test('isWindowsTaskkillParseNoise: returns false for non-string input', () => {
+  assert.equal(isWindowsTaskkillParseNoise(null), false);
+  assert.equal(isWindowsTaskkillParseNoise(undefined), false);
+  assert.equal(isWindowsTaskkillParseNoise(42), false);
+  assert.equal(isWindowsTaskkillParseNoise({ msg: 'x' }), false);
+});
+
+test('isWindowsTaskkillParseNoise: returns false for empty payload after prefix', () => {
+  assert.equal(isWindowsTaskkillParseNoise('Failed to parse item:'), false);
+  assert.equal(isWindowsTaskkillParseNoise('Failed to parse item:   '), false);
+});
+
+test('isWindowsTaskkillParseNoise: matches when only "terminated" keyword present with PID pair', () => {
+  const message = 'Failed to parse item: PID 100 PID 200 process tree terminated';
+  assert.equal(isWindowsTaskkillParseNoise(message), true);
 });

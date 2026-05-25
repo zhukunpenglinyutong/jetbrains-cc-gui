@@ -109,6 +109,8 @@ export function useCodexProviderManagement(options: UseCodexProviderManagementOp
             configToml: providerData.configToml,
             authJson: providerData.authJson,
             customModels: providerData.customModels,
+            messageEnvVars: providerData.messageEnvVars || [],
+            mcpEnvVars: providerData.mcpEnvVars || [],
           },
         };
         sendToJava(`update_codex_provider:${JSON.stringify(updateData)}`);

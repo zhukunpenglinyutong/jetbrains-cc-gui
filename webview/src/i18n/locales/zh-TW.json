@@ -89,7 +89,16 @@
     "attachmentsUploaded": "[已上傳附件]",
     "streamingConnected": "{{provider}} 已成功連接，正在理解問題",
     "showEarlierMessages": "顯示之前的 {{count}} 則訊息",
-    "totalDuration": "本次耗時"
+    "totalDuration": "本次耗時",
+    "compactSummary": {
+      "summarizedConversation": "已總結的對話",
+      "compactSummary": "對話摘要",
+      "messagesUpTo": "已總結此節點之前的 {{count}} 則訊息",
+      "messagesFrom": "已總結此節點之後的 {{count}} 則訊息",
+      "userContext": "補充說明：「{{context}}」",
+      "expand": "展開摘要",
+      "collapse": "摺疊摘要"
+    }
   },
   "settings": {
     "title": "設定",
@@ -112,6 +121,7 @@
       },
       "language": {
         "label": "介面語言",
+        "followIde": "跟隨 IDE",
         "simplifiedChinese": "简体中文",
         "traditionalChinese": "繁體中文",
         "english": "English",
@@ -202,6 +212,11 @@
         "cmdEnter": "⌘/Ctrl+Enter 發送",
         "cmdEnterDesc": "按 ⌘/Ctrl+Enter 發送訊息，Enter 換行"
       },
+      "permissionDialogTimeout": {
+        "label": "權限與提問對話框超時時間",
+        "unit": "秒",
+        "hint": "設定 Claude 提問對話框和權限請求對話框的超時時間（30~3600 秒）。超時後對話框將自動關閉，Claude 會繼續執行。"
+      },
       "chatBgColor": {
         "label": "聊天背景色",
         "custom": "自訂",
@@ -281,6 +296,11 @@
         "label": "Additional Prompt",
         "placeholder": "Add your extra requirements here, e.g., generate commit in English, include issue number, etc...",
         "hint": "The plugin has built-in CCG Commits specification prompts. Content you add here will be used as additional requirements, and AI will prioritize your instructions."
+      },
+      "projectPrompt": {
+        "label": "專案級附加提示詞",
+        "placeholder": "在此新增當前專案的專屬要求，例如：scope 必須使用模組名、commit body 需包含影響範圍等...",
+        "hint": "此提示詞僅對當前專案生效，與全域附加提示詞同時拼接。當兩者內容矛盾時，以專案提示詞為準。不同專案可獨立配置。"
       },
       "codeReview": {
         "comingSoon": "Coming Soon",
@@ -574,7 +594,19 @@
         "cliLoginDisableMessage": "將恢復先前的 config.toml 並切換 API Key 認證方式。",
         "modelIdRequired": "Model ID is required",
         "modelIdInvalid": "Invalid model ID format (only letters, numbers, dots, hyphens, underscores, slashes and colons allowed)",
-        "modelIdDuplicate": "Model ID already exists"
+        "modelIdDuplicate": "Model ID already exists",
+        "envVarsTitle": "Environment Variables",
+        "messageEnvLabel": "Message Environment Variables",
+        "messageEnvHint": "Custom environment variables injected into the Codex message subprocess",
+        "mcpEnvLabel": "MCP Environment Variables",
+        "mcpEnvHint": "Custom environment variables injected into the MCP tool discovery subprocess",
+        "envKeyPlaceholder": "ENV_KEY",
+        "envValuePlaceholder": "value",
+        "addEnvVar": "Add Variable",
+        "envKeyInvalid": "Invalid key name (must start with letter/underscore, alphanumeric only)",
+        "envKeyProtected": "Cannot set built-in variable: {{key}}",
+        "envKeyDuplicate": "Duplicate key: {{key}}",
+        "envValueTooLong": "變數值過長（最大 {{max}} 字元）"
       }
     },
     "agent": {
@@ -712,7 +744,8 @@
       "WebSearch": "網頁搜尋",
       "WebFetch": "獲取網頁",
       "execute": "執行 {{toolName}}",
-      "readDirectory": "讀取目錄"
+      "readDirectory": "讀取目錄",
+      "timeoutWarning": "請儘快回答，對話框將在 {{seconds}} 秒後自動關閉"
     }
   },
   "askUserQuestion": {
@@ -1206,7 +1239,7 @@
       },
       "opus46_1m": {
         "label": "Opus 4.6",
-        "description": "Opus 4.6 長對話模式"
+        "description": "Opus 4.6 · 高效能推理模型"
       },
       "haiku45": {
         "label": "Haiku 4.5",
@@ -1435,5 +1468,33 @@
     "providerNotConfigured": "供應商未設定",
     "providerNotConfiguredDesc": "尚未設定 AI 供應商或未授權使用本機設定，請先在供應商管理設定中完成設定後再開始對話。",
     "goToProviderSettings": "前往設定"
+  },
+  "errorDiagnostic": {
+    "copyCommand": "複製",
+    "copied": "已複製",
+    "openDependencySettings": "開啟相依性管理",
+    "recommended": "推薦",
+    "codexThreadResume": {
+      "title": "工作階段執行緒已失效",
+      "intro": "新建工作階段即可解決此問題。目前工作階段的執行緒 ID 在 Codex 伺服器端已不存在。",
+      "reason": "Codex 服務端會在一段時間後清除舊執行緒，繼續上一次工作階段時可能觸發此錯誤。"
+    },
+    "sdkNativeBinaryMissing": {
+      "title": "SDK 安裝不完整 — 缺少 native 二進位檔",
+      "intro": "這是淘寶 npm 鏡像源的已知問題（非外掛 bug）。鏡像源未完整同步 platform 檔案。可手動按以下方案處理：",
+      "reason": "淘寶源同步完成後此問題會自動消失，無需擔心。",
+      "solutions": {
+        "switchRegistry": {
+          "title": "方案一：暫時切換官方源重新安裝",
+          "step0": "1. 在終端機執行（切換到 npm 官方源）：",
+          "step1": "2. 開啟外掛設定中的「相依性管理」，點選重新安裝：",
+          "step2": "3. 重新安裝完成後，切回淘寶源："
+        },
+        "downgrade": {
+          "title": "方案二：版本回退",
+          "step0": "在「相依性管理」中將 SDK 版本切換到 v0.2.112 或更早版本，切換後需要重新啟動 IDEA。"
+        }
+      }
+    }
   }
 }

@@ -4,7 +4,10 @@ import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.handler.provider.ModelProviderHandler;
 
+import com.github.claudecodegui.util.LanguageConfigService;
 import com.github.claudecodegui.util.ThemeConfigService;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
@@ -15,6 +18,7 @@ import com.intellij.openapi.diagnostic.Logger;
 public class SettingsHandler extends BaseMessageHandler {
 
     private static final Logger LOG = Logger.getInstance(SettingsHandler.class);
+    private final Gson gson = new Gson();
 
     private final InputHistoryHandler inputHistoryHandler;
     private final SoundSettingsHandler soundSettingsHandler;
@@ -47,6 +51,8 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_send_shortcut",
         "get_auto_open_file_enabled",
         "set_auto_open_file_enabled",
+        "get_permission_dialog_timeout",
+        "set_permission_dialog_timeout",
         "get_commit_generation_enabled",
         "set_commit_generation_enabled",
         "get_status_bar_widget_enabled",
@@ -60,6 +66,8 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_commit_ai_config",
         "get_prompt_enhancer_config",
         "set_prompt_enhancer_config",
+        "get_project_commit_prompt",
+        "set_project_commit_prompt",
         "get_input_history",
         "record_input_history",
         "delete_input_history_item",
@@ -71,7 +79,11 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_selected_sound",
         "set_custom_sound_path",
         "test_sound",
-        "browse_sound_file"
+        "browse_sound_file",
+        // User language preference
+        "set_user_language",
+        "get_user_language",
+        "clear_user_language"
     };
 
     public SettingsHandler(HandlerContext context) {
@@ -176,6 +188,12 @@ public class SettingsHandler extends BaseMessageHandler {
             case "set_auto_open_file_enabled":
                 projectConfigHandler.handleSetAutoOpenFileEnabled(content);
                 return true;
+            case "get_permission_dialog_timeout":
+                projectConfigHandler.handleGetPermissionDialogTimeout();
+                return true;
+            case "set_permission_dialog_timeout":
+                projectConfigHandler.handleSetPermissionDialogTimeout(content);
+                return true;
             case "get_commit_generation_enabled":
                 projectConfigHandler.handleGetCommitGenerationEnabled();
                 return true;
@@ -221,6 +239,12 @@ public class SettingsHandler extends BaseMessageHandler {
             case "set_prompt_enhancer_config":
                 projectConfigHandler.handleSetPromptEnhancerConfig(content);
                 return true;
+            case "get_project_commit_prompt":
+                projectConfigHandler.handleGetProjectCommitPrompt();
+                return true;
+            case "set_project_commit_prompt":
+                projectConfigHandler.handleSetProjectCommitPrompt(content);
+                return true;
             // Input history
             case "get_input_history":
                 inputHistoryHandler.handleGetInputHistory();
@@ -256,9 +280,75 @@ public class SettingsHandler extends BaseMessageHandler {
             case "browse_sound_file":
                 soundSettingsHandler.handleBrowseSoundFile();
                 return true;
+            // User language preference
+            case "set_user_language":
+                handleSetUserLanguage(content);
+                return true;
+            case "get_user_language":
+                handleGetUserLanguage();
+                return true;
+            case "clear_user_language":
+                handleClearUserLanguage();
+                return true;
             default:
                 return false;
         }
+    }
+
+    /**
+     * Handle set_user_language: save user's manual language preference.
+     * On failure, push the authoritative config back so the webview can roll
+     * back its optimistic UI update.
+     */
+    private void handleSetUserLanguage(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            String language = json.has("language") && !json.get("language").isJsonNull()
+                    ? json.get("language").getAsString() : null;
+            if (language == null || language.isEmpty()) {
+                LOG.warn("[SettingsHandler] set_user_language rejected: empty language");
+                pushLanguageConfig();
+                return;
+            }
+            LanguageConfigService.setUserLanguage(context.getSettingsService(), language);
+            LOG.info("[SettingsHandler] Saved user language preference: " + language);
+            pushLanguageConfig();
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to save user language: " + e.getMessage(), e);
+            pushLanguageConfig();
+        }
+    }
+
+    /**
+     * Handle get_user_language: return user's saved language preference.
+     */
+    private void handleGetUserLanguage() {
+        String userLanguage = LanguageConfigService.getUserLanguage(context.getSettingsService());
+        JsonObject response = new JsonObject();
+        response.addProperty("language", userLanguage != null ? userLanguage : "");
+        response.addProperty("manuallySet", userLanguage != null);
+        callJavaScript("window.onUserLanguage", escapeJs(response.toString()));
+    }
+
+    /**
+     * Handle clear_user_language: clear user's manual language preference.
+     * Pushes the authoritative config on both success and failure so the
+     * webview always reflects the persisted state.
+     */
+    private void handleClearUserLanguage() {
+        try {
+            LanguageConfigService.clearUserLanguage(context.getSettingsService());
+            LOG.info("[SettingsHandler] Cleared user language preference");
+        } catch (Exception e) {
+            LOG.error("[SettingsHandler] Failed to clear user language: " + e.getMessage(), e);
+        } finally {
+            pushLanguageConfig();
+        }
+    }
+
+    private void pushLanguageConfig() {
+        JsonObject languageConfig = LanguageConfigService.getLanguageConfig(context.getSettingsService());
+        callJavaScript("window.applyIdeaLanguageConfig", escapeJs(languageConfig.toString()));
     }
 
     /**

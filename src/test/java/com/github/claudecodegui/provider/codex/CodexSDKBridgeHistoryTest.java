@@ -2,16 +2,19 @@ package com.github.claudecodegui.provider.codex;
 
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.session.MessageParser;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 public class CodexSDKBridgeHistoryTest {
 
@@ -119,6 +122,63 @@ public class CodexSDKBridgeHistoryTest {
         }
     }
 
+    @Test
+    public void getSessionMessagesRestoresLocalImagesForHistoryReplay() throws IOException {
+        Path sessionsDir = Files.createTempDirectory("codex-sdk-bridge-history-local-image");
+        Path imagePath = Files.createTempFile("codex-sdk-bridge-image", ".png");
+        try {
+            Files.write(imagePath, "png-bytes".getBytes(StandardCharsets.UTF_8));
+            writeSessionFile(
+                    sessionsDir,
+                    "session-local-image",
+                    line("2026-05-11T09:02:20Z", "event_msg",
+                            "{\"type\":\"user_message\",\"message\":\"Restore image\",\"local_images\":[\"" + escapeJson(imagePath.toString()) + "\"]}")
+            );
+
+            CodexSDKBridge bridge = new CodexSDKBridge(sessionsDir);
+            List<JsonObject> messages = bridge.getSessionMessages("session-local-image", sessionsDir.toString());
+
+            assertEquals(1, messages.size());
+            assertEquals("user", messages.get(0).get("type").getAsString());
+            assertEquals("Restore image", messages.get(0).get("content").getAsString());
+            JsonArray contentBlocks = messages.get(0).getAsJsonObject("raw").getAsJsonArray("content");
+            assertEquals("image", contentBlocks.get(0).getAsJsonObject().get("type").getAsString());
+            assertTrue(contentBlocks.get(0).getAsJsonObject().get("src").getAsString().startsWith("data:image/png;base64,"));
+        } finally {
+            Files.deleteIfExists(imagePath);
+            deleteDirectory(sessionsDir);
+        }
+    }
+
+    @Test
+    public void getSessionMessagesKeepsImageOnlyHistoryReplay() throws IOException {
+        Path sessionsDir = Files.createTempDirectory("codex-sdk-bridge-history-image-only");
+        Path imagePath = Files.createTempFile("codex-sdk-bridge-image-only", ".png");
+        try {
+            Files.write(imagePath, "png-bytes".getBytes(StandardCharsets.UTF_8));
+            writeSessionFile(
+                    sessionsDir,
+                    "session-image-only",
+                    line("2026-05-11T09:03:20Z", "event_msg",
+                            "{\"type\":\"user_message\",\"message\":\"\",\"local_images\":[\"" + escapeJson(imagePath.toString()) + "\"]}")
+            );
+
+            CodexSDKBridge bridge = new CodexSDKBridge(sessionsDir);
+            List<JsonObject> messages = bridge.getSessionMessages("session-image-only", sessionsDir.toString());
+
+            assertEquals(1, messages.size());
+            assertEquals("user", messages.get(0).get("type").getAsString());
+            assertEquals("", messages.get(0).get("content").getAsString());
+            JsonArray contentBlocks = messages.get(0).getAsJsonObject("raw").getAsJsonArray("content");
+            assertEquals(1, contentBlocks.size());
+            assertEquals("image", contentBlocks.get(0).getAsJsonObject().get("type").getAsString());
+            assertTrue(contentBlocks.get(0).getAsJsonObject().get("src").getAsString().startsWith("data:image/png;base64,"));
+        } finally {
+            Files.deleteIfExists(imagePath);
+            deleteDirectory(sessionsDir);
+        }
+    }
+
     private static Path writeSessionFile(Path dir, String sessionId, String... lines) throws IOException {
         Files.createDirectories(dir);
         Path file = dir.resolve(sessionId + ".jsonl");
@@ -128,6 +188,10 @@ public class CodexSDKBridgeHistoryTest {
 
     private static String line(String timestamp, String type, String payloadJson) {
         return "{\"timestamp\":\"" + timestamp + "\",\"type\":\"" + type + "\",\"payload\":" + payloadJson + "}";
+    }
+
+    private static String escapeJson(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private static void deleteDirectory(Path path) throws IOException {

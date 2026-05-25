@@ -86,6 +86,7 @@ async function createRuntime(requestContext, callbacks) {
     runtimeSessionEpoch: requestContext.runtimeSessionEpoch || null,
     runtimeSignature: requestContext.runtimeSignature,
     currentModel: requestContext.sdkModelName || null,
+    modelId: requestContext.modelId || null, // Original model ID, may contain [1m] suffix
     currentPermissionMode: initialPermissionMode,
     permissionModeState: { value: initialPermissionMode },
     currentMaxThinkingTokens: requestContext.maxThinkingTokens ?? null,
@@ -252,4 +253,4 @@ export async function cleanupStaleSessionRuntimes(callbacks) {
   return cleanupSessionsFromRegistry((runtime) => disposeRuntime(runtime, callbacks));
 }
 
-export { beginRuntimeTurn, endRuntimeTurn, touchRuntime };
+export { beginRuntimeTurn, endRuntimeTurn, touchRuntime, applyDynamicControls };

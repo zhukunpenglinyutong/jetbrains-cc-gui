@@ -6,6 +6,10 @@ import type { CommitAiConfig, CommitAiProvider } from '../../../types/aiFeatureC
 import { DEFAULT_COMMIT_AI_CONFIG } from '../../../types/aiFeatureConfig';
 import type { PromptEnhancerConfig, PromptEnhancerProvider } from '../../../types/promptEnhancer';
 import { DEFAULT_PROMPT_ENHANCER_CONFIG } from '../../../types/promptEnhancer';
+import {
+  DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS,
+  clampPermissionDialogTimeoutSeconds,
+} from '../../../utils/permissionDialogTimeout';
 
 const sendToJava = (message: string) => {
   if (window.sendToJava) {
@@ -20,6 +24,8 @@ export interface UseSettingsBasicActionsProps {
   onSendShortcutChangeProp?: (shortcut: 'enter' | 'cmdEnter') => void;
   autoOpenFileEnabledProp?: boolean;
   onAutoOpenFileEnabledChangeProp?: (enabled: boolean) => void;
+  permissionDialogTimeoutSecondsProp?: number;
+  onPermissionDialogTimeoutChangeProp?: (seconds: number) => void;
 }
 
 export interface UseSettingsBasicActionsReturn {
@@ -52,6 +58,8 @@ export interface UseSettingsBasicActionsReturn {
   localAutoOpenFileEnabled: boolean;
   commitPrompt: string;
   savingCommitPrompt: boolean;
+  projectCommitPrompt: string;
+  savingProjectCommitPrompt: boolean;
   soundNotificationEnabled: boolean;
   soundOnlyWhenUnfocused: boolean;
   selectedSound: string;
@@ -85,10 +93,13 @@ export interface UseSettingsBasicActionsReturn {
   handleTestSound: () => void;
   handleBrowseSound: () => void;
   handleSaveCommitPrompt: () => void;
+  handleSaveProjectCommitPrompt: () => void;
   handleCommitGenerationEnabledChange: (enabled: boolean) => void;
   handleAiTitleGenerationEnabledChange: (enabled: boolean) => void;
   handleStatusBarWidgetEnabledChange: (enabled: boolean) => void;
   handleTaskCompletionNotificationEnabledChange: (enabled: boolean) => void;
+  permissionDialogTimeoutSeconds: number;
+  handlePermissionDialogTimeoutChange: (seconds: number) => void;
   handleCommitAiProviderChange: (provider: CommitAiProvider) => void;
   handleCommitAiModelChange: (model: string) => void;
   handleCommitAiResetToDefault: () => void;
@@ -122,6 +133,8 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setLocalAutoOpenFileEnabled: (enabled: boolean) => void;
   /** @internal */ setCommitPrompt: (prompt: string) => void;
   /** @internal */ setSavingCommitPrompt: (saving: boolean) => void;
+  /** @internal */ setProjectCommitPrompt: (prompt: string) => void;
+  /** @internal */ setSavingProjectCommitPrompt: (saving: boolean) => void;
   /** @internal */ setSoundNotificationEnabled: (enabled: boolean) => void;
   /** @internal */ setSoundOnlyWhenUnfocused: (enabled: boolean) => void;
   /** @internal */ setSelectedSound: (soundId: string) => void;
@@ -143,6 +156,8 @@ export function useSettingsBasicActions({
   onSendShortcutChangeProp,
   autoOpenFileEnabledProp,
   onAutoOpenFileEnabledChangeProp,
+  permissionDialogTimeoutSecondsProp,
+  onPermissionDialogTimeoutChangeProp,
 }: UseSettingsBasicActionsProps): UseSettingsBasicActionsReturn {
   // Node.js path
   const [nodePath, setNodePath] = useState('');
@@ -185,6 +200,10 @@ export function useSettingsBasicActions({
   const [commitPrompt, setCommitPrompt] = useState('');
   const [savingCommitPrompt, setSavingCommitPrompt] = useState(false);
 
+  // Project-level commit AI prompt configuration
+  const [projectCommitPrompt, setProjectCommitPrompt] = useState('');
+  const [savingProjectCommitPrompt, setSavingProjectCommitPrompt] = useState(false);
+
   // Sound notification configuration
   const [soundNotificationEnabled, setSoundNotificationEnabled] = useState<boolean>(false);
   const [soundOnlyWhenUnfocused, setSoundOnlyWhenUnfocused] = useState<boolean>(false);
@@ -217,6 +236,13 @@ export function useSettingsBasicActions({
 
   // Task completion notification toggle (default: false, opt-in feature)
   const [taskCompletionNotificationEnabled, setTaskCompletionNotificationEnabled] = useState<boolean>(false);
+
+  // Permission dialog timeout — owned by App.tsx; we treat the prop as authoritative.
+  // We intentionally do NOT keep a local copy: it would be dead state because the
+  // prop is always provided in production, and a divergent local copy could be read
+  // by accident in future refactors.
+  const permissionDialogTimeoutSeconds =
+    permissionDialogTimeoutSecondsProp ?? DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS;
 
   const [commitAiConfig, setCommitAiConfig] = useState<CommitAiConfig>(
     DEFAULT_COMMIT_AI_CONFIG
@@ -389,6 +415,15 @@ export function useSettingsBasicActions({
     sendToJava(`set_task_completion_notification_enabled:${JSON.stringify(payload)}`);
   }, []);
 
+  // Permission dialog timeout change handler
+  const handlePermissionDialogTimeoutChange = useCallback((seconds: number) => {
+    const clamped = clampPermissionDialogTimeoutSeconds(seconds);
+    // App.tsx owns the canonical state and provides the callback in production.
+    onPermissionDialogTimeoutChangeProp?.(clamped);
+    const payload = { permissionDialogTimeoutSeconds: clamped };
+    sendToJava(`set_permission_dialog_timeout:${JSON.stringify(payload)}`);
+  }, [onPermissionDialogTimeoutChangeProp]);
+
   const handleCommitAiProviderChange = useCallback((provider: CommitAiProvider) => {
     const providerAvailable = commitAiConfig.availability[provider];
     const nextConfig: CommitAiConfig = {
@@ -494,6 +529,13 @@ export function useSettingsBasicActions({
     sendToJava(`set_commit_prompt:${JSON.stringify(payload)}`);
   }, [commitPrompt]);
 
+  // Project-level commit AI prompt save handler
+  const handleSaveProjectCommitPrompt = useCallback(() => {
+    setSavingProjectCommitPrompt(true);
+    const payload = { prompt: projectCommitPrompt };
+    sendToJava(`set_project_commit_prompt:${JSON.stringify(payload)}`);
+  }, [projectCommitPrompt]);
+
   return {
     nodePath,
     setNodePath,
@@ -555,6 +597,11 @@ export function useSettingsBasicActions({
     handleTestSound,
     handleBrowseSound,
     handleSaveCommitPrompt,
+    projectCommitPrompt,
+    setProjectCommitPrompt,
+    savingProjectCommitPrompt,
+    setSavingProjectCommitPrompt,
+    handleSaveProjectCommitPrompt,
     commitGenerationEnabled,
     setCommitGenerationEnabled,
     handleCommitGenerationEnabledChange,
@@ -567,6 +614,8 @@ export function useSettingsBasicActions({
     taskCompletionNotificationEnabled,
     setTaskCompletionNotificationEnabled,
     handleTaskCompletionNotificationEnabledChange,
+    permissionDialogTimeoutSeconds,
+    handlePermissionDialogTimeoutChange,
     commitAiConfig,
     setCommitAiConfig,
     handleCommitAiProviderChange,

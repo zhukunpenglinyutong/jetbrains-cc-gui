@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -27,10 +28,36 @@ class CodexUsageAggregator {
 
     private static final Logger LOG = Logger.getInstance(CodexUsageAggregator.class);
 
+    private static final String ALL_PROJECTS = "all";
+    private static final String JSONL_SUFFIX = ".jsonl";
     private static final String DEFAULT_MODEL = "gpt-5.1";
-    private static final double INPUT_COST_PER_1M = 3.0;
-    private static final double OUTPUT_COST_PER_1M = 15.0;
-    private static final double CACHE_READ_COST_PER_1M = 0.30;
+    private static final double ONE_MILLION = 1_000_000.0;
+    private static final Pattern SNAPSHOT_SUFFIX = Pattern.compile("-\\d{4}-\\d{2}-\\d{2}$");
+
+    private static final Pricing DEFAULT_PRICING = new Pricing(1.25, 10.0, 0.125);
+    private static final Map<String, Pricing> MODEL_PRICING = Map.ofEntries(
+            Map.entry("gpt-5", DEFAULT_PRICING),
+            Map.entry("gpt-5.1", DEFAULT_PRICING),
+            Map.entry("gpt-5-codex", DEFAULT_PRICING),
+            Map.entry("gpt-5.1-codex", DEFAULT_PRICING),
+            Map.entry("gpt-5.2-codex", new Pricing(1.75, 14.0, 0.175)),
+            Map.entry("gpt-5.4", new Pricing(2.5, 15.0, 0.25)),
+            Map.entry("gpt-5.4-mini", new Pricing(0.75, 4.5, 0.075))
+    );
+    private static final Map<String, String> MODEL_ALIASES = Map.of(
+            "gpt-5-codex", "gpt-5",
+            "gpt-5.3-codex", "gpt-5.2-codex"
+    );
+    private static final List<String> MODEL_PREFIXES = List.of(
+            "gpt-5.4-mini",
+            "gpt-5.4",
+            "gpt-5.3-codex",
+            "gpt-5.2-codex",
+            "gpt-5.1-codex",
+            "gpt-5-codex",
+            "gpt-5.1",
+            "gpt-5"
+    );
 
     private static final DateTimeFormatter DATE_FORMATTER =
             DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneId.systemDefault());
@@ -52,13 +79,13 @@ class CodexUsageAggregator {
             List<CodexHistoryReader.SessionSummary> allSessions = readAllSessionSummaries();
             LOG.info("[CodexHistoryReader] Total sessions before filtering: " + allSessions.size());
 
-            if (!"all".equals(projectPath)) {
+            if (!ALL_PROJECTS.equals(projectPath)) {
                 LOG.info("[CodexHistoryReader] Project-based filtering requested for: " + projectPath);
                 LOG.info("[CodexHistoryReader] Codex sessions don't track project paths, showing all sessions instead");
             }
 
             List<CodexHistoryReader.SessionSummary> filteredSessions = cutoffTime > 0
-                    ? allSessions.stream().filter(s -> s.timestamp >= cutoffTime).collect(Collectors.toList())
+                    ? allSessions.stream().filter(session -> session.timestamp >= cutoffTime).collect(Collectors.toList())
                     : allSessions;
 
             stats.totalSessions = filteredSessions.size();
@@ -73,8 +100,9 @@ class CodexUsageAggregator {
 
     private CodexHistoryReader.ProjectStatistics initEmptyStatistics(String projectPath) {
         CodexHistoryReader.ProjectStatistics stats = new CodexHistoryReader.ProjectStatistics();
+        boolean allProjects = ALL_PROJECTS.equals(projectPath);
         stats.projectPath = projectPath;
-        stats.projectName = "all".equals(projectPath) ? "All Projects" : Paths.get(projectPath).getFileName().toString();
+        stats.projectName = allProjects ? "All Projects" : Paths.get(projectPath).getFileName().toString();
         stats.totalUsage = new CodexHistoryReader.UsageData();
         stats.sessions = new ArrayList<>();
         stats.dailyUsage = new ArrayList<>();
@@ -97,7 +125,7 @@ class CodexUsageAggregator {
         try (Stream<Path> paths = Files.walk(sessionsDir)) {
             List<Path> jsonlFiles = paths
                     .filter(Files::isRegularFile)
-                    .filter(path -> path.toString().endsWith(".jsonl"))
+                    .filter(path -> path.toString().endsWith(JSONL_SUFFIX))
                     .filter(CodexHistoryParser::isNonEmptyFile)
                     .collect(Collectors.toList());
 
@@ -124,13 +152,14 @@ class CodexUsageAggregator {
         CodexHistoryReader.SessionSummary summary = new CodexHistoryReader.SessionSummary();
 
         String fileName = sessionFile.getFileName().toString();
-        summary.sessionId = fileName.substring(0, fileName.lastIndexOf(".jsonl"));
+        summary.sessionId = fileName.substring(0, fileName.length() - JSONL_SUFFIX.length());
         summary.usage = new CodexHistoryReader.UsageData();
         summary.model = DEFAULT_MODEL;
 
         long firstTimestamp = 0;
         String sessionTitle = null;
         String actualModel = null;
+        JsonObject latestTokenUsage = null;
 
         try (BufferedReader reader = Files.newBufferedReader(sessionFile, StandardCharsets.UTF_8)) {
             String line;
@@ -157,7 +186,10 @@ class CodexUsageAggregator {
                         sessionTitle = extractTitle(msg);
                     }
 
-                    extractTokenUsage(msg, summary.usage);
+                    JsonObject tokenUsage = extractTokenUsage(msg, summary.usage);
+                    if (tokenUsage != null) {
+                        latestTokenUsage = tokenUsage;
+                    }
                 } catch (Exception e) {
                     LOG.debug("[CodexHistoryReader] Failed to parse line: " + e.getMessage());
                 }
@@ -166,16 +198,13 @@ class CodexUsageAggregator {
 
         summary.timestamp = firstTimestamp > 0 ? firstTimestamp : System.currentTimeMillis();
         summary.summary = sessionTitle;
-        summary.usage.totalTokens = summary.usage.inputTokens
-                + summary.usage.outputTokens
-                + summary.usage.cacheWriteTokens
-                + summary.usage.cacheReadTokens;
+        summary.usage.totalTokens = extractTotalTokens(summary.usage, latestTokenUsage);
 
         if (actualModel != null && !actualModel.isEmpty()) {
             summary.model = actualModel;
         }
 
-        summary.cost = calculateCost(summary.usage);
+        summary.cost = calculateCost(summary.usage, summary.model);
 
         if (sessionTitle == null && summary.usage.totalTokens == 0) {
             LOG.debug("[CodexHistoryReader] Skipping session with no valid data: " + summary.sessionId);
@@ -205,33 +234,65 @@ class CodexUsageAggregator {
         return parser.extractUserMessageTitle(msg.payload);
     }
 
-    private void extractTokenUsage(CodexHistoryReader.CodexMessage msg, CodexHistoryReader.UsageData usage) {
+    private JsonObject extractTokenUsage(CodexHistoryReader.CodexMessage msg, CodexHistoryReader.UsageData usage) {
         if (!"event_msg".equals(msg.type)) {
-            return;
+            return null;
         }
         JsonObject payload = msg.payload;
         if (!payload.has("type") || !"token_count".equals(payload.get("type").getAsString())) {
-            return;
+            return null;
         }
         if (!payload.has("info") || payload.get("info").isJsonNull() || !payload.get("info").isJsonObject()) {
-            return;
+            return null;
         }
         JsonObject info = payload.getAsJsonObject("info");
         if (!info.has("total_token_usage") || !info.get("total_token_usage").isJsonObject()) {
-            return;
+            return null;
         }
         JsonObject totalUsage = info.getAsJsonObject("total_token_usage");
         usage.inputTokens = totalUsage.has("input_tokens") ? totalUsage.get("input_tokens").getAsLong() : 0;
         usage.outputTokens = totalUsage.has("output_tokens") ? totalUsage.get("output_tokens").getAsLong() : 0;
-        usage.cacheReadTokens = totalUsage.has("cached_input_tokens") ? totalUsage.get("cached_input_tokens").getAsLong() : 0;
+        usage.cacheReadTokens = totalUsage.has("cached_input_tokens")
+                ? totalUsage.get("cached_input_tokens").getAsLong()
+                : totalUsage.has("cache_read_input_tokens") ? totalUsage.get("cache_read_input_tokens").getAsLong() : 0;
         usage.cacheWriteTokens = 0;
+        return totalUsage;
     }
 
-    private double calculateCost(CodexHistoryReader.UsageData usage) {
-        double inputCost = (usage.inputTokens / 1_000_000.0) * INPUT_COST_PER_1M;
-        double outputCost = (usage.outputTokens / 1_000_000.0) * OUTPUT_COST_PER_1M;
-        double cacheReadCost = (usage.cacheReadTokens / 1_000_000.0) * CACHE_READ_COST_PER_1M;
+    private long extractTotalTokens(CodexHistoryReader.UsageData usage, JsonObject totalUsage) {
+        if (totalUsage != null && totalUsage.has("total_tokens")) {
+            return totalUsage.get("total_tokens").getAsLong();
+        }
+        // Codex includes cached input inside input_tokens, so total usage is input + output.
+        return usage.inputTokens + usage.outputTokens;
+    }
+
+    private double calculateCost(CodexHistoryReader.UsageData usage, String model) {
+        Pricing pricing = resolvePricing(model);
+        long cachedInputTokens = Math.min(usage.cacheReadTokens, usage.inputTokens);
+        long nonCachedInputTokens = Math.max(usage.inputTokens - cachedInputTokens, 0);
+
+        double inputCost = (nonCachedInputTokens / ONE_MILLION) * pricing.inputCostPer1M;
+        double outputCost = (usage.outputTokens / ONE_MILLION) * pricing.outputCostPer1M;
+        double cacheReadCost = (cachedInputTokens / ONE_MILLION) * pricing.cacheReadCostPer1M;
         return inputCost + outputCost + cacheReadCost;
+    }
+
+    private Pricing resolvePricing(String model) {
+        return MODEL_PRICING.getOrDefault(normalizeModel(model), DEFAULT_PRICING);
+    }
+
+    private String normalizeModel(String model) {
+        if (model == null || model.isBlank()) {
+            return DEFAULT_MODEL;
+        }
+
+        String normalized = MODEL_ALIASES.getOrDefault(SNAPSHOT_SUFFIX.matcher(model).replaceFirst(""), model);
+        return MODEL_PREFIXES.stream()
+                .filter(normalized::startsWith)
+                .findFirst()
+                .map(prefix -> MODEL_ALIASES.getOrDefault(prefix, prefix))
+                .orElse(normalized);
     }
 
     private void processSessions(
@@ -250,11 +311,7 @@ class CodexUsageAggregator {
             CodexHistoryReader.ProjectStatistics stats
     ) {
         for (CodexHistoryReader.SessionSummary session : sessions) {
-            stats.totalUsage.inputTokens += session.usage.inputTokens;
-            stats.totalUsage.outputTokens += session.usage.outputTokens;
-            stats.totalUsage.cacheWriteTokens += session.usage.cacheWriteTokens;
-            stats.totalUsage.cacheReadTokens += session.usage.cacheReadTokens;
-            stats.totalUsage.totalTokens += session.usage.totalTokens;
+            mergeUsage(stats.totalUsage, session.usage);
             stats.estimatedCost += session.cost;
         }
     }
@@ -275,11 +332,7 @@ class CodexUsageAggregator {
 
             daily.sessions++;
             daily.cost += session.cost;
-            daily.usage.inputTokens += session.usage.inputTokens;
-            daily.usage.outputTokens += session.usage.outputTokens;
-            daily.usage.cacheWriteTokens += session.usage.cacheWriteTokens;
-            daily.usage.cacheReadTokens += session.usage.cacheReadTokens;
-            daily.usage.totalTokens += session.usage.totalTokens;
+            mergeUsage(daily.usage, session.usage);
 
             if (!daily.modelsUsed.contains(session.model)) {
                 daily.modelsUsed.add(session.model);
@@ -350,5 +403,16 @@ class CodexUsageAggregator {
                     ((weekly.currentWeek.tokens - weekly.lastWeek.tokens)
                             / (double) weekly.lastWeek.tokens) * 100.0;
         }
+    }
+
+    private void mergeUsage(CodexHistoryReader.UsageData target, CodexHistoryReader.UsageData source) {
+        target.inputTokens += source.inputTokens;
+        target.outputTokens += source.outputTokens;
+        target.cacheWriteTokens += source.cacheWriteTokens;
+        target.cacheReadTokens += source.cacheReadTokens;
+        target.totalTokens += source.totalTokens;
+    }
+
+    private record Pricing(double inputCostPer1M, double outputCostPer1M, double cacheReadCostPer1M) {
     }
 }

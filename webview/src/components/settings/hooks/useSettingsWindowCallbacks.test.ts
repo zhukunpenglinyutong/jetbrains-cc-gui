@@ -22,6 +22,8 @@ describe('useSettingsWindowCallbacks', () => {
     setSavingCommitPrompt: vi.fn(),
     setCommitAiConfig: vi.fn(),
     setPromptEnhancerConfig: vi.fn(),
+    setProjectCommitPrompt: vi.fn(),
+    setSavingProjectCommitPrompt: vi.fn(),
     setEditorFontConfig: vi.fn(),
     setUiFontConfig: vi.fn(),
     setIdeTheme: vi.fn(),

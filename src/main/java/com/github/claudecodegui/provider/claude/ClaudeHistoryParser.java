@@ -63,11 +63,18 @@ class ClaudeHistoryParser {
 
             String summary = generateSummary(messages);
 
+            long firstTimestamp = 0;
             long lastTimestamp = 0;
             for (ClaudeHistoryReader.ConversationMessage msg : messages) {
                 if (msg.timestamp != null) {
                     try {
                         long ts = parseTimestamp(msg.timestamp);
+                        if (ts <= 0) {
+                            continue;
+                        }
+                        if (firstTimestamp == 0 || ts < firstTimestamp) {
+                            firstTimestamp = ts;
+                        }
                         if (ts > lastTimestamp) {
                             lastTimestamp = ts;
                         }
@@ -86,7 +93,7 @@ class ClaudeHistoryParser {
             session.title = summary;
             session.messageCount = messages.size();
             session.lastTimestamp = lastTimestamp;
-            session.firstTimestamp = lastTimestamp;
+            session.firstTimestamp = firstTimestamp;
 
             return session;
         } catch (Exception e) {

@@ -30,7 +30,7 @@ checkstyle {
 }
 
 group = 'com.github.idea-claude-code-gui'
-version = '0.4.2'
+version = '0.4.3'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -103,6 +103,39 @@ dependencies {
         }
 
         instrumentationTools()
+
+        // IDEs to verify the plugin against (used by `verifyPlugin` task).
+        // Mirrors what JetBrains Marketplace runs so we can catch binary
+        // incompatibility (e.g. new abstract methods in JCEF) before upload.
+        pluginVerifier()
+    }
+}
+
+intellijPlatform {
+    pluginVerification {
+        // Local verifier is stricter than the marketplace about descriptor
+        // name characters (rejects the Chinese parens in "CC GUI（Claude or
+        // Codex）"). The marketplace accepts that name, so we limit local
+        // failures to actual binary/internal API compatibility issues.
+        failureLevel = [
+            org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,
+            org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel.INTERNAL_API_USAGES
+        ]
+
+        // PythonCore is pinned to 243.x for compileOnly use across the
+        // sinceBuild=233 .. untilBuild=263.* range. Verifier on 262.x EAP
+        // cannot resolve com.jetbrains.python classes from a 243.x PythonCore,
+        // so we mark the package as external — references from the optional
+        // python-features.xml content module are guarded by the optional
+        // dependency on com.intellij.modules.python at runtime.
+        externalPrefixes = ['com.jetbrains.python']
+
+        ides {
+            // 2026.2 EAP build 262.6228.19 – the exact build that surfaced
+            // the CefResourceHandler / PluginManagerCore issues during
+            // marketplace verification.
+            ide('IU', '262.6228.19')
+        }
     }
 }
 
@@ -273,6 +306,7 @@ def aiBridgeHashFile = new File(aiBridgePackDir, 'ai-bridge.hash')
 def webviewDir = file('webview')
 def requestedTasks = gradle.startParameter.taskNames.collect { it.toLowerCase() }
 def enableVConsoleInWebview = requestedTasks.any { it.contains('runide') }
+def skipWebviewBuild = (project.findProperty('skipWebview') ?: 'false').toString().toBoolean()
 
 // Get custom Node.js path from local properties
 def localNodePath = getLocalProperty('node.path')
@@ -332,7 +366,10 @@ tasks.register('buildWebview', Exec) {
         commandLine npmCommand, 'run', 'build'
     }
 
-    onlyIf { webviewDir.exists() }
+    onlyIf { webviewDir.exists() && !skipWebviewBuild }
+    if (skipWebviewBuild) {
+        println "Skipping webview build because -PskipWebview=true"
+    }
     doFirst { println "Building webview..." }
     doLast { println "Webview build completed." }
 }
@@ -354,12 +391,19 @@ tasks.register('packageAiBridge', Exec) {
     // Switch to ai-bridge directory for packaging, avoiding inclusion of top-level directory
     workingDir aiBridgeDir
 
-    // Ensure output directory exists
+    // Ensure output directory exists and dependencies are installed
     doFirst {
         aiBridgePackDir.mkdirs()
         // Delete old zip file
         if (aiBridgeArchive.exists()) {
             aiBridgeArchive.delete()
+        }
+        // Install npm dependencies if node_modules doesn't exist
+        if (!new File(aiBridgeDir, 'node_modules').exists()) {
+            println 'Installing ai-bridge npm dependencies...'
+            String npmCmd = System.getProperty('os.name').toLowerCase().contains('windows') ? 'npm.cmd' : 'npm'
+            exec { commandLine npmCmd, 'install', '--silent', '--loglevel=error'; workingDir = aiBridgeDir }
+            println 'ai-bridge npm dependencies installed.'
         }
     }
 

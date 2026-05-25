@@ -7,7 +7,9 @@ import {
   ensureStreamingAssistantInList,
   getStreamEndHandlingMode,
   getRawUuid,
+  getMessageTimestampMs,
   preserveLastAssistantIdentity,
+  preserveLatestMessagesOnShrink,
   preserveMessageIdentity,
   preserveStreamingAssistantContent,
   stripDuplicateTrailingToolMessages,
@@ -64,6 +66,83 @@ describe('getStreamEndHandlingMode', () => {
 
   it('skips finalize for non-Codex providers when no stream is active', () => {
     expect(getStreamEndHandlingMode('claude', false, 0)).toBe('skip');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getMessageTimestampMs
+// ---------------------------------------------------------------------------
+
+describe('getMessageTimestampMs', () => {
+  it('extracts timestamp from ISO string in raw.timestamp', () => {
+    const isoTimestamp = '2024-01-01T10:00:00.000Z';
+    const expectedMs = new Date(isoTimestamp).getTime();
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: 'test',
+      raw: { timestamp: isoTimestamp },
+    };
+    expect(getMessageTimestampMs(msg)).toBe(expectedMs);
+  });
+
+  it('extracts timestamp from number in raw.timestamp', () => {
+    const msTimestamp = Date.now();
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: 'test',
+      raw: { timestamp: msTimestamp },
+    };
+    expect(getMessageTimestampMs(msg)).toBe(msTimestamp);
+  });
+
+  it('extracts timestamp from ISO string in message.timestamp', () => {
+    const isoTimestamp = '2024-01-01T10:00:00.000Z';
+    const expectedMs = new Date(isoTimestamp).getTime();
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: 'test',
+      timestamp: isoTimestamp,
+    };
+    expect(getMessageTimestampMs(msg)).toBe(expectedMs);
+  });
+
+  it('extracts timestamp from number in message.timestamp', () => {
+    const msTimestamp = Date.now();
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: 'test',
+      timestamp: msTimestamp as unknown as string, // TypeScript type hack
+    };
+    expect(getMessageTimestampMs(msg)).toBe(msTimestamp);
+  });
+
+  it('prefers raw.timestamp over message.timestamp', () => {
+    const rawTimestamp = Date.now();
+    const msgTimestamp = rawTimestamp - 10000;
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: 'test',
+      timestamp: msgTimestamp as unknown as string,
+      raw: { timestamp: rawTimestamp },
+    };
+    expect(getMessageTimestampMs(msg)).toBe(rawTimestamp);
+  });
+
+  it('returns undefined when no valid timestamp found', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: 'test',
+    };
+    expect(getMessageTimestampMs(msg)).toBeUndefined();
+  });
+
+  it('returns undefined for invalid ISO string', () => {
+    const msg: ClaudeMessage = {
+      type: 'user',
+      content: 'test',
+      timestamp: 'invalid-date',
+    };
+    expect(getMessageTimestampMs(msg)).toBeUndefined();
   });
 });
 
@@ -286,6 +365,233 @@ describe('appendOptimisticMessageIfMissing', () => {
     const hasAttachment = raw.message.content.some((b: any) => b.type === 'attachment');
     expect(hasAttachment).toBe(true);
   });
+
+  it('does not append optimistic message when it is newer than everything in nextList (stale update)', () => {
+    // Simulates race condition: a stale backend update (from compaction)
+    // arrives after the user has already sent a new optimistic message.
+    // The stale update's newest timestamp is before the optimistic message.
+    const optimisticTime = Date.now();
+    const staleTime = optimisticTime - 10000; // 10 seconds older
+
+    const optimistic = makeUserMsg('fresh message', {
+      isOptimistic: true,
+      timestamp: new Date(optimisticTime).toISOString(),
+    });
+    const staleAssistant = makeAssistantMsg('old response', {
+      timestamp: new Date(staleTime).toISOString(),
+    });
+
+    const prev = [staleAssistant, optimistic];
+    const next: ClaudeMessage[] = [staleAssistant];
+
+    const result = appendOptimisticMessageIfMissing(prev, next);
+    // Stale update should NOT append the optimistic message
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe(staleAssistant);
+  });
+
+  it('matches backend user message when Java sends numeric timestamp (millis)', () => {
+    // Java's MessageJsonConverter sends timestamp as number (milliseconds),
+    // while frontend optimistic message uses ISO string format.
+    // Verify fallback matches correctly even with format difference.
+    const nowMs = Date.now();
+    const javaTimestamp = nowMs + 500; // Java creates message slightly later
+
+    const optimistic = makeUserMsg('hello', {
+      isOptimistic: true,
+      timestamp: new Date(nowMs).toISOString(),
+    });
+    // Simulate Java message with numeric timestamp (as number, not string)
+    const backendMsg: ClaudeMessage = {
+      type: 'user',
+      content: 'hello',
+      timestamp: javaTimestamp as unknown as string, // TypeScript type hack to simulate Java format
+    };
+
+    const prev = [optimistic];
+    const next = [backendMsg];
+
+    const result = appendOptimisticMessageIfMissing(prev, next);
+    expect(result).toHaveLength(1);
+    // Should match and use backend message (even with numeric timestamp)
+    expect(result[0]).toBe(backendMsg);
+  });
+
+  it('matches backend user message when Java timestamp is slightly older than optimistic', () => {
+    // In some async scenarios, Java's timestamp may be older than frontend's
+    // due to clock skew or processing delays. Verify fallback allows match
+    // within time window.
+    const nowMs = Date.now();
+    const javaTimestamp = nowMs - 3000; // Java message 3 seconds older (within window)
+
+    const optimistic = makeUserMsg('hello', {
+      isOptimistic: true,
+      timestamp: new Date(nowMs).toISOString(),
+    });
+    const backendMsg: ClaudeMessage = {
+      type: 'user',
+      content: 'hello',
+      timestamp: javaTimestamp as unknown as string,
+    };
+
+    const prev = [optimistic];
+    const next = [backendMsg];
+
+    const result = appendOptimisticMessageIfMissing(prev, next);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe(backendMsg);
+  });
+
+  it('matches when backend has raw.timestamp (ISO) and optimistic has message.timestamp (ISO)', () => {
+    // Simulates compact scenario: SDK messages have raw.timestamp as ISO string
+    const nowMs = Date.now();
+    const sdkTimestamp = new Date(nowMs).toISOString();
+
+    const optimistic = makeUserMsg('compact test', {
+      isOptimistic: true,
+      timestamp: new Date(nowMs + 100).toISOString(),
+    });
+    // Backend message from SDK has raw.timestamp (ISO string)
+    const backendMsg: ClaudeMessage = {
+      type: 'user',
+      content: 'compact test',
+      timestamp: '', // message.timestamp may be empty or stale from Java
+      raw: { timestamp: sdkTimestamp },
+    };
+
+    const prev = [optimistic];
+    const next = [backendMsg];
+
+    const result = appendOptimisticMessageIfMissing(prev, next);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe(backendMsg);
+  });
+
+  it('matches when both have raw.timestamp in different formats', () => {
+    // Backend: raw.timestamp is number (milliseconds)
+    // Optimistic: raw.timestamp is ISO string
+    const nowMs = Date.now();
+
+    const optimistic: ClaudeMessage = {
+      type: 'user',
+      content: 'mixed format',
+      isOptimistic: true,
+      timestamp: new Date(nowMs).toISOString(),
+      raw: { timestamp: new Date(nowMs).toISOString() },
+    };
+    const backendMsg: ClaudeMessage = {
+      type: 'user',
+      content: 'mixed format',
+      timestamp: nowMs - 500 as unknown as string,
+      raw: { timestamp: nowMs }, // number format
+    };
+
+    const prev = [optimistic];
+    const next = [backendMsg];
+
+    const result = appendOptimisticMessageIfMissing(prev, next);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe(backendMsg);
+  });
+
+  it('does not append optimistic when it is newer than all messages in nextList (stale update)', () => {
+    // When optimistic message timestamp is newer than the newest message in nextList,
+    // this indicates a stale update - the backend hasn't yet received the user message.
+    // Should NOT append to avoid showing duplicates.
+    const nowMs = Date.now();
+    const oldBackendTimestamp = nowMs - 10000; // 10 seconds older
+
+    const optimistic = makeUserMsg('new message', {
+      isOptimistic: true,
+      timestamp: new Date(nowMs).toISOString(),
+    });
+    const backendMsg: ClaudeMessage = {
+      type: 'user',
+      content: 'new message',
+      timestamp: '',
+      raw: { timestamp: new Date(oldBackendTimestamp).toISOString() },
+    };
+    // newerMsg is older than optimistic but newer than backendMsg
+    const newerMsg: ClaudeMessage = {
+      type: 'assistant',
+      content: 'response',
+      timestamp: new Date(nowMs - 1000).toISOString(),
+    };
+    const prev = [newerMsg, optimistic];
+    const next = [newerMsg, backendMsg];
+
+    const result = appendOptimisticMessageIfMissing(prev, next);
+    // Should NOT append because optimistic is newer than maxNextTime (stale update guard)
+    expect(result).toHaveLength(2);
+    expect(result[0]).toBe(newerMsg);
+    expect(result[1]).toBe(backendMsg);
+  });
+
+  it('matches backend user message even when other messages have older timestamps (compact scenario)', () => {
+    // Compact scenario: backend sends compact summary (old timestamp) + new user message.
+    // The new user message's timestamp should match the optimistic, even if compact summary
+    // has an older timestamp that would trigger stale update guard.
+    const nowMs = Date.now();
+    const sdkTimestamp = new Date(nowMs).toISOString(); // SDK sends ISO format
+    const compactSummaryTimestamp = nowMs - 30000; // Compact summary is 30 seconds older
+
+    const optimistic = makeUserMsg('after compact', {
+      isOptimistic: true,
+      timestamp: new Date(nowMs).toISOString(),
+    });
+    // Compact summary message (older timestamp)
+    const compactSummary: ClaudeMessage = {
+      type: 'assistant',
+      content: 'compact summary text',
+      timestamp: new Date(compactSummaryTimestamp).toISOString(),
+    };
+    // New user message from SDK (timestamp matches optimistic within window)
+    const backendUserMsg: ClaudeMessage = {
+      type: 'user',
+      content: 'after compact',
+      timestamp: '', // message.timestamp may be empty from Java
+      raw: { timestamp: sdkTimestamp }, // SDK provides ISO timestamp in raw
+    };
+
+    const prev = [optimistic];
+    const next = [compactSummary, backendUserMsg];
+
+    const result = appendOptimisticMessageIfMissing(prev, next);
+    // Should match backendUserMsg (not trigger stale update guard based on compactSummary)
+    expect(result).toHaveLength(2);
+    expect(result[0]).toBe(compactSummary);
+    expect(result[1]).toBe(backendUserMsg);
+  });
+
+  it('matches backend user message when its timestamp is slightly older than optimistic', () => {
+    // Real-world timing: SDK receives message slightly after frontend creates optimistic.
+    // SDK timestamp (T2) < frontend optimistic timestamp (T1) by a few milliseconds.
+    // Should still match because time difference is within window.
+    const nowMs = Date.now();
+    const sdkTimestamp = new Date(nowMs - 500).toISOString(); // SDK timestamp 500ms older
+
+    const optimistic = makeUserMsg('timing test', {
+      isOptimistic: true,
+      timestamp: new Date(nowMs).toISOString(),
+    });
+    const backendUserMsg: ClaudeMessage = {
+      type: 'user',
+      content: 'timing test',
+      timestamp: '',
+      raw: { timestamp: sdkTimestamp },
+    };
+    const assistantMsg = makeAssistantMsg('previous response', {
+      timestamp: new Date(nowMs - 1000).toISOString(),
+    });
+
+    const prev = [assistantMsg, optimistic];
+    const next = [assistantMsg, backendUserMsg];
+
+    const result = appendOptimisticMessageIfMissing(prev, next);
+    expect(result).toHaveLength(2);
+    expect(result[0]).toBe(assistantMsg);
+    expect(result[1]).toBe(backendUserMsg);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -488,6 +794,58 @@ describe('preserveStreamingAssistantContent', () => {
     );
     expect(result).toBe(next);
     expect(result[0].content).toBe('new streaming');
+  });
+});
+
+describe('preserveLatestMessagesOnShrink', () => {
+  it('preserves shrink tail when list shrinks for codex', () => {
+    const oldAssistant = makeAssistantMsg('old response');
+    const optimistic = makeUserMsg('new question', { isOptimistic: true });
+    const prev = [oldAssistant, optimistic];
+
+    const compactSummary = makeAssistantMsg('compact summary');
+    const backendUser = makeUserMsg('new question');
+    const next = [compactSummary, backendUser];
+
+    // prev.length = 2, next.length = 2, no shrink
+    const result = preserveLatestMessagesOnShrink(prev, next, 'codex');
+    expect(result).toBe(next);
+  });
+
+  it('does NOT add optimistic duplicate when shrink tail contains optimistic already matched', () => {
+    // Compact scenario: backend sends shorter list, optimistic was matched but shrink
+    // logic must filter it out to prevent duplicate display.
+    const oldAssistant1 = makeAssistantMsg('old response 1');
+    const oldAssistant2 = makeAssistantMsg('old response 2');
+    const optimistic = makeUserMsg('after compact', { isOptimistic: true });
+    const prev = [oldAssistant1, oldAssistant2, optimistic]; // length 3
+
+    const compactSummary = makeAssistantMsg('compact summary');
+    const backendUser = makeUserMsg('after compact'); // matches optimistic content
+    const next = [compactSummary, backendUser]; // length 2 < 3, triggers shrink
+
+    const result = preserveLatestMessagesOnShrink(prev, next, 'claude');
+    // Should NOT add optimistic because nextList already has matching backendUser
+    // Current bug: returns [compactSummary, backendUser, optimistic] - duplicate!
+    expect(result).toHaveLength(2);
+    expect(result[0]).toBe(compactSummary);
+    expect(result[1]).toBe(backendUser);
+  });
+
+  it('preserves non-optimistic user message in shrink tail when no match in nextList', () => {
+    // Shrink scenario where preserved user message is NOT optimistic (history message)
+    const oldAssistant = makeAssistantMsg('old response');
+    const historyUser = makeUserMsg('history question', { timestamp: '2024-01-01T00:00:00.000Z' });
+    const prev = [oldAssistant, historyUser]; // length 2
+
+    const compactSummary = makeAssistantMsg('compact summary');
+    const next = [compactSummary]; // length 1 < 2, triggers shrink
+
+    const result = preserveLatestMessagesOnShrink(prev, next, 'claude');
+    // Should preserve historyUser because nextList doesn't have matching message
+    expect(result).toHaveLength(2);
+    expect(result[0]).toBe(compactSummary);
+    expect(result[1]).toBe(historyUser);
   });
 });
 

@@ -89,7 +89,16 @@
     "attachmentsUploaded": "[첨부파일 업로드됨]",
     "streamingConnected": "{{provider}} 연결됨, 질문을 이해하는 중",
     "showEarlierMessages": "이전 메시지 {{count}}개 보기",
-    "totalDuration": "이번 응답 소요 시간"
+    "totalDuration": "이번 응답 소요 시간",
+    "compactSummary": {
+      "summarizedConversation": "요약된 대화",
+      "compactSummary": "대화 요약",
+      "messagesUpTo": "이 시점까지의 메시지 {{count}}개를 요약했습니다",
+      "messagesFrom": "이 시점 이후의 메시지 {{count}}개를 요약했습니다",
+      "userContext": "컨텍스트: \"{{context}}\"",
+      "expand": "요약 펼치기",
+      "collapse": "요약 접기"
+    }
   },
   "settings": {
     "title": "설정",
@@ -112,6 +121,7 @@
       },
       "language": {
         "label": "언어",
+        "followIde": "IDE 따르기",
         "simplifiedChinese": "简体中文",
         "traditionalChinese": "繁體中文",
         "english": "English",
@@ -201,6 +211,11 @@
         "enterDesc": "Enter를 눌러 메시지 전송, Shift+Enter로 줄바꿈",
         "cmdEnter": "⌘/Ctrl+Enter로 전송",
         "cmdEnterDesc": "⌘/Ctrl+Enter를 눌러 메시지 전송, Enter로 줄바꿈"
+      },
+      "permissionDialogTimeout": {
+        "label": "권한 및 질문 대화 상자 제한 시간",
+        "unit": "초",
+        "hint": "Claude 질문 대화 상자와 권한 요청 대화 상자의 제한 시간을 설정합니다(30~3600초). 제한 시간이 지나면 대화 상자가 자동으로 닫히고 Claude가 계속 진행합니다."
       },
       "chatBgColor": {
         "label": "채팅 배경",
@@ -605,7 +620,19 @@
         "cliLoginDisableMessage": "이전 config.toml을 복원하고 API 키 인증 방식으로 전환합니다.",
         "modelIdRequired": "모델 ID는 필수입니다",
         "modelIdInvalid": "잘못된 모델 ID 형식 (영문자, 숫자, 점, 하이픈, 밑줄, 슬래시, 콜론만 허용)",
-        "modelIdDuplicate": "모델 ID가 이미 존재합니다"
+        "modelIdDuplicate": "모델 ID가 이미 존재합니다",
+        "envVarsTitle": "Environment Variables",
+        "messageEnvLabel": "Message Environment Variables",
+        "messageEnvHint": "Custom environment variables injected into the Codex message subprocess",
+        "mcpEnvLabel": "MCP Environment Variables",
+        "mcpEnvHint": "Custom environment variables injected into the MCP tool discovery subprocess",
+        "envKeyPlaceholder": "ENV_KEY",
+        "envValuePlaceholder": "value",
+        "addEnvVar": "Add Variable",
+        "envKeyInvalid": "Invalid key name (must start with letter/underscore, alphanumeric only)",
+        "envKeyProtected": "Cannot set built-in variable: {{key}}",
+        "envKeyDuplicate": "Duplicate key: {{key}}",
+        "envValueTooLong": "값이 너무 깁니다 (최대 {{max}}자)"
       }
     },
     "agent": {
@@ -828,7 +855,8 @@
       "WebSearch": "웹 검색",
       "WebFetch": "웹 가져오기",
       "execute": "{{toolName}} 실행",
-      "readDirectory": "디렉토리 읽기"
+      "readDirectory": "디렉토리 읽기",
+      "timeoutWarning": "곧 답변해주세요, {{seconds}}초 후 대화상자가 닫힙니다"
     }
   },
   "askUserQuestion": {
@@ -1323,7 +1351,7 @@
       },
       "opus46_1m": {
         "label": "Opus 4.6",
-        "description": "긴 세션을 위한 Opus 4.6"
+        "description": "Opus 4.6 · 고성능 추론 모델"
       },
       "haiku45": {
         "label": "Haiku 4.5",
@@ -1552,5 +1580,33 @@
     "providerNotConfigured": "제공자가 설정되지 않았습니다",
     "providerNotConfiguredDesc": "아직 AI 제공자가 구성되지 않았거나 로컬 구성 사용 권한이 승인되지 않았습니다. 대화를 시작하기 전에 제공자 관리 설정에서 구성을 완료해주세요.",
     "goToProviderSettings": "설정으로 이동"
+  },
+  "errorDiagnostic": {
+    "copyCommand": "복사",
+    "copied": "복사됨",
+    "openDependencySettings": "종속성 관리 열기",
+    "recommended": "권장",
+    "codexThreadResume": {
+      "title": "세션 스레드가 더 이상 유효하지 않습니다",
+      "intro": "새 세션을 만들면 이 문제가 해결됩니다. 현재 세션의 스레드 ID가 Codex 서버에 더 이상 존재하지 않습니다.",
+      "reason": "Codex는 일정 시간이 지나면 오래된 스레드를 삭제하며, 이전 세션을 재개하려 할 때 이 오류가 발생할 수 있습니다."
+    },
+    "sdkNativeBinaryMissing": {
+      "title": "SDK 설치 불완전 — 네이티브 바이너리 누락",
+      "intro": "이것은 Taobao npm 미러의 알려진 문제입니다(플러그인 버그가 아님). 미러가 플랫폼별 파일을 완전히 동기화하지 않았습니다. 아래 방법 중 하나로 수동 해결할 수 있습니다:",
+      "reason": "Taobao 미러가 동기화를 완료하면 이 문제가 자동으로 사라집니다. 걱정하지 마세요.",
+      "solutions": {
+        "switchRegistry": {
+          "title": "방법 1: 임시로 공식 레지스트리로 전환 후 재설치",
+          "step0": "1. 터미널에서 실행 (npm 공식 레지스트리로 전환):",
+          "step1": "2. 플러그인 설정의 '종속성 관리'를 열고 재설치 클릭:",
+          "step2": "3. 재설치 완료 후 Taobao 미러로 복원:"
+        },
+        "downgrade": {
+          "title": "방법 2: 버전 롤백",
+          "step0": "'종속성 관리'에서 SDK 버전을 v0.2.112 또는 그 이전으로 전환하세요. 전환 후 IDEA를 재시작해야 합니다."
+        }
+      }
+    }
   }
 }

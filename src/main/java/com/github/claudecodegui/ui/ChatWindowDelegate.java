@@ -5,6 +5,7 @@ import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.handler.AgentHandler;
 import com.github.claudecodegui.handler.ClipboardHandler;
+import com.github.claudecodegui.handler.ContextHandler;
 import com.github.claudecodegui.handler.CodexMcpServerHandler;
 import com.github.claudecodegui.handler.DependencyHandler;
 import com.github.claudecodegui.handler.DiffHandler;
@@ -251,6 +252,7 @@ public class ChatWindowDelegate {
         messageDispatcher.registerHandler(new FileHandler(handlerContext));
         messageDispatcher.registerHandler(new SettingsHandler(handlerContext));
         messageDispatcher.registerHandler(new SessionHandler(handlerContext));
+        messageDispatcher.registerHandler(new ContextHandler(handlerContext));
         messageDispatcher.registerHandler(new FileExportHandler(handlerContext));
         messageDispatcher.registerHandler(new DiffHandler(handlerContext));
         messageDispatcher.registerHandler(new PromptEnhancerHandler(handlerContext));
@@ -295,8 +297,8 @@ public class ChatWindowDelegate {
         messageDispatcher.registerHandler(permissionHandler);
 
         HistoryHandler historyHandler = new HistoryHandler(handlerContext);
-        historyHandler.setSessionLoadCallback((sessionId, projectPath) ->
-            host.getSessionLifecycleManager().loadHistorySession(sessionId, projectPath));
+        historyHandler.setSessionLoadCallback((sessionId, projectPath, provider) ->
+            host.getSessionLifecycleManager().loadHistorySession(sessionId, projectPath, provider));
         host.setHistoryHandler(historyHandler);
         messageDispatcher.registerHandler(historyHandler);
 

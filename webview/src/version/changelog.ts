@@ -13,10 +13,93 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
+    version: '0.4.3',
+    date: '2026-05-22',
+    content: {
+      en: `✨ Features
+- Add \`/context\` slash command for context usage visualization: shows a colored token-grid dialog with per-category breakdown and expandable detail tables for MCP tools, agents, memory files, and skills (by @gadfly3173)
+- Add Codex custom environment variable configuration in Settings → Codex Provider, with protected key enforcement and 16 KB value cap (by @orwenxiang)
+- Add project-level commit AI prompt configuration in Settings → Commit, independent of the global commit prompt
+- Restore locally attached images in history replay for both Claude and Codex sessions (by @GlMelon)
+- Render \`/compact\` summary as a collapsible notification block matching CLI style, with expandable content and i18n support across 10 locales (by @gadfly3173)
+- Add file path tooltip on hover for file links in tool blocks and markdown content, with project-relative display and fallback to absolute path (by @ywz626)
+- Add configurable auto-cancel timeout for permission, plan-approval, and ask-user-question dialogs; default 30s, range 5–300s, configurable in Settings → Basic → Behavior (by @ywz626)
+- Add WSL Node.js path support for Windows hosts: verify and invoke WSL-installed Node binaries without requiring a Windows-native install (by @Gazoon007)
+- Add persistent user language preference with a "Follow IDE" option in Settings → Appearance; language selection now survives IDE restarts (by @gadfly3173)
+- Add gpt-5.4-mini context limit (400K tokens) and model-specific pricing to avoid cost overestimation
+- Add Codex expired-session-thread error pattern with bilingual i18n across 11 locales
+
+🐛 Fixes
+- Fix settings.json permission rules being bypassed by the PreToolUseHook; all non-plan paths now return \`continue\` so the SDK evaluates Deny/Allow/Ask rules natively (by @devlimits)
+- Fix settings.json permission rules not applying in plan mode; plan-mode-specific branches are preserved (by @devlimits)
+- Fix AI-generated session titles exceeding the 50-char user-rename limit causing silent failures; AI titles now update the history list locally without going through the rename endpoint (by @devlimits)
+- Fix streaming updates not rendering in deprioritized JCEF paint states; replace \`requestAnimationFrame\` with \`setTimeout(fn, 16)\` for the streaming batching path (by @devlimits)
+- Fix provider not being preserved when loading history sessions across different providers (by @GlMelon)
+- Fix user-initiated request aborts being treated as errors and showing error toasts (by @GlMelon)
+- Fix streaming content being overwritten by an earlier backend coalescer snapshot after stream-end (by @GlMelon)
+- Fix assistant messages containing command-name XML tags in code examples being incorrectly filtered or rendered as slash commands (by @gadfly3173)
+- Fix Haiku model env variable mapping from incorrect \`SMALL_FAST_MODEL\` to \`ANTHROPIC_DEFAULT_HAIKU_MODEL\` (by @gadfly3173)
+- Fix Claude and Codex usage aggregation alignment: fix cache token double-counting and add model alias resolution (by @yadue)
+- Fix UTF-8 BOM in config files causing parse failures; preserve ai-bridge cache during multi-instance startup (by @CoderDream)
+- Fix plan-mode UI: \`/plan\` sends as normal text in Codex mode; "(1M context)" suffix only shown for Claude (by @gadfly3173)
+- Fix italic font-style causing poor readability on small screens
+- Fix Claude history fallback scan path assigning last-message timestamp to firstTimestamp
+- Fix Windows Codex taskkill parse noise after process completion (by @lrk1314)
+- Fix XSS bypass in MarkdownBlock catch fallback; fix API key leakage in error messages; restrict shell invocation to known-shell allowlist (security)
+
+🔧 Improvements
+- Extract \`UserMessageSanitizer\` utility for stripping system context from history replay (by @GlMelon)
+- Remove dead permission helpers orphaned by the settings.json permission fix (by @devlimits)
+- Improve file link tooltip: extract hook, use DOM measurement for precise positioning, add LRU cache (max 200 entries) (by @ywz626)
+- Add GitHub issue templates with structured required fields and bilingual labels
+- Refactor \`ContextUsageDialog\`: extract generic \`DetailsTable\` sub-component
+- Add \`-PskipWebview=true\` Gradle property to skip webview build during backend-only iterations`,
+      zh: `✨ Features
+- 新增 \`/context\` 斜线命令，可视化上下文用量：弹出彩色 Token 网格对话框，按类别分类展示，并支持展开 MCP 工具、子代理、记忆文件和技能的详细表格（by @gadfly3173）
+- 新增 Codex 自定义环境变量配置，在「设置 → Codex Provider」中管理，支持受保护 Key 校验和 16 KB 值长度上限（by @orwenxiang）
+- 新增项目级提交 AI 提示词配置，可在「设置 → 提交」中独立于全局提示词进行配置
+- 历史回放时恢复本地附件图片，Claude 和 Codex 会话均支持（by @GlMelon）
+- 将 \`/compact\` 摘要渲染为可折叠通知块，风格与 CLI 保持一致，支持展开详细内容，覆盖 10 种语言（by @gadfly3173）
+- 在工具调用块和 Markdown 内容的文件链接上添加悬浮路径提示，显示项目相对路径，超出项目根目录时回退为绝对路径（by @ywz626）
+- 新增权限、计划审批和「询问用户」对话框的可配置自动取消超时，默认 30 秒，范围 5–300 秒，可在「设置 → 基础 → 行为」中调整（by @ywz626）
+- 新增 Windows 主机 WSL Node.js 路径支持，可使用 WSL 安装的 Node.js，无需安装 Windows 原生版本（by @Gazoon007）
+- 新增持久化用户语言偏好，在「设置 → 外观」中提供「跟随 IDE」选项，重启 IDE 后语言选择仍然生效（by @gadfly3173）
+- 新增 gpt-5.4-mini 上下文限制（400K tokens）和模型专属定价，避免成本高估
+- 新增 Codex 会话线程过期错误模式，支持 11 种语言的双语提示
+
+🐛 Fixes
+- 修复 PreToolUseHook 绕过 settings.json 权限规则的问题，所有非 Plan 模式路径现在返回 \`continue\`，由 SDK 原生评估权限规则（by @devlimits）
+- 修复 Plan 模式下 settings.json 权限规则不生效的问题（by @devlimits）
+- 修复 AI 自动生成的会话标题超过 50 字符导致重命名接口静默失败的问题（by @devlimits）
+- 修复 JCEF 降低优先级的绘制状态下流式更新无法渲染的问题，将流式批处理从 \`requestAnimationFrame\` 改为 \`setTimeout(fn, 16)\`（by @devlimits）
+- 修复跨 Provider 加载历史会话时 Provider 信息丢失的问题（by @GlMelon）
+- 修复用户主动中断请求被误判为错误并弹出错误 Toast 的问题（by @GlMelon）
+- 修复流式传输结束后后端快照覆盖流式内容的问题（by @GlMelon）
+- 修复助手消息中代码示例包含命令名 XML 标签时被错误过滤或渲染为斜线命令的问题（by @gadfly3173）
+- 修复 Haiku 模型环境变量映射错误，从 \`SMALL_FAST_MODEL\` 改为 \`ANTHROPIC_DEFAULT_HAIKU_MODEL\`（by @gadfly3173）
+- 修复 Claude 和 Codex 用量聚合不一致，修复缓存 Token 重复计算并新增模型别名解析（by @yadue）
+- 修复配置文件中 UTF-8 BOM 导致解析失败，多实例启动时保留 ai-bridge 缓存目录（by @CoderDream）
+- 修复 Plan 模式 UI：Codex 模式下 \`/plan\` 改为发送普通文本；「(1M context)」后缀仅在 Claude 下显示（by @gadfly3173）
+- 修复小屏幕上斜体字体影响可读性的问题
+- 修复 Claude 历史回退扫描路径时间戳分配错误
+- 修复 Windows 上 Codex 完成后 taskkill 解析噪声输出问题（by @lrk1314）
+- 修复 MarkdownBlock XSS 漏洞、API Key 在错误消息中泄漏及 shell 调用未限制白名单问题（安全）
+
+🔧 Improvements
+- 提取 \`UserMessageSanitizer\` 工具类，用于历史回放时从用户消息中剥离系统上下文（by @GlMelon）
+- 移除 settings.json 权限修复后遗留的废弃 helper（by @devlimits）
+- 改进文件链接提示：提取 Hook，使用 DOM 测量精确定位，新增 LRU 缓存（最多 200 条）（by @ywz626）
+- 新增 GitHub Issue 模板，包含结构化必填字段和中英双语标签
+- 重构 \`ContextUsageDialog\`，提取通用 \`DetailsTable\` 子组件
+- 新增 \`-PskipWebview=true\` Gradle 属性，在纯后端迭代时跳过 Webview 构建`,
+    },
+  },
+  {
     version: '0.4.2',
     date: '2026-05-08',
     content: {
       en: `✨ Features
+- Add Session Templates: save the current session as a reusable template and create new sessions from templates via the chat tool window menu
 - Add task completion toast notification, disabled by default and opt-in via Settings → Basic → Behavior; the toast shows the session title with the latest assistant answer preview (by @adminkk)
 - Add "Copy AI Reference" action to the editor right-click menu for sending selected code with file path and line range context (by @JackCmd233)
 - Add multi-project workspace context collection for IntelliJ workspace mode, giving AI providers awareness of subproject structure (by @gadfly3173)
@@ -61,6 +144,7 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
 - Enable Checkstyle NeedBraces rule and wrap 197 pre-existing single-line if/else bodies across 44 Java files in braces to guard against goto-fail-style edits
 - Tighten Checkstyle configuration: enforce newline at end of file, line length limits, reorganize rule sections, and remove unused imports`,
       zh: `✨ Features
+- 新增会话模板功能：可将当前会话保存为模板，并可在聊天工具窗口菜单中通过模板快速创建新会话
 - 新增任务完成 Toast 通知，默认关闭，可在「设置 → 基础 → 行为」中开启；Toast 展示会话标题与最新助手回答预览（by @adminkk）
 - 在编辑器右键菜单新增「Copy AI Reference」操作，可将选中代码连同文件路径和行号范围一并发送给 AI（by @JackCmd233）
 - 新增 IntelliJ 工作区（Workspace）模式下的多项目上下文收集，让 AI 感知子项目结构（by @gadfly3173）

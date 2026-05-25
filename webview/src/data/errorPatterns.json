@@ -1,0 +1,48 @@
+{
+  "patterns": [
+    {
+      "code": "codexThreadResume",
+      "match": {
+        "regex": "thread/resume"
+      },
+      "solutions": []
+    },
+    {
+      "code": "sdkNativeBinaryMissing",
+      "match": {
+        "regex": "Native CLI binary for [^ ]+ not found",
+        "keywordsAll": ["claude-agent-sdk"]
+      },
+      "solutions": [
+        {
+          "key": "switchRegistry",
+          "recommended": true,
+          "steps": [
+            {
+              "kind": "command",
+              "command": "npm config set registry https://registry.npmjs.org/"
+            },
+            {
+              "kind": "navigation",
+              "action": "openDependencySettings"
+            },
+            {
+              "kind": "command",
+              "command": "npm config set registry https://registry.npmmirror.com/"
+            }
+          ]
+        },
+        {
+          "key": "downgrade",
+          "recommended": false,
+          "steps": [
+            {
+              "kind": "navigation",
+              "action": "openDependencySettings"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

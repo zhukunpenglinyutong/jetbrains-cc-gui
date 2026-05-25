@@ -89,7 +89,16 @@
     "attachmentsUploaded": "[Anexos Enviados]",
     "streamingConnected": "{{provider}} conectado, entendendo sua pergunta",
     "showEarlierMessages": "Mostrar {{count}} mensagens anteriores",
-    "totalDuration": "Esta resposta levou"
+    "totalDuration": "Esta resposta levou",
+    "compactSummary": {
+      "summarizedConversation": "Conversa resumida",
+      "compactSummary": "Resumo compacto",
+      "messagesUpTo": "{{count}} mensagens resumidas até este ponto",
+      "messagesFrom": "{{count}} mensagens resumidas a partir deste ponto",
+      "userContext": "Contexto: \"{{context}}\"",
+      "expand": "Expandir resumo",
+      "collapse": "Recolher resumo"
+    }
   },
   "settings": {
     "title": "Configurações",
@@ -112,6 +121,7 @@
       },
       "language": {
         "label": "Idioma",
+        "followIde": "Seguir IDE",
         "simplifiedChinese": "简体中文",
         "traditionalChinese": "繁體中文",
         "english": "English",
@@ -213,6 +223,11 @@
         "enterDesc": "Pressione Enter para enviar mensagem, Shift+Enter para nova linha",
         "cmdEnter": "⌘/Ctrl+Enter para Enviar",
         "cmdEnterDesc": "Pressione ⌘/Ctrl+Enter para enviar mensagem, Enter para nova linha"
+      },
+      "permissionDialogTimeout": {
+        "label": "Tempo Limite de Diálogos de Permissão e Pergunta",
+        "unit": "segundos",
+        "hint": "Defina o tempo limite para os diálogos de perguntas do Claude e os diálogos de solicitação de permissão (30~3600 segundos). Após o tempo limite, o diálogo será fechado automaticamente e o Claude continuará."
       },
       "chatBgColor": {
         "label": "Plano de Fundo do Chat",
@@ -658,7 +673,19 @@
         "cliLoginDisableMessage": "O plugin parará de ler ~/.codex/config.toml e auth.json.",
         "modelIdRequired": "ID do modelo é obrigatório",
         "modelIdInvalid": "Formato de ID do modelo inválido (apenas letras, números, pontos, hífens, underscores, barras e dois pontos permitidos)",
-        "modelIdDuplicate": "ID do modelo já existe"
+        "modelIdDuplicate": "ID do modelo já existe",
+        "envVarsTitle": "Environment Variables",
+        "messageEnvLabel": "Message Environment Variables",
+        "messageEnvHint": "Custom environment variables injected into the Codex message subprocess",
+        "mcpEnvLabel": "MCP Environment Variables",
+        "mcpEnvHint": "Custom environment variables injected into the MCP tool discovery subprocess",
+        "envKeyPlaceholder": "ENV_KEY",
+        "envValuePlaceholder": "value",
+        "addEnvVar": "Add Variable",
+        "envKeyInvalid": "Invalid key name (must start with letter/underscore, alphanumeric only)",
+        "envKeyProtected": "Cannot set built-in variable: {{key}}",
+        "envKeyDuplicate": "Duplicate key: {{key}}",
+        "envValueTooLong": "Valor muito longo (máx. {{max}} caracteres)"
       }
     },
     "agent": {
@@ -881,7 +908,8 @@
       "WebSearch": "Pesquisa Web",
       "WebFetch": "Buscar Web",
       "execute": "Executar {{toolName}}",
-      "readDirectory": "Ler Diretório"
+      "readDirectory": "Ler Diretório",
+      "timeoutWarning": "Por favor, responda em breve, o diálogo fechará em {{seconds}} segundos"
     }
   },
   "askUserQuestion": {
@@ -1378,7 +1406,7 @@
       },
       "opus46_1m": {
         "label": "Opus 4.6",
-        "description": "Opus 4.6 para sessões longas"
+        "description": "Opus 4.6 · Modelo de raciocínio de alta performance"
       },
       "haiku45": {
         "label": "Haiku 4.5",
@@ -1607,5 +1635,33 @@
     "providerNotConfigured": "Provedor Não Configurado",
     "providerNotConfiguredDesc": "Nenhum provedor de IA está configurado ainda, ou o acesso à configuração local não foi autorizado. Por favor, complete a configuração em Gerenciamento de Provedores antes de iniciar uma conversa.",
     "goToProviderSettings": "Ir para Configurações"
+  },
+  "errorDiagnostic": {
+    "copyCommand": "Copiar",
+    "copied": "Copiado",
+    "openDependencySettings": "Abrir Gerenciamento de Dependências",
+    "recommended": "Recomendado",
+    "codexThreadResume": {
+      "title": "O thread da sessão não é mais válido",
+      "intro": "Criar uma nova sessão resolverá esse problema. O ID de thread da sessão atual não existe mais no servidor Codex.",
+      "reason": "O Codex limpa threads antigos após um período, o que pode acionar esse erro ao retomar uma sessão anterior."
+    },
+    "sdkNativeBinaryMissing": {
+      "title": "Instalação do SDK incompleta — binário nativo ausente",
+      "intro": "Este é um problema conhecido do mirror npm da Taobao (não é um bug do plugin). O mirror não sincronizou completamente os arquivos específicos da plataforma. Você pode resolver isso manualmente com qualquer uma das opções abaixo:",
+      "reason": "Este problema desaparecerá automaticamente quando o mirror da Taobao concluir a sincronização — nenhuma ação adicional é necessária.",
+      "solutions": {
+        "switchRegistry": {
+          "title": "Opção 1: alterne temporariamente para o registro oficial e reinstale",
+          "step0": "1. Execute em seu terminal (alternar para o registro npm oficial):",
+          "step1": "2. Abra as configurações de Gerenciamento de Dependências do plugin e clique em Reinstalar:",
+          "step2": "3. Após a conclusão da reinstalação, retorne ao mirror da Taobao:"
+        },
+        "downgrade": {
+          "title": "Opção 2: reverter para uma versão anterior",
+          "step0": "Em Gerenciamento de Dependências, altere a versão do SDK para v0.2.112 ou anterior. Reinicie o IDEA após a alteração."
+        }
+      }
+    }
   }
 }

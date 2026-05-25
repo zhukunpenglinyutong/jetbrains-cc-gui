@@ -1,6 +1,7 @@
 package com.github.claudecodegui.provider.claude;
 
 import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.provider.common.DaemonBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.google.gson.Gson;
@@ -9,6 +10,7 @@ import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -107,11 +109,12 @@ public class ClaudeSDKBridgeRefactorTest {
         StringBuilder assistantContent = new StringBuilder();
         AtomicBoolean hadSendError = new AtomicBoolean(false);
         AtomicReference<String> lastNodeError = new AtomicReference<>(null);
+        AtomicBoolean wasAborted = new AtomicBoolean(false);
 
-        adapter.processOutputLine("[MESSAGE] {\"type\":\"assistant\",\"content\":\"ignored\"}", callback, result, assistantContent, hadSendError, lastNodeError);
-        adapter.processOutputLine("[CONTENT_DELTA] \"Hello\\nWorld\"", callback, result, assistantContent, hadSendError, lastNodeError);
-        adapter.processOutputLine("[THINKING_DELTA] \"reasoning\"", callback, result, assistantContent, hadSendError, lastNodeError);
-        adapter.processOutputLine("[SESSION_ID] session-123", callback, result, assistantContent, hadSendError, lastNodeError);
+        adapter.processOutputLine("[MESSAGE] {\"type\":\"assistant\",\"content\":\"ignored\"}", callback, result, assistantContent, hadSendError, lastNodeError, wasAborted);
+        adapter.processOutputLine("[CONTENT_DELTA] \"Hello\\nWorld\"", callback, result, assistantContent, hadSendError, lastNodeError, wasAborted);
+        adapter.processOutputLine("[THINKING_DELTA] \"reasoning\"", callback, result, assistantContent, hadSendError, lastNodeError, wasAborted);
+        adapter.processOutputLine("[SESSION_ID] session-123", callback, result, assistantContent, hadSendError, lastNodeError, wasAborted);
 
         assertEquals(1, result.messages.size());
         assertEquals("assistant", callback.events.get(0).type);
@@ -133,14 +136,67 @@ public class ClaudeSDKBridgeRefactorTest {
         StringBuilder assistantContent = new StringBuilder();
         AtomicBoolean hadSendError = new AtomicBoolean(false);
         AtomicReference<String> lastNodeError = new AtomicReference<>(null);
+        AtomicBoolean wasAborted = new AtomicBoolean(false);
 
-        adapter.processOutputLine("[SEND_ERROR] {\"error\":\"boom\"}", callback, result, assistantContent, hadSendError, lastNodeError);
+        adapter.processOutputLine("[SEND_ERROR] {\"error\":\"boom\"}", callback, result, assistantContent, hadSendError, lastNodeError, wasAborted);
 
         assertTrue(hadSendError.get());
         assertFalse(result.success);
         assertEquals("boom", result.error);
         assertEquals(1, callback.errors.size());
         assertEquals("boom", callback.errors.get(0));
+    }
+
+    @Test
+    public void streamAdapterSuppressesSendErrorAfterUserAbort() {
+        ClaudeStreamAdapter adapter = new ClaudeStreamAdapter(new Gson());
+        RecordingCallback callback = new RecordingCallback();
+        SDKResult result = new SDKResult();
+        StringBuilder assistantContent = new StringBuilder();
+        AtomicBoolean hadSendError = new AtomicBoolean(false);
+        AtomicReference<String> lastNodeError = new AtomicReference<>(null);
+        AtomicBoolean wasAborted = new AtomicBoolean(true);
+
+        adapter.processOutputLine("[SEND_ERROR] {\"error\":\"Request aborted by user\"}", callback, result, assistantContent, hadSendError, lastNodeError, wasAborted);
+
+        assertFalse(hadSendError.get());
+        assertEquals(null, result.error);
+        assertTrue(callback.errors.isEmpty());
+    }
+
+    @Test
+    public void daemonExecutorCompletesGracefullyOnUserAbort() throws Exception {
+        Gson gson = new Gson();
+        ClaudeDaemonRequestExecutor executor = new ClaudeDaemonRequestExecutor(
+                com.intellij.openapi.diagnostic.Logger.getInstance(ClaudeDaemonRequestExecutor.class),
+                new ClaudeRequestParamsBuilder(gson),
+                new ClaudeStreamAdapter(gson),
+                new ClaudeJsonOutputExtractor()
+        );
+        RecordingCallback callback = new RecordingCallback();
+
+        SDKResult result = executor.sendMessageViaDaemon(
+                new AbortingDaemonBridge(),
+                "channel-1",
+                "hello",
+                null,
+                null,
+                "/workspace",
+                null,
+                "default",
+                "claude-sonnet-4-6",
+                null,
+                null,
+                Boolean.TRUE,
+                null,
+                null,
+                callback
+        ).get();
+
+        assertFalse(result.success);
+        assertEquals("User interrupted", result.error);
+        assertEquals(1, callback.completions.size());
+        assertTrue(callback.errors.isEmpty());
     }
 
     @Test
@@ -168,6 +224,7 @@ public class ClaudeSDKBridgeRefactorTest {
     private static class RecordingCallback implements MessageCallback {
         private final List<Event> events = new ArrayList<>();
         private final List<String> errors = new ArrayList<>();
+        private final List<SDKResult> completions = new ArrayList<>();
 
         @Override
         public void onMessage(String type, String content) {
@@ -181,6 +238,28 @@ public class ClaudeSDKBridgeRefactorTest {
 
         @Override
         public void onComplete(SDKResult result) {
+            completions.add(result);
+        }
+    }
+
+    private static class AbortingDaemonBridge extends DaemonBridge {
+        AbortingDaemonBridge() {
+            super(null, null, null);
+        }
+
+        @Override
+        public CompletableFuture<Boolean> sendCommand(
+                String method,
+                JsonObject params,
+                DaemonOutputCallback callback
+        ) {
+            callback.onAbort();
+            return CompletableFuture.completedFuture(false);
+        }
+
+        @Override
+        public boolean isAlive() {
+            return true;
         }
     }
 

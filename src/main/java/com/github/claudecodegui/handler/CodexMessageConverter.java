@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.github.claudecodegui.util.UserMessageSanitizer;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -41,8 +42,6 @@ public class CodexMessageConverter {
     private static final Pattern WRITE_CMD_PATTERN = Pattern.compile(
         "cat\\s*>\\s*([^\\s;|&]+)|tee\\s+(?:-[a-zA-Z]+\\s+)*([^\\s;|&]+)|(?:echo|printf)\\s+[^>]*>\\s*([^\\s;|&]+)"
     );
-
-    private static final String[] SYSTEM_TAG_NAMES = {"agents-instructions", "system-reminder", "system-prompt"};
 
     private CodexMessageConverter() {
         // Utility class, no instantiation.
@@ -317,30 +316,7 @@ public class CodexMessageConverter {
      * These blocks are useful model context, but should not be rendered as user history.
      */
     public static String stripSystemTags(String text) {
-        if (text == null || text.isEmpty()) {
-            return text;
-        }
-        String result = text;
-        for (String tag : SYSTEM_TAG_NAMES) {
-            result = removeTagBlocks(result, tag);
-        }
-        return result.trim();
-    }
-
-    private static String removeTagBlocks(String text, String tagName) {
-        String result = text;
-        String openTag = "<" + tagName + ">";
-        String closeTag = "</" + tagName + ">";
-        int start = result.indexOf(openTag);
-        while (start >= 0) {
-            int end = result.indexOf(closeTag, start);
-            if (end < 0) {
-                break;
-            }
-            result = result.substring(0, start) + result.substring(end + closeTag.length());
-            start = result.indexOf(openTag);
-        }
-        return result;
+        return UserMessageSanitizer.sanitizeUserFacingText(text);
     }
 
     private static JsonArray textContentBlocks(String text) {

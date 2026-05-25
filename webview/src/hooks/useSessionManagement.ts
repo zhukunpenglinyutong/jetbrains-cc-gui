@@ -38,16 +38,18 @@ interface UseSessionManagementReturn {
   suppressNextStatusToastRef: React.MutableRefObject<boolean>;
   createNewSession: () => void;
   forceCreateNewSession: () => void;
+  forceCreateNewSessionWithProvider: (providerId: string) => void;
   handleConfirmNewSession: () => void;
   handleCancelNewSession: () => void;
   handleConfirmInterrupt: () => void;
   handleCancelInterrupt: () => void;
-  loadHistorySession: (sessionId: string) => void;
+  loadHistorySession: (sessionId: string, provider?: string) => void;
   deleteHistorySession: (sessionId: string) => void;
   deleteHistorySessions: (sessionIds: string[]) => void;
   exportHistorySession: (sessionId: string, title: string) => void;
   toggleFavoriteSession: (sessionId: string) => void;
   updateHistoryTitle: (sessionId: string, newTitle: string) => void;
+  applyHistoryTitleLocal: (sessionId: string, newTitle: string) => void;
 }
 
 /**
@@ -160,6 +162,15 @@ export function useSessionManagement({
     sendBridgeEvent('create_new_session');
   }, [beginSessionTransition, loading]);
 
+  const forceCreateNewSessionWithProvider = useCallback((providerId: string) => {
+    if (loading) {
+      sendBridgeEvent('interrupt_session');
+    }
+    beginSessionTransition(null, null);
+    sendBridgeEvent('set_provider', providerId);
+    sendBridgeEvent('create_new_session');
+  }, [beginSessionTransition, loading]);
+
   // Confirm new session
   const handleConfirmNewSession = useCallback(() => {
     setShowNewSessionConfirm(false);
@@ -195,7 +206,7 @@ export function useSessionManagement({
   }, []);
 
   // Load history session
-  const loadHistorySession = useCallback((sessionId: string) => {
+  const loadHistorySession = useCallback((sessionId: string, provider?: string) => {
     // [FIX] Send interrupt signal if AI is responding
     if (loading) {
       sendBridgeEvent('interrupt_session');
@@ -203,7 +214,10 @@ export function useSessionManagement({
 
     const session = historyDataRef.current?.sessions?.find(s => s.sessionId === sessionId);
     beginSessionTransition(sessionId, session?.title ?? null);
-    sendBridgeEvent('load_session', sessionId);
+    sendBridgeEvent('load_session', JSON.stringify({
+      sessionId,
+      provider: provider || session?.provider || 'claude',
+    }));
     setCurrentView('chat');
   }, [beginSessionTransition, loading, setCurrentView]);
 
@@ -355,12 +369,28 @@ export function useSessionManagement({
     }
   }, [historyData, setHistoryData, addToast, t]);
 
+  // AI-generated titles are already persisted by saveAiTitle to the JSONL
+  // session file. This skips the round-trip through the customTitle endpoint,
+  // which would otherwise reject titles over its length limit.
+  const applyHistoryTitleLocal = useCallback((sessionId: string, newTitle: string) => {
+    if (historyData && historyData.sessions) {
+      const updatedSessions = historyData.sessions.map(session =>
+        session.sessionId === sessionId ? { ...session, title: newTitle } : session
+      );
+      setHistoryData({
+        ...historyData,
+        sessions: updatedSessions
+      });
+    }
+  }, [historyData, setHistoryData]);
+
   return {
     showNewSessionConfirm,
     showInterruptConfirm,
     suppressNextStatusToastRef,
     createNewSession,
     forceCreateNewSession,
+    forceCreateNewSessionWithProvider,
     handleConfirmNewSession,
     handleCancelNewSession,
     handleConfirmInterrupt,
@@ -371,5 +401,6 @@ export function useSessionManagement({
     exportHistorySession,
     toggleFavoriteSession,
     updateHistoryTitle,
+    applyHistoryTitleLocal,
   };
 }
