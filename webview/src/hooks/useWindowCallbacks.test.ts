@@ -55,7 +55,7 @@ describe('useWindowCallbacks integration', () => {
     setRewindDialogOpen: vi.fn(),
     setCurrentRewindRequest: vi.fn(),
     setContextInfo: vi.fn(),
-    setSelectedAgent: vi.fn(),
+    setAgentsByProvider: vi.fn(),
 
     // Refs
     currentProviderRef: { current: 'claude' },

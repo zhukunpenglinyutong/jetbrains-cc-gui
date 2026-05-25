@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { sendBridgeEvent } from '../../utils/bridge';
 import { writeClaudeModelMapping } from '../../utils/claudeModelMapping';
 import type { ProviderConfig } from '../../types/provider';
 import type { SelectedAgent } from '../../components/ChatInputBox/types';
 import { isOpenCodeSelectedAgent } from '../../components/ChatInputBox/openCodeAgents';
+
+export type AgentsByProvider = Record<string, SelectedAgent | null>;
 
 export interface UseProviderSettingsOptions {
   addToast: (message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
@@ -13,16 +15,20 @@ export interface UseProviderSettingsOptions {
 
 /**
  * Cross-cutting provider settings: streaming, send shortcut, auto-open file,
- * selected agent, and the active provider config. Each setting handler pushes
- * the change to the backend via bridge event and (where applicable) toasts the
- * user-visible state change. Loads the previously-selected agent on mount,
- * retrying until the JCEF bridge is ready.
+ * selected agent (scoped per provider), and the active provider config. Each
+ * setting handler pushes the change to the backend via bridge event and (where
+ * applicable) toasts the user-visible state change.
+ *
+ * Agent selection is stored per provider so switching between Claude/Codex/OpenCode
+ * never carries a stale incompatible agent. The current provider's agent is
+ * derived from the agents-by-provider map.
  */
 export function useProviderSettings({ addToast, t }: UseProviderSettingsOptions) {
   const [streamingEnabledSetting, setStreamingEnabledSetting] = useState(true);
   const [sendShortcut, setSendShortcut] = useState<'enter' | 'cmdEnter'>('enter');
   const [autoOpenFileEnabled, setAutoOpenFileEnabled] = useState(false);
-  const [selectedAgent, setSelectedAgent] = useState<SelectedAgent | null>(null);
+  const [agentsByProvider, setAgentsByProvider] = useState<AgentsByProvider>({});
+  const currentProviderRef = useRef('claude');
   const [activeProviderConfig, setActiveProviderConfig] = useState<ProviderConfig | null>(null);
   const [, setProviderConfigVersion] = useState(0);
 
@@ -65,23 +71,26 @@ export function useProviderSettings({ addToast, t }: UseProviderSettingsOptions)
     };
   }, []);
 
-  const handleAgentSelect = useCallback((agent: SelectedAgent | null) => {
-    setSelectedAgent(agent);
-    if (agent) {
-      if (isOpenCodeSelectedAgent(agent)) {
-        return;
+  const handleAgentSelect = useCallback((agent: SelectedAgent | null, provider?: string) => {
+    const targetProvider = provider ?? currentProviderRef.current;
+    setAgentsByProvider(prev => {
+      const prevAgent = prev[targetProvider];
+      if (agent) {
+        if (!isOpenCodeSelectedAgent(agent)) {
+          sendBridgeEvent('set_selected_agent', JSON.stringify({
+            id: agent.id,
+            name: agent.name,
+            prompt: agent.prompt,
+          }));
+        }
+      } else {
+        if (!prevAgent || !isOpenCodeSelectedAgent(prevAgent)) {
+          sendBridgeEvent('set_selected_agent', '');
+        }
       }
-      sendBridgeEvent('set_selected_agent', JSON.stringify({
-        id: agent.id,
-        name: agent.name,
-        prompt: agent.prompt,
-      }));
-    } else {
-      if (!isOpenCodeSelectedAgent(selectedAgent)) {
-        sendBridgeEvent('set_selected_agent', '');
-      }
-    }
-  }, [selectedAgent]);
+      return { ...prev, [targetProvider]: agent };
+    });
+  }, []);
 
   const handleStreamingEnabledChange = useCallback((enabled: boolean) => {
     setStreamingEnabledSetting(enabled);
@@ -113,8 +122,9 @@ export function useProviderSettings({ addToast, t }: UseProviderSettingsOptions)
     setSendShortcut,
     autoOpenFileEnabled,
     setAutoOpenFileEnabled,
-    selectedAgent,
-    setSelectedAgent,
+    agentsByProvider,
+    setAgentsByProvider,
+    currentProviderRef,
     activeProviderConfig,
     setActiveProviderConfig,
     setProviderConfigVersion,

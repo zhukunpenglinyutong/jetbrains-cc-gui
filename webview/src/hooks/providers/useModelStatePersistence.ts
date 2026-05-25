@@ -10,8 +10,10 @@ import {
   strip1MContextSuffix,
 } from '../../components/ChatInputBox/types';
 import type { PermissionMode, ReasoningEffort } from '../../components/ChatInputBox/types';
+import type { AgentsByProvider } from './useProviderSettings';
 
 const STORAGE_KEY = 'model-selection-state';
+const AGENTS_STORAGE_KEY = 'agents-by-provider-state';
 const REASONING_VALUES = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 
 const getCustomModels = (key: string): { id: string }[] => {
@@ -38,6 +40,7 @@ export interface UseModelStatePersistenceOptions {
   setPermissionMode: (value: PermissionMode) => void;
   setLongContextEnabled: (value: boolean) => void;
   setReasoningEffort: (value: ReasoningEffort) => void;
+  setAgentsByProvider: (value: React.SetStateAction<AgentsByProvider>) => void;
   // Cross-slice save deps (re-saves on any change)
   currentProvider: string;
   selectedClaudeModel: string;
@@ -48,6 +51,7 @@ export interface UseModelStatePersistenceOptions {
   openCodePermissionMode: PermissionMode;
   longContextEnabled: boolean;
   reasoningEffort: ReasoningEffort;
+  agentsByProvider: AgentsByProvider;
 }
 
 /**
@@ -72,6 +76,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     setPermissionMode,
     setLongContextEnabled,
     setReasoningEffort,
+    setAgentsByProvider,
     currentProvider,
     selectedClaudeModel,
     selectedCodexModel,
@@ -81,6 +86,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     openCodePermissionMode,
     longContextEnabled,
     reasoningEffort,
+    agentsByProvider,
   } = options;
 
   // Hydrate from localStorage and sync to backend (mount only).
@@ -184,6 +190,19 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
         }
       };
       setTimeout(syncToBackend, 200);
+
+      // Hydrate agent selections per provider from localStorage
+      try {
+        const savedAgents = localStorage.getItem(AGENTS_STORAGE_KEY);
+        if (savedAgents) {
+          const parsed = JSON.parse(savedAgents);
+          if (parsed && typeof parsed === 'object') {
+            setAgentsByProvider(parsed);
+          }
+        }
+      } catch {
+        // Failed to restore agent selections — non-fatal.
+      }
     } catch {
       // Failed to load model selection state — fall back to defaults already
       // set by individual slice hooks.
@@ -218,4 +237,13 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     longContextEnabled,
     reasoningEffort,
   ]);
+
+  // Persist agent selections per provider whenever the map changes.
+  useEffect(() => {
+    try {
+      localStorage.setItem(AGENTS_STORAGE_KEY, JSON.stringify(agentsByProvider));
+    } catch {
+      // Failed to save agent selections — non-fatal.
+    }
+  }, [agentsByProvider]);
 }

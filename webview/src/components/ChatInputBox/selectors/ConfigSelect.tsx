@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import Switch from 'antd/es/switch';
 import { agentProvider, CREATE_NEW_AGENT_ID, EMPTY_STATE_ID, type AgentItem } from '../providers/agentProvider';
 import { openCodeAgentProvider } from '../providers/openCodeAgentProvider';
-import { selectedAgentForProvider } from '../openCodeAgents';
 import type { SelectedAgent } from '../types';
 import { RuntimeProviderSelect } from './RuntimeProviderSelect';
 import { NodeProcessSelect } from './NodeProcessSelect';
@@ -160,7 +159,7 @@ export const ConfigSelect = ({
   const [showToast, setShowToast] = useState(false);
   const [nodeProcessTotals, setNodeProcessTotals] = useState<{ all: number; orphan: number }>({ all: 0, orphan: 0 });
   const supportsRuntimeProviderSwitch = currentProvider === 'claude' || currentProvider === 'codex';
-  const displayedSelectedAgent = selectedAgentForProvider(selectedAgent, currentProvider);
+  const displayedSelectedAgent = selectedAgent;
 
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);

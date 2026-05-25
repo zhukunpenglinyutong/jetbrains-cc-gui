@@ -55,6 +55,12 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
   const { isSdkInstalled, ...usage } = useUsageTracking();
   const settings = useProviderSettings({ addToast, t });
 
+  // Keep the settings hook's provider ref in sync with the current provider.
+  settings.currentProviderRef.current = currentProvider;
+
+  // Derive the selected agent for the current provider from the per-provider map.
+  const selectedAgent = settings.agentsByProvider[currentProvider] ?? null;
+
   const {
     selectedClaudeModel, setSelectedClaudeModel,
     claudePermissionMode, setClaudePermissionMode,
@@ -83,6 +89,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     setPermissionMode,
     setLongContextEnabled,
     setReasoningEffort,
+    setAgentsByProvider: settings.setAgentsByProvider,
     currentProvider,
     selectedClaudeModel,
     selectedCodexModel,
@@ -92,6 +99,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     openCodePermissionMode,
     longContextEnabled,
     reasoningEffort,
+    agentsByProvider: settings.agentsByProvider,
   });
 
   // ── Computed values ──
@@ -222,6 +230,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     currentProvider, setCurrentProvider,
     permissionMode, setPermissionMode,
     selectedModel,
+    selectedAgent,
     currentSdkInstalled,
     currentProviderRef,
     handleModeSelect,

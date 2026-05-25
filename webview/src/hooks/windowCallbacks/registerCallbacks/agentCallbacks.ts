@@ -4,14 +4,42 @@
  * Registers window bridge callbacks for agent management and selection context:
  * addSelectionInfo, addCodeSnippet, clearSelectionInfo,
  * onSelectedAgentReceived, onSelectedAgentChanged.
+ *
+ * Agent selection is scoped per provider. When the backend sends an agent
+ * selection via the bridge, it is stored in the current provider's slot in
+ * the agentsByProvider map.
  */
 
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
+import type { SelectedAgent } from '../../../components/ChatInputBox/types';
+
+function parseAgentJson(json: string | null | undefined): SelectedAgent | null {
+  if (!json || json === 'null' || json === '{}') {
+    return null;
+  }
+  const data = JSON.parse(json);
+  const agentFromNewShape = data?.agent;
+  const agentFromLegacyShape = data;
+  const agentData = agentFromNewShape?.id
+    ? agentFromNewShape
+    : agentFromLegacyShape?.id
+      ? agentFromLegacyShape
+      : null;
+  if (!agentData) {
+    return null;
+  }
+  return {
+    id: agentData.id,
+    name: agentData.name || '',
+    prompt: agentData.prompt,
+  };
+}
 
 export function registerAgentAndSelectionCallbacks(options: UseWindowCallbacksOptions): void {
   const {
     setContextInfo,
-    setSelectedAgent,
+    setAgentsByProvider,
+    currentProviderRef,
   } = options;
 
   window.addSelectionInfo = (selectionInfo) => {
@@ -44,58 +72,24 @@ export function registerAgentAndSelectionCallbacks(options: UseWindowCallbacksOp
 
   window.onSelectedAgentReceived = (json) => {
     try {
-      if (!json || json === 'null' || json === '{}') {
-        setSelectedAgent(null);
-        return;
-      }
-      const data = JSON.parse(json);
-      const agentFromNewShape = data?.agent;
-      const agentFromLegacyShape = data;
-
-      const agentData = agentFromNewShape?.id
-        ? agentFromNewShape
-        : agentFromLegacyShape?.id
-          ? agentFromLegacyShape
-          : null;
-      if (!agentData) {
-        setSelectedAgent(null);
-        return;
-      }
-
-      setSelectedAgent({
-        id: agentData.id,
-        name: agentData.name || '',
-        prompt: agentData.prompt,
-      });
+      const agent = parseAgentJson(json);
+      const provider = currentProviderRef.current;
+      setAgentsByProvider(prev => ({ ...prev, [provider]: agent }));
     } catch (error) {
       console.error('[Frontend] Failed to parse selected agent:', error);
-      setSelectedAgent(null);
+      setAgentsByProvider(prev => ({ ...prev, [currentProviderRef.current]: null }));
     }
   };
 
   window.onSelectedAgentChanged = (json) => {
     try {
-      if (!json || json === 'null' || json === '{}') {
-        setSelectedAgent(null);
+      const data = json ? JSON.parse(json) : null;
+      if (data && data?.success === false) {
         return;
       }
-
-      const data = JSON.parse(json);
-      if (data?.success === false) {
-        return;
-      }
-
-      const agentData = data?.agent;
-      if (!agentData || !agentData.id) {
-        setSelectedAgent(null);
-        return;
-      }
-
-      setSelectedAgent({
-        id: agentData.id,
-        name: agentData.name || '',
-        prompt: agentData.prompt,
-      });
+      const agent = parseAgentJson(json);
+      const provider = currentProviderRef.current;
+      setAgentsByProvider(prev => ({ ...prev, [provider]: agent }));
     } catch (error) {
       console.error('[Frontend] Failed to parse selected agent changed:', error);
     }

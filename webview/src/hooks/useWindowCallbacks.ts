@@ -2,8 +2,9 @@ import { useEffect, useRef } from 'react';
 import type { TFunction } from 'i18next';
 import type { MutableRefObject, RefObject } from 'react';
 import type { ClaudeMessage, ClaudeRawMessage, HistoryData, SubagentHistoryResponse } from '../types';
-import type { PermissionMode, SelectedAgent } from '../components/ChatInputBox/types';
+import type { PermissionMode } from '../components/ChatInputBox/types';
 import type { ProviderConfig } from '../types/provider';
+import type { AgentsByProvider } from './providers/useProviderSettings';
 import type { PermissionRequest } from '../components/PermissionDialog';
 import type { AskUserQuestionRequest } from '../components/AskUserQuestionDialog';
 import type { PlanApprovalRequest } from '../components/PlanApprovalDialog';
@@ -56,7 +57,7 @@ export interface UseWindowCallbacksOptions {
   setRewindDialogOpen: (open: boolean) => void;
   setCurrentRewindRequest: (request: RewindRequest | null) => void;
   setContextInfo: React.Dispatch<React.SetStateAction<ContextInfo | null>>;
-  setSelectedAgent: React.Dispatch<React.SetStateAction<SelectedAgent | null>>;
+  setAgentsByProvider: React.Dispatch<React.SetStateAction<AgentsByProvider>>;
   setSubagentHistories?: React.Dispatch<React.SetStateAction<Record<string, SubagentHistoryResponse>>>;
 
   // Refs

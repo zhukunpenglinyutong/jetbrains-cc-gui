@@ -4,7 +4,6 @@ import { sendBridgeEvent } from '../utils/bridge';
 import type { ClaudeContentBlock, ClaudeMessage } from '../types';
 import { apply1MContextSuffix } from '../components/ChatInputBox/types';
 import type { Attachment, ChatInputBoxHandle, PermissionMode, SelectedAgent } from '../components/ChatInputBox/types';
-import { selectedAgentForProvider } from '../components/ChatInputBox/openCodeAgents';
 import type { ViewMode } from './useModelProviderState';
 
 /**
@@ -364,7 +363,7 @@ export function useMessageSender({
     sendBridgeEvent('set_provider', currentProvider);
 
     // Build agent info
-    const selectedAgentForSend = selectedAgentForProvider(selectedAgent, currentProvider);
+    const selectedAgentForSend = selectedAgent;
     const agentInfo = selectedAgentForSend ? {
       id: selectedAgentForSend.id,
       name: selectedAgentForSend.name,
