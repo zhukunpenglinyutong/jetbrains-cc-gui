@@ -9,6 +9,9 @@ import { readClaudeModelMapping } from '../../utils/claudeModelMapping';
 import { sendBridgeEvent } from '../../utils/bridge';
 import { ensureSelectedOpenCodeModel, parseOpenCodeModelPayload } from './openCodeModels';
 
+const OPENCODE_MODEL_REQUEST_RETRY_MS = 1000;
+const OPENCODE_MODEL_REQUEST_MAX_ATTEMPTS = 100;
+
 /**
  * Get custom Codex model list from localStorage
  * Uses runtime type validation for data safety
@@ -133,6 +136,8 @@ export const ButtonArea = ({
     }
 
     let disposed = false;
+    let requestAttempts = 0;
+    let retryTimer: number | undefined;
     const previousCallback = window.updateOpenCodeModels;
     const updateOpenCodeModels = (json: string) => {
       if (!disposed) {
@@ -140,11 +145,27 @@ export const ButtonArea = ({
       }
     };
 
+    const requestOpenCodeModels = () => {
+      if (disposed) {
+        return;
+      }
+      requestAttempts += 1;
+      if (sendBridgeEvent('get_opencode_models')) {
+        return;
+      }
+      if (requestAttempts < OPENCODE_MODEL_REQUEST_MAX_ATTEMPTS) {
+        retryTimer = window.setTimeout(requestOpenCodeModels, OPENCODE_MODEL_REQUEST_RETRY_MS);
+      }
+    };
+
     window.updateOpenCodeModels = updateOpenCodeModels;
-    sendBridgeEvent('get_opencode_models');
+    requestOpenCodeModels();
 
     return () => {
       disposed = true;
+      if (retryTimer !== undefined) {
+        window.clearTimeout(retryTimer);
+      }
       if (window.updateOpenCodeModels === updateOpenCodeModels) {
         window.updateOpenCodeModels = previousCallback;
       }
