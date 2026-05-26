@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AVAILABLE_MODES, type PermissionMode } from '../types';
+import { useDropdownPosition } from '../../../hooks/useDropdownPosition';
 
 const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
 const CHEVRON_ICON_STYLE: React.CSSProperties = { fontSize: '10px', marginLeft: '2px' };
-const DROPDOWN_STYLE: React.CSSProperties = {
+const DROPDOWN_BASE_STYLE: React.CSSProperties = {
   position: 'absolute',
   bottom: '100%',
-  left: 0,
   marginBottom: '4px',
   zIndex: 10000,
 };
@@ -65,6 +65,9 @@ export const ModeSelect = ({ value, onChange, provider }: ModeSelectProps) => {
   }, [provider]);
 
   const currentMode = modeOptions.find(m => m.id === value) || modeOptions[0];
+  const { positionedStyle, recalculate } = useDropdownPosition({
+    buttonRef,
+  });
 
   // Helper function to get translated mode text
   const getModeText = (modeId: PermissionMode, field: 'label' | 'tooltip' | 'description') => {
@@ -82,8 +85,12 @@ export const ModeSelect = ({ value, onChange, provider }: ModeSelectProps) => {
    */
   const handleToggle = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsOpen(!isOpen);
-  }, [isOpen]);
+    const next = !isOpen;
+    setIsOpen(next);
+    if (next) {
+      recalculate();
+    }
+  }, [isOpen, recalculate]);
 
   /**
    * Select mode
@@ -139,7 +146,7 @@ export const ModeSelect = ({ value, onChange, provider }: ModeSelectProps) => {
         <div
           ref={dropdownRef}
           className="selector-dropdown"
-          style={DROPDOWN_STYLE}
+          style={{ ...DROPDOWN_BASE_STYLE, ...positionedStyle }}
         >
           {modeOptions.map((mode) => (
             <div

@@ -5,6 +5,7 @@ import Switch from 'antd/es/switch';
 import { agentProvider, CREATE_NEW_AGENT_ID, EMPTY_STATE_ID, type AgentItem } from '../providers/agentProvider';
 import { openCodeAgentProvider } from '../providers/openCodeAgentProvider';
 import type { SelectedAgent } from '../types';
+import { useDropdownPosition } from '../../../hooks/useDropdownPosition';
 import { RuntimeProviderSelect } from './RuntimeProviderSelect';
 import { NodeProcessSelect } from './NodeProcessSelect';
 import {
@@ -34,11 +35,9 @@ const TOGGLE_BUTTON_STYLE: React.CSSProperties = {
   marginRight: '-2px',
 };
 
-const SUBMENU_STYLE: React.CSSProperties = {
+const SUBMENU_BASE_STYLE: React.CSSProperties = {
   position: 'absolute',
-  left: '100%',
   bottom: 0,
-  marginLeft: '-30px',
   zIndex: 10001,
   minWidth: '320px',
   maxWidth: '360px',
@@ -81,10 +80,9 @@ const AGENT_DESC_PLAIN_STYLE: React.CSSProperties = {
   fontStyle: 'normal',
 };
 
-const DROPDOWN_STYLE: React.CSSProperties = {
+const DROPDOWN_BASE_STYLE: React.CSSProperties = {
   position: 'absolute',
   bottom: '100%',
-  left: 0,
   marginBottom: '4px',
   zIndex: 10000,
   minWidth: '200px',
@@ -163,16 +161,28 @@ export const ConfigSelect = ({
 
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const agentTriggerRef = useRef<HTMLDivElement>(null);
+  const runtimeProviderTriggerRef = useRef<HTMLDivElement>(null);
   const agentAbortControllerRef = useRef<AbortController | null>(null);
   const toastTimerRef = useRef<number | undefined>(undefined);
 
+  const { positionedStyle: mainPositionedStyle, recalculate: mainRecalculate } = useDropdownPosition({
+    buttonRef,
+  });
+  const { positionedStyle: submenuPositionedStyle, recalculate: submenuRecalculate } = useDropdownPosition({
+    buttonRef: agentTriggerRef,
+    submenu: true,
+  });
+
   const handleToggle = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsOpen(!isOpen);
-    if (!isOpen) {
+    const next = !isOpen;
+    setIsOpen(next);
+    if (next) {
       setActiveSubmenu('none');
+      mainRecalculate();
     }
-  }, [isOpen]);
+  }, [isOpen, mainRecalculate]);
 
   const loadAgents = useCallback(async () => {
     if (agentAbortControllerRef.current) {
@@ -291,10 +301,21 @@ export const ConfigSelect = ({
     };
   }, []);
 
-  const renderAgentSubmenu = () => (
+  const renderAgentSubmenu = () => {
+    const submenuStyle: React.CSSProperties = {
+      ...SUBMENU_BASE_STYLE,
+      ...submenuPositionedStyle,
+    };
+    if (submenuPositionedStyle.left === '100%') {
+      submenuStyle.marginLeft = '-30px';
+    }
+    if (submenuPositionedStyle.right === '100%') {
+      submenuStyle.marginRight = '-30px';
+    }
+    return (
     <div
       className="selector-dropdown"
-      style={SUBMENU_STYLE}
+      style={submenuStyle}
       onMouseEnter={(e) => {
         e.stopPropagation();
         setActiveSubmenu('agent');
@@ -372,6 +393,7 @@ export const ConfigSelect = ({
       )}
     </div>
   );
+};
 
   return (
     <div style={WRAPPER_STYLE}>
@@ -389,12 +411,16 @@ export const ConfigSelect = ({
         <div
           ref={dropdownRef}
           className="selector-dropdown"
-          style={DROPDOWN_STYLE}
+          style={{ ...DROPDOWN_BASE_STYLE, ...mainPositionedStyle }}
         >
           {/* Agent Item */}
           <div
+            ref={agentTriggerRef}
             className="selector-option"
-            onMouseEnter={() => setActiveSubmenu('agent')}
+            onMouseEnter={() => {
+              setActiveSubmenu('agent');
+              submenuRecalculate();
+            }}
             onMouseLeave={() => setActiveSubmenu('none')}
             style={SELECTOR_OPTION_RELATIVE_STYLE}
           >
@@ -420,6 +446,7 @@ export const ConfigSelect = ({
 
               {/* Runtime Provider Item */}
               <div
+                ref={runtimeProviderTriggerRef}
                 className="selector-option"
                 onMouseEnter={() => setActiveSubmenu('runtimeProvider')}
                 onMouseLeave={() => setActiveSubmenu('none')}
@@ -437,6 +464,7 @@ export const ConfigSelect = ({
                   <RuntimeProviderSelect
                     currentProvider={currentProvider}
                     embedded
+                    triggerRef={runtimeProviderTriggerRef}
                     onProviderSwitched={showProviderToast}
                     onClose={() => {
                       setIsOpen(false);

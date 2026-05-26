@@ -3,13 +3,13 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { AVAILABLE_PROVIDERS } from '../types';
 import { ProviderModelIcon } from '../../shared/ProviderModelIcon';
+import { useDropdownPosition } from '../../../hooks/useDropdownPosition';
 
 const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
 const CHEVRON_ICON_STYLE: React.CSSProperties = { fontSize: '10px', marginLeft: '2px' };
-const DROPDOWN_STYLE: React.CSSProperties = {
+const DROPDOWN_BASE_STYLE: React.CSSProperties = {
   position: 'absolute',
   bottom: '100%',
-  left: 0,
   marginBottom: '4px',
   zIndex: 10000,
 };
@@ -43,6 +43,9 @@ export const ProviderSelect = ({ value, onChange, compact = false }: ProviderSel
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const currentProvider = AVAILABLE_PROVIDERS.find(p => p.id === value) || AVAILABLE_PROVIDERS[0];
+  const { positionedStyle, recalculate } = useDropdownPosition({
+    buttonRef,
+  });
 
   // Helper function to get translated provider label
   const getProviderLabel = (providerId: string) => {
@@ -54,8 +57,12 @@ export const ProviderSelect = ({ value, onChange, compact = false }: ProviderSel
    */
   const handleToggle = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsOpen(!isOpen);
-  }, [isOpen]);
+    const next = !isOpen;
+    setIsOpen(next);
+    if (next) {
+      recalculate();
+    }
+  }, [isOpen, recalculate]);
 
   /**
    * Show toast message
@@ -138,7 +145,7 @@ export const ProviderSelect = ({ value, onChange, compact = false }: ProviderSel
           <div
             ref={dropdownRef}
             className="selector-dropdown"
-            style={DROPDOWN_STYLE}
+            style={{ ...DROPDOWN_BASE_STYLE, ...positionedStyle }}
           >
             {AVAILABLE_PROVIDERS.map((provider) => (
               <div

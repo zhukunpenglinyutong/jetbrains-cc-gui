@@ -7,13 +7,13 @@ import {
   XHIGH_EFFORT_CLAUDE_MODELS,
   type ReasoningEffort,
 } from '../types';
+import { useDropdownPosition } from '../../../hooks/useDropdownPosition';
 
 const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
 const CHEVRON_ICON_STYLE: React.CSSProperties = { fontSize: '10px', marginLeft: '2px' };
-const DROPDOWN_STYLE: React.CSSProperties = {
+const DROPDOWN_BASE_STYLE: React.CSSProperties = {
   position: 'absolute',
   bottom: '100%',
-  right: 0,
   marginBottom: '4px',
   zIndex: 10000,
 };
@@ -63,6 +63,10 @@ export const ReasoningSelect = ({ value, onChange, disabled, selectedModel, curr
   });
 
   const currentLevel = availableLevels.find(l => l.id === value) || availableLevels[availableLevels.length - 2] || availableLevels[0];
+  const { positionedStyle, recalculate } = useDropdownPosition({
+    buttonRef,
+    preferredAlignment: 'right',
+  });
 
   useEffect(() => {
     if (!isVisible || availableLevels.some(level => level.id === value)) {
@@ -88,8 +92,12 @@ export const ReasoningSelect = ({ value, onChange, disabled, selectedModel, curr
   const handleToggle = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     if (disabled) return;
-    setIsOpen(!isOpen);
-  }, [isOpen, disabled]);
+    const next = !isOpen;
+    setIsOpen(next);
+    if (next) {
+      recalculate();
+    }
+  }, [isOpen, disabled, recalculate]);
 
   /**
    * Select reasoning level
@@ -146,7 +154,7 @@ export const ReasoningSelect = ({ value, onChange, disabled, selectedModel, curr
         <div
           ref={dropdownRef}
           className="selector-dropdown"
-          style={DROPDOWN_STYLE}
+          style={{ ...DROPDOWN_BASE_STYLE, ...positionedStyle }}
         >
           {availableLevels.map((level) => (
             <div

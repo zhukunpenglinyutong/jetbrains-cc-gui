@@ -8,6 +8,7 @@ import {
   subscribeCodexProviderList,
   subscribeProviderList,
 } from '../../../utils/runtimeProviderCapabilities';
+import { useDropdownPosition } from '../../../hooks/useDropdownPosition';
 
 const DISABLED_OPTION_STYLE: React.CSSProperties = { cursor: 'default' };
 const PROVIDER_INFO_STYLE: React.CSSProperties = { display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 };
@@ -17,6 +18,7 @@ const CHEVRON_ICON_STYLE: React.CSSProperties = { fontSize: '10px', marginLeft: 
 interface RuntimeProviderSelectProps {
   currentProvider: string;
   embedded?: boolean;
+  triggerRef?: React.RefObject<HTMLElement | null>;
   onClose?: () => void;
   onProviderSwitched?: (providerName: string) => void;
 }
@@ -36,7 +38,7 @@ const parseProviderList = (json: string): RuntimeProvider[] => {
  * RuntimeProviderSelect - lightweight active-provider switcher for current engine.
  * Claude mode switches Claude Code providers; Codex mode switches Codex providers.
  */
-export const RuntimeProviderSelect = ({ currentProvider, embedded = false, onClose, onProviderSwitched }: RuntimeProviderSelectProps) => {
+export const RuntimeProviderSelect = ({ currentProvider, embedded = false, triggerRef, onClose, onProviderSwitched }: RuntimeProviderSelectProps) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -46,6 +48,12 @@ export const RuntimeProviderSelect = ({ currentProvider, embedded = false, onClo
   });
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const { positionedStyle, recalculate } = useDropdownPosition({
+    buttonRef: (embedded ? triggerRef : buttonRef) as React.RefObject<HTMLElement | null>,
+    submenu: embedded,
+    minWidth: embedded ? 260 : 200,
+  });
 
   const providerKind: ProviderKind = currentProvider === 'codex' ? 'codex' : 'claude';
   const visibleProviders = providersByKind[providerKind];
@@ -87,9 +95,10 @@ export const RuntimeProviderSelect = ({ currentProvider, embedded = false, onClo
     const nextOpen = !isOpen;
     setIsOpen(nextOpen);
     if (nextOpen) {
+      recalculate();
       requestProviders(providerKind);
     }
-  }, [currentProvider, isOpen, providerKind, requestProviders]);
+  }, [currentProvider, isOpen, providerKind, recalculate, requestProviders]);
 
   const handleSelect = useCallback((provider: RuntimeProvider) => {
     const eventName = providerKind === 'codex' ? 'switch_codex_provider' : 'switch_provider';
@@ -207,15 +216,22 @@ export const RuntimeProviderSelect = ({ currentProvider, embedded = false, onClo
   const dropdownStyle: React.CSSProperties = {
     position: 'absolute',
     bottom: embedded ? 0 : '100%',
-    left: embedded ? '100%' : 0,
-    marginLeft: embedded ? '-30px' : undefined,
     marginBottom: embedded ? undefined : '4px',
     zIndex: 10001,
     minWidth: '260px',
     maxWidth: '360px',
     maxHeight: '300px',
     overflowY: 'auto',
+    ...positionedStyle,
   };
+  // When the submenu is positioned to the right (left: 100%), apply the overlap offset
+  if (embedded && positionedStyle.left === '100%') {
+    dropdownStyle.marginLeft = '-30px';
+  }
+  // When flipped to the left (right: 100%), mirror the overlap offset
+  if (embedded && positionedStyle.right === '100%') {
+    dropdownStyle.marginRight = '-30px';
+  }
 
   const renderProviderDropdown = () => (
     <div

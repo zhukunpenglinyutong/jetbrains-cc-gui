@@ -4,16 +4,16 @@ import { AVAILABLE_MODELS, normalizeClaudeModelId, modelSupports1MContext, strip
 import type { ModelInfo } from '../types';
 import { readClaudeModelMapping } from '../../../utils/claudeModelMapping';
 import { ProviderModelIcon } from '../../shared/ProviderModelIcon';
+import { useDropdownPosition } from '../../../hooks/useDropdownPosition';
 import Switch from 'antd/es/switch';
 import Input from 'antd/es/input';
 import './ModelSelect.less';
 
 const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
 const CHEVRON_ICON_STYLE: React.CSSProperties = { fontSize: '10px', marginLeft: '2px' };
-const DROPDOWN_STYLE: React.CSSProperties = {
+const DROPDOWN_BASE_STYLE: React.CSSProperties = {
   position: 'absolute',
   bottom: '100%',
-  left: 0,
   marginBottom: '4px',
   zIndex: 10000,
   maxHeight: '400px',
@@ -200,13 +200,32 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
     return model.description;
   };
 
+  const filteredModels = models.filter(model => {
+    const label = getModelLabel(model, false).toLowerCase();
+    const description = getModelDescription(model)?.toLowerCase() || '';
+    const search = searchTerm.toLowerCase();
+    return label.includes(search) || description.includes(search) || model.id.toLowerCase().includes(search);
+  });
+
+  const visibleModels = filteredModels.slice(0, 100);
+
+  const inputRef = useRef<any>(null);
+  const { positionedStyle, recalculate } = useDropdownPosition({
+    buttonRef,
+    preferredAlignment: 'right',
+  });
+
   /**
    * Toggle dropdown
    */
   const handleToggle = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsOpen(!isOpen);
-  }, [isOpen]);
+    const next = !isOpen;
+    setIsOpen(next);
+    if (next) {
+      recalculate();
+    }
+  }, [isOpen, recalculate]);
 
   /**
    * Select model
@@ -217,20 +236,18 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
     setSearchTerm('');
   }, [onChange]);
 
-  const filteredModels = models.filter(model => {
-    const label = getModelLabel(model, false).toLowerCase();
-    const description = getModelDescription(model)?.toLowerCase() || '';
-    const search = searchTerm.toLowerCase();
-    return label.includes(search) || description.includes(search) || model.id.toLowerCase().includes(search);
-  });
-
-  const visibleModels = filteredModels.slice(0, 100);
-
   /**
    * Close on outside click
    */
   useEffect(() => {
     if (!isOpen) return;
+
+    // Focus without scrolling
+    if (inputRef.current) {
+      setTimeout(() => {
+        inputRef.current?.focus({ preventScroll: true });
+      }, 0);
+    }
 
     const handleClickOutside = (e: MouseEvent) => {
       if (
@@ -276,14 +293,14 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
         <div
           ref={dropdownRef}
           className="selector-dropdown"
-          style={DROPDOWN_STYLE}
+          style={{ ...DROPDOWN_BASE_STYLE, ...positionedStyle }}
         >
           <Input
+            ref={inputRef}
             style={SEARCH_INPUT_STYLE}
             placeholder={t('models.searchPlaceholder')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            autoFocus
           />
           {visibleModels.length > 0 ? (
             <>
