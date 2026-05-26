@@ -1,4 +1,4 @@
-import { type ComponentProps } from 'react';
+import { useEffect, useState, type ComponentProps } from 'react';
 import { useTranslation } from 'react-i18next';
 import ConfirmDialog from './ConfirmDialog';
 import PermissionDialog from './PermissionDialog';
@@ -15,6 +15,7 @@ import { useDialogs } from '../contexts/DialogContext';
 import { useUIState } from '../contexts/UIStateContext';
 import ContextUsageDialog from './ContextUsageDialog';
 import { DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS } from '../utils/permissionDialogTimeout';
+import { setSkipNewSessionConfirm } from '../utils/skipNewSessionConfirm';
 
 /**
  * Wrapper that manages plugin-level custom models for the add-model dialog.
@@ -101,6 +102,28 @@ export const AppDialogs = ({
     addModelDialogOpen, setAddModelDialogOpen,
   } = useUIState();
 
+  // "Don't ask again" checkbox state for the new-session confirm dialog.
+  // Resets to unchecked every time the dialog re-opens so the user re-affirms
+  // intent each time they want to silence it.
+  const [skipNewSessionAgain, setSkipNewSessionAgain] = useState(false);
+  useEffect(() => {
+    if (showNewSessionConfirm) {
+      setSkipNewSessionAgain(false);
+    }
+  }, [showNewSessionConfirm]);
+
+  const handleConfirmNewSessionWithSkip = () => {
+    if (skipNewSessionAgain) {
+      // Persist before navigating away — listeners (settings page) sync automatically.
+      setSkipNewSessionConfirm(true);
+    }
+    onConfirmNewSession();
+  };
+  // Note: We deliberately do NOT persist the "don't ask again" checkbox when the
+  // user cancels the dialog. A cancelled dialog means they did not intend the
+  // destructive action AND did not intend to change the preference. The state is
+  // discarded via the useEffect above on next open.
+
   return (
     <>
       <ConfirmDialog
@@ -109,9 +132,18 @@ export const AppDialogs = ({
         message={t('chat.confirmNewSession')}
         confirmText={t('common.confirm')}
         cancelText={t('common.cancel')}
-        onConfirm={onConfirmNewSession}
+        onConfirm={handleConfirmNewSessionWithSkip}
         onCancel={onCancelNewSession}
-      />
+      >
+        <label className="confirm-dialog-dont-ask-again">
+          <input
+            type="checkbox"
+            checked={skipNewSessionAgain}
+            onChange={(e) => setSkipNewSessionAgain(e.target.checked)}
+          />
+          <span>{t('common.dontAskAgain')}</span>
+        </label>
+      </ConfirmDialog>
       <ConfirmDialog
         isOpen={showInterruptConfirm}
         title={t('chat.createNewSession')}

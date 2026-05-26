@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import {useState} from 'react';
 import styles from './style.module.less';
-import { useTranslation } from 'react-i18next';
-import type { DiffThemeMode } from '../../../utils/diffTheme';
-import type { UiFontConfig } from '../hooks/useSettingsBasicActions';
+import {useTranslation} from 'react-i18next';
+import type {DiffThemeMode} from '../../../utils/diffTheme';
+import type {UiFontConfig} from '../hooks/useSettingsBasicActions';
 import AppearanceTab from './AppearanceTab';
 import BehaviorTab from './BehaviorTab';
 import EnvironmentTab from './EnvironmentTab';
@@ -69,6 +69,9 @@ interface BasicConfigSectionProps {
   // AI title generation configuration
   aiTitleGenerationEnabled?: boolean;
   onAiTitleGenerationEnabledChange?: (enabled: boolean) => void;
+  // New-session confirm dialog (positive semantics: true = shown)
+  newSessionConfirmEnabled?: boolean;
+  onNewSessionConfirmEnabledChange?: (enabled: boolean) => void;
   // Task completion notification configuration
   taskCompletionNotificationEnabled?: boolean;
   onTaskCompletionNotificationEnabledChange?: (enabled: boolean) => void;
@@ -142,6 +145,8 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onStatusBarWidgetEnabledChange={props.onStatusBarWidgetEnabledChange}
           aiTitleGenerationEnabled={props.aiTitleGenerationEnabled}
           onAiTitleGenerationEnabledChange={props.onAiTitleGenerationEnabledChange}
+          newSessionConfirmEnabled={props.newSessionConfirmEnabled}
+          onNewSessionConfirmEnabledChange={props.onNewSessionConfirmEnabledChange}
           taskCompletionNotificationEnabled={props.taskCompletionNotificationEnabled}
           onTaskCompletionNotificationEnabledChange={props.onTaskCompletionNotificationEnabledChange}
           permissionDialogTimeoutSeconds={props.permissionDialogTimeoutSeconds}

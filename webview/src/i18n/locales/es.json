@@ -12,6 +12,7 @@
     "close": "Cerrar",
     "newSession": "Nueva sesión",
     "newTab": "Nueva pestaña",
+    "dontAskAgain": "No volver a preguntar",
     "history": "Historial",
     "settings": "Configuración",
     "thinking": "Pensando",
@@ -91,6 +92,22 @@
     "streamingConnected": "{{provider}} conectado, entendiendo tu pregunta",
     "showEarlierMessages": "Mostrar {{count}} mensajes anteriores",
     "totalDuration": "Esta respuesta tardó",
+    "search": {
+      "ariaLabel": "Buscar en la conversación",
+      "placeholder": "Buscar en la conversación…",
+      "next": "Siguiente coincidencia (Enter)",
+      "previous": "Coincidencia anterior (Mayús+Enter)",
+      "close": "Cerrar (Esc)",
+      "counter": "{{current}}/{{total}}",
+      "noResults": "Sin resultados",
+      "searching": "Buscando…",
+      "expandedHint": "{{count}} mensajes anteriores expandidos",
+      "matchCase": "Coincidir mayúsculas y minúsculas (Alt+C)",
+      "wholeWord": "Coincidir palabra completa (Alt+W)",
+      "regex": "Expresión regular (Alt+R)",
+      "invalidRegex": "Regex no válida",
+      "openTooltip": "Buscar en la conversación (Cmd/Ctrl+F)"
+    },
     "compactSummary": {
       "summarizedConversation": "Conversación resumida",
       "compactSummary": "Resumen compacto",
@@ -229,6 +246,12 @@
         "custom": "Personalizado",
         "reset": "Restablecer",
         "hint": "Personalizar el color de fondo de sus mensajes. Dejar vacío para seguir el tema predeterminado."
+      },
+      "newSessionConfirm": {
+        "label": "Confirmación de nueva sesión",
+        "enabled": "Habilitado",
+        "disabled": "Deshabilitado",
+        "hint": "Cuando está deshabilitado, crear una nueva sesión en una conversación con mensajes existentes omitirá el cuadro de confirmación."
       }
     },
     "providers": "Gestión de proveedores",
@@ -802,6 +825,44 @@
       "loading": "Cargando proveedores...",
       "empty": "No hay proveedores disponibles",
       "switched": "Cambiado a {{provider}}"
+    },
+    "nodeProcesses": {
+      "title": "Gestor de procesos Node",
+      "badge": "{{total}} procesos",
+      "badgeWithOrphan": "{{total}} · {{orphan}} huérfanos ⚠",
+      "summary": "Total: {{total}} · Huérfanos: {{orphan}}",
+      "loading": "Cargando procesos...",
+      "empty": "No hay procesos Node activos",
+      "refresh": "Actualizar",
+      "groups": {
+        "daemon": "Procesos daemon",
+        "channel": "Conversaciones activas",
+        "orphan": "Procesos huérfanos"
+      },
+      "kind": {
+        "daemonShort": "Daemon",
+        "channelShort": "Canal",
+        "orphanShort": "Huérfano"
+      },
+      "kill": "Terminar",
+      "interrupt": "Detener",
+      "restart": "Reiniciar",
+      "pending": "Procesando...",
+      "killAll": "Limpiar huérfanos ({{count}})",
+      "killHint": "Forzar la terminación de este proceso Node",
+      "killAllHint": "Terminar todos los procesos huérfanos detectados",
+      "restartHint": "Detiene el daemon; el siguiente mensaje generará uno nuevo automáticamente",
+      "killConfirmTitle": "¿Terminar este proceso?",
+      "killConfirm": "¿Terminar el proceso PID {{pid}}? Las conversaciones en curso pueden perderse.",
+      "restartConfirmTitle": "¿Reiniciar el daemon?",
+      "restartConfirm": "¿Reiniciar el daemon? Las conversaciones activas se interrumpirán.",
+      "killAllConfirmTitle": "¿Limpiar todos los procesos huérfanos?",
+      "killAllConfirm": "¿Terminar los {{count}} procesos huérfanos?",
+      "killSuccess": "Proceso terminado",
+      "killAllSuccess": "Se limpiaron {{count}} procesos huérfanos",
+      "restartSuccess": "Daemon detenido; se iniciará automáticamente en el siguiente mensaje",
+      "killFailed": "Error al terminar: {{error}}",
+      "activeRequests": "{{count}} en curso"
     },
     "link": "Enlace"
   },

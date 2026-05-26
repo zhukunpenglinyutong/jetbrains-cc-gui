@@ -120,6 +120,7 @@ public class ModelProviderHandler {
     public void handleSetProvider(String content) {
         try {
             String provider = parseProvider(content);
+            String previousProvider = context.getCurrentProvider();
 
             LOG.info("[ModelProviderHandler] Setting provider to: " + provider);
             context.setCurrentProvider(provider);
@@ -127,6 +128,17 @@ public class ModelProviderHandler {
             if (context.getSession() != null) {
                 context.getSession().setProvider(provider);
             }
+
+            // Bug fix (Node process leak L2): when the tab moves AWAY from Claude
+            // to another SDK family (currently only Codex), the lingering Claude
+            // daemon would otherwise stay alive for the rest of the tab's lifetime.
+            // The daemon caches process.env, so even if the user comes back to
+            // Claude with refreshed credentials, the cached env would persist —
+            // shutting it down here forces the next Claude message to spawn a
+            // fresh daemon. The daemon restart on return is lazy (deferred to
+            // the next claude.send call), so users pay ~5–10s only when they
+            // actually send the next Claude message.
+            shutdownStaleClaudeDaemonIfLeavingClaude(previousProvider, provider);
 
             refreshSlashCommandsForProvider(provider);
             usagePushService.refreshContextBar();
@@ -148,6 +160,59 @@ public class ModelProviderHandler {
             usagePushService.refreshContextBar();
         } catch (Exception e) {
             LOG.error("[ModelProviderHandler] Failed to set session provider: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Pure decision predicate: should we shut down the Claude daemon when the
+     * tab provider transitions from {@code previousProvider} to {@code newProvider}?
+     *
+     * <p>Returns true only on Claude → non-Claude transitions. Same-direction
+     * reaffirmations (e.g. {@code set_provider("codex")} fired again on every
+     * message send) must not restart the daemon, and Claude → Claude
+     * reaffirmations must keep the warm daemon alive.
+     *
+     * <p>Package-private so unit tests can verify the full transition matrix
+     * without spinning up a HandlerContext or ClaudeSDKBridge.
+     */
+    static boolean shouldShutdownClaudeDaemonOnProviderSwitch(String previousProvider, String newProvider) {
+        if (!"claude".equals(previousProvider)) {
+            return false;
+        }
+        // Empty/null newProvider means "not set yet" (initialization, race), NOT
+        // "user moved away from Claude". Treating it as a leave-claude transition
+        // would cause spurious daemon restarts (~5–10s) when set_provider arrives
+        // before the tab has fully booted.
+        if (newProvider == null || newProvider.isEmpty() || "claude".equals(newProvider)) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Shut down the Claude daemon when leaving the Claude family.
+     * Delegates the decision to {@link #shouldShutdownClaudeDaemonOnProviderSwitch}
+     * and only performs the side effect (calling
+     * {@link com.github.claudecodegui.provider.claude.ClaudeSDKBridge#shutdownDaemon()})
+     * when the decision says yes and the bridge is present.
+     *
+     * @return true when shutdown was actually invoked
+     */
+    boolean shutdownStaleClaudeDaemonIfLeavingClaude(String previousProvider, String newProvider) {
+        if (!shouldShutdownClaudeDaemonOnProviderSwitch(previousProvider, newProvider)) {
+            return false;
+        }
+        if (context.getClaudeSDKBridge() == null) {
+            return false;
+        }
+        try {
+            context.getClaudeSDKBridge().shutdownDaemon();
+            LOG.info("[ModelProviderHandler] Shut down Claude daemon after switching to: " + newProvider);
+            return true;
+        } catch (Exception e) {
+            LOG.warn("[ModelProviderHandler] Failed to shut down Claude daemon on provider switch: "
+                    + e.getMessage(), e);
+            return false;
         }
     }
 

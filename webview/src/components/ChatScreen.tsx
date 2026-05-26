@@ -1,4 +1,4 @@
-import { type RefObject } from 'react';
+import { type RefObject, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChatInputBox } from './ChatInputBox';
 import type {
@@ -10,6 +10,8 @@ import { MessageList } from './MessageList';
 import { ScrollControl } from './ScrollControl';
 import { StatusPanel, StatusPanelErrorBoundary } from './StatusPanel';
 import { WelcomeScreen } from './WelcomeScreen';
+import { ConversationSearch } from './ConversationSearch';
+import type { MessageListRevealHandle } from './ConversationSearch/types';
 import {
   SessionIdContext,
   SubagentHistoryContext,
@@ -52,6 +54,10 @@ export interface ChatScreenProps {
   inputAreaRef: RefObject<HTMLDivElement | null>;
   messageNodeMapRef: RefObject<Map<string, HTMLDivElement>>;
   userCollapsedRef: RefObject<boolean>;
+  /** Imperative handle exposing `revealAll()` to the in-page search panel. */
+  messageListRef: RefObject<MessageListRevealHandle | null>;
+  /** Cooperate with useScrollBehavior to avoid pausing auto-follow during search scrolls. */
+  isAutoScrollingRef?: React.RefObject<boolean>;
 
   // Anchor rail
   anchorCollapsedCount: number;
@@ -118,7 +124,7 @@ export const ChatScreen = ({
   subagents, globalTodos, filteredFileChanges,
   subagentHistoryCtxValue, sessionIdCtxValue,
   chatInputRef, messagesContainerRef, messagesEndRef, inputAreaRef,
-  messageNodeMapRef, userCollapsedRef,
+  messageNodeMapRef, userCollapsedRef, messageListRef, isAutoScrollingRef,
   anchorCollapsedCount, setAnchorCollapsedCount, onMessageNodeRef,
   statusPanelExpanded, forceStatusUpdate,
   onUndoFile, onDiscardAll, onKeepAll,
@@ -147,7 +153,53 @@ export const ChatScreen = ({
     addToast,
     draftInput, setDraftInput,
     openChangelogDialog,
+    searchOpen, setSearchOpen,
   } = useUIState();
+
+  // Signal that the search hook can listen to for re-scanning. Combines
+  // length + last timestamp + streaming flag + last-message content size.
+  //
+  // The content size is REQUIRED because during streaming the last assistant
+  // message accumulates content while length / timestamp / isStreaming all
+  // stay the same — without this sub-signal the hook would never re-scan the
+  // new chunks (see code review feedback).
+  //
+  // ClaudeMessage.content is `string | undefined` at the top level, but the
+  // streaming pipeline actually appends to `raw.message.content[]` (an array
+  // of content blocks: text / tool_use / tool_result). Assistant tool-calling
+  // messages are ALWAYS array-shaped on `raw`, so measuring ONLY top-level
+  // string content silently freezes the signal in the most common streaming
+  // case. We measure both shapes by summing inner text lengths.
+  const searchSignal = useMemo(() => {
+    const last = mergedMessages[mergedMessages.length - 1];
+    let lastLen = 0;
+    if (typeof last?.content === 'string') {
+      lastLen = last.content.length;
+    }
+    // Walk raw blocks (text/tool_use/tool_result) and sum their textual size.
+    // `raw` is either an object with `content[]` or `message.content[]`, or
+    // sometimes a plain string. We use a tolerant shape with `unknown`.
+    const rawHolder = last?.raw as
+      | { content?: unknown; message?: { content?: unknown } }
+      | string
+      | undefined;
+    const rawBlocks =
+      typeof rawHolder === 'object' && rawHolder !== null
+        ? rawHolder.content ?? rawHolder.message?.content
+        : undefined;
+    if (Array.isArray(rawBlocks)) {
+      for (const block of rawBlocks) {
+        const b = block as { text?: unknown; content?: unknown };
+        if (typeof b.text === 'string') lastLen += b.text.length;
+        else if (typeof b.content === 'string') lastLen += b.content.length;
+      }
+    }
+    return `${mergedMessages.length}|${last?.timestamp ?? ''}|${last?.isStreaming ? 'S' : 'F'}|${lastLen}`;
+  }, [mergedMessages]);
+
+  const handleSearchClose = useCallback(() => {
+    setSearchOpen(false);
+  }, [setSearchOpen]);
 
   return (
     <>
@@ -157,6 +209,14 @@ export const ChatScreen = ({
           collapsedCount={anchorCollapsedCount}
           containerRef={messagesContainerRef}
           messageNodeMap={messageNodeMapRef}
+        />
+        <ConversationSearch
+          open={searchOpen}
+          onClose={handleSearchClose}
+          containerRef={messagesContainerRef}
+          messagesSignal={searchSignal}
+          messageListRef={messageListRef}
+          isAutoScrollingRef={isAutoScrollingRef}
         />
         <div className="messages-container" ref={messagesContainerRef}>
           {messages.length === 0 && (
@@ -173,6 +233,7 @@ export const ChatScreen = ({
             <SubagentHistoryContext.Provider value={subagentHistoryCtxValue}>
               <ToolResultRawContext.Provider value={getToolResultRaw}>
                 <MessageList
+                  ref={messageListRef}
                   messages={mergedMessages}
                   streamingActive={streamingActive}
                   isThinking={isThinking}

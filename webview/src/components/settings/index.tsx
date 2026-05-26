@@ -1,11 +1,11 @@
-import { useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
-import type { CodexProviderConfig } from '../../types/provider';
-import { ToastContainer } from '../Toast';
+import {useMemo} from 'react';
+import {useTranslation} from 'react-i18next';
+import type {CodexProviderConfig} from '../../types/provider';
+import {ToastContainer} from '../Toast';
 
 // Import split-out components
 import SettingsHeader from './SettingsHeader';
-import SettingsSidebar, { type SettingsTab } from './SettingsSidebar';
+import SettingsSidebar, {type SettingsTab} from './SettingsSidebar';
 import BasicConfigSection from './BasicConfigSection';
 import ProviderTabSection from './ProviderTabSection';
 import DependencySection from './DependencySection';
@@ -18,18 +18,19 @@ import PromptSection from './PromptSection';
 import CommitSection from './CommitSection';
 import PromptEnhancerSection from './PromptEnhancerSection';
 import OtherSettingsSection from './OtherSettingsSection';
-import { SkillsSettingsSection } from '../skills';
+import {SkillsSettingsSection} from '../skills';
 import SettingsDialogs from './SettingsDialogs';
+import {setNewSessionConfirmEnabled as persistNewSessionConfirmEnabled} from '../../utils/skipNewSessionConfirm';
 
 // Import custom hooks
 import {
-  useProviderManagement,
-  useCodexProviderManagement,
-  useAgentManagement,
-  useSettingsWindowCallbacks,
-  useSettingsPageState,
-  useSettingsThemeSync,
-  useSettingsBasicActions,
+    useAgentManagement,
+    useCodexProviderManagement,
+    useProviderManagement,
+    useSettingsBasicActions,
+    useSettingsPageState,
+    useSettingsThemeSync,
+    useSettingsWindowCallbacks,
 } from './hooks';
 
 import styles from './style.module.less';
@@ -140,6 +141,8 @@ const SettingsView = ({
     setDiffExpandedByDefault,
     historyCompletionEnabled,
     setHistoryCompletionEnabled,
+    skipNewSessionConfirm,
+    setSkipNewSessionConfirm,
     handleSaveNodePath,
     handleSaveWorkingDirectory,
     handleUiFontSelectionChange,
@@ -474,6 +477,14 @@ const SettingsView = ({
               }}
               aiTitleGenerationEnabled={aiTitleGenerationEnabled}
               onAiTitleGenerationEnabledChange={handleAiTitleGenerationEnabledChange}
+              newSessionConfirmEnabled={!skipNewSessionConfirm}
+              onNewSessionConfirmEnabledChange={(enabled) => {
+                // Optimistic local update so the toggle reflects instantly even if
+                // the CustomEvent loops back. persistNewSessionConfirmEnabled writes
+                // to localStorage and dispatches the sync event for other surfaces.
+                setSkipNewSessionConfirm(!enabled);
+                persistNewSessionConfirmEnabled(enabled);
+              }}
               taskCompletionNotificationEnabled={taskCompletionNotificationEnabled}
               onTaskCompletionNotificationEnabledChange={handleTaskCompletionNotificationEnabledChange}
               invocationMode={invocationMode}

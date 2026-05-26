@@ -1,6 +1,8 @@
 package com.github.claudecodegui.handler;
 
+import com.github.claudecodegui.bridge.ProcessManager;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.util.PlatformUtils;
 
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
@@ -20,6 +22,9 @@ import java.util.concurrent.TimeUnit;
 public class InputHistoryHandler {
 
     private static final Logger LOG = Logger.getInstance(InputHistoryHandler.class);
+
+    /** Hard wall-clock timeout for the input-history Node.js child process. */
+    private static final long PROCESS_TIMEOUT_SECONDS = 30;
 
     private final HandlerContext context;
 
@@ -182,37 +187,51 @@ public class InputHistoryHandler {
         ProcessBuilder pb = new ProcessBuilder(nodePath, "-e", nodeScript);
         pb.redirectErrorStream(true);
 
-        Process process = pb.start();
+        // L7 fix: register with ProcessManager so cleanupAllProcesses sees this child.
+        ProcessManager processManager = context.getClaudeSDKBridge().getProcessManager();
+        String channelId = ProcessManager.newChannelId("input-history");
+        Process process = null;
+        try {
+            process = pb.start();
+            processManager.registerProcess(channelId, process);
 
-        if (stdinData != null) {
-            try (BufferedWriter writer = new BufferedWriter(
-                    new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8))) {
-                writer.write(stdinData);
-                writer.flush();
+            if (stdinData != null) {
+                try (BufferedWriter writer = new BufferedWriter(
+                        new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8))) {
+                    writer.write(stdinData);
+                    writer.flush();
+                }
+            }
+
+            StringBuilder output = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line).append("\n");
+                }
+            }
+
+            boolean finished = process.waitFor(PROCESS_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            if (!finished) {
+                PlatformUtils.terminateProcess(process);
+                throw new Exception("Node.js process timeout after " + PROCESS_TIMEOUT_SECONDS + " seconds");
+            }
+
+            int exitCode = process.exitValue();
+            if (exitCode != 0) {
+                throw new Exception("Node.js process exited with code " + exitCode + ": " + output);
+            }
+
+            String[] lines = output.toString().split("\n");
+            return lines.length > 0 ? lines[lines.length - 1] : "{}";
+        } finally {
+            if (process != null) {
+                if (process.isAlive()) {
+                    PlatformUtils.terminateProcess(process);
+                }
+                processManager.unregisterProcess(channelId, process);
             }
         }
-
-        StringBuilder output = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                output.append(line).append("\n");
-            }
-        }
-
-        boolean finished = process.waitFor(30, TimeUnit.SECONDS);
-        if (!finished) {
-            process.destroyForcibly();
-            throw new Exception("Node.js process timeout after 30 seconds");
-        }
-
-        int exitCode = process.exitValue();
-        if (exitCode != 0) {
-            throw new Exception("Node.js process exited with code " + exitCode + ": " + output);
-        }
-
-        String[] lines = output.toString().split("\n");
-        return lines.length > 0 ? lines[lines.length - 1] : "{}";
     }
 }

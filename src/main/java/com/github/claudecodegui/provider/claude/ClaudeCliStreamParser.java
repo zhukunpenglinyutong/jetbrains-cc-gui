@@ -1,5 +1,6 @@
 package com.github.claudecodegui.provider.claude;
 
+import com.github.claudecodegui.cli.common.CliErrorFormatter;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.google.gson.Gson;
@@ -273,8 +274,10 @@ public class ClaudeCliStreamParser {
             callback.onMessage("usage", obj.get("usage").toString());
         }
 
+        boolean isErrorResult = obj.has("is_error") && obj.get("is_error").isJsonPrimitive() && obj.get("is_error").getAsBoolean();
+
         // 提取 result 文本（最终完整回复）
-        if (obj.has("result")) {
+        if (!isErrorResult && obj.has("result")) {
             String resultText = obj.get("result").getAsString();
             if (!resultText.isEmpty() && assistantContent.length() == 0) {
                 // 没有通过 delta 收到内容时，使用 result
@@ -296,7 +299,14 @@ public class ClaudeCliStreamParser {
         callback.onMessage("stream_end", "");
         callback.onMessage("message_end", "");
 
-        // 标记成功
+        if (isErrorResult) {
+            String rawError = obj.has("result") && obj.get("result").isJsonPrimitive() ? obj.get("result").getAsString() : obj.toString();
+            result.success = false;
+            result.error = CliErrorFormatter.formatError("Claude", rawError);
+            result.finalResult = null;
+            return;
+        }
+
         result.success = true;
         result.finalResult = assistantContent.toString();
     }

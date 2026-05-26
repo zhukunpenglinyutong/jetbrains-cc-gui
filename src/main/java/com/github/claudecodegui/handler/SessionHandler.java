@@ -258,7 +258,7 @@ public class SessionHandler extends BaseMessageHandler {
                     String data = a.has("data") && !a.get("data").isJsonNull()
                                           ? a.get("data").getAsString()
                                           : "";
-                    LOG.info("[ClaudeImageDiag][SessionHandler] payload att[" + i + "]: fileName=" + fileName + ", mediaType=" + mediaType + ", dataChars=" + (data != null ? data.length() : 0) + ", provider=" + provider + ", sessionKey=" + sessionKey);
+                    LOG.info("[ClaudeImageDiag][SessionHandler] payload att[" + i + "]" + ": fileName=" + fileName + ", mediaType=" + mediaType + ", dataChars=" + (data != null ? data.length() : 0) + ", provider=" + provider + ", sessionKey=" + sessionKey);
                     ClaudeSession.Attachment attachment = new ClaudeSession.Attachment(fileName, mediaType, data);
                     if (mediaType.startsWith("image/") && !data.isBlank()) {
                         AttachmentStorageService.PersistedAttachment persisted = AttachmentStorageService.getInstance()
@@ -271,7 +271,7 @@ public class SessionHandler extends BaseMessageHandler {
                             // Image is now on disk — free the base64 string from the pipeline.
                             // Downstream (SDK/CLI) reads from localPath; display uses resourceUrl.
                             attachment.data = null;
-                            LOG.info("[ClaudeImageDiag][SessionHandler] persisted image att[" + i + "]: localPath=" + attachment.localPath + ", resourceUrl=" + attachment.resourceUrl + ", thumbnailUrl=" + attachment.thumbnailUrl + ", hash=" + attachment.attachmentHash);
+                            LOG.info("[ClaudeImageDiag][SessionHandler] persisted image att[" + i + "]" + ": localPath=" + attachment.localPath + ", resourceUrl=" + attachment.resourceUrl + ", thumbnailUrl=" + attachment.thumbnailUrl + ", hash=" + attachment.attachmentHash);
                         } else {
                             LOG.warn("[ClaudeImageDiag][SessionHandler] image persistence returned null for att[" + i + "]: fileName=" + fileName + ", mediaType=" + mediaType);
                         }

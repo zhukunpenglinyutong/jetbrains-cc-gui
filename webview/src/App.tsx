@@ -30,6 +30,7 @@ import type { Attachment, ChatInputBoxHandle } from './components/ChatInputBox/t
 import { ToastContainer } from './components/Toast';
 import { ChatHeader } from './components/ChatHeader';
 import { ChatScreen } from './components/ChatScreen';
+import type { MessageListRevealHandle } from './components/ConversationSearch/types';
 import { useSubagentContextValues } from './contexts/SubagentContext';
 import { useMessages } from './contexts/MessagesContext';
 import { useSession } from './contexts/SessionContext';
@@ -83,6 +84,7 @@ const App = () => {
     settingsInitialTab, setSettingsInitialTab,
     toasts, addToast, dismissToast, clearToasts,
     setContextInfo,
+    searchOpen, setSearchOpen,
   } = useUIState();
 
   // ── Permission dialog timeout (synced with backend config) ──
@@ -105,6 +107,9 @@ const App = () => {
     else { messageNodeMapRef.current.delete(id); }
   }, []);
 
+  // Imperative handle for the in-page search panel to expand collapsed earlier messages.
+  const messageListRef = useRef<MessageListRevealHandle | null>(null);
+
   // ── Theme & context actions ──
   useThemeInit();
   useContextActions();
@@ -118,7 +123,7 @@ const App = () => {
   // ── Scroll behavior ──
   const {
     messagesContainerRef, messagesEndRef, inputAreaRef,
-    isUserAtBottomRef, userPausedRef,
+    isUserAtBottomRef, isAutoScrollingRef, userPausedRef,
   } = useScrollBehavior({ currentView, messages, loading, streamingActive });
 
   // ── Streaming messages ──
@@ -176,6 +181,58 @@ const App = () => {
       document.removeEventListener('dragenter', preventExternalDrop);
     };
   }, []);
+
+  // ── Close in-conversation search panel when navigating away from chat ──
+  // Split from the hotkey effect below so that toggling `searchOpen` does
+  // NOT rebind the global keydown listener every time the panel opens/closes.
+  useEffect(() => {
+    if (currentView !== 'chat' && searchOpen) {
+      setSearchOpen(false);
+    }
+  }, [currentView, searchOpen, setSearchOpen]);
+
+  // ── In-conversation search hotkey (Cmd+F on macOS, Ctrl+F elsewhere) ──
+  // Only active in chat view. Settings / history use their own search
+  // (HistoryFilters) or none at all — we deliberately let the platform
+  // handle Cmd+F there.
+  //
+  // We deliberately listen for ONLY the platform-appropriate modifier:
+  // macOS users use Ctrl+F as the Emacs-style "forward-char" cursor move,
+  // so we MUST NOT capture Ctrl+F on macOS. This is a real regression
+  // surfaced by code review.
+  //
+  // Platform detection prefers `navigator.userAgentData.platform` (modern,
+  // non-deprecated) and falls back to `userAgent` string sniffing for
+  // JCEF / older Chromium where userAgentData may be unavailable.
+  // `navigator.platform` is intentionally NOT used — it is deprecated and
+  // returns inconsistent values inside JCEF.
+  useEffect(() => {
+    if (currentView !== 'chat') return;
+    const isMac = (() => {
+      if (typeof navigator === 'undefined') return false;
+      const uaData = (navigator as Navigator & {
+        userAgentData?: { platform?: string };
+      }).userAgentData;
+      const platform = uaData?.platform ?? navigator.userAgent ?? '';
+      return /mac|iphone|ipad|ipod/i.test(platform);
+    })();
+    const handler = (e: KeyboardEvent) => {
+      const key = e.key;
+      if (key !== 'f' && key !== 'F') return;
+      const isFind = isMac ? (e.metaKey && !e.ctrlKey) : (e.ctrlKey && !e.metaKey);
+      if (!isFind) return;
+      // Don't fight IME composition.
+      if (e.isComposing) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setSearchOpen(true);
+    };
+    document.addEventListener('keydown', handler, true);
+    return () => document.removeEventListener('keydown', handler, true);
+    // setSearchOpen is a stable useState setter; intentionally omitted from
+    // deps so we don't rebind the global listener on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentView]);
 
   // ── Slash command preloading ──
   useEffect(() => {
@@ -377,6 +434,7 @@ const App = () => {
           setSettingsInitialTab(undefined);
           setCurrentView('settings');
         }}
+        onOpenSearch={() => setSearchOpen(true)}
         titleEditable
         onTitleChange={(newTitle) => {
           setCustomSessionTitle(newTitle);
@@ -418,6 +476,8 @@ const App = () => {
           inputAreaRef={inputAreaRef}
           messageNodeMapRef={messageNodeMapRef}
           userCollapsedRef={userCollapsedRef}
+          messageListRef={messageListRef}
+          isAutoScrollingRef={isAutoScrollingRef}
           anchorCollapsedCount={anchorCollapsedCount}
           setAnchorCollapsedCount={setAnchorCollapsedCount}
           onMessageNodeRef={handleMessageNodeRef}

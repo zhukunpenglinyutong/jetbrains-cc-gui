@@ -1,12 +1,12 @@
 package com.github.claudecodegui.session;
 
+import com.github.claudecodegui.handler.SettingsHandler;
+import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.model.SessionTemplate;
-import com.github.claudecodegui.settings.CodemossSettingsService;
-import com.github.claudecodegui.handler.core.HandlerContext;
-import com.github.claudecodegui.handler.SettingsHandler;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.skill.SlashCommandRegistry;
 import com.github.claudecodegui.util.JsUtils;
 import com.github.claudecodegui.util.PlatformUtils;
@@ -31,41 +31,11 @@ public class SessionLifecycleManager {
     private static final Logger LOG = Logger.getInstance(SessionLifecycleManager.class);
     private static final String PERMISSION_MODE_PROPERTY_KEY = "claude.code.permission.mode";
 
-    /**
-     * Host interface providing access to window-level dependencies.
-     */
-    public interface SessionHost {
-        Project getProject();
-
-        ClaudeSDKBridge getClaudeSDKBridge();
-
-        CodexSDKBridge getCodexSDKBridge();
-
-        ClaudeSession getSession();
-
-        void setSession(ClaudeSession session);
-
-        HandlerContext getHandlerContext();
-
-        StreamMessageCoalescer getStreamCoalescer();
-
-        void clearPendingPermissionRequests();
-
-        void clearPermissionDecisionMemory();
-
-        void callJavaScript(String functionName, String... args);
-
-        boolean isDisposed();
-
-        JBCefBrowser getBrowser();
-
-        void setupSessionCallbacks();
-
-        void invalidateSessionCallbacks();
-
-        void setSlashCommandsFetched(boolean fetched);
-
-        void setFetchedSlashCommandsCount(int count);
+    static void prepareForSessionReset(SessionHost host) {
+        host.invalidateSessionCallbacks();
+        host.getStreamCoalescer().resetStreamState();
+        host.resetTabStatus();
+        host.callJavaScript("clearMessages");
     }
 
     private final SessionHost host;
@@ -83,9 +53,7 @@ public class SessionLifecycleManager {
         ClaudeSession oldSession = host.getSession();
         LOG.info("Creating new session from backend runtime defaults");
 
-        host.invalidateSessionCallbacks();
-        host.getStreamCoalescer().resetStreamState();
-        host.callJavaScript("clearMessages");
+        prepareForSessionReset(host);
 
         CompletableFuture<Void> interruptFuture = oldSession != null
                                                           ? oldSession.interrupt()
@@ -126,9 +94,7 @@ public class SessionLifecycleManager {
 
         ClaudeSession oldSession = host.getSession();
 
-        host.invalidateSessionCallbacks();
-        host.getStreamCoalescer().resetStreamState();
-        host.callJavaScript("clearMessages");
+        prepareForSessionReset(host);
 
         CompletableFuture<Void> interruptFuture = oldSession != null
                 ? oldSession.interrupt()
@@ -218,9 +184,7 @@ public class SessionLifecycleManager {
         LOG.info("Preserving session state when loading history: mode=" + previousPermissionMode
                          + ", provider=" + previousProvider + ", model=" + previousModel);
 
-        host.invalidateSessionCallbacks();
-        host.getStreamCoalescer().resetStreamState();
-        host.callJavaScript("clearMessages");
+        prepareForSessionReset(host);
         host.clearPendingPermissionRequests();
         host.clearPermissionDecisionMemory();
 
@@ -524,5 +488,44 @@ public class SessionLifecycleManager {
         }
         String json = new Gson().toJson(payload);
         ApplicationManager.getApplication().invokeLater(() -> host.callJavaScript("window.updateSessionRuntimeState", JsUtils.escapeJs(json)));
+    }
+
+    /**
+     * Host interface providing access to window-level dependencies.
+     */
+    public interface SessionHost {
+        Project getProject();
+
+        ClaudeSDKBridge getClaudeSDKBridge();
+
+        CodexSDKBridge getCodexSDKBridge();
+
+        ClaudeSession getSession();
+
+        void setSession(ClaudeSession session);
+
+        HandlerContext getHandlerContext();
+
+        StreamMessageCoalescer getStreamCoalescer();
+
+        void clearPendingPermissionRequests();
+
+        void clearPermissionDecisionMemory();
+
+        void callJavaScript(String functionName, String... args);
+
+        boolean isDisposed();
+
+        JBCefBrowser getBrowser();
+
+        void setupSessionCallbacks();
+
+        void invalidateSessionCallbacks();
+
+        void setSlashCommandsFetched(boolean fetched);
+
+        void setFetchedSlashCommandsCount(int count);
+
+        void resetTabStatus();
     }
 }

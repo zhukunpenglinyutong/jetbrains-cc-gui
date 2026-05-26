@@ -4,7 +4,6 @@ import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.settings.TabStateService;
 import com.github.claudecodegui.startup.BridgePreloader;
 import com.github.claudecodegui.ui.detached.DetachedWindowManager;
-import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
@@ -21,8 +20,8 @@ import com.intellij.ui.content.ContentManagerEvent;
 import com.intellij.ui.content.ContentManagerListener;
 import org.jetbrains.annotations.NotNull;
 
-import javax.swing.*;
-import java.awt.*;
+import java.awt.Component;
+import java.awt.GridBagLayout;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
@@ -34,6 +33,11 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
 
 /**
  * Claude SDK chat tool window.
@@ -141,6 +145,15 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
         windows.addAll(DetachedWindowManager.getAllDetachedChatWindows(project));
         return windows;
+    }
+
+    /**
+     * Public version of {@link #collectProjectChatWindows(Project)} for NodeProcessRegistry.
+     * Returns all chat windows belonging to the given project, including tab windows
+     * and detached floating windows.
+     */
+    public static Set<ClaudeChatWindow> getAllChatWindowsForProject(@NotNull Project project) {
+        return collectProjectChatWindows(project);
     }
 
     private static Set<ClaudeChatWindow> collectAllChatWindows() {

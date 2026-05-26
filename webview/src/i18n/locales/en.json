@@ -12,6 +12,7 @@
     "close": "Close",
     "newSession": "New Session",
     "newTab": "New Tab",
+    "dontAskAgain": "Don't ask again",
     "history": "History",
     "settings": "Settings",
     "thinking": "Thinking",
@@ -93,6 +94,22 @@
     "streamingConnected": "{{provider}} connected, understanding your question",
     "showEarlierMessages": "Show {{count}} earlier messages",
     "totalDuration": "This reply took",
+    "search": {
+      "ariaLabel": "Search in conversation",
+      "placeholder": "Search in conversation…",
+      "next": "Next match (Enter)",
+      "previous": "Previous match (Shift+Enter)",
+      "close": "Close (Esc)",
+      "counter": "{{current}}/{{total}}",
+      "noResults": "No results",
+      "searching": "Searching…",
+      "expandedHint": "Expanded {{count}} earlier messages",
+      "matchCase": "Match Case (Alt+C)",
+      "wholeWord": "Match Whole Word (Alt+W)",
+      "regex": "Use Regular Expression (Alt+R)",
+      "invalidRegex": "Invalid regex",
+      "openTooltip": "Search in conversation (Cmd/Ctrl+F)"
+    },
     "compactSummary": {
       "summarizedConversation": "Summarized conversation",
       "compactSummary": "Compact summary",
@@ -262,33 +279,17 @@
         "softDark": "Soft Dark",
         "softDarkDesc": "Keep code contrast without the harsh black background"
       },
-      "soundNotification": {
-        "label": "Task Completion Sound",
-        "enabled": "Enabled",
-        "disabled": "Disabled",
-        "hint": "When enabled, a notification sound will play when AI completes a task, so you'll know even when away from the screen.",
-        "onlyWhenUnfocused": "Play only when IDE is not focused",
-        "onlyWhenUnfocusedHint": "When enabled, the sound will only play when the IDE window is not in focus.",
-        "selectSound": "Notification Sound",
-        "soundDefault": "Default",
-        "soundChime": "Chime",
-        "soundBell": "Bell",
-        "soundDing": "Ding",
-        "soundSuccess": "Success",
-        "soundCustom": "Custom...",
-        "customSound": "Custom Sound File",
-        "customSoundPlaceholder": "Select or enter audio file path",
-        "customSoundHint": "Supports WAV, MP3, AIFF formats",
-        "testSound": "Test",
-        "browse": "Browse",
-        "useDefault": "Use Default",
-        "customSoundSaved": "Custom sound saved"
-      },
       "userMsgColor": {
         "label": "User Message Color",
         "custom": "Custom",
         "reset": "Reset",
         "hint": "Customize the background color of your messages. Leave empty to follow the theme default."
+      },
+      "newSessionConfirm": {
+        "label": "New Session Confirmation",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "When disabled, creating a new session in a conversation with existing messages will skip the confirmation dialog."
       }
     },
     "providers": "Provider Management",
@@ -992,6 +993,44 @@
       "loading": "Loading providers...",
       "empty": "No providers available",
       "switched": "Switched to {{provider}}"
+    },
+    "nodeProcesses": {
+      "title": "Node Process Manager",
+      "badge": "{{total}} processes",
+      "badgeWithOrphan": "{{total}} · {{orphan}} orphan ⚠",
+      "summary": "Total: {{total}} · Orphans: {{orphan}}",
+      "loading": "Loading processes...",
+      "empty": "No active Node processes",
+      "refresh": "Refresh",
+      "groups": {
+        "daemon": "Daemon Processes",
+        "channel": "Active Conversations",
+        "orphan": "Orphan Processes"
+      },
+      "kind": {
+        "daemonShort": "Daemon",
+        "channelShort": "Channel",
+        "orphanShort": "Orphan"
+      },
+      "kill": "Kill",
+      "interrupt": "Stop",
+      "restart": "Restart",
+      "pending": "Working...",
+      "killAll": "Clean up orphans ({{count}})",
+      "killHint": "Force terminate this Node process",
+      "killAllHint": "Kill every detected orphan process",
+      "restartHint": "Stop the daemon; the next message will spawn a fresh one",
+      "killConfirmTitle": "Terminate process?",
+      "killConfirm": "Kill process PID {{pid}}? Any in-flight conversation will be lost.",
+      "restartConfirmTitle": "Restart daemon?",
+      "restartConfirm": "Restart the daemon? Active conversations will be interrupted.",
+      "killAllConfirmTitle": "Clean up all orphans?",
+      "killAllConfirm": "Kill all {{count}} orphan processes?",
+      "killSuccess": "Process terminated",
+      "killAllSuccess": "Cleaned up {{count}} orphan process(es)",
+      "restartSuccess": "Daemon stopped; a new instance will start automatically on the next message",
+      "killFailed": "Kill failed: {{error}}",
+      "activeRequests": "{{count}} in-flight"
     },
     "link": "Link"
   },

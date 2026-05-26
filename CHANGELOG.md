@@ -1,3 +1,63 @@
+##### **2026年5月23日（v0.4.4-Alpha1）**
+
+English:
+
+✨ Features
+- Add Node Process Manager panel in the chat settings menu (under "Switch Current Provider"). Shows all Node.js child processes for the current project grouped into Daemon, Active Channels and Orphan, with PID, uptime, memory, and per-process Kill / Restart / Interrupt actions. Includes a one-click "Clean up all orphans" button to recover from process leak accumulation
+- Add orphan process scanner that detects Node processes matching `daemon.js` / `channel-manager.js` in the OS process list but not in any of our registries. Orphans are surfaced in the panel with a red warning highlight so users can manually terminate processes the plugin failed to clean up
+- Add live process count badge to the settings menu: shows the total active Node process count, switches to red with a ⚠ when orphan processes are detected
+- Add in-conversation search panel (Cmd+F on macOS, Ctrl+F elsewhere): navigate matches with Prev/Next, Esc to close, hit count display; auto-expands collapsed folds when a hit lands inside; closes automatically when switching views to avoid clashing with HistoryFilters
+- Add Match Case / Whole Word / Regex toggles to the conversation search panel with Alt+C / Alt+W / Alt+R shortcuts; toggle state persisted via localStorage; regex mode surfaces an "Invalid regex" hint on compile failure
+- Add a "Don't ask again" checkbox to the new-session confirm dialog (preference persisted to localStorage); the matching switch is added to Settings → Basic → Behavior with two-way sync via CustomEvent. Interrupting a running AI still always confirms regardless of this preference
+- Add 10-language localization (zh, zh-TW, en, ja, ko, es, fr, pt-BR, ru, hi) for Node Process Manager, conversation search, and the new-session preference switch
+
+🐛 Fixes
+- Fix Codex history sessions failing to load due to two coupled bugs: (1) `HistoryMessageInjector.handleLoadSession` used variable shadows so the Codex branch read the unresolved `currentProvider` / `sessionId` instead of the parsed payload values, causing wrong provider routing; (2) `CodexMessageConverter.convertFunctionCallToToolUse` did not map the Codex `cmd` field to the frontend `command` field, breaking timeline rendering when replaying `exec_command` history. Regression tests pinned for both paths
+- Fix Claude daemon process leak on tab provider switch: previously the daemon stayed alive for the rest of the tab's lifetime even after switching to Codex. `ModelProviderHandler` now shuts down the lingering daemon on Claude → non-Claude transitions; the daemon is lazily restarted on the next Claude message if the user switches back
+- Fix orphan process scanner falsely identifying daemons belonging to OTHER IDE instances as orphans. When running CC GUI in both IDEA and PyCharm side-by-side, each instance previously listed the other's daemons — "Kill all orphans" would have terminated live work in the foreign IDE. The scanner now checks `ProcessHandle.parent()` and only attributes a process to this JVM when its parent PID matches `ProcessHandle.current().pid()`
+- Fix Node.js child process leaks across 11 short-lived subprocess paths (L1-L11): `PromptEnhancerHandler`, `ClaudeQueryExecutor.executeQueryStream` / `executeQuerySync`, `ClaudeSessionQueryService`, `ClaudeRewindService`, `InputHistoryHandler`, `NodeJsServiceCaller`, `BaseSDKBridge.executeStreamingCommand`, `CodexSDKBridge.getMcpServerTools`. None of these registered the child with `ProcessManager`, so a stalled SDK call would leak the Node process for the lifetime of the IDE instance and bypass shutdown cleanup. Each is now registered immediately after `pb.start()`, force-killed via `PlatformUtils.terminateProcess()` in `finally`, and symmetrically unregistered
+- Fix `PromptEnhancerHandler` blocking on stalled SDK calls forever: `process.waitFor()` had no timeout and a synchronous `readLine()` on a stuck stream defeated cancellation. Output is now drained asynchronously and a 60s timeout is enforced
+- Fix `CodexSDKBridge.getMcpServerTools` race where concurrent calls overwrote each other's process reference in `ProcessManager`'s registry under the shared constant key `__codex_mcp_tools__`; each call now generates a unique UUID-suffixed channelId
+- Fix `daemon.js` parent-PID polling interval from 10s to 3s, tightening the worst-case orphan-daemon lifetime after a hard IDE crash
+
+🔧 Improvements
+- Add project-scoped `NodeProcessRegistry` service that aggregates Node process state across all chat windows (including detached windows) for unified inspection
+- Expose `ProcessManager.getActiveChannelSnapshot()`, `BaseSDKBridge.getProcessManager()`, `ClaudeSDKBridge.getCurrentDaemonBridgeForInspection()`, `DaemonBridge.getDaemonProcessForInspection()` for read-only process inspection from the UI layer
+- Replace the daemon process label hard-coded as "claude" with the tab's current provider (claude/codex), so the panel matches what users see in the chat tab
+- Add `ProcessManager.newChannelId(prefix)` helper and route 7 call sites through it (consolidated channel-id generation)
+- Categorise reader-thread failures in `ClaudeRewindService` and `PromptEnhancerProcessRunner` (IOException = expected on kill, RuntimeException = real bug logged with stack); replace magic 60s/5s timeouts with named constants
+- Replace `boolean[1]` lambda-capture trick in `NodeProcessRegistry` with `AtomicBoolean` to satisfy Checkstyle (semantically equivalent, no behaviour change)
+
+中文：
+
+✨ 新功能
+- 在聊天设置菜单中（"切换当前供应商"下方）新增「Node 进程管理」面板，集中展示本项目所有 Node.js 子进程。按守护进程 / 进行中对话 / 孤立进程三类分组，每个进程显示 PID、运行时长、内存占用，并提供终止 / 重启 / 中断按钮。底部一键"清理所有孤立进程"按钮，专治长时间使用后的 Node 进程堆积
+- 新增孤立进程扫描器：用 `ProcessHandle.allProcesses()` 扫描系统级 Node 进程，找出含 `daemon.js` / `channel-manager.js` 但不在我们注册表中的进程，在面板中以红色警告高亮显示，让用户能手动终止插件未能正确清理的失控进程
+- 设置菜单实时显示进程总数徽章：正常时灰色显示总数，检测到孤立进程时变为红色 ⚠ 警告
+- 新增会话内搜索面板：macOS 下 Cmd+F、其他平台 Ctrl+F 唤起；支持上一个/下一个匹配、Esc 关闭、命中计数显示；命中折叠区域时自动展开早期消息并提示展开数量；切换视图时自动关闭，避免与 HistoryFilters 冲突
+- 会话内搜索新增 Match Case / Whole Word / Regex 三个模式开关，对应 Alt+C / Alt+W / Alt+R 快捷键；开关状态通过 localStorage 持久化；正则模式下编译失败时显示 Invalid regex 错误提示
+- 新建会话确认弹窗新增"不再提示"复选框，偏好持久化到 localStorage；设置 → 基础 → 行为页同步增加对应开关，与对话框通过 CustomEvent 双向联动。中断运行中 AI 的危险操作始终强制确认，不受此偏好影响
+- Node 进程管理、会话内搜索、新建会话偏好开关支持 10 种语言（中简、中繁、英、日、韩、西、法、葡、俄、印地）
+
+🐛 修复
+- 修复 Codex 历史会话点不开的问题：根因是两个耦合 bug——(1) `HistoryMessageInjector.handleLoadSession` 内变量影子写错，Codex 分支读到了未解析的 `currentProvider` / `sessionId` 而不是 payload 解析后的值，导致 provider 路由错乱；(2) `CodexMessageConverter.convertFunctionCallToToolUse` 未把 Codex 协议的 `cmd` 字段映射为前端期望的 `command` 字段，导致 `exec_command` 历史回放时间线全空白。两条路径都补上了防回归测试
+- 修复 Tab 从 Claude 切换到 Codex 后 Claude daemon 不关闭导致进程泄漏的问题：之前用户在 Tab 切换 provider 类型到 Codex 后，原 Claude daemon 会一直存活到 Tab 关闭。现在 `ModelProviderHandler` 会在 Claude → 非 Claude 切换时主动关闭 daemon；用户切回 Claude 时下条消息会自动重新启动新 daemon
+- 修复多 IDE 实例下孤立进程误判的问题：之前同时打开 IDEA + PyCharm 跑 CC GUI 时，两个实例会把对方的 daemon 当成自己的孤立进程显示，「清理所有孤立进程」会误杀另一个 IDE 正在运行的对话。现在通过 `ProcessHandle.parent()` 比对当前 JVM PID，每个实例只认领自己 fork 出来的真正孤立进程
+- 修复 11 处 Node.js 短生命周期子进程泄漏（L1-L11）：`PromptEnhancerHandler`、`ClaudeQueryExecutor.executeQueryStream` / `executeQuerySync`、`ClaudeSessionQueryService`、`ClaudeRewindService`、`InputHistoryHandler`、`NodeJsServiceCaller`、`BaseSDKBridge.executeStreamingCommand`、`CodexSDKBridge.getMcpServerTools`。这些路径以前都没有把 fork 出来的子进程注册到 `ProcessManager`，导致 SDK 卡死时子进程能存活到 IDE 退出，绕过关机清理。现在每处都在 `pb.start()` 后立即注册，`finally` 块中通过 `PlatformUtils.terminateProcess()` 强制终止，并对称取消注册
+- 修复 `PromptEnhancerHandler` 在 SDK 卡死时永久阻塞调用线程的问题：`process.waitFor()` 没有超时，且同步 `readLine()` 读卡住的流根本无法被超时打断。改为异步消耗 stdout + 60 秒硬性超时
+- 修复 `CodexSDKBridge.getMcpServerTools` 并发竞争：之前用常量 key `__codex_mcp_tools__` 注册到 `ProcessManager`，并发调用会互相覆盖 Process 引用，被覆盖的子进程无法再被取消注册。现在每次调用生成 UUID 后缀的唯一 channelId
+- 修复 `daemon.js` 父进程心跳从 10s 缩短到 3s，IDE 硬崩溃后 daemon 最长存活时间从 10 秒收紧到 3 秒
+
+🔧 改进
+- 新增项目级 `NodeProcessRegistry` 服务，跨所有聊天窗口（含游离窗口）聚合 Node 进程数据，实现统一管理视图
+- 暴露 `ProcessManager.getActiveChannelSnapshot()`、`BaseSDKBridge.getProcessManager()`、`ClaudeSDKBridge.getCurrentDaemonBridgeForInspection()`、`DaemonBridge.getDaemonProcessForInspection()` 用于只读进程检视
+- 进程面板的 daemon 标签从硬编码 "claude" 改为读取 Tab 当前 provider（claude/codex），与用户在聊天 Tab 看到的供应商完全一致
+- 新增 `ProcessManager.newChannelId(prefix)` 统一生成 channelId，收编 7 个调用点
+- `ClaudeRewindService` / `PromptEnhancerProcessRunner` 中区分 reader 线程异常分类（IOException = 终止时预期，RuntimeException = 真 bug，带堆栈记录）；用具名常量替换魔法数 60s / 5s
+- `NodeProcessRegistry` 中用 `AtomicBoolean` 替换 `boolean[1]` 的 lambda 闭包绕过技巧，满足 Checkstyle 要求（行为等价无差异）
+
+---
+
 ##### **2026年5月22日（v0.4.3）**
 
 English:

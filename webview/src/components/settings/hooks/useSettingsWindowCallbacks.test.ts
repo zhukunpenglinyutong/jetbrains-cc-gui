@@ -1,8 +1,8 @@
-import { renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useSettingsWindowCallbacks, type SettingsWindowCallbacksDeps } from './useSettingsWindowCallbacks';
-import type { CommitAiConfig } from '../../../types/aiFeatureConfig';
-import type { PromptEnhancerConfig } from '../../../types/promptEnhancer';
+import {renderHook} from '@testing-library/react';
+import {beforeEach, describe, expect, it, vi} from 'vitest';
+import {type SettingsWindowCallbacksDeps, useSettingsWindowCallbacks} from './useSettingsWindowCallbacks';
+import type {CommitAiConfig} from '../../../types/aiFeatureConfig';
+import type {PromptEnhancerConfig} from '../../../types/promptEnhancer';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -33,10 +33,6 @@ describe('useSettingsWindowCallbacks', () => {
     setLoading: vi.fn(),
     setCodexLoading: vi.fn(),
     setCodexConfigLoading: vi.fn(),
-    setSoundNotificationEnabled: vi.fn(),
-    setSoundOnlyWhenUnfocused: vi.fn(),
-    setSelectedSound: vi.fn(),
-    setCustomSoundPath: vi.fn(),
     updateProviders: vi.fn(),
     updateActiveProvider: vi.fn(),
     loadProviders: vi.fn(),
@@ -76,7 +72,6 @@ describe('useSettingsWindowCallbacks', () => {
     expect(window.sendToJava).toHaveBeenCalledWith('get_commit_prompt:');
     expect(window.sendToJava).toHaveBeenCalledWith('get_commit_ai_config:');
     expect(window.sendToJava).toHaveBeenCalledWith('get_prompt_enhancer_config:');
-    expect(window.sendToJava).toHaveBeenCalledWith('get_sound_notification_config:');
     expect(window.sendToJava).toHaveBeenCalledWith('get_ui_font_config:');
   });
 

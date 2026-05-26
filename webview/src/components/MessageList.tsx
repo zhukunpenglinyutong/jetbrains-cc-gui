@@ -1,4 +1,4 @@
-import { memo, useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { memo, useState, useEffect, useRef, useMemo, useCallback, forwardRef, useImperativeHandle } from 'react';
 import type { TFunction } from 'i18next';
 import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock } from '../types';
 import type { QueueDisplayState } from '../contexts/MessagesContext';
@@ -7,6 +7,7 @@ import { MessageItem } from './MessageItem';
 import WaitingIndicator from './WaitingIndicator';
 import { ContextMenu } from './ContextMenu';
 import { useContextMenu, copySelection } from '../hooks/useContextMenu.js';
+import type { MessageListRevealHandle } from './ConversationSearch/types';
 
 /** Always render at least this many recent messages. Earlier messages are collapsed. */
 const VISIBLE_MESSAGE_WINDOW = 15;
@@ -69,7 +70,7 @@ interface MessageListProps {
   currentProvider?: string;
 }
 
-export const MessageList = memo(function MessageList({
+export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListProps>(function MessageList({
   messages,
   streamingActive,
   isThinking,
@@ -88,7 +89,7 @@ export const MessageList = memo(function MessageList({
   onNavigateToProviderSettings,
   onNavigateToDependencySettings,
   currentProvider,
-}: MessageListProps) {
+}, ref) {
   // Number of earlier messages revealed beyond VISIBLE_MESSAGE_WINDOW. Grows in
   // page-size chunks as the user clicks "show earlier", avoiding a single huge
   // mount when sessions exceed hundreds of messages.
@@ -135,6 +136,20 @@ export const MessageList = memo(function MessageList({
   const handleRevealMore = useCallback(() => {
     setRevealedCount((prev) => prev + REVEAL_PAGE_SIZE);
   }, []);
+
+  // Imperative API so the in-page search can expand everything before scanning.
+  // Returns the number of messages that were just revealed (0 when nothing
+  // was collapsed). This lets the search panel surface "Expanded N earlier
+  // messages" exactly once per panel-open, per the agreed design.
+  useImperativeHandle(ref, (): MessageListRevealHandle => ({
+    revealAll: () => {
+      if (totalEarlierMessages === 0) return 0;
+      const previouslyHidden = collapsedCount;
+      if (previouslyHidden === 0) return 0;
+      setRevealedCount(totalEarlierMessages);
+      return previouslyHidden;
+    },
+  }), [totalEarlierMessages, collapsedCount]);
 
   // Notify parent of collapsed count changes (for anchor rail sync)
   useEffect(() => {
@@ -208,4 +223,4 @@ export const MessageList = memo(function MessageList({
       <div ref={messagesEndRef} />
     </div>
   );
-});
+}));

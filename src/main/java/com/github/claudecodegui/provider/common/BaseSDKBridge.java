@@ -8,6 +8,7 @@ import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.bridge.ProcessManager;
 import com.github.claudecodegui.startup.BridgePreloader;
+import com.github.claudecodegui.util.PlatformUtils;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.util.concurrency.AppExecutorUtil;
 
@@ -107,6 +108,15 @@ public abstract class BaseSDKBridge {
      */
     public int getActiveProcessCount() {
         return processManager.getActiveProcessCount();
+    }
+
+    /**
+     * Expose this bridge's ProcessManager for inspection by NodeProcessRegistry.
+     * Callers must treat the returned manager as read-only — do not register/unregister
+     * processes through this reference; use the bridge's normal API instead.
+     */
+    public ProcessManager getProcessManager() {
+        return processManager;
     }
 
     /**
@@ -351,6 +361,15 @@ public abstract class BaseSDKBridge {
                 } finally {
                     processManager.unregisterProcess(channelId, process);
                     processManager.waitForProcessTermination(process);
+                    // L9 fix: waitForProcessTermination only waits 5s and then gives
+                    // up. If the SDK is stuck on a network read it can outlive that
+                    // window — force-kill so the child does not become a long-lived
+                    // orphan. Matches the cleanup guarantee in interruptChannel.
+                    if (process.isAlive()) {
+                        LOG.warn("[" + getProviderName() + "] process " + process.pid()
+                                + " did not terminate within waitForProcessTermination window, force-killing");
+                        PlatformUtils.terminateProcess(process);
+                    }
                 }
 
             } catch (Exception e) {

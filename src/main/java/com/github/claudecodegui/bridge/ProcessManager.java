@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
@@ -27,6 +28,19 @@ public class ProcessManager {
     private final Set<String> interruptedChannels = ConcurrentHashMap.newKeySet();
     private final Map<RuntimeKey, Process> activeRuntimeProcesses = new ConcurrentHashMap<>();
     private final Set<RuntimeKey> interruptedRuntimes = ConcurrentHashMap.newKeySet();
+
+    /**
+     * Generates a unique channel ID by appending a random UUID to {@code prefix}.
+     *
+     * <p>Use this when registering a short-lived child process whose channel
+     * has no natural identifier (one-shot RPC calls, helper scripts, etc.).
+     * A unique suffix is mandatory: see {@code CodexSDKBridge#getMcpServerTools}
+     * (L10 fix) for why constant channel IDs corrupt the registry under
+     * concurrent calls.
+     */
+    public static String newChannelId(String prefix) {
+        return prefix + "-" + UUID.randomUUID();
+    }
 
     /**
      * Registers an active process.
@@ -275,6 +289,22 @@ public class ProcessManager {
             }
         }
         return count;
+    }
+
+    /**
+     * Returns an immutable snapshot of the currently registered channel→process map.
+     * Used by NodeProcessRegistry to enumerate live processes for the management panel.
+     * Filters out dead processes inline so callers don't need to re-check isAlive().
+     */
+    public Map<String, Process> getActiveChannelSnapshot() {
+        Map<String, Process> snapshot = new java.util.HashMap<>();
+        for (Map.Entry<String, Process> entry : activeChannelProcesses.entrySet()) {
+            Process process = entry.getValue();
+            if (process != null && process.isAlive()) {
+                snapshot.put(entry.getKey(), process);
+            }
+        }
+        return snapshot;
     }
 
     /**

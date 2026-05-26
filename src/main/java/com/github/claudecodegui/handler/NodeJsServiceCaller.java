@@ -1,7 +1,9 @@
 package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.bridge.ProcessManager;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.util.PlatformUtils;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -165,29 +167,43 @@ public class NodeJsServiceCaller {
      * and return the last line of stdout (expected to be JSON).
      */
     private String executeNodeScript(ProcessBuilder pb) throws Exception {
-        Process process = pb.start();
+        // L8 fix: register with ProcessManager so cleanupAllProcesses sees this child.
+        ProcessManager processManager = context.getClaudeSDKBridge().getProcessManager();
+        String channelId = ProcessManager.newChannelId("node-service");
+        Process process = null;
+        try {
+            process = pb.start();
+            processManager.registerProcess(channelId, process);
 
-        StringBuilder output = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                output.append(line).append("\n");
+            StringBuilder output = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line).append("\n");
+                }
+            }
+
+            boolean finished = process.waitFor(PROCESS_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            if (!finished) {
+                PlatformUtils.terminateProcess(process);
+                throw new Exception("Node.js process timed out after " + PROCESS_TIMEOUT_SECONDS + " seconds");
+            }
+
+            int exitCode = process.exitValue();
+            if (exitCode != 0) {
+                throw new Exception("Node.js process exited with code " + exitCode + ": " + output);
+            }
+
+            String[] lines = output.toString().split("\n");
+            return lines.length > 0 ? lines[lines.length - 1] : "{}";
+        } finally {
+            if (process != null) {
+                if (process.isAlive()) {
+                    PlatformUtils.terminateProcess(process);
+                }
+                processManager.unregisterProcess(channelId, process);
             }
         }
-
-        boolean finished = process.waitFor(PROCESS_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-        if (!finished) {
-            process.destroyForcibly();
-            throw new Exception("Node.js process timed out after " + PROCESS_TIMEOUT_SECONDS + " seconds");
-        }
-
-        int exitCode = process.exitValue();
-        if (exitCode != 0) {
-            throw new Exception("Node.js process exited with code " + exitCode + ": " + output);
-        }
-
-        String[] lines = output.toString().split("\n");
-        return lines.length > 0 ? lines[lines.length - 1] : "{}";
     }
 }

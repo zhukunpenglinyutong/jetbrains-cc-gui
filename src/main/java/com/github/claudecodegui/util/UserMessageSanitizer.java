@@ -9,7 +9,7 @@ public final class UserMessageSanitizer {
 
     private static final String[] SYSTEM_TAG_NAMES = {"agents-instructions", "system-reminder", "system-prompt"};
 
-    private static final String[] APPENDED_CONTEXT_MARKERS = {
+    private static final String[] APPENDED_CONTEXT_MARKERS = {"\n\n## Opened Files Context\n\n",
         "\n\n## Agent Role and Instructions\n\n",
         "\n\n## Workspace Context\n\n",
         "\n\n## Project Modules\n\nThis project contains multiple modules:\n",

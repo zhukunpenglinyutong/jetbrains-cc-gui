@@ -226,6 +226,47 @@
   width: 16px;
 }
 
+/* Node process management panel */
+.node-process-dropdown .codicon-modifier-spin {
+  animation: codicon-spin 1.5s linear infinite;
+}
+
+.node-process-icon-button {
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+.node-process-icon-button:hover:not(:disabled) {
+  background: var(--button-hover);
+}
+
+.node-process-icon-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.node-process-icon-button .codicon {
+  font-size: 14px;
+}
+
+.node-process-icon-button--danger {
+  color: var(--error-color, #d9534f);
+}
+
+.node-process-icon-button--danger:hover:not(:disabled) {
+  background: rgba(217, 83, 79, 0.12);
+}
+
 /* Selector toast notification */
 .selector-toast {
   position: fixed;

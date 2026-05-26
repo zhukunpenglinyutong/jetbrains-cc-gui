@@ -12,6 +12,11 @@ export interface ChatHeaderProps {
   onNewTab: () => void;
   onHistory: () => void;
   onSettings: () => void;
+  /**
+   * Opens the in-conversation search panel. Only rendered when provided.
+   * Wired up by App.tsx via UIStateContext.setSearchOpen.
+   */
+  onOpenSearch?: () => void;
   onTitleChange?: (newTitle: string) => void;
   titleEditable?: boolean;
 }
@@ -25,6 +30,7 @@ export function ChatHeader({
   onNewTab,
   onHistory,
   onSettings,
+  onOpenSearch,
   onTitleChange,
   titleEditable = false,
 }: ChatHeaderProps): React.ReactElement | null {
@@ -130,6 +136,16 @@ export function ChatHeader({
       <div className="header-right">
         {currentView === 'chat' && (
           <>
+            {onOpenSearch && (
+              <button
+                className="icon-button"
+                onClick={onOpenSearch}
+                data-tooltip={t('chat.search.openTooltip', { defaultValue: 'Search in conversation' })}
+                aria-label={t('chat.search.openTooltip', { defaultValue: 'Search in conversation' })}
+              >
+                <span className="codicon codicon-search" />
+              </button>
+            )}
             <button className="icon-button" onClick={onNewSession} data-tooltip={t('common.newSession')}>
               <span className="codicon codicon-plus" />
             </button>

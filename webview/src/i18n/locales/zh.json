@@ -12,6 +12,7 @@
     "close": "关闭",
     "newSession": "新会话",
     "newTab": "新标签页",
+    "dontAskAgain": "不再提示",
     "history": "历史记录",
     "settings": "设置",
     "thinking": "思考",
@@ -93,6 +94,22 @@
     "streamingConnected": "{{provider}} 已成功连接，正在理解问题",
     "showEarlierMessages": "显示之前的 {{count}} 条消息",
     "totalDuration": "本次耗时",
+    "search": {
+      "ariaLabel": "在对话中搜索",
+      "placeholder": "在对话中搜索…",
+      "next": "下一个匹配 (Enter)",
+      "previous": "上一个匹配 (Shift+Enter)",
+      "close": "关闭 (Esc)",
+      "counter": "{{current}}/{{total}}",
+      "noResults": "无结果",
+      "searching": "搜索中…",
+      "expandedHint": "已展开 {{count}} 条早期消息",
+      "matchCase": "区分大小写 (Alt+C)",
+      "wholeWord": "全词匹配 (Alt+W)",
+      "regex": "正则表达式 (Alt+R)",
+      "invalidRegex": "正则无效",
+      "openTooltip": "在对话中搜索 (Cmd/Ctrl+F)"
+    },
     "compactSummary": {
       "summarizedConversation": "已总结的对话",
       "compactSummary": "对话摘要",
@@ -271,33 +288,17 @@
         "softDark": "柔和深色",
         "softDarkDesc": "保留代码感，但弱化纯黑对比"
       },
-      "soundNotification": {
-        "label": "任务完成提示音",
-        "enabled": "已开启",
-        "disabled": "已关闭",
-        "hint": "开启后，AI 完成任务时会播放提示音，方便您离开屏幕时也能知道任务已完成。",
-        "onlyWhenUnfocused": "仅在 IDE 未聚焦时播放",
-        "onlyWhenUnfocusedHint": "开启后，仅在 IDE 窗口未聚焦时播放提示音。",
-        "selectSound": "提示音",
-        "soundDefault": "默认",
-        "soundChime": "清脆铃声",
-        "soundBell": "钟声",
-        "soundDing": "叮咚",
-        "soundSuccess": "成功提示",
-        "soundCustom": "自定义...",
-        "customSound": "自定义音频文件",
-        "customSoundPlaceholder": "选择或输入音频文件路径",
-        "customSoundHint": "支持 WAV、MP3、AIFF 格式",
-        "testSound": "试听",
-        "browse": "浏览",
-        "useDefault": "使用默认",
-        "customSoundSaved": "自定义提示音已保存"
-      },
       "userMsgColor": {
         "label": "用户消息颜色",
         "custom": "自定义",
         "reset": "恢复默认",
         "hint": "自定义您的消息背景颜色，留空则跟随主题默认颜色"
+      },
+      "newSessionConfirm": {
+        "label": "新建会话时二次确认",
+        "enabled": "已开启",
+        "disabled": "已关闭",
+        "hint": "关闭后，在已有消息的会话中点击新建将直接创建，不再弹出确认窗口"
       }
     },
     "providers": "供应商管理",
@@ -1006,6 +1007,44 @@
       "loading": "正在加载供应商...",
       "empty": "暂无可用供应商",
       "switched": "已切换到 {{provider}}"
+    },
+    "nodeProcesses": {
+      "title": "Node 进程管理",
+      "badge": "{{total}} 个进程",
+      "badgeWithOrphan": "{{total}} 个 · {{orphan}} 孤立 ⚠",
+      "summary": "共 {{total}} 个 · 孤立 {{orphan}} 个",
+      "loading": "正在加载进程信息...",
+      "empty": "当前没有活跃的 Node 进程",
+      "refresh": "刷新",
+      "groups": {
+        "daemon": "守护进程",
+        "channel": "进行中对话",
+        "orphan": "孤立进程"
+      },
+      "kind": {
+        "daemonShort": "Daemon",
+        "channelShort": "对话",
+        "orphanShort": "孤立"
+      },
+      "kill": "终止",
+      "interrupt": "中断",
+      "restart": "重启",
+      "pending": "处理中...",
+      "killAll": "清理所有孤立进程 ({{count}})",
+      "killHint": "强制结束该 Node 进程",
+      "killAllHint": "一键清理所有失控的孤立进程",
+      "restartHint": "关闭守护进程，下一条消息时会自动重新启动",
+      "killConfirmTitle": "终止该进程？",
+      "killConfirm": "确认终止 PID {{pid}}？当前对话可能丢失。",
+      "restartConfirmTitle": "重启守护进程？",
+      "restartConfirm": "确认重启守护进程？当前正在进行的对话会被中断。",
+      "killAllConfirmTitle": "清理所有孤立进程？",
+      "killAllConfirm": "确认终止全部 {{count}} 个孤立进程？",
+      "killSuccess": "进程已终止",
+      "killAllSuccess": "已清理 {{count}} 个孤立进程",
+      "restartSuccess": "守护进程已关闭，下一条消息会自动启动新实例",
+      "killFailed": "终止失败：{{error}}",
+      "activeRequests": "{{count}} 个进行中"
     },
     "link": "链接"
   },

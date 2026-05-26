@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import type { ClaudeMessage, HistoryData } from '../types';
 import { sendBridgeEvent } from '../utils/bridge';
+import { getSkipNewSessionConfirm } from '../utils/skipNewSessionConfirm';
 
 type ViewMode = 'chat' | 'history' | 'settings';
 
@@ -139,10 +140,21 @@ export function useSessionManagement({
     // [FIX] Prioritize loading check - if AI is responding, must interrupt first
     // This prevents creating new session without stopping the current conversation
     if (loading) {
-      // If loading (AI is responding), show interrupt confirmation
+      // If loading (AI is responding), show interrupt confirmation.
+      // NOTE: The "don't ask again" preference deliberately does NOT apply here —
+      // interrupting an in-progress AI response is a more dangerous operation
+      // and must always require explicit confirmation.
       pendingActionRef.current = 'newSession';
       setShowInterruptConfirm(true);
     } else if (messages.length > 0) {
+      // If the user previously ticked "don't ask again", skip the dialog and
+      // proceed directly. Preference is read fresh each call so the setting
+      // page toggle takes effect immediately.
+      if (getSkipNewSessionConfirm()) {
+        beginSessionTransition(null, null);
+        sendBridgeEvent('create_new_session');
+        return;
+      }
       // If there are messages but not loading, show new session confirmation
       pendingActionRef.current = 'newSession';
       setShowNewSessionConfirm(true);
