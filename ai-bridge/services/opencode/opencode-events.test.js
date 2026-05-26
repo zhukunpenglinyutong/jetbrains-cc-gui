@@ -195,6 +195,7 @@ test('opencode session.status idle is treated as the turn completion signal', as
     }
   }, ctx);
   assert.equal(ctx.sawSessionIdle, false);
+  assert.equal(ctx.sawTurnLive, true);
 
   await handleOpenCodeEvent({
     type: 'session.status',
@@ -243,6 +244,48 @@ test('opencode event stream closure does not complete a busy turn before status 
   }
 
   assert.equal(calls, 2);
+});
+
+test('opencode missing status cannot complete a turn before live activity', async () => {
+  const previousPollMs = process.env.OPENCODE_SESSION_STATUS_POLL_MS;
+  const previousDrainMs = process.env.OPENCODE_EVENT_DRAIN_IDLE_MS;
+  process.env.OPENCODE_SESSION_STATUS_POLL_MS = '1';
+  process.env.OPENCODE_EVENT_DRAIN_IDLE_MS = '1';
+
+  let completed = false;
+  const ctx = createEventContext({
+    client: {
+      session: {
+        status: async () => ({ data: {} })
+      }
+    }
+  }, '/repo', 'default', { id: 'ses_test' });
+  ctx.eventStreamClosed = true;
+  ctx.lastActivityAt = Date.now() - 1000;
+
+  const wait = waitForOpenCodeTurnIdle(ctx, { aborted: false }).then(() => {
+    completed = true;
+  });
+
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(completed, false);
+
+    ctx.sawTurnLive = true;
+    await wait;
+    assert.equal(completed, true);
+  } finally {
+    if (previousPollMs === undefined) {
+      delete process.env.OPENCODE_SESSION_STATUS_POLL_MS;
+    } else {
+      process.env.OPENCODE_SESSION_STATUS_POLL_MS = previousPollMs;
+    }
+    if (previousDrainMs === undefined) {
+      delete process.env.OPENCODE_EVENT_DRAIN_IDLE_MS;
+    } else {
+      process.env.OPENCODE_EVENT_DRAIN_IDLE_MS = previousDrainMs;
+    }
+  }
 });
 
 test('opencode task tool input and subagent metadata are preserved', async () => {

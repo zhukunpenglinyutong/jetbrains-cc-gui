@@ -2103,6 +2103,7 @@ function createEventContext(runtime, cwd, permissionMode, sessionRef) {
     sawAssistantOutput: false,
     sawSendError: false,
     sawSessionIdle: false,
+    sawTurnLive: false,
     eventStreamClosed: false,
     lastActivityAt: Date.now(),
     lastToolError: ''
@@ -2226,7 +2227,12 @@ async function pollOpenCodeSessionIdle(ctx) {
       statusApi.call(ctx.runtime.client.session, { query: directoryQuery(ctx.cwd) }),
       'get opencode session status'
     );
-    return isOpenCodeIdleStatus(statuses?.[sessionId]);
+    const status = statuses?.[sessionId];
+    if (status && !isOpenCodeIdleStatus(status)) {
+      ctx.sawTurnLive = true;
+      return false;
+    }
+    return true;
   } catch {
     return undefined;
   }
@@ -2239,18 +2245,18 @@ async function waitForOpenCodeTurnIdle(ctx, activeTurn) {
   );
 
   while (!activeTurn.aborted && !ctx.sawSendError) {
-    if (ctx.sawSessionIdle) {
+    if (ctx.sawSessionIdle && ctx.sawTurnLive) {
       await waitForOpenCodeEventDrain(ctx, activeTurn);
       return;
     }
 
     const idle = await pollOpenCodeSessionIdle(ctx);
-    if (idle === true) {
+    if (idle === true && ctx.sawTurnLive) {
       await waitForOpenCodeEventDrain(ctx, activeTurn);
       return;
     }
 
-    if (idle === undefined && ctx.eventStreamClosed) {
+    if (idle === undefined && ctx.eventStreamClosed && ctx.sawTurnLive) {
       await waitForOpenCodeEventDrain(ctx, activeTurn);
       return;
     }
@@ -2308,6 +2314,9 @@ async function handleOpenCodeEvent(event, ctx) {
     case 'session.status': {
       if (isOpenCodeIdleStatus(props.status)) {
         ctx.sawSessionIdle = true;
+      } else {
+        ctx.sawTurnLive = true;
+        ctx.sawSessionIdle = false;
       }
       break;
     }
@@ -2318,6 +2327,7 @@ async function handleOpenCodeEvent(event, ctx) {
     }
 
     case 'message.part.updated': {
+      ctx.sawTurnLive = true;
       const part = props.part || {};
       if (part.id) {
         ctx.partTypes.set(part.id, partKind(part));
@@ -2351,6 +2361,7 @@ async function handleOpenCodeEvent(event, ctx) {
       if (!delta) {
         return;
       }
+      ctx.sawTurnLive = true;
 
       const partType = ctx.partTypes.get(props.partID);
       if (props.partID) {
@@ -2369,6 +2380,9 @@ async function handleOpenCodeEvent(event, ctx) {
 
     case 'message.updated': {
       const info = props.info || props.message || {};
+      if (info.role === 'assistant') {
+        ctx.sawTurnLive = true;
+      }
       if (info.role === 'assistant' && info.error) {
         emitContextSendError(ctx, {
           code: 'OPENCODE_SESSION_ERROR',
@@ -2379,6 +2393,7 @@ async function handleOpenCodeEvent(event, ctx) {
     }
 
     case 'session.error': {
+      ctx.sawTurnLive = true;
       emitContextSendError(ctx, {
         code: 'OPENCODE_SESSION_ERROR',
         error: formatOpenCodeError(props.error, 'opencode session error')
@@ -2387,11 +2402,13 @@ async function handleOpenCodeEvent(event, ctx) {
     }
 
     case 'session.diff': {
+      ctx.sawTurnLive = true;
       emitOpenCodeDiffMessages(ctx, props.diff, 'session.diff');
       break;
     }
 
     case 'permission.asked': {
+      ctx.sawTurnLive = true;
       const requestId = props.id || props.requestID || props.permissionID;
       if (!requestId || ctx.repliedPermissions.has(requestId)) {
         return;
@@ -2402,6 +2419,7 @@ async function handleOpenCodeEvent(event, ctx) {
     }
 
     case 'question.asked': {
+      ctx.sawTurnLive = true;
       const requestId = props.id || props.requestID || props.questionID;
       if (!requestId || ctx.rejectedQuestions.has(requestId)) {
         return;
@@ -2531,6 +2549,7 @@ export async function sendMessage(
 
     let response;
     eventContext.sawSessionIdle = false;
+    eventContext.sawTurnLive = false;
     if (slashCommand) {
       const promptOptions = resolveOpenCodePromptOptions(permissionMode, agent);
       const fileParts = promptParts.parts.filter((part) => part.type === 'file');
@@ -2557,6 +2576,9 @@ export async function sendMessage(
         }),
         'send opencode command'
       );
+      // session.command is a synchronous HTTP operation; if it returned, the
+      // turn was definitely live even when the status entry has already cleared.
+      eventContext.sawTurnLive = true;
     } else {
       const body = { parts: promptParts.parts };
       if (parsedModel) {
@@ -2564,14 +2586,25 @@ export async function sendMessage(
       }
       Object.assign(body, resolveOpenCodePromptOptions(permissionMode, agent));
 
+      const useAsyncPrompt = typeof runtime.client.session.promptAsync === 'function';
+      const promptApi = useAsyncPrompt
+        ? runtime.client.session.promptAsync
+        : runtime.client.session.prompt;
       response = await unwrapSdkResult(
-        runtime.client.session.prompt({
+        promptApi.call(runtime.client.session, {
           path: { id: sessionRef.id },
           query: directoryQuery(cwd),
           body
         }),
-        'send opencode prompt'
+        useAsyncPrompt
+          ? 'start opencode async prompt'
+          : 'send opencode prompt'
       );
+      if (!useAsyncPrompt) {
+        // Older SDK fallback: the synchronous prompt call only returns after
+        // the turn has run, so a missing status entry can be considered done.
+        eventContext.sawTurnLive = true;
+      }
     }
 
     if (responseHasOpenCodeError(response)) {
