@@ -28,6 +28,7 @@ const DEFAULT_HISTORY_COUNT_CONCURRENCY = 4;
 const DEFAULT_MCP_STATUS_TIMEOUT_MS = 35000;
 const MAX_TOOL_RESULT_CHARS = 20000;
 const DEFAULT_EVENT_DRAIN_IDLE_MS = 300;
+const DEFAULT_SESSION_STATUS_POLL_MS = 250;
 const PLAN_MODE_PERMISSION_DENIED =
   'opencode permission denied because the chat is in plan mode.';
 const WINDOWS_ABSOLUTE_PATH = /^[A-Za-z]:[\\/]/;
@@ -75,6 +76,9 @@ function emitSendError(errorPayload) {
 
 function emitContextSendError(ctx, errorPayload) {
   if (ctx) {
+    if (ctx.sawSendError) {
+      return;
+    }
     ctx.sawSendError = true;
   }
   emitSendError(errorPayload);
@@ -2098,6 +2102,8 @@ function createEventContext(runtime, cwd, permissionMode, sessionRef) {
     sawContentDelta: false,
     sawAssistantOutput: false,
     sawSendError: false,
+    sawSessionIdle: false,
+    eventStreamClosed: false,
     lastActivityAt: Date.now(),
     lastToolError: ''
   };
@@ -2198,6 +2204,61 @@ async function waitForOpenCodeEventDrain(ctx, activeTurn) {
   }
 }
 
+function isOpenCodeIdleStatus(status) {
+  if (!status) {
+    return true;
+  }
+  if (typeof status === 'string') {
+    return status === 'idle';
+  }
+  return status?.type === 'idle';
+}
+
+async function pollOpenCodeSessionIdle(ctx) {
+  const sessionId = ctx?.sessionRef?.id;
+  const statusApi = ctx?.runtime?.client?.session?.status;
+  if (!sessionId || typeof statusApi !== 'function') {
+    return undefined;
+  }
+
+  try {
+    const statuses = await unwrapSdkResult(
+      statusApi.call(ctx.runtime.client.session, { query: directoryQuery(ctx.cwd) }),
+      'get opencode session status'
+    );
+    return isOpenCodeIdleStatus(statuses?.[sessionId]);
+  } catch {
+    return undefined;
+  }
+}
+
+async function waitForOpenCodeTurnIdle(ctx, activeTurn) {
+  const pollMs = parsePositiveInteger(
+    process.env.OPENCODE_SESSION_STATUS_POLL_MS,
+    DEFAULT_SESSION_STATUS_POLL_MS
+  );
+
+  while (!activeTurn.aborted && !ctx.sawSendError) {
+    if (ctx.sawSessionIdle) {
+      await waitForOpenCodeEventDrain(ctx, activeTurn);
+      return;
+    }
+
+    const idle = await pollOpenCodeSessionIdle(ctx);
+    if (idle === true) {
+      await waitForOpenCodeEventDrain(ctx, activeTurn);
+      return;
+    }
+
+    if (idle === undefined && ctx.eventStreamClosed) {
+      await waitForOpenCodeEventDrain(ctx, activeTurn);
+      return;
+    }
+
+    await delay(Math.max(10, pollMs));
+  }
+}
+
 function eventProperties(event) {
   return event?.properties || event?.payload?.properties || {};
 }
@@ -2244,6 +2305,18 @@ async function handleOpenCodeEvent(event, ctx) {
   markOpenCodeActivity(ctx);
 
   switch (type) {
+    case 'session.status': {
+      if (isOpenCodeIdleStatus(props.status)) {
+        ctx.sawSessionIdle = true;
+      }
+      break;
+    }
+
+    case 'session.idle': {
+      ctx.sawSessionIdle = true;
+      break;
+    }
+
     case 'message.part.updated': {
       const part = props.part || {};
       if (part.id) {
@@ -2362,7 +2435,9 @@ async function consumeEvents(client, ctx, signal, onReady, onSubscribeError = un
       }
       await handleOpenCodeEvent(event, ctx);
     }
+    ctx.eventStreamClosed = true;
   } catch (error) {
+    ctx.eventStreamClosed = true;
     if (!signal.aborted) {
       const message = formatOpenCodeError(error, 'opencode event stream ended');
       emitStatus(`opencode event stream ended: ${message}`);
@@ -2402,6 +2477,7 @@ export async function sendMessage(
   let cleanupAttachments = async () => {};
   let eventAbortController = null;
   let eventTask = null;
+  let eventContext = null;
   const activeTurn = {
     runtime: null,
     cwd,
@@ -2416,7 +2492,7 @@ export async function sendMessage(
     activeTurn.runtime = runtime;
 
     const sessionRef = { id: sessionId && sessionId.trim() ? sessionId.trim() : '' };
-    const eventContext = createEventContext(runtime, cwd, permissionMode, sessionRef);
+    eventContext = createEventContext(runtime, cwd, permissionMode, sessionRef);
     eventAbortController = new AbortController();
     activeTurn.eventAbortController = eventAbortController;
 
@@ -2454,6 +2530,7 @@ export async function sendMessage(
     cleanupAttachments = promptParts.cleanup;
 
     let response;
+    eventContext.sawSessionIdle = false;
     if (slashCommand) {
       const promptOptions = resolveOpenCodePromptOptions(permissionMode, agent);
       const fileParts = promptParts.parts.filter((part) => part.type === 'file');
@@ -2511,19 +2588,20 @@ export async function sendMessage(
       eventContext.sawAssistantOutput = true;
     }
 
-    await waitForOpenCodeEventDrain(eventContext, activeTurn);
+    await waitForOpenCodeTurnIdle(eventContext, activeTurn);
 
     if (!eventContext.sawSendError && !eventContext.sawAssistantOutput) {
       emitOpenCodeEmptyResponseFallback(eventContext);
     }
 
-    if (!eventContext.sawSendError) {
-      emitMarker('[STREAM_END]');
-      emitMarker('[MESSAGE_END]');
-    }
+    // Keep UI cleanup markers aligned with Claude/Codex, including error turns.
+    emitMarker('[STREAM_END]');
+    emitMarker('[MESSAGE_END]');
   } catch (error) {
     if (!activeTurn.aborted) {
-      emitSendError(normalizeOpenCodeSdkError(error));
+      emitContextSendError(eventContext, normalizeOpenCodeSdkError(error));
+      emitMarker('[STREAM_END]');
+      emitMarker('[MESSAGE_END]');
     }
   } finally {
     activeOpenCodeTurns.delete(activeTurn);
@@ -2955,5 +3033,6 @@ export {
   parseOpenCodeSlashCommand,
   resolveOpenCodePromptModel,
   unwrapSdkResult,
+  waitForOpenCodeTurnIdle,
   resolveOpenCodePromptOptions
 };

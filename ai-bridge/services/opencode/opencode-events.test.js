@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import {
   createEventContext,
   handleOpenCodeEvent,
-  normalizeOpenCodeMessage
+  normalizeOpenCodeMessage,
+  waitForOpenCodeTurnIdle
 } from './message-service.js';
 
 async function captureConsole(fn) {
@@ -181,6 +182,67 @@ test('opencode session.error emits structured send error', async () => {
     error: 'provider timed out'
   }]);
   assert.equal(ctx.sawSendError, true);
+});
+
+test('opencode session.status idle is treated as the turn completion signal', async () => {
+  const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
+
+  await handleOpenCodeEvent({
+    type: 'session.status',
+    properties: {
+      sessionID: 'ses_test',
+      status: { type: 'busy' }
+    }
+  }, ctx);
+  assert.equal(ctx.sawSessionIdle, false);
+
+  await handleOpenCodeEvent({
+    type: 'session.status',
+    properties: {
+      sessionID: 'ses_test',
+      status: { type: 'idle' }
+    }
+  }, ctx);
+  assert.equal(ctx.sawSessionIdle, true);
+});
+
+test('opencode event stream closure does not complete a busy turn before status is idle', async () => {
+  const previousPollMs = process.env.OPENCODE_SESSION_STATUS_POLL_MS;
+  const previousDrainMs = process.env.OPENCODE_EVENT_DRAIN_IDLE_MS;
+  process.env.OPENCODE_SESSION_STATUS_POLL_MS = '1';
+  process.env.OPENCODE_EVENT_DRAIN_IDLE_MS = '1';
+
+  let calls = 0;
+  const statuses = [
+    { ses_test: { type: 'busy' } },
+    {}
+  ];
+  const ctx = createEventContext({
+    client: {
+      session: {
+        status: async () => ({ data: statuses[calls++] })
+      }
+    }
+  }, '/repo', 'default', { id: 'ses_test' });
+  ctx.eventStreamClosed = true;
+  ctx.lastActivityAt = Date.now() - 1000;
+
+  try {
+    await waitForOpenCodeTurnIdle(ctx, { aborted: false });
+  } finally {
+    if (previousPollMs === undefined) {
+      delete process.env.OPENCODE_SESSION_STATUS_POLL_MS;
+    } else {
+      process.env.OPENCODE_SESSION_STATUS_POLL_MS = previousPollMs;
+    }
+    if (previousDrainMs === undefined) {
+      delete process.env.OPENCODE_EVENT_DRAIN_IDLE_MS;
+    } else {
+      process.env.OPENCODE_EVENT_DRAIN_IDLE_MS = previousDrainMs;
+    }
+  }
+
+  assert.equal(calls, 2);
 });
 
 test('opencode task tool input and subagent metadata are preserved', async () => {
