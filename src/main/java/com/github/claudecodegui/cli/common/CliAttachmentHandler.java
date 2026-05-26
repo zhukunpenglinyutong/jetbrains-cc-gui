@@ -77,7 +77,7 @@ public class CliAttachmentHandler {
                 }
             } catch (Exception e) {
                 LOG.warn("[CliAttachmentHandler] Failed to process attachment: " + att.fileName, e);
-                LOG.warn("[ClaudeImageDiag][CliAttachmentHandler] exception while processing attachment: fileName=" + att.fileName + ", mediaType=" + att.mediaType + ", localPath=" + att.localPath, e);
+                LOG.warn("[ClaudeImageDiag][CliAttachmentHandler] " + "exception while processing attachment: fileName=" + att.fileName + ", mediaType=" + att.mediaType + ", localPath=" + att.localPath, e);
             }
         }
         LOG.info("[ClaudeImageDiag][CliAttachmentHandler] processForClaude result: blocks=" + blocks.size());

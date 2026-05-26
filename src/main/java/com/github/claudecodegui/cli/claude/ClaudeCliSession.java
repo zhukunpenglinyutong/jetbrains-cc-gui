@@ -178,7 +178,7 @@ public class ClaudeCliSession {
             if (block.kind() == CliAttachmentHandler.ContentBlock.Kind.IMAGE) {
                 imageIndex++;
                 String path = block.file().getAbsolutePath().replace('\\', '/');
-                sb.append("\n\n[Image #").append(imageIndex).append(": ").append(path).append("]\n").append("Use the Read tool to inspect this image file, then answer using its visible content: ").append(path);
+                sb.append("\n\n[Image #").append(imageIndex).append(": ").append(path).append("]\n").append("Use the Read tool to inspect this image file, ").append("then answer using its visible content: ").append(path);
             } else if (block.text() != null) {
                 sb.append("\n\n").append(block.text());
             }
@@ -258,7 +258,7 @@ public class ClaudeCliSession {
                         imageBlockCount++;
                     }
                 }
-                LOG.info("[ClaudeImageDiag][ClaudeCliSession] prompt prepared: tabId=" + tabId + ", requestAttachments=" + (request.attachments() != null ? request.attachments().size() : 0) + ", contentBlocks=" + blocks.size() + ", imageBlocks=" + imageBlockCount + ", addDirs=" + addDirs + ", promptViaStdin=true" + ", containsReadInstruction=" + prompt.contains("Use the Read tool to inspect this image file") + ", promptPreview=" + previewPrompt(prompt));
+                LOG.info("[ClaudeImageDiag][ClaudeCliSession] prompt prepared" + ": tabId=" + tabId + ", requestAttachments=" + (request.attachments() != null ? request.attachments().size() : 0) + ", contentBlocks=" + blocks.size() + ", imageBlocks=" + imageBlockCount + ", addDirs=" + addDirs + ", promptViaStdin=true" + ", containsReadInstruction=" + prompt.contains("Use the Read tool to inspect this image file") + ", promptPreview=" + previewPrompt(prompt));
 
                 List<String> cmd = buildCommand(cliPath, request, prompt, addDirs);
                 LOG.info("[ClaudeCliSession][" + tabId + "] Command (prompt via stdin): " + String.join(" ", cmd));
