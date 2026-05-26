@@ -224,6 +224,8 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
     return label.includes(search) || description.includes(search) || model.id.toLowerCase().includes(search);
   });
 
+  const visibleModels = filteredModels.slice(0, 100);
+
   /**
    * Close on outside click
    */
@@ -283,30 +285,37 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
             onChange={(e) => setSearchTerm(e.target.value)}
             autoFocus
           />
-          {filteredModels.length > 0 ? (
-            filteredModels.map((model) => (
-              <div
-                key={model.id}
-                className={`selector-option ${isSelectedModel(model.id) ? 'selected' : ''}`}
-                onClick={() => handleSelect(model.id)}
-              >
-                <ProviderModelIcon
-                  providerId={currentProvider}
-                  modelId={resolveModelIdForIcon(model.id, modelMapping, MODEL_ID_TO_MAPPING_KEY)}
-                  size={16}
-                  colored
-                />
-                <div style={MODEL_OPTION_INFO_STYLE}>
-                  <span>{getModelLabel(model, false)}</span>
-                  {getModelDescription(model) && (
-                    <span className="model-description">{getModelDescription(model)}</span>
+          {visibleModels.length > 0 ? (
+            <>
+              {visibleModels.map((model) => (
+                <div
+                  key={model.id}
+                  className={`selector-option ${isSelectedModel(model.id) ? 'selected' : ''}`}
+                  onClick={() => handleSelect(model.id)}
+                >
+                  <ProviderModelIcon
+                    providerId={currentProvider}
+                    modelId={resolveModelIdForIcon(model.id, modelMapping, MODEL_ID_TO_MAPPING_KEY)}
+                    size={16}
+                    colored
+                  />
+                  <div style={MODEL_OPTION_INFO_STYLE}>
+                    <span>{getModelLabel(model, false)}</span>
+                    {getModelDescription(model) && (
+                      <span className="model-description">{getModelDescription(model)}</span>
+                    )}
+                  </div>
+                  {isSelectedModel(model.id) && (
+                    <span className="codicon codicon-check check-mark" />
                   )}
                 </div>
-                {isSelectedModel(model.id) && (
-                  <span className="codicon codicon-check check-mark" />
-                )}
-              </div>
-            ))
+              ))}
+              {filteredModels.length > 100 && (
+                <div className="selector-empty" style={{ fontSize: '11px', color: 'var(--text-secondary)', padding: '8px 12px' }}>
+                  {t('models.typeToSearchMore', { count: filteredModels.length - 100, defaultValue: `+ ${filteredModels.length - 100} more models. Type to search.` })}
+                </div>
+              )}
+            </>
           ) : (
             <div className="selector-empty">{t('models.noModelsFound')}</div>
           )}
