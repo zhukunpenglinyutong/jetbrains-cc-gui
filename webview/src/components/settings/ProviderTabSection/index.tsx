@@ -295,19 +295,13 @@ const ProviderTabSection = ({
                 </div>
                 <div className={sharedStyles.cardActions}>
                   {openCodeAuthorized ? (
-                    <>
-                      <div className={sharedStyles.activeBadge}>
-                        <span className="codicon codicon-check" />
-                        {t('settings.opencodeProvider.authorized')}
-                      </div>
-                      <button
-                        className={sharedStyles.revokeButton}
-                        onClick={() => setShowOpenCodeRevokeConfirm(true)}
-                      >
-                        <span className="codicon codicon-circle-slash" />
-                        {t('settings.provider.revokeAuthorization')}
-                      </button>
-                    </>
+                    <button
+                      className={sharedStyles.revokeButton}
+                      onClick={() => setShowOpenCodeRevokeConfirm(true)}
+                    >
+                      <span className="codicon codicon-circle-slash" />
+                      {t('settings.provider.revokeAuthorization')}
+                    </button>
                   ) : (
                     <button
                       className={sharedStyles.useButton}
