@@ -13,7 +13,6 @@ import com.github.claudecodegui.util.JsUtils;
 import com.github.claudecodegui.util.JBCefBrowserFactory;
 import com.github.claudecodegui.util.LanguageConfigService;
 import com.github.claudecodegui.util.PlatformUtils;
-import com.github.claudecodegui.util.ThemeConfigService;
 import com.google.gson.JsonArray;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
@@ -360,8 +359,10 @@ public class WebviewInitializer {
 
             JComponent browserComponent = browser.getComponent();
 
-            // Set webview container background color to prevent white flash before HTML loads.
-            browserComponent.setBackground(ThemeConfigService.getBackgroundColor());
+            // Make browser component transparent so IDE background shows through.
+            // OSR mode (all platforms) renders through Swing so transparency works.
+            browserComponent.setOpaque(false);
+            browserComponent.setBackground(new Color(0, 0, 0, 0));
 
             // Add drag-and-drop support - get full file paths
             new DropTarget(browserComponent, new DropTargetAdapter() {

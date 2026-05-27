@@ -1,10 +1,16 @@
 import { useEffect, useState } from 'react';
+import { useWindowOpacity } from './useWindowOpacity';
+
+import { isValidHexColor, hexToRgb } from '../utils/colorUtils';
 
 /**
  * Manages IDE theme initialization and synchronization.
  * Handles font scaling, background color, and theme mode detection.
  */
 export function useThemeInit() {
+  // Initialize window opacity from localStorage, apply CSS in real-time, debounce localStorage writes
+  const { opacity } = useWindowOpacity();
+
   // IDE theme state - prefer initial theme injected by Java
   const [ideTheme, setIdeTheme] = useState<'light' | 'dark' | null>(() => {
     const injectedTheme = window.__INITIAL_IDE_THEME__;
@@ -56,10 +62,10 @@ export function useThemeInit() {
     document.documentElement.style.setProperty('--font-scale', scale.toString());
 
     // Initialize chat background color (validate hex format before applying)
-    const isValidHexColor = (c: string) => /^#[0-9a-fA-F]{6}$/.test(c);
     const savedChatBgColor = localStorage.getItem('chatBgColor');
     if (savedChatBgColor && isValidHexColor(savedChatBgColor)) {
       document.documentElement.style.setProperty('--bg-chat', savedChatBgColor);
+      document.documentElement.style.setProperty('--bg-chat-rgb', hexToRgb(savedChatBgColor));
     }
 
     // Initialize user message bubble color
@@ -114,5 +120,5 @@ export function useThemeInit() {
     }
   }, [ideTheme]);
 
-  return { ideTheme };
+  return { ideTheme, windowOpacity: opacity };
 }
