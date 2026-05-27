@@ -10,8 +10,6 @@ export { useFileChanges } from './useFileChanges';
 export { useSubagents } from './useSubagents';
 export { useMessageQueue } from './useMessageQueue';
 export { useThemeInit } from './useThemeInit';
-export { useWindowOpacity } from './useWindowOpacity';
-export type { UseWindowOpacityReturn } from './useWindowOpacity';
 export { useContextActions } from './useContextActions';
 export { useMessageProcessing } from './useMessageProcessing';
 export { useMessageSender } from './useMessageSender';
