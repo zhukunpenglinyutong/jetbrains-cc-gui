@@ -2099,6 +2099,7 @@ function createEventContext(runtime, cwd, permissionMode, sessionRef) {
     repliedPermissions: new Set(),
     rejectedQuestions: new Set(),
     streamedTextByPartId: new Map(),
+    suppressedTextByPartId: new Map(),
     sawContentDelta: false,
     sawAssistantOutput: false,
     sawSendError: false,
@@ -2106,7 +2107,8 @@ function createEventContext(runtime, cwd, permissionMode, sessionRef) {
     sawTurnLive: false,
     eventStreamClosed: false,
     lastActivityAt: Date.now(),
-    lastToolError: ''
+    lastToolError: '',
+    lastTextPartEndedWithoutWhitespace: false
   };
 }
 
@@ -2143,6 +2145,26 @@ function emitOpenCodePartTextTail(ctx, part) {
   }
 
   const partId = pickString(part.id, part.partID);
+  if (partId) {
+    const suppressed = ctx.suppressedTextByPartId.get(partId);
+    if (suppressed) {
+      ctx.suppressedTextByPartId.delete(partId);
+      if (isReasoningPart(kind)) {
+        emitThinkingDelta(suppressed);
+      } else {
+        let flushText = suppressed;
+        if (ctx.lastTextPartEndedWithoutWhitespace && !suppressed.startsWith(' ')) {
+          ctx.lastTextPartEndedWithoutWhitespace = false;
+          flushText = ' ' + suppressed;
+        }
+        ctx.sawContentDelta = true;
+        ctx.sawAssistantOutput = true;
+        emitContentDelta(flushText);
+        ctx.lastTextPartEndedWithoutWhitespace = !/\s$/.test(flushText);
+      }
+    }
+  }
+
   const previous = partId ? ctx.streamedTextByPartId.get(partId) || '' : '';
   let delta = '';
   if (!previous) {
@@ -2155,6 +2177,9 @@ function emitOpenCodePartTextTail(ctx, part) {
     if (partId) {
       ctx.streamedTextByPartId.set(partId, text);
     }
+    if (!isReasoningPart(kind) && text) {
+      ctx.lastTextPartEndedWithoutWhitespace = !/\s$/.test(text);
+    }
     return false;
   }
 
@@ -2164,6 +2189,7 @@ function emitOpenCodePartTextTail(ctx, part) {
     ctx.sawContentDelta = true;
     ctx.sawAssistantOutput = true;
     emitContentDelta(delta);
+    ctx.lastTextPartEndedWithoutWhitespace = !/\s$/.test(delta);
   }
   if (partId) {
     ctx.streamedTextByPartId.set(partId, text);
@@ -2367,6 +2393,38 @@ async function handleOpenCodeEvent(event, ctx) {
       if (props.partID) {
         const previous = ctx.streamedTextByPartId.get(props.partID) || '';
         ctx.streamedTextByPartId.set(props.partID, previous + delta);
+
+        if (partType === undefined) {
+          const suppressed = ctx.suppressedTextByPartId.get(props.partID) || '';
+          ctx.suppressedTextByPartId.set(props.partID, suppressed + delta);
+          break;
+        }
+
+        const isNewTextPart = !previous && !isReasoningPart(partType);
+        if (isNewTextPart && ctx.lastTextPartEndedWithoutWhitespace && !delta.startsWith(' ')) {
+          ctx.lastTextPartEndedWithoutWhitespace = false;
+          ctx.sawContentDelta = true;
+          ctx.sawAssistantOutput = true;
+          emitContentDelta(' ');
+        }
+
+        const suppressed = ctx.suppressedTextByPartId.get(props.partID);
+        if (suppressed) {
+          ctx.suppressedTextByPartId.delete(props.partID);
+          let flushText = suppressed;
+          if (!isReasoningPart(partType) && ctx.lastTextPartEndedWithoutWhitespace && !suppressed.startsWith(' ')) {
+            ctx.lastTextPartEndedWithoutWhitespace = false;
+            flushText = ' ' + suppressed;
+          }
+          if (isReasoningPart(partType)) {
+            emitThinkingDelta(flushText);
+          } else {
+            ctx.sawContentDelta = true;
+            ctx.sawAssistantOutput = true;
+            emitContentDelta(flushText);
+            ctx.lastTextPartEndedWithoutWhitespace = !/\s$/.test(flushText);
+          }
+        }
       }
       if (isReasoningPart(partType)) {
         emitThinkingDelta(delta);
@@ -2374,6 +2432,7 @@ async function handleOpenCodeEvent(event, ctx) {
         ctx.sawContentDelta = true;
         ctx.sawAssistantOutput = true;
         emitContentDelta(delta);
+        ctx.lastTextPartEndedWithoutWhitespace = !/\s$/.test(delta);
       }
       break;
     }

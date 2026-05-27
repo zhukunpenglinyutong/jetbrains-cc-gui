@@ -160,6 +160,39 @@ test('opencode final text part fills missing streaming deltas', async () => {
   assert.equal(ctx.sawAssistantOutput, true);
 });
 
+test('opencode inserts space between text parts at part boundaries', async () => {
+  const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
+  const lines = await captureConsole(async () => {
+    await handleOpenCodeEvent({
+      type: 'message.part.delta',
+      properties: { sessionID: 'ses_test', messageID: 'msg_assistant_1', partID: 'prt_text_1', field: 'text', delta: 'findings.' }
+    }, ctx);
+    await handleOpenCodeEvent({
+      type: 'message.part.updated',
+      properties: {
+        sessionID: 'ses_test',
+        part: { id: 'prt_text_1', sessionID: 'ses_test', messageID: 'msg_assistant_1', type: 'text', text: 'findings.', time: { start: 1, end: 2 } }
+      }
+    }, ctx);
+
+    await handleOpenCodeEvent({
+      type: 'message.part.delta',
+      properties: { sessionID: 'ses_test', messageID: 'msg_assistant_1', partID: 'prt_text_2', field: 'text', delta: 'The analysis' }
+    }, ctx);
+    await handleOpenCodeEvent({
+      type: 'message.part.updated',
+      properties: {
+        sessionID: 'ses_test',
+        part: { id: 'prt_text_2', sessionID: 'ses_test', messageID: 'msg_assistant_1', type: 'text', text: 'The analysis', time: { start: 3, end: 4 } }
+      }
+    }, ctx);
+  });
+
+  assert.deepEqual(contentDeltas(lines), ['findings.', ' The analysis']);
+  assert.equal(ctx.sawAssistantOutput, true);
+  assert.equal(ctx.lastTextPartEndedWithoutWhitespace, true);
+});
+
 test('opencode session.error emits structured send error', async () => {
   const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
   const lines = await captureConsole(async () => {
