@@ -25,6 +25,9 @@ export const TRANSIENT_INTERNAL_TOOL_NAMES = new Set([
   'multi_tool_use.parallel',
 ]);
 
+// Task management tools (incremental create/update, shown in StatusPanel)
+export const TASK_MANAGE_TOOL_NAMES = new Set(['taskcreate', 'taskupdate']);
+
 // File modification tools (for rewind feature - includes write for new file creation)
 export const FILE_MODIFY_TOOL_NAMES = new Set([
   'write',
