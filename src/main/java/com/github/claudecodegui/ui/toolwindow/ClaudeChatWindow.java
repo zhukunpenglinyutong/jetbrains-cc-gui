@@ -95,8 +95,8 @@ public class ClaudeChatWindow {
         this.settingsService = new CodemossSettingsService();
         this.htmlLoader = new HtmlLoader(getClass());
         this.mainPanel = new JPanel(new BorderLayout());
-
-        this.mainPanel.setBackground(com.github.claudecodegui.util.ThemeConfigService.getBackgroundColor());
+        // Make panel fully transparent so IDE background shows through
+        this.mainPanel.setOpaque(false);
 
         this.streamCoalescer = new StreamMessageCoalescer(new StreamMessageCoalescer.JsCallbackTarget() {
             @Override

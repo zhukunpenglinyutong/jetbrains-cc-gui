@@ -1,14 +1,26 @@
 /* ==================== 主题变量定义 ==================== */
+
 /* 暗色主题（默认） */
 :root, [data-theme="dark"] {
+    /* 全局透明度控制 */
+    --overlay-min-opacity: 0.85;
+
     /* 背景色 */
     --bg-primary: #1e1e1e;
+    --bg-primary-rgb: 30, 30, 30;
     --bg-chat: var(--bg-primary);
+    --bg-chat-rgb: 30, 30, 30;
+    --bg-ide: #1e1e1e;
     --bg-secondary: #252526;
+    --bg-secondary-rgb: 37, 37, 38;
     --bg-tertiary: #2b2d31;
+    --bg-tertiary-rgb: 43, 45, 49;
     --bg-elevated: #2d2d2d;
+    --bg-elevated-rgb: 45, 45, 45;
     --bg-hover: #35373c;
+    --bg-hover-rgb: 53, 55, 60;
     --bg-active: #37373d;
+    --bg-active-rgb: 55, 55, 61;
 
     /* 文字颜色 */
     --text-primary: #cccccc;
@@ -57,6 +69,7 @@
 
     /* 代码块颜色 */
     --color-code-block-bg: #1e1e1e;
+    --color-code-block-bg-rgb: 30, 30, 30;
     --color-code-block-border: #333;
     --color-code-inline-bg: rgba(255, 255, 255, 0.1);
 
@@ -100,6 +113,7 @@
 
     /* 消息颜色 */
     --color-message-user-bg: #005fb8;
+    --color-message-user-bg-rgb: 0, 95, 184;
     --color-message-user-text: #ffffff;
     --color-message-user-code-bg: rgba(0, 0, 0, 0.2);
     --color-message-user-code-border: rgba(255, 255, 255, 0.1);
@@ -189,14 +203,25 @@
 
 /* 亮色主题 */
 [data-theme="light"] {
+    /* 全局透明度控制 */
+    --overlay-min-opacity: 0.85;
+
     /* 背景色 */
     --bg-primary: #ffffff;
+    --bg-primary-rgb: 255, 255, 255;
     --bg-chat: var(--bg-primary);
+    --bg-chat-rgb: 255, 255, 255;
+    --bg-ide: #ffffff;
     --bg-secondary: #f3f3f3;
+    --bg-secondary-rgb: 243, 243, 243;
     --bg-tertiary: #e8e8e8;
+    --bg-tertiary-rgb: 232, 232, 232;
     --bg-elevated: #f5f5f5;
+    --bg-elevated-rgb: 245, 245, 245;
     --bg-hover: #e0e0e0;
+    --bg-hover-rgb: 224, 224, 224;
     --bg-active: #d6d6d6;
+    --bg-active-rgb: 214, 214, 214;
 
     /* 文字颜色 */
     --text-primary: #333333;
@@ -245,6 +270,7 @@
 
     /* 代码块颜色 */
     --color-code-block-bg: #f5f5f5;
+    --color-code-block-bg-rgb: 245, 245, 245;
     --color-code-block-border: #d0d0d0;
     --color-code-inline-bg: rgba(0, 0, 0, 0.06);
 
@@ -288,6 +314,7 @@
 
     /* 消息颜色 */
     --color-message-user-bg: #0078d4;
+    --color-message-user-bg-rgb: 0, 120, 212;
     --color-message-user-text: #ffffff;
     --color-message-user-code-bg: rgba(0, 0, 0, 0.15);
     --color-message-user-code-border: rgba(255, 255, 255, 0.2);

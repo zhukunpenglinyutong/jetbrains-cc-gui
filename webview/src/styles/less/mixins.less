@@ -64,7 +64,7 @@
         bottom: -@offset;
         left: 50%;
         transform: translateX(-50%);
-        background: var(--bg-elevated);
+        background: rgba(var(--bg-elevated-rgb), max(var(--overlay-min-opacity, 0.85), var(--window-opacity, 1)));
         color: var(--text-secondary);
         padding: 4px 8px;
         border-radius: 4px;
@@ -90,7 +90,7 @@
         transform: translateX(-50%);
         border-left: 5px solid transparent;
         border-right: 5px solid transparent;
-        border-bottom: 5px solid var(--bg-elevated);
+        border-bottom: 5px solid rgba(var(--bg-elevated-rgb), max(var(--overlay-min-opacity, 0.85), var(--window-opacity, 1)));
         opacity: 0;
         pointer-events: none;
         transition: opacity 0.2s;

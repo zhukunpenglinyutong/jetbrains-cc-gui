@@ -1,6 +1,8 @@
 // hooks/useSettingsThemeSync.ts
 import { useState, useEffect } from 'react';
 import { applyDiffTheme, getStoredDiffTheme, type DiffThemeMode } from '../../../utils/diffTheme';
+import { hexToRgb } from '../../../utils/colorUtils';
+import { useWindowOpacity } from '../../../hooks/useWindowOpacity';
 
 // Extend window type for IDE theme injection
 declare global {
@@ -22,6 +24,8 @@ export interface UseSettingsThemeSyncReturn {
   setUserMsgColor: (color: string) => void;
   diffTheme: DiffThemeMode;
   setDiffTheme: (theme: DiffThemeMode) => void;
+  windowOpacity: number;
+  setWindowOpacity: (opacity: number) => void;
 }
 
 export function useSettingsThemeSync(): UseSettingsThemeSyncReturn {
@@ -68,6 +72,9 @@ export function useSettingsThemeSync(): UseSettingsThemeSyncReturn {
     }
     return '';
   });
+
+  // Window opacity — unified hook: initializes from localStorage, applies CSS real-time, debounces storage
+  const { opacity: windowOpacity, setOpacity: setWindowOpacity } = useWindowOpacity();
 
   // Diff theme configuration
   const [diffTheme, setDiffTheme] = useState<DiffThemeMode>(() => getStoredDiffTheme());
@@ -116,9 +123,11 @@ export function useSettingsThemeSync(): UseSettingsThemeSyncReturn {
   useEffect(() => {
     if (chatBgColor) {
       document.documentElement.style.setProperty('--bg-chat', chatBgColor);
+      document.documentElement.style.setProperty('--bg-chat-rgb', hexToRgb(chatBgColor));
       localStorage.setItem('chatBgColor', chatBgColor);
     } else {
       document.documentElement.style.removeProperty('--bg-chat');
+      document.documentElement.style.removeProperty('--bg-chat-rgb');
       localStorage.removeItem('chatBgColor');
     }
   }, [chatBgColor]);
@@ -152,5 +161,7 @@ export function useSettingsThemeSync(): UseSettingsThemeSyncReturn {
     setUserMsgColor,
     diffTheme,
     setDiffTheme,
+    windowOpacity,
+    setWindowOpacity,
   };
 }

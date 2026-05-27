@@ -881,6 +881,13 @@ interface Window {
    */
   __INITIAL_IDE_THEME__?: 'light' | 'dark';
 
+  /**
+   * Platform identifier injected by Java at HTML load time.
+   * Values: "windows", "macos", "linux", "unknown".
+   * Replaces navigator.platform (deprecated) for platform-specific logic.
+   */
+  __PLATFORM__?: 'windows' | 'macos' | 'linux' | 'unknown';
+
   // ============================================================================
   // Provider settings panel callbacks (registered by ProviderList)
   // ============================================================================
