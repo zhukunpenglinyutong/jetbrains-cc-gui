@@ -1516,6 +1516,7 @@
     "dbParseProviderFailed": "プロバイダー設定の解析に失敗しました",
     "aiResponseEmpty": "AI レスポンスが空です",
     "enhancementFailed": "強化に失敗しました",
+    "unsupportedImageVision": "現在のモデルは画像認識をサポートしていないか、このプロバイダーの Claude Code 互換インターフェースが画像ツール結果をサポートしていません。\n視覚対応モデルに切り替えて、もう一度お試しください。",
     "uploadedImages": "{{count}} 枚の画像をアップロードしました",
     "uploadedAttachments": "添付ファイルをアップロードしました",
     "emptyMessage": "空のメッセージ",

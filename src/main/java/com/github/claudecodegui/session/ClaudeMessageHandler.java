@@ -198,8 +198,10 @@ public class ClaudeMessageHandler implements MessageCallback {
         callbackHandler.notifyQueueDisplayStateChanged(state.getQueueDisplayState(), state.getQueueAheadCount());
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
 
-        // Show error in status bar
-        ClaudeNotifier.showError(project, error);
+        // Show error in status bar when project context is available.
+        if (project != null) {
+            ClaudeNotifier.showError(project, error);
+        }
     }
 
     /**
@@ -209,6 +211,10 @@ public class ClaudeMessageHandler implements MessageCallback {
     public void onComplete(SDKResult result) {
         if (isStaleRuntimeEpoch()) {
             LOG.debug("Ignoring stale Claude callback completion for epoch: " + expectedRuntimeSessionEpoch);
+            return;
+        }
+        if (result != null && !result.success && result.error != null && !result.error.isBlank() && !errorReportedThisTurn) {
+            onError(result.error);
             return;
         }
         if (streamEndedThisTurn) {

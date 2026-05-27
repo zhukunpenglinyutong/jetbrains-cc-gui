@@ -1760,6 +1760,7 @@
     "dbParseProviderFailed": "Failed to parse provider config",
     "aiResponseEmpty": "AI response is empty",
     "enhancementFailed": "Enhancement failed",
+    "unsupportedImageVision": "The current model does not support image recognition, or this provider's Claude Code compatible interface does not support image tool results.\nPlease switch to a vision-capable model and try again.",
     "uploadedImages": "Uploaded {{count}} image(s)",
     "uploadedAttachments": "Uploaded attachment(s)",
     "emptyMessage": "Empty message",

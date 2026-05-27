@@ -1511,6 +1511,7 @@
     "dbParseProviderFailed": "Échec de l'analyse de la configuration du fournisseur",
     "aiResponseEmpty": "La réponse de l'IA est vide",
     "enhancementFailed": "Échec de l'amélioration",
+    "unsupportedImageVision": "Le modèle actuel ne prend pas en charge la reconnaissance d'images, ou l'interface compatible Claude Code de ce fournisseur ne prend pas en charge les résultats d'outils d'image.\nVeuillez passer à un modèle compatible avec la vision, puis réessayer.",
     "uploadedImages": "{{count}} image(s) téléchargée(s)",
     "uploadedAttachments": "Pièce(s) jointe(s) téléchargée(s)",
     "emptyMessage": "Message vide",

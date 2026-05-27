@@ -144,16 +144,17 @@ export const appendOptimisticMessageIfMissing = (
     return [...nextList, optimisticMsg];
   }
 
-  // Backend message matched the optimistic message.  Preserve attachment blocks
-  // from the optimistic message into the backend message's raw data; otherwise
-  // non-image file attachments won't be visible.
+  // Backend message matched the optimistic message.  Preserve attachment and
+  // image blocks from the optimistic message into the backend message's raw
+  // data; otherwise non-image file attachments won't be visible, and base64
+  // image data won't be available as fallback when JCEF URLs fail.
   const optimisticRaw = optimisticMsg.raw as any;
   const optimisticContent: unknown[] | undefined = optimisticRaw?.message?.content;
   if (Array.isArray(optimisticContent)) {
-    const attachmentBlocks = optimisticContent.filter(
-      (b: any) => b && typeof b === 'object' && b.type === 'attachment',
+    const preservedBlocks = optimisticContent.filter(
+      (b: any) => b && typeof b === 'object' && (b.type === 'attachment' || b.type === 'image'),
     );
-    if (attachmentBlocks.length > 0) {
+    if (preservedBlocks.length > 0) {
       const backendMsg = nextList[matchedIndex];
       const backendRaw = (backendMsg.raw ?? {}) as any;
       const backendContent: unknown[] = Array.isArray(backendRaw?.message?.content)
@@ -161,14 +162,64 @@ export const appendOptimisticMessageIfMissing = (
         : Array.isArray(backendRaw?.content)
           ? backendRaw.content
           : [];
-      const mergedContent = [...attachmentBlocks, ...backendContent];
-      const mergedRaw = {
-        ...backendRaw,
-        message: { ...(backendRaw?.message ?? {}), content: mergedContent },
-      };
-      const result = [...nextList];
-      result[matchedIndex] = { ...backendMsg, raw: mergedRaw };
-      return result;
+
+      const optimisticImageBlocks = preservedBlocks.filter(
+        (block: any) => block.type === 'image',
+      );
+      let nextOptimisticImageIndex = 0;
+      const consumedOptimisticImages = new Set<number>();
+
+      const mergedBackendContent = backendContent.map((block) => {
+        if (!block || typeof block !== 'object' || (block as any).type !== 'image') {
+          return block;
+        }
+
+        while (nextOptimisticImageIndex < optimisticImageBlocks.length &&
+            consumedOptimisticImages.has(nextOptimisticImageIndex)) {
+          nextOptimisticImageIndex += 1;
+        }
+
+        const optimisticImage = optimisticImageBlocks[nextOptimisticImageIndex] as any;
+        const optimisticSrc = optimisticImage?.source?.url || optimisticImage?.src;
+        if (typeof optimisticSrc !== 'string' || !optimisticSrc.startsWith('data:image/')) {
+          return block;
+        }
+
+        consumedOptimisticImages.add(nextOptimisticImageIndex);
+        nextOptimisticImageIndex += 1;
+        return {
+          ...(block as any),
+          thumbnailSrc: optimisticSrc,
+          previewSrc: optimisticSrc,
+        };
+      });
+
+      const newPreservedBlocks = preservedBlocks.filter((block: any) => {
+        if (block.type !== 'image') return true; // always keep attachment blocks
+        const imageIndex = optimisticImageBlocks.indexOf(block);
+        if (imageIndex >= 0 && consumedOptimisticImages.has(imageIndex)) {
+          return false;
+        }
+        const src = block.source?.url || block.src;
+        return typeof src !== 'string' || !backendContent.some((backendBlock) => {
+          if (!backendBlock || typeof backendBlock !== 'object' || (backendBlock as any).type !== 'image') {
+            return false;
+          }
+          const backendSrc = (backendBlock as any).source?.url || (backendBlock as any).src;
+          return backendSrc === src;
+        });
+      });
+
+      if (newPreservedBlocks.length > 0 || mergedBackendContent.some((block, index) => block !== backendContent[index])) {
+        const mergedContent = [...newPreservedBlocks, ...mergedBackendContent];
+        const mergedRaw = {
+          ...backendRaw,
+          message: { ...(backendRaw?.message ?? {}), content: mergedContent },
+        };
+        const result = [...nextList];
+        result[matchedIndex] = { ...backendMsg, raw: mergedRaw };
+        return result;
+      }
     }
   }
 

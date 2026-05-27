@@ -7,6 +7,8 @@ import type { TFunction } from 'i18next';
  */
 export function createLocalizeMessage(t: TFunction): (text: string) => string {
   return (text: string): string => {
+    const i18nPlaceholderPrefix = '__I18N__:';
+
     // ai-bridge error message English to i18n key mapping
     const aiBridgeMessageMap: Record<string, string> = {
       // Claude Code error messages
@@ -32,7 +34,16 @@ export function createLocalizeMessage(t: TFunction): (text: string) => string {
       'Request interrupted by user': t('chat.requestInterrupted'),
       '[Empty message]': t('aiBridge.emptyMessage'),
       '[Uploaded attachment(s)]': t('aiBridge.uploadedAttachments'),
+      '__I18N__:aiBridge.unsupportedImageVision': t('aiBridge.unsupportedImageVision'),
     };
+
+    if (text.startsWith(i18nPlaceholderPrefix)) {
+      const lineEnd = text.indexOf('\n');
+      const token = lineEnd >= 0 ? text.slice(0, lineEnd) : text;
+      const remainder = lineEnd >= 0 ? text.slice(lineEnd) : '';
+      const translationKey = token.slice(i18nPlaceholderPrefix.length);
+      return `${t(translationKey)}${remainder}`;
+    }
 
     // Check for exact match
     if (aiBridgeMessageMap[text]) {

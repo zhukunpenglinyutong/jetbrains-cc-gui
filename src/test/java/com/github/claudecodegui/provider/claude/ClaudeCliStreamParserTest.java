@@ -16,6 +16,8 @@ import static org.junit.Assert.assertTrue;
 
 public class ClaudeCliStreamParserTest {
 
+    private static final String UNSUPPORTED_IMAGE_MESSAGE_KEY = "__I18N__:aiBridge.unsupportedImageVision";
+
     @Test
     public void assistantToolUseEmitsToolUseEvent() {
         ClaudeCliStreamParser parser = new ClaudeCliStreamParser(new Gson());
@@ -145,6 +147,189 @@ public class ClaudeCliStreamParserTest {
         assertEquals("", assistantContent.toString());
         assertFalse(result.success);
         assertEquals(CliErrorFormatter.formatError("Claude", "API Error: Request rejected (429) · [1308][已达到 5 小时的使用上限。]"), result.error);
+    }
+
+    @Test
+    public void imageToolResultFollowedByApiErrorReportsUnsupportedVision() {
+        ClaudeCliStreamParser parser = new ClaudeCliStreamParser(new Gson());
+        RecordingCallback callback = new RecordingCallback();
+        SDKResult result = new SDKResult();
+        StringBuilder assistantContent = new StringBuilder();
+        AtomicBoolean hadSendError = new AtomicBoolean(false);
+
+        parser.parseLine(
+                "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"call_1\",\"name\":\"Read\",\"input\":{\"file_path\":\"C:/tmp/image.png\"}}]}}",
+                callback,
+                result,
+                assistantContent,
+                hadSendError,
+                false
+        );
+        parser.parseLine(
+                "{\"type\":\"user\",\"message\":{\"content\":[{\"tool_use_id\":\"call_1\",\"type\":\"tool_result\",\"content\":[{\"type\":\"image\",\"source\":{\"type\":\"base64\",\"data\":\"abc\"},\"type\":\"image/png\"}]}]}}",
+                callback,
+                result,
+                assistantContent,
+                hadSendError,
+                false
+        );
+        parser.parseLine(
+                "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":true,\"api_error_status\":404,\"result\":\"There's an issue with the selected model (mimo-v2.5-pro). It may not exist or you may not have access to it.\"}",
+                callback,
+                result,
+                assistantContent,
+                hadSendError,
+                false
+        );
+
+        assertFalse(result.success);
+        assertTrue(result.error.contains(UNSUPPORTED_IMAGE_MESSAGE_KEY));
+        assertTrue(result.error.contains("mimo-v2.5-pro"));
+    }
+
+    @Test
+    public void imageToolResultWithoutAnyAssistantOutputReportsUnsupportedVision() {
+        ClaudeCliStreamParser parser = new ClaudeCliStreamParser(new Gson());
+        RecordingCallback callback = new RecordingCallback();
+        SDKResult result = new SDKResult();
+        StringBuilder assistantContent = new StringBuilder();
+        AtomicBoolean hadSendError = new AtomicBoolean(false);
+
+        parser.parseLine(
+                "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"call_1\",\"name\":\"Read\",\"input\":{\"file_path\":\"C:/tmp/image.png\"}}]}}",
+                callback,
+                result,
+                assistantContent,
+                hadSendError,
+                false
+        );
+        parser.parseLine(
+                "{\"type\":\"user\",\"message\":{\"content\":[{\"tool_use_id\":\"call_1\",\"type\":\"tool_result\",\"content\":[{\"type\":\"image/png\",\"source\":{\"type\":\"base64\",\"data\":\"abc\"}}]}]}}",
+                callback,
+                result,
+                assistantContent,
+                hadSendError,
+                false
+        );
+        parser.parseLine(
+                "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"\"}",
+                callback,
+                result,
+                assistantContent,
+                hadSendError,
+                false
+        );
+
+        assertFalse(result.success);
+        assertTrue(result.error.contains(UNSUPPORTED_IMAGE_MESSAGE_KEY));
+        assertTrue(result.error.contains("finished without any readable image-analysis output"));
+        assertEquals("", assistantContent.toString());
+    }
+
+    @Test
+    public void imageToolResultWithAssistantOutputDoesNotReportUnsupportedVision() {
+        ClaudeCliStreamParser parser = new ClaudeCliStreamParser(new Gson());
+        RecordingCallback callback = new RecordingCallback();
+        SDKResult result = new SDKResult();
+        StringBuilder assistantContent = new StringBuilder();
+        AtomicBoolean hadSendError = new AtomicBoolean(false);
+
+        parser.parseLine(
+                "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"call_1\",\"name\":\"Read\",\"input\":{\"file_path\":\"C:/tmp/image.png\"}}]}}",
+                callback,
+                result,
+                assistantContent,
+                hadSendError,
+                false
+        );
+        parser.parseLine(
+                "{\"type\":\"user\",\"message\":{\"content\":[{\"tool_use_id\":\"call_1\",\"type\":\"tool_result\",\"content\":[{\"type\":\"image/png\",\"source\":{\"type\":\"base64\",\"data\":\"abc\"}}]}]}}",
+                callback,
+                result,
+                assistantContent,
+                hadSendError,
+                false
+        );
+        parser.parseLine(
+                "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_start\",\"content_block\":{\"type\":\"text\"}}}",
+                callback,
+                result,
+                assistantContent,
+                hadSendError,
+                false
+        );
+        parser.parseLine(
+                textDelta("我看到了图片中的地图和路线说明。"),
+                callback,
+                result,
+                assistantContent,
+                hadSendError,
+                false
+        );
+        parser.parseLine(
+                "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"\"}",
+                callback,
+                result,
+                assistantContent,
+                hadSendError,
+                false
+        );
+
+        assertTrue(result.success);
+        assertEquals("我看到了图片中的地图和路线说明。", result.finalResult);
+    }
+
+    @Test
+    public void imageToolResultFollowedOnlyByMetaPlanningTextStillReportsUnsupportedVision() {
+        ClaudeCliStreamParser parser = new ClaudeCliStreamParser(new Gson());
+        RecordingCallback callback = new RecordingCallback();
+        SDKResult result = new SDKResult();
+        StringBuilder assistantContent = new StringBuilder();
+        AtomicBoolean hadSendError = new AtomicBoolean(false);
+
+        parser.parseLine(
+                "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"call_1\",\"name\":\"Read\",\"input\":{\"file_path\":\"C:/tmp/image.png\"}}]}}",
+                callback,
+                result,
+                assistantContent,
+                hadSendError,
+                false
+        );
+        parser.parseLine(
+                "{\"type\":\"user\",\"message\":{\"content\":[{\"tool_use_id\":\"call_1\",\"type\":\"tool_result\",\"content\":[{\"type\":\"image/png\",\"source\":{\"type\":\"base64\",\"data\":\"abc\"}}]}]}}",
+                callback,
+                result,
+                assistantContent,
+                hadSendError,
+                false
+        );
+        parser.parseLine(
+                "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_start\",\"content_block\":{\"type\":\"text\"}}}",
+                callback,
+                result,
+                assistantContent,
+                hadSendError,
+                false
+        );
+        parser.parseLine(
+                textDelta("The user wants me to read an image file and answer based on its content. Let me use the Read tool to inspect the image."),
+                callback,
+                result,
+                assistantContent,
+                hadSendError,
+                false
+        );
+        parser.parseLine(
+                "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"\"}",
+                callback,
+                result,
+                assistantContent,
+                hadSendError,
+                false
+        );
+
+        assertFalse(result.success);
+        assertTrue(result.error.contains(UNSUPPORTED_IMAGE_MESSAGE_KEY));
     }
 
     private static class RecordingCallback implements MessageCallback {

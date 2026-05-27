@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -363,6 +364,20 @@ public class ClaudeMessageHandlerDedupTest {
                 List.of("Z", "ebra"), callbackHandler.contentDeltas);
         assertTrue("Non-marker text should not become thinking",
                 callbackHandler.thinkingDeltas.isEmpty());
+    }
+
+    @Test
+    public void onCompleteWithStructuredErrorAddsErrorMessageToChat() {
+        com.github.claudecodegui.provider.common.SDKResult result = new com.github.claudecodegui.provider.common.SDKResult();
+        result.success = false;
+        result.error = "当前模型不支持图片识别，或该服务商的 Claude Code 兼容接口不支持图片工具结果。";
+
+        handler.onComplete(result);
+
+        assertFalse("Structured completion error should be added to chat", state.getMessages().isEmpty());
+        ClaudeSession.Message last = state.getMessages().get(state.getMessages().size() - 1);
+        assertEquals(ClaudeSession.Message.Type.ERROR, last.type);
+        assertEquals(result.error, last.content);
     }
 
     /**

@@ -1511,6 +1511,7 @@
     "dbParseProviderFailed": "Error al analizar la configuración del proveedor",
     "aiResponseEmpty": "La respuesta de AI está vacía",
     "enhancementFailed": "Mejora fallida",
+    "unsupportedImageVision": "El modelo actual no admite el reconocimiento de imágenes, o la interfaz compatible con Claude Code de este proveedor no admite resultados de herramientas de imagen.\nCambie a un modelo compatible con visión e inténtelo de nuevo.",
     "uploadedImages": "{{count}} imagen(es) subida(s)",
     "uploadedAttachments": "Archivo(s) adjunto(s) subido(s)",
     "emptyMessage": "Mensaje vacío",

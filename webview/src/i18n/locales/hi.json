@@ -1510,6 +1510,7 @@
     "dbParseProviderFailed": "प्रदाता कॉन्फ़िगरेशन पार्स करने में विफल",
     "aiResponseEmpty": "AI प्रतिक्रिया खाली है",
     "enhancementFailed": "संवर्धन विफल",
+    "unsupportedImageVision": "वर्तमान मॉडल छवि पहचान का समर्थन नहीं करता है, या इस प्रदाता का Claude Code संगत इंटरफ़ेस छवि टूल परिणामों का समर्थन नहीं करता है।\nकृपया विज़न-सक्षम मॉडल पर स्विच करें और फिर से प्रयास करें।",
     "uploadedImages": "{{count}} छवि(यां) अपलोड की गईं",
     "uploadedAttachments": "अनुलग्नक अपलोड किए गए",
     "emptyMessage": "खाली संदेश",

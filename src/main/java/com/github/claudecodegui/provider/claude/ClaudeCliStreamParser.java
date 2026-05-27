@@ -33,10 +33,15 @@ public class ClaudeCliStreamParser {
     private boolean messageStarted;
     private boolean thinkingActive;
     private final StringBuilder pendingTextBlock = new StringBuilder();
-    private boolean toolStructureSeenInTurn;
     private boolean textBlockAfterToolStructure;
     private boolean nextTextBlockIsAfterToolStructure;
+    private boolean readToolUseSeen;
+    private boolean imageReadToolUseSeen;
+    private boolean imageToolResultSeen;
+    private boolean imageUnderstandingObserved;
     private TextBlockRoute currentTextBlockRoute = TextBlockRoute.NONE;
+
+    private static final String UNSUPPORTED_IMAGE_MESSAGE = "__I18N__:aiBridge.unsupportedImageVision";
 
     /**
      * 每次新请求前重置状态。
@@ -45,9 +50,12 @@ public class ClaudeCliStreamParser {
         streamStarted = false;
         messageStarted = false;
         thinkingActive = false;
-        toolStructureSeenInTurn = false;
         textBlockAfterToolStructure = false;
         nextTextBlockIsAfterToolStructure = false;
+        readToolUseSeen = false;
+        imageReadToolUseSeen = false;
+        imageToolResultSeen = false;
+        imageUnderstandingObserved = false;
         currentTextBlockRoute = TextBlockRoute.NONE;
         pendingTextBlock.setLength(0);
     }
@@ -70,7 +78,6 @@ public class ClaudeCliStreamParser {
 
         switch (eventType) {
             case "message_start":
-                toolStructureSeenInTurn = false;
                 textBlockAfterToolStructure = false;
                 nextTextBlockIsAfterToolStructure = false;
                 emitStreamStartIfNeeded(callback);
@@ -93,7 +100,6 @@ public class ClaudeCliStreamParser {
                     } else {
                         currentTextBlockRoute = TextBlockRoute.NONE;
                         if ("tool_use".equals(blockType) || "server_tool_use".equals(blockType)) {
-                            toolStructureSeenInTurn = true;
                             nextTextBlockIsAfterToolStructure = true;
                         }
                     }
@@ -237,11 +243,15 @@ public class ClaudeCliStreamParser {
             JsonObject block = elem.getAsJsonObject();
             String blockType = block.has("type") ? block.get("type").getAsString() : "";
             if ("tool_use".equals(blockType)) {
-                toolStructureSeenInTurn = true;
                 nextTextBlockIsAfterToolStructure = true;
+                if ("Read".equals(getString(block, "name"))) {
+                    readToolUseSeen = true;
+                    if (isImagePath(getToolUseFilePath(block))) {
+                        imageReadToolUseSeen = true;
+                    }
+                }
                 callback.onMessage("tool_use", block.toString());
             } else if ("server_tool_use".equals(blockType)) {
-                toolStructureSeenInTurn = true;
                 nextTextBlockIsAfterToolStructure = true;
             }
             // text 类型的内容已通过 content_block_delta 接收，跳过
@@ -257,8 +267,10 @@ public class ClaudeCliStreamParser {
                     JsonObject block = elem.getAsJsonObject();
                     String blockType = block.has("type") ? block.get("type").getAsString() : "";
                     if ("tool_result".equals(blockType)) {
-                        toolStructureSeenInTurn = true;
                         nextTextBlockIsAfterToolStructure = true;
+                        if (imageReadToolUseSeen && containsImageToolResult(block)) {
+                            imageToolResultSeen = true;
+                        }
                         callback.onMessage("tool_result", block.toString());
                     }
                 }
@@ -268,6 +280,7 @@ public class ClaudeCliStreamParser {
 
     private void handleResult(JsonObject obj, MessageCallback callback, SDKResult result, StringBuilder assistantContent) {
         flushPendingTextBlock(callback, assistantContent, false);
+        String resultText = null;
 
         // 提取 usage
         if (obj.has("usage")) {
@@ -278,10 +291,11 @@ public class ClaudeCliStreamParser {
 
         // 提取 result 文本（最终完整回复）
         if (!isErrorResult && obj.has("result")) {
-            String resultText = obj.get("result").getAsString();
+            resultText = obj.get("result").getAsString();
             if (!resultText.isEmpty() && assistantContent.length() == 0) {
                 // 没有通过 delta 收到内容时，使用 result
                 assistantContent.append(resultText);
+                markImageUnderstandingObserved(resultText);
                 callback.onMessage("content", resultText);
             }
         }
@@ -302,7 +316,16 @@ public class ClaudeCliStreamParser {
         if (isErrorResult) {
             String rawError = obj.has("result") && obj.get("result").isJsonPrimitive() ? obj.get("result").getAsString() : obj.toString();
             result.success = false;
-            result.error = CliErrorFormatter.formatError("Claude", rawError);
+            result.error = isLikelyUnsupportedImageResult(obj, rawError)
+                    ? UNSUPPORTED_IMAGE_MESSAGE + "\n\nDetails:\n" + rawError
+                    : CliErrorFormatter.formatError("Claude", rawError);
+            result.finalResult = null;
+            return;
+        }
+
+        if (shouldReportSilentImageFailure(resultText, assistantContent.toString())) {
+            result.success = false;
+            result.error = UNSUPPORTED_IMAGE_MESSAGE + "\n\nDetails:\nThe model finished without any readable image-analysis output after the image tool result was returned.";
             result.finalResult = null;
             return;
         }
@@ -317,6 +340,7 @@ public class ClaudeCliStreamParser {
             return;
         }
         if (currentTextBlockRoute == TextBlockRoute.CONTENT || currentTextBlockRoute == TextBlockRoute.NONE) {
+            markImageUnderstandingObserved(text);
             emitContentDelta(text, callback, assistantContent);
             return;
         }
@@ -346,12 +370,22 @@ public class ClaudeCliStreamParser {
             callback.onMessage("thinking_delta", text);
             return;
         }
+        markImageUnderstandingObserved(text);
         emitContentDelta(text, callback, assistantContent);
     }
 
     private void emitContentDelta(String text, MessageCallback callback, StringBuilder assistantContent) {
         assistantContent.append(text);
         callback.onMessage("content_delta", text);
+    }
+
+    private void markImageUnderstandingObserved(String text) {
+        if (!imageReadToolUseSeen || imageUnderstandingObserved || text == null) {
+            return;
+        }
+        if (containsMeaningfulImageUnderstandingText(text)) {
+            imageUnderstandingObserved = true;
+        }
     }
 
     private boolean isToolTraceText(String text) {
@@ -420,6 +454,146 @@ public class ClaudeCliStreamParser {
             break;
         }
         return normalized;
+    }
+
+    private boolean containsImageToolResult(JsonObject toolResult) {
+        if (toolResult == null || !toolResult.has("content")) {
+            return false;
+        }
+        return containsImageBlock(toolResult.get("content"));
+    }
+
+    private boolean containsImageBlock(JsonElement element) {
+        if (element == null || element.isJsonNull()) {
+            return false;
+        }
+        if (element.isJsonObject()) {
+            JsonObject obj = element.getAsJsonObject();
+            String type = getString(obj, "type");
+            if ("image".equals(type) || (type != null && type.startsWith("image/"))) {
+                return true;
+            }
+            JsonObject source = obj.has("source") && obj.get("source").isJsonObject()
+                    ? obj.getAsJsonObject("source")
+                    : null;
+            if (source != null && "base64".equals(getString(source, "type"))) {
+                return true;
+            }
+            for (String key : obj.keySet()) {
+                if (containsImageBlock(obj.get(key))) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (element.isJsonArray()) {
+            for (JsonElement child : element.getAsJsonArray()) {
+                if (containsImageBlock(child)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean isLikelyUnsupportedImageResult(JsonObject resultObject, String rawError) {
+        if (!imageReadToolUseSeen) {
+            return false;
+        }
+        Integer status = getInt(resultObject, "api_error_status");
+        if (status != null && status >= 400 && status < 500) {
+            return true;
+        }
+        String lower = rawError == null ? "" : rawError.toLowerCase(Locale.ROOT);
+        return lower.contains("image")
+                || lower.contains("vision")
+                || lower.contains("multimodal")
+                || lower.contains("content")
+                || lower.contains("model_not_found")
+                || lower.contains("model not found")
+                || lower.contains("model")
+                || lower.contains("unsupported")
+                || lower.contains("invalid");
+    }
+
+    private boolean shouldReportSilentImageFailure(String resultText, String assistantText) {
+        if (!imageReadToolUseSeen || imageUnderstandingObserved) {
+            return false;
+        }
+        if (containsMeaningfulImageUnderstandingText(assistantText)) {
+            return false;
+        }
+        return !containsMeaningfulImageUnderstandingText(resultText);
+    }
+
+    private boolean containsMeaningfulImageUnderstandingText(String text) {
+        if (text == null) {
+            return false;
+        }
+        String normalized = text.strip();
+        if (normalized.isEmpty()) {
+            return false;
+        }
+        return !isMetaImagePlanningText(normalized);
+    }
+
+    private boolean isMetaImagePlanningText(String text) {
+        String lower = text.toLowerCase(Locale.ROOT);
+        if (lower.contains("the user wants me to") && lower.contains("image")) {
+            return true;
+        }
+        if (lower.contains("let me use the read tool") || lower.contains("use the read tool to inspect")) {
+            return true;
+        }
+        if ((lower.contains("read an image file") || lower.contains("read the image") || lower.contains("inspect the image"))
+                && (lower.contains("let me") || lower.contains("i need to") || lower.contains("i should"))) {
+            return true;
+        }
+        return (text.contains("Read 工具") || text.contains("read 工具"))
+                && (text.contains("查看图片") || text.contains("读取图片") || text.contains("识别图片"));
+    }
+
+    private String getToolUseFilePath(JsonObject block) {
+        if (block == null || !block.has("input") || !block.get("input").isJsonObject()) {
+            return null;
+        }
+        return getString(block.getAsJsonObject("input"), "file_path");
+    }
+
+    private boolean isImagePath(String filePath) {
+        if (filePath == null || filePath.isBlank()) {
+            return false;
+        }
+        String lower = filePath.toLowerCase(Locale.ROOT);
+        return lower.endsWith(".png")
+                || lower.endsWith(".jpg")
+                || lower.endsWith(".jpeg")
+                || lower.endsWith(".gif")
+                || lower.endsWith(".bmp")
+                || lower.endsWith(".webp")
+                || lower.endsWith(".svg");
+    }
+
+    private static String getString(JsonObject obj, String key) {
+        if (obj == null || key == null || !obj.has(key) || obj.get(key).isJsonNull()) {
+            return null;
+        }
+        try {
+            return obj.get(key).getAsString();
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static Integer getInt(JsonObject obj, String key) {
+        if (obj == null || key == null || !obj.has(key) || obj.get(key).isJsonNull()) {
+            return null;
+        }
+        try {
+            return obj.get(key).getAsInt();
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private enum TextBlockRoute {

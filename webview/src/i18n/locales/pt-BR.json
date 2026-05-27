@@ -1683,6 +1683,7 @@
     "dbParseProviderFailed": "Falha ao interpretar configuração do provedor",
     "aiResponseEmpty": "Resposta da IA está vazia",
     "enhancementFailed": "Falha no aprimoramento",
+    "unsupportedImageVision": "O modelo atual não oferece suporte ao reconhecimento de imagens, ou a interface compatível com Claude Code deste provedor não oferece suporte a resultados de ferramentas de imagem.\nAlterne para um modelo com suporte a visão e tente novamente.",
     "uploadedImages": "{{count}} imagem(ns) enviada(s)",
     "uploadedAttachments": "Anexo(s) enviado(s)",
     "emptyMessage": "Mensagem vazia",

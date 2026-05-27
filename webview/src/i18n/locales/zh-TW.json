@@ -1527,6 +1527,7 @@
     "dbParseProviderFailed": "解析供應商配置失敗",
     "aiResponseEmpty": "AI 響應為空",
     "enhancementFailed": "增強失敗",
+    "unsupportedImageVision": "目前模型不支援圖片辨識，或該服務商的 Claude Code 相容介面不支援圖片工具結果。\n請切換到支援視覺的模型後再試一次。",
     "uploadedImages": "已上傳 {{count}} 張圖片",
     "uploadedAttachments": "已上傳附件",
     "emptyMessage": "空訊息",
