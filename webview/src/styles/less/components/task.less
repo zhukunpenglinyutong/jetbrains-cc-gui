@@ -1,6 +1,6 @@
 /* Task Execution Block Styles */
 .task-container {
-    background: var(--bg-primary);
+    background: rgba(var(--bg-primary-rgb), max(0.3, var(--window-opacity, 1)));
     border: 1px solid var(--border-primary);
     border-radius: 8px;
     margin: 12px 0;
@@ -13,14 +13,14 @@
     align-items: center;
     justify-content: space-between;
     padding: 8px 12px;
-    background: var(--bg-primary);
+    background: rgba(var(--bg-primary-rgb), max(0.3, var(--window-opacity, 1)));
     cursor: pointer;
     user-select: none;
     transition: background-color 0.2s;
 }
 
 .task-header:hover {
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), max(0.3, var(--window-opacity, 1)));
 }
 
 .task-header-expanded {
@@ -102,7 +102,7 @@
 .task-details {
     padding: 0;
     border-top: 1px solid var(--border-primary);
-    background: var(--bg-primary);
+    background: rgba(var(--bg-primary-rgb), max(0.3, var(--window-opacity, 1)));
     overflow-anchor: none;
 }
 
@@ -134,7 +134,7 @@
     color: var(--text-primary);
     line-height: 1.5;
     white-space: pre-wrap;
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), max(0.3, var(--window-opacity, 1)));
     padding: 8px;
     border-radius: 6px;
     font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);

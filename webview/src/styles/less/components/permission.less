@@ -27,7 +27,7 @@
 }
 
 .permission-dialog {
-    background: var(--bg-elevated);
+    background: rgba(var(--bg-elevated-rgb), max(var(--overlay-min-opacity, 0.85), var(--window-opacity, 1)));
     border: 1px solid var(--border-secondary);
     border-radius: 12px;
     box-shadow: var(--shadow-lg);
@@ -44,7 +44,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), max(var(--overlay-min-opacity, 0.85), var(--window-opacity, 1)));
 }
 
 .permission-dialog-icon {
@@ -88,7 +88,7 @@
     font-size: 14px;
     color: var(--text-secondary);
     padding: 10px 12px;
-    background: var(--bg-primary);
+    background: rgba(var(--bg-primary-rgb), var(--window-opacity, 1));
     border: 1px solid var(--border-secondary);
     border-radius: 6px;
     font-family: var(--idea-editor-font-family, monospace);
@@ -107,7 +107,7 @@
 
 .permission-dialog-param {
     padding: 10px 12px;
-    background: var(--bg-primary);
+    background: rgba(var(--bg-primary-rgb), var(--window-opacity, 1));
     border: 1px solid var(--border-secondary);
     border-radius: 6px;
     font-size: 13px;
@@ -161,7 +161,7 @@
     display: flex;
     justify-content: flex-end;
     gap: 12px;
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), max(var(--overlay-min-opacity, 0.85), var(--window-opacity, 1)));
 }
 
 .permission-dialog-button {
@@ -189,13 +189,13 @@
 }
 
 .permission-dialog-button.approve-button {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), max(var(--overlay-min-opacity, 0.85), var(--window-opacity, 1)));
     color: var(--text-primary);
     border: 1px solid var(--border-hover);
 }
 
 .permission-dialog-button.approve-button:hover {
-    background: var(--bg-active);
+    background: rgba(var(--bg-active-rgb), max(var(--overlay-min-opacity, 0.85), var(--window-opacity, 1)));
     border-color: var(--text-muted);
 }
 
@@ -217,7 +217,7 @@
 
 /* Permission Dialog V2 Styles - New compact design */
 .permission-dialog-v2 {
-    background: var(--bg-primary);
+    background: rgba(var(--bg-primary-rgb), max(var(--overlay-min-opacity, 0.85), var(--window-opacity, 1)));
     border: 1px solid var(--border-secondary);
     border-radius: 8px;
     box-shadow: var(--shadow-lg);
@@ -238,7 +238,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    background: var(--bg-elevated);
+    background: rgba(var(--bg-elevated-rgb), var(--window-opacity, 1));
     border: 1px solid var(--border-secondary);
     border-radius: 4px;
     padding: 8px 12px;
@@ -250,7 +250,7 @@
 }
 
 .permission-dialog-v2-details-toggle:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
 }
 
 .permission-dialog-v2-details-toggle .codicon {
@@ -258,7 +258,7 @@
 }
 
 .permission-dialog-v2-details {
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
     border: 1px solid var(--border-secondary);
     border-radius: 4px;
     padding: 12px;
@@ -302,7 +302,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    background: var(--bg-elevated);
+    background: rgba(var(--bg-elevated-rgb), var(--window-opacity, 1));
     border: 1px solid var(--border-secondary);
     border-radius: 4px;
     padding: 12px 16px;
@@ -314,7 +314,7 @@
 }
 
 .permission-dialog-v2-option:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
     border-color: var(--border-hover);
 }
 
@@ -344,7 +344,7 @@
 
 .permission-dialog-v2-input {
     width: 100%;
-    background: var(--bg-elevated);
+    background: rgba(var(--bg-elevated-rgb), var(--window-opacity, 1));
     border: 1px solid var(--border-secondary);
     border-radius: 4px;
     padding: 12px 16px;
@@ -366,7 +366,7 @@
 /* Permission Dialog V3 Styles - 底部固定栏设计 */
 .permission-dialog-v3 {
     position: relative;
-    background: var(--bg-elevated);
+    background: rgba(var(--bg-elevated-rgb), max(var(--overlay-min-opacity, 0.85), var(--window-opacity, 1)));
     /* 毛玻璃效果 */
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
@@ -439,7 +439,7 @@
 }
 
 .permission-dialog-v3-command-box {
-    background: var(--bg-primary);
+    background: rgba(var(--bg-primary-rgb), var(--window-opacity, 1));
     border: 1px solid var(--border-primary);
     border-radius: 8px;
     margin-bottom: 14px;
@@ -493,7 +493,7 @@
 
 .permission-dialog-v3-command-header .command-toggle:hover {
     color: var(--text-secondary);
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
 }
 
 .permission-dialog-v3-command-header .command-toggle .codicon {
@@ -538,7 +538,7 @@
     justify-content: center;
     align-items: center;
     gap: 6px;
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
     border: 1px solid var(--border-secondary);
     border-radius: 6px;
     /* 调整为适合横排的 padding */
@@ -553,7 +553,7 @@
 }
 
 .permission-dialog-v3-option:hover {
-    background: var(--bg-active);
+    background: rgba(var(--bg-active-rgb), var(--window-opacity, 1));
     border-color: var(--border-hover);
 }
 
@@ -576,7 +576,7 @@
     font-size: 11px;
     font-weight: 400;
     color: var(--text-muted);
-    background: var(--bg-elevated);
+    background: rgba(var(--bg-elevated-rgb), var(--window-opacity, 1));
     padding: 2px 8px;
     border-radius: 4px;
 }
