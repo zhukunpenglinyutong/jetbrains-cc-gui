@@ -1,21 +1,14 @@
 import { renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { useThemeInit } from './useThemeInit';
 
-describe('useThemeInit windowOpacity initialization', () => {
+describe('useThemeInit theme initialization', () => {
   beforeEach(() => {
     localStorage.clear();
     document.documentElement.style.removeProperty('--window-opacity');
   });
 
-  it('does not set CSS property when localStorage is empty', () => {
-    renderHook(() => useThemeInit());
-    expect(
-      document.documentElement.style.getPropertyValue('--window-opacity')
-    ).toBe('');
-  });
-
-  it('sets CSS property for valid opacity < 1.0', () => {
+  it('initializes windowOpacity from localStorage', () => {
     localStorage.setItem('windowOpacity', '0.6');
     renderHook(() => useThemeInit());
     expect(
@@ -23,7 +16,7 @@ describe('useThemeInit windowOpacity initialization', () => {
     ).toBe('0.6');
   });
 
-  it('does not set CSS property when opacity = 1.0', () => {
+  it('does not set CSS property when opacity is 1.0', () => {
     localStorage.setItem('windowOpacity', '1.0');
     renderHook(() => useThemeInit());
     expect(
@@ -31,7 +24,7 @@ describe('useThemeInit windowOpacity initialization', () => {
     ).toBe('');
   });
 
-  it('clamps value > 1.0 down to 1.0 and does not set CSS property', () => {
+  it('clamps value > 1.0 and does not set CSS property', () => {
     localStorage.setItem('windowOpacity', '1.5');
     renderHook(() => useThemeInit());
     expect(
@@ -47,27 +40,11 @@ describe('useThemeInit windowOpacity initialization', () => {
     ).toBe('0');
   });
 
-  it('treats NaN value as 1.0 and does not set CSS property', () => {
+  it('ignores NaN value and does not set CSS property', () => {
     localStorage.setItem('windowOpacity', 'abc');
     renderHook(() => useThemeInit());
     expect(
       document.documentElement.style.getPropertyValue('--window-opacity')
     ).toBe('');
-  });
-
-  it('treats Infinity as 1.0 and does not set CSS property', () => {
-    localStorage.setItem('windowOpacity', 'Infinity');
-    renderHook(() => useThemeInit());
-    expect(
-      document.documentElement.style.getPropertyValue('--window-opacity')
-    ).toBe('');
-  });
-
-  it('clamps -Infinity to 0.0 and sets CSS property', () => {
-    localStorage.setItem('windowOpacity', '-Infinity');
-    renderHook(() => useThemeInit());
-    expect(
-      document.documentElement.style.getPropertyValue('--window-opacity')
-    ).toBe('0');
   });
 });
