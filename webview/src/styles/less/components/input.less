@@ -1,8 +1,8 @@
 /* Input Area Styles */
 .input-area {
     padding: 9px 8px 8px;
-    background: var(--bg-chat);
-    border-top: 1px solid var(--bg-tertiary);
+    background: transparent;
+    border-top: 1px solid rgba(var(--bg-tertiary-rgb), var(--window-opacity, 1));
     flex-shrink: 0;
 }
 
@@ -10,7 +10,7 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
-    background: var(--bg-tertiary);
+    background: rgba(var(--bg-tertiary-rgb), max(var(--overlay-min-opacity, 0.85), var(--window-opacity, 1)));
     border: 1px solid var(--border-secondary);
     border-radius: 8px;
     padding: 12px 12px 8px 12px;

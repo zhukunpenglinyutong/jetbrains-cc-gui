@@ -1,6 +1,6 @@
 /* Agent Dialog Styles */
 .agent-dialog {
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), max(var(--overlay-min-opacity, 0.85), var(--window-opacity, 1)));
     border: 1px solid var(--border-secondary);
     border-radius: 8px;
     box-shadow: var(--shadow-lg);
@@ -51,7 +51,7 @@
         justify-content: center;
 
         &:hover {
-            background: var(--bg-hover);
+            background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
             color: var(--text-primary);
         }
     }
@@ -94,7 +94,7 @@
 .form-input,
 .form-textarea {
     width: 100%;
-    background: var(--bg-tertiary);
+    background: rgba(var(--bg-tertiary-rgb), var(--window-opacity, 1));
     border: 1px solid var(--border-secondary);
     border-radius: 4px;
     color: var(--text-primary);

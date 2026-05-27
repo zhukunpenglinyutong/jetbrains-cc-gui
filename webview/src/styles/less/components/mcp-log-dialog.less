@@ -14,13 +14,13 @@
     padding: 0;
     border: 1px solid var(--border-primary);
     border-radius: 6px;
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
     color: var(--text-primary);
     cursor: pointer;
 }
 
 .mcp-header .log-btn:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
 }
 
 .mcp-header .log-btn .log-badge {
@@ -79,7 +79,7 @@
 }
 
 .mcp-log-dialog .clear-btn:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
     color: var(--color-danger);
 }
 
@@ -109,7 +109,7 @@
 }
 
 .log-entry:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
 }
 
 .log-entry .log-time {

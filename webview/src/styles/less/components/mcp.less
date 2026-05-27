@@ -36,7 +36,7 @@
     flex-direction: column;
     border: 1px solid var(--border-secondary);
     border-radius: 8px;
-    background: var(--bg-primary);
+    background: rgba(var(--bg-primary-rgb), var(--window-opacity, 1));
     overflow: hidden;
 }
 
@@ -99,13 +99,13 @@
     padding: 0;
     border: 1px solid var(--border-primary);
     border-radius: 6px;
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
     color: var(--text-primary);
     cursor: pointer;
 }
 
 .mcp-header .refresh-btn:hover:not(:disabled) {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
 }
 
 .mcp-header .refresh-btn:disabled {
@@ -145,7 +145,7 @@
     right: 0;
     margin-top: 4px;
     min-width: 160px;
-    background: var(--bg-elevated);
+    background: rgba(var(--bg-elevated-rgb), var(--window-opacity, 1));
     border: 1px solid var(--border-primary);
     border-radius: 6px;
     box-shadow: var(--shadow-md);
@@ -164,7 +164,7 @@
 }
 
 .dropdown-item:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
 }
 
 .dropdown-item .codicon {
@@ -183,7 +183,7 @@
 .server-card {
     border: 1px solid var(--border-primary);
     border-radius: 8px;
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
     overflow: hidden;
     transition: all 0.15s ease;
 }
@@ -211,7 +211,7 @@
 }
 
 .card-header:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
 }
 
 .header-left-section {
@@ -290,14 +290,14 @@
     padding: 0;
     border: 1px solid var(--border-primary);
     border-radius: 6px;
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
     color: var(--text-primary);
     cursor: pointer;
     transition: all 0.15s ease;
 }
 
 .icon-btn:hover:not(:disabled) {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
     border-color: var(--border-hover);
 }
 
@@ -336,7 +336,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: var(--bg-secondary);
+    background-color: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
     border: 1px solid var(--border-primary);
     border-radius: 11px;
     transition: 0.2s;
@@ -494,7 +494,7 @@
     padding: 6px 12px;
     border: 1px solid var(--border-primary);
     border-radius: 6px;
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
     color: var(--text-primary);
     cursor: pointer;
     font-size: 12px;
@@ -502,7 +502,7 @@
 }
 
 .action-btn:hover:not(:disabled) {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
     border-color: var(--accent-primary);
 }
 
@@ -516,17 +516,17 @@
 }
 
 .action-btn.check-btn {
-    background: var(--bg-tertiary);
+    background: rgba(var(--bg-tertiary-rgb), var(--window-opacity, 1));
     color: var(--text-primary);
     border-color: transparent;
 }
 
 .action-btn.check-btn:hover:not(:disabled) {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
 }
 
 .action-btn.edit-btn:hover {
-    background: var(--bg-tertiary);
+    background: rgba(var(--bg-tertiary-rgb), var(--window-opacity, 1));
 }
 
 .action-btn.delete-btn:hover {
@@ -690,7 +690,7 @@
 
 /* 弹窗主体 */
 .dialog {
-    background: var(--vscode-editor-background, var(--bg-primary));
+    background: var(--vscode-editor-background, rgba(var(--bg-primary-rgb), max(var(--overlay-min-opacity, 0.85), var(--window-opacity, 1))));
     border: 1px solid var(--vscode-panel-border, var(--border-primary));
     border-radius: 8px;
     width: 90%;
@@ -739,7 +739,7 @@
     padding: 6px 12px;
     border: 1px solid var(--vscode-panel-border, var(--border-primary));
     border-radius: 4px;
-    background: var(--vscode-input-background, var(--bg-secondary));
+    background: var(--vscode-input-background, rgba(var(--bg-secondary-rgb), var(--window-opacity, 1)));
     color: var(--vscode-foreground, var(--text-primary));
     font-size: 12px;
     cursor: default;
@@ -795,7 +795,7 @@
     display: flex;
     border: 1px solid var(--vscode-input-border, var(--border-secondary));
     border-radius: 6px;
-    background: var(--vscode-input-background, var(--bg-secondary));
+    background: var(--vscode-input-background, rgba(var(--bg-secondary-rgb), var(--window-opacity, 1)));
     overflow: hidden;
     min-height: 300px;
     max-height: 400px;
@@ -950,7 +950,7 @@
     padding: 12px 14px;
     border: 1px solid var(--vscode-panel-border, var(--border-primary));
     border-radius: 8px;
-    background: var(--vscode-sideBar-background, var(--bg-secondary));
+    background: var(--vscode-sideBar-background, rgba(var(--bg-secondary-rgb), var(--window-opacity, 1)));
     cursor: pointer;
     transition: all 0.15s ease;
     .flex-gap-horizontal(12px);
@@ -1275,7 +1275,7 @@
 }
 
 .clear-logs-btn:hover {
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
     border-color: var(--border-primary);
     color: var(--text-primary);
 }
@@ -1450,7 +1450,7 @@
 }
 
 .logs-content::-webkit-scrollbar-track {
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
 }
 
 .logs-content::-webkit-scrollbar-thumb {
@@ -1517,7 +1517,7 @@
     padding: 4px 10px;
     border: 1px solid var(--border-primary);
     border-radius: 4px;
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
     color: var(--text-primary);
     cursor: pointer;
     font-size: 11px;
@@ -1525,7 +1525,7 @@
 }
 
 .load-tools-btn:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
     border-color: var(--accent-primary);
 }
 
@@ -1573,13 +1573,13 @@
     padding: 8px 12px;
     border: 1px solid var(--border-secondary);
     border-radius: 6px;
-    background: var(--bg-tertiary);
+    background: rgba(var(--bg-tertiary-rgb), var(--window-opacity, 1));
     transition: all 0.15s ease;
 }
 
 .tool-item:hover {
     border-color: var(--accent-primary);
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
 }
 
 .tool-name {
@@ -1616,7 +1616,7 @@
     padding: 16px 12px;
     border: 1px dashed var(--border-secondary);
     border-radius: 6px;
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
     color: var(--text-tertiary);
     font-size: 12px;
 }
@@ -1662,7 +1662,7 @@
     height: 500px;
     border: 1px solid var(--border-primary);
     border-radius: 8px;
-    background: var(--bg-primary);
+    background: rgba(var(--bg-primary-rgb), var(--window-opacity, 1));
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -1675,7 +1675,7 @@
     display: flex;
     flex-direction: column;
     border-right: 1px solid var(--border-primary);
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
     overflow: hidden;
 }
 
@@ -1686,7 +1686,7 @@
     align-items: center;
     padding: 8px 10px;
     border-bottom: 1px solid var(--border-primary);
-    background: var(--bg-tertiary);
+    background: rgba(var(--bg-tertiary-rgb), var(--window-opacity, 1));
     flex-shrink: 0;
     gap: 8px;
 }
@@ -1721,7 +1721,7 @@
 }
 
 .sidebar-icon-btn:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
     border-color: var(--accent-primary);
     color: var(--text-primary);
 }
@@ -1749,7 +1749,7 @@
     color: var(--text-tertiary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
 }
 
 .sidebar-tool-list {
@@ -1774,7 +1774,7 @@
 }
 
 .sidebar-tool-item:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
     border-color: var(--border-secondary);
     transform: translateX(1px);
 }
@@ -1851,7 +1851,7 @@
     align-items: center;
     padding: 12px 16px;
     border-bottom: 1px solid var(--border-primary);
-    background: var(--bg-tertiary);
+    background: rgba(var(--bg-tertiary-rgb), var(--window-opacity, 1));
     flex-shrink: 0;
 }
 
@@ -1935,7 +1935,7 @@
     padding: 16px;
     border: 1px solid var(--border-secondary);
     border-radius: 8px;
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
 }
 
 .detail-row {
@@ -1981,7 +1981,7 @@
     padding: 12px;
     border: 1px solid var(--border-secondary);
     border-radius: 6px;
-    background: var(--bg-tertiary);
+    background: rgba(var(--bg-tertiary-rgb), var(--window-opacity, 1));
 }
 
 .param-name {
@@ -2009,7 +2009,7 @@
 .param-type {
     padding: 2px 6px;
     border-radius: 4px;
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
     color: var(--text-secondary);
     font-family: var(--idea-editor-font-family, monospace);
 }
@@ -2047,7 +2047,7 @@
 
 .sidebar-content::-webkit-scrollbar-track,
 .content-panel-body::-webkit-scrollbar-track {
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
 }
 
 .sidebar-content::-webkit-scrollbar-thumb,
@@ -2087,7 +2087,7 @@
     max-width: 400px;
     padding: 12px 16px;
     border-radius: 8px;
-    background: var(--bg-elevated);
+    background: rgba(var(--bg-elevated-rgb), var(--window-opacity, 1));
     border: 1px solid var(--border-primary);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     animation: tooltipFadeIn 0.15s ease-out;
@@ -2150,7 +2150,7 @@
 .mcp-tool-tooltip .tooltip-param {
     padding: 8px 10px;
     border-radius: 4px;
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
     border: 1px solid var(--border-secondary);
 }
 
@@ -2179,7 +2179,7 @@
 .mcp-tool-tooltip .tooltip-param-type {
     padding: 2px 6px;
     border-radius: 3px;
-    background: var(--bg-tertiary);
+    background: rgba(var(--bg-tertiary-rgb), var(--window-opacity, 1));
     color: var(--text-secondary);
     font-family: var(--idea-editor-font-family, monospace);
 }

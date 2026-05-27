@@ -12,7 +12,7 @@
 
 .toast {
     pointer-events: auto;
-    background: var(--bg-elevated);
+    background: rgba(var(--bg-elevated-rgb), max(var(--overlay-min-opacity, 0.85), var(--window-opacity, 1)));
     border: 1px solid var(--border-secondary);
     border-radius: 6px;
     padding: 12px 16px;

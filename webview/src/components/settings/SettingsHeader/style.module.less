@@ -7,7 +7,7 @@
   align-items: center;
   padding: 12px 16px;
   border-bottom: 1px solid var(--border-primary);
-  background: var(--bg-secondary);
+  background: transparent;
 }
 
 .headerLeft {
@@ -29,7 +29,7 @@
   .flex-gap-horizontal(4px);
 
   &:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
     color: var(--text-secondary);
   }
 }

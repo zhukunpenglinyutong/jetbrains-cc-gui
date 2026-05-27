@@ -53,7 +53,7 @@
   font-size: 13px;
 
   &:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
   }
 }
 
@@ -66,7 +66,7 @@
   top: 100%;
   right: 0;
   margin-top: 4px;
-  background: var(--bg-secondary);
+  background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
   border: 1px solid var(--border-secondary);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
@@ -87,7 +87,7 @@
   white-space: nowrap;
 
   &:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
   }
 
   &:not(:last-child) {
@@ -112,7 +112,7 @@
 }
 
 .dialog {
-  background: var(--bg-primary);
+  background: rgba(var(--bg-primary-rgb), max(var(--overlay-min-opacity, 0.85), var(--window-opacity, 1)));
   border-radius: 8px;
   width: 700px;
   max-width: 90%;
@@ -177,7 +177,7 @@
 .strategySection {
   margin-bottom: 16px;
   padding: 12px;
-  background: var(--bg-secondary);
+  background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
   border-radius: 6px;
   border: 1px solid var(--border-primary);
 }
@@ -206,7 +206,7 @@
   transition: background 0.2s;
 
   &:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
   }
 
   input[type="radio"] {
@@ -237,7 +237,7 @@
   display: flex;
   align-items: center;
   padding: 8px;
-  background: var(--bg-secondary);
+  background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
@@ -259,11 +259,11 @@
   border-radius: 4px;
   cursor: pointer;
   border: 1px solid var(--border-primary);
-  background: var(--bg-primary);
+  background: rgba(var(--bg-primary-rgb), var(--window-opacity, 1));
   transition: all 0.2s;
 
   &:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
     border-color: var(--border-hover, var(--border-secondary));
   }
 
@@ -377,7 +377,7 @@
   cursor: pointer;
   
   &:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
   }
 }
 
@@ -403,7 +403,7 @@
   display: inline-flex;
   align-items: center;
   padding: 2px 6px;
-  background: var(--bg-secondary);
+  background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
   border: 1px solid var(--border-primary);
   border-radius: 4px;
   font-size: 10px;
@@ -427,7 +427,7 @@
 }
 
 .warningDialog {
-  background: var(--bg-primary);
+  background: rgba(var(--bg-primary-rgb), max(var(--overlay-min-opacity, 0.85), var(--window-opacity, 1)));
   border-radius: 8px;
   padding: 24px;
   width: 400px;
@@ -497,7 +497,7 @@
   padding: 12px;
   border-radius: 8px;
   border: 1px solid var(--border-primary);
-  background: var(--bg-secondary);
+  background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
   transition: all 0.2s ease;
 
   &.active {
@@ -601,7 +601,7 @@
   gap: 6px;
   padding: 4px 12px;
   border-radius: 8px;
-  background: var(--bg-tertiary);
+  background: rgba(var(--bg-tertiary-rgb), var(--window-opacity, 1));
   color: var(--text-tertiary);
   font-size: 12px;
   font-weight: 500;
@@ -632,7 +632,7 @@
   justify-content: center;
 
   &:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
   }
 }
 
@@ -644,7 +644,7 @@
   padding: 64px 0;
   color: var(--text-tertiary);
   text-align: center;
-  background: var(--bg-secondary);
+  background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
   border: 2px dashed var(--border-secondary);
   border-radius: 8px;
   margin-top: 8px;

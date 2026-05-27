@@ -1,6 +1,6 @@
 .sidebar {
   width: 200px;
-  background: var(--bg-secondary);
+  background: transparent;
   border-right: 1px solid var(--border-primary);
   padding: 8px 0;
   overflow-y: auto;
@@ -44,7 +44,7 @@
   }
 
   &:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
   }
 
   &.active {
