@@ -73,7 +73,7 @@
   margin-top: 12px;
   border: 1px solid var(--border-secondary);
   border-radius: 6px;
-  background: var(--bg-secondary);
+  background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
   max-height: 300px;
   overflow: hidden;
   display: flex;
@@ -86,7 +86,7 @@
   gap: 8px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--border-secondary);
-  background: var(--bg-tertiary);
+  background: rgba(var(--bg-tertiary-rgb), var(--window-opacity, 1));
 }
 
 .actionsSpacer {
@@ -182,7 +182,7 @@
   }
 
   &:hover {
-    background: var(--bg-tertiary);
+    background: rgba(var(--bg-tertiary-rgb), var(--window-opacity, 1));
 
     .deleteButton,
     .editButton {
@@ -309,7 +309,7 @@
   position: relative;
   width: 44px;
   height: 24px;
-  background: var(--bg-tertiary);
+  background: rgba(var(--bg-tertiary-rgb), var(--window-opacity, 1));
   border: 1px solid var(--border-secondary);
   border-radius: 12px;
   transition: all 0.2s ease;
@@ -436,7 +436,7 @@
 }
 
 .editorDialog {
-  background: var(--bg-primary);
+  background: rgba(var(--bg-primary-rgb), max(var(--overlay-min-opacity, 0.85), var(--window-opacity, 1)));
   border: 1px solid var(--border-secondary);
   border-radius: 8px;
   width: 90%;
@@ -485,7 +485,7 @@
   transition: all 0.15s ease;
 
   &:hover {
-    background: var(--bg-tertiary);
+    background: rgba(var(--bg-tertiary-rgb), var(--window-opacity, 1));
     color: var(--text-secondary);
   }
 
@@ -517,7 +517,7 @@
 .editorTextarea {
   width: 100%;
   padding: 10px 12px;
-  background: var(--bg-secondary);
+  background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
   border: 1px solid var(--border-secondary);
   border-radius: 6px;
   font-size: 13px;
@@ -549,7 +549,7 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  background: var(--bg-secondary);
+  background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
   border: 1px solid var(--border-secondary);
   border-radius: 6px;
   color: var(--text-secondary);
@@ -557,7 +557,7 @@
   transition: all 0.15s ease;
 
   &:hover:not(:disabled) {
-    background: var(--bg-tertiary);
+    background: rgba(var(--bg-tertiary-rgb), var(--window-opacity, 1));
     border-color: var(--accent-primary);
     color: var(--accent-primary);
   }
@@ -575,7 +575,7 @@
 .importanceInput {
   width: 60px;
   padding: 6px 8px;
-  background: var(--bg-secondary);
+  background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
   border: 1px solid var(--border-secondary);
   border-radius: 6px;
   font-size: 14px;
@@ -619,7 +619,7 @@
   gap: 8px;
   padding: 12px 16px;
   border-top: 1px solid var(--border-secondary);
-  background: var(--bg-secondary);
+  background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
   border-radius: 0 0 8px 8px;
 }
 
@@ -634,7 +634,7 @@
   transition: all 0.15s ease;
 
   &:hover {
-    background: var(--bg-tertiary);
+    background: rgba(var(--bg-tertiary-rgb), var(--window-opacity, 1));
     border-color: var(--text-tertiary);
   }
 }

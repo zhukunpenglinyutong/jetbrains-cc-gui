@@ -104,6 +104,8 @@ const SettingsView = ({
     setUserMsgColor,
     diffTheme,
     setDiffTheme,
+    windowOpacity,
+    setWindowOpacity,
   } = useSettingsThemeSync();
 
   // Basic settings actions: node path, working dir, streaming, shortcuts, sound, commit prompt, etc.
@@ -474,6 +476,8 @@ const SettingsView = ({
               onUserMsgColorChange={setUserMsgColor}
               diffTheme={diffTheme}
               onDiffThemeChange={setDiffTheme}
+              windowOpacity={windowOpacity}
+              onWindowOpacityChange={setWindowOpacity}
               diffExpandedByDefault={diffExpandedByDefault}
               onDiffExpandedByDefaultChange={setDiffExpandedByDefault}
               commitGenerationEnabled={commitGenerationEnabled}

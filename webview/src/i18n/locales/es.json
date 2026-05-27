@@ -251,6 +251,11 @@
         "enabled": "Habilitado",
         "disabled": "Deshabilitado",
         "hint": "Cuando está deshabilitado, crear una nueva sesión en una conversación con mensajes existentes omitirá el cuadro de confirmación."
+      },
+      "windowOpacity": {
+        "label": "Opacidad de ventana",
+        "reset": "Restablecer",
+        "hint": "Reduce la opacidad para que el fondo del IDE se vea a través de la ventana de chat. Rango: 0% - 100%"
       }
     },
     "providers": "Gestión de proveedores",

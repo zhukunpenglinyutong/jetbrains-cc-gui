@@ -22,7 +22,7 @@
   text-align: center;
   padding: 48px 24px;
   color: var(--text-tertiary);
-  background: var(--bg-secondary);
+  background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
   border: 1px solid var(--border-primary);
   border-radius: 6px;
 
@@ -70,7 +70,7 @@
   padding: 12px;
   border-radius: 8px;
   border: 1px solid var(--border-primary);
-  background: var(--bg-secondary);
+  background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
   transition: all 0.2s ease;
 
   &.active {
@@ -120,7 +120,7 @@
   gap: 6px;
   padding: 4px 12px;
   border-radius: 8px;
-  background: var(--bg-tertiary);
+  background: rgba(var(--bg-tertiary-rgb), var(--window-opacity, 1));
   color: var(--text-tertiary);
   font-size: 12px;
   font-weight: 500;
@@ -170,7 +170,7 @@
   justify-content: center;
 
   &:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
   }
 }
 
@@ -182,7 +182,7 @@
   padding: 64px 0;
   color: var(--text-tertiary);
   text-align: center;
-  background: var(--bg-secondary);
+  background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
   border: 2px dashed var(--border-secondary);
   border-radius: 8px;
   margin-top: 8px;
@@ -246,7 +246,7 @@
 }
 
 .warningDialog {
-  background: var(--bg-primary);
+  background: rgba(var(--bg-primary-rgb), max(var(--overlay-min-opacity, 0.85), var(--window-opacity, 1)));
   border-radius: 8px;
   padding: 24px;
   width: 400px;
@@ -307,7 +307,7 @@
   font-size: 13px;
 
   &:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
   }
 }
 

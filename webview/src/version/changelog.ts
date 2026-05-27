@@ -23,6 +23,8 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
 - Add a "Don't ask again" checkbox to the new-session confirm dialog, synced with Settings → Basic → Behavior (interrupting a running AI still always confirms)
 - Add Claude Opus 4.8 model support (200K / 1M context), marked as the latest flagship
 - Add \`spawn EBUSY\` error pattern with recommended fixes across 11 locales
+- Add window opacity slider in Settings → Appearance: real-time transparency control (0–100%) with localStorage persistence and unified \`--window-opacity\` CSS variable
+
 
 🐛 Fixes
 - Fix Codex history sessions failing to load due to payload-parsing variable shadows and a missing \`cmd\`→\`command\` field mapping in history replay
@@ -37,17 +39,26 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
 - Fix \`killByPid\` being able to terminate arbitrary process trees; restrict to PIDs owned by this JVM (security)
 
 🔧 Improvements
+🔧 Improvements
 - Add project-scoped \`NodeProcessRegistry\` aggregating Node process state across all chat windows
 - Show the tab's actual provider (claude/codex) as the daemon label instead of a hard-coded "claude"
 - Add an SDK hook output validator that guarantees hook returns pass the SDK Zod schema, guarding against the \`permissionDecision\` regression class
-- Tighten \`daemon.js\` parent-PID polling from 10s to 3s`,
-      zh: `✨ Features
+- Tighten \`daemon.js\` parent-PID polling from 10s to 3s
+- Expose \`ProcessManager.getActiveChannelSnapshot()\`, \`BaseSDKBridge.getProcessManager()\`, \`ClaudeSDKBridge.getCurrentDaemonBridgeForInspection()\`, \`DaemonBridge.getDaemonProcessForInspection()\` for read-only process inspection from the UI layer
+- Add \`ProcessManager.newChannelId(prefix)\` helper and route 7 call sites through it
+- Categorise reader-thread failures in \`ClaudeRewindService\` and \`PromptEnhancerProcessRunner\` (IOException = expected on kill, RuntimeException = real bug logged with stack); replace magic 60s/5s with named constants
+- Replace \`boolean[1]\` lambda-capture trick in \`NodeProcessRegistry\` with \`AtomicBoolean\` to satisfy Checkstyle
+- Large-area elements (message bubbles, code blocks, tool blocks, task blocks, input box) now follow \`--window-opacity\` for consistent transparent window appearance
+- Floating dialogs (import, warning, confirm) use \`max(--overlay-min-opacity, --window-opacity)\` to prevent transparency bleed-through
+- Add \`--overlay-min-opacity: 0.85\` CSS variable and RGB variants for all large-area background colors`,
+      zh: `✨ 新功能
 - 新增「Node 进程管理」面板（"切换当前供应商"下方）：集中展示所有 Node.js 子进程，按守护进程 / 进行中对话 / 孤立进程分组，显示 PID、运行时长、内存，并提供终止 / 重启 / 中断按钮，底部一键"清理所有孤立进程"
 - 新增孤立进程扫描器，标记含 \`daemon.js\` / \`channel-manager.js\` 但不在注册表中的 Node 进程；设置菜单实时进程徽章在检测到孤立进程时变红
 - 新增会话内搜索面板（Cmd+F / Ctrl+F），支持上一个/下一个、命中计数、自动展开折叠，以及 Match Case / Whole Word / Regex 开关（Alt+C / Alt+W / Alt+R）
 - 新建会话确认弹窗新增"不再提示"复选框，与设置 → 基础 → 行为双向同步（中断运行中 AI 仍强制确认）
 - 新增 Claude Opus 4.8 模型支持（200K / 1M 上下文），标记为最新旗舰
 - 新增 \`spawn EBUSY\` 错误模式及推荐解决方案，覆盖 11 种语言
+- 设置 → 外观新增窗口透明度滑块：实时透明度控制（0–100%），localStorage 持久化，统一 \`--window-opacity\` CSS 变量
 
 🐛 Fixes
 - 修复 Codex 历史会话点不开的问题：根因是 payload 解析变量影子写错，以及历史回放缺少 \`cmd\`→\`command\` 字段映射
@@ -65,7 +76,14 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
 - 新增项目级 \`NodeProcessRegistry\`，跨所有聊天窗口聚合 Node 进程状态
 - 进程面板 daemon 标签改为显示 Tab 实际 provider（claude/codex），不再硬编码 "claude"
 - 新增 SDK hook 返回值校验器，确保 hook 返回能通过 SDK Zod 校验，防范 \`permissionDecision\` 类回归
-- 将 \`daemon.js\` 父进程心跳从 10s 收紧到 3s`,
+- 将 \`daemon.js\` 父进程心跳从 10s 收紧到 3s
+- 暴露 \`ProcessManager.getActiveChannelSnapshot()\`、\`BaseSDKBridge.getProcessManager()\`、\`ClaudeSDKBridge.getCurrentDaemonBridgeForInspection()\`、\`DaemonBridge.getDaemonProcessForInspection()\` 用于只读进程检视
+- 新增 \`ProcessManager.newChannelId(prefix)\` 统一生成 channelId，收编 7 个调用点
+- \`ClaudeRewindService\` / \`PromptEnhancerProcessRunner\` 中区分 reader 线程异常分类（IOException = 终止时预期，RuntimeException = 真 bug，带堆栈记录）；用具名常量替换魔法数 60s / 5s
+- \`NodeProcessRegistry\` 中用 \`AtomicBoolean\` 替换 \`boolean[1]\` 的 lambda 闭包绕过技巧，满足 Checkstyle 要求
+- 大面积元素（消息气泡、代码块、工具块、任务块、输入框）现在跟随 \`--window-opacity\` 变化，实现一致的透明窗口效果
+- 浮动对话框（导入、警告、确认）使用 \`max(--overlay-min-opacity, --window-opacity)\` 防止透明穿透
+- 新增 \`--overlay-min-opacity: 0.85\` CSS 变量及所有大面积背景色的 RGB 变体`,
     },
   },
   {
@@ -153,102 +171,6 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
     version: '0.4.2',
     date: '2026-05-08',
-    content: {
-      en: `✨ Features
-- Add Session Templates: save the current session as a reusable template and create new sessions from templates via the chat tool window menu
-- Add task completion toast notification, disabled by default and opt-in via Settings → Basic → Behavior; the toast shows the session title with the latest assistant answer preview (by @adminkk)
-- Add "Copy AI Reference" action to the editor right-click menu for sending selected code with file path and line range context (by @JackCmd233)
-- Add multi-project workspace context collection for IntelliJ workspace mode, giving AI providers awareness of subproject structure (by @gadfly3173)
-- Add AI-powered session title generation using Claude Haiku after the first query completes, with a Settings → Basic → Behavior toggle (by @gadfly3173)
-- Insert code snippet at the current caret position instead of always appending to the end when using "Copy AI Reference" or editor send actions
-- Show execution results and permission-denial state in tool blocks for better observability
-- Show the active provider name dynamically in the "AI provider connected" banner (e.g. "Codex connected" instead of always "Claude connected")
-
-🐛 Fixes
-- Fix Codex message handler causing duplicate assistant messages in new sessions and during history recovery (by @GlMelon)
-- Fix batch deletion of session history causing SessionIndexManager index corruption (by @GlMelon)
-- Fix Codex thinking process not being restored after provider switch (by @GlMelon)
-- Fix historical record duplication and internal command message leakage (by @GlMelon)
-- Fix deprecated API calls in OpenFileHandler (by @GlMelon)
-- Fix editor popup action icons missing after icon refactoring (by @JackCmd233)
-- Fix selection reference range formatting in the Copy AI Reference action (by @JackCmd233)
-- Fix multi-instance startup causing two IDE processes to delete each other's ai-bridge extraction files (by @zxc1213)
-- Fix MCP server config from ~/.claude.json not being passed to the Claude Agent SDK (by @RunfengLin815)
-- Fix task completion toast showing pre-tool-call prose; now displays the final answer text from the last text block (by @gadfly3173)
-- Fix drag-sort in JCEF: ensure drop event fires reliably and set correct dropEffect for move
-- Fix session title listener to support multiple ChatWindow subscribers via CopyOnWriteArrayList, preventing silent event drops
-- Fix sessionId input validation against path-traversal payloads in history deletion endpoints
-- Fix event listener memory leaks in webview: properly clean up visibilitychange, focus, and pageshow listeners on unload
-- Fix content-visibility placeholder size mismatch that caused tool-call cards to appear "stuck" mid-screen during streaming until manual scroll
-- Fix streamed text being incorrectly repositioned when tool_use/tool_result blocks appeared mid-stream by switching from turn-based to boundary-based message patching
-- Fix CLI Login mode mutating ~/.claude/settings.json by removing user API keys; CLI Login state is now read from plugin-owned config and the daemon is restarted on provider switch to apply the new auth mode reliably
-
-🔧 Improvements
-- Replace single-element array concurrency workaround with AtomicBoolean/AtomicReference throughout the SDK bridge layer
-- Unify all editor action icons to use cc-gui-icon for a consistent visual identity
-- Improve attachment handling and model resolution in ai-bridge with vision model detection
-- Extract loadMcpServersConfigAsRecord helper to prevent empty MCP config from leaking into SDK options
-- Remove brand icon from task completion toast for a simpler, lighter notification layout
-- Improve drag-sort external drop detection to distinguish file drops from UI reorder drags; add pointer handling and touch-action CSS
-- Memoize SubagentList, FileChangesList, and HistoryView list items to reduce re-renders by ~50%
-- Optimize long-session rendering: switch to auto-sizing content-visibility with per-type size hints and 30-message pagination
-- Eliminate 110+ unsafe \`(window as any)\` casts with proper TypeScript Window interface extensions and JSDoc annotations
-- Extract repeated inline style objects to named module-level constants across multiple components
-- Split the oversized App component into focused modules with dedicated context providers (DialogContext, SessionContext, UIStateContext, MessagesContext) and a new ChatScreen container
-- Split the 400+ line useModelProviderState hook into four single-responsibility hooks (useClaudeProvider, useCodexProvider, useModelStatePersistence, useProviderSettings) for clearer state ownership
-- Refactor Java bridge, webview, and ai-bridge: split oversized classes into focused single-responsibility components
-- Enable Checkstyle NeedBraces rule and wrap 197 pre-existing single-line if/else bodies across 44 Java files in braces to guard against goto-fail-style edits
-- Tighten Checkstyle configuration: enforce newline at end of file, line length limits, reorganize rule sections, and remove unused imports`,
-      zh: `✨ Features
-- 新增会话模板功能：可将当前会话保存为模板，并可在聊天工具窗口菜单中通过模板快速创建新会话
-- 新增任务完成 Toast 通知，默认关闭，可在「设置 → 基础 → 行为」中开启；Toast 展示会话标题与最新助手回答预览（by @adminkk）
-- 在编辑器右键菜单新增「Copy AI Reference」操作，可将选中代码连同文件路径和行号范围一并发送给 AI（by @JackCmd233）
-- 新增 IntelliJ 工作区（Workspace）模式下的多项目上下文收集，让 AI 感知子项目结构（by @gadfly3173）
-- 新增 AI 会话标题自动生成功能，首次对话结束后使用 Claude Haiku 生成语义化标题，并在「设置 → 基础 → 行为」中提供开关（by @gadfly3173）
-- 使用「Copy AI Reference」或编辑器发送操作时，代码片段插入到当前光标位置，不再始终追加到末尾
-- 工具调用块新增执行结果展示，并跟踪权限拒绝状态，便于调试和观察
-- AI 连接提示横幅改为动态显示当前 Provider 名称（例如切换至 Codex 时显示「Codex connected」）
-
-🐛 Fixes
-- 修复 Codex 消息处理器导致新建会话和历史恢复时出现重复助手消息的问题（by @GlMelon）
-- 修复批量删除会话历史记录导致 SessionIndexManager 索引损坏的问题（by @GlMelon）
-- 修复切换 Provider 后 Codex 思考过程无法恢复的问题（by @GlMelon）
-- 修复历史记录重复和内部命令消息泄漏问题（by @GlMelon）
-- 修复 OpenFileHandler 中废弃 API 的调用（by @GlMelon）
-- 修复图标重构后编辑器弹出菜单操作图标丢失的问题（by @JackCmd233）
-- 修复「Copy AI Reference」中选区引用的行号范围格式错误（by @JackCmd233）
-- 修复两个 IDE 实例同时启动时互相删除对方 ai-bridge 解压文件的问题（by @zxc1213）
-- 修复 ~/.claude.json 中的 MCP Server 配置未传递给 Claude Agent SDK 的问题（by @RunfengLin815）
-- 修复任务完成 Toast 显示工具调用前的中间文案问题，改为显示最后一个文本块中的最终回答（by @gadfly3173）
-- 修复 JCEF 中拖拽排序问题：确保 drop 事件可靠触发并为移动操作设置正确的 dropEffect
-- 修复会话标题监听器，改用 CopyOnWriteArrayList 支持多个 ChatWindow 订阅，防止事件静默丢失
-- 修复历史删除接口中 sessionId 输入未校验、存在路径穿越风险的安全问题
-- 修复 Webview 中事件监听器内存泄漏：visibilitychange、focus、pageshow 监听器现在在页面卸载时正确清理
-- 修复流式输出时 content-visibility 占位高度估算偏差导致工具调用卡片"卡"在屏幕中部、需手动滚动才能恢复的问题
-- 将消息打补丁逻辑从基于 turn 改为基于边界（boundary），修复工具卡片中途出现时流式文本错位的问题
-- 修复 CLI Login 模式会修改 ~/.claude/settings.json 删除用户 API Key 的问题；CLI Login 状态改由插件自有配置维护，并在切换 Provider 时重启守护进程以可靠应用新认证模式
-
-🔧 Improvements
-- 将 SDK Bridge 层中的单元素数组并发变通方案替换为 AtomicBoolean/AtomicReference
-- 统一所有编辑器操作图标为 cc-gui-icon，提供一致的视觉标识
-- 改进 ai-bridge 中的附件处理和模型解析逻辑，新增视觉模型检测
-- 提取 loadMcpServersConfigAsRecord 工具函数，避免空 MCP 配置被错误传入 SDK 选项
-- 移除任务完成 Toast 中的品牌图标，布局更简洁轻量
-- 改进拖拽排序的外部文件检测逻辑，区分文件拖入与 UI 排序操作，并补充 pointer 事件处理和 touch-action CSS
-- 对 SubagentList、FileChangesList、HistoryView 列表项进行记忆化优化，减少约 50% 的不必要重渲染
-- 优化长会话渲染：content-visibility 改为自动尺寸估算，并按消息类型提供尺寸提示，配合 30 条消息分页
-- 消除 110+ 处不安全的 \`(window as any)\` 类型断言，改用正确的 TypeScript Window 接口扩展和 JSDoc 注解
-- 将多个组件中的重复内联样式对象提取为模块级命名常量
-- 拆分过大的 App 组件为多个聚焦模块，新增 DialogContext / SessionContext / UIStateContext / MessagesContext 上下文以及 ChatScreen 容器组件
-- 将 400+ 行的 useModelProviderState Hook 拆分为四个单一职责 Hook（useClaudeProvider、useCodexProvider、useModelStatePersistence、useProviderSettings），状态归属更清晰
-- 重构 Java Bridge、Webview 及 ai-bridge：拆分过大的类为单一职责的聚焦组件
-- 启用 Checkstyle NeedBraces 规则，并在 44 个 Java 文件中为 197 处单行 if/else 补全花括号，防止未来编辑出现 goto-fail 式漏洞
-- 收紧 Checkstyle 配置：强制文件末尾换行、行长度限制，重新组织规则分组，移除无用 import`,
-    },
-  },
-  {
-    version: '0.4.1',
-    date: '2026-05-06',
     content: {
       en: `✨ Features
 - Add runtime provider switcher: switch between providers without restarting the session

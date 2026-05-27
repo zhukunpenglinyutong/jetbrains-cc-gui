@@ -296,6 +296,11 @@
         "enabled": "Ativado",
         "disabled": "Desativado",
         "hint": "Quando desativado, criar uma nova sessão em uma conversa com mensagens existentes irá pular a caixa de confirmação."
+      },
+      "windowOpacity": {
+        "label": "Opacidade da janela",
+        "reset": "Redefinir",
+        "hint": "Reduza a opacidade para deixar o fundo do IDE aparecer através da janela de chat. Intervalo: 0% - 100%"
       }
     },
     "providers": "Gerenciamento de Provedores",

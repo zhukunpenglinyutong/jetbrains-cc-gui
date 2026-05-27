@@ -176,6 +176,32 @@ English:
 
 ---
 
+##### **2026年5月23日（v0.4.4）**
+
+English:
+
+✨ Features
+- Add window opacity slider in Settings → Appearance: real-time transparency control (0–100%) with localStorage persistence and unified `--window-opacity` CSS variable
+
+🔧 Improvements
+- Large-area elements (message bubbles, code blocks, tool blocks, task blocks, input box) now follow `--window-opacity` for consistent transparent window appearance
+- Floating dialogs (import, warning, confirm) use `max(--overlay-min-opacity, --window-opacity)` to prevent transparency bleed-through
+- Extract unified `useWindowOpacity` hook: single source of truth for opacity state, debounced localStorage writes (500ms), `Number.isFinite` validation for robust input parsing
+- Add `--overlay-min-opacity: 0.85` CSS variable and RGB variants for all large-area background colors
+
+中文：
+
+✨ Features
+- 设置 → 外观新增窗口透明度滑块：实时透明度控制（0–100%），localStorage 持久化，统一 `--window-opacity` CSS 变量
+
+🔧 Improvements
+- 大面积元素（消息气泡、代码块、工具块、任务块、输入框）现在跟随 `--window-opacity` 变化，实现一致的透明窗口效果
+- 浮动对话框（导入、警告、确认）使用 `max(--overlay-min-opacity, --window-opacity)` 防止透明穿透
+- 提取统一的 `useWindowOpacity` hook：透明度状态唯一来源，localStorage 写入防抖（500ms），`Number.isFinite` 输入校验保证解析健壮性
+- 新增 `--overlay-min-opacity: 0.85` CSS 变量及所有大面积背景色的 RGB 变体
+
+---
+
 ##### **2026年5月8日（v0.4.2）**
 
 English:

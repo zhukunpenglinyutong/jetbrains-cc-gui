@@ -35,7 +35,7 @@
 /* Bash命令块样式 */
 .bash-tool-header {
     border-bottom: none;
-    background: var(--bg-primary);
+    background: rgba(var(--bg-primary-rgb), var(--window-opacity, 1));
 }
 
 .bash-tool-header.expanded {
@@ -132,7 +132,7 @@
 .bash-tool-content {
     display: flex;
     flex-direction: column;
-    background: var(--bg-primary);
+    background: rgba(var(--bg-primary-rgb), var(--window-opacity, 1));
     position: relative;
 }
 
@@ -147,7 +147,7 @@
 }
 
 .bash-command-block {
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
     border: 1px solid var(--border-primary);
     border-radius: 6px;
     padding: 10px 12px;
@@ -353,11 +353,11 @@
 }
 
 .bash-timeline-content:hover {
-    background-color: var(--bg-secondary);
+    background-color: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
 }
 
 .bash-timeline-content.expanded {
-    background-color: var(--bg-secondary);
+    background-color: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
 }
 
 /* 时间线行 */

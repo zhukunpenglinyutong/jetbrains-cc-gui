@@ -58,13 +58,13 @@
     padding: 0;
     border: 1px solid var(--border-primary);
     border-radius: 6px;
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
     color: var(--text-primary);
     cursor: pointer;
 }
 
 .skills-header .refresh-btn:hover:not(:disabled) {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
 }
 
 .skills-header .refresh-btn:disabled {
@@ -87,7 +87,7 @@
 .skill-card {
     border: 1px solid var(--border-primary);
     border-radius: 8px;
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
     overflow: hidden;
     transition: all 0.15s ease;
 }
@@ -133,7 +133,7 @@
     font-size: 11px;
     padding: 2px 6px;
     border-radius: 4px;
-    background: var(--bg-tertiary);
+    background: rgba(var(--bg-tertiary-rgb), var(--window-opacity, 1));
     color: var(--text-tertiary);
     margin-left: 8px;
 }
@@ -164,7 +164,7 @@
 }
 
 .skill-dialog {
-    background: var(--vscode-editor-background, var(--bg-primary));
+    background: var(--vscode-editor-background, rgba(var(--bg-primary-rgb), max(var(--overlay-min-opacity, 0.85), var(--window-opacity, 1))));
     border: 1px solid var(--vscode-panel-border, var(--border-primary));
     border-radius: 8px;
     width: 90%;
@@ -206,7 +206,7 @@
 }
 
 .skill-dialog .close-btn:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
     color: var(--text-primary);
 }
 
@@ -284,7 +284,7 @@
     padding: 8px 12px;
     border: 1px solid var(--border-primary);
     border-radius: 4px;
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
     color: var(--text-primary);
     font-size: 13px;
     box-sizing: border-box;
@@ -464,13 +464,13 @@
 }
 
 .skill-dialog .btn-secondary {
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
     color: var(--text-primary);
     border: 1px solid var(--border-primary);
 }
 
 .skill-dialog .btn-secondary:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
 }
 
 .skill-dialog .btn-danger {
@@ -500,7 +500,7 @@
 .filter-tabs {
     display: flex;
     gap: 4px;
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
     padding: 4px;
     border-radius: 8px;
     border: 1px solid var(--border-primary);
@@ -521,7 +521,7 @@
 
 .filter-tabs .tab-item:hover {
     color: var(--text-primary);
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
 }
 
 .filter-tabs .tab-item.active {
@@ -553,7 +553,7 @@
     align-items: center;
     gap: 6px;
     padding: 6px 10px;
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
     border: 1px solid var(--border-primary);
     border-radius: 6px;
     transition: border-color 0.15s ease;
@@ -591,14 +591,14 @@
     padding: 0;
     border: 1px solid var(--border-primary);
     border-radius: 6px;
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
     color: var(--text-primary);
     cursor: pointer;
     transition: all 0.15s ease;
 }
 
 .icon-btn:hover:not(:disabled) {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
     border-color: var(--border-hover);
 }
 
@@ -628,7 +628,7 @@
 
 /* 新版 Skill 卡片 */
 .skill-card {
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
     border: 1px solid var(--border-primary);
     border-radius: 8px;
     overflow: hidden;
@@ -653,7 +653,7 @@
 }
 
 .skill-card .card-header:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
 }
 
 /* Skill 图标包装器 */
@@ -787,7 +787,7 @@
     padding: 6px 12px;
     border: 1px solid var(--border-primary);
     border-radius: 6px;
-    background: var(--bg-tertiary);
+    background: rgba(var(--bg-tertiary-rgb), var(--window-opacity, 1));
     color: var(--text-primary);
     cursor: pointer;
     font-size: 12px;
@@ -795,7 +795,7 @@
 }
 
 .skill-card .action-btn:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
     border-color: var(--border-hover);
 }
 
@@ -946,7 +946,7 @@
     transition: all 0.15s ease;
     flex-shrink: 0;
     border: 2px solid transparent;
-    background: var(--bg-tertiary);
+    background: rgba(var(--bg-tertiary-rgb), var(--window-opacity, 1));
 }
 
 .skill-card .toggle-switch:hover {

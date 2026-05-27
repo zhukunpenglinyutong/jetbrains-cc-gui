@@ -62,7 +62,7 @@
     font-size: 12px;
     border: 1px solid var(--border-secondary);
     border-radius: 6px;
-    background: var(--bg-tertiary);
+    background: rgba(var(--bg-tertiary-rgb), var(--window-opacity, 1));
     color: var(--text-primary);
     cursor: pointer;
     transition: all 0.2s;
@@ -70,12 +70,12 @@
 }
 
 .btn-small:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
     border-color: var(--text-tertiary);
 }
 
 .btn-small:active {
-    background: var(--bg-active);
+    background: rgba(var(--bg-active-rgb), var(--window-opacity, 1));
     transform: translateY(1px);
 }
 

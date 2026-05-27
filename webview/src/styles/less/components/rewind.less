@@ -17,7 +17,7 @@
     opacity: 0.5;
 
     &:hover {
-        background: var(--bg-hover);
+        background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
         color: var(--text-secondary);
         opacity: 1;
     }
@@ -58,7 +58,7 @@
 }
 
 .rewind-target {
-    background: var(--bg-primary);
+    background: rgba(var(--bg-primary-rgb), var(--window-opacity, 1));
     border: 1px solid var(--border-primary);
     border-radius: 6px;
     padding: 12px;
@@ -203,7 +203,7 @@
     }
 
     &:hover {
-        background: var(--bg-hover);
+        background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
     }
 }
 
