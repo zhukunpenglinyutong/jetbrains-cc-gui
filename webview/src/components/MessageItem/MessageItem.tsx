@@ -15,10 +15,11 @@ import {
   BashToolGroupBlock,
   SearchToolGroupBlock,
 } from '../toolBlocks';
+import AgentGroupBlock from '../toolBlocks/AgentGroupBlock';
 import { ContentBlockRenderer } from './ContentBlockRenderer';
 import { formatTime } from '../../utils/helpers';
 import { copyToClipboard } from '../../utils/copyUtils';
-import { READ_TOOL_NAMES, EDIT_TOOL_NAMES, BASH_TOOL_NAMES, SEARCH_TOOL_NAMES, isToolName } from '../../utils/toolConstants';
+import { READ_TOOL_NAMES, EDIT_TOOL_NAMES, BASH_TOOL_NAMES, SEARCH_TOOL_NAMES, AGENT_TOOL_NAMES, isToolName } from '../../utils/toolConstants';
 
 export interface MessageItemProps {
   message: ClaudeMessage;
@@ -51,7 +52,8 @@ type GroupedBlock =
   | { type: 'read_group'; blocks: ClaudeContentBlock[]; startIndex: number }
   | { type: 'edit_group'; blocks: ClaudeContentBlock[]; startIndex: number }
   | { type: 'bash_group'; blocks: ClaudeContentBlock[]; startIndex: number }
-  | { type: 'search_group'; blocks: ClaudeContentBlock[]; startIndex: number };
+  | { type: 'search_group'; blocks: ClaudeContentBlock[]; startIndex: number }
+  | { type: 'agent_group'; agentBlock: ClaudeContentBlock; followingTextBlocks: ClaudeContentBlock[]; startIndex: number };
 
 /** Shared copy icon SVG used by both user and assistant message copy buttons */
 const CopyIcon = () => (
@@ -117,6 +119,9 @@ function groupBlocks(blocks: ClaudeContentBlock[]): GroupedBlock[] {
   let bashGroupStartIndex = -1;
   let currentSearchGroup: ClaudeContentBlock[] = [];
   let searchGroupStartIndex = -1;
+  let currentAgentBlock: ClaudeContentBlock | null = null;
+  let agentFollowingText: ClaudeContentBlock[] = [];
+  let agentGroupStartIndex = -1;
 
   const flushReadGroup = () => {
     if (currentReadGroup.length > 0) {
@@ -166,8 +171,39 @@ function groupBlocks(blocks: ClaudeContentBlock[]): GroupedBlock[] {
     }
   };
 
+  const flushAgentGroup = () => {
+    if (currentAgentBlock) {
+      groupedBlocks.push({
+        type: 'agent_group',
+        agentBlock: currentAgentBlock,
+        followingTextBlocks: [...agentFollowingText],
+        startIndex: agentGroupStartIndex,
+      });
+      currentAgentBlock = null;
+      agentFollowingText = [];
+      agentGroupStartIndex = -1;
+    }
+  };
+
   blocks.forEach((block, idx) => {
-    if (isToolBlockOfType(block, READ_TOOL_NAMES)) {
+    // If we're collecting text for an agent group, check if this block continues it
+    if (currentAgentBlock) {
+      if (block.type === 'text') {
+        agentFollowingText.push(block);
+        return;
+      }
+      // Non-text block: flush the agent group
+      flushAgentGroup();
+    }
+
+    if (isToolBlockOfType(block, AGENT_TOOL_NAMES)) {
+      flushReadGroup();
+      flushEditGroup();
+      flushBashGroup();
+      flushSearchGroup();
+      currentAgentBlock = block;
+      agentGroupStartIndex = idx;
+    } else if (isToolBlockOfType(block, READ_TOOL_NAMES)) {
       flushEditGroup();
       flushBashGroup();
       flushSearchGroup();
@@ -208,6 +244,7 @@ function groupBlocks(blocks: ClaudeContentBlock[]): GroupedBlock[] {
     }
   });
 
+  flushAgentGroup();
   flushReadGroup();
   flushEditGroup();
   flushBashGroup();
@@ -537,6 +574,20 @@ export const MessageItem = memo(function MessageItem({
         return (
           <div key={`${messageIndex}-searchgroup-${grouped.startIndex}`} className="content-block">
             <SearchToolGroupBlock items={searchItems} />
+          </div>
+        );
+      }
+
+      if (grouped.type === 'agent_group') {
+        return (
+          <div key={`${messageIndex}-agentgroup-${grouped.startIndex}`} className="content-block">
+            <AgentGroupBlock
+              agentBlock={grouped.agentBlock}
+              followingTextBlocks={grouped.followingTextBlocks}
+              messageIndex={messageIndex}
+              isStreaming={isMessageStreaming}
+              findToolResult={findToolResult}
+            />
           </div>
         );
       }

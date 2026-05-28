@@ -6,9 +6,6 @@ import { sendBridgeEvent } from '../../utils/bridge';
 import { useSubagentHistoryGetter, useSessionId, useGetToolResultRaw, type GetToolResultRawFn } from '../../contexts/SubagentContext';
 import SubagentProcessDetails from '../StatusPanel/SubagentProcessDetails';
 
-const MONO_FONT_STYLE: React.CSSProperties = {
-  fontFamily: "var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace)",
-};
 const NORMAL_WEIGHT_STYLE: React.CSSProperties = { fontWeight: 'normal' };
 
 interface TaskExecutionBlockProps {
@@ -214,7 +211,7 @@ const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, resul
             <span className="tool-title-summary">· {modelSummary}</span>
           )}
           {shortAgentId && (
-            <span className="tool-title-summary" style={MONO_FONT_STYLE}>
+            <span className="tool-title-summary">
               · {shortAgentId}
             </span>
           )}

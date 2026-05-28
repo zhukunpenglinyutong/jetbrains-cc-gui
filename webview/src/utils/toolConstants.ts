@@ -28,6 +28,9 @@ export const TRANSIENT_INTERNAL_TOOL_NAMES = new Set([
 // Task management tools (incremental create/update, shown in StatusPanel)
 export const TASK_MANAGE_TOOL_NAMES = new Set(['taskcreate', 'taskupdate']);
 
+// Agent/subagent tools
+export const AGENT_TOOL_NAMES = new Set(['task', 'agent', 'spawn_agent']);
+
 // File modification tools (for rewind feature - includes write for new file creation)
 export const FILE_MODIFY_TOOL_NAMES = new Set([
   'write',
