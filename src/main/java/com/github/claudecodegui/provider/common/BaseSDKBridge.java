@@ -7,8 +7,10 @@ import com.github.claudecodegui.bridge.BridgeDirectoryResolver;
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.bridge.ProcessManager;
+import com.github.claudecodegui.service.PluginLifecycleService;
 import com.github.claudecodegui.startup.BridgePreloader;
 import com.github.claudecodegui.util.PlatformUtils;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.util.concurrency.AppExecutorUtil;
 
@@ -54,6 +56,7 @@ public abstract class BaseSDKBridge {
         this.LOG = Logger.getInstance(loggerClass);
         // Inject IntelliJ's managed executor into NodeDetector for in-flight detection tasks.
         this.nodeDetector.setDetectionExecutor(AppExecutorUtil.getAppExecutorService());
+        ApplicationManager.getApplication().getService(PluginLifecycleService.class).registerBridge(this);
     }
 
     // ============================================================================

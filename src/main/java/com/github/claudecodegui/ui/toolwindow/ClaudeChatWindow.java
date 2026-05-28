@@ -11,6 +11,7 @@ import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.opencode.OpenCodeSDKBridge;
 import com.github.claudecodegui.provider.common.DaemonBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
+import com.github.claudecodegui.service.PluginLifecycleService;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.session.SessionCallbackAdapter;
 import com.github.claudecodegui.session.SessionLifecycleManager;
@@ -749,6 +750,19 @@ public class ClaudeChatWindow {
             if (session != null) { session.interrupt(); }
         } catch (Exception e) {
             LOG.warn("Failed to clean up session: " + e.getMessage());
+        }
+
+        PluginLifecycleService lifecycleService = ApplicationManager.getApplication().getService(PluginLifecycleService.class);
+        if (lifecycleService != null) {
+            if (claudeSDKBridge != null) {
+                lifecycleService.unregisterBridge(claudeSDKBridge);
+            }
+            if (codexSDKBridge != null) {
+                lifecycleService.unregisterBridge(codexSDKBridge);
+            }
+            if (openCodeSDKBridge != null) {
+                lifecycleService.unregisterBridge(openCodeSDKBridge);
+            }
         }
 
         try {
