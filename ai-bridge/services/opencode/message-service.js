@@ -2445,7 +2445,8 @@ async function handleOpenCodeEvent(event, ctx) {
     }
 
     case 'message.part.delta': {
-      if (props.field && props.field !== 'text') {
+      const isReasoningField = props.field === 'reasoning_content' || props.field === 'reasoning_details';
+      if (props.field && props.field !== 'text' && !isReasoningField) {
         return;
       }
       const delta = typeof props.delta === 'string' ? props.delta : '';
@@ -2454,7 +2455,13 @@ async function handleOpenCodeEvent(event, ctx) {
       }
       ctx.sawTurnLive = true;
 
+      if (props.partID && isReasoningField && !ctx.partTypes.has(props.partID)) {
+        ctx.partTypes.set(props.partID, 'reasoning');
+      }
+
       const partType = ctx.partTypes.get(props.partID);
+      const isReasoning = isReasoningField || isReasoningPart(partType);
+
       if (props.partID) {
         const previous = ctx.streamedTextByPartId.get(props.partID) || '';
         ctx.streamedTextByPartId.set(props.partID, previous + delta);
@@ -2465,7 +2472,7 @@ async function handleOpenCodeEvent(event, ctx) {
           break;
         }
 
-        const isNewTextPart = !previous && !isReasoningPart(partType);
+        const isNewTextPart = !previous && !isReasoning;
         if (isNewTextPart && ctx.lastTextPartEndedWithoutWhitespace && !delta.startsWith(' ')) {
           ctx.lastTextPartEndedWithoutWhitespace = false;
           ctx.sawContentDelta = true;
@@ -2477,11 +2484,11 @@ async function handleOpenCodeEvent(event, ctx) {
         if (suppressed) {
           ctx.suppressedTextByPartId.delete(props.partID);
           let flushText = suppressed;
-          if (!isReasoningPart(partType) && ctx.lastTextPartEndedWithoutWhitespace && !suppressed.startsWith(' ')) {
+          if (!isReasoning && ctx.lastTextPartEndedWithoutWhitespace && !suppressed.startsWith(' ')) {
             ctx.lastTextPartEndedWithoutWhitespace = false;
             flushText = ' ' + suppressed;
           }
-          if (isReasoningPart(partType)) {
+          if (isReasoning) {
             emitThinkingDelta(flushText);
           } else {
             ctx.sawContentDelta = true;
@@ -2491,7 +2498,7 @@ async function handleOpenCodeEvent(event, ctx) {
           }
         }
       }
-      if (isReasoningPart(partType)) {
+      if (isReasoning) {
         emitThinkingDelta(delta);
       } else {
         ctx.sawContentDelta = true;

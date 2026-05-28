@@ -619,3 +619,114 @@ test('opencode history normalization restores apply_patch diffs as edit blocks',
   assert.equal(normalized.message.content[1].type, 'tool_result');
   assert.equal(normalized.message.content[1].tool_use_id, normalized.message.content[0].id);
 });
+
+function thinkingDeltas(lines) {
+  return lines
+    .filter((line) => line.startsWith('[THINKING_DELTA] '))
+    .map((line) => JSON.parse(line.slice('[THINKING_DELTA] '.length)));
+}
+
+test('opencode reasoning deltas with reasoning_content field emit thinking blocks', async () => {
+  const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
+  const lines = await captureConsole(async () => {
+    await handleOpenCodeEvent({
+      type: 'message.part.delta',
+      properties: {
+        sessionID: 'ses_test',
+        messageID: 'msg_1',
+        partID: 'prt_reasoning_1',
+        field: 'reasoning_content',
+        delta: 'Let me'
+      }
+    }, ctx);
+
+    await handleOpenCodeEvent({
+      type: 'message.part.delta',
+      properties: {
+        sessionID: 'ses_test',
+        messageID: 'msg_1',
+        partID: 'prt_reasoning_1',
+        field: 'reasoning_content',
+        delta: ' think about this.'
+      }
+    }, ctx);
+
+    await handleOpenCodeEvent({
+      type: 'message.part.updated',
+      properties: {
+        sessionID: 'ses_test',
+        messageID: 'msg_1',
+        part: {
+          id: 'prt_reasoning_1',
+          type: 'reasoning',
+          text: 'Let me think about this.'
+        }
+      }
+    }, ctx);
+  });
+
+  const tDeltas = thinkingDeltas(lines);
+  assert.equal(tDeltas.length, 2);
+  assert.equal(tDeltas[0], 'Let me');
+  assert.equal(tDeltas[1], ' think about this.');
+
+  const cDeltas = contentDeltas(lines);
+  assert.equal(cDeltas.length, 0, 'reasoning deltas should not emit content deltas');
+});
+
+test('opencode reasoning deltas from part type emit thinking blocks', async () => {
+  const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
+  const lines = await captureConsole(async () => {
+    await handleOpenCodeEvent({
+      type: 'message.part.updated',
+      properties: {
+        sessionID: 'ses_test',
+        messageID: 'msg_1',
+        part: {
+          id: 'prt_reason_2',
+          type: 'reasoning',
+          text: ''
+        }
+      }
+    }, ctx);
+
+    await handleOpenCodeEvent({
+      type: 'message.part.delta',
+      properties: {
+        sessionID: 'ses_test',
+        messageID: 'msg_1',
+        partID: 'prt_reason_2',
+        field: 'text',
+        delta: 'Analyzing code...'
+      }
+    }, ctx);
+  });
+
+  const tDeltas = thinkingDeltas(lines);
+  assert.equal(tDeltas.length, 1);
+  assert.equal(tDeltas[0], 'Analyzing code...');
+
+  const cDeltas = contentDeltas(lines);
+  assert.equal(cDeltas.length, 0, 'reasoning part deltas should not emit content deltas');
+});
+
+test('opencode non-reasoning unknown field deltas are skipped', async () => {
+  const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
+  const lines = await captureConsole(async () => {
+    await handleOpenCodeEvent({
+      type: 'message.part.delta',
+      properties: {
+        sessionID: 'ses_test',
+        messageID: 'msg_1',
+        partID: 'prt_unknown_1',
+        field: 'some_other_field',
+        delta: 'should be skipped'
+      }
+    }, ctx);
+  });
+
+  const tDeltas = thinkingDeltas(lines);
+  const cDeltas = contentDeltas(lines);
+  assert.equal(tDeltas.length, 0);
+  assert.equal(cDeltas.length, 0, 'unknown field deltas should be skipped');
+});
