@@ -2233,7 +2233,7 @@ async function waitForOpenCodeEventDrain(ctx, activeTurn) {
 
 function isOpenCodeIdleStatus(status) {
   if (!status) {
-    return true;
+    return false;
   }
   if (typeof status === 'string') {
     return status === 'idle';
@@ -2254,7 +2254,10 @@ async function pollOpenCodeSessionIdle(ctx) {
       'get opencode session status'
     );
     const status = statuses?.[sessionId];
-    if (status && !isOpenCodeIdleStatus(status)) {
+    if (!status) {
+      return undefined;
+    }
+    if (!isOpenCodeIdleStatus(status)) {
       ctx.sawTurnLive = true;
       return false;
     }
