@@ -83,6 +83,7 @@
     "disabled": "已停用",
     "sdkNotInstalled": "{{provider}} SDK 尚未安裝，請先安裝 SDK 才能開始對話",
     "sdkStatusLoading": "Checking SDK status...",
+    "planModeEnabled": "已啟用規劃模式",
     "invocationModeRequired": "尚未讀取到 Claude 呼叫模式，請先在設定中選擇 SDK 或 CLI 模式後再傳送。",
     "openSourceBanner": "本專案保證100%開源（謹防盜版項目）",
     "goInstallSdk": "前往安裝",
@@ -1366,46 +1367,46 @@
   },
   "modes": {
     "default": {
-      "label": "Default Mode",
-      "tooltip": "Standard permission behavior",
-      "description": "Requires manual confirmation for each operation, suitable for cautious use"
+      "label": "預設模式",
+      "tooltip": "標準權限行為",
+      "description": "每個操作都需要手動確認，適合謹慎使用"
     },
     "plan": {
-      "label": "Plan Mode",
-      "tooltip": "Plan mode - read-only analysis",
-      "description": "Uses only read-only tools, generates plan for user approval"
+      "label": "規劃模式",
+      "tooltip": "規劃模式 - 唯讀分析",
+      "description": "僅使用唯讀工具，產生計畫供使用者核准後執行"
     },
     "acceptEdits": {
-      "label": "Agent Mode",
-      "tooltip": "Automatically accept file edits",
-      "description": "Automatically accept file creation/editing, reducing confirmation steps"
+      "label": "代理模式",
+      "tooltip": "自動接受檔案編輯",
+      "description": "自動接受檔案建立與編輯，減少確認步驟"
     },
     "bypassPermissions": {
-      "label": "Auto Mode",
-      "tooltip": "Bypass all permission checks",
-      "description": "Fully automated, bypassing all permission checks [Use with caution]"
+      "label": "自動模式",
+      "tooltip": "略過所有權限檢查",
+      "description": "完全自動化，略過所有權限檢查【請謹慎使用】"
     }
   },
   "codexModes": {
     "default": {
-      "label": "Suggest (approval)",
-      "tooltip": "Codex approval_policy=untrusted – prompts before editing files or running shell commands.",
-      "description": "Safest option. Every write or command requires your approval."
+      "label": "建議模式",
+      "tooltip": "Codex approval_policy=untrusted：編輯檔案或執行 Shell 指令前都會提示確認。",
+      "description": "最安全的選項。每次寫入或執行指令都需要你的核准。"
     },
     "plan": {
-      "label": "Plan Mode",
-      "tooltip": "Plan mode - read-only analysis",
-      "description": "Uses only read-only tools, generates plan for user approval"
+      "label": "規劃模式",
+      "tooltip": "規劃模式 - 唯讀分析",
+      "description": "僅使用唯讀工具，產生計畫供使用者核准後執行"
     },
     "acceptEdits": {
-      "label": "Auto Edit",
-      "tooltip": "Codex approval_policy=on-request – asks for approval when needed",
-      "description": "Balanced option. Allows normal editing flow while still requiring approvals when needed."
+      "label": "自動編輯",
+      "tooltip": "Codex approval_policy=on-request：需要時才要求核准。",
+      "description": "平衡選項。保留正常編輯流程，同時在需要時要求核准。"
     },
     "bypassPermissions": {
-      "label": "Full Auto",
-      "tooltip": "Codex approval_policy=never – runs commands and writes files without prompting (workspace sandbox still enforced).",
-      "description": "Hands-off mode. Codex executes edits and shell commands immediately."
+      "label": "全自動",
+      "tooltip": "Codex approval_policy=never：不提示即執行指令與寫入檔案（仍受工作區沙箱限制）。",
+      "description": "免確認模式。Codex 會立即執行編輯與 Shell 指令。"
     }
   },
   "providers": {

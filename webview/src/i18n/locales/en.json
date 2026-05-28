@@ -83,6 +83,7 @@
     "disabled": "Disabled",
     "sdkNotInstalled": "{{provider}} SDK is not installed. Please install the SDK to start chatting.",
     "sdkStatusLoading": "Checking SDK status...",
+    "planModeEnabled": "Plan mode enabled",
     "invocationModeRequired": "Invocation mode is not loaded. Please choose SDK or CLI mode in Settings before sending.",
     "openSourceBanner": "This project is guaranteed to be 100% open source (beware of pirated projects)",
     "goInstallSdk": "Go to Install",

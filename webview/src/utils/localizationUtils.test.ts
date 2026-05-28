@@ -28,7 +28,7 @@ describe('createLocalizeMessage', () => {
   it('localizes unsupported image vision placeholder while preserving details', () => {
     const t = ((key: string) => {
       const translations: Record<string, string> = {
-        'aiBridge.unsupportedImageVision': '当前模型不支持图片识别，或该服务商的 Claude Code 兼容接口不支持图片工具结果。\n请切换到支持视觉的模型后重试。',
+        'aiBridge.unsupportedImageVision': '当前模型不支持图片识别，或该服务商兼容接口不支持图片工具结果。\n请切换到支持视觉的模型后重试。',
       };
       return translations[key] ?? key;
     }) as any;
