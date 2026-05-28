@@ -38,7 +38,7 @@ export interface UseModelProviderStateOptions {
 export function useModelProviderState({ addToast, t }: UseModelProviderStateOptions) {
   // ── Cross-slice state owned by the orchestrator ──
   const [currentProvider, setCurrentProvider] = useState('claude');
-  const [permissionMode, setPermissionMode] = useState<PermissionMode>('bypassPermissions');
+  const [permissionMode, setPermissionMode] = useState<PermissionMode>('acceptEdits');
 
   // External-facing ref so window callbacks can read the latest provider
   // without re-binding. Render-time assignment avoids the useRef + useEffect
@@ -93,10 +93,9 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
   // ── Cross-provider handlers ──
   const handleModeSelect = useCallback((mode: PermissionMode) => {
     if (currentProvider === 'codex') {
-      const codexMode: PermissionMode = mode === 'plan' ? 'default' : mode;
-      setPermissionMode(codexMode);
-      setCodexPermissionMode(codexMode);
-        sendBridgeEvent('set_session_mode', codexMode);
+      setPermissionMode(mode);
+      setCodexPermissionMode(mode);
+        sendBridgeEvent('set_session_mode', mode);
       return;
     }
     setPermissionMode(mode);
@@ -121,7 +120,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
       sendBridgeEvent('set_session_provider', providerId);
 
     const modeToSet: PermissionMode = providerId === 'codex'
-      ? (codexPermissionMode === 'plan' ? 'default' : codexPermissionMode)
+      ? codexPermissionMode
       : claudePermissionMode;
     setPermissionMode(modeToSet);
       sendBridgeEvent('set_session_mode', modeToSet);

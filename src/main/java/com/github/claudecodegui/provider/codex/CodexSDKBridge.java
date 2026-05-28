@@ -494,35 +494,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 if (permissionMode != null && !permissionMode.isEmpty()) {
                     String sandboxMode = resolveCodexSandboxMode(cwd);
 
-                    switch (permissionMode) {
-                        case "bypassPermissions":
-                            env.put(ENV_CODEX_SANDBOX_MODE, sandboxMode);
-                            env.put(ENV_CODEX_SANDBOX, sandboxMode);
-                            env.put(ENV_CODEX_APPROVAL_POLICY, APPROVAL_POLICY_NEVER);
-                            break;
-                        case "acceptEdits":
-                        case "autoEdit":
-                            env.put(ENV_CODEX_SANDBOX_MODE, sandboxMode);
-                            env.put(ENV_CODEX_SANDBOX, sandboxMode);
-                            env.put(ENV_CODEX_APPROVAL_POLICY, APPROVAL_POLICY_ON_REQUEST);
-                            break;
-                        case "plan":
-                            env.put(ENV_CODEX_SANDBOX_MODE, sandboxMode);
-                            env.put(ENV_CODEX_SANDBOX, sandboxMode);
-                            env.put(ENV_CODEX_APPROVAL_POLICY, APPROVAL_POLICY_UNTRUSTED);
-                            break;
-                        default:
-                            // Default mode: use configured sandbox mode with confirmation
-                            env.put(ENV_CODEX_SANDBOX_MODE, sandboxMode);
-                            env.put(ENV_CODEX_SANDBOX, sandboxMode);
-                            env.put(ENV_CODEX_APPROVAL_POLICY, APPROVAL_POLICY_UNTRUSTED);
-                            break;
-                    }
-                    LOG.info("[Codex] Permission env override: SANDBOX_MODE=" +
-                            env.get(ENV_CODEX_SANDBOX_MODE) + ", SANDBOX=" +
-                            env.get(ENV_CODEX_SANDBOX) + ", APPROVAL_POLICY=" +
-                            env.get(ENV_CODEX_APPROVAL_POLICY) + " (from permissionMode=" + permissionMode +
-                            ")");
+                    applyCodexPermissionModeEnv(env, sandboxMode, permissionMode);
                 }
 
                 pb.redirectErrorStream(true);
@@ -1112,22 +1084,30 @@ public class CodexSDKBridge extends BaseSDKBridge {
             return;
         }
 
-        String sandboxMode = resolveCodexSandboxMode(cwd);
-        env.put(ENV_CODEX_SANDBOX_MODE, sandboxMode);
-        env.put(ENV_CODEX_SANDBOX, sandboxMode);
+        applyCodexPermissionModeEnv(env, resolveCodexSandboxMode(cwd), permissionMode);
+    }
 
+    private void applyCodexPermissionModeEnv(Map<String, String> env, String sandboxMode, String permissionMode) {
         switch (permissionMode) {
             case "bypassPermissions":
+                env.put(ENV_CODEX_SANDBOX_MODE, SANDBOX_MODE_DANGER_FULL_ACCESS);
+                env.put(ENV_CODEX_SANDBOX, SANDBOX_MODE_DANGER_FULL_ACCESS);
                 env.put(ENV_CODEX_APPROVAL_POLICY, APPROVAL_POLICY_NEVER);
                 break;
             case "acceptEdits":
             case "autoEdit":
+                env.put(ENV_CODEX_SANDBOX_MODE, sandboxMode);
+                env.put(ENV_CODEX_SANDBOX, sandboxMode);
                 env.put(ENV_CODEX_APPROVAL_POLICY, APPROVAL_POLICY_ON_REQUEST);
                 break;
             case "plan":
+                env.put(ENV_CODEX_SANDBOX_MODE, "read-only");
+                env.put(ENV_CODEX_SANDBOX, "read-only");
                 env.put(ENV_CODEX_APPROVAL_POLICY, APPROVAL_POLICY_UNTRUSTED);
                 break;
             default:
+                env.put(ENV_CODEX_SANDBOX_MODE, sandboxMode);
+                env.put(ENV_CODEX_SANDBOX, sandboxMode);
                 env.put(ENV_CODEX_APPROVAL_POLICY, APPROVAL_POLICY_UNTRUSTED);
                 break;
         }

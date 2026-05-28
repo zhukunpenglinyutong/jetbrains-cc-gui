@@ -78,7 +78,7 @@ public class SessionState {
     // Configuration fields below are volatile because set_mode / set_model / set_provider
     // and send_message may execute on different async handler threads with no other
     // happens-before guarantee between them.
-    private volatile String permissionMode = "bypassPermissions";
+    private volatile String permissionMode = "acceptEdits";
     private volatile String model = "claude-sonnet-4-6";
     private volatile String provider = "claude";
     private volatile String claudeInvocationMode = null;

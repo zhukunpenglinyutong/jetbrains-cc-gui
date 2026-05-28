@@ -339,7 +339,7 @@ public class SessionLifecycleManager {
      */
     public void sendCurrentPermissionMode() {
         try {
-            String currentMode = "bypassPermissions";
+            String currentMode = "acceptEdits";
 
             ClaudeSession currentSession = host.getSession();
             if (currentSession != null) {
@@ -442,11 +442,11 @@ public class SessionLifecycleManager {
     private String readDefaultPermissionMode(String provider) {
         String mode = PropertiesComponent.getInstance().getValue(PERMISSION_MODE_PROPERTY_KEY);
         if (mode == null || mode.trim().isEmpty() || !SessionState.isValidPermissionMode(mode)) {
-            mode = "bypassPermissions";
+            mode = "acceptEdits";
         } else {
             mode = mode.trim();
         }
-        return "codex".equals(provider) && "plan".equals(mode) ? "default" : mode;
+        return mode;
     }
 
     private void completeNewSessionBootstrap(ClaudeSession newSession, String workingDirectory, String successLogPrefix) {

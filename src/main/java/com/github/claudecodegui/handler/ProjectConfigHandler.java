@@ -287,11 +287,11 @@ public class ProjectConfigHandler {
     private String readDefaultPermissionMode(String provider) {
         String mode = PropertiesComponent.getInstance().getValue(PermissionModeHandler.PERMISSION_MODE_PROPERTY_KEY);
         if (mode == null || mode.trim().isEmpty()) {
-            mode = "bypassPermissions";
+            mode = "acceptEdits";
         } else {
             mode = mode.trim();
         }
-        return "codex".equals(provider) && "plan".equals(mode) ? "default" : mode;
+        return mode;
     }
 
     public void handleSetInvocationMode(String content) {

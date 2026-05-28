@@ -29,7 +29,7 @@ public class PermissionModeHandler {
      */
     public void handleGetMode() {
         try {
-            String currentMode = "bypassPermissions";  // Default value
+            String currentMode = "acceptEdits";  // Default value
 
             // Prefer getting from session first
             if (context.getSession() != null) {

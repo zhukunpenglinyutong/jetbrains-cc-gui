@@ -78,7 +78,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       let restoredProvider = 'claude';
-      let restoredClaudePermissionMode: PermissionMode = 'bypassPermissions';
+      let restoredClaudePermissionMode: PermissionMode = 'acceptEdits';
       let restoredCodexPermissionMode: PermissionMode = 'default';
 
       if (saved) {
@@ -93,9 +93,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           restoredClaudePermissionMode = state.claudePermissionMode;
         }
         if (isValidPermissionMode(state.codexPermissionMode)) {
-          restoredCodexPermissionMode = state.codexPermissionMode === 'plan'
-            ? 'default'
-            : state.codexPermissionMode;
+          restoredCodexPermissionMode = state.codexPermissionMode;
         }
 
         if (typeof state.longContextEnabled === 'boolean') {

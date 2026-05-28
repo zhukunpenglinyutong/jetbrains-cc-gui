@@ -222,6 +222,26 @@ public class CodexCliSessionTest {
     }
 
     @Test
+    public void imageUnsupportedTurnFailureUsesLocalizedVisionMessage() throws Exception {
+        Method method = CodexCliSession.class.getDeclaredMethod(
+                "formatCodexError",
+                String.class,
+                boolean.class
+        );
+        method.setAccessible(true);
+
+        String error = (String) method.invoke(
+                null,
+                "This model does not support image input. Please use a vision-capable model.",
+                true
+        );
+
+        assertTrue(error.startsWith("__I18N__:aiBridge.unsupportedImageVision"));
+        assertTrue(error.contains("Details:"));
+        assertTrue(error.contains("does not support image input"));
+    }
+
+    @Test
     public void readingAdditionalInputFromStdinIsIgnored() throws Exception {
         CodexCliSession session = new CodexCliSession("tab-2");
         RecordingCallback callback = new RecordingCallback();
@@ -304,7 +324,8 @@ public class CodexCliSessionTest {
                 "buildExitError",
                 int.class,
                 StringBuilder.class,
-                StringBuilder.class
+                StringBuilder.class,
+                boolean.class
         );
         method.setAccessible(true);
 
@@ -313,7 +334,7 @@ public class CodexCliSessionTest {
                 .append("url: https://gongyiapi.mossx.ai/responses, ")
                 .append("request id: req-503");
 
-        String error = (String) method.invoke(null, 1, diagnostic, null);
+        String error = (String) method.invoke(null, 1, diagnostic, null, false);
 
         assertTrue(error.contains("Codex CLI 请求失败"));
         assertTrue(error.contains("服务暂时不可用 (503)"));

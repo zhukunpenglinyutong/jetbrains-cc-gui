@@ -29,6 +29,9 @@ public final class CodexCliCommandUtils {
         if ("bypassPermissions".equals(permissionMode)) {
             approval = "never";
             sandbox = "danger-full-access";
+        } else if ("plan".equals(permissionMode)) {
+            approval = "untrusted";
+            sandbox = "read-only";
         } else if ("acceptEdits".equals(permissionMode) || "autoEdit".equals(permissionMode)) {
             approval = "on-request";
         } else {

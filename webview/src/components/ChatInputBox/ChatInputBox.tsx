@@ -58,7 +58,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
     {
       isLoading = false,
       selectedModel = 'claude-sonnet-4-6',
-      permissionMode = 'bypassPermissions',
+      permissionMode = 'acceptEdits',
       currentProvider = 'claude',
       usagePercentage = 0,
       usageUsedTokens,
