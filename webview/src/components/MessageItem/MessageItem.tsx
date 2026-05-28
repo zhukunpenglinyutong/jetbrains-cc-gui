@@ -53,7 +53,7 @@ type GroupedBlock =
   | { type: 'edit_group'; blocks: ClaudeContentBlock[]; startIndex: number }
   | { type: 'bash_group'; blocks: ClaudeContentBlock[]; startIndex: number }
   | { type: 'search_group'; blocks: ClaudeContentBlock[]; startIndex: number }
-  | { type: 'agent_group'; agentBlock: ClaudeContentBlock; followingTextBlocks: ClaudeContentBlock[]; startIndex: number };
+  | { type: 'agent_group'; agentBlock: ClaudeContentBlock; followingBlocks: ClaudeContentBlock[]; startIndex: number };
 
 /** Shared copy icon SVG used by both user and assistant message copy buttons */
 const CopyIcon = () => (
@@ -109,7 +109,11 @@ function isToolBlockOfType(block: ClaudeContentBlock, toolNames: Set<string>): b
   return block.type === 'tool_use' && isToolName(block.name, toolNames);
 }
 
-function groupBlocks(blocks: ClaudeContentBlock[]): GroupedBlock[] {
+function groupBlocks(
+  blocks: ClaudeContentBlock[],
+  findToolResult: (toolId: string | undefined, messageIndex: number) => ToolResultBlock | null | undefined,
+  messageIndex: number,
+): GroupedBlock[] {
   const groupedBlocks: GroupedBlock[] = [];
   let currentReadGroup: ClaudeContentBlock[] = [];
   let readGroupStartIndex = -1;
@@ -176,7 +180,7 @@ function groupBlocks(blocks: ClaudeContentBlock[]): GroupedBlock[] {
       groupedBlocks.push({
         type: 'agent_group',
         agentBlock: currentAgentBlock,
-        followingTextBlocks: [...agentFollowingText],
+        followingBlocks: [...agentFollowingText],
         startIndex: agentGroupStartIndex,
       });
       currentAgentBlock = null;
@@ -186,13 +190,33 @@ function groupBlocks(blocks: ClaudeContentBlock[]): GroupedBlock[] {
   };
 
   blocks.forEach((block, idx) => {
-    // If we're collecting text for an agent group, check if this block continues it
+    // If we're collecting blocks for an agent group, determine boundary
     if (currentAgentBlock) {
-      if (block.type === 'text') {
+      const agentToolId = currentAgentBlock.type === 'tool_use' ? currentAgentBlock.id : undefined;
+      const agentResult = findToolResult(agentToolId, messageIndex);
+      const agentCompleted = agentResult !== undefined && agentResult !== null;
+
+      if (isToolBlockOfType(block, AGENT_TOOL_NAMES)) {
+        // New agent tool — flush current group, start new one
+        flushAgentGroup();
+        currentAgentBlock = block;
+        agentGroupStartIndex = idx;
+        return;
+      }
+
+      if (!agentCompleted) {
+        // Agent still running — absorb all subsequent blocks
         agentFollowingText.push(block);
         return;
       }
-      // Non-text block: flush the agent group
+
+      // Agent completed — only absorb the first text block (result summary)
+      if (block.type === 'text' && agentFollowingText.length === 0) {
+        agentFollowingText.push(block);
+        return;
+      }
+
+      // Any other block after completion belongs to main agent
       flushAgentGroup();
     }
 
@@ -398,7 +422,7 @@ export const MessageItem = memo(function MessageItem({
     }
   }, [blocks, isMessageStreaming, manuallyExpandedThinking]);
 
-  const groupedBlocks = useMemo(() => groupBlocks(blocks), [blocks]);
+  const groupedBlocks = useMemo(() => groupBlocks(blocks, findToolResult, messageIndex), [blocks, findToolResult, messageIndex]);
 
   // Register user message DOM node for anchor navigation
   // Must be called before any early returns to satisfy React hooks rules
@@ -579,13 +603,16 @@ export const MessageItem = memo(function MessageItem({
       }
 
       if (grouped.type === 'agent_group') {
+        const agentToolId = grouped.agentBlock.type === 'tool_use' ? grouped.agentBlock.id : undefined;
         return (
-          <div key={`${messageIndex}-agentgroup-${grouped.startIndex}`} className="content-block">
+          <div key={`agentgroup-${agentToolId ?? grouped.startIndex}`} className="content-block">
             <AgentGroupBlock
               agentBlock={grouped.agentBlock}
-              followingTextBlocks={grouped.followingTextBlocks}
+              followingBlocks={grouped.followingBlocks}
               messageIndex={messageIndex}
               isStreaming={isMessageStreaming}
+              isLastMessage={isLast}
+              isThinking={isThinking}
               findToolResult={findToolResult}
             />
           </div>

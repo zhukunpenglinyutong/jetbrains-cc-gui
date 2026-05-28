@@ -5,13 +5,15 @@ import { normalizeToolName } from '../../utils/toolConstants';
 import { sendBridgeEvent } from '../../utils/bridge';
 import { useSubagentHistoryGetter, useSessionId, useGetToolResultRaw, type GetToolResultRawFn } from '../../contexts/SubagentContext';
 import SubagentProcessDetails from '../StatusPanel/SubagentProcessDetails';
-import MarkdownBlock from '../MarkdownBlock';
+import { ContentBlockRenderer } from '../MessageItem/ContentBlockRenderer';
 
 interface AgentGroupBlockProps {
   agentBlock: ClaudeContentBlock;
-  followingTextBlocks: ClaudeContentBlock[];
+  followingBlocks: ClaudeContentBlock[];
   messageIndex: number;
   isStreaming: boolean;
+  isLastMessage: boolean;
+  isThinking: boolean;
   findToolResult: (toolId: string | undefined, messageIndex: number) => ToolResultBlock | null | undefined;
 }
 
@@ -62,20 +64,34 @@ function parseAgentToolMeta(
   };
 }
 
+// Persist expanded state across re-mounts (streaming causes component remount)
+const expandedState = new Map<string, boolean>();
+
 const AgentGroupBlock = memo(function AgentGroupBlock({
   agentBlock,
-  followingTextBlocks,
+  followingBlocks,
   messageIndex,
   isStreaming,
+  isLastMessage,
+  isThinking,
   findToolResult,
 }: AgentGroupBlockProps) {
   const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
   const getSubagentHistory = useSubagentHistoryGetter();
   const currentSessionId = useSessionId();
   const getToolResultRaw = useGetToolResultRaw();
 
   const toolId = agentBlock.type === 'tool_use' ? agentBlock.id : undefined;
+  const stateKey = toolId ?? `agent-${messageIndex}`;
+  const [expanded, setExpandedRaw] = useState(() => expandedState.get(stateKey) ?? false);
+  const setExpanded = (updater: (prev: boolean) => boolean) => {
+    setExpandedRaw((prev) => {
+      const next = updater(prev);
+      expandedState.set(stateKey, next);
+      return next;
+    });
+  };
+
   const input = agentBlock.type === 'tool_use' ? (agentBlock.input as Record<string, unknown> | undefined) : undefined;
   const result = findToolResult(toolId, messageIndex);
   const isCompleted = result !== undefined && result !== null;
@@ -150,9 +166,21 @@ const AgentGroupBlock = memo(function AgentGroupBlock({
             history={history}
             canLoad={Boolean(currentSessionId)}
           />
-          {followingTextBlocks.map((block, idx) => (
-            <div key={idx} className="agent-group-text-block">
-              <MarkdownBlock content={block.type === 'text' ? block.text : ''} />
+          {followingBlocks.map((block, idx) => (
+            <div key={idx} className="content-block">
+              <ContentBlockRenderer
+                block={block}
+                messageIndex={messageIndex}
+                messageType="assistant"
+                isStreaming={isStreaming}
+                isThinkingExpanded={false}
+                isThinking={isThinking}
+                isLastMessage={isLastMessage}
+                isLastBlock={idx === followingBlocks.length - 1}
+                t={t}
+                onToggleThinking={() => {}}
+                findToolResult={findToolResult}
+              />
             </div>
           ))}
         </div>
