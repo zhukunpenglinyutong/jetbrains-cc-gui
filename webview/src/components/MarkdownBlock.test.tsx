@@ -43,7 +43,7 @@ describe('MarkdownBlock linkify integration', () => {
         content={[
           'Open src/components/App.tsx',
           '',
-          '`src/inline-code.ts` should be linkified',
+          '`src/inline-code.ts` should NOT be linkified',
           '',
           '```ts',
           'src/ignored-block.ts',
@@ -55,10 +55,10 @@ describe('MarkdownBlock linkify integration', () => {
     const fileLink = screen.getByRole('link', { name: 'src/components/App.tsx' });
     expect(fileLink.getAttribute('data-linkify')).toBe('file');
 
-    // Inline code content should be linkified
-    const inlineCodeLink = screen.getByRole('link', { name: 'src/inline-code.ts' });
-    expect(inlineCodeLink.getAttribute('data-linkify')).toBe('file');
-    expect(inlineCodeLink.closest('code')).toBeTruthy();
+    // Inline code content should NOT be linkified
+    const inlineCode = document.querySelector('code');
+    expect(inlineCode?.textContent).toContain('src/inline-code.ts');
+    expect(inlineCode?.querySelector('a')).toBeNull();
 
     // Code fence content should NOT be linkified
     const fencedCode = document.querySelector('pre code');

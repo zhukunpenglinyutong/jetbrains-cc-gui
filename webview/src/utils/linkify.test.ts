@@ -119,7 +119,7 @@ describe('linkify', () => {
     root.innerHTML = [
       '<p>Open src/components/App.tsx and com.github.foo.BarService</p>',
       '<p><a href="https://example.com/docs">docs</a></p>',
-      '<p><code>src/inline-code.ts</code> should be linkified</p>',
+      '<p><code>src/inline-code.ts</code> should NOT be linkified</p>',
       '<pre>com.github.foo.IgnoredService</pre>',
     ].join('');
 
@@ -129,8 +129,8 @@ describe('linkify', () => {
     expect(root.querySelector('a.file-link')?.textContent).toBe('src/components/App.tsx');
     expect(root.querySelector('a.class-link')?.textContent).toBe('com.github.foo.BarService');
     expect(root.querySelector('a.url-link')?.getAttribute('data-linkify')).toBe('url');
-    // Inline code content should be linkified
-    expect(root.querySelector('code a.file-link')?.textContent).toBe('src/inline-code.ts');
+    // Inline code content should NOT be linkified
+    expect(root.querySelector('code a.file-link')).toBeNull();
     // Code fence (pre) content should NOT be linkified
     expect(root.querySelector('pre a')).toBeNull();
   });

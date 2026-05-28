@@ -177,7 +177,7 @@ function createGlobalRegex(regex: RegExp): RegExp {
   return new RegExp(regex.source, flags);
 }
 
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => HTML_ESCAPE_LOOKUP[char] ?? char);
 }
 
@@ -420,9 +420,8 @@ function shouldSkipTextNode(textNode: Text): boolean {
     return true;
   }
 
-  // Skip anchors (already linked) and code fences (pre blocks)
-  // Note: <code> is NOT skipped - inline code content should be linkified
-  return parentElement.closest('a, pre') !== null;
+  // Skip anchors (already linked), code fences (pre blocks), and inline code
+  return parentElement.closest('a, pre, code') !== null;
 }
 
 export function parseFileLinkTarget(value: string): FileLinkTarget | null {

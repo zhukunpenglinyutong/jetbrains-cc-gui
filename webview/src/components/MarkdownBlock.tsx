@@ -6,6 +6,7 @@ import { openBrowser, openClass, openFile } from '../utils/bridge';
 import { useMarkdownFileLinkTooltip } from '../hooks/useMarkdownFileLinkTooltip';
 import {
   decorateExistingAnchors,
+  escapeHtml,
   linkifyHtml,
   linkifyPlainTextSegment,
 } from '../utils/linkify';
@@ -313,9 +314,7 @@ function renderStreamingInlineText(
       .map((inlinePart) => {
         const inlineCodeMatch = /^`([^`\n]+)`$/.exec(inlinePart);
         if (inlineCodeMatch) {
-          // Inline code content should also be linkified
-          const linkifiedCode = linkifyPlainTextSegment(inlineCodeMatch[1], capabilities);
-          return `<code>${linkifiedCode}</code>`;
+          return `<code>${escapeHtml(inlineCodeMatch[1])}</code>`;
         }
 
         return inlinePart
@@ -359,10 +358,10 @@ function renderStreamingProseSegment(
   const inlineParts = cleaned.split(INLINE_CODE_RE);
 
   const processedParts = inlineParts.map((part, idx) => {
-    // Odd indices are inline code — pass to linkifyPlainTextSegment which escapes HTML
+    // Odd indices are inline code — escape HTML only, no linkify
     if (idx % 2 === 1) {
       const inlineContent = part.slice(1, -1); // Remove surrounding backticks
-      return `<code>${linkifyPlainTextSegment(inlineContent, capabilities)}</code>`;
+      return `<code>${escapeHtml(inlineContent)}</code>`;
     }
     // Even indices are prose — escape XML tags then render inline formatting
     return renderStreamingInlineText(escapeXmlTags(part), capabilities, false);

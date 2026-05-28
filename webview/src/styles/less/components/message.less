@@ -750,7 +750,7 @@
     background-color: var(--color-code-inline-bg);
     padding: 2px 4px;
     border-radius: 3px;
-    font-size: 12.5px;
+    font-size: 0.9em;
     word-wrap: break-word;
     overflow-wrap: break-word;
 }
@@ -811,9 +811,20 @@
     overflow-wrap: break-word;
 }
 
-.markdown-content h1 { font-size: 1.5em; }
-.markdown-content h2 { font-size: 1.3em; }
+.markdown-content h1 { font-size: 1.6em; }
+.markdown-content h2 { font-size: 1.4em; }
 .markdown-content h3 { font-size: 1.2em; }
+.markdown-content h4 { font-size: 1.1em; }
+.markdown-content h5 { font-size: 1.05em; }
+.markdown-content h6 { font-size: 1em; }
+
+.markdown-content strong {
+    font-weight: 700;
+    color: var(--text-secondary);
+    background-color: var(--color-code-inline-bg);
+    padding: 2px 4px;
+    border-radius: 3px;
+}
 
 .markdown-content a {
     color: var(--accent-primary, #4ea1ff);
@@ -1017,7 +1028,7 @@
     align-items: center;
     gap: 8px;
     padding: 6px 12px;
-    font-size: 13px;
+    font-size: 12px;
     min-width: 0; /* 允许内容缩小 */
 }
 
