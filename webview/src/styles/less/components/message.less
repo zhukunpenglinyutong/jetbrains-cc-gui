@@ -828,34 +828,27 @@
 
 .markdown-content a {
     color: var(--accent-primary, #4ea1ff);
-    text-decoration-line: underline;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 2px;
-    text-decoration-color: currentColor;
+    text-decoration: none;
     word-wrap: break-word;
     overflow-wrap: break-word;
     pointer-events: auto;
     cursor: pointer;
-    transition: color 0.15s ease, text-decoration-thickness 0.15s ease, opacity 0.15s ease;
+    transition: color 0.15s ease, opacity 0.15s ease;
 }
 
 .markdown-content a:hover {
-    text-decoration-thickness: 2px;
     opacity: 0.95;
 }
 
 .markdown-content a.file-link {
-    text-decoration-style: dotted;
     color: var(--color-tool-file-link, var(--accent-primary, #4ea1ff));
 }
 
 .markdown-content a.class-link {
-    text-decoration-style: dashed;
     color: var(--color-tool-class-link, var(--accent-primary, #4ea1ff));
 }
 
 .markdown-content a.url-link {
-    text-decoration-style: solid;
 }
 
 .message.user .markdown-content a {
