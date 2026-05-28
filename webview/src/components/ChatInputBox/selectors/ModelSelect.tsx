@@ -30,7 +30,6 @@ const SEARCH_INPUT_STYLE: React.CSSProperties = {
   background: 'var(--dropdown-bg)',
   color: 'var(--text-primary)'
 };
-const MODEL_OPTION_INFO_STYLE: React.CSSProperties = { display: 'flex', flexDirection: 'column', flex: 1 };
 const LONG_CONTEXT_OPTION_STYLE: React.CSSProperties = { justifyContent: 'space-between', cursor: 'default' };
 const LONG_CONTEXT_LABEL_STYLE: React.CSSProperties = { fontSize: '12px' };
 
@@ -341,8 +340,8 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
                         size={16}
                         colored
                       />
-                      <div style={MODEL_OPTION_INFO_STYLE}>
-                        <span>{getModelLabel(model, false)}</span>
+                      <div className="model-option-info">
+                        <span className="model-name">{getModelLabel(model, false)}</span>
                         {getModelDescription(model) && (
                           <span className="model-description">{getModelDescription(model)}</span>
                         )}
