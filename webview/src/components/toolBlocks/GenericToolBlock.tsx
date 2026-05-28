@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { ToolInput, ToolResultBlock } from '../../types';
 import { useIsToolDenied } from '../../hooks/useIsToolDenied';
 import { useResolvedFileLinkTooltip } from '../../hooks/useResolvedFileLinkTooltip';
+import { getPersistedExpanded, setPersistedExpanded } from '../../utils/expandedState';
 import { openFile } from '../../utils/bridge';
 import { formatParamValue, truncate } from '../../utils/helpers';
 import { getFileIcon, getFolderIcon } from '../../utils/fileIcons';
@@ -211,7 +212,15 @@ const PatchFileLink = ({ path }: PatchFileLinkProps) => {
 const GenericToolBlock = ({ name, input, result, toolId }: GenericToolBlockProps) => {
   const { t } = useTranslation();
   const lowerName = (name ?? '').toLowerCase();
-  const [expanded, setExpanded] = useState(false);
+  const stateKey = `generic-${toolId ?? lowerName}`;
+  const [expanded, setExpandedRaw] = useState(() => getPersistedExpanded(stateKey));
+  const setExpanded = (v: boolean | ((prev: boolean) => boolean)) => {
+    setExpandedRaw((prev) => {
+      const next = typeof v === 'function' ? v(prev) : v;
+      setPersistedExpanded(stateKey, next);
+      return next;
+    });
+  };
   const isDenied = useIsToolDenied(toolId);
 
   // Ignore write_stdin tool - it's waiting for previous command result

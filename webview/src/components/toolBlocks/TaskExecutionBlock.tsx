@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { ToolInput, ToolResultBlock } from '../../types';
 import { normalizeToolName } from '../../utils/toolConstants';
 import { sendBridgeEvent } from '../../utils/bridge';
+import { getPersistedExpanded, setPersistedExpanded } from '../../utils/expandedState';
 import { useSubagentHistoryGetter, useSessionId, useGetToolResultRaw, type GetToolResultRawFn } from '../../contexts/SubagentContext';
 import SubagentProcessDetails from '../StatusPanel/SubagentProcessDetails';
 
@@ -120,7 +121,15 @@ function shortenAgentId(agentId?: string): string | undefined {
 
 const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, result, toolId, isStreaming = false }: TaskExecutionBlockProps) {
   const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
+  const stateKey = `task-${toolId ?? 'unknown'}`;
+  const [expanded, setExpandedRaw] = useState(() => getPersistedExpanded(stateKey));
+  const setExpanded = (updater: (prev: boolean) => boolean) => {
+    setExpandedRaw((prev) => {
+      const next = updater(prev);
+      setPersistedExpanded(stateKey, next);
+      return next;
+    });
+  };
   const getSubagentHistory = useSubagentHistoryGetter();
   const currentSessionId = useSessionId();
   const getToolResultRaw = useGetToolResultRaw();

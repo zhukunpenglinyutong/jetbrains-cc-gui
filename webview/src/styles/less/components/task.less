@@ -217,13 +217,15 @@
 
 .agent-group-content {
     padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 
     .task-container {
         margin: 0;
     }
-}
 
-.agent-group-text-block {
-    margin-top: 10px;
-    padding: 0 4px;
+    > .content-block {
+        padding: 0 4px;
+    }
 }

@@ -109,6 +109,10 @@ function isToolBlockOfType(block: ClaudeContentBlock, toolNames: Set<string>): b
   return block.type === 'tool_use' && isToolName(block.name, toolNames);
 }
 
+// Tracks how many blocks each agent group absorbed while running.
+// Once the agent completes, this frozen count prevents blocks from being released.
+const agentGroupBlockCount = new Map<string, number>();
+
 function groupBlocks(
   blocks: ClaudeContentBlock[],
   findToolResult: (toolId: string | undefined, messageIndex: number) => ToolResultBlock | null | undefined,
@@ -177,6 +181,10 @@ function groupBlocks(
 
   const flushAgentGroup = () => {
     if (currentAgentBlock) {
+      const agentToolId = currentAgentBlock.type === 'tool_use' ? currentAgentBlock.id : undefined;
+      const key = agentToolId ?? `agent-${agentGroupStartIndex}`;
+      // Persist the count so it's stable after completion
+      agentGroupBlockCount.set(key, agentFollowingText.length);
       groupedBlocks.push({
         type: 'agent_group',
         agentBlock: currentAgentBlock,
@@ -190,33 +198,34 @@ function groupBlocks(
   };
 
   blocks.forEach((block, idx) => {
-    // If we're collecting blocks for an agent group, determine boundary
     if (currentAgentBlock) {
-      const agentToolId = currentAgentBlock.type === 'tool_use' ? currentAgentBlock.id : undefined;
-      const agentResult = findToolResult(agentToolId, messageIndex);
-      const agentCompleted = agentResult !== undefined && agentResult !== null;
-
       if (isToolBlockOfType(block, AGENT_TOOL_NAMES)) {
-        // New agent tool — flush current group, start new one
         flushAgentGroup();
         currentAgentBlock = block;
         agentGroupStartIndex = idx;
         return;
       }
 
+      const agentToolId = currentAgentBlock.type === 'tool_use' ? currentAgentBlock.id : undefined;
+      const agentResult = findToolResult(agentToolId, messageIndex);
+      const agentCompleted = agentResult !== undefined && agentResult !== null;
+
       if (!agentCompleted) {
-        // Agent still running — absorb all subsequent blocks
+        // Still running — absorb all subsequent blocks
         agentFollowingText.push(block);
         return;
       }
 
-      // Agent completed — only absorb the first text block (result summary)
-      if (block.type === 'text' && agentFollowingText.length === 0) {
+      // Completed — use the frozen count to decide boundary
+      const key = agentToolId ?? `agent-${agentGroupStartIndex}`;
+      const frozenCount = agentGroupBlockCount.get(key) ?? 0;
+      if (agentFollowingText.length < frozenCount) {
+        // Still within the previously established boundary
         agentFollowingText.push(block);
         return;
       }
 
-      // Any other block after completion belongs to main agent
+      // Beyond boundary — flush and let block be processed normally
       flushAgentGroup();
     }
 

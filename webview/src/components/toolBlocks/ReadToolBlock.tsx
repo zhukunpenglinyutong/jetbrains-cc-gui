@@ -6,6 +6,7 @@ import { openFile } from '../../utils/bridge';
 import { useResolvedFileLinkTooltip } from '../../hooks/useResolvedFileLinkTooltip';
 import { getFileIcon, getFolderIcon } from '../../utils/fileIcons';
 import { getToolLineInfo, resolveToolTarget } from '../../utils/toolPresentation';
+import { getPersistedExpanded, setPersistedExpanded } from '../../utils/expandedState';
 
 interface ReadToolBlockProps {
   input?: ToolInput;
@@ -65,7 +66,15 @@ const PARAM_VALUE_STYLE: React.CSSProperties = {
 };
 
 const ReadToolBlock = ({ input, result, toolId }: ReadToolBlockProps) => {
-  const [expanded, setExpanded] = useState(false);
+  const stateKey = `read-${toolId ?? 'unknown'}`;
+  const [expanded, setExpandedRaw] = useState(() => getPersistedExpanded(stateKey));
+  const setExpanded = (v: boolean | ((prev: boolean) => boolean)) => {
+    setExpandedRaw((prev) => {
+      const next = typeof v === 'function' ? v(prev) : v;
+      setPersistedExpanded(stateKey, next);
+      return next;
+    });
+  };
   const { t } = useTranslation();
   const isDenied = useIsToolDenied(toolId);
 

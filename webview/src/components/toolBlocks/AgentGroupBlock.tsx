@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { ClaudeContentBlock, ToolResultBlock } from '../../types';
 import { normalizeToolName } from '../../utils/toolConstants';
 import { sendBridgeEvent } from '../../utils/bridge';
+import { getPersistedExpanded, setPersistedExpanded } from '../../utils/expandedState';
 import { useSubagentHistoryGetter, useSessionId, useGetToolResultRaw, type GetToolResultRawFn } from '../../contexts/SubagentContext';
 import SubagentProcessDetails from '../StatusPanel/SubagentProcessDetails';
 import { ContentBlockRenderer } from '../MessageItem/ContentBlockRenderer';
@@ -65,7 +66,6 @@ function parseAgentToolMeta(
 }
 
 // Persist expanded state across re-mounts (streaming causes component remount)
-const expandedState = new Map<string, boolean>();
 
 const AgentGroupBlock = memo(function AgentGroupBlock({
   agentBlock,
@@ -82,12 +82,12 @@ const AgentGroupBlock = memo(function AgentGroupBlock({
   const getToolResultRaw = useGetToolResultRaw();
 
   const toolId = agentBlock.type === 'tool_use' ? agentBlock.id : undefined;
-  const stateKey = toolId ?? `agent-${messageIndex}`;
-  const [expanded, setExpandedRaw] = useState(() => expandedState.get(stateKey) ?? false);
+  const stateKey = `agent-group-${toolId ?? messageIndex}`;
+  const [expanded, setExpandedRaw] = useState(() => getPersistedExpanded(stateKey));
   const setExpanded = (updater: (prev: boolean) => boolean) => {
     setExpandedRaw((prev) => {
       const next = updater(prev);
-      expandedState.set(stateKey, next);
+      setPersistedExpanded(stateKey, next);
       return next;
     });
   };

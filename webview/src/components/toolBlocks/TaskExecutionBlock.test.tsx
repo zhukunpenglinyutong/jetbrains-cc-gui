@@ -1,5 +1,6 @@
 import { act, fireEvent, render } from '@testing-library/react';
 import TaskExecutionBlock from './TaskExecutionBlock';
+import { clearAllPersistedExpanded } from '../../utils/expandedState';
 
 const mockSendBridgeEvent = vi.fn();
 const mockGetSubagentHistory = vi.fn<(key: string) => unknown>();
@@ -24,6 +25,7 @@ vi.mock('../../contexts/SubagentContext', () => ({
 
 describe('TaskExecutionBlock polling', () => {
   beforeEach(() => {
+    clearAllPersistedExpanded();
     vi.useFakeTimers();
     mockSendBridgeEvent.mockReset();
     mockGetSubagentHistory.mockReset();

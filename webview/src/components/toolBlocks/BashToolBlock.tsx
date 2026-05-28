@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolInput, ToolResultBlock } from '../../types';
 import { useIsToolDenied } from '../../hooks/useIsToolDenied';
+import { getPersistedExpanded, setPersistedExpanded } from '../../utils/expandedState';
 
 const TASK_DETAILS_STYLE: React.CSSProperties = { padding: 0, border: 'none' };
 const TASK_CONTENT_WRAPPER_STYLE: React.CSSProperties = { paddingLeft: '40px', position: 'relative', zIndex: 1 };
@@ -17,7 +18,15 @@ interface BashToolBlockProps {
 
 const BashToolBlock = ({ input, result, toolId }: BashToolBlockProps) => {
   const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
+  const stateKey = `bash-${toolId ?? 'unknown'}`;
+  const [expanded, setExpandedRaw] = useState(() => getPersistedExpanded(stateKey));
+  const setExpanded = (v: boolean | ((prev: boolean) => boolean)) => {
+    setExpandedRaw((prev) => {
+      const next = typeof v === 'function' ? v(prev) : v;
+      setPersistedExpanded(stateKey, next);
+      return next;
+    });
+  };
 
   if (!input) {
     return null;
