@@ -11,7 +11,7 @@ import { tmpdir } from 'os';
 import { basename, isAbsolute, join, resolve } from 'path';
 import { pathToFileURL } from 'url';
 
-import { requestPermissionFromJava } from '../../permission-ipc.js';
+import { requestPermissionFromJava, requestAskUserQuestionAnswers } from '../../permission-ipc.js';
 import { getMcpServerTools as getMcpServerToolsImpl } from '../claude/mcp-status/index.js';
 import { ensureOpenCodeSdk, normalizeOpenCodeSdkError } from './opencode-utils.js';
 import {
@@ -1287,8 +1287,19 @@ function modelPayloadContains(providers, fullModelId) {
 function firstProviderDefault(defaults, providers = []) {
   const entries = Object.entries(defaults)
     .map(([providerID, modelID]) => [String(providerID || '').trim(), String(modelID || '').trim()])
-    .filter(([providerID, modelID]) => providerID && modelID)
-    .sort(([left], [right]) => left.localeCompare(right));
+    .filter(([providerID, modelID]) => providerID && modelID);
+
+  const providerOrder = providers.length > 0
+    ? providers.map((p) => String(p?.id))
+    : [];
+  const orderMap = new Map(providerOrder.map((id, i) => [id, i]));
+
+  entries.sort(([left], [right]) => {
+    const li = orderMap.get(left) ?? orderMap.size;
+    const ri = orderMap.get(right) ?? orderMap.size;
+    if (li !== ri) return li - ri;
+    return left.localeCompare(right);
+  });
 
   for (const [providerID, modelID] of entries) {
     const fullModelId = `${providerID}/${modelID}`;
@@ -1300,11 +1311,10 @@ function firstProviderDefault(defaults, providers = []) {
 }
 
 function firstAvailableProviderModel(providers = []) {
-  const sortedProviders = providers
-    .filter((provider) => provider && typeof provider === 'object' && provider.id)
-    .sort((left, right) => String(left.id).localeCompare(String(right.id)));
+  const listedProviders = providers
+    .filter((provider) => provider && typeof provider === 'object' && provider.id);
 
-  for (const provider of sortedProviders) {
+  for (const provider of listedProviders) {
     const providerID = String(provider.id);
     const providerModels = provider.models && typeof provider.models === 'object'
       ? provider.models
@@ -1929,18 +1939,69 @@ async function replyToPermission(runtime, cwd, permission, permissionMode) {
     : `Rejected opencode permission: ${label}`);
 }
 
-async function rejectQuestion(runtime, cwd, question) {
-  const requestId = question?.id || question?.requestID || question?.questionID;
+async function replyToQuestion(runtime, cwd, questionEvent) {
+  const requestId = questionEvent?.id || questionEvent?.requestID || questionEvent?.questionID;
   if (!requestId) {
     return;
   }
 
-  await postJson(
-    runtime.baseUrl,
-    `/question/${encodeURIComponent(requestId)}/reject`,
-    cwd
-  );
-  emitStatus('Rejected opencode question request; question UI is not implemented yet.');
+  const questions = questionEvent?.questions || [];
+  const header = typeof questionEvent?.header === 'string' ? questionEvent.header : '';
+
+  const normalizedQuestions = questions
+    .map((q) => {
+      if (!q || typeof q !== 'object') return null;
+      const questionText = typeof q.question === 'string' ? q.question : '';
+      const questionHeader = typeof q.header === 'string' ? q.header : (header || '');
+      const multiSelect = q.multiple === true || q.multiSelect === true;
+      const options = Array.isArray(q.options) ? q.options.map((opt) => {
+        if (typeof opt === 'string') return { label: opt, description: '' };
+        return {
+          label: typeof opt?.label === 'string' ? opt.label : '',
+          description: typeof opt?.description === 'string' ? opt.description : ''
+        };
+      }).filter((opt) => opt.label) : [];
+      if (!questionText) return null;
+      return { question: questionText, header: questionHeader, options, multiSelect };
+    })
+    .filter(Boolean);
+
+  if (normalizedQuestions.length === 0) {
+    await postJson(
+      runtime.baseUrl,
+      `/question/${encodeURIComponent(requestId)}/reject`,
+      cwd
+    );
+    emitStatus('Rejected opencode question request: no valid questions found.');
+    return;
+  }
+
+  const input = {
+    questions: normalizedQuestions
+  };
+
+  emitStatus('Showing opencode question dialog...');
+  const answers = await requestAskUserQuestionAnswers(input);
+
+  if (answers) {
+    const replyBody = {
+      answers: Array.isArray(answers) ? answers : []
+    };
+    await postJson(
+      runtime.baseUrl,
+      `/question/${encodeURIComponent(requestId)}/reply`,
+      cwd,
+      replyBody
+    );
+    emitStatus('Answered opencode question.');
+  } else {
+    await postJson(
+      runtime.baseUrl,
+      `/question/${encodeURIComponent(requestId)}/reject`,
+      cwd
+    );
+    emitStatus('User cancelled opencode question dialog.');
+  }
 }
 
 function partText(part) {
@@ -2098,6 +2159,7 @@ function createEventContext(runtime, cwd, permissionMode, sessionRef) {
     emittedDiffIds: new Set(),
     repliedPermissions: new Set(),
     rejectedQuestions: new Set(),
+    repliedQuestions: new Set(),
     streamedTextByPartId: new Map(),
     suppressedTextByPartId: new Map(),
     sawContentDelta: false,
@@ -2482,12 +2544,12 @@ async function handleOpenCodeEvent(event, ctx) {
 
     case 'question.asked': {
       ctx.sawTurnLive = true;
-      const requestId = props.id || props.requestID || props.questionID;
-      if (!requestId || ctx.rejectedQuestions.has(requestId)) {
+      const questionRequestId = props.id || props.requestID || props.questionID;
+      if (!questionRequestId || ctx.repliedQuestions.has(questionRequestId)) {
         return;
       }
-      ctx.rejectedQuestions.add(requestId);
-      await rejectQuestion(ctx.runtime, ctx.cwd, props);
+      ctx.repliedQuestions.add(questionRequestId);
+      await replyToQuestion(ctx.runtime, ctx.cwd, props);
       break;
     }
 

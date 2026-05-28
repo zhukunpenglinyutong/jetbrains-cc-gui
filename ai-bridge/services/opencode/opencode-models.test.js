@@ -172,7 +172,7 @@ test('opencode model discovery ignores stale configured default labels', () => {
   assert.equal(models[0].description, 'Uses openai/gpt-5.5-pro provider default.');
 });
 
-test('opencode default model uses provider defaults alphabetically', () => {
+test('opencode default model uses provider defaults in provider-list order', () => {
   const models = normalizeOpenCodeModels({
     providers: [
       {
@@ -196,10 +196,10 @@ test('opencode default model uses provider defaults alphabetically', () => {
     },
   });
 
-  assert.equal(models[0].description, 'Uses anthropic/claude-sonnet-4-6 provider default.');
+  assert.equal(models[0].description, 'Uses openai/gpt-5.4 provider default.');
 });
 
-test('opencode default model falls back to first available model alphabetically', () => {
+test('opencode default model falls back to first available model in provider-list order', () => {
   const models = normalizeOpenCodeModels({
     providers: [
       {
@@ -219,7 +219,7 @@ test('opencode default model falls back to first available model alphabetically'
     ],
   });
 
-  assert.equal(models[0].description, 'Uses anthropic/claude-sonnet-4-6 as first available model.');
+  assert.equal(models[0].description, 'Uses openai/gpt-5.5 as first available model.');
 });
 
 test('opencode default placeholder is not parsed as a concrete model', () => {
