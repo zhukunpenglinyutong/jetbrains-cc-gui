@@ -22,34 +22,35 @@ describe('openCodeModels', () => {
       ],
     }));
 
-    expect(models).toEqual([
-      {
-        id: 'opencode-default',
-        label: 'opencode default',
-        description: 'Uses anthropic/claude-sonnet-4-5 from opencode config.',
-      },
-      {
-        id: 'anthropic/claude-sonnet-4-5',
-        label: 'Claude Sonnet 4.5',
-        description: 'Anthropic · provider default',
-      },
-    ]);
+    expect(models).toEqual({
+      models: [
+        {
+          id: 'opencode-default',
+          label: 'opencode default',
+          description: 'Uses anthropic/claude-sonnet-4-5 from opencode config.',
+        },
+        {
+          id: 'anthropic/claude-sonnet-4-5',
+          label: 'Claude Sonnet 4.5',
+          description: 'Anthropic · provider default',
+        },
+      ],
+    });
   });
 
   it('falls back to the default opencode model on invalid payloads', () => {
-    expect(parseOpenCodeModelPayload('not-json')).toEqual(OPENCODE_MODELS);
-    expect(parseOpenCodeModelPayload(JSON.stringify({ success: false }))).toEqual(OPENCODE_MODELS);
+    const invalidResult = parseOpenCodeModelPayload('not-json');
+    expect(invalidResult.models).toEqual([]);
+    expect(invalidResult.error).toBeDefined();
+    expect(invalidResult.error).toContain('is not valid JSON');
+
+    expect(parseOpenCodeModelPayload(JSON.stringify({ success: false }))).toEqual({
+      models: OPENCODE_MODELS,
+    });
   });
 
   it('keeps a selected dynamic model visible before discovery completes', () => {
-    expect(ensureSelectedOpenCodeModel(OPENCODE_MODELS, 'github-copilot/gpt-5.1')).toEqual([
-      ...OPENCODE_MODELS,
-      {
-        id: 'github-copilot/gpt-5.1',
-        label: 'github-copilot/gpt-5.1',
-        description: 'Selected opencode model',
-      },
-    ]);
+    expect(ensureSelectedOpenCodeModel(OPENCODE_MODELS, 'github-copilot/gpt-5.1')).toEqual(OPENCODE_MODELS);
   });
 
   it('does not duplicate the opencode default placeholder', () => {

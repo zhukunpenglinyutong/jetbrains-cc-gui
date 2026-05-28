@@ -86,9 +86,13 @@ const DROPDOWN_BASE_STYLE: React.CSSProperties = {
   marginBottom: '4px',
   zIndex: 10000,
   minWidth: '200px',
+  overflow: 'visible',
 };
 
-const SELECTOR_OPTION_RELATIVE_STYLE: React.CSSProperties = { position: 'relative' };
+const SELECTOR_OPTION_RELATIVE_STYLE: React.CSSProperties = {
+  position: 'relative',
+  overflow: 'visible',
+};
 
 const ITEM_INFO_STYLE: React.CSSProperties = {
   display: 'flex',
