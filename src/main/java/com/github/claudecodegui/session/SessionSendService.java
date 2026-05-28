@@ -104,9 +104,6 @@ public class SessionSendService {
             resolvedMode = "default";
         }
 
-        if ("codex".equals(provider) && "plan".equals(resolvedMode)) {
-            return "default";
-        }
         return resolvedMode;
     }
 
@@ -274,16 +271,16 @@ public class SessionSendService {
             String effectivePermissionMode,
             String effectiveInvocationMode
     ) {
-        LOG.info("[SessionSendService][DIAG] sendToClaude called, attachments="
+        LOG.debug("[SessionSendService][DIAG] sendToClaude called, attachments="
                 + (attachments == null ? "NULL" : attachments.size()));
-        LOG.info("[ClaudeImageDiag][SessionSendService] sendToClaude route" + ": invocationMode=" + effectiveInvocationMode + ", provider=" + state.getProvider() + ", sessionId=" + (state.getSessionId() != null ? state.getSessionId() : "(new)") + ", attachments=" + (attachments == null ? "NULL" : attachments.size()));
+        LOG.debug("[ClaudeImageDiag][SessionSendService] sendToClaude route" + ": invocationMode=" + effectiveInvocationMode + ", provider=" + state.getProvider() + ", sessionId=" + (state.getSessionId() != null ? state.getSessionId() : "(new)") + ", attachments=" + (attachments == null ? "NULL" : attachments.size()));
         if (attachments != null) {
             for (int i = 0; i < attachments.size(); i++) {
                 ClaudeSession.Attachment att = attachments.get(i);
-                LOG.info("[SessionSendService][DIAG] att[" + i + "]: fileName=" + att.fileName
+                LOG.debug("[SessionSendService][DIAG] att[" + i + "]: fileName=" + att.fileName
                         + ", localPath=" + att.localPath
                         + ", data=" + (att.data != null ? att.data.length() + "chars" : "null"));
-                LOG.info("[ClaudeImageDiag][SessionSendService] att[" + i + "]" + ": fileName=" + att.fileName + ", mediaType=" + att.mediaType + ", localPath=" + att.localPath + ", resourceUrl=" + att.resourceUrl + ", data=" + (att.data != null ? att.data.length() + "chars" : "null"));
+                LOG.debug("[ClaudeImageDiag][SessionSendService] att[" + i + "]" + ": fileName=" + att.fileName + ", mediaType=" + att.mediaType + ", localPath=" + att.localPath + ", resourceUrl=" + att.resourceUrl + ", data=" + (att.data != null ? att.data.length() + "chars" : "null"));
             }
         }
         ClaudeMessageHandler handler = new ClaudeMessageHandler(
@@ -364,8 +361,8 @@ public class SessionSendService {
                     String agentPrompt = agent.get("prompt").getAsString();
                     String agentName = agent.has("name") ? agent.get("name").getAsString() : "Unknown";
                     LOG.info("[Agent] ✓ Found agent: " + agentName);
-                    LOG.info("[Agent] ✓ Prompt length: " + agentPrompt.length() + " chars");
-                    LOG.info("[Agent] ✓ Prompt preview: "
+                    LOG.debug("[Agent] ✓ Prompt length: " + agentPrompt.length() + " chars");
+                    LOG.debug("[Agent] ✓ Prompt preview: "
                             + (agentPrompt.length() > 100 ? agentPrompt.substring(0, 100) + "..." : agentPrompt));
                     return agentPrompt;
                 }

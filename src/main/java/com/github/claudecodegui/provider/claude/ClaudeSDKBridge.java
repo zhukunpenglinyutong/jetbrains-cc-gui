@@ -407,7 +407,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             String reasoningEffort,
             MessageCallback callback
     ) {
-        LOG.info("[ClaudeSDKBridge][DIAG] sendMessage called, attachments="
+        LOG.debug("[ClaudeSDKBridge][DIAG] sendMessage called, attachments="
                 + (attachments == null ? "NULL" : attachments.size()));
 
         // Try daemon mode first (avoids per-request Node.js process spawning)

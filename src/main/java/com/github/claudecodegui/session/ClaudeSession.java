@@ -431,12 +431,12 @@ public class ClaudeSession {
             String requestedPermissionMode,
             String requestedInvocationMode
     ) {
-        LOG.info("[ClaudeSession][DIAG] send() called, attachments="
+        LOG.debug("[ClaudeSession][DIAG] send() called, attachments="
                 + (attachments == null ? "NULL" : attachments.size()));
         if (attachments != null) {
             for (int i = 0; i < attachments.size(); i++) {
                 Attachment att = attachments.get(i);
-                LOG.info("[ClaudeSession][DIAG] att[" + i + "]: fileName=" + att.fileName
+                LOG.debug("[ClaudeSession][DIAG] att[" + i + "]: fileName=" + att.fileName
                         + ", localPath=" + att.localPath
                         + ", data=" + (att.data != null ? att.data.length() + "chars" : "null")
                         + ", resourceUrl=" + att.resourceUrl);

@@ -258,7 +258,7 @@ public class ClaudeCliSession {
                         imageBlockCount++;
                     }
                 }
-                LOG.info("[ClaudeImageDiag][ClaudeCliSession] prompt prepared" + ": tabId=" + tabId + ", requestAttachments=" + (request.attachments() != null ? request.attachments().size() : 0) + ", contentBlocks=" + blocks.size() + ", imageBlocks=" + imageBlockCount + ", addDirs=" + addDirs + ", promptViaStdin=true" + ", containsReadInstruction=" + prompt.contains("Use the Read tool to inspect this image file") + ", promptPreview=" + previewPrompt(prompt));
+                LOG.debug("[ClaudeImageDiag][ClaudeCliSession] prompt prepared" + ": tabId=" + tabId + ", requestAttachments=" + (request.attachments() != null ? request.attachments().size() : 0) + ", contentBlocks=" + blocks.size() + ", imageBlocks=" + imageBlockCount + ", addDirs=" + addDirs + ", promptViaStdin=true" + ", containsReadInstruction=" + prompt.contains("Use the Read tool to inspect this image file") + ", promptPreview=" + previewPrompt(prompt));
 
                 List<String> cmd = buildCommand(cliPath, request, prompt, addDirs);
                 LOG.info("[ClaudeCliSession][" + tabId + "] Command (prompt via stdin): " + String.join(" ", cmd));
@@ -279,7 +279,7 @@ public class ClaudeCliSession {
                 Process process = pb.start();
                 LOG.info("[CliConcurrencyDiag][ClaudeCliSession] process started" + ": tabId=" + tabId + ", elapsedMs=" + elapsedMillis(sendStartNanos) + ", thread=" + Thread.currentThread().getName());
                 writePromptToStdin(process, prompt);
-                LOG.info("[CliConcurrencyDiag][ClaudeCliSession] prompt written to stdin" + ": tabId=" + tabId + ", promptChars=" + prompt.length() + ", elapsedMs=" + elapsedMillis(sendStartNanos) + ", thread=" + Thread.currentThread().getName());
+                LOG.debug("[CliConcurrencyDiag][ClaudeCliSession] prompt written to stdin" + ": tabId=" + tabId + ", promptChars=" + prompt.length() + ", elapsedMs=" + elapsedMillis(sendStartNanos) + ", thread=" + Thread.currentThread().getName());
                 activeHandle = new CliProcessHandle(process, "claude-tab-" + tabId);
 
                 readOutput(callback, diagnostic, sendStartNanos, completedWithStructuredError);

@@ -41,14 +41,14 @@ public class CliAttachmentHandler {
     ) {
         List<ContentBlock> blocks = new ArrayList<>();
         if (attachments == null || attachments.isEmpty()) {
-            LOG.info("[ClaudeImageDiag][CliAttachmentHandler] processForClaude: no attachments" + ", provider=" + provider + ", sessionKey=" + sessionKey);
+            LOG.debug("[ClaudeImageDiag][CliAttachmentHandler] processForClaude: no attachments" + ", provider=" + provider + ", sessionKey=" + sessionKey);
             return blocks;
         }
-        LOG.info("[ClaudeImageDiag][CliAttachmentHandler] processForClaude: attachments=" + attachments.size() + ", provider=" + provider + ", sessionKey=" + sessionKey);
+        LOG.debug("[ClaudeImageDiag][CliAttachmentHandler] processForClaude: attachments=" + attachments.size() + ", provider=" + provider + ", sessionKey=" + sessionKey);
 
         for (ClaudeSession.Attachment att : attachments) {
             if (att == null) {
-                LOG.warn("[ClaudeImageDiag][CliAttachmentHandler] skip null attachment");
+                LOG.debug("[ClaudeImageDiag][CliAttachmentHandler] skip null attachment");
                 continue;
             }
             try {
@@ -59,28 +59,28 @@ public class CliAttachmentHandler {
                     }
                     if (file != null && file.isFile()) {
                         blocks.add(new ContentBlock(ContentBlock.Kind.IMAGE, att.mediaType, file, null));
-                        LOG.info("[ClaudeImageDiag][CliAttachmentHandler] " + "image block created: fileName=" + att.fileName + ", mediaType=" + att.mediaType + ", localPath=" + att.localPath + ", resolvedFile=" + file.getAbsolutePath() + ", exists=" + file.isFile() + ", data=" + (att.data != null ? att.data.length() + "chars" : "null"));
+                        LOG.debug("[ClaudeImageDiag][CliAttachmentHandler] " + "image block created: fileName=" + att.fileName + ", mediaType=" + att.mediaType + ", localPath=" + att.localPath + ", resolvedFile=" + file.getAbsolutePath() + ", exists=" + file.isFile() + ", data=" + (att.data != null ? att.data.length() + "chars" : "null"));
                     } else {
-                        LOG.warn("[ClaudeImageDiag][CliAttachmentHandler] " + "image attachment could not resolve to file: " + "fileName=" + att.fileName + ", mediaType=" + att.mediaType + ", localPath=" + att.localPath + ", data=" + (att.data != null ? att.data.length() + "chars" : "null"));
+                        LOG.debug("[ClaudeImageDiag][CliAttachmentHandler] " + "image attachment could not resolve to file: " + "fileName=" + att.fileName + ", mediaType=" + att.mediaType + ", localPath=" + att.localPath + ", data=" + (att.data != null ? att.data.length() + "chars" : "null"));
                     }
                 } else {
                     // 文档/文本：读取内容作为 text block
                     String text = resolveTextContent(att);
                     if (text == null) {
-                        LOG.warn("[ClaudeImageDiag][CliAttachmentHandler] " + "text attachment could not resolve content: " + "fileName=" + att.fileName + ", mediaType=" + att.mediaType + ", localPath=" + att.localPath);
+                        LOG.debug("[ClaudeImageDiag][CliAttachmentHandler] " + "text attachment could not resolve content: " + "fileName=" + att.fileName + ", mediaType=" + att.mediaType + ", localPath=" + att.localPath);
                         continue;
                     }
                     blocks.add(new ContentBlock(ContentBlock.Kind.TEXT,
                             null, null,
                             "[File: " + att.fileName + "]\n" + text));
-                    LOG.info("[ClaudeImageDiag][CliAttachmentHandler] " + "text block created: fileName=" + att.fileName + ", mediaType=" + att.mediaType + ", textChars=" + text.length());
+                    LOG.debug("[ClaudeImageDiag][CliAttachmentHandler] " + "text block created: fileName=" + att.fileName + ", mediaType=" + att.mediaType + ", textChars=" + text.length());
                 }
             } catch (Exception e) {
                 LOG.warn("[CliAttachmentHandler] Failed to process attachment: " + att.fileName, e);
-                LOG.warn("[ClaudeImageDiag][CliAttachmentHandler] " + "exception while processing attachment: fileName=" + att.fileName + ", mediaType=" + att.mediaType + ", localPath=" + att.localPath, e);
+                LOG.debug("[ClaudeImageDiag][CliAttachmentHandler] " + "exception while processing attachment: fileName=" + att.fileName + ", mediaType=" + att.mediaType + ", localPath=" + att.localPath, e);
             }
         }
-        LOG.info("[ClaudeImageDiag][CliAttachmentHandler] processForClaude result: blocks=" + blocks.size());
+        LOG.debug("[ClaudeImageDiag][CliAttachmentHandler] processForClaude result: blocks=" + blocks.size());
         return blocks;
     }
 

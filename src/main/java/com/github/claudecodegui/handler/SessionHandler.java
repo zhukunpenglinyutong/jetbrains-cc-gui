@@ -188,7 +188,7 @@ public class SessionHandler extends BaseMessageHandler {
         final String finalRequestedPermissionMode = requestedPermissionMode;
         final String finalRequestedInvocationMode = requestedInvocationMode;
         ClaudeSession currentSession = context.getSession();
-        LOG.info("[CliConcurrencyDiag][SessionHandler] accepted send_message" + ": provider=" + (currentSession != null ? currentSession.getProvider() : context.getCurrentProvider()) + ", requestedInvocationMode=" + (finalRequestedInvocationMode != null ? finalRequestedInvocationMode : "(none)") + ", sessionId=" + (currentSession != null ? currentSession.getSessionId() : "(none)") + ", channelId=" + (currentSession != null ? currentSession.getChannelId() : "(none)") + ", promptChars=" + finalPrompt.length() + ", thread=" + Thread.currentThread().getName());
+        LOG.debug("[CliConcurrencyDiag][SessionHandler] accepted send_message" + ": provider=" + (currentSession != null ? currentSession.getProvider() : context.getCurrentProvider()) + ", requestedInvocationMode=" + (finalRequestedInvocationMode != null ? finalRequestedInvocationMode : "(none)") + ", sessionId=" + (currentSession != null ? currentSession.getSessionId() : "(none)") + ", channelId=" + (currentSession != null ? currentSession.getChannelId() : "(none)") + ", promptChars=" + finalPrompt.length() + ", thread=" + Thread.currentThread().getName());
 
         CompletableFuture.runAsync(() -> {
             long dispatchStartNanos = System.nanoTime();
@@ -240,7 +240,7 @@ public class SessionHandler extends BaseMessageHandler {
             java.util.List<ClaudeSession.Attachment> atts = new java.util.ArrayList<>();
             if (payload != null && payload.has("attachments") && payload.get("attachments").isJsonArray()) {
                 JsonArray arr = payload.getAsJsonArray("attachments");
-                LOG.info("[ClaudeImageDiag][SessionHandler] received attachment payload: count=" + arr.size() + ", textChars=" + text.length());
+                LOG.debug("[ClaudeImageDiag][SessionHandler] received attachment payload: count=" + arr.size() + ", textChars=" + text.length());
                 String provider = context.getSession() != null ? context.getSession().getProvider() : context.getCurrentProvider();
                 String currentSessionId = context.getSession() != null ? context.getSession().getSessionId() : null;
                 String runtimeEpoch = context.getSession() != null ? context.getSession().getRuntimeSessionEpoch() : null;
@@ -258,7 +258,7 @@ public class SessionHandler extends BaseMessageHandler {
                     String data = a.has("data") && !a.get("data").isJsonNull()
                                           ? a.get("data").getAsString()
                                           : "";
-                    LOG.info("[ClaudeImageDiag][SessionHandler] payload att[" + i + "]" + ": fileName=" + fileName + ", mediaType=" + mediaType + ", dataChars=" + (data != null ? data.length() : 0) + ", provider=" + provider + ", sessionKey=" + sessionKey);
+                    LOG.debug("[ClaudeImageDiag][SessionHandler] payload att[" + i + "]" + ": fileName=" + fileName + ", mediaType=" + mediaType + ", dataChars=" + (data != null ? data.length() : 0) + ", provider=" + provider + ", sessionKey=" + sessionKey);
                     ClaudeSession.Attachment attachment = new ClaudeSession.Attachment(fileName, mediaType, data);
                     if (mediaType.startsWith("image/") && !data.isBlank()) {
                         AttachmentStorageService.PersistedAttachment persisted = AttachmentStorageService.getInstance()
@@ -271,17 +271,17 @@ public class SessionHandler extends BaseMessageHandler {
                             // Image is now on disk — free the base64 string from the pipeline.
                             // Downstream (SDK/CLI) reads from localPath; display uses resourceUrl.
                             attachment.data = null;
-                            LOG.info("[ClaudeImageDiag][SessionHandler] persisted image att[" + i + "]" + ": localPath=" + attachment.localPath + ", resourceUrl=" + attachment.resourceUrl + ", thumbnailUrl=" + attachment.thumbnailUrl + ", hash=" + attachment.attachmentHash);
+                            LOG.debug("[ClaudeImageDiag][SessionHandler] persisted image att[" + i + "]" + ": localPath=" + attachment.localPath + ", resourceUrl=" + attachment.resourceUrl + ", thumbnailUrl=" + attachment.thumbnailUrl + ", hash=" + attachment.attachmentHash);
                         } else {
-                            LOG.warn("[ClaudeImageDiag][SessionHandler] image persistence returned null for att[" + i + "]: fileName=" + fileName + ", mediaType=" + mediaType);
+                            LOG.debug("[ClaudeImageDiag][SessionHandler] image persistence returned null for att[" + i + "]: fileName=" + fileName + ", mediaType=" + mediaType);
                         }
                     } else if (mediaType.startsWith("image/")) {
-                        LOG.warn("[ClaudeImageDiag][SessionHandler] image attachment has no base64 data: att[" + i + "], fileName=" + fileName);
+                        LOG.debug("[ClaudeImageDiag][SessionHandler] image attachment has no base64 data: att[" + i + "], fileName=" + fileName);
                     }
                     atts.add(attachment);
                 }
             } else {
-                LOG.info("[ClaudeImageDiag][SessionHandler] no attachments array in payload for send_message_with_attachments");
+                LOG.debug("[ClaudeImageDiag][SessionHandler] no attachments array in payload for send_message_with_attachments");
             }
 
             // [FIX] Extract agent prompt from the payload for per-tab agent selection
@@ -375,7 +375,7 @@ public class SessionHandler extends BaseMessageHandler {
         final String finalRequestedPermissionMode = requestedPermissionMode;
         final String finalRequestedInvocationMode = requestedInvocationMode;
         ClaudeSession currentSession = context.getSession();
-        LOG.info("[CliConcurrencyDiag][SessionHandler] accepted send_message_with_attachments" + ": provider=" + (currentSession != null ? currentSession.getProvider() : context.getCurrentProvider()) + ", requestedInvocationMode=" + (finalRequestedInvocationMode != null ? finalRequestedInvocationMode : "(none)") + ", sessionId=" + (currentSession != null ? currentSession.getSessionId() : "(none)") + ", channelId=" + (currentSession != null ? currentSession.getChannelId() : "(none)") + ", promptChars=" + prompt.length() + ", attachmentCount=" + (attachments != null ? attachments.size() : 0) + ", thread=" + Thread.currentThread().getName());
+        LOG.debug("[CliConcurrencyDiag][SessionHandler] accepted send_message_with_attachments" + ": provider=" + (currentSession != null ? currentSession.getProvider() : context.getCurrentProvider()) + ", requestedInvocationMode=" + (finalRequestedInvocationMode != null ? finalRequestedInvocationMode : "(none)") + ", sessionId=" + (currentSession != null ? currentSession.getSessionId() : "(none)") + ", channelId=" + (currentSession != null ? currentSession.getChannelId() : "(none)") + ", promptChars=" + prompt.length() + ", attachmentCount=" + (attachments != null ? attachments.size() : 0) + ", thread=" + Thread.currentThread().getName());
 
         CompletableFuture.runAsync(() -> {
             long dispatchStartNanos = System.nanoTime();
