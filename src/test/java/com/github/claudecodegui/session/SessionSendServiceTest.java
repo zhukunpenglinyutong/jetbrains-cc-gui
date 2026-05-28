@@ -25,7 +25,7 @@ public class SessionSendServiceTest {
     @Test
     public void resolveEffectivePermissionModeDowngradesCodexPlanAfterSessionResolution() {
         assertEquals(
-                "default",
+                "plan",
                 SessionSendService.resolveEffectivePermissionMode("codex", null, "plan")
         );
     }

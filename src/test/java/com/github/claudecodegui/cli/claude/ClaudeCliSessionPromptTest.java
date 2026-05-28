@@ -2,9 +2,12 @@ package com.github.claudecodegui.cli.claude;
 
 import com.github.claudecodegui.cli.CliSendRequest;
 import com.github.claudecodegui.cli.common.CliAttachmentHandler;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
@@ -15,19 +18,23 @@ import static org.junit.Assert.assertTrue;
 
 public class ClaudeCliSessionPromptTest {
 
+    @Rule
+    public TemporaryFolder folder = new TemporaryFolder();
+
     @Test
     public void rendersImageAttachmentWithReadToolInstruction() throws Exception {
         ClaudeCliSession session = new ClaudeCliSession("tab-claude-prompt");
         CliSendRequest request = new CliSendRequest("tab-claude-prompt", "claude", "describe this image", null, null, List.of(), null, List.of(), null, null, null, null, Map.of());
-        File image = new File("C:\\Users\\32979\\.codemoss\\attachments\\store\\abc123.png");
+        File image = newAttachmentFile("abc123.png");
+        String promptPath = promptPath(image);
         List<CliAttachmentHandler.ContentBlock> blocks = List.of(new CliAttachmentHandler.ContentBlock(CliAttachmentHandler.ContentBlock.Kind.IMAGE, "image/png", image, null));
 
         Method method = ClaudeCliSession.class.getDeclaredMethod("buildPrompt", CliSendRequest.class, List.class);
         method.setAccessible(true);
         String prompt = (String) method.invoke(session, request, blocks);
 
-        assertTrue(prompt.contains("[Image #1: C:/Users/32979/.codemoss/attachments/store/abc123.png]"));
-        assertTrue(prompt.contains("Use the Read tool to inspect this image file, then answer using its visible content: " + "C:/Users/32979/.codemoss/attachments/store/abc123.png"));
+        assertTrue(prompt.contains("[Image #1: " + promptPath + "]"));
+        assertTrue(prompt.contains("Use the Read tool to inspect this image file, then answer using its visible content: " + promptPath));
         assertFalse(prompt.contains("Referenced image:"));
     }
 
@@ -38,12 +45,24 @@ public class ClaudeCliSessionPromptTest {
 
         Method method = ClaudeCliSession.class.getDeclaredMethod("buildCommand", String.class, CliSendRequest.class, String.class, List.class);
         method.setAccessible(true);
-        @SuppressWarnings("unchecked") List<String> command = (List<String>) method.invoke(session, "claude", request, "first line\nsecond line", List.of("C:\\Users\\32979\\.codemoss\\attachments\\store"));
+        File storeDir = folder.newFolder("attachments", "store");
+        @SuppressWarnings("unchecked") List<String> command = (List<String>) method.invoke(session, "claude", request, "first line\nsecond line", List.of(storeDir.getAbsolutePath()));
 
         assertFalse(command.contains("--"));
         assertFalse(command.contains("first line\nsecond line"));
         assertEquals("claude", command.get(0));
         assertTrue(command.contains("-p"));
         assertTrue(command.contains("--add-dir"));
+    }
+
+    private File newAttachmentFile(String name) throws IOException {
+        File storeDir = folder.newFolder("attachments", "store");
+        File file = new File(storeDir, name);
+        assertTrue(file.createNewFile());
+        return file;
+    }
+
+    private static String promptPath(File file) {
+        return file.getAbsolutePath().replace('\\', '/');
     }
 }

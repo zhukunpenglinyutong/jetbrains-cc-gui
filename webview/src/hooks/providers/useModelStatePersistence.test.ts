@@ -19,7 +19,7 @@ describe('useModelStatePersistence', () => {
         currentProvider: 'claude',
         selectedClaudeModel: 'claude-sonnet-4-6',
         selectedCodexModel: 'gpt-5.3-codex',
-        claudePermissionMode: 'bypassPermissions',
+        claudePermissionMode: 'acceptEdits',
         codexPermissionMode: 'default',
         longContextEnabled: true,
         reasoningEffort: 'high',
@@ -36,8 +36,8 @@ describe('useModelStatePersistence', () => {
             provider: 'codex',
             codexModel: 'gpt-5.3-codex',
             claudeModel: 'claude-sonnet-4-6',
-            claudePermissionMode: 'bypassPermissions',
-            codexPermissionMode: 'default',
+            claudePermissionMode: 'acceptEdits',
+            codexPermissionMode: 'plan',
             longContextEnabled: true,
             reasoningEffort: 'high',
         }));
@@ -48,5 +48,23 @@ describe('useModelStatePersistence', () => {
         expect(calls).not.toContainEqual(expect.stringContaining('set_provider:'));
         expect(calls).not.toContainEqual(expect.stringContaining('set_mode:'));
         expect(calls).not.toContainEqual(expect.stringContaining('set_model:'));
+    });
+
+    it('preserves codex plan mode during hydration', () => {
+        const options = createOptions();
+        localStorage.setItem('model-selection-state', JSON.stringify({
+            provider: 'codex',
+            codexModel: 'gpt-5.3-codex',
+            claudeModel: 'claude-sonnet-4-6',
+            claudePermissionMode: 'acceptEdits',
+            codexPermissionMode: 'plan',
+            longContextEnabled: true,
+            reasoningEffort: 'high',
+        }));
+
+        renderHook(() => useModelStatePersistence(options));
+
+        expect(options.setCodexPermissionMode).toHaveBeenCalledWith('plan');
+        expect(options.setPermissionMode).toHaveBeenCalledWith('plan');
     });
 });
