@@ -1,7 +1,5 @@
-import { OPENCODE_MODELS } from './types';
+import { OPENCODE_DEFAULT_MODEL_ID, OPENCODE_MODELS } from './types';
 import type { ModelInfo } from './types';
-
-const SELECTED_OPENCODE_MODEL_DESCRIPTION = 'Selected opencode model';
 
 function asNonEmptyString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0
@@ -29,15 +27,19 @@ export function parseOpenCodeModelPayload(payload: string): { models: ModelInfo[
   try {
     const parsed = JSON.parse(payload);
     if (parsed?.success === false && parsed?.error) {
-      return { models: OPENCODE_MODELS, error: parsed.error };
+      return { models: [], error: parsed.error };
     }
     const rawModels: unknown[] = Array.isArray(parsed?.models) ? parsed.models : [];
     const models = rawModels
       .map(normalizeModel)
       .filter((model: ModelInfo | null): model is ModelInfo => model !== null);
+    
+    if (models.length > 0 && !models.some(m => m.id === OPENCODE_DEFAULT_MODEL_ID)) {
+      return { models: [OPENCODE_MODELS[0], ...models] };
+    }
     return { models: models.length > 0 ? models : OPENCODE_MODELS };
   } catch (e: any) {
-    return { models: OPENCODE_MODELS, error: e.message || 'Failed to parse opencode models' };
+    return { models: [], error: e.message || 'Failed to parse opencode models' };
   }
 }
 
@@ -47,16 +49,8 @@ export function ensureSelectedOpenCodeModel(
 ): ModelInfo[] {
   const baseModels = models.length > 0 ? models : OPENCODE_MODELS;
   const selectedId = asNonEmptyString(selectedModel);
-  if (!selectedId || selectedId === 'opencode-default' || baseModels.some((model) => model.id === selectedId)) {
+  if (!selectedId || baseModels.some((model) => model.id === selectedId)) {
     return baseModels;
   }
-
-  return [
-    ...baseModels,
-    {
-      id: selectedId,
-      label: selectedId,
-      description: SELECTED_OPENCODE_MODEL_DESCRIPTION,
-    },
-  ];
+  return baseModels;
 }

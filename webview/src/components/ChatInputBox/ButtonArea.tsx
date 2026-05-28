@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ButtonAreaProps, ModelInfo, PermissionMode, ReasoningEffort } from './types';
 import { ConfigSelect, ModelSelect, ModeSelect, ProviderSelect, ReasoningSelect } from './selectors';
-import { CLAUDE_MODELS, CODEX_MODELS } from './types';
+import { CLAUDE_MODELS, CODEX_MODELS, OPENCODE_DEFAULT_MODEL_ID } from './types';
 import { STORAGE_KEYS, validateCodexCustomModels } from '../../types/provider';
 import type { CodexCustomModel } from '../../types/provider';
 import { readClaudeModelMapping } from '../../utils/claudeModelMapping';
@@ -185,6 +185,16 @@ export const ButtonArea = ({
       }
     };
   }, [currentProvider]);
+
+  // Ensure a valid model is selected for opencode
+  useEffect(() => {
+    if (currentProvider === 'opencode' && !modelsLoading && openCodeModels.length > 0) {
+      const isValidModel = openCodeModels.some(m => m.id === selectedModel);
+      if (!isValidModel && selectedModel !== OPENCODE_DEFAULT_MODEL_ID) {
+        onModelSelect?.(OPENCODE_DEFAULT_MODEL_ID);
+      }
+    }
+  }, [currentProvider, modelsLoading, openCodeModels, selectedModel, onModelSelect]);
 
   /**
    * Apply model name mapping
