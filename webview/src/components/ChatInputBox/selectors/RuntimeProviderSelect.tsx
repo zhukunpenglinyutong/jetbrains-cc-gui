@@ -49,7 +49,7 @@ export const RuntimeProviderSelect = ({ currentProvider, embedded = false, trigg
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const { positionedStyle, recalculate } = useDropdownPosition({
+  const { positionedStyle, maxHeight: viewportMaxHeight, recalculate } = useDropdownPosition({
     buttonRef: (embedded ? triggerRef : buttonRef) as React.RefObject<HTMLElement | null>,
     submenu: embedded,
     minWidth: embedded ? 260 : 200,
@@ -213,25 +213,14 @@ export const RuntimeProviderSelect = ({ currentProvider, embedded = false, trigg
 
   const activeName = activeProvider ? getProviderDisplayName(activeProvider, providerKind) : t('config.runtimeProvider.title');
 
+  const dropdownMaxHeight = viewportMaxHeight ? `${Math.min(300, viewportMaxHeight)}px` : '300px';
   const dropdownStyle: React.CSSProperties = {
-    position: 'absolute',
-    bottom: embedded ? 0 : '100%',
-    marginBottom: embedded ? undefined : '4px',
-    zIndex: 10001,
     minWidth: '260px',
     maxWidth: '360px',
-    maxHeight: '300px',
+    maxHeight: dropdownMaxHeight,
     overflowY: 'auto',
     ...positionedStyle,
   };
-  // When the submenu is positioned to the right (left: 100%), apply the overlap offset
-  if (embedded && positionedStyle.left === '100%') {
-    dropdownStyle.marginLeft = '-30px';
-  }
-  // When flipped to the left (right: 100%), mirror the overlap offset
-  if (embedded && positionedStyle.right === '100%') {
-    dropdownStyle.marginRight = '-30px';
-  }
 
   const renderProviderDropdown = () => (
     <div

@@ -7,12 +7,6 @@ import { useDropdownPosition } from '../../../hooks/useDropdownPosition';
 
 const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
 const CHEVRON_ICON_STYLE: React.CSSProperties = { fontSize: '10px', marginLeft: '2px' };
-const DROPDOWN_BASE_STYLE: React.CSSProperties = {
-  position: 'absolute',
-  bottom: '100%',
-  marginBottom: '4px',
-  zIndex: 10000,
-};
 const TOAST_STYLE: React.CSSProperties = { zIndex: 20000 };
 
 function getProviderOptionStyle(enabled: boolean): React.CSSProperties {
@@ -43,7 +37,7 @@ export const ProviderSelect = ({ value, onChange, compact = false }: ProviderSel
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const currentProvider = AVAILABLE_PROVIDERS.find(p => p.id === value) || AVAILABLE_PROVIDERS[0];
-  const { positionedStyle, recalculate } = useDropdownPosition({
+  const { positionedStyle, maxHeight: viewportMaxHeight, recalculate } = useDropdownPosition({
     buttonRef,
   });
 
@@ -145,7 +139,7 @@ export const ProviderSelect = ({ value, onChange, compact = false }: ProviderSel
           <div
             ref={dropdownRef}
             className="selector-dropdown"
-            style={{ ...DROPDOWN_BASE_STYLE, ...positionedStyle }}
+            style={{ ...positionedStyle, maxHeight: viewportMaxHeight ? `${viewportMaxHeight}px` : undefined, overflowY: 'auto' }}
           >
             {AVAILABLE_PROVIDERS.map((provider) => (
               <div

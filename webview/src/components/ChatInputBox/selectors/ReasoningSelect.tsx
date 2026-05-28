@@ -11,12 +11,6 @@ import { useDropdownPosition } from '../../../hooks/useDropdownPosition';
 
 const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
 const CHEVRON_ICON_STYLE: React.CSSProperties = { fontSize: '10px', marginLeft: '2px' };
-const DROPDOWN_BASE_STYLE: React.CSSProperties = {
-  position: 'absolute',
-  bottom: '100%',
-  marginBottom: '4px',
-  zIndex: 10000,
-};
 const LEVEL_INFO_STYLE: React.CSSProperties = { display: 'flex', flexDirection: 'column', flex: 1 };
 
 interface ReasoningSelectProps {
@@ -63,9 +57,10 @@ export const ReasoningSelect = ({ value, onChange, disabled, selectedModel, curr
   });
 
   const currentLevel = availableLevels.find(l => l.id === value) || availableLevels[availableLevels.length - 2] || availableLevels[0];
-  const { positionedStyle, recalculate } = useDropdownPosition({
+  const { positionedStyle, maxHeight: viewportMaxHeight, recalculate } = useDropdownPosition({
     buttonRef,
     preferredAlignment: 'right',
+    minWidth: 240,
   });
 
   useEffect(() => {
@@ -154,7 +149,7 @@ export const ReasoningSelect = ({ value, onChange, disabled, selectedModel, curr
         <div
           ref={dropdownRef}
           className="selector-dropdown"
-          style={{ ...DROPDOWN_BASE_STYLE, ...positionedStyle }}
+          style={{ ...positionedStyle, maxHeight: viewportMaxHeight ? `${viewportMaxHeight}px` : undefined, overflowY: 'auto' }}
         >
           {availableLevels.map((level) => (
             <div

@@ -4,41 +4,55 @@ import { getAppViewport } from '../utils/viewport';
 type DropdownAlignment = 'left' | 'right';
 
 interface UseDropdownPositionOptions {
-  /**
-   * Ref to the trigger button element.
-   */
   buttonRef: React.RefObject<HTMLElement | null>;
-  /**
-   * Preferred side the dropdown should open to.
-   * The hook will flip to the opposite side if there isn't enough room.
-   * @default 'left'
-   */
   preferredAlignment?: DropdownAlignment;
-  /**
-   * Estimated minimum width of the dropdown in px.
-   * Used to check whether the dropdown fits when aligned to the preferred side.
-   * @default 200
-   */
   minWidth?: number;
-  /**
-   * If true, positions the dropdown to the right of the trigger (submenu style)
-   * instead of above it. Falls back to `right: 100%` when space is tight.
-   * @default false
-   */
   submenu?: boolean;
 }
 
+interface PositionState {
+  left: number;
+  bottom: number;
+  maxHeight: number;
+  submenuSide: 'right' | 'left';
+}
+
+const FALLBACK_ABSOLUTE_LEFT: React.CSSProperties = {
+  position: 'absolute',
+  bottom: '100%',
+  marginBottom: '4px',
+  left: 0,
+};
+
+const FALLBACK_ABSOLUTE_RIGHT: React.CSSProperties = {
+  position: 'absolute',
+  bottom: '100%',
+  marginBottom: '4px',
+  right: 0,
+};
+
+const FALLBACK_SUBMENU_RIGHT: React.CSSProperties = {
+  position: 'absolute',
+  bottom: 0,
+  left: '100%',
+};
+
+const FALLBACK_SUBMENU_LEFT: React.CSSProperties = {
+  position: 'absolute',
+  bottom: 0,
+  right: '100%',
+};
+
 /**
- * Hook that computes CSS left/right positioning for a dropdown to ensure
- * it stays within viewport boundaries.
+ * Hook that computes fixed-position styles for a dropdown to ensure
+ * it stays completely within the visible #app viewport area.
  *
- * Returns a `positionedStyle` object to spread onto the dropdown element,
- * and a `recalculate` function that should be called when the dropdown opens.
+ * Uses the same coordinate-space Convention as the completion Dropdown:
+ * all arithmetic is done in getBoundingClientRect space (which includes
+ * CSS zoom), then divided by fixedPosDivisor for the final CSS values.
  *
- * For normal dropdowns: positions above the button, aligning to preferred side,
- * flipping if there isn't enough room.
- * For submenus: positions to the right of the trigger, flipping to the left if
- * there isn't enough space on the right.
+ * For normal dropdowns: positions above the trigger button.
+ * For submenus: positions beside the trigger row.
  */
 export function useDropdownPosition({
   buttonRef,
@@ -47,66 +61,102 @@ export function useDropdownPosition({
   submenu = false,
 }: UseDropdownPositionOptions): {
   positionedStyle: React.CSSProperties;
+  maxHeight: number | undefined;
   recalculate: () => void;
 } {
-  const [alignedLeft, setAlignedLeft] = useState<boolean | null>(null);
+  const [positionState, setPositionState] = useState<PositionState | null>(null);
 
   const recalculate = useCallback(() => {
     const button = buttonRef.current;
     if (!button) {
-      setAlignedLeft(preferredAlignment === 'left');
+      setPositionState(null);
       return;
     }
 
     const rect = button.getBoundingClientRect();
-    const { width: viewportWidth, left: viewportLeft } = getAppViewport();
+    const { width: viewportWidth, height: viewportHeight, top: viewportTop, left: viewportLeft } = getAppViewport();
+    const padding = 8;
 
+    // All coordinates are in getBoundingClientRect space (includes CSS zoom).
+    // Subtract viewport offsets to make them relative to #app.
     const buttonLeft = rect.left - viewportLeft;
     const buttonRight = rect.right - viewportLeft;
-    const padding = 10;
+    const buttonTop = rect.top - viewportTop;
+    const buttonBottom = rect.bottom - viewportTop;
 
     if (submenu) {
-      // Submenu opens to the right by default. Check right edge.
-      if (buttonRight + minWidth + padding > viewportWidth) {
-        // Not enough space on the right, flip to left side
-        setAlignedLeft(false);
+      const side: 'right' | 'left' =
+        buttonRight + minWidth + padding <= viewportWidth ? 'right' : 'left';
+
+      let left: number;
+      if (side === 'right') {
+        left = buttonRight + padding;
       } else {
-        setAlignedLeft(true);
+        left = buttonLeft - minWidth - padding;
       }
-    } else if (preferredAlignment === 'right') {
-      // Right-aligned: check if the left edge would overflow viewport
-      const dropdownLeft = buttonRight - minWidth;
-      if (dropdownLeft < padding) {
-        // Not enough space on the left, flip to left-aligned
-        setAlignedLeft(true);
-      } else {
-        setAlignedLeft(false);
+      left = Math.max(padding, Math.min(left, viewportWidth - minWidth - padding));
+
+      // Submenu bottom aligns with button vertical center (half-height overlap)
+      const submenuOverlap = rect.height / 2;
+      const bottomValue = viewportHeight - buttonBottom + submenuOverlap;
+
+      // Max height: from the submenu top to the viewport top (with padding)
+      const submenuMaxHeight = buttonBottom - submenuOverlap - padding;
+
+      setPositionState({ left, bottom: bottomValue, maxHeight: submenuMaxHeight, submenuSide: side });
+      return;
+    }
+
+    // Normal dropdown: position above the button
+    let left: number;
+    if (preferredAlignment === 'right') {
+      left = buttonRight - minWidth;
+      if (left < padding) {
+        left = buttonLeft;
       }
     } else {
-      // Left-aligned: check if the right edge would overflow viewport
-      if (buttonLeft + minWidth + padding > viewportWidth) {
-        // Not enough space on the right, flip to right-aligned
-        setAlignedLeft(false);
-      } else {
-        setAlignedLeft(true);
+      left = buttonLeft;
+      if (left + minWidth + padding > viewportWidth) {
+        left = buttonRight - minWidth;
       }
     }
+    left = Math.max(padding, Math.min(left, viewportWidth - minWidth - padding));
+
+    // Dropdown bottom edge sits just above the button top (with gap)
+    const gap = 4;
+    const bottomValue = viewportHeight - buttonTop + gap;
+
+    // Max height: from the dropdown bottom (buttonTop - gap) to viewport top (with padding)
+    const dropdownMaxHeight = buttonTop - gap - padding;
+
+    setPositionState({ left, bottom: bottomValue, maxHeight: dropdownMaxHeight, submenuSide: 'right' });
   }, [buttonRef, preferredAlignment, minWidth, submenu]);
 
-  const positionedStyle: React.CSSProperties =
-    alignedLeft === null
-      ? submenu
-        ? { left: '100%' }
-        : preferredAlignment === 'left'
-          ? { left: 0 }
-          : { right: 0 }
-      : submenu
-        ? alignedLeft
-          ? { left: '100%' }
-          : { left: 'auto', right: '100%' }
-        : alignedLeft
-          ? { left: 0 }
-          : { right: 0 };
+  if (!positionState) {
+    if (submenu) {
+      return {
+        positionedStyle: preferredAlignment === 'left' ? FALLBACK_SUBMENU_RIGHT : FALLBACK_SUBMENU_LEFT,
+        maxHeight: undefined,
+        recalculate,
+      };
+    }
+    return {
+      positionedStyle: preferredAlignment === 'left' ? FALLBACK_ABSOLUTE_LEFT : FALLBACK_ABSOLUTE_RIGHT,
+      maxHeight: undefined,
+      recalculate,
+    };
+  }
 
-  return { positionedStyle, recalculate };
+  const { fixedPosDivisor } = getAppViewport();
+
+  return {
+    positionedStyle: {
+      position: 'fixed',
+      left: positionState.left / fixedPosDivisor,
+      bottom: positionState.bottom / fixedPosDivisor,
+      zIndex: submenu ? 10001 : 10000,
+    },
+    maxHeight: positionState.maxHeight / fixedPosDivisor,
+    recalculate,
+  };
 }

@@ -5,12 +5,6 @@ import { useDropdownPosition } from '../../../hooks/useDropdownPosition';
 
 const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
 const CHEVRON_ICON_STYLE: React.CSSProperties = { fontSize: '10px', marginLeft: '2px' };
-const DROPDOWN_BASE_STYLE: React.CSSProperties = {
-  position: 'absolute',
-  bottom: '100%',
-  marginBottom: '4px',
-  zIndex: 10000,
-};
 const MODE_INFO_STYLE: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
@@ -65,7 +59,7 @@ export const ModeSelect = ({ value, onChange, provider }: ModeSelectProps) => {
   }, [provider]);
 
   const currentMode = modeOptions.find(m => m.id === value) || modeOptions[0];
-  const { positionedStyle, recalculate } = useDropdownPosition({
+  const { positionedStyle, maxHeight: viewportMaxHeight, recalculate } = useDropdownPosition({
     buttonRef,
   });
 
@@ -146,7 +140,7 @@ export const ModeSelect = ({ value, onChange, provider }: ModeSelectProps) => {
         <div
           ref={dropdownRef}
           className="selector-dropdown"
-          style={{ ...DROPDOWN_BASE_STYLE, ...positionedStyle }}
+          style={{ ...positionedStyle, maxHeight: viewportMaxHeight ? `${viewportMaxHeight}px` : undefined, overflowY: 'auto' }}
         >
           {modeOptions.map((mode) => (
             <div

@@ -12,14 +12,6 @@ import { sendBridgeEvent } from '../../../utils/bridge';
 
 const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
 const CHEVRON_ICON_STYLE: React.CSSProperties = { fontSize: '10px', marginLeft: '2px' };
-const DROPDOWN_BASE_STYLE: React.CSSProperties = {
-  position: 'absolute',
-  bottom: '100%',
-  marginBottom: '4px',
-  zIndex: 10000,
-  maxHeight: '400px',
-  overflowY: 'auto'
-};
 
 const SEARCH_INPUT_STYLE: React.CSSProperties = {
   padding: '8px 12px',
@@ -218,9 +210,10 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
   const visibleModels = filteredModels.slice(0, 100);
 
   const inputRef = useRef<any>(null);
-  const { positionedStyle, recalculate } = useDropdownPosition({
+  const { positionedStyle, maxHeight: viewportMaxHeight, recalculate } = useDropdownPosition({
     buttonRef,
     preferredAlignment: 'right',
+    minWidth: 320,
   });
 
   /**
@@ -307,7 +300,7 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
         <div
           ref={dropdownRef}
           className="selector-dropdown"
-          style={{ ...DROPDOWN_BASE_STYLE, ...positionedStyle }}
+          style={{ ...positionedStyle, maxHeight: viewportMaxHeight ? `${Math.min(400, viewportMaxHeight)}px` : '400px', overflowY: 'auto' }}
         >
           {error ? (
             <div className="selector-error">

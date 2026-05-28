@@ -36,9 +36,6 @@ const TOGGLE_BUTTON_STYLE: React.CSSProperties = {
 };
 
 const SUBMENU_BASE_STYLE: React.CSSProperties = {
-  position: 'absolute',
-  bottom: 0,
-  zIndex: 10001,
   minWidth: '320px',
   maxWidth: '360px',
   maxHeight: '300px',
@@ -78,15 +75,6 @@ const AGENT_DESC_STYLE: React.CSSProperties = {
 
 const AGENT_DESC_PLAIN_STYLE: React.CSSProperties = {
   fontStyle: 'normal',
-};
-
-const DROPDOWN_BASE_STYLE: React.CSSProperties = {
-  position: 'absolute',
-  bottom: '100%',
-  marginBottom: '4px',
-  zIndex: 10000,
-  minWidth: '200px',
-  overflow: 'visible',
 };
 
 const SELECTOR_OPTION_RELATIVE_STYLE: React.CSSProperties = {
@@ -170,12 +158,14 @@ export const ConfigSelect = ({
   const agentAbortControllerRef = useRef<AbortController | null>(null);
   const toastTimerRef = useRef<number | undefined>(undefined);
 
-  const { positionedStyle: mainPositionedStyle, recalculate: mainRecalculate } = useDropdownPosition({
+  const { positionedStyle: mainPositionedStyle, maxHeight: mainMaxHeight, recalculate: mainRecalculate } = useDropdownPosition({
     buttonRef,
+    minWidth: 200,
   });
-  const { positionedStyle: submenuPositionedStyle, recalculate: submenuRecalculate } = useDropdownPosition({
+  const { positionedStyle: submenuPositionedStyle, maxHeight: submenuMaxHeight, recalculate: submenuRecalculate } = useDropdownPosition({
     buttonRef: agentTriggerRef,
     submenu: true,
+    minWidth: 320,
   });
 
   const handleToggle = useCallback((e: React.MouseEvent) => {
@@ -306,16 +296,12 @@ export const ConfigSelect = ({
   }, []);
 
   const renderAgentSubmenu = () => {
+    const submenuMaxHeightPx = submenuMaxHeight ? `${Math.min(300, submenuMaxHeight)}px` : '300px';
     const submenuStyle: React.CSSProperties = {
       ...SUBMENU_BASE_STYLE,
       ...submenuPositionedStyle,
+      maxHeight: submenuMaxHeightPx,
     };
-    if (submenuPositionedStyle.left === '100%') {
-      submenuStyle.marginLeft = '-30px';
-    }
-    if (submenuPositionedStyle.right === '100%') {
-      submenuStyle.marginRight = '-30px';
-    }
     return (
     <div
       className="selector-dropdown"
@@ -415,7 +401,7 @@ export const ConfigSelect = ({
         <div
           ref={dropdownRef}
           className="selector-dropdown"
-          style={{ ...DROPDOWN_BASE_STYLE, ...mainPositionedStyle }}
+          style={{ ...mainPositionedStyle, minWidth: '200px', overflow: 'visible', maxHeight: mainMaxHeight ? `${mainMaxHeight}px` : undefined }}
         >
           {/* Agent Item */}
           <div
