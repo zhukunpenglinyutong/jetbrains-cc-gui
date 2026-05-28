@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ButtonAreaProps, ModelInfo, PermissionMode, ReasoningEffort } from './types';
 import { ConfigSelect, ModelSelect, ModeSelect, ProviderSelect, ReasoningSelect } from './selectors';
-import { CLAUDE_MODELS, CODEX_MODELS, OPENCODE_MODELS } from './types';
+import { CLAUDE_MODELS, CODEX_MODELS } from './types';
 import { STORAGE_KEYS, validateCodexCustomModels } from '../../types/provider';
 import type { CodexCustomModel } from '../../types/provider';
 import { readClaudeModelMapping } from '../../utils/claudeModelMapping';
@@ -104,7 +104,9 @@ export const ButtonArea = ({
   // Track changes to custom models in localStorage
   // When localStorage changes, updating this version number triggers useMemo recalculation
   const [customModelsVersion, setCustomModelsVersion] = useState(0);
-  const [openCodeModels, setOpenCodeModels] = useState<ModelInfo[]>(OPENCODE_MODELS);
+  const [openCodeModels, setOpenCodeModels] = useState<ModelInfo[]>([]);
+  const [openCodeError, setOpenCodeError] = useState<string | undefined>(undefined);
+  const [modelsLoading, setModelsLoading] = useState(false);
 
   // Listen for localStorage changes (cross-tab sync + same-tab custom events)
   useEffect(() => {
@@ -132,6 +134,9 @@ export const ButtonArea = ({
 
   useEffect(() => {
     if (currentProvider !== 'opencode' || typeof window === 'undefined') {
+      setOpenCodeError(undefined);
+      setModelsLoading(false);
+      setOpenCodeModels([]);
       return;
     }
 
@@ -141,7 +146,13 @@ export const ButtonArea = ({
     const previousCallback = window.updateOpenCodeModels;
     const updateOpenCodeModels = (json: string) => {
       if (!disposed) {
-        setOpenCodeModels(parseOpenCodeModelPayload(json));
+        setModelsLoading(false);
+        const { models, error } = parseOpenCodeModelPayload(json);
+        setOpenCodeModels(models);
+        setOpenCodeError(error);
+        if (error && window.showError) {
+          window.showError(error);
+        }
       }
     };
 
@@ -158,6 +169,9 @@ export const ButtonArea = ({
       }
     };
 
+    setModelsLoading(true);
+    setOpenCodeError(undefined);
+    setOpenCodeModels([]);
     window.updateOpenCodeModels = updateOpenCodeModels;
     requestOpenCodeModels();
 
@@ -321,6 +335,8 @@ export const ButtonArea = ({
           onAddModel={currentProvider === 'opencode' ? undefined : onAddModel}
           longContextEnabled={longContextEnabled}
           onLongContextChange={onLongContextChange}
+          error={openCodeError}
+          isLoading={modelsLoading}
         />
         <ReasoningSelect value={reasoningEffort} onChange={handleReasoningChange} selectedModel={selectedModel} currentProvider={currentProvider} />
       </div>

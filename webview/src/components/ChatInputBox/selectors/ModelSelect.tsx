@@ -8,6 +8,7 @@ import { useDropdownPosition } from '../../../hooks/useDropdownPosition';
 import Switch from 'antd/es/switch';
 import Input from 'antd/es/input';
 import './ModelSelect.less';
+import { sendBridgeEvent } from '../../../utils/bridge';
 
 const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
 const CHEVRON_ICON_STYLE: React.CSSProperties = { fontSize: '10px', marginLeft: '2px' };
@@ -41,6 +42,8 @@ interface ModelSelectProps {
   onAddModel?: () => void;
   longContextEnabled?: boolean;
   onLongContextChange?: (enabled: boolean) => void;
+  error?: string;
+  isLoading?: boolean;
 }
 
 const DEFAULT_MODEL_MAP: Record<string, ModelInfo> = AVAILABLE_MODELS.reduce(
@@ -140,7 +143,7 @@ const resolveModelIdForIcon = (
  * ModelSelect - Model selector component
  * Supports switching between Sonnet 4.5, Opus 4.5, and other models, including Codex models
  */
-export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, currentProvider = 'claude', onAddModel, longContextEnabled = true, onLongContextChange }: ModelSelectProps) => {
+export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, currentProvider = 'claude', onAddModel, longContextEnabled = true, onLongContextChange, error, isLoading }: ModelSelectProps) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -161,6 +164,12 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
   };
 
   const getModelLabel = (model: ModelInfo, show1MContext = false): string => {
+    if (isLoading) {
+      return t('models.loading');
+    }
+    if (error) {
+      return t('models.error');
+    }
     const mappingKey = MODEL_ID_TO_MAPPING_KEY[model.id];
     if (mappingKey) {
       const mappedName = resolveMappedModelName(mappingKey, modelMapping);
@@ -271,13 +280,19 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
     };
   }, [isOpen]);
 
+  const handleOpenSettings = () => {
+    sendBridgeEvent('show_settings', 'opencode');
+    setIsOpen(false);
+  };
+
   return (
     <div style={RELATIVE_INLINE_BLOCK_STYLE}>
       <button
         ref={buttonRef}
         className="selector-button"
         onClick={handleToggle}
-        title={t('chat.currentModel', { model: getModelLabel(currentModel, true) })}
+        title={error || t('chat.currentModel', { model: getModelLabel(currentModel, true) })}
+        data-has-error={!!error}
       >
         <ProviderModelIcon
           providerId={currentProvider}
@@ -295,48 +310,60 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
           className="selector-dropdown"
           style={{ ...DROPDOWN_BASE_STYLE, ...positionedStyle }}
         >
-          <Input
-            ref={inputRef}
-            style={SEARCH_INPUT_STYLE}
-            placeholder={t('models.searchPlaceholder')}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          {visibleModels.length > 0 ? (
+          {error ? (
+            <div className="selector-error">
+              <span className="codicon codicon-warning" />
+              <pre>{error}</pre>
+              <button onClick={handleOpenSettings}>{t('settings.title')}</button>
+            </div>
+          ) : isLoading ? (
+            <div className="selector-empty">{t('models.loading')}</div>
+          ) : (
             <>
-              {visibleModels.map((model) => (
-                <div
-                  key={model.id}
-                  className={`selector-option ${isSelectedModel(model.id) ? 'selected' : ''}`}
-                  onClick={() => handleSelect(model.id)}
-                >
-                  <ProviderModelIcon
-                    providerId={currentProvider}
-                    modelId={resolveModelIdForIcon(model.id, modelMapping, MODEL_ID_TO_MAPPING_KEY)}
-                    size={16}
-                    colored
-                  />
-                  <div style={MODEL_OPTION_INFO_STYLE}>
-                    <span>{getModelLabel(model, false)}</span>
-                    {getModelDescription(model) && (
-                      <span className="model-description">{getModelDescription(model)}</span>
-                    )}
-                  </div>
-                  {isSelectedModel(model.id) && (
-                    <span className="codicon codicon-check check-mark" />
+              <Input
+                ref={inputRef}
+                style={SEARCH_INPUT_STYLE}
+                placeholder={t('models.searchPlaceholder')}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              {visibleModels.length > 0 ? (
+                <>
+                  {visibleModels.map((model) => (
+                    <div
+                      key={model.id}
+                      className={`selector-option ${isSelectedModel(model.id) ? 'selected' : ''}`}
+                      onClick={() => handleSelect(model.id)}
+                    >
+                      <ProviderModelIcon
+                        providerId={currentProvider}
+                        modelId={resolveModelIdForIcon(model.id, modelMapping, MODEL_ID_TO_MAPPING_KEY)}
+                        size={16}
+                        colored
+                      />
+                      <div style={MODEL_OPTION_INFO_STYLE}>
+                        <span>{getModelLabel(model, false)}</span>
+                        {getModelDescription(model) && (
+                          <span className="model-description">{getModelDescription(model)}</span>
+                        )}
+                      </div>
+                      {isSelectedModel(model.id) && (
+                        <span className="codicon codicon-check check-mark" />
+                      )}
+                    </div>
+                  ))}
+                  {filteredModels.length > 100 && (
+                    <div className="selector-empty" style={{ fontSize: '11px', color: 'var(--text-secondary)', padding: '8px 12px' }}>
+                      {t('models.typeToSearchMore', { count: filteredModels.length - 100, defaultValue: `+ ${filteredModels.length - 100} more models. Type to search.` })}
+                    </div>
                   )}
-                </div>
-              ))}
-              {filteredModels.length > 100 && (
-                <div className="selector-empty" style={{ fontSize: '11px', color: 'var(--text-secondary)', padding: '8px 12px' }}>
-                  {t('models.typeToSearchMore', { count: filteredModels.length - 100, defaultValue: `+ ${filteredModels.length - 100} more models. Type to search.` })}
-                </div>
+                </>
+              ) : (
+                <div className="selector-empty">{t('models.noModelsFound')}</div>
               )}
             </>
-          ) : (
-            <div className="selector-empty">{t('models.noModelsFound')}</div>
           )}
-          {currentProvider === 'claude' && onLongContextChange && (
+          {currentProvider === 'claude' && onLongContextChange && !error && !isLoading && (
             <>
               <div className="selector-divider" />
               <div
@@ -354,7 +381,7 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
               </div>
             </>
           )}
-          {onAddModel && (
+          {onAddModel && !error && !isLoading && (
             <>
               <div className="selector-divider" />
               <div

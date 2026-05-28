@@ -25,16 +25,19 @@ function normalizeModel(raw: unknown): ModelInfo | null {
   return description ? { id, label, description } : { id, label };
 }
 
-export function parseOpenCodeModelPayload(payload: string): ModelInfo[] {
+export function parseOpenCodeModelPayload(payload: string): { models: ModelInfo[], error?: string } {
   try {
     const parsed = JSON.parse(payload);
+    if (parsed?.success === false && parsed?.error) {
+      return { models: OPENCODE_MODELS, error: parsed.error };
+    }
     const rawModels: unknown[] = Array.isArray(parsed?.models) ? parsed.models : [];
     const models = rawModels
       .map(normalizeModel)
       .filter((model: ModelInfo | null): model is ModelInfo => model !== null);
-    return models.length > 0 ? models : OPENCODE_MODELS;
-  } catch {
-    return OPENCODE_MODELS;
+    return { models: models.length > 0 ? models : OPENCODE_MODELS };
+  } catch (e: any) {
+    return { models: OPENCODE_MODELS, error: e.message || 'Failed to parse opencode models' };
   }
 }
 
