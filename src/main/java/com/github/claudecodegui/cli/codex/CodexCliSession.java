@@ -68,6 +68,15 @@ public class CodexCliSession {
             + "|rate.limit|quota|abort|fatal|panic|unexpected.status"
             + "|[45]\\d{2}\\b)\\b"
     );
+    private static final String UNSUPPORTED_IMAGE_MESSAGE = "__I18N__:aiBridge.unsupportedImageVision";
+    private static final Pattern UNSUPPORTED_IMAGE_CONTEXT_PATTERN = Pattern.compile(
+            "(?i)\\b(?:image|images|vision|visual|multimodal|local_image|image_url)\\b"
+    );
+    private static final Pattern UNSUPPORTED_IMAGE_REASON_PATTERN = Pattern.compile(
+            "(?i)(?:\\b(?:not|n't)\\s+support(?:ed|s)?\\b|\\bunsupported\\b"
+            + "|\\bvision[- ]?capable\\b|\\bmultimodal\\b.*\\brequired\\b"
+            + "|\\brequires?\\b.*\\bvision\\b|\\bonly\\s+supported\\b)"
+    );
 
     private final String tabId;
     private final Gson gson = new Gson();
@@ -97,6 +106,7 @@ public class CodexCliSession {
             Process process = null;
             try {
                 List<File> images = attachmentHandler.processForCodex(request.attachments(), tempFiles);
+                boolean requestHasImages = !images.isEmpty();
                 List<String> cmd = buildCommand(request, images);
                 LOG.info("[CodexCliSession][" + tabId + "] Command: " + String.join(" ", cmd));
 
@@ -139,7 +149,7 @@ public class CodexCliSession {
                     callback.onComplete(false, assistantContent.toString(), "User interrupted");
                 } else if (exitCode == 0) {
                     if (!cliError.isEmpty()) {
-                        String err = CliErrorFormatter.formatError("Codex", cliError.toString());
+                        String err = formatCodexError(cliError.toString(), requestHasImages);
                         callback.onError(err);
                         callback.onComplete(false, assistantContent.toString(), err);
                     } else {
@@ -148,7 +158,7 @@ public class CodexCliSession {
                         callback.onComplete(true, assistantContent.toString(), null);
                     }
                 } else {
-                    String err = buildExitError(exitCode, diagnostic, cliError);
+                    String err = buildExitError(exitCode, diagnostic, cliError, requestHasImages);
                     callback.onError(err);
                     callback.onComplete(false, assistantContent.toString(), err);
                 }
@@ -244,7 +254,7 @@ public class CodexCliSession {
                     if (cliError != null) {
                         CliErrorFormatter.appendDiagnosticLine(cliError, msg);
                     } else {
-                        callback.onError(CliErrorFormatter.formatError("Codex", msg));
+                        callback.onError(formatCodexError(msg, false));
                     }
                 }
                 case "error" -> {
@@ -255,7 +265,7 @@ public class CodexCliSession {
                     if (cliError != null) {
                         CliErrorFormatter.appendDiagnosticLine(cliError, msg);
                     } else {
-                        callback.onError(CliErrorFormatter.formatError("Codex", msg));
+                        callback.onError(formatCodexError(msg, false));
                     }
                 }
                 default -> {
@@ -796,11 +806,38 @@ public class CodexCliSession {
         return DIAGNOSTIC_GENERIC_PATTERN.matcher(trimmed).matches();
     }
 
-    private static String buildExitError(int exitCode, StringBuilder diagnostic, StringBuilder cliError) {
+    private static String buildExitError(
+            int exitCode,
+            StringBuilder diagnostic,
+            StringBuilder cliError,
+            boolean requestHasImages
+    ) {
         // cliError 仅包含错误/诊断相关行，优先使用
         CharSequence effectiveDiagnostic = (cliError != null && !cliError.isEmpty())
                 ? cliError : diagnostic;
+        if (isLikelyUnsupportedImageError(effectiveDiagnostic, requestHasImages)) {
+            return UNSUPPORTED_IMAGE_MESSAGE + "\n\nDetails:\n" + effectiveDiagnostic;
+        }
         return CliErrorFormatter.formatExitError("Codex", exitCode, effectiveDiagnostic);
+    }
+
+    private static String formatCodexError(String rawError, boolean requestHasImages) {
+        if (isLikelyUnsupportedImageError(rawError, requestHasImages)) {
+            return UNSUPPORTED_IMAGE_MESSAGE + "\n\nDetails:\n" + rawError;
+        }
+        return CliErrorFormatter.formatError("Codex", rawError);
+    }
+
+    private static boolean isLikelyUnsupportedImageError(CharSequence diagnostic, boolean requestHasImages) {
+        if (!requestHasImages || diagnostic == null) {
+            return false;
+        }
+        String details = diagnostic.toString();
+        if (details.isBlank()) {
+            return false;
+        }
+        return UNSUPPORTED_IMAGE_CONTEXT_PATTERN.matcher(details).find()
+                && UNSUPPORTED_IMAGE_REASON_PATTERN.matcher(details).find();
     }
 
     private static void cleanupTempFiles(List<File> files) {
