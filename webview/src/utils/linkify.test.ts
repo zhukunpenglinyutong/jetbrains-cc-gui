@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   decorateExistingAnchors,
   isJavaFqcnCandidate,
+  isMarkdownFileNavigationHref,
   linkifyHtml,
   linkifyPlainTextSegment,
+  normalizeFileNavigationTarget,
   parseFileLinkTarget,
 } from './linkify';
 import { DEFAULT_LINKIFY_CAPABILITIES } from './linkifyCapabilities';
@@ -23,6 +25,31 @@ describe('linkify', () => {
     });
 
     expect(parseFileLinkTarget('E:\\project\\src\\Foo.java:42:15')).toBeNull();
+  });
+
+  it('normalizes encoded and file:// markdown hrefs for navigation', () => {
+    expect(normalizeFileNavigationTarget('/Users/demo/my%20file.ts')).toBe('/Users/demo/my file.ts');
+    expect(normalizeFileNavigationTarget('/Users/demo/%C3%BCber.txt')).toBe('/Users/demo/über.txt');
+    expect(normalizeFileNavigationTarget('file:///Users/demo/my%20file.ts')).toBe('/Users/demo/my file.ts');
+    expect(normalizeFileNavigationTarget('/Users/demo/my%2520file.ts')).toBe('/Users/demo/my file.ts');
+    expect(isMarkdownFileNavigationHref('/Users/demo/my%20file.ts')).toBe(true);
+    expect(isMarkdownFileNavigationHref('file:///tmp/demo.txt')).toBe(true);
+    expect(isMarkdownFileNavigationHref('https://example.com/docs')).toBe(false);
+  });
+
+  it('decorates markdown file links with file-link metadata', () => {
+    const root = document.createElement('div');
+    root.innerHTML = [
+      '<p><a href="/Users/demo/my%20file.ts">spaced path</a></p>',
+      '<p><a href="file:///Users/demo/%C3%BCber.txt">umlaut path</a></p>',
+      '<p><a href="https://example.com/docs">docs</a></p>',
+    ].join('');
+
+    decorateExistingAnchors(root);
+
+    expect(root.querySelector('a.file-link')?.getAttribute('href')).toBe('/Users/demo/my%20file.ts');
+    expect(root.querySelectorAll('a.file-link').length).toBe(2);
+    expect(root.querySelector('a.url-link')?.getAttribute('data-linkify')).toBe('url');
   });
 
   it('recognizes valid Java FQCN values and rejects false positives', () => {

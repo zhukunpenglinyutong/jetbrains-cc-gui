@@ -425,6 +425,81 @@ function shouldSkipTextNode(textNode: Text): boolean {
   return parentElement.closest('a, pre') !== null;
 }
 
+const FILE_URI_SCHEME_REGEX = /^file:/i;
+const WINDOWS_DRIVE_PATH_REGEX = /^[A-Za-z]:[\\/]/;
+
+function decodeHrefRepeatedly(value: string, maxPasses = 3): string {
+  let current = value;
+  for (let pass = 0; pass < maxPasses; pass += 1) {
+    try {
+      const decoded = decodeURIComponent(current.replace(/\+/g, ' '));
+      if (decoded === current) {
+        break;
+      }
+      current = decoded;
+    } catch {
+      break;
+    }
+  }
+  return current;
+}
+
+function fileUriToPath(uri: string): string {
+  try {
+    const url = new URL(uri);
+    let pathname = decodeHrefRepeatedly(url.pathname);
+    if (/^\/[A-Za-z]:\//.test(pathname)) {
+      pathname = pathname.slice(1);
+    }
+    return pathname;
+  } catch {
+    const withoutScheme = uri.replace(/^file:\/\//i, '');
+    if (/^[A-Za-z]:\//.test(withoutScheme)) {
+      return decodeHrefRepeatedly(withoutScheme);
+    }
+    const posixish = withoutScheme.startsWith('/') ? withoutScheme : `/${withoutScheme}`;
+    return decodeHrefRepeatedly(posixish);
+  }
+}
+
+/**
+ * Normalize markdown/file hrefs into a filesystem path suitable for open_file.
+ * Handles percent-encoding, repeated encoding, and file:// URIs.
+ */
+export function normalizeFileNavigationTarget(href: string): string | null {
+  const trimmed = href.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (FILE_URI_SCHEME_REGEX.test(trimmed)) {
+    return fileUriToPath(trimmed);
+  }
+
+  return decodeHrefRepeatedly(trimmed);
+}
+
+export function isMarkdownFileNavigationHref(href: string): boolean {
+  const normalized = normalizeFileNavigationTarget(href);
+  if (!normalized) {
+    return false;
+  }
+
+  if (FILE_URI_SCHEME_REGEX.test(href.trim())) {
+    return true;
+  }
+
+  if (WINDOWS_DRIVE_PATH_REGEX.test(normalized)) {
+    return true;
+  }
+
+  if (normalized.startsWith('./') || normalized.startsWith('../') || normalized.startsWith('/')) {
+    return true;
+  }
+
+  return /\.[A-Za-z0-9._-]+$/.test(normalized);
+}
+
 export function parseFileLinkTarget(value: string): FileLinkTarget | null {
   const trimmedValue = value.trim();
   if (!trimmedValue) {
@@ -474,12 +549,20 @@ export function isJavaFqcnCandidate(value: string): boolean {
 export function decorateExistingAnchors(root: Element): void {
   root.querySelectorAll('a[href]').forEach((anchor) => {
     const href = anchor.getAttribute('href')?.trim();
-    if (!href || !HTTP_LINK_REGEX.test(href)) {
+    if (!href) {
       return;
     }
 
-    anchor.classList.add('url-link');
-    anchor.setAttribute('data-linkify', 'url');
+    if (HTTP_LINK_REGEX.test(href)) {
+      anchor.classList.add('url-link');
+      anchor.setAttribute('data-linkify', 'url');
+      return;
+    }
+
+    if (isMarkdownFileNavigationHref(href)) {
+      anchor.classList.add('file-link');
+      anchor.setAttribute('data-linkify', 'file');
+    }
   });
 }
 

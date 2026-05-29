@@ -100,22 +100,47 @@ describe('MarkdownBlock linkify integration', () => {
     expect(screen.getByRole('link', { name: 'good' }).getAttribute('href')).toBe('https://example.com/docs');
   });
 
-  it('strips file: protocol links and does not route them to openFile', () => {
+  it('allows file: markdown links and routes them to openFile', () => {
     render(
       <MarkdownBlock
         content={'[click](https://example.com/docs) and [local](file:///tmp/demo.txt)'}
       />,
     );
 
-    // file: link should be stripped entirely by DOMPurify sanitization
-    expect(screen.queryByRole('link', { name: 'local' })).toBeNull();
+    const fileLink = screen.getByRole('link', { name: 'local' });
+    expect(fileLink.getAttribute('href')).toBe('file:///tmp/demo.txt');
+    expect(fileLink.classList.contains('file-link')).toBe(true);
 
-    // https link should still work
     const httpsLink = screen.getByRole('link', { name: 'click' });
     expect(httpsLink.getAttribute('href')).toBe('https://example.com/docs');
 
+    fireEvent.click(fileLink);
+    expect(bridgeMocks.openFile).toHaveBeenCalledWith('file:///tmp/demo.txt');
+
     fireEvent.click(httpsLink);
     expect(bridgeMocks.openBrowser).toHaveBeenCalledWith('https://example.com/docs');
+  });
+
+  it('opens markdown posix links with spaces and umlauts', () => {
+    render(
+      <MarkdownBlock
+        content={[
+          '[spaced](/Users/demo/my%20file.ts)',
+          '',
+          '[umlaut](/Users/demo/%C3%BCber.txt)',
+          '',
+          '[angle bracket](</Users/demo/with spaces/über.txt>)',
+        ].join('\n')}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('link', { name: 'spaced' }));
+    fireEvent.click(screen.getByRole('link', { name: 'umlaut' }));
+    fireEvent.click(screen.getByRole('link', { name: 'angle bracket' }));
+
+    expect(bridgeMocks.openFile).toHaveBeenNthCalledWith(1, '/Users/demo/my%20file.ts');
+    expect(bridgeMocks.openFile).toHaveBeenNthCalledWith(2, '/Users/demo/%C3%BCber.txt');
+    expect(bridgeMocks.openFile).toHaveBeenNthCalledWith(3, '/Users/demo/with%20spaces/%C3%BCber.txt');
   });
 
   it('renders windows, posix, and explicit relative paths as file links', () => {

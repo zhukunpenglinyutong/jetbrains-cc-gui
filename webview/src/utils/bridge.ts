@@ -1,4 +1,4 @@
-import { isJavaFqcnCandidate } from './linkify';
+import { isJavaFqcnCandidate, normalizeFileNavigationTarget, parseFileLinkTarget } from './linkify';
 
 const BRIDGE_UNAVAILABLE_WARNED = new Set<string>();
 const SAFE_BROWSER_PROTOCOLS = /^(https?|mailto):/i;
@@ -83,16 +83,17 @@ export const resolveFilePathWithCallback = (
     callback(null);
     return;
   }
-  if (!isValidOpenFileTarget(filePath)) {
+  const normalizedPath = normalizeFileNavigationTarget(filePath);
+  if (!normalizedPath || !isValidOpenFileTarget(normalizedPath)) {
     callback(null);
     return;
   }
 
   installResolveFilePathHandler();
 
-  const existing = resolveFilePathCallbacks.get(filePath);
+  const existing = resolveFilePathCallbacks.get(normalizedPath);
   if (existing) {
-    resolveFilePathCallbacks.set(filePath, {
+    resolveFilePathCallbacks.set(normalizedPath, {
       callbacks: [...existing.callbacks, callback],
       timeoutId: existing.timeoutId,
     });
@@ -100,14 +101,14 @@ export const resolveFilePathWithCallback = (
   }
 
   const timeoutId = setTimeout(() => {
-    flushPendingCallbacks(filePath, null);
+    flushPendingCallbacks(normalizedPath, null);
   }, RESOLVE_FILE_PATH_TIMEOUT_MS);
 
-  resolveFilePathCallbacks.set(filePath, {
+  resolveFilePathCallbacks.set(normalizedPath, {
     callbacks: [callback],
     timeoutId,
   });
-  sendBridgeEvent('resolve_file_path', filePath);
+  sendBridgeEvent('resolve_file_path', normalizedPath);
 };
 
 /**
@@ -172,24 +173,32 @@ export const resolveFilePath = (filePath?: string) => {
   if (!filePath) {
     return;
   }
-  if (!isValidOpenFileTarget(filePath)) {
+  const normalizedPath = normalizeFileNavigationTarget(filePath);
+  if (!normalizedPath || !isValidOpenFileTarget(normalizedPath)) {
     return;
   }
-  sendBridgeEvent('resolve_file_path', filePath);
+  sendBridgeEvent('resolve_file_path', normalizedPath);
 };
 
 export const openFile = (filePath?: string, lineStart?: number, lineEnd?: number) => {
   if (!filePath) {
     return;
   }
-  if (!isValidOpenFileTarget(filePath)) {
+  const normalizedPath = normalizeFileNavigationTarget(filePath);
+  if (!normalizedPath || !isValidOpenFileTarget(normalizedPath)) {
     return;
   }
-  let path = filePath;
-  if (lineStart !== undefined && Number.isFinite(lineStart) && lineStart > 0) {
-    path = (lineEnd !== undefined && Number.isFinite(lineEnd) && lineEnd > 0)
-      ? `${filePath}:${lineStart}-${lineEnd}`
-      : `${filePath}:${lineStart}`;
+
+  const parsedTarget = parseFileLinkTarget(normalizedPath);
+  const pathOnly = parsedTarget?.path ?? normalizedPath;
+  const resolvedLineStart = lineStart ?? parsedTarget?.lineStart;
+  const resolvedLineEnd = lineEnd ?? parsedTarget?.lineEnd;
+
+  let path = pathOnly;
+  if (resolvedLineStart !== undefined && Number.isFinite(resolvedLineStart) && resolvedLineStart > 0) {
+    path = (resolvedLineEnd !== undefined && Number.isFinite(resolvedLineEnd) && resolvedLineEnd > 0)
+      ? `${pathOnly}:${resolvedLineStart}-${resolvedLineEnd}`
+      : `${pathOnly}:${resolvedLineStart}`;
   }
   sendBridgeEvent('open_file', path);
 };
