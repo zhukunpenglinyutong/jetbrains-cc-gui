@@ -319,9 +319,14 @@ export const CLAUDE_MODELS: ModelInfo[] = [
     description: 'Sonnet 4.6 · Use the default model',
   },
   {
+    id: 'claude-opus-4-8',
+    label: 'Opus 4.8',
+    description: 'Opus 4.8 · Latest and most capable',
+  },
+  {
     id: 'claude-opus-4-7',
     label: 'Opus 4.7',
-    description: 'Opus 4.7 · Latest and most capable',
+    description: 'Opus 4.7 · Previous flagship model',
   },
   {
     id: 'claude-opus-4-6',
@@ -416,6 +421,7 @@ export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
  * Based on: https://code.claude.com/docs/en/model-config#adjust-effort-level
  */
 export const EFFORT_SUPPORTED_CLAUDE_MODELS = new Set([
+  'claude-opus-4-8',
   'claude-opus-4-7',
   'claude-opus-4-6',
   'claude-opus-4-6[1m]',
@@ -427,6 +433,7 @@ export const EFFORT_SUPPORTED_CLAUDE_MODELS = new Set([
  * Opus 4.7 is currently the only Claude Code model with xhigh support.
  */
 export const XHIGH_EFFORT_CLAUDE_MODELS = new Set([
+  'claude-opus-4-8',
   'claude-opus-4-7',
 ]);
 
@@ -434,6 +441,7 @@ export const XHIGH_EFFORT_CLAUDE_MODELS = new Set([
  * Claude models that support the 'max' effort level.
  */
 export const MAX_EFFORT_CLAUDE_MODELS = new Set([
+  'claude-opus-4-8',
   'claude-opus-4-7',
   'claude-opus-4-6',
   'claude-opus-4-6[1m]',

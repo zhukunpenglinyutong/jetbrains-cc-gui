@@ -487,3 +487,228 @@ test('processStreamEvent: incremental-mode block keeps appending novel deltas', 
   assert.match(deltaLines[2], /"!"/);
   assert.equal(state.lastAssistantContent, 'Hello world!');
 });
+
+// =========================================================================
+// REGRESSION TESTS for PR #1205 — character loss + duplication fixes.
+//
+// These two scenarios are the exact bugs the PR claims to fix.  Without
+// dedicated unit coverage the same regression has re-shipped multiple times
+// (cf. .claude/rules/codex-history-replay-pitfalls.md "修复 PR 长期未合入
+// 主线 = 必然回归" lesson).  Keep these green.
+// =========================================================================
+
+test('REGRESSION (PR#1205 bug 1): incremental stream "1","5","0","0" must NOT lose trailing "0" via endsWith match', () => {
+  // Pre-fix behaviour: once accumulated content is "150", a subsequent
+  // incremental delta "0" was absorbed because previous.endsWith(incoming).
+  // The stale-replay check is now gated on snapshot mode, so incremental
+  // fragments are emitted intact.
+  const state = makeTurnState(true);
+
+  const captured = captureStdout(() => {
+    for (const fragment of ['1', '5', '0', '0']) {
+      processStreamEvent(
+        {
+          type: 'stream_event',
+          event: {
+            type: 'content_block_delta',
+            index: 0,
+            delta: { type: 'text_delta', text: fragment },
+          },
+        },
+        state,
+      );
+    }
+  });
+
+  const deltaLines = tagLines(captured, '[CONTENT_DELTA]');
+  const emitted = deltaLines
+    .map((line) => JSON.parse(line.replace(/^\[CONTENT_DELTA\]\s+/, '').trim()))
+    .join('');
+
+  assert.equal(emitted, '1500', `expected concatenated deltas to equal "1500", got "${emitted}"`);
+  assert.equal(deltaLines.length, 4, 'each fragment should emit its own delta');
+  assert.equal(state.lastAssistantContent, '1500');
+});
+
+test('REGRESSION (PR#1205 bug 1): mid-word incremental fragment whose tail matches previous tail must not be absorbed', () => {
+  // Generalisation of the 1500 bug: any incremental fragment that happens
+  // to be a suffix of the accumulated content used to be silently dropped.
+  // Example: accumulated "abc", next fragment "c" — pre-fix returned "".
+  const state = makeTurnState(true);
+
+  const captured = captureStdout(() => {
+    for (const fragment of ['a', 'b', 'c', 'c']) {
+      processStreamEvent(
+        {
+          type: 'stream_event',
+          event: {
+            type: 'content_block_delta',
+            index: 0,
+            delta: { type: 'text_delta', text: fragment },
+          },
+        },
+        state,
+      );
+    }
+  });
+
+  const emitted = tagLines(captured, '[CONTENT_DELTA]')
+    .map((line) => JSON.parse(line.replace(/^\[CONTENT_DELTA\]\s+/, '').trim()))
+    .join('');
+
+  assert.equal(emitted, 'abcc', `expected "abcc", got "${emitted}"`);
+});
+
+test('REGRESSION (PR#1205 bug 2): assistant snapshot for a brand-new block must NOT emit while stream events are active', () => {
+  // Pre-fix behaviour: when an interim assistant snapshot delivered content
+  // for a block that the stream had not yet populated (typical multi-block
+  // response where block 1 starts after block 0 finished), the snapshot
+  // emitted the full block text as a [CONTENT_DELTA].  The stream then
+  // delivered the same content again → user saw garbled / duplicated output.
+  // After the fix, the snapshot path suppresses the emit when the per-block
+  // accumulator is still empty and stream events are active.
+  const state = makeTurnState(true);
+
+  const captured = captureStdout(() => {
+    // Block 0 has been fully delivered via stream events.
+    processStreamEvent(
+      {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'text_delta', text: 'Hello' },
+        },
+      },
+      state,
+    );
+    state.hasStreamEvents = true;
+
+    // Interim assistant snapshot arrives carrying block 0 + a brand-new
+    // block 1 whose stream events have not started yet.
+    const interimSnapshot = {
+      type: 'assistant',
+      message: {
+        content: [
+          { type: 'text', text: 'Hello' },
+          { type: 'text', text: 'Brand new block 1 content' },
+        ],
+      },
+    };
+    processMessageContent(interimSnapshot, state);
+
+    // Stream events for block 1 then arrive piece-by-piece.
+    for (const fragment of ['Brand ', 'new ', 'block ', '1 ', 'content']) {
+      processStreamEvent(
+        {
+          type: 'stream_event',
+          event: {
+            type: 'content_block_delta',
+            index: 1,
+            delta: { type: 'text_delta', text: fragment },
+          },
+        },
+        state,
+      );
+    }
+  });
+
+  const deltaPayloads = tagLines(captured, '[CONTENT_DELTA]')
+    .map((line) => JSON.parse(line.replace(/^\[CONTENT_DELTA\]\s+/, '').trim()));
+
+  // No delta should equal the full block-1 snapshot — that would be the
+  // duplicate emit the PR fixes.
+  assert.ok(
+    !deltaPayloads.includes('Brand new block 1 content'),
+    `snapshot must not emit the whole new block as a single delta; got payloads: ${JSON.stringify(deltaPayloads)}`,
+  );
+  // Concatenated stream of block 1 must equal the expected content exactly
+  // once — no doubling, no garbled prefix.
+  const concatenated = deltaPayloads.join('');
+  assert.equal(
+    concatenated,
+    'HelloBrand new block 1 content',
+    `expected exactly one delivery of block 0 + block 1, got "${concatenated}"`,
+  );
+});
+
+test('REGRESSION (snapshot single-source): processMessageContent absorbs a snapshot-mode mid-stream rewrite instead of mis-slicing it', () => {
+  // The snapshot path used to derive its delta with a naive
+  // currentText.substring(previousBlock.length), which assumes the snapshot is
+  // always a prefix-extension of the accumulated content. When a Claude-compatible
+  // provider in cumulative-snapshot mode emits a FINAL assistant message that
+  // rewrites the middle of a block (shared prefix, divergent middle, longer
+  // overall), the substring sliced an arbitrary tail ("es") and emitted garbage,
+  // diverging from the live processStreamEvent path which absorbs the rewrite.
+  // Routing the snapshot through resolveSnapshotDelta (the same engine) makes the
+  // two paths single-sourced: the corrective rewrite is absorbed (novel === '').
+  const state = makeTurnState(true);
+
+  const captured = captureStdout(() => {
+    // Two live deltas: the second extends the first → confirms snapshot mode.
+    processStreamEvent(
+      { type: 'stream_event', event: { type: 'content_block_delta', index: 0,
+        delta: { type: 'text_delta', text: 'The result is ' } } },
+      state,
+    );
+    processStreamEvent(
+      { type: 'stream_event', event: { type: 'content_block_delta', index: 0,
+        delta: { type: 'text_delta', text: 'The result is 42 items' } } },
+      state,
+    );
+    state.hasStreamEvents = true;
+
+    // Final snapshot rewrites the middle: "42 items" → "43 oranges".
+    const finalSnapshot = {
+      type: 'assistant',
+      message: { content: [{ type: 'text', text: 'The result is 43 oranges' }] },
+    };
+    processMessageContent(finalSnapshot, state);
+  });
+
+  const emitted = tagLines(captured, '[CONTENT_DELTA]')
+    .map((line) => JSON.parse(line.replace(/^\[CONTENT_DELTA\]\s+/, '').trim()))
+    .join('');
+
+  // Live path emitted "The result is " + "42 items"; the corrective snapshot is
+  // absorbed rather than appending a mis-sliced "es" tail (the pre-refactor bug).
+  assert.equal(
+    emitted,
+    'The result is 42 items',
+    `snapshot rewrite must be absorbed, not mis-sliced; got "${emitted}"`,
+  );
+  assert.ok(!emitted.includes('oranges'), 'must not splice the divergent rewrite tail');
+});
+
+test('REGRESSION (PR#1205 bug 2): tail-fill is still emitted when block has prior partial content', () => {
+  // The suppression in bug 2 must NOT block legitimate tail-fill: when the
+  // block already has streamed content and the snapshot extends it, the
+  // missing tail must be emitted (otherwise content is silently dropped).
+  const state = makeTurnState(true);
+
+  const captured = captureStdout(() => {
+    processStreamEvent(
+      {
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'text_delta', text: 'Hello' },
+        },
+      },
+      state,
+    );
+    state.hasStreamEvents = true;
+
+    const finalSnapshot = {
+      type: 'assistant',
+      message: { content: [{ type: 'text', text: 'Hello world' }] },
+    };
+    processMessageContent(finalSnapshot, state);
+  });
+
+  const deltaLines = tagLines(captured, '[CONTENT_DELTA]');
+  assert.equal(deltaLines.length, 2, 'stream fragment + tail-fill');
+  assert.match(deltaLines[0], /"Hello"/);
+  assert.match(deltaLines[1], /" world"/);
+});

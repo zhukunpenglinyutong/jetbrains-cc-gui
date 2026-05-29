@@ -1,4 +1,4 @@
-function getBlockMap(turnState, key) {
+export function getBlockMap(turnState, key) {
   if (!(turnState[key] instanceof Map)) {
     turnState[key] = new Map();
   }
@@ -36,7 +36,11 @@ function computeNovelDelta(previous, incoming, mode) {
   }
 
   // Stale replay: incoming is fully contained at the start or end of previous.
-  if (previous.startsWith(incoming) || previous.endsWith(incoming)) {
+  // Only active in cumulative-snapshot mode.  In incremental mode every delta is
+  // by definition novel, and a coincidental suffix match (e.g. "0" arriving after
+  // "150") would falsely absorb legitimate characters — producing the exact
+  // character-shift bug seen with 1500 → 150.
+  if (mode === 'snapshot' && (previous.startsWith(incoming) || previous.endsWith(incoming))) {
     return { novel: '', next: previous, mode };
   }
 
@@ -86,21 +90,27 @@ export function normalizeStreamDelta(turnState, kind, index, incoming) {
   return result.novel;
 }
 
-export function rememberStreamSnapshot(turnState, kind, index, snapshot) {
-  const text = typeof snapshot === 'string' ? snapshot : '';
+/**
+ * Snapshot-path counterpart to {@link normalizeStreamDelta}.
+ *
+ * The final (or interim) assistant message carries the FULL text of each block.
+ * Route that whole snapshot through the SAME novelty/correction engine the live
+ * delta path uses, instead of a naive `snapshot.substring(previous.length)`.
+ * A bare substring assumes the snapshot is always a prefix-extension of the
+ * accumulated content; when a Claude-compatible provider emits a mid-stream
+ * corrective rewrite (same prefix, divergent middle, equal-or-shorter length)
+ * the substring either mis-slices or silently drops the change. computeNovelDelta
+ * absorbs that case in snapshot mode and keeps the block map single-sourced.
+ *
+ * Returns the novel delta to emit plus `hadPrevious` (whether the block already
+ * held streamed content before this snapshot) — the gate the tail-fill fix
+ * depends on. IO and emit-gating stay with the caller so this stays pure.
+ */
+export function resolveSnapshotDelta(turnState, kind, index, snapshot) {
   const key = kind === 'thinking' ? 'thinkingBlockContentByIndex' : 'textBlockContentByIndex';
   const blockMap = getBlockMap(turnState, key);
   const blockIndex = getBlockIndex(index);
-  const previous = blockMap.get(blockIndex) || '';
-  if (text.length >= previous.length) {
-    blockMap.set(blockIndex, text);
-  }
-  // Lock snapshot mode if the assistant snapshot extends the prior accumulated
-  // content (a confirmed cumulative-snapshot signal).  Without this, blocks
-  // whose deltas were all single-shot fragments would keep their default
-  // incremental mode and a later corrective rewrite would still duplicate.
-  if (text.length > 0 && previous.length > 0 && text.startsWith(previous) && text !== previous) {
-    const modeMap = getModeMap(turnState);
-    modeMap.set(modeKey(kind, blockIndex), 'snapshot');
-  }
+  const hadPrevious = (blockMap.get(blockIndex) || '').length > 0;
+  const delta = normalizeStreamDelta(turnState, kind, index, snapshot);
+  return { delta, hadPrevious };
 }

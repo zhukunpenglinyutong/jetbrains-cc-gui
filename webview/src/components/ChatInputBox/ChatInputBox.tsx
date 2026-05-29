@@ -2,6 +2,7 @@ import {
   forwardRef,
   memo,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -34,12 +35,14 @@ import {
   useChatInputCompletionsCoordinator,
   useChatInputSelectionController,
   useOpenSourceBannerState,
+  useResetAttachmentsOnSessionChange,
   useSpaceKeyListener,
   useResizableChatInputBox,
 } from './hooks/index.js';
 import { debounce } from './utils/debounce.js';
 import { perfTimer } from '../../utils/debug.js';
 import { DEBOUNCE_TIMING } from '../../constants/performance.js';
+import { SessionContext } from '../../contexts/SessionContext.js';
 import { ContextMenu } from '../ContextMenu';
 import { useContextMenu, copySelection, pasteAtCursor, insertNewline } from '../../hooks/useContextMenu.js';
 import './styles.css';
@@ -121,6 +124,21 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       externalAttachments,
       onAddAttachment,
       onRemoveAttachment,
+    });
+
+    // Reset draft attachments + clear JCEF ghosting when the session changes, so
+    // attachments don't drift into a new conversation and leave stale thumbnails.
+    // SessionContext is read null-safely so this component still mounts in tests
+    // without a SessionProvider.
+    const sessionCtx = useContext(SessionContext);
+    const clearInternalAttachments = useCallback(() => {
+      setInternalAttachments([]);
+      clearAttachmentsDraft?.();
+    }, [setInternalAttachments, clearAttachmentsDraft]);
+    useResetAttachmentsOnSessionChange({
+      currentSessionId: sessionCtx?.currentSessionId ?? null,
+      isControlled: externalAttachments !== undefined,
+      clearInternalAttachments,
     });
 
     // Input element refs and state

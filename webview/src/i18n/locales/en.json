@@ -1510,7 +1510,7 @@
       },
       "opus46": {
         "label": "Opus 4.7",
-        "description": "Opus 4.7 · Latest and most capable"
+        "description": "Opus 4.7 · Previous flagship model"
       },
       "opus46_1m": {
         "label": "Opus 4.6",
@@ -1519,6 +1519,10 @@
       "haiku45": {
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · Fastest for quick answers"
+      },
+      "opus48": {
+        "label": "Opus 4.8",
+        "description": "Opus 4.8 · Latest and most capable"
       }
     },
     "codex": {
@@ -1801,6 +1805,22 @@
         "downgrade": {
           "title": "Option 2: Roll back to an older version",
           "step0": "In Dependency Management, switch the SDK version to v0.2.112 or earlier. Restart IDEA after switching."
+        }
+      }
+    },
+    "spawnEbusy": {
+      "title": "spawn EBUSY — child process failed to launch",
+      "intro": "This error is typically caused by an incompatible Node.js version or an incomplete SDK installation. Try the two options below in order:",
+      "reason": "EBUSY is a system error raised by Node.js when a child process can't be launched due to a busy resource. Common causes: Node.js 24 compatibility issues, an outdated SDK, or an incomplete install from the Taobao mirror.",
+      "solutions": {
+        "checkNodeVersion": {
+          "title": "Option 1: Check your Node.js version",
+          "step0": "Run the command below in a terminal to see your version. Node 22 or the current LTS is recommended — users have reported many issues on Node 24, so prefer Node 20 or 22:"
+        },
+        "reinstallLatestSdk": {
+          "title": "Option 2: Reinstall the latest SDK from the official npm registry",
+          "step0": "1. Switch to the official npm registry (avoid the Taobao mirror — it may not have the latest version):",
+          "step1": "2. Open Dependency Management and reinstall the latest SDK:"
         }
       }
     }

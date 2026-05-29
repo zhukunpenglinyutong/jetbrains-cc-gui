@@ -36,6 +36,7 @@ export { useChatInputAttachmentsCoordinator } from './useChatInputAttachmentsCoo
 export { useChatInputCompletionsCoordinator } from './useChatInputCompletionsCoordinator.js';
 export { useChatInputSelectionController } from './useChatInputSelectionController.js';
 export { useOpenSourceBannerState } from './useOpenSourceBannerState.js';
+export { useResetAttachmentsOnSessionChange } from './useResetAttachmentsOnSessionChange.js';
 export { useSpaceKeyListener } from './useSpaceKeyListener.js';
 export { useResizableChatInputBox, computeResize } from './useResizableChatInputBox.js';
 export { useInlineHistoryCompletion } from './useInlineHistoryCompletion.js';

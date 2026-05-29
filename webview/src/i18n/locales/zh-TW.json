@@ -1309,7 +1309,7 @@
       },
       "opus46": {
         "label": "Opus 4.7",
-        "description": "Opus 4.7 · 最新最強大的模型"
+        "description": "Opus 4.7 · 上一代旗艦模型"
       },
       "opus46_1m": {
         "label": "Opus 4.6",
@@ -1318,6 +1318,10 @@
       "haiku45": {
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · 速度最快，適合快速回覆"
+      },
+      "opus48": {
+        "label": "Opus 4.8",
+        "description": "Opus 4.8 · 最新最強大的模型"
       }
     },
     "longContext": {
@@ -1568,6 +1572,22 @@
         "downgrade": {
           "title": "方案二：版本回退",
           "step0": "在「相依性管理」中將 SDK 版本切換到 v0.2.112 或更早版本，切換後需要重新啟動 IDEA。"
+        }
+      }
+    },
+    "spawnEbusy": {
+      "title": "spawn EBUSY — 子處理程序啟動失敗",
+      "intro": "此錯誤通常由 Node.js 版本不相容或 SDK 安裝不完整引起，按以下兩個方向排查通常可解決：",
+      "reason": "EBUSY 是 Node.js 啟動子處理程序時遇到資源忙碌的系統錯誤。常見原因：Node.js 24 相容性問題、SDK 版本過舊，或使用淘寶源安裝時同步不完整。",
+      "solutions": {
+        "checkNodeVersion": {
+          "title": "方案一：檢查 Node.js 版本",
+          "step0": "在終端機執行以下指令查看版本號。建議使用 Node 22 或目前最新 LTS 版本 — 使用者反饋 Node 24 報錯較多，請優先使用 20 或 22："
+        },
+        "reinstallLatestSdk": {
+          "title": "方案二：用 npm 官方源重新安裝最新版 SDK",
+          "step0": "1. 切換到 npm 官方源（淘寶源可能未同步最新版本，請勿使用淘寶源安裝）：",
+          "step1": "2. 開啟「相依性管理」重新安裝最新版 SDK："
         }
       }
     }

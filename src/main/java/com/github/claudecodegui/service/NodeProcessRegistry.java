@@ -294,11 +294,50 @@ public final class NodeProcessRegistry implements Disposable {
      * Terminate a process tree by PID. Uses the existing {@link PlatformUtils} helpers
      * for cross-platform correctness. Returns true when the kill command executed
      * successfully — does not guarantee the process is fully reaped yet.
+     *
+     * <p>Ownership guard: only PIDs that appear in this JVM's own {@link #snapshot()}
+     * are eligible. Snapshot entries are either registry-tracked (daemon/channel) or
+     * orphans that already passed the {@link #isOwnedByJvm} parent-PID check. Without
+     * this guard a malformed or hostile frontend payload could ask us to terminate an
+     * arbitrary process tree on the host (the PID arrives untrusted via
+     * {@code NodeProcessHandler.handleKillNodeProcess}).
      */
     public boolean killByPid(long pid) {
         if (pid <= 0) {
             return false;
         }
+        if (!isPidOwned(pid, snapshotPids())) {
+            LOG.warn("[NodeProcessRegistry] Refusing to kill PID " + pid
+                    + " — not tracked by this JVM's snapshot");
+            return false;
+        }
+        return terminateTrackedPid(pid);
+    }
+
+    /** Collect the PID set of every process in the current snapshot. */
+    private Set<Long> snapshotPids() {
+        Set<Long> pids = new HashSet<>();
+        for (NodeProcessInfo info : snapshot()) {
+            pids.add(info.getPid());
+        }
+        return pids;
+    }
+
+    /**
+     * Pure ownership predicate for the kill guard. Package-private so the
+     * security-sensitive decision can be unit-tested without a live Project.
+     */
+    static boolean isPidOwned(long pid, Set<Long> ownedPids) {
+        return pid > 0 && ownedPids != null && ownedPids.contains(pid);
+    }
+
+    /**
+     * Unconditional kill — callers MUST have already established that {@code pid}
+     * belongs to this JVM (via the {@link #killByPid} guard or a freshly built
+     * snapshot in {@link #killAllOrphans}). Kept private to prevent new unguarded
+     * termination entry points.
+     */
+    private boolean terminateTrackedPid(long pid) {
         LOG.info("[NodeProcessRegistry] Killing process tree for PID " + pid);
         return PlatformUtils.terminateProcessTree(pid);
     }
@@ -337,8 +376,10 @@ public final class NodeProcessRegistry implements Disposable {
      */
     public int killAllOrphans() {
         int killed = 0;
+        // Orphans in the snapshot already passed the isOwnedByJvm check, so kill
+        // them directly — re-running killByPid would rebuild the snapshot per PID.
         for (NodeProcessInfo info : snapshot()) {
-            if (info.getKind() == NodeProcessInfo.Kind.ORPHAN && killByPid(info.getPid())) {
+            if (info.getKind() == NodeProcessInfo.Kind.ORPHAN && terminateTrackedPid(info.getPid())) {
                 killed++;
             }
         }

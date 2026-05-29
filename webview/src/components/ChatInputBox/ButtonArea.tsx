@@ -131,6 +131,7 @@ export const ButtonArea = ({
   const applyModelMapping = useCallback((model: ModelInfo, mapping: { main?: string; haiku?: string; sonnet?: string; opus?: string }): ModelInfo => {
     const modelKeyMap: Record<string, keyof typeof mapping> = {
       'claude-sonnet-4-6': 'sonnet',
+      'claude-opus-4-8': 'opus',
       'claude-opus-4-7': 'opus',
       'claude-haiku-4-5': 'haiku',
     };

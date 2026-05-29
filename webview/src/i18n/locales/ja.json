@@ -1303,7 +1303,7 @@
       },
       "opus46": {
         "label": "Opus 4.7",
-        "description": "Opus 4.7 · 最新かつ最も優れたモデル"
+        "description": "Opus 4.7 · 前世代フラッグシップモデル"
       },
       "opus46_1m": {
         "label": "Opus 4.6",
@@ -1312,6 +1312,10 @@
       "haiku45": {
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · 迅速な回答に最速"
+      },
+      "opus48": {
+        "label": "Opus 4.8",
+        "description": "Opus 4.8 · 最新かつ最も優れたモデル"
       }
     },
     "codex": {
@@ -1556,6 +1560,22 @@
         "downgrade": {
           "title": "方法 2：バージョンをロールバック",
           "step0": "「依存関係管理」で SDK バージョンを v0.2.112 以前に切り替えてください。切り替え後は IDEA の再起動が必要です。"
+        }
+      }
+    },
+    "spawnEbusy": {
+      "title": "spawn EBUSY — 子プロセスの起動に失敗",
+      "intro": "このエラーは通常、Node.js のバージョン不一致または SDK のインストール不完全が原因です。以下の 2 つの方法を順に試してください：",
+      "reason": "EBUSY は Node.js が子プロセスを起動する際にリソースが使用中である場合に発生するシステムエラーです。一般的な原因：Node.js 24 の互換性問題、SDK が古い、または Taobao ミラーからの不完全なインストール。",
+      "solutions": {
+        "checkNodeVersion": {
+          "title": "方法 1：Node.js のバージョンを確認する",
+          "step0": "ターミナルで以下のコマンドを実行してバージョンを確認してください。Node 22 または現在の最新 LTS を推奨します — Node 24 では多数のエラー報告があるため、Node 20 または 22 をご利用ください："
+        },
+        "reinstallLatestSdk": {
+          "title": "方法 2：npm 公式レジストリから最新の SDK を再インストール",
+          "step0": "1. npm 公式レジストリに切り替える（Taobao ミラーは最新版に同期されていない可能性があります、使用しないでください）：",
+          "step1": "2. 「依存関係管理」を開いて最新の SDK を再インストール："
         }
       }
     }

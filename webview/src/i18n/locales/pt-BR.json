@@ -1464,7 +1464,7 @@
       },
       "opus46": {
         "label": "Opus 4.7",
-        "description": "Opus 4.7 · O mais recente e capaz"
+        "description": "Opus 4.7 · Modelo principal anterior"
       },
       "opus46_1m": {
         "label": "Opus 4.6",
@@ -1473,6 +1473,10 @@
       "haiku45": {
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · Mais rápido para respostas rápidas"
+      },
+      "opus48": {
+        "label": "Opus 4.8",
+        "description": "Opus 4.8 · O mais recente e capaz"
       }
     },
     "longContext": {
@@ -1723,6 +1727,22 @@
         "downgrade": {
           "title": "Opção 2: reverter para uma versão anterior",
           "step0": "Em Gerenciamento de Dependências, altere a versão do SDK para v0.2.112 ou anterior. Reinicie o IDEA após a alteração."
+        }
+      }
+    },
+    "spawnEbusy": {
+      "title": "spawn EBUSY — falha ao iniciar o processo filho",
+      "intro": "Este erro geralmente é causado por uma versão incompatível do Node.js ou uma instalação incompleta do SDK. Tente as duas opções abaixo na ordem:",
+      "reason": "EBUSY é um erro de sistema lançado pelo Node.js quando um processo filho não pode ser iniciado devido a um recurso ocupado. Causas comuns: problemas de compatibilidade com Node.js 24, SDK desatualizado ou instalação incompleta a partir do mirror da Taobao.",
+      "solutions": {
+        "checkNodeVersion": {
+          "title": "Opção 1: Verifique sua versão do Node.js",
+          "step0": "Execute o comando abaixo em um terminal para ver sua versão. Node 22 ou a LTS atual é recomendado — usuários relataram muitos problemas no Node 24, então prefira Node 20 ou 22:"
+        },
+        "reinstallLatestSdk": {
+          "title": "Opção 2: Reinstale o SDK mais recente a partir do registro npm oficial",
+          "step0": "1. Mude para o registro npm oficial (evite o mirror da Taobao — pode não ter a versão mais recente):",
+          "step1": "2. Abra Gerenciamento de Dependências e reinstale o SDK mais recente:"
         }
       }
     }

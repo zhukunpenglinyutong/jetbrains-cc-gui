@@ -1524,7 +1524,7 @@
       },
       "opus46": {
         "label": "Opus 4.7",
-        "description": "Opus 4.7 · 最新最强大的模型"
+        "description": "Opus 4.7 · 上一代旗舰模型"
       },
       "opus46_1m": {
         "label": "Opus 4.6",
@@ -1533,6 +1533,10 @@
       "haiku45": {
         "label": "Haiku 4.5",
         "description": "Haiku 速度最快，适合快速答复"
+      },
+      "opus48": {
+        "label": "Opus 4.8",
+        "description": "Opus 4.8 · 最新最强大的模型"
       }
     },
     "codex": {
@@ -1815,6 +1819,22 @@
         "downgrade": {
           "title": "方案二：版本回退",
           "step0": "在「依赖管理」中将 SDK 版本切换到 v0.2.112 或更早版本，切换后需要重启 IDEA。"
+        }
+      }
+    },
+    "spawnEbusy": {
+      "title": "spawn EBUSY — 子进程启动失败",
+      "intro": "该错误通常由 Node.js 版本不兼容或 SDK 安装不完整引起，按以下两个方向排查通常可解决：",
+      "reason": "EBUSY 是 Node.js 启动子进程时遇到资源繁忙的系统错误。常见原因：Node.js 24 兼容性问题、SDK 版本过旧、或使用淘宝源安装时同步不完整。",
+      "solutions": {
+        "checkNodeVersion": {
+          "title": "方案一：检查 Node.js 版本",
+          "step0": "在终端运行下面的命令查看版本号。建议使用 Node 22 或当前最新 LTS 版本 — 用户反馈 Node 24 报错较多，请优先使用 20 或 22："
+        },
+        "reinstallLatestSdk": {
+          "title": "方案二：用 npm 官方源重装最新版 SDK",
+          "step0": "1. 切换到 npm 官方源（淘宝源可能未同步最新版本，请勿使用淘宝源安装）：",
+          "step1": "2. 打开「依赖管理」重装最新版 SDK："
         }
       }
     }

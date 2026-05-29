@@ -1292,7 +1292,7 @@
       },
       "opus46": {
         "label": "Opus 4.7",
-        "description": "Opus 4.7 · Le plus récent et le plus performant"
+        "description": "Opus 4.7 · Modèle phare précédent"
       },
       "opus46_1m": {
         "label": "Opus 4.6",
@@ -1301,6 +1301,10 @@
       "haiku45": {
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · Le plus rapide pour des réponses rapides"
+      },
+      "opus48": {
+        "label": "Opus 4.8",
+        "description": "Opus 4.8 · Le plus récent et le plus performant"
       }
     },
     "longContext": {
@@ -1551,6 +1555,22 @@
         "downgrade": {
           "title": "Option 2 : Revenir à une version antérieure",
           "step0": "Dans Gestion des dépendances, passez la version du SDK à v0.2.112 ou antérieure. Redémarrez IDEA après le changement."
+        }
+      }
+    },
+    "spawnEbusy": {
+      "title": "spawn EBUSY — échec du lancement du processus enfant",
+      "intro": "Cette erreur est généralement causée par une version de Node.js incompatible ou une installation incomplète du SDK. Essayez les deux options ci-dessous dans l'ordre :",
+      "reason": "EBUSY est une erreur système levée par Node.js lorsqu'un processus enfant ne peut pas être lancé en raison d'une ressource occupée. Causes courantes : problèmes de compatibilité avec Node.js 24, un SDK obsolète, ou une installation incomplète depuis le miroir Taobao.",
+      "solutions": {
+        "checkNodeVersion": {
+          "title": "Option 1 : Vérifiez votre version de Node.js",
+          "step0": "Exécutez la commande ci-dessous dans un terminal pour voir votre version. Node 22 ou la LTS actuelle est recommandée — les utilisateurs ont signalé de nombreux problèmes sur Node 24, préférez donc Node 20 ou 22 :"
+        },
+        "reinstallLatestSdk": {
+          "title": "Option 2 : Réinstaller le dernier SDK depuis le registre npm officiel",
+          "step0": "1. Basculez vers le registre npm officiel (évitez le miroir Taobao — il peut ne pas avoir la dernière version) :",
+          "step1": "2. Ouvrez Gestion des dépendances et réinstallez le dernier SDK :"
         }
       }
     }

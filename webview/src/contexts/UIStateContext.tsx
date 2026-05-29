@@ -4,6 +4,7 @@ import type { SettingsTab } from '../components/settings/SettingsSidebar';
 import type { ContextInfo, ViewMode } from '../hooks';
 import { APP_VERSION } from '../version/version';
 import { DEFAULT_STATUS } from './MessagesContext';
+import { forceWebviewRepaint } from '../utils/forceWebviewRepaint';
 
 const LAST_SEEN_VERSION_KEY = 'lastSeenChangelogVersion';
 
@@ -76,6 +77,8 @@ export function UIStateProvider({ children }: { children: ReactNode }) {
   const closeChangelogDialog = useCallback(() => {
     localStorage.setItem(LAST_SEEN_VERSION_KEY, APP_VERSION);
     setShowChangelogDialog(false);
+    // The fixed-position fullscreen overlay can leave ghosting after unmount on macOS JCEF.
+    forceWebviewRepaint('changelog-dialog-close');
   }, []);
 
   const openChangelogDialog = useCallback(() => { setShowChangelogDialog(true); }, []);

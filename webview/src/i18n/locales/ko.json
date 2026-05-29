@@ -1409,7 +1409,7 @@
       },
       "opus46": {
         "label": "Opus 4.7",
-        "description": "Opus 4.7 · 최신 및 가장 강력한 모델"
+        "description": "Opus 4.7 · 이전 세대 플래그십 모델"
       },
       "opus46_1m": {
         "label": "Opus 4.6",
@@ -1418,6 +1418,10 @@
       "haiku45": {
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · 빠른 응답에 최적"
+      },
+      "opus48": {
+        "label": "Opus 4.8",
+        "description": "Opus 4.8 · 최신 및 가장 강력한 모델"
       }
     },
     "longContext": {
@@ -1668,6 +1672,22 @@
         "downgrade": {
           "title": "방법 2: 버전 롤백",
           "step0": "'종속성 관리'에서 SDK 버전을 v0.2.112 또는 그 이전으로 전환하세요. 전환 후 IDEA를 재시작해야 합니다."
+        }
+      }
+    },
+    "spawnEbusy": {
+      "title": "spawn EBUSY — 자식 프로세스 시작 실패",
+      "intro": "이 오류는 일반적으로 Node.js 버전 비호환성 또는 불완전한 SDK 설치로 인해 발생합니다. 아래 두 가지 방법을 순서대로 시도해 보세요:",
+      "reason": "EBUSY는 Node.js가 리소스 사용 중으로 인해 자식 프로세스를 시작할 수 없을 때 발생하는 시스템 오류입니다. 일반적인 원인: Node.js 24 호환성 문제, 오래된 SDK 또는 Taobao 미러에서의 불완전한 설치.",
+      "solutions": {
+        "checkNodeVersion": {
+          "title": "방법 1: Node.js 버전 확인",
+          "step0": "터미널에서 아래 명령어를 실행하여 버전을 확인하세요. Node 22 또는 현재 LTS를 권장합니다 — Node 24에서 많은 오류가 보고되었으므로 Node 20 또는 22를 우선 사용하세요:"
+        },
+        "reinstallLatestSdk": {
+          "title": "방법 2: npm 공식 레지스트리에서 최신 SDK 재설치",
+          "step0": "1. npm 공식 레지스트리로 전환 (Taobao 미러는 최신 버전이 없을 수 있으므로 사용하지 마세요):",
+          "step1": "2. '종속성 관리'를 열고 최신 SDK를 재설치:"
         }
       }
     }

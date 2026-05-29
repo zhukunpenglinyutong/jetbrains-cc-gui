@@ -2,6 +2,10 @@ package com.github.claudecodegui.service;
 
 import org.junit.Test;
 
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -116,5 +120,45 @@ public class NodeProcessRegistryHelpersTest {
     public void isOwnedByJvmHandlesPidOne() {
         // PID 1 (init/launchd) means parent died and the OS re-parented. Not ours.
         assertFalse(NodeProcessRegistry.isOwnedByJvm(1L, 12345L));
+    }
+
+    // ============================================================================
+    // Kill ownership guard — killByPid must refuse PIDs that are not in our own
+    // snapshot, so a malformed/hostile frontend payload cannot terminate an
+    // arbitrary process tree on the host.
+    // ============================================================================
+
+    @Test
+    public void isPidOwnedAcceptsTrackedPid() {
+        Set<Long> owned = new HashSet<>();
+        owned.add(12345L);
+        owned.add(67890L);
+        assertTrue(NodeProcessRegistry.isPidOwned(12345L, owned));
+        assertTrue(NodeProcessRegistry.isPidOwned(67890L, owned));
+    }
+
+    @Test
+    public void isPidOwnedRejectsUntrackedPid() {
+        // The security fix: a PID the frontend invented (or another process tree)
+        // must never be eligible for termination.
+        Set<Long> owned = new HashSet<>();
+        owned.add(12345L);
+        assertFalse(NodeProcessRegistry.isPidOwned(99999L, owned));
+    }
+
+    @Test
+    public void isPidOwnedRejectsEmptyAndNullSet() {
+        assertFalse(NodeProcessRegistry.isPidOwned(12345L, Collections.emptySet()));
+        assertFalse(NodeProcessRegistry.isPidOwned(12345L, null));
+    }
+
+    @Test
+    public void isPidOwnedRejectsNonPositivePid() {
+        Set<Long> owned = new HashSet<>();
+        owned.add(0L);
+        owned.add(-1L);
+        // Even if a bogus non-positive value somehow lands in the set, it is never killable.
+        assertFalse(NodeProcessRegistry.isPidOwned(0L, owned));
+        assertFalse(NodeProcessRegistry.isPidOwned(-1L, owned));
     }
 }

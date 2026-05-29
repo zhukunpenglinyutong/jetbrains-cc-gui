@@ -1292,7 +1292,7 @@
       },
       "opus46": {
         "label": "Opus 4.7",
-        "description": "Opus 4.7 · El más reciente y capaz"
+        "description": "Opus 4.7 · Modelo insignia anterior"
       },
       "opus46_1m": {
         "label": "Opus 4.6",
@@ -1301,6 +1301,10 @@
       "haiku45": {
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · El más rápido para respuestas rápidas"
+      },
+      "opus48": {
+        "label": "Opus 4.8",
+        "description": "Opus 4.8 · El más reciente y capaz"
       }
     },
     "longContext": {
@@ -1551,6 +1555,22 @@
         "downgrade": {
           "title": "Opción 2: Volver a una versión anterior",
           "step0": "En Gestión de dependencias, cambia la versión del SDK a v0.2.112 o anterior. Reinicia IDEA después del cambio."
+        }
+      }
+    },
+    "spawnEbusy": {
+      "title": "spawn EBUSY — error al iniciar el proceso hijo",
+      "intro": "Este error suele estar causado por una versión incompatible de Node.js o una instalación incompleta del SDK. Prueba las dos opciones siguientes en orden:",
+      "reason": "EBUSY es un error del sistema generado por Node.js cuando no puede iniciarse un proceso hijo debido a un recurso ocupado. Causas comunes: problemas de compatibilidad con Node.js 24, un SDK desactualizado, o una instalación incompleta desde el mirror de Taobao.",
+      "solutions": {
+        "checkNodeVersion": {
+          "title": "Opción 1: Verifica tu versión de Node.js",
+          "step0": "Ejecuta el comando siguiente en una terminal para ver tu versión. Se recomienda Node 22 o la LTS actual — los usuarios han reportado muchos problemas con Node 24, prefiere Node 20 o 22:"
+        },
+        "reinstallLatestSdk": {
+          "title": "Opción 2: Reinstalar el último SDK desde el registro oficial de npm",
+          "step0": "1. Cambia al registro oficial de npm (evita el mirror de Taobao — puede no tener la última versión):",
+          "step1": "2. Abre Gestión de dependencias y reinstala el último SDK:"
         }
       }
     }

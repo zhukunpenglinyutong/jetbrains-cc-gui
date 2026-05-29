@@ -66,10 +66,16 @@ function extractFilePaths(toolName, toolInput) {
 const INTERACTIVE_TOOLS = new Set(['AskUserQuestion']);
 const VALID_PERMISSION_MODES = new Set(['default', 'plan', 'acceptEdits', 'bypassPermissions']);
 
+// Yield to the SDK's native permission flow (settings.json deny/allow/ask rules,
+// mode-check, canUseTool fallback). Maps to SyncHookJSONOutput.continue in sdk.d.ts.
+// Frozen so accidental mutation cannot leak across hook invocations.
+const YIELD_TO_SDK = Object.freeze({ continue: true });
+
 export {
   PLAN_MODE_ALLOWED_TOOLS,
   INTERACTIVE_TOOLS,
-  VALID_PERMISSION_MODES
+  VALID_PERMISSION_MODES,
+  YIELD_TO_SDK
 };
 
 export function normalizePermissionMode(permissionMode) {
@@ -164,12 +170,7 @@ export function createPreToolUseHook(permissionModeState, cwd = null, onModeChan
 
       // Step 2: Safe always-allow tools yield to SDK so settings.json deny rules can fire.
       if (SAFE_ALWAYS_ALLOW_TOOLS.has(toolName)) {
-        return {
-          hookSpecificOutput: {
-            hookEventName: 'PreToolUse',
-            permissionDecision: 'continue'
-          }
-        };
+        return YIELD_TO_SDK;
       }
 
       // Step 3: Agent/Task are auto-approved in plan mode, matching CLI behavior.
@@ -258,22 +259,12 @@ export function createPreToolUseHook(permissionModeState, cwd = null, onModeChan
 
       // Step 5: Plan mode specific allowed tools (read-only exploration tools)
       if (PLAN_MODE_ALLOWED_TOOLS.has(toolName)) {
-        return {
-          hookSpecificOutput: {
-            hookEventName: 'PreToolUse',
-            permissionDecision: 'continue'
-          }
-        };
+        return YIELD_TO_SDK;
       }
 
       // Step 6: Auto-approve read-only MCP tools (mcp__* without Write/Edit in name)
       if (toolName?.startsWith('mcp__') && !toolName.includes('Write') && !toolName.includes('Edit')) {
-        return {
-          hookSpecificOutput: {
-            hookEventName: 'PreToolUse',
-            permissionDecision: 'continue'
-          }
-        };
+        return YIELD_TO_SDK;
       }
 
       // Everything else is blocked in plan mode
@@ -286,11 +277,6 @@ export function createPreToolUseHook(permissionModeState, cwd = null, onModeChan
       };
     }
 
-    return {
-      hookSpecificOutput: {
-        hookEventName: 'PreToolUse',
-        permissionDecision: 'continue'
-      }
-    };
+    return YIELD_TO_SDK;
   };
 }

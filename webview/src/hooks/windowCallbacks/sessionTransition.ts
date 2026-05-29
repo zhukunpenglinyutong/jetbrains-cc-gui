@@ -7,6 +7,7 @@
  */
 
 import type { MutableRefObject } from 'react';
+import { forceWebviewRepaint } from '../../utils/forceWebviewRepaint';
 
 export interface ResetTransientUiStateOptions {
   clearToasts: () => void;
@@ -64,6 +65,9 @@ export const buildResetTransientUiState = (opts: ResetTransientUiStateOptions) =
       cancelAnimationFrame(opts.thinkingUpdateTimeoutRef.current);
       opts.thinkingUpdateTimeoutRef.current = null;
     }
+    // Clear JCEF native-rendering ghosting left by the outgoing session's overlays
+    // and input-box content after the transition unmounts/reflows them.
+    forceWebviewRepaint('session-transition');
   };
 };
 

@@ -629,16 +629,20 @@ export function registerMessageCallbacks(
     if (!window.__deniedToolIds) {
       window.__deniedToolIds = new Set<string>();
     }
+    // Compute orphans inside the updater (needs the latest message list) but keep
+    // the __deniedToolIds mutation OUTSIDE it — a setMessages updater must stay
+    // pure, and React StrictMode double-invokes it. Mirrors onStreamEnd's pattern.
+    let orphanIds: string[] = [];
     setMessages((prev) => {
       if (prev.length === 0) return prev;
-      const orphanIds = collectUnresolvedToolUseIds(prev, 'all');
-      for (const id of orphanIds) {
-        window.__deniedToolIds!.add(id);
-      }
+      orphanIds = collectUnresolvedToolUseIds(prev, 'all');
       // Shallow copy forces ChatMessages to re-render so the now-denied IDs are
       // picked up by BashToolGroupBlock's deniedToolIds prop.
       return prev.map(m => ({ ...m }));
     });
+    for (const id of orphanIds) {
+      window.__deniedToolIds.add(id);
+    }
   };
 
   window.addUserMessage = (content: string) => {
