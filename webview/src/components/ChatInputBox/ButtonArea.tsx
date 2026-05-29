@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, useEffect } from 'react';
+import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ButtonAreaProps, ModelInfo, PermissionMode, ReasoningEffort } from './types';
 import { ConfigSelect, ModelSelect, ModeSelect, ProviderSelect, ReasoningSelect } from './selectors';
@@ -107,6 +107,7 @@ export const ButtonArea = ({
   const [openCodeModels, setOpenCodeModels] = useState<ModelInfo[]>([]);
   const [openCodeError, setOpenCodeError] = useState<string | undefined>(undefined);
   const [modelsLoading, setModelsLoading] = useState(false);
+  const openCodeModelRequestRef = useRef<(() => void) | null>(null);
 
   // Listen for localStorage changes (cross-tab sync + same-tab custom events)
   useEffect(() => {
@@ -169,6 +170,7 @@ export const ButtonArea = ({
       }
     };
 
+    openCodeModelRequestRef.current = requestOpenCodeModels;
     setModelsLoading(true);
     setOpenCodeError(undefined);
     setOpenCodeModels([]);
@@ -177,6 +179,7 @@ export const ButtonArea = ({
 
     return () => {
       disposed = true;
+      openCodeModelRequestRef.current = null;
       if (retryTimer !== undefined) {
         window.clearTimeout(retryTimer);
       }
@@ -184,6 +187,43 @@ export const ButtonArea = ({
         window.updateOpenCodeModels = previousCallback;
       }
     };
+  }, [currentProvider]);
+
+  useEffect(() => {
+    if (currentProvider !== 'opencode' || typeof window === 'undefined') {
+      return;
+    }
+
+    const previousAuthCallback = window.updateOpenCodeAuthorization;
+    const handleOpenCodeAuthorization = (json: string) => {
+      previousAuthCallback?.(json);
+      try {
+        const data = JSON.parse(json);
+        if (data?.authorized === true) {
+          setModelsLoading(true);
+          setOpenCodeError(undefined);
+          openCodeModelRequestRef.current?.();
+        }
+      } catch {
+        // ignore malformed authorization payloads
+      }
+    };
+    window.updateOpenCodeAuthorization = handleOpenCodeAuthorization;
+
+    return () => {
+      if (window.updateOpenCodeAuthorization === handleOpenCodeAuthorization) {
+        window.updateOpenCodeAuthorization = previousAuthCallback;
+      }
+    };
+  }, [currentProvider]);
+
+  const refreshOpenCodeModels = useCallback(() => {
+    if (currentProvider !== 'opencode') {
+      return;
+    }
+    setModelsLoading(true);
+    setOpenCodeError(undefined);
+    openCodeModelRequestRef.current?.();
   }, [currentProvider]);
 
   // Ensure a valid model is selected for opencode
@@ -343,6 +383,7 @@ export const ButtonArea = ({
           models={availableModels}
           currentProvider={currentProvider}
           onAddModel={currentProvider === 'opencode' ? undefined : onAddModel}
+          onRefresh={currentProvider === 'opencode' ? refreshOpenCodeModels : undefined}
           longContextEnabled={longContextEnabled}
           onLongContextChange={onLongContextChange}
           error={openCodeError}

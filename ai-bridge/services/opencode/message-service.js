@@ -1169,20 +1169,15 @@ function normalizeOpenCodeAgents(agentPayload = [], configPayload = {}) {
   return agents;
 }
 
-function normalizeOpenCodeModels(providerPayload = {}, configPayload = {}) {
-  const providers = getOpenCodeProviderList(providerPayload);
-  const defaults = getOpenCodeProviderDefaults(providerPayload);
-  const resolvedDefault = resolveOpenCodeDefaultModelId(providerPayload, configPayload);
+function normalizeOpenCodeModels(providerPayload = {}, configPayload = {}, resolvedDefaultOverride) {
+  const filteredPayload = filterOpenCodeProviderPayload(providerPayload, configPayload);
+  const providers = getOpenCodeProviderList(filteredPayload);
+  const defaults = getOpenCodeProviderDefaults(filteredPayload);
+  const resolvedDefault = resolvedDefaultOverride || resolveOpenCodeDefaultModelId(filteredPayload, configPayload);
   const models = [{
-    id: 'opencode-default',
+    id: OPENCODE_DEFAULT_MODEL_SELECTION_ID,
     label: 'opencode default',
-    description: resolvedDefault.id
-      ? `Uses ${resolvedDefault.id} ${resolvedDefault.source === 'config'
-        ? 'from opencode config'
-        : resolvedDefault.source === 'first-available'
-          ? 'as first available model'
-          : 'provider default'}.`
-      : 'Uses the provider and model configured in opencode.',
+    description: formatOpenCodeDefaultDescription(resolvedDefault),
     isDefault: true
   }];
   const seen = new Set(models.map((model) => model.id));
@@ -1243,6 +1238,141 @@ function getOpenCodeProviderDefaults(providerPayload = {}) {
   return providerPayload?.default && typeof providerPayload.default === 'object'
     ? providerPayload.default
     : {};
+}
+
+const OPENCODE_DEFAULT_MODEL_SELECTION_ID = 'opencode-default';
+
+function normalizeProviderFilterList(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((item) => String(item || '').trim()).filter(Boolean);
+}
+
+function filterOpenCodeProvidersByConfig(providers = [], configPayload = {}) {
+  const disabled = new Set(normalizeProviderFilterList(configPayload?.disabled_providers));
+  const enabled = normalizeProviderFilterList(configPayload?.enabled_providers);
+  const enabledSet = enabled.length > 0 ? new Set(enabled) : null;
+
+  return providers.filter((provider) => {
+    if (!provider || !provider.id) {
+      return false;
+    }
+    const providerID = String(provider.id);
+    if (disabled.has(providerID)) {
+      return false;
+    }
+    if (enabledSet && !enabledSet.has(providerID)) {
+      return false;
+    }
+    return true;
+  });
+}
+
+function filterOpenCodeProviderPayload(providerPayload = {}, configPayload = {}) {
+  const providers = filterOpenCodeProvidersByConfig(
+    getOpenCodeProviderList(providerPayload),
+    configPayload
+  );
+  const defaults = getOpenCodeProviderDefaults(providerPayload);
+  const filteredDefaults = Object.fromEntries(
+    Object.entries(defaults).filter(([providerID]) =>
+      providers.some((provider) => String(provider.id) === providerID)
+    )
+  );
+
+  return {
+    ...providerPayload,
+    providers,
+    all: providers,
+    default: filteredDefaults
+  };
+}
+
+function formatOpenCodeDefaultDescription(resolvedDefault = {}) {
+  if (!resolvedDefault?.id) {
+    return 'Uses the provider and model configured in opencode.';
+  }
+  const sourceText = {
+    config: 'from opencode config',
+    'provider-default': 'provider default',
+    'first-available': 'as first available model',
+    'last-used': 'last used in this project'
+  }[resolvedDefault.source] || 'configured in opencode';
+  return `Uses ${resolvedDefault.id} ${sourceText}.`;
+}
+
+function isOpenCodeDefaultModelSelection(selectedModel) {
+  const trimmed = typeof selectedModel === 'string' ? selectedModel.trim() : '';
+  return !trimmed || trimmed === OPENCODE_DEFAULT_MODEL_SELECTION_ID;
+}
+
+async function resolveLastUsedSessionModel(client, cwd, providers = []) {
+  if (!client || typeof client.session?.list !== 'function') {
+    return '';
+  }
+
+  try {
+    const sessions = await unwrapSdkResult(
+      client.session.list({
+        query: {
+          ...(directoryQuery(cwd) || {}),
+          scope: 'project',
+          roots: true,
+          limit: 1
+        }
+      }),
+      'list opencode sessions for default model'
+    );
+    const session = Array.isArray(sessions) ? sessions[0] : null;
+    const sessionId = pickString(session?.id, session?.sessionID, session?.sessionId);
+    if (!sessionId || typeof client.session?.messages !== 'function') {
+      return '';
+    }
+
+    const messages = await unwrapSdkResult(
+      client.session.messages({
+        path: { id: sessionId },
+        query: directoryQuery(cwd)
+      }),
+      'list opencode session messages for default model'
+    );
+    if (!Array.isArray(messages)) {
+      return '';
+    }
+
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const info = asRecord(messages[index]?.info ?? messages[index]);
+      if (info?.role !== 'user') {
+        continue;
+      }
+      const model = asRecord(info.model);
+      const providerID = pickString(model.providerID, model.providerId);
+      const modelID = pickString(model.modelID, model.modelId, model.id);
+      if (!providerID || !modelID) {
+        continue;
+      }
+      const fullModelId = `${providerID}/${modelID}`;
+      if (modelPayloadContains(providers, fullModelId)) {
+        return fullModelId;
+      }
+      return '';
+    }
+  } catch {
+    return '';
+  }
+
+  return '';
+}
+
+async function resolveOpenCodeDefaultModelIdForDiscovery(client, cwd, providerPayload = {}, configPayload = {}) {
+  const filteredPayload = filterOpenCodeProviderPayload(providerPayload, configPayload);
+  const providers = getOpenCodeProviderList(filteredPayload);
+  const lastUsed = client ? await resolveLastUsedSessionModel(client, cwd, providers) : '';
+  if (lastUsed) {
+    return { id: lastUsed, source: 'last-used' };
+  }
+  return resolveOpenCodeDefaultModelId(filteredPayload, configPayload);
 }
 
 function resolveOpenCodeDefaultModelId(providerPayload = {}, configPayload = {}) {
@@ -1310,27 +1440,43 @@ function firstProviderDefault(defaults, providers = []) {
   return '';
 }
 
+function firstAvailableModelForProvider(provider) {
+  if (!provider || typeof provider !== 'object' || !provider.id) {
+    return '';
+  }
+  const providerID = String(provider.id);
+  const providerModels = provider.models && typeof provider.models === 'object'
+    ? provider.models
+    : {};
+  const [modelID] = Object.entries(providerModels)
+    .map(([modelKey, rawModel]) => {
+      const model = rawModel && typeof rawModel === 'object' ? rawModel : {};
+      if (model.enabled === false) {
+        return '';
+      }
+      return String(model.id || modelKey || '').trim();
+    })
+    .filter(Boolean)
+    .sort((left, right) => left.localeCompare(right));
+  return modelID ? `${providerID}/${modelID}` : '';
+}
+
 function firstAvailableProviderModel(providers = []) {
   const listedProviders = providers
     .filter((provider) => provider && typeof provider === 'object' && provider.id);
 
+  const opencodeProvider = listedProviders.find((provider) => String(provider.id) === 'opencode');
+  if (opencodeProvider) {
+    const opencodeModel = firstAvailableModelForProvider(opencodeProvider);
+    if (opencodeModel) {
+      return opencodeModel;
+    }
+  }
+
   for (const provider of listedProviders) {
-    const providerID = String(provider.id);
-    const providerModels = provider.models && typeof provider.models === 'object'
-      ? provider.models
-      : {};
-    const [modelID] = Object.entries(providerModels)
-      .map(([modelKey, rawModel]) => {
-        const model = rawModel && typeof rawModel === 'object' ? rawModel : {};
-        if (model.enabled === false) {
-          return '';
-        }
-        return String(model.id || modelKey || '').trim();
-      })
-      .filter(Boolean)
-      .sort((left, right) => left.localeCompare(right));
-    if (modelID) {
-      return `${providerID}/${modelID}`;
+    const model = firstAvailableModelForProvider(provider);
+    if (model) {
+      return model;
     }
   }
   return '';
@@ -1435,20 +1581,24 @@ async function resolveOpenCodeDefaultModel(client, cwd) {
     ).catch(() => ({})),
     listOpenCodeModelProviders(client, query).catch(() => ({}))
   ]);
+  const filteredPayload = filterOpenCodeProviderPayload(providers, config);
+  const providerList = getOpenCodeProviderList(filteredPayload);
   const configured = typeof config?.model === 'string' ? config.model.trim() : '';
-  const providerList = Array.isArray(providers?.providers)
-    ? providers.providers
-    : Array.isArray(providers?.all)
-      ? providers.all
-      : [];
   if (configured && modelPayloadContains(providerList, configured)) {
     return parseOpenCodeModel(configured);
   }
-  const defaults = providers?.default && typeof providers.default === 'object' ? providers.default : {};
+  const lastUsed = await resolveLastUsedSessionModel(client, cwd, providerList);
+  if (lastUsed) {
+    return parseOpenCodeModel(lastUsed);
+  }
+  const defaults = getOpenCodeProviderDefaults(filteredPayload);
   return parseOpenCodeModel(firstProviderDefault(defaults, providerList) || firstAvailableProviderModel(providerList));
 }
 
 async function resolveOpenCodePromptModel(client, cwd, selectedModel) {
+  if (isOpenCodeDefaultModelSelection(selectedModel)) {
+    return undefined;
+  }
   const parsedModel = parseOpenCodeModel(selectedModel);
   if (parsedModel) {
     return parsedModel;
@@ -2937,13 +3087,19 @@ export async function listModels(cwd = '', options = {}) {
       ),
       listOpenCodeModelProviders(runtime.client, query)
     ]);
-    const resolvedDefault = resolveOpenCodeDefaultModelId(providers, config);
-    const models = normalizeOpenCodeModels(providers, config);
+    const resolvedDefault = await resolveOpenCodeDefaultModelIdForDiscovery(
+      runtime.client,
+      cwd,
+      providers,
+      config
+    );
+    const models = normalizeOpenCodeModels(providers, config, resolvedDefault);
 
     console.log(JSON.stringify({
       success: true,
       cwd,
       defaultModel: resolvedDefault.id,
+      defaultModelSource: resolvedDefault.source,
       models
     }));
   } catch (error) {
@@ -3219,6 +3375,8 @@ export {
   normalizeOpenCodeSessions,
   parseOpenCodeSlashCommand,
   resolveOpenCodePromptModel,
+  resolveLastUsedSessionModel,
+  filterOpenCodeProvidersByConfig,
   unwrapSdkResult,
   waitForOpenCodeTurnIdle,
   resolveOpenCodePromptOptions

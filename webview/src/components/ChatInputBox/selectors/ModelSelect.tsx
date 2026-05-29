@@ -35,6 +35,7 @@ interface ModelSelectProps {
   onLongContextChange?: (enabled: boolean) => void;
   error?: string;
   isLoading?: boolean;
+  onRefresh?: () => void;
 }
 
 const DEFAULT_MODEL_MAP: Record<string, ModelInfo> = AVAILABLE_MODELS.reduce(
@@ -134,7 +135,7 @@ const resolveModelIdForIcon = (
  * ModelSelect - Model selector component
  * Supports switching between Sonnet 4.5, Opus 4.5, and other models, including Codex models
  */
-export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, currentProvider = 'claude', onAddModel, longContextEnabled = true, onLongContextChange, error, isLoading }: ModelSelectProps) => {
+export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, currentProvider = 'claude', onAddModel, longContextEnabled = true, onLongContextChange, error, isLoading, onRefresh }: ModelSelectProps) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -382,6 +383,18 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
               >
                 <span className="codicon codicon-add selector-add-icon" />
                 <span>{t('models.addModel')}</span>
+              </div>
+            </>
+          )}
+          {onRefresh && !error && (
+            <>
+              <div className="selector-divider" />
+              <div
+                className="selector-option selector-option-add"
+                onClick={() => { onRefresh(); }}
+              >
+                <span className={`codicon codicon-refresh ${isLoading ? 'codicon-modifier-spin' : ''}`} />
+                <span>{t('models.refreshModels')}</span>
               </div>
             </>
           )}

@@ -1531,6 +1531,9 @@
   },
   "models": {
     "addModel": "Add Model",
+    "refreshModels": "Refresh models",
+    "loading": "Loading models...",
+    "error": "Model discovery failed",
     "searchPlaceholder": "Search models...",
     "noModelsFound": "No models found",
     "longContext": {
