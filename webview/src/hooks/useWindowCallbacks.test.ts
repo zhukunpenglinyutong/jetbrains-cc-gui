@@ -955,6 +955,26 @@ describe('useWindowCallbacks integration', () => {
 
       expect(window.__streamEndProcessedTurnId).toBeUndefined();
     });
+
+    it('onStreamEnd clears loading state for OpenCode when stream start was lost', () => {
+      const opts = createOptions({
+        currentProviderRef: { current: 'opencode' },
+      });
+      opts.isStreamingRef.current = false;
+      opts.streamingTurnIdRef.current = -1;
+
+      renderHook(() => useWindowCallbacks(opts));
+
+      act(() => {
+        window.onStreamEnd!();
+      });
+
+      expect(opts.setStreamingActive).toHaveBeenCalledWith(false);
+      expect(opts.setLoading).toHaveBeenCalledWith(false);
+      expect(opts.setLoadingStartTime).toHaveBeenCalledWith(null);
+      expect(opts.setIsThinking).toHaveBeenCalledWith(false);
+      expect(opts.setMessages).not.toHaveBeenCalled();
+    });
   });
 
   // ===== Interrupted tool_use cleanup on stream end =====

@@ -43,4 +43,21 @@ public class SessionSendServiceTest {
         assertNull(SessionSendService.getCodexRuntimeAccessError("managed"));
         assertNull(SessionSendService.getCodexRuntimeAccessError("cli_login"));
     }
+
+    @Test
+    public void getOpenCodeRuntimeAccessErrorRequiresAuthorization() {
+        assertEquals(
+                "OpenCode access is not authorized. Enable OpenCode in Settings > Provider Management before using it.",
+                SessionSendService.getOpenCodeRuntimeAccessError(false)
+        );
+        assertNull(SessionSendService.getOpenCodeRuntimeAccessError(true));
+    }
+
+    @Test
+    public void resolveEffectivePermissionModeKeepsPlanForOpenCode() {
+        assertEquals(
+                "plan",
+                SessionSendService.resolveEffectivePermissionMode("opencode", null, "plan")
+        );
+    }
 }
