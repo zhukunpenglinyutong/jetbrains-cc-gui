@@ -8,7 +8,7 @@
  */
 
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
-import type { ClaudeMessage } from '../../../types';
+import type { ClaudeMessage, ClaudeContentBlock, ClaudeRawMessage } from '../../../types';
 import type { ContextUsageData } from '../../../components/ContextUsageDialog';
 import { sendBridgeEvent } from '../../../utils/bridge';
 import { debugError } from '../../../utils/debug';
@@ -21,6 +21,8 @@ import {
   preserveStreamingAssistantContent,
   stripDuplicateTrailingToolMessages,
 } from '../messageSync';
+import { collapseStreamingTurnAssistants } from '../../../utils/messageUtils';
+import { streamDebugLog } from '../../../utils/streamDebugLog';
 import { releaseSessionTransition } from '../sessionTransition';
 import { parseSequence } from '../parseSequence';
 import { collectUnresolvedToolUseIds } from './streamingCallbacks';
@@ -136,6 +138,43 @@ export function registerMessageCallbacks(
     window.__pendingUpdateJson = null;
     window.__pendingUpdateSequence = null;
   };
+  const stampTurnIdOnAssistantMessages = (
+    messages: ClaudeMessage[],
+    turnId: number,
+  ): ClaudeMessage[] => {
+    let changed = false;
+    const result = messages.map((msg) => {
+      if (msg.type === 'assistant' && msg.__turnId === undefined) {
+        changed = true;
+        return { ...msg, __turnId: turnId };
+      }
+      return msg;
+    });
+    if (changed) {
+      const stamped = result.filter((m) => m.type === 'assistant').map((m) => `turnId=${m.__turnId}:content=${(m.content || '').slice(0, 30)}`);
+      streamDebugLog('[STREAM-DBG] stampTurnIdOnAssistantMessages: stamped', stamped.length, 'assistant msgs with turnId', turnId, stamped);
+    }
+    return changed ? result : messages;
+  };
+
+  const normalizeBlocksForMerge = (
+    raw?: ClaudeRawMessage | string,
+  ): ClaudeContentBlock[] | null => {
+    const blocks = extractRawBlocks(raw);
+    return blocks.length > 0 ? (blocks as ClaudeContentBlock[]) : null;
+  };
+
+  const collapseActiveStreamingTurn = (messages: ClaudeMessage[]): ClaudeMessage[] => {
+    if (!isStreamingRef.current || streamingTurnIdRef.current <= 0) {
+      return messages;
+    }
+    return collapseStreamingTurnAssistants(
+      messages,
+      streamingTurnIdRef.current,
+      normalizeBlocksForMerge,
+    );
+  };
+
   window.__cancelPendingUpdateMessages = cancelPendingUpdateMessages;
 
   const processUpdateMessages = (json: string, sequence: number | null = null) => {
@@ -149,6 +188,13 @@ export function registerMessageCallbacks(
       if (sequence != null) {
         window.__minAcceptedUpdateSequence = Math.max(minAcceptedSequence, sequence);
       }
+
+      const parsedSummary = parsed.map((m, i) => {
+        if (m.type === 'assistant') return `#${i}:assistant:turnId=${m.__turnId}:content=${(m.content || '').slice(0, 40)}`;
+        if (m.type === 'user') return `#${i}:user:content=${(m.content || '').slice(0, 40)}`;
+        return `#${i}:${m.type}`;
+      });
+      streamDebugLog('[STREAM-DBG] processUpdateMessages: isStreaming=', isStreamingRef.current, 'backendRender=', useBackendStreamingRenderRef.current, 'turnId=', streamingTurnIdRef.current, 'parsed:', parsed.length, 'msgs', parsedSummary);
 
       setMessages((prev) => {
         // If streaming is active, delegate to the streaming logic
@@ -182,6 +228,9 @@ export function registerMessageCallbacks(
               findLastAssistantIndex,
               patchAssistantForStreaming,
             );
+            // Stamp __turnId on all assistant messages in the streaming turn
+            // so mergeConsecutiveAssistantMessages can merge them across tool_use boundaries.
+            smartMerged = stampTurnIdOnAssistantMessages(smartMerged, streamingTurnIdRef.current);
             const result = preserveLatestMessagesOnShrink(
               prev,
               appendOptimisticMessageIfMissing(prev, smartMerged),
@@ -232,7 +281,9 @@ export function registerMessageCallbacks(
               }
             }
 
-            return finalizeMessageList(prev, result);
+            const resultSummary = result.filter(m => m.type === 'assistant').map((m, i) => `#${i}:turnId=${m.__turnId}:isStreaming=${m.isStreaming}:content=${(m.content || '').slice(0, 30)}`);
+            streamDebugLog('[STREAM-DBG] processUpdateMessages backend-render path returning:', result.length, 'messages, assistants:', resultSummary);
+            return finalizeMessageList(prev, collapseActiveStreamingTurn(result));
           }
 
           const lastAssistantIdx = findLastAssistantIndex(parsed);
@@ -296,6 +347,9 @@ export function registerMessageCallbacks(
           findLastAssistantIndex,
           patchAssistantForStreaming,
         );
+        // Stamp __turnId on all assistant messages in the streaming turn
+        // so mergeConsecutiveAssistantMessages can merge them across tool_use boundaries.
+        patched = stampTurnIdOnAssistantMessages(patched, streamingTurnIdRef.current);
         patched = preserveLatestMessagesOnShrink(prev, patched, options.currentProviderRef.current);
 
         const patchedAssistantIdx = findLastAssistantIndex(patched);
@@ -354,7 +408,9 @@ export function registerMessageCallbacks(
           return prev;
         }
 
-        return finalizeMessageList(prev, patched);
+        const nonBackendSummary = patched.filter(m => m.type === 'assistant').map((m, i) => `#${i}:turnId=${m.__turnId}:isStreaming=${m.isStreaming}:content=${(m.content || '').slice(0, 30)}`);
+        streamDebugLog('[STREAM-DBG] processUpdateMessages non-backend streaming path returning:', patched.length, 'messages, assistants:', nonBackendSummary);
+        return finalizeMessageList(prev, collapseActiveStreamingTurn(patched));
       });
     } catch (error) {
       console.error('[Frontend] Failed to parse messages:', error);

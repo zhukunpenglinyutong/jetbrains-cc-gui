@@ -559,6 +559,39 @@ test('opencode history normalization preserves completed tool parts', () => {
   ]);
 });
 
+test('opencode history normalization preserves image file parts', () => {
+  const normalized = normalizeOpenCodeMessage({
+    info: { id: 'msg_user_1', role: 'user' },
+    parts: [
+      {
+        type: 'file',
+        url: 'file:///tmp/opencode-attachments-1/diagram.png',
+        filename: 'diagram.png',
+        mime: 'image/png'
+      },
+      {
+        type: 'text',
+        text: 'What changed in this screenshot?'
+      }
+    ]
+  });
+
+  assert.deepEqual(normalized.message.content, [
+    {
+      type: 'image',
+      source: {
+        type: 'url',
+        url: 'file:///tmp/opencode-attachments-1/diagram.png',
+        media_type: 'image/png'
+      }
+    },
+    {
+      type: 'text',
+      text: 'What changed in this screenshot?'
+    }
+  ]);
+});
+
 test('opencode history normalization restores apply_patch diffs as edit blocks', () => {
   const normalized = normalizeOpenCodeMessage({
     info: {

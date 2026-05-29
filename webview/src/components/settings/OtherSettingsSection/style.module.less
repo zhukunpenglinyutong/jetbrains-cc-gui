@@ -38,6 +38,57 @@
   margin-bottom: 24px;
 }
 
+.streamDebugLogMeta {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.logPathRow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.logPathLabel {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.logPathValue {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--color-code-bg);
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-family: var(--idea-editor-font-family, monospace);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.openLogButton {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid var(--border-subtle, rgba(128, 128, 128, 0.35));
+  border-radius: 4px;
+  color: var(--accent-primary);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 6px 10px;
+  transition: background 0.2s ease, border-color 0.2s ease;
+
+  &:hover {
+    background: var(--color-code-bg);
+    border-color: var(--accent-primary);
+  }
+}
+
 /* 历史记录管理 */
 .historyManagement {
   margin-top: 16px;

@@ -2073,6 +2073,29 @@ function normalizeOpenCodeMessage(item) {
       continue;
     }
 
+    if (kind === 'file') {
+      const url = pickString(part.url);
+      const mime = pickString(part.mime, part.mimeType) || 'application/octet-stream';
+      const filename = pickString(part.filename, part.name) || 'file';
+      if (mime.startsWith('image/') && url) {
+        content.push({
+          type: 'image',
+          source: {
+            type: 'url',
+            url,
+            media_type: mime
+          }
+        });
+      } else {
+        content.push({
+          type: 'attachment',
+          fileName: filename,
+          mediaType: mime
+        });
+      }
+      continue;
+    }
+
     if (!text || (kind !== 'text' && !isReasoningPart(kind))) {
       continue;
     }

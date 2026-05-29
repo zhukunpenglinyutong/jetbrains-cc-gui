@@ -34,6 +34,7 @@ import {
 } from './hooks';
 
 import styles from './style.module.less';
+import { setStreamDebugLogEnabled as persistStreamDebugLogEnabled } from '../../utils/streamDebugLog';
 
 const BLOCK_STYLE: React.CSSProperties = { display: 'block' };
 const NONE_STYLE: React.CSSProperties = { display: 'none' };
@@ -151,6 +152,8 @@ const SettingsView = ({
     setHistoryCompletionEnabled,
     skipNewSessionConfirm,
     setSkipNewSessionConfirm,
+    streamDebugLogEnabled,
+    setStreamDebugLogEnabled,
     handleSaveNodePath,
     handleSaveWorkingDirectory,
     handleUiFontSelectionChange,
@@ -649,6 +652,11 @@ const SettingsView = ({
                 localStorage.setItem('historyCompletionEnabled', enabled.toString());
                 // Dispatch custom event for same-tab sync (localStorage 'storage' event only fires for cross-tab)
                 window.dispatchEvent(new CustomEvent('historyCompletionChanged', { detail: { enabled } }));
+              }}
+              streamDebugLogEnabled={streamDebugLogEnabled}
+              onStreamDebugLogEnabledChange={(enabled) => {
+                setStreamDebugLogEnabled(enabled);
+                persistStreamDebugLogEnabled(enabled);
               }}
             />
           </div>

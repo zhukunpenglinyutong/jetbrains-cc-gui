@@ -14,6 +14,7 @@ import {
   MESSAGE_TYPES,
 } from '../utils/messageUtils';
 import type { ClaudeContentBlock, ClaudeMessage, ClaudeRawMessage } from '../types';
+import { streamDebugLog } from '../utils/streamDebugLog';
 
 export interface UseMessageProcessingOptions {
   messages: ClaudeMessage[];
@@ -112,11 +113,13 @@ export function useMessageProcessing({ messages, currentSessionId, t }: UseMessa
   // instead of 'user' type so they render correctly (left-aligned, no bubble).
   // This includes task_notification, hook, agent, queue, channel, etc.
   const mergedMessages = useMemo(() => {
+    streamDebugLog('[STREAM-DBG] useMessageProcessing merging messages:', messages.length, 'messages, assistants:', messages.filter(m => m.type === 'assistant').map((m, i) => `#${i}:turnId=${m.__turnId}:isStreaming=${m.isStreaming}:content=${(m.content || '').slice(0, 30)}`));
     const merged = mergeConsecutiveAssistantMessages(
       messages,
       normalizeBlocks,
       mergedAssistantMessageCache.current
     );
+    streamDebugLog('[STREAM-DBG] useMessageProcessing merged result:', merged.length, 'messages, assistants:', merged.filter(m => m.type === 'assistant').map((m, i) => `#${i}:turnId=${m.__turnId}:isStreaming=${m.isStreaming}:content=${(m.content || '').slice(0, 30)}`));
 
     const visible: ClaudeMessage[] = [];
 

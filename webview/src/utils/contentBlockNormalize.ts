@@ -1,5 +1,6 @@
 import type { TFunction } from 'i18next';
 import type { ClaudeContentBlock, ClaudeRawMessage } from '../types';
+import { expandTextWithAcpContext, isAcpContextText } from './acpContext';
 
 // ---------------------------------------------------------------------------
 // Constants - avoid magic strings throughout the codebase
@@ -311,6 +312,11 @@ export function normalizeBlocks(
           return;
         }
 
+        if (isAcpContextText(rawText)) {
+          blocks.push(...expandTextWithAcpContext(rawText, localizeMessage));
+          return;
+        }
+
         blocks.push({
           type: 'text',
           text: localizeMessage(rawText),
@@ -398,7 +404,14 @@ export function normalizeBlocks(
 
       // Filter empty strings and command tags (without <command-message>)
       // But only for user messages - assistant messages with these tags should pass through
-      if (!content.trim() || (isUserMessage && containsAnyTag(content, FILTERED_NORMALIZE_TAGS))) {
+      if (isUserMessage && containsAnyTag(content, FILTERED_NORMALIZE_TAGS)) {
+        return null;
+      }
+      if (isAcpContextText(content)) {
+        const blocks = expandTextWithAcpContext(content, localizeMessage);
+        return blocks.length ? blocks : null;
+      }
+      if (!content.trim()) {
         return null;
       }
       return [{ type: 'text' as const, text: localizeMessage(content) }];

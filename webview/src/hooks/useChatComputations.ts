@@ -9,6 +9,7 @@ import type { GetToolResultRawFn } from '../contexts/SubagentContext';
 import type { RewindableMessage } from '../components/RewindSelectDialog';
 import { formatTime } from '../utils/helpers';
 import { extractTodosFromToolUse } from '../utils/todoToolNormalization';
+import { findToolResultBlockInRaw } from '../utils/messageUtils';
 import {
   finalizeSubagentsForSettledTurn,
   finalizeTodosForSettledTurn,
@@ -62,28 +63,17 @@ export function useChatComputations({
     const currentMessages = messagesRef.current;
     const cachedRaw = toolResultRawMapRef.current.get(toolUseId);
     if (cachedRaw != null) {
-      const content = cachedRaw.content ?? cachedRaw.message?.content;
-      if (Array.isArray(content)) {
-        const hit = content.find(
-          (block): block is ToolResultBlock =>
-            Boolean(block) && block.type === 'tool_result' && block.tool_use_id === toolUseId,
-        );
-        if (hit) return hit;
-      }
+      const hit = findToolResultBlockInRaw(cachedRaw, toolUseId);
+      if (hit) return hit;
     }
     for (let i = 0; i < currentMessages.length; i += 1) {
-      const candidate = currentMessages[i];
-      const raw = candidate.raw;
-      if (!raw || typeof raw === 'string') continue;
-      const content = raw.content ?? raw.message?.content;
-      if (!Array.isArray(content)) continue;
-      const resultBlock = content.find(
-        (block): block is ToolResultBlock =>
-          Boolean(block) && block.type === 'tool_result' && block.tool_use_id === toolUseId,
-      );
-      if (resultBlock) {
-        toolResultRawMapRef.current.set(toolUseId, raw);
-        return resultBlock;
+      const hit = findToolResultBlockInRaw(currentMessages[i].raw, toolUseId);
+      if (hit) {
+        const raw = currentMessages[i].raw;
+        if (raw && typeof raw !== 'string') {
+          toolResultRawMapRef.current.set(toolUseId, raw);
+        }
+        return hit;
       }
     }
     return null;

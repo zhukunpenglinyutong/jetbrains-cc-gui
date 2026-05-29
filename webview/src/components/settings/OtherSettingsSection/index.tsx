@@ -2,6 +2,11 @@ import { useState, useEffect, useCallback, Component, type ReactNode } from 'rea
 import styles from './style.module.less';
 import { useTranslation } from 'react-i18next';
 import {
+  getStreamDebugLogPath,
+  openStreamDebugLogFile,
+  requestStreamDebugLogPath,
+} from '../../../utils/streamDebugLog';
+import {
   loadHistoryWithImportance,
   deleteHistoryItem,
   clearAllHistory,
@@ -54,6 +59,8 @@ class OtherSettingsErrorBoundary extends Component<
 interface OtherSettingsSectionProps {
   historyCompletionEnabled: boolean;
   onHistoryCompletionEnabledChange: (enabled: boolean) => void;
+  streamDebugLogEnabled: boolean;
+  onStreamDebugLogEnabledChange: (enabled: boolean) => void;
 }
 
 interface EditorState {
@@ -94,10 +101,13 @@ const formatRelativeTime = (timestamp: string | undefined, t: (key: string, opti
 const OtherSettingsSection = ({
   historyCompletionEnabled,
   onHistoryCompletionEnabledChange,
+  streamDebugLogEnabled,
+  onStreamDebugLogEnabledChange,
 }: OtherSettingsSectionProps) => {
   const { t } = useTranslation();
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [showHistoryList, setShowHistoryList] = useState(false);
+  const [streamDebugLogPath, setStreamDebugLogPath] = useState<string | null>(() => getStreamDebugLogPath());
   const [editorState, setEditorState] = useState<EditorState>({
     isOpen: false,
     mode: 'add',
@@ -119,6 +129,27 @@ const OtherSettingsSection = ({
       reloadHistory();
     }
   }, [showHistoryList, reloadHistory]);
+
+  useEffect(() => {
+    const syncPath = () => setStreamDebugLogPath(getStreamDebugLogPath());
+    const previous = window.updateStreamDebugLogPath;
+    window.updateStreamDebugLogPath = (json: string) => {
+      if (typeof previous === 'function') {
+        previous(json);
+      }
+      syncPath();
+    };
+    requestStreamDebugLogPath();
+    return () => {
+      window.updateStreamDebugLogPath = previous;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (streamDebugLogEnabled) {
+      requestStreamDebugLogPath();
+    }
+  }, [streamDebugLogEnabled]);
 
   const handleDeleteItem = useCallback((item: HistoryItem) => {
     try {
@@ -326,6 +357,52 @@ const OtherSettingsSection = ({
             </div>
           )}
         </div>
+      </div>
+
+      {/* Streaming answer debug log toggle */}
+      <div className={styles.historyCompletionSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-output" />
+          <span className={styles.fieldLabel}>{t('settings.other.streamDebugLog.label')}</span>
+        </div>
+        <label className={styles.toggleWrapper}>
+          <input
+            type="checkbox"
+            className={styles.toggleInput}
+            checked={streamDebugLogEnabled}
+            onChange={(e) => onStreamDebugLogEnabledChange(e.target.checked)}
+          />
+          <span className={styles.toggleSlider} />
+          <span className={styles.toggleLabel}>
+            {streamDebugLogEnabled
+              ? t('settings.other.streamDebugLog.enabled')
+              : t('settings.other.streamDebugLog.disabled')}
+          </span>
+        </label>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>{t('settings.other.streamDebugLog.hint')}</span>
+        </small>
+        {streamDebugLogEnabled && (
+          <div className={styles.streamDebugLogMeta}>
+            {streamDebugLogPath && (
+              <div className={styles.logPathRow}>
+                <span className={styles.logPathLabel}>{t('settings.other.streamDebugLog.logFile')}</span>
+                <code className={styles.logPathValue} title={streamDebugLogPath}>
+                  {streamDebugLogPath}
+                </code>
+              </div>
+            )}
+            <button
+              type="button"
+              className={styles.openLogButton}
+              onClick={() => openStreamDebugLogFile()}
+            >
+              <span className="codicon codicon-file" />
+              <span>{t('settings.other.streamDebugLog.openLog')}</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Editor Dialog */}

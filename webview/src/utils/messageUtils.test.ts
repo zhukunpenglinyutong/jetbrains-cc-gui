@@ -4,6 +4,8 @@ import {
   getMessageKey,
   getContentBlocks,
   mergeConsecutiveAssistantMessages,
+  findToolResultBlockInRaw,
+  extractRawContentBlocks,
   formatCommandForDisplay,
   formatCommandForResubmit,
   formatTaskNotificationForDisplay,
@@ -312,7 +314,7 @@ describe('mergeConsecutiveAssistantMessages', () => {
     expect(mergedRaw.content?.some((b) => b.type === 'text')).toBe(true);
   });
 
-  it('keeps tool_use separated from final answer for streaming messages (has __turnId)', () => {
+  it('merges tool_use with final answer for streaming messages with same __turnId', () => {
     const messages: ClaudeMessage[] = [
       makeMsg('assistant', '', {
         __turnId: 1,
@@ -328,9 +330,136 @@ describe('mergeConsecutiveAssistantMessages', () => {
     ];
 
     const result = mergeConsecutiveAssistantMessages(messages, normalizeBlocks);
-    // Should have 2 assistant messages: tool_use block and final answer block
-    // (user tool_result is skipped, but assistant blocks stay separated)
+    // Same __turnId streaming messages should merge, matching history behavior
+    expect(result.filter((m) => m.type === 'assistant')).toHaveLength(1);
+    const mergedRaw = result[0].raw as { content?: Array<{ type?: string }> };
+    expect(mergedRaw.content?.some((b) => b.type === 'tool_use')).toBe(true);
+    expect(mergedRaw.content?.some((b) => b.type === 'text')).toBe(true);
+  });
+
+  it('keeps tool_use separated from final answer for different __turnId streaming messages', () => {
+    const messages: ClaudeMessage[] = [
+      makeMsg('assistant', '', {
+        __turnId: 1,
+        raw: { content: [{ type: 'tool_use', id: 'tool-1', name: 'read_file' }] } as any,
+      }),
+      makeMsg('user', '[tool_result]', {
+        raw: { content: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'file content' }] } as any,
+      }),
+      makeMsg('assistant', 'final answer', {
+        __turnId: 2,
+        raw: { content: [{ type: 'text', text: 'final answer' }] } as any,
+      }),
+    ];
+
+    const result = mergeConsecutiveAssistantMessages(messages, normalizeBlocks);
     expect(result.filter((m) => m.type === 'assistant')).toHaveLength(2);
+  });
+
+  it('same __turnId bypasses tool_use boundary check (early return)', () => {
+    const messages: ClaudeMessage[] = [
+      makeMsg('assistant', '', {
+        __turnId: 5,
+        raw: { content: [{ type: 'tool_use', id: 't1', name: 'bash' }] } as any,
+      }),
+      makeMsg('user', '[tool_result]'),
+      makeMsg('assistant', 'result', {
+        __turnId: 5,
+        raw: { content: [{ type: 'text', text: 'result' }] } as any,
+      }),
+    ];
+
+    const result = mergeConsecutiveAssistantMessages(messages, normalizeBlocks);
+    expect(result.filter((m) => m.type === 'assistant')).toHaveLength(1);
+  });
+
+  it('merges content-only streaming text into raw blocks for tool+text turns', () => {
+    const messages: ClaudeMessage[] = [
+      makeMsg('assistant', '', {
+        __turnId: 2,
+        raw: { content: [{ type: 'tool_use', id: 'tool-1', name: 'read_file' }] } as any,
+      }),
+      makeMsg('user', '[tool_result]', {
+        raw: { content: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'ok' }] } as any,
+      }),
+      makeMsg('assistant', 'final answer', {
+        __turnId: 2,
+        isStreaming: true,
+        raw: { content: [{ type: 'thinking', thinking: 'planning' }] } as any,
+      }),
+    ];
+
+    const result = mergeConsecutiveAssistantMessages(messages, normalizeBlocks);
+    expect(result).toHaveLength(1);
+    const mergedRaw = result[0].raw as { content?: Array<{ type?: string; text?: string }> };
+    expect(mergedRaw.content?.some((block) => block.type === 'tool_use')).toBe(true);
+    expect(mergedRaw.content?.some((block) => block.type === 'thinking')).toBe(true);
+    expect(mergedRaw.content?.some((block) => block.type === 'text' && block.text === 'final answer')).toBe(true);
+    expect(result[0].isStreaming).toBe(true);
+  });
+
+  it('preserves opencode assistant tool_result blocks when merging streaming fragments', () => {
+    const messages: ClaudeMessage[] = [
+      makeMsg('assistant', '', {
+        __turnId: 3,
+        raw: { content: [{ type: 'tool_use', id: 'tool-1', name: 'read_file', input: { file_path: 'a.ts' } }] } as any,
+      }),
+      makeMsg('assistant', '', {
+        __turnId: 3,
+        raw: {
+          content: [
+            { type: 'tool_result', tool_use_id: 'tool-1', content: 'file contents' },
+            { type: 'text', text: 'Done reading.' },
+          ],
+        } as any,
+      }),
+    ];
+
+    const result = mergeConsecutiveAssistantMessages(messages, normalizeBlocks);
+    expect(result).toHaveLength(1);
+    const mergedRaw = result[0].raw as { content?: Array<{ type?: string; tool_use_id?: string }> };
+    expect(mergedRaw.content?.some((block) => block.type === 'tool_use')).toBe(true);
+    expect(mergedRaw.content?.some((block) => block.type === 'tool_result' && block.tool_use_id === 'tool-1')).toBe(true);
+  });
+
+  it('folds trailing user tool_result blocks into a single assistant message', () => {
+    const messages: ClaudeMessage[] = [
+      makeMsg('assistant', '', {
+        __turnId: 4,
+        raw: { content: [{ type: 'tool_use', id: 'tool-1', name: 'read_file', input: {} }] } as any,
+      }),
+      makeMsg('user', '[tool_result]', {
+        raw: { content: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'done' }] } as any,
+      }),
+    ];
+
+    const result = mergeConsecutiveAssistantMessages(messages, normalizeBlocks);
+    expect(result).toHaveLength(1);
+    const mergedRaw = result[0].raw as { content?: Array<{ type?: string; tool_use_id?: string }> };
+    expect(mergedRaw.content?.some((block) => block.type === 'tool_result' && block.tool_use_id === 'tool-1')).toBe(true);
+  });
+});
+
+describe('extractRawContentBlocks', () => {
+  it('parses JSON string raw payloads', () => {
+    const raw = JSON.stringify({
+      message: {
+        content: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'ok' }],
+      },
+    });
+    const blocks = extractRawContentBlocks(raw);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].type).toBe('tool_result');
+  });
+});
+
+describe('findToolResultBlockInRaw', () => {
+  it('finds tool_result blocks inside JSON string raw payloads', () => {
+    const raw = JSON.stringify({
+      content: [{ type: 'tool_result', tool_use_id: 'tool-abc', content: 'result text' }],
+    });
+    const hit = findToolResultBlockInRaw(raw, 'tool-abc');
+    expect(hit?.content).toBe('result text');
   });
 });
 

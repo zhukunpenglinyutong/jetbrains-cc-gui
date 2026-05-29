@@ -263,6 +263,17 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
    * @returns The index of the assistant message
    */
   const getOrCreateStreamingAssistantIndex = (list: ClaudeMessage[]): number => {
+    const turnId = streamingTurnIdRef.current;
+    if (turnId > 0) {
+      for (let i = list.length - 1; i >= 0; i -= 1) {
+        const msg = list[i];
+        if (msg?.type === 'assistant' && msg.__turnId === turnId) {
+          streamingMessageIndexRef.current = i;
+          return i;
+        }
+      }
+    }
+
     const currentIdx = streamingMessageIndexRef.current;
     if (currentIdx >= 0 && currentIdx < list.length && list[currentIdx]?.type === 'assistant') {
       return currentIdx;

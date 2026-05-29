@@ -25,6 +25,7 @@ import com.github.claudecodegui.ui.WebviewInitializer;
 import com.github.claudecodegui.ui.WebviewWatchdog;
 import com.github.claudecodegui.util.HtmlLoader;
 import com.github.claudecodegui.util.JsUtils;
+import com.github.claudecodegui.util.StreamDebugLogService;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -553,6 +554,11 @@ public class ClaudeChatWindow {
 
         String type = parts[0];
         String content = parts.length > 1 ? parts[1] : "";
+
+        if ("stream_debug_log".equals(type)) {
+            StreamDebugLogService.appendLine(content);
+            return;
+        }
 
         if (messageDispatcher.dispatch(type, content)) {
             return;

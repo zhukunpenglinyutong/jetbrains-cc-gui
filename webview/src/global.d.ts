@@ -745,6 +745,13 @@ interface Window {
   /** Cancel pending rAF-deferred updateMessages (set by messageCallbacks, called by onStreamEnd). */
   __cancelPendingUpdateMessages?: () => void;
 
+  /** Return buffered streaming debug log text (also written to disk when Java bridge is available). */
+  getStreamDebugLogText?: () => string;
+  /** Clear the in-memory streaming debug log buffer. */
+  clearStreamDebugLog?: () => void;
+  /** Receives the absolute path to the streaming debug log file from the IDE backend. */
+  updateStreamDebugLogPath?: (json: string) => void;
+
   /**
    * Rewind result callback - returns the result of a rewind operation
    */

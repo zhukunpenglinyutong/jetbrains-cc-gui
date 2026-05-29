@@ -12,6 +12,7 @@ import { sendBridgeEvent } from '../../../utils/bridge';
 import { THROTTLE_INTERVAL } from '../../useStreamingMessages';
 import { parseSequence } from '../parseSequence';
 import { getStreamEndHandlingMode } from '../messageSync';
+import { streamDebugLog } from '../../../utils/streamDebugLog';
 
 /**
  * Scans assistant messages containing tool_use blocks and returns IDs that have
@@ -224,6 +225,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     streamingMessageIndexRef.current = -1;
     turnIdCounterRef.current += 1;
     streamingTurnIdRef.current = turnIdCounterRef.current;
+    streamDebugLog('[STREAM-DBG] onStreamStart: new turnId=', streamingTurnIdRef.current, 'prev messages count=', 'prev');
     setMessages((prev) => {
       const last = prev[prev.length - 1];
       if (isReplayStart && last?.type === 'assistant') {
@@ -362,25 +364,25 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
       return;
     }
 
-    // FIX: Extract backend final snapshot from pending updateMessages BEFORE cancelling rAF.
-    // The backend's final flush contains the authoritative message state (complete raw blocks).
-    // If onStreamEnd cancels the rAF without processing this snapshot, the final message may
-    // show incomplete content (e.g., last delta missing) or duplicated content in raw blocks.
+    // FIX: Extract the full backend snapshot from pending updateMessages BEFORE cancelling.
+    // The pending payload includes user tool_result messages that may never have been applied
+    // if onStreamEnd cancels the deferred rAF without processing them first.
+    let pendingFullMessages: ClaudeMessage[] | null = null;
     let backendSnapshotContent: string | undefined;
     let backendSnapshotRaw: ClaudeRawMessage | string | undefined = undefined;
     if (typeof window.__pendingUpdateJson === 'string' && window.__pendingUpdateJson.length > 0) {
       try {
-        const parsed = JSON.parse(window.__pendingUpdateJson) as Array<Record<string, unknown>>;
-        for (let i = parsed.length - 1; i >= 0; i--) {
-          if (parsed[i]?.type === 'assistant') {
-            const rawContent = parsed[i].content;
+        pendingFullMessages = JSON.parse(window.__pendingUpdateJson) as ClaudeMessage[];
+        for (let i = pendingFullMessages.length - 1; i >= 0; i--) {
+          if (pendingFullMessages[i]?.type === 'assistant') {
+            const rawContent = pendingFullMessages[i].content;
             const content = typeof rawContent === 'string' ? rawContent : '';
             if (content) {
               backendSnapshotContent = content;
-              const rawVal = parsed[i].raw;
-              if (rawVal != null && (typeof rawVal === 'object' || typeof rawVal === 'string')) {
-                backendSnapshotRaw = rawVal as ClaudeRawMessage | string;
-              }
+            }
+            const rawVal = pendingFullMessages[i].raw;
+            if (rawVal != null && (typeof rawVal === 'object' || typeof rawVal === 'string')) {
+              backendSnapshotRaw = rawVal as ClaudeRawMessage | string;
             }
             break;
           }
@@ -483,10 +485,50 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
 
     // Flush final content and finalize the streaming message.
     setMessages((prev) => {
-      let newMessages = prev;
-      const idx = endedStreamingMessageIndex;
-      if (prev.length > 0 && idx >= 0 && idx < prev.length && prev[idx]?.type === 'assistant') {
-        newMessages = [...prev];
+      let newMessages: ClaudeMessage[] = pendingFullMessages
+        ? pendingFullMessages.map((msg, index) => {
+            const prevMsg = index < prev.length ? prev[index] : undefined;
+            if (
+              prevMsg &&
+              typeof prevMsg.durationMs === 'number' &&
+              msg.type === 'assistant' &&
+              prevMsg.type === 'assistant'
+            ) {
+              return { ...msg, durationMs: prevMsg.durationMs };
+            }
+            return msg;
+          })
+        : [...prev];
+
+      newMessages = newMessages.map((msg) => {
+        if (msg.type === 'assistant' && msg.isStreaming) {
+          if (
+            endedStreamingTurnId <= 0 ||
+            msg.__turnId === undefined ||
+            msg.__turnId === endedStreamingTurnId
+          ) {
+            return { ...msg, isStreaming: false };
+          }
+        }
+        return msg;
+      });
+
+      let idx = endedStreamingMessageIndex;
+      if (pendingFullMessages && endedStreamingTurnId > 0) {
+        idx = -1;
+        for (let i = newMessages.length - 1; i >= 0; i -= 1) {
+          if (
+            newMessages[i]?.type === 'assistant' &&
+            newMessages[i].__turnId === endedStreamingTurnId
+          ) {
+            idx = i;
+            break;
+          }
+        }
+      }
+
+      streamDebugLog('[STREAM-DBG] onStreamEnd setMessages: idx=', idx, 'prev count=', prev.length, 'base count=', newMessages.length, 'usedPendingSnapshot=', Boolean(pendingFullMessages), 'prev assistants=', prev.filter(m => m.type === 'assistant').map(m => `turnId=${m.__turnId}:isStreaming=${m.isStreaming}:content=${(m.content || '').slice(0, 30)}`));
+      if (newMessages.length > 0 && idx >= 0 && idx < newMessages.length && newMessages[idx]?.type === 'assistant') {
         // FIX: Keep __turnId on the message for a short period to prevent
         // incorrect merging with history messages. The __turnId will be
         // removed later when history is loaded or a new turn starts.

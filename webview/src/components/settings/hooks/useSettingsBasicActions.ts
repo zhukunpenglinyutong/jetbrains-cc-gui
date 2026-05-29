@@ -15,6 +15,7 @@ import {
   SKIP_NEW_SESSION_CONFIRM_EVENT,
   type SkipNewSessionConfirmChangedDetail,
 } from '../../../utils/skipNewSessionConfirm';
+import { isStreamDebugLogEnabled } from '../../../utils/streamDebugLog';
 
 const sendToJava = (message: string) => {
   if (window.sendToJava) {
@@ -80,6 +81,7 @@ export interface UseSettingsBasicActionsReturn {
   historyCompletionEnabled: boolean;
   /** Whether to skip the "create new session with existing messages" confirm dialog. */
   skipNewSessionConfirm: boolean;
+  streamDebugLogEnabled: boolean;
   commitGenerationEnabled: boolean;
   aiTitleGenerationEnabled: boolean;
   statusBarWidgetEnabled: boolean;
@@ -156,6 +158,7 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setDiffExpandedByDefault: (expanded: boolean) => void;
   /** @internal */ setHistoryCompletionEnabled: (enabled: boolean) => void;
   /** @internal */ setSkipNewSessionConfirm: (enabled: boolean) => void;
+  /** @internal */ setStreamDebugLogEnabled: (enabled: boolean) => void;
   /** @internal */ setCommitGenerationEnabled: (enabled: boolean) => void;
   /** @internal */ setAiTitleGenerationEnabled: (enabled: boolean) => void;
   /** @internal */ setStatusBarWidgetEnabled: (enabled: boolean) => void;
@@ -256,6 +259,8 @@ export function useSettingsBasicActions({
     window.addEventListener(SKIP_NEW_SESSION_CONFIRM_EVENT, handler);
     return () => window.removeEventListener(SKIP_NEW_SESSION_CONFIRM_EVENT, handler);
   }, []);
+
+  const [streamDebugLogEnabled, setStreamDebugLogEnabled] = useState<boolean>(() => isStreamDebugLogEnabled());
 
   // AI commit generation toggle (default: true)
   const [commitGenerationEnabled, setCommitGenerationEnabled] = useState<boolean>(true);
@@ -612,6 +617,8 @@ export function useSettingsBasicActions({
     setHistoryCompletionEnabled,
     skipNewSessionConfirm,
     setSkipNewSessionConfirm,
+    streamDebugLogEnabled,
+    setStreamDebugLogEnabled,
     handleSaveNodePath,
     handleSaveWorkingDirectory,
     handleUiFontSelectionChange,

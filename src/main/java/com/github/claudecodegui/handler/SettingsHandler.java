@@ -5,6 +5,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.handler.provider.ModelProviderHandler;
 
 import com.github.claudecodegui.util.LanguageConfigService;
+import com.github.claudecodegui.util.StreamDebugLogService;
 import com.github.claudecodegui.util.ThemeConfigService;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -83,7 +84,9 @@ public class SettingsHandler extends BaseMessageHandler {
         // User language preference
         "set_user_language",
         "get_user_language",
-        "clear_user_language"
+        "clear_user_language",
+        "get_stream_debug_log_path",
+        "open_stream_debug_log"
     };
 
     public SettingsHandler(HandlerContext context) {
@@ -290,6 +293,12 @@ public class SettingsHandler extends BaseMessageHandler {
             case "clear_user_language":
                 handleClearUserLanguage();
                 return true;
+            case "get_stream_debug_log_path":
+                handleGetStreamDebugLogPath();
+                return true;
+            case "open_stream_debug_log":
+                handleOpenStreamDebugLog();
+                return true;
             default:
                 return false;
         }
@@ -349,6 +358,16 @@ public class SettingsHandler extends BaseMessageHandler {
     private void pushLanguageConfig() {
         JsonObject languageConfig = LanguageConfigService.getLanguageConfig(context.getSettingsService());
         callJavaScript("window.applyIdeaLanguageConfig", escapeJs(languageConfig.toString()));
+    }
+
+    private void handleGetStreamDebugLogPath() {
+        JsonObject response = new JsonObject();
+        response.addProperty("path", StreamDebugLogService.getLogFilePath().toString());
+        callJavaScript("window.updateStreamDebugLogPath", escapeJs(response.toString()));
+    }
+
+    private void handleOpenStreamDebugLog() {
+        StreamDebugLogService.openLogFile(context.getProject());
     }
 
     /**

@@ -358,6 +358,36 @@ describe('useStreamingMessages', () => {
     expect(rawContent[0]).toMatchObject({ type: 'thinking', thinking: 'Thinking longer now' });
   });
 
+  it('prefers the assistant with the active streaming turn id over a stale index', () => {
+    const { result } = renderHook(() => useStreamingMessages());
+
+    result.current.streamingTurnIdRef.current = 9;
+    result.current.streamingMessageIndexRef.current = 0;
+    result.current.streamingContentRef.current = 'Live answer';
+
+    const messages: ClaudeMessage[] = [
+      {
+        type: 'assistant',
+        content: 'Old completed answer',
+        __turnId: 8,
+        raw: { message: { content: [{ type: 'text', text: 'Old completed answer' }] } },
+      },
+      {
+        type: 'assistant',
+        content: '',
+        __turnId: 9,
+        isStreaming: true,
+        raw: { message: { content: [{ type: 'tool_use', id: 'tool-1', name: 'read_file', input: {} }] } },
+      },
+    ];
+
+    const idx = result.current.getOrCreateStreamingAssistantIndex([...messages]);
+    const patched = result.current.patchAssistantForStreaming(messages[idx]);
+
+    expect(idx).toBe(1);
+    expect(patched.content).toBe('Live answer');
+  });
+
   it('keeps backend raw structure intact when the cumulative thinking buffer cannot be reconciled', () => {
     const { result } = renderHook(() => useStreamingMessages());
 

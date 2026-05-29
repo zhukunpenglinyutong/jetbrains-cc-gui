@@ -1,5 +1,12 @@
 import type { TFunction } from 'i18next';
-import type { ClaudeContentBlock, ClaudeMessage, ClaudeRawMessage, CompactSummaryMetadata } from '../types';
+import type {
+  ClaudeContentBlock,
+  ClaudeContentOrResultBlock,
+  ClaudeMessage,
+  ClaudeRawMessage,
+  CompactSummaryMetadata,
+  ToolResultBlock,
+} from '../types';
 import { isCompactSummaryMetadata } from '../types';
 import {
   containsAnyTag,
@@ -18,7 +25,9 @@ import {
 } from './contentBlockNormalize';
 import type { CompactNotificationItem } from '../types';
 import { MESSAGE_MERGE_CACHE_LIMIT } from './messageMergeCache';
-import { clearStaleStreamEndedMarker, hasRecentlyEndedTurnId } from './streamMarkers';
+import { clearStaleStreamEndedMarker } from './streamMarkers';
+import { streamDebugLog } from './streamDebugLog';
+import { expandTextWithAcpContext, isAcpContextText, stripAcpContextText } from './acpContext';
 
 // ---------------------------------------------------------------------------
 // Re-exports — keep messageUtils.ts as the public barrel so existing imports
@@ -278,6 +287,10 @@ export function getMessageText(
     }
   }
 
+  if (isAcpContextText(result)) {
+    result = stripAcpContextText(result);
+  }
+
   return result;
 }
 
@@ -483,6 +496,9 @@ export function getContentBlocks(
       message.content.trim() &&
       !isSyntheticToolMessageContent(message.content, rawBlocks)
     ) {
+      if (isAcpContextText(message.content)) {
+        return [...rawBlocks, ...expandTextWithAcpContext(message.content, localizeMessage)];
+      }
       return [...rawBlocks, { type: 'text', text: localizeMessage(message.content) }];
     }
     return rawBlocks;
@@ -501,11 +517,81 @@ export function getContentBlocks(
         return [{ type: 'text' as const, text: localizeMessage(displayContent) }];
       }
     }
+    if (isAcpContextText(message.content)) {
+      return expandTextWithAcpContext(message.content, localizeMessage);
+    }
     return [{ type: 'text', text: localizeMessage(message.content) }];
   }
   // If no content at all, return empty array instead of showing "(empty message)"
   // shouldShowMessage will filter out these messages
   return [];
+}
+
+function parseRawObject(raw: ClaudeRawMessage | string | undefined): Record<string, unknown> | null {
+  if (!raw) {
+    return null;
+  }
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+    } catch {
+      return null;
+    }
+  }
+  return raw as Record<string, unknown>;
+}
+
+export function extractRawContentBlocks(raw: ClaudeRawMessage | string | undefined): ClaudeContentOrResultBlock[] {
+  const rawObj = parseRawObject(raw);
+  if (!rawObj) {
+    return [];
+  }
+
+  const message = rawObj.message as { content?: unknown } | undefined;
+  const content = rawObj.content ?? message?.content;
+  if (!Array.isArray(content)) {
+    return [];
+  }
+
+  return content.filter((block): block is ClaudeContentOrResultBlock => Boolean(block && typeof block === 'object'));
+}
+
+export function findToolResultBlockInRaw(
+  raw: ClaudeRawMessage | string | undefined,
+  toolUseId: string,
+): ToolResultBlock | null {
+  const hit = extractRawContentBlocks(raw).find(
+    (block): block is ToolResultBlock =>
+      block.type === 'tool_result' && block.tool_use_id === toolUseId,
+  );
+  return hit ?? null;
+}
+
+function dedupeMergedRawBlocks(blocks: ClaudeContentOrResultBlock[]): ClaudeContentOrResultBlock[] {
+  const seenToolUseIds = new Set<string>();
+  const seenToolResultIds = new Set<string>();
+  const result: ClaudeContentOrResultBlock[] = [];
+
+  for (const block of blocks) {
+    if (block.type === 'tool_use' && typeof block.id === 'string' && block.id) {
+      if (seenToolUseIds.has(block.id)) {
+        continue;
+      }
+      seenToolUseIds.add(block.id);
+    }
+
+    if (block.type === 'tool_result' && typeof block.tool_use_id === 'string' && block.tool_use_id) {
+      if (seenToolResultIds.has(block.tool_use_id)) {
+        continue;
+      }
+      seenToolResultIds.add(block.tool_use_id);
+    }
+
+    result.push(block);
+  }
+
+  return result;
 }
 
 /**
@@ -530,47 +616,23 @@ export function mergeConsecutiveAssistantMessages(
     return `${message.type}-${index}`;
   };
 
-  const getAssistantBlockSummary = (message: ClaudeMessage): { hasToolUse: boolean; hasText: boolean } => {
-    const blocks = normalizeBlocksFn(message.raw) || [];
-    return {
-      hasToolUse: blocks.some((block) => block.type === 'tool_use'),
-      hasText: blocks.some((block) => block.type === 'text' && typeof block.text === 'string' && block.text.trim().length > 0)
-        || Boolean(message.content && message.content.trim()),
-    };
-  };
-
   const shouldMergeAssistantMessage = (previous: ClaudeMessage, next: ClaudeMessage): boolean => {
-    // Distinct streaming turns must stay visually separated even when the
-    // backend emits adjacent assistant fragments during synchronization.
-    // Block merge when either side has a __turnId and they differ.
-    // This prevents streaming messages from merging with history messages.
-    // FIX: Also check __lastStreamEndedTurnId to distinguish recently-ended
-    // streaming messages from true history messages.
     const prevTurnId = previous.__turnId;
     const nextTurnId = next.__turnId;
 
-    // If either message has the recently-ended turn ID, block merging
-    if (hasRecentlyEndedTurnId(prevTurnId) || hasRecentlyEndedTurnId(nextTurnId)) {
-      return false;
+    const sameTurnId = prevTurnId !== undefined && prevTurnId === nextTurnId;
+    if (sameTurnId) {
+      streamDebugLog('[STREAM-DBG] shouldMerge: same turnId merge', { prevTurnId, nextTurnId, prevContent: previous.content?.slice(0, 50), nextContent: next.content?.slice(0, 50) });
+      return true;
     }
 
-    // Block merge when either side has a __turnId and they differ
     if ((prevTurnId !== undefined || nextTurnId !== undefined) &&
         prevTurnId !== nextTurnId) {
+      streamDebugLog('[STREAM-DBG] shouldMerge: BLOCKED different turnIds', { prevTurnId, nextTurnId, prevContent: previous.content?.slice(0, 50), nextContent: next.content?.slice(0, 50) });
       return false;
     }
 
-    const previousSummary = getAssistantBlockSummary(previous);
-    const nextSummary = getAssistantBlockSummary(next);
-
-    // For messages without __turnId (loaded from history), allow merging across
-    // tool_use boundary so that tool-execution and final answer appear as one block.
-    // For streaming messages (with __turnId), keep tool_use separated from answer.
-    const bothLackTurnId = prevTurnId === undefined && nextTurnId === undefined;
-    if (!bothLackTurnId && previousSummary.hasToolUse !== nextSummary.hasToolUse) {
-      return false;
-    }
-
+    streamDebugLog('[STREAM-DBG] shouldMerge: history merge (no turnIds)', { prevTurnId, nextTurnId, prevContent: previous.content?.slice(0, 50), nextContent: next.content?.slice(0, 50) });
     return true;
   };
 
@@ -596,32 +658,49 @@ export function mergeConsecutiveAssistantMessages(
     return content.every((block) => block && block.type === 'tool_result');
   };
 
-  const buildMergedAssistantMessage = (group: ClaudeMessage[]): ClaudeMessage => {
+  const buildMergedAssistantMessage = (
+    group: ClaudeMessage[],
+    boundaryToolResults: ClaudeContentOrResultBlock[] = [],
+  ): ClaudeMessage => {
     const first = group[0];
+    const anyStreaming = group.some((msg) => msg.isStreaming === true);
 
-    const combinedBlocks: ClaudeContentBlock[] = [];
+    const combinedBlocks: ClaudeContentOrResultBlock[] = [];
     const contentParts: string[] = [];
 
     for (const msg of group) {
-      const blocks = normalizeBlocksFn(msg.raw) || [];
-      if (blocks.length > 0) {
-        combinedBlocks.push(...blocks);
+      const rawBlocks = extractRawContentBlocks(msg.raw);
+      if (rawBlocks.length > 0) {
+        combinedBlocks.push(...rawBlocks);
       }
       if (msg.content) {
         const trimmed = msg.content.trim();
         if (trimmed) {
           contentParts.push(msg.content);
+          const displayBlocks = normalizeBlocksFn(msg.raw) || [];
+          const hasTextInRaw = rawBlocks.some(
+            (block) => block.type === 'text' && typeof block.text === 'string' && block.text.trim().length > 0,
+          );
+          if (!hasTextInRaw && !isSyntheticToolMessageContent(msg.content, displayBlocks)) {
+            combinedBlocks.push({ type: 'text', text: msg.content });
+          }
         }
       }
     }
+
+    if (boundaryToolResults.length > 0) {
+      combinedBlocks.push(...boundaryToolResults);
+    }
+
+    const mergedRawBlocks = dedupeMergedRawBlocks(combinedBlocks);
 
     const rawBase: ClaudeRawMessage =
       (typeof first.raw === 'object' && first.raw ? { ...(first.raw as ClaudeRawMessage) } : ({} as ClaudeRawMessage));
 
     const nextRaw: ClaudeRawMessage = {
       ...rawBase,
-      content: combinedBlocks,
-      message: rawBase.message ? { ...rawBase.message, content: combinedBlocks } : rawBase.message,
+      content: mergedRawBlocks,
+      message: rawBase.message ? { ...rawBase.message, content: mergedRawBlocks } : rawBase.message,
     };
 
     const mergedContent = contentParts.join('\n');
@@ -631,11 +710,13 @@ export function mergeConsecutiveAssistantMessages(
       content: mergedContent,
       raw: nextRaw,
       __turnId: first.__turnId,
+      isStreaming: anyStreaming,
     };
   };
 
   const result: ClaudeMessage[] = [];
   let i = 0;
+  streamDebugLog('[STREAM-DBG] mergeConsecutiveAssistantMessages input:', messages.length, 'messages, turnIds:', messages.map((m, idx) => m.type === 'assistant' ? `#${idx}:turnId=${m.__turnId}:content=${(m.content || '').slice(0, 30)}` : `#${idx}:${m.type}`));
   while (i < messages.length) {
     const msg = messages[i];
     if (msg.type !== 'assistant') {
@@ -645,6 +726,7 @@ export function mergeConsecutiveAssistantMessages(
     }
 
     const assistantGroup: ClaudeMessage[] = [msg];
+    const boundaryToolResults: ClaudeContentOrResultBlock[] = [];
     let j = i + 1;
     let previousAssistant = msg;
 
@@ -652,6 +734,9 @@ export function mergeConsecutiveAssistantMessages(
       const candidate = messages[j];
 
       if (isToolResultOnlyUserMessage(candidate)) {
+        boundaryToolResults.push(
+          ...extractRawContentBlocks(candidate.raw).filter((block) => block.type === 'tool_result'),
+        );
         j += 1;
         continue;
       }
@@ -668,7 +753,20 @@ export function mergeConsecutiveAssistantMessages(
 
     const group = messages.slice(i, j);
     if (assistantGroup.length <= 1) {
-      result.push(msg);
+      if (boundaryToolResults.length > 0) {
+        const rawBlocks = extractRawContentBlocks(msg.raw);
+        const nextRaw: ClaudeRawMessage = {
+          ...(typeof msg.raw === 'object' && msg.raw ? { ...(msg.raw as ClaudeRawMessage) } : {}),
+          content: dedupeMergedRawBlocks([...rawBlocks, ...boundaryToolResults]),
+        };
+        const messageObj = nextRaw.message as { content?: ClaudeContentOrResultBlock[] } | undefined;
+        if (messageObj) {
+          messageObj.content = nextRaw.content as ClaudeContentOrResultBlock[];
+        }
+        result.push({ ...msg, raw: nextRaw });
+      } else {
+        result.push(msg);
+      }
       i = j;
       continue;
     }
@@ -688,7 +786,7 @@ export function mergeConsecutiveAssistantMessages(
       }
     }
 
-    const merged = buildMergedAssistantMessage(assistantGroup);
+    const merged = buildMergedAssistantMessage(assistantGroup, boundaryToolResults);
     if (cache) {
       cache.set(groupKey, { source: group, merged });
       if (cache.size > MESSAGE_MERGE_CACHE_LIMIT) {
@@ -699,5 +797,22 @@ export function mergeConsecutiveAssistantMessages(
     i = j;
   }
 
+  streamDebugLog('[STREAM-DBG] mergeConsecutiveAssistantMessages output:', result.length, 'messages, turnIds:', result.map((m, idx) => m.type === 'assistant' ? `#${idx}:turnId=${m.__turnId}:content=${(m.content || '').slice(0, 30)}` : `#${idx}:${m.type}`));
   return result;
+}
+
+/**
+ * Collapse assistant fragments from the active streaming turn so state matches
+ * the merged timeline the renderer already uses during live updates.
+ */
+export function collapseStreamingTurnAssistants(
+  messages: ClaudeMessage[],
+  turnId: number,
+  normalizeBlocksFn: (raw?: ClaudeRawMessage | string) => ClaudeContentBlock[] | null,
+): ClaudeMessage[] {
+  if (turnId <= 0) return messages;
+  if (!messages.some((msg) => msg.type === 'assistant' && msg.__turnId === turnId)) {
+    return messages;
+  }
+  return mergeConsecutiveAssistantMessages(messages, normalizeBlocksFn);
 }

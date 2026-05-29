@@ -450,6 +450,14 @@
           "justNow": "just now"
         }
       },
+      "streamDebugLog": {
+        "label": "Streaming answer debug log",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "When enabled, streaming merge and message-update events are written to the browser console and appended to a log file in your IDE log directory (next to idea.log).",
+        "logFile": "Log file",
+        "openLog": "Open log"
+      },
       "aiTitleGeneration": {
         "label": "AI session title generation",
         "enabled": "Enabled",
