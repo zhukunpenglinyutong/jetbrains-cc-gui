@@ -1,11 +1,11 @@
 package com.github.claudecodegui.session;
 
 /**
- * Temporary opencode callback handler.
+ * opencode callback handler built on the Codex-normalized bridge contract.
  *
- * opencode will emit the same normalized bridge markers as Codex in the first
- * bridge slice. Replace this with an opencode-specific handler when the event
- * translator starts emitting opencode tool, permission, and diff details.
+ * OpenCode emits the same STREAM_START/STREAM_END markers as Codex. The webview
+ * uses Codex-style minimal stream-end recovery when stream_end arrives without
+ * a prior stream_start.
  */
 public class OpenCodeMessageHandler extends CodexMessageHandler {
 

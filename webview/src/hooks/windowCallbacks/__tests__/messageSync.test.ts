@@ -64,7 +64,11 @@ describe('getStreamEndHandlingMode', () => {
     expect(getStreamEndHandlingMode('codex', false, 0)).toBe('minimal');
   });
 
-  it('skips finalize for non-Codex providers when no stream is active', () => {
+  it('uses minimal finalize for OpenCode when stream start was lost', () => {
+    expect(getStreamEndHandlingMode('opencode', false, 0)).toBe('minimal');
+  });
+
+  it('skips finalize for Claude when no stream is active', () => {
     expect(getStreamEndHandlingMode('claude', false, 0)).toBe('skip');
   });
 });

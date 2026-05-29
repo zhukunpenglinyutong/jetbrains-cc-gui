@@ -20,7 +20,9 @@ export const getStreamEndHandlingMode = (
   if (isStreaming || currentTurnId > 0) {
     return 'full';
   }
-  if (provider === 'codex') {
+  // Codex and OpenCode share the same bridge markers and handler shape. When
+  // stream_end arrives without a prior stream_start, still clear spinners.
+  if (provider === 'codex' || provider === 'opencode') {
     return 'minimal';
   }
   return 'skip';
