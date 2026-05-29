@@ -5,6 +5,7 @@ import {
   createEventContext,
   handleOpenCodeEvent,
   normalizeOpenCodeMessage,
+  shouldHandleSessionEvent,
   waitForOpenCodeTurnIdle
 } from './message-service.js';
 
@@ -762,4 +763,53 @@ test('opencode non-reasoning unknown field deltas are skipped', async () => {
   const cDeltas = contentDeltas(lines);
   assert.equal(tDeltas.length, 0);
   assert.equal(cDeltas.length, 0, 'unknown field deltas should be skipped');
+});
+
+test('opencode session filtering ignores events before session id is assigned', () => {
+  const ctx = createEventContext(null, '/repo', 'default', { id: '' });
+  const props = {
+    sessionID: 'ses_foreign',
+    messageID: 'msg_1',
+    partID: 'prt_text_1',
+    field: 'text',
+    delta: 'leaked text'
+  };
+
+  assert.equal(shouldHandleSessionEvent(ctx, props), false);
+});
+
+test('opencode session filtering rejects foreign session events', () => {
+  const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_active' });
+  const props = {
+    sessionID: 'ses_foreign',
+    messageID: 'msg_1',
+    partID: 'prt_text_1',
+    field: 'text',
+    delta: 'leaked text'
+  };
+
+  assert.equal(shouldHandleSessionEvent(ctx, props), false);
+  assert.equal(shouldHandleSessionEvent(ctx, {
+    ...props,
+    sessionID: 'ses_active'
+  }), true);
+});
+
+test('opencode ignores foreign session deltas before session id is assigned', async () => {
+  const ctx = createEventContext(null, '/repo', 'default', { id: '' });
+  const lines = await captureConsole(async () => {
+    await handleOpenCodeEvent({
+      type: 'message.part.delta',
+      properties: {
+        sessionID: 'ses_foreign',
+        messageID: 'msg_1',
+        partID: 'prt_text_1',
+        field: 'text',
+        delta: 'leaked text'
+      }
+    }, ctx);
+  });
+
+  assert.equal(contentDeltas(lines).length, 0);
+  assert.equal(ctx.sessionRef.id, '');
 });

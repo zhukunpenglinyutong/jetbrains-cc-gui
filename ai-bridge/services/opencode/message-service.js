@@ -2542,19 +2542,17 @@ function eventSessionId(props) {
 }
 
 function shouldHandleSessionEvent(ctx, props) {
-  const sessionId = eventSessionId(props);
-  if (!sessionId || !ctx.sessionRef.id) {
-    return true;
+  const activeSessionId = typeof ctx.sessionRef?.id === 'string' ? ctx.sessionRef.id.trim() : '';
+  if (!activeSessionId) {
+    return false;
   }
-  return sessionId === ctx.sessionRef.id;
-}
 
-function setSessionIfMissing(ctx, props) {
   const sessionId = eventSessionId(props);
-  if (sessionId && !ctx.sessionRef.id) {
-    ctx.sessionRef.id = sessionId;
-    emitMarker('[THREAD_ID]', sessionId);
+  if (!sessionId) {
+    return false;
   }
+
+  return sessionId === activeSessionId;
 }
 
 async function handleOpenCodeEvent(event, ctx) {
@@ -2568,7 +2566,6 @@ async function handleOpenCodeEvent(event, ctx) {
     return;
   }
 
-  setSessionIfMissing(ctx, props);
   if (!shouldHandleSessionEvent(ctx, props)) {
     return;
   }
@@ -3361,6 +3358,7 @@ export {
   extractOpenCodeAssistantText,
   extractSessionId,
   handleOpenCodeEvent,
+  shouldHandleSessionEvent,
   listOpenCodeModelProviders,
   normalizeOpenCodeMessage,
   normalizeOpenCodeAgents,
