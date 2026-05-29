@@ -1210,6 +1210,7 @@ function normalizeOpenCodeModels(providerPayload = {}, configPayload = {}, resol
       const label = model.name ? String(model.name) : modelID;
       const status = model.status && model.status !== 'active' ? ` · ${model.status}` : '';
       const defaultForProvider = defaults[providerID] === modelID;
+      const variants = normalizeOpenCodeModelVariants(model.variants);
       models.push({
         id,
         label,
@@ -1218,12 +1219,33 @@ function normalizeOpenCodeModels(providerPayload = {}, configPayload = {}, resol
         modelID,
         providerName,
         isDefault: false,
-        isProviderDefault: defaultForProvider
+        isProviderDefault: defaultForProvider,
+        ...(variants.length > 0 ? { variants } : {})
       });
     }
   }
 
+  if (resolvedDefault?.id) {
+    const resolvedEntry = models.find((entry) => entry.id === resolvedDefault.id);
+    if (resolvedEntry?.variants?.length) {
+      models[0].variants = resolvedEntry.variants;
+    }
+  }
+
   return models;
+}
+
+function normalizeOpenCodeModelVariants(rawVariants) {
+  if (!rawVariants) {
+    return [];
+  }
+  if (Array.isArray(rawVariants)) {
+    return rawVariants.map((entry) => String(entry || '').trim()).filter(Boolean);
+  }
+  if (typeof rawVariants === 'object') {
+    return Object.keys(rawVariants).map((key) => String(key || '').trim()).filter(Boolean);
+  }
+  return [];
 }
 
 function getOpenCodeProviderList(providerPayload = {}) {
@@ -2790,7 +2812,8 @@ export async function sendMessage(
   model = '',
   agent = '',
   attachments = [],
-  options = {}
+  options = {},
+  variant = ''
 ) {
   let runtime = null;
   let cleanupAttachments = async () => {};
@@ -2884,6 +2907,10 @@ export async function sendMessage(
       const body = { parts: promptParts.parts };
       if (parsedModel) {
         body.model = parsedModel;
+      }
+      const normalizedVariant = typeof variant === 'string' ? variant.trim() : '';
+      if (normalizedVariant && normalizedVariant !== 'default') {
+        body.variant = normalizedVariant;
       }
       Object.assign(body, resolveOpenCodePromptOptions(permissionMode, agent));
 

@@ -270,6 +270,7 @@ public class SessionSendService {
                 effectivePermissionMode,
                 state.getModel(),
                 agentPrompt,
+                state.getReasoningEffort(),
                 handler
         ).thenApply(result -> null);
     }

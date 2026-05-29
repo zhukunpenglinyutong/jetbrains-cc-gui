@@ -25,12 +25,14 @@ export function ChatInputBoxFooter({
   permissionMode,
   currentProvider,
   reasoningEffort,
+  openCodeModelVariant,
   onSubmit,
   onStop,
   onModeSelect,
   onModelSelect,
   onProviderSelect,
   onReasoningChange,
+  onOpenCodeVariantChange,
   onEnhancePrompt,
   alwaysThinkingEnabled,
   onToggleThinking,
@@ -60,12 +62,14 @@ export function ChatInputBoxFooter({
   permissionMode: PermissionMode;
   currentProvider: string;
   reasoningEffort: ReasoningEffort;
+  openCodeModelVariant?: string;
   onSubmit: () => void;
   onStop?: () => void;
   onModeSelect?: (mode: PermissionMode) => void;
   onModelSelect?: (modelId: string) => void;
   onProviderSelect?: (providerId: string) => void;
   onReasoningChange?: (effort: ReasoningEffort) => void;
+  onOpenCodeVariantChange?: (variant: string) => void;
   onEnhancePrompt: () => void;
   alwaysThinkingEnabled?: boolean;
   onToggleThinking?: (enabled: boolean) => void;
@@ -107,12 +111,14 @@ export function ChatInputBoxFooter({
         permissionMode={permissionMode}
         currentProvider={currentProvider}
         reasoningEffort={reasoningEffort}
+        openCodeModelVariant={openCodeModelVariant}
         onSubmit={onSubmit}
         onStop={onStop}
         onModeSelect={onModeSelect}
         onModelSelect={onModelSelect}
         onProviderSelect={onProviderSelect}
         onReasoningChange={onReasoningChange}
+        onOpenCodeVariantChange={onOpenCodeVariantChange}
         onEnhancePrompt={onEnhancePrompt}
         alwaysThinkingEnabled={alwaysThinkingEnabled}
         onToggleThinking={onToggleThinking}

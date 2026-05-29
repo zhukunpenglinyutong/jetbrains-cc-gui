@@ -7,6 +7,22 @@ function asNonEmptyString(value: unknown): string | undefined {
     : undefined;
 }
 
+function normalizeModelVariants(raw: unknown): string[] | undefined {
+  if (Array.isArray(raw)) {
+    const variants = raw
+      .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+      .filter(Boolean);
+    return variants.length > 0 ? variants : undefined;
+  }
+  if (raw && typeof raw === 'object') {
+    const variants = Object.keys(raw as Record<string, unknown>)
+      .map((key) => key.trim())
+      .filter(Boolean);
+    return variants.length > 0 ? variants : undefined;
+  }
+  return undefined;
+}
+
 function normalizeModel(raw: unknown): ModelInfo | null {
   if (!raw || typeof raw !== 'object') {
     return null;
@@ -20,7 +36,9 @@ function normalizeModel(raw: unknown): ModelInfo | null {
 
   const label = asNonEmptyString(candidate.label) ?? id;
   const description = asNonEmptyString(candidate.description);
-  return description ? { id, label, description } : { id, label };
+  const variants = normalizeModelVariants(candidate.variants);
+  const base = description ? { id, label, description } : { id, label };
+  return variants ? { ...base, variants } : base;
 }
 
 function formatOpenCodeDefaultDescription(defaultModel: string, defaultModelSource?: string): string {
@@ -112,4 +130,39 @@ export function ensureSelectedOpenCodeModel(
       description: selectedId,
     },
   ];
+}
+
+export function resolveOpenCodeVariantKeys(
+  models: ModelInfo[],
+  selectedModelId: string,
+  defaultModelId?: string,
+): string[] {
+  const selectedId = asNonEmptyString(selectedModelId);
+  if (!selectedId) {
+    return [];
+  }
+
+  const resolvedModelId = selectedId === OPENCODE_DEFAULT_MODEL_ID
+    ? asNonEmptyString(defaultModelId)
+    : selectedId;
+  if (!resolvedModelId) {
+    return [];
+  }
+
+  const model = models.find((entry) => entry.id === resolvedModelId);
+  return model?.variants ?? [];
+}
+
+export function buildOpenCodeVariantOptions(variantKeys: string[]): Array<{ id: string; label: string }> {
+  if (variantKeys.length === 0) {
+    return [];
+  }
+  const options = ['default', ...variantKeys];
+  if (options.length <= 2) {
+    return [];
+  }
+  return options.map((id) => ({
+    id,
+    label: id.charAt(0).toUpperCase() + id.slice(1),
+  }));
 }

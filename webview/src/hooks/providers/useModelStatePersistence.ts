@@ -40,6 +40,7 @@ export interface UseModelStatePersistenceOptions {
   setPermissionMode: (value: PermissionMode) => void;
   setLongContextEnabled: (value: boolean) => void;
   setReasoningEffort: (value: ReasoningEffort) => void;
+  setOpenCodeModelVariant: (value: string | undefined) => void;
   setAgentsByProvider: (value: React.SetStateAction<AgentsByProvider>) => void;
   // Cross-slice save deps (re-saves on any change)
   currentProvider: string;
@@ -51,6 +52,7 @@ export interface UseModelStatePersistenceOptions {
   openCodePermissionMode: PermissionMode;
   longContextEnabled: boolean;
   reasoningEffort: ReasoningEffort;
+  openCodeModelVariant?: string;
   agentsByProvider: AgentsByProvider;
 }
 
@@ -76,6 +78,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     setPermissionMode,
     setLongContextEnabled,
     setReasoningEffort,
+    setOpenCodeModelVariant,
     setAgentsByProvider,
     currentProvider,
     selectedClaudeModel,
@@ -86,6 +89,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     openCodePermissionMode,
     longContextEnabled,
     reasoningEffort,
+    openCodeModelVariant,
     agentsByProvider,
   } = options;
 
@@ -103,6 +107,8 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
       let restoredCodexPermissionMode: PermissionMode = 'default';
       let restoredOpenCodePermissionMode: PermissionMode = 'default';
       let restoredLongContextEnabled = true;
+      let restoredOpenCodeModelVariant: string | undefined;
+      let restoredReasoningEffort: ReasoningEffort | undefined;
 
       if (saved) {
         const state = JSON.parse(saved);
@@ -130,6 +136,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
         }
 
         if (isReasoningEffort(state.reasoningEffort)) {
+          restoredReasoningEffort = state.reasoningEffort;
           setReasoningEffort(state.reasoningEffort);
         }
 
@@ -157,6 +164,11 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           restoredOpenCodeModel = state.openCodeModel.trim();
           setSelectedOpenCodeModel(restoredOpenCodeModel);
         }
+
+        if (typeof state.openCodeModelVariant === 'string' && state.openCodeModelVariant.trim().length > 0) {
+          restoredOpenCodeModelVariant = state.openCodeModelVariant.trim();
+          setOpenCodeModelVariant(restoredOpenCodeModelVariant);
+        }
       }
 
       const initialPermissionMode: PermissionMode = restoredProvider === 'codex'
@@ -182,6 +194,11 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
               : apply1MContextSuffix(restoredClaudeModel, restoredLongContextEnabled);
           sendBridgeEvent('set_model', modelToSync);
           sendBridgeEvent('set_mode', initialPermissionMode);
+          if (restoredProvider === 'opencode') {
+            sendBridgeEvent('set_reasoning_effort', restoredOpenCodeModelVariant ?? '');
+          } else if (restoredProvider === 'codex' && restoredReasoningEffort) {
+            sendBridgeEvent('set_reasoning_effort', restoredReasoningEffort);
+          }
         } else {
           syncRetryCount++;
           if (syncRetryCount < MAX_SYNC_RETRIES) {
@@ -222,6 +239,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
         openCodePermissionMode,
         longContextEnabled,
         reasoningEffort,
+        openCodeModelVariant,
       }));
     } catch {
       // Failed to save model selection state — non-fatal.
@@ -236,6 +254,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     openCodePermissionMode,
     longContextEnabled,
     reasoningEffort,
+    openCodeModelVariant,
   ]);
 
   // Persist agent selections per provider whenever the map changes.

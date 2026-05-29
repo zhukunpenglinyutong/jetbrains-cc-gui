@@ -126,6 +126,7 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
             String permissionMode,
             String model,
             String agent,
+            String modelVariant,
             MessageCallback callback
     ) {
         JsonObject stdinInput = new JsonObject();
@@ -136,6 +137,12 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
         stdinInput.addProperty("model", model != null ? model : "");
         stdinInput.addProperty("agent", agent != null ? agent : "");
         stdinInput.add("attachments", buildAttachments(attachments));
+        if (modelVariant != null) {
+            String normalizedVariant = modelVariant.trim();
+            if (!normalizedVariant.isEmpty() && !"default".equalsIgnoreCase(normalizedVariant)) {
+                stdinInput.addProperty("variant", normalizedVariant);
+            }
+        }
 
         DaemonBridge db = getDaemonBridge();
         if (db != null) {

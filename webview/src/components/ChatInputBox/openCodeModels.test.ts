@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { OPENCODE_MODELS } from './types';
-import { ensureSelectedOpenCodeModel, parseOpenCodeModelPayload } from './openCodeModels';
+import { ensureSelectedOpenCodeModel, parseOpenCodeModelPayload, buildOpenCodeVariantOptions, resolveOpenCodeVariantKeys } from './openCodeModels';
 
 describe('openCodeModels', () => {
   it('parses discovered opencode models from the bridge payload', () => {
@@ -81,5 +81,38 @@ describe('openCodeModels', () => {
 
     expect(result.defaultModel).toBe('openai/gpt-5.5');
     expect(result.models[0].description).toBe('Uses openai/gpt-5.5 last used in this project.');
+  });
+
+  it('parses model variants from discovery payloads', () => {
+    const result = parseOpenCodeModelPayload(JSON.stringify({
+      success: true,
+      models: [
+        {
+          id: 'openai/gpt-5.5',
+          label: 'GPT-5.5',
+          variants: ['low', 'high'],
+        },
+      ],
+    }));
+
+    expect(result.models.find((model) => model.id === 'openai/gpt-5.5')?.variants).toEqual(['low', 'high']);
+  });
+
+  it('builds OpenCode variant options like the TUI', () => {
+    expect(buildOpenCodeVariantOptions(['high'])).toEqual([]);
+    expect(buildOpenCodeVariantOptions(['low', 'high'])).toEqual([
+      { id: 'default', label: 'Default' },
+      { id: 'low', label: 'Low' },
+      { id: 'high', label: 'High' },
+    ]);
+  });
+
+  it('resolves variants for opencode default from the configured default model', () => {
+    const models = [
+      { id: 'opencode-default', label: 'opencode default', variants: ['low', 'high'] },
+      { id: 'openai/gpt-5.5', label: 'GPT-5.5', variants: ['low', 'high'] },
+    ];
+
+    expect(resolveOpenCodeVariantKeys(models, 'opencode-default', 'openai/gpt-5.5')).toEqual(['low', 'high']);
   });
 });

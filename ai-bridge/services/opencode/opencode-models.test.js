@@ -48,6 +48,38 @@ test('opencode model discovery keeps CLI default placeholder first', () => {
   });
 });
 
+test('opencode model discovery exposes model variants and copies them to CLI default', () => {
+  const models = normalizeOpenCodeModels({
+    providers: [
+      {
+        id: 'openai',
+        name: 'OpenAI',
+        models: {
+          'gpt-5.5': {
+            id: 'gpt-5.5',
+            name: 'GPT-5.5',
+            variants: {
+              low: { reasoning: { effort: 'low' } },
+              high: { reasoning: { effort: 'high' } },
+            },
+          },
+        },
+      },
+    ],
+    default: {
+      openai: 'gpt-5.5',
+    },
+  }, {
+    model: 'openai/gpt-5.5',
+  }, {
+    id: 'openai/gpt-5.5',
+    source: 'config',
+  });
+
+  assert.deepEqual(models[0].variants, ['low', 'high']);
+  assert.deepEqual(models[1].variants, ['low', 'high']);
+});
+
 test('opencode model discovery filters disabled models', () => {
   const models = normalizeOpenCodeModels({
     providers: [

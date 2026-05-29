@@ -35,7 +35,8 @@ export async function handleOpenCodeCommand(command, args, stdinData) {
         permissionMode = args[3] || '',
         model = args[4] || '',
         agent = '',
-        attachments = []
+        attachments = [],
+        variant = ''
       } = stdinData || {};
 
       await openCodeSendMessage(
@@ -46,7 +47,8 @@ export async function handleOpenCodeCommand(command, args, stdinData) {
         model,
         agent,
         attachments,
-        options
+        options,
+        variant
       );
       break;
     }

@@ -75,6 +75,8 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
   const {
     selectedOpenCodeModel, setSelectedOpenCodeModel,
     openCodePermissionMode, setOpenCodePermissionMode,
+    openCodeModelVariant, setOpenCodeModelVariant,
+    handleOpenCodeVariantChange,
   } = opencode;
 
   // ── Persistence: load on mount + save on change ──
@@ -86,6 +88,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     setClaudePermissionMode,
     setCodexPermissionMode,
     setOpenCodePermissionMode,
+    setOpenCodeModelVariant,
     setPermissionMode,
     setLongContextEnabled,
     setReasoningEffort,
@@ -99,6 +102,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     openCodePermissionMode,
     longContextEnabled,
     reasoningEffort,
+    openCodeModelVariant,
     agentsByProvider: settings.agentsByProvider,
   });
 
@@ -166,10 +170,18 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
         ? selectedOpenCodeModel || OPENCODE_DEFAULT_MODEL_ID
         : apply1MContextSuffix(selectedClaudeModel, longContextEnabled);
     sendBridgeEvent('set_model', newModel);
+
+    if (providerId === 'opencode') {
+      sendBridgeEvent('set_reasoning_effort', openCodeModelVariant ?? '');
+    } else if (providerId === 'codex') {
+      sendBridgeEvent('set_reasoning_effort', reasoningEffort);
+    }
   }, [
     claudePermissionMode,
     codexPermissionMode,
     openCodePermissionMode,
+    openCodeModelVariant,
+    reasoningEffort,
     selectedCodexModel,
     selectedOpenCodeModel,
     selectedClaudeModel,
@@ -225,6 +237,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
   return {
     ...claude,
     ...codex,
+    ...opencode,
     ...usage,
     ...settings,
     currentProvider, setCurrentProvider,
@@ -238,5 +251,6 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     handleProviderSelect,
     handleLongContextChange,
     handleToggleThinking,
+    handleOpenCodeVariantChange,
   };
 }

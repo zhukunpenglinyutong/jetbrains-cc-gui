@@ -260,6 +260,8 @@ export interface ModelInfo {
   id: string;
   label: string;
   description?: string;
+  /** OpenCode model variant keys (thinking effort), when supported by the model. */
+  variants?: string[];
 }
 
 /**
@@ -637,8 +639,12 @@ export interface ChatInputBoxProps {
   onProviderSelect?: (providerId: string) => void;
   /** Current reasoning effort */
   reasoningEffort?: ReasoningEffort;
+  /** Selected OpenCode model variant (thinking effort), when supported */
+  openCodeModelVariant?: string;
   /** Switch reasoning effort callback */
   onReasoningChange?: (effort: ReasoningEffort) => void;
+  /** Switch OpenCode model variant callback */
+  onOpenCodeVariantChange?: (variant: string) => void;
   /** Toggle thinking mode */
   onToggleThinking?: (enabled: boolean) => void;
   /** Whether streaming is enabled */
@@ -716,6 +722,8 @@ export interface ButtonAreaProps {
   currentProvider?: string;
   /** Current reasoning effort */
   reasoningEffort?: ReasoningEffort;
+  /** Selected OpenCode model variant (thinking effort), when supported */
+  openCodeModelVariant?: string;
 
   // Event callbacks
   onSubmit?: () => void;
@@ -725,6 +733,8 @@ export interface ButtonAreaProps {
   onProviderSelect?: (providerId: string) => void;
   /** Switch reasoning effort callback */
   onReasoningChange?: (effort: ReasoningEffort) => void;
+  /** Switch OpenCode model variant callback */
+  onOpenCodeVariantChange?: (variant: string) => void;
   /** Enhance prompt callback */
   onEnhancePrompt?: () => void;
   /** Whether always thinking enabled */

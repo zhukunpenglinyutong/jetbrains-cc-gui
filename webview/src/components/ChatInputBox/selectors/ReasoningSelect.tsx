@@ -5,7 +5,6 @@ import {
   EFFORT_SUPPORTED_CLAUDE_MODELS,
   MAX_EFFORT_CLAUDE_MODELS,
   XHIGH_EFFORT_CLAUDE_MODELS,
-  type ReasoningEffort,
 } from '../types';
 import { useDropdownPosition } from '../../../hooks/useDropdownPosition';
 
@@ -13,12 +12,20 @@ const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative',
 const CHEVRON_ICON_STYLE: React.CSSProperties = { fontSize: '10px', marginLeft: '2px' };
 const LEVEL_INFO_STYLE: React.CSSProperties = { display: 'flex', flexDirection: 'column', flex: 1 };
 
+type ReasoningLevelOption = {
+  id: string;
+  label: string;
+  description?: string;
+  icon?: string;
+};
+
 interface ReasoningSelectProps {
-  value: ReasoningEffort;
-  onChange: (effort: ReasoningEffort) => void;
+  value: string;
+  onChange: (effort: string) => void;
   disabled?: boolean;
   selectedModel?: string;
   currentProvider?: string;
+  openCodeVariantOptions?: Array<{ id: string; label: string }>;
 }
 
 /**
@@ -29,34 +36,57 @@ interface ReasoningSelectProps {
  * - Claude Opus 4.7: low/medium/high/xhigh/max
  * - Claude Opus 4.6 and Sonnet 4.6: low/medium/high/max
  * - Claude Haiku 4.5 and legacy models: hidden (no adaptive thinking support)
+ * - OpenCode: model variant keys from opencode discovery (thinking effort), when available
  */
-export const ReasoningSelect = ({ value, onChange, disabled, selectedModel, currentProvider }: ReasoningSelectProps) => {
+export const ReasoningSelect = ({
+  value,
+  onChange,
+  disabled,
+  selectedModel,
+  currentProvider,
+  openCodeVariantOptions,
+}: ReasoningSelectProps) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Determine visibility: for Claude, hide if model doesn't support adaptive thinking
-  const isVisible = currentProvider !== 'claude' || !selectedModel || EFFORT_SUPPORTED_CLAUDE_MODELS.has(selectedModel);
+  const isOpenCode = currentProvider === 'opencode';
+  const openCodeLevels: ReasoningLevelOption[] = (openCodeVariantOptions ?? []).map((option) => ({
+    id: option.id,
+    label: option.label,
+    description: option.id === 'default'
+      ? 'Use model default thinking effort'
+      : `${option.label} thinking effort`,
+    icon: 'codicon-lightbulb',
+  }));
 
-  // Build the list of available levels for the current model
-  const availableLevels = REASONING_LEVELS.filter(level => {
-    if (currentProvider !== 'claude') {
-      return level.id !== 'max';
-    }
-    if (!selectedModel) {
+  const isVisible = isOpenCode
+    ? openCodeLevels.length > 0
+    : currentProvider === 'codex'
+      || (currentProvider === 'claude' && (!selectedModel || EFFORT_SUPPORTED_CLAUDE_MODELS.has(selectedModel)));
+
+  const availableLevels: ReasoningLevelOption[] = isOpenCode
+    ? openCodeLevels
+    : REASONING_LEVELS.filter(level => {
+      if (currentProvider !== 'claude') {
+        return level.id !== 'max';
+      }
+      if (!selectedModel) {
+        return true;
+      }
+      if (level.id === 'xhigh') {
+        return XHIGH_EFFORT_CLAUDE_MODELS.has(selectedModel);
+      }
+      if (level.id === 'max') {
+        return MAX_EFFORT_CLAUDE_MODELS.has(selectedModel);
+      }
       return true;
-    }
-    if (level.id === 'xhigh') {
-      return XHIGH_EFFORT_CLAUDE_MODELS.has(selectedModel);
-    }
-    if (level.id === 'max') {
-      return MAX_EFFORT_CLAUDE_MODELS.has(selectedModel);
-    }
-    return true;
-  });
+    });
 
-  const currentLevel = availableLevels.find(l => l.id === value) || availableLevels[availableLevels.length - 2] || availableLevels[0];
+  const currentLevel = availableLevels.find(l => l.id === value)
+    || availableLevels[availableLevels.length - 2]
+    || availableLevels[0];
   const { positionedStyle, maxHeight: viewportMaxHeight, recalculate } = useDropdownPosition({
     buttonRef,
     preferredAlignment: 'right',
@@ -72,18 +102,19 @@ export const ReasoningSelect = ({ value, onChange, disabled, selectedModel, curr
     }
   }, [availableLevels, currentLevel, isVisible, onChange, value]);
 
-  /**
-   * Get translated text for reasoning level
-   */
-  const getReasoningText = (levelId: ReasoningEffort, field: 'label' | 'description') => {
+  const getReasoningText = (levelId: string, field: 'label' | 'description') => {
+    if (isOpenCode) {
+      const option = openCodeLevels.find((level) => level.id === levelId);
+      if (field === 'label') {
+        return option?.label ?? levelId;
+      }
+      return option?.description ?? levelId;
+    }
     const key = `reasoning.${levelId}.${field}`;
     const fallback = REASONING_LEVELS.find(l => l.id === levelId)?.[field] || levelId;
     return t(key, { defaultValue: fallback });
   };
 
-  /**
-   * Toggle dropdown
-   */
   const handleToggle = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     if (disabled) return;
@@ -94,17 +125,11 @@ export const ReasoningSelect = ({ value, onChange, disabled, selectedModel, curr
     }
   }, [isOpen, disabled, recalculate]);
 
-  /**
-   * Select reasoning level
-   */
-  const handleSelect = useCallback((effort: ReasoningEffort) => {
+  const handleSelect = useCallback((effort: string) => {
     onChange(effort);
     setIsOpen(false);
   }, [onChange]);
 
-  /**
-   * Close on outside click
-   */
   useEffect(() => {
     if (!isOpen) return;
 
@@ -158,7 +183,7 @@ export const ReasoningSelect = ({ value, onChange, disabled, selectedModel, curr
               onClick={() => handleSelect(level.id)}
               title={getReasoningText(level.id, 'description')}
             >
-              <span className={`codicon ${level.icon}`} />
+              <span className={`codicon ${level.icon ?? 'codicon-lightbulb'}`} />
               <div style={LEVEL_INFO_STYLE}>
                 <span>{getReasoningText(level.id, 'label')}</span>
                 <span className="mode-description">{getReasoningText(level.id, 'description')}</span>

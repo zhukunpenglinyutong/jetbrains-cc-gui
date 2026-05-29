@@ -80,7 +80,9 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       onModelSelect,
       onProviderSelect,
       reasoningEffort = 'high',
+      openCodeModelVariant,
       onReasoningChange,
+      onOpenCodeVariantChange,
       activeFile,
       selectedLines,
       onClearContext,
@@ -700,12 +702,14 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
           permissionMode={permissionMode}
           currentProvider={currentProvider}
           reasoningEffort={reasoningEffort}
+          openCodeModelVariant={openCodeModelVariant}
           onSubmit={handleSubmit}
           onStop={onStop}
           onModeSelect={handleModeSelect}
           onModelSelect={handleModelSelect}
           onProviderSelect={onProviderSelect}
           onReasoningChange={onReasoningChange}
+          onOpenCodeVariantChange={onOpenCodeVariantChange}
           onEnhancePrompt={handleEnhancePrompt}
           alwaysThinkingEnabled={alwaysThinkingEnabled}
           onToggleThinking={onToggleThinking}

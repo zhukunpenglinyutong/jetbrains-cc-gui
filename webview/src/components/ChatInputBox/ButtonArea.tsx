@@ -7,7 +7,7 @@ import { STORAGE_KEYS, validateCodexCustomModels } from '../../types/provider';
 import type { CodexCustomModel } from '../../types/provider';
 import { readClaudeModelMapping } from '../../utils/claudeModelMapping';
 import { sendBridgeEvent } from '../../utils/bridge';
-import { ensureSelectedOpenCodeModel, parseOpenCodeModelPayload } from './openCodeModels';
+import { ensureSelectedOpenCodeModel, parseOpenCodeModelPayload, buildOpenCodeVariantOptions, resolveOpenCodeVariantKeys } from './openCodeModels';
 
 const OPENCODE_MODEL_REQUEST_RETRY_MS = 1000;
 const OPENCODE_MODEL_REQUEST_MAX_ATTEMPTS = 100;
@@ -80,6 +80,8 @@ export const ButtonArea = ({
   permissionMode = 'bypassPermissions',
   currentProvider = 'claude',
   reasoningEffort = 'high',
+  openCodeModelVariant,
+  onOpenCodeVariantChange,
   onSubmit,
   onStop,
   onModeSelect,
@@ -105,6 +107,7 @@ export const ButtonArea = ({
   // When localStorage changes, updating this version number triggers useMemo recalculation
   const [customModelsVersion, setCustomModelsVersion] = useState(0);
   const [openCodeModels, setOpenCodeModels] = useState<ModelInfo[]>([]);
+  const [openCodeDefaultModel, setOpenCodeDefaultModel] = useState<string | undefined>(undefined);
   const [openCodeError, setOpenCodeError] = useState<string | undefined>(undefined);
   const [modelsLoading, setModelsLoading] = useState(false);
   const openCodeModelRequestRef = useRef<(() => void) | null>(null);
@@ -138,6 +141,7 @@ export const ButtonArea = ({
       setOpenCodeError(undefined);
       setModelsLoading(false);
       setOpenCodeModels([]);
+      setOpenCodeDefaultModel(undefined);
       return;
     }
 
@@ -148,8 +152,9 @@ export const ButtonArea = ({
     const updateOpenCodeModels = (json: string) => {
       if (!disposed) {
         setModelsLoading(false);
-        const { models, error } = parseOpenCodeModelPayload(json);
+        const { models, defaultModel, error } = parseOpenCodeModelPayload(json);
         setOpenCodeModels(models);
+        setOpenCodeDefaultModel(defaultModel);
         setOpenCodeError(error);
         if (error && window.showError) {
           window.showError(error);
@@ -174,6 +179,7 @@ export const ButtonArea = ({
     setModelsLoading(true);
     setOpenCodeError(undefined);
     setOpenCodeModels([]);
+    setOpenCodeDefaultModel(undefined);
     window.updateOpenCodeModels = updateOpenCodeModels;
     requestOpenCodeModels();
 
@@ -305,6 +311,26 @@ export const ButtonArea = ({
     return [...customModels, ...filteredBuiltIn];
   }, [currentProvider, applyModelMapping, customModelsVersion, openCodeModels, selectedModel]);
 
+  const openCodeVariantOptions = useMemo(() => {
+    if (currentProvider !== 'opencode') {
+      return [];
+    }
+    return buildOpenCodeVariantOptions(
+      resolveOpenCodeVariantKeys(availableModels, selectedModel, openCodeDefaultModel),
+    );
+  }, [availableModels, currentProvider, openCodeDefaultModel, selectedModel]);
+
+  const reasoningValue = currentProvider === 'opencode'
+    ? (openCodeModelVariant ?? 'default')
+    : reasoningEffort;
+  const handleReasoningSelection = useCallback((value: string) => {
+    if (currentProvider === 'opencode') {
+      onOpenCodeVariantChange?.(value);
+      return;
+    }
+    onReasoningChange?.(value as ReasoningEffort);
+  }, [currentProvider, onOpenCodeVariantChange, onReasoningChange]);
+
   /**
    * Handle submit button click
    */
@@ -341,13 +367,6 @@ export const ButtonArea = ({
   const handleProviderSelect = useCallback((providerId: string) => {
     onProviderSelect?.(providerId);
   }, [onProviderSelect]);
-
-  /**
-   * Handle reasoning depth selection
-   */
-  const handleReasoningChange = useCallback((effort: ReasoningEffort) => {
-    onReasoningChange?.(effort);
-  }, [onReasoningChange]);
 
   /**
    * Handle enhance prompt button click
@@ -389,7 +408,13 @@ export const ButtonArea = ({
           error={openCodeError}
           isLoading={modelsLoading}
         />
-        <ReasoningSelect value={reasoningEffort} onChange={handleReasoningChange} selectedModel={selectedModel} currentProvider={currentProvider} />
+        <ReasoningSelect
+          value={reasoningValue}
+          onChange={handleReasoningSelection}
+          selectedModel={selectedModel}
+          currentProvider={currentProvider}
+          openCodeVariantOptions={openCodeVariantOptions}
+        />
       </div>
 
       {/* Right side: tool buttons */}

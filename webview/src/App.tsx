@@ -143,7 +143,7 @@ const App = () => {
     selectedAgent, sdkStatusLoaded, currentSdkInstalled,
     currentProviderRef,
     activeProviderConfig, claudeSettingsAlwaysThinkingEnabled,
-    reasoningEffort, streamingEnabledSetting, sendShortcut, autoOpenFileEnabled,
+    reasoningEffort, openCodeModelVariant, streamingEnabledSetting, sendShortcut, autoOpenFileEnabled,
     longContextEnabled,
     usagePercentage, usageUsedTokens, usageMaxTokens,
     setPermissionMode,
@@ -156,7 +156,7 @@ const App = () => {
     setUsagePercentage, setUsageUsedTokens, setUsageMaxTokens,
     syncActiveProviderModelMapping,
     handleModeSelect, handleModelSelect, handleProviderSelect,
-    handleReasoningChange, handleAgentSelect, handleToggleThinking,
+    handleReasoningChange, handleOpenCodeVariantChange, handleAgentSelect, handleToggleThinking,
     handleStreamingEnabledChange, handleSendShortcutChange,
     handleAutoOpenFileEnabledChange, handleLongContextChange,
   } = useModelProviderState({ addToast, t });
@@ -496,6 +496,7 @@ const App = () => {
           activeProviderConfig={activeProviderConfig}
           claudeSettingsAlwaysThinkingEnabled={claudeSettingsAlwaysThinkingEnabled}
           reasoningEffort={reasoningEffort}
+          openCodeModelVariant={openCodeModelVariant}
           streamingEnabledSetting={streamingEnabledSetting}
           sendShortcut={sendShortcut}
           autoOpenFileEnabled={autoOpenFileEnabled}
@@ -507,6 +508,7 @@ const App = () => {
           onModelSelect={handleModelSelect}
           onAgentSelect={handleAgentSelect}
           onReasoningChange={handleReasoningChange}
+          onOpenCodeVariantChange={handleOpenCodeVariantChange}
           onToggleThinking={handleToggleThinking}
           onStreamingEnabledChange={handleStreamingEnabledChange}
           onAutoOpenFileEnabledChange={handleAutoOpenFileEnabledChange}

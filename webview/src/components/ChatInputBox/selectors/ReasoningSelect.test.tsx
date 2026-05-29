@@ -68,4 +68,40 @@ describe('ReasoningSelect', () => {
 
     expect(screen.queryByRole('button')).toBeNull();
   });
+
+  it('shows OpenCode model variants when the selected model supports them', () => {
+    render(
+      <ReasoningSelect
+        value="default"
+        onChange={vi.fn()}
+        currentProvider="opencode"
+        selectedModel="openai/gpt-5.5"
+        openCodeVariantOptions={[
+          { id: 'default', label: 'Default' },
+          { id: 'low', label: 'Low' },
+          { id: 'high', label: 'High' },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button'));
+
+    expect(screen.getAllByText('Default').length).toBeGreaterThan(0);
+    expect(screen.getByText('Low')).toBeTruthy();
+    expect(screen.getByText('High')).toBeTruthy();
+  });
+
+  it('hides for OpenCode when the selected model has no variants', () => {
+    render(
+      <ReasoningSelect
+        value="default"
+        onChange={vi.fn()}
+        currentProvider="opencode"
+        selectedModel="opencode-default"
+        openCodeVariantOptions={[]}
+      />,
+    );
+
+    expect(screen.queryByRole('button')).toBeNull();
+  });
 });

@@ -573,6 +573,7 @@ Footer 包含：
                 null,                       // permissionMode
                 model,                      // model
                 null,                       // agent
+                null,                       // modelVariant
                 new MessageCallback() {
                     @Override
                     public void onMessage(String type, String content) {

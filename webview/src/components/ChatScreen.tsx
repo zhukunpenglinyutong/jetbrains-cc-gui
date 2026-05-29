@@ -88,6 +88,7 @@ export interface ChatScreenProps {
   activeProviderConfig: ProviderState['activeProviderConfig'];
   claudeSettingsAlwaysThinkingEnabled: ProviderState['claudeSettingsAlwaysThinkingEnabled'];
   reasoningEffort: ProviderState['reasoningEffort'];
+  openCodeModelVariant: ProviderState['openCodeModelVariant'];
   streamingEnabledSetting: ProviderState['streamingEnabledSetting'];
   sendShortcut: ProviderState['sendShortcut'];
   autoOpenFileEnabled: ProviderState['autoOpenFileEnabled'];
@@ -101,6 +102,7 @@ export interface ChatScreenProps {
   onModelSelect: ProviderState['handleModelSelect'];
   onAgentSelect: ProviderState['handleAgentSelect'];
   onReasoningChange: ProviderState['handleReasoningChange'];
+  onOpenCodeVariantChange: ProviderState['handleOpenCodeVariantChange'];
   onToggleThinking: ProviderState['handleToggleThinking'];
   onStreamingEnabledChange: ProviderState['handleStreamingEnabledChange'];
   onAutoOpenFileEnabledChange: ProviderState['handleAutoOpenFileEnabledChange'];
@@ -133,9 +135,9 @@ export const ChatScreen = ({
   currentProvider, selectedModel, permissionMode, selectedAgent,
   sdkStatusLoaded, currentSdkInstalled,
   activeProviderConfig, claudeSettingsAlwaysThinkingEnabled,
-  reasoningEffort, streamingEnabledSetting, sendShortcut, autoOpenFileEnabled,
+  reasoningEffort, openCodeModelVariant, streamingEnabledSetting, sendShortcut, autoOpenFileEnabled,
   longContextEnabled, usagePercentage, usageUsedTokens, usageMaxTokens,
-  onModeSelect, onModelSelect, onAgentSelect, onReasoningChange, onToggleThinking,
+  onModeSelect, onModelSelect, onAgentSelect, onReasoningChange, onOpenCodeVariantChange, onToggleThinking,
   onStreamingEnabledChange,
   onAutoOpenFileEnabledChange, onLongContextChange,
   messageQueue, onRemoveFromQueue,
@@ -302,7 +304,9 @@ export const ChatScreen = ({
           onModelSelect={onModelSelect}
           onProviderSelect={onProviderSelect}
           reasoningEffort={reasoningEffort}
+          openCodeModelVariant={openCodeModelVariant}
           onReasoningChange={onReasoningChange}
+          onOpenCodeVariantChange={onOpenCodeVariantChange}
           onToggleThinking={onToggleThinking}
           streamingEnabled={streamingEnabledSetting}
           onStreamingEnabledChange={onStreamingEnabledChange}
