@@ -20,6 +20,7 @@ import java.util.concurrent.CompletableFuture;
 public class OpenCodeMcpServerHandler extends BaseMessageHandler {
 
     private static final Logger LOG = Logger.getInstance(OpenCodeMcpServerHandler.class);
+    private static final String BRIDGE_UNAVAILABLE = "opencode bridge is not available";
 
     private static final String[] SUPPORTED_TYPES = {
         "get_opencode_mcp_servers",
@@ -63,6 +64,10 @@ public class OpenCodeMcpServerHandler extends BaseMessageHandler {
                 sendServerList(new JsonArray());
                 return;
             }
+            if (!isBridgeAvailable()) {
+                sendServerList(new JsonArray());
+                return;
+            }
 
             CompletableFuture.supplyAsync(
                     () -> context.getOpenCodeSDKBridge().listMcpServers(getProjectPath()),
@@ -87,6 +92,10 @@ public class OpenCodeMcpServerHandler extends BaseMessageHandler {
     private void handleGetMcpServerStatus() {
         try {
             if (!isOpenCodeLocalConfigAuthorized()) {
+                sendServerStatus(new JsonArray());
+                return;
+            }
+            if (!isBridgeAvailable()) {
                 sendServerStatus(new JsonArray());
                 return;
             }
@@ -122,6 +131,10 @@ public class OpenCodeMcpServerHandler extends BaseMessageHandler {
                 sendToolsError(serverId, "OpenCode local config access is not authorized", gson);
                 return;
             }
+            if (!isBridgeAvailable()) {
+                sendToolsError(serverId, BRIDGE_UNAVAILABLE, gson);
+                return;
+            }
 
             CompletableFuture.supplyAsync(
                     () -> context.getOpenCodeSDKBridge().getMcpServerTools(serverId, getProjectPath()),
@@ -145,6 +158,13 @@ public class OpenCodeMcpServerHandler extends BaseMessageHandler {
     }
 
     private CompletableFuture<JsonObject> queryMcpServerStatus(String cwd) {
+        if (!isBridgeAvailable()) {
+            JsonObject failure = new JsonObject();
+            failure.addProperty("success", false);
+            failure.addProperty("error", BRIDGE_UNAVAILABLE);
+            return CompletableFuture.completedFuture(failure);
+        }
+
         synchronized (queryLock) {
             if (inFlightQuery != null && !inFlightQuery.isDone() && sameCwd(inFlightCwd, cwd)) {
                 return inFlightQuery;
@@ -192,6 +212,14 @@ public class OpenCodeMcpServerHandler extends BaseMessageHandler {
             LOG.warn("[OpenCodeMcpServerHandler] Failed to read opencode authorization state: " + e.getMessage());
             return false;
         }
+    }
+
+    private boolean isBridgeAvailable() {
+        if (context.getOpenCodeSDKBridge() != null) {
+            return true;
+        }
+        LOG.warn("[OpenCodeMcpServerHandler] " + BRIDGE_UNAVAILABLE);
+        return false;
     }
 
     private String getProjectPath() {
