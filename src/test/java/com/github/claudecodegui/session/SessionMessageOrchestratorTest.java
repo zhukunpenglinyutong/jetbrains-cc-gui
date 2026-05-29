@@ -151,6 +151,32 @@ public class SessionMessageOrchestratorTest {
     }
 
     @Test
+    public void syncUserMessageUuidsShortCircuitsForOpenCodeProvider() {
+        SessionState state = new SessionState();
+        state.setProvider("opencode");
+        state.setSessionId("session-opencode");
+        state.addMessage(new ClaudeSession.Message(ClaudeSession.Message.Type.USER, "Fix the bug", new JsonObject()));
+
+        RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+        SessionCallbackFacade callbackFacade = new SessionCallbackFacade(null);
+
+        SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                state,
+                new MessageParser(),
+                callbackFacade,
+                historyAccess,
+                (usedTokens, maxTokens) -> {
+                },
+                0,
+                0
+        );
+
+        orchestrator.syncUserMessageUuidsAfterSend().join();
+
+        assertEquals(0, historyAccess.latestClaudeUserMessageRequests.get());
+    }
+
+    @Test
     public void loadFromServerSetsErrorWhenHistoryAccessThrows() {
         SessionState state = new SessionState();
         state.setProvider("claude");

@@ -76,7 +76,7 @@ public class SessionMessageOrchestrator {
     }
 
     public CompletableFuture<Void> syncUserMessageUuidsAfterSend() {
-        if ("codex".equals(state.getProvider()) || findLatestUnresolvedUserMessage() == null) {
+        if (!shouldSyncUserMessageUuidsAfterSend()) {
             return CompletableFuture.completedFuture(null);
         }
 
@@ -84,6 +84,14 @@ public class SessionMessageOrchestrator {
             sleep(initialUuidSyncDelayMs);
             updateUserMessageUuids();
         });
+    }
+
+    private boolean shouldSyncUserMessageUuidsAfterSend() {
+        String provider = state.getProvider();
+        if ("codex".equals(provider) || "opencode".equals(provider)) {
+            return false;
+        }
+        return findLatestUnresolvedUserMessage() != null;
     }
 
     void updateUserMessageUuids() {
