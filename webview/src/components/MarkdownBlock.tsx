@@ -1,6 +1,6 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { memo, useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import { memo, useMemo, useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { openBrowser, openClass, openFile } from '../utils/bridge';
 import { useMarkdownFileLinkTooltip } from '../hooks/useMarkdownFileLinkTooltip';
@@ -757,6 +757,14 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
     prevIsStreamingRef.current = isStreaming;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isStreaming, html, renderMermaidDiagrams]);
+
+  // 非流式内容更新后强制合成器重绘
+  // JCEF 在 dangerouslySetInnerHTML 后可能不触发 paint invalidation
+  useLayoutEffect(() => {
+    if (!isStreaming && containerRef.current) {
+      void containerRef.current.offsetHeight;
+    }
+  }, [html, isStreaming]);
 
   const handleClick = async (event: React.MouseEvent<HTMLDivElement>) => {
     // React synthetic events may have a Text node as target when the user

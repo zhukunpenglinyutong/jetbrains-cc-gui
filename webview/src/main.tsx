@@ -204,6 +204,12 @@ function setupScaleRecovery() {
     });
   };
 
+  // Java 端 TAB 切换时调用的强制缩放恢复（跳过所有冷却门槛）
+  window.forceScaleRecovery = (reason: string) => {
+    debugLog('[ScaleRecovery] forceScaleRecovery called, reason:', reason);
+    forceReapply(reason);
+  };
+
   const onVisibilityChange = () => {
     if (document.hidden) {
       hiddenAt = Date.now();
@@ -613,6 +619,15 @@ if (typeof window !== 'undefined') {
   window.updateLinkifyCapabilities = (json: string) => {
     applyLinkifyCapabilitiesPayload(json);
   };
+}
+
+// 禁用浏览器原生 Ctrl/⌘+滚轮缩放，仅保留设置中的字号缩放
+if (typeof document !== 'undefined') {
+  document.addEventListener('wheel', (e: WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+    }
+  }, { passive: false });
 }
 
 // Render the React application

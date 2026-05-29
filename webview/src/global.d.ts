@@ -436,6 +436,12 @@ interface Window {
   __pendingUiFontConfig?: import('./types/uiFontConfig').UiFontConfig;
 
   /**
+   * Force scale/DPI recovery — called from Java backend when a tab becomes selected,
+   * to handle DPI changes on external monitors.
+   */
+  forceScaleRecovery?: (reason: string) => void;
+
+  /**
    * Apply IDEA language configuration (called from Java backend)
    * @param config Language configuration object containing language code and IDEA locale
    */

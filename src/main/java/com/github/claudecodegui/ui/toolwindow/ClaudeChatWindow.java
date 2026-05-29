@@ -388,6 +388,13 @@ public class ClaudeChatWindow {
         loadRestoredHistoryIfNeeded(currentState);
     }
 
+    public void triggerScaleRefresh() {
+        if (disposed || browser == null) {
+            return;
+        }
+        callJavaScript("forceScaleRecovery", "tab-selected");
+    }
+
     private void loadRestoredHistoryIfNeeded(TabStateService.TabSessionState savedState) {
         if (!TabSessionRestorePolicy.shouldLoadHistory(savedState) || session == null) {
             return;

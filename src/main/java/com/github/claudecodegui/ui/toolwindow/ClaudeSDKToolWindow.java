@@ -300,6 +300,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 ClaudeChatWindow window = contentToWindowMap.get(event.getContent());
                 if (window != null) {
                     window.loadRestoredHistoryIfNeeded();
+                    window.triggerScaleRefresh();
                 }
             }
 
