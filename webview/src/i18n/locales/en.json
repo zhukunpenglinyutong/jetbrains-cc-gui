@@ -1456,9 +1456,13 @@
         "label": "Sonnet 4.6",
         "description": "Sonnet 4.6 · Use the default model"
       },
+      "opus48": {
+        "label": "Opus 4.8",
+        "description": "Opus 4.8 · Latest and most capable"
+      },
       "opus46": {
         "label": "Opus 4.7",
-        "description": "Opus 4.7 · Latest and most capable"
+        "description": "Opus 4.7 · Previous generation flagship"
       },
       "opus46_1m": {
         "label": "Opus 4.6",

@@ -44,6 +44,7 @@ class ClaudeUsageAggregator {
             Map.entry("claude-opus-4-20250514", LEGACY_OPUS_PRICING),
             Map.entry("claude-opus-4-5", OPUS_4_5_PRICING),
             Map.entry("claude-opus-4-6", OPUS_4_5_PRICING),
+            Map.entry("claude-opus-4-8", OPUS_4_5_PRICING),
             Map.entry("claude-sonnet-4", TIERED_SONNET_PRICING),
             Map.entry("claude-sonnet-4-20250514", TIERED_SONNET_PRICING),
             Map.entry("claude-sonnet-4-5", TIERED_SONNET_PRICING),
@@ -53,6 +54,7 @@ class ClaudeUsageAggregator {
     );
     private static final List<String> MODEL_PREFIXES = List.of(
             "claude-opus-4-20250514",
+            "claude-opus-4-8",
             "claude-opus-4-6",
             "claude-opus-4-5",
             "claude-opus-4-1",

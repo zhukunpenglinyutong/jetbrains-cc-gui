@@ -1227,9 +1227,13 @@
         "label": "Sonnet 4.6",
         "description": "Sonnet 4.6 · डिफ़ॉल्ट अनुशंसित मॉडल"
       },
+      "opus48": {
+        "label": "Opus 4.8",
+        "description": "Opus 4.8 · नवीनतम और सबसे सक्षम"
+      },
       "opus46": {
         "label": "Opus 4.7",
-        "description": "Opus 4.7 · नवीनतम और सबसे सक्षम"
+        "description": "Opus 4.7 · पिछली पीढ़ी का प्रमुख मॉडल"
       },
       "opus46_1m": {
         "label": "Opus 4.6",

@@ -79,6 +79,10 @@ describe('ModelSelect', () => {
     expect(CLAUDE_MODELS.map((model) => model.id)).not.toContain('claude-opus-4-6[1m]');
   });
 
+  it('Claude 内置模型列表应包含 Opus 4.8', () => {
+    expect(CLAUDE_MODELS.map((model) => model.id)).toContain('claude-opus-4-8');
+  });
+
   it('Codex 内置模型列表应与目标设计一致', () => {
     expect(CODEX_MODELS.map((model) => model.id)).toEqual([
       'gpt-5.5',

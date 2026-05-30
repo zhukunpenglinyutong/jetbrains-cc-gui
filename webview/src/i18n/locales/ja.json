@@ -1239,9 +1239,13 @@
         "label": "Sonnet 4.6",
         "description": "Sonnet 4.6 · デフォルトモデルを使用"
       },
+      "opus48": {
+        "label": "Opus 4.8",
+        "description": "Opus 4.8 · 最新かつ最も優れたモデル"
+      },
       "opus46": {
         "label": "Opus 4.7",
-        "description": "Opus 4.7 · 最新かつ最も優れたモデル"
+        "description": "Opus 4.7 · 前世代のフラッグシップ"
       },
       "opus46_1m": {
         "label": "Opus 4.6",

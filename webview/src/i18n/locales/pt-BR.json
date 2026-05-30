@@ -1400,9 +1400,13 @@
         "label": "Sonnet 4.6",
         "description": "Sonnet 4.6 · Usar o modelo padrão"
       },
+      "opus48": {
+        "label": "Opus 4.8",
+        "description": "Opus 4.8 · O mais recente e capaz"
+      },
       "opus46": {
         "label": "Opus 4.7",
-        "description": "Opus 4.7 · O mais recente e capaz"
+        "description": "Opus 4.7 · Carro-chefe da geração anterior"
       },
       "opus46_1m": {
         "label": "Opus 4.6",
