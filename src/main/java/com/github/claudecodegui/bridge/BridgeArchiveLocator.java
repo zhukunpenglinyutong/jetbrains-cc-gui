@@ -1,10 +1,9 @@
 package com.github.claudecodegui.bridge;
 
 import com.github.claudecodegui.util.PlatformUtils;
-import com.intellij.ide.plugins.IdeaPluginDescriptor;
-import com.intellij.ide.plugins.PluginManager;
+import com.github.claudecodegui.util.PluginMetadata;
+import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.openapi.extensions.PluginId;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -24,17 +23,16 @@ final class BridgeArchiveLocator {
     static final String SDK_ARCHIVE_NAME = "ai-bridge.zip";
 
     /**
-     * Resolution result: the descriptor that owns the archive plus the archive
-     * file location (which may live in a sandbox parallel to the descriptor's
-     * own plugin path).
+     * Resolution result: the plugin directory plus plugin version used for the
+     * archive freshness signature.
      */
-    static final class ArchiveLocation {
-        final IdeaPluginDescriptor descriptor;
-        final File archiveFile;
+    static final class PluginLocation {
+        final File pluginDir;
+        final String version;
 
-        ArchiveLocation(IdeaPluginDescriptor descriptor, File archiveFile) {
-            this.descriptor = descriptor;
-            this.archiveFile = archiveFile;
+        PluginLocation(File pluginDir, String version) {
+            this.pluginDir = pluginDir;
+            this.version = version;
         }
     }
 
@@ -42,61 +40,94 @@ final class BridgeArchiveLocator {
     }
 
     /**
-     * Resolve the {@link IdeaPluginDescriptor} that contains ai-bridge.zip,
-     * falling back to a name/id-based scan of all loaded plugins when the
-     * primary id lookup fails.
-     *
-     * <p>The primary lookup uses {@code findEnabledPlugin}, which is sufficient
-     * because we are looking up our own plugin (running code means enabled).
-     * The fallback scan exists for dev sandbox scenarios where the plugin id
-     * detected at runtime may not match the descriptor registered with the
-     * platform.
+     * Resolve the plugin directory without using plugin-manager internals.
      */
-    static IdeaPluginDescriptor resolveDescriptor() {
+    static PluginLocation resolvePluginLocation() {
         String expectedId = PlatformUtils.getPluginId();
-        PluginId pluginId = PluginId.getId(expectedId);
         LOG.info("[BridgeResolver] Plugin ID: " + expectedId);
-        IdeaPluginDescriptor descriptor = PluginManager.getInstance().findEnabledPlugin(pluginId);
-        if (descriptor != null) {
-            return descriptor;
-        }
 
-        LOG.warn("[BridgeResolver] Cannot get plugin descriptor by PluginId: " + expectedId);
-
-        // Fallback: scan all plugins. PluginManager.getPlugins() is @Deprecated but
-        // remains the only public API for enumerating all plugins; verifier treats
-        // it as a deprecation warning, not an INTERNAL_API_USAGES failure.
-        // Match priority: (1) exact id, (2) id contains "claude", (3) name contains "Claude".
-        IdeaPluginDescriptor idMatch = null;
-        IdeaPluginDescriptor nameMatch = null;
-        for (IdeaPluginDescriptor plugin : PluginManager.getPlugins()) {
-            String id = plugin.getPluginId().getIdString();
-            String name = plugin.getName();
-
-            if (expectedId.equals(id)) {
-                LOG.debug("[BridgeResolver] Exact id match: " + id + ", path=" + plugin.getPluginPath());
-                return plugin;
-            }
-            if (idMatch == null && (id.contains("claude") || id.contains("Claude"))) {
-                idMatch = plugin;
-            } else if (nameMatch == null && name != null && (name.contains("Claude") || name.contains("claude"))) {
-                nameMatch = plugin;
+        for (File candidate : collectPluginDirCandidates(PluginMetadata.getPluginDirectory(BridgeArchiveLocator.class))) {
+            File archiveFile = locateArchive(candidate);
+            if (archiveFile != null) {
+                File pluginDir = archiveFile.getParentFile();
+                LOG.debug("[BridgeResolver] Plugin directory with archive: " + pluginDir.getAbsolutePath());
+                return new PluginLocation(pluginDir, PluginMetadata.getPluginVersion());
             }
         }
 
-        IdeaPluginDescriptor candidate = idMatch != null ? idMatch : nameMatch;
-        if (candidate != null) {
-            LOG.debug("[BridgeResolver] Fuzzy match: id=" + candidate.getPluginId().getIdString()
-                    + ", name=" + candidate.getName() + ", path=" + candidate.getPluginPath());
-            File candidateArchive = new File(candidate.getPluginPath().toFile(), SDK_ARCHIVE_NAME);
-            if (candidateArchive.exists()) {
-                LOG.debug("[BridgeResolver] Found ai-bridge.zip in candidate plugin: " + candidateArchive.getAbsolutePath());
-                return candidate;
-            }
-        }
-
-        LOG.debug("[BridgeResolver] Could not find plugin descriptor by any method");
+        LOG.debug("[BridgeResolver] Could not resolve plugin directory containing " + SDK_ARCHIVE_NAME);
         return null;
+    }
+
+    static List<File> collectPluginDirCandidates(File classpathPluginDir) {
+        List<File> candidates = new ArrayList<>();
+        addCandidate(candidates, classpathPluginDir);
+
+        try {
+            String pluginsRoot = PathManager.getPluginsPath();
+            if (pluginsRoot != null && !pluginsRoot.isEmpty()) {
+                addPluginRootCandidates(candidates, new File(pluginsRoot));
+            }
+
+            String systemPath = PathManager.getSystemPath();
+            if (systemPath != null && !systemPath.isEmpty()) {
+                addPluginRootCandidates(candidates, new File(systemPath, "plugins"));
+            }
+        } catch (Throwable t) {
+            LOG.debug("[BridgeResolver] Cannot infer plugin roots from PathManager: " + t.getMessage());
+        }
+
+        if (classpathPluginDir != null) {
+            File ancestor = classpathPluginDir;
+            int climbs = 0;
+            while (ancestor != null && climbs < 8) {
+                addPluginRootCandidates(candidates, ancestor);
+                addPluginRootCandidates(candidates, new File(ancestor, "plugins"));
+                addPluginRootCandidates(candidates, new File(ancestor, "system/plugins"));
+                addPluginRootCandidates(candidates, new File(ancestor, "config/plugins"));
+                addIdeaSandboxCandidates(candidates, new File(ancestor, "build/idea-sandbox"));
+                ancestor = ancestor.getParentFile();
+                climbs++;
+            }
+        }
+
+        return candidates;
+    }
+
+    private static void addIdeaSandboxCandidates(List<File> candidates, File sandboxRoot) {
+        if (sandboxRoot == null || !sandboxRoot.isDirectory()) {
+            return;
+        }
+
+        File[] ideSandboxes = sandboxRoot.listFiles(File::isDirectory);
+        if (ideSandboxes == null) {
+            return;
+        }
+
+        for (File ideSandbox : ideSandboxes) {
+            addPluginRootCandidates(candidates, new File(ideSandbox, "plugins"));
+        }
+    }
+
+    private static void addPluginRootCandidates(List<File> candidates, File pluginsRoot) {
+        if (pluginsRoot == null) {
+            return;
+        }
+        addCandidate(candidates, new File(pluginsRoot, BridgePathLocator.PLUGIN_DIR_NAME));
+        addCandidate(candidates, new File(pluginsRoot, PlatformUtils.getPluginId()));
+    }
+
+    private static void addCandidate(List<File> candidates, File candidate) {
+        if (candidate == null) {
+            return;
+        }
+        String path = candidate.getAbsolutePath();
+        for (File existing : candidates) {
+            if (existing.getAbsolutePath().equals(path)) {
+                return;
+            }
+        }
+        candidates.add(candidate);
     }
 
     /**
@@ -182,7 +213,7 @@ final class BridgeArchiveLocator {
      * Compute the expected signature for the located archive. Combines the
      * plugin version with either a precomputed hash or a runtime SHA-256.
      */
-    static String computeSignature(IdeaPluginDescriptor descriptor, File archiveFile) {
+    static String computeSignature(PluginLocation pluginLocation, File archiveFile) {
         // Prefer precomputed hash file (generated at build time) to avoid runtime calculation overhead
         // Note: hash file should be in the same directory as archiveFile
         File archiveParentDir = archiveFile.getParentFile();
@@ -195,6 +226,6 @@ final class BridgeArchiveLocator {
             LOG.warn("[BridgeResolver] Failed to calculate archive hash, falling back to version-based signature");
             archiveHash = "unknown";
         }
-        return descriptor.getVersion() + ":" + archiveHash;
+        return pluginLocation.version + ":" + archiveHash;
     }
 }

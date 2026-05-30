@@ -315,7 +315,7 @@ public class WorkspaceContextCollector {
      * Standard JAVA_MODULE types typically do not have this option set.
      */
     private static @Nullable String getModuleTypeName(@NotNull Module module) {
-        String moduleType = module.getOptionValue("moduleType");
+        String moduleType = module.getModuleTypeName();
         return moduleType != null && !moduleType.isEmpty() ? moduleType : null;
     }
 

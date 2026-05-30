@@ -113,10 +113,8 @@ dependencies {
 
 intellijPlatform {
     pluginVerification {
-        // Local verifier is stricter than the marketplace about descriptor
-        // name characters (rejects the Chinese parens in "CC GUI（Claude or
-        // Codex）"). The marketplace accepts that name, so we limit local
-        // failures to actual binary/internal API compatibility issues.
+        // Keep local verification focused on binary/internal API compatibility
+        // issues that match Marketplace rejection criteria.
         failureLevel = [
             org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,
             org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel.INTERNAL_API_USAGES
