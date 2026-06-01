@@ -40,6 +40,10 @@ export interface SdkStatus {
   hasUpdate?: boolean;
   /** Installation path */
   installPath?: string;
+  /** Detected CLI binary path (e.g. opencode executable location) */
+  cliPath?: string;
+  /** Detected CLI binary version (e.g. opencode --version output) */
+  cliVersion?: string;
   /** Description */
   description?: string;
   /** Last checked time */

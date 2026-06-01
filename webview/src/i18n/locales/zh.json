@@ -357,7 +357,8 @@
       "uninstallSuccess": "{{name}} 已卸载",
       "uninstallFailed": "卸载失败: {{error}}",
       "updating": "更新中...",
-      "updateSuccess": "{{name}} 更新成功"
+      "updateSuccess": "{{name}} 更新成功",
+      "cliVersion": "CLI v{{version}}"
     },
     "usage": "使用统计",
     "usageDesc": "查看您的 Token 消耗、费用统计和使用趋势分析",

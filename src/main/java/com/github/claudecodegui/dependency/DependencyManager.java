@@ -558,12 +558,108 @@ public class DependencyManager {
                 String version = getInstalledVersion(sdk.getId());
                 status.addProperty("installedVersion", version);
                 status.addProperty("version", version); // Also add the version field
+                status.addProperty("installPath", getSdkDir(sdk.getId()).toString());
+            }
+
+            // Detect opencode CLI binary info for the opencode-sdk card
+            if ("opencode-sdk".equals(sdk.getId())) {
+                String[] cliInfo = detectOpenCodeCli();
+                if (cliInfo[0] != null) {
+                    status.addProperty("cliPath", cliInfo[0]);
+                }
+                if (cliInfo[1] != null) {
+                    status.addProperty("cliVersion", cliInfo[1]);
+                }
             }
 
             result.add(sdk.getId(), status);
         }
 
         return result;
+    }
+
+    /**
+     * Detects the opencode CLI binary path and version.
+     * Searches in the same priority order as the Node bridge's OPENCODE_PATH_ENTRIES:
+     * ~/.opencode/bin, /opt/homebrew/bin, /usr/local/bin, then system PATH.
+     *
+     * @return a two-element array: [cliPath, cliVersion]. Either or both may be null.
+     */
+    String[] detectOpenCodeCli() {
+        String home = PlatformUtils.getHomeDirectory();
+        List<String> searchPaths = new ArrayList<>();
+        searchPaths.add(Paths.get(home, ".opencode", "bin").toString());
+        if (!PlatformUtils.isWindows()) {
+            searchPaths.add("/opt/homebrew/bin");
+            searchPaths.add("/usr/local/bin");
+        }
+
+        // Check preferred directories first
+        for (String dir : searchPaths) {
+            String exeName = PlatformUtils.isWindows() ? "opencode.exe" : "opencode";
+            Path candidate = Paths.get(dir, exeName);
+            if (Files.isExecutable(candidate)) {
+                String version = runOpenCodeVersion(candidate.toString());
+                return new String[]{candidate.toString(), version};
+            }
+        }
+
+        // Fall back to system PATH via `which`/`where`
+        try {
+            String whichCmd = PlatformUtils.isWindows() ? "where" : "which";
+            ProcessBuilder pb = new ProcessBuilder(whichCmd, "opencode");
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            String path = null;
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                path = reader.readLine();
+            }
+            if (!process.waitFor(5, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+            }
+            if (path != null && !path.trim().isEmpty()) {
+                path = path.trim();
+                String version = runOpenCodeVersion(path);
+                return new String[]{path, version};
+            }
+        } catch (Exception e) {
+            LOG.debug("[DependencyManager] which/where opencode failed: " + e.getMessage());
+        }
+
+        return new String[]{null, null};
+    }
+
+    /**
+     * Runs `opencode --version` and returns the trimmed output, or null on failure.
+     */
+    private String runOpenCodeVersion(String cliPath) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder(cliPath, "--version");
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            StringBuilder output = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line.trim());
+                }
+            }
+            if (!process.waitFor(10, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                return null;
+            }
+            if (process.exitValue() == 0) {
+                String version = output.toString().trim();
+                // Strip common version prefixes like "opencode version " or "v"
+                version = version.replaceFirst("(?i)^opencode\\s+version\\s+", "");
+                return version.isEmpty() ? null : version;
+            }
+        } catch (Exception e) {
+            LOG.debug("[DependencyManager] opencode --version failed for " + cliPath + ": " + e.getMessage());
+        }
+        return null;
     }
 
     /**

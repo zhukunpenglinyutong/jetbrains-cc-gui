@@ -705,6 +705,24 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
                     <span>{info.installPath}</span>
                   </div>
                 )}
+
+                {/* CLI binary info (opencode-sdk only) */}
+                {sdk.id === 'opencode-sdk' && (info?.cliPath || info?.cliVersion) && (
+                  <div className={styles.cliInfo}>
+                    {info.cliPath && (
+                      <div className={styles.installPath}>
+                        <span className="codicon codicon-terminal" />
+                        <span>{info.cliPath}</span>
+                      </div>
+                    )}
+                    {info.cliVersion && (
+                      <div className={styles.installPath}>
+                        <span className="codicon codicon-versions" />
+                        <span>{t('settings.dependency.cliVersion', { version: info.cliVersion })}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })

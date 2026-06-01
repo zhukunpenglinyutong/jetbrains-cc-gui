@@ -358,7 +358,8 @@
       "uninstallSuccess": "{{name}} has been uninstalled",
       "uninstallFailed": "Uninstall failed: {{error}}",
       "updating": "Updating...",
-      "updateSuccess": "{{name}} updated successfully"
+      "updateSuccess": "{{name}} updated successfully",
+      "cliVersion": "CLI v{{version}}"
     },
     "usage": "Usage Statistics",
     "usageDesc": "View your Token consumption, cost statistics and usage trend analysis",
