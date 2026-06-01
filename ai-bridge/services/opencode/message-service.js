@@ -13,7 +13,7 @@ import { pathToFileURL } from 'url';
 
 import { requestPermissionFromJava, requestAskUserQuestionAnswers } from '../../permission-ipc.js';
 import { getMcpServerTools as getMcpServerToolsImpl } from '../claude/mcp-status/index.js';
-import { ensureOpenCodeSdk, normalizeOpenCodeSdkError } from './opencode-utils.js';
+import { ensureOpenCodePath, ensureOpenCodeSdk, normalizeOpenCodeSdkError } from './opencode-utils.js';
 import {
   buildOpenCodePermissionDialogRequest,
   shouldAutoAllowOpenCodePermission,
@@ -206,6 +206,8 @@ async function createOpenCodeRuntime(cwd) {
   if (typeof sdk.createOpencodeServer !== 'function') {
     throw new Error('opencode SDK loaded, but createOpencodeServer export was not found');
   }
+
+  ensureOpenCodePath();
 
   const server = await sdk.createOpencodeServer({
     hostname: process.env.OPENCODE_HOSTNAME || DEFAULT_HOSTNAME,

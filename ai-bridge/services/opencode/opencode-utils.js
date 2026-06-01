@@ -3,6 +3,12 @@
  */
 import { loadOpenCodeSdk } from '../../utils/sdk-loader.js';
 
+const OPENCODE_PATH_ENTRIES = [
+  `${process.env.HOME || ''}/.opencode/bin`,
+  '/opt/homebrew/bin',
+  '/usr/local/bin'
+].filter(Boolean);
+
 export async function ensureOpenCodeSdk() {
   const sdk = await loadOpenCodeSdk();
 
@@ -11,6 +17,20 @@ export async function ensureOpenCodeSdk() {
   }
 
   return sdk;
+}
+
+export function ensureOpenCodePath() {
+  const delimiter = process.platform === 'win32' ? ';' : ':';
+  const currentPath = process.env.PATH || '';
+  const currentEntries = currentPath.split(delimiter).filter(Boolean);
+  const currentEntrySet = new Set(currentEntries);
+  const missingEntries = OPENCODE_PATH_ENTRIES.filter((entry) => !currentEntrySet.has(entry));
+
+  if (missingEntries.length > 0) {
+    process.env.PATH = [...missingEntries, ...currentEntries].join(delimiter);
+  }
+
+  return process.env.PATH;
 }
 
 export function normalizeOpenCodeSdkError(error) {
