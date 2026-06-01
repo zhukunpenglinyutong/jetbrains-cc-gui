@@ -40,6 +40,7 @@ public class SessionRuntimeRouter {
             List<ClaudeSession.Attachment> attachments,
             String permissionMode,
             String model,
+            String permissionSessionId,
             JsonObject openedFiles,
             String agentPrompt,
             Boolean streaming,
@@ -48,11 +49,17 @@ public class SessionRuntimeRouter {
     ) {
         if ("cli".equals(invocationMode)) {
             String tabId = resolveTabId(channelId);
-            LOG.info("[CliConcurrencyDiag][RuntimeRouter] routing Claude to CLI" + ": tabId=" + tabId + ", channelId=" + channelId + ", sessionId=" + (sessionId != null ? sessionId : "(new)") + ", epoch=" + runtimeSessionEpoch + ", cwd=" + (cwd != null ? cwd : "(none)") + ", thread=" + Thread.currentThread().getName());
+            LOG.info(String.format(
+                    "[CliConcurrencyDiag][RuntimeRouter] routing Claude to CLI: tabId=%s, channelId=%s, sessionId=%s, epoch=%s, cwd=%s, thread=%s",
+                    tabId, channelId,
+                    sessionId != null ? sessionId : "(new)",
+                    runtimeSessionEpoch,
+                    cwd != null ? cwd : "(none)",
+                    Thread.currentThread().getName()));
             return cliManager.send(new CliSendRequest(
                     tabId, "claude", message, sessionId, cwd,
                     attachments, openedFiles, List.of(),
-                    agentPrompt, permissionMode, model, reasoningEffort, Map.of()
+                    agentPrompt, permissionMode, model, reasoningEffort, permissionSessionId, Map.of()
             ), callback);
         }
         return sdkRuntime.sendClaude(channelId, message, sessionId, runtimeSessionEpoch, cwd,
@@ -78,6 +85,7 @@ public class SessionRuntimeRouter {
                     cliRequest.permissionMode(),
                     cliRequest.model(),
                     cliRequest.reasoningEffort(),
+                    cliRequest.permissionSessionId(),
                     cliRequest.env()
             ), callback);
         }

@@ -22,6 +22,7 @@ public record CliRequest(
         String permissionMode,
         String model,
         String reasoningEffort,
+        String permissionSessionId,
         Map<String, String> env
 ) {
     public CliRequest {

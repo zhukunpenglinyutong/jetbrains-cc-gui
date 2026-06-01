@@ -4,11 +4,12 @@ import com.github.claudecodegui.cli.CliSendRequest;
 import com.github.claudecodegui.cli.CliSessionCallback;
 import com.github.claudecodegui.cli.CliSessionExecutor;
 import com.github.claudecodegui.cli.common.CliAttachmentHandler;
+import com.github.claudecodegui.cli.common.CliEnvironmentBuilder;
 import com.github.claudecodegui.cli.common.CliErrorFormatter;
 import com.github.claudecodegui.cli.common.CliMcpConfig;
 import com.github.claudecodegui.cli.common.CliProcessHandle;
+import com.github.claudecodegui.cli.common.CliSettings;
 import com.github.claudecodegui.session.runtime.CodexCliResolver;
-import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.ui.toolwindow.TabPerformanceLogger;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
@@ -17,11 +18,9 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 
-import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
@@ -46,6 +45,7 @@ import java.util.regex.Pattern;
 public class CodexCliSession {
 
     private static final Logger LOG = Logger.getInstance(CodexCliSession.class);
+    private static final String ENV_CODEX_SANDBOX_NETWORK_DISABLED = "CODEX_SANDBOX_NETWORK_DISABLED";
     private static final Pattern POWERSHELL_PROFILE_ERROR_PATTERN = Pattern.compile(
             "(?i)(PowerShell_profile\\.ps1|running scripts is disabled on this system|PSSecurityException|UnauthorizedAccess)"
     );
@@ -84,6 +84,10 @@ public class CodexCliSession {
             "(?i)(?:\\b(?:not|n't)\\s+support(?:ed|s)?\\b|\\bunsupported\\b"
             + "|\\bvision[- ]?capable\\b|\\bmultimodal\\b.*\\brequired\\b"
             + "|\\brequires?\\b.*\\bvision\\b|\\bonly\\s+supported\\b)"
+    );
+    private static final Pattern RATE_LIMIT_OR_QUOTA_PATTERN = Pattern.compile(
+            "(?i)(?:\\b429\\b|too\\s+many\\s+requests|rate\\s*limit|quota|request\\s+rejected"
+            + "|使用上限|限额)"
     );
 
     private final String tabId;
@@ -126,9 +130,16 @@ public class CodexCliSession {
                         pb.directory(cwd);
                     }
                 }
-                pb.environment().put("NO_COLOR", "1");
+                Map<String, String> cliEnv = pb.environment();
+                cliEnv.clear();
+                cliEnv.putAll(CliEnvironmentBuilder.buildBaseEnvironment());
+                cliEnv.put("NO_COLOR", "1");
+                CliEnvironmentBuilder.configureProjectPath(cliEnv, request.cwd());
+                // CLI mode must be allowed to reach the real Codex API even if the host
+                // process was launched with sandbox-network restrictions.
+                cliEnv.remove(ENV_CODEX_SANDBOX_NETWORK_DISABLED);
                 if (!request.extraEnv().isEmpty()) {
-                    pb.environment().putAll(CodexCliCommandUtils.sanitizeEnv(request.extraEnv()));
+                    cliEnv.putAll(CodexCliCommandUtils.sanitizeEnv(request.extraEnv()));
                 }
 
                 process = pb.start();
@@ -591,11 +602,7 @@ public class CodexCliSession {
     }
 
     private String readSandboxMode(String cwd) {
-        try {
-            return new CodemossSettingsService().getCodexSandboxMode(cwd);
-        } catch (Exception e) {
-            return PlatformUtils.isWindows() ? "danger-full-access" : "workspace-write";
-        }
+        return CliSettings.getCodexSandboxMode(cwd);
     }
 
     private static String getString(JsonObject obj, String key) {
@@ -855,6 +862,9 @@ public class CodexCliSession {
         if (details.isBlank()) {
             return false;
         }
+        if (RATE_LIMIT_OR_QUOTA_PATTERN.matcher(details).find()) {
+            return false;
+        }
         return UNSUPPORTED_IMAGE_CONTEXT_PATTERN.matcher(details).find()
                 && UNSUPPORTED_IMAGE_REASON_PATTERN.matcher(details).find();
     }
@@ -877,7 +887,9 @@ public class CodexCliSession {
         if (len > 0 && bytes[len - 1] == '\r') {
             len--;
         }
-        if (len == 0) return;
+        if (len == 0) {
+            return;
+        }
 
         String line = decodeLine(bytes, len);
         if (!line.isBlank()) {

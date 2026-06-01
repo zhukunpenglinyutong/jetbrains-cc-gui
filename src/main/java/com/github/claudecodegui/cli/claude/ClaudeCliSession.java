@@ -1,13 +1,14 @@
 package com.github.claudecodegui.cli.claude;
 
-import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.cli.CliSendRequest;
 import com.github.claudecodegui.cli.CliSessionCallback;
 import com.github.claudecodegui.cli.CliSessionExecutor;
 import com.github.claudecodegui.cli.common.CliAttachmentHandler;
+import com.github.claudecodegui.cli.common.CliEnvironmentBuilder;
 import com.github.claudecodegui.cli.common.CliErrorFormatter;
 import com.github.claudecodegui.cli.common.CliMcpConfig;
 import com.github.claudecodegui.cli.common.CliProcessHandle;
+import com.github.claudecodegui.cli.common.CliSettings;
 import com.github.claudecodegui.provider.claude.ClaudeCliDetector;
 import com.github.claudecodegui.provider.claude.ClaudeCliStreamParser;
 import com.github.claudecodegui.provider.common.MessageCallback;
@@ -22,9 +23,13 @@ import java.io.File;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -41,7 +46,8 @@ public class ClaudeCliSession {
     private final Gson gson = new Gson();
     private final CliAttachmentHandler attachmentHandler = new CliAttachmentHandler();
     private final CliMcpConfig mcpConfig;
-    private final EnvironmentConfigurator envConfigurator = new EnvironmentConfigurator();
+    private volatile String permissionDir;
+    private volatile String cliPermissionSessionId;
 
     // 当前 session_id（从 stream-json 输出中获取）
     private volatile String sessionId;
@@ -263,9 +269,13 @@ public class ClaudeCliSession {
             StringBuilder diagnostic = new StringBuilder();
             AtomicBoolean completedWithStructuredError = new AtomicBoolean(false);
             try {
-                LOG.info(
-                        "[CliConcurrencyDiag][ClaudeCliSession] send task started" + ": tabId=" + tabId + ", requestSessionId=" + (request.sessionId() != null ? request.sessionId() : "(new)") + ", currentSessionId=" + (sessionId != null ? sessionId : "(none)") + ", cwd=" + (request.cwd() != null ? request.cwd() : "(none)") + ", thread=" + Thread.currentThread()
-                                .getName());
+                LOG.info(String.format(
+                        "[CliConcurrencyDiag][ClaudeCliSession] send task started: tabId=%s, requestSessionId=%s, currentSessionId=%s, cwd=%s, thread=%s",
+                        tabId,
+                        request.sessionId() != null ? request.sessionId() : "(new)",
+                        sessionId != null ? sessionId : "(none)",
+                        request.cwd() != null ? request.cwd() : "(none)",
+                        Thread.currentThread().getName()));
                 String cliPath = ClaudeCliDetector.getInstance()
                         .findCliExecutable();
                 if (cliPath == null) {
@@ -285,10 +295,13 @@ public class ClaudeCliSession {
                         imageBlockCount++;
                     }
                 }
-                LOG.debug(
-                        "[ClaudeImageDiag][ClaudeCliSession] prompt prepared" + ": tabId=" + tabId + ", requestAttachments=" + (request.attachments() != null ? request.attachments()
-                                .size() : 0) + ", contentBlocks=" + blocks.size() + ", imageBlocks=" + imageBlockCount + ", addDirs=" + addDirs + ", promptViaStdin=true" + ", containsReadInstruction=" + prompt.contains(
-                                "Use the Read tool to inspect this image file") + ", promptPreview=" + previewPrompt(prompt));
+                LOG.debug(String.format(
+                        "[ClaudeImageDiag][ClaudeCliSession] prompt prepared: tabId=%s, reqAtts=%d, blocks=%d, imgBlocks=%d, addDirs=%s, stdin=true, hasReadInstr=%s, preview=%s",
+                        tabId,
+                        request.attachments() != null ? request.attachments().size() : 0,
+                        blocks.size(), imageBlockCount, addDirs,
+                        prompt.contains("Use the Read tool to inspect this image file"),
+                        previewPrompt(prompt)));
 
                 List<String> cmd = buildCommand(cliPath, request, prompt, addDirs);
                 LOG.info("[ClaudeCliSession][" + tabId + "] Command (prompt via stdin): " + String.join(" ", cmd));
@@ -302,10 +315,17 @@ public class ClaudeCliSession {
                         pb.directory(cwd);
                     }
                 }
-                pb.environment()
-                        .put("NO_COLOR", "1");
-                envConfigurator.configurePermissionEnv(pb.environment());
-                envConfigurator.configureProjectPath(pb.environment(), request.cwd());
+                Map<String, String> cliEnv = pb.environment();
+                cliEnv.clear();
+                cliEnv.putAll(CliEnvironmentBuilder.buildBaseEnvironment());
+                cliEnv.put("NO_COLOR", "1");
+                CliEnvironmentBuilder.configureClaudePermissionEnv(
+                        cliEnv,
+                        getPermissionDirectory(),
+                        getPermissionSessionId(request),
+                        getPermissionSafetyNetMs()
+                );
+                CliEnvironmentBuilder.configureProjectPath(cliEnv, request.cwd());
 
                 LOG.info("[CliConcurrencyDiag][ClaudeCliSession] starting process" + ": tabId=" + tabId + ", elapsedMs=" + elapsedMillis(
                         sendStartNanos) + ", thread=" + Thread.currentThread()
@@ -420,6 +440,38 @@ public class ClaudeCliSession {
         } else {
             callback.onComplete(result.success, assistantContent.toString(), result.error);
         }
+    }
+
+    private String getPermissionDirectory() {
+        String cached = permissionDir;
+        if (cached != null) {
+            return cached;
+        }
+        Path dir = Paths.get(System.getProperty("java.io.tmpdir"), "claude-permission");
+        try {
+            Files.createDirectories(dir);
+        } catch (Exception e) {
+            LOG.warn("[ClaudeCliSession] Failed to prepare permission dir: " + dir + " (" + e.getMessage() + ")");
+        }
+        permissionDir = dir.toAbsolutePath().toString();
+        return permissionDir;
+    }
+
+    private String getPermissionSessionId(CliSendRequest request) {
+        if (request.permissionSessionId() != null && !request.permissionSessionId().isBlank()) {
+            return request.permissionSessionId();
+        }
+        String cached = cliPermissionSessionId;
+        if (cached != null && !cached.isBlank()) {
+            return cached;
+        }
+        String generated = java.util.UUID.randomUUID().toString();
+        cliPermissionSessionId = generated;
+        return generated;
+    }
+
+    private long getPermissionSafetyNetMs() {
+        return CliSettings.getClaudePermissionSafetyNetMs();
     }
 
 }

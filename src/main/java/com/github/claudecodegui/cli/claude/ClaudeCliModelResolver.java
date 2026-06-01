@@ -1,6 +1,6 @@
 package com.github.claudecodegui.cli.claude;
 
-import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.github.claudecodegui.cli.common.CliSettings;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 
@@ -15,11 +15,7 @@ final class ClaudeCliModelResolver {
 
     static String resolve(String selectedModel) {
         try {
-            JsonObject settings = new CodemossSettingsService().readClaudeSettings();
-            if (settings == null || !settings.has("env") || !settings.get("env").isJsonObject()) {
-                return selectedModel;
-            }
-            return resolveMapped(selectedModel, settings.getAsJsonObject("env"));
+            return resolveMapped(selectedModel, CliSettings.readClaudeEnv());
         } catch (Exception e) {
             LOG.warn("[ClaudeCliModelResolver] Failed: " + e.getMessage());
             return selectedModel;

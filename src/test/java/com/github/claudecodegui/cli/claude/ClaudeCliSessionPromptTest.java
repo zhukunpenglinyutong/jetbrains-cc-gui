@@ -24,7 +24,7 @@ public class ClaudeCliSessionPromptTest {
     @Test
     public void rendersImageAttachmentWithReadToolInstruction() throws Exception {
         ClaudeCliSession session = new ClaudeCliSession("tab-claude-prompt");
-        CliSendRequest request = new CliSendRequest("tab-claude-prompt", "claude", "describe this image", null, null, List.of(), null, List.of(), null, null, null, null, Map.of());
+        CliSendRequest request = new CliSendRequest("tab-claude-prompt", "claude", "describe this image", null, null, List.of(), null, List.of(), null, null, null, null, null, Map.of());
         File image = newAttachmentFile("abc123.png");
         String promptPath = promptPath(image);
         List<CliAttachmentHandler.ContentBlock> blocks = List.of(new CliAttachmentHandler.ContentBlock(CliAttachmentHandler.ContentBlock.Kind.IMAGE, "image/png", image, null));
@@ -41,7 +41,7 @@ public class ClaudeCliSessionPromptTest {
     @Test
     public void buildsCommandWithoutPromptArgumentSoPromptCanBeWrittenToStdin() throws Exception {
         ClaudeCliSession session = new ClaudeCliSession("tab-claude-command");
-        CliSendRequest request = new CliSendRequest("tab-claude-command", "claude", "first line\nsecond line", null, null, List.of(), null, List.of(), null, "default", "sonnet", "high", Map.of());
+        CliSendRequest request = new CliSendRequest("tab-claude-command", "claude", "first line\nsecond line", null, null, List.of(), null, List.of(), null, "default", "sonnet", "high", null, Map.of());
 
         Method method = ClaudeCliSession.class.getDeclaredMethod("buildCommand", String.class, CliSendRequest.class, String.class, List.class);
         method.setAccessible(true);

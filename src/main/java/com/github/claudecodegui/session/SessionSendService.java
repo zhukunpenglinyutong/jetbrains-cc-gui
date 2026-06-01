@@ -253,6 +253,7 @@ public class SessionSendService {
                 effectivePermissionMode,
                 state.getModel(),
                 state.getReasoningEffort(),
+                state.getPermissionSessionId(),
                 Map.of()
         );
 
@@ -273,14 +274,21 @@ public class SessionSendService {
     ) {
         LOG.debug("[SessionSendService][DIAG] sendToClaude called, attachments="
                 + (attachments == null ? "NULL" : attachments.size()));
-        LOG.debug("[ClaudeImageDiag][SessionSendService] sendToClaude route" + ": invocationMode=" + effectiveInvocationMode + ", provider=" + state.getProvider() + ", sessionId=" + (state.getSessionId() != null ? state.getSessionId() : "(new)") + ", attachments=" + (attachments == null ? "NULL" : attachments.size()));
+        LOG.debug(String.format(
+                "[ClaudeImageDiag][SessionSendService] sendToClaude route: invocationMode=%s, provider=%s, sessionId=%s, attachments=%s",
+                effectiveInvocationMode, state.getProvider(),
+                state.getSessionId() != null ? state.getSessionId() : "(new)",
+                attachments == null ? "NULL" : attachments.size()));
         if (attachments != null) {
             for (int i = 0; i < attachments.size(); i++) {
                 ClaudeSession.Attachment att = attachments.get(i);
                 LOG.debug("[SessionSendService][DIAG] att[" + i + "]: fileName=" + att.fileName
                         + ", localPath=" + att.localPath
                         + ", data=" + (att.data != null ? att.data.length() + "chars" : "null"));
-                LOG.debug("[ClaudeImageDiag][SessionSendService] att[" + i + "]" + ": fileName=" + att.fileName + ", mediaType=" + att.mediaType + ", localPath=" + att.localPath + ", resourceUrl=" + att.resourceUrl + ", data=" + (att.data != null ? att.data.length() + "chars" : "null"));
+                LOG.debug(String.format(
+                        "[ClaudeImageDiag][SessionSendService] att[%d]: fileName=%s, mediaType=%s, localPath=%s, resourceUrl=%s, data=%s",
+                        i, att.fileName, att.mediaType, att.localPath, att.resourceUrl,
+                        att.data != null ? att.data.length() + "chars" : "null"));
             }
         }
         ClaudeMessageHandler handler = new ClaudeMessageHandler(
@@ -311,6 +319,7 @@ public class SessionSendService {
                         attachments,
                         effectivePermissionMode,
                         currentModel,
+                        state.getPermissionSessionId(),
                         openedFilesJson,
                         agentPrompt,
                         streaming,

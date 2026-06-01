@@ -82,6 +82,7 @@ public class SessionState {
     private volatile String model = "claude-sonnet-4-6";
     private volatile String provider = "claude";
     private volatile String claudeInvocationMode = null;
+    private volatile String permissionSessionId = null;
     // Reasoning effort (thinking depth)
     private volatile String reasoningEffort = "high";
 
@@ -155,6 +156,10 @@ public class SessionState {
 
     public String getClaudeInvocationMode() {
         return claudeInvocationMode;
+    }
+
+    public String getPermissionSessionId() {
+        return permissionSessionId;
     }
 
     public String getReasoningEffort() {
@@ -259,6 +264,16 @@ public class SessionState {
         String trimmed = claudeInvocationMode.trim();
         if (VALID_CLAUDE_INVOCATION_MODES.contains(trimmed)) {
             this.claudeInvocationMode = trimmed;
+        }
+    }
+
+    public void setPermissionSessionId(String permissionSessionId) {
+        if (permissionSessionId == null) {
+            return;
+        }
+        String trimmed = permissionSessionId.trim();
+        if (!trimmed.isEmpty()) {
+            this.permissionSessionId = trimmed;
         }
     }
 

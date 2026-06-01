@@ -222,6 +222,10 @@ public class ChatWindowDelegate {
         LOG.info("Unified bridge sessionId for PermissionService routing: " + sessionId);
 
         PermissionService permissionService = PermissionService.getInstance(project, sessionId);
+        ClaudeSession session = host.getSession();
+        if (session != null) {
+            session.setPermissionSessionId(sessionId);
+        }
         permissionService.start();
         permissionService.registerDialogShower(project, (toolName, inputs) ->
             host.getPermissionHandler().showFrontendPermissionDialog(toolName, inputs));

@@ -23,6 +23,7 @@ public record CliSendRequest(
         String permissionMode,
         String model,
         String reasoningEffort,
+        String permissionSessionId,
         Map<String, String> extraEnv
 ) {
     public CliSendRequest {

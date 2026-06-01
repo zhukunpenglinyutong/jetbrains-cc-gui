@@ -700,6 +700,14 @@ public class ClaudeSession {
         LOG.info("Claude invocation mode updated to: " + state.getClaudeInvocationMode());
     }
 
+    public String getPermissionSessionId() {
+        return state.getPermissionSessionId();
+    }
+
+    public void setPermissionSessionId(String permissionSessionId) {
+        state.setPermissionSessionId(permissionSessionId);
+    }
+
     /**
      * Get the current runtime session epoch.
      */
