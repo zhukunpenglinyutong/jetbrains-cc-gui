@@ -299,7 +299,11 @@ public class ProjectConfigHandler {
             JsonObject json = gson.fromJson(content, JsonObject.class);
             String mode = readString(json, "invocationMode", "sdk");
             settingsService.setClaudeInvocationMode(mode);
+            if (context.getSession() != null) {
+                context.getSession().setClaudeInvocationMode(settingsService.getClaudeInvocationMode());
+            }
             pushJson("window.updateInvocationMode", jsonOf("invocationMode", settingsService.getClaudeInvocationMode()));
+            pushJson("window.updateSessionRuntimeState", buildSessionRuntimeStateJson());
         } catch (Exception e) {
             LOG.error("[ProjectConfigHandler] Failed to set Claude invocation mode: " + e.getMessage(), e);
             showError("Failed to save Claude invocation mode: " + e.getMessage());

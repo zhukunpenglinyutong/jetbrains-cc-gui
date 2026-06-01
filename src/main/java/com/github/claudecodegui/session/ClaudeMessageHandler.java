@@ -208,11 +208,6 @@ public class ClaudeMessageHandler implements MessageCallback {
         }
         callbackHandler.notifyQueueDisplayStateChanged(state.getQueueDisplayState(), state.getQueueAheadCount());
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
-
-        // Show error in status bar when project context is available.
-        if (project != null) {
-            ClaudeNotifier.showError(project, error);
-        }
     }
 
     /**

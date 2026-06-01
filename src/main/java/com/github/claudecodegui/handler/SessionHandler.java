@@ -188,7 +188,14 @@ public class SessionHandler extends BaseMessageHandler {
         final String finalRequestedPermissionMode = requestedPermissionMode;
         final String finalRequestedInvocationMode = requestedInvocationMode;
         ClaudeSession currentSession = context.getSession();
-        LOG.debug("[CliConcurrencyDiag][SessionHandler] accepted send_message" + ": provider=" + (currentSession != null ? currentSession.getProvider() : context.getCurrentProvider()) + ", requestedInvocationMode=" + (finalRequestedInvocationMode != null ? finalRequestedInvocationMode : "(none)") + ", sessionId=" + (currentSession != null ? currentSession.getSessionId() : "(none)") + ", channelId=" + (currentSession != null ? currentSession.getChannelId() : "(none)") + ", promptChars=" + finalPrompt.length() + ", thread=" + Thread.currentThread().getName());
+        LOG.debug(String.format(
+                "[CliConcurrencyDiag][SessionHandler] accepted send_message: provider=%s, requestedInvocationMode=%s, sessionId=%s, channelId=%s, promptChars=%d, thread=%s",
+                currentSession != null ? currentSession.getProvider() : context.getCurrentProvider(),
+                finalRequestedInvocationMode != null ? finalRequestedInvocationMode : "(none)",
+                currentSession != null ? currentSession.getSessionId() : "(none)",
+                currentSession != null ? currentSession.getChannelId() : "(none)",
+                finalPrompt.length(),
+                Thread.currentThread().getName()));
 
         CompletableFuture.runAsync(() -> {
             long dispatchStartNanos = System.nanoTime();
@@ -207,16 +214,20 @@ public class SessionHandler extends BaseMessageHandler {
             }
 
             // [FIX] Pass agent prompt and file tags directly to session
-            LOG.info("[CliConcurrencyDiag][SessionHandler] invoking session.send" + ": provider=" + context.getSession().getProvider() + ", invocationMode=" + (finalRequestedInvocationMode != null ? finalRequestedInvocationMode : context.getSession().getClaudeInvocationMode()) + ", sessionId=" + context.getSession().getSessionId() + ", channelId=" + context.getSession().getChannelId() + ", elapsedMs=" + ((System.nanoTime() - dispatchStartNanos) / 1_000_000) + ", thread=" + Thread.currentThread().getName());
+            LOG.info(String.format(
+                    "[CliConcurrencyDiag][SessionHandler] invoking session.send: provider=%s, invocationMode=%s, sessionId=%s, channelId=%s, elapsedMs=%d, thread=%s",
+                    context.getSession().getProvider(),
+                    finalRequestedInvocationMode != null ? finalRequestedInvocationMode : context.getSession().getClaudeInvocationMode(),
+                    context.getSession().getSessionId(),
+                    context.getSession().getChannelId(),
+                    (System.nanoTime() - dispatchStartNanos) / 1_000_000,
+                    Thread.currentThread().getName()));
             context.getSession().send(finalPrompt, finalAgentPrompt, finalFileTagPaths,
                     finalRequestedPermissionMode, finalRequestedInvocationMode)
                 .thenRun(() -> {
                 })
                 .exceptionally(ex -> {
                     LOG.error("Failed to send message", ex);
-                    if (project != null) {
-                        ClaudeNotifier.showError(project, "Task failed: " + ex.getMessage());
-                    }
                     ApplicationManager.getApplication().invokeLater(() -> {
                         callJavaScript("addErrorMessage", escapeJs("发送失败: " + ex.getMessage()));
                     });
@@ -258,7 +269,11 @@ public class SessionHandler extends BaseMessageHandler {
                     String data = a.has("data") && !a.get("data").isJsonNull()
                                           ? a.get("data").getAsString()
                                           : "";
-                    LOG.debug("[ClaudeImageDiag][SessionHandler] payload att[" + i + "]" + ": fileName=" + fileName + ", mediaType=" + mediaType + ", dataChars=" + (data != null ? data.length() : 0) + ", provider=" + provider + ", sessionKey=" + sessionKey);
+                    LOG.debug(String.format(
+                            "[ClaudeImageDiag][SessionHandler] payload att[%d]: fileName=%s, mediaType=%s, dataChars=%d, provider=%s, sessionKey=%s",
+                            i, fileName, mediaType,
+                            data != null ? data.length() : 0,
+                            provider, sessionKey));
                     ClaudeSession.Attachment attachment = new ClaudeSession.Attachment(fileName, mediaType, data);
                     if (mediaType.startsWith("image/") && !data.isBlank()) {
                         AttachmentStorageService.PersistedAttachment persisted = AttachmentStorageService.getInstance()
@@ -271,7 +286,10 @@ public class SessionHandler extends BaseMessageHandler {
                             // Image is now on disk — free the base64 string from the pipeline.
                             // Downstream (SDK/CLI) reads from localPath; display uses resourceUrl.
                             attachment.data = null;
-                            LOG.debug("[ClaudeImageDiag][SessionHandler] persisted image att[" + i + "]" + ": localPath=" + attachment.localPath + ", resourceUrl=" + attachment.resourceUrl + ", thumbnailUrl=" + attachment.thumbnailUrl + ", hash=" + attachment.attachmentHash);
+                            LOG.debug(String.format(
+                                    "[ClaudeImageDiag][SessionHandler] persisted image att[%d]: localPath=%s, resourceUrl=%s, thumbnailUrl=%s, hash=%s",
+                                    i, attachment.localPath, attachment.resourceUrl,
+                                    attachment.thumbnailUrl, attachment.attachmentHash));
                         } else {
                             LOG.debug("[ClaudeImageDiag][SessionHandler] image persistence returned null for att[" + i + "]: fileName=" + fileName + ", mediaType=" + mediaType);
                         }
@@ -375,7 +393,15 @@ public class SessionHandler extends BaseMessageHandler {
         final String finalRequestedPermissionMode = requestedPermissionMode;
         final String finalRequestedInvocationMode = requestedInvocationMode;
         ClaudeSession currentSession = context.getSession();
-        LOG.debug("[CliConcurrencyDiag][SessionHandler] accepted send_message_with_attachments" + ": provider=" + (currentSession != null ? currentSession.getProvider() : context.getCurrentProvider()) + ", requestedInvocationMode=" + (finalRequestedInvocationMode != null ? finalRequestedInvocationMode : "(none)") + ", sessionId=" + (currentSession != null ? currentSession.getSessionId() : "(none)") + ", channelId=" + (currentSession != null ? currentSession.getChannelId() : "(none)") + ", promptChars=" + prompt.length() + ", attachmentCount=" + (attachments != null ? attachments.size() : 0) + ", thread=" + Thread.currentThread().getName());
+        LOG.debug(String.format(
+                "[CliConcurrencyDiag][SessionHandler] accepted send_msg_atts: provider=%s, invMode=%s, sid=%s, chId=%s, chars=%d, atts=%d, thread=%s",
+                currentSession != null ? currentSession.getProvider() : context.getCurrentProvider(),
+                finalRequestedInvocationMode != null ? finalRequestedInvocationMode : "(none)",
+                currentSession != null ? currentSession.getSessionId() : "(none)",
+                currentSession != null ? currentSession.getChannelId() : "(none)",
+                prompt.length(),
+                attachments != null ? attachments.size() : 0,
+                Thread.currentThread().getName()));
 
         CompletableFuture.runAsync(() -> {
             long dispatchStartNanos = System.nanoTime();
@@ -393,16 +419,20 @@ public class SessionHandler extends BaseMessageHandler {
             }
 
             // [FIX] Pass agent prompt and file tags directly to session
-            LOG.info("[CliConcurrencyDiag][SessionHandler] invoking session.send with attachments" + ": provider=" + context.getSession().getProvider() + ", invocationMode=" + (finalRequestedInvocationMode != null ? finalRequestedInvocationMode : context.getSession().getClaudeInvocationMode()) + ", sessionId=" + context.getSession().getSessionId() + ", channelId=" + context.getSession().getChannelId() + ", elapsedMs=" + ((System.nanoTime() - dispatchStartNanos) / 1_000_000) + ", thread=" + Thread.currentThread().getName());
+            LOG.info(String.format(
+                    "[CliConcurrencyDiag][SessionHandler] invoking session.send atts: provider=%s, invMode=%s, sid=%s, chId=%s, elapsed=%dms, thread=%s",
+                    context.getSession().getProvider(),
+                    finalRequestedInvocationMode != null ? finalRequestedInvocationMode : context.getSession().getClaudeInvocationMode(),
+                    context.getSession().getSessionId(),
+                    context.getSession().getChannelId(),
+                    (System.nanoTime() - dispatchStartNanos) / 1_000_000,
+                    Thread.currentThread().getName()));
             context.getSession().send(prompt, attachments, finalAgentPrompt, finalFileTagPaths,
                     finalRequestedPermissionMode, finalRequestedInvocationMode)
                 .thenRun(() -> {
                 })
                 .exceptionally(ex -> {
                     LOG.error("Failed to send message with attachments", ex);
-                    if (project != null) {
-                        ClaudeNotifier.showError(project, "Task failed: " + ex.getMessage());
-                    }
                     ApplicationManager.getApplication().invokeLater(() -> {
                         callJavaScript("addErrorMessage", escapeJs("发送失败: " + ex.getMessage()));
                     });

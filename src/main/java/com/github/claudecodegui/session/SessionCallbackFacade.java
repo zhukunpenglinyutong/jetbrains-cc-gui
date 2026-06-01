@@ -1,6 +1,5 @@
 package com.github.claudecodegui.session;
 
-import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.intellij.openapi.project.Project;
 
@@ -32,9 +31,6 @@ public class SessionCallbackFacade {
 
     public void notifyStateChange(boolean busy, boolean loading, String error) {
         callbackHandler.notifyStateChange(busy, loading, error);
-        if (project != null && error != null && !error.isEmpty()) {
-            ClaudeNotifier.showError(project, error);
-        }
     }
 
     public void notifyStatusMessage(String message) {

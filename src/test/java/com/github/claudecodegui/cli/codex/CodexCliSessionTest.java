@@ -242,6 +242,51 @@ public class CodexCliSessionTest {
     }
 
     @Test
+    public void imageRequestRateLimitKeepsFormattedRateLimitError() throws Exception {
+        Method method = CodexCliSession.class.getDeclaredMethod(
+                "formatCodexError",
+                String.class,
+                boolean.class
+        );
+        method.setAccessible(true);
+
+        String error = (String) method.invoke(
+                null,
+                "API Error: Request rejected (429) · [1308][已达到 5 小时的使用上限。"
+                        + "您的限额将在 2026-06-01 19:08:32 重置。]",
+                true
+        );
+
+        assertFalse(error.startsWith("__I18N__:aiBridge.unsupportedImageVision"));
+        assertTrue(error.contains("请求过于频繁 (429)"));
+        assertTrue(error.contains("已达到 5 小时的使用上限"));
+    }
+
+    @Test
+    public void imageRequestExitRateLimitWithImageContextKeepsFormattedRateLimitError() throws Exception {
+        Method method = CodexCliSession.class.getDeclaredMethod(
+                "buildExitError",
+                int.class,
+                StringBuilder.class,
+                StringBuilder.class,
+                boolean.class
+        );
+        method.setAccessible(true);
+
+        StringBuilder diagnostic = new StringBuilder();
+        diagnostic.append("sending local_image attachment failed: ")
+                .append("API Error: Request rejected (429) · [1308][已达到 5 小时的使用上限。]")
+                .append(" model requires vision request retry");
+
+        String error = (String) method.invoke(null, 1, diagnostic, null, true);
+
+        assertFalse(error.startsWith("__I18N__:aiBridge.unsupportedImageVision"));
+        assertTrue(error.contains("Codex CLI 请求失败"));
+        assertTrue(error.contains("请求过于频繁 (429)"));
+        assertTrue(error.contains("local_image"));
+    }
+
+    @Test
     public void readingAdditionalInputFromStdinIsIgnored() throws Exception {
         CodexCliSession session = new CodexCliSession("tab-2");
         RecordingCallback callback = new RecordingCallback();

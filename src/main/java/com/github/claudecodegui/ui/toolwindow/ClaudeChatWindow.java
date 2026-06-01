@@ -682,7 +682,14 @@ public class ClaudeChatWindow {
 
         if ("send_message".equals(type) || "send_message_with_attachments".equals(type)) {
             ClaudeSession currentSession = session;
-            LOG.info("[CliConcurrencyDiag][Webview->Java] received " + type + ": tab=" + getCurrentTabName() + ", contentIndex=" + getTabIndex() + ", sessionId=" + (currentSession != null ? currentSession.getSessionId() : "(none)") + ", channelId=" + (currentSession != null ? currentSession.getChannelId() : "(none)") + ", provider=" + (currentSession != null ? currentSession.getProvider() : "(none)") + ", payloadChars=" + content.length() + ", thread=" + Thread.currentThread().getName());
+            LOG.info(String.format(
+                    "[CliConcurrencyDiag][Webview->Java] received %s: tab=%s, contentIndex=%d, sessionId=%s, channelId=%s, provider=%s, payloadChars=%d, thread=%s",
+                    type, getCurrentTabName(), getTabIndex(),
+                    currentSession != null ? currentSession.getSessionId() : "(none)",
+                    currentSession != null ? currentSession.getChannelId() : "(none)",
+                    currentSession != null ? currentSession.getProvider() : "(none)",
+                    content.length(),
+                    Thread.currentThread().getName()));
         }
 
         if (messageDispatcher.dispatch(type, content)) {

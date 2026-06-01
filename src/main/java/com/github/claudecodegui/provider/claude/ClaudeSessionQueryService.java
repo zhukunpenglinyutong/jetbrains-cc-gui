@@ -38,7 +38,9 @@ class ClaudeSessionQueryService {
             "The user has attached the image(s) above. Please use the Read tool to view them.";
     private static final String IMAGE_ATTACHMENT_CONTENT_HINT =
             "The user attached the image file(s) above. Use the image content to answer the request.";
-    private static final Pattern CLI_IMAGE_READ_INSTRUCTION_PATTERN = Pattern.compile("(?im)^\\s*Use the Read tool to inspect this image file, then answer using its visible content:\\s*" + "(?:[a-z]:[/\\\\]|/).+?\\.(?:png|jpe?g|gif|webp|bmp|svg)\\s*$");
+    private static final Pattern CLI_IMAGE_READ_INSTRUCTION_PATTERN = Pattern.compile(
+            "(?im)^\\s*Use the Read tool to inspect this image file, then answer using its visible content:\\s*"
+                    + "(?:[a-z]:[/\\\\]|/).+?\\.(?:png|jpe?g|gif|webp|bmp|svg)\\s*$");
 
     private final Logger log;
     private final Gson gson;
