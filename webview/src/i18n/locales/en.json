@@ -31,6 +31,7 @@
     "confirmNewSession": "Current session has messages. Are you sure you want to create a new session?",
     "confirmInterrupt": "A conversation is in progress. Creating a new session will interrupt it. Continue?",
     "requestInterrupted": "Request interrupted by user",
+    "userInterrupted": "User interrupted",
     "uploadedFiles": "Uploaded files: {{files}}",
     "emptyMessage": "Empty message",
     "clickToPreview": "Click to preview",

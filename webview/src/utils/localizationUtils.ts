@@ -31,6 +31,7 @@ export function createLocalizeMessage(t: TFunction): (text: string) => string {
       // Others
       'AI response is empty': t('aiBridge.aiResponseEmpty'),
       'Enhancement failed': t('aiBridge.enhancementFailed'),
+      'User interrupted': t('chat.requestInterrupted'),
       'Request interrupted by user': t('chat.requestInterrupted'),
       '[Empty message]': t('aiBridge.emptyMessage'),
       '[Uploaded attachment(s)]': t('aiBridge.uploadedAttachments'),

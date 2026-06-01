@@ -47,4 +47,18 @@ describe('createLocalizeMessage', () => {
       expect(locale.aiBridge.unsupportedImageVision.trim(), language).not.toBe('');
     }
   });
+
+  it('localizes user interrupted messages from backend and i18n placeholder', () => {
+    const t = ((key: string) => {
+      const translations: Record<string, string> = {
+        'chat.requestInterrupted': '用户已中断',
+      };
+      return translations[key] ?? key;
+    }) as any;
+
+    const localize = createLocalizeMessage(t);
+
+    expect(localize('User interrupted')).toBe('用户已中断');
+    expect(localize('__I18N__:chat.requestInterrupted')).toBe('用户已中断');
+  });
 });
