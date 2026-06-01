@@ -4,6 +4,7 @@ import type { MutableRefObject, RefObject } from 'react';
 import type { ClaudeMessage, ClaudeRawMessage, HistoryData, SubagentHistoryResponse } from '../types';
 import type { PermissionMode, SelectedAgent } from '../components/ChatInputBox/types';
 import type { ProviderConfig } from '../types/provider';
+import type { QueueDisplayState } from '../contexts/MessagesContext';
 import type { PermissionRequest } from '../components/PermissionDialog';
 import type { AskUserQuestionRequest } from '../components/AskUserQuestionDialog';
 import type { PlanApprovalRequest } from '../components/PlanApprovalDialog';
@@ -30,6 +31,8 @@ export interface UseWindowCallbacksOptions {
   setStatus: React.Dispatch<React.SetStateAction<string>>;
   setLoading: React.Dispatch<React.SetStateAction<boolean>>;
   setLoadingStartTime: React.Dispatch<React.SetStateAction<number | null>>;
+  setQueueDisplayState: React.Dispatch<React.SetStateAction<QueueDisplayState>>;
+  setQueueAheadCount: React.Dispatch<React.SetStateAction<number>>;
   setIsThinking: React.Dispatch<React.SetStateAction<boolean>>;
   setExpandedThinking?: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   setStreamingActive: React.Dispatch<React.SetStateAction<boolean>>;
@@ -38,6 +41,7 @@ export interface UseWindowCallbacksOptions {
   setUsagePercentage: React.Dispatch<React.SetStateAction<number>>;
   setUsageUsedTokens: React.Dispatch<React.SetStateAction<number | undefined>>;
   setUsageMaxTokens: React.Dispatch<React.SetStateAction<number | undefined>>;
+    setCurrentProvider: React.Dispatch<React.SetStateAction<string>>;
   setPermissionMode: React.Dispatch<React.SetStateAction<PermissionMode>>;
   setClaudePermissionMode: React.Dispatch<React.SetStateAction<PermissionMode>>;
   setCodexPermissionMode: React.Dispatch<React.SetStateAction<PermissionMode>>;
@@ -112,6 +116,10 @@ export interface UseWindowCallbacksOptions {
 
 export function useWindowCallbacks(options: UseWindowCallbacksOptions): void {
   const { t } = options;
+
+  if (!window.__CLAUDE_INVOCATION_MODE__) {
+      window.__CLAUDE_INVOCATION_MODE__ = 'unknown';
+  }
 
   // Store t in ref to avoid stale closures
   const tRef = useRef(t);

@@ -1,11 +1,11 @@
-import { useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
-import type { CodexProviderConfig } from '../../types/provider';
-import { ToastContainer } from '../Toast';
+import {useMemo} from 'react';
+import {useTranslation} from 'react-i18next';
+import type {CodexProviderConfig} from '../../types/provider';
+import {ToastContainer} from '../Toast';
 
 // Import split-out components
 import SettingsHeader from './SettingsHeader';
-import SettingsSidebar, { type SettingsTab } from './SettingsSidebar';
+import SettingsSidebar, {type SettingsTab} from './SettingsSidebar';
 import BasicConfigSection from './BasicConfigSection';
 import ProviderTabSection from './ProviderTabSection';
 import DependencySection from './DependencySection';
@@ -18,19 +18,19 @@ import PromptSection from './PromptSection';
 import CommitSection from './CommitSection';
 import PromptEnhancerSection from './PromptEnhancerSection';
 import OtherSettingsSection from './OtherSettingsSection';
-import { SkillsSettingsSection } from '../skills';
+import {SkillsSettingsSection} from '../skills';
 import SettingsDialogs from './SettingsDialogs';
-import { setNewSessionConfirmEnabled as persistNewSessionConfirmEnabled } from '../../utils/skipNewSessionConfirm';
+import {setNewSessionConfirmEnabled as persistNewSessionConfirmEnabled} from '../../utils/skipNewSessionConfirm';
 
 // Import custom hooks
 import {
-  useProviderManagement,
-  useCodexProviderManagement,
-  useAgentManagement,
-  useSettingsWindowCallbacks,
-  useSettingsPageState,
-  useSettingsThemeSync,
-  useSettingsBasicActions,
+    useAgentManagement,
+    useCodexProviderManagement,
+    useProviderManagement,
+    useSettingsBasicActions,
+    useSettingsPageState,
+    useSettingsThemeSync,
+    useSettingsWindowCallbacks,
 } from './hooks';
 
 import styles from './style.module.less';
@@ -137,14 +137,6 @@ const SettingsView = ({
     setCommitPrompt,
     savingCommitPrompt,
     setSavingCommitPrompt,
-    soundNotificationEnabled,
-    setSoundNotificationEnabled,
-    soundOnlyWhenUnfocused,
-    setSoundOnlyWhenUnfocused,
-    selectedSound,
-    setSelectedSound,
-    customSoundPath,
-    setCustomSoundPath,
     diffExpandedByDefault,
     setDiffExpandedByDefault,
     historyCompletionEnabled,
@@ -160,13 +152,6 @@ const SettingsView = ({
     handleCodexSandboxModeChange,
     handleSendShortcutChange,
     handleAutoOpenFileEnabledChange,
-    handleSoundNotificationEnabledChange,
-    handleSoundOnlyWhenUnfocusedChange,
-    handleSelectedSoundChange,
-    handleCustomSoundPathChange,
-    handleSaveCustomSoundPath,
-    handleTestSound,
-    handleBrowseSound,
     handleSaveCommitPrompt,
     projectCommitPrompt,
     setProjectCommitPrompt,
@@ -195,6 +180,12 @@ const SettingsView = ({
     handlePromptEnhancerProviderChange,
     handlePromptEnhancerModelChange,
     handlePromptEnhancerResetToDefault,
+    invocationMode,
+    setInvocationMode,
+    cliPath,
+    setCliPath,
+    handleInvocationModeChange,
+    handleCliPathChange,
   } = useSettingsBasicActions({
     streamingEnabledProp,
     onStreamingEnabledChangeProp,
@@ -328,14 +319,12 @@ const SettingsView = ({
     addToast,
     onStreamingEnabledChangeProp,
     onSendShortcutChangeProp,
-    setSoundNotificationEnabled,
-    setSoundOnlyWhenUnfocused,
-    setSelectedSound,
-    setCustomSoundPath,
     setCommitGenerationEnabled,
     setAiTitleGenerationEnabled,
     setStatusBarWidgetEnabled,
     setTaskCompletionNotificationEnabled,
+    setInvocationMode,
+    setCliPath,
   });
 
   // Save provider (wrapper function with validation logic)
@@ -496,19 +485,12 @@ const SettingsView = ({
                 setSkipNewSessionConfirm(!enabled);
                 persistNewSessionConfirmEnabled(enabled);
               }}
-              soundNotificationEnabled={soundNotificationEnabled}
-              onSoundNotificationEnabledChange={handleSoundNotificationEnabledChange}
-              soundOnlyWhenUnfocused={soundOnlyWhenUnfocused}
-              onSoundOnlyWhenUnfocusedChange={handleSoundOnlyWhenUnfocusedChange}
-              selectedSound={selectedSound}
-              onSelectedSoundChange={handleSelectedSoundChange}
-              customSoundPath={customSoundPath}
-              onCustomSoundPathChange={handleCustomSoundPathChange}
-              onSaveCustomSoundPath={handleSaveCustomSoundPath}
-              onTestSound={handleTestSound}
-              onBrowseSound={handleBrowseSound}
               taskCompletionNotificationEnabled={taskCompletionNotificationEnabled}
               onTaskCompletionNotificationEnabledChange={handleTaskCompletionNotificationEnabledChange}
+              invocationMode={invocationMode}
+              onInvocationModeChange={handleInvocationModeChange}
+              cliPath={cliPath}
+              onCliPathChange={handleCliPathChange}
               permissionDialogTimeoutSeconds={permissionDialogTimeoutSeconds}
               onPermissionDialogTimeoutChange={handlePermissionDialogTimeoutChange}
             />

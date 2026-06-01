@@ -1,6 +1,36 @@
 import { useEffect } from 'react';
 import { createTextFragment } from '../utils/selectionUtils.js';
 
+const WALL_TIME_LINE = /^Wall time:\s+.+$/;
+const EXIT_CODE_LINE = /^Exit code:\s+.+$/;
+const OUTPUT_HEADER_LINE = /^Output:\s*$/;
+const POWERSHELL_NOISE_LINE = /^(?:Check the spelling of the name, or if a path was included, verify that the path is correct and try again\.|Cannot load PSReadline module\..*|At line:\d+ char:\d+.*|\+ CategoryInfo\s*:.*|\+ FullyQualifiedErrorId\s*:.*|\+ ~+)$/;
+
+function sanitizeExternalSnippet(selectionInfo: string): string {
+  if (!selectionInfo) return '';
+
+  const kept = selectionInfo
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return true;
+      return !WALL_TIME_LINE.test(trimmed)
+        && !EXIT_CODE_LINE.test(trimmed)
+        && !OUTPUT_HEADER_LINE.test(trimmed)
+        && !POWERSHELL_NOISE_LINE.test(trimmed);
+    });
+
+  while (kept.length > 0 && !kept[0].trim()) {
+    kept.shift();
+  }
+  while (kept.length > 0 && !kept[kept.length - 1].trim()) {
+    kept.pop();
+  }
+
+  return kept.join('\n');
+}
+
 interface UseGlobalCallbacksOptions {
   editableRef: React.RefObject<HTMLDivElement | null>;
   pathMappingRef: React.MutableRefObject<Map<string, string>>;
@@ -217,16 +247,18 @@ export function useGlobalCallbacks({
     window.insertCodeSnippetAtCursor = (selectionInfo: string) => {
       try {
         if (!editableRef.current) return;
+        const sanitizedSelection = sanitizeExternalSnippet(selectionInfo);
+        if (!sanitizedSelection.trim()) return;
 
         // Read caret BEFORE focus() to avoid focus side-effects on selection.
         // If caret is inside the editable, insert at caret. Otherwise (e.g. window
         // just regained focus from an external IDE action with no prior caret),
         // fall back to appending at the end with a leading newline separator.
-        const insertedAtCaret = tryInsertExternalSnippetAtCaret(selectionInfo);
+        const insertedAtCaret = tryInsertExternalSnippetAtCaret(sanitizedSelection);
 
         if (!insertedAtCaret) {
           editableRef.current.focus();
-          appendExternalSnippetToEnd(selectionInfo);
+          appendExternalSnippetToEnd(sanitizedSelection);
         }
 
         // Trigger state update

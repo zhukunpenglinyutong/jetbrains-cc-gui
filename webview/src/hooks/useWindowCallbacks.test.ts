@@ -27,6 +27,8 @@ describe('useWindowCallbacks integration', () => {
     setStatus: vi.fn(),
     setLoading: vi.fn(),
     setLoadingStartTime: vi.fn(),
+    setQueueDisplayState: vi.fn(),
+    setQueueAheadCount: vi.fn(),
     setIsThinking: vi.fn(),
     setExpandedThinking: vi.fn(),
     setStreamingActive: vi.fn(),
@@ -38,6 +40,7 @@ describe('useWindowCallbacks integration', () => {
     setUsageMaxTokens: vi.fn(),
     setSubagentHistories: vi.fn(),
     setPermissionMode: vi.fn(),
+      setCurrentProvider: vi.fn(),
     setClaudePermissionMode: vi.fn(),
     setCodexPermissionMode: vi.fn(),
     setSelectedClaudeModel: vi.fn(),
@@ -104,6 +107,7 @@ describe('useWindowCallbacks integration', () => {
     window.__sessionTransitionToken = null;
     window.__pendingSessionTransitionToast = undefined;
     window.__deniedToolIds = new Set();
+    window.__CLAUDE_INVOCATION_MODE__ = 'sdk';
     window.sendToJava = vi.fn();
     // The drain test inspects this slot; if a prior test (or earlier suite run)
     // leaked a value onto window we'd see a false-positive drain. Wipe it here
@@ -146,6 +150,44 @@ describe('useWindowCallbacks integration', () => {
 
     expect(window.__sessionTransitioning).toBe(false);
     expect(window.__sessionTransitionToken).toBeNull();
+  });
+
+  it('historyLoadComplete clears loading, thinking, and queue state', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.historyLoadComplete!();
+    });
+
+    expect(opts.setLoading).toHaveBeenCalledWith(false);
+    expect(opts.setLoadingStartTime).toHaveBeenCalledWith(null);
+    expect(opts.setIsThinking).toHaveBeenCalledWith(false);
+    expect(opts.setQueueDisplayState).toHaveBeenCalledWith('NONE');
+    expect(opts.setQueueAheadCount).toHaveBeenCalledWith(0);
+  });
+
+  it('addUserMessage ignores duplicate user content already present locally', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.addUserMessage?.('嘻嘻');
+    });
+
+    expect(opts.setMessages).toHaveBeenCalledTimes(1);
+    const updater = (opts.setMessages as any).mock.calls[0][0] as (prev: ClaudeMessage[]) => ClaudeMessage[];
+    const existing: ClaudeMessage[] = [
+      {
+        type: 'user',
+        content: '嘻嘻',
+        timestamp: '2026-05-15T12:24:00.000Z',
+        isOptimistic: true,
+        raw: { message: { content: [{ type: 'text', text: '嘻嘻' }] } } as any,
+      },
+    ];
+
+    expect(updater(existing)).toBe(existing);
   });
 
   it('historyLoadComplete shows pending session transition toast', () => {
@@ -351,6 +393,48 @@ describe('useWindowCallbacks integration', () => {
     expect(opts.setMessages).toHaveBeenCalled();
   });
 
+    it('requests session runtime state on mount and updates cached chat-side invocation mode', () => {
+    vi.useFakeTimers();
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      vi.runAllTimers();
+    });
+
+        expect(window.sendToJava).toHaveBeenCalledWith('get_session_runtime_state:');
+
+    act(() => {
+        window.updateSessionRuntimeState?.(JSON.stringify({
+            provider: 'claude',
+            model: 'claude-sonnet-4-6',
+            permissionMode: 'default',
+            claudeInvocationMode: 'cli',
+        }));
+    });
+
+    expect(window.__CLAUDE_INVOCATION_MODE__).toBe('cli');
+    vi.useRealTimers();
+  });
+
+    it('updateSessionRuntimeState hydrates Codex provider model and mode from backend session state', () => {
+        const opts = createOptions();
+        renderHook(() => useWindowCallbacks(opts));
+
+        act(() => {
+            window.updateSessionRuntimeState?.(JSON.stringify({
+                provider: 'codex',
+                model: 'gpt-5.3-codex',
+                permissionMode: 'plan',
+            }));
+        });
+
+        expect(opts.setCurrentProvider).toHaveBeenCalledWith('codex');
+        expect(opts.setPermissionMode).toHaveBeenCalled();
+        expect(opts.setCodexPermissionMode).toHaveBeenCalled();
+        expect(opts.setSelectedCodexModel).toHaveBeenCalledWith('gpt-5.3-codex');
+    });
+
   it('patchMessageUuid updates the latest unresolved user message using raw text fallback', () => {
     const opts = createOptions({
       extractRawBlocks: (raw) => {
@@ -422,6 +506,24 @@ describe('useWindowCallbacks integration', () => {
     expect(window.__sessionTransitioning).toBe(true);
     expect(window.__sessionTransitionToken).toBe('transition-status');
     expect(opts.setStatus).toHaveBeenCalledWith('warming runtime');
+  });
+
+  it('ignores delayed showLoading and showQueueStatus callbacks during session transition', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    window.__sessionTransitioning = true;
+    window.__sessionTransitionToken = 'transition-loading';
+
+    act(() => {
+      window.showLoading?.(true);
+      window.showQueueStatus?.('QUEUED', 3);
+    });
+
+    expect(opts.setLoading).not.toHaveBeenCalled();
+    expect(opts.setLoadingStartTime).not.toHaveBeenCalled();
+    expect(opts.setQueueDisplayState).not.toHaveBeenCalled();
+    expect(opts.setQueueAheadCount).not.toHaveBeenCalled();
   });
 
   // ===== addErrorMessage only shows toast (no status) =====
@@ -553,6 +655,34 @@ describe('useWindowCallbacks integration', () => {
     expect(streamingMessageIndexRef.current).toBe(-1);
   });
 
+  it('clearMessages cancels pending scoped updateMessages rAF', () => {
+      const clearTimeoutMock = vi.fn();
+      vi.stubGlobal('setTimeout', vi.fn(() => 42));
+      vi.stubGlobal('clearTimeout', clearTimeoutMock);
+
+    const opts = createOptions({
+      isStreamingRef: { current: true },
+      currentSessionIdRef: { current: 'session-a' },
+      streamingTurnIdRef: { current: 1 },
+    });
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.onStreamStart?.();
+      window.updateMessages?.(
+        JSON.stringify([{ type: 'assistant', content: 'pending' }]),
+        '1',
+      );
+    });
+
+    expect(window.__pendingUpdateRaf).toBe(42);
+
+    act(() => {
+      window.clearMessages?.();
+    });
+
+      expect(clearTimeoutMock).toHaveBeenCalledWith(42);
+    expect(window.__pendingUpdateRaf).toBeNull();
   // ===== clearMessages forces a webview repaint to clear JCEF ghosting =====
 
   it('clearMessages triggers forceWebviewRepaint to clear leftover ghosting', () => {

@@ -5,6 +5,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.cache.SessionIndexCache;
 import com.github.claudecodegui.cache.SessionIndexManager;
+import com.github.claudecodegui.util.AttachmentStorageService;
 import com.github.claudecodegui.util.PathUtils;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
@@ -71,6 +72,7 @@ class HistoryDeleteService {
 
                 LOG.info("[HistoryHandler] Delete completed - Main file: " + (result.mainDeleted ? "deleted" : "not found") + ", Agent files: " + result.agentFilesDeleted);
 
+                cleanupSessionAttachments(currentProvider, sessionId);
                 if (result.mainDeleted) {
                     cleanupSessionMetadata(sessionId);
                 }
@@ -106,6 +108,7 @@ class HistoryDeleteService {
                 for (String sessionId : sessionIds) {
                     try {
                         DeleteResult result = deleteSessionFiles(sessionId, currentProvider);
+                        cleanupSessionAttachments(currentProvider, sessionId);
                         if (result.mainDeleted) {
                             mainDeletedCount++;
                             cleanupSessionMetadata(sessionId);
@@ -309,6 +312,16 @@ class HistoryDeleteService {
             }
         } catch (Exception e) {
             LOG.warn("[HistoryHandler] Failed to clean up cache (does not affect deletion): " + e.getMessage());
+        }
+    }
+
+    private void cleanupSessionAttachments(String provider, String sessionId) {
+        try {
+            AttachmentStorageService storageService = AttachmentStorageService.getInstance();
+            storageService.deleteSessionRecords(provider, sessionId);
+            storageService.cleanupOrphanedResources(storageService.collectAllReferencedHashes());
+        } catch (Exception e) {
+            LOG.warn("[HistoryHandler] Failed to clean up session attachments: " + e.getMessage());
         }
     }
 

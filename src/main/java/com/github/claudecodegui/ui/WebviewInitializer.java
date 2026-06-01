@@ -6,6 +6,7 @@ import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.model.NodeDetectionResult;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.startup.BridgePreloader;
 import com.github.claudecodegui.util.FontConfigService;
 import com.github.claudecodegui.util.HtmlLoader;
@@ -163,9 +164,13 @@ public class WebviewInitializer {
         // Prewarm daemon in background so first user message starts faster.
         // Bind the warm runtime to the current logical session epoch so future new-session
         // transitions cannot accidentally reuse stale anonymous runtime ownership.
-        claudeSDKBridge.prewarmDaemonAsync(host.getProject().getBasePath(), host.getHandlerContext().getSession() != null
-                ? host.getHandlerContext().getSession().getRuntimeSessionEpoch()
-                : null);
+        // Skip daemon prewarm when CLI invocation mode is active — CLI mode uses a separate
+        // process per request and does not need the Node.js daemon.
+        if (!"cli".equals(getClaudeInvocationMode())) {
+            claudeSDKBridge.prewarmDaemonAsync(host.getProject().getBasePath(), host.getHandlerContext().getSession() != null
+                    ? host.getHandlerContext().getSession().getRuntimeSessionEpoch()
+                    : null);
+        }
 
         // Check JCEF support before creating browser
         if (!JBCefBrowserFactory.isJcefSupported()) {
@@ -181,6 +186,10 @@ public class WebviewInitializer {
 
             browser.getJBCefClient().addRequestHandler(
                     new UiFontResourceRequestHandler(),
+                    browser.getCefBrowser()
+            );
+            browser.getJBCefClient().addRequestHandler(
+                    new AttachmentResourceRequestHandler(),
                     browser.getCefBrowser()
             );
 
@@ -633,5 +642,14 @@ public class WebviewInitializer {
                 LOG.warn("[WebviewWatchdog] Recreate failed: " + e.getMessage(), e);
             }
         });
+    }
+
+    private String getClaudeInvocationMode() {
+        try {
+            return new CodemossSettingsService().getClaudeInvocationMode();
+        } catch (Exception e) {
+            LOG.warn("Failed to read Claude invocation mode, defaulting to sdk: " + e.getMessage());
+            return "sdk";
+        }
     }
 }

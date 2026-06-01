@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -18,12 +19,13 @@ import static org.junit.Assert.assertTrue;
 public class ClaudeMessageHandlerDedupTest {
 
     private RecordingCallbackHandler callbackHandler;
+    private SessionState state;
     private ClaudeMessageHandler handler;
 
     @Before
     public void setUp() {
         callbackHandler = new RecordingCallbackHandler();
-        SessionState state = new SessionState();
+        state = new SessionState();
         MessageParser messageParser = new MessageParser();
         MessageMerger messageMerger = new MessageMerger();
         Gson gson = new GsonBuilder().create();
@@ -34,7 +36,8 @@ public class ClaudeMessageHandlerDedupTest {
                 callbackHandler,
                 messageParser,
                 messageMerger,
-                gson
+                gson,
+                state.getRuntimeSessionEpoch()
         );
     }
 
@@ -201,6 +204,20 @@ public class ClaudeMessageHandlerDedupTest {
                 List.of("Let me think"), callbackHandler.thinkingDeltas);
     }
 
+    @Test
+    public void handleThinkingDelta_doesNotPushFullMessageUpdatesDuringStreaming() {
+        handler.onMessage("stream_start", "");
+        callbackHandler.clear();
+
+        handler.onMessage("thinking_delta", "first ");
+        handler.onMessage("thinking_delta", "second");
+
+        assertEquals("Thinking deltas should still stream through the delta channel",
+                List.of("first ", "second"), callbackHandler.thinkingDeltas);
+        assertEquals("Full message snapshots during thinking deltas duplicate frontend buffers",
+                0, callbackHandler.messageUpdateCount);
+    }
+
     /**
      * Test that syncedContentOffset is reset on stream end.
      */
@@ -293,6 +310,76 @@ public class ClaudeMessageHandlerDedupTest {
                 List.of("A"), callbackHandler.contentDeltas);
     }
 
+    @Test
+    public void handleContentDelta_doesNotClassifyToolTraceTextWithoutParserSignal() {
+        handler.onMessage("stream_start", "");
+        callbackHandler.clear();
+
+        handler.onMessage("content_delta", "Built-in Tool: inspect_asset\n");
+        handler.onMessage("content_delta", "Output: screen analysis");
+
+        assertEquals("Message handler should not guess tool trace text from content deltas", List.of("Built-in Tool: inspect_asset\n", "Output: screen analysis"), callbackHandler.contentDeltas);
+        assertTrue("Parser-classified thinking_delta is the only route to thinking", callbackHandler.thinkingDeltas.isEmpty());
+    }
+
+    @Test
+    public void handleThinkingDelta_streamsParserClassifiedToolTraceToThinking() {
+        handler.onMessage("stream_start", "");
+        callbackHandler.clear();
+
+        handler.onMessage("thinking_delta", "Built-in Tool: inspect_asset\n");
+        handler.onMessage("thinking_delta", "Output: screen analysis");
+
+        assertTrue("Parser-classified tool trace should not stream as chat content",
+                callbackHandler.contentDeltas.isEmpty());
+        assertEquals("Parser-classified tool trace should stream through thinking", List.of("Built-in Tool: inspect_asset\n", "Output: screen analysis"),
+                callbackHandler.thinkingDeltas);
+    }
+
+    @Test
+    public void handleContentDelta_doesNotRouteOutputWithoutImageContext() {
+        handler.onMessage("stream_start", "");
+        callbackHandler.clear();
+
+        handler.onMessage("content_delta", "Output: final answer");
+
+        assertEquals("Normal text should stream as chat content without image context",
+                List.of("Output: final answer"), callbackHandler.contentDeltas);
+        assertTrue("Normal text should not become thinking without image context",
+                callbackHandler.thinkingDeltas.isEmpty());
+    }
+
+    @Test
+    public void handleContentDelta_doesNotDelayProviderLikePrefixes() {
+        handler.onMessage("stream_start", "");
+        callbackHandler.clear();
+
+        handler.onMessage("content_delta", "Z");
+        assertEquals("Normal text should not be delayed for provider-specific marker matching",
+                List.of("Z"), callbackHandler.contentDeltas);
+
+        handler.onMessage("content_delta", "ebra");
+
+        assertEquals("Non-marker text should be released as normal content",
+                List.of("Z", "ebra"), callbackHandler.contentDeltas);
+        assertTrue("Non-marker text should not become thinking",
+                callbackHandler.thinkingDeltas.isEmpty());
+    }
+
+    @Test
+    public void onCompleteWithStructuredErrorAddsErrorMessageToChat() {
+        com.github.claudecodegui.provider.common.SDKResult result = new com.github.claudecodegui.provider.common.SDKResult();
+        result.success = false;
+        result.error = "当前模型不支持图片识别，或该服务商的 Claude Code 兼容接口不支持图片工具结果。";
+
+        handler.onComplete(result);
+
+        assertFalse("Structured completion error should be added to chat", state.getMessages().isEmpty());
+        ClaudeSession.Message last = state.getMessages().get(state.getMessages().size() - 1);
+        assertEquals(ClaudeSession.Message.Type.ERROR, last.type);
+        assertEquals(result.error, last.content);
+    }
+
     /**
      * Recording callback handler that captures all notifications for testing.
      * Extends CallbackHandler and overrides relevant methods.
@@ -302,10 +389,12 @@ public class ClaudeMessageHandlerDedupTest {
         final List<String> thinkingDeltas = new ArrayList<>();
         int streamStartCount = 0;
         int streamEndCount = 0;
+        int messageUpdateCount = 0;
 
         void clear() {
             contentDeltas.clear();
             thinkingDeltas.clear();
+            messageUpdateCount = 0;
         }
 
         @Override
@@ -316,6 +405,11 @@ public class ClaudeMessageHandlerDedupTest {
         @Override
         public void notifyThinkingDelta(String delta) {
             thinkingDeltas.add(delta);
+        }
+
+        @Override
+        public void notifyMessageUpdate(List<ClaudeSession.Message> messages) {
+            messageUpdateCount++;
         }
 
         @Override

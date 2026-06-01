@@ -72,7 +72,7 @@ export const ButtonArea = ({
   isLoading = false,
   isEnhancing = false,
   selectedModel = 'claude-sonnet-4-6',
-  permissionMode = 'bypassPermissions',
+  permissionMode = 'acceptEdits',
   currentProvider = 'claude',
   reasoningEffort = 'high',
   onSubmit,

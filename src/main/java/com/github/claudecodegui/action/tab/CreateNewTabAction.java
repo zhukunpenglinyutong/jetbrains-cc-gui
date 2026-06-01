@@ -3,6 +3,7 @@ package com.github.claudecodegui.action.tab;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.ui.toolwindow.ClaudeChatWindow;
 import com.github.claudecodegui.ui.toolwindow.ClaudeSDKToolWindow;
+import com.github.claudecodegui.ui.toolwindow.TabPerformanceLogger;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
@@ -38,6 +39,7 @@ public class CreateNewTabAction extends AnAction {
 
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
+        long actionStartNanos = System.nanoTime();
         Project project = e.getProject();
         if (project == null) {
             LOG.error("[CreateNewTabAction] Project is null");
@@ -52,7 +54,9 @@ public class CreateNewTabAction extends AnAction {
         }
 
         // Create a new chat window instance with skipRegister=true (don't replace the main instance)
+        long createWindowStartNanos = System.nanoTime();
         ClaudeChatWindow newChatWindow = new ClaudeChatWindow(project, true);
+        long createWindowElapsedMs = TabPerformanceLogger.elapsedMillis(createWindowStartNanos);
 
         // Create a tab name in the format "AIN"
         String tabName = ClaudeSDKToolWindow.getNextTabName(toolWindow);
@@ -71,6 +75,9 @@ public class CreateNewTabAction extends AnAction {
         // Ensure the tool window is visible
         toolWindow.show(null);
 
+        LOG.info("[TabPerf] New tab created in " + TabPerformanceLogger.elapsedMillis(actionStartNanos)
+                + "ms (" + createWindowElapsedMs + "ms in ClaudeChatWindow ctor): "
+                + TabPerformanceLogger.describeTab(tabName, null));
         LOG.info("[CreateNewTabAction] Created new tab: " + tabName);
     }
 

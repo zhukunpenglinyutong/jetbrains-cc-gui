@@ -11,7 +11,7 @@ import { sendBridgeEvent } from '../../utils/bridge';
 const MAX_RETRIES = 30;
 
 /**
- * Fire the three settings queries to the backend.  Retries up to MAX_RETRIES
+ * Fire the stable settings queries to the backend.  Retries up to MAX_RETRIES
  * times (at 100 ms intervals) if window.sendToJava is not yet available.
  */
 export const startInitialSettingsRequest = (): void => {
@@ -37,6 +37,31 @@ export const startInitialSettingsRequest = (): void => {
     }
   };
   setTimeout(requestInitialSettings, 200);
+};
+
+/**
+ * Request backend-authoritative runtime state for the current session.
+ */
+export const startSessionRuntimeStateRequest = (): void => {
+    if (typeof window === 'undefined') {
+        return;
+    }
+
+    let retryCount = 0;
+    const requestSessionRuntimeState = () => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+        if (window.sendToJava) {
+            sendBridgeEvent('get_session_runtime_state');
+        } else {
+            retryCount++;
+            if (retryCount < MAX_RETRIES) {
+                setTimeout(requestSessionRuntimeState, 100);
+            }
+        }
+    };
+    setTimeout(requestSessionRuntimeState, 200);
 };
 
 /**
@@ -88,6 +113,24 @@ export const startModeRequest = (): void => {
     }
   };
   setTimeout(requestMode, 200);
+};
+
+/**
+ * Request the current Claude session invocation mode from the backend.
+ */
+export const startInvocationModeRequest = (): void => {
+  let retryCount = 0;
+  const requestInvocationMode = () => {
+    if (window.sendToJava) {
+        sendBridgeEvent('get_session_invocation_mode');
+    } else {
+      retryCount++;
+      if (retryCount < MAX_RETRIES) {
+        setTimeout(requestInvocationMode, 100);
+      }
+    }
+  };
+  setTimeout(requestInvocationMode, 200);
 };
 
 /**
@@ -155,6 +198,18 @@ export const drainPendingSettings = (): void => {
     const pending = w.__pendingModeReceived as string;
     delete w.__pendingModeReceived;
     window.onModeReceived?.(pending);
+  }
+
+  if (w.__pendingInvocationMode) {
+    const pending = w.__pendingInvocationMode as string;
+    delete w.__pendingInvocationMode;
+      window.updateSessionInvocationMode?.(pending);
+  }
+
+    if (w.__pendingSessionRuntimeState) {
+        const pending = w.__pendingSessionRuntimeState as string;
+        delete w.__pendingSessionRuntimeState;
+        window.updateSessionRuntimeState?.(pending);
   }
 };
 

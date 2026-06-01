@@ -24,6 +24,16 @@ function createContextUsageRequestId(): string {
   return `context-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function getClaudeInvocationMode(): 'sdk' | 'cli' | undefined {
+  if (window.__CLAUDE_INVOCATION_MODE__ === 'cli') return 'cli';
+  if (window.__CLAUDE_INVOCATION_MODE__ === 'sdk') return 'sdk';
+  return undefined;
+}
+
+function isClaudeInvocationModeKnown(): boolean {
+  return window.__CLAUDE_INVOCATION_MODE__ === 'cli' || window.__CLAUDE_INVOCATION_MODE__ === 'sdk';
+}
+
 export interface UseMessageSenderOptions {
   t: TFunction;
   addToast: (message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
@@ -60,7 +70,6 @@ export function useMessageSender({
   addToast,
   currentProvider,
   selectedModel,
-  permissionMode,
   selectedAgent,
   sdkStatusLoaded,
   currentSdkInstalled,
@@ -139,6 +148,13 @@ export function useMessageSender({
         return true;
       }
 
+      if (getClaudeInvocationMode() === 'cli') {
+        addToast(t('chat.contextUsageUnavailableInCliMode', {
+          defaultValue: 'Context usage is unavailable in Claude CLI mode. Switch invocation mode to SDK to use /context.',
+        }), 'warning');
+        return true;
+      }
+
       const requestId = createContextUsageRequestId();
 
       // Open dialog with loading state immediately
@@ -208,6 +224,7 @@ export function useMessageSender({
             type: 'image',
             src: `data:${att.mediaType};base64,${att.data}`,
             mediaType: att.mediaType,
+            sourceKind: 'base64',
           });
         } else {
           blocks.push({
@@ -236,18 +253,9 @@ export function useMessageSender({
     text: string,
     attachments: Attachment[] | undefined,
     agentInfo: { id: string; name: string; prompt?: string } | null,
-    fileTagsInfo: { displayPath: string; absolutePath: string }[] | null,
-    requestedPermissionMode: PermissionMode
+    fileTagsInfo: { displayPath: string; absolutePath: string }[] | null
   ) => {
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
-    const effectivePermissionMode: PermissionMode = currentProvider === 'codex' && requestedPermissionMode === 'plan'
-      ? 'default'
-      : requestedPermissionMode;
-    console.debug('[ModeSync][Frontend] send request mode', {
-      provider: currentProvider,
-      requestedMode: requestedPermissionMode,
-      effectiveMode: effectivePermissionMode,
-    });
 
     if (hasAttachments) {
       try {
@@ -260,7 +268,7 @@ export function useMessageSender({
           })),
           agent: agentInfo,
           fileTags: fileTagsInfo,
-          permissionMode: effectivePermissionMode,
+          invocationMode: currentProvider === 'claude' ? getClaudeInvocationMode() : undefined,
         });
         sendBridgeEvent('send_message_with_attachments', payload);
       } catch (error) {
@@ -269,7 +277,7 @@ export function useMessageSender({
           text,
           agent: agentInfo,
           fileTags: fileTagsInfo,
-          permissionMode: effectivePermissionMode,
+          invocationMode: currentProvider === 'claude' ? getClaudeInvocationMode() : undefined,
         });
         sendBridgeEvent('send_message', fallbackPayload);
       }
@@ -278,7 +286,7 @@ export function useMessageSender({
         text,
         agent: agentInfo,
         fileTags: fileTagsInfo,
-        permissionMode: effectivePermissionMode,
+        invocationMode: currentProvider === 'claude' ? getClaudeInvocationMode() : undefined,
       });
       sendBridgeEvent('send_message', payload);
     }
@@ -292,6 +300,15 @@ export function useMessageSender({
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
 
     if (!text && !hasAttachments) return;
+
+    if (currentProvider === 'claude' && !isClaudeInvocationModeKnown()) {
+      addToast(t('chat.invocationModeRequired', {
+        defaultValue: 'Invocation mode is not loaded. Please choose SDK or CLI mode in Settings before sending.',
+      }), 'error');
+      setSettingsInitialTab('basic');
+      setCurrentView('settings');
+      return;
+    }
 
     // Check SDK status
     if (!sdkStatusLoaded) {
@@ -353,9 +370,6 @@ export function useMessageSender({
       }
     });
 
-    // Sync provider setting
-    sendBridgeEvent('set_provider', currentProvider);
-
     // Build agent info
     const agentInfo = selectedAgent ? {
       id: selectedAgent.id,
@@ -371,12 +385,11 @@ export function useMessageSender({
     })) : null;
 
     // Send message to backend
-    sendMessageToBackend(text, attachments, agentInfo, fileTagsInfo, permissionMode);
+    sendMessageToBackend(text, attachments, agentInfo, fileTagsInfo);
   }, [
     sdkStatusLoaded,
     currentSdkInstalled,
     currentProvider,
-    permissionMode,
     selectedAgent,
     buildUserContentBlocks,
     sendMessageToBackend,
@@ -410,9 +423,19 @@ export function useMessageSender({
   }, [checkNewSessionCommand, checkLocalCommand, checkContextCommand, checkUnimplementedCommand, executeMessage]);
 
   /**
-   * Interrupt the current session
+   * Interrupt the current session.
+   *
+   * Calls the canonical onStreamEnd callback to atomically clean up all
+   * streaming state (refs, buffers, turn tracking) and stamps
+   * __streamEndProcessedTurnId so the backend's delayed onStreamEnd
+   * (from handleInterruptSession) becomes a no-op via the idempotency guard.
    */
   const interruptSession = useCallback(() => {
+    if (typeof window.onStreamEnd === 'function') {
+      window.onStreamEnd();
+    }
+    // Safety net: ensure loading/streaming are reset even when onStreamEnd
+    // ran in 'skip' mode (no active streaming turn to end).
     setLoading(false);
     setLoadingStartTime(null);
     setStreamingActive(false);

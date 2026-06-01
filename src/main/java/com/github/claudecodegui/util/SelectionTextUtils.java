@@ -12,12 +12,28 @@ import com.intellij.util.concurrency.AppExecutorUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 public final class SelectionTextUtils {
 
     private static final Logger LOG = Logger.getInstance(SelectionTextUtils.class);
     private static final long ACTIVATION_DELAY_MS = 300L;
+    private static final Pattern WALL_TIME_LINE = Pattern.compile("^Wall time:\\s+.+$");
+    private static final Pattern EXIT_CODE_LINE = Pattern.compile("^Exit code:\\s+.+$");
+    private static final Pattern OUTPUT_HEADER_LINE = Pattern.compile("^Output:\\s*$");
+    private static final Pattern POWERSHELL_ERROR_LINE = Pattern.compile(
+            "^(?:"
+                    + "Check the spelling of the name, or if a path was included, verify that the path is correct and try again\\."
+                    + "|Cannot load PSReadline module\\..*$"
+                    + "|At line:\\d+ char:\\d+.*$"
+                    + "|\\+ CategoryInfo\\s*:.*$"
+                    + "|\\+ FullyQualifiedErrorId\\s*:.*$"
+                    + "|\\+ ~+$"
+                    + ")"
+    );
 
     private static final ToolWindowProvider DEFAULT_TOOL_WINDOW_PROVIDER = SelectionTextUtils::createDefaultToolWindowProvider;
     private static final Scheduler DEFAULT_SCHEDULER = SelectionTextUtils::defaultScheduler;
@@ -59,10 +75,46 @@ public final class SelectionTextUtils {
         if (text == null) {
             return null;
         }
-        if (text.trim().isEmpty()) {
+        String sanitized = stripTerminalNoise(text);
+        if (sanitized.trim().isEmpty()) {
             return null;
         }
-        return text;
+        return sanitized;
+    }
+
+    private static String stripTerminalNoise(@NotNull String text) {
+        String normalized = text.replace("\r\n", "\n");
+        String[] lines = normalized.split("\n", -1);
+        List<String> kept = new ArrayList<>();
+
+        for (String line : lines) {
+            if (shouldDropTerminalNoiseLine(line)) {
+                continue;
+            }
+            kept.add(line);
+        }
+
+        int start = 0;
+        int end = kept.size();
+        while (start < end && kept.get(start).trim().isEmpty()) {
+            start++;
+        }
+        while (end > start && kept.get(end - 1).trim().isEmpty()) {
+            end--;
+        }
+
+        return String.join("\n", kept.subList(start, end));
+    }
+
+    private static boolean shouldDropTerminalNoiseLine(@NotNull String line) {
+        String trimmed = line.trim();
+        if (trimmed.isEmpty()) {
+            return false;
+        }
+        return WALL_TIME_LINE.matcher(trimmed).matches()
+                || EXIT_CODE_LINE.matcher(trimmed).matches()
+                || OUTPUT_HEADER_LINE.matcher(trimmed).matches()
+                || POWERSHELL_ERROR_LINE.matcher(trimmed).matches();
     }
 
     public static void sendToChatWindow(@NotNull Project project, @NotNull String text) {

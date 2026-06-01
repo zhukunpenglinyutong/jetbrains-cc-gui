@@ -1,4 +1,7 @@
+// @vitest-environment happy-dom
+
 import { act, renderHook } from '@testing-library/react';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { useMessageSender } from './useMessageSender';
 import type { UseMessageSenderOptions } from './useMessageSender';
 
@@ -36,6 +39,7 @@ describe('useMessageSender - /context command', () => {
 
   beforeEach(() => {
     window.sendToJava = vi.fn();
+    window.__CLAUDE_INVOCATION_MODE__ = 'sdk';
   });
 
   it('sends get_context_usage with base model when longContext is disabled', () => {
@@ -118,6 +122,59 @@ describe('useMessageSender - /context command', () => {
       'warning',
     );
   });
+
+  it('shows warning toast and does not send bridge event in Claude CLI mode', () => {
+    window.__CLAUDE_INVOCATION_MODE__ = 'cli';
+    const addToast = vi.fn();
+    const opts = createOptions({ addToast });
+
+    const { result } = renderHook(() => useMessageSender(opts));
+
+    act(() => {
+      result.current.handleSubmit('/context');
+    });
+
+    expect(window.sendToJava).not.toHaveBeenCalled();
+    expect(addToast).toHaveBeenCalledWith(
+      expect.stringContaining('CLI mode'),
+      'warning',
+    );
+  });
+
+    it('blocks normal Claude messages while invocation mode is unknown', () => {
+        window.__CLAUDE_INVOCATION_MODE__ = 'unknown';
+        const addToast = vi.fn();
+        const opts = createOptions({addToast});
+
+        const {result} = renderHook(() => useMessageSender(opts));
+
+        act(() => {
+            result.current.handleSubmit('hello');
+        });
+
+        expect(window.sendToJava).not.toHaveBeenCalled();
+        expect(addToast).toHaveBeenCalledWith(
+            expect.stringContaining('Invocation mode'),
+            'error',
+        );
+    });
+
+    it('does not include permissionMode in normal send payload', () => {
+        const opts = createOptions({
+            currentProvider: 'codex',
+            permissionMode: 'bypassPermissions',
+        });
+        const {result} = renderHook(() => useMessageSender(opts));
+
+        act(() => {
+            result.current.handleSubmit('hello');
+        });
+
+        const calls = (window.sendToJava as any).mock.calls.map(([payload]: [string]) => payload);
+        const sendMessageCall = calls.find((payload: string) => payload.startsWith('send_message:'));
+        const payload = JSON.parse(sendMessageCall!.substring('send_message:'.length));
+        expect(payload).not.toHaveProperty('permissionMode');
+    });
 
   it('closes dialog with error toast when bridge is unavailable', () => {
     // Don't set window.sendToJava → bridge unavailable

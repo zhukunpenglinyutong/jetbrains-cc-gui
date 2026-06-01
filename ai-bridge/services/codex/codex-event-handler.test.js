@@ -4,6 +4,8 @@ import {
   createInitialEventState,
   isWindowsTaskkillParseNoise,
   processCodexEventStream,
+  isIgnorableWindowsTerminationNoiseLine,
+  shouldSuppressCodexStreamParseErrorAfterCompletion,
 } from './codex-event-handler.js';
 
 async function* eventsFrom(items) {
@@ -81,6 +83,167 @@ test('Codex item.updated agent_message emits incremental content deltas before c
       content: [{ type: 'text', text: 'Hello' }],
     },
   });
+});
+
+test('isWindowsTaskkillParseNoise: matches English SUCCESS taskkill output', () => {
+  const message =
+    'Failed to parse item: SUCCESS: The process with PID 12345 (child process of PID 67890) has been terminated.';
+  assert.equal(isWindowsTaskkillParseNoise(message), true);
+});
+
+test('isWindowsTaskkillParseNoise: matches Chinese 成功 taskkill output', () => {
+  const message = 'Failed to parse item: 成功: 进程 PID 12345 (PID 67890 的子进程) 已被终止';
+  assert.equal(isWindowsTaskkillParseNoise(message), true);
+});
+
+test('isWindowsTaskkillParseNoise: matches mojibake (replacement char) with PID pair', () => {
+  const message = 'Failed to parse item: ���: PID 12345 PID 67890 ��';
+  assert.equal(isWindowsTaskkillParseNoise(message), true);
+});
+
+test('isWindowsTaskkillParseNoise: ignores message without "Failed to parse item:" prefix', () => {
+  const message = 'SUCCESS: process PID 12345 (child PID 67890) terminated';
+  assert.equal(isWindowsTaskkillParseNoise(message), false);
+});
+
+test('isWindowsTaskkillParseNoise: ignores message with only a single PID', () => {
+  const message = 'Failed to parse item: SUCCESS: process PID 12345 terminated';
+  assert.equal(isWindowsTaskkillParseNoise(message), false);
+});
+
+test('isWindowsTaskkillParseNoise: ignores real Codex parse errors without taskkill keywords', () => {
+  const message = 'Failed to parse item: {"id":"msg-1","type":"agent_message"';
+  assert.equal(isWindowsTaskkillParseNoise(message), false);
+});
+
+test('isWindowsTaskkillParseNoise: returns false for non-string input', () => {
+  assert.equal(isWindowsTaskkillParseNoise(null), false);
+  assert.equal(isWindowsTaskkillParseNoise(undefined), false);
+  assert.equal(isWindowsTaskkillParseNoise(42), false);
+  assert.equal(isWindowsTaskkillParseNoise({ msg: 'x' }), false);
+});
+
+test('isWindowsTaskkillParseNoise: returns false for empty payload after prefix', () => {
+  assert.equal(isWindowsTaskkillParseNoise('Failed to parse item:'), false);
+  assert.equal(isWindowsTaskkillParseNoise('Failed to parse item:   '), false);
+});
+
+test('isWindowsTaskkillParseNoise: matches when only "terminated" keyword present with PID pair', () => {
+  const message = 'Failed to parse item: PID 100 PID 200 process tree terminated';
+  assert.equal(isWindowsTaskkillParseNoise(message), true);
+});
+
+test('recognizes localized Windows termination noise lines', () => {
+  assert.equal(
+    isIgnorableWindowsTerminationNoiseLine('SUCCESS: The process with PID 41032 (child process of PID 20716) has been terminated.'),
+    true,
+  );
+  assert.equal(
+    isIgnorableWindowsTerminationNoiseLine('成功: 已终止 PID 37392 (属于 PID 38456 子进程) 的进程。'),
+    true,
+  );
+  assert.equal(
+    isIgnorableWindowsTerminationNoiseLine('�ɹ�: ����ֹ PID 42484 (���� PID 47728 �ӽ���)�Ľ��̡�'),
+    true,
+  );
+  assert.equal(
+    isIgnorableWindowsTerminationNoiseLine('�ɹ�: ����ֹ PID 38792 (���� PID 49056 �ӽ���)�Ľ��̡�'),
+    true,
+  );
+  assert.equal(
+    isIgnorableWindowsTerminationNoiseLine('Failed to parse item: something else'),
+    false,
+  );
+});
+
+test('suppresses post-completion parse errors caused by Windows termination noise', () => {
+  const state = createInitialEventState(() => {});
+  state.turnCompletedObserved = true;
+
+  assert.equal(
+    shouldSuppressCodexStreamParseErrorAfterCompletion(
+      'Failed to parse item: 成功: 已终止 PID 37392 (属于 PID 38456 子进程) 的进程。',
+      state,
+    ),
+    true,
+  );
+  assert.equal(
+    shouldSuppressCodexStreamParseErrorAfterCompletion(
+      'Failed to parse item: �ɹ�: ����ֹ PID 42484 (���� PID 47728 �ӽ���)�Ľ��̡�',
+      state,
+    ),
+    true,
+  );
+  assert.equal(
+    shouldSuppressCodexStreamParseErrorAfterCompletion(
+      'Failed to parse item: �ɹ�: ����ֹ PID 38792 (���� PID 49056 �ӽ���)�Ľ��̡�',
+      state,
+    ),
+    true,
+  );
+
+  state.turnCompletedObserved = false;
+  assert.equal(
+    shouldSuppressCodexStreamParseErrorAfterCompletion(
+      'Failed to parse item: 成功: 已终止 PID 37392 (属于 PID 38456 子进程) 的进程。',
+      state,
+    ),
+    false,
+  );
+});
+
+test('Codex event stream stops waiting when abort signal fires', async () => {
+  const state = createInitialEventState(() => {});
+  const controller = new AbortController();
+  let returnCalled = false;
+
+  const events = {
+    [Symbol.asyncIterator]() {
+      return {
+        next() {
+          return new Promise(() => {});
+        },
+        async return() {
+          returnCalled = true;
+          return { done: true };
+        },
+      };
+    },
+  };
+
+  const processing = processCodexEventStream(events, state, {
+    ...makeConfig(),
+    turnAbortController: controller,
+  });
+
+  controller.abort();
+  await processing;
+
+  assert.equal(state.userAbortObserved, true);
+  assert.equal(state.suppressNoResponseFallback, true);
+  assert.equal(returnCalled, true);
+});
+
+test('Codex event stream propagates no-rollout resume failures when not aborted', async () => {
+  const state = createInitialEventState(() => {});
+  const error = new Error('Codex Exec exited with code 1: thread/resume failed: no rollout found for thread id abc');
+
+  const events = {
+    [Symbol.asyncIterator]() {
+      return {
+        async next() {
+          throw error;
+        },
+      };
+    },
+  };
+
+  await assert.rejects(
+    () => processCodexEventStream(events, state, makeConfig()),
+    /no rollout found/,
+  );
+
+  assert.equal(state.userAbortObserved, false);
 });
 
 test('isWindowsTaskkillParseNoise: matches English SUCCESS taskkill output', () => {

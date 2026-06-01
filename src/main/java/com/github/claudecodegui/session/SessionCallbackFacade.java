@@ -1,6 +1,5 @@
 package com.github.claudecodegui.session;
 
-import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.intellij.openapi.project.Project;
 
@@ -32,9 +31,6 @@ public class SessionCallbackFacade {
 
     public void notifyStateChange(boolean busy, boolean loading, String error) {
         callbackHandler.notifyStateChange(busy, loading, error);
-        if (project != null && error != null && !error.isEmpty()) {
-            ClaudeNotifier.showError(project, error);
-        }
     }
 
     public void notifyStatusMessage(String message) {
@@ -73,6 +69,10 @@ public class SessionCallbackFacade {
         callbackHandler.notifyStreamEnd();
     }
 
+    public void notifyStreamCompleted() {
+        callbackHandler.notifyStreamCompleted();
+    }
+
     public void notifyContentDelta(String delta) {
         callbackHandler.notifyContentDelta(delta);
     }
@@ -87,5 +87,9 @@ public class SessionCallbackFacade {
 
     public void notifyUserMessageUuidPatched(String content, String uuid) {
         callbackHandler.notifyUserMessageUuidPatched(content, uuid);
+    }
+
+    public void notifyQueueDisplayStateChanged(ClaudeSession.SessionCallback.QueueDisplayState state, int aheadCount) {
+        callbackHandler.notifyQueueDisplayStateChanged(state, aheadCount);
     }
 }

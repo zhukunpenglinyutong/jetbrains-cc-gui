@@ -66,17 +66,7 @@ public class ModelProviderHandler {
 
     public void handleSetModel(String content) {
         try {
-            String model = content;
-            if (content != null && !content.isEmpty()) {
-                try {
-                    JsonObject json = gson.fromJson(content, JsonObject.class);
-                    if (json.has("model")) {
-                        model = json.get("model").getAsString();
-                    }
-                } catch (Exception e) {
-                    // content itself is the model
-                }
-            }
+            String model = parseModel(content);
 
             LOG.info("[ModelProviderHandler] Setting model to: " + model);
             context.setCurrentModel(model);
@@ -105,25 +95,36 @@ public class ModelProviderHandler {
         }
     }
 
-    public void handleSetProvider(String content) {
+    public void handleSetSessionModel(String content) {
         try {
-            String provider = content;
-            if (content != null && !content.isEmpty()) {
-                try {
-                    JsonObject json = gson.fromJson(content, JsonObject.class);
-                    if (json.has("provider")) {
-                        provider = json.get("provider").getAsString();
-                    }
-                } catch (Exception e) {
-                    // content itself is the provider
-                }
+            String model = parseModel(content);
+
+            LOG.info("[ModelProviderHandler] Setting session model to: " + model);
+            if (context.getSession() != null) {
+                context.getSession().setModel(model);
             }
 
-            // Capture previous provider BEFORE mutating context so we can detect
-            // the leave-claude transition that needs daemon cleanup.
+            com.github.claudecodegui.notifications.ClaudeNotifier.setModel(context.getProject(), model);
+
+            String resolvedModelForUsage = resolveConfiguredClaudeModelFromSettings(model);
+            int newMaxTokens = getModelContextLimit(resolvedModelForUsage);
+            final String confirmedModel = model;
+            final String confirmedProvider = context.getSession() != null ? context.getSession().getProvider() : context.getCurrentProvider();
+            ApplicationManager.getApplication().invokeLater(() -> {
+                context.callJavaScript("window.onModelConfirmed", context.escapeJs(confirmedModel), context.escapeJs(confirmedProvider));
+                usagePushService.pushUsageUpdateAfterModelChange(newMaxTokens);
+            });
+        } catch (Exception e) {
+            LOG.error("[ModelProviderHandler] Failed to set session model: " + e.getMessage(), e);
+        }
+    }
+
+    public void handleSetProvider(String content) {
+        try {
+            String provider = parseProvider(content);
             String previousProvider = context.getCurrentProvider();
-            LOG.info("[ModelProviderHandler] Setting provider to: " + provider
-                    + " (was: " + previousProvider + ")");
+
+            LOG.info("[ModelProviderHandler] Setting provider to: " + provider);
             context.setCurrentProvider(provider);
 
             if (context.getSession() != null) {
@@ -145,6 +146,22 @@ public class ModelProviderHandler {
             usagePushService.refreshContextBar();
         } catch (Exception e) {
             LOG.error("[ModelProviderHandler] Failed to set provider: " + e.getMessage(), e);
+        }
+    }
+
+    public void handleSetSessionProvider(String content) {
+        try {
+            String provider = parseProvider(content);
+
+            LOG.info("[ModelProviderHandler] Setting session provider to: " + provider);
+            if (context.getSession() != null) {
+                context.getSession().setProvider(provider);
+            }
+
+            refreshSlashCommandsForProvider(provider);
+            usagePushService.refreshContextBar();
+        } catch (Exception e) {
+            LOG.error("[ModelProviderHandler] Failed to set session provider: " + e.getMessage(), e);
         }
     }
 
@@ -263,6 +280,36 @@ public class ModelProviderHandler {
             LOG.error("[ModelProviderHandler] Failed to refresh slash commands asynchronously: " + ex.getMessage(), ex);
             return null;
         });
+    }
+
+    private String parseModel(String content) {
+        String model = content;
+        if (content != null && !content.isEmpty()) {
+            try {
+                JsonObject json = gson.fromJson(content, JsonObject.class);
+                if (json.has("model")) {
+                    model = json.get("model").getAsString();
+                }
+            } catch (Exception e) {
+                // content itself is the model
+            }
+        }
+        return model;
+    }
+
+    private String parseProvider(String content) {
+        String provider = content;
+        if (content != null && !content.isEmpty()) {
+            try {
+                JsonObject json = gson.fromJson(content, JsonObject.class);
+                if (json.has("provider")) {
+                    provider = json.get("provider").getAsString();
+                }
+            } catch (Exception e) {
+                // content itself is the provider
+            }
+        }
+        return provider;
     }
 
     private String resolveConfiguredClaudeModelFromSettings(String baseModel) {

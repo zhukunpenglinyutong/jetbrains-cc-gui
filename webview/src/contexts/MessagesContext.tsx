@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from 're
 import type { ClaudeMessage, SubagentHistoryResponse } from '../types';
 
 export const DEFAULT_STATUS = 'ready';
+export type QueueDisplayState = 'NONE' | 'QUEUED' | 'PROCESSING' | 'COMPLETED';
 
 export interface MessagesContextValue {
   messages: ClaudeMessage[];
@@ -14,6 +15,10 @@ export interface MessagesContextValue {
   setLoading: React.Dispatch<React.SetStateAction<boolean>>;
   loadingStartTime: number | null;
   setLoadingStartTime: React.Dispatch<React.SetStateAction<number | null>>;
+  queueDisplayState: QueueDisplayState;
+  setQueueDisplayState: React.Dispatch<React.SetStateAction<QueueDisplayState>>;
+  queueAheadCount: number;
+  setQueueAheadCount: React.Dispatch<React.SetStateAction<number>>;
   isThinking: boolean;
   setIsThinking: React.Dispatch<React.SetStateAction<boolean>>;
   streamingActive: boolean;
@@ -36,6 +41,8 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<string>(DEFAULT_STATUS);
   const [loading, setLoading] = useState<boolean>(false);
   const [loadingStartTime, setLoadingStartTime] = useState<number | null>(null);
+  const [queueDisplayState, setQueueDisplayState] = useState<QueueDisplayState>('NONE');
+  const [queueAheadCount, setQueueAheadCount] = useState<number>(0);
   const [isThinking, setIsThinking] = useState<boolean>(false);
   const [streamingActive, setStreamingActive] = useState<boolean>(false);
 
@@ -51,12 +58,16 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
       setLoading,
       loadingStartTime,
       setLoadingStartTime,
+      queueDisplayState,
+      setQueueDisplayState,
+      queueAheadCount,
+      setQueueAheadCount,
       isThinking,
       setIsThinking,
       streamingActive,
       setStreamingActive,
     }),
-    [messages, subagentHistories, status, loading, loadingStartTime, isThinking, streamingActive],
+    [messages, subagentHistories, status, loading, loadingStartTime, queueDisplayState, queueAheadCount, isThinking, streamingActive],
   );
 
   return <MessagesContext.Provider value={value}>{children}</MessagesContext.Provider>;

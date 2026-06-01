@@ -156,9 +156,32 @@ export function ContentBlockRenderer({
   }
 
   if (block.type === 'image' && block.src) {
+    const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+      const img = e.currentTarget;
+      if (img.dataset.fallback) return;
+      const src = block.src ?? '';
+      // resource_url 失败时尝试降级到原始 src
+      if (block.thumbnailSrc && img.src !== src && !src.startsWith('data:')) {
+        img.dataset.fallback = 'true';
+        img.src = src;
+        return;
+      }
+      img.dataset.fallback = 'failed';
+      img.alt = t('chat.imageLoadFailed');
+      img.style.display = 'none';
+      const placeholder = img.nextElementSibling;
+      if (placeholder && placeholder.classList.contains('image-load-failed')) return;
+      const span = document.createElement('span');
+      span.className = 'image-load-failed';
+      span.textContent = t('chat.imageLoadFailed');
+      span.style.cssText = 'color:var(--text-secondary);font-size:12px;padding:8px;';
+      img.parentElement?.appendChild(span);
+    };
+
     const handleImagePreview = () => {
       const previewRoot = document.getElementById('image-preview-root');
-      if (!previewRoot || !block.src) return;
+      const previewSrc = block.previewSrc || block.src;
+      if (!previewRoot || !previewSrc) return;
 
       // Clear previous content safely
       previewRoot.innerHTML = '';
@@ -170,7 +193,7 @@ export function ContentBlockRenderer({
 
       // Create image element safely (prevents XSS)
       const img = document.createElement('img');
-      img.src = block.src;
+      img.src = previewSrc;
       img.alt = t('chat.imagePreview');
       img.className = 'image-preview-content';
       img.onclick = (e) => e.stopPropagation();
@@ -197,9 +220,10 @@ export function ContentBlockRenderer({
         title={t('chat.clickToPreview')}
       >
         <img
-          src={block.src}
+          src={block.thumbnailSrc || block.src}
           alt={t('chat.userUploadedImage')}
           style={getImageStyle(messageType === 'user')}
+          onError={handleImageError}
         />
       </div>
     );

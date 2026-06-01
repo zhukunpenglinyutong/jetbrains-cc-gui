@@ -147,10 +147,11 @@ final class SlashCommandPathPolicy {
 
     static Path resolvePluginSubPath(Path pluginDir, String declaredPath) {
         try {
-            Path path = Paths.get(declaredPath);
-            if (path.isAbsolute() || declaredPath.startsWith("/")) {
-                LOG.warn("Rejecting absolute plugin path: " + declaredPath);
-                return null;
+            String trimmedPath = declaredPath == null ? "" : declaredPath.trim();
+            Path path = Paths.get(trimmedPath);
+            if (path.isAbsolute() || path.getRoot() != null
+                    || trimmedPath.startsWith("/") || trimmedPath.startsWith("\\")) {
+                return pluginDir.resolve(path).normalize();
             }
             return pluginDir.resolve(path).normalize();
         } catch (Exception e) {

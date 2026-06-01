@@ -1,5 +1,6 @@
 package com.github.claudecodegui.settings;
 
+import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -627,14 +628,7 @@ public class CodexMcpServerManager {
                 } catch (IOException ignored) {
                 }
                 if (process.isAlive()){
-                    process.destroy();
-                    try {
-                        if (!process.waitFor(300, TimeUnit.MILLISECONDS)) {
-                            process.destroyForcibly();
-                        }
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
+                    PlatformUtils.terminateProcessAndWait(process, 300, TimeUnit.MILLISECONDS);
                 }
             }
         }
@@ -800,7 +794,7 @@ public class CodexMcpServerManager {
             Process process = pb.start();
             boolean finished = process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
             if (!finished) {
-                process.destroyForcibly();
+                PlatformUtils.terminateProcessAndWait(process, 1, TimeUnit.SECONDS);
                 LOG.warn("[CodexMcpServerManager] Command check timed out for: " + commandName);
                 return false;
             }

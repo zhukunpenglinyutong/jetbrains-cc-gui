@@ -285,6 +285,16 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
         }, 300);
     }
 
+    @Override
+    public void onStreamCompleted() {
+        if (isInactive()) {
+            return;
+        }
+        if (streamEndCallback != null) {
+            safeRun("streamEndCallback", streamEndCallback);
+        }
+    }
+
     /**
      * Send the onStreamEnd signal and associated cleanup to the frontend.
      * Called from either the primary (flush callback) or fallback (Alarm) path.
@@ -296,13 +306,14 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
             LOG.debug("Skipping sendStreamEndToFrontend — adapter deactivated (sequence=" + sequence + ")");
             return;
         }
+        // Tag this as a backend-triggered stream-end so the frontend can
+        // distinguish it from a stall-watchdog recovery in diagnostic logs.
+        safeRun("callJavaScript(__lastStreamEndSource)", () ->
+                jsTarget.callJavaScript("__lastStreamEndSource", "'backend'"));
         safeRun("callJavaScript(onStreamEnd)", () ->
                 jsTarget.callJavaScript("onStreamEnd", String.valueOf(sequence)));
         safeRun("callJavaScript(showLoading, false)", () ->
                 jsTarget.callJavaScript("showLoading", "false"));
-        if (streamEndCallback != null) {
-            safeRun("streamEndCallback", streamEndCallback);
-        }
         LOG.debug("Stream ended - notified frontend (sequence=" + sequence + ")");
     }
 
@@ -370,6 +381,20 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
             return;
         }
         jsTarget.callJavaScript("patchMessageUuid", JsUtils.escapeJs(content), JsUtils.escapeJs(uuid));
+    }
+
+    @Override
+    public void onQueueDisplayStateChanged(ClaudeSession.SessionCallback.QueueDisplayState state, int aheadCount) {
+        if (isInactive()) {
+            return;
+        }
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (isInactive()) {
+                return;
+            }
+            String normalizedState = state != null ? state.name() : ClaudeSession.SessionCallback.QueueDisplayState.NONE.name();
+            jsTarget.callJavaScript("showQueueStatus", JsUtils.escapeJs(normalizedState), String.valueOf(Math.max(0, aheadCount)));
+        });
     }
 
     /**

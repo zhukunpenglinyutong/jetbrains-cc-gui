@@ -387,6 +387,36 @@ describe('useStreamingMessages', () => {
     expect(rawContent[0]).toMatchObject({ thinking: 'Original first' });
     expect(rawContent[2]).toMatchObject({ thinking: 'Original second' });
   });
+
+  it('does not overwrite a new single thinking segment with the whole stream thinking buffer', () => {
+    const { result } = renderHook(() => useStreamingMessages());
+
+    result.current.streamingThinkingRef.current = 'Earlier complete thinking. Latest segment only.';
+
+    const assistant: ClaudeMessage = {
+      type: 'assistant',
+      content: '',
+      isStreaming: true,
+      raw: {
+        message: {
+          content: [
+            { type: 'thinking', thinking: 'Latest segment only.', text: 'Latest segment only.' },
+            { type: 'text', text: 'Answer' },
+          ],
+        },
+      },
+    };
+
+    const patched = result.current.patchAssistantForStreaming(assistant);
+    const rawContent = (patched.raw as any).message.content as ContentBlockTest[];
+
+    expect(rawContent[0]).toMatchObject({
+      type: 'thinking',
+      thinking: 'Latest segment only.',
+      text: 'Latest segment only.',
+    });
+    expect(rawContent[1]).toMatchObject({ type: 'text', text: 'Answer' });
+  });
 });
 
 interface ContentBlockTest {

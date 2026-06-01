@@ -18,6 +18,7 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
     setUsagePercentage,
     setUsageUsedTokens,
     setUsageMaxTokens,
+      setCurrentProvider,
     setPermissionMode,
     setClaudePermissionMode,
     setCodexPermissionMode,
@@ -111,6 +112,44 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
       console.error('[Frontend] Failed to parse active provider in App:', error);
     }
   };
+
+    window.updateSessionInvocationMode = (jsonStr: string) => {
+        try {
+            const data = JSON.parse(jsonStr);
+            const mode = data.invocationMode;
+            if (mode === 'sdk' || mode === 'cli') {
+                window.__CLAUDE_INVOCATION_MODE__ = mode;
+            }
+        } catch (error) {
+            console.error('[Frontend] Failed to parse invocation mode:', error);
+        }
+    };
+
+    window.updateSessionRuntimeState = (jsonStr: string) => {
+        try {
+            const data = JSON.parse(jsonStr);
+            const provider = data.provider === 'codex' ? 'codex' : 'claude';
+            setCurrentProvider(provider);
+            currentProviderRef.current = provider;
+
+            updateMode(data.permissionMode as PermissionMode | undefined, provider);
+
+            if (typeof data.model === 'string' && data.model.trim()) {
+                if (provider === 'codex') {
+                    setSelectedCodexModel(data.model);
+                } else {
+                    setSelectedClaudeModel(normalizeClaudeModelId(data.model));
+                }
+            }
+
+            const invocationMode = data.claudeInvocationMode;
+            if (invocationMode === 'sdk' || invocationMode === 'cli') {
+                window.__CLAUDE_INVOCATION_MODE__ = invocationMode;
+            }
+        } catch (error) {
+            console.error('[Frontend] Failed to parse session runtime state:', error);
+        }
+    };
 
   window.updateThinkingEnabled = (jsonStr: string) => {
     const trimmed = (jsonStr || '').trim();

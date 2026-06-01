@@ -2,6 +2,7 @@ package com.github.claudecodegui.provider.codex;
 
 import com.github.claudecodegui.util.TagExtractor;
 import com.github.claudecodegui.util.TextSanitizer;
+import com.github.claudecodegui.util.UserMessageSanitizer;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
@@ -141,9 +142,8 @@ class CodexHistoryParser {
         if (text == null || text.isEmpty()) {
             return null;
         }
-        // Strip system/instruction tags that the Codex SDK prepends to user messages.
-        // These contain AGENTS.md content and should not appear in titles.
-        text = stripSystemTags(text);
+        // Strip system/instruction text that is useful for the model but not for history titles.
+        text = UserMessageSanitizer.sanitizeUserFacingText(text);
         text = TagExtractor.extractCommandMessageContent(text);
         return TextSanitizer.sanitizeAndTruncateSingleLine(text, 45);
     }
@@ -154,32 +154,7 @@ class CodexHistoryParser {
      * AGENTS.md content; these should be stripped before title extraction.
      */
     static String stripSystemTags(String text) {
-        if (text == null || text.isEmpty()) {
-            return text;
-        }
-        String[] systemTags = {"agents-instructions", "system-reminder", "system-prompt"};
-        String result = text;
-        for (String tag : systemTags) {
-            result = removeTagBlock(result, tag);
-        }
-        return result.trim();
-    }
-
-    /**
-     * Remove a complete XML tag block (opening tag through closing tag) from text.
-     */
-    private static String removeTagBlock(String text, String tagName) {
-        String openTag = "<" + tagName + ">";
-        String closeTag = "</" + tagName + ">";
-        int start = text.indexOf(openTag);
-        if (start == -1) {
-            return text;
-        }
-        int end = text.indexOf(closeTag, start);
-        if (end == -1) {
-            return text;
-        }
-        return text.substring(0, start) + text.substring(end + closeTag.length());
+        return UserMessageSanitizer.sanitizeUserFacingText(text);
     }
 
     long parseTimestamp(String timestamp) {

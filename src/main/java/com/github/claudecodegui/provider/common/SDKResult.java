@@ -9,6 +9,7 @@ import java.util.List;
  */
 public class SDKResult {
     public boolean success;
+    public boolean interrupted;
     public String error;
     public int messageCount;
     public List<Object> messages;

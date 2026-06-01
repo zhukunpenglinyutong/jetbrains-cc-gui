@@ -7,9 +7,25 @@ package com.github.claudecodegui.util;
  */
 public final class UserMessageSanitizer {
 
-    private static final String[] SYSTEM_TAG_NAMES = {"agents-instructions", "system-reminder", "system-prompt"};
+    private static final String[] SYSTEM_TAG_NAMES = {
+        "agents-instructions",
+        "system-reminder",
+        "system-prompt",
+        "INSTRUCTIONS",
+        "environment_context"
+    };
 
-    private static final String[] APPENDED_CONTEXT_MARKERS = {
+    private static final String IMAGE_ATTACHMENT_HINT =
+            "The user has attached the image(s) above. Please use the Read tool to view them.";
+
+    private static final java.util.regex.Pattern CLI_IMAGE_READ_INSTRUCTION_PATTERN = java.util.regex.Pattern.compile(
+            "(?im)^\\s*Use the Read tool to inspect this image file, then answer using its visible content:\\s*"
+                    + "(?:[a-z]:[/\\\\]|/).+?\\.(?:png|jpe?g|gif|webp|bmp|svg)\\s*$");
+
+    private static final java.util.regex.Pattern AGENTS_INSTRUCTIONS_HEADER_PATTERN =
+            java.util.regex.Pattern.compile("(?im)^\\s*#\\s+AGENTS\\.md instructions(?:\\s+for\\s+.+)?\\s*$");
+
+    private static final String[] APPENDED_CONTEXT_MARKERS = {"\n\n## Opened Files Context\n\n",
         "\n\n## Agent Role and Instructions\n\n",
         "\n\n## Workspace Context\n\n",
         "\n\n## Project Modules\n\nThis project contains multiple modules:\n",
@@ -34,9 +50,11 @@ public final class UserMessageSanitizer {
         }
 
         String normalized = text.replace("\r\n", "\n").replace("\r", "\n");
-        String strippedTags = stripSystemTags(normalized);
+        String strippedHeader = AGENTS_INSTRUCTIONS_HEADER_PATTERN.matcher(normalized).replaceAll("");
+        String strippedTags = stripSystemTags(strippedHeader);
         String strippedContext = stripAppendedContext(strippedTags);
-        return strippedContext.trim();
+        String strippedHints = stripAttachmentHints(strippedContext);
+        return normalizeWhitespace(strippedHints);
     }
 
     private static String stripSystemTags(String text) {
@@ -61,6 +79,18 @@ public final class UserMessageSanitizer {
             start = result.indexOf(openTag);
         }
         return result;
+    }
+
+    private static String stripAttachmentHints(String text) {
+        String result = text.replace(IMAGE_ATTACHMENT_HINT, "");
+        result = CLI_IMAGE_READ_INSTRUCTION_PATTERN.matcher(result).replaceAll("");
+        return result;
+    }
+
+    private static String normalizeWhitespace(String text) {
+        String normalized = text.replaceAll("(?m)^[ \\t]+$", "");
+        normalized = normalized.replaceAll("\\n{3,}", "\n\n");
+        return normalized.trim();
     }
 
     private static String stripAppendedContext(String text) {

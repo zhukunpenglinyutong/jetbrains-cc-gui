@@ -1,6 +1,7 @@
 import { memo, useState, useEffect, useRef, useMemo, useCallback, forwardRef, useImperativeHandle } from 'react';
 import type { TFunction } from 'i18next';
 import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock } from '../types';
+import type { QueueDisplayState } from '../contexts/MessagesContext';
 import { getMessageKey } from '../utils/messageUtils';
 import { MessageItem } from './MessageItem';
 import WaitingIndicator from './WaitingIndicator';
@@ -52,6 +53,8 @@ interface MessageListProps {
   isThinking: boolean;
   loading: boolean;
   loadingStartTime: number | null;
+  queueDisplayState: QueueDisplayState;
+  queueAheadCount: number;
   t: TFunction;
   getMessageText: (message: ClaudeMessage) => string;
   getContentBlocks: (message: ClaudeMessage) => ClaudeContentBlock[];
@@ -73,6 +76,8 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
   isThinking,
   loading,
   loadingStartTime,
+  queueDisplayState,
+  queueAheadCount,
   t,
   getMessageText,
   getContentBlocks,
@@ -89,6 +94,19 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
   // page-size chunks as the user clicks "show earlier", avoiding a single huge
   // mount when sessions exceed hundreds of messages.
   const [revealedCount, setRevealedCount] = useState(0);
+
+  // Keep WaitingIndicator mounted during exit animation
+  const [waitingVisible, setWaitingVisible] = useState(false);
+
+  useEffect(() => {
+    if (loading) {
+      setWaitingVisible(true);
+    }
+  }, [loading]);
+
+  const handleWaitingExitComplete = useCallback(() => {
+    setWaitingVisible(false);
+  }, []);
 
   // Context menu for message list (copy only, when text selected)
   const ctxMenu = useContextMenu();
@@ -192,8 +210,16 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
         );
       })}
 
-      {/* Loading indicator */}
-      {loading && <WaitingIndicator startTime={loadingStartTime ?? undefined} />}
+      {/* Loading / queue indicator */}
+      {waitingVisible && (
+        <WaitingIndicator
+          startTime={loadingStartTime ?? undefined}
+          queueDisplayState={queueDisplayState}
+          queueAheadCount={queueAheadCount}
+          loading={loading}
+          onExitComplete={handleWaitingExitComplete}
+        />
+      )}
       <div ref={messagesEndRef} />
     </div>
   );

@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { Attachment } from '../types.js';
 import { generateId } from '../utils/generateId.js';
 import { insertTextAtCursor } from '../utils/selectionUtils.js';
@@ -56,6 +56,54 @@ export function usePasteAndDrop({
   handleInput,
   flushInput,
 }: UsePasteAndDropOptions): UsePasteAndDropReturn {
+  const recentImageAttachmentRef = useRef<Map<string, number>>(new Map());
+
+  const isRecentDuplicateImageAttachment = useCallback((signature: string): boolean => {
+    const now = Date.now();
+    const recentWindowMs = 1500;
+    const recent = recentImageAttachmentRef.current;
+
+    for (const [key, timestamp] of recent.entries()) {
+      if (now - timestamp > recentWindowMs) {
+        recent.delete(key);
+      }
+    }
+
+    const lastSeen = recent.get(signature);
+    if (lastSeen && now - lastSeen <= recentWindowMs) {
+      return true;
+    }
+
+    recent.set(signature, now);
+    return false;
+  }, []);
+
+  const appendImageAttachment = useCallback((
+    fileName: string,
+    mediaType: string,
+    base64: string,
+  ) => {
+    const signature = [
+      mediaType || 'image/png',
+      base64.length,
+      base64.slice(0, 48),
+      base64.slice(-48),
+    ].join('|');
+
+    if (isRecentDuplicateImageAttachment(signature)) {
+      return;
+    }
+
+    const attachment: Attachment = {
+      id: generateId(),
+      fileName,
+      mediaType: mediaType || 'image/png',
+      data: base64,
+    };
+
+    setInternalAttachments((prev) => [...prev, attachment]);
+  }, [isRecentDuplicateImageAttachment, setInternalAttachments]);
+
   /**
    * Handle paste event - detect images and plain text
    */
@@ -93,14 +141,7 @@ export function usePasteAndDrop({
                 const m = name.match(/\.([a-zA-Z0-9]+)$/);
                 return m ? m[1] : 'png';
               })();
-              const attachment: Attachment = {
-                id: generateId(),
-                fileName: `pasted-image-${Date.now()}.${ext}`,
-                mediaType,
-                data: base64,
-              };
-
-              setInternalAttachments((prev) => [...prev, attachment]);
+              appendImageAttachment(`pasted-image-${Date.now()}.${ext}`, mediaType, base64);
             };
             reader.readAsDataURL(blob);
           }
@@ -183,7 +224,7 @@ export function usePasteAndDrop({
         }
       }
     },
-    [setInternalAttachments, handleInput, flushInput]
+    [appendImageAttachment, handleInput, flushInput]
   );
 
   /**
@@ -229,14 +270,11 @@ export function usePasteAndDrop({
                 const m = file.name.match(/\.([a-zA-Z0-9]+)$/);
                 return m ? m[1] : 'png';
               })();
-              const attachment: Attachment = {
-                id: generateId(),
-                fileName: file.name || `dropped-image-${Date.now()}.${ext}`,
-                mediaType: file.type || 'image/png',
-                data: base64,
-              };
-
-              setInternalAttachments((prev) => [...prev, attachment]);
+              appendImageAttachment(
+                file.name || `dropped-image-${Date.now()}.${ext}`,
+                file.type || 'image/png',
+                base64,
+              );
             };
             reader.readAsDataURL(file);
           }
@@ -320,7 +358,7 @@ export function usePasteAndDrop({
       adjustHeight,
       renderFileTags,
       setHasContent,
-      setInternalAttachments,
+      appendImageAttachment,
       onInput,
       closeAllCompletions,
     ]
@@ -332,17 +370,15 @@ export function usePasteAndDrop({
       const { base64, mediaType } = (e as CustomEvent).detail;
       if (!base64) return;
       const ext = mediaType?.split('/')[1] || 'png';
-      const attachment: Attachment = {
-        id: generateId(),
-        fileName: `pasted-image-${Date.now()}.${ext}`,
-        mediaType: mediaType || 'image/png',
-        data: base64,
-      };
-      setInternalAttachments((prev) => [...prev, attachment]);
+      appendImageAttachment(
+        `pasted-image-${Date.now()}.${ext}`,
+        mediaType || 'image/png',
+        base64,
+      );
     };
     window.addEventListener('java-paste-image', onJavaPasteImage);
     return () => window.removeEventListener('java-paste-image', onJavaPasteImage);
-  }, [setInternalAttachments]);
+  }, [appendImageAttachment]);
 
   return {
     handlePaste,

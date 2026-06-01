@@ -405,7 +405,7 @@ export const MessageItem = memo(function MessageItem({
 
     if (isEmptyStreamingPlaceholder) {
       return (
-        <div className="streaming-connect-status">
+        <div className="streaming-connect-status streaming-connect-enter">
           <span className="streaming-connect-text">
             {t('chat.streamingConnected', { provider: getProviderDisplayName(currentProvider) })}
           </span>
