@@ -1,6 +1,7 @@
 package com.github.claudecodegui.cli.common;
 
 import com.github.claudecodegui.settings.ConfigPathManager;
+import com.github.claudecodegui.settings.RuntimeSharedConfigService;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
@@ -21,6 +22,7 @@ public class CliMcpConfig {
 
     private final String tabId;
     private final Path configPath;
+    private final RuntimeSharedConfigService sharedConfigService = new RuntimeSharedConfigService();
     private JsonObject servers = new JsonObject();
 
     public CliMcpConfig(String tabId) {
@@ -48,15 +50,7 @@ public class CliMcpConfig {
                     return;
                 }
             }
-            // 从全局 ~/.claude/settings.json 读取 mcpServers 作为初始值
-            Path globalSettings = new ConfigPathManager().getClaudeSettingsPath();
-            if (Files.exists(globalSettings)) {
-                String content = Files.readString(globalSettings, StandardCharsets.UTF_8);
-                JsonObject settings = GSON.fromJson(content, JsonObject.class);
-                if (settings != null && settings.has("mcpServers") && settings.get("mcpServers").isJsonObject()) {
-                    servers = settings.getAsJsonObject("mcpServers");
-                }
-            }
+            servers = sharedConfigService.getSharedMcpServers(null);
             persist();
         } catch (Exception e) {
             LOG.warn("[CliMcpConfig] Failed to initialize MCP config for tab " + tabId, e);
