@@ -80,6 +80,17 @@ public class SendTerminalSelectionToInputActionTest {
     }
 
     @Test
+    public void terminalNoiseSelectionIsSanitized() {
+        SendTerminalSelectionToInputAction.setSelectionProvider(event -> String.join("\n",
+                "Wall time: 3.2 seconds",
+                "Cannot load PSReadline module. Console is running without PSReadline.",
+                "+ return resource;"
+        ));
+
+        Assert.assertEquals("+ return resource;", SendTerminalSelectionToInputAction.resolveSelectedText(null));
+    }
+
+    @Test
     public void unsupportedEditorReturnsNull() {
         SendTerminalSelectionToInputAction.setSelectionProvider(event -> null);
         Assert.assertNull(SendTerminalSelectionToInputAction.resolveSelectedText(null));
