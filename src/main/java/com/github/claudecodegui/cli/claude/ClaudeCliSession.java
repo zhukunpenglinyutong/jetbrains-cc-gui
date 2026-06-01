@@ -63,8 +63,8 @@ public class ClaudeCliSession {
         if (h != null) {
             long startNanos = System.nanoTime();
             h.interrupt();
-            LOG.info("[TabPerf] ClaudeCliSession.interrupt returned in "
-                    + TabPerformanceLogger.elapsedMillis(startNanos) + "ms: tab=" + tabId);
+            LOG.info("[TabPerf] ClaudeCliSession.interrupt returned in " + TabPerformanceLogger.elapsedMillis(
+                    startNanos) + "ms: tab=" + tabId);
         }
     }
 
@@ -73,10 +73,9 @@ public class ClaudeCliSession {
         interrupt();
         long cleanupStartNanos = System.nanoTime();
         mcpConfig.cleanup();
-        LOG.info("[TabPerf] ClaudeCliSession MCP cleanup returned in "
-                + TabPerformanceLogger.elapsedMillis(cleanupStartNanos) + "ms: tab=" + tabId);
-        LOG.info("[TabPerf] ClaudeCliSession.dispose returned in "
-                + TabPerformanceLogger.elapsedMillis(startNanos) + "ms: tab=" + tabId);
+        LOG.info("[TabPerf] ClaudeCliSession MCP cleanup returned in " + TabPerformanceLogger.elapsedMillis(
+                cleanupStartNanos) + "ms: tab=" + tabId);
+        LOG.info("[TabPerf] ClaudeCliSession.dispose returned in " + TabPerformanceLogger.elapsedMillis(startNanos) + "ms: tab=" + tabId);
     }
 
     public String getSessionId() {
@@ -89,7 +88,8 @@ public class ClaudeCliSession {
         if (line == null) {
             return "";
         }
-        String compact = line.replace('\n', ' ').replace('\r', ' ');
+        String compact = line.replace('\n', ' ')
+                .replace('\r', ' ');
         return compact.length() > 240 ? compact.substring(0, 240) + "..." : compact;
     }
 
@@ -97,7 +97,8 @@ public class ClaudeCliSession {
         if (prompt == null) {
             return "";
         }
-        String compact = prompt.replace('\n', ' ').replace('\r', ' ');
+        String compact = prompt.replace('\n', ' ')
+                .replace('\r', ' ');
         return compact.length() > 500 ? compact.substring(0, 500) + "..." : compact;
     }
 
@@ -133,7 +134,8 @@ public class ClaudeCliSession {
             cmd.add(model);
         }
 
-        if (request.reasoningEffort() != null && !request.reasoningEffort().isBlank()) {
+        if (request.reasoningEffort() != null && !request.reasoningEffort()
+                .isBlank()) {
             cmd.add("--effort");
             cmd.add(request.reasoningEffort());
         }
@@ -177,36 +179,56 @@ public class ClaudeCliSession {
         for (CliAttachmentHandler.ContentBlock block : blocks) {
             if (block.kind() == CliAttachmentHandler.ContentBlock.Kind.IMAGE) {
                 imageIndex++;
-                String path = block.file().getAbsolutePath().replace('\\', '/');
-                sb.append("\n\n[Image #").append(imageIndex).append(": ").append(path).append("]\n").append("Use the Read tool to inspect this image file, ").append("then answer using its visible content: ").append(path);
+                String path = block.file()
+                        .getAbsolutePath()
+                        .replace('\\', '/');
+                sb.append("\n\n[Image #")
+                        .append(imageIndex)
+                        .append(": ")
+                        .append(path)
+                        .append("]\n")
+                        .append("Use the Read tool to inspect this image file, ")
+                        .append("then answer using its visible content: ")
+                        .append(path);
             } else if (block.text() != null) {
-                sb.append("\n\n").append(block.text());
+                sb.append("\n\n")
+                        .append(block.text());
             }
         }
 
-        if (request.openedFiles() != null && request.openedFiles().size() > 0) {
-            sb.append("\n\n## Opened Files Context\n\n").append(gson.toJson(request.openedFiles()));
+        if (request.openedFiles() != null && request.openedFiles()
+                .size() > 0) {
+            sb.append("\n\n## Opened Files Context\n\n")
+                    .append(gson.toJson(request.openedFiles()));
         }
-        if (request.fileTagPaths() != null && !request.fileTagPaths().isEmpty()) {
+        if (request.fileTagPaths() != null && !request.fileTagPaths()
+                .isEmpty()) {
             sb.append("\n\n## Referenced Files\n\n");
             for (String p : request.fileTagPaths()) {
-                sb.append("- ").append(p).append('\n');
+                sb.append("- ")
+                        .append(p)
+                        .append('\n');
             }
         }
-        if (request.agentPrompt() != null && !request.agentPrompt().isBlank()) {
-            sb.append("\n\n## Agent Role and Instructions\n\n").append(request.agentPrompt());
+        if (request.agentPrompt() != null && !request.agentPrompt()
+                .isBlank()) {
+            sb.append("\n\n## Agent Role and Instructions\n\n")
+                    .append(request.agentPrompt());
         }
         return sb.toString();
     }
 
-    /** 收集图片附件所在的父目录（去重），用于 --add-dir 授权。 */
+    /**
+     * 收集图片附件所在的父目录（去重），用于 --add-dir 授权。
+     */
     private List<String> collectAddDirs(List<CliAttachmentHandler.ContentBlock> blocks) {
         Set<String> dirs = new LinkedHashSet<>();
         for (CliAttachmentHandler.ContentBlock block : blocks) {
             if (block.kind() != CliAttachmentHandler.ContentBlock.Kind.IMAGE || block.file() == null) {
                 continue;
             }
-            File parent = block.file().getParentFile();
+            File parent = block.file()
+                    .getParentFile();
             if (parent != null && parent.isDirectory()) {
                 dirs.add(parent.getAbsolutePath());
             }
@@ -226,10 +248,12 @@ public class ClaudeCliSession {
     }
 
     private static String getString(JsonObject obj, String key) {
-        if (obj == null || !obj.has(key) || obj.get(key).isJsonNull()) {
+        if (obj == null || !obj.has(key) || obj.get(key)
+                .isJsonNull()) {
             return null;
         }
-        return obj.get(key).getAsString();
+        return obj.get(key)
+                .getAsString();
     }
 
     public CompletableFuture<Void> send(CliSendRequest request, CliSessionCallback callback) {
@@ -239,16 +263,19 @@ public class ClaudeCliSession {
             StringBuilder diagnostic = new StringBuilder();
             AtomicBoolean completedWithStructuredError = new AtomicBoolean(false);
             try {
-                LOG.info("[CliConcurrencyDiag][ClaudeCliSession] send task started" + ": tabId=" + tabId + ", requestSessionId=" + (request.sessionId() != null ? request.sessionId() : "(new)") + ", currentSessionId=" + (sessionId != null ? sessionId : "(none)") + ", cwd=" + (request.cwd() != null ? request.cwd() : "(none)") + ", thread=" + Thread.currentThread().getName());
-                String cliPath = ClaudeCliDetector.getInstance().findCliExecutable();
+                LOG.info(
+                        "[CliConcurrencyDiag][ClaudeCliSession] send task started" + ": tabId=" + tabId + ", requestSessionId=" + (request.sessionId() != null ? request.sessionId() : "(new)") + ", currentSessionId=" + (sessionId != null ? sessionId : "(none)") + ", cwd=" + (request.cwd() != null ? request.cwd() : "(none)") + ", thread=" + Thread.currentThread()
+                                .getName());
+                String cliPath = ClaudeCliDetector.getInstance()
+                        .findCliExecutable();
                 if (cliPath == null) {
                     throw new IllegalStateException("Claude CLI not found");
                 }
 
                 // 解析附件:图片落盘以供 prompt 引用,文档读为文本
                 String sessionKey = sessionId != null ? sessionId : "epoch-" + tabId;
-                List<CliAttachmentHandler.ContentBlock> blocks =
-                        attachmentHandler.processForClaude(request.provider(), sessionKey, request.attachments(), tempFiles);
+                List<CliAttachmentHandler.ContentBlock> blocks = attachmentHandler.processForClaude(request.provider(), sessionKey,
+                                                                                                    request.attachments(), tempFiles);
 
                 String prompt = buildPrompt(request, blocks);
                 List<String> addDirs = collectAddDirs(blocks);
@@ -258,28 +285,40 @@ public class ClaudeCliSession {
                         imageBlockCount++;
                     }
                 }
-                LOG.debug("[ClaudeImageDiag][ClaudeCliSession] prompt prepared" + ": tabId=" + tabId + ", requestAttachments=" + (request.attachments() != null ? request.attachments().size() : 0) + ", contentBlocks=" + blocks.size() + ", imageBlocks=" + imageBlockCount + ", addDirs=" + addDirs + ", promptViaStdin=true" + ", containsReadInstruction=" + prompt.contains("Use the Read tool to inspect this image file") + ", promptPreview=" + previewPrompt(prompt));
+                LOG.debug(
+                        "[ClaudeImageDiag][ClaudeCliSession] prompt prepared" + ": tabId=" + tabId + ", requestAttachments=" + (request.attachments() != null ? request.attachments()
+                                .size() : 0) + ", contentBlocks=" + blocks.size() + ", imageBlocks=" + imageBlockCount + ", addDirs=" + addDirs + ", promptViaStdin=true" + ", containsReadInstruction=" + prompt.contains(
+                                "Use the Read tool to inspect this image file") + ", promptPreview=" + previewPrompt(prompt));
 
                 List<String> cmd = buildCommand(cliPath, request, prompt, addDirs);
                 LOG.info("[ClaudeCliSession][" + tabId + "] Command (prompt via stdin): " + String.join(" ", cmd));
 
                 ProcessBuilder pb = new ProcessBuilder(cmd);
                 pb.redirectErrorStream(true);
-                if (request.cwd() != null && !request.cwd().isBlank()) {
+                if (request.cwd() != null && !request.cwd()
+                        .isBlank()) {
                     File cwd = new File(request.cwd());
                     if (cwd.isDirectory()) {
                         pb.directory(cwd);
                     }
                 }
-                pb.environment().put("NO_COLOR", "1");
+                pb.environment()
+                        .put("NO_COLOR", "1");
                 envConfigurator.configurePermissionEnv(pb.environment());
                 envConfigurator.configureProjectPath(pb.environment(), request.cwd());
 
-                LOG.info("[CliConcurrencyDiag][ClaudeCliSession] starting process" + ": tabId=" + tabId + ", elapsedMs=" + elapsedMillis(sendStartNanos) + ", thread=" + Thread.currentThread().getName());
+                LOG.info("[CliConcurrencyDiag][ClaudeCliSession] starting process" + ": tabId=" + tabId + ", elapsedMs=" + elapsedMillis(
+                        sendStartNanos) + ", thread=" + Thread.currentThread()
+                        .getName());
                 Process process = pb.start();
-                LOG.info("[CliConcurrencyDiag][ClaudeCliSession] process started" + ": tabId=" + tabId + ", elapsedMs=" + elapsedMillis(sendStartNanos) + ", thread=" + Thread.currentThread().getName());
+                LOG.info("[CliConcurrencyDiag][ClaudeCliSession] process started" + ": tabId=" + tabId + ", elapsedMs=" + elapsedMillis(
+                        sendStartNanos) + ", thread=" + Thread.currentThread()
+                        .getName());
                 writePromptToStdin(process, prompt);
-                LOG.debug("[CliConcurrencyDiag][ClaudeCliSession] prompt written to stdin" + ": tabId=" + tabId + ", promptChars=" + prompt.length() + ", elapsedMs=" + elapsedMillis(sendStartNanos) + ", thread=" + Thread.currentThread().getName());
+                LOG.debug(
+                        "[CliConcurrencyDiag][ClaudeCliSession] prompt written to stdin" + ": tabId=" + tabId + ", promptChars=" + prompt.length() + ", elapsedMs=" + elapsedMillis(
+                                sendStartNanos) + ", thread=" + Thread.currentThread()
+                                .getName());
                 activeHandle = new CliProcessHandle(process, "claude-tab-" + tabId);
 
                 readOutput(callback, diagnostic, sendStartNanos, completedWithStructuredError);
@@ -287,10 +326,14 @@ public class ClaudeCliSession {
                 process.waitFor();
                 int exitCode = process.exitValue();
                 boolean interrupted = activeHandle.wasInterrupted();
-                LOG.info("[CliConcurrencyDiag][ClaudeCliSession] process exited" + ": tabId=" + tabId + ", exitCode=" + exitCode + ", interrupted=" + interrupted + ", elapsedMs=" + elapsedMillis(sendStartNanos) + ", thread=" + Thread.currentThread().getName());
+                LOG.info(
+                        "[CliConcurrencyDiag][ClaudeCliSession] process exited" + ": tabId=" + tabId + ", exitCode=" + exitCode + ", " +
+                                "interrupted=" + interrupted + ", elapsedMs=" + elapsedMillis(
+                                sendStartNanos) + ", thread=" + Thread.currentThread()
+                                .getName());
 
                 if (interrupted) {
-                    callback.onComplete(false, null, "User interrupted");
+                    callback.onInterrupted(null, "__I18N__:chat.requestInterrupted");
                 } else if (exitCode != 0 && !completedWithStructuredError.get()) {
                     String err = buildExitError(exitCode, diagnostic);
                     callback.onError(err);
@@ -307,7 +350,8 @@ public class ClaudeCliSession {
         });
     }
 
-    private void readOutput(CliSessionCallback callback, StringBuilder diagnostic, long sendStartNanos, AtomicBoolean completedWithStructuredError) throws Exception {
+    private void readOutput(CliSessionCallback callback, StringBuilder diagnostic, long sendStartNanos,
+                            AtomicBoolean completedWithStructuredError) throws Exception {
         ClaudeCliStreamParser parser = new ClaudeCliStreamParser(gson);
         parser.resetState();
         StringBuilder assistantContent = new StringBuilder();
@@ -336,12 +380,15 @@ public class ClaudeCliSession {
             }
         };
 
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(activeHandle.process().getInputStream(), StandardCharsets.UTF_8))) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(activeHandle.process()
+                                                                                      .getInputStream(), StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 if (firstOutputLogged.compareAndSet(false, true)) {
-                    LOG.info("[CliConcurrencyDiag][ClaudeCliSession] first stdout line" + ": tabId=" + tabId + ", elapsedMs=" + elapsedMillis(sendStartNanos) + ", preview=" + previewLine(line) + ", thread=" + Thread.currentThread().getName());
+                    LOG.info(
+                            "[CliConcurrencyDiag][ClaudeCliSession] first stdout line" + ": tabId=" + tabId + ", elapsedMs=" + elapsedMillis(
+                                    sendStartNanos) + ", preview=" + previewLine(line) + ", thread=" + Thread.currentThread()
+                                    .getName());
                 }
                 if (line.isBlank()) {
                     continue;
@@ -365,7 +412,7 @@ public class ClaudeCliSession {
         // 进程 stdout 结束但没有 result 事件
         boolean interrupted = activeHandle.wasInterrupted();
         if (interrupted) {
-            callback.onComplete(false, assistantContent.toString(), "User interrupted");
+            callback.onInterrupted(assistantContent.toString(), "__I18N__:chat.requestInterrupted");
         } else if (!hadError.get() && !assistantContent.isEmpty()) {
             callback.onMessage("stream_end", "");
             callback.onMessage("message_end", "");
