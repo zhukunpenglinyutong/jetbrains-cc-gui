@@ -712,3 +712,255 @@ test('REGRESSION (PR#1205 bug 2): tail-fill is still emitted when block has prio
   assert.match(deltaLines[0], /"Hello"/);
   assert.match(deltaLines[1], /" world"/);
 });
+
+// =========================================================================
+// REGRESSION (eb1786 cross-turn pollution).
+//
+// turnState (blockMap + modeMap) lives for the WHOLE request, but a single
+// request runs many assistant turns (every tool_use loop iteration is its own
+// assistant message whose content blocks re-number from index 0). The maps are
+// keyed by block INDEX, so without a turn-boundary reset the previous turn's
+// index-0 state leaks into the next turn:
+//
+//   - eb1786 routed the snapshot path through normalizeStreamDelta, which locks
+//     'snapshot' mode whenever incoming.startsWith(previous) — TRUE for every
+//     normal turn end (snapshot === accumulated). 'snapshot' mode is an absorber
+//     state: the next turn's genuine deltas hit the correction branch and are
+//     dropped (novel=''), producing the fragmented thinking the user saw
+//     ("--if}", "ifconstifreturn}", "constifprev" — space/char loss + gaps).
+//   - A stale accumulator left in the map also makes the tail-fill snapshot
+//     re-emit a whole block, i.e. duplicated text.
+//
+// The fix resets the per-block maps at each message_start. Keep these green.
+// =========================================================================
+
+test('REGRESSION (eb1786): second assistant turn reusing thinking index 0 streams intact (not swallowed by prior-turn snapshot mode)', () => {
+  const state = makeTurnState(true);
+
+  const captured = captureStdout(() => {
+    // ---- Turn 1: message_start -> thinking deltas -> assistant snapshot + tool_use ----
+    processStreamEvent(
+      { type: 'stream_event', event: { type: 'message_start', message: { usage: {} } } },
+      state,
+    );
+    state.hasStreamEvents = true;
+    processStreamEvent(
+      { type: 'stream_event', event: { type: 'content_block_delta', index: 0,
+        delta: { type: 'thinking_delta', thinking: 'Analyzing' } } },
+      state,
+    );
+    processStreamEvent(
+      { type: 'stream_event', event: { type: 'content_block_delta', index: 0,
+        delta: { type: 'thinking_delta', thinking: ' the code' } } },
+      state,
+    );
+    // Final assistant snapshot for turn 1 (thinking === accumulated) + tool_use.
+    // Pre-fix this locked thinking:0 into 'snapshot' mode for the rest of the request.
+    processMessageContent(
+      { type: 'assistant', message: { content: [
+        { type: 'thinking', thinking: 'Analyzing the code' },
+        { type: 'tool_use', id: 't1', name: 'Read', input: {} },
+      ] } },
+      state,
+    );
+
+    // ---- Turn 2: a NEW assistant message_start, same block index 0 ----
+    processStreamEvent(
+      { type: 'stream_event', event: { type: 'message_start', message: { usage: {} } } },
+      state,
+    );
+    processStreamEvent(
+      { type: 'stream_event', event: { type: 'content_block_delta', index: 0,
+        delta: { type: 'thinking_delta', thinking: 'Now I' } } },
+      state,
+    );
+    processStreamEvent(
+      { type: 'stream_event', event: { type: 'content_block_delta', index: 0,
+        delta: { type: 'thinking_delta', thinking: ' understand' } } },
+      state,
+    );
+  });
+
+  const emitted = tagLines(captured, '[THINKING_DELTA]')
+    .map((line) => JSON.parse(line.replace(/^\[THINKING_DELTA\]\s+/, '').trim()))
+    .join('');
+
+  // Pre-fix: Turn 2 deltas were dropped (snapshot-mode absorber) -> emitted ===
+  // 'Analyzing the code'. The new turn's thinking simply vanished / fragmented.
+  assert.equal(
+    emitted,
+    'Analyzing the codeNow I understand',
+    `Turn 2 thinking must stream intact across the tool_use boundary; got "${emitted}"`,
+  );
+});
+
+test('REGRESSION (eb1786): second assistant turn reusing text index 0 streams intact', () => {
+  const state = makeTurnState(true);
+
+  const captured = captureStdout(() => {
+    // ---- Turn 1 ----
+    processStreamEvent(
+      { type: 'stream_event', event: { type: 'message_start', message: { usage: {} } } },
+      state,
+    );
+    state.hasStreamEvents = true;
+    processStreamEvent(
+      { type: 'stream_event', event: { type: 'content_block_delta', index: 0,
+        delta: { type: 'text_delta', text: 'First turn answer' } } },
+      state,
+    );
+    processMessageContent(
+      { type: 'assistant', message: { content: [
+        { type: 'text', text: 'First turn answer' },
+        { type: 'tool_use', id: 't1', name: 'Bash', input: {} },
+      ] } },
+      state,
+    );
+
+    // ---- Turn 2: same text block index 0, brand-new content ----
+    processStreamEvent(
+      { type: 'stream_event', event: { type: 'message_start', message: { usage: {} } } },
+      state,
+    );
+    for (const fragment of ['Let me ', 'check the ', 'logic.']) {
+      processStreamEvent(
+        { type: 'stream_event', event: { type: 'content_block_delta', index: 0,
+          delta: { type: 'text_delta', text: fragment } } },
+        state,
+      );
+    }
+    // Turn 2 final snapshot (text === accumulated). Must NOT re-emit (no duplication).
+    processMessageContent(
+      { type: 'assistant', message: { content: [
+        { type: 'text', text: 'Let me check the logic.' },
+      ] } },
+      state,
+    );
+  });
+
+  const payloads = tagLines(captured, '[CONTENT_DELTA]')
+    .map((line) => JSON.parse(line.replace(/^\[CONTENT_DELTA\]\s+/, '').trim()));
+  const emitted = payloads.join('');
+
+  assert.equal(
+    emitted,
+    'First turn answerLet me check the logic.',
+    `Turn 2 text must stream intact and exactly once; got "${emitted}"`,
+  );
+  // No single delta may be the whole turn-2 block (that would be the duplicate emit).
+  assert.ok(
+    !payloads.includes('Let me check the logic.'),
+    `snapshot must not re-emit the whole turn-2 block; payloads: ${JSON.stringify(payloads)}`,
+  );
+});
+
+test('REGRESSION (eb1786): message_start reset preserves cross-turn usage accumulation', () => {
+  // The fix clears block maps at message_start but must NOT touch accumulatedUsage,
+  // which carries across all turns of a multi-turn tool_use run (mergeUsage keeps
+  // output_tokens from prior turns and takes the latest positive input_tokens).
+  const state = makeTurnState(true);
+
+  // Turn 1
+  processStreamEvent(
+    { type: 'stream_event', event: { type: 'message_start', message: { usage: { input_tokens: 10 } } } },
+    state,
+  );
+  processStreamEvent(
+    { type: 'stream_event', event: { type: 'message_delta', usage: { output_tokens: 20 } } },
+    state,
+  );
+  // Turn 2 — message_start is where the block-map reset fires.
+  processStreamEvent(
+    { type: 'stream_event', event: { type: 'message_start', message: { usage: { input_tokens: 8 } } } },
+    state,
+  );
+
+  assert.equal(state.accumulatedUsage?.output_tokens, 20, 'prior-turn output_tokens must survive the reset');
+  assert.equal(state.accumulatedUsage?.input_tokens, 8, 'input_tokens follows mergeUsage latest-value semantics');
+});
+
+// =========================================================================
+// BLOCK_RESET SIGNAL TESTS.
+//
+// message_start now emits a [BLOCK_RESET] signal to notify frontend that
+// streaming content refs should be cleared. This prevents cross-turn
+// content merging when a new assistant message starts within an ongoing
+// stream (e.g., after a tool_use loop iteration).
+// =========================================================================
+
+test('BLOCK_RESET: message_start emits [BLOCK_RESET] signal before subsequent deltas', () => {
+  const state = makeTurnState(true);
+
+  const captured = captureStdout(() => {
+    // message_start should emit BLOCK_RESET BEFORE any deltas
+    processStreamEvent(
+      { type: 'stream_event', event: { type: 'message_start', message: { usage: {} } } },
+      state,
+    );
+    // Subsequent deltas arrive
+    processStreamEvent(
+      { type: 'stream_event', event: { type: 'content_block_delta', index: 0,
+        delta: { type: 'thinking_delta', thinking: 'New thinking' } } },
+      state,
+    );
+  });
+
+  const blockResetLines = tagLines(captured, '[BLOCK_RESET]');
+  const thinkingDeltaLines = tagLines(captured, '[THINKING_DELTA]');
+
+  // BLOCK_RESET must be emitted exactly once at message_start
+  assert.equal(blockResetLines.length, 1, 'message_start must emit one [BLOCK_RESET]');
+  // Thinking delta must be emitted after BLOCK_RESET
+  assert.equal(thinkingDeltaLines.length, 1, 'thinking delta must be emitted');
+
+  // Verify ordering: BLOCK_RESET comes before THINKING_DELTA
+  const blockResetIdx = captured.findIndex((line) => line.startsWith('[BLOCK_RESET]'));
+  const thinkingDeltaIdx = captured.findIndex((line) => line.startsWith('[THINKING_DELTA]'));
+  assert.ok(blockResetIdx < thinkingDeltaIdx, 'BLOCK_RESET must come before subsequent deltas');
+});
+
+test('BLOCK_RESET: not emitted when streaming is disabled', () => {
+  const state = makeTurnState(false); // streamingEnabled = false
+
+  const captured = captureStdout(() => {
+    processStreamEvent(
+      { type: 'stream_event', event: { type: 'message_start', message: { usage: {} } } },
+      state,
+    );
+  });
+
+  const blockResetLines = tagLines(captured, '[BLOCK_RESET]');
+  assert.equal(blockResetLines.length, 0, 'BLOCK_RESET must not be emitted when streaming is disabled');
+});
+
+test('BLOCK_RESET: emitted at each message_start in multi-turn tool_use loop', () => {
+  const state = makeTurnState(true);
+
+  const captured = captureStdout(() => {
+    // Turn 1 message_start
+    processStreamEvent(
+      { type: 'stream_event', event: { type: 'message_start', message: { usage: {} } } },
+      state,
+    );
+    state.hasStreamEvents = true;
+    processStreamEvent(
+      { type: 'stream_event', event: { type: 'content_block_delta', index: 0,
+        delta: { type: 'thinking_delta', thinking: 'Turn 1' } } },
+      state,
+    );
+
+    // Turn 2 message_start (after tool_use loop iteration)
+    processStreamEvent(
+      { type: 'stream_event', event: { type: 'message_start', message: { usage: {} } } },
+      state,
+    );
+    processStreamEvent(
+      { type: 'stream_event', event: { type: 'content_block_delta', index: 0,
+        delta: { type: 'thinking_delta', thinking: 'Turn 2' } } },
+      state,
+    );
+  });
+
+  const blockResetLines = tagLines(captured, '[BLOCK_RESET]');
+  assert.equal(blockResetLines.length, 2, 'BLOCK_RESET must be emitted at each message_start in multi-turn loop');
+});

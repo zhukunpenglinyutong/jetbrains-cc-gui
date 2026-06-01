@@ -115,6 +115,20 @@ describe('useWindowCallbacks integration', () => {
     delete (window as unknown as Record<string, unknown>).__pendingPermissionDialogTimeout;
   });
 
+  /** Stub timer/rAF globals to execute synchronously for streaming tests. */
+  const stubSynchronousTimers = () => {
+    vi.stubGlobal('setTimeout', (callback: () => void) => {
+      callback();
+      return 1 as unknown as ReturnType<typeof setTimeout>;
+    });
+    vi.stubGlobal('clearTimeout', vi.fn());
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+  };
+
   afterEach(() => {
     vi.unstubAllGlobals();
   });
@@ -775,16 +789,7 @@ describe('useWindowCallbacks integration', () => {
   });
 
   it('accepts streaming updateMessages when assistant raw blocks gain spawn_agent tool_use', () => {
-    vi.stubGlobal('setTimeout', (callback: () => void) => {
-      callback();
-      return 1 as unknown as ReturnType<typeof setTimeout>;
-    });
-    vi.stubGlobal('clearTimeout', vi.fn());
-    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
-      callback(0);
-      return 1;
-    });
-    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    stubSynchronousTimers();
 
     const patchAssistantForStreaming = vi.fn((msg: ClaudeMessage) => ({
       ...msg,
@@ -858,7 +863,7 @@ describe('useWindowCallbacks integration', () => {
     renderHook(() => useWindowCallbacks(opts));
 
     act(() => {
-      window.onStreamStart?.();
+      window.onStreamStart?.('replay');
     });
 
     expect(opts.setMessages).toHaveBeenCalledTimes(1);
@@ -874,6 +879,42 @@ describe('useWindowCallbacks integration', () => {
     expect(nextMessages[1]).toMatchObject({
       type: 'assistant',
       content: 'partial answer',
+      isStreaming: true,
+      __turnId: 1,
+    });
+  });
+
+  it('starts a fresh assistant message for a new turn instead of reusing the previous completed assistant', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.onStreamStart?.();
+    });
+
+    expect(opts.setMessages).toHaveBeenCalledTimes(1);
+    const updater = (opts.setMessages as any).mock.calls[0][0] as (messages: ClaudeMessage[]) => ClaudeMessage[];
+    const previousMessages: ClaudeMessage[] = [
+      { type: 'user', content: 'previous question', timestamp: '2026-04-27T00:00:00.000Z' },
+      {
+        type: 'assistant',
+        content: 'previous answer',
+        timestamp: '2026-04-27T00:00:01.000Z',
+        durationMs: 1200,
+      },
+    ];
+
+    const nextMessages = updater(previousMessages);
+
+    expect(nextMessages).toHaveLength(3);
+    expect(nextMessages[1]).toMatchObject({
+      type: 'assistant',
+      content: 'previous answer',
+    });
+    expect(nextMessages[1]?.isStreaming).not.toBe(true);
+    expect(nextMessages[2]).toMatchObject({
+      type: 'assistant',
+      content: '',
       isStreaming: true,
       __turnId: 1,
     });
@@ -1163,6 +1204,219 @@ describe('useWindowCallbacks integration', () => {
       act(() => { window.onPermissionDenied!(); });
 
       expect(window.__deniedToolIds?.has('denied-1')).toBe(true);
+    });
+
+    it('stale backend snapshot during streaming must not redirect streamingMessageIndexRef to prior-turn assistant', () => {
+      stubSynchronousTimers();
+
+      const assistant1: ClaudeMessage = {
+        type: 'assistant',
+        content: 'Using tool',
+        timestamp: '2026-01-01T00:00:01Z',
+        __turnId: 1,
+        isStreaming: false,
+        raw: {
+          message: {
+            content: [
+              { type: 'tool_use', id: 't1', name: 'bash', input: { command: 'ls' } },
+              { type: 'text', text: 'Using tool' },
+            ],
+          },
+        } as never,
+      };
+      const userToolResult: ClaudeMessage = {
+        type: 'user', content: '', timestamp: '2026-01-01T00:00:02Z',
+        raw: { content: [{ type: 'tool_result', tool_use_id: 't1', content: 'ok' }] } as never,
+      };
+
+      const initialMessages: ClaudeMessage[] = [
+        { type: 'user', content: 'question', timestamp: '2026-01-01T00:00:00Z' },
+        assistant1,
+        userToolResult,
+      ];
+
+      const { opts, buffer } = createOptsWithMessages(initialMessages);
+      // Simulate that turn 1 already completed
+      opts.turnIdCounterRef.current = 1;
+
+      renderHook(() => useWindowCallbacks(opts));
+
+      // --- Turn 2: onStreamStart creates new assistant at the end ---
+      act(() => { window.onStreamStart!(); });
+
+      // Verify the updater appended the new assistant with __turnId=2
+      expect(buffer.current.length).toBe(4);
+      expect(buffer.current[3]).toMatchObject({
+        type: 'assistant',
+        isStreaming: true,
+        __turnId: 2,
+      });
+
+      const correctStreamingIdx = opts.streamingMessageIndexRef.current;
+      expect(correctStreamingIdx).toBe(3);
+
+      // --- Stale backend snapshot arrives (still only has assistant1) ---
+      const staleSnapshot = [
+        { type: 'user', content: 'question', timestamp: '2026-01-01T00:00:00Z' },
+        {
+          type: 'assistant',
+          content: 'Using tool',
+          timestamp: '2026-01-01T00:00:01Z',
+          __turnId: 1,
+          raw: {
+            message: {
+              content: [
+                { type: 'tool_use', id: 't1', name: 'bash', input: { command: 'ls' } },
+                { type: 'text', text: 'Using tool' },
+              ],
+            },
+          },
+        },
+        { type: 'user', content: '', timestamp: '2026-01-01T00:00:02Z',
+          raw: { content: [{ type: 'tool_result', tool_use_id: 't1', content: 'ok' }] } },
+      ];
+
+      act(() => {
+        window.updateMessages!(JSON.stringify(staleSnapshot));
+      });
+
+      // streamingMessageIndexRef must NOT be redirected to index 1 (assistant1)
+      expect(opts.streamingMessageIndexRef.current).toBe(correctStreamingIdx);
+    });
+
+    it('guard branch: stale snapshot with equal length bypasses preserveLatestMessagesOnShrink and still preserves index', () => {
+      stubSynchronousTimers();
+
+      const assistant1: ClaudeMessage = {
+        type: 'assistant',
+        content: 'First reply',
+        timestamp: '2026-01-01T00:00:01Z',
+        __turnId: 1,
+        isStreaming: false,
+        raw: {
+          message: {
+            content: [{ type: 'text', text: 'First reply' }],
+          },
+        } as never,
+      };
+
+      const initialMessages: ClaudeMessage[] = [
+        { type: 'user', content: 'hello', timestamp: '2026-01-01T00:00:00Z' },
+        assistant1,
+      ];
+
+      const { opts, buffer } = createOptsWithMessages(initialMessages);
+      opts.turnIdCounterRef.current = 1;
+
+      renderHook(() => useWindowCallbacks(opts));
+
+      // --- Turn 2: onStreamStart creates new assistant at the end ---
+      act(() => { window.onStreamStart!(); });
+
+      expect(buffer.current.length).toBe(3);
+      expect(buffer.current[2]).toMatchObject({
+        type: 'assistant',
+        isStreaming: true,
+        __turnId: 2,
+      });
+
+      const correctStreamingIdx = opts.streamingMessageIndexRef.current;
+      expect(correctStreamingIdx).toBe(2);
+
+      // --- Stale backend snapshot with SAME length as prev (3 messages) ---
+      // preserveLatestMessagesOnShrink sees patched.length(3) >= prev.length(3)
+      // and returns early, so findLastAssistantIndex finds assistant1 (__turnId=1).
+      // The guard must block the stale redirect.
+      const staleSnapshot = [
+        { type: 'user', content: 'hello', timestamp: '2026-01-01T00:00:00Z' },
+        {
+          type: 'assistant',
+          content: 'First reply',
+          timestamp: '2026-01-01T00:00:01Z',
+          __turnId: 1,
+          raw: { message: { content: [{ type: 'text', text: 'First reply' }] } },
+        },
+        // Extra user message makes the snapshot length (3) >= prev length (3),
+        // preventing preserveLatestMessagesOnShrink from re-appending the streaming assistant.
+        { type: 'user', content: 'extra', timestamp: '2026-01-01T00:00:02Z' },
+      ];
+
+      act(() => {
+        window.updateMessages!(JSON.stringify(staleSnapshot));
+      });
+
+      // streamingMessageIndexRef must NOT be redirected to index 1 (assistant1)
+      expect(opts.streamingMessageIndexRef.current).not.toBe(1);
+      // It must point to the correct streaming assistant (__turnId=2)
+      const finalIdx = opts.streamingMessageIndexRef.current;
+      expect(buffer.current[finalIdx]).toMatchObject({
+        type: 'assistant',
+        __turnId: 2,
+      });
+    });
+
+    it('onBlockReset clears streaming refs to prevent cross-turn content merging', () => {
+      stubSynchronousTimers();
+
+      const opts = createOptions();
+      renderHook(() => useWindowCallbacks(opts));
+
+      // Start streaming
+      act(() => { window.onStreamStart!(); });
+      expect(opts.isStreamingRef.current).toBe(true);
+
+      // Simulate first turn's thinking delta
+      act(() => { window.onThinkingDelta!('Turn1Thinking'); });
+      expect(opts.streamingThinkingRef.current).toBe('Turn1Thinking');
+
+      // Simulate first turn's content delta
+      act(() => { window.onContentDelta!('Turn1Content'); });
+      expect(opts.streamingContentRef.current).toBe('Turn1Content');
+
+      // Block reset signal arrives (new assistant message in stream)
+      act(() => { window.onBlockReset!(); });
+
+      // Streaming refs should be cleared
+      expect(opts.streamingThinkingRef.current).toBe('');
+      expect(opts.streamingContentRef.current).toBe('');
+
+      // But streaming should still be active
+      expect(opts.isStreamingRef.current).toBe(true);
+
+      // Second turn's deltas arrive - should NOT merge with first turn
+      act(() => { window.onThinkingDelta!('Turn2Thinking'); });
+      expect(opts.streamingThinkingRef.current).toBe('Turn2Thinking');
+
+      act(() => { window.onContentDelta!('Turn2Content'); });
+      expect(opts.streamingContentRef.current).toBe('Turn2Content');
+
+      // If onBlockReset was NOT called, we would have "Turn1ThinkingTurn2Thinking"
+      // and "Turn1ContentTurn2Content" (merged content)
+    });
+
+    it('onBlockReset is ignored when stream is not active', () => {
+      vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+        callback(0);
+        return 1;
+      });
+      vi.stubGlobal('cancelAnimationFrame', vi.fn());
+
+      const opts = createOptions();
+      renderHook(() => useWindowCallbacks(opts));
+
+      // Stream is NOT active
+      expect(opts.isStreamingRef.current).toBe(false);
+
+      // Pre-populate refs (simulating stale state)
+      opts.streamingThinkingRef.current = 'StaleThinking';
+      opts.streamingContentRef.current = 'StaleContent';
+
+      // Block reset arrives when stream is not active
+      act(() => { window.onBlockReset!(); });
+
+      // Refs should NOT be cleared (stale signal ignored)
+      expect(opts.streamingThinkingRef.current).toBe('StaleThinking');
+      expect(opts.streamingContentRef.current).toBe('StaleContent');
     });
   });
 });

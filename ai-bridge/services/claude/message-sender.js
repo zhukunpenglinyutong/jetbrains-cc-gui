@@ -30,7 +30,7 @@ import {
 import { createPreToolUseHook } from './permission-mode.js';
 import { loadMcpServersConfigAsRecord } from './mcp-status/config-loader.js';
 import { setActiveQueryResult } from './message-session-registry.js';
-import { normalizeStreamDelta, resolveSnapshotDelta } from './stream-delta-normalizer.js';
+import { normalizeStreamDelta, resolveSnapshotDelta, resetTurnBlockState } from './stream-delta-normalizer.js';
 import { generateSessionTitle } from '../session-title-service.js';
 
 // ========== Internal helpers for deduplication ==========
@@ -152,10 +152,21 @@ function processStreamMessage(msg, state, logPrefix) {
       // - message_start: ACCUMULATE usage across all turns (not reset!)
       // - message_delta: incremental output_tokens updates
       // - The accumulatedUsage represents the cumulative total across all turns in multi-turn tool use.
-      if (event.type === 'message_start' && event.message?.usage) {
-        // IMPORTANT: Must use mergeUsage(state.accumulatedUsage, ...) to accumulate across turns.
-        // Using mergeUsage(null, ...) would reset and only show the last turn's usage.
-        state.accumulatedUsage = mergeUsage(state.accumulatedUsage, event.message.usage);
+      if (event.type === 'message_start') {
+        // Turn boundary: re-numbered content blocks. Clear the index-keyed block
+        // maps so the prior turn's accumulator / locked stream-mode cannot corrupt
+        // or duplicate this turn's index-0 block (see resetTurnBlockState). Mirrors
+        // stream-event-processor.js — both streaming paths must reset identically.
+        resetTurnBlockState(state);
+        // Emit BLOCK_RESET — mirrors stream-event-processor.js, see there for rationale.
+        if (state.streamingEnabled) {
+          process.stdout.write('[BLOCK_RESET]\n');
+        }
+        if (event.message?.usage) {
+          // IMPORTANT: Must use mergeUsage(state.accumulatedUsage, ...) to accumulate across turns.
+          // Using mergeUsage(null, ...) would reset and only show the last turn's usage.
+          state.accumulatedUsage = mergeUsage(state.accumulatedUsage, event.message.usage);
+        }
       }
       if (event.type === 'message_delta' && event.usage) {
         state.accumulatedUsage = mergeUsage(state.accumulatedUsage, event.usage);

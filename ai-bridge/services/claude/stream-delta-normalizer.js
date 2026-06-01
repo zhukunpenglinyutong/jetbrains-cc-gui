@@ -114,3 +114,25 @@ export function resolveSnapshotDelta(turnState, kind, index, snapshot) {
   const delta = normalizeStreamDelta(turnState, kind, index, snapshot);
   return { delta, hadPrevious };
 }
+
+/**
+ * Reset all per-block streaming bookkeeping at an assistant-turn boundary.
+ *
+ * The content maps and the mode map are keyed by block INDEX, but every
+ * assistant turn — including each tool_use loop iteration — is its own message
+ * whose content blocks re-number from index 0. The whole request shares one
+ * turnState, so without clearing these at message_start the previous turn's
+ * index-0 accumulator and its locked 'snapshot' mode leak into the next turn:
+ * computeNovelDelta's snapshot-mode branch then absorbs the new turn's genuine
+ * deltas (novel='' → fragmented / vanished output, e.g. the "constifprev"
+ * garbled thinking) and a stale accumulator makes the tail-fill snapshot
+ * re-emit a whole block (duplication).
+ *
+ * Token usage is intentionally NOT reset here — it accumulates across turns and
+ * is owned by the caller's usage bookkeeping.
+ */
+export function resetTurnBlockState(turnState) {
+  turnState.textBlockContentByIndex = new Map();
+  turnState.thinkingBlockContentByIndex = new Map();
+  turnState.blockStreamModeByKey = new Map();
+}

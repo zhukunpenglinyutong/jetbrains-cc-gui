@@ -1,4 +1,4 @@
-##### **2026年5月23日（v0.4.4-Alpha1）**
+##### **2026年5月29日（v0.4.4）**
 
 English:
 
@@ -9,6 +9,8 @@ English:
 - Add in-conversation search panel (Cmd+F on macOS, Ctrl+F elsewhere): navigate matches with Prev/Next, Esc to close, hit count display; auto-expands collapsed folds when a hit lands inside; closes automatically when switching views to avoid clashing with HistoryFilters
 - Add Match Case / Whole Word / Regex toggles to the conversation search panel with Alt+C / Alt+W / Alt+R shortcuts; toggle state persisted via localStorage; regex mode surfaces an "Invalid regex" hint on compile failure
 - Add a "Don't ask again" checkbox to the new-session confirm dialog (preference persisted to localStorage); the matching switch is added to Settings → Basic → Behavior with two-way sync via CustomEvent. Interrupting a running AI still always confirms regardless of this preference
+- Add Claude Opus 4.8 model support: register `claude-opus-4-8` and `claude-opus-4-8[1m]` context limits (200K / 1M tokens), reasoning-effort mapping, and mark it as the latest flagship (Opus 4.7 demoted to previous flagship)
+- Add `spawn EBUSY` error pattern with two recommended fixes (check the Node.js version, reinstall the SDK from the official registry) across 11 locales
 - Add 10-language localization (zh, zh-TW, en, ja, ko, es, fr, pt-BR, ru, hi) for Node Process Manager, conversation search, and the new-session preference switch
 
 🐛 Fixes
@@ -19,24 +21,34 @@ English:
 - Fix `PromptEnhancerHandler` blocking on stalled SDK calls forever: `process.waitFor()` had no timeout and a synchronous `readLine()` on a stuck stream defeated cancellation. Output is now drained asynchronously and a 60s timeout is enforced
 - Fix `CodexSDKBridge.getMcpServerTools` race where concurrent calls overwrote each other's process reference in `ProcessManager`'s registry under the shared constant key `__codex_mcp_tools__`; each call now generates a unique UUID-suffixed channelId
 - Fix `daemon.js` parent-PID polling interval from 10s to 3s, tightening the worst-case orphan-daemon lifetime after a hard IDE crash
+- Fix character loss and duplication in streaming deltas: the incremental `computeNovelDelta` stale-replay `endsWith` check caused false positives (e.g. "1500" rendered as "150"), and an interim assistant snapshot arriving before stream events populated a block emitted the block text twice. The stale-replay check is now restricted to cumulative-snapshot mode and the premature snapshot delta is suppressed (by @Cyber0xFE)
+- Fix snapshot-path delta mis-slicing: snapshots were derived with a naive `substring(previousBlock.length)`, so a Claude-compatible provider emitting a mid-stream corrective rewrite (shared prefix, divergent middle) was mis-sliced or silently dropped. Snapshots now route through `resolveSnapshotDelta`, reusing the live `normalizeStreamDelta` novelty/correction engine so both paths share one source of truth
+- Fix new assistant turns being overwritten when the frontend reloads mid-stream: Java now sends `onStreamStart("replay")` to reuse the existing assistant message, while genuine new turns append a fresh message instead of clobbering the previous completed response (by @gadfly3173)
+- Fix cross-turn streaming state leak: per-block content/mode maps persisted across assistant turns within one request, so a normal turn-end locked the index-0 block into snapshot mode and leaked a stale accumulator into the next turn — fragmenting or vanishing thinking text and re-emitting whole blocks. Per-block state is now reset at each `message_start` (token usage still accumulates across turns)
+- Fix `PreToolUseHook` returning the invalid `permissionDecision: 'continue'` (not in the `HookPermissionDecision` enum `allow | deny | ask | defer`), which tripped the SDK Zod validator and surfaced as intermittent `ZodError: invalid_value` on every tool call. Replaced with the top-level `continue: true` yield signal across all four non-deny call sites (by @devlimits)
+- Fix JCEF render ghosting on macOS leaving stale pixels after session changes, and draft attachments drifting into a newly opened conversation. Added `forceWebviewRepaint` and a `useResetAttachmentsOnSessionChange` hook wired into clearMessages, session transitions, and changelog/banner dismissals
+- Fix `killByPid` being able to terminate arbitrary process trees: a malformed or hostile frontend payload could request killing any PID on the host. An ownership check now restricts termination to PIDs present in this JVM's process snapshot (security)
 
 🔧 Improvements
-- Add project-scoped `NodeProcessRegistry` service that aggregates Node process state across all chat windows (including detached windows) for unified inspection
+- Add project-scoped `NodeProcessRegistry` service that aggregates Node process state across all chat windows (including detached windows) for a unified inspection view
 - Expose `ProcessManager.getActiveChannelSnapshot()`, `BaseSDKBridge.getProcessManager()`, `ClaudeSDKBridge.getCurrentDaemonBridgeForInspection()`, `DaemonBridge.getDaemonProcessForInspection()` for read-only process inspection from the UI layer
 - Replace the daemon process label hard-coded as "claude" with the tab's current provider (claude/codex), so the panel matches what users see in the chat tab
 - Add `ProcessManager.newChannelId(prefix)` helper and route 7 call sites through it (consolidated channel-id generation)
+- Add an SDK hook output validator (`permission-mode-schema.js`) that runs on every hook return to guarantee the shape passes the SDK's Zod schema, guarding against the `permissionDecision` regression class; extract a frozen `YIELD_TO_SDK` constant to prevent the four yield branches from drifting apart
 - Categorise reader-thread failures in `ClaudeRewindService` and `PromptEnhancerProcessRunner` (IOException = expected on kill, RuntimeException = real bug logged with stack); replace magic 60s/5s timeouts with named constants
-- Replace `boolean[1]` lambda-capture trick in `NodeProcessRegistry` with `AtomicBoolean` to satisfy Checkstyle (semantically equivalent, no behaviour change)
+- Replace the `boolean[1]` lambda-capture trick in `NodeProcessRegistry` with `AtomicBoolean` to satisfy Checkstyle (semantically equivalent, no behaviour change)
 
 中文：
 
 ✨ 新功能
 - 在聊天设置菜单中（"切换当前供应商"下方）新增「Node 进程管理」面板，集中展示本项目所有 Node.js 子进程。按守护进程 / 进行中对话 / 孤立进程三类分组，每个进程显示 PID、运行时长、内存占用，并提供终止 / 重启 / 中断按钮。底部一键"清理所有孤立进程"按钮，专治长时间使用后的 Node 进程堆积
-- 新增孤立进程扫描器：用 `ProcessHandle.allProcesses()` 扫描系统级 Node 进程，找出含 `daemon.js` / `channel-manager.js` 但不在我们注册表中的进程，在面板中以红色警告高亮显示，让用户能手动终止插件未能正确清理的失控进程
+- 新增孤立进程扫描器：扫描系统级 Node 进程，找出含 `daemon.js` / `channel-manager.js` 但不在我们注册表中的进程，在面板中以红色警告高亮显示，让用户能手动终止插件未能正确清理的失控进程
 - 设置菜单实时显示进程总数徽章：正常时灰色显示总数，检测到孤立进程时变为红色 ⚠ 警告
 - 新增会话内搜索面板：macOS 下 Cmd+F、其他平台 Ctrl+F 唤起；支持上一个/下一个匹配、Esc 关闭、命中计数显示；命中折叠区域时自动展开早期消息并提示展开数量；切换视图时自动关闭，避免与 HistoryFilters 冲突
 - 会话内搜索新增 Match Case / Whole Word / Regex 三个模式开关，对应 Alt+C / Alt+W / Alt+R 快捷键；开关状态通过 localStorage 持久化；正则模式下编译失败时显示 Invalid regex 错误提示
 - 新建会话确认弹窗新增"不再提示"复选框，偏好持久化到 localStorage；设置 → 基础 → 行为页同步增加对应开关，与对话框通过 CustomEvent 双向联动。中断运行中 AI 的危险操作始终强制确认，不受此偏好影响
+- 新增 Claude Opus 4.8 模型支持：注册 `claude-opus-4-8` 与 `claude-opus-4-8[1m]` 上下文限制（200K / 1M tokens）、reasoning-effort 映射，并标记为最新旗舰（Opus 4.7 降为前代旗舰）
+- 新增 `spawn EBUSY` 错误模式，提供两个推荐解决方案（检查 Node.js 版本、从官方源重装 SDK），覆盖 11 种语言
 - Node 进程管理、会话内搜索、新建会话偏好开关支持 10 种语言（中简、中繁、英、日、韩、西、法、葡、俄、印地）
 
 🐛 修复
@@ -47,12 +59,20 @@ English:
 - 修复 `PromptEnhancerHandler` 在 SDK 卡死时永久阻塞调用线程的问题：`process.waitFor()` 没有超时，且同步 `readLine()` 读卡住的流根本无法被超时打断。改为异步消耗 stdout + 60 秒硬性超时
 - 修复 `CodexSDKBridge.getMcpServerTools` 并发竞争：之前用常量 key `__codex_mcp_tools__` 注册到 `ProcessManager`，并发调用会互相覆盖 Process 引用，被覆盖的子进程无法再被取消注册。现在每次调用生成 UUID 后缀的唯一 channelId
 - 修复 `daemon.js` 父进程心跳从 10s 缩短到 3s，IDE 硬崩溃后 daemon 最长存活时间从 10 秒收紧到 3 秒
+- 修复流式增量中字符丢失和重复的问题：增量模式下 `computeNovelDelta` 的 `endsWith` 陈旧重放检测误判（例如 "1500" 被渲染成 "150"），且流事件尚未填充内容块时提前到达的助手快照会把整块文本重复输出一次。现在陈旧重放检测仅在累积快照模式下生效，并抑制过早的快照 delta（by @Cyber0xFE）
+- 修复快照路径 delta 错误切片的问题：快照之前用朴素的 `substring(previousBlock.length)` 计算，导致 Claude 兼容 provider 发出的中途修正重写（共享前缀、中段分叉）被错误切片或静默丢弃。现在快照统一走 `resolveSnapshotDelta`，复用实时路径的 `normalizeStreamDelta` 新增/修正引擎，两条路径共享同一处真相来源
+- 修复前端在流式过程中重载时新一轮回复被覆盖的问题：Java 现在发送 `onStreamStart("replay")` 复用现有助手消息，而真正的新一轮回复会追加一条全新消息，不再覆盖上一条已完成的回复（by @gadfly3173）
+- 修复跨 turn 的流式状态泄漏：一次请求内的 per-block 内容/模式 map 会在多轮助手回复间残留，正常的一轮结束会把 index-0 块锁定为快照模式，并把陈旧累积器泄漏到下一轮——导致思考文本碎裂或消失、整块内容被重复输出。现在每次 `message_start` 都重置 per-block 状态（token 用量仍跨轮累积）
+- 修复 `PreToolUseHook` 返回非法的 `permissionDecision: 'continue'`（不在 `HookPermissionDecision` 枚举 `allow | deny | ask | defer` 中）导致触发 SDK Zod 校验、每次工具调用都间歇性抛出 `ZodError: invalid_value` 的问题。改用 `SyncHookJSONOutput` 顶层的 `continue: true` 让行字段，覆盖全部四个非 deny 调用点（by @devlimits）
+- 修复 macOS 上 JCEF 渲染残影（会话切换后残留旧像素）以及草稿附件漂移到新会话的问题。新增 `forceWebviewRepaint` 与 `useResetAttachmentsOnSessionChange` Hook，接入 clearMessages、会话切换、更新日志弹窗与横幅关闭等时机
+- 修复 `killByPid` 可终止任意进程树的问题：格式错误或恶意的前端 payload 可请求杀死宿主机上任意 PID。现在加入所有权校验，仅终止当前 JVM 进程快照中存在的 PID（安全）
 
 🔧 改进
 - 新增项目级 `NodeProcessRegistry` 服务，跨所有聊天窗口（含游离窗口）聚合 Node 进程数据，实现统一管理视图
 - 暴露 `ProcessManager.getActiveChannelSnapshot()`、`BaseSDKBridge.getProcessManager()`、`ClaudeSDKBridge.getCurrentDaemonBridgeForInspection()`、`DaemonBridge.getDaemonProcessForInspection()` 用于只读进程检视
 - 进程面板的 daemon 标签从硬编码 "claude" 改为读取 Tab 当前 provider（claude/codex），与用户在聊天 Tab 看到的供应商完全一致
 - 新增 `ProcessManager.newChannelId(prefix)` 统一生成 channelId，收编 7 个调用点
+- 新增 SDK hook 返回值校验器（`permission-mode-schema.js`），在每次 hook 返回时运行，确保返回结构能通过 SDK 的 Zod 校验，防范 `permissionDecision` 类回归；并提取冻结常量 `YIELD_TO_SDK`，防止四个让行分支各自漂移
 - `ClaudeRewindService` / `PromptEnhancerProcessRunner` 中区分 reader 线程异常分类（IOException = 终止时预期，RuntimeException = 真 bug，带堆栈记录）；用具名常量替换魔法数 60s / 5s
 - `NodeProcessRegistry` 中用 `AtomicBoolean` 替换 `boolean[1]` 的 lambda 闭包绕过技巧，满足 Checkstyle 要求（行为等价无差异）
 

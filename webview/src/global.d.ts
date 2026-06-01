@@ -610,7 +610,7 @@ interface Window {
   /**
    * Stream start callback - called when streaming begins
    */
-  onStreamStart?: () => void;
+  onStreamStart?: (mode?: string | boolean) => void;
 
   /**
    * Content delta callback - called when a content delta is received
@@ -623,6 +623,13 @@ interface Window {
    * @param delta The thinking delta string
    */
   onThinkingDelta?: (delta: string) => void;
+
+  /**
+   * Block reset callback - called when a new assistant message starts within
+   * an ongoing stream (e.g., after a tool_use loop iteration). Frontend should
+   * clear streaming content refs to prevent cross-turn content merging.
+   */
+  onBlockReset?: () => void;
 
   /**
    * Stream end callback - called when streaming ends

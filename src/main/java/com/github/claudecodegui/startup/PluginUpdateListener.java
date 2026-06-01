@@ -1,12 +1,9 @@
 package com.github.claudecodegui.startup;
 
-import com.github.claudecodegui.util.PlatformUtils;
-import com.intellij.ide.plugins.IdeaPluginDescriptor;
-import com.intellij.ide.plugins.PluginManager;
+import com.github.claudecodegui.util.PluginMetadata;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.openapi.extensions.PluginId;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.startup.ProjectActivity;
 import kotlin.Unit;
@@ -42,16 +39,7 @@ public class PluginUpdateListener implements ProjectActivity {
      */
     private void checkAndCleanupOldCache() {
         try {
-            // Look up our own plugin descriptor. findEnabledPlugin is safe because
-            // this listener only runs after our plugin has been loaded (i.e. enabled).
-            PluginId pluginId = PluginId.getId(PlatformUtils.getPluginId());
-            IdeaPluginDescriptor descriptor = PluginManager.getInstance().findEnabledPlugin(pluginId);
-            if (descriptor == null) {
-                LOG.debug("[PluginUpdateListener] Plugin descriptor not found");
-                return;
-            }
-
-            String currentVersion = descriptor.getVersion();
+            String currentVersion = PluginMetadata.getPluginVersion();
             PropertiesComponent props = PropertiesComponent.getInstance();
             String lastVersion = props.getValue(LAST_VERSION_KEY);
 

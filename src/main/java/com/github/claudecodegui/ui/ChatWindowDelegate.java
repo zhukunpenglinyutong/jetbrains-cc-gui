@@ -542,7 +542,7 @@ public class ChatWindowDelegate {
             boolean streamActive = host.getStreamCoalescer().isStreamActive();
             if (streamActive) {
                 LOG.debug("Replaying streaming state to frontend (session was actively streaming during reload)");
-                host.callJavaScript("onStreamStart");
+                host.callJavaScript("onStreamStart", "replay");
             }
 
             LOG.info("Replayed current session state to frontend: sessionId="

@@ -205,8 +205,9 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     }, STREAM_STALL_CHECK_INTERVAL_MS);
   };
 
-  window.onStreamStart = () => {
+  window.onStreamStart = (mode?: string | boolean) => {
     if (window.__sessionTransitioning) return;
+    const isReplayStart = mode === 'replay' || mode === true;
     // Clear any stale pending updateMessages from previous turn.
     // This prevents onStreamEnd from using outdated snapshot data.
     if (typeof window.__cancelPendingUpdateMessages === 'function') {
@@ -254,7 +255,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     scopeState.minAcceptedSequence = 0;
     setMessages((prev) => {
       const last = prev[prev.length - 1];
-      if (last?.type === 'assistant') {
+      if (isReplayStart && last?.type === 'assistant') {
         streamingMessageIndexRef.current = prev.length - 1;
         scopeState.messageIndex = streamingMessageIndexRef.current;
         const updated = [...prev];
@@ -667,5 +668,37 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     for (const id of idsToAdd) {
       window.__deniedToolIds!.add(id);
     }
+  };
+
+  // Block reset callback — clears streaming content refs when a new assistant
+  // message starts within an ongoing stream (e.g., after tool_use loop iteration).
+  // This prevents cross-turn content merging where new thinking/text deltas
+  // would append to previous turn's buffered content.
+  window.onBlockReset = () => {
+    if (!isStreamingRef.current) {
+      // Stream not active, ignore (could be stale signal after stream ended)
+      return;
+    }
+    // Clear content buffers - new deltas will start fresh
+    streamingContentRef.current = '';
+    streamingThinkingRef.current = '';
+    // Intentionally NOT resetting streamingMessageIndexRef here: the backend will
+    // send a new updateMessages snapshot for this turn, which will eventually set
+    // the correct index via the isStaleSnapshot guard. Resetting the index now
+    // would leave a window where incoming deltas have nowhere to land.
+    // Reset throttle timeouts to ensure clean state for new deltas
+    if (contentUpdateTimeoutRef.current != null) {
+      cancelAnimationFrame(contentUpdateTimeoutRef.current);
+      contentUpdateTimeoutRef.current = null;
+    }
+    if (thinkingUpdateTimeoutRef.current != null) {
+      cancelAnimationFrame(thinkingUpdateTimeoutRef.current);
+      thinkingUpdateTimeoutRef.current = null;
+    }
+    // Reset last update timestamps to prevent throttle delays
+    lastContentUpdateRef.current = 0;
+    lastThinkingUpdateRef.current = 0;
+    // Clear auto-expanded thinking keys for the new turn
+    autoExpandedThinkingKeysRef.current.clear();
   };
 }

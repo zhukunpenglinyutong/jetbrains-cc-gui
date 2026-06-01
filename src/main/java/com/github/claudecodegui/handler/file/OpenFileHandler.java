@@ -13,9 +13,9 @@ import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.ScrollType;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.Computable;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.search.FilenameIndex;
 import com.intellij.psi.search.GlobalSearchScope;
@@ -216,7 +216,7 @@ class OpenFileHandler {
         String pathSuffix = extractPathSuffix(pathHint);
 
         // FilenameIndex requires read access
-        return ReadAction.compute(() -> {
+        return ApplicationManager.getApplication().runReadAction((Computable<VirtualFile>) () -> {
             // Search for files with matching name in project scope
             Collection<VirtualFile> matches = FilenameIndex.getVirtualFilesByName(
                 fileName,
