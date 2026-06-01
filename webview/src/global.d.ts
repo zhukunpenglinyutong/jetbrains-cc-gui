@@ -708,6 +708,13 @@ interface Window {
    __streamEndProcessedTurnId?: number;
 
    /**
+   * Source of the last onStreamEnd call ('watchdog' | 'backend').
+   * Used for diagnostic logging to identify premature stream-end events.
+   * Set by the stall watchdog before calling onStreamEnd, cleared after processing.
+   */
+  __lastStreamEndSource?: string;
+
+   /**
    * Timestamp when the current streaming turn started.
    * Used to calculate durationMs on the assistant message when the stream ends.
    */

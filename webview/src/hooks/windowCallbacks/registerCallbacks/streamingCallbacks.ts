@@ -127,14 +127,18 @@ export function collectUnresolvedToolUseIds(
  * auto-recovers by forcing the stream-end cleanup.  This guards against the
  * backend onStreamEnd signal being silently dropped by JCEF.
  *
- * Set to 60s to avoid false positives during long tool execution phases
- * (e.g., command execution, file operations) where no content deltas arrive
- * but the backend is still actively processing.  The backend heartbeat
- * mechanism in StreamMessageCoalescer keeps __lastStreamActivityAt bumped
- * via periodic updateMessages re-pushes.
+ * Set to 180s (3 minutes) to avoid false positives during long tool execution
+ * phases (e.g., command execution, file operations, extended model thinking)
+ * where no content deltas arrive but the backend is still actively processing.
+ * The backend heartbeat mechanism in StreamMessageCoalescer keeps
+ * __lastStreamActivityAt bumped via periodic onStreamingHeartbeat calls.
+ *
+ * Previous value of 60s was too aggressive — the EDT can stall for tens of
+ * seconds during large JCEF payload processing or IntelliJ indexing, causing
+ * heartbeat JS calls to be queued and the watchdog to fire before they execute.
  */
-const STREAM_STALL_TIMEOUT_MS = 60_000;
-const STREAM_STALL_CHECK_INTERVAL_MS = 5_000;
+const STREAM_STALL_TIMEOUT_MS = 180_000;
+const STREAM_STALL_CHECK_INTERVAL_MS = 10_000;
 
 export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): void {
   const {
@@ -191,12 +195,18 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
         clearStallWatchdog();
         return;
       }
-      const elapsed = Date.now() - getScopeLastActivityAt(activeScopeKey);
+      const elapsedScope = Date.now() - getScopeLastActivityAt(activeScopeKey);
+      const elapsedGlobal = window.__lastStreamActivityAt
+        ? Date.now() - window.__lastStreamActivityAt
+        : Infinity;
+      const elapsed = Math.max(elapsedScope, elapsedGlobal);
       if (elapsed >= STREAM_STALL_TIMEOUT_MS) {
         console.warn(
-          `[StreamWatchdog] Stream stalled for ${elapsed}ms — forcing stream-end recovery`,
+          `[StreamWatchdog] Stream stalled for ${elapsed}ms (scope=${elapsedScope}ms, global=${elapsedGlobal}ms) — forcing stream-end recovery`,
         );
         clearStallWatchdog();
+        // Tag this as a watchdog-triggered recovery so onStreamEnd can log the source
+        window.__lastStreamEndSource = 'watchdog';
         // Trigger the same cleanup as onStreamEnd
         if (typeof window.onStreamEnd === 'function') {
           window.onStreamEnd();
@@ -375,6 +385,15 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
 
   window.onStreamEnd = (sequence?: string | number) => {
     if (window.__sessionTransitioning) return;
+
+    // Diagnostic: log the source of onStreamEnd for debugging premature stream-end issues
+    const source = window.__lastStreamEndSource || 'backend';
+    window.__lastStreamEndSource = undefined;
+    if (source === 'watchdog') {
+      console.warn('[onStreamEnd] Triggered by stall watchdog recovery — possible premature stream-end');
+    } else {
+      console.log(`[onStreamEnd] Triggered by ${source} (sequence=${sequence})`);
+    }
 
     // Idempotency guard: dual-path delivery (primary via flush callback +
     // fallback via Alarm) may send onStreamEnd twice for the same turn.
