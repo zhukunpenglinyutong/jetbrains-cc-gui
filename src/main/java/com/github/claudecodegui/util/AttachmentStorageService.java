@@ -238,6 +238,10 @@ public final class AttachmentStorageService {
         }
     }
 
+    Path getStoreDir() {
+        return storeDir;
+    }
+
     private void ensureDirectories() throws IOException {
         pathManager.ensureConfigDirectory();
         Files.createDirectories(attachmentRoot);

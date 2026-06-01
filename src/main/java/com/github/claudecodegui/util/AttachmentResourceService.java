@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -12,6 +13,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Stream;
 
 /**
  * Registers persisted attachment files behind opaque JCEF-served URLs.
@@ -49,7 +51,9 @@ public final class AttachmentResourceService {
         String extension = extensionForPath(canonicalPath);
         String token = tokenFor(canonicalPath, lastModified, length);
         String version = lastModified + "-" + length;
-        String url = ATTACHMENT_RESOURCE_ORIGIN + "/" + token + extension + "?v=" + version;
+        String pathHint = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(canonicalPath.getBytes(StandardCharsets.UTF_8));
+        String url = ATTACHMENT_RESOURCE_ORIGIN + "/" + token + extension + "?v=" + version + "&p=" + pathHint;
         AttachmentResource resource = new AttachmentResource(
                 canonicalFile.toPath(),
                 length,
@@ -89,10 +93,89 @@ public final class AttachmentResourceService {
         AttachmentResource resource = ATTACHMENT_RESOURCES.get(token);
         if (resource == null || !resource.isCurrent()) {
             ATTACHMENT_RESOURCES.remove(token);
-            return null;
+            resource = rebuildResourceFromUrl(token, fileName, uri.getRawQuery());
+            if (resource == null) {
+                return null;
+            }
         }
 
         return resource;
+    }
+
+    private static AttachmentResource rebuildResourceFromUrl(String token, String fileName, String rawQuery) {
+        try {
+            Path hintedPath = pathHintFromQuery(rawQuery);
+            if (matchesToken(hintedPath, token)) {
+                return registerAttachmentFile(hintedPath.toFile(), null);
+            }
+
+            Path storeDir = AttachmentStorageService.getInstance().getStoreDir();
+            if (storeDir == null || !Files.isDirectory(storeDir)) {
+                return null;
+            }
+
+            Path candidate = storeDir.resolve(fileName);
+            if (matchesToken(candidate, token)) {
+                return registerAttachmentFile(candidate.toFile(), null);
+            }
+
+            try (Stream<Path> stream = Files.list(storeDir)) {
+                Path matched = stream
+                        .filter(Files::isRegularFile)
+                        .filter(path -> matchesToken(path, token))
+                        .findFirst()
+                        .orElse(null);
+                if (matched == null) {
+                    return null;
+                }
+                return registerAttachmentFile(matched.toFile(), null);
+            }
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static Path pathHintFromQuery(String rawQuery) {
+        if (rawQuery == null || rawQuery.isBlank()) {
+            return null;
+        }
+        String[] pairs = rawQuery.split("&");
+        for (String pair : pairs) {
+            int separator = pair.indexOf('=');
+            String key = separator >= 0 ? pair.substring(0, separator) : pair;
+            if (!"p".equals(key)) {
+                continue;
+            }
+            String encodedPath = separator >= 0 ? pair.substring(separator + 1) : "";
+            if (encodedPath.isBlank()) {
+                return null;
+            }
+            try {
+                byte[] decoded = Base64.getUrlDecoder().decode(encodedPath);
+                return Path.of(new String(decoded, StandardCharsets.UTF_8));
+            } catch (IllegalArgumentException e) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private static boolean matchesToken(Path candidate, String token) {
+        if (candidate == null || token == null || token.isBlank()) {
+            return false;
+        }
+        try {
+            File canonicalFile = candidate.toFile().getCanonicalFile();
+            if (!canonicalFile.isFile()) {
+                return false;
+            }
+            String canonicalPath = canonicalFile.getPath();
+            long lastModified = canonicalFile.lastModified();
+            long length = canonicalFile.length();
+            return token.equals(tokenFor(canonicalPath, lastModified, length));
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     private static URI parseUri(String url) {
