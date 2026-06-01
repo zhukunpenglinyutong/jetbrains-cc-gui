@@ -41,7 +41,6 @@ describe('acpContext', () => {
       {
         type: 'user',
         message: {
-          role: 'user',
           content: ACP_SAMPLE,
         },
       },
