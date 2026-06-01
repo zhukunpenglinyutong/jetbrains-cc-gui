@@ -224,6 +224,10 @@ public class ClaudeMessageHandler implements MessageCallback {
             LOG.debug("Ignoring stale Claude callback completion for epoch: " + expectedRuntimeSessionEpoch);
             return;
         }
+        if (result != null && result.interrupted) {
+            handleInterruptedCompletion(result);
+            return;
+        }
         if (result != null && !result.success && result.error != null && !result.error.isBlank() && !errorReportedThisTurn) {
             onError(result.error);
             return;
@@ -276,6 +280,41 @@ public class ClaudeMessageHandler implements MessageCallback {
             callbackHandler.notifyStreamEnd();
         }
 
+        callbackHandler.notifyQueueDisplayStateChanged(state.getQueueDisplayState(), state.getQueueAheadCount());
+        callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+    }
+
+    private void handleInterruptedCompletion(SDKResult result) {
+        boolean wasStreaming = isStreaming;
+        isStreaming = false;
+        textSegmentActive = false;
+        thinkingSegmentActive = false;
+        replayDedup.reset();
+
+        if (isThinking) {
+            isThinking = false;
+            callbackHandler.notifyThinkingStatusChanged(false);
+        }
+
+        errorReportedThisTurn = false;
+        lastReportedError = null;
+        state.setError(null);
+        state.setBusy(false);
+        state.setLoading(false);
+        state.updateLastModifiedTime();
+        state.setQueueDisplayState(ClaudeSession.SessionCallback.QueueDisplayState.COMPLETED);
+        state.setQueueAheadCount(0);
+
+        String interruptionMessage = result.error;
+        if (interruptionMessage != null && !interruptionMessage.isBlank()) {
+            state.addMessage(new Message(Message.Type.ASSISTANT, interruptionMessage));
+        }
+
+        callbackHandler.notifyMessageUpdate(state.getMessages());
+        if (wasStreaming && !streamEndedThisTurn) {
+            callbackHandler.notifyStreamEnd();
+        }
+        streamEndedThisTurn = false;
         callbackHandler.notifyQueueDisplayStateChanged(state.getQueueDisplayState(), state.getQueueAheadCount());
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
     }

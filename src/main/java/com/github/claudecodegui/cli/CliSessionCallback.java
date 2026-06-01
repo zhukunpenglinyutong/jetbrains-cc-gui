@@ -8,4 +8,8 @@ public interface CliSessionCallback {
     void onMessage(String type, String content);
     void onError(String error);
     void onComplete(boolean success, String finalResult, String error);
+
+    default void onInterrupted(String finalResult, String message) {
+        onComplete(false, finalResult, message);
+    }
 }

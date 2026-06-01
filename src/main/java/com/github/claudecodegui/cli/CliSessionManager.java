@@ -112,6 +112,16 @@ public class CliSessionManager {
                 result.error = error;
                 callback.onComplete(result);
             }
+
+            @Override
+            public void onInterrupted(String finalResult, String message) {
+                SDKResult result = SDKResult.error(message);
+                result.success = false;
+                result.interrupted = true;
+                result.finalResult = finalResult;
+                result.error = message;
+                callback.onComplete(result);
+            }
         };
     }
 }

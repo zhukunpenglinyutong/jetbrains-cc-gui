@@ -159,6 +159,10 @@ public class CodexMessageHandler implements MessageCallback {
      */
     @Override
     public void onComplete(SDKResult result) {
+        if (result != null && result.interrupted) {
+            handleInterruptedCompletion(result);
+            return;
+        }
         boolean streamEndedBeforeComplete = streamEndedThisTurn;
         boolean wasStreaming = isStreaming;
 
@@ -173,6 +177,34 @@ public class CodexMessageHandler implements MessageCallback {
         if (wasStreaming && !streamEndedBeforeComplete) {
             LOG.warn("Codex onComplete called without prior stream_end; forcing stream cleanup");
             callbackHandler.notifyMessageUpdate(state.getMessages());
+            callbackHandler.notifyStreamEnd();
+        }
+
+        resetStreamingAccumulator();
+        callbackHandler.notifyQueueDisplayStateChanged(state.getQueueDisplayState(), state.getQueueAheadCount());
+        callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+    }
+
+    private void handleInterruptedCompletion(SDKResult result) {
+        boolean streamEndedBeforeComplete = streamEndedThisTurn;
+        boolean wasStreaming = isStreaming;
+
+        isStreaming = false;
+        streamEndedThisTurn = false;
+        resetThinkingStatus();
+        state.setError(null);
+        state.setBusy(false);
+        state.setLoading(false);
+        state.setQueueDisplayState(ClaudeSession.SessionCallback.QueueDisplayState.COMPLETED);
+        state.setQueueAheadCount(0);
+        state.updateLastModifiedTime();
+
+        if (result.error != null && !result.error.isBlank()) {
+            state.addMessage(new Message(Message.Type.ASSISTANT, result.error));
+        }
+
+        callbackHandler.notifyMessageUpdate(state.getMessages());
+        if (wasStreaming && !streamEndedBeforeComplete) {
             callbackHandler.notifyStreamEnd();
         }
 
@@ -665,11 +697,46 @@ public class CodexMessageHandler implements MessageCallback {
      * @param content visible content
      */
     private void rewriteUserRawContent(com.google.gson.JsonObject msg, String content) {
+        com.google.gson.JsonArray existingContent = null;
+        if (msg.has("message") && msg.get("message").isJsonObject()) {
+            com.google.gson.JsonObject message = msg.getAsJsonObject("message");
+            if (message.has("content") && message.get("content").isJsonArray()) {
+                existingContent = message.getAsJsonArray("content");
+            }
+        } else if (msg.has("content") && msg.get("content").isJsonArray()) {
+            existingContent = msg.getAsJsonArray("content");
+        }
+
         com.google.gson.JsonArray contentBlocks = new com.google.gson.JsonArray();
-        com.google.gson.JsonObject textBlock = new com.google.gson.JsonObject();
-        textBlock.addProperty("type", "text");
-        textBlock.addProperty("text", content);
-        contentBlocks.add(textBlock);
+        boolean textUpdated = false;
+        if (existingContent != null) {
+            for (com.google.gson.JsonElement element : existingContent) {
+                if (!element.isJsonObject()) {
+                    continue;
+                }
+                com.google.gson.JsonObject block = element.getAsJsonObject().deepCopy();
+                String blockType = block.has("type") && !block.get("type").isJsonNull()
+                        ? block.get("type").getAsString()
+                        : null;
+                if ("text".equals(blockType) || "input_text".equals(blockType) || "output_text".equals(blockType)) {
+                    if (!textUpdated) {
+                        block.addProperty("type", "text");
+                        block.addProperty("text", content);
+                        contentBlocks.add(block);
+                        textUpdated = true;
+                    }
+                } else {
+                    contentBlocks.add(block);
+                }
+            }
+        }
+
+        if (!textUpdated) {
+            com.google.gson.JsonObject textBlock = new com.google.gson.JsonObject();
+            textBlock.addProperty("type", "text");
+            textBlock.addProperty("text", content);
+            contentBlocks.add(textBlock);
+        }
 
         if (msg.has("message") && msg.get("message").isJsonObject()) {
             msg.getAsJsonObject("message").add("content", contentBlocks);

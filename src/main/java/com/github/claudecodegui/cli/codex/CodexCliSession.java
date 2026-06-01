@@ -18,9 +18,17 @@ import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.charset.Charset;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CharsetDecoder;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -130,14 +138,25 @@ public class CodexCliSession {
                 activeHandle = new CliProcessHandle(process, "codex-tab-" + tabId);
 
                 StringBuilder assistantContent = new StringBuilder();
-                try (BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        if (!line.isBlank()) {
-                            CliErrorFormatter.appendDiagnosticLine(diagnostic, line);
-                            parseEvent(line, callback, assistantContent, cliError);
+                // 逐行读取原始字节，先尝试 UTF-8 解码，失败则回退到平台默认编码（Windows GBK）。
+                // 这解决了 Node.js (UTF-8) 和 cmd.exe (GBK) 混合输出的编码问题。
+                try (InputStream rawIn = process.getInputStream()) {
+                    ByteArrayOutputStream lineBuf = new ByteArrayOutputStream();
+                    byte[] readBuf = new byte[8192];
+                    int n;
+                    while ((n = rawIn.read(readBuf)) != -1) {
+                        for (int i = 0; i < n; i++) {
+                            byte b = readBuf[i];
+                            if (b == '\n') {
+                                processLine(lineBuf, diagnostic, callback, assistantContent, cliError);
+                            } else {
+                                lineBuf.write(b);
+                            }
                         }
+                    }
+                    // 处理最后一行（无尾随换行符）
+                    if (lineBuf.size() > 0) {
+                        processLine(lineBuf, diagnostic, callback, assistantContent, cliError);
                     }
                 }
 
@@ -146,7 +165,7 @@ public class CodexCliSession {
                 boolean interrupted = activeHandle.wasInterrupted();
 
                 if (interrupted) {
-                    callback.onComplete(false, assistantContent.toString(), "User interrupted");
+                    callback.onInterrupted(assistantContent.toString(), "__I18N__:chat.requestInterrupted");
                 } else if (exitCode == 0) {
                     if (!cliError.isEmpty()) {
                         String err = formatCodexError(cliError.toString(), requestHasImages);
@@ -838,6 +857,50 @@ public class CodexCliSession {
         }
         return UNSUPPORTED_IMAGE_CONTEXT_PATTERN.matcher(details).find()
                 && UNSUPPORTED_IMAGE_REASON_PATTERN.matcher(details).find();
+    }
+
+    /**
+     * 处理一行原始字节数据：解码为字符串后交给 parseEvent。
+     * Windows 上 Node.js 管道输出是 UTF-8，但 cmd.exe 错误信息可能是 GBK 编码。
+     */
+    private void processLine(
+            ByteArrayOutputStream lineBuf,
+            StringBuilder diagnostic,
+            CliSessionCallback callback,
+            StringBuilder assistantContent,
+            StringBuilder cliError
+    ) {
+        byte[] bytes = lineBuf.toByteArray();
+        lineBuf.reset();
+        // 去掉尾部 \r
+        int len = bytes.length;
+        if (len > 0 && bytes[len - 1] == '\r') {
+            len--;
+        }
+        if (len == 0) return;
+
+        String line = decodeLine(bytes, len);
+        if (!line.isBlank()) {
+            CliErrorFormatter.appendDiagnosticLine(diagnostic, line);
+            parseEvent(line, callback, assistantContent, cliError);
+        }
+    }
+
+    /**
+     * 先尝试 UTF-8 解码，如果遇到无效字节序列则回退到平台默认编码。
+     * 这样可以同时正确处理 Node.js 的 UTF-8 JSON 输出和 cmd.exe 的 GBK 错误信息。
+     */
+    private static String decodeLine(byte[] bytes, int len) {
+        CharsetDecoder utf8Decoder = StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT);
+        try {
+            CharBuffer cb = utf8Decoder.decode(ByteBuffer.wrap(bytes, 0, len));
+            return cb.toString();
+        } catch (CharacterCodingException e) {
+            // UTF-8 解码失败，使用平台默认编码（Windows 中文系统为 GBK）
+            return new String(bytes, 0, len, Charset.defaultCharset());
+        }
     }
 
     private static void cleanupTempFiles(List<File> files) {
