@@ -309,11 +309,18 @@ export function registerMessageCallbacks(
 
         const patchedAssistantIdx = findLastAssistantIndex(patched);
         if (patchedAssistantIdx >= 0 && patched[patchedAssistantIdx]?.type === 'assistant') {
-          streamingMessageIndexRef.current = patchedAssistantIdx;
-          patched[patchedAssistantIdx] = patchAssistantForStreaming({
-            ...patched[patchedAssistantIdx],
-            __turnId: streamingTurnIdRef.current,
-          });
+          const patchedAssistant = patched[patchedAssistantIdx];
+          const currentTurnId = streamingTurnIdRef.current;
+          // Stale: backend snapshot hasn't caught up — findLastAssistantIndex returns prior turn's assistant
+          const isStaleSnapshot = currentTurnId > 0 && patchedAssistant.__turnId !== undefined
+            && patchedAssistant.__turnId !== currentTurnId;
+          if (!isStaleSnapshot) {
+            streamingMessageIndexRef.current = patchedAssistantIdx;
+            patched[patchedAssistantIdx] = patchAssistantForStreaming({
+              ...patchedAssistant,
+              __turnId: currentTurnId,
+            });
+          }
         }
 
         // Only skip updates when neither message structure nor non-text raw blocks

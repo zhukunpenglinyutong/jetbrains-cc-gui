@@ -338,6 +338,23 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
     }
 
     @Override
+    public void onBlockReset() {
+        if (isInactive()) {
+            return;
+        }
+        // Reset throttlers for the new turn's deltas
+        contentDeltaThrottler.reset();
+        thinkingDeltaThrottler.reset();
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (isInactive()) {
+                return;
+            }
+            jsTarget.callJavaScript("onBlockReset");
+            LOG.debug("Block reset sent to frontend - streaming refs cleared");
+        });
+    }
+
+    @Override
     public void onUsageUpdate(int usedTokens, int maxTokens) {
         if (isInactive()) {
             return;

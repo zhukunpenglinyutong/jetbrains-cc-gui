@@ -2,11 +2,11 @@ package com.github.claudecodegui.handler.file;
 
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.Computable;
 import com.intellij.pom.Navigatable;
 import com.intellij.psi.JavaPsiFacade;
 import com.intellij.psi.PsiClass;
@@ -61,17 +61,18 @@ public class JavaClassNavigationSupport {
     }
 
     private static boolean navigateWhenSmart(Project project, String fqcn) {
-        SmartPsiElementPointer<PsiElement> pointer = ReadAction.compute(() -> {
-            PsiClass psiClass = JavaPsiFacade.getInstance(project)
-                .findClass(fqcn, createClassSearchScope(project));
-            if (psiClass == null) {
-                return null;
-            }
+        SmartPsiElementPointer<PsiElement> pointer = ApplicationManager.getApplication().runReadAction(
+            (Computable<SmartPsiElementPointer<PsiElement>>) () -> {
+                PsiClass psiClass = JavaPsiFacade.getInstance(project)
+                    .findClass(fqcn, createClassSearchScope(project));
+                if (psiClass == null) {
+                    return null;
+                }
 
-            PsiElement navigationTarget = psiClass.getNavigationElement();
-            PsiElement target = navigationTarget != null ? navigationTarget : psiClass;
-            return SmartPointerManager.getInstance(project).createSmartPsiElementPointer(target);
-        });
+                PsiElement navigationTarget = psiClass.getNavigationElement();
+                PsiElement target = navigationTarget != null ? navigationTarget : psiClass;
+                return SmartPointerManager.getInstance(project).createSmartPsiElementPointer(target);
+            });
 
         if (pointer == null) {
             return false;

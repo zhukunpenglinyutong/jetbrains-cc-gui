@@ -84,7 +84,7 @@ public class PythonContextCollector {
                     if (statements.length > 0 && statements[0] instanceof PyExpressionStatement) {
                         PyExpression expr = ((PyExpressionStatement) statements[0]).getExpression();
                         if (expr instanceof PyStringLiteralExpression) {
-                            String docString = ((PyStringLiteralExpression) expr).getStringValue();
+                            String docString = extractStringLiteralText((PyStringLiteralExpression) expr);
                             if (docString != null) {
                                 scope.addProperty("docstring", docString);
                             }
@@ -135,6 +135,14 @@ public class PythonContextCollector {
         }
 
         return scope.size() > 0 ? scope : null;
+    }
+
+    private static String extractStringLiteralText(PyStringLiteralExpression expression) {
+        StringBuilder value = new StringBuilder();
+        for (PyStringElement element : expression.getStringElements()) {
+            value.append(element.getContent());
+        }
+        return value.length() > 0 ? value.toString() : null;
     }
     
     private static JsonArray getImports(PyFile pyFile) {

@@ -137,6 +137,11 @@ class ClaudeStreamAdapter {
             return;
         }
 
+        if (line.startsWith("[BLOCK_RESET]")) {
+            callback.onMessage("block_reset", "");
+            return;
+        }
+
         if (line.startsWith("[MESSAGE_END]")) {
             callback.onMessage("message_end", "");
         }

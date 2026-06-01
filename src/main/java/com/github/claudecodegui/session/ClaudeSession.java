@@ -125,6 +125,15 @@ public class ClaudeSession {
         default void onThinkingDelta(String delta) {
         }
 
+        /**
+         * Called when a block reset signal is received during streaming.
+         * This indicates a new assistant message has started within the stream
+         * (e.g., after a tool_use loop iteration), and the frontend should
+         * clear its streaming content refs to prevent cross-turn content merging.
+         */
+        default void onBlockReset() {
+        }
+
         default void onUsageUpdate(int usedTokens, int maxTokens) {
         }
 

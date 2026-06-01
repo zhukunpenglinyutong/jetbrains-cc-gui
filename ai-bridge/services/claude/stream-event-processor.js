@@ -1,6 +1,6 @@
 import { emitAccumulatedUsage, mergeUsage } from '../../utils/usage-utils.js';
 import { truncateErrorContent, truncateToolResultBlock } from './message-output-filter.js';
-import { normalizeStreamDelta, resolveSnapshotDelta } from './stream-delta-normalizer.js';
+import { normalizeStreamDelta, resolveSnapshotDelta, resetTurnBlockState } from './stream-delta-normalizer.js';
 
 export function emitUsageTag(msg) {
   if (msg.type === 'assistant' && msg.message?.usage) {
@@ -38,8 +38,23 @@ export function processStreamEvent(msg, turnState) {
   const event = msg.event;
   if (!event) return;
 
-  if (event.type === 'message_start' && event.message?.usage) {
-    turnState.accumulatedUsage = mergeUsage(turnState.accumulatedUsage, event.message.usage);
+  if (event.type === 'message_start') {
+    // Turn boundary: each assistant message (incl. every tool_use loop iteration)
+    // re-numbers its content blocks from index 0. Clear the index-keyed block maps
+    // so the prior turn's accumulator / locked stream-mode cannot corrupt or
+    // duplicate this turn's index-0 block (see resetTurnBlockState). Usage still
+    // accumulates across turns.
+    resetTurnBlockState(turnState);
+    // Emit BLOCK_RESET signal BEFORE any subsequent deltas to ensure frontend
+    // clears its streaming refs (streamingThinkingRef, streamingContentRef).
+    // This prevents new turn's thinking/text from merging with previous turn's content.
+    // Must emit synchronously here, not in the delta handlers, to guarantee ordering.
+    if (turnState.streamingEnabled) {
+      process.stdout.write('[BLOCK_RESET]\n');
+    }
+    if (event.message?.usage) {
+      turnState.accumulatedUsage = mergeUsage(turnState.accumulatedUsage, event.message.usage);
+    }
   }
 
   if (event.type === 'message_delta' && event.usage) {

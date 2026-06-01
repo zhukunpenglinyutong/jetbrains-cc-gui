@@ -1,6 +1,5 @@
 package com.github.claudecodegui.bridge;
 
-import com.intellij.ide.plugins.IdeaPluginDescriptor;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.progress.ProgressIndicator;
@@ -198,12 +197,12 @@ public class BridgeDirectoryResolver {
             LOG.info("[BridgeResolver] Current thread: " + Thread.currentThread().getName());
             LOG.info("[BridgeResolver] Is EDT: " + ApplicationManager.getApplication().isDispatchThread());
 
-            IdeaPluginDescriptor descriptor = BridgeArchiveLocator.resolveDescriptor();
-            if (descriptor == null) {
+            BridgeArchiveLocator.PluginLocation pluginLocation = BridgeArchiveLocator.resolvePluginLocation();
+            if (pluginLocation == null) {
                 return null;
             }
 
-            File pluginDir = descriptor.getPluginPath().toFile();
+            File pluginDir = pluginLocation.pluginDir;
             LOG.info("[BridgeResolver] Plugin directory: " + pluginDir.getAbsolutePath());
             LOG.info("[BridgeResolver] Plugin directory exists: " + pluginDir.exists());
 
@@ -216,7 +215,7 @@ public class BridgeDirectoryResolver {
             LOG.info("[BridgeResolver] Extracted dir path: " + extractedDir.getAbsolutePath());
             LOG.info("[BridgeResolver] Extracted dir exists: " + extractedDir.exists());
 
-            String signature = BridgeArchiveLocator.computeSignature(descriptor, archiveFile);
+            String signature = BridgeArchiveLocator.computeSignature(pluginLocation, archiveFile);
             LOG.info("[BridgeResolver] Expected signature: " + signature);
             File versionFile = new File(extractedDir, BRIDGE_VERSION_FILE);
             LOG.info("[BridgeResolver] Version file path: " + versionFile.getAbsolutePath());

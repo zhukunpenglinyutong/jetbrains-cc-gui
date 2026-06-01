@@ -75,3 +75,5 @@ logs/*.log
 .workflow
 .worktrees/
 .omx/
+
+.codex
