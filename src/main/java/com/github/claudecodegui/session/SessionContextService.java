@@ -10,11 +10,18 @@ import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Computable;
 
+import com.intellij.openapi.editor.Document;
+import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.openapi.vfs.VirtualFile;
+import org.jetbrains.annotations.Nullable;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -417,7 +424,228 @@ public class SessionContextService {
         return "[Uploaded Attachments: " + String.join(", ", names) + "]";
     }
 
+    /**
+     * Scan message text for @file references (e.g., @/path/to/file#L10-20).
+     * Only injects context for files with unsaved editor changes — already-saved
+     * files are left to the SDK's normal disk read. Returns empty string if no
+     * unsaved file references are found.
+     */
+    String buildContextFromText(String messageText) {
+        if (messageText == null || messageText.isEmpty()) {
+            return "";
+        }
+
+        // Collect @file references from message text
+        List<String> fileRefs = new ArrayList<>();
+        Pattern fileRefPattern = Pattern.compile("@(\\S+)");
+        Matcher matcher = fileRefPattern.matcher(messageText);
+        while (matcher.find()) {
+            String matchedPath = matcher.group(1);
+            if (!matchedPath.startsWith("terminal://") && !matchedPath.startsWith("service://")) {
+                fileRefs.add(matchedPath);
+            }
+        }
+        if (fileRefs.isEmpty()) {
+            return "";
+        }
+
+        // Only inject context for unsaved files
+        List<String> unsavedRefs = filterUnsavedFiles(fileRefs);
+        if (unsavedRefs.isEmpty()) {
+            return "";
+        }
+
+        // Build context block (only if at least one file actually needs injection)
+        StringBuilder sb = new StringBuilder();
+        boolean hasContent = false;
+
+        for (String path : unsavedRefs) {
+            if (isUnchangedLineRange(path)) {
+                continue;
+            }
+            String fileContent = readFileContent(path);
+            if (fileContent != null && !fileContent.isEmpty()) {
+                if (!hasContent) {
+                    sb.append("\n\n## Referenced Files (unsaved changes)\n\n");
+                    hasContent = true;
+                }
+                String extension = getFileExtension(path.contains("#L")
+                    ? path.substring(0, path.indexOf("#L")) : path);
+                sb.append("### `").append(path).append("`\n\n");
+                sb.append("```").append(extension).append("\n");
+                sb.append(fileContent);
+                if (!fileContent.endsWith("\n")) {
+                    sb.append("\n");
+                }
+                sb.append("```\n\n");
+            }
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * From the given list of @file reference strings, return only those whose
+     * corresponding editor Document has unsaved changes. Performs all lookups
+     * in a single read action.
+     */
+    private List<String> filterUnsavedFiles(List<String> fileRefs) {
+        return ApplicationManager.getApplication().runReadAction((Computable<List<String>>) () -> {
+            FileDocumentManager fdm = FileDocumentManager.getInstance();
+            List<String> unsaved = new ArrayList<>();
+            for (String ref : fileRefs) {
+                String cleanPath = ref.contains("#L") ? ref.substring(0, ref.indexOf("#L")) : ref;
+                VirtualFile vf = LocalFileSystem.getInstance().findFileByPath(cleanPath);
+                if (vf == null) {
+                    continue;
+                }
+                Document doc = fdm.getDocument(vf);
+                if (doc != null && fdm.isDocumentUnsaved(doc)) {
+                    unsaved.add(ref);
+                }
+            }
+            return unsaved;
+        });
+    }
+
+    /**
+     * For a @file#L10-20 reference, check whether the specific line range content
+     * matches between the editor Document and disk. Returns true when lines are
+     * identical (no need to inject context). Returns false if no #L range is
+     * present, or if the Document content differs from disk (injection needed).
+     */
+    private boolean isUnchangedLineRange(String path) {
+        int hashLIdx = path.indexOf("#L");
+        if (hashLIdx < 0) {
+            return false;
+        }
+
+        String cleanPath = path.substring(0, hashLIdx);
+        String range = path.substring(hashLIdx + 2);
+        int dashIdx = range.indexOf('-');
+        int startLine;
+        int endLine;
+
+        try {
+            if (dashIdx >= 0) {
+                startLine = Integer.parseInt(range.substring(0, dashIdx));
+                endLine = Integer.parseInt(range.substring(dashIdx + 1));
+            } else {
+                startLine = endLine = Integer.parseInt(range);
+            }
+        } catch (NumberFormatException e) {
+            LOG.warn("[Codex Context] Invalid line range: " + path);
+            return false;
+        }
+
+        String docContent = readFromDocument(cleanPath);
+        String diskContent = readFromDisk(cleanPath);
+
+        if (docContent == null && diskContent == null) {
+            return true;
+        }
+        if (docContent == null || diskContent == null) {
+            return false;
+        }
+
+        String docLines = extractLines(docContent, startLine, endLine);
+        String diskLines = extractLines(diskContent, startLine, endLine);
+
+        boolean unchanged = docLines != null && docLines.equals(diskLines);
+        if (unchanged) {
+            LOG.info("[Codex Context] Lines " + startLine + "-" + endLine
+                    + " unchanged for " + cleanPath + ", skip injection");
+        }
+        return unchanged;
+    }
+
     private String readFileContent(String filePath) {
+        // Parse optional line range suffix (e.g., /path/file.ts#L10-20 or /path/file.ts#L10)
+        String cleanPath = filePath;
+        int startLine = -1;
+        int endLine = -1;
+
+        int hashLIdx = filePath.indexOf("#L");
+        if (hashLIdx >= 0) {
+            cleanPath = filePath.substring(0, hashLIdx);
+            String range = filePath.substring(hashLIdx + 2);
+            int dashIdx = range.indexOf('-');
+            try {
+                if (dashIdx >= 0) {
+                    startLine = Integer.parseInt(range.substring(0, dashIdx));
+                    endLine = Integer.parseInt(range.substring(dashIdx + 1));
+                } else {
+                    startLine = Integer.parseInt(range);
+                    endLine = startLine;
+                }
+            } catch (NumberFormatException e) {
+                LOG.warn("[Codex Context] Invalid line range in path: " + filePath);
+            }
+        }
+
+        // Try IntelliJ Document first (captures unsaved editor changes)
+        String fileContent = readFromDocument(cleanPath);
+
+        // Fall back to disk if no Document available
+        if (fileContent == null) {
+            fileContent = readFromDisk(cleanPath);
+        }
+
+        if (fileContent == null) {
+            return null;
+        }
+
+        // Apply line range filtering
+        if (startLine >= 0 && endLine >= 0) {
+            fileContent = extractLines(fileContent, startLine, endLine);
+        }
+
+        return fileContent;
+    }
+
+    /**
+     * Read file content from IntelliJ's in-memory Document.
+     * Returns null if the file is not open in any editor.
+     */
+    @Nullable
+    private String readFromDocument(String filePath) {
+        try {
+            return ApplicationManager.getApplication().runReadAction((Computable<String>) () -> {
+                VirtualFile vf = LocalFileSystem.getInstance().findFileByPath(filePath);
+                if (vf == null) {
+                    LOG.info("[Codex Context] readFromDocument: VirtualFile not found for " + filePath);
+                    return null;
+                }
+
+                Document document = FileDocumentManager.getInstance().getDocument(vf);
+                if (document == null) {
+                    LOG.info("[Codex Context] readFromDocument: Document not found for " + filePath);
+                    return null;
+                }
+
+                long docLength = document.getTextLength();
+                if (docLength > maxFileSizeBytes) {
+                    String fullText = document.getText();
+                    String truncated = fullText.substring(0, Math.min(fullText.length(), maxFileSizeBytes));
+                    LOG.info("[Codex Context] readFromDocument: SUCCESS truncated for " + filePath
+                            + " (" + (maxFileSizeBytes / 1024) + "KB of " + (docLength / 1024) + "KB)");
+                    return truncated + "\n\n... (file truncated, showing first "
+                            + (maxFileSizeBytes / 1024) + "KB of " + (docLength / 1024) + "KB)";
+                }
+                String text = document.getText();
+                return text;
+            });
+        } catch (Exception e) {
+            LOG.warn("[Codex Context] Failed to read from Document: " + filePath + ", error: " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Read file content from disk (fallback when file is not open in any editor).
+     */
+    @Nullable
+    private String readFromDisk(String filePath) {
         try {
             File file = new File(filePath);
             if (!file.exists() || !file.isFile() || !file.canRead()) {
@@ -443,12 +671,33 @@ public class SessionContextService {
                 return null;
             }
 
-            String content = Files.readString(file.toPath(), StandardCharsets.UTF_8);
-            LOG.info("[Codex Context] Read file content: " + filePath + " (" + fileSize + " bytes)");
-            return content;
+            String fileContent = Files.readString(file.toPath(), StandardCharsets.UTF_8);
+            LOG.info("[Codex Context] Read from disk: " + filePath + " (" + fileSize + " bytes)");
+            return fileContent;
         } catch (Exception e) {
             LOG.warn("[Codex Context] Failed to read file: " + filePath + ", error: " + e.getMessage());
             return null;
+        }
+    }
+
+    /**
+     * Extract a specific line range from content. Lines are 1-indexed.
+     */
+    private String extractLines(String fileContent, int startLine, int endLine) {
+        if (fileContent == null || startLine < 1 || endLine < startLine) {
+            return fileContent;
+        }
+        try {
+            String[] lines = fileContent.split("\n", -1);
+            int startIdx = Math.min(startLine - 1, lines.length - 1);
+            int endIdx = Math.min(endLine, lines.length);
+            if (startIdx >= endIdx) {
+                return "";
+            }
+            return String.join("\n", Arrays.copyOfRange(lines, startIdx, endIdx));
+        } catch (Exception e) {
+            LOG.warn("[Codex Context] Failed to extract lines: " + e.getMessage());
+            return fileContent;
         }
     }
 
