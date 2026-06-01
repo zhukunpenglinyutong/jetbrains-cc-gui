@@ -10,6 +10,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 public class CodexMessageHandlerTest {
@@ -107,6 +108,35 @@ public class CodexMessageHandlerTest {
         assertFalse(state.isLoading());
         assertTrue(callback.messageUpdateCount >= 1);
         assertEquals("done", callback.lastMessages.get(callback.lastMessages.size() - 1).content);
+    }
+
+    @Test
+    public void interruptedCompletionAddsAssistantNoticeInsteadOfError() {
+        SessionState state = new SessionState();
+        state.setBusy(true);
+        state.setLoading(true);
+
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("stream_start", "");
+
+        SDKResult result = SDKResult.error("__I18N__:chat.requestInterrupted");
+        result.interrupted = true;
+        handler.onComplete(result);
+
+        assertEquals(1, callback.streamStartCount);
+        assertEquals(1, callback.streamEndCount);
+        assertFalse(state.isBusy());
+        assertFalse(state.isLoading());
+        assertEquals(ClaudeSession.SessionCallback.QueueDisplayState.COMPLETED, state.getQueueDisplayState());
+        assertEquals(1, state.getMessages().size());
+        Message message = state.getMessages().get(0);
+        assertEquals(Message.Type.ASSISTANT, message.type);
+        assertEquals("__I18N__:chat.requestInterrupted", message.content);
+        assertEquals(1, callback.messageUpdateCount);
     }
 
     @Test
@@ -408,5 +438,30 @@ public class CodexMessageHandlerTest {
         handler.onMessage("content_delta", "hello world");
         assertEquals("Duplicate content delta should be consumed by replay dedup",
                 deltasBefore, callback.contentDeltas.size());
+    }
+
+    @Test
+    public void userMessageWithImagePreservesImageBlockInRawContent() {
+        SessionState state = new SessionState();
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("user", "{\"message\":{\"content\":[{\"type\":\"image\",\"src\":\"cc-gui-attachment://thumb\",\"previewSrc\":\"cc-gui-attachment://full\",\"thumbnailSrc\":\"cc-gui-attachment://thumb\",\"sourceKind\":\"resource_url\"},{\"type\":\"text\",\"text\":\"请看这张图\"}]}}");
+
+        Message lastMessage = callback.lastMessages.get(callback.lastMessages.size() - 1);
+        assertEquals(Message.Type.USER, lastMessage.type);
+        assertEquals("请看这张图", lastMessage.content);
+        assertNotNull(lastMessage.raw);
+
+        com.google.gson.JsonArray content = lastMessage.raw
+                .getAsJsonObject("message")
+                .getAsJsonArray("content");
+
+        assertEquals(2, content.size());
+        assertEquals("image", content.get(0).getAsJsonObject().get("type").getAsString());
+        assertEquals("text", content.get(1).getAsJsonObject().get("type").getAsString());
+        assertEquals("请看这张图", content.get(1).getAsJsonObject().get("text").getAsString());
     }
 }
