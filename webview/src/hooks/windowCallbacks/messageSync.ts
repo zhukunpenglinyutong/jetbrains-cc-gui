@@ -11,6 +11,7 @@ import type { ClaudeContentOrResultBlock, ClaudeMessage, ClaudeRawMessage } from
 
 /** Time window (ms) for matching optimistic messages with backend messages. */
 export const OPTIMISTIC_MESSAGE_TIME_WINDOW = 5000;
+const UPLOADED_ATTACHMENT_PLACEHOLDER_RE = /^\[Uploaded(?:\s[\s\S]*)?\]$/;
 
 export const getStreamEndHandlingMode = (
   provider: string,
@@ -236,10 +237,16 @@ const getUserMessageComparableContent = (message: ClaudeMessage): string => {
   if (!Array.isArray(rawContent)) {
     return message.content || '';
   }
+  const hasAttachmentBlock = rawContent.some(
+    (block: any) => block && typeof block === 'object' && (block.type === 'attachment' || block.type === 'image'),
+  );
   const rawText = rawContent
     .filter((block: any) => block && typeof block === 'object' && block.type === 'text' && typeof block.text === 'string')
     .map((block: any) => block.text)
     .join('\n');
+  if (hasAttachmentBlock && UPLOADED_ATTACHMENT_PLACEHOLDER_RE.test(rawText.trim())) {
+    return '';
+  }
   return rawText || message.content || '';
 };
 

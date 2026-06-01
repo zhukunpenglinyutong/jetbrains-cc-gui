@@ -411,6 +411,54 @@ describe('appendOptimisticMessageIfMissing', () => {
     });
   });
 
+  it('keeps optimistic base64 image fallback when backend adds an attachment summary text', () => {
+    const ts = new Date().toISOString();
+    const optimisticImage = {
+      type: 'image',
+      src: 'data:image/png;base64,QUJDRA==',
+      mediaType: 'image/png',
+      sourceKind: 'base64',
+    };
+    const backendImage = {
+      type: 'image',
+      src: 'https://cc-gui-attachment.local/image-1.png',
+      mediaType: 'image/png',
+      sourceKind: 'resource_url',
+    };
+    const optimistic = makeUserMsg('', {
+      isOptimistic: true,
+      timestamp: ts,
+      raw: {
+        message: {
+          content: [optimisticImage],
+        },
+      } as any,
+    });
+    const backendMsg = makeUserMsg('[Uploaded Attachments: image.png]', {
+      timestamp: ts,
+      raw: {
+        message: {
+          content: [
+            backendImage,
+            { type: 'text', text: '[Uploaded Attachments: image.png]' },
+          ],
+        },
+      } as any,
+    });
+
+    const result = appendOptimisticMessageIfMissing([optimistic], [backendMsg]);
+
+    expect(result).toHaveLength(1);
+    const raw = result[0].raw as any;
+    const imageBlocks = raw.message.content.filter((b: any) => b.type === 'image');
+    expect(imageBlocks).toHaveLength(1);
+    expect(imageBlocks[0]).toMatchObject({
+      src: backendImage.src,
+      thumbnailSrc: optimisticImage.src,
+      previewSrc: optimisticImage.src,
+    });
+  });
+
   it('does not append optimistic message when it is newer than everything in nextList (stale update)', () => {
     // Simulates race condition: a stale backend update (from compaction)
     // arrives after the user has already sent a new optimistic message.
