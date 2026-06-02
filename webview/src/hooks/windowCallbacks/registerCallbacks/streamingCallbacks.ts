@@ -149,6 +149,8 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     thinkingUpdateTimeoutRef,
     getOrCreateStreamingAssistantIndex,
     patchAssistantForStreaming,
+    markStreamingBlockBoundary,
+    resetStreamingBlockBoundary,
   } = options;
 
   // ── Stream stall watchdog ──
@@ -215,6 +217,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     window.__turnStartedAt = Date.now();
     streamingContentRef.current = '';
     streamingThinkingRef.current = '';
+    resetStreamingBlockBoundary();
     isStreamingRef.current = true;
     startStallWatchdog();
     useBackendStreamingRenderRef.current = false;
@@ -646,6 +649,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     // Clear content buffers - new deltas will start fresh
     streamingContentRef.current = '';
     streamingThinkingRef.current = '';
+    markStreamingBlockBoundary();
     // Intentionally NOT resetting streamingMessageIndexRef here: the backend will
     // send a new updateMessages snapshot for this turn, which will eventually set
     // the correct index via the isStaleSnapshot guard. Resetting the index now

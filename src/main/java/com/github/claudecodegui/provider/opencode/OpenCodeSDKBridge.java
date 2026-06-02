@@ -71,6 +71,8 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
             callback.onMessage("stream_start", "");
         } else if (line.startsWith("[STREAM_END]")) {
             callback.onMessage("stream_end", "");
+        } else if (line.startsWith("[BLOCK_RESET]")) {
+            callback.onMessage("block_reset", "");
         } else if (line.startsWith("[MESSAGE_END]")) {
             callback.onMessage("message_end", "");
         } else if (line.startsWith("[THREAD_ID]")) {

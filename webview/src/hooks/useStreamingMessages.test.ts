@@ -219,6 +219,88 @@ describe('useStreamingMessages', () => {
     });
   });
 
+  it('places already-buffered text before a late first tool snapshot without backend text', () => {
+    const { result } = renderHook(() => useStreamingMessages());
+
+    result.current.streamingContentRef.current = 'I will run checks.';
+
+    const assistant: ClaudeMessage = {
+      type: 'assistant',
+      content: '',
+      isStreaming: true,
+      raw: {
+        message: {
+          content: [
+            { type: 'tool_use', id: 'bash-1', name: 'run_command', input: { command: 'npm test' } },
+          ],
+        },
+      },
+    };
+
+    const patched = result.current.patchAssistantForStreaming(assistant);
+    const rawContent = (patched.raw as any).message.content as ContentBlockTest[];
+
+    expect(rawContent.map((block) => block.type)).toEqual(['text', 'tool_use']);
+    expect(rawContent[0]).toMatchObject({ type: 'text', text: 'I will run checks.' });
+    expect(rawContent[1]).toMatchObject({ type: 'tool_use', id: 'bash-1' });
+  });
+
+  it('appends streamed text after a tool when a block boundary was marked', () => {
+    const { result } = renderHook(() => useStreamingMessages());
+
+    result.current.markStreamingBlockBoundary();
+    result.current.streamingContentRef.current = 'Checks passed.';
+
+    const assistant: ClaudeMessage = {
+      type: 'assistant',
+      content: '',
+      isStreaming: true,
+      raw: {
+        message: {
+          content: [
+            { type: 'tool_use', id: 'bash-1', name: 'run_command', input: { command: 'npm test' } },
+          ],
+        },
+      },
+    };
+
+    const patched = result.current.patchAssistantForStreaming(assistant);
+    const rawContent = (patched.raw as any).message.content as ContentBlockTest[];
+
+    expect(rawContent.map((block) => block.type)).toEqual(['tool_use', 'text']);
+    expect(rawContent[0]).toMatchObject({ type: 'tool_use', id: 'bash-1' });
+    expect(rawContent[1]).toMatchObject({ type: 'text', text: 'Checks passed.' });
+  });
+
+  it('appends streamed thinking after existing tool blocks when a block boundary was marked', () => {
+    const { result } = renderHook(() => useStreamingMessages());
+
+    result.current.markStreamingBlockBoundary();
+    result.current.streamingThinkingRef.current = 'Now inspect results.';
+
+    const assistant: ClaudeMessage = {
+      type: 'assistant',
+      content: '',
+      isStreaming: true,
+      raw: {
+        message: {
+          content: [
+            { type: 'thinking', thinking: 'Need checks first.', text: 'Need checks first.' },
+            { type: 'tool_use', id: 'bash-1', name: 'run_command', input: { command: 'npm test' } },
+          ],
+        },
+      },
+    };
+
+    const patched = result.current.patchAssistantForStreaming(assistant);
+    const rawContent = (patched.raw as any).message.content as ContentBlockTest[];
+
+    expect(rawContent.map((block) => block.type)).toEqual(['thinking', 'tool_use', 'thinking']);
+    expect(rawContent[0]).toMatchObject({ type: 'thinking', thinking: 'Need checks first.' });
+    expect(rawContent[1]).toMatchObject({ type: 'tool_use', id: 'bash-1' });
+    expect(rawContent[2]).toMatchObject({ type: 'thinking', thinking: 'Now inspect results.' });
+  });
+
   it('does not duplicate earlier thinking content when a second thinking block follows a tool_use', () => {
     // Extended thinking turn:
     //   thinking_seg1 → tool_use → thinking_seg2

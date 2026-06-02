@@ -133,6 +133,7 @@ const App = () => {
     streamingTurnIdRef, turnIdCounterRef,
     findLastAssistantIndex, extractRawBlocks,
     getOrCreateStreamingAssistantIndex, patchAssistantForStreaming,
+    markStreamingBlockBoundary, resetStreamingBlockBoundary,
   } = useStreamingMessages();
 
   // (Toast helpers moved to UIStateContext)
@@ -290,6 +291,7 @@ const App = () => {
     lastThinkingUpdateRef, thinkingUpdateTimeoutRef,
     findLastAssistantIndex, extractRawBlocks,
     getOrCreateStreamingAssistantIndex, patchAssistantForStreaming,
+    markStreamingBlockBoundary, resetStreamingBlockBoundary,
     syncActiveProviderModelMapping,
     openPermissionDialog, openAskUserQuestionDialog, openPlanApprovalDialog,
     openContextUsageDialog, updateContextUsageData,

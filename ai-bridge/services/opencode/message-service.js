@@ -26,6 +26,7 @@ const DEFAULT_START_TIMEOUT_MS = 10000;
 const DEFAULT_HISTORY_LIMIT = 200;
 const DEFAULT_HISTORY_COUNT_CONCURRENCY = 4;
 const DEFAULT_MCP_STATUS_TIMEOUT_MS = 35000;
+const DEFAULT_DIFF_BASELINE_TIMEOUT_MS = 3000;
 const MAX_TOOL_RESULT_CHARS = 20000;
 const DEFAULT_EVENT_DRAIN_IDLE_MS = 300;
 const DEFAULT_SESSION_STATUS_POLL_MS = 250;
@@ -753,6 +754,7 @@ function emitOpenCodeToolResult(ctx, part, normalizedInput = undefined) {
     openCodeToolResultContent(part),
     openCodeToolResultMetadata(part, normalizedInput)
   ));
+  process.stdout.write('[BLOCK_RESET]\n');
   if (isError) {
     const exitCode = openCodeToolExitCode(part);
     const suffix = typeof exitCode === 'number' ? ` (exit ${exitCode})` : '';
@@ -794,6 +796,34 @@ function stableHash(text) {
   return Math.abs(hash).toString(36);
 }
 
+function normalizeOpenCodeDiffWithSignature(rawDiff, cwd = '') {
+  const diff = normalizeOpenCodeDiff(rawDiff, cwd);
+  if (!diff) {
+    return null;
+  }
+  const fileSignature = normalizePathForSignature(diff.filePath, cwd);
+  return {
+    diff,
+    signature: `${fileSignature}:${diff.patch || diff.oldString}:${diff.newString}`
+  };
+}
+
+function seedOpenCodeDiffSignatures(ctx, diffs) {
+  if (!ctx || !Array.isArray(diffs)) {
+    return 0;
+  }
+  let added = 0;
+  for (const rawDiff of diffs) {
+    const normalized = normalizeOpenCodeDiffWithSignature(rawDiff, ctx.cwd);
+    if (!normalized || ctx.emittedDiffIds.has(normalized.signature)) {
+      continue;
+    }
+    ctx.emittedDiffIds.add(normalized.signature);
+    added += 1;
+  }
+  return added;
+}
+
 function emitOpenCodeDiffMessages(ctx, diffs, source = 'opencode') {
   if (!Array.isArray(diffs)) {
     return 0;
@@ -801,12 +831,11 @@ function emitOpenCodeDiffMessages(ctx, diffs, source = 'opencode') {
 
   let emitted = 0;
   diffs.forEach((rawDiff, index) => {
-    const diff = normalizeOpenCodeDiff(rawDiff, ctx.cwd);
-    if (!diff) {
+    const normalized = normalizeOpenCodeDiffWithSignature(rawDiff, ctx.cwd);
+    if (!normalized) {
       return;
     }
-    const fileSignature = normalizePathForSignature(diff.filePath, ctx.cwd);
-    const signature = `${fileSignature}:${diff.patch || diff.oldString}:${diff.newString}`;
+    const { diff, signature } = normalized;
     if (ctx.emittedDiffIds.has(signature)) {
       return;
     }
@@ -820,16 +849,57 @@ function emitOpenCodeDiffMessages(ctx, diffs, source = 'opencode') {
       new_string: diff.newString,
       patch: diff.patch,
       workdir: ctx.cwd || undefined,
-      source,
-      status: diff.status,
-      additions: diff.additions,
-      deletions: diff.deletions
+      opencode_diff_metadata: {
+        status: diff.status,
+        additions: diff.additions,
+        deletions: diff.deletions
+      }
     }));
     emitMessage(toolResultMsg(toolUseId, false, 'File change recorded'));
+    process.stdout.write('[BLOCK_RESET]\n');
     emitted += 1;
   });
 
   return emitted;
+}
+
+async function fetchOpenCodeSessionDiff(runtime, cwd, sessionId) {
+  if (!runtime || !sessionId) {
+    return [];
+  }
+
+  try {
+    const payload = await getJsonWithTimeout(
+      runtime.baseUrl,
+      `/session/${encodeURIComponent(sessionId)}/diff`,
+      cwd,
+      DEFAULT_DIFF_BASELINE_TIMEOUT_MS
+    );
+    if (Array.isArray(payload)) {
+      return payload;
+    }
+    if (Array.isArray(payload?.data)) {
+      return payload.data;
+    }
+  } catch (error) {
+    emitStatus(`Skipped opencode diff baseline: ${truncateForDisplay(formatOpenCodeError(error), 200)}`);
+  }
+
+  return [];
+}
+
+async function seedOpenCodeDiffBaseline(ctx) {
+  const sessionId = ctx?.sessionRef?.id;
+  if (!sessionId) {
+    if (ctx) {
+      ctx.sessionDiffBaselineReady = true;
+    }
+    return 0;
+  }
+  const diffs = await fetchOpenCodeSessionDiff(ctx.runtime, ctx.cwd, sessionId);
+  const seeded = seedOpenCodeDiffSignatures(ctx, diffs);
+  ctx.sessionDiffBaselineReady = true;
+  return seeded;
 }
 
 function openCodeToolMetadata(part) {
@@ -2285,10 +2355,12 @@ function normalizeOpenCodeMessage(item) {
     content.push({ type: 'text', text: textContent });
   }
 
+  const messageId = info?.id || info?.messageID || '';
   const normalized = {
     type: role,
+    uuid: messageId,
     message: {
-      id: info?.id || info?.messageID || '',
+      id: messageId,
       role,
       content
     },
@@ -2303,13 +2375,21 @@ function normalizeOpenCodeMessage(item) {
   return normalized;
 }
 
-function isOpenCodeToolResultUserMessage(msg) {
-  if (msg.type !== 'user') return false;
-  const content = msg.message?.content;
-  if (Array.isArray(content) && content.length === 1 && content[0].text === '[tool_result]') {
-    return true;
+function assignOpenCodeHistoryTurnIds(messages) {
+  let nextAssistantTurnId = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (!msg.message) {
+      continue;
+    }
+    if (msg.type === 'assistant') {
+      msg.message.__turnId = nextAssistantTurnId;
+      nextAssistantTurnId--;
+    } else if (Object.prototype.hasOwnProperty.call(msg.message, '__turnId')) {
+      delete msg.message.__turnId;
+    }
   }
-  return false;
+  return messages;
 }
 
 function emitAssistantMessageFromResponse(response) {
@@ -2369,6 +2449,7 @@ function createEventContext(runtime, cwd, permissionMode, sessionRef) {
     emittedToolResultIds: new Set(),
     toolUseSignatures: new Map(),
     emittedDiffIds: new Set(),
+    sessionDiffBaselineReady: false,
     repliedPermissions: new Set(),
     rejectedQuestions: new Set(),
     repliedQuestions: new Set(),
@@ -2743,6 +2824,10 @@ async function handleOpenCodeEvent(event, ctx) {
 
     case 'session.diff': {
       ctx.sawTurnLive = true;
+      if (!ctx.sessionDiffBaselineReady) {
+        seedOpenCodeDiffSignatures(ctx, props.diff);
+        break;
+      }
       emitOpenCodeDiffMessages(ctx, props.diff, 'session.diff');
       break;
     }
@@ -2875,6 +2960,7 @@ export async function sendMessage(
     if (!sessionRef.id) {
       throw new Error('opencode did not return a session id');
     }
+    await seedOpenCodeDiffBaseline(eventContext);
     if (activeTurn.aborted) {
       throw new Error('User interrupted');
     }
@@ -3071,17 +3157,9 @@ export async function getSessionMessages(sessionId = '', cwd = '', options = {})
 
     let normalizedMessages = Array.isArray(messages) ? messages.map(normalizeOpenCodeMessage) : [];
     
-    // Assign negative turnIds to group history messages into distinct turns based on user prompts
-    let currentTurnId = 0;
-    for (let i = normalizedMessages.length - 1; i >= 0; i--) {
-      const msg = normalizedMessages[i];
-      if (msg.type === 'user' && !isOpenCodeToolResultUserMessage(msg)) {
-        currentTurnId--;
-      }
-      if (msg.message) {
-        msg.message.__turnId = currentTurnId;
-      }
-    }
+    // Assign negative turnIds per restored assistant step so the frontend
+    // does not merge opencode's step messages into one large answer block.
+    normalizedMessages = assignOpenCodeHistoryTurnIds(normalizedMessages);
 
     console.log(JSON.stringify({
       success: true,
@@ -3417,7 +3495,9 @@ export {
   extractSessionId,
   handleOpenCodeEvent,
   shouldHandleSessionEvent,
+  seedOpenCodeDiffSignatures,
   listOpenCodeModelProviders,
+  assignOpenCodeHistoryTurnIds,
   normalizeOpenCodeMessage,
   normalizeOpenCodeAgents,
   normalizeOpenCodeCommands,

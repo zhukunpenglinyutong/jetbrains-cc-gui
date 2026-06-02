@@ -221,6 +221,36 @@ describe('mergeConsecutiveAssistantMessages', () => {
     expect(result.map((message) => message.__turnId)).toEqual([10, 11]);
   });
 
+  it('keeps restored opencode assistant steps separate when they have distinct negative turn ids', () => {
+    const messages: ClaudeMessage[] = [
+      makeMsg('assistant', 'Looking at files.', {
+        __turnId: -2,
+        raw: {
+          content: [
+            { type: 'text', text: 'Looking at files.' },
+            { type: 'tool_use', id: 'tool-1', name: 'read_file', input: { file_path: 'a.ts' } },
+            { type: 'tool_result', tool_use_id: 'tool-1', content: 'file content' },
+          ],
+        } as any,
+      }),
+      makeMsg('assistant', 'Checking tests.', {
+        __turnId: -1,
+        raw: {
+          content: [
+            { type: 'text', text: 'Checking tests.' },
+            { type: 'tool_use', id: 'tool-2', name: 'bash', input: { command: 'npm test' } },
+            { type: 'tool_result', tool_use_id: 'tool-2', content: 'pass' },
+          ],
+        } as any,
+      }),
+    ];
+
+    const result = mergeConsecutiveAssistantMessages(messages, normalizeBlocks);
+
+    expect(result).toHaveLength(2);
+    expect(result.map((message) => message.content)).toEqual(['Looking at files.', 'Checking tests.']);
+  });
+
   it('does not merge streaming message (has __turnId) with history message (no __turnId)', () => {
     const messages: ClaudeMessage[] = [
       makeMsg('assistant', 'streaming turn', {
@@ -1182,4 +1212,3 @@ describe('buildCompactNotification', () => {
     expect(result!.content).toBe('/compact');
   });
 });
-

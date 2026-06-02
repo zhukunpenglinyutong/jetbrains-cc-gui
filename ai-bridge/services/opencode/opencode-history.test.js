@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { normalizeOpenCodeSessions } from './message-service.js';
+import {
+  assignOpenCodeHistoryTurnIds,
+  normalizeOpenCodeMessage,
+  normalizeOpenCodeSessions
+} from './message-service.js';
 
 test('normalizes opencode sessions for the history sidebar', () => {
   const sessions = normalizeOpenCodeSessions([
@@ -66,4 +70,33 @@ test('deduplicates opencode history sessions by session id', () => {
 
   assert.equal(sessions.length, 1);
   assert.equal(sessions[0].title, 'New duplicate');
+});
+
+test('assigns unique negative turn ids to restored opencode assistant steps', () => {
+  const messages = assignOpenCodeHistoryTurnIds([
+    { type: 'user', message: { content: [{ type: 'text', text: 'first' }] } },
+    { type: 'assistant', message: { content: [{ type: 'text', text: 'first response' }] } },
+    { type: 'user', message: { content: [{ type: 'tool_result', text: '[tool_result]' }] } },
+    { type: 'assistant', message: { content: [{ type: 'text', text: 'after tool' }] } },
+    { type: 'user', message: { content: [{ type: 'text', text: 'second' }] } },
+    { type: 'assistant', message: { content: [{ type: 'text', text: 'second response' }] } }
+  ]);
+
+  assert.deepEqual(messages.map((message) => message.message.__turnId), [undefined, -3, undefined, -2, undefined, -1]);
+  assert.equal(messages.some((message) => message.message.__turnId === 0), false);
+});
+
+test('normalizes opencode message id as stable uuid for history rendering', () => {
+  const message = normalizeOpenCodeMessage({
+    info: {
+      id: 'msg_123',
+      role: 'assistant'
+    },
+    parts: [
+      { type: 'text', text: 'hello' }
+    ]
+  });
+
+  assert.equal(message.uuid, 'msg_123');
+  assert.equal(message.message.id, 'msg_123');
 });

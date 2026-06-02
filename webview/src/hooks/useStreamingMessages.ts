@@ -40,6 +40,8 @@ interface UseStreamingMessagesReturn {
   extractRawBlocks: (raw: unknown) => ContentBlock[];
   getOrCreateStreamingAssistantIndex: (list: ClaudeMessage[]) => number;
   patchAssistantForStreaming: (assistant: ClaudeMessage) => ClaudeMessage;
+  markStreamingBlockBoundary: () => void;
+  resetStreamingBlockBoundary: () => void;
 
   // Reset function
   resetStreamingState: () => void;
@@ -68,6 +70,8 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
   // Text length at the moment trailing structural blocks (tool_use/tool_result)
   // first appeared. Later text deltas belong after those blocks.
   const trailingStructuralTextBoundaryRef = useRef<{ signature: string; textLength: number } | null>(null);
+  const textAfterStructuralBoundaryRef = useRef(false);
+  const thinkingAfterStructuralBoundaryRef = useRef(false);
 
   // Turn tracking
   const streamingTurnIdRef = useRef(-1);
@@ -97,8 +101,49 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
       .map((block, index) => (block?.type === 'text' ? index : -1))
       .filter((index) => index >= 0);
 
+    const firstStructuralIdx = blocks.findIndex(
+      (block) => block?.type !== 'text' && block?.type !== 'thinking',
+    );
+    const lastStructuralIdx = (() => {
+      for (let i = blocks.length - 1; i >= 0; i -= 1) {
+        if (blocks[i]?.type !== 'text' && blocks[i]?.type !== 'thinking') {
+          return i;
+        }
+      }
+      return -1;
+    })();
+
+    if (textAfterStructuralBoundaryRef.current && lastStructuralIdx >= 0) {
+      const textAfterBoundary = textIndices.filter((index) => index > lastStructuralIdx);
+      if (textAfterBoundary.length === 0) {
+        return [...blocks, { type: 'text', text: content }];
+      }
+
+      const lastPostToolTextIdx = textAfterBoundary[textAfterBoundary.length - 1];
+      const prefixText = textAfterBoundary
+        .slice(0, -1)
+        .map((index) => (typeof blocks[index]?.text === 'string' ? blocks[index].text : ''))
+        .join('');
+      const desiredText = content.startsWith(prefixText) ? content.slice(prefixText.length) : content;
+      const currentText = typeof blocks[lastPostToolTextIdx]?.text === 'string' ? blocks[lastPostToolTextIdx].text : '';
+      if (currentText === desiredText) {
+        return blocks;
+      }
+      const nextBlocks = [...blocks];
+      nextBlocks[lastPostToolTextIdx] = { ...nextBlocks[lastPostToolTextIdx], text: desiredText };
+      return nextBlocks;
+    }
+
     if (textIndices.length === 0) {
-      return [...blocks, { type: 'text', text: content }];
+      const textBlock = { type: 'text', text: content };
+      if (firstStructuralIdx >= 0 && !textAfterStructuralBoundaryRef.current) {
+        return [
+          ...blocks.slice(0, firstStructuralIdx),
+          textBlock,
+          ...blocks.slice(firstStructuralIdx),
+        ];
+      }
+      return [...blocks, textBlock];
     }
 
     const lastTextIdx = textIndices[textIndices.length - 1];
@@ -192,13 +237,10 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
     return '';
   };
 
-  // Mirror of syncTextBlocksWithContent for thinking blocks.
-  // streamingThinkingRef accumulates ALL thinking deltas in the current turn,
-  // including segments separated by tool_use blocks (extended thinking can
-  // resume after a tool call).  We must therefore strip the prefix carried by
-  // earlier thinking blocks before assigning the remainder to the last block,
-  // otherwise the last block would receive the concatenation of every segment
-  // and duplicate earlier content.
+  // Mirror of syncTextBlocksWithContent for thinking blocks. Before the first
+  // explicit block boundary, streamingThinkingRef is cumulative for the turn,
+  // so split thinking blocks must receive only their suffix. After a block
+  // boundary, the buffer is segment-local and belongs after the latest tool.
   const syncThinkingBlocksWithContent = (blocks: ContentBlock[], thinking: string): ContentBlock[] => {
     if (!thinking) return blocks;
 
@@ -206,8 +248,43 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
       .map((block, index) => (block?.type === 'thinking' ? index : -1))
       .filter((index) => index >= 0);
 
+    const lastStructuralIdx = (() => {
+      for (let i = blocks.length - 1; i >= 0; i -= 1) {
+        if (blocks[i]?.type !== 'text' && blocks[i]?.type !== 'thinking') {
+          return i;
+        }
+      }
+      return -1;
+    })();
+
+    if (thinkingAfterStructuralBoundaryRef.current && lastStructuralIdx >= 0) {
+      const thinkingAfterBoundary = thinkingIndices.filter((index) => index > lastStructuralIdx);
+      if (thinkingAfterBoundary.length === 0) {
+        return [...blocks, { type: 'thinking', thinking, text: thinking }];
+      }
+
+      const lastPostToolThinkingIdx = thinkingAfterBoundary[thinkingAfterBoundary.length - 1];
+      const prefixThinking = thinkingAfterBoundary
+        .slice(0, -1)
+        .map((index) => getThinkingText(blocks[index]))
+        .join('');
+      const desiredThinking = thinking.startsWith(prefixThinking) ? thinking.slice(prefixThinking.length) : thinking;
+      const currentThinking = getThinkingText(blocks[lastPostToolThinkingIdx]);
+      if (currentThinking === desiredThinking) {
+        return blocks;
+      }
+      const nextBlocks = [...blocks];
+      nextBlocks[lastPostToolThinkingIdx] = {
+        ...nextBlocks[lastPostToolThinkingIdx],
+        thinking: desiredThinking,
+        text: desiredThinking,
+      };
+      return nextBlocks;
+    }
+
     if (thinkingIndices.length === 0) {
-      return [{ type: 'thinking', thinking, text: thinking }, ...blocks];
+      const thinkingBlock = { type: 'thinking', thinking, text: thinking };
+      return [thinkingBlock, ...blocks];
     }
 
     const lastThinkingIdx = thinkingIndices[thinkingIndices.length - 1];
@@ -348,6 +425,8 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
     lastThinkingUpdateRef.current = 0;
     autoExpandedThinkingKeysRef.current.clear();
     trailingStructuralTextBoundaryRef.current = null;
+    textAfterStructuralBoundaryRef.current = false;
+    thinkingAfterStructuralBoundaryRef.current = false;
     streamingTurnIdRef.current = -1;
 
     if (contentUpdateTimeoutRef.current != null) {
@@ -358,6 +437,18 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
       cancelAnimationFrame(thinkingUpdateTimeoutRef.current);
       thinkingUpdateTimeoutRef.current = null;
     }
+  };
+
+  const markStreamingBlockBoundary = () => {
+    trailingStructuralTextBoundaryRef.current = null;
+    textAfterStructuralBoundaryRef.current = true;
+    thinkingAfterStructuralBoundaryRef.current = true;
+  };
+
+  const resetStreamingBlockBoundary = () => {
+    trailingStructuralTextBoundaryRef.current = null;
+    textAfterStructuralBoundaryRef.current = false;
+    thinkingAfterStructuralBoundaryRef.current = false;
   };
 
   return {
@@ -386,6 +477,8 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
     extractRawBlocks,
     getOrCreateStreamingAssistantIndex,
     patchAssistantForStreaming,
+    markStreamingBlockBoundary,
+    resetStreamingBlockBoundary,
 
     // Reset function
     resetStreamingState,

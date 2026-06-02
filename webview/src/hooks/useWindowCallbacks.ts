@@ -86,6 +86,8 @@ export interface UseWindowCallbacksOptions {
   extractRawBlocks: (raw: ClaudeRawMessage | string | undefined) => Array<Record<string, unknown>>;
   getOrCreateStreamingAssistantIndex: (messages: ClaudeMessage[]) => number;
   patchAssistantForStreaming: (msg: ClaudeMessage) => ClaudeMessage;
+  markStreamingBlockBoundary: () => void;
+  resetStreamingBlockBoundary: () => void;
 
   // Other functions
   syncActiveProviderModelMapping: (provider: ProviderConfig) => void;

@@ -82,6 +82,8 @@ describe('useWindowCallbacks integration', () => {
     extractRawBlocks: () => [],
     getOrCreateStreamingAssistantIndex: () => 0,
     patchAssistantForStreaming: (msg: ClaudeMessage) => msg,
+    markStreamingBlockBoundary: vi.fn(),
+    resetStreamingBlockBoundary: vi.fn(),
     syncActiveProviderModelMapping: vi.fn(),
     openPermissionDialog: vi.fn(),
     openAskUserQuestionDialog: vi.fn(),

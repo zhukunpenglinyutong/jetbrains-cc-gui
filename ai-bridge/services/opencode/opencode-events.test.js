@@ -5,6 +5,7 @@ import {
   createEventContext,
   handleOpenCodeEvent,
   normalizeOpenCodeMessage,
+  seedOpenCodeDiffSignatures,
   shouldHandleSessionEvent,
   waitForOpenCodeTurnIdle
 } from './message-service.js';
@@ -465,6 +466,7 @@ test('opencode edit metadata is normalized for existing diff UI', async () => {
 
 test('opencode session.diff emits synthetic edit tool messages', async () => {
   const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
+  ctx.sessionDiffBaselineReady = true;
   const lines = await captureConsole(async () => {
     await handleOpenCodeEvent({
       type: 'session.diff',
@@ -491,8 +493,83 @@ test('opencode session.diff emits synthetic edit tool messages', async () => {
   assert.equal(messages[1].message.content[0].type, 'tool_result');
 });
 
+test('opencode session.diff skips baseline session changes', async () => {
+  const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
+  seedOpenCodeDiffSignatures(ctx, [{
+    file: '/repo/src/old.ts',
+    patch: '@@ -1 +1 @@\n-const oldValue = 1\n+const oldValue = 2\n'
+  }]);
+  ctx.sessionDiffBaselineReady = true;
+
+  const lines = await captureConsole(async () => {
+    await handleOpenCodeEvent({
+      type: 'session.diff',
+      properties: {
+        sessionID: 'ses_test',
+        diff: [
+          {
+            file: '/repo/src/old.ts',
+            patch: '@@ -1 +1 @@\n-const oldValue = 1\n+const oldValue = 2\n'
+          },
+          {
+            file: '/repo/src/new.ts',
+            patch: '@@ -1 +1 @@\n-const newValue = 1\n+const newValue = 2\n'
+          }
+        ]
+      }
+    }, ctx);
+  });
+
+  const messages = messagePayloads(lines);
+  assert.equal(messages.length, 2);
+  assert.equal(messages[0].message.content[0].input.file_path, '/repo/src/new.ts');
+});
+
+test('opencode session.diff before baseline is seeded but not emitted', async () => {
+  const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
+  const lines = await captureConsole(async () => {
+    await handleOpenCodeEvent({
+      type: 'session.diff',
+      properties: {
+        sessionID: 'ses_test',
+        diff: [{
+          file: '/repo/src/old.ts',
+          patch: '@@ -1 +1 @@\n-const oldValue = 1\n+const oldValue = 2\n'
+        }]
+      }
+    }, ctx);
+  });
+
+  assert.deepEqual(messagePayloads(lines), []);
+  ctx.sessionDiffBaselineReady = true;
+
+  const afterBaselineLines = await captureConsole(async () => {
+    await handleOpenCodeEvent({
+      type: 'session.diff',
+      properties: {
+        sessionID: 'ses_test',
+        diff: [
+          {
+            file: '/repo/src/old.ts',
+            patch: '@@ -1 +1 @@\n-const oldValue = 1\n+const oldValue = 2\n'
+          },
+          {
+            file: '/repo/src/new.ts',
+            patch: '@@ -1 +1 @@\n-const newValue = 1\n+const newValue = 2\n'
+          }
+        ]
+      }
+    }, ctx);
+  });
+
+  const messages = messagePayloads(afterBaselineLines);
+  assert.equal(messages.length, 2);
+  assert.equal(messages[0].message.content[0].input.file_path, '/repo/src/new.ts');
+});
+
 test('opencode session.diff deduplicates equivalent relative and absolute paths', async () => {
   const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
+  ctx.sessionDiffBaselineReady = true;
   const lines = await captureConsole(async () => {
     await handleOpenCodeEvent({
       type: 'session.diff',

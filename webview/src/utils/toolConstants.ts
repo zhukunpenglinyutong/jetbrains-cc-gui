@@ -4,16 +4,16 @@
  */
 
 // Read/file viewing tools
-export const READ_TOOL_NAMES = new Set(['read', 'read_file', 'read_multiple_files']);
+export const READ_TOOL_NAMES = new Set(['read', 'read_file', 'read_multiple_files', 'view_file']);
 
 // Edit/file modification tools
-export const EDIT_TOOL_NAMES = new Set(['edit', 'edit_file', 'replace_string', 'write', 'write_file', 'write_to_file']);
+export const EDIT_TOOL_NAMES = new Set(['edit', 'edit_file', 'replace_string', 'write', 'write_file', 'write_to_file', 'replace_file_content', 'multi_replace_file_content']);
 
 // Bash/command execution tools
-export const BASH_TOOL_NAMES = new Set(['bash', 'run_terminal_cmd', 'exec_command', 'execute_command', 'shell_command']);
+export const BASH_TOOL_NAMES = new Set(['bash', 'run_terminal_cmd', 'exec_command', 'execute_command', 'shell_command', 'run_command']);
 
 // Search/grep/glob tools
-export const SEARCH_TOOL_NAMES = new Set(['grep', 'glob', 'search', 'find', 'search_files']);
+export const SEARCH_TOOL_NAMES = new Set(['grep', 'glob', 'search', 'find', 'search_files', 'grep_search']);
 
 // Internal orchestration tools that may be useful during streaming but should
 // not remain as residual tool cards after the final answer is complete.
@@ -35,6 +35,8 @@ export const FILE_MODIFY_TOOL_NAMES = new Set([
   'write_to_file',
   'notebookedit',
   'create_file',
+  'replace_file_content',
+  'multi_replace_file_content'
 ]);
 
 export function normalizeToolName(toolName: string): string {
