@@ -11,9 +11,11 @@ import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class CliSettingsIsolationTest {
     private String originalHomeDir;
@@ -54,6 +56,75 @@ public class CliSettingsIsolationTest {
         JsonObject env = CliSettings.readClaudeEnv();
 
         assertEquals("cli-model", env.get("ANTHROPIC_MODEL").getAsString());
+    }
+
+    @Test
+    public void readClaudeCliEnvironmentMergesSettingsJsonWithoutProtectedRuntimeKeys() throws Exception {
+        Path tempHome = Files.createTempDirectory("cli-claude-env");
+        useTemporaryHomeDirectory(tempHome);
+        Path claudeDir = tempHome.resolve(".claude");
+        Files.createDirectories(claudeDir);
+        Files.writeString(claudeDir.resolve("settings.json"),
+                """
+                {
+                  "env": {
+                    "ANTHROPIC_BASE_URL": "https://claude-proxy.example.com",
+                    "ANTHROPIC_AUTH_TOKEN": "sk-claude",
+                    "ANTHROPIC_DEFAULT_SONNET_MODEL": "provider-sonnet",
+                    "HTTP_PROXY": "http://127.0.0.1:7890",
+                    "CLAUDE_SESSION_ID": "must-not-leak"
+                  },
+                  "apiKeyHelper": "helper.cmd"
+                }
+                """,
+                StandardCharsets.UTF_8);
+
+        Map<String, String> env = CliSettings.readClaudeCliEnvironment();
+
+        assertEquals("https://claude-proxy.example.com", env.get("ANTHROPIC_BASE_URL"));
+        assertEquals("sk-claude", env.get("ANTHROPIC_AUTH_TOKEN"));
+        assertEquals("provider-sonnet", env.get("ANTHROPIC_DEFAULT_SONNET_MODEL"));
+        assertEquals("http://127.0.0.1:7890", env.get("HTTP_PROXY"));
+        assertEquals("helper.cmd", env.get("ANTHROPIC_API_KEY_HELPER"));
+        assertFalse(env.containsKey("CLAUDE_SESSION_ID"));
+    }
+
+    @Test
+    public void readCodexCliEnvironmentReadsConfigTomlAndAuthJsonWithoutSandboxOverrides() throws Exception {
+        Path tempHome = Files.createTempDirectory("cli-codex-env");
+        useTemporaryHomeDirectory(tempHome);
+        Path codexDir = tempHome.resolve(".codex");
+        Files.createDirectories(codexDir);
+        Files.writeString(codexDir.resolve("config.toml"),
+                """
+                model = "gpt-5.3-codex"
+                model_provider = "eacase"
+                sandbox_mode = "danger-full-access"
+
+                [model_providers.eacase]
+                base_url = "https://gpt.eacase.de5.net/v1"
+                env_key = "EACASE_API_KEY"
+
+                [env]
+                EACASE_API_KEY = "sk-codex"
+                HTTPS_PROXY = "http://127.0.0.1:7890"
+                CODEX_SANDBOX_MODE = "must-not-leak"
+                """,
+                StandardCharsets.UTF_8);
+        Files.writeString(codexDir.resolve("auth.json"),
+                "{\"OPENAI_API_KEY\":\"sk-openai\"}",
+                StandardCharsets.UTF_8);
+
+        Map<String, String> env = CliSettings.readCodexCliEnvironment();
+
+        assertEquals("gpt-5.3-codex", env.get("CODEX_MODEL"));
+        assertEquals("https://gpt.eacase.de5.net/v1", env.get("OPENAI_BASE_URL"));
+        assertEquals("sk-codex", env.get("EACASE_API_KEY"));
+        assertEquals("sk-openai", env.get("OPENAI_API_KEY"));
+        assertEquals("http://127.0.0.1:7890", env.get("HTTPS_PROXY"));
+        assertFalse(env.containsKey("CODEX_SANDBOX_MODE"));
+        assertFalse(env.containsKey("CODEX_SANDBOX"));
+        assertTrue(env.containsKey("CODEX_MODEL"));
     }
 
     private void useTemporaryHomeDirectory(Path tempHome) throws Exception {

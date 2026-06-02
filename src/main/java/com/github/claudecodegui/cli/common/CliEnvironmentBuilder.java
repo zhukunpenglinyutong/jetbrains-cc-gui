@@ -2,7 +2,6 @@ package com.github.claudecodegui.cli.common;
 
 import com.github.claudecodegui.util.PlatformUtils;
 
-import java.io.File;
 import java.nio.file.Paths;
 import java.util.LinkedHashMap;
 import java.util.Locale;

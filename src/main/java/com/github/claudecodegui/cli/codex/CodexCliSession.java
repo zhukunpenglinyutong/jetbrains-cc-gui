@@ -11,7 +11,6 @@ import com.github.claudecodegui.cli.common.CliProcessHandle;
 import com.github.claudecodegui.cli.common.CliSettings;
 import com.github.claudecodegui.session.runtime.CodexCliResolver;
 import com.github.claudecodegui.ui.toolwindow.TabPerformanceLogger;
-import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -133,6 +132,7 @@ public class CodexCliSession {
                 Map<String, String> cliEnv = pb.environment();
                 cliEnv.clear();
                 cliEnv.putAll(CliEnvironmentBuilder.buildBaseEnvironment());
+                cliEnv.putAll(CliSettings.readCodexCliEnvironment());
                 cliEnv.put("NO_COLOR", "1");
                 CliEnvironmentBuilder.configureProjectPath(cliEnv, request.cwd());
                 // CLI mode must be allowed to reach the real Codex API even if the host
