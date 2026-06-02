@@ -1,6 +1,8 @@
 package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.dependency.DependencyManager;
+import com.github.claudecodegui.dependency.SdkDefinition;
 import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.model.NodeDetectionResult;
@@ -30,6 +32,7 @@ import java.util.concurrent.CompletableFuture;
 public class SessionHandler extends BaseMessageHandler {
 
     private static final Logger LOG = Logger.getInstance(SessionHandler.class);
+    private final DependencyManager dependencyManager = new DependencyManager(NodeDetector.getInstance());
 
     private static final String[] SUPPORTED_TYPES = {
             "send_message",
@@ -102,7 +105,8 @@ public class SessionHandler extends BaseMessageHandler {
      * [FIX] Now parses JSON format to extract text, agent info and file tags
      */
     private void handleSendMessage(String content) {
-        boolean requiresNodeRuntime = !isCliModeActive(extractInvocationMode(content));
+        String requestedInvocationMode = extractInvocationMode(content);
+        boolean requiresNodeRuntime = !isCliModeActive(requestedInvocationMode);
         String nodeVersion = requiresNodeRuntime ? this.resolveNodeVersion() : null;
         if (requiresNodeRuntime && nodeVersion == null) {
             ApplicationManager.getApplication().invokeLater(() -> {
@@ -119,12 +123,20 @@ public class SessionHandler extends BaseMessageHandler {
             return;
         }
 
+        String sdkValidationMessage = validateRequiredSdk(requestedInvocationMode);
+        if (sdkValidationMessage != null) {
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("addErrorMessage", escapeJs(sdkValidationMessage));
+            });
+            return;
+        }
+
         // [FIX] Parse JSON format to extract text, agent info and file tags
         String prompt;
         String agentPrompt = null;
         java.util.List<String> fileTagPaths = null;
         String requestedPermissionMode = null;
-        String requestedInvocationMode = null;
+        String resolvedRequestedInvocationMode = requestedInvocationMode;
         try {
             Gson gson = new Gson();
             JsonObject payload = gson.fromJson(content, JsonObject.class);
@@ -171,7 +183,7 @@ public class SessionHandler extends BaseMessageHandler {
             if (payload != null && payload.has("invocationMode") && !payload.get("invocationMode").isJsonNull()) {
                 String mode = payload.get("invocationMode").getAsString();
                 if (SessionState.isValidClaudeInvocationMode(mode)) {
-                    requestedInvocationMode = mode;
+                    resolvedRequestedInvocationMode = mode;
                 } else {
                     LOG.warn("[SessionHandler] Ignoring invalid invocationMode from payload: " + mode);
                 }
@@ -186,7 +198,7 @@ public class SessionHandler extends BaseMessageHandler {
         final String finalAgentPrompt = agentPrompt;
         final java.util.List<String> finalFileTagPaths = fileTagPaths;
         final String finalRequestedPermissionMode = requestedPermissionMode;
-        final String finalRequestedInvocationMode = requestedInvocationMode;
+        final String finalRequestedInvocationMode = resolvedRequestedInvocationMode;
         ClaudeSession currentSession = context.getSession();
         LOG.debug(String.format(
                 "[CliConcurrencyDiag][SessionHandler] accepted send_message: provider=%s, requestedInvocationMode=%s, sessionId=%s, channelId=%s, promptChars=%d, thread=%s",
@@ -379,6 +391,14 @@ public class SessionHandler extends BaseMessageHandler {
             });
             return;
         }
+
+        String sdkValidationMessage = validateRequiredSdk(requestedInvocationMode);
+        if (sdkValidationMessage != null) {
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("addErrorMessage", escapeJs(sdkValidationMessage));
+            });
+            return;
+        }
         if (requiresNodeRuntime && !NodeDetector.isVersionSupported(nodeVersion)) {
             int minVersion = NodeDetector.MIN_NODE_MAJOR_VERSION;
             ApplicationManager.getApplication().invokeLater(() -> {
@@ -501,6 +521,34 @@ public class SessionHandler extends BaseMessageHandler {
             LOG.debug("[SessionHandler] Failed to resolve Claude invocation mode: " + e.getMessage());
             return false;
         }
+    }
+
+    private String validateRequiredSdk(String requestedInvocationMode) {
+        ClaudeSession currentSession = context.getSession();
+        String provider = currentSession != null ? currentSession.getProvider() : context.getCurrentProvider();
+
+        if (provider == null || provider.isBlank()) {
+            provider = "claude";
+        }
+
+        if ("claude".equals(provider) && isCliModeActive(requestedInvocationMode)) {
+            return null;
+        }
+
+        SdkDefinition sdkDefinition = SdkDefinition.fromProvider(provider);
+        if (sdkDefinition == null) {
+            return null;
+        }
+
+        try {
+            if (dependencyManager.isInstalled(sdkDefinition.getId())) {
+                return null;
+            }
+        } catch (Exception e) {
+            LOG.warn("[SessionHandler] Failed to verify SDK installation for provider " + provider + ": " + e.getMessage(), e);
+        }
+
+        return sdkDefinition.getDisplayName() + " 未安装或不可用，请前往设置中的 Dependencies 页面安装后再发送消息。";
     }
 
     /**

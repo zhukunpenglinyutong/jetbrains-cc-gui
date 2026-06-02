@@ -91,6 +91,10 @@ export function useMessageSender({
   openContextUsageDialog,
   closeContextUsageDialog,
 }: UseMessageSenderOptions) {
+  const getProviderDisplayName = useCallback((provider: string): string => {
+    return provider === 'codex' ? 'Codex' : 'Claude Code';
+  }, []);
+
   /**
    * Check if the input is a new session command
    */
@@ -310,14 +314,20 @@ export function useMessageSender({
       return;
     }
 
-    // Check SDK status
+    // SDK status preflight is best-effort only. If the async status query is still
+    // unresolved, allow the send and let the backend perform the authoritative check.
     if (!sdkStatusLoaded) {
-      addToast(t('chat.sdkStatusLoading'), 'info');
-      return;
+      addToast(
+        t('chat.sdkStatusCheckDeferred', {
+          provider: getProviderDisplayName(currentProvider),
+          defaultValue: '{{provider}} SDK status is still loading. Sending will continue and the backend will verify it before execution.',
+        }),
+        'info',
+      );
     }
     if (!currentSdkInstalled) {
       addToast(
-        t('chat.sdkNotInstalled', { provider: currentProvider === 'codex' ? 'Codex' : 'Claude Code' }) + ' ' + t('chat.goInstallSdk'),
+        t('chat.sdkNotInstalled', { provider: getProviderDisplayName(currentProvider) }) + ' ' + t('chat.goInstallSdk'),
         'warning'
       );
       setSettingsInitialTab('dependencies');
@@ -395,6 +405,7 @@ export function useMessageSender({
     sendMessageToBackend,
     addToast,
     t,
+    getProviderDisplayName,
   ]);
 
   /**

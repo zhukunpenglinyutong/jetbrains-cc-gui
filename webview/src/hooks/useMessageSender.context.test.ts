@@ -7,6 +7,7 @@ import type { UseMessageSenderOptions } from './useMessageSender';
 
 describe('useMessageSender - /context command', () => {
   const t = ((key: string, opts?: any) => opts?.defaultValue ?? key) as any;
+  const parseBridgeCall = (call: string) => JSON.parse(call) as { type: string; content: string };
 
   const createOptions = (overrides: Partial<UseMessageSenderOptions> = {}): UseMessageSenderOptions => ({
     t,
@@ -56,9 +57,9 @@ describe('useMessageSender - /context command', () => {
 
     expect(window.sendToJava).toHaveBeenCalledTimes(1);
     const call = (window.sendToJava as any).mock.calls[0][0] as string;
-    expect(call).toMatch(/^get_context_usage:/);
-
-    const payload = JSON.parse(call.substring('get_context_usage:'.length));
+    const bridgePayload = parseBridgeCall(call);
+    expect(bridgePayload.type).toBe('get_context_usage');
+    const payload = JSON.parse(bridgePayload.content);
     expect(payload.model).toBe('claude-opus-4-7');
     expect(payload.requestId).toBeTruthy();
   });
@@ -77,7 +78,9 @@ describe('useMessageSender - /context command', () => {
 
     expect(window.sendToJava).toHaveBeenCalledTimes(1);
     const call = (window.sendToJava as any).mock.calls[0][0] as string;
-    const payload = JSON.parse(call.substring('get_context_usage:'.length));
+    const bridgePayload = parseBridgeCall(call);
+    expect(bridgePayload.type).toBe('get_context_usage');
+    const payload = JSON.parse(bridgePayload.content);
     expect(payload.model).toBe('claude-opus-4-7[1m]');
   });
 
@@ -170,9 +173,9 @@ describe('useMessageSender - /context command', () => {
             result.current.handleSubmit('hello');
         });
 
-        const calls = (window.sendToJava as any).mock.calls.map(([payload]: [string]) => payload);
-        const sendMessageCall = calls.find((payload: string) => payload.startsWith('send_message:'));
-        const payload = JSON.parse(sendMessageCall!.substring('send_message:'.length));
+        const calls = (window.sendToJava as any).mock.calls.map(([payload]: [string]) => parseBridgeCall(payload));
+        const sendMessageCall = calls.find((payload: { type: string }) => payload.type === 'send_message');
+        const payload = JSON.parse(sendMessageCall!.content);
         expect(payload).not.toHaveProperty('permissionMode');
     });
 
@@ -194,6 +197,28 @@ describe('useMessageSender - /context command', () => {
     expect(addToast).toHaveBeenCalledWith(
       expect.any(String),
       'error',
+    );
+  });
+
+  it('allows sending while SDK status is still loading and shows an informational toast', () => {
+    const addToast = vi.fn();
+    const opts = createOptions({
+      currentProvider: 'codex',
+      sdkStatusLoaded: false,
+      currentSdkInstalled: true,
+      addToast,
+    });
+
+    const { result } = renderHook(() => useMessageSender(opts));
+
+    act(() => {
+      result.current.handleSubmit('hello');
+    });
+
+    expect(window.sendToJava).toHaveBeenCalled();
+    expect(addToast).toHaveBeenCalledWith(
+      expect.stringContaining('backend will verify'),
+      'info',
     );
   });
 });
