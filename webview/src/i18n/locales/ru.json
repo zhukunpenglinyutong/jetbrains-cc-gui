@@ -92,6 +92,8 @@
     "streamingConnected": "{{provider}} обрабатывает запрос",
     "showEarlierMessages": "Показать предыдущие сообщения ({{count}})",
     "totalDuration": "Этот ответ занял",
+    "waitingTimedOutDuration": "Ожидание истекло",
+    "streamStalledRetrying": "Вывод модели не поступал некоторое время. CLI может всё ещё повторять попытку; при сбое будет показана итоговая ошибка.",
     "search": {
       "ariaLabel": "Поиск в беседе",
       "placeholder": "Поиск в беседе…",

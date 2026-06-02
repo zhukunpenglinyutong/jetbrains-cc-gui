@@ -84,6 +84,7 @@
     "disabled": "已停用",
     "sdkNotInstalled": "{{provider}} SDK 尚未安装，请先安装 SDK 才能开始对话",
     "sdkStatusLoading": "正在检查 SDK 状态...",
+    "sdkStatusCheckDeferred": "{{provider}} SDK 状态仍在加载，当前会继续发送，并在后端执行前自动校验。",
     "planModeEnabled": "已启用规划模式",
     "invocationModeRequired": "尚未读取到 Claude 调用模式，请先在设置中选择 SDK 或 CLI 模式后再发送。",
     "openSourceBanner": "本项目保证100%开源（谨防盗版项目）",
@@ -96,6 +97,8 @@
     "streamingConnected": "{{provider}} 已成功连接，正在理解问题",
     "showEarlierMessages": "显示之前的 {{count}} 条消息",
     "totalDuration": "本次耗时",
+    "waitingTimedOutDuration": "等待超时",
+    "streamStalledRetrying": "长时间未收到模型输出，CLI 可能仍在重试；如果稍后失败会显示真实错误。",
     "search": {
       "ariaLabel": "在对话中搜索",
       "placeholder": "在对话中搜索…",

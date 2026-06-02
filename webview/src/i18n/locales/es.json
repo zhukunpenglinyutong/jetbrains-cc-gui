@@ -92,6 +92,8 @@
     "streamingConnected": "{{provider}} conectado, entendiendo tu pregunta",
     "showEarlierMessages": "Mostrar {{count}} mensajes anteriores",
     "totalDuration": "Esta respuesta tardó",
+    "waitingTimedOutDuration": "Tiempo de espera agotado",
+    "streamStalledRetrying": "No se recibió salida del modelo durante un tiempo. Es posible que la CLI siga reintentando; si falla, aparecerá el error final.",
     "search": {
       "ariaLabel": "Buscar en la conversación",
       "placeholder": "Buscar en la conversación…",

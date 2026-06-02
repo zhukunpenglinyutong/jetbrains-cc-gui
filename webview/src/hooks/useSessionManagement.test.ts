@@ -4,6 +4,8 @@ import type { HistoryData } from '../types/index.js';
 
 describe('useSessionManagement', () => {
   const t = ((key: string) => key) as any;
+  const bridgeCall = (type: string, content = '') =>
+    JSON.stringify({ type, content });
 
   const createMocks = () => ({
     setHistoryData: vi.fn(),
@@ -63,7 +65,7 @@ describe('useSessionManagement', () => {
     expect(mocks.setCustomSessionTitle).toHaveBeenCalledWith(null);
     expect(mocks.setUsagePercentage).toHaveBeenCalledWith(0);
     expect(mocks.setUsageUsedTokens).toHaveBeenCalledWith(undefined);
-    expect(window.sendToJava).toHaveBeenCalledWith('create_new_session:');
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('create_new_session'));
   });
 
   it('clears stale ui state before loading history', () => {
@@ -99,10 +101,10 @@ describe('useSessionManagement', () => {
       result.current.loadHistorySession('history-1');
     });
 
-    expect(window.sendToJava).toHaveBeenNthCalledWith(1, 'interrupt_session:');
+    expect(window.sendToJava).toHaveBeenNthCalledWith(1, bridgeCall('interrupt_session'));
     expect(window.sendToJava).toHaveBeenNthCalledWith(
       2,
-      'load_session:{"sessionId":"history-1","provider":"claude"}'
+      bridgeCall('load_session', '{"sessionId":"history-1","provider":"claude"}')
     );
     expect(window.__sessionTransitioning).toBe(true);
     expect(window.__sessionTransitionToken).toBeTruthy();
@@ -160,8 +162,8 @@ describe('useSessionManagement', () => {
 
     expect(historyData.sessions).toEqual([]);
     expect(historyData.total).toBe(0);
-    expect(window.sendToJava).toHaveBeenCalledWith('delete_session:history-1');
-    expect(window.sendToJava).toHaveBeenCalledWith('delete_session:history-2');
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('delete_session', 'history-1'));
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('delete_session', 'history-2'));
   });
 
   it('sends one backend request when deleting multiple history sessions', () => {
@@ -211,7 +213,7 @@ describe('useSessionManagement', () => {
     expect(historyData.sessions).toEqual([]);
     expect(historyData.total).toBe(0);
     expect(window.sendToJava).toHaveBeenCalledTimes(1);
-    expect(window.sendToJava).toHaveBeenCalledWith('delete_sessions:["history-1","history-2"]');
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('delete_sessions', '["history-1","history-2"]'));
     expect(mocks.addToast).toHaveBeenCalledWith('history.sessionDeleted', 'success');
   });
 
@@ -233,7 +235,7 @@ describe('useSessionManagement', () => {
       result.current.deleteHistorySessions(['history-1', 'history-2', 'history-1']);
     });
 
-    expect(window.sendToJava).toHaveBeenCalledWith('delete_sessions:["history-1","history-2"]');
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('delete_sessions', '["history-1","history-2"]'));
     expect(mocks.addToast).toHaveBeenCalledWith('history.sessionDeleted', 'success');
   });
 
@@ -281,8 +283,8 @@ describe('useSessionManagement', () => {
       result.current.deleteHistorySessions(['history-1', 'history-2']);
     });
 
-    expect(window.sendToJava).toHaveBeenCalledWith('delete_sessions:["history-1","history-2"]');
-    expect(window.sendToJava).toHaveBeenCalledWith('create_new_session:');
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('delete_sessions', '["history-1","history-2"]'));
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('create_new_session'));
     expect(mocks.addToast).not.toHaveBeenCalledWith('history.sessionDeleted', 'success');
     expect(window.__pendingSessionTransitionToast).toEqual({
       message: 'history.sessionDeleted',
@@ -308,8 +310,8 @@ describe('useSessionManagement', () => {
       result.current.forceCreateNewSession();
     });
 
-    expect(window.sendToJava).toHaveBeenCalledWith('interrupt_session:');
-    expect(window.sendToJava).toHaveBeenCalledWith('create_new_session:');
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('interrupt_session'));
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('create_new_session'));
     expect(window.__sessionTransitioning).toBe(true);
     expect(window.__sessionTransitionToken).toBeTruthy();
     expect(mocks.clearToasts).toHaveBeenCalledTimes(1);
@@ -337,8 +339,8 @@ describe('useSessionManagement', () => {
       result.current.forceCreateNewSessionWithProvider('codex');
     });
 
-    expect(window.sendToJava).toHaveBeenNthCalledWith(1, 'set_provider:codex');
-    expect(window.sendToJava).toHaveBeenNthCalledWith(2, 'create_new_session:');
+    expect(window.sendToJava).toHaveBeenNthCalledWith(1, bridgeCall('set_provider', 'codex'));
+    expect(window.sendToJava).toHaveBeenNthCalledWith(2, bridgeCall('create_new_session'));
     expect(window.__sessionTransitioning).toBe(true);
     expect(mocks.setMessages).toHaveBeenCalledWith([]);
     expect(mocks.setCurrentSessionId).toHaveBeenCalledWith(null);
@@ -394,7 +396,7 @@ describe('useSessionManagement', () => {
     expect(window.__sessionTransitioning).toBe(true);
     expect(window.__sessionTransitionToken).toBeTruthy();
     expect(mocks.setMessages).toHaveBeenCalledWith([]);
-    expect(window.sendToJava).toHaveBeenCalledWith('create_new_session:');
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('create_new_session'));
   });
 
   it('still shows the interrupt dialog while loading even if skipNewSessionConfirm is enabled', () => {
@@ -423,7 +425,7 @@ describe('useSessionManagement', () => {
     expect(result.current.showNewSessionConfirm).toBe(false);
     expect(window.__sessionTransitioning).toBe(false);
     expect(mocks.setMessages).not.toHaveBeenCalled();
-    expect(window.sendToJava).not.toHaveBeenCalledWith('create_new_session:');
+    expect(window.sendToJava).not.toHaveBeenCalledWith(bridgeCall('create_new_session'));
   });
 
   it('handleConfirmInterrupt completes interrupt+transition even with skipNewSessionConfirm enabled', () => {
@@ -465,8 +467,8 @@ describe('useSessionManagement', () => {
     const calls = (window.sendToJava as ReturnType<typeof vi.fn>).mock.calls.map(
       (c: unknown[]) => c[0]
     );
-    expect(calls.filter((c) => c === 'interrupt_session:')).toHaveLength(1);
-    expect(calls.filter((c) => c === 'create_new_session:')).toHaveLength(1);
+    expect(calls.filter((c) => c === bridgeCall('interrupt_session'))).toHaveLength(1);
+    expect(calls.filter((c) => c === bridgeCall('create_new_session'))).toHaveLength(1);
   });
 
   it('handleConfirmNewSession cleans state and creates new session', () => {
@@ -498,7 +500,7 @@ describe('useSessionManagement', () => {
     expect(mocks.clearToasts).toHaveBeenCalledTimes(1);
     expect(mocks.setMessages).toHaveBeenCalledWith([]);
     expect(mocks.setCurrentSessionId).toHaveBeenCalledWith(null);
-    expect(window.sendToJava).toHaveBeenCalledWith('create_new_session:');
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('create_new_session'));
     expect(result.current.showNewSessionConfirm).toBe(false);
   });
 
@@ -526,8 +528,8 @@ describe('useSessionManagement', () => {
       result.current.handleConfirmInterrupt();
     });
 
-    expect(window.sendToJava).toHaveBeenCalledWith('interrupt_session:');
-    expect(window.sendToJava).toHaveBeenCalledWith('create_new_session:');
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('interrupt_session'));
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('create_new_session'));
     expect(window.__sessionTransitioning).toBe(true);
     expect(window.__sessionTransitionToken).toBeTruthy();
     expect(mocks.clearToasts).toHaveBeenCalledTimes(1);
@@ -570,8 +572,8 @@ describe('useSessionManagement', () => {
 
     // Should NOT send interrupt when not loading
     const calls = (window.sendToJava as any).mock.calls.map((c: any) => c[0]);
-    expect(calls).not.toContain('interrupt_session:');
-    expect(calls).toContain('load_session:{"sessionId":"hist-2","provider":"claude"}');
+    expect(calls).not.toContain(bridgeCall('interrupt_session'));
+    expect(calls).toContain(bridgeCall('load_session', '{"sessionId":"hist-2","provider":"claude"}'));
 
     // But should still set transition guard
     expect(window.__sessionTransitioning).toBe(true);
@@ -616,7 +618,7 @@ describe('useSessionManagement', () => {
     });
 
     expect(window.sendToJava).toHaveBeenCalledWith(
-      'load_session:{"sessionId":"hist-codex","provider":"codex"}'
+      bridgeCall('load_session', '{"sessionId":"hist-codex","provider":"codex"}')
     );
   });
 

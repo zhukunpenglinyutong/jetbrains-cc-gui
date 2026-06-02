@@ -92,6 +92,8 @@
     "streamingConnected": "{{provider}} 연결됨, 질문을 이해하는 중",
     "showEarlierMessages": "이전 메시지 {{count}}개 보기",
     "totalDuration": "이번 응답 소요 시간",
+    "waitingTimedOutDuration": "대기 시간 초과",
+    "streamStalledRetrying": "한동안 모델 출력이 수신되지 않았습니다. CLI가 아직 재시도 중일 수 있으며, 실패하면 최종 오류가 표시됩니다.",
     "search": {
       "ariaLabel": "대화에서 검색",
       "placeholder": "대화에서 검색...",

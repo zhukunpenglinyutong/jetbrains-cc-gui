@@ -95,6 +95,8 @@
     "streamingConnected": "{{provider}} 已成功連接，正在理解問題",
     "showEarlierMessages": "顯示之前的 {{count}} 則訊息",
     "totalDuration": "本次耗時",
+    "waitingTimedOutDuration": "等待逾時",
+    "streamStalledRetrying": "長時間未收到模型輸出，CLI 可能仍在重試；如果稍後失敗會顯示真實錯誤。",
     "search": {
       "ariaLabel": "在對話中搜尋",
       "placeholder": "在對話中搜尋...",

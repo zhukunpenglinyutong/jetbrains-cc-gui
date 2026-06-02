@@ -92,6 +92,8 @@
     "streamingConnected": "{{provider}}に接続しました、質問を理解しています",
     "showEarlierMessages": "以前の{{count}}件のメッセージを表示",
     "totalDuration": "今回の応答時間",
+    "waitingTimedOutDuration": "待機がタイムアウトしました",
+    "streamStalledRetrying": "しばらくモデル出力を受信していません。CLI はまだ再試行中の可能性があり、失敗した場合は最終エラーが表示されます。",
     "search": {
       "ariaLabel": "会話内を検索",
       "placeholder": "会話内を検索...",

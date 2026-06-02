@@ -84,6 +84,7 @@
     "disabled": "Disabled",
     "sdkNotInstalled": "{{provider}} SDK is not installed. Please install the SDK to start chatting.",
     "sdkStatusLoading": "Checking SDK status...",
+    "sdkStatusCheckDeferred": "{{provider}} SDK status is still loading. Sending will continue and the backend will verify it before execution.",
     "planModeEnabled": "Plan mode enabled",
     "invocationModeRequired": "Invocation mode is not loaded. Please choose SDK or CLI mode in Settings before sending.",
     "openSourceBanner": "This project is guaranteed to be 100% open source (beware of pirated projects)",
@@ -96,6 +97,8 @@
     "streamingConnected": "{{provider}} connected, understanding your question",
     "showEarlierMessages": "Show {{count}} earlier messages",
     "totalDuration": "This reply took",
+    "waitingTimedOutDuration": "Wait timed out",
+    "streamStalledRetrying": "No model output was received for a while. The CLI may still be retrying; the final error will appear if it fails.",
     "search": {
       "ariaLabel": "Search in conversation",
       "placeholder": "Search in conversation…",

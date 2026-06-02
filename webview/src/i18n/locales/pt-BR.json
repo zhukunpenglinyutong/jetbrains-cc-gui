@@ -92,6 +92,8 @@
     "streamingConnected": "{{provider}} conectado, entendendo sua pergunta",
     "showEarlierMessages": "Mostrar {{count}} mensagens anteriores",
     "totalDuration": "Esta resposta levou",
+    "waitingTimedOutDuration": "Tempo de espera esgotado",
+    "streamStalledRetrying": "Nenhuma saída do modelo foi recebida por um tempo. A CLI ainda pode estar tentando novamente; se falhar, o erro final aparecerá.",
     "search": {
       "ariaLabel": "Pesquisar na conversa",
       "placeholder": "Pesquisar na conversa…",

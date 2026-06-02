@@ -92,6 +92,8 @@
     "streamingConnected": "{{provider}} connecté, en train de comprendre votre question",
     "showEarlierMessages": "Afficher {{count}} messages précédents",
     "totalDuration": "Cette réponse a pris",
+    "waitingTimedOutDuration": "Délai d'attente dépassé",
+    "streamStalledRetrying": "Aucune sortie du modèle n'a été reçue depuis un moment. La CLI peut encore réessayer ; l'erreur finale s'affichera en cas d'échec.",
     "search": {
       "ariaLabel": "Rechercher dans la conversation",
       "placeholder": "Rechercher dans la conversation…",

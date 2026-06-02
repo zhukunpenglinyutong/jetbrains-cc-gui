@@ -402,7 +402,9 @@ describe('useWindowCallbacks integration', () => {
       vi.runAllTimers();
     });
 
-        expect(window.sendToJava).toHaveBeenCalledWith('get_session_runtime_state:');
+        expect(window.sendToJava).toHaveBeenCalledWith(
+          JSON.stringify({ type: 'get_session_runtime_state', content: '' })
+        );
 
     act(() => {
         window.updateSessionRuntimeState?.(JSON.stringify({
@@ -683,6 +685,8 @@ describe('useWindowCallbacks integration', () => {
 
       expect(clearTimeoutMock).toHaveBeenCalledWith(42);
     expect(window.__pendingUpdateRaf).toBeNull();
+  });
+
   // ===== clearMessages forces a webview repaint to clear JCEF ghosting =====
 
   it('clearMessages triggers forceWebviewRepaint to clear leftover ghosting', () => {
@@ -997,6 +1001,37 @@ describe('useWindowCallbacks integration', () => {
       expect((opts.setStreamingActive as any).mock.calls.length).toBe(callsAfterFirstEnd);
     });
 
+    it('watchdog-triggered onStreamEnd marks the assistant message source for UI diagnostics', () => {
+      const buffer = { current: [] as ClaudeMessage[] };
+      const setMessages = vi.fn((value: ClaudeMessage[] | ((prev: ClaudeMessage[]) => ClaudeMessage[])) => {
+        buffer.current = typeof value === 'function'
+          ? (value as (prev: ClaudeMessage[]) => ClaudeMessage[])(buffer.current)
+          : value;
+      });
+      const opts = createOptions({ setMessages: setMessages as never });
+      renderHook(() => useWindowCallbacks(opts));
+
+      act(() => {
+        window.onStreamStart!();
+      });
+
+      window.__lastStreamEndSource = 'watchdog';
+
+      act(() => {
+        window.onStreamEnd!();
+      });
+
+      const lastAssistant = buffer.current.findLast((message) => message.type === 'assistant');
+      expect(lastAssistant).toMatchObject({
+        streamEndSource: 'watchdog',
+        streamEndReason: 'stalled',
+      });
+      expect(opts.addToast).toHaveBeenCalledWith(
+        'chat.streamStalledRetrying',
+        'warning',
+      );
+    });
+
     it('onStreamStart clears __streamEndProcessedTurnId for next turn', () => {
       const opts = createOptions();
       renderHook(() => useWindowCallbacks(opts));
@@ -1145,6 +1180,29 @@ describe('useWindowCallbacks integration', () => {
       expect(window.__deniedToolIds?.has('B-1')).toBe(true);
     });
 
+    it('historyLoadComplete also marks orphan shell_command tool_use in raw.message.content as denied', () => {
+      const assistant: ClaudeMessage = {
+        type: 'assistant',
+        content: '运行命令',
+        raw: {
+          message: {
+            content: [
+              { type: 'text', text: '运行命令' },
+              { type: 'tool_use', id: 'cmd-hist-1', name: 'shell_command', input: { command: 'git status' } },
+            ],
+          },
+        } as never,
+        timestamp: new Date().toISOString(),
+      };
+
+      const { opts, buffer } = createOptsWithMessages([assistant]);
+      renderHook(() => useWindowCallbacks(opts));
+
+      act(() => { window.historyLoadComplete!(); });
+
+      expect(window.__deniedToolIds?.has('cmd-hist-1')).toBe(true);
+    });
+
     it('onStreamEnd only scans the LAST turn, leaving earlier-turn orphans alone', () => {
       // Design contract (NOT a bug): during a LIVE stream only the active turn can
       // have stragglers — every earlier turn already received its tool_results
@@ -1198,7 +1256,7 @@ describe('useWindowCallbacks integration', () => {
         } as never,
         timestamp: new Date().toISOString(),
       };
-      const { opts } = createOptsWithMessages([assistant]);
+      const { opts, buffer } = createOptsWithMessages([assistant]);
       renderHook(() => useWindowCallbacks(opts));
 
       act(() => { window.onPermissionDenied!(); });
@@ -1420,3 +1478,6 @@ describe('useWindowCallbacks integration', () => {
     });
   });
 });
+
+
+
