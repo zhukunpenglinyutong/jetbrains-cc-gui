@@ -18,6 +18,7 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
     setUsagePercentage,
     setUsageUsedTokens,
     setUsageMaxTokens,
+    setTokenDetail,
       setCurrentProvider,
     setPermissionMode,
     setClaudePermissionMode,
@@ -62,6 +63,30 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
         setUsagePercentage(safePercentage);
         setUsageUsedTokens(used);
         setUsageMaxTokens(max);
+
+        // Parse detailed token information if available
+        if (typeof data.inputTokens === 'number' ||
+            typeof data.outputTokens === 'number' ||
+            typeof data.cacheCreationTokens === 'number' ||
+            typeof data.cacheReadTokens === 'number') {
+          const inputTokens = data.inputTokens || 0;
+          const outputTokens = data.outputTokens || 0;
+          const cacheCreationTokens = data.cacheCreationTokens || 0;
+          const cacheReadTokens = data.cacheReadTokens || 0;
+          const totalInput = inputTokens + cacheCreationTokens + cacheReadTokens;
+          const cacheHitRate = totalInput > 0 ? (cacheReadTokens / totalInput) * 100 : 0;
+
+          setTokenDetail({
+            inputTokens,
+            outputTokens,
+            cacheCreationTokens,
+            cacheReadTokens,
+            totalTokens: used || 0,
+            maxTokens: max || 0,
+            percentage: safePercentage,
+            cacheHitRate,
+          });
+        }
       }
     } catch (error) {
       console.error('[Frontend] Failed to parse usage update:', error);

@@ -95,6 +95,7 @@ export interface ChatScreenProps {
   usagePercentage: ProviderState['usagePercentage'];
   usageUsedTokens: ProviderState['usageUsedTokens'];
   usageMaxTokens: ProviderState['usageMaxTokens'];
+  tokenDetail: ProviderState['tokenDetail'];
 
   // Model handlers
   onModeSelect: ProviderState['handleModeSelect'];
@@ -134,7 +135,7 @@ export const ChatScreen = ({
   sdkStatusLoaded, currentSdkInstalled,
   activeProviderConfig, claudeSettingsAlwaysThinkingEnabled,
   reasoningEffort, streamingEnabledSetting, sendShortcut, autoOpenFileEnabled,
-  longContextEnabled, usagePercentage, usageUsedTokens, usageMaxTokens,
+  longContextEnabled, usagePercentage, usageUsedTokens, usageMaxTokens, tokenDetail,
   onModeSelect, onModelSelect, onAgentSelect, onReasoningChange, onToggleThinking,
   onStreamingEnabledChange,
   onAutoOpenFileEnabledChange, onLongContextChange,
@@ -289,6 +290,7 @@ export const ChatScreen = ({
           usagePercentage={usagePercentage}
           usageUsedTokens={usageUsedTokens}
           usageMaxTokens={usageMaxTokens}
+          tokenDetail={tokenDetail}
           showUsage={true}
           alwaysThinkingEnabled={activeProviderConfig?.settingsConfig?.alwaysThinkingEnabled ?? claudeSettingsAlwaysThinkingEnabled}
           placeholder={sendShortcut === 'cmdEnter' ? t('chat.inputPlaceholderCmdEnter') : t('chat.inputPlaceholderEnter')}

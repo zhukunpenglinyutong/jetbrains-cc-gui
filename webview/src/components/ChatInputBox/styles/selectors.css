@@ -347,3 +347,49 @@
   opacity: 1;
   visibility: visible;
 }
+
+/* ============================================================
+   Detailed Token Usage Tooltip
+   ============================================================ */
+.token-detail-tooltip {
+  min-width: 200px;
+  white-space: normal;
+  padding: 8px 12px;
+}
+
+.token-detail-header {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--dropdown-border);
+}
+
+.token-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.token-detail-row.token-detail-total {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--dropdown-border);
+  font-weight: 600;
+}
+
+.token-detail-label {
+  color: var(--text-secondary);
+  margin-right: 12px;
+}
+
+.token-detail-value {
+  color: var(--text-primary);
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-weight: 500;
+}
+

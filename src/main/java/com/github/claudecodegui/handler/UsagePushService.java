@@ -53,10 +53,16 @@ public class UsagePushService {
                 sendUsageUpdate(0, newMaxTokens);
                 return;
             }
-            int usedTokens = TokenUsageUtils.extractUsedTokens(lastUsage, context.getCurrentProvider());
 
-            // Send update
-            sendUsageUpdate(usedTokens, newMaxTokens);
+            // Extract detailed token information
+            int usedTokens = TokenUsageUtils.extractUsedTokens(lastUsage, context.getCurrentProvider());
+            int inputTokens = lastUsage.has("input_tokens") ? lastUsage.get("input_tokens").getAsInt() : 0;
+            int outputTokens = lastUsage.has("output_tokens") ? lastUsage.get("output_tokens").getAsInt() : 0;
+            int cacheCreationTokens = lastUsage.has("cache_creation_input_tokens") ? lastUsage.get("cache_creation_input_tokens").getAsInt() : 0;
+            int cacheReadTokens = lastUsage.has("cache_read_input_tokens") ? lastUsage.get("cache_read_input_tokens").getAsInt() : 0;
+
+            // Send update with detailed breakdown
+            sendUsageUpdate(usedTokens, newMaxTokens, inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens);
 
         } catch (Exception e) {
             LOG.error("[UsagePushService] Failed to push usage update after model change: " + e.getMessage(), e);
@@ -64,20 +70,35 @@ public class UsagePushService {
     }
 
     /**
-     * Send usage update to the frontend.
+     * Send usage update to the frontend with detailed token breakdown.
      */
     public void sendUsageUpdate(int usedTokens, int maxTokens) {
+        sendUsageUpdate(usedTokens, maxTokens, 0, 0, 0, 0);
+    }
+
+    /**
+     * Send usage update to the frontend with detailed token breakdown.
+     */
+    public void sendUsageUpdate(int usedTokens, int maxTokens, int inputTokens, int outputTokens,
+                                int cacheCreationTokens, int cacheReadTokens) {
         int percentage = Math.min(100, maxTokens > 0 ? (int) ((usedTokens * 100.0) / maxTokens) : 0);
 
-        LOG.info("[UsagePushService] Sending usage update: usedTokens=" + usedTokens + ", maxTokens=" + maxTokens + ", percentage=" + percentage + "%");
+        LOG.info("[UsagePushService] Sending usage update: usedTokens=" + usedTokens + ", maxTokens=" + maxTokens +
+                 ", percentage=" + percentage + "%");
 
-        // Build usage update data
+        // Build usage update data with detailed breakdown
         JsonObject usageUpdate = new JsonObject();
         usageUpdate.addProperty("percentage", percentage);
         usageUpdate.addProperty("totalTokens", usedTokens);
         usageUpdate.addProperty("limit", maxTokens);
         usageUpdate.addProperty("usedTokens", usedTokens);
         usageUpdate.addProperty("maxTokens", maxTokens);
+
+        // Add detailed token breakdown
+        usageUpdate.addProperty("inputTokens", inputTokens);
+        usageUpdate.addProperty("outputTokens", outputTokens);
+        usageUpdate.addProperty("cacheCreationTokens", cacheCreationTokens);
+        usageUpdate.addProperty("cacheReadTokens", cacheReadTokens);
 
         String usageJson = gson.toJson(usageUpdate);
 

@@ -40,6 +40,8 @@ interface ContextBarProps {
   autoOpenFileEnabled?: boolean;
   /** Callback to enable file context (called from placeholder click) */
   onRequestEnableFileContext?: () => void;
+  /** Detailed token usage information */
+  tokenDetail?: any;
 }
 
 export const ContextBar: React.FC<ContextBarProps> = memo(({
@@ -60,6 +62,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
   onToggleStatusPanel,
   autoOpenFileEnabled = false,
   onRequestEnableFileContext,
+  tokenDetail,
 }) => {
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -162,6 +165,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
               usedTokens={usedTokens}
               maxTokens={maxTokens}
               size={14}
+              tokenDetail={tokenDetail}
             />
           </div>
         )}

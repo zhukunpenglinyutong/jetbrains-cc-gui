@@ -563,6 +563,8 @@ export interface ChatInputBoxProps {
   usageUsedTokens?: number;
   /** Maximum context tokens */
   usageMaxTokens?: number;
+  /** Detailed token breakdown */
+  tokenDetail?: TokenDetail;
   /** Whether to show usage */
   showUsage?: boolean;
   /** Whether always thinking is enabled */
@@ -742,6 +744,28 @@ export interface DropdownProps {
 }
 
 /**
+ * Detailed token information breakdown
+ */
+export interface TokenDetail {
+  /** Input tokens */
+  inputTokens: number;
+  /** Output tokens */
+  outputTokens: number;
+  /** Cache creation tokens */
+  cacheCreationTokens: number;
+  /** Cache read tokens */
+  cacheReadTokens: number;
+  /** Total tokens used */
+  totalTokens: number;
+  /** Maximum token limit */
+  maxTokens: number;
+  /** Usage percentage (0-100) */
+  percentage: number;
+  /** Cache hit rate (cache_read / total_input * 100) */
+  cacheHitRate: number;
+}
+
+/**
  * TokenIndicator component props
  */
 export interface TokenIndicatorProps {
@@ -753,6 +777,8 @@ export interface TokenIndicatorProps {
   usedTokens?: number;
   /** Maximum context tokens */
   maxTokens?: number;
+  /** Detailed token breakdown */
+  tokenDetail?: TokenDetail;
 }
 
 /**

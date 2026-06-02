@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import type { TokenIndicatorProps } from './types';
 
+
 /**
  * TokenIndicator - Usage ring progress bar component
  * Implemented using SVG dual-circle approach
@@ -10,6 +11,7 @@ export const TokenIndicator = ({
   size = 14,
   usedTokens,
   maxTokens,
+  tokenDetail,
 }: TokenIndicatorProps) => {
   const { t } = useTranslation();
   // Circle radius (accounting for stroke space)
@@ -41,9 +43,52 @@ export const TokenIndicator = ({
 
   const usedText = formatTokens(usedTokens);
   const maxText = formatTokens(maxTokens);
-  const tooltip = usedText && maxText
+  const simpleTooltip = usedText && maxText
     ? `${tooltipPercentage} · ${usedText} / ${maxText} ${' '}${t('chat.context')}`
     : t('chat.usagePercentage', { percentage: tooltipPercentage });
+
+  // Render detailed tooltip if tokenDetail is available
+  const renderDetailedTooltip = () => {
+    if (!tokenDetail) return simpleTooltip;
+
+    const formatNumber = (num: number) => {
+      return num.toLocaleString('en-US');
+    };
+
+    return (
+      <div className="token-detail-tooltip">
+        <div className="token-detail-header">📊 Token 使用详情</div>
+        <div className="token-detail-row">
+          <span className="token-detail-label">输入 Token:</span>
+          <span className="token-detail-value">{formatNumber(tokenDetail.inputTokens)}</span>
+        </div>
+        <div className="token-detail-row">
+          <span className="token-detail-label">输出 Token:</span>
+          <span className="token-detail-value">{formatNumber(tokenDetail.outputTokens)}</span>
+        </div>
+        <div className="token-detail-row">
+          <span className="token-detail-label">缓存创建:</span>
+          <span className="token-detail-value">{formatNumber(tokenDetail.cacheCreationTokens)}</span>
+        </div>
+        <div className="token-detail-row">
+          <span className="token-detail-label">缓存读取:</span>
+          <span className="token-detail-value">{formatNumber(tokenDetail.cacheReadTokens)}</span>
+        </div>
+        <div className="token-detail-row token-detail-total">
+          <span className="token-detail-label">总计:</span>
+          <span className="token-detail-value">{formatNumber(tokenDetail.totalTokens)} / {formatNumber(tokenDetail.maxTokens)}</span>
+        </div>
+        <div className="token-detail-row">
+          <span className="token-detail-label">使用率:</span>
+          <span className="token-detail-value">{tokenDetail.percentage.toFixed(1)}%</span>
+        </div>
+        <div className="token-detail-row">
+          <span className="token-detail-label">缓存命中率:</span>
+          <span className="token-detail-value">{tokenDetail.cacheHitRate.toFixed(1)}%</span>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="token-indicator">
@@ -73,7 +118,7 @@ export const TokenIndicator = ({
         </svg>
         {/* Hover tooltip */}
         <div className="token-tooltip">
-          {tooltip}
+          {renderDetailedTooltip()}
         </div>
       </div>
       <span className="token-percentage-label">{labelPercentage}</span>

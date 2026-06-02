@@ -146,7 +146,7 @@ const App = () => {
     activeProviderConfig, claudeSettingsAlwaysThinkingEnabled,
     reasoningEffort, streamingEnabledSetting, sendShortcut, autoOpenFileEnabled,
     longContextEnabled,
-    usagePercentage, usageUsedTokens, usageMaxTokens,
+    usagePercentage, usageUsedTokens, usageMaxTokens, tokenDetail,
       setCurrentProvider,
     setPermissionMode,
     setClaudePermissionMode, setCodexPermissionMode,
@@ -156,6 +156,7 @@ const App = () => {
     setSendShortcut, setAutoOpenFileEnabled,
     setSdkStatus, setSdkStatusLoaded, setSelectedAgent,
     setUsagePercentage, setUsageUsedTokens, setUsageMaxTokens,
+    setTokenDetail,
     syncActiveProviderModelMapping,
     handleModeSelect, handleModelSelect, handleProviderSelect,
     handleReasoningChange, handleAgentSelect, handleToggleThinking,
@@ -274,13 +275,14 @@ const App = () => {
     setQueueDisplayState, setQueueAheadCount,
     setIsThinking, setStreamingActive, setHistoryData,
     setCurrentSessionId, setUsagePercentage, setUsageUsedTokens, setUsageMaxTokens,
+    setTokenDetail,
       setCurrentProvider,
     setPermissionMode, setClaudePermissionMode, setCodexPermissionMode,
     setSelectedClaudeModel, setSelectedCodexModel,
     setProviderConfigVersion, setActiveProviderConfig,
     setClaudeSettingsAlwaysThinkingEnabled, setStreamingEnabledSetting,
     setSendShortcut, setAutoOpenFileEnabled,
-    setSdkStatus, setSdkStatusLoaded,
+    setSdkStatus, setSdkStatusLoaded, // These come from useUsageTracking
     setIsRewinding, setRewindDialogOpen, setCurrentRewindRequest,
     setContextInfo, setSelectedAgent,
     setSubagentHistories,
@@ -507,6 +509,7 @@ const App = () => {
           usagePercentage={usagePercentage}
           usageUsedTokens={usageUsedTokens}
           usageMaxTokens={usageMaxTokens}
+          tokenDetail={tokenDetail}
           onModeSelect={handleModeSelect}
           onModelSelect={handleModelSelect}
           onAgentSelect={handleAgentSelect}

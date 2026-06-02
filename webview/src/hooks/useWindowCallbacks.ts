@@ -41,6 +41,7 @@ export interface UseWindowCallbacksOptions {
   setUsagePercentage: React.Dispatch<React.SetStateAction<number>>;
   setUsageUsedTokens: React.Dispatch<React.SetStateAction<number | undefined>>;
   setUsageMaxTokens: React.Dispatch<React.SetStateAction<number | undefined>>;
+  setTokenDetail: React.Dispatch<React.SetStateAction<any>>;
     setCurrentProvider: React.Dispatch<React.SetStateAction<string>>;
   setPermissionMode: React.Dispatch<React.SetStateAction<PermissionMode>>;
   setClaudePermissionMode: React.Dispatch<React.SetStateAction<PermissionMode>>;
