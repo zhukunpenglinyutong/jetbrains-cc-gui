@@ -38,6 +38,9 @@ public class MessageJsonConverter {
             msgObj.addProperty("type", msg.type.toString().toLowerCase());
             msgObj.addProperty("timestamp", msg.timestamp);
             msgObj.addProperty("content", truncateErrorContent(msg.content != null ? msg.content : ""));
+            if (msg.raw != null && msg.raw.has("message") && msg.raw.getAsJsonObject("message").has("__turnId")) {
+                msgObj.add("__turnId", msg.raw.getAsJsonObject("message").get("__turnId"));
+            }
             if (msg.raw != null) {
                 msgObj.add("raw", truncateRawForTransport(msg.raw));
             }
@@ -209,6 +212,9 @@ public class MessageJsonConverter {
             JsonObject transportMessage = new JsonObject();
             if (sourceMessage.has("content")) {
                 transportMessage.add("content", sourceMessage.get("content").deepCopy());
+            }
+            if (sourceMessage.has("__turnId")) {
+                transportMessage.add("__turnId", sourceMessage.get("__turnId").deepCopy());
             }
             if (transportMessage.size() > 0) {
                 transport.add("message", transportMessage);

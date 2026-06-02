@@ -2205,7 +2205,7 @@ function isReasoningPart(kind) {
 
 function normalizeOpenCodeMessage(item) {
   const info = item?.info || item?.message || item;
-  const role = info?.role === 'user' ? 'user' : 'assistant';
+  const role = pickString(info?.role, info?.type) === 'user' ? 'user' : 'assistant';
   const cwd = pickString(info?.path?.cwd, info?.path?.root, info?.cwd);
   const content = [];
   let toolUseResult;
@@ -2301,6 +2301,15 @@ function normalizeOpenCodeMessage(item) {
     normalized.toolUseResult = toolUseResult;
   }
   return normalized;
+}
+
+function isOpenCodeToolResultUserMessage(msg) {
+  if (msg.type !== 'user') return false;
+  const content = msg.message?.content;
+  if (Array.isArray(content) && content.length === 1 && content[0].text === '[tool_result]') {
+    return true;
+  }
+  return false;
 }
 
 function emitAssistantMessageFromResponse(response) {
@@ -3060,10 +3069,24 @@ export async function getSessionMessages(sessionId = '', cwd = '', options = {})
       'get opencode session messages'
     );
 
+    let normalizedMessages = Array.isArray(messages) ? messages.map(normalizeOpenCodeMessage) : [];
+    
+    // Assign negative turnIds to group history messages into distinct turns based on user prompts
+    let currentTurnId = 0;
+    for (let i = normalizedMessages.length - 1; i >= 0; i--) {
+      const msg = normalizedMessages[i];
+      if (msg.type === 'user' && !isOpenCodeToolResultUserMessage(msg)) {
+        currentTurnId--;
+      }
+      if (msg.message) {
+        msg.message.__turnId = currentTurnId;
+      }
+    }
+
     console.log(JSON.stringify({
       success: true,
       sessionId: normalizedSessionId,
-      messages: Array.isArray(messages) ? messages.map(normalizeOpenCodeMessage) : []
+      messages: normalizedMessages
     }));
   } catch (error) {
     console.log(JSON.stringify({
