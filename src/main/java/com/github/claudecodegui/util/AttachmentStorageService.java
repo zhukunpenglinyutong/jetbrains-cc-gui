@@ -222,13 +222,24 @@ public final class AttachmentStorageService {
             if (thumbnailPath != null && Files.isRegularFile(thumbnailPath)) {
                 thumbnail = AttachmentResourceService.registerAttachmentFile(thumbnailPath.toFile(), "image/jpeg");
             }
+            String originalDataUri = AttachmentResourceService.resourceAsDataUri(original);
+            String thumbnailDataUri = thumbnail != null
+                    ? AttachmentResourceService.resourceAsDataUri(thumbnail)
+                    : null;
+            String displaySrc = thumbnailDataUri != null ? thumbnailDataUri : originalDataUri;
             JsonObject imageBlock = new JsonObject();
             imageBlock.addProperty("type", "image");
-            imageBlock.addProperty("src", thumbnail != null ? thumbnail.url() : original.url());
-            imageBlock.addProperty("previewSrc", original.url());
-            imageBlock.addProperty("thumbnailSrc", thumbnail != null ? thumbnail.url() : original.url());
+            imageBlock.addProperty("src", displaySrc != null
+                    ? displaySrc
+                    : thumbnail != null ? thumbnail.url() : original.url());
+            imageBlock.addProperty("previewSrc", originalDataUri != null
+                    ? originalDataUri
+                    : displaySrc != null ? displaySrc : original.url());
+            imageBlock.addProperty("thumbnailSrc", displaySrc != null
+                    ? displaySrc
+                    : thumbnail != null ? thumbnail.url() : original.url());
             imageBlock.addProperty("mediaType", mediaType);
-            imageBlock.addProperty("sourceKind", "resource_url");
+            imageBlock.addProperty("sourceKind", displaySrc != null ? "base64" : "resource_url");
             imageBlock.addProperty("localPath", path.toAbsolutePath().toString());
             imageBlock.addProperty("alt", path.getFileName() != null ? path.getFileName().toString() : "image");
             return imageBlock;

@@ -102,6 +102,28 @@ public final class AttachmentResourceService {
         return resource;
     }
 
+    public static String resolveAttachmentUrlAsDataUri(String url) {
+        AttachmentResource resource = resolveAttachmentUrl(url);
+        if (resource == null) {
+            return null;
+        }
+        return resourceAsDataUri(resource);
+    }
+
+    public static String resourceAsDataUri(AttachmentResource resource) {
+        if (resource == null || !resource.isCurrent()) {
+            return null;
+        }
+
+        try {
+            byte[] bytes = Files.readAllBytes(resource.path());
+            String encoded = Base64.getEncoder().encodeToString(bytes);
+            return "data:" + resource.mimeType() + ";base64," + encoded;
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
     private static AttachmentResource rebuildResourceFromUrl(String token, String fileName, String rawQuery) {
         try {
             Path hintedPath = pathHintFromQuery(rawQuery);

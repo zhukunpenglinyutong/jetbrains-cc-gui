@@ -89,10 +89,20 @@ export const appendOptimisticMessageIfMissing = (
   prevList: ClaudeMessage[],
   nextList: ClaudeMessage[],
 ): ClaudeMessage[] => {
-  const lastPrev = prevList[prevList.length - 1];
-  if (!lastPrev?.isOptimistic) return nextList;
+  let optimisticMsg: ClaudeMessage | undefined;
+  for (let i = prevList.length - 1; i >= 0; i -= 1) {
+    const candidate = prevList[i];
+    if (candidate?.type !== 'user') {
+      continue;
+    }
+    if (candidate.isOptimistic) {
+      optimisticMsg = candidate;
+    }
+    break;
+  }
 
-  const optimisticMsg = lastPrev;
+  if (!optimisticMsg) return nextList;
+
   const optimisticText = getUserMessageComparableContent(optimisticMsg);
   const optimisticTime = getMessageTimestampMs(optimisticMsg) ?? Number.NaN;
 

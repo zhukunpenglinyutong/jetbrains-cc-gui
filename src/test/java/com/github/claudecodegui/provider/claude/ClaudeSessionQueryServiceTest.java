@@ -1,6 +1,5 @@
 package com.github.claudecodegui.provider.claude;
 
-import com.github.claudecodegui.util.AttachmentResourceService;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import org.junit.Test;
@@ -31,9 +30,9 @@ public class ClaudeSessionQueryServiceTest {
             assertEquals(2, contentBlocks.size());
             assertEquals("image", contentBlocks.get(0).getAsJsonObject().get("type").getAsString());
             assertTrue(contentBlocks.get(0).getAsJsonObject().get("src").getAsString()
-                    .startsWith(AttachmentResourceService.ATTACHMENT_RESOURCE_ORIGIN + "/"));
+                    .startsWith("data:image/png;base64,"));
             assertTrue(contentBlocks.get(0).getAsJsonObject().get("previewSrc").getAsString()
-                    .startsWith(AttachmentResourceService.ATTACHMENT_RESOURCE_ORIGIN + "/"));
+                    .startsWith("data:image/png;base64,"));
             assertEquals("text", contentBlocks.get(1).getAsJsonObject().get("type").getAsString());
             assertEquals("请分析这张图片", contentBlocks.get(1).getAsJsonObject().get("text").getAsString());
         } finally {
@@ -56,7 +55,7 @@ public class ClaudeSessionQueryServiceTest {
             assertEquals(1, contentBlocks.size());
             assertEquals("image", contentBlocks.get(0).getAsJsonObject().get("type").getAsString());
             assertTrue(contentBlocks.get(0).getAsJsonObject().get("src").getAsString()
-                    .startsWith(AttachmentResourceService.ATTACHMENT_RESOURCE_ORIGIN + "/"));
+                    .startsWith("data:image/png;base64,"));
         } finally {
             Files.deleteIfExists(imagePath);
         }
@@ -76,7 +75,8 @@ public class ClaudeSessionQueryServiceTest {
             assertEquals(2, contentBlocks.size());
             JsonObject imageBlock = contentBlocks.get(0).getAsJsonObject();
             assertEquals("image", imageBlock.get("type").getAsString());
-            assertEquals("resource_url", imageBlock.get("sourceKind").getAsString());
+            assertEquals("base64", imageBlock.get("sourceKind").getAsString());
+            assertTrue(imageBlock.get("src").getAsString().startsWith("data:image/png;base64,"));
             assertEquals(imagePath.toAbsolutePath().toString(), imageBlock.get("localPath").getAsString());
             assertEquals("text", contentBlocks.get(1).getAsJsonObject().get("type").getAsString());
             assertEquals("Analyze this image", contentBlocks.get(1).getAsJsonObject().get("text").getAsString());

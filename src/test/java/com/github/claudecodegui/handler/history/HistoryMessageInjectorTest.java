@@ -1,7 +1,6 @@
 package com.github.claudecodegui.handler.history;
 
 import com.github.claudecodegui.handler.core.HandlerContext;
-import com.github.claudecodegui.util.AttachmentResourceService;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.project.Project;
@@ -123,7 +122,7 @@ public class HistoryMessageInjectorTest {
             // The variant with a real image content block wins.
             assertEquals("image", contentBlocks.get(0).getAsJsonObject().get("type").getAsString());
             assertTrue(contentBlocks.get(0).getAsJsonObject().get("src").getAsString()
-                    .startsWith(AttachmentResourceService.ATTACHMENT_RESOURCE_ORIGIN + "/"));
+                    .startsWith("data:image/png;base64,"));
             assertEquals("text", contentBlocks.get(1).getAsJsonObject().get("type").getAsString());
             assertEquals("图片内容是啥", contentBlocks.get(1).getAsJsonObject().get("text").getAsString());
         } finally {
@@ -174,12 +173,12 @@ public class HistoryMessageInjectorTest {
             assertEquals(3, contentBlocks.size());
             assertEquals("image", contentBlocks.get(0).getAsJsonObject().get("type").getAsString());
             assertEquals("image", contentBlocks.get(1).getAsJsonObject().get("type").getAsString());
-            // Both images must point to distinct attachment URLs.
+            // Both images must preserve distinct inline image data.
             String src1 = contentBlocks.get(0).getAsJsonObject().get("src").getAsString();
             String src2 = contentBlocks.get(1).getAsJsonObject().get("src").getAsString();
-            assertTrue(src1.startsWith(AttachmentResourceService.ATTACHMENT_RESOURCE_ORIGIN + "/"));
-            assertTrue(src2.startsWith(AttachmentResourceService.ATTACHMENT_RESOURCE_ORIGIN + "/"));
-            assertFalse("Two images must resolve to distinct resource URLs", src1.equals(src2));
+            assertTrue(src1.startsWith("data:image/png;base64,"));
+            assertTrue(src2.startsWith("data:image/png;base64,"));
+            assertFalse("Two images must resolve to distinct base64 data", src1.equals(src2));
             assertEquals("text", contentBlocks.get(2).getAsJsonObject().get("type").getAsString());
             assertEquals("图片内容是啥", contentBlocks.get(2).getAsJsonObject().get("text").getAsString());
         } finally {
@@ -229,7 +228,7 @@ public class HistoryMessageInjectorTest {
             assertEquals("image", contentBlocks.get(0).getAsJsonObject().get("type").getAsString());
             assertEquals("image/png", contentBlocks.get(0).getAsJsonObject().get("mediaType").getAsString());
             assertTrue(contentBlocks.get(0).getAsJsonObject().get("src").getAsString()
-                    .startsWith(AttachmentResourceService.ATTACHMENT_RESOURCE_ORIGIN + "/"));
+                    .startsWith("data:image/png;base64,"));
             assertEquals("text", contentBlocks.get(1).getAsJsonObject().get("type").getAsString());
             assertEquals("hello", contentBlocks.get(1).getAsJsonObject().get("text").getAsString());
         } finally {
@@ -267,7 +266,7 @@ public class HistoryMessageInjectorTest {
             assertEquals(1, contentBlocks.size());
             assertEquals("image", contentBlocks.get(0).getAsJsonObject().get("type").getAsString());
             assertTrue(contentBlocks.get(0).getAsJsonObject().get("src").getAsString()
-                    .startsWith(AttachmentResourceService.ATTACHMENT_RESOURCE_ORIGIN + "/"));
+                    .startsWith("data:image/png;base64,"));
         } finally {
             Files.deleteIfExists(imagePath);
         }

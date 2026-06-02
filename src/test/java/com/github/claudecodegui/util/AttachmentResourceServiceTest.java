@@ -74,6 +74,41 @@ public class AttachmentResourceServiceTest {
     }
 
     @Test
+    public void resolveAttachmentUrlAsDataUriReadsRegisteredResourceFile() throws Exception {
+        File file = folder.newFile("data-uri-image.png");
+        Files.writeString(file.toPath(), "image-bytes");
+
+        AttachmentResourceService.AttachmentResource registered =
+                AttachmentResourceService.registerAttachmentFile(file, "image/png");
+
+        assertEquals(
+                "data:image/png;base64,aW1hZ2UtYnl0ZXM=",
+                AttachmentResourceService.resolveAttachmentUrlAsDataUri(registered.url())
+        );
+    }
+
+    @Test
+    public void resolveAttachmentUrlAsDataUriRebuildsResourceAfterRegistryMiss() throws Exception {
+        @SuppressWarnings("unchecked")
+        Map<String, AttachmentResourceService.AttachmentResource> resources =
+                (Map<String, AttachmentResourceService.AttachmentResource>) privateStaticField("ATTACHMENT_RESOURCES");
+        resources.clear();
+
+        File file = folder.newFile("data-uri-rebuild.png");
+        Files.writeString(file.toPath(), "image-rebuild");
+
+        AttachmentResourceService.AttachmentResource registered =
+                AttachmentResourceService.registerAttachmentFile(file, "image/png");
+        String url = registered.url();
+        resources.clear();
+
+        assertEquals(
+                "data:image/png;base64,aW1hZ2UtcmVidWlsZA==",
+                AttachmentResourceService.resolveAttachmentUrlAsDataUri(url)
+        );
+    }
+
+    @Test
     public void registeredAttachmentResourcesAreBoundedByLruCapacity() throws Exception {
         @SuppressWarnings("unchecked")
         Map<String, AttachmentResourceService.AttachmentResource> resources =

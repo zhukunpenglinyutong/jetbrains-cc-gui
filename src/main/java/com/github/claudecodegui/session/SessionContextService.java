@@ -401,11 +401,14 @@ public class SessionContextService {
             String displayUrl = thumbnailUrl != null && !thumbnailUrl.isBlank()
                     ? thumbnailUrl
                     : resourceUrl;
-            imageBlock.addProperty("src", displayUrl);
-            imageBlock.addProperty("previewSrc", resourceUrl);
-            imageBlock.addProperty("thumbnailSrc", displayUrl);
+            String previewDataUri = AttachmentResourceService.resolveAttachmentUrlAsDataUri(resourceUrl);
+            String thumbnailDataUri = AttachmentResourceService.resolveAttachmentUrlAsDataUri(displayUrl);
+            String displaySrc = thumbnailDataUri != null ? thumbnailDataUri : previewDataUri;
+            imageBlock.addProperty("src", displaySrc != null ? displaySrc : displayUrl);
+            imageBlock.addProperty("previewSrc", previewDataUri != null ? previewDataUri : resourceUrl);
+            imageBlock.addProperty("thumbnailSrc", displaySrc != null ? displaySrc : displayUrl);
             imageBlock.addProperty("mediaType", att.mediaType);
-            imageBlock.addProperty("sourceKind", "resource_url");
+            imageBlock.addProperty("sourceKind", displaySrc != null ? "base64" : "resource_url");
             if (att.localPath != null && !att.localPath.isBlank()) {
                 imageBlock.addProperty("localPath", att.localPath);
             }
