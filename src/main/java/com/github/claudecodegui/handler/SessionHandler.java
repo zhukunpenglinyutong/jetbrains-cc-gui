@@ -191,7 +191,7 @@ public class SessionHandler extends BaseMessageHandler {
             }
 
             // [FIX] Pass agent prompt and file tags directly to session
-            context.getSession().send(finalPrompt, finalAgentPrompt, finalFileTagPaths, finalRequestedPermissionMode)
+            context.getSession().send(finalPrompt, finalAgentPrompt, finalFileTagPaths, finalRequestedPermissionMode, false)
                 .thenRun(() -> {
                     // Claude now triggers success on actual stream_end callback.
                     // Codex has no stream_end event, keep success trigger at completion.
@@ -282,7 +282,6 @@ public class SessionHandler extends BaseMessageHandler {
                     LOG.warn("[SessionHandler] Ignoring invalid permissionMode from attachment payload: " + mode);
                 }
             }
-
             sendMessageWithAttachments(text, atts, agentPrompt, fileTagPaths, requestedPermissionMode);
         } catch (Exception e) {
             LOG.error("[SessionHandler] 解析附件负载失败: " + e.getMessage(), e);
@@ -337,7 +336,7 @@ public class SessionHandler extends BaseMessageHandler {
             }
 
             // [FIX] Pass agent prompt and file tags directly to session
-            context.getSession().send(prompt, attachments, finalAgentPrompt, finalFileTagPaths, finalRequestedPermissionMode)
+            context.getSession().send(prompt, attachments, finalAgentPrompt, finalFileTagPaths, finalRequestedPermissionMode, false)
                 .thenRun(() -> {
                     // Claude now triggers success on actual stream_end callback.
                     // Codex has no stream_end event, keep success trigger at completion.
@@ -388,7 +387,7 @@ public class SessionHandler extends BaseMessageHandler {
     /**
      * Determine the appropriate working directory.
      */
-    private String determineWorkingDirectory() {
+    protected String determineWorkingDirectory() {
         String projectPath = context.getProject().getBasePath();
 
         // Prefer the user-configured working directory first

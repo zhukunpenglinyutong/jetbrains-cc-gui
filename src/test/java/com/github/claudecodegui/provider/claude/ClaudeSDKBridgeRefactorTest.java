@@ -56,7 +56,8 @@ public class ClaudeSDKBridgeRefactorTest {
                 "system prompt",
                 Boolean.TRUE,
                 Boolean.TRUE,
-                "xhigh"
+                "xhigh",
+                Boolean.TRUE
         );
 
         assertEquals("hello", params.get("message").getAsString());
@@ -69,6 +70,7 @@ public class ClaudeSDKBridgeRefactorTest {
         assertTrue(params.get("streaming").getAsBoolean());
         assertTrue(params.get("disableThinking").getAsBoolean());
         assertEquals("xhigh", params.get("reasoningEffort").getAsString());
+        assertTrue(params.get("forkSession").getAsBoolean());
         assertTrue(params.has("attachments"));
         assertEquals(1, params.getAsJsonArray("attachments").size());
         assertEquals("image.png", params.getAsJsonArray("attachments").get(0).getAsJsonObject().get("fileName").getAsString());
@@ -93,10 +95,12 @@ public class ClaudeSDKBridgeRefactorTest {
                 null,
                 null,
                 null,
+                null,
                 null
         );
 
         assertFalse(params.has("attachments"));
+        assertFalse(params.has("forkSession"));
         assertEquals("", params.get("sessionId").getAsString());
         assertEquals("", params.get("cwd").getAsString());
     }
@@ -188,6 +192,7 @@ public class ClaudeSDKBridgeRefactorTest {
                 null,
                 null,
                 Boolean.TRUE,
+                null,
                 null,
                 null,
                 callback

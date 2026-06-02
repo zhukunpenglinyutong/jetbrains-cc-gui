@@ -99,10 +99,13 @@ function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, max
 /**
  * Prepare session resume on the options object if a resumeSessionId is provided.
  */
-async function prepareSessionResume(options, resumeSessionId, workingDirectory) {
+async function prepareSessionResume(options, resumeSessionId, workingDirectory, forkSession = false) {
   if (resumeSessionId && resumeSessionId !== '') {
     options.resume = resumeSessionId;
-    console.log('[RESUMING]', resumeSessionId);
+    if (forkSession) {
+      options.forkSession = true;
+    }
+    process.stderr.write(`${forkSession ? '[FORKING]' : '[RESUMING]'} ${resumeSessionId}\n`);
     if (!hasClaudeProjectSessionFile(resumeSessionId, workingDirectory)) {
       console.log('[RESUME_WAIT] Waiting for session file to appear before resuming...');
       await waitForClaudeProjectSessionFile(resumeSessionId, workingDirectory, 2500, 100);
@@ -242,6 +245,10 @@ function processStreamMessage(msg, state, logPrefix) {
 
   // Capture session_id
   if (msg.type === 'system' && msg.session_id) {
+    if (state.forkSession && msg.session_id === state.sourceSessionId) {
+      console.warn('[LIFECYCLE] Ignoring fork session_id that matches source session');
+      return;
+    }
     state.currentSessionId = msg.session_id;
     console.log('[SESSION_ID]', msg.session_id);
     setActiveQueryResult(msg.session_id, state.queryResult);
@@ -288,17 +295,19 @@ function emitThinkingDelta(thinkingText, state, blockIndex = 0) {
 /**
  * Execute a query call with auto-retry logic for transient API errors.
  */
-async function executeWithRetry({ createQueryResult, streamingEnabled, resumeSessionId, workingDirectory, logPrefix, outerStreamState, userMessage }) {
+async function executeWithRetry({ createQueryResult, streamingEnabled, resumeSessionId, forkSession = false, workingDirectory, logPrefix, outerStreamState, userMessage }) {
   let retryAttempt = 0;
   let lastRetryError = null;
   const lp = logPrefix ? ` ${logPrefix}` : '';
 
   while (retryAttempt <= AUTO_RETRY_CONFIG.maxRetries) {
     const state = {
-      currentSessionId: resumeSessionId, messageCount: 0, hasStreamEvents: false,
+      currentSessionId: forkSession ? null : resumeSessionId, messageCount: 0, hasStreamEvents: false,
       lastAssistantContent: '', lastThinkingContent: '', accumulatedUsage: null,
       streamingEnabled, streamStarted: outerStreamState.streamStarted,
-      streamEnded: outerStreamState.streamEnded, queryResult: null
+      streamEnded: outerStreamState.streamEnded, queryResult: null,
+      forkSession,
+      sourceSessionId: resumeSessionId
     };
 
     if (retryAttempt > 0) {
@@ -334,6 +343,9 @@ async function executeWithRetry({ createQueryResult, streamingEnabled, resumeSes
       }
 
       // Success
+      if (forkSession && (!state.currentSessionId || state.currentSessionId === resumeSessionId)) {
+        throw new Error('Fork request completed without a new session ID');
+      }
       if (retryAttempt > 0) console.log(`[RETRY]${lp} Success after ${retryAttempt} retry attempt(s)`);
       if (streamingEnabled && state.streamStarted) {
         // NOTE: Do NOT emit accumulatedUsage at stream end.
@@ -428,7 +440,7 @@ function handleSendError(error, streamState, sdkStderrLines) {
  * @param {string} agentPrompt - Agent prompt (optional)
  * @param {boolean} streaming - Whether to enable streaming (optional, defaults to config value)
  */
-export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null, disableThinking = false, reasoningEffort = null) {
+export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null, disableThinking = false, reasoningEffort = null, forkSession = false) {
   console.log('[DIAG] ========== sendMessage() START ==========');
   console.log('[DIAG] params:', { msgLen: message ? message.length : 0, resumeSessionId: resumeSessionId || '(new)', cwd, permissionMode, model });
 
@@ -472,7 +484,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
       console.log('[DEBUG] Set SDK effort:', normalizedReasoningEffort);
     }
 
-    await prepareSessionResume(options, resumeSessionId, workingDirectory);
+    await prepareSessionResume(options, resumeSessionId, workingDirectory, forkSession);
 
     const queryFn = await loadSdkQueryFunction('');
 
@@ -480,6 +492,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
       createQueryResult: () => queryFn({ prompt: message, options }),
       streamingEnabled,
       resumeSessionId,
+      forkSession,
       workingDirectory,
       logPrefix: '',
       outerStreamState,
@@ -548,7 +561,8 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
       console.log('[DEBUG] (withAttachments) Set SDK effort:', reasoningEffort);
     }
 
-    await prepareSessionResume(options, resumeSessionId, workingDirectory);
+    const forkSession = stdinData?.forkSession === true;
+    await prepareSessionResume(options, resumeSessionId, workingDirectory, forkSession);
 
     const queryFn = await loadSdkQueryFunction(' (withAttachments)');
 
@@ -562,6 +576,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
       },
       streamingEnabled,
       resumeSessionId,
+      forkSession,
       workingDirectory,
       logPrefix: '(withAttachments)',
       outerStreamState,
@@ -572,3 +587,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     handleSendError(error, { streamingEnabled, ...outerStreamState }, sdkStderrLines);
   }
 }
+
+export const __testing = {
+  executeWithRetry
+};

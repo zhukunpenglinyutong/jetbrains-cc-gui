@@ -213,7 +213,7 @@ public class ClaudeSession {
     }
 
     /**
-     * 提供底层会话状态访问，用于历史恢复等需要直接重建会话内存态的场景。
+     * Exposes mutable session state for restore flows that must rebuild in-memory session data.
      */
     public SessionState getState() {
         return state;
@@ -359,6 +359,16 @@ public class ClaudeSession {
         return send(input, null, agentPrompt, fileTagPaths, requestedPermissionMode);
     }
 
+    public CompletableFuture<Void> send(
+            String input,
+            String agentPrompt,
+            List<String> fileTagPaths,
+            String requestedPermissionMode,
+            boolean forkSession
+    ) {
+        return send(input, null, agentPrompt, fileTagPaths, requestedPermissionMode, forkSession);
+    }
+
     /**
      * Send a message with attachments using global agent settings.
      *
@@ -406,6 +416,17 @@ public class ClaudeSession {
             List<String> fileTagPaths,
             String requestedPermissionMode
     ) {
+        return send(input, attachments, agentPrompt, fileTagPaths, requestedPermissionMode, false);
+    }
+
+    public CompletableFuture<Void> send(
+            String input,
+            List<Attachment> attachments,
+            String agentPrompt,
+            List<String> fileTagPaths,
+            String requestedPermissionMode,
+            boolean forkSession
+    ) {
         String normalizedInput = (input != null) ? input.trim() : "";
         Message userMessage = contextService.buildUserMessage(normalizedInput, attachments);
         sendService.updateSessionStateForSend(userMessage, normalizedInput);
@@ -413,6 +434,13 @@ public class ClaudeSession {
         final String finalAgentPrompt = agentPrompt;
         final List<String> finalFileTagPaths = fileTagPaths;
         final String finalRequestedPermissionMode = requestedPermissionMode;
+        // Consume the pending fork marker before the provider call so only the first
+        // message in a branch tab uses SDK forkSession; follow-up messages must resume normally.
+        final boolean finalForkSession = forkSession || state.popPendingForkOnNextSend();
+        if (finalForkSession && LOG.isDebugEnabled()) {
+            LOG.debug("[Fork] send() will be issued as a forked branch (frontendForkFlag=" + forkSession
+                    + ", sessionId=" + state.getSessionId() + ")");
+        }
 
         return launchClaude().thenCompose(chId -> {
             sendService.prepareContextCollector(contextCollector);
@@ -425,7 +453,8 @@ public class ClaudeSession {
                             openedFilesJson,
                             finalAgentPrompt,
                             finalFileTagPaths,
-                            finalRequestedPermissionMode
+                            finalRequestedPermissionMode,
+                            finalForkSession
                     )
             ).thenCompose(v -> syncUserMessageUuidsAfterSend());
         }).exceptionally(ex -> {
@@ -618,6 +647,22 @@ public class ClaudeSession {
         return state.getSlashCommands();
     }
 
+
+    /**
+     * Marks the next send() as a branch fork.
+     * Called when a branch tab is created so its first user message triggers SDK resume+forkSession.
+     */
+    public void setPendingForkOnNextSend(boolean pending) {
+        state.setPendingForkOnNextSend(pending);
+    }
+
+    /**
+     * Reads and resets the pending fork marker for tests and fallback flows.
+     * Normal sends already consume this marker internally.
+     */
+    public boolean popPendingForkOnNextSend() {
+        return state.popPendingForkOnNextSend();
+    }
 
     /**
      * Create a permission request (called by the SDK).

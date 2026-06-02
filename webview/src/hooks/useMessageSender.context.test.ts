@@ -14,6 +14,8 @@ describe('useMessageSender - /context command', () => {
     selectedAgent: null,
     sdkStatusLoaded: true,
     currentSdkInstalled: true,
+    currentSessionId: 'source-session',
+    currentSessionTitle: '测试消息',
     sentAttachmentsRef: { current: new Map() },
     chatInputRef: { current: null },
     messagesContainerRef: { current: null },
@@ -138,5 +140,167 @@ describe('useMessageSender - /context command', () => {
       expect.any(String),
       'error',
     );
+  });
+
+  it('fires fork_session event with the current session id when /fork is typed alone', () => {
+    const opts = createOptions();
+
+    const { result } = renderHook(() => useMessageSender(opts));
+
+    act(() => {
+      result.current.handleSubmit('/fork');
+    });
+
+    expect(window.sendToJava).toHaveBeenCalledTimes(1);
+    const call = (window.sendToJava as any).mock.calls[0][0] as string;
+    expect(call).toMatch(/^fork_session:/);
+
+    const payload = JSON.parse(call.substring('fork_session:'.length));
+    expect(payload.sourceSessionId).toBe('source-session');
+    expect(payload.sourceTitle).toBe('测试消息');
+  });
+
+  it('omits the placeholder new-session title from fork_session payload', () => {
+    const opts = createOptions({ currentSessionTitle: 'common.newSession' });
+
+    const { result } = renderHook(() => useMessageSender(opts));
+
+    act(() => {
+      result.current.handleSubmit('/fork');
+    });
+
+    const call = (window.sendToJava as any).mock.calls[0][0] as string;
+    const payload = JSON.parse(call.substring('fork_session:'.length));
+    expect(payload.sourceSessionId).toBe('source-session');
+    expect(payload.sourceTitle).toBeUndefined();
+  });
+
+  it('does not fire send_message for /fork because fork is a tab-opening action', () => {
+    // Regression guard: in the old design /fork piggy-backed on send_message
+    // with forkSession=true, which made the source tab spit out a fake user
+    // message. The new design must never enqueue a normal chat message.
+    const opts = createOptions();
+    const { result } = renderHook(() => useMessageSender(opts));
+
+    act(() => {
+      result.current.handleSubmit('/fork');
+    });
+
+    const calls = (window.sendToJava as any).mock.calls.map((call: string[]) => call[0]);
+    const sendMessageCall = calls.find((c: string) => c.startsWith('send_message:'));
+    expect(sendMessageCall).toBeUndefined();
+  });
+
+  it('still fires fork_session when /fork has trailing text and surfaces an info toast', () => {
+    const addToast = vi.fn();
+    const opts = createOptions({ addToast });
+
+    const { result } = renderHook(() => useMessageSender(opts));
+
+    act(() => {
+      // Legacy users may type "/fork explore alt" expecting the old prompt-required
+      // flow. The trailing text must be ignored (not sent to Claude) but the user
+      // should be told once so they know to retype it in the new tab.
+      result.current.handleSubmit('/fork explore alternative');
+    });
+
+    expect(window.sendToJava).toHaveBeenCalledTimes(1);
+    const call = (window.sendToJava as any).mock.calls[0][0] as string;
+    expect(call).toMatch(/^fork_session:/);
+
+    expect(addToast).toHaveBeenCalledTimes(1);
+    expect(addToast).toHaveBeenCalledWith(expect.any(String), 'info');
+  });
+
+  it('treats /fork followed only by whitespace as the no-trailing-text case', () => {
+    const addToast = vi.fn();
+    const opts = createOptions({ addToast });
+
+    const { result } = renderHook(() => useMessageSender(opts));
+
+    act(() => {
+      // handleSubmit already trims the input before dispatching, so trailing
+      // whitespace must not pop the "trailing text ignored" info toast.
+      result.current.handleSubmit('/fork   ');
+    });
+
+    expect(window.sendToJava).toHaveBeenCalledTimes(1);
+    const call = (window.sendToJava as any).mock.calls[0][0] as string;
+    expect(call).toMatch(/^fork_session:/);
+    expect(addToast).not.toHaveBeenCalled();
+  });
+
+  it('accepts uppercase /FORK case-insensitively', () => {
+    const opts = createOptions();
+
+    const { result } = renderHook(() => useMessageSender(opts));
+
+    act(() => {
+      result.current.handleSubmit('/FORK');
+    });
+
+    expect(window.sendToJava).toHaveBeenCalledTimes(1);
+    const call = (window.sendToJava as any).mock.calls[0][0] as string;
+    expect(call).toMatch(/^fork_session:/);
+  });
+
+  it('executeMessage does not open a fork tab directly', () => {
+    const opts = createOptions();
+
+    const { result } = renderHook(() => useMessageSender(opts));
+
+    act(() => {
+      result.current.executeMessage('/fork');
+    });
+
+    const calls = (window.sendToJava as any).mock.calls.map((call: string[]) => call[0]);
+    expect(calls.some((call: string) => call.startsWith('fork_session:'))).toBe(false);
+    expect(calls.some((call: string) => call.startsWith('send_message:'))).toBe(true);
+  });
+
+  it('warns and does not fire fork_session without an existing Claude session', () => {
+    const addToast = vi.fn();
+    const opts = createOptions({ currentSessionId: null, addToast });
+
+    const { result } = renderHook(() => useMessageSender(opts));
+
+    act(() => {
+      result.current.handleSubmit('/fork');
+    });
+
+    expect(window.sendToJava).not.toHaveBeenCalled();
+    expect(addToast).toHaveBeenCalledTimes(1);
+    expect(addToast).toHaveBeenCalledWith(expect.any(String), 'warning');
+  });
+
+  it('warns and does not fire fork_session when Codex provider is active', () => {
+    const addToast = vi.fn();
+    const opts = createOptions({ currentProvider: 'codex', addToast });
+
+    const { result } = renderHook(() => useMessageSender(opts));
+
+    act(() => {
+      result.current.handleSubmit('/fork');
+    });
+
+    expect(window.sendToJava).not.toHaveBeenCalled();
+    expect(addToast).toHaveBeenCalledWith(expect.stringContaining('Claude'), 'warning');
+  });
+
+  it('shows an error toast when the bridge is unavailable during /fork', () => {
+    // Drop the bridge so sendBridgeEvent returns false. The user must be told
+    // something went wrong instead of being left with a silent no-op tab.
+    delete (window as any).sendToJava;
+
+    const addToast = vi.fn();
+    const opts = createOptions({ addToast });
+
+    const { result } = renderHook(() => useMessageSender(opts));
+
+    act(() => {
+      result.current.handleSubmit('/fork');
+    });
+
+    expect(addToast).toHaveBeenCalledWith(expect.any(String), 'error');
   });
 });

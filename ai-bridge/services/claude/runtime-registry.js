@@ -17,7 +17,7 @@ export {
 };
 
 export function rememberRuntime(runtime, requestContext, registerActiveQueryResult) {
-  if (requestContext.requestedSessionId) {
+  if (requestContext.requestedSessionId && !requestContext.forkSession) {
     runtimesBySessionId.set(requestContext.requestedSessionId, runtime);
     registerActiveQueryResult?.(requestContext.requestedSessionId, runtime.query);
     return;
@@ -71,6 +71,7 @@ export function removeRuntime(runtime, removeSession) {
 }
 
 export function findRuntimeForRequest(requestContext) {
+  if (requestContext.forkSession) return null;
   if (requestContext.requestedSessionId) {
     return runtimesBySessionId.get(requestContext.requestedSessionId) || null;
   }

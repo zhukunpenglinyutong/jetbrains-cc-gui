@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * Session state management.
@@ -18,6 +19,9 @@ public class SessionState {
      * Canonical whitelist of valid permission modes.
      * Shared across SessionHandler (payload validation) and ClaudeSession (mode resolution).
      */
+    private static final int MAX_SESSION_ID_LENGTH = 128;
+    private static final Pattern SESSION_ID_PATTERN = Pattern.compile("^[A-Za-z0-9._-]+$");
+
     public static final Set<String> VALID_PERMISSION_MODES;
     static {
         Set<String> modes = new HashSet<>();
@@ -34,6 +38,17 @@ public class SessionState {
      */
     public static boolean isValidPermissionMode(String mode) {
         return mode != null && VALID_PERMISSION_MODES.contains(mode.trim());
+    }
+
+    public static boolean isValidSessionId(String sessionId) {
+        if (sessionId == null) {
+            return false;
+        }
+        String trimmed = sessionId.trim();
+        if (trimmed.isEmpty() || !trimmed.equals(sessionId) || trimmed.length() > MAX_SESSION_ID_LENGTH) {
+            return false;
+        }
+        return SESSION_ID_PATTERN.matcher(trimmed).matches();
     }
 
     // Session identifiers
@@ -69,6 +84,11 @@ public class SessionState {
 
     // PSI context collection toggle
     private boolean psiContextEnabled = true;
+
+    // One-shot fork marker: the next send should use forkSession=true, then reset immediately.
+    // The IDE sets this while creating a branch tab because the user's later message payload
+    // does not know that the tab was created from /fork.
+    private volatile boolean pendingForkOnNextSend = false;
 
     // Getters
     public String getSessionId() {
@@ -216,6 +236,24 @@ public class SessionState {
 
     public void setPsiContextEnabled(boolean psiContextEnabled) {
         this.psiContextEnabled = psiContextEnabled;
+    }
+
+    /**
+     * Marks the next send() as a branch fork.
+     * Only the immediately following send is affected, then popPendingForkOnNextSend() resets it.
+     */
+    public void setPendingForkOnNextSend(boolean pending) {
+        this.pendingForkOnNextSend = pending;
+    }
+
+    /**
+     * Reads and resets the pending fork marker.
+     * synchronized prevents concurrent sends from consuming the marker twice and creating two branch sessions.
+     */
+    public synchronized boolean popPendingForkOnNextSend() {
+        boolean current = this.pendingForkOnNextSend;
+        this.pendingForkOnNextSend = false;
+        return current;
     }
 
     /**

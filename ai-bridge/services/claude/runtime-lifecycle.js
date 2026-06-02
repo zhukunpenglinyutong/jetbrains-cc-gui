@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { AsyncStream } from '../../utils/async-stream.js';
 import { loadClaudeSdk } from '../../utils/sdk-loader.js';
 import { createPreToolUseHook, normalizePermissionMode } from './permission-mode.js';
@@ -29,6 +31,12 @@ export function buildRuntimeSignature(options, systemPromptAppend, streamingEnab
   return JSON.stringify(material);
 }
 
+export function describeRuntimeSignature(runtimeSignature) {
+  const value = runtimeSignature || '';
+  const hash = createHash('sha256').update(value).digest('hex').slice(0, 12);
+  return 'signatureHash=' + hash + ' signatureLength=' + value.length;
+}
+
 async function ensureQueryFn() {
   if (cachedQueryFn) return cachedQueryFn;
   const sdk = await loadClaudeSdk();
@@ -56,7 +64,7 @@ export async function disposeRuntime(runtime, callbacks) {
   if (!runtime || runtime.closed) return;
   console.log('[LIFECYCLE] disposeRuntime sessionId=' + (runtime.sessionId || '(new)')
     + ' epoch=' + (runtime.runtimeSessionEpoch || '(none)')
-    + ' signature=' + (runtime.runtimeSignature || '(none)'));
+    + ' ' + describeRuntimeSignature(runtime.runtimeSignature));
   runtime.closed = true;
   runtime.activeTurnCount = 0;
 
@@ -82,7 +90,7 @@ async function createRuntime(requestContext, callbacks) {
 
   const runtime = {
     closed: false,
-    sessionId: requestContext.requestedSessionId || null,
+    sessionId: requestContext.forkSession ? null : (requestContext.requestedSessionId || null),
     runtimeSessionEpoch: requestContext.runtimeSessionEpoch || null,
     runtimeSignature: requestContext.runtimeSignature,
     currentModel: requestContext.sdkModelName || null,
@@ -146,7 +154,7 @@ async function createRuntime(requestContext, callbacks) {
 
   console.log('[LIFECYCLE] createRuntime sessionId=' + (runtime.sessionId || '(new)')
     + ' epoch=' + (runtime.runtimeSessionEpoch || '(none)')
-    + ' signature=' + runtime.runtimeSignature);
+    + ' ' + describeRuntimeSignature(runtime.runtimeSignature));
 
   return runtime;
 }
@@ -205,7 +213,7 @@ function assertRuntimeOwnership(runtime, requestContext) {
     throw err;
   }
 
-  if (requestContext.requestedSessionId && runtime.sessionId && runtime.sessionId !== requestContext.requestedSessionId) {
+  if (!requestContext.forkSession && requestContext.requestedSessionId && runtime.sessionId && runtime.sessionId !== requestContext.requestedSessionId) {
     const err = new Error(
       `Runtime ownership mismatch: expected session ${requestContext.requestedSessionId}, got ${runtime.sessionId}`
     );
@@ -236,7 +244,7 @@ export async function acquireRuntime(requestContext, callbacks) {
   } else {
     console.log('[LIFECYCLE] reuseRuntime sessionId=' + (runtime.sessionId || '(new)')
       + ' epoch=' + (runtime.runtimeSessionEpoch || '(none)')
-      + ' signature=' + runtime.runtimeSignature);
+      + ' ' + describeRuntimeSignature(runtime.runtimeSignature));
   }
 
   assertRuntimeOwnership(runtime, requestContext);

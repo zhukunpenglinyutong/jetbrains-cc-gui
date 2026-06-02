@@ -97,6 +97,15 @@ public class ChatWindowDelegate {
         void setSlashCommandsFetched(boolean fetched);
         void setFetchedSlashCommandsCount(int count);
         void persistTabSessionState();
+
+        /**
+         * Consumes the fork title seeded by {@code ClaudeChatWindow#setForkContext}.
+         * This must run after frontend_ready so the frontend can show the source title first,
+         * then persist the fork title under the new SDK session ID when it arrives.
+         */
+        default String popPendingForkTitle() {
+            return null;
+        }
     }
 
     private final DelegateHost host;
@@ -480,6 +489,22 @@ public class ChatWindowDelegate {
         host.getStreamCoalescer().flush(null);
     }
 
+    public void replayPendingForkTitleIfReady() {
+        if (!host.isFrontendReady()) {
+            return;
+        }
+        ClaudeSession session = host.getSession();
+        if (session == null || host.isDisposed()) {
+            return;
+        }
+        String sessionId = session.getSessionId();
+        if (sessionId == null || sessionId.trim().isEmpty()) {
+            return;
+        }
+        host.callJavaScript("setSessionId", JsUtils.escapeJs(sessionId));
+        seedPendingForkTitle();
+    }
+
     private void replayCurrentSessionStateToFrontend() {
         ClaudeSession session = host.getSession();
         if (session == null || host.isDisposed()) {
@@ -490,6 +515,7 @@ public class ChatWindowDelegate {
             String sessionId = session.getSessionId();
             if (sessionId != null && !sessionId.trim().isEmpty()) {
                 host.callJavaScript("setSessionId", JsUtils.escapeJs(sessionId));
+                seedPendingForkTitle();
             }
 
             List<ClaudeSession.Message> messages = session.getMessages();
@@ -524,6 +550,14 @@ public class ChatWindowDelegate {
                     + ", streaming=" + streamActive);
         } catch (Exception e) {
             LOG.warn("Failed to replay current session state to frontend: " + e.getMessage(), e);
+        }
+    }
+
+    private void seedPendingForkTitle() {
+        String forkTitle = host.popPendingForkTitle();
+        if (forkTitle != null && !forkTitle.isEmpty()) {
+            host.callJavaScript("seedForkSessionTitle", JsUtils.escapeJs(forkTitle));
+            LOG.info("[Fork] Seeded fork title to webview (length=" + forkTitle.length() + ")");
         }
     }
 

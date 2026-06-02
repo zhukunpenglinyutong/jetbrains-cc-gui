@@ -232,6 +232,27 @@ describe('useWindowCallbacks integration', () => {
 
   // ===== AI title path uses applyHistoryTitleLocal (no backend round-trip) =====
 
+  it('preserves a fork title seed for the next SDK session id without updating source history', () => {
+    const forkTitle = '测试消息[fork]';
+    const currentSessionIdRef = { current: null as string | null };
+    const customSessionTitleRef = { current: null as string | null };
+    const opts = createOptions({
+      currentSessionIdRef,
+      customSessionTitleRef,
+    });
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.setSessionId!('source-session');
+      (window as any).seedForkSessionTitle(forkTitle);
+      window.setSessionId!('fork-session');
+    });
+
+    expect(opts.setCustomSessionTitle).toHaveBeenCalledWith(forkTitle);
+    expect(opts.applyHistoryTitleLocal).not.toHaveBeenCalledWith('source-session', forkTitle);
+    expect(opts.updateHistoryTitle).toHaveBeenCalledWith('fork-session', forkTitle);
+  });
+
   it('updateSessionTitle routes AI titles through applyHistoryTitleLocal, not updateHistoryTitle', () => {
     const opts = createOptions({
       currentSessionIdRef: { current: 'sess-123' },
