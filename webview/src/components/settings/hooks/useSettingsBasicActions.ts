@@ -6,6 +6,7 @@ import {DEFAULT_COMMIT_AI_CONFIG} from '../../../types/aiFeatureConfig';
 import type {PromptEnhancerConfig, PromptEnhancerProvider} from '../../../types/promptEnhancer';
 import {DEFAULT_PROMPT_ENHANCER_CONFIG} from '../../../types/promptEnhancer';
 import {clampPermissionDialogTimeoutSeconds, DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS,} from '../../../utils/permissionDialogTimeout';
+import { sendBridgeEvent } from '../../../utils/bridge';
 import {
     getSkipNewSessionConfirm,
     SKIP_NEW_SESSION_CONFIRM_EVENT,
@@ -14,10 +15,8 @@ import {
 
 export type { UiFontConfig } from '../../../types/uiFontConfig';
 
-const sendToJava = (message: string) => {
-  if (window.sendToJava) {
-    window.sendToJava(message);
-  }
+const sendToJava = (event: string, payload = '') => {
+  sendBridgeEvent(event, payload);
 };
 
 export interface UseSettingsBasicActionsProps {
@@ -277,38 +276,38 @@ export function useSettingsBasicActions({
   const handleSaveNodePath = useCallback(() => {
     setSavingNodePath(true);
     const payload = { path: (nodePath || '').trim() };
-    sendToJava(`set_node_path:${JSON.stringify(payload)}`);
+    sendToJava('set_node_path', JSON.stringify(payload));
   }, [nodePath]);
 
   const handleSaveWorkingDirectory = useCallback(() => {
     setSavingWorkingDirectory(true);
     const payload = { customWorkingDir: (workingDirectory || '').trim() };
-    sendToJava(`set_working_directory:${JSON.stringify(payload)}`);
+    sendToJava('set_working_directory', JSON.stringify(payload));
   }, [workingDirectory]);
 
   const handleUiFontSelectionChange = useCallback((selection: string) => {
     if (selection === 'followEditor') {
-      sendToJava(`set_ui_font_config:${JSON.stringify({ mode: 'followEditor' })}`);
+      sendToJava('set_ui_font_config', JSON.stringify({ mode: 'followEditor' }));
       return;
     }
 
     if (selection === 'customFile' && uiFontConfig?.customFontPath) {
-      sendToJava(`set_ui_font_config:${JSON.stringify({
+      sendToJava('set_ui_font_config', JSON.stringify({
         mode: 'customFile',
         customFontPath: uiFontConfig.customFontPath,
-      })}`);
+      }));
     }
   }, [uiFontConfig?.customFontPath]);
 
   const handleSaveUiFontCustomPath = useCallback((path: string) => {
-    sendToJava(`set_ui_font_config:${JSON.stringify({
+    sendToJava('set_ui_font_config', JSON.stringify({
       mode: 'customFile',
       customFontPath: path,
-    })}`);
+    }));
   }, []);
 
   const handleBrowseUiFontFile = useCallback(() => {
-    sendToJava('browse_ui_font_file:');
+    sendToJava('browse_ui_font_file');
   }, []);
 
   // Streaming toggle change handler
@@ -320,14 +319,14 @@ export function useSettingsBasicActions({
       // Fallback to local state if no prop callback provided
       setLocalStreamingEnabled(enabled);
       const payload = { streamingEnabled: enabled };
-      sendToJava(`set_streaming_enabled:${JSON.stringify(payload)}`);
+      sendToJava('set_streaming_enabled', JSON.stringify(payload));
     }
   }, [onStreamingEnabledChangeProp]);
 
   const handleCodexSandboxModeChange = useCallback((mode: 'workspace-write' | 'danger-full-access') => {
     setCodexSandboxMode(mode);
     const payload = { sandboxMode: mode };
-    sendToJava(`set_codex_sandbox_mode:${JSON.stringify(payload)}`);
+    sendToJava('set_codex_sandbox_mode', JSON.stringify(payload));
   }, []);
 
   // Send shortcut change handler
@@ -339,7 +338,7 @@ export function useSettingsBasicActions({
       // Fallback to local state if no prop callback provided
       setLocalSendShortcut(shortcut);
       const payload = { sendShortcut: shortcut };
-      sendToJava(`set_send_shortcut:${JSON.stringify(payload)}`);
+      sendToJava('set_send_shortcut', JSON.stringify(payload));
     }
   }, [onSendShortcutChangeProp]);
 
@@ -352,7 +351,7 @@ export function useSettingsBasicActions({
       // Fallback to local state if no prop callback provided
       setLocalAutoOpenFileEnabled(enabled);
       const payload = { autoOpenFileEnabled: enabled };
-      sendToJava(`set_auto_open_file_enabled:${JSON.stringify(payload)}`);
+      sendToJava('set_auto_open_file_enabled', JSON.stringify(payload));
     }
   }, [onAutoOpenFileEnabledChangeProp]);
 
@@ -360,28 +359,28 @@ export function useSettingsBasicActions({
   const handleCommitGenerationEnabledChange = useCallback((enabled: boolean) => {
     setCommitGenerationEnabled(enabled);
     const payload = { commitGenerationEnabled: enabled };
-    sendToJava(`set_commit_generation_enabled:${JSON.stringify(payload)}`);
+    sendToJava('set_commit_generation_enabled', JSON.stringify(payload));
   }, []);
 
   // AI session title generation toggle change handler
   const handleAiTitleGenerationEnabledChange = useCallback((enabled: boolean) => {
     setAiTitleGenerationEnabled(enabled);
     const payload = { aiTitleGenerationEnabled: enabled };
-    sendToJava(`set_ai_title_generation_enabled:${JSON.stringify(payload)}`);
+    sendToJava('set_ai_title_generation_enabled', JSON.stringify(payload));
   }, []);
 
   // Status bar widget toggle change handler
   const handleStatusBarWidgetEnabledChange = useCallback((enabled: boolean) => {
     setStatusBarWidgetEnabled(enabled);
     const payload = { statusBarWidgetEnabled: enabled };
-    sendToJava(`set_status_bar_widget_enabled:${JSON.stringify(payload)}`);
+    sendToJava('set_status_bar_widget_enabled', JSON.stringify(payload));
   }, []);
 
   // Task completion notification toggle change handler
   const handleTaskCompletionNotificationEnabledChange = useCallback((enabled: boolean) => {
     setTaskCompletionNotificationEnabled(enabled);
     const payload = { taskCompletionNotificationEnabled: enabled };
-    sendToJava(`set_task_completion_notification_enabled:${JSON.stringify(payload)}`);
+    sendToJava('set_task_completion_notification_enabled', JSON.stringify(payload));
   }, []);
 
   // Permission dialog timeout change handler
@@ -390,7 +389,7 @@ export function useSettingsBasicActions({
     // App.tsx owns the canonical state and provides the callback in production.
     onPermissionDialogTimeoutChangeProp?.(clamped);
     const payload = { permissionDialogTimeoutSeconds: clamped };
-    sendToJava(`set_permission_dialog_timeout:${JSON.stringify(payload)}`);
+    sendToJava('set_permission_dialog_timeout', JSON.stringify(payload));
   }, [onPermissionDialogTimeoutChangeProp]);
 
   const handleCommitAiProviderChange = useCallback((provider: CommitAiProvider) => {
@@ -402,10 +401,10 @@ export function useSettingsBasicActions({
       resolutionSource: providerAvailable ? 'manual' : 'unavailable',
     };
     setCommitAiConfig(nextConfig);
-    sendToJava(`set_commit_ai_config:${JSON.stringify({
+    sendToJava('set_commit_ai_config', JSON.stringify({
       provider,
       models: nextConfig.models,
-    })}`);
+    }));
   }, [commitAiConfig]);
 
   const handleCommitAiModelChange = useCallback((model: string) => {
@@ -418,10 +417,10 @@ export function useSettingsBasicActions({
       },
     };
     setCommitAiConfig(nextConfig);
-    sendToJava(`set_commit_ai_config:${JSON.stringify({
+    sendToJava('set_commit_ai_config', JSON.stringify({
       provider: commitAiConfig.provider,
       models: nextConfig.models,
-    })}`);
+    }));
   }, [commitAiConfig]);
 
   const handleCommitAiResetToDefault = useCallback(() => {
@@ -436,10 +435,10 @@ export function useSettingsBasicActions({
         : 'unavailable',
     };
     setCommitAiConfig(nextConfig);
-    sendToJava(`set_commit_ai_config:${JSON.stringify({
+    sendToJava('set_commit_ai_config', JSON.stringify({
       provider: null,
       models: nextConfig.models,
-    })}`);
+    }));
   }, [commitAiConfig]);
 
   const handlePromptEnhancerProviderChange = useCallback((provider: PromptEnhancerProvider) => {
@@ -451,10 +450,10 @@ export function useSettingsBasicActions({
       resolutionSource: providerAvailable ? 'manual' : 'unavailable',
     };
     setPromptEnhancerConfig(nextConfig);
-    sendToJava(`set_prompt_enhancer_config:${JSON.stringify({
+    sendToJava('set_prompt_enhancer_config', JSON.stringify({
       provider,
       models: nextConfig.models,
-    })}`);
+    }));
   }, [promptEnhancerConfig]);
 
   const handlePromptEnhancerModelChange = useCallback((model: string) => {
@@ -467,10 +466,10 @@ export function useSettingsBasicActions({
       },
     };
     setPromptEnhancerConfig(nextConfig);
-    sendToJava(`set_prompt_enhancer_config:${JSON.stringify({
+    sendToJava('set_prompt_enhancer_config', JSON.stringify({
       provider: promptEnhancerConfig.provider,
       models: nextConfig.models,
-    })}`);
+    }));
   }, [promptEnhancerConfig]);
 
   const handlePromptEnhancerResetToDefault = useCallback(() => {
@@ -485,36 +484,36 @@ export function useSettingsBasicActions({
         : 'unavailable',
     };
     setPromptEnhancerConfig(nextConfig);
-    sendToJava(`set_prompt_enhancer_config:${JSON.stringify({
+    sendToJava('set_prompt_enhancer_config', JSON.stringify({
       provider: null,
       models: nextConfig.models,
-    })}`);
+    }));
   }, [promptEnhancerConfig]);
 
   const handleInvocationModeChange = useCallback((mode: 'sdk' | 'cli') => {
     setInvocationMode(mode);
     const payload = { invocationMode: mode };
-    sendToJava(`set_invocation_mode:${JSON.stringify(payload)}`);
+    sendToJava('set_invocation_mode', JSON.stringify(payload));
   }, []);
 
   const handleCliPathChange = useCallback((path: string) => {
     setCliPath(path);
     const payload = { cliPath: path };
-    sendToJava(`set_cli_path:${JSON.stringify(payload)}`);
+    sendToJava('set_cli_path', JSON.stringify(payload));
   }, []);
 
   // Commit AI prompt save handler
   const handleSaveCommitPrompt = useCallback(() => {
     setSavingCommitPrompt(true);
     const payload = { prompt: commitPrompt };
-    sendToJava(`set_commit_prompt:${JSON.stringify(payload)}`);
+    sendToJava('set_commit_prompt', JSON.stringify(payload));
   }, [commitPrompt]);
 
   // Project-level commit AI prompt save handler
   const handleSaveProjectCommitPrompt = useCallback(() => {
     setSavingProjectCommitPrompt(true);
     const payload = { prompt: projectCommitPrompt };
-    sendToJava(`set_project_commit_prompt:${JSON.stringify(payload)}`);
+    sendToJava('set_project_commit_prompt', JSON.stringify(payload));
   }, [projectCommitPrompt]);
 
   return {

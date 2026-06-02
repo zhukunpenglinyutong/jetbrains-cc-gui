@@ -15,6 +15,9 @@ vi.mock('react-i18next', () => ({
 }));
 
 describe('AppearanceTab ui font selector', () => {
+  const bridgeCall = (type: string, content = '') =>
+    JSON.stringify({ type, content });
+
   afterEach(() => {
     localStorage.clear();
   });
@@ -57,7 +60,7 @@ describe('AppearanceTab ui font selector', () => {
       target: { value: '__follow_idea__' },
     });
 
-    expect(sendToJava).toHaveBeenCalledWith('clear_user_language:');
+    expect(sendToJava).toHaveBeenCalledWith(bridgeCall('clear_user_language'));
     expect(changeLanguageMock).not.toHaveBeenCalled();
     // Java + main.tsx own the persisted state; component must not write here.
     expect(localStorage.getItem('languageSelectionMode')).toBe('manual');
@@ -76,7 +79,7 @@ describe('AppearanceTab ui font selector', () => {
     });
 
     expect(sendToJava).toHaveBeenCalledWith(
-      'set_user_language:' + JSON.stringify({ language: 'en' })
+      bridgeCall('set_user_language', JSON.stringify({ language: 'en' }))
     );
     expect(changeLanguageMock).toHaveBeenCalledWith('en');
     expect(localStorage.getItem('languageSelectionMode')).toBe('followIdea');

@@ -9,6 +9,7 @@ import ConfirmDialog from '../../ConfirmDialog';
 import PromptExportDialog from './PromptExportDialog';
 import PromptImportConfirmDialog from './PromptImportConfirmDialog';
 import styles from './style.module.less';
+import { sendBridgeEvent } from '../../../utils/bridge';
 
 interface PromptSectionProps {
   onSuccess?: (message: string) => void;
@@ -55,9 +56,7 @@ export default function PromptSection({
   // Load project info and prompts on mount
   useEffect(() => {
     // Load project info first
-    if (window.sendToJava) {
-      window.sendToJava('get_project_info:{}');
-    }
+    sendBridgeEvent('get_project_info', '{}');
     // Then load prompts
     loadAllPrompts();
     return () => cleanupPromptsTimeout();

@@ -9,6 +9,9 @@ vi.mock('react-i18next', () => ({
 }));
 
 describe('useCodexProviderManagement', () => {
+  const bridgeCall = (type: string, content = '') =>
+    JSON.stringify({ type, content });
+
   beforeEach(() => {
     window.sendToJava = vi.fn();
   });
@@ -21,7 +24,7 @@ describe('useCodexProviderManagement', () => {
     });
 
     expect(window.sendToJava).toHaveBeenCalledWith(
-      'revoke_codex_local_config_authorization:{"fallbackProviderId":"provider-1"}'
+      bridgeCall('revoke_codex_local_config_authorization', '{"fallbackProviderId":"provider-1"}')
     );
     expect(result.current.codexLoading).toBe(true);
   });

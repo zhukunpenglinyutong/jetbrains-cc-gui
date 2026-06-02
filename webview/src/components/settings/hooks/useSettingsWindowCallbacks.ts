@@ -15,11 +15,10 @@ import {
   subscribeCodexProviderList,
   subscribeProviderList,
 } from '../../../utils/runtimeProviderCapabilities';
+import { sendBridgeEvent } from '../../../utils/bridge';
 
-const sendToJava = (message: string) => {
-  if (window.sendToJava) {
-    window.sendToJava(message);
-  }
+const sendToJava = (event: string, payload = '') => {
+  sendBridgeEvent(event, payload);
 };
 
 export interface SettingsWindowCallbacksDeps {
@@ -481,21 +480,21 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     d().loadAgents();
     // Note: loadPrompts is now handled by PromptSection component
     d().loadPrompts?.();
-    sendToJava('get_node_path:');
-    sendToJava('get_working_directory:');
-    sendToJava('get_editor_font_config:');
-    sendToJava('get_ui_font_config:');
-    sendToJava('get_streaming_enabled:');
-    sendToJava('get_codex_sandbox_mode:');
-    sendToJava('get_commit_prompt:');
-    sendToJava('get_commit_ai_config:');
-    sendToJava('get_prompt_enhancer_config:');
-    sendToJava('get_commit_generation_enabled:');
-    sendToJava('get_ai_title_generation_enabled:');
-    sendToJava('get_status_bar_widget_enabled:');
-    sendToJava('get_task_completion_notification_enabled:');
-    sendToJava('get_invocation_mode:');
-    sendToJava('get_permission_dialog_timeout:');
+    sendToJava('get_node_path');
+    sendToJava('get_working_directory');
+    sendToJava('get_editor_font_config');
+    sendToJava('get_ui_font_config');
+    sendToJava('get_streaming_enabled');
+    sendToJava('get_codex_sandbox_mode');
+    sendToJava('get_commit_prompt');
+    sendToJava('get_commit_ai_config');
+    sendToJava('get_prompt_enhancer_config');
+    sendToJava('get_commit_generation_enabled');
+    sendToJava('get_ai_title_generation_enabled');
+    sendToJava('get_status_bar_widget_enabled');
+    sendToJava('get_task_completion_notification_enabled');
+    sendToJava('get_invocation_mode');
+    sendToJava('get_permission_dialog_timeout');
 
     return () => {
       d().cleanupAgentsTimeout();

@@ -11,6 +11,9 @@ vi.mock('react-i18next', () => ({
 }));
 
 describe('useSettingsWindowCallbacks', () => {
+  const bridgeCall = (type: string, content = '') =>
+    JSON.stringify({ type, content });
+
   const createDeps = (): SettingsWindowCallbacksDeps => ({
     setNodePath: vi.fn(),
     setNodeVersion: vi.fn(),
@@ -63,16 +66,16 @@ describe('useSettingsWindowCallbacks', () => {
     expect(deps.loadProviders).toHaveBeenCalledTimes(1);
     expect(deps.loadCodexProviders).toHaveBeenCalledTimes(1);
     expect(deps.loadAgents).toHaveBeenCalledTimes(1);
-    expect(window.sendToJava).not.toHaveBeenCalledWith('get_current_claude_config:');
-    expect(window.sendToJava).toHaveBeenCalledWith('get_node_path:');
-    expect(window.sendToJava).toHaveBeenCalledWith('get_working_directory:');
-    expect(window.sendToJava).toHaveBeenCalledWith('get_editor_font_config:');
-    expect(window.sendToJava).toHaveBeenCalledWith('get_streaming_enabled:');
-    expect(window.sendToJava).toHaveBeenCalledWith('get_codex_sandbox_mode:');
-    expect(window.sendToJava).toHaveBeenCalledWith('get_commit_prompt:');
-    expect(window.sendToJava).toHaveBeenCalledWith('get_commit_ai_config:');
-    expect(window.sendToJava).toHaveBeenCalledWith('get_prompt_enhancer_config:');
-    expect(window.sendToJava).toHaveBeenCalledWith('get_ui_font_config:');
+    expect(window.sendToJava).not.toHaveBeenCalledWith(bridgeCall('get_current_claude_config'));
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('get_node_path'));
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('get_working_directory'));
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('get_editor_font_config'));
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('get_streaming_enabled'));
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('get_codex_sandbox_mode'));
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('get_commit_prompt'));
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('get_commit_ai_config'));
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('get_prompt_enhancer_config'));
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('get_ui_font_config'));
   });
 
   it('registers prompt enhancer callback and updates state from backend payload', () => {

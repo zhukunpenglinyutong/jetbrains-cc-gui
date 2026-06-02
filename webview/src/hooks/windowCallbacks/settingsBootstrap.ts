@@ -25,10 +25,10 @@ export const startInitialSettingsRequest = (): void => {
       return;
     }
     if (window.sendToJava) {
-      window.sendToJava('get_streaming_enabled:');
-      window.sendToJava('get_send_shortcut:');
-      window.sendToJava('get_auto_open_file_enabled:');
-      window.sendToJava('get_permission_dialog_timeout:');
+      sendBridgeEvent('get_streaming_enabled');
+      sendBridgeEvent('get_send_shortcut');
+      sendBridgeEvent('get_auto_open_file_enabled');
+      sendBridgeEvent('get_permission_dialog_timeout');
     } else {
       settingsRetryCount++;
       if (settingsRetryCount < MAX_RETRIES) {
@@ -231,6 +231,6 @@ export const drainAndRequestDependencyStatus = (): void => {
   }
 
   if (window.sendToJava) {
-    window.sendToJava('get_dependency_status:');
+    sendBridgeEvent('get_dependency_status');
   }
 };

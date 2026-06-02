@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import styles from './style.module.less';
 import { useTranslation } from 'react-i18next';
+import { sendBridgeEvent } from '../../../utils/bridge';
 import type { DiffThemeMode } from '../../../utils/diffTheme';
 import type { UiFontConfig } from '../hooks/useSettingsBasicActions';
 
@@ -307,16 +308,12 @@ const AppearanceTab = ({
     setLanguageSelection(language);
 
     if (language === FOLLOW_IDEA_LANGUAGE) {
-      if (window.sendToJava) {
-        window.sendToJava('clear_user_language:');
-      }
+      sendBridgeEvent('clear_user_language');
       return;
     }
 
     i18n.changeLanguage(language);
-    if (window.sendToJava) {
-      window.sendToJava(`set_user_language:${JSON.stringify({ language })}`);
-    }
+    sendBridgeEvent('set_user_language', JSON.stringify({ language }));
   };
 
   const handleUiFontSelectionChange = (event: React.ChangeEvent<HTMLSelectElement>) => {

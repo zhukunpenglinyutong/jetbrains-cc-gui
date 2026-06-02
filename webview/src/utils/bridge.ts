@@ -154,6 +154,11 @@ const isValidFqcn = (className: string): boolean => {
   return isJavaFqcnCandidate(trimmed);
 };
 
+type BridgeEnvelope = {
+  type: string;
+  content: string;
+};
+
 const callBridge = (payload: string) => {
   if (window.sendToJava) {
     window.sendToJava(payload);
@@ -165,7 +170,8 @@ const callBridge = (payload: string) => {
 };
 
 export const sendBridgeEvent = (event: string, content = '') => {
-  return callBridge(`${event}:${content}`);
+  const envelope: BridgeEnvelope = { type: event, content };
+  return callBridge(JSON.stringify(envelope));
 };
 
 export const resolveFilePath = (filePath?: string) => {

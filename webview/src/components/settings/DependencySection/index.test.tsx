@@ -43,6 +43,9 @@ vi.mock('react-i18next', () => ({
 }));
 
 describe('DependencySection', () => {
+  const bridgeCall = (type: string, content = '') =>
+    JSON.stringify({ type, content });
+
   beforeEach(() => {
     vi.clearAllMocks();
     window.sendToJava = vi.fn();
@@ -169,7 +172,7 @@ describe('DependencySection', () => {
     });
 
     expect(screen.getAllByText('版本列表加载中').length).toBeGreaterThan(0);
-    expect(window.sendToJava).toHaveBeenCalledWith('get_dependency_versions:');
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('get_dependency_versions'));
 
     act(() => {
       window.dependencyVersionsLoaded?.(JSON.stringify({

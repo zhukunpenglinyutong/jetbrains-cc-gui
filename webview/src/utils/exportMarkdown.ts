@@ -378,8 +378,8 @@ export function downloadJSON(content: string, filename: string): void {
     filename: filename.endsWith('.json') ? filename : `${filename}.json`
   });
 
-  if (window.sendToJava) {
-    window.sendToJava(`save_json:${payload}`);
+  if (sendBridgeEvent('save_json', payload)) {
+    return;
   } else {
     console.error('[Frontend] sendToJava not available, falling back to browser download');
     // Fallback: use browser download
@@ -401,3 +401,4 @@ function fallbackBrowserDownload(content: string, filename: string): void {
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+import { sendBridgeEvent } from './bridge';

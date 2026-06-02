@@ -4,6 +4,9 @@ import { useSettingsBasicActions } from './useSettingsBasicActions';
 import type { CommitAiConfig } from '../../../types/aiFeatureConfig';
 
 describe('useSettingsBasicActions', () => {
+  const bridgeCall = (type: string, content = '') =>
+    JSON.stringify({ type, content });
+
   const defaultCommitAiConfig: CommitAiConfig = {
     provider: null,
     effectiveProvider: 'codex',
@@ -38,7 +41,7 @@ describe('useSettingsBasicActions', () => {
     expect(result.current.commitAiConfig.provider).toBe('claude');
     expect(result.current.promptEnhancerConfig).toEqual(promptEnhancerBefore);
     expect(window.sendToJava).toHaveBeenCalledWith(
-      'set_commit_ai_config:{"provider":"claude","models":{"claude":"claude-sonnet-4-6","codex":"gpt-5.5"}}'
+      bridgeCall('set_commit_ai_config', '{"provider":"claude","models":{"claude":"claude-sonnet-4-6","codex":"gpt-5.5"}}')
     );
   });
 
@@ -63,7 +66,7 @@ describe('useSettingsBasicActions', () => {
     expect(result.current.commitAiConfig.models.codex).toBe('gpt-5.4');
     expect(result.current.promptEnhancerConfig).toEqual(promptEnhancerBefore);
     expect(window.sendToJava).toHaveBeenCalledWith(
-      'set_commit_ai_config:{"provider":"codex","models":{"claude":"claude-sonnet-4-6","codex":"gpt-5.4"}}'
+      bridgeCall('set_commit_ai_config', '{"provider":"codex","models":{"claude":"claude-sonnet-4-6","codex":"gpt-5.4"}}')
     );
   });
 });
