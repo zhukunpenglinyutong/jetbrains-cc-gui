@@ -40,6 +40,8 @@ import com.intellij.ui.content.ContentManager;
 import com.intellij.ui.jcef.JBCefBrowser;
 
 import java.awt.BorderLayout;
+import com.intellij.util.Alarm;
+
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.swing.JPanel;
@@ -143,6 +145,7 @@ public class ClaudeChatWindow {
      * task completion notification sent.
      */
     private final AtomicBoolean taskCompletionNotificationSent = new AtomicBoolean(false);
+    private final Alarm notificationAlarm = new Alarm(Alarm.ThreadToUse.SWING_THREAD);
 
     /**
      * title event listener.
@@ -671,14 +674,22 @@ public class ClaudeChatWindow {
             return;
         }
 
-        String[] parts = message.split(":", 2);
-        if (parts.length < 1) {
-            LOG.error("Invalid message format");
-            return;
-        }
+        String type;
+        String content;
 
-        String type = parts[0];
-        String content = parts.length > 1 ? parts[1] : "";
+        BridgeMessage bridgeMessage = parseBridgeMessage(message);
+        if (bridgeMessage != null) {
+            type = bridgeMessage.type;
+            content = bridgeMessage.content;
+        } else {
+            String[] parts = message.split(":", 2);
+            if (parts.length < 1) {
+                LOG.error("Invalid message format");
+                return;
+            }
+            type = parts[0];
+            content = parts.length > 1 ? parts[1] : "";
+        }
 
         if ("send_message".equals(type) || "send_message_with_attachments".equals(type)) {
             ClaudeSession currentSession = session;
@@ -697,6 +708,35 @@ public class ClaudeChatWindow {
         }
 
         LOG.warn("Unknown message type: " + type);
+    }
+
+    private BridgeMessage parseBridgeMessage(String message) {
+        if (message == null || message.isEmpty() || message.charAt(0) != '{') {
+            return null;
+        }
+        try {
+            JsonObject json = new Gson().fromJson(message, JsonObject.class);
+            if (json == null || !json.has("type")) {
+                return null;
+            }
+            String type = json.get("type").getAsString();
+            String content = json.has("content") && !json.get("content").isJsonNull()
+                    ? json.get("content").getAsString()
+                    : "";
+            return new BridgeMessage(type, content);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static final class BridgeMessage {
+        private final String type;
+        private final String content;
+
+        private BridgeMessage(String type, String content) {
+            this.type = type;
+            this.content = content;
+        }
     }
 
     // ==================== Session Delegates ====================
@@ -792,7 +832,8 @@ public class ClaudeChatWindow {
         if (session == null) {
             return;
         }
-        maybeShowTaskCompletionNotification();
+        notificationAlarm.cancelAllRequests();
+        notificationAlarm.addRequest(this::maybeShowTaskCompletionNotification, 500);
     }
 
     public void onSendStarted() {
@@ -800,6 +841,9 @@ public class ClaudeChatWindow {
     }
 
     public void maybeShowTaskCompletionNotification() {
+        if (disposed) {
+            return;
+        }
         if (!shouldShowTaskCompletionNotification(session)) {
             return;
         }
@@ -909,6 +953,7 @@ public class ClaudeChatWindow {
                 session != null ? session.getSessionId() : null);
         this.disposed = true;
 
+        notificationAlarm.cancelAllRequests();
         chatWindowDelegate.dispose();
         editorContextTracker.dispose();
         streamCoalescer.dispose();
