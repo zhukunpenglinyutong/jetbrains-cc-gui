@@ -618,7 +618,9 @@ export const MessageItem = memo(function MessageItem({
         <div className="message-duration">
           <span className="message-duration-inner">
             <span className="message-duration-flag codicon codicon-clock"></span>
-            <span className="message-duration-cost">{t('chat.totalDuration')}</span>
+            <span className="message-duration-cost">
+              {t(message.streamEndSource === 'watchdog' ? 'chat.waitingTimedOutDuration' : 'chat.totalDuration')}
+            </span>
             <span className="message-duration-value">{formatDurationMs(message.durationMs)}</span>
           </span>
         </div>

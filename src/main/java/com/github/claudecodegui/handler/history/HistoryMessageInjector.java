@@ -553,10 +553,9 @@ public class HistoryMessageInjector {
 
         ApplicationManager.getApplication().invokeLater(() -> {
             String jsCode = "if (window.clearMessages) { window.clearMessages(); } " +
-                                    "window.__sessionTransitioning = false; " +
-                                    "window.__sessionTransitionToken = null; " +
                                     "if (window.updateMessages) { window.updateMessages('" + escapedMessagesJson + "'); }";
             context.executeJavaScriptOnEDT(jsCode);
         });
     }
 }
+

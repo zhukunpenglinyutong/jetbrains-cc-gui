@@ -75,10 +75,13 @@ export interface ClaudeMessage {
   type: ClaudeRole;
   content?: string;
   raw?: ClaudeRawMessage | string;
-  timestamp?: string;
-  isStreaming?: boolean;
-  isOptimistic?: boolean;
-  /**
+    timestamp?: string;
+    isStreaming?: boolean;
+    isOptimistic?: boolean;
+    durationMs?: number;
+    streamEndSource?: 'backend' | 'watchdog' | string;
+    streamEndReason?: string;
+    /**
    * Runtime-only: numeric turn identifier for streaming assistant isolation.
    * Set by frontend during streaming to distinguish messages from different
    * conversation turns. Messages with different __turnId values should never

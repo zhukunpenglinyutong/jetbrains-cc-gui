@@ -121,7 +121,10 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
   const firstMsgIdRef = useRef(messages[0]?.id);
   useEffect(() => {
     const currentFirstId = messages[0]?.id;
-    if (currentFirstId !== firstMsgIdRef.current) {
+    const isSessionStart = messages.length === 0;
+
+    // Reset on session start OR when first message ID changes
+    if (isSessionStart || currentFirstId !== firstMsgIdRef.current) {
       setRevealedCount(0);
     }
     firstMsgIdRef.current = currentFirstId;

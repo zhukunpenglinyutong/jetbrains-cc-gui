@@ -162,6 +162,8 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     thinkingUpdateTimeoutRef,
     getOrCreateStreamingAssistantIndex,
     patchAssistantForStreaming,
+    addToast,
+    t,
   } = options;
 
   // ── Stream stall watchdog ──
@@ -391,6 +393,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     window.__lastStreamEndSource = undefined;
     if (source === 'watchdog') {
       console.warn('[onStreamEnd] Triggered by stall watchdog recovery — possible premature stream-end');
+      addToast(t('chat.streamStalledRetrying'), 'warning');
     } else {
       console.log(`[onStreamEnd] Triggered by ${source} (sequence=${sequence})`);
     }
@@ -606,6 +609,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
           isStreaming: false,
           __turnId: endedStreamingTurnId, // Keep __turnId for merge guard
           ...(durationMs != null ? { durationMs } : {}),
+          ...(source === 'watchdog' ? { streamEndSource: 'watchdog', streamEndReason: 'stalled' } : {}),
         };
       }
 

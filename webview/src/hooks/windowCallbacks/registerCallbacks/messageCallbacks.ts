@@ -643,9 +643,30 @@ export function registerMessageCallbacks(
     setMessages((prev) => {
       if (prev.length === 0) return prev;
       orphanIds = collectUnresolvedToolUseIds(prev, 'all');
-      // Shallow copy forces ChatMessages to re-render so the now-denied IDs are
-      // picked up by BashToolGroupBlock's deniedToolIds prop.
-      return prev.map(m => ({ ...m }));
+      if (orphanIds.length === 0) {
+        return prev.map(m => ({ ...m }));
+      }
+
+      const syntheticResults: ClaudeMessage[] = orphanIds.map((id) => ({
+        type: 'user',
+        content: '[tool_result]',
+        timestamp: new Date().toISOString(),
+        raw: {
+          role: 'user',
+          origin: { kind: 'tool_result' },
+          content: [{
+            type: 'tool_result',
+            tool_use_id: id,
+            content: 'Interrupted during history replay',
+            is_error: true,
+          }],
+        },
+      }));
+
+      // Shallow-copy existing messages to force a re-render, then append
+      // synthetic tool_result blocks so any UI path relying on findToolResult()
+      // also settles orphaned historical tool_use entries.
+      return [...prev.map(m => ({ ...m })), ...syntheticResults];
     });
     for (const id of orphanIds) {
       window.__deniedToolIds.add(id);
@@ -680,3 +701,4 @@ export function registerMessageCallbacks(
   };
 
 }
+

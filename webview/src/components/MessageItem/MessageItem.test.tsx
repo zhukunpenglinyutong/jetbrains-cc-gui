@@ -35,6 +35,7 @@ const t = ((key: string) => {
     'markdown.copySuccess': '已复制',
     'chat.streamingConnected': '已连接',
     'chat.totalDuration': '本次耗时',
+    'chat.waitingTimedOutDuration': '等待超时',
   };
   return translations[key] ?? key;
 }) as any;
@@ -151,5 +152,21 @@ describe('MessageItem copy button visibility', () => {
 
     expect(screen.getByTestId('bash-tool-group-block')).toBeTruthy();
     expect(screen.queryAllByTestId('content-block-tool_use')).toHaveLength(0);
+  });
+
+  it('labels watchdog-ended assistant duration as a waiting timeout', () => {
+    const message: ClaudeMessage = {
+      type: 'assistant',
+      content: 'partial answer',
+      durationMs: 181_000,
+      streamEndSource: 'watchdog',
+      streamEndReason: 'stalled',
+    };
+
+    renderMessageItem(message);
+
+    expect(screen.getByText('等待超时')).toBeTruthy();
+    expect(screen.getByText('3:01')).toBeTruthy();
+    expect(screen.queryByText('本次耗时')).toBeNull();
   });
 });
