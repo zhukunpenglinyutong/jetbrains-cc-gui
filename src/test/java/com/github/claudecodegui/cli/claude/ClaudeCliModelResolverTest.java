@@ -4,6 +4,8 @@ import com.google.gson.JsonObject;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class ClaudeCliModelResolverTest {
 
@@ -57,5 +59,55 @@ public class ClaudeCliModelResolverTest {
         String resolved = ClaudeCliModelResolver.resolveMapped("claude-haiku-4-5", env);
 
         assertEquals("mimo-fast", resolved);
+    }
+
+    @Test
+    public void shouldDisableOptionalCapabilitiesForMappedThirdPartyModelsByDefault() {
+        JsonObject env = new JsonObject();
+        env.addProperty("ANTHROPIC_DEFAULT_SONNET_MODEL", "mimo-v2.5-pro");
+
+        ClaudeCliModelResolver.ResolvedModel resolved = ClaudeCliModelResolver.resolveProfile(
+                "claude-sonnet-4-6", env);
+
+        assertEquals("mimo-v2.5-pro", resolved.model());
+        assertFalse(resolved.capabilities().supportsEffort());
+    }
+
+    @Test
+    public void shouldEnableEffortForCanonicalClaudeModels() {
+        ClaudeCliModelResolver.ResolvedModel resolved = ClaudeCliModelResolver.resolveProfile(
+                "claude-sonnet-4-6", new JsonObject());
+
+        assertEquals("claude-sonnet-4-6", resolved.model());
+        assertTrue(resolved.capabilities().supportsEffort());
+    }
+
+    @Test
+    public void shouldAllowExplicitEffortCapabilityOverrideForCustomModels() {
+        JsonObject env = new JsonObject();
+        env.addProperty("ANTHROPIC_MODEL", "mimo-v2.5-pro");
+        env.addProperty("ANTHROPIC_MODEL_CAPABILITIES", "effort,tools");
+
+        ClaudeCliModelResolver.ResolvedModel resolved = ClaudeCliModelResolver.resolveProfile(
+                "claude-sonnet-4-6", env);
+
+        assertEquals("mimo-v2.5-pro", resolved.model());
+        assertTrue(resolved.capabilities().supportsEffort());
+    }
+
+    @Test
+    public void shouldDisableOptionalCliCapabilitiesWhenExplicitlyConfigured() {
+        JsonObject env = new JsonObject();
+        env.addProperty("ANTHROPIC_DEFAULT_SONNET_MODEL", "claude-compatible-proxy");
+        env.addProperty("ANTHROPIC_DEFAULT_SONNET_MODEL_CAPABILITIES",
+                "no-effort,no-mcp,no-add-dir,no-partial-messages");
+
+        ClaudeCliModelResolver.ResolvedModel resolved = ClaudeCliModelResolver.resolveProfile(
+                "claude-sonnet-4-6", env);
+
+        assertFalse(resolved.capabilities().supportsEffort());
+        assertFalse(resolved.capabilities().supportsMcp());
+        assertFalse(resolved.capabilities().supportsAddDir());
+        assertFalse(resolved.capabilities().supportsPartialMessages());
     }
 }

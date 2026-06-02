@@ -124,36 +124,60 @@ public class ClaudeCliSession {
     // ── command builder ──────────────────────────────────────────────────────
 
     private List<String> buildCommand(String cliPath, CliSendRequest request, String prompt, List<String> addDirs) {
+        ClaudeCliModelResolver.ResolvedModel profile = ClaudeCliModelResolver.resolveProfile(request.model());
+        return buildCommand(
+                cliPath,
+                request,
+                addDirs,
+                profile,
+                mcpConfig.hasServers(),
+                mcpConfig.getConfigFilePath(),
+                sessionId
+        );
+    }
+
+    static List<String> buildCommand(
+            String cliPath,
+            CliSendRequest request,
+            List<String> addDirs,
+            ClaudeCliModelResolver.ResolvedModel profile,
+            boolean hasMcpServers,
+            String mcpConfigFilePath,
+            String currentSessionId
+    ) {
         List<String> cmd = new ArrayList<>();
         cmd.add(cliPath);
         cmd.add("-p");
         cmd.add("--output-format");
         cmd.add("stream-json");
         cmd.add("--verbose");
-        cmd.add("--include-partial-messages");
+        if (profile.capabilities().supportsPartialMessages()) {
+            cmd.add("--include-partial-messages");
+        }
 
         ClaudeCliPermissionMode.apply(cmd, request.permissionMode());
 
-        String model = ClaudeCliModelResolver.resolve(request.model());
+        String model = profile.model();
         if (model != null && !model.isBlank()) {
             cmd.add("--model");
             cmd.add(model);
         }
 
-        if (request.reasoningEffort() != null && !request.reasoningEffort()
+        if (profile.capabilities().supportsEffort()
+                && request.reasoningEffort() != null && !request.reasoningEffort()
                 .isBlank()) {
             cmd.add("--effort");
             cmd.add(request.reasoningEffort());
         }
 
         // per-tab MCP 配置
-        if (mcpConfig.hasServers()) {
+        if (profile.capabilities().supportsMcp() && hasMcpServers) {
             cmd.add("--mcp-config");
-            cmd.add(mcpConfig.getConfigFilePath());
+            cmd.add(mcpConfigFilePath);
         }
 
         // 附件父目录授权，使 Claude 可以读取持久化目录下的图片
-        if (addDirs != null) {
+        if (profile.capabilities().supportsAddDir() && addDirs != null) {
             for (String dir : addDirs) {
                 cmd.add("--add-dir");
                 cmd.add(dir);
@@ -161,7 +185,7 @@ public class ClaudeCliSession {
         }
 
         // 续接已有会话（优先使用本地保存的 sessionId，其次用请求传入的）
-        String resumeId = sessionId != null ? sessionId : request.sessionId();
+        String resumeId = currentSessionId != null ? currentSessionId : request.sessionId();
         if (resumeId != null && !resumeId.isBlank()) {
             cmd.add("--resume");
             cmd.add(resumeId);
@@ -318,6 +342,7 @@ public class ClaudeCliSession {
                 Map<String, String> cliEnv = pb.environment();
                 cliEnv.clear();
                 cliEnv.putAll(CliEnvironmentBuilder.buildBaseEnvironment());
+                cliEnv.putAll(CliSettings.readClaudeCliEnvironment());
                 cliEnv.put("NO_COLOR", "1");
                 CliEnvironmentBuilder.configureClaudePermissionEnv(
                         cliEnv,
