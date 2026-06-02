@@ -638,7 +638,7 @@ function openCodeToolUseId(part) {
 function openCodeToolResultContent(part) {
   const state = asRecord(part?.state);
   const output = state.status === 'error' ? state.error : state.output;
-  const fallback = pickString(state.title, part?.tool) || '(no output)';
+  const fallback = pickString(state.title, part?.tool, part?.name) || '(no output)';
   const content = pickString(output) || fallback;
   return truncateForDisplay(content);
 }
@@ -2210,7 +2210,8 @@ function normalizeOpenCodeMessage(item) {
   const content = [];
   let toolUseResult;
 
-  for (const part of item?.parts || []) {
+  const partsToProcess = Array.isArray(item?.parts) ? item.parts : (Array.isArray(info?.content) ? info.content : []);
+  for (const part of partsToProcess) {
     const kind = partKind(part);
     const text = partText(part);
     if (kind === 'tool') {
@@ -2227,7 +2228,7 @@ function normalizeOpenCodeMessage(item) {
       content.push({
         type: 'tool_use',
         id: toolUseId,
-        name: normalizeOpenCodeToolName(part.tool),
+        name: normalizeOpenCodeToolName(part.tool || part.name),
         input: normalizedInput
       });
 
@@ -2277,6 +2278,11 @@ function normalizeOpenCodeMessage(item) {
       type: isReasoningPart(kind) ? 'thinking' : 'text',
       text
     });
+  }
+
+  const textContent = info?.text;
+  if (content.length === 0 && typeof textContent === 'string' && textContent.trim()) {
+    content.push({ type: 'text', text: textContent });
   }
 
   const normalized = {

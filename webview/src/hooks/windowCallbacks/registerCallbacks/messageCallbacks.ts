@@ -138,13 +138,32 @@ export function registerMessageCallbacks(
     window.__pendingUpdateJson = null;
     window.__pendingUpdateSequence = null;
   };
+  const isToolResultOnlyUserMessage = (message: ClaudeMessage): boolean => {
+    if (message.type !== 'user') return false;
+    if ((message.content ?? '').trim() === '[tool_result]') return true;
+    const raw: any = message.raw;
+    if (!raw || typeof raw === 'string') return false;
+    const content = raw.content ?? raw.message?.content;
+    if (!Array.isArray(content) || content.length === 0) return false;
+    return content.every((block: any) => block && block.type === 'tool_result');
+  };
+
   const stampTurnIdOnAssistantMessages = (
     messages: ClaudeMessage[],
     turnId: number,
   ): ClaudeMessage[] => {
+    let lastNormalUserIdx = -1;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.type === 'user' && !isToolResultOnlyUserMessage(msg)) {
+        lastNormalUserIdx = i;
+        break;
+      }
+    }
+
     let changed = false;
-    const result = messages.map((msg) => {
-      if (msg.type === 'assistant' && msg.__turnId === undefined) {
+    const result = messages.map((msg, i) => {
+      if (i > lastNormalUserIdx && msg.type === 'assistant' && msg.__turnId === undefined) {
         changed = true;
         return { ...msg, __turnId: turnId };
       }
