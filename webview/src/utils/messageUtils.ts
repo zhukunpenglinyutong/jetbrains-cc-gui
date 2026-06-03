@@ -622,18 +622,30 @@ export function mergeConsecutiveAssistantMessages(
 
     const sameTurnId = prevTurnId !== undefined && prevTurnId === nextTurnId;
     if (sameTurnId) {
-      streamDebugLog('[STREAM-DBG] shouldMerge: same turnId merge', { prevTurnId, nextTurnId, prevContent: previous.content?.slice(0, 50), nextContent: next.content?.slice(0, 50) });
       return true;
     }
 
     if ((prevTurnId !== undefined || nextTurnId !== undefined) &&
         prevTurnId !== nextTurnId) {
-      streamDebugLog('[STREAM-DBG] shouldMerge: BLOCKED different turnIds', { prevTurnId, nextTurnId, prevContent: previous.content?.slice(0, 50), nextContent: next.content?.slice(0, 50) });
       return false;
     }
 
-    streamDebugLog('[STREAM-DBG] shouldMerge: history merge (no turnIds)', { prevTurnId, nextTurnId, prevContent: previous.content?.slice(0, 50), nextContent: next.content?.slice(0, 50) });
     return true;
+  };
+
+  const summarizeMergeInput = (list: ClaudeMessage[]): string[] => {
+    const assistants = list
+      .map((message, index) => ({ message, index }))
+      .filter(({ message }) => message.type === 'assistant')
+      .map(({ message, index }) => `#${index}:turnId=${message.__turnId}:streaming=${message.isStreaming === true}:content=${(message.content || '').slice(0, 30)}`);
+    if (assistants.length <= 8) {
+      return assistants;
+    }
+    return [
+      ...assistants.slice(0, 4),
+      `...${assistants.length - 8} omitted...`,
+      ...assistants.slice(-4),
+    ];
   };
 
   const isToolResultOnlyUserMessage = (message: ClaudeMessage): boolean => {
@@ -716,7 +728,7 @@ export function mergeConsecutiveAssistantMessages(
 
   const result: ClaudeMessage[] = [];
   let i = 0;
-  streamDebugLog('[STREAM-DBG] mergeConsecutiveAssistantMessages input:', messages.length, 'messages, turnIds:', messages.map((m, idx) => m.type === 'assistant' ? `#${idx}:turnId=${m.__turnId}:content=${(m.content || '').slice(0, 30)}` : `#${idx}:${m.type}`));
+  streamDebugLog('[STREAM-DBG] mergeConsecutiveAssistantMessages input:', messages.length, 'messages, assistants:', summarizeMergeInput(messages));
   while (i < messages.length) {
     const msg = messages[i];
     if (msg.type !== 'assistant') {
@@ -797,7 +809,7 @@ export function mergeConsecutiveAssistantMessages(
     i = j;
   }
 
-  streamDebugLog('[STREAM-DBG] mergeConsecutiveAssistantMessages output:', result.length, 'messages, turnIds:', result.map((m, idx) => m.type === 'assistant' ? `#${idx}:turnId=${m.__turnId}:content=${(m.content || '').slice(0, 30)}` : `#${idx}:${m.type}`));
+  streamDebugLog('[STREAM-DBG] mergeConsecutiveAssistantMessages output:', result.length, 'messages, assistants:', summarizeMergeInput(result));
   return result;
 }
 

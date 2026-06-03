@@ -112,6 +112,95 @@ export function collectUnresolvedToolUseIds(
   return idsToAdd;
 }
 
+function isToolResultOnlyUserMessage(message: ClaudeMessage): boolean {
+  if (message.type !== 'user') return false;
+  if ((message.content ?? '').trim() === '[tool_result]') return true;
+
+  try {
+    const rawObj = typeof message.raw === 'string' ? JSON.parse(message.raw) : message.raw;
+    const content = rawObj?.content ?? rawObj?.message?.content;
+    return Array.isArray(content) && content.length > 0
+      && content.every((block: { type?: string }) => block?.type === 'tool_result');
+  } catch {
+    return false;
+  }
+}
+
+function stampEndedTurnOnAssistantFragments(
+  messages: ClaudeMessage[],
+  turnId: number,
+): ClaudeMessage[] {
+  if (turnId <= 0) return messages;
+
+  let lastNormalUserIdx = -1;
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const msg = messages[i];
+    if (msg.type === 'user' && !isToolResultOnlyUserMessage(msg)) {
+      lastNormalUserIdx = i;
+      break;
+    }
+  }
+
+  let changed = false;
+  let assistantStep = 0;
+  const completedStepBaseTurnId = turnId * 100_000;
+  const stamped = messages.map((msg, index) => {
+    if (index <= lastNormalUserIdx || msg.type !== 'assistant' || msg.__turnId !== undefined) {
+      return msg;
+    }
+    changed = true;
+    assistantStep += 1;
+    return { ...msg, __turnId: completedStepBaseTurnId + assistantStep };
+  });
+
+  return changed ? stamped : messages;
+}
+
+function summarizeAssistantsForDebug(messages: ClaudeMessage[]): string[] {
+  const assistants = messages
+    .filter((message) => message.type === 'assistant')
+    .map((message, index) => `#${index}:turnId=${message.__turnId}:isStreaming=${message.isStreaming}:content=${(message.content || '').slice(0, 30)}`);
+  if (assistants.length <= 8) {
+    return assistants;
+  }
+  return [
+    ...assistants.slice(0, 4),
+    `...${assistants.length - 8} omitted...`,
+    ...assistants.slice(-4),
+  ];
+}
+
+function findPreviousLiveAssistant(
+  messages: ClaudeMessage[],
+  turnId: number,
+  streamingIndex: number,
+): ClaudeMessage | undefined {
+  if (turnId > 0) {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const msg = messages[i];
+      if (msg.type === 'assistant' && msg.__turnId === turnId) {
+        return msg;
+      }
+    }
+  }
+
+  if (streamingIndex >= 0 && streamingIndex < messages.length) {
+    const indexed = messages[streamingIndex];
+    if (indexed?.type === 'assistant') {
+      return indexed;
+    }
+  }
+
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const msg = messages[i];
+    if (msg.type === 'assistant' && msg.isStreaming) {
+      return msg;
+    }
+  }
+
+  return undefined;
+}
+
 /**
  * Timeout (ms) for detecting a stalled stream.  If no content/thinking delta
  * arrives for this duration while isStreamingRef is still true, the frontend
@@ -503,6 +592,8 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
           })
         : [...prev];
 
+      newMessages = stampEndedTurnOnAssistantFragments(newMessages, endedStreamingTurnId);
+
       newMessages = newMessages.map((msg) => {
         if (msg.type === 'assistant' && msg.isStreaming) {
           if (
@@ -538,7 +629,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
         }
       }
 
-      streamDebugLog('[STREAM-DBG] onStreamEnd setMessages: idx=', idx, 'prev count=', prev.length, 'base count=', newMessages.length, 'usedPendingSnapshot=', Boolean(pendingFullMessages), 'prev assistants=', prev.filter(m => m.type === 'assistant').map(m => `turnId=${m.__turnId}:isStreaming=${m.isStreaming}:content=${(m.content || '').slice(0, 30)}`));
+      streamDebugLog('[STREAM-DBG] onStreamEnd setMessages: idx=', idx, 'prev count=', prev.length, 'base count=', newMessages.length, 'usedPendingSnapshot=', Boolean(pendingFullMessages), 'prev assistants=', summarizeAssistantsForDebug(prev));
       if (newMessages.length > 0 && idx >= 0 && idx < newMessages.length && newMessages[idx]?.type === 'assistant') {
         // FIX: Keep __turnId on the message for a short period to prevent
         // incorrect merging with history messages. The __turnId will be
@@ -552,7 +643,11 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
         // The backend snapshot may be from an earlier coalescer flush, so the existing
         // raw (updated by subsequent deltas) could actually be more up-to-date.
         let finalRaw = newMessages[idx].raw;
-        const previousLiveRaw = prev[idx]?.type === 'assistant' ? prev[idx].raw : undefined;
+        const previousLiveRaw = findPreviousLiveAssistant(
+          prev,
+          endedStreamingTurnId,
+          endedStreamingMessageIndex,
+        )?.raw;
         if (previousLiveRaw != null && finalRaw != null) {
           finalRaw = mergeRawBlocksDuringStreaming(previousLiveRaw, finalRaw) as ClaudeRawMessage | string | undefined;
         }

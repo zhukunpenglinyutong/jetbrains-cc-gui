@@ -23,6 +23,7 @@ public final class StreamDebugLogService {
 
     private static final Logger LOG = Logger.getInstance(StreamDebugLogService.class);
     private static final String LOG_FILE_NAME = "codemoss-stream-debug.log";
+    private static final long MAX_LOG_BYTES = 20L * 1024L * 1024L;
 
     private StreamDebugLogService() {
     }
@@ -60,6 +61,14 @@ public final class StreamDebugLogService {
                     "# Codemoss streaming debug log" + System.lineSeparator(),
                     StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE_NEW
+            );
+        } else if (Files.size(logPath) > MAX_LOG_BYTES) {
+            Files.writeString(
+                    logPath,
+                    "# Codemoss streaming debug log truncated after exceeding "
+                            + MAX_LOG_BYTES + " bytes" + System.lineSeparator(),
+                    StandardCharsets.UTF_8,
+                    StandardOpenOption.TRUNCATE_EXISTING
             );
         }
     }

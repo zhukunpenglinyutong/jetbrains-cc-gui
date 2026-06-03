@@ -259,12 +259,43 @@ async function getPersistentOpenCodeRuntime(cwd) {
     return existing;
   }
 
-  const runtimePromise = createOpenCodeRuntime(cwd).catch((error) => {
-    persistentRuntimes.delete(key);
-    throw error;
-  });
+  const runtimePromise = createOpenCodeRuntime(cwd)
+    .then((runtime) => {
+      Object.defineProperty(runtime, '__persistentRuntimeKey', {
+        value: key,
+        enumerable: false,
+        configurable: true
+      });
+      return runtime;
+    })
+    .catch((error) => {
+      persistentRuntimes.delete(key);
+      throw error;
+    });
   persistentRuntimes.set(key, runtimePromise);
   return runtimePromise;
+}
+
+function isOpenCodeRuntimeTransportError(error) {
+  const message = error && error.message ? error.message : String(error || '');
+  const cause = error?.cause;
+  const causeMessage = cause && cause.message ? cause.message : String(cause || '');
+  return /fetch failed|ECONNREFUSED|ECONNRESET|EPIPE|socket hang up|terminated|other side closed|connection closed/i
+    .test(`${message}\n${causeMessage}`);
+}
+
+async function discardPersistentOpenCodeRuntimeOnError(runtime, error) {
+  if (!runtime || !isOpenCodeRuntimeTransportError(error)) {
+    return;
+  }
+
+  const key = runtime.__persistentRuntimeKey;
+  if (key && persistentRuntimes.has(key)) {
+    persistentRuntimes.delete(key);
+  }
+  if (runtime.ownedServer) {
+    await runtime.close().catch(() => {});
+  }
 }
 
 async function acquireOpenCodeRuntime(cwd, options = {}) {
@@ -3169,6 +3200,7 @@ export async function sendMessage(
     emitMarker('[MESSAGE_END]');
   } catch (error) {
     if (!activeTurn.aborted) {
+      await discardPersistentOpenCodeRuntimeOnError(runtime, error);
       emitContextSendError(eventContext, normalizeOpenCodeSdkError(error));
       emitMarker('[STREAM_END]');
       emitMarker('[MESSAGE_END]');
@@ -3205,6 +3237,7 @@ export async function abortSession(sessionId = '', cwd = '', options = {}) {
 
     console.log(JSON.stringify({ success: true, sessionId: normalizedSessionId }));
   } catch (error) {
+    await discardPersistentOpenCodeRuntimeOnError(runtime, error);
     console.log(JSON.stringify({
       success: false,
       error: normalizeOpenCodeSdkError(error).error,
@@ -3234,6 +3267,7 @@ export async function deleteSession(sessionId = '', cwd = '', options = {}) {
 
     console.log(JSON.stringify({ success: true, sessionId: normalizedSessionId }));
   } catch (error) {
+    await discardPersistentOpenCodeRuntimeOnError(runtime, error);
     console.log(JSON.stringify({
       success: false,
       error: normalizeOpenCodeSdkError(error).error,
@@ -3273,6 +3307,7 @@ export async function getSessionMessages(sessionId = '', cwd = '', options = {})
       messages: normalizedMessages
     }));
   } catch (error) {
+    await discardPersistentOpenCodeRuntimeOnError(runtime, error);
     console.log(JSON.stringify({
       success: false,
       error: normalizeOpenCodeSdkError(error).error,
@@ -3303,6 +3338,7 @@ export async function listSessions(cwd = '', options = {}) {
       total: normalizedSessions.reduce((sum, session) => sum + (session.messageCount || 0), 0)
     }));
   } catch (error) {
+    await discardPersistentOpenCodeRuntimeOnError(runtime, error);
     console.log(JSON.stringify({
       success: false,
       error: normalizeOpenCodeSdkError(error).error,
@@ -3342,6 +3378,7 @@ export async function listModels(cwd = '', options = {}) {
       models
     }));
   } catch (error) {
+    await discardPersistentOpenCodeRuntimeOnError(runtime, error);
     console.log(JSON.stringify({
       success: false,
       error: normalizeOpenCodeSdkError(error).error,
@@ -3375,6 +3412,7 @@ export async function listAgents(cwd = '', options = {}) {
       agents: normalizeOpenCodeAgents(agents, config)
     }));
   } catch (error) {
+    await discardPersistentOpenCodeRuntimeOnError(runtime, error);
     console.log(JSON.stringify({
       success: false,
       error: normalizeOpenCodeSdkError(error).error,
@@ -3400,6 +3438,7 @@ export async function listCommands(cwd = '', options = {}) {
       commands: normalizeOpenCodeCommands(commands)
     }));
   } catch (error) {
+    await discardPersistentOpenCodeRuntimeOnError(runtime, error);
     console.log(JSON.stringify({
       success: false,
       error: normalizeOpenCodeSdkError(error).error,
@@ -3432,6 +3471,7 @@ export async function listMcpServers(cwd = '', options = {}) {
       status: normalizeOpenCodeMcpStatusList(config, status)
     }));
   } catch (error) {
+    await discardPersistentOpenCodeRuntimeOnError(runtime, error);
     console.log(JSON.stringify({
       success: false,
       error: normalizeOpenCodeSdkError(error).error,
@@ -3464,6 +3504,7 @@ export async function listMcpServerStatus(cwd = '', options = {}) {
       status: normalizeOpenCodeMcpStatusList(config, status)
     }));
   } catch (error) {
+    await discardPersistentOpenCodeRuntimeOnError(runtime, error);
     console.log(JSON.stringify({
       success: false,
       error: normalizeOpenCodeSdkError(error).error,
@@ -3527,10 +3568,11 @@ export async function getMcpServerTools(serverId = '', cwd = '', options = {}) {
           };
           console.log(JSON.stringify(result));
           return;
-        }
-      } catch (error) {
-        errors.push(`/experimental/tool failed: ${normalizeOpenCodeSdkError(error).error}`);
       }
+    } catch (error) {
+      await discardPersistentOpenCodeRuntimeOnError(runtime, error);
+      errors.push(`/experimental/tool failed: ${normalizeOpenCodeSdkError(error).error}`);
+    }
     } else {
       errors.push('No concrete opencode provider/model available for /experimental/tool');
     }
@@ -3552,6 +3594,7 @@ export async function getMcpServerTools(serverId = '', cwd = '', options = {}) {
         return;
       }
     } catch (error) {
+      await discardPersistentOpenCodeRuntimeOnError(runtime, error);
       errors.push(`/experimental/tool/ids failed: ${normalizeOpenCodeSdkError(error).error}`);
     }
 
@@ -3586,6 +3629,7 @@ export async function getMcpServerTools(serverId = '', cwd = '', options = {}) {
 
     console.log(JSON.stringify(result));
   } catch (error) {
+    await discardPersistentOpenCodeRuntimeOnError(runtime, error);
     const message = normalizeOpenCodeSdkError(error).error;
     console.log(JSON.stringify({
       success: false,
@@ -3624,6 +3668,7 @@ export {
   resolveOpenCodePromptModel,
   resolveLastUsedSessionModel,
   filterOpenCodeProvidersByConfig,
+  isOpenCodeRuntimeTransportError,
   unwrapSdkResult,
   waitForOpenCodeTurnIdle,
   resolveOpenCodePromptOptions

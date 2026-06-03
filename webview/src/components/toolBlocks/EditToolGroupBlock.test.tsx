@@ -26,6 +26,7 @@ vi.mock('../../hooks/useResolvedFileLinkTooltip', () => ({
 
 describe('EditToolGroupBlock', () => {
   beforeEach(() => {
+    window.__deniedToolIds = new Set();
     bridgeMocks.openFile.mockReset();
     bridgeMocks.refreshFile.mockReset();
     bridgeMocks.showDiff.mockReset();
@@ -63,5 +64,30 @@ describe('EditToolGroupBlock', () => {
     fireEvent.click(screen.getByText('App.tsx'));
 
     expect(bridgeMocks.openFile).toHaveBeenCalledWith('/repo/src/App.tsx', undefined, undefined);
+  });
+
+  it('renders interrupted unresolved edits as error instead of pending', () => {
+    window.__deniedToolIds = new Set(['edit-1']);
+
+    const { container } = render(
+      <EditToolGroupBlock
+        items={[
+          {
+            name: 'edit',
+            input: {
+              file_path: 'src/App.tsx',
+              old_string: 'const value = 1',
+              new_string: 'const value = 2',
+            },
+            result: null,
+            toolId: 'edit-1',
+          },
+        ]}
+      />,
+    );
+
+    expect(container.querySelector('.tool-status-indicator.error')).toBeTruthy();
+    expect(container.querySelector('.tool-status-indicator.pending')).toBeNull();
+    expect(bridgeMocks.refreshFile).not.toHaveBeenCalled();
   });
 });

@@ -20,6 +20,7 @@ interface EditItem {
   lineEnd?: number;
   isCompleted: boolean;
   isError: boolean;
+  toolId?: string;
 }
 
 interface EditToolGroupBlockProps {
@@ -27,6 +28,7 @@ interface EditToolGroupBlockProps {
     name?: string;
     input?: ToolInput;
     result?: ToolResultBlock | null;
+    toolId?: string;
   }>;
 }
 
@@ -163,6 +165,7 @@ const mergeEditItems = (existing: EditItem, next: EditItem): EditItem => {
     lineEnd: primary.lineEnd ?? secondary.lineEnd,
     isCompleted: primary.isCompleted || secondary.isCompleted,
     isError: primary.isError || secondary.isError,
+    toolId: primary.toolId ?? secondary.toolId,
   };
 };
 
@@ -239,7 +242,7 @@ function computeDiffStats(oldString: string, newString: string): { additions: nu
 /**
  * Parse item to EditItem
  */
-function parseEditItem(item: { name?: string; input?: ToolInput; result?: ToolResultBlock | null }): EditItem | null {
+function parseEditItem(item: { name?: string; input?: ToolInput; result?: ToolResultBlock | null; toolId?: string }): EditItem | null {
   const result = item.result;
   const input = item.input ? normalizeToolInput(item.name, item.input) : item.input;
   if (!input) return null;
@@ -265,8 +268,9 @@ function parseEditItem(item: { name?: string; input?: ToolInput; result?: ToolRe
 
   const { additions, deletions } = computeDiffStats(oldString, newString);
   const lineInfo = getToolLineInfo(input, target, result);
-  const isCompleted = result !== undefined && result !== null;
-  const isError = isCompleted && result?.is_error === true;
+  const isDenied = item.toolId ? (window.__deniedToolIds?.has(item.toolId) ?? false) : false;
+  const isCompleted = (result !== undefined && result !== null) || isDenied;
+  const isError = isDenied || (isCompleted && result?.is_error === true);
 
   return {
     filePath: target.rawPath,
@@ -281,6 +285,7 @@ function parseEditItem(item: { name?: string; input?: ToolInput; result?: ToolRe
     lineEnd: lineInfo.end,
     isCompleted,
     isError,
+    toolId: item.toolId,
   };
 }
 
@@ -470,7 +475,7 @@ const EditToolGroupBlock = ({ items }: EditToolGroupBlockProps) => {
         >
           {editItems.map((item, index) => (
             <EditFileItem
-              key={index}
+              key={item.toolId || index}
               item={item}
               onFileClick={handleFileClick}
               onShowDiff={handleShowDiff}

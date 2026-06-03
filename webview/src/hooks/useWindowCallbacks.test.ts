@@ -1151,6 +1151,74 @@ describe('useWindowCallbacks integration', () => {
       expect(window.__deniedToolIds?.has('old-A')).toBe(false);
     });
 
+    it('onStreamEnd preserves split assistant step boundaries and prior live raw text', () => {
+      stubSynchronousTimers();
+
+      const user: ClaudeMessage = {
+        type: 'user',
+        content: 'search the repo',
+        timestamp: '2026-01-01T00:00:00Z',
+      };
+      const liveAssistant: ClaudeMessage = {
+        type: 'assistant',
+        content: 'Before tool.',
+        timestamp: '2026-01-01T00:00:01Z',
+        __turnId: 7,
+        isStreaming: true,
+        raw: {
+          message: {
+            content: [
+              { type: 'text', text: 'Before tool.' },
+              { type: 'tool_use', id: 'search-1', name: 'grep', input: { pattern: 'needle' } },
+            ],
+          },
+        } as never,
+      };
+
+      const { opts, buffer } = createOptsWithMessages([user, liveAssistant]);
+      opts.currentProviderRef.current = 'opencode';
+      opts.isStreamingRef.current = true;
+      opts.streamingTurnIdRef.current = 7;
+      opts.streamingMessageIndexRef.current = 1;
+      opts.streamingContentRef.current = 'Before tool.';
+
+      renderHook(() => useWindowCallbacks(opts));
+
+      window.__pendingUpdateJson = JSON.stringify([
+        user,
+        {
+          type: 'assistant',
+          content: '',
+          timestamp: '2026-01-01T00:00:01Z',
+          raw: { message: { content: [] } },
+        },
+        {
+          type: 'assistant',
+          content: '',
+          timestamp: '2026-01-01T00:00:02Z',
+          raw: {
+            message: {
+              content: [
+                { type: 'tool_use', id: 'search-1', name: 'grep', input: { pattern: 'needle' } },
+              ],
+            },
+          },
+        },
+      ]);
+
+      act(() => { window.onStreamEnd!('5'); });
+
+      const assistants = buffer.current.filter((message) => message.type === 'assistant');
+      expect(assistants.map((message) => message.__turnId)).toEqual([700001, 7]);
+      expect(new Set(assistants.map((message) => message.__turnId)).size).toBe(2);
+
+      const finalRaw = assistants[assistants.length - 1].raw as any;
+      const finalBlocks = finalRaw.message.content as Array<{ type?: string; text?: string; id?: string }>;
+      expect(finalBlocks.map((block) => block.type)).toEqual(['text', 'tool_use']);
+      expect(finalBlocks[0]).toMatchObject({ type: 'text', text: 'Before tool.' });
+      expect(finalBlocks[1]).toMatchObject({ type: 'tool_use', id: 'search-1' });
+    });
+
     it('onPermissionDenied still marks unresolved tool_use (regression guard)', () => {
       // Sanity check that refactoring onPermissionDenied to share the helper
       // did not change its observable behavior.

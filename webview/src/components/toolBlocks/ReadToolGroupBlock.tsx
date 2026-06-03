@@ -17,6 +17,7 @@ interface FileItem {
   lineEnd?: number;
   isCompleted: boolean;
   isError: boolean;
+  toolId?: string;
 }
 
 interface ReadToolGroupBlockProps {
@@ -24,6 +25,7 @@ interface ReadToolGroupBlockProps {
     name?: string;
     input?: ToolInput;
     result?: ToolResultBlock | null;
+    toolId?: string;
   }>;
 }
 
@@ -87,7 +89,7 @@ function getFileListItemStyle(isDirectory: boolean): React.CSSProperties {
 /**
  * Parse item to FileItem
  */
-const parseFileItem = (item: { input?: ToolInput; result?: ToolResultBlock | null }): FileItem | null => {
+const parseFileItem = (item: { input?: ToolInput; result?: ToolResultBlock | null; toolId?: string }): FileItem | null => {
   const input = item.input;
   if (!input) return null;
 
@@ -101,9 +103,9 @@ const parseFileItem = (item: { input?: ToolInput; result?: ToolResultBlock | nul
       : `L${lineInfoValue.start}`)
     : '';
 
-  // Determine completion status
-  const isCompleted = item.result !== undefined && item.result !== null;
-  const isError = isCompleted && item.result?.is_error === true;
+  const isDenied = item.toolId ? (window.__deniedToolIds?.has(item.toolId) ?? false) : false;
+  const isCompleted = (item.result !== undefined && item.result !== null) || isDenied;
+  const isError = isDenied || (isCompleted && item.result?.is_error === true);
 
   return {
     filePath: target.rawPath,
@@ -116,6 +118,7 @@ const parseFileItem = (item: { input?: ToolInput; result?: ToolResultBlock | nul
     lineEnd: lineInfoValue.end,
     isCompleted,
     isError,
+    toolId: item.toolId,
   };
 };
 
@@ -250,7 +253,7 @@ const ReadToolGroupBlock = ({ items }: ReadToolGroupBlockProps) => {
         >
           {fileItems.map((item, index) => (
             <FileListItem
-              key={index}
+              key={item.toolId || index}
               item={item}
               onFileClick={handleFileClick}
             />

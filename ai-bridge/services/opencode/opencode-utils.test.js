@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { ensureOpenCodePath } from './opencode-utils.js';
+import { ensureOpenCodePath, normalizeOpenCodeSdkError } from './opencode-utils.js';
+import { isOpenCodeRuntimeTransportError } from './message-service.js';
 
 test('opencode path discovery prepends user-managed install directory', () => {
   const originalPath = process.env.PATH;
@@ -36,4 +37,17 @@ test('opencode path discovery does not duplicate existing entries', () => {
   } finally {
     process.env.PATH = originalPath;
   }
+});
+
+test('normalizes opencode fetch failures as server connectivity errors', () => {
+  const normalized = normalizeOpenCodeSdkError(new Error('fetch failed'));
+
+  assert.equal(normalized.code, 'OPENCODE_SERVER_UNREACHABLE');
+  assert.match(normalized.error, /opencode server request failed/);
+});
+
+test('detects transport failures that should discard persistent runtimes', () => {
+  assert.equal(isOpenCodeRuntimeTransportError(new Error('fetch failed')), true);
+  assert.equal(isOpenCodeRuntimeTransportError(new Error('ECONNRESET')), true);
+  assert.equal(isOpenCodeRuntimeTransportError(new Error('Input exceeds context window of this model')), false);
 });

@@ -22,6 +22,20 @@ export interface UseMessageProcessingOptions {
   t: TFunction;
 }
 
+function summarizeAssistantsForDebug(messages: ClaudeMessage[]): string[] {
+  const assistants = messages
+    .filter((message) => message.type === 'assistant')
+    .map((message, index) => `#${index}:turnId=${message.__turnId}:isStreaming=${message.isStreaming}:content=${(message.content || '').slice(0, 30)}`);
+  if (assistants.length <= 8) {
+    return assistants;
+  }
+  return [
+    ...assistants.slice(0, 4),
+    `...${assistants.length - 8} omitted...`,
+    ...assistants.slice(-4),
+  ];
+}
+
 /**
  * Message utility functions with memoization and caching.
  * Handles normalizeBlocks, getMessageText, shouldShowMessage, getContentBlocks,
@@ -113,13 +127,13 @@ export function useMessageProcessing({ messages, currentSessionId, t }: UseMessa
   // instead of 'user' type so they render correctly (left-aligned, no bubble).
   // This includes task_notification, hook, agent, queue, channel, etc.
   const mergedMessages = useMemo(() => {
-    streamDebugLog('[STREAM-DBG] useMessageProcessing merging messages:', messages.length, 'messages, assistants:', messages.filter(m => m.type === 'assistant').map((m, i) => `#${i}:turnId=${m.__turnId}:isStreaming=${m.isStreaming}:content=${(m.content || '').slice(0, 30)}`));
+    streamDebugLog('[STREAM-DBG] useMessageProcessing merging messages:', messages.length, 'messages, assistants:', summarizeAssistantsForDebug(messages));
     const merged = mergeConsecutiveAssistantMessages(
       messages,
       normalizeBlocks,
       mergedAssistantMessageCache.current
     );
-    streamDebugLog('[STREAM-DBG] useMessageProcessing merged result:', merged.length, 'messages, assistants:', merged.filter(m => m.type === 'assistant').map((m, i) => `#${i}:turnId=${m.__turnId}:isStreaming=${m.isStreaming}:content=${(m.content || '').slice(0, 30)}`));
+    streamDebugLog('[STREAM-DBG] useMessageProcessing merged result:', merged.length, 'messages, assistants:', summarizeAssistantsForDebug(merged));
 
     const visible: ClaudeMessage[] = [];
 

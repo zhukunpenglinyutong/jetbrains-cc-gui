@@ -452,6 +452,7 @@ export const MessageItem = memo(function MessageItem({
             name: block.name,
             input: block.input,
             result: findToolResult(block.id, messageIndex),
+            toolId: block.id,
           };
         });
 
@@ -462,6 +463,7 @@ export const MessageItem = memo(function MessageItem({
                 name={editItems[0].name}
                 input={editItems[0].input}
                 result={editItems[0].result}
+                toolId={editItems[0].toolId}
               />
             </div>
           );
@@ -512,6 +514,7 @@ export const MessageItem = memo(function MessageItem({
             name: block.name,
             input: block.input,
             result: findToolResult(block.id, messageIndex),
+            toolId: block.id,
           };
         });
 

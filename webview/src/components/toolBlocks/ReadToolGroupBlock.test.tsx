@@ -20,6 +20,7 @@ vi.mock('../../utils/bridge', () => ({
 
 describe('ReadToolGroupBlock', () => {
   beforeEach(() => {
+    window.__deniedToolIds = new Set();
     bridgeMocks.openFile.mockReset();
     bridgeMocks.resolveFilePathWithCallback.mockReset();
     bridgeMocks.resolveFilePathWithCallback.mockImplementation((_path: string, callback: (result: string | null) => void) => {
@@ -70,5 +71,24 @@ describe('ReadToolGroupBlock', () => {
 
     expect(bridgeMocks.resolveFilePathWithCallback).not.toHaveBeenCalled();
     expect(document.querySelector('.file-link-tooltip')?.textContent).toBe('src/components/');
+  });
+
+  it('renders interrupted unresolved reads as error instead of pending', () => {
+    window.__deniedToolIds = new Set(['read-1']);
+
+    const { container } = render(
+      <ReadToolGroupBlock
+        items={[
+          {
+            input: { file_path: '/repo/src/App.tsx' },
+            result: null,
+            toolId: 'read-1',
+          },
+        ]}
+      />,
+    );
+
+    expect(container.querySelector('.tool-status-indicator.error')).toBeTruthy();
+    expect(container.querySelector('.tool-status-indicator.pending')).toBeNull();
   });
 });

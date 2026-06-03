@@ -9,6 +9,7 @@ interface SearchItem {
   path: string;
   isCompleted: boolean;
   isError: boolean;
+  toolId?: string;
 }
 
 interface SearchToolGroupBlockProps {
@@ -16,6 +17,7 @@ interface SearchToolGroupBlockProps {
     name?: string;
     input?: ToolInput;
     result?: ToolResultBlock | null;
+    toolId?: string;
   }>;
 }
 
@@ -101,8 +103,8 @@ const getSearchToolIcon = (toolName: string): string => {
 /**
  * Parse item to SearchItem
  */
-const parseSearchItem = (item: { name?: string; input?: ToolInput; result?: ToolResultBlock | null }): SearchItem | null => {
-  const { name, input, result } = item;
+const parseSearchItem = (item: { name?: string; input?: ToolInput; result?: ToolResultBlock | null; toolId?: string }): SearchItem | null => {
+  const { name, input, result, toolId } = item;
   if (!input) return null;
 
   const toolName = name ?? 'search';
@@ -121,10 +123,11 @@ const parseSearchItem = (item: { name?: string; input?: ToolInput; result?: Tool
     (typeof input.directory === 'string' ? input.directory : undefined) ??
     '';
 
-  const isCompleted = result !== undefined && result !== null;
-  const isError = isCompleted && result?.is_error === true;
+  const isDenied = toolId ? (window.__deniedToolIds?.has(toolId) ?? false) : false;
+  const isCompleted = (result !== undefined && result !== null) || isDenied;
+  const isError = isDenied || (isCompleted && result?.is_error === true);
 
-  return { toolName, pattern, path, isCompleted, isError };
+  return { toolName, pattern, path, isCompleted, isError, toolId };
 };
 
 const SearchToolGroupBlock = ({ items }: SearchToolGroupBlockProps) => {
@@ -199,7 +202,7 @@ const SearchToolGroupBlock = ({ items }: SearchToolGroupBlockProps) => {
         >
           {searchItems.map((item, index) => (
             <div
-              key={index}
+              key={item.toolId || index}
               className="file-list-item"
               style={FILE_LIST_ITEM_STYLE}
               title={item.pattern ? `${item.pattern}${item.path ? ` → ${item.path}` : ''}` : item.path}

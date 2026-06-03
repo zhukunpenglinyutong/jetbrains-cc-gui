@@ -30,6 +30,26 @@ import { getStructuralBlockSignature } from '../../../utils/toolBlockSignature';
 
 const isTruthy = (v: unknown) => v === true || v === 'true';
 
+function summarizeMessagesForDebug(messages: ClaudeMessage[]): string[] {
+  const summary = messages.map((message, index) => {
+    if (message.type === 'assistant') {
+      return `#${index}:assistant:turnId=${message.__turnId}:streaming=${message.isStreaming === true}:content=${(message.content || '').slice(0, 40)}`;
+    }
+    if (message.type === 'user') {
+      return `#${index}:user:content=${(message.content || '').slice(0, 40)}`;
+    }
+    return `#${index}:${message.type}`;
+  });
+  if (summary.length <= 12) {
+    return summary;
+  }
+  return [
+    ...summary.slice(0, 6),
+    `...${summary.length - 12} omitted...`,
+    ...summary.slice(-6),
+  ];
+}
+
 /**
  * Build a lightweight string signature from non-text raw blocks so we can
  * cheaply detect structural changes (new tool_use/tool_result blocks) without
@@ -170,8 +190,8 @@ export function registerMessageCallbacks(
       return msg;
     });
     if (changed) {
-      const stamped = result.filter((m) => m.type === 'assistant').map((m) => `turnId=${m.__turnId}:content=${(m.content || '').slice(0, 30)}`);
-      streamDebugLog('[STREAM-DBG] stampTurnIdOnAssistantMessages: stamped', stamped.length, 'assistant msgs with turnId', turnId, stamped);
+      const stampedCount = result.filter((m) => m.type === 'assistant' && m.__turnId === turnId).length;
+      streamDebugLog('[STREAM-DBG] stampTurnIdOnAssistantMessages: stamped', stampedCount, 'assistant msgs with turnId', turnId);
     }
     return changed ? result : messages;
   };
@@ -208,11 +228,7 @@ export function registerMessageCallbacks(
         window.__minAcceptedUpdateSequence = Math.max(minAcceptedSequence, sequence);
       }
 
-      const parsedSummary = parsed.map((m, i) => {
-        if (m.type === 'assistant') return `#${i}:assistant:turnId=${m.__turnId}:content=${(m.content || '').slice(0, 40)}`;
-        if (m.type === 'user') return `#${i}:user:content=${(m.content || '').slice(0, 40)}`;
-        return `#${i}:${m.type}`;
-      });
+      const parsedSummary = summarizeMessagesForDebug(parsed);
       streamDebugLog('[STREAM-DBG] processUpdateMessages: isStreaming=', isStreamingRef.current, 'backendRender=', useBackendStreamingRenderRef.current, 'turnId=', streamingTurnIdRef.current, 'parsed:', parsed.length, 'msgs', parsedSummary);
 
       setMessages((prev) => {
@@ -300,7 +316,7 @@ export function registerMessageCallbacks(
               }
             }
 
-            const resultSummary = result.filter(m => m.type === 'assistant').map((m, i) => `#${i}:turnId=${m.__turnId}:isStreaming=${m.isStreaming}:content=${(m.content || '').slice(0, 30)}`);
+            const resultSummary = summarizeMessagesForDebug(result);
             streamDebugLog('[STREAM-DBG] processUpdateMessages backend-render path returning:', result.length, 'messages, assistants:', resultSummary);
             return finalizeMessageList(prev, collapseActiveStreamingTurn(result));
           }
@@ -427,7 +443,7 @@ export function registerMessageCallbacks(
           return prev;
         }
 
-        const nonBackendSummary = patched.filter(m => m.type === 'assistant').map((m, i) => `#${i}:turnId=${m.__turnId}:isStreaming=${m.isStreaming}:content=${(m.content || '').slice(0, 30)}`);
+        const nonBackendSummary = summarizeMessagesForDebug(patched);
         streamDebugLog('[STREAM-DBG] processUpdateMessages non-backend streaming path returning:', patched.length, 'messages, assistants:', nonBackendSummary);
         return finalizeMessageList(prev, collapseActiveStreamingTurn(patched));
       });
