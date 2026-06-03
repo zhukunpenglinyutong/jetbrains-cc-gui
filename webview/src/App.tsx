@@ -3,7 +3,12 @@ import { useTranslation } from 'react-i18next';
 import HistoryView from './components/history/HistoryView';
 import SettingsView from './components/settings';
 import { sendBridgeEvent } from './utils/bridge';
-import { preloadSlashCommands, forceRefreshPrompts } from './components/ChatInputBox/providers';
+import {
+  forceRefreshPrompts,
+  preloadOpenCodeAgents,
+  preloadOpenCodeSlashCommands,
+  preloadSlashCommands,
+} from './components/ChatInputBox/providers';
 import {
   useScrollBehavior,
   useSessionManagement,
@@ -300,6 +305,18 @@ const App = () => {
     setCustomSessionTitle,
     setPermissionDialogTimeoutSeconds,
   });
+
+  useEffect(() => {
+    if (currentProvider !== 'opencode') return;
+
+    preloadOpenCodeAgents();
+    preloadOpenCodeSlashCommands();
+    const retryTimer = setTimeout(() => {
+      preloadOpenCodeAgents();
+      preloadOpenCodeSlashCommands();
+    }, 1000);
+    return () => clearTimeout(retryTimer);
+  }, [currentProvider]);
 
   // ── Message processing ──
   const {

@@ -196,3 +196,16 @@ export async function openCodeAgentProvider(
 
   return merged;
 }
+
+/**
+ * Warm the opencode-native agent cache before the user opens `#`.
+ */
+export function preloadOpenCodeAgents(): void {
+  if (loadingState !== 'idle' && loadingState !== 'failed') {
+    debugLog('[OpenCodeAgentProvider] Preload skipped (state=' + loadingState + ')');
+    return;
+  }
+
+  setupOpenCodeAgentsCallback();
+  requestRefresh();
+}

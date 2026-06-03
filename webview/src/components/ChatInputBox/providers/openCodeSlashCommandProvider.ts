@@ -266,4 +266,17 @@ export async function openCodeSlashCommandProvider(
   return mergeOpenCodeSlashCommandGroups(builtinCommands, filteredOpenCodeCommands);
 }
 
+/**
+ * Warm the opencode-native slash command cache before the user opens `/`.
+ */
+export function preloadOpenCodeSlashCommands(): void {
+  if (loadingState !== 'idle' && loadingState !== 'failed') {
+    debugLog('[OpenCodeSlashCommandProvider] Preload skipped (state=' + loadingState + ')');
+    return;
+  }
+
+  setupOpenCodeSlashCommandsCallback();
+  requestRefresh();
+}
+
 export default openCodeSlashCommandProvider;

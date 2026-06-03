@@ -14,6 +14,7 @@ export {
 
 export {
   openCodeSlashCommandProvider,
+  preloadOpenCodeSlashCommands,
   setupOpenCodeSlashCommandsCallback,
   resetOpenCodeSlashCommandsState,
 } from './openCodeSlashCommandProvider';
@@ -29,6 +30,7 @@ export type { AgentItem } from './agentProvider';
 
 export {
   openCodeAgentProvider,
+  preloadOpenCodeAgents,
   setupOpenCodeAgentsCallback,
   resetOpenCodeAgentsState,
 } from './openCodeAgentProvider';

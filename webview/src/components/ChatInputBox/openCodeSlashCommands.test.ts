@@ -1,11 +1,25 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const bridgeMocks = vi.hoisted(() => ({
+  sendBridgeEvent: vi.fn(() => true),
+}));
+
+vi.mock('../../utils/bridge', () => bridgeMocks);
+
 import {
   mergeOpenCodeSlashCommandGroups,
   parseOpenCodeCommandPayload,
+  preloadOpenCodeSlashCommands,
+  resetOpenCodeSlashCommandsState,
 } from './providers/openCodeSlashCommandProvider';
 import type { CommandItem } from './types';
 
 describe('openCodeSlashCommands', () => {
+  beforeEach(() => {
+    bridgeMocks.sendBridgeEvent.mockClear();
+    resetOpenCodeSlashCommandsState();
+  });
+
   it('parses discovered OpenCode commands and hides skills', () => {
     const commands = parseOpenCodeCommandPayload(JSON.stringify({
       success: true,
@@ -64,5 +78,13 @@ describe('openCodeSlashCommands', () => {
     ]);
     expect(grouped[0].kind).toBe('section-header');
     expect(grouped[2].label).toBe('OpenCode commands');
+  });
+
+  it('preloads native commands before the slash menu opens', () => {
+    preloadOpenCodeSlashCommands();
+    preloadOpenCodeSlashCommands();
+
+    expect(bridgeMocks.sendBridgeEvent).toHaveBeenCalledTimes(1);
+    expect(bridgeMocks.sendBridgeEvent).toHaveBeenCalledWith('get_opencode_commands');
   });
 });

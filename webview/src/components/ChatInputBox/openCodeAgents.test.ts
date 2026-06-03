@@ -1,13 +1,29 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const bridgeMocks = vi.hoisted(() => ({
+  sendBridgeEvent: vi.fn(() => true),
+}));
+
+vi.mock('../../utils/bridge', () => bridgeMocks);
+
 import {
   isOpenCodeSelectedAgent,
   mergeOpenCodeAgentGroups,
   parseOpenCodeAgentPayload,
   selectedAgentForProvider,
 } from './openCodeAgents';
+import {
+  preloadOpenCodeAgents,
+  resetOpenCodeAgentsState,
+} from './providers/openCodeAgentProvider';
 import type { SelectedAgent } from './types';
 
 describe('openCodeAgents', () => {
+  beforeEach(() => {
+    bridgeMocks.sendBridgeEvent.mockClear();
+    resetOpenCodeAgentsState();
+  });
+
   it('parses discovered opencode agents from the bridge payload', () => {
     const agents = parseOpenCodeAgentPayload(JSON.stringify({
       success: true,
@@ -119,5 +135,13 @@ describe('openCodeAgents', () => {
       mode: 'custom',
       prompt: 'Review carefully.',
     });
+  });
+
+  it('preloads native agents before the agent menu opens', () => {
+    preloadOpenCodeAgents();
+    preloadOpenCodeAgents();
+
+    expect(bridgeMocks.sendBridgeEvent).toHaveBeenCalledTimes(1);
+    expect(bridgeMocks.sendBridgeEvent).toHaveBeenCalledWith('get_opencode_agents');
   });
 });
