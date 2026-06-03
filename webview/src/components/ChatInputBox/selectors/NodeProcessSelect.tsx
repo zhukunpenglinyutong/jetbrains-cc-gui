@@ -34,6 +34,9 @@ const DROPDOWN_STYLE_EMBEDDED: React.CSSProperties = {
   padding: '6px 0',
 };
 
+const DROPDOWN_SIDE_OVERLAP_PX = 30;
+const DROPDOWN_VIEWPORT_PADDING_PX = 8;
+
 const GROUP_HEADER_STYLE: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
@@ -170,6 +173,26 @@ type PendingConfirm =
   | { kind: 'restart'; proc: NodeProcessInfo }
   | { kind: 'killAll'; orphans: NodeProcessInfo[] };
 
+interface HorizontalRect {
+  left: number;
+  right: number;
+}
+
+export function shouldFlipEmbeddedNodeProcessDropdown(
+  parentRect: HorizontalRect,
+  dropdownWidth: number,
+  viewportWidth: number,
+): boolean {
+  if (dropdownWidth <= 0 || viewportWidth <= 0) return false;
+
+  const normalRight = parentRect.right - DROPDOWN_SIDE_OVERLAP_PX + dropdownWidth;
+  const flippedLeft = parentRect.left + DROPDOWN_SIDE_OVERLAP_PX - dropdownWidth;
+  const rightOverflow = Math.max(0, normalRight - (viewportWidth - DROPDOWN_VIEWPORT_PADDING_PX));
+  const leftOverflow = Math.max(0, DROPDOWN_VIEWPORT_PADDING_PX - flippedLeft);
+
+  return rightOverflow > 0 && leftOverflow < rightOverflow;
+}
+
 function formatUptime(ms: number): string {
   if (ms <= 0) return '—';
   const totalSeconds = Math.floor(ms / 1000);
@@ -228,9 +251,11 @@ export const NodeProcessSelect = ({ embedded = false, onClose, onToast }: NodePr
     const node = dropdownRef.current;
     if (!node) return;
     const rect = node.getBoundingClientRect();
-    const overflowsRight = rect.right > window.innerWidth - 8;
-    if (overflowsRight !== flipToLeft) {
-      setFlipToLeft(overflowsRight);
+    const parentRect = node.parentElement?.getBoundingClientRect();
+    if (!parentRect) return;
+    const shouldFlip = shouldFlipEmbeddedNodeProcessDropdown(parentRect, rect.width, window.innerWidth);
+    if (shouldFlip !== flipToLeft) {
+      setFlipToLeft(shouldFlip);
     }
   }, [embedded, snapshot, flipToLeft]);
 
