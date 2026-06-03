@@ -1,6 +1,10 @@
 package com.github.claudecodegui.provider.opencode;
 
 import org.junit.Test;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+
+import java.util.List;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -26,5 +30,38 @@ public class OpenCodeSDKBridgeTest {
         RuntimeException error = new RuntimeException("Input exceeds context window of this model");
 
         assertFalse(OpenCodeSDKBridge.isIgnorableDaemonStopAfterStreamEnd(error, true));
+    }
+
+    @Test
+    public void recoveryPromptIncludesRecentMessagesFailedPromptAndFiles() {
+        JsonObject userMessage = new JsonObject();
+        userMessage.addProperty("type", "user");
+        userMessage.addProperty("content", "Please update the quota popup docs");
+
+        JsonObject toolInput = new JsonObject();
+        toolInput.addProperty("file_path", "docs/quota-popup.png");
+        JsonObject toolBlock = new JsonObject();
+        toolBlock.addProperty("type", "tool_use");
+        toolBlock.addProperty("name", "edit");
+        toolBlock.add("input", toolInput);
+        JsonArray content = new JsonArray();
+        content.add(toolBlock);
+        JsonObject assistantMessage = new JsonObject();
+        assistantMessage.addProperty("type", "assistant");
+        assistantMessage.add("content", content);
+
+        String prompt = OpenCodeSDKBridge.buildRecoveryPrompt(
+                List.of(userMessage, assistantMessage),
+                "Retry the failed documentation update",
+                "ses_test",
+                "/tmp/project");
+
+        assertTrue(prompt.contains("Continue this work in a fresh opencode session"));
+        assertTrue(prompt.contains("Working directory: /tmp/project"));
+        assertTrue(prompt.contains("Previous session: ses_test"));
+        assertTrue(prompt.contains("docs/quota-popup.png"));
+        assertTrue(prompt.contains("user: Please update the quota popup docs"));
+        assertTrue(prompt.contains("Failed request to continue:"));
+        assertTrue(prompt.contains("Retry the failed documentation update"));
     }
 }

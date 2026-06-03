@@ -110,6 +110,11 @@ interface Window {
   addToast?: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 
   /**
+   * Receives an opencode context-window recovery handoff prompt.
+   */
+  onContextRecoveryPrompt?: (json: string) => void;
+
+  /**
    * Toast deferred until a session transition finishes, because backend
    * clearMessages resets transient UI state during new-session creation.
    */

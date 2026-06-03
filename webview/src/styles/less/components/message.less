@@ -539,6 +539,94 @@
     border-left: 2px solid var(--color-provider-card-accent);
 }
 
+.context-recovery-card {
+    margin-top: 10px;
+    background: var(--color-provider-card-bg);
+    border: 1px solid var(--color-provider-card-border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.context-recovery-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.context-recovery-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: var(--color-provider-card-icon-bg);
+    color: var(--color-provider-card-accent);
+    flex-shrink: 0;
+}
+
+.context-recovery-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--color-provider-card-accent);
+}
+
+.context-recovery-intro,
+.context-recovery-hint {
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.context-recovery-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.context-recovery-primary-btn,
+.context-recovery-secondary-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.context-recovery-primary-btn {
+    border: 1px solid var(--color-provider-card-action-hover-border);
+    background: var(--color-provider-card-action-hover-bg);
+    color: var(--color-provider-card-accent);
+}
+
+.context-recovery-secondary-btn {
+    border: 1px solid var(--color-provider-card-action-border);
+    background: var(--color-provider-card-action-bg);
+    color: var(--text-secondary);
+}
+
+.context-recovery-primary-btn:hover,
+.context-recovery-secondary-btn:hover {
+    background: var(--color-provider-card-action-hover-bg);
+    border-color: var(--color-provider-card-action-hover-border);
+}
+
+.context-recovery-recommended {
+    font-size: 11px;
+    padding: 1px 7px;
+    border-radius: 10px;
+    background: var(--color-provider-card-accent);
+    color: rgba(0, 0, 0, 0.8);
+}
+
 /* AI Indicator Dot */
 .ai-indicator-dot {
     width: 6px;

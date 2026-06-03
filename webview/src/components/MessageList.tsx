@@ -63,8 +63,23 @@ interface MessageListProps {
   onCollapsedCountChange?: (count: number) => void;
   onNavigateToProviderSettings?: () => void;
   onNavigateToDependencySettings?: () => void;
+  onStartContextRecovery?: (failedPrompt: string) => void;
+  onStartEmptySession?: () => void;
   /** Current active provider id; forwarded to MessageItem for streaming-connect label. */
   currentProvider?: string;
+}
+
+function findPreviousUserText(
+  messages: ClaudeMessage[],
+  beforeIndex: number,
+  getMessageText: (message: ClaudeMessage) => string,
+): string {
+  for (let i = beforeIndex - 1; i >= 0; i--) {
+    if (messages[i]?.type === 'user') {
+      return getMessageText(messages[i]);
+    }
+  }
+  return '';
 }
 
 export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListProps>(function MessageList({
@@ -83,6 +98,8 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
   onCollapsedCountChange,
   onNavigateToProviderSettings,
   onNavigateToDependencySettings,
+  onStartContextRecovery,
+  onStartEmptySession,
   currentProvider,
 }, ref) {
   // Number of earlier messages revealed beyond VISIBLE_MESSAGE_WINDOW. Grows in
@@ -168,6 +185,9 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
         const messageIndex = shouldCollapse ? visibleIndex + collapsedCount : visibleIndex;
         const messageKey = getMessageKey(message, messageIndex);
         const toolResultSignature = getMessageToolResultSignature(message, messageIndex, getContentBlocks, findToolResult);
+        const failedPrompt = message.type === 'error'
+          ? findPreviousUserText(messages, messageIndex, getMessageText)
+          : undefined;
 
         return (
           <MessageItem
@@ -186,6 +206,9 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
             onNodeRef={onMessageNodeRef}
             onNavigateToProviderSettings={onNavigateToProviderSettings}
             onNavigateToDependencySettings={onNavigateToDependencySettings}
+            onStartContextRecovery={onStartContextRecovery}
+            onStartEmptySession={onStartEmptySession}
+            failedPrompt={failedPrompt}
             toolResultSignature={toolResultSignature}
             currentProvider={currentProvider}
           />

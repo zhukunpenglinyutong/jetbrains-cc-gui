@@ -77,6 +77,8 @@ export interface ChatScreenProps {
   onRewind: () => void;
   onNavigateToProviderSettings: () => void;
   onProviderSelect: (providerId: string) => void;
+  onStartContextRecovery?: (failedPrompt: string) => void;
+  onStartEmptySession?: () => void;
 
   // Model / provider state (slice from useModelProviderState)
   currentProvider: ProviderState['currentProvider'];
@@ -132,6 +134,7 @@ export const ChatScreen = ({
   onUndoFile, onDiscardAll, onKeepAll,
   onSubmit, onInterrupt, onRewind,
   onNavigateToProviderSettings, onProviderSelect,
+  onStartContextRecovery, onStartEmptySession,
   currentProvider, selectedModel, permissionMode, selectedAgent,
   sdkStatusLoaded, currentSdkInstalled,
   activeProviderConfig, claudeSettingsAlwaysThinkingEnabled,
@@ -251,6 +254,8 @@ export const ChatScreen = ({
                     setSettingsInitialTab('dependencies');
                     setCurrentView('settings');
                   }}
+                  onStartContextRecovery={onStartContextRecovery}
+                  onStartEmptySession={onStartEmptySession}
                   currentProvider={currentProvider}
                 />
               </ToolResultRawContext.Provider>

@@ -6,8 +6,16 @@ import { MessageList } from './MessageList';
 
 // Mock MessageItem to keep this suite focused on list-level paging behaviour.
 vi.mock('./MessageItem', () => ({
-  MessageItem: ({ messageKey, message }: { messageKey: string; message: ClaudeMessage }) => (
-    <div data-testid="message-item" data-key={messageKey} data-type={message.type}>
+  MessageItem: ({
+    messageKey,
+    message,
+    failedPrompt,
+  }: {
+    messageKey: string;
+    message: ClaudeMessage;
+    failedPrompt?: string;
+  }) => (
+    <div data-testid="message-item" data-key={messageKey} data-type={message.type} data-failed-prompt={failedPrompt ?? ''}>
       {message.content}
     </div>
   ),
@@ -202,5 +210,19 @@ describe('MessageList container behaviour', () => {
       />
     );
     expect(screen.getByTestId('waiting-indicator')).toBeTruthy();
+  });
+
+  it('passes the previous user message as context recovery failed prompt', () => {
+    const messages = [
+      { type: 'user', content: 'first request', id: 'm-1' },
+      { type: 'assistant', content: 'first answer', id: 'm-2' },
+      { type: 'user', content: 'failed request', id: 'm-3' },
+      { type: 'error', content: 'Input exceeds context window of this model', id: 'm-4' },
+    ] as unknown as ClaudeMessage[];
+
+    renderList(messages);
+
+    const items = screen.getAllByTestId('message-item');
+    expect(items[3].getAttribute('data-failed-prompt')).toBe('failed request');
   });
 });

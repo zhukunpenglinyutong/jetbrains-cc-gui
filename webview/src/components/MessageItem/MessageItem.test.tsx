@@ -1,5 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import type { ComponentProps } from 'react';
 import type { ClaudeContentBlock, ClaudeMessage, ToolResultBlock } from '../../types';
 import { extractMarkdownContent } from '../../utils/copyUtils';
 import { MessageItem } from './MessageItem';
@@ -29,14 +30,14 @@ vi.mock('./ProviderNotConfiguredCard', () => ({
   isProviderNotConfiguredError: () => false,
 }));
 
-const t = ((key: string) => {
+const t = ((key: string, options?: { defaultValue?: string }) => {
   const translations: Record<string, string> = {
     'markdown.copyMessage': '复制消息',
     'markdown.copySuccess': '已复制',
     'chat.streamingConnected': '已连接',
     'chat.totalDuration': '本次耗时',
   };
-  return translations[key] ?? key;
+  return translations[key] ?? options?.defaultValue ?? key;
 }) as any;
 
 const getMessageText = (message: ClaudeMessage) => message.content ?? '';
@@ -58,7 +59,7 @@ const getContentBlocks = (message: ClaudeMessage): ClaudeContentBlock[] => {
 
 const findToolResult = (_toolId: string | undefined, _messageIndex: number): ToolResultBlock | null => null;
 
-function renderMessageItem(message: ClaudeMessage) {
+function renderMessageItem(message: ClaudeMessage, overrides: Partial<ComponentProps<typeof MessageItem>> = {}) {
   return render(
     <MessageItem
       message={message}
@@ -72,6 +73,7 @@ function renderMessageItem(message: ClaudeMessage) {
       getContentBlocks={getContentBlocks}
       findToolResult={findToolResult}
       extractMarkdownContent={extractMarkdownContent}
+      {...overrides}
     />
   );
 }
@@ -151,5 +153,28 @@ describe('MessageItem copy button visibility', () => {
 
     expect(screen.getByTestId('bash-tool-group-block')).toBeTruthy();
     expect(screen.queryAllByTestId('content-block-tool_use')).toHaveLength(0);
+  });
+
+  it('shows opencode context recovery actions and sends failed prompt', () => {
+    const onStartContextRecovery = vi.fn();
+    const onStartEmptySession = vi.fn();
+    const message: ClaudeMessage = {
+      type: 'error',
+      content: 'Input exceeds context window of this model',
+    };
+
+    renderMessageItem(message, {
+      currentProvider: 'opencode',
+      failedPrompt: 'finish the docs update',
+      onStartContextRecovery,
+      onStartEmptySession,
+    });
+
+    expect(screen.getByText('Context window exceeded')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Start new session with summary/i }));
+    expect(onStartContextRecovery).toHaveBeenCalledWith('finish the docs update');
+
+    fireEvent.click(screen.getByRole('button', { name: /Start empty new session/i }));
+    expect(onStartEmptySession).toHaveBeenCalled();
   });
 });

@@ -332,6 +332,40 @@ const App = () => {
     forceCreateNewSessionWithProvider(providerId);
   }, [forceCreateNewSessionWithProvider, handleProviderSelect]);
 
+  const handleStartContextRecovery = useCallback((failedPrompt: string) => {
+    sendBridgeEvent('recover_context_window', JSON.stringify({ failedPrompt }));
+    addToast(t('contextRecovery.building', { defaultValue: 'Building recovery prompt...' }), 'info');
+  }, [addToast, t]);
+
+  const handleContextRecoveryPrompt = useCallback((json: string) => {
+    try {
+      const payload = JSON.parse(json) as { success?: boolean; prompt?: string; error?: string };
+      if (!payload.success || !payload.prompt) {
+        addToast(payload.error || t('contextRecovery.failed', { defaultValue: 'Failed to build recovery prompt' }), 'error');
+        return;
+      }
+
+      forceCreateNewSession();
+      setCurrentView('chat');
+      window.setTimeout(() => {
+        chatInputRef.current?.setValue(payload.prompt ?? '');
+        chatInputRef.current?.focus();
+        addToast(t('contextRecovery.ready', { defaultValue: 'Recovery prompt is ready to review' }), 'success');
+      }, 0);
+    } catch {
+      addToast(t('contextRecovery.failed', { defaultValue: 'Failed to build recovery prompt' }), 'error');
+    }
+  }, [addToast, forceCreateNewSession, setCurrentView, t]);
+
+  useEffect(() => {
+    window.onContextRecoveryPrompt = handleContextRecoveryPrompt;
+    return () => {
+      if (window.onContextRecoveryPrompt === handleContextRecoveryPrompt) {
+        delete window.onContextRecoveryPrompt;
+      }
+    };
+  }, [handleContextRecoveryPrompt]);
+
   const {
     handleSubmit: hookHandleSubmit,
     executeMessage,
@@ -506,6 +540,8 @@ const App = () => {
           onRewind={handleOpenRewindSelectDialog}
           onNavigateToProviderSettings={handleNavigateToProviderSettings}
           onProviderSelect={wrappedHandleProviderSelect}
+          onStartContextRecovery={handleStartContextRecovery}
+          onStartEmptySession={forceCreateNewSession}
           currentProvider={currentProvider}
           selectedModel={selectedModel}
           permissionMode={permissionMode}

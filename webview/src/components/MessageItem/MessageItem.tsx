@@ -5,6 +5,7 @@ import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock } from '../../t
 import MarkdownBlock from '../MarkdownBlock';
 import { ProviderNotConfiguredCard, isProviderNotConfiguredError } from './ProviderNotConfiguredCard';
 import { ErrorDiagnosticCard } from './ErrorDiagnosticCard';
+import { ContextRecoveryCard, isContextWindowExceededError } from './ContextRecoveryCard';
 import { matchErrorPattern } from '../../utils/errorMatcher';
 import {
   EditToolBlock,
@@ -35,6 +36,9 @@ export interface MessageItemProps {
   onNodeRef?: (id: string, node: HTMLDivElement | null) => void;
   onNavigateToProviderSettings?: () => void;
   onNavigateToDependencySettings?: () => void;
+  onStartContextRecovery?: (failedPrompt: string) => void;
+  onStartEmptySession?: () => void;
+  failedPrompt?: string;
   toolResultSignature?: string;
   /** Current active provider id (e.g. 'claude', 'codex'); drives the streaming-connect label. */
   currentProvider?: string;
@@ -232,6 +236,9 @@ export const MessageItem = memo(function MessageItem({
   onNodeRef,
   onNavigateToProviderSettings,
   onNavigateToDependencySettings,
+  onStartContextRecovery,
+  onStartEmptySession,
+  failedPrompt,
   toolResultSignature: _toolResultSignature,
   currentProvider,
 }: MessageItemProps): React.ReactElement {
@@ -373,11 +380,14 @@ export const MessageItem = memo(function MessageItem({
   }, [message.type, messageKey, onNodeRef]);
 
   const isProviderNotConfigured = message.type === 'error' && isProviderNotConfiguredError(getMessageText(message));
+  const isContextWindowExceeded = message.type === 'error'
+    && currentProvider === 'opencode'
+    && isContextWindowExceededError(getMessageText(message));
   const errorDiagnosticPattern = useMemo(
-    () => (message.type === 'error' && !isProviderNotConfigured
+    () => (message.type === 'error' && !isProviderNotConfigured && !isContextWindowExceeded
       ? matchErrorPattern(getMessageText(message))
       : null),
-    [message, isProviderNotConfigured, getMessageText]
+    [message, isProviderNotConfigured, isContextWindowExceeded, getMessageText]
   );
 
   const renderGroupedBlocks = () => {
@@ -393,6 +403,14 @@ export const MessageItem = memo(function MessageItem({
       return (
         <>
           <MarkdownBlock content={getMessageText(message)} />
+          {isContextWindowExceeded && (
+            <ContextRecoveryCard
+              t={t}
+              failedPrompt={failedPrompt}
+              onStartRecovery={onStartContextRecovery}
+              onStartEmptySession={onStartEmptySession}
+            />
+          )}
           {errorDiagnosticPattern && (
             <ErrorDiagnosticCard
               t={t}

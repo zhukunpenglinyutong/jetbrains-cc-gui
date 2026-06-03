@@ -14,8 +14,10 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -34,6 +36,10 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
     private static final int QUERY_TIMEOUT_SECONDS = 30;
     private static final int MCP_STATUS_QUERY_TIMEOUT_SECONDS = 45;
     private static final long DAEMON_RETRY_DELAY_MS = 60_000;
+    private static final int RECOVERY_MAX_MESSAGES = 14;
+    private static final int RECOVERY_MAX_MESSAGE_CHARS = 900;
+    private static final int RECOVERY_MAX_TOTAL_CHARS = 10_000;
+    private static final int RECOVERY_MAX_FAILED_PROMPT_CHARS = 2_000;
     private final Object daemonLock = new Object();
     private volatile DaemonBridge daemonBridge;
     private volatile long daemonRetryAfter = 0;
@@ -401,6 +407,251 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
             error.add("weeklyComparison", weekly);
             return error;
         }
+    }
+
+    public JsonObject buildRecoveryPrompt(String sessionId, String cwd, String failedPrompt) {
+        JsonObject result = new JsonObject();
+        if (sessionId == null || sessionId.trim().isEmpty()) {
+            result.addProperty("success", false);
+            result.addProperty("error", "No opencode session is available to summarize");
+            return result;
+        }
+
+        try {
+            List<JsonObject> messages = getSessionMessages(sessionId, cwd);
+            String prompt = buildRecoveryPrompt(messages, failedPrompt, sessionId, cwd);
+            result.addProperty("success", true);
+            result.addProperty("prompt", prompt);
+            result.addProperty("sessionId", sessionId);
+            result.addProperty("messageCount", messages.size());
+            return result;
+        } catch (Exception e) {
+            LOG.warn("[OpenCodeSDKBridge] Failed to build opencode recovery prompt: " + e.getMessage(), e);
+            result.addProperty("success", false);
+            result.addProperty("error", e.getMessage());
+            return result;
+        }
+    }
+
+    static String buildRecoveryPrompt(List<JsonObject> messages, String failedPrompt, String sessionId, String cwd) {
+        StringBuilder prompt = new StringBuilder();
+        prompt.append("Continue this work in a fresh opencode session.\n\n");
+        prompt.append("The previous session exceeded the model context window, so this is a bounded handoff summary. ");
+        prompt.append("Use it as context, then continue from the failed request.\n\n");
+        if (cwd != null && !cwd.trim().isEmpty()) {
+            prompt.append("Working directory: ").append(cwd.trim()).append("\n");
+        }
+        if (sessionId != null && !sessionId.trim().isEmpty()) {
+            prompt.append("Previous session: ").append(sessionId.trim()).append("\n");
+        }
+
+        Set<String> changedFiles = collectRecoveryChangedFiles(messages);
+        if (!changedFiles.isEmpty()) {
+            prompt.append("\nFiles likely touched or relevant:\n");
+            int count = 0;
+            for (String file : changedFiles) {
+                if (count >= 12) { break; }
+                prompt.append("- ").append(file).append("\n");
+                count++;
+            }
+        }
+
+        prompt.append("\nRecent conversation summary:\n");
+        List<String> recent = recentRecoveryMessageLines(messages);
+        if (recent.isEmpty()) {
+            prompt.append("- No prior message details were available from the opencode session API.\n");
+        } else {
+            for (String line : recent) {
+                if (prompt.length() + line.length() + 3 > RECOVERY_MAX_TOTAL_CHARS) {
+                    prompt.append("- Earlier details omitted to keep the handoff within context.\n");
+                    break;
+                }
+                prompt.append("- ").append(line).append("\n");
+            }
+        }
+
+        String cleanFailedPrompt = truncateForRecovery(failedPrompt, RECOVERY_MAX_FAILED_PROMPT_CHARS);
+        if (!cleanFailedPrompt.isEmpty()) {
+            prompt.append("\nFailed request to continue:\n");
+            prompt.append(cleanFailedPrompt).append("\n");
+        }
+
+        prompt.append("\nContinue from here. Prefer small, verifiable steps and do not repeat already completed work unless needed.");
+        return truncateForRecovery(prompt.toString(), RECOVERY_MAX_TOTAL_CHARS);
+    }
+
+    private static List<String> recentRecoveryMessageLines(List<JsonObject> messages) {
+        List<String> lines = new ArrayList<>();
+        if (messages == null || messages.isEmpty()) {
+            return lines;
+        }
+
+        for (int i = messages.size() - 1; i >= 0 && lines.size() < RECOVERY_MAX_MESSAGES; i--) {
+            JsonObject message = messages.get(i);
+            String role = recoveryMessageRole(message);
+            String text = truncateForRecovery(recoveryMessageText(message), RECOVERY_MAX_MESSAGE_CHARS);
+            if (text.isEmpty() || "[tool_result]".equals(text)) {
+                continue;
+            }
+            lines.add(0, role + ": " + text);
+        }
+        return lines;
+    }
+
+    private static Set<String> collectRecoveryChangedFiles(List<JsonObject> messages) {
+        Set<String> files = new LinkedHashSet<>();
+        if (messages == null) {
+            return files;
+        }
+        for (JsonObject message : messages) {
+            JsonArray blocks = recoveryContentBlocks(message);
+            if (blocks == null) {
+                continue;
+            }
+            for (var element : blocks) {
+                if (!element.isJsonObject()) {
+                    continue;
+                }
+                JsonObject block = element.getAsJsonObject();
+                String type = stringField(block, "type");
+                if (!"tool_use".equals(type)) {
+                    continue;
+                }
+                JsonObject input = block.has("input") && block.get("input").isJsonObject()
+                        ? block.getAsJsonObject("input") : null;
+                String filePath = firstNonBlank(
+                        stringField(input, "file_path"),
+                        stringField(input, "path"),
+                        stringField(input, "file"));
+                if (!filePath.isEmpty()) {
+                    files.add(filePath);
+                }
+            }
+        }
+        return files;
+    }
+
+    private static String recoveryMessageRole(JsonObject message) {
+        String type = stringField(message, "type");
+        JsonObject inner = message != null && message.has("message") && message.get("message").isJsonObject()
+                ? message.getAsJsonObject("message") : null;
+        return firstNonBlank(stringField(inner, "role"), type, "message");
+    }
+
+    private static String recoveryMessageText(JsonObject message) {
+        if (message == null) {
+            return "";
+        }
+        String content = stringField(message, "content");
+        if (!content.isEmpty()) {
+            return normalizeRecoveryWhitespace(content);
+        }
+        JsonObject inner = message.has("message") && message.get("message").isJsonObject()
+                ? message.getAsJsonObject("message") : null;
+        content = stringField(inner, "content");
+        if (!content.isEmpty()) {
+            return normalizeRecoveryWhitespace(content);
+        }
+        JsonArray blocks = recoveryContentBlocks(message);
+        if (blocks == null) {
+            return "";
+        }
+        StringBuilder text = new StringBuilder();
+        for (var element : blocks) {
+            if (!element.isJsonObject()) {
+                continue;
+            }
+            JsonObject block = element.getAsJsonObject();
+            String type = stringField(block, "type");
+            if ("text".equals(type) || "thinking".equals(type) || "compact_summary".equals(type)) {
+                appendRecoveryText(text, firstNonBlank(stringField(block, "text"), stringField(block, "thinking"), stringField(block, "content")));
+            } else if ("tool_use".equals(type)) {
+                appendRecoveryText(text, "Tool used: " + firstNonBlank(stringField(block, "name"), "unknown"));
+            } else if ("tool_result".equals(type)) {
+                appendRecoveryText(text, "Tool result: " + toolResultText(block));
+            }
+        }
+        return normalizeRecoveryWhitespace(text.toString());
+    }
+
+    private static JsonArray recoveryContentBlocks(JsonObject message) {
+        if (message == null) {
+            return null;
+        }
+        if (message.has("content") && message.get("content").isJsonArray()) {
+            return message.getAsJsonArray("content");
+        }
+        JsonObject inner = message.has("message") && message.get("message").isJsonObject()
+                ? message.getAsJsonObject("message") : null;
+        if (inner != null && inner.has("content") && inner.get("content").isJsonArray()) {
+            return inner.getAsJsonArray("content");
+        }
+        return null;
+    }
+
+    private static String toolResultText(JsonObject block) {
+        if (block == null || !block.has("content")) {
+            return "";
+        }
+        if (block.get("content").isJsonPrimitive()) {
+            return block.get("content").getAsString();
+        }
+        if (block.get("content").isJsonArray()) {
+            StringBuilder text = new StringBuilder();
+            for (var item : block.getAsJsonArray("content")) {
+                if (item.isJsonObject()) {
+                    appendRecoveryText(text, stringField(item.getAsJsonObject(), "text"));
+                }
+            }
+            return text.toString();
+        }
+        return "";
+    }
+
+    private static void appendRecoveryText(StringBuilder builder, String value) {
+        String normalized = normalizeRecoveryWhitespace(value);
+        if (normalized.isEmpty()) {
+            return;
+        }
+        if (builder.length() > 0) {
+            builder.append(" | ");
+        }
+        builder.append(normalized);
+    }
+
+    private static String stringField(JsonObject object, String field) {
+        if (object == null || field == null || !object.has(field) || object.get(field).isJsonNull()) {
+            return "";
+        }
+        try {
+            return object.get(field).getAsString();
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) {
+            return "";
+        }
+        for (String value : values) {
+            if (value != null && !value.trim().isEmpty()) {
+                return value.trim();
+            }
+        }
+        return "";
+    }
+
+    private static String normalizeRecoveryWhitespace(String value) {
+        return value == null ? "" : value.replaceAll("\\s+", " ").trim();
+    }
+
+    private static String truncateForRecovery(String value, int maxChars) {
+        String normalized = value == null ? "" : value.trim();
+        if (normalized.length() <= maxChars) {
+            return normalized;
+        }
+        return normalized.substring(0, Math.max(0, maxChars - 24)).trim() + " ...[truncated]";
     }
 
     public JsonObject deleteSession(String sessionId, String cwd) {
