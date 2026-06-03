@@ -24,6 +24,7 @@ const DEFAULT_HOSTNAME = '127.0.0.1';
 const DEFAULT_PORT = 0;
 const DEFAULT_START_TIMEOUT_MS = 10000;
 const DEFAULT_HISTORY_LIMIT = 200;
+const DEFAULT_USAGE_HISTORY_LIMIT = 1000;
 const DEFAULT_HISTORY_COUNT_CONCURRENCY = 4;
 const DEFAULT_MCP_STATUS_TIMEOUT_MS = 35000;
 const DEFAULT_DIFF_BASELINE_TIMEOUT_MS = 3000;
@@ -469,6 +470,20 @@ function pickString(...values) {
     }
   }
   return '';
+}
+
+function pickFiniteNumber(...values) {
+  for (const value of values) {
+    const numeric = typeof value === 'number' ? value : Number(value);
+    if (Number.isFinite(numeric)) {
+      return numeric;
+    }
+  }
+  return 0;
+}
+
+function nonNegativeNumber(value) {
+  return Math.max(0, pickFiniteNumber(value));
 }
 
 function normalizeOpenCodeToolName(tool) {
@@ -1317,6 +1332,7 @@ function normalizeOpenCodeModels(providerPayload = {}, configPayload = {}, resol
       const status = model.status && model.status !== 'active' ? ` · ${model.status}` : '';
       const defaultForProvider = defaults[providerID] === modelID;
       const variants = normalizeOpenCodeModelVariants(model.variants);
+      const contextLimit = openCodeModelContextLimit(model);
       models.push({
         id,
         label,
@@ -1326,6 +1342,7 @@ function normalizeOpenCodeModels(providerPayload = {}, configPayload = {}, resol
         providerName,
         isDefault: false,
         isProviderDefault: defaultForProvider,
+        ...(contextLimit > 0 ? { contextLimit, contextWindow: contextLimit } : {}),
         ...(variants.length > 0 ? { variants } : {})
       });
     }
@@ -1352,6 +1369,41 @@ function normalizeOpenCodeModelVariants(rawVariants) {
     return Object.keys(rawVariants).map((key) => String(key || '').trim()).filter(Boolean);
   }
   return [];
+}
+
+function openCodeModelContextLimit(model) {
+  const rawModel = asRecord(model);
+  const limit = asRecord(rawModel.limit);
+  const limits = asRecord(rawModel.limits);
+  return nonNegativeNumber(
+    limit.context,
+    limit.input,
+    limits.context,
+    limits.input,
+    rawModel.contextLimit,
+    rawModel.contextWindow,
+    rawModel.context,
+    rawModel.maxContextTokens
+  );
+}
+
+function findOpenCodeProviderModel(providerPayload = {}, parsedModel = undefined) {
+  if (!parsedModel?.providerID || !parsedModel?.modelID) {
+    return null;
+  }
+  for (const provider of getOpenCodeProviderList(providerPayload)) {
+    if (!provider || String(provider.id) !== parsedModel.providerID) {
+      continue;
+    }
+    const models = provider.models && typeof provider.models === 'object' ? provider.models : {};
+    for (const [modelKey, rawModel] of Object.entries(models)) {
+      const model = asRecord(rawModel);
+      if (String(model.id || modelKey) === parsedModel.modelID) {
+        return model;
+      }
+    }
+  }
+  return null;
 }
 
 function getOpenCodeProviderList(providerPayload = {}) {
@@ -1734,6 +1786,27 @@ async function resolveOpenCodePromptModel(client, cwd, selectedModel) {
   return resolveOpenCodeDefaultModel(client, cwd);
 }
 
+async function resolveOpenCodeModelContextLimit(client, cwd, parsedModel) {
+  let modelRef = parsedModel;
+  if (!modelRef?.providerID || !modelRef?.modelID) {
+    modelRef = await resolveOpenCodeDefaultModel(client, cwd).catch(() => undefined);
+  }
+  if (!modelRef?.providerID || !modelRef?.modelID) {
+    return 0;
+  }
+
+  const query = directoryQuery(cwd);
+  const [config, providers] = await Promise.all([
+    unwrapSdkResult(
+      client.config.get({ query }),
+      'get opencode config for usage limit'
+    ).catch(() => ({})),
+    listOpenCodeModelProviders(client, query).catch(() => ({}))
+  ]);
+  const filteredPayload = filterOpenCodeProviderPayload(providers, config);
+  return openCodeModelContextLimit(findOpenCodeProviderModel(filteredPayload, modelRef));
+}
+
 function normalizeOpenCodeTimestamp(value) {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value;
@@ -1747,6 +1820,240 @@ function normalizeOpenCodeTimestamp(value) {
     return Number.isNaN(parsed) ? 0 : parsed;
   }
   return 0;
+}
+
+function normalizeOpenCodeUsageData(tokens = {}) {
+  const source = asRecord(tokens);
+  const cache = asRecord(source.cache);
+  const inputTokens = nonNegativeNumber(source.input ?? source.inputTokens);
+  const reasoningTokens = nonNegativeNumber(source.reasoning ?? source.reasoningTokens);
+  const outputTokens = nonNegativeNumber(source.output ?? source.outputTokens) + reasoningTokens;
+  const cacheReadTokens = nonNegativeNumber(cache.read ?? source.cacheReadTokens ?? source.cacheReadInputTokens);
+  const cacheWriteTokens = nonNegativeNumber(cache.write ?? source.cacheWriteTokens ?? source.cacheWriteInputTokens);
+  const summedTotal = inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens;
+  const explicitTotal = nonNegativeNumber(source.total ?? source.totalTokens);
+
+  return {
+    inputTokens,
+    outputTokens,
+    cacheWriteTokens,
+    cacheReadTokens,
+    totalTokens: Math.max(explicitTotal, summedTotal),
+    reasoningTokens
+  };
+}
+
+function normalizeOpenCodeUsageForBridge(tokens = {}, contextLimit = 0) {
+  const usage = normalizeOpenCodeUsageData(tokens);
+  const bridgeUsage = {
+    input_tokens: usage.inputTokens,
+    output_tokens: usage.outputTokens,
+    cache_creation_input_tokens: usage.cacheWriteTokens,
+    cache_read_input_tokens: usage.cacheReadTokens,
+    total_tokens: usage.totalTokens
+  };
+  const limit = nonNegativeNumber(contextLimit);
+  if (limit > 0) {
+    bridgeUsage.context_window = limit;
+    bridgeUsage.max_tokens = limit;
+  }
+  return bridgeUsage;
+}
+
+function openCodeUsageTokensFromMessage(info = {}, parts = []) {
+  const messageTokens = asRecord(info).tokens;
+  if (messageTokens && typeof messageTokens === 'object') {
+    return messageTokens;
+  }
+
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    const part = asRecord(parts[index]);
+    if (partKind(part) === 'step-finish' && part.tokens) {
+      return part.tokens;
+    }
+  }
+  return null;
+}
+
+function openCodeModelId(model = {}) {
+  const rawModel = asRecord(model);
+  const providerID = pickString(rawModel.providerID, rawModel.providerId);
+  const modelID = pickString(rawModel.id, rawModel.modelID, rawModel.modelId);
+  if (providerID && modelID) {
+    return `${providerID}/${modelID}`;
+  }
+  return modelID || 'unknown';
+}
+
+function openCodeProjectName(projectPath) {
+  if (!projectPath || projectPath === 'all') {
+    return 'All Projects';
+  }
+  return basename(projectPath) || projectPath;
+}
+
+function emptyOpenCodeUsageStatistics(projectPath = 'all') {
+  return {
+    projectPath,
+    projectName: openCodeProjectName(projectPath),
+    totalSessions: 0,
+    totalUsage: {
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheWriteTokens: 0,
+      cacheReadTokens: 0,
+      totalTokens: 0
+    },
+    estimatedCost: 0,
+    sessions: [],
+    dailyUsage: [],
+    weeklyComparison: {
+      currentWeek: { sessions: 0, cost: 0, tokens: 0 },
+      lastWeek: { sessions: 0, cost: 0, tokens: 0 },
+      trends: { sessions: 0, cost: 0, tokens: 0 }
+    },
+    byModel: [],
+    lastUpdated: Date.now()
+  };
+}
+
+function mergeOpenCodeUsage(target, source) {
+  target.inputTokens += source.inputTokens || 0;
+  target.outputTokens += source.outputTokens || 0;
+  target.cacheWriteTokens += source.cacheWriteTokens || 0;
+  target.cacheReadTokens += source.cacheReadTokens || 0;
+  target.totalTokens += source.totalTokens || 0;
+}
+
+function normalizeOpenCodeUsageSession(rawSession) {
+  const session = asRecord(rawSession);
+  const sessionId = pickString(session.id, session.sessionID, session.sessionId);
+  if (!sessionId || session.parentID || session.parentId) {
+    return null;
+  }
+
+  const usage = normalizeOpenCodeUsageData(session.tokens);
+  const cost = nonNegativeNumber(session.cost);
+  if (usage.totalTokens <= 0 && cost <= 0) {
+    return null;
+  }
+
+  const time = asRecord(session.time);
+  return {
+    sessionId,
+    timestamp: normalizeOpenCodeTimestamp(time.updated ?? session.updated ?? time.created ?? session.created),
+    model: openCodeModelId(session.model),
+    usage,
+    cost,
+    summary: pickString(session.title, session.slug, sessionId)
+  };
+}
+
+function dateKey(timestamp) {
+  return new Date(timestamp).toISOString().slice(0, 10);
+}
+
+function trendPercent(current, previous) {
+  return previous > 0 ? ((current - previous) / previous) * 100 : 0;
+}
+
+function buildOpenCodeDailyUsage(sessions) {
+  const daily = new Map();
+  for (const session of sessions) {
+    const date = dateKey(session.timestamp);
+    if (!daily.has(date)) {
+      daily.set(date, {
+        date,
+        sessions: 0,
+        usage: { inputTokens: 0, outputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, totalTokens: 0 },
+        cost: 0,
+        modelsUsed: []
+      });
+    }
+    const entry = daily.get(date);
+    entry.sessions += 1;
+    entry.cost += session.cost;
+    mergeOpenCodeUsage(entry.usage, session.usage);
+    if (!entry.modelsUsed.includes(session.model)) {
+      entry.modelsUsed.push(session.model);
+    }
+  }
+  return Array.from(daily.values()).sort((left, right) => left.date.localeCompare(right.date));
+}
+
+function buildOpenCodeModelUsage(sessions) {
+  const models = new Map();
+  for (const session of sessions) {
+    if (!models.has(session.model)) {
+      models.set(session.model, {
+        model: session.model,
+        totalCost: 0,
+        totalTokens: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+        sessionCount: 0
+      });
+    }
+    const entry = models.get(session.model);
+    entry.sessionCount += 1;
+    entry.totalCost += session.cost;
+    entry.totalTokens += session.usage.totalTokens;
+    entry.inputTokens += session.usage.inputTokens;
+    entry.outputTokens += session.usage.outputTokens;
+    entry.cacheCreationTokens += session.usage.cacheWriteTokens;
+    entry.cacheReadTokens += session.usage.cacheReadTokens;
+  }
+  return Array.from(models.values()).sort((left, right) => right.totalCost - left.totalCost);
+}
+
+function buildOpenCodeWeeklyComparison(sessions) {
+  const now = Date.now();
+  const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000;
+  const twoWeeksAgo = now - 14 * 24 * 60 * 60 * 1000;
+  const weekly = {
+    currentWeek: { sessions: 0, cost: 0, tokens: 0 },
+    lastWeek: { sessions: 0, cost: 0, tokens: 0 },
+    trends: { sessions: 0, cost: 0, tokens: 0 }
+  };
+
+  for (const session of sessions) {
+    if (session.timestamp >= oneWeekAgo) {
+      weekly.currentWeek.sessions += 1;
+      weekly.currentWeek.cost += session.cost;
+      weekly.currentWeek.tokens += session.usage.totalTokens;
+    } else if (session.timestamp >= twoWeeksAgo) {
+      weekly.lastWeek.sessions += 1;
+      weekly.lastWeek.cost += session.cost;
+      weekly.lastWeek.tokens += session.usage.totalTokens;
+    }
+  }
+
+  weekly.trends.sessions = trendPercent(weekly.currentWeek.sessions, weekly.lastWeek.sessions);
+  weekly.trends.cost = trendPercent(weekly.currentWeek.cost, weekly.lastWeek.cost);
+  weekly.trends.tokens = trendPercent(weekly.currentWeek.tokens, weekly.lastWeek.tokens);
+  return weekly;
+}
+
+function buildOpenCodeUsageStatistics(sessionPayload = [], projectPath = 'all', cutoffTime = 0) {
+  const stats = emptyOpenCodeUsageStatistics(projectPath);
+  const sessions = (Array.isArray(sessionPayload) ? sessionPayload : [])
+    .map(normalizeOpenCodeUsageSession)
+    .filter(Boolean)
+    .filter((session) => !cutoffTime || session.timestamp >= cutoffTime)
+    .sort((left, right) => right.timestamp - left.timestamp);
+
+  stats.totalSessions = sessions.length;
+  stats.sessions = sessions;
+  for (const session of sessions) {
+    mergeOpenCodeUsage(stats.totalUsage, session.usage);
+    stats.estimatedCost += session.cost;
+  }
+  stats.dailyUsage = buildOpenCodeDailyUsage(sessions);
+  stats.byModel = buildOpenCodeModelUsage(sessions);
+  stats.weeklyComparison = buildOpenCodeWeeklyComparison(sessions);
+  return stats;
 }
 
 function normalizeOpenCodeMessageCount(session, sessionId, messageCounts) {
@@ -2406,6 +2713,13 @@ function normalizeOpenCodeMessage(item) {
   if (toolUseResult) {
     normalized.toolUseResult = toolUseResult;
   }
+  if (role === 'assistant') {
+    const usageTokens = openCodeUsageTokensFromMessage(info, partsToProcess);
+    if (usageTokens) {
+      normalized.usage = normalizeOpenCodeUsageForBridge(usageTokens);
+      normalized.message.usage = normalized.usage;
+    }
+  }
   return normalized;
 }
 
@@ -2487,6 +2801,9 @@ function createEventContext(runtime, cwd, permissionMode, sessionRef) {
     emittedToolResultIds: new Set(),
     toolUseSignatures: new Map(),
     emittedDiffIds: new Set(),
+    emittedUsagePartIds: new Set(),
+    modelContextLimit: 0,
+    sawUsageResult: false,
     sessionDiffBaselineReady: false,
     repliedPermissions: new Set(),
     rejectedQuestions: new Set(),
@@ -2525,6 +2842,60 @@ function responseHasAssistantText(response) {
 
 function openCodePartId(part) {
   return pickString(part?.id, part?.partID, part?.partId);
+}
+
+function emitOpenCodeUsageResult(ctx, source) {
+  const part = asRecord(source);
+  const tokens = asRecord(part.tokens);
+  if (Object.keys(tokens).length === 0) {
+    return false;
+  }
+
+  const partId = openCodePartId(part);
+  if (partId && ctx.emittedUsagePartIds.has(partId)) {
+    return false;
+  }
+
+  const usage = normalizeOpenCodeUsageForBridge(tokens, ctx.modelContextLimit);
+  if (usage.total_tokens <= 0) {
+    return false;
+  }
+
+  if (partId) {
+    ctx.emittedUsagePartIds.add(partId);
+  }
+  ctx.sawUsageResult = true;
+  emitMessage({
+    type: 'result',
+    usage,
+    opencode: {
+      cost: nonNegativeNumber(part.cost),
+      tokens
+    }
+  });
+  return true;
+}
+
+function emitOpenCodeUsageFromResponse(ctx, response) {
+  if (!response || ctx.sawUsageResult) {
+    return false;
+  }
+  const parts = Array.isArray(response.parts) ? response.parts : [];
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    const part = asRecord(parts[index]);
+    if (partKind(part) === 'step-finish' && emitOpenCodeUsageResult(ctx, part)) {
+      return true;
+    }
+  }
+  const info = asRecord(response.info);
+  if (info.tokens) {
+    return emitOpenCodeUsageResult(ctx, {
+      id: pickString(info.id, info.messageID),
+      tokens: info.tokens,
+      cost: info.cost
+    });
+  }
+  return false;
 }
 
 function openCodeMessageId(source) {
@@ -2843,7 +3214,9 @@ async function handleOpenCodeEvent(event, ctx) {
         rememberOpenCodePartMessage(ctx, partId, openCodeMessageId(part));
       }
 
-      if (part.type === 'tool' && part.tool) {
+      if (partKind(part) === 'step-finish') {
+        emitOpenCodeUsageResult(ctx, part);
+      } else if (part.type === 'tool' && part.tool) {
         const normalizedInput = normalizeOpenCodeToolInput(part, ctx.cwd);
         emitOpenCodeToolUse(ctx, part, normalizedInput);
         emitOpenCodeToolResult(ctx, part, normalizedInput);
@@ -3107,6 +3480,11 @@ export async function sendMessage(
     emitMarker('[STREAM_START]');
 
     const parsedModel = await resolveOpenCodePromptModel(runtime.client, cwd, model);
+    eventContext.modelContextLimit = await resolveOpenCodeModelContextLimit(
+      runtime.client,
+      cwd,
+      parsedModel
+    ).catch(() => 0);
     const slashCommand = await resolveOpenCodeSlashCommand(runtime.client, cwd, message);
     const promptParts = await buildPromptParts(slashCommand ? '' : message, attachments);
     cleanupAttachments = promptParts.cleanup;
@@ -3188,6 +3566,7 @@ export async function sendMessage(
     } else if (responseHasAssistantText(response)) {
       eventContext.sawAssistantOutput = true;
     }
+    emitOpenCodeUsageFromResponse(eventContext, response);
 
     await waitForOpenCodeTurnIdle(eventContext, activeTurn);
 
@@ -3345,6 +3724,43 @@ export async function listSessions(cwd = '', options = {}) {
       sessions: [],
       total: 0
     }));
+  } finally {
+    await releaseOpenCodeRuntime(runtime, options);
+  }
+}
+
+function openCodeUsageStatisticsQuery(cwd, scope) {
+  const query = {
+    roots: true,
+    limit: parsePositiveInteger(process.env.OPENCODE_USAGE_HISTORY_LIMIT, DEFAULT_USAGE_HISTORY_LIMIT)
+  };
+  if (scope === 'current' && cwd && cwd !== 'all') {
+    Object.assign(query, directoryQuery(cwd), { scope: 'project' });
+  }
+  return query;
+}
+
+export async function usageStatistics(cwd = 'all', scope = 'current', cutoffTime = 0, options = {}) {
+  let runtime = null;
+  const projectPath = scope === 'all' || cwd === 'all' ? 'all' : cwd;
+  try {
+    runtime = await acquireOpenCodeRuntime(projectPath === 'all' ? '' : projectPath, options);
+    const sessions = await unwrapSdkResult(
+      runtime.client.session.list({
+        query: openCodeUsageStatisticsQuery(projectPath, scope)
+      }),
+      'list opencode usage sessions'
+    );
+    console.log(JSON.stringify(buildOpenCodeUsageStatistics(
+      sessions,
+      projectPath,
+      nonNegativeNumber(cutoffTime)
+    )));
+  } catch (error) {
+    await discardPersistentOpenCodeRuntimeOnError(runtime, error);
+    const stats = emptyOpenCodeUsageStatistics(projectPath);
+    stats.error = normalizeOpenCodeSdkError(error).error;
+    console.log(JSON.stringify(stats));
   } finally {
     await releaseOpenCodeRuntime(runtime, options);
   }
@@ -3664,6 +4080,9 @@ export {
   releaseOpenCodeRuntime,
   normalizeOpenCodeModels,
   normalizeOpenCodeSessions,
+  normalizeOpenCodeUsageData,
+  normalizeOpenCodeUsageForBridge,
+  buildOpenCodeUsageStatistics,
   parseOpenCodeSlashCommand,
   resolveOpenCodePromptModel,
   resolveLastUsedSessionModel,

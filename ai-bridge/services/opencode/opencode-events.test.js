@@ -110,6 +110,48 @@ test('opencode tool updates emit tool_use and tool_result blocks', async () => {
   });
 });
 
+test('opencode step-finish emits normalized usage result once', async () => {
+  const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
+  ctx.modelContextLimit = 1000;
+  const stepFinish = {
+    id: 'prt_step_finish_1',
+    sessionID: 'ses_test',
+    messageID: 'msg_assistant_1',
+    type: 'step-finish',
+    reason: 'stop',
+    cost: 0.0123,
+    tokens: {
+      input: 100,
+      output: 20,
+      reasoning: 5,
+      cache: { read: 10, write: 15 }
+    }
+  };
+
+  const lines = await captureConsole(async () => {
+    await handleOpenCodeEvent({
+      type: 'message.part.updated',
+      properties: { part: stepFinish }
+    }, ctx);
+    await handleOpenCodeEvent({
+      type: 'message.part.updated',
+      properties: { part: stepFinish }
+    }, ctx);
+  });
+
+  const results = messagePayloads(lines).filter((message) => message.type === 'result');
+  assert.equal(results.length, 1);
+  assert.deepEqual(results[0].usage, {
+    input_tokens: 100,
+    output_tokens: 25,
+    cache_creation_input_tokens: 15,
+    cache_read_input_tokens: 10,
+    total_tokens: 150,
+    context_window: 1000,
+    max_tokens: 1000
+  });
+});
+
 test('opencode shell tools with nonzero exit emit error tool results', async () => {
   const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
   const lines = await captureConsole(async () => {

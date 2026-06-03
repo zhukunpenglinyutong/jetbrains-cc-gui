@@ -54,9 +54,10 @@ public class UsagePushService {
                 return;
             }
             int usedTokens = TokenUsageUtils.extractUsedTokens(lastUsage, context.getCurrentProvider());
+            int maxTokens = TokenUsageUtils.extractMaxTokens(lastUsage, newMaxTokens);
 
             // Send update
-            sendUsageUpdate(usedTokens, newMaxTokens);
+            sendUsageUpdate(usedTokens, maxTokens);
 
         } catch (Exception e) {
             LOG.error("[UsagePushService] Failed to push usage update after model change: " + e.getMessage(), e);

@@ -330,6 +330,50 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
         }
     }
 
+    public JsonObject getUsageStatistics(String cwd, String scope, long cutoffTime) {
+        try {
+            return runJsonCommand("usageStatistics", List.of(
+                    cwd != null ? cwd : "all",
+                    scope != null ? scope : "current",
+                    String.valueOf(Math.max(0, cutoffTime))
+            ));
+        } catch (Exception e) {
+            LOG.warn("[OpenCodeSDKBridge] Failed to get opencode usage statistics: " + e.getMessage(), e);
+            JsonObject error = new JsonObject();
+            error.addProperty("projectPath", cwd != null ? cwd : "all");
+            error.addProperty("projectName", "all".equals(cwd) ? "All Projects" : cwd != null ? cwd : "All Projects");
+            error.addProperty("totalSessions", 0);
+            error.addProperty("estimatedCost", 0);
+            error.addProperty("lastUpdated", System.currentTimeMillis());
+            error.addProperty("error", e.getMessage());
+            error.add("sessions", new JsonArray());
+            error.add("dailyUsage", new JsonArray());
+            error.add("byModel", new JsonArray());
+            JsonObject usage = new JsonObject();
+            usage.addProperty("inputTokens", 0);
+            usage.addProperty("outputTokens", 0);
+            usage.addProperty("cacheWriteTokens", 0);
+            usage.addProperty("cacheReadTokens", 0);
+            usage.addProperty("totalTokens", 0);
+            error.add("totalUsage", usage);
+            JsonObject weekly = new JsonObject();
+            JsonObject currentWeek = new JsonObject();
+            currentWeek.addProperty("sessions", 0);
+            currentWeek.addProperty("cost", 0);
+            currentWeek.addProperty("tokens", 0);
+            JsonObject lastWeek = currentWeek.deepCopy();
+            JsonObject trends = new JsonObject();
+            trends.addProperty("sessions", 0);
+            trends.addProperty("cost", 0);
+            trends.addProperty("tokens", 0);
+            weekly.add("currentWeek", currentWeek);
+            weekly.add("lastWeek", lastWeek);
+            weekly.add("trends", trends);
+            error.add("weeklyComparison", weekly);
+            return error;
+        }
+    }
+
     public JsonObject deleteSession(String sessionId, String cwd) {
         try {
             return runJsonCommand("deleteSession", List.of(
@@ -517,6 +561,11 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
                 params.addProperty("serverId", args.size() > 0 ? args.get(0) : "");
                 params.addProperty("cwd", args.size() > 1 ? args.get(1) : "");
                 break;
+            case "usageStatistics":
+                params.addProperty("cwd", args.size() > 0 ? args.get(0) : "all");
+                params.addProperty("scope", args.size() > 1 ? args.get(1) : "current");
+                params.addProperty("cutoffTime", args.size() > 2 ? args.get(2) : "0");
+                break;
             case "listModels":
             case "listSessions":
             case "listAgents":
@@ -565,7 +614,7 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
     }
 
     private int jsonCommandTimeoutSeconds(String action) {
-        return "listMcpServerStatus".equals(action)
+        return "listMcpServerStatus".equals(action) || "usageStatistics".equals(action)
                 ? MCP_STATUS_QUERY_TIMEOUT_SECONDS
                 : QUERY_TIMEOUT_SECONDS;
     }

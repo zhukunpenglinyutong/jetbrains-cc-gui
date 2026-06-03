@@ -41,6 +41,24 @@ public final class TokenUsageUtils {
         return calculateTotalTokens(input, cacheCreation, cacheRead, output);
     }
 
+    public static int extractMaxTokens(JsonObject usage, int fallback) {
+        if (usage == null) { return fallback; }
+        String[] fields = {"context_window", "max_tokens", "limit", "maxTokens"};
+        for (String field : fields) {
+            if (!usage.has(field) || usage.get(field).isJsonNull()) {
+                continue;
+            }
+            try {
+                int value = usage.get(field).getAsInt();
+                if (value > 0) {
+                    return value;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return fallback;
+    }
+
     /**
      * Find the last usage JSON from a list of raw server messages (JsonObject).
      * Scans from end to find the last assistant message with usage data.

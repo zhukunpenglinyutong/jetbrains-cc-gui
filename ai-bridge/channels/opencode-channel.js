@@ -11,6 +11,7 @@ import {
   listMcpServerStatus as openCodeListMcpServerStatus,
   listMcpServers as openCodeListMcpServers,
   listSessions as openCodeListSessions,
+  usageStatistics as openCodeUsageStatistics,
   listModels as openCodeListModels,
   sendMessage as openCodeSendMessage
 } from '../services/opencode/message-service.js';
@@ -86,6 +87,14 @@ export async function handleOpenCodeCommand(command, args, stdinData) {
       break;
     }
 
+    case 'usageStatistics': {
+      const cwd = stdinData?.cwd || args[0] || 'all';
+      const scope = stdinData?.scope || args[1] || 'current';
+      const cutoffTime = stdinData?.cutoffTime || args[2] || 0;
+      await openCodeUsageStatistics(cwd, scope, cutoffTime, options);
+      break;
+    }
+
     case 'listAgents': {
       const cwd = stdinData?.cwd || args[0] || '';
       await openCodeListAgents(cwd, options);
@@ -123,5 +132,5 @@ export async function handleOpenCodeCommand(command, args, stdinData) {
 }
 
 export function getOpenCodeCommandList() {
-  return ['send', 'abort', 'deleteSession', 'getSessionMessages', 'listSessions', 'listModels', 'listAgents', 'listCommands', 'listMcpServers', 'listMcpServerStatus', 'getMcpServerTools'];
+  return ['send', 'abort', 'deleteSession', 'getSessionMessages', 'listSessions', 'usageStatistics', 'listModels', 'listAgents', 'listCommands', 'listMcpServers', 'listMcpServerStatus', 'getMcpServerTools'];
 }

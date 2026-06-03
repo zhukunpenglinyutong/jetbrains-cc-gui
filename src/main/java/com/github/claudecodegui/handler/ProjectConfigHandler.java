@@ -676,7 +676,13 @@ public class ProjectConfigHandler {
                     }
                 }
                 String json;
-                if ("codex".equals(provider)) {
+                if ("opencode".equals(provider)) {
+                    if (context.getOpenCodeSDKBridge() == null) {
+                        throw new IllegalStateException("opencode SDK bridge is not available");
+                    }
+                    String scope = "all".equals(projectPath) ? "all" : "current";
+                    json = gson.toJson(context.getOpenCodeSDKBridge().getUsageStatistics(projectPath, scope, cutoffTime));
+                } else if ("codex".equals(provider)) {
                     CodexHistoryReader reader = new CodexHistoryReader();
                     CodexHistoryReader.ProjectStatistics stats = reader.getProjectStatistics(projectPath, cutoffTime);
                     LOG.info("[ProjectConfigHandler] Codex statistics - sessions: " + stats.totalSessions +
