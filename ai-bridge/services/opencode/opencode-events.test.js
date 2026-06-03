@@ -60,6 +60,16 @@ function toolPart(overrides = {}) {
   };
 }
 
+function messageUpdated(messageID, role = 'assistant') {
+  return {
+    type: 'message.updated',
+    properties: {
+      sessionID: 'ses_test',
+      info: { id: messageID, role }
+    }
+  };
+}
+
 test('opencode tool updates emit tool_use and tool_result blocks', async () => {
   const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
   const lines = await captureConsole(async () => {
@@ -156,6 +166,7 @@ test('opencode final text part fills missing streaming deltas', async () => {
         }
       }
     }, ctx);
+    await handleOpenCodeEvent(messageUpdated('msg_assistant_1'), ctx);
   });
 
   assert.deepEqual(contentDeltas(lines), ['hel', 'lo']);
@@ -165,6 +176,8 @@ test('opencode final text part fills missing streaming deltas', async () => {
 test('opencode inserts space between text parts at part boundaries', async () => {
   const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
   const lines = await captureConsole(async () => {
+    await handleOpenCodeEvent(messageUpdated('msg_assistant_1'), ctx);
+
     await handleOpenCodeEvent({
       type: 'message.part.delta',
       properties: { sessionID: 'ses_test', messageID: 'msg_assistant_1', partID: 'prt_text_1', field: 'text', delta: 'findings.' }
@@ -193,6 +206,30 @@ test('opencode inserts space between text parts at part boundaries', async () =>
   assert.deepEqual(contentDeltas(lines), ['findings.', ' The analysis']);
   assert.equal(ctx.sawAssistantOutput, true);
   assert.equal(ctx.lastTextPartEndedWithoutWhitespace, true);
+});
+
+test('opencode drops user-role text parts from the event stream', async () => {
+  const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
+  const lines = await captureConsole(async () => {
+    await handleOpenCodeEvent({
+      type: 'message.part.updated',
+      properties: {
+        sessionID: 'ses_test',
+        part: {
+          id: 'prt_user_1',
+          sessionID: 'ses_test',
+          messageID: 'msg_user_1',
+          type: 'text',
+          text: 'echoed prompt',
+          time: { start: 1, end: 2 }
+        }
+      }
+    }, ctx);
+    await handleOpenCodeEvent(messageUpdated('msg_user_1', 'user'), ctx);
+  });
+
+  assert.deepEqual(contentDeltas(lines), []);
+  assert.equal(ctx.sawAssistantOutput, false);
 });
 
 test('opencode session.error emits structured send error', async () => {
@@ -740,6 +777,8 @@ function thinkingDeltas(lines) {
 test('opencode reasoning deltas with reasoning_content field emit thinking blocks', async () => {
   const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
   const lines = await captureConsole(async () => {
+    await handleOpenCodeEvent(messageUpdated('msg_1'), ctx);
+
     await handleOpenCodeEvent({
       type: 'message.part.delta',
       properties: {
@@ -788,6 +827,8 @@ test('opencode reasoning deltas with reasoning_content field emit thinking block
 test('opencode reasoning deltas from part type emit thinking blocks', async () => {
   const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
   const lines = await captureConsole(async () => {
+    await handleOpenCodeEvent(messageUpdated('msg_1'), ctx);
+
     await handleOpenCodeEvent({
       type: 'message.part.updated',
       properties: {

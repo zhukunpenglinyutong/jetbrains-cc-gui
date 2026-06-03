@@ -2444,7 +2444,11 @@ function createEventContext(runtime, cwd, permissionMode, sessionRef) {
     cwd,
     permissionMode,
     sessionRef,
+    messageRoles: new Map(),
+    partMessageIds: new Map(),
     partTypes: new Map(),
+    textPartSnapshotsByPartId: new Map(),
+    droppedTextPartIds: new Set(),
     emittedToolUseIds: new Set(),
     emittedToolResultIds: new Set(),
     toolUseSignatures: new Map(),
@@ -2485,6 +2489,93 @@ function responseHasAssistantText(response) {
   ));
 }
 
+function openCodePartId(part) {
+  return pickString(part?.id, part?.partID, part?.partId);
+}
+
+function openCodeMessageId(source) {
+  return pickString(source?.messageID, source?.messageId, source?.message?.id);
+}
+
+function rememberOpenCodePartMessage(ctx, partId, messageId) {
+  if (partId && messageId) {
+    ctx.partMessageIds.set(partId, messageId);
+  }
+}
+
+function openCodePartRole(ctx, partId, messageId) {
+  const resolvedMessageId = messageId || ctx.partMessageIds.get(partId);
+  return resolvedMessageId ? ctx.messageRoles.get(resolvedMessageId) : undefined;
+}
+
+function dropOpenCodeTextPart(ctx, partId) {
+  if (!partId) {
+    return;
+  }
+  ctx.droppedTextPartIds.add(partId);
+  ctx.suppressedTextByPartId.delete(partId);
+  ctx.streamedTextByPartId.delete(partId);
+  ctx.textPartSnapshotsByPartId.delete(partId);
+  ctx.partTypes.delete(partId);
+  ctx.partMessageIds.delete(partId);
+}
+
+function emitOpenCodeSuppressedText(ctx, partId, kind) {
+  const suppressed = ctx.suppressedTextByPartId.get(partId);
+  if (!suppressed) {
+    return false;
+  }
+
+  ctx.suppressedTextByPartId.delete(partId);
+  if (isReasoningPart(kind)) {
+    emitThinkingDelta(suppressed);
+    return true;
+  }
+
+  let flushText = suppressed;
+  if (ctx.lastTextPartEndedWithoutWhitespace && !suppressed.startsWith(' ')) {
+    ctx.lastTextPartEndedWithoutWhitespace = false;
+    flushText = ' ' + suppressed;
+  }
+  ctx.sawContentDelta = true;
+  ctx.sawAssistantOutput = true;
+  emitContentDelta(flushText);
+  ctx.lastTextPartEndedWithoutWhitespace = !/\s$/.test(flushText);
+  return true;
+}
+
+function flushOpenCodeBufferedTextForMessage(ctx, messageId, role) {
+  if (!messageId) {
+    return;
+  }
+
+  for (const [partId, partMessageId] of Array.from(ctx.partMessageIds.entries())) {
+    if (partMessageId !== messageId || ctx.droppedTextPartIds.has(partId)) {
+      continue;
+    }
+
+    if (role === 'user') {
+      dropOpenCodeTextPart(ctx, partId);
+      continue;
+    }
+
+    if (role !== 'assistant') {
+      continue;
+    }
+
+    const kind = ctx.partTypes.get(partId);
+    if (kind) {
+      emitOpenCodeSuppressedText(ctx, partId, kind);
+    }
+
+    const snapshot = ctx.textPartSnapshotsByPartId.get(partId);
+    if (snapshot) {
+      ctx.textPartSnapshotsByPartId.delete(partId);
+      emitOpenCodePartTextTail(ctx, snapshot);
+    }
+  }
+}
+
 function emitOpenCodePartTextTail(ctx, part) {
   const kind = partKind(part);
   if (kind !== 'text' && !isReasoningPart(kind)) {
@@ -2499,25 +2590,27 @@ function emitOpenCodePartTextTail(ctx, part) {
     return false;
   }
 
-  const partId = pickString(part.id, part.partID);
-  if (partId) {
-    const suppressed = ctx.suppressedTextByPartId.get(partId);
-    if (suppressed) {
-      ctx.suppressedTextByPartId.delete(partId);
-      if (isReasoningPart(kind)) {
-        emitThinkingDelta(suppressed);
-      } else {
-        let flushText = suppressed;
-        if (ctx.lastTextPartEndedWithoutWhitespace && !suppressed.startsWith(' ')) {
-          ctx.lastTextPartEndedWithoutWhitespace = false;
-          flushText = ' ' + suppressed;
-        }
-        ctx.sawContentDelta = true;
-        ctx.sawAssistantOutput = true;
-        emitContentDelta(flushText);
-        ctx.lastTextPartEndedWithoutWhitespace = !/\s$/.test(flushText);
-      }
+  const partId = openCodePartId(part);
+  if (partId && ctx.droppedTextPartIds.has(partId)) {
+    return false;
+  }
+
+  const messageId = openCodeMessageId(part);
+  rememberOpenCodePartMessage(ctx, partId, messageId);
+  const role = openCodePartRole(ctx, partId, messageId);
+  if (role === 'user') {
+    dropOpenCodeTextPart(ctx, partId);
+    return false;
+  }
+  if (messageId && role === undefined) {
+    if (partId) {
+      ctx.textPartSnapshotsByPartId.set(partId, part);
     }
+    return false;
+  }
+
+  if (partId) {
+    emitOpenCodeSuppressedText(ctx, partId, kind);
   }
 
   const previous = partId ? ctx.streamedTextByPartId.get(partId) || '' : '';
@@ -2710,8 +2803,10 @@ async function handleOpenCodeEvent(event, ctx) {
     case 'message.part.updated': {
       ctx.sawTurnLive = true;
       const part = props.part || {};
-      if (part.id) {
-        ctx.partTypes.set(part.id, partKind(part));
+      const partId = openCodePartId(part);
+      if (partId) {
+        ctx.partTypes.set(partId, partKind(part));
+        rememberOpenCodePartMessage(ctx, partId, openCodeMessageId(part));
       }
 
       if (part.type === 'tool' && part.tool) {
@@ -2745,20 +2840,38 @@ async function handleOpenCodeEvent(event, ctx) {
       }
       ctx.sawTurnLive = true;
 
-      if (props.partID && isReasoningField && !ctx.partTypes.has(props.partID)) {
-        ctx.partTypes.set(props.partID, 'reasoning');
+      const partId = openCodePartId(props);
+      const messageId = openCodeMessageId(props);
+      rememberOpenCodePartMessage(ctx, partId, messageId);
+      if (partId && ctx.droppedTextPartIds.has(partId)) {
+        return;
       }
 
-      const partType = ctx.partTypes.get(props.partID);
+      if (partId && isReasoningField && !ctx.partTypes.has(partId)) {
+        ctx.partTypes.set(partId, 'reasoning');
+      }
+
+      const partType = ctx.partTypes.get(partId);
       const isReasoning = isReasoningField || isReasoningPart(partType);
 
-      if (props.partID) {
-        const previous = ctx.streamedTextByPartId.get(props.partID) || '';
-        ctx.streamedTextByPartId.set(props.partID, previous + delta);
+      if (partId) {
+        const previous = ctx.streamedTextByPartId.get(partId) || '';
+        ctx.streamedTextByPartId.set(partId, previous + delta);
 
         if (partType === undefined) {
-          const suppressed = ctx.suppressedTextByPartId.get(props.partID) || '';
-          ctx.suppressedTextByPartId.set(props.partID, suppressed + delta);
+          const suppressed = ctx.suppressedTextByPartId.get(partId) || '';
+          ctx.suppressedTextByPartId.set(partId, suppressed + delta);
+          break;
+        }
+
+        const role = openCodePartRole(ctx, partId, messageId);
+        if (role === 'user') {
+          dropOpenCodeTextPart(ctx, partId);
+          break;
+        }
+        if (messageId && role === undefined) {
+          const suppressed = ctx.suppressedTextByPartId.get(partId) || '';
+          ctx.suppressedTextByPartId.set(partId, suppressed + delta);
           break;
         }
 
@@ -2770,23 +2883,7 @@ async function handleOpenCodeEvent(event, ctx) {
           emitContentDelta(' ');
         }
 
-        const suppressed = ctx.suppressedTextByPartId.get(props.partID);
-        if (suppressed) {
-          ctx.suppressedTextByPartId.delete(props.partID);
-          let flushText = suppressed;
-          if (!isReasoning && ctx.lastTextPartEndedWithoutWhitespace && !suppressed.startsWith(' ')) {
-            ctx.lastTextPartEndedWithoutWhitespace = false;
-            flushText = ' ' + suppressed;
-          }
-          if (isReasoning) {
-            emitThinkingDelta(flushText);
-          } else {
-            ctx.sawContentDelta = true;
-            ctx.sawAssistantOutput = true;
-            emitContentDelta(flushText);
-            ctx.lastTextPartEndedWithoutWhitespace = !/\s$/.test(flushText);
-          }
-        }
+        emitOpenCodeSuppressedText(ctx, partId, partType);
       }
       if (isReasoning) {
         emitThinkingDelta(delta);
@@ -2801,6 +2898,12 @@ async function handleOpenCodeEvent(event, ctx) {
 
     case 'message.updated': {
       const info = props.info || props.message || {};
+      const messageId = openCodeMessageId(info) || pickString(info.id, props.messageID, props.messageId);
+      const role = pickString(info.role, info.type);
+      if (messageId && (role === 'assistant' || role === 'user')) {
+        ctx.messageRoles.set(messageId, role);
+        flushOpenCodeBufferedTextForMessage(ctx, messageId, role);
+      }
       if (info.role === 'assistant') {
         ctx.sawTurnLive = true;
       }
