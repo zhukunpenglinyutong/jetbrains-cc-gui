@@ -215,6 +215,70 @@ test('opencode final text part fills missing streaming deltas', async () => {
   assert.equal(ctx.sawAssistantOutput, true);
 });
 
+test('opencode delays tool updates until preceding text part closes', async () => {
+  const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
+  const lines = await captureConsole(async () => {
+    await handleOpenCodeEvent(messageUpdated('msg_assistant_1'), ctx);
+
+    await handleOpenCodeEvent({
+      type: 'message.part.delta',
+      properties: {
+        sessionID: 'ses_test',
+        messageID: 'msg_assistant_1',
+        partID: 'prt_text_1',
+        field: 'text',
+        delta: 'This matches `docs/qu'
+      }
+    }, ctx);
+
+    await handleOpenCodeEvent({
+      type: 'message.part.updated',
+      properties: { part: toolPart() }
+    }, ctx);
+    await handleOpenCodeEvent({
+      type: 'message.part.updated',
+      properties: {
+        part: toolPart({
+          state: {
+            status: 'completed',
+            input: { command: 'cp new docs/quota-popup.png', description: 'Replace asset' },
+            output: 'ok',
+            title: 'Replace asset',
+            metadata: {},
+            time: { start: 1, end: 2 }
+          }
+        })
+      }
+    }, ctx);
+
+    await handleOpenCodeEvent({
+      type: 'message.part.updated',
+      properties: {
+        sessionID: 'ses_test',
+        part: {
+          id: 'prt_text_1',
+          sessionID: 'ses_test',
+          messageID: 'msg_assistant_1',
+          type: 'text',
+          text: 'This matches `docs/quota-popup.png`; replacing that asset and committing it separately.',
+          time: { start: 1, end: 2 }
+        }
+      }
+    }, ctx);
+  });
+
+  assert.deepEqual(contentDeltas(lines), [
+    'This matches `docs/qu',
+    'ota-popup.png`; replacing that asset and committing it separately.'
+  ]);
+
+  const tailIndex = lines.findIndex((line) => line.includes('ota-popup.png'));
+  const toolResultIndex = lines.findIndex((line) => line.startsWith('[MESSAGE] ')
+    && JSON.parse(line.slice('[MESSAGE] '.length)).type === 'user');
+  assert.ok(tailIndex >= 0);
+  assert.ok(toolResultIndex > tailIndex);
+});
+
 test('opencode inserts space between text parts at part boundaries', async () => {
   const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
   const lines = await captureConsole(async () => {

@@ -38,6 +38,25 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
     private volatile DaemonBridge daemonBridge;
     private volatile long daemonRetryAfter = 0;
 
+    static boolean isIgnorableDaemonStopAfterStreamEnd(Throwable error, boolean sawStreamEnd) {
+        return sawStreamEnd && isDaemonStoppedError(error);
+    }
+
+    static boolean isDaemonStoppedError(Throwable error) {
+        Throwable current = error;
+        while (current != null) {
+            if (isDaemonStoppedError(current.getMessage())) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    static boolean isDaemonStoppedError(String error) {
+        return error != null && error.contains("Daemon stopped");
+    }
+
     public OpenCodeSDKBridge() {
         super(OpenCodeSDKBridge.class);
     }
@@ -171,6 +190,7 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
             StringBuilder assistantContent = new StringBuilder();
             AtomicBoolean hadSendError = new AtomicBoolean(false);
             AtomicBoolean wasAborted = new AtomicBoolean(false);
+            AtomicBoolean sawStreamEnd = new AtomicBoolean(false);
             AtomicReference<String> lastNodeError = new AtomicReference<>(null);
 
             try {
@@ -183,6 +203,9 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
                         new DaemonBridge.DaemonOutputCallback() {
                             @Override
                             public void onLine(String line) {
+                                if (line.startsWith("[STREAM_END]")) {
+                                    sawStreamEnd.set(true);
+                                }
                                 if (line.startsWith("[UNCAUGHT_ERROR]")
                                         || line.startsWith("[UNHANDLED_REJECTION]")
                                         || line.startsWith("[COMMAND_ERROR]")
@@ -259,9 +282,15 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
 
                 return result;
             } catch (Exception e) {
+                result.finalResult = assistantContent.toString();
+                result.messageCount = result.messages.size();
                 if (wasAborted.get()) {
                     result.success = false;
                     result.error = "User interrupted";
+                    callback.onComplete(result);
+                } else if (isIgnorableDaemonStopAfterStreamEnd(e, sawStreamEnd.get())) {
+                    LOG.warn("[OpenCodeSDKBridge] Ignoring daemon stop after opencode stream_end", e);
+                    result.success = true;
                     callback.onComplete(result);
                 } else if (!hadSendError.get()) {
                     result.success = false;

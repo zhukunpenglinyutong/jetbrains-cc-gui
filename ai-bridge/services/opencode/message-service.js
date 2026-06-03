@@ -812,6 +812,21 @@ function emitOpenCodeToolResult(ctx, part, normalizedInput = undefined) {
   ctx.emittedToolResultIds.add(toolUseId);
 }
 
+function emitOpenCodeToolUpdate(ctx, part, normalizedInput = undefined) {
+  emitOpenCodeToolUse(ctx, part, normalizedInput);
+  emitOpenCodeToolResult(ctx, part, normalizedInput);
+  if (part.state?.status === 'completed' || part.state?.status === 'error') {
+    const fileDiffs = openCodeToolDiffs(part);
+    if (shouldEmitSyntheticDiffForTool(part, normalizedInput)) {
+      emitOpenCodeDiffMessages(ctx, fileDiffs, `tool:${openCodeToolUseId(part) || part.id || part.tool}`);
+    }
+  }
+
+  const resultStatus = isOpenCodeToolResultError(part) ? 'error' : part.state?.status;
+  const status = resultStatus ? ` (${resultStatus})` : '';
+  emitStatus(`opencode tool: ${part.tool}${status}`);
+}
+
 function normalizeOpenCodeDiff(diff, cwd = '') {
   const candidate = asRecord(diff);
   const filePath = resolveProjectPath(
@@ -2794,8 +2809,12 @@ function createEventContext(runtime, cwd, permissionMode, sessionRef) {
     sessionRef,
     messageRoles: new Map(),
     partMessageIds: new Map(),
+    partOrder: new Map(),
+    partOrderCounter: 0,
     partTypes: new Map(),
     textPartSnapshotsByPartId: new Map(),
+    openTextPartIdsByMessageId: new Map(),
+    queuedToolPartsByMessageId: new Map(),
     droppedTextPartIds: new Set(),
     emittedToolUseIds: new Set(),
     emittedToolResultIds: new Set(),
@@ -2908,6 +2927,17 @@ function rememberOpenCodePartMessage(ctx, partId, messageId) {
   }
 }
 
+function rememberOpenCodePartOrder(ctx, partId) {
+  if (!partId) {
+    return 0;
+  }
+  if (!ctx.partOrder.has(partId)) {
+    ctx.partOrderCounter += 1;
+    ctx.partOrder.set(partId, ctx.partOrderCounter);
+  }
+  return ctx.partOrder.get(partId) || 0;
+}
+
 function openCodePartRole(ctx, partId, messageId) {
   const resolvedMessageId = messageId || ctx.partMessageIds.get(partId);
   return resolvedMessageId ? ctx.messageRoles.get(resolvedMessageId) : undefined;
@@ -2917,12 +2947,94 @@ function dropOpenCodeTextPart(ctx, partId) {
   if (!partId) {
     return;
   }
+  closeOpenCodeTextPart(ctx, partId, ctx.partMessageIds.get(partId));
   ctx.droppedTextPartIds.add(partId);
   ctx.suppressedTextByPartId.delete(partId);
   ctx.streamedTextByPartId.delete(partId);
   ctx.textPartSnapshotsByPartId.delete(partId);
   ctx.partTypes.delete(partId);
   ctx.partMessageIds.delete(partId);
+}
+
+function markOpenCodeTextPartOpen(ctx, partId, messageId) {
+  if (!partId || !messageId || ctx.droppedTextPartIds.has(partId)) {
+    return;
+  }
+  const set = ctx.openTextPartIdsByMessageId.get(messageId) || new Set();
+  set.add(partId);
+  ctx.openTextPartIdsByMessageId.set(messageId, set);
+}
+
+function closeOpenCodeTextPart(ctx, partId, messageId) {
+  if (!partId) {
+    return;
+  }
+
+  const messageIds = messageId ? [messageId] : Array.from(ctx.openTextPartIdsByMessageId.keys());
+  for (const id of messageIds) {
+    const set = ctx.openTextPartIdsByMessageId.get(id);
+    if (!set) {
+      continue;
+    }
+    set.delete(partId);
+    if (set.size === 0) {
+      ctx.openTextPartIdsByMessageId.delete(id);
+    }
+  }
+}
+
+function hasOpenCodeTextPartBefore(ctx, messageId, partId) {
+  if (!messageId || !partId) {
+    return false;
+  }
+  const set = ctx.openTextPartIdsByMessageId.get(messageId);
+  if (!set || set.size === 0) {
+    return false;
+  }
+  const order = ctx.partOrder.get(partId) || Number.MAX_SAFE_INTEGER;
+  for (const openPartId of set) {
+    const openOrder = ctx.partOrder.get(openPartId) || 0;
+    if (openOrder > 0 && openOrder < order) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function queueOpenCodeToolUpdate(ctx, part, normalizedInput) {
+  const messageId = openCodeMessageId(part);
+  if (!messageId) {
+    return false;
+  }
+  const queue = ctx.queuedToolPartsByMessageId.get(messageId) || [];
+  queue.push({ part, normalizedInput });
+  ctx.queuedToolPartsByMessageId.set(messageId, queue);
+  return true;
+}
+
+function flushQueuedOpenCodeToolUpdates(ctx, messageId) {
+  const queue = ctx.queuedToolPartsByMessageId.get(messageId);
+  if (!queue || queue.length === 0) {
+    return;
+  }
+
+  const remaining = [];
+  let blocked = false;
+  for (const item of queue) {
+    const partId = openCodePartId(item.part);
+    if (blocked || hasOpenCodeTextPartBefore(ctx, messageId, partId)) {
+      remaining.push(item);
+      blocked = true;
+      continue;
+    }
+    emitOpenCodeToolUpdate(ctx, item.part, item.normalizedInput);
+  }
+
+  if (remaining.length > 0) {
+    ctx.queuedToolPartsByMessageId.set(messageId, remaining);
+  } else {
+    ctx.queuedToolPartsByMessageId.delete(messageId);
+  }
 }
 
 function emitOpenCodeSuppressedText(ctx, partId, kind) {
@@ -2970,6 +3082,9 @@ function flushOpenCodeBufferedTextForMessage(ctx, messageId, role) {
 
     const kind = ctx.partTypes.get(partId);
     if (kind) {
+      if (kind === 'text') {
+        markOpenCodeTextPartOpen(ctx, partId, messageId);
+      }
       emitOpenCodeSuppressedText(ctx, partId, kind);
     }
 
@@ -2977,6 +3092,10 @@ function flushOpenCodeBufferedTextForMessage(ctx, messageId, role) {
     if (snapshot) {
       ctx.textPartSnapshotsByPartId.delete(partId);
       emitOpenCodePartTextTail(ctx, snapshot);
+      if (kind === 'text') {
+        closeOpenCodeTextPart(ctx, partId, messageId);
+        flushQueuedOpenCodeToolUpdates(ctx, messageId);
+      }
     }
   }
 }
@@ -3210,6 +3329,7 @@ async function handleOpenCodeEvent(event, ctx) {
       const part = props.part || {};
       const partId = openCodePartId(part);
       if (partId) {
+        rememberOpenCodePartOrder(ctx, partId);
         ctx.partTypes.set(partId, partKind(part));
         rememberOpenCodePartMessage(ctx, partId, openCodeMessageId(part));
       }
@@ -3218,20 +3338,24 @@ async function handleOpenCodeEvent(event, ctx) {
         emitOpenCodeUsageResult(ctx, part);
       } else if (part.type === 'tool' && part.tool) {
         const normalizedInput = normalizeOpenCodeToolInput(part, ctx.cwd);
-        emitOpenCodeToolUse(ctx, part, normalizedInput);
-        emitOpenCodeToolResult(ctx, part, normalizedInput);
-        if (part.state?.status === 'completed' || part.state?.status === 'error') {
-          const fileDiffs = openCodeToolDiffs(part);
-          if (shouldEmitSyntheticDiffForTool(part, normalizedInput)) {
-            emitOpenCodeDiffMessages(ctx, fileDiffs, `tool:${openCodeToolUseId(part) || part.id || part.tool}`);
-          }
+        const messageId = openCodeMessageId(part);
+        if (hasOpenCodeTextPartBefore(ctx, messageId, partId)) {
+          queueOpenCodeToolUpdate(ctx, part, normalizedInput);
+          break;
         }
-
-        const resultStatus = isOpenCodeToolResultError(part) ? 'error' : part.state?.status;
-        const status = resultStatus ? ` (${resultStatus})` : '';
-        emitStatus(`opencode tool: ${part.tool}${status}`);
+        emitOpenCodeToolUpdate(ctx, part, normalizedInput);
       } else {
+        const messageId = openCodeMessageId(part);
+        const kind = partKind(part);
+        if (kind === 'text' && !part?.time?.end) {
+          markOpenCodeTextPartOpen(ctx, partId, messageId);
+        }
         emitOpenCodePartTextTail(ctx, part);
+        const role = openCodePartRole(ctx, partId, messageId);
+        if (kind === 'text' && part?.time?.end && (!messageId || role !== undefined)) {
+          closeOpenCodeTextPart(ctx, partId, messageId);
+          flushQueuedOpenCodeToolUpdates(ctx, messageId);
+        }
       }
       break;
     }
@@ -3249,11 +3373,15 @@ async function handleOpenCodeEvent(event, ctx) {
 
       const partId = openCodePartId(props);
       const messageId = openCodeMessageId(props);
+      rememberOpenCodePartOrder(ctx, partId);
       rememberOpenCodePartMessage(ctx, partId, messageId);
       if (partId && ctx.droppedTextPartIds.has(partId)) {
         return;
       }
 
+      if (partId && props.field === 'text' && !ctx.partTypes.has(partId)) {
+        ctx.partTypes.set(partId, 'text');
+      }
       if (partId && isReasoningField && !ctx.partTypes.has(partId)) {
         ctx.partTypes.set(partId, 'reasoning');
       }
@@ -3276,6 +3404,9 @@ async function handleOpenCodeEvent(event, ctx) {
           dropOpenCodeTextPart(ctx, partId);
           break;
         }
+        if (!isReasoning) {
+          markOpenCodeTextPartOpen(ctx, partId, messageId);
+        }
         if (messageId && role === undefined) {
           const suppressed = ctx.suppressedTextByPartId.get(partId) || '';
           ctx.suppressedTextByPartId.set(partId, suppressed + delta);
@@ -3283,14 +3414,22 @@ async function handleOpenCodeEvent(event, ctx) {
         }
 
         const isNewTextPart = !previous && !isReasoning;
+        let deltaToEmit = delta;
         if (isNewTextPart && ctx.lastTextPartEndedWithoutWhitespace && !delta.startsWith(' ')) {
           ctx.lastTextPartEndedWithoutWhitespace = false;
-          ctx.sawContentDelta = true;
-          ctx.sawAssistantOutput = true;
-          emitContentDelta(' ');
+          deltaToEmit = ' ' + delta;
         }
 
         emitOpenCodeSuppressedText(ctx, partId, partType);
+        if (isReasoning) {
+          emitThinkingDelta(delta);
+        } else {
+          ctx.sawContentDelta = true;
+          ctx.sawAssistantOutput = true;
+          emitContentDelta(deltaToEmit);
+          ctx.lastTextPartEndedWithoutWhitespace = !/\s$/.test(deltaToEmit);
+        }
+        break;
       }
       if (isReasoning) {
         emitThinkingDelta(delta);
