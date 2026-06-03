@@ -322,6 +322,31 @@ export const mergeRawBlocksDuringStreaming = (
 
   if (nextBlocks.length === 0) return nextRaw;
 
+  const nextHasTextLike = nextBlocks.some(isTextLikeBlock);
+  if (!nextHasTextLike) {
+    const prevTextLikeBlocks = prevBlocks.filter(isTextLikeBlock);
+    if (prevTextLikeBlocks.length > 0) {
+      let nextStructuralIdx = 0;
+      const prevStructuralCount = prevBlocks.filter((block) => !isTextLikeBlock(block)).length;
+      const mergedBlocks = prevStructuralCount > 0
+        ? [
+            ...prevBlocks.flatMap((prevBlock) => {
+              if (isTextLikeBlock(prevBlock)) return [prevBlock];
+              if (nextStructuralIdx >= nextBlocks.length) return [];
+              const nextBlock = nextBlocks[nextStructuralIdx];
+              nextStructuralIdx += 1;
+              return [nextBlock];
+            }),
+            ...nextBlocks.slice(nextStructuralIdx),
+          ]
+        : [...prevTextLikeBlocks, ...nextBlocks];
+      if (nextMsg !== undefined) {
+        return { ...nextObj, message: { ...nextMsg, content: mergedBlocks } };
+      }
+      return { ...nextObj, content: mergedBlocks };
+    }
+  }
+
   let prevTextLikeIdx = 0;
   let changed = false;
 

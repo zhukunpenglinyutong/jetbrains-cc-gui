@@ -1,12 +1,41 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
 
 import {
+  listMcpServers,
   normalizeOpenCodeMcpServers,
   normalizeOpenCodeMcpStatusList,
   normalizeOpenCodeMcpToolIds,
   normalizeOpenCodeMcpTools
 } from './message-service.js';
+
+async function withJsonServer(handler, fn) {
+  const server = createServer(handler);
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  try {
+    return await fn(baseUrl);
+  } finally {
+    await new Promise((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+  }
+}
+
+async function captureConsoleJson(fn) {
+  const originalLog = console.log;
+  const lines = [];
+  console.log = (...args) => lines.push(args.join(' '));
+  try {
+    await fn();
+  } finally {
+    console.log = originalLog;
+  }
+  const jsonLine = lines.find((line) => line.startsWith('{'));
+  return JSON.parse(jsonLine);
+}
 
 test('opencode MCP normalization merges config with /mcp status', () => {
   const config = {
@@ -119,4 +148,44 @@ test('opencode MCP tool ID normalization supports ids endpoint fallback', () => 
     { name: 'find_files_by_name_keyword' },
     { name: 'get_file_problems' },
   ]);
+});
+
+test('opencode MCP server listing includes live /mcp status', async () => {
+  const config = {
+    mcp: {
+      intellij: {
+        type: 'local',
+        command: ['java', '-jar', 'mcp.jar'],
+      },
+    },
+  };
+
+  await withJsonServer((request, response) => {
+    if (request.method === 'GET' && request.url?.startsWith('/mcp')) {
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ intellij: { status: 'connected' } }));
+      return;
+    }
+    response.writeHead(404, { 'Content-Type': 'application/json' });
+    response.end('{"error":"not found"}');
+  }, async (baseUrl) => {
+    const runtime = {
+      baseUrl,
+      client: {
+        config: {
+          get: async () => ({ data: config }),
+        },
+      },
+    };
+
+    const payload = await captureConsoleJson(async () => {
+      await listMcpServers('/repo', { runtime });
+    });
+
+    assert.equal(payload.success, true);
+    assert.equal(payload.servers[0].opencode.status.status, 'connected');
+    assert.deepEqual(payload.status.map((entry) => [entry.name, entry.status]), [
+      ['intellij', 'connected'],
+    ]);
+  });
 });

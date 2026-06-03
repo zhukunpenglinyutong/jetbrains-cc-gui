@@ -1131,6 +1131,45 @@ describe('preserveStreamingAssistantContent — raw blocks protection', () => {
     expect(blocks[1].id).toBe('tu-1');
   });
 
+  it('keeps streamed text-like blocks around a structural-only backend snapshot', () => {
+    const prev = [makeAssistantMsg(' After tool.', {
+      __turnId: 4,
+      isStreaming: true,
+      raw: {
+        message: {
+          content: [
+            { type: 'thinking', thinking: 'Need tool.', text: 'Need tool.' },
+            { type: 'text', text: 'Before tool.' },
+            { type: 'tool_use', id: 'call_1', name: 'bash', input: { command: 'npm test' } },
+            { type: 'text', text: ' After tool.' },
+          ],
+        },
+      } as any,
+    })];
+    const next = [makeAssistantMsg('', {
+      __turnId: 4,
+      raw: {
+        message: {
+          content: [
+            { type: 'tool_use', id: 'call_1', name: 'bash', input: { command: 'npm test' } },
+          ],
+        },
+      } as any,
+    })];
+
+    const result = preserveStreamingAssistantContent(
+      prev, next, ref(true), ref(' After tool.'),
+      findLastAssistantIndex, patchAssistantForStreaming,
+    );
+
+    const blocks = (result[0].raw as any)?.message?.content as any[];
+    expect(blocks.map((block) => block.type)).toEqual(['thinking', 'text', 'tool_use', 'text']);
+    expect(blocks[0].thinking).toBe('Need tool.');
+    expect(blocks[1].text).toBe('Before tool.');
+    expect(blocks[2].id).toBe('call_1');
+    expect(blocks[3].text).toBe(' After tool.');
+  });
+
   it('does not regress thinking block raw content when backend has shorter thinking', () => {
     // Same scenario as text, but for thinking blocks
     const longThinking = 'A'.repeat(200);

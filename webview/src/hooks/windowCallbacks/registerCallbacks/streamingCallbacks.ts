@@ -11,7 +11,7 @@ import type { ClaudeMessage, ClaudeRawMessage } from '../../../types';
 import { sendBridgeEvent } from '../../../utils/bridge';
 import { THROTTLE_INTERVAL } from '../../useStreamingMessages';
 import { parseSequence } from '../parseSequence';
-import { getStreamEndHandlingMode } from '../messageSync';
+import { getStreamEndHandlingMode, mergeRawBlocksDuringStreaming } from '../messageSync';
 import { streamDebugLog } from '../../../utils/streamDebugLog';
 
 /**
@@ -529,6 +529,14 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
           }
         }
       }
+      if (idx < 0 || idx >= newMessages.length || newMessages[idx]?.type !== 'assistant') {
+        for (let i = newMessages.length - 1; i >= 0; i -= 1) {
+          if (newMessages[i]?.type === 'assistant') {
+            idx = i;
+            break;
+          }
+        }
+      }
 
       streamDebugLog('[STREAM-DBG] onStreamEnd setMessages: idx=', idx, 'prev count=', prev.length, 'base count=', newMessages.length, 'usedPendingSnapshot=', Boolean(pendingFullMessages), 'prev assistants=', prev.filter(m => m.type === 'assistant').map(m => `turnId=${m.__turnId}:isStreaming=${m.isStreaming}:content=${(m.content || '').slice(0, 30)}`));
       if (newMessages.length > 0 && idx >= 0 && idx < newMessages.length && newMessages[idx]?.type === 'assistant') {
@@ -544,6 +552,10 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
         // The backend snapshot may be from an earlier coalescer flush, so the existing
         // raw (updated by subsequent deltas) could actually be more up-to-date.
         let finalRaw = newMessages[idx].raw;
+        const previousLiveRaw = prev[idx]?.type === 'assistant' ? prev[idx].raw : undefined;
+        if (previousLiveRaw != null && finalRaw != null) {
+          finalRaw = mergeRawBlocksDuringStreaming(previousLiveRaw, finalRaw) as ClaudeRawMessage | string | undefined;
+        }
         if (endedBackendRaw != null) {
           if (getTextLenFromRaw(endedBackendRaw) >= getTextLenFromRaw(finalRaw)) {
             finalRaw = endedBackendRaw;

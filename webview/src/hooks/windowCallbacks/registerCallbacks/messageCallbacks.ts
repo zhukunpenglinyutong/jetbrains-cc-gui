@@ -358,6 +358,9 @@ export function registerMessageCallbacks(
         let patched = [...parsed];
         patched = appendOptimisticMessageIfMissing(prev, patched);
         patched = preserveLastAssistantIdentity(prev, patched, findLastAssistantIndex);
+        // Stamp before preserving streaming content so turn-aware merge guards
+        // do not reject backend snapshots that have not received __turnId yet.
+        patched = stampTurnIdOnAssistantMessages(patched, streamingTurnIdRef.current);
         patched = preserveStreamingAssistantContent(
           prev,
           patched,
@@ -366,9 +369,6 @@ export function registerMessageCallbacks(
           findLastAssistantIndex,
           patchAssistantForStreaming,
         );
-        // Stamp __turnId on all assistant messages in the streaming turn
-        // so mergeConsecutiveAssistantMessages can merge them across tool_use boundaries.
-        patched = stampTurnIdOnAssistantMessages(patched, streamingTurnIdRef.current);
         patched = preserveLatestMessagesOnShrink(prev, patched, options.currentProviderRef.current);
 
         const patchedAssistantIdx = findLastAssistantIndex(patched);

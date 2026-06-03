@@ -268,6 +268,9 @@ async function getPersistentOpenCodeRuntime(cwd) {
 }
 
 async function acquireOpenCodeRuntime(cwd, options = {}) {
+  if (options?.runtime) {
+    return options.runtime;
+  }
   if (shouldUsePersistentRuntime(options)) {
     return getPersistentOpenCodeRuntime(cwd);
   }
@@ -275,7 +278,7 @@ async function acquireOpenCodeRuntime(cwd, options = {}) {
 }
 
 async function releaseOpenCodeRuntime(runtime, options = {}) {
-  if (!runtime || shouldUsePersistentRuntime(options)) {
+  if (!runtime || options?.runtime || shouldUsePersistentRuntime(options)) {
     return;
   }
   await runtime.close().catch(() => {});
@@ -3416,12 +3419,17 @@ export async function listMcpServers(cwd = '', options = {}) {
       runtime.client.config.get({ query }),
       'get opencode config'
     );
+    const timeoutMs = parsePositiveInteger(
+      process.env.OPENCODE_MCP_STATUS_TIMEOUT_MS,
+      DEFAULT_MCP_STATUS_TIMEOUT_MS
+    );
+    const status = await getJsonWithTimeout(runtime.baseUrl, '/mcp', cwd, timeoutMs).catch(() => ({}));
 
     console.log(JSON.stringify({
       success: true,
       cwd,
-      servers: normalizeOpenCodeMcpServers(config, {}),
-      status: normalizeOpenCodeMcpStatusList(config, {})
+      servers: normalizeOpenCodeMcpServers(config, status),
+      status: normalizeOpenCodeMcpStatusList(config, status)
     }));
   } catch (error) {
     console.log(JSON.stringify({

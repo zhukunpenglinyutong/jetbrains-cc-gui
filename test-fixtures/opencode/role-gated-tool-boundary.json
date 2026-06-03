@@ -1,0 +1,194 @@
+{
+  "name": "role-gated-tool-boundary",
+  "cwd": "/repo",
+  "sessionId": "ses_replay",
+  "description": "Drops user text echoes, buffers assistant text until role is known, and keeps post-tool text after a block reset.",
+  "events": [
+    {
+      "type": "message.part.updated",
+      "properties": {
+        "sessionID": "ses_replay",
+        "part": {
+          "id": "prt_user_1",
+          "sessionID": "ses_replay",
+          "messageID": "msg_user_1",
+          "type": "text",
+          "text": "Echoed prompt",
+          "time": { "start": 1, "end": 2 }
+        }
+      }
+    },
+    {
+      "type": "message.updated",
+      "properties": {
+        "sessionID": "ses_replay",
+        "info": { "id": "msg_user_1", "role": "user" }
+      }
+    },
+    {
+      "type": "message.part.updated",
+      "properties": {
+        "sessionID": "ses_replay",
+        "part": {
+          "id": "prt_reasoning_1",
+          "sessionID": "ses_replay",
+          "messageID": "msg_assistant_1",
+          "type": "reasoning",
+          "text": ""
+        }
+      }
+    },
+    {
+      "type": "message.updated",
+      "properties": {
+        "sessionID": "ses_replay",
+        "info": { "id": "msg_assistant_1", "role": "assistant" }
+      }
+    },
+    {
+      "type": "message.part.delta",
+      "properties": {
+        "sessionID": "ses_replay",
+        "messageID": "msg_assistant_1",
+        "partID": "prt_reasoning_1",
+        "field": "text",
+        "delta": "Need tool."
+      }
+    },
+    {
+      "type": "message.part.delta",
+      "properties": {
+        "sessionID": "ses_replay",
+        "messageID": "msg_assistant_1",
+        "partID": "prt_text_1",
+        "field": "text",
+        "delta": "Before tool."
+      }
+    },
+    {
+      "type": "message.part.updated",
+      "properties": {
+        "sessionID": "ses_replay",
+        "part": {
+          "id": "prt_text_1",
+          "sessionID": "ses_replay",
+          "messageID": "msg_assistant_1",
+          "type": "text",
+          "text": "Before tool.",
+          "time": { "start": 3, "end": 4 }
+        }
+      }
+    },
+    {
+      "type": "message.part.updated",
+      "properties": {
+        "sessionID": "ses_replay",
+        "part": {
+          "id": "prt_tool_1",
+          "sessionID": "ses_replay",
+          "messageID": "msg_assistant_1",
+          "type": "tool",
+          "callID": "call_1",
+          "tool": "bash",
+          "state": {
+            "status": "running",
+            "input": { "command": "npm test", "description": "Run tests" },
+            "title": "Run tests",
+            "time": { "start": 5 }
+          }
+        }
+      }
+    },
+    {
+      "type": "message.part.updated",
+      "properties": {
+        "sessionID": "ses_replay",
+        "part": {
+          "id": "prt_tool_1",
+          "sessionID": "ses_replay",
+          "messageID": "msg_assistant_1",
+          "type": "tool",
+          "callID": "call_1",
+          "tool": "bash",
+          "state": {
+            "status": "completed",
+            "input": { "command": "npm test", "description": "Run tests" },
+            "output": "ok",
+            "title": "Run tests",
+            "metadata": {},
+            "time": { "start": 5, "end": 6 }
+          }
+        }
+      }
+    },
+    {
+      "type": "message.part.delta",
+      "properties": {
+        "sessionID": "ses_replay",
+        "messageID": "msg_assistant_1",
+        "partID": "prt_text_2",
+        "field": "text",
+        "delta": "After tool."
+      }
+    },
+    {
+      "type": "message.part.updated",
+      "properties": {
+        "sessionID": "ses_replay",
+        "part": {
+          "id": "prt_text_2",
+          "sessionID": "ses_replay",
+          "messageID": "msg_assistant_1",
+          "type": "text",
+          "text": "After tool.",
+          "time": { "start": 7, "end": 8 }
+        }
+      }
+    }
+  ],
+  "expect": {
+    "contentDeltas": ["Before tool.", " After tool."],
+    "thinkingDeltas": ["Need tool."],
+    "forbiddenContent": ["Echoed prompt"],
+    "toolUseIds": ["call_1"],
+    "toolResultIds": ["call_1"],
+    "blockResetCount": 1,
+    "webviewReplay": [
+      { "type": "STREAM_START" },
+      { "type": "THINKING_DELTA", "payload": "Need tool." },
+      { "type": "CONTENT_DELTA", "payload": "Before tool." },
+      {
+        "type": "MESSAGE",
+        "payload": {
+          "type": "assistant",
+          "message": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "call_1",
+                "name": "bash",
+                "input": { "command": "npm test", "description": "Run tests" }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "MESSAGE",
+        "payload": {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": [
+              { "type": "tool_result", "tool_use_id": "call_1", "is_error": false, "content": "ok" }
+            ]
+          }
+        }
+      },
+      { "type": "BLOCK_RESET" },
+      { "type": "CONTENT_DELTA", "payload": " After tool." },
+      { "type": "STREAM_END" }
+    ]
+  }
+}
