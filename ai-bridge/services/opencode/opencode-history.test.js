@@ -162,3 +162,55 @@ test('builds opencode usage statistics from session usage fields', () => {
   assert.equal(stats.byModel[0].sessionCount, 1);
   assert.equal(stats.dailyUsage[0].sessions, 1);
 });
+
+test('builds opencode usage statistics from message usage inside cutoff', () => {
+  const oldTime = Date.UTC(2026, 4, 1);
+  const recentTime = Date.UTC(2026, 5, 1);
+  const cutoff = Date.UTC(2026, 4, 15);
+  const stats = buildOpenCodeUsageStatistics([
+    {
+      id: 'ses_long_lived',
+      title: 'Long lived',
+      directory: '/repo',
+      time: { created: oldTime, updated: recentTime },
+      model: { providerID: 'openai', id: 'gpt-5.5' },
+      cost: 10,
+      tokens: { input: 400, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
+    }
+  ], '/repo', cutoff, new Map([
+    ['ses_long_lived', [
+      {
+        info: {
+          id: 'msg_old',
+          role: 'assistant',
+          time: { created: oldTime },
+          providerID: 'openai',
+          modelID: 'gpt-5.5',
+          cost: 0,
+          tokens: { input: 100, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
+        },
+        parts: []
+      },
+      {
+        info: {
+          id: 'msg_recent',
+          role: 'assistant',
+          time: { created: recentTime },
+          providerID: 'openai',
+          modelID: 'gpt-5.5',
+          cost: 0,
+          tokens: { input: 300, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
+        },
+        parts: []
+      }
+    ]]
+  ]));
+
+  assert.equal(stats.totalSessions, 1);
+  assert.equal(stats.totalUsage.totalTokens, 300);
+  assert.equal(stats.estimatedCost, 7.5);
+  assert.equal(stats.sessions[0].cost, 7.5);
+  assert.equal(stats.byModel[0].totalCost, 7.5);
+  assert.equal(stats.byModel[0].sessionCount, 1);
+  assert.equal(stats.dailyUsage[0].sessions, 1);
+});

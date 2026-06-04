@@ -1955,6 +1955,10 @@ function mergeOpenCodeUsage(target, source) {
   target.totalTokens += source.totalTokens || 0;
 }
 
+function createOpenCodeUsageData() {
+  return { inputTokens: 0, outputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, totalTokens: 0 };
+}
+
 function normalizeOpenCodeUsageSession(rawSession) {
   const session = asRecord(rawSession);
   const sessionId = pickString(session.id, session.sessionID, session.sessionId);
@@ -1995,20 +1999,25 @@ function buildOpenCodeDailyUsage(sessions) {
       daily.set(date, {
         date,
         sessions: 0,
-        usage: { inputTokens: 0, outputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, totalTokens: 0 },
+        usage: createOpenCodeUsageData(),
         cost: 0,
-        modelsUsed: []
+        modelsUsed: [],
+        sessionIds: new Set()
       });
     }
     const entry = daily.get(date);
-    entry.sessions += 1;
+    entry.sessionIds.add(session.sessionId);
     entry.cost += session.cost;
     mergeOpenCodeUsage(entry.usage, session.usage);
     if (!entry.modelsUsed.includes(session.model)) {
       entry.modelsUsed.push(session.model);
     }
   }
-  return Array.from(daily.values()).sort((left, right) => left.date.localeCompare(right.date));
+  return Array.from(daily.values()).map((entry) => {
+    entry.sessions = entry.sessionIds.size;
+    delete entry.sessionIds;
+    return entry;
+  }).sort((left, right) => left.date.localeCompare(right.date));
 }
 
 function buildOpenCodeModelUsage(sessions) {
@@ -2023,11 +2032,12 @@ function buildOpenCodeModelUsage(sessions) {
         outputTokens: 0,
         cacheCreationTokens: 0,
         cacheReadTokens: 0,
-        sessionCount: 0
+        sessionCount: 0,
+        sessionIds: new Set()
       });
     }
     const entry = models.get(session.model);
-    entry.sessionCount += 1;
+    entry.sessionIds.add(session.sessionId);
     entry.totalCost += session.cost;
     entry.totalTokens += session.usage.totalTokens;
     entry.inputTokens += session.usage.inputTokens;
@@ -2035,7 +2045,11 @@ function buildOpenCodeModelUsage(sessions) {
     entry.cacheCreationTokens += session.usage.cacheWriteTokens;
     entry.cacheReadTokens += session.usage.cacheReadTokens;
   }
-  return Array.from(models.values()).sort((left, right) => right.totalCost - left.totalCost);
+  return Array.from(models.values()).map((entry) => {
+    entry.sessionCount = entry.sessionIds.size;
+    delete entry.sessionIds;
+    return entry;
+  }).sort((left, right) => right.totalCost - left.totalCost);
 }
 
 function buildOpenCodeWeeklyComparison(sessions) {
@@ -2047,32 +2061,173 @@ function buildOpenCodeWeeklyComparison(sessions) {
     lastWeek: { sessions: 0, cost: 0, tokens: 0 },
     trends: { sessions: 0, cost: 0, tokens: 0 }
   };
+  const currentSessionIds = new Set();
+  const lastSessionIds = new Set();
 
   for (const session of sessions) {
     if (session.timestamp >= oneWeekAgo) {
-      weekly.currentWeek.sessions += 1;
+      currentSessionIds.add(session.sessionId);
       weekly.currentWeek.cost += session.cost;
       weekly.currentWeek.tokens += session.usage.totalTokens;
     } else if (session.timestamp >= twoWeeksAgo) {
-      weekly.lastWeek.sessions += 1;
+      lastSessionIds.add(session.sessionId);
       weekly.lastWeek.cost += session.cost;
       weekly.lastWeek.tokens += session.usage.totalTokens;
     }
   }
 
+  weekly.currentWeek.sessions = currentSessionIds.size;
+  weekly.lastWeek.sessions = lastSessionIds.size;
   weekly.trends.sessions = trendPercent(weekly.currentWeek.sessions, weekly.lastWeek.sessions);
   weekly.trends.cost = trendPercent(weekly.currentWeek.cost, weekly.lastWeek.cost);
   weekly.trends.tokens = trendPercent(weekly.currentWeek.tokens, weekly.lastWeek.tokens);
   return weekly;
 }
 
-function buildOpenCodeUsageStatistics(sessionPayload = [], projectPath = 'all', cutoffTime = 0) {
+function openCodeMessageTimestamp(info = {}, parts = [], fallback = 0) {
+  const time = asRecord(info.time);
+  const direct = normalizeOpenCodeTimestamp(time.completed ?? time.end ?? time.updated ?? time.created ?? info.updated ?? info.created);
+  if (direct > 0) {
+    return direct;
+  }
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    const partTime = asRecord(parts[index]?.time);
+    const partTimestamp = normalizeOpenCodeTimestamp(partTime.end ?? partTime.completed ?? partTime.start ?? partTime.created);
+    if (partTimestamp > 0) {
+      return partTimestamp;
+    }
+  }
+  return fallback;
+}
+
+function openCodeMessageModel(info = {}, fallback = 'unknown') {
+  const providerID = pickString(info.providerID, info.providerId);
+  const modelID = pickString(info.modelID, info.modelId, info.model);
+  return providerID && modelID ? `${providerID}/${modelID}` : (modelID || fallback || 'unknown');
+}
+
+function openCodeUsageCostFromMessage(info = {}, parts = []) {
+  const infoCost = nonNegativeNumber(info.cost);
+  if (infoCost > 0) {
+    return infoCost;
+  }
+  return parts.reduce((sum, part) => {
+    const record = asRecord(part);
+    return partKind(record) === 'step-finish' ? sum + nonNegativeNumber(record.cost) : sum;
+  }, 0);
+}
+
+function buildOpenCodeUsageEntriesFromMessages(rawSession, messages = []) {
+  const session = asRecord(rawSession);
+  const sessionId = pickString(session.id, session.sessionID, session.sessionId);
+  if (!sessionId || !Array.isArray(messages) || messages.length === 0) {
+    return [];
+  }
+
+  const time = asRecord(session.time);
+  const fallbackTimestamp = normalizeOpenCodeTimestamp(time.updated ?? session.updated ?? time.created ?? session.created);
+  const fallbackModel = openCodeModelId(session.model);
+  const summary = pickString(session.title, session.slug, sessionId);
+  const entries = [];
+
+  for (const item of messages) {
+    const info = asRecord(item?.info || item?.message || item);
+    const role = pickString(info.role, info.type);
+    if (role && role !== 'assistant') {
+      continue;
+    }
+    const parts = Array.isArray(item?.parts) ? item.parts : (Array.isArray(info.content) ? info.content : []);
+    const tokens = openCodeUsageTokensFromMessage(info, parts);
+    const usage = normalizeOpenCodeUsageData(tokens);
+    const cost = openCodeUsageCostFromMessage(info, parts);
+    if (usage.totalTokens <= 0 && cost <= 0) {
+      continue;
+    }
+    entries.push({
+      sessionId,
+      timestamp: openCodeMessageTimestamp(info, parts, fallbackTimestamp),
+      model: openCodeMessageModel(info, fallbackModel),
+      usage,
+      cost,
+      summary
+    });
+  }
+
+  const sessionCost = nonNegativeNumber(session.cost);
+  const entryCost = entries.reduce((sum, entry) => sum + entry.cost, 0);
+  const entryTokens = entries.reduce((sum, entry) => sum + entry.usage.totalTokens, 0);
+  if (sessionCost > 0 && entryCost <= 0 && entryTokens > 0) {
+    for (const entry of entries) {
+      entry.cost = sessionCost * (entry.usage.totalTokens / entryTokens);
+    }
+  }
+
+  return entries;
+}
+
+function aggregateOpenCodeUsageSession(rawSession, entries) {
+  if (!entries || entries.length === 0) {
+    return normalizeOpenCodeUsageSession(rawSession);
+  }
+  const session = asRecord(rawSession);
+  const sessionId = pickString(session.id, session.sessionID, session.sessionId);
+  const usage = createOpenCodeUsageData();
+  let cost = 0;
+  let timestamp = 0;
+  let model = entries[0]?.model || openCodeModelId(session.model);
+  for (const entry of entries) {
+    mergeOpenCodeUsage(usage, entry.usage);
+    cost += entry.cost;
+    if (entry.timestamp >= timestamp) {
+      timestamp = entry.timestamp;
+      model = entry.model;
+    }
+  }
+  return {
+    sessionId,
+    timestamp,
+    model,
+    usage,
+    cost,
+    summary: pickString(session.title, session.slug, sessionId)
+  };
+}
+
+function buildOpenCodeUsageStatistics(sessionPayload = [], projectPath = 'all', cutoffTime = 0, messagePayloads = new Map()) {
   const stats = emptyOpenCodeUsageStatistics(projectPath);
-  const sessions = (Array.isArray(sessionPayload) ? sessionPayload : [])
-    .map(normalizeOpenCodeUsageSession)
-    .filter(Boolean)
-    .filter((session) => !cutoffTime || session.timestamp >= cutoffTime)
-    .sort((left, right) => right.timestamp - left.timestamp);
+  const sessions = [];
+  const usageEntries = [];
+
+  for (const rawSession of Array.isArray(sessionPayload) ? sessionPayload : []) {
+    const session = asRecord(rawSession);
+    const sessionId = pickString(session.id, session.sessionID, session.sessionId);
+    if (!sessionId || session.parentID || session.parentId) {
+      continue;
+    }
+    const detailedEntries = buildOpenCodeUsageEntriesFromMessages(session, messagePayloads.get(sessionId));
+    const filteredEntries = detailedEntries.filter((entry) => !cutoffTime || entry.timestamp >= cutoffTime);
+    if (filteredEntries.length > 0) {
+      const aggregatedSession = aggregateOpenCodeUsageSession(session, filteredEntries);
+      if (aggregatedSession) {
+        sessions.push(aggregatedSession);
+        usageEntries.push(...filteredEntries);
+      }
+      continue;
+    }
+
+    if (detailedEntries.length > 0) {
+      continue;
+    }
+
+    const fallbackSession = normalizeOpenCodeUsageSession(session);
+    if (fallbackSession && (!cutoffTime || fallbackSession.timestamp >= cutoffTime)) {
+      sessions.push(fallbackSession);
+      usageEntries.push(fallbackSession);
+    }
+  }
+
+  sessions.sort((left, right) => right.timestamp - left.timestamp);
+  usageEntries.sort((left, right) => right.timestamp - left.timestamp);
 
   stats.totalSessions = sessions.length;
   stats.sessions = sessions;
@@ -2080,9 +2235,9 @@ function buildOpenCodeUsageStatistics(sessionPayload = [], projectPath = 'all', 
     mergeOpenCodeUsage(stats.totalUsage, session.usage);
     stats.estimatedCost += session.cost;
   }
-  stats.dailyUsage = buildOpenCodeDailyUsage(sessions);
-  stats.byModel = buildOpenCodeModelUsage(sessions);
-  stats.weeklyComparison = buildOpenCodeWeeklyComparison(sessions);
+  stats.dailyUsage = buildOpenCodeDailyUsage(usageEntries);
+  stats.byModel = buildOpenCodeModelUsage(usageEntries);
+  stats.weeklyComparison = buildOpenCodeWeeklyComparison(usageEntries);
   return stats;
 }
 
@@ -2415,6 +2570,39 @@ async function countOpenCodeHistoryMessages(client, cwd, sessions) {
   ]);
 
   return new Map(counts);
+}
+
+async function loadOpenCodeUsageMessages(client, defaultCwd, sessions) {
+  if (!client || typeof client.session?.messages !== 'function' || !Array.isArray(sessions) || sessions.length === 0) {
+    return new Map();
+  }
+  const rootSessions = sessions.filter((session) => {
+    const candidate = asRecord(session);
+    return pickString(candidate.id, candidate.sessionID, candidate.sessionId) && !candidate.parentID && !candidate.parentId;
+  });
+  const concurrency = parsePositiveInteger(
+    process.env.OPENCODE_USAGE_MESSAGE_CONCURRENCY,
+    DEFAULT_HISTORY_COUNT_CONCURRENCY
+  );
+  const pairs = await mapWithConcurrency(rootSessions, concurrency, async (session) => {
+    const candidate = asRecord(session);
+    const sessionId = pickString(candidate.id, candidate.sessionID, candidate.sessionId);
+    const cwd = pickString(candidate.directory, candidate.cwd, defaultCwd);
+    try {
+      const messages = await unwrapSdkResult(
+        client.session.messages({
+          path: { id: sessionId },
+          query: directoryQuery(cwd)
+        }),
+        'load opencode usage messages'
+      );
+      return [sessionId, Array.isArray(messages) ? messages : []];
+    } catch {
+      return [sessionId, null];
+    }
+  });
+
+  return new Map(pairs.filter(([, messages]) => Array.isArray(messages)));
 }
 
 function sanitizeAttachmentName(name, index) {
@@ -4022,10 +4210,16 @@ export async function usageStatistics(cwd = 'all', scope = 'current', cutoffTime
       }),
       'list opencode usage sessions'
     );
+    const messages = await loadOpenCodeUsageMessages(
+      runtime.client,
+      projectPath === 'all' ? '' : projectPath,
+      sessions
+    );
     console.log(JSON.stringify(buildOpenCodeUsageStatistics(
       sessions,
       projectPath,
-      nonNegativeNumber(cutoffTime)
+      nonNegativeNumber(cutoffTime),
+      messages
     )));
   } catch (error) {
     await discardPersistentOpenCodeRuntimeOnError(runtime, error);

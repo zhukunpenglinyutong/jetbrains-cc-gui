@@ -89,7 +89,10 @@ export function useUsageStatistics(currentProvider?: string) {
     return num.toString();
   };
 
-  const formatCost = (cost: number): string => `$${cost.toFixed(4)}`;
+  const formatCost = (cost: number): string => {
+    if (!Number.isFinite(cost) || cost <= 0) return '$0.00';
+    return cost >= 1 ? `$${cost.toFixed(2)}` : `$${cost.toFixed(4)}`;
+  };
 
   const formatDate = (timestamp: number): string => {
     const date = new Date(timestamp);
