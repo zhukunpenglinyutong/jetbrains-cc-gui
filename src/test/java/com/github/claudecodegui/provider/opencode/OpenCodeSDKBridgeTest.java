@@ -19,6 +19,51 @@ public class OpenCodeSDKBridgeTest {
     }
 
     @Test
+    public void daemonProcessDiedAfterStreamEndIsIgnorable() {
+        RuntimeException error = new RuntimeException("Daemon process died unexpectedly");
+
+        assertTrue(OpenCodeSDKBridge.isIgnorableDaemonStopAfterStreamEnd(error, true));
+    }
+
+    @Test
+    public void daemonStoppedSendErrorAfterStreamEndIsIgnorable() {
+        String line = "[SEND_ERROR] {\"error\":\"java.lang.RuntimeException: Daemon stopped\"}";
+
+        assertTrue(OpenCodeSDKBridge.isIgnorableDaemonStopLineAfterStreamEnd(line, true));
+    }
+
+    @Test
+    public void daemonStoppedSendErrorBeforeStreamEndIsNotIgnorable() {
+        String line = "[SEND_ERROR] {\"error\":\"java.lang.RuntimeException: Daemon stopped\"}";
+
+        assertFalse(OpenCodeSDKBridge.isIgnorableDaemonStopLineAfterStreamEnd(line, false));
+    }
+
+    @Test
+    public void providerSendErrorAfterStreamEndRemainsVisible() {
+        String line = "[SEND_ERROR] {\"error\":\"Input exceeds context window of this model\"}";
+
+        assertFalse(OpenCodeSDKBridge.isIgnorableDaemonStopLineAfterStreamEnd(line, true));
+    }
+
+    @Test
+    public void falseDaemonCompletionAfterStreamEndWithoutProviderErrorIsComplete() {
+        assertTrue(OpenCodeSDKBridge.shouldTreatDaemonFailureAsCompleteAfterStreamEnd(true, null));
+    }
+
+    @Test
+    public void falseDaemonCompletionAfterStreamEndWithDaemonErrorIsComplete() {
+        assertTrue(OpenCodeSDKBridge.shouldTreatDaemonFailureAsCompleteAfterStreamEnd(true, "Daemon stopped"));
+    }
+
+    @Test
+    public void falseDaemonCompletionAfterStreamEndWithProviderErrorRemainsFailed() {
+        assertFalse(OpenCodeSDKBridge.shouldTreatDaemonFailureAsCompleteAfterStreamEnd(
+                true,
+                "Input exceeds context window of this model"));
+    }
+
+    @Test
     public void daemonStoppedBeforeStreamEndIsNotIgnorable() {
         RuntimeException error = new RuntimeException("Daemon stopped");
 

@@ -60,7 +60,21 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
     }
 
     static boolean isDaemonStoppedError(String error) {
-        return error != null && error.contains("Daemon stopped");
+        if (error == null) {
+            return false;
+        }
+        String normalized = error.toLowerCase();
+        return normalized.contains("daemon stopped")
+                || normalized.contains("daemon process died")
+                || normalized.contains("daemon process is not alive");
+    }
+
+    static boolean isIgnorableDaemonStopLineAfterStreamEnd(String line, boolean sawStreamEnd) {
+        return sawStreamEnd && line != null && line.startsWith("[SEND_ERROR]") && isDaemonStoppedError(line);
+    }
+
+    static boolean shouldTreatDaemonFailureAsCompleteAfterStreamEnd(boolean sawStreamEnd, String error) {
+        return sawStreamEnd && (error == null || isDaemonStoppedError(error));
     }
 
     public OpenCodeSDKBridge() {
@@ -212,6 +226,10 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
                                 if (line.startsWith("[STREAM_END]")) {
                                     sawStreamEnd.set(true);
                                 }
+                                if (isIgnorableDaemonStopLineAfterStreamEnd(line, sawStreamEnd.get())) {
+                                    LOG.warn("[OpenCodeSDKBridge] Ignoring daemon lifecycle send error after opencode stream_end: " + line);
+                                    return;
+                                }
                                 if (line.startsWith("[UNCAUGHT_ERROR]")
                                         || line.startsWith("[UNHANDLED_REJECTION]")
                                         || line.startsWith("[COMMAND_ERROR]")
@@ -225,6 +243,10 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
 
                             @Override
                             public void onStderr(String text) {
+                                if (isIgnorableDaemonStopLineAfterStreamEnd(text, sawStreamEnd.get())) {
+                                    LOG.warn("[OpenCodeSDKBridge] Ignoring daemon lifecycle stderr after opencode stream_end: " + text);
+                                    return;
+                                }
                                 if (text != null && text.startsWith("[SEND_ERROR]")) {
                                     processOutputLine(text, callback, result, assistantContent, hadSendError, lastNodeError);
                                     return;
@@ -234,6 +256,10 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
 
                             @Override
                             public void onError(String error) {
+                                if (isIgnorableDaemonStopAfterStreamEnd(new RuntimeException(error), sawStreamEnd.get())) {
+                                    LOG.warn("[OpenCodeSDKBridge] Ignoring daemon lifecycle callback after opencode stream_end: " + error);
+                                    return;
+                                }
                                 if (!hadSendError.get()) {
                                     result.success = false;
                                     result.error = error;
@@ -271,6 +297,11 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
                 if (!hadSendError.get()) {
                     result.success = success != null && success;
                     if (result.success) {
+                        callback.onComplete(result);
+                    } else if (shouldTreatDaemonFailureAsCompleteAfterStreamEnd(sawStreamEnd.get(), result.error)) {
+                        LOG.warn("[OpenCodeSDKBridge] Treating daemon lifecycle failure after opencode stream_end as completed: " + result.error);
+                        result.success = true;
+                        result.error = null;
                         callback.onComplete(result);
                     } else if (wasAborted.get()) {
                         result.error = "User interrupted";
