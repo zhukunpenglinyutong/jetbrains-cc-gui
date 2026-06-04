@@ -784,6 +784,9 @@ function emitOpenCodeToolUse(ctx, part, normalizedInput = undefined) {
     ctx.emittedToolUseIds.add(toolUseId);
     ctx.toolUseSignatures.set(toolUseId, signature);
   }
+  if (part?.state?.status !== 'completed' && part?.state?.status !== 'error') {
+    markOpenCodeToolPending(ctx, part);
+  }
   return toolUseId;
 }
 
@@ -803,7 +806,11 @@ function emitOpenCodeToolResult(ctx, part, normalizedInput = undefined) {
     openCodeToolResultContent(part),
     openCodeToolResultMetadata(part, normalizedInput)
   ));
+  const messageId = markOpenCodeToolResolved(ctx, part);
   process.stdout.write('[BLOCK_RESET]\n');
+  if (!hasPendingOpenCodeTool(ctx, messageId)) {
+    flushOpenCodeBufferedTextForMessage(ctx, messageId, 'assistant');
+  }
   if (isError) {
     const exitCode = openCodeToolExitCode(part);
     const suffix = typeof exitCode === 'number' ? ` (exit ${exitCode})` : '';
@@ -2815,6 +2822,7 @@ function createEventContext(runtime, cwd, permissionMode, sessionRef) {
     textPartSnapshotsByPartId: new Map(),
     openTextPartIdsByMessageId: new Map(),
     queuedToolPartsByMessageId: new Map(),
+    pendingToolUseIdsByMessageId: new Map(),
     droppedTextPartIds: new Set(),
     emittedToolUseIds: new Set(),
     emittedToolResultIds: new Set(),
@@ -3037,6 +3045,54 @@ function flushQueuedOpenCodeToolUpdates(ctx, messageId) {
   }
 }
 
+function pendingOpenCodeToolIds(ctx, messageId) {
+  if (!messageId) {
+    return undefined;
+  }
+  return ctx.pendingToolUseIdsByMessageId.get(messageId);
+}
+
+function hasPendingOpenCodeTool(ctx, messageId) {
+  const set = pendingOpenCodeToolIds(ctx, messageId);
+  return Boolean(set && set.size > 0);
+}
+
+function markOpenCodeToolPending(ctx, part) {
+  const messageId = openCodeMessageId(part);
+  const toolUseId = openCodeToolUseId(part);
+  if (!messageId || !toolUseId) {
+    return;
+  }
+  const set = ctx.pendingToolUseIdsByMessageId.get(messageId) || new Set();
+  set.add(toolUseId);
+  ctx.pendingToolUseIdsByMessageId.set(messageId, set);
+}
+
+function markOpenCodeToolResolved(ctx, part) {
+  const messageId = openCodeMessageId(part);
+  const toolUseId = openCodeToolUseId(part);
+  if (!messageId || !toolUseId) {
+    return messageId;
+  }
+  const set = ctx.pendingToolUseIdsByMessageId.get(messageId);
+  if (!set) {
+    return messageId;
+  }
+  set.delete(toolUseId);
+  if (set.size === 0) {
+    ctx.pendingToolUseIdsByMessageId.delete(messageId);
+  }
+  return messageId;
+}
+
+function suppressOpenCodeTextDelta(ctx, partId, delta) {
+  if (!partId || !delta) {
+    return;
+  }
+  const suppressed = ctx.suppressedTextByPartId.get(partId) || '';
+  ctx.suppressedTextByPartId.set(partId, suppressed + delta);
+}
+
 function emitOpenCodeSuppressedText(ctx, partId, kind) {
   const suppressed = ctx.suppressedTextByPartId.get(partId);
   if (!suppressed) {
@@ -3077,6 +3133,9 @@ function flushOpenCodeBufferedTextForMessage(ctx, messageId, role) {
     }
 
     if (role !== 'assistant') {
+      continue;
+    }
+    if (hasPendingOpenCodeTool(ctx, messageId)) {
       continue;
     }
 
@@ -3133,10 +3192,6 @@ function emitOpenCodePartTextTail(ctx, part) {
     return false;
   }
 
-  if (partId) {
-    emitOpenCodeSuppressedText(ctx, partId, kind);
-  }
-
   const previous = partId ? ctx.streamedTextByPartId.get(partId) || '' : '';
   let delta = '';
   if (!previous) {
@@ -3153,6 +3208,17 @@ function emitOpenCodePartTextTail(ctx, part) {
       ctx.lastTextPartEndedWithoutWhitespace = !/\s$/.test(text);
     }
     return false;
+  }
+
+  if (partId && hasPendingOpenCodeTool(ctx, messageId)) {
+    suppressOpenCodeTextDelta(ctx, partId, delta);
+    ctx.streamedTextByPartId.set(partId, text);
+    ctx.textPartSnapshotsByPartId.set(partId, part);
+    return false;
+  }
+
+  if (partId) {
+    emitOpenCodeSuppressedText(ctx, partId, kind);
   }
 
   if (isReasoningPart(kind)) {
@@ -3408,8 +3474,12 @@ async function handleOpenCodeEvent(event, ctx) {
           markOpenCodeTextPartOpen(ctx, partId, messageId);
         }
         if (messageId && role === undefined) {
-          const suppressed = ctx.suppressedTextByPartId.get(partId) || '';
-          ctx.suppressedTextByPartId.set(partId, suppressed + delta);
+          suppressOpenCodeTextDelta(ctx, partId, delta);
+          break;
+        }
+
+        if (hasPendingOpenCodeTool(ctx, messageId)) {
+          suppressOpenCodeTextDelta(ctx, partId, delta);
           break;
         }
 

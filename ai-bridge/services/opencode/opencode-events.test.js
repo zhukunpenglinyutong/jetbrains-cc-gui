@@ -279,6 +279,125 @@ test('opencode delays tool updates until preceding text part closes', async () =
   assert.ok(toolResultIndex > tailIndex);
 });
 
+test('opencode buffers post-tool text until pending tool result emits', async () => {
+  const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
+  const lines = await captureConsole(async () => {
+    await handleOpenCodeEvent(messageUpdated('msg_assistant_1'), ctx);
+
+    await handleOpenCodeEvent({
+      type: 'message.part.updated',
+      properties: { part: toolPart() }
+    }, ctx);
+
+    await handleOpenCodeEvent({
+      type: 'message.part.delta',
+      properties: {
+        sessionID: 'ses_test',
+        messageID: 'msg_assistant_1',
+        partID: 'prt_text_after_tool',
+        field: 'text',
+        delta: 'Ver'
+      }
+    }, ctx);
+
+    await handleOpenCodeEvent({
+      type: 'message.part.updated',
+      properties: {
+        part: toolPart({
+          state: {
+            status: 'completed',
+            input: { command: 'npm test', description: 'Run tests' },
+            output: 'ok',
+            title: 'Run tests',
+            metadata: {},
+            time: { start: 1, end: 2 }
+          }
+        })
+      }
+    }, ctx);
+
+    await handleOpenCodeEvent({
+      type: 'message.part.delta',
+      properties: {
+        sessionID: 'ses_test',
+        messageID: 'msg_assistant_1',
+        partID: 'prt_text_after_tool',
+        field: 'text',
+        delta: 'ifying...'
+      }
+    }, ctx);
+  });
+
+  assert.deepEqual(contentDeltas(lines), ['Ver', 'ifying...']);
+
+  const firstContentIndex = lines.findIndex((line) => line.startsWith('[CONTENT_DELTA] '));
+  const toolResultIndex = lines.findIndex((line) => line.startsWith('[MESSAGE] ')
+    && JSON.parse(line.slice('[MESSAGE] '.length)).type === 'user');
+  assert.ok(toolResultIndex >= 0);
+  assert.ok(firstContentIndex > toolResultIndex);
+});
+
+test('opencode buffers completed post-tool text tail until pending tool result emits', async () => {
+  const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
+  const lines = await captureConsole(async () => {
+    await handleOpenCodeEvent(messageUpdated('msg_assistant_1'), ctx);
+
+    await handleOpenCodeEvent({
+      type: 'message.part.updated',
+      properties: { part: toolPart() }
+    }, ctx);
+
+    await handleOpenCodeEvent({
+      type: 'message.part.delta',
+      properties: {
+        sessionID: 'ses_test',
+        messageID: 'msg_assistant_1',
+        partID: 'prt_text_after_tool',
+        field: 'text',
+        delta: 'Ver'
+      }
+    }, ctx);
+
+    await handleOpenCodeEvent({
+      type: 'message.part.updated',
+      properties: {
+        part: {
+          id: 'prt_text_after_tool',
+          sessionID: 'ses_test',
+          messageID: 'msg_assistant_1',
+          type: 'text',
+          text: 'Verifying...',
+          time: { start: 3, end: 4 }
+        }
+      }
+    }, ctx);
+
+    await handleOpenCodeEvent({
+      type: 'message.part.updated',
+      properties: {
+        part: toolPart({
+          state: {
+            status: 'completed',
+            input: { command: 'npm test', description: 'Run tests' },
+            output: 'ok',
+            title: 'Run tests',
+            metadata: {},
+            time: { start: 1, end: 2 }
+          }
+        })
+      }
+    }, ctx);
+  });
+
+  assert.deepEqual(contentDeltas(lines), ['Verifying...']);
+
+  const firstContentIndex = lines.findIndex((line) => line.startsWith('[CONTENT_DELTA] '));
+  const toolResultIndex = lines.findIndex((line) => line.startsWith('[MESSAGE] ')
+    && JSON.parse(line.slice('[MESSAGE] '.length)).type === 'user');
+  assert.ok(toolResultIndex >= 0);
+  assert.ok(firstContentIndex > toolResultIndex);
+});
+
 test('opencode inserts space between text parts at part boundaries', async () => {
   const ctx = createEventContext(null, '/repo', 'default', { id: 'ses_test' });
   const lines = await captureConsole(async () => {
