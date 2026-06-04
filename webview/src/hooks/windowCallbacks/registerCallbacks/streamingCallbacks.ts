@@ -459,31 +459,41 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     // show incomplete content (e.g., last delta missing) or duplicated content in raw blocks.
     let backendSnapshotContent: string | undefined;
     let backendSnapshotRaw: ClaudeRawMessage | string | undefined = undefined;
+
+    // Helper to extract assistant raw from an updateMessages JSON payload.
+    const extractAssistantRaw = (json: string): { content?: string; raw?: ClaudeRawMessage | string } => {
+      try {
+        const parsed = JSON.parse(json) as Array<Record<string, unknown>>;
+        for (let i = parsed.length - 1; i >= 0; i--) {
+          if (parsed[i]?.type === 'assistant') {
+            const rawContent = parsed[i].content;
+            const content = typeof rawContent === 'string' ? rawContent : '';
+            const rawVal = parsed[i].raw;
+            const raw = (rawVal != null && (typeof rawVal === 'object' || typeof rawVal === 'string'))
+              ? rawVal as ClaudeRawMessage | string : undefined;
+            return { content: content || undefined, raw };
+          }
+        }
+      } catch { /* ignore parse errors */ }
+      return {};
+    };
+
+    // Primary: try scoped pending update
     if (scopeKey) {
       const pending = consumeScopedPendingUpdate(scopeKey);
       if (typeof pending.json === 'string' && pending.json.length > 0) {
-        try {
-          const parsed = JSON.parse(pending.json) as Array<Record<string, unknown>>;
-          for (let i = parsed.length - 1; i >= 0; i--) {
-            if (parsed[i]?.type === 'assistant') {
-              const rawContent = parsed[i].content;
-              const content = typeof rawContent === 'string' ? rawContent : '';
-              if (content) {
-                backendSnapshotContent = content;
-                const rawVal = parsed[i].raw;
-                if (rawVal != null && (typeof rawVal === 'object' || typeof rawVal === 'string')) {
-                  backendSnapshotRaw = rawVal as ClaudeRawMessage | string;
-                }
-              }
-              break;
-            }
-          }
-        } catch (error) {
-          // pending update JSON is produced internally by the bridge; a parse failure
-          // indicates an upstream contract violation worth surfacing for diagnosis.
-          console.warn('[Frontend] Failed to parse pending update on stream end:', error);
-        }
+        const extracted = extractAssistantRaw(pending.json);
+        backendSnapshotContent = extracted.content;
+        backendSnapshotRaw = extracted.raw;
       }
+    }
+
+    // Fallback: try window.__pendingUpdateJson (set by messageCallbacks during streaming).
+    // This covers text-only CLI turns where the scoped state may not have been populated.
+    if (!backendSnapshotRaw && typeof window.__pendingUpdateJson === 'string' && window.__pendingUpdateJson.length > 0) {
+      const extracted = extractAssistantRaw(window.__pendingUpdateJson);
+      if (!backendSnapshotContent) backendSnapshotContent = extracted.content;
+      if (!backendSnapshotRaw) backendSnapshotRaw = extracted.raw;
     }
 
     if (typeof window.__cancelPendingUpdateMessages === 'function') {

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { QueueDisplayState } from '../contexts/MessagesContext';
+import { ClockIcon, LoadingIcon } from './Icons';
 
 interface WaitingIndicatorProps {
   /** Loading start timestamp (ms), used to maintain continuous timing across view switches */
@@ -36,7 +37,6 @@ export const WaitingIndicator = ({
   const prevIsQueuedRef = useRef(isQueued);
 
   // ── Existing state (unchanged) ──
-  const [dotCount, setDotCount] = useState(1);
   const [elapsedSeconds, setElapsedSeconds] = useState(() => {
     // If a start time is provided, calculate the elapsed seconds
     if (startTime) {
@@ -86,14 +86,6 @@ export const WaitingIndicator = ({
     }
   }, [loading, isQueued, onExitComplete, phase]);
 
-  // ── Ellipsis animation ──
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setDotCount(prev => (prev % 3) + 1);
-    }, 500);
-    return () => clearInterval(timer);
-  }, []);
-
   // ── Timer: track elapsed seconds for the current thinking round ──
   useEffect(() => {
     const timer = setInterval(() => {
@@ -110,17 +102,14 @@ export const WaitingIndicator = ({
     };
   }, [startTime]);
 
-  // ── Formatting helpers (unchanged) ──
-  const dots = '.'.repeat(dotCount);
-
-  // Format elapsed time: show "X seconds" under 60s, "X min Y sec" above 60s
+  // ── Formatting helpers ──
   const formatElapsedTime = (seconds: number): string => {
     if (seconds < 60) {
-      return `${seconds} ${t('common.seconds')}`;
+      return `${seconds}s`;
     }
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
-    return `${t('chat.minutesAndSeconds', { minutes, seconds: remainingSeconds })}`;
+    return `${minutes}m ${remainingSeconds}s`;
   };
 
   // ── CSS class resolution ──
@@ -139,16 +128,31 @@ export const WaitingIndicator = ({
   return (
     <div className={containerClass}>
       {displayedMode === 'queued' ? (
-        <span className={`queue-pill ${contentClass}`}>
-          {t('chat.queueWaiting', { count: queueAheadCount })}
-          <span className="queue-pill-dot" />
-        </span>
+        <div className={`waiting-chip ${contentClass}`}>
+          <div className="chip-icon">
+            <ClockIcon size={16} />
+          </div>
+          <span className="chip-text">
+            {t('chat.queueWaiting', { count: queueAheadCount })}
+          </span>
+          {queueAheadCount > 0 && (
+            <span className="chip-time">
+              {t('chat.estimatedWait', '预计')} {queueAheadCount * 5}s
+            </span>
+          )}
+        </div>
       ) : (
-        <span className={`queue-pill queue-pill-generating ${contentClass}`}>
-          {t('chat.generatingResponse')}<span className="waiting-dots">{dots}</span>
-          <span className="waiting-seconds">（{t('chat.elapsedTime', { time: formatElapsedTime(elapsedSeconds) })}）</span>
-          <span className="queue-pill-dot" />
-        </span>
+        <div className={`waiting-chip generating ${contentClass}`}>
+          <div className="chip-icon">
+            <LoadingIcon size={16} spinning={true} />
+          </div>
+          <span className="chip-text">
+            {t('chat.generatingResponse', 'Claude 正在思考')}
+          </span>
+          <span className="chip-time">
+            {formatElapsedTime(elapsedSeconds)}
+          </span>
+        </div>
       )}
     </div>
   );
