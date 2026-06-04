@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { useWindowCallbacks } from './useWindowCallbacks.js';
 import type { UseWindowCallbacksOptions } from './useWindowCallbacks.js';
-import type { ClaudeMessage } from '../types/index.js';
+import type { ClaudeMessage } from '../types';
 import { forceWebviewRepaint } from '../utils/forceWebviewRepaint.js';
 
 // Mock the repaint util so we can assert the session-transition path triggers it
@@ -106,6 +106,10 @@ describe('useWindowCallbacks integration', () => {
     window.__sessionTransitionToken = null;
     window.__pendingSessionTransitionToast = undefined;
     window.__deniedToolIds = new Set();
+    window.__streamEndProcessedTurnId = undefined;
+    window.__lastStreamEndedTurnId = undefined;
+    window.__lastStreamEndedAt = undefined;
+    window.__minAcceptedUpdateSequence = undefined;
     window.sendToJava = vi.fn();
     // The drain test inspects this slot; if a prior test (or earlier suite run)
     // leaked a value onto window we'd see a false-positive drain. Wipe it here
@@ -1217,6 +1221,67 @@ describe('useWindowCallbacks integration', () => {
       expect(finalBlocks.map((block) => block.type)).toEqual(['text', 'tool_use']);
       expect(finalBlocks[0]).toMatchObject({ type: 'text', text: 'Before tool.' });
       expect(finalBlocks[1]).toMatchObject({ type: 'tool_use', id: 'search-1' });
+    });
+
+    it('accepts post-stream stale-sequence snapshots when they add final text', () => {
+      stubSynchronousTimers();
+      window.__minAcceptedUpdateSequence = 0;
+
+      const user: ClaudeMessage = {
+        type: 'user',
+        content: 'fix it',
+        timestamp: '2026-01-01T00:00:00Z',
+      };
+      const liveAssistant: ClaudeMessage = {
+        type: 'assistant',
+        content: '',
+        timestamp: '2026-01-01T00:00:01Z',
+        __turnId: 7,
+        isStreaming: true,
+        raw: {
+          message: {
+            content: [
+              { type: 'tool_use', id: 'cmd-1', name: 'bash', input: { command: 'git status' } },
+            ],
+          },
+        } as never,
+      };
+
+      const { opts, buffer } = createOptsWithMessages([user, liveAssistant]);
+      opts.currentProviderRef.current = 'opencode';
+      opts.isStreamingRef.current = true;
+      opts.streamingTurnIdRef.current = 7;
+      opts.streamingMessageIndexRef.current = 1;
+
+      renderHook(() => useWindowCallbacks(opts));
+
+      act(() => { window.onStreamEnd!('10'); });
+      expect(buffer.current[1]).toMatchObject({ type: 'assistant', content: '' });
+
+      const finalSnapshot: ClaudeMessage[] = [
+        user,
+        {
+          ...liveAssistant,
+          content: 'Fixed the issue.',
+          isStreaming: false,
+          raw: {
+            message: {
+              content: [
+                { type: 'tool_use', id: 'cmd-1', name: 'bash', input: { command: 'git status' } },
+                { type: 'text', text: 'Fixed the issue.' },
+              ],
+            },
+          } as never,
+        },
+      ];
+
+      act(() => { window.updateMessages!(JSON.stringify(finalSnapshot), '9'); });
+
+      expect(buffer.current[1]).toMatchObject({
+        type: 'assistant',
+        content: 'Fixed the issue.',
+        isStreaming: false,
+      });
     });
 
     it('onPermissionDenied still marks unresolved tool_use (regression guard)', () => {

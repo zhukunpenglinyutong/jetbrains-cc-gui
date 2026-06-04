@@ -29,6 +29,7 @@ import { collectUnresolvedToolUseIds } from './streamingCallbacks';
 import { getStructuralBlockSignature } from '../../../utils/toolBlockSignature';
 
 const isTruthy = (v: unknown) => v === true || v === 'true';
+const STALE_SEQUENCE_RECOVERY_WINDOW_MS = 5_000;
 
 function summarizeMessagesForDebug(messages: ClaudeMessage[]): string[] {
   const summary = messages.map((message, index) => {
@@ -48,6 +49,68 @@ function summarizeMessagesForDebug(messages: ClaudeMessage[]): string[] {
     `...${summary.length - 12} omitted...`,
     ...summary.slice(-6),
   ];
+}
+
+function getRawTextLength(raw: ClaudeMessage['raw']): number {
+  if (!raw) return 0;
+  let rawObj: Record<string, unknown>;
+  if (typeof raw === 'string') {
+    try {
+      rawObj = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      return 0;
+    }
+  } else if (typeof raw === 'object') {
+    rawObj = raw as Record<string, unknown>;
+  } else {
+    return 0;
+  }
+  const message = rawObj.message as Record<string, unknown> | undefined;
+  const content = rawObj.content ?? message?.content;
+  if (!Array.isArray(content)) return 0;
+  return content.reduce((sum, block) => {
+    if (!block || typeof block !== 'object') return sum;
+    const blockObj = block as Record<string, unknown>;
+    return blockObj.type === 'text' && typeof blockObj.text === 'string'
+      ? sum + blockObj.text.length
+      : sum;
+  }, 0);
+}
+
+function getAssistantTextLength(message: ClaudeMessage | undefined): number {
+  if (!message || message.type !== 'assistant') return 0;
+  return Math.max(message.content?.length ?? 0, getRawTextLength(message.raw));
+}
+
+function getLatestUserContent(messages: ClaudeMessage[]): string | null {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i];
+    if (message.type === 'user') return message.content ?? '';
+  }
+  return null;
+}
+
+function hasMoreCompleteLatestAssistant(
+  currentMessages: ClaudeMessage[],
+  nextMessages: ClaudeMessage[],
+  findLastAssistantIndex: (list: ClaudeMessage[]) => number,
+): boolean {
+  const currentIdx = findLastAssistantIndex(currentMessages);
+  const nextIdx = findLastAssistantIndex(nextMessages);
+  if (currentIdx < 0 || nextIdx < 0) return false;
+  const currentLatestUser = getLatestUserContent(currentMessages);
+  const nextLatestUser = getLatestUserContent(nextMessages);
+  if (currentLatestUser == null || nextLatestUser == null || currentLatestUser !== nextLatestUser) {
+    return false;
+  }
+  return getAssistantTextLength(nextMessages[nextIdx]) > getAssistantTextLength(currentMessages[currentIdx]);
+}
+
+function isRecentOpenCodeStreamEndRecoveryCandidate(provider: string): boolean {
+  if (provider !== 'opencode') return false;
+  const lastStreamEndedAt = window.__lastStreamEndedAt;
+  return typeof lastStreamEndedAt === 'number'
+    && Date.now() - lastStreamEndedAt <= STALE_SEQUENCE_RECOVERY_WINDOW_MS;
 }
 
 /**
@@ -218,13 +281,11 @@ export function registerMessageCallbacks(
 
   const processUpdateMessages = (json: string, sequence: number | null = null) => {
     const minAcceptedSequence = window.__minAcceptedUpdateSequence ?? 0;
-    if (sequence != null && sequence < minAcceptedSequence) {
-      return;
-    }
+    const hasStaleSequence = sequence != null && sequence < minAcceptedSequence;
 
     try {
       const parsed = JSON.parse(json) as ClaudeMessage[];
-      if (sequence != null) {
+      if (sequence != null && !hasStaleSequence) {
         window.__minAcceptedUpdateSequence = Math.max(minAcceptedSequence, sequence);
       }
 
@@ -232,6 +293,13 @@ export function registerMessageCallbacks(
       streamDebugLog('[STREAM-DBG] processUpdateMessages: isStreaming=', isStreamingRef.current, 'backendRender=', useBackendStreamingRenderRef.current, 'turnId=', streamingTurnIdRef.current, 'parsed:', parsed.length, 'msgs', parsedSummary);
 
       setMessages((prev) => {
+        if (hasStaleSequence) {
+          if (isStreamingRef.current || !hasMoreCompleteLatestAssistant(prev, parsed, findLastAssistantIndex)) {
+            return prev;
+          }
+          streamDebugLog('[STREAM-DBG] accepting stale updateMessages with more complete assistant text, sequence=', sequence, 'min=', minAcceptedSequence);
+        }
+
         // If streaming is active, delegate to the streaming logic
         if (isStreamingRef.current) {
           if (useBackendStreamingRenderRef.current) {
@@ -458,7 +526,10 @@ export function registerMessageCallbacks(
     if (window.__sessionTransitioning) return;
     const sequence = parseSequence(sequenceArg);
     const minAcceptedSequence = window.__minAcceptedUpdateSequence ?? 0;
-    if (sequence != null && sequence < minAcceptedSequence) {
+    if (sequence != null && sequence < minAcceptedSequence && (
+      isStreamingRef.current ||
+      !isRecentOpenCodeStreamEndRecoveryCandidate(options.currentProviderRef.current)
+    )) {
       return;
     }
 
