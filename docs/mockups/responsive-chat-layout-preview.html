@@ -1,0 +1,818 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>响应式聊天布局预览</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --page: #18191c;
+      --bg: #1e1f22;
+      --panel: #25262b;
+      --bar: #2b2d31;
+      --surface: #303238;
+      --surface-2: #363941;
+      --hover: #3d414a;
+      --border: #464950;
+      --border-soft: rgba(255, 255, 255, .08);
+      --text: #f0f2f5;
+      --soft: #d8dde6;
+      --muted: #a8adb7;
+      --faint: #767c88;
+      --accent: #4ea1ff;
+      --violet: #a989ff;
+      --green: #4cc38a;
+      --amber: #e7b85a;
+      --red: #f07178;
+      --shadow: 0 12px 30px rgba(0, 0, 0, .28);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 14px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--page);
+      color: var(--text);
+    }
+
+    button {
+      font: inherit;
+      color: inherit;
+    }
+
+    .page {
+      min-height: 100vh;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      max-width: 1200px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .title {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .title h1 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.25;
+      font-weight: 650;
+    }
+
+    .title span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .size-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .size-controls button {
+      border: 1px solid var(--border);
+      background: var(--bar);
+      border-radius: 6px;
+      padding: 6px 10px;
+      cursor: pointer;
+      color: var(--soft);
+    }
+
+    .size-controls button:hover {
+      background: var(--hover);
+    }
+
+    .stage {
+      max-width: 1200px;
+      width: 100%;
+      margin: 0 auto;
+      min-height: 0;
+    }
+
+    .resize-frame {
+      width: min(100%, 900px);
+      min-width: 360px;
+      max-width: 100%;
+      height: calc(100vh - 126px);
+      min-height: 620px;
+      margin: 0 auto;
+      resize: horizontal;
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #141518;
+      box-shadow: var(--shadow);
+    }
+
+    .app {
+      height: 100%;
+      min-width: 320px;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+      overflow: hidden;
+      container-type: inline-size;
+    }
+
+    .topbar {
+      height: 54px;
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--border-soft);
+      background: #202124;
+    }
+
+    .session-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--soft);
+      font-size: 13px;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 0 0 auto;
+    }
+
+    .icon-button {
+      width: 30px;
+      height: 30px;
+      border: 1px solid transparent;
+      background: transparent;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      color: var(--muted);
+      flex: 0 0 auto;
+    }
+
+    .icon-button:hover {
+      background: var(--hover);
+      color: var(--text);
+    }
+
+    .main {
+      min-height: 0;
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .messages-shell {
+      min-height: 0;
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      background: #1b1c1f;
+    }
+
+    .messages-container {
+      min-height: 0;
+      flex: 1 1 auto;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      padding: 18px 20px 14px;
+      gap: 18px;
+    }
+
+    .message-list {
+      width: 100%;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .message {
+      display: flex;
+      gap: 12px;
+      max-width: min(85%, 980px);
+      min-width: 0;
+      padding: 0;
+      animation: enter .22s ease both;
+    }
+
+    @keyframes enter {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .message.user {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+
+    .message.assistant {
+      align-self: flex-start;
+    }
+
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      color: white;
+      position: relative;
+    }
+
+    .user .avatar {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    }
+
+    .assistant .avatar {
+      background: linear-gradient(135deg, var(--accent), var(--violet));
+    }
+
+    .avatar-label {
+      position: absolute;
+      bottom: -18px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: var(--muted);
+      font-size: 10px;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .message:hover .avatar-label {
+      opacity: 1;
+    }
+
+    .content-wrap {
+      min-width: 0;
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      position: relative;
+    }
+
+    .user .content-wrap {
+      align-items: flex-end;
+    }
+
+    .meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--faint);
+      font-size: 11px;
+      line-height: 1;
+      min-height: 14px;
+    }
+
+    .bubble {
+      position: relative;
+      min-width: 0;
+      max-width: 100%;
+      padding: 13px 16px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--soft);
+      line-height: 1.65;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .assistant .bubble {
+      background: var(--surface);
+      border-top-left-radius: 4px;
+    }
+
+    .user .bubble {
+      width: fit-content;
+      background: linear-gradient(135deg, rgba(99, 102, 241, .17), rgba(139, 92, 246, .11));
+      border-color: rgba(139, 92, 246, .34);
+      border-top-right-radius: 4px;
+      color: #fff;
+    }
+
+    .bubble::before {
+      content: "";
+      position: absolute;
+      top: 13px;
+      width: 8px;
+      height: 8px;
+      background: inherit;
+      border: 1px solid inherit;
+      transform: rotate(45deg);
+    }
+
+    .assistant .bubble::before {
+      left: -5px;
+      border-left: 0;
+      border-bottom: 0;
+    }
+
+    .user .bubble::before {
+      right: -5px;
+      border-right: 0;
+      border-top: 0;
+    }
+
+    .thinking {
+      border: 1px solid rgba(169, 137, 255, .24);
+      background: rgba(169, 137, 255, .08);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--violet);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+
+    .code-line {
+      display: inline-flex;
+      max-width: 100%;
+      padding: 2px 7px;
+      border: 1px solid rgba(78, 161, 255, .22);
+      background: rgba(78, 161, 255, .1);
+      border-radius: 4px;
+      color: var(--accent);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      vertical-align: baseline;
+    }
+
+    .usage {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 6px;
+      padding: 8px 12px;
+      border: 1px solid rgba(78, 161, 255, .15);
+      background: rgba(78, 161, 255, .06);
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .usage strong {
+      color: var(--soft);
+      font-weight: 650;
+    }
+
+    .status-panel {
+      flex: 0 0 auto;
+      border-top: 1px solid var(--border-soft);
+      background: #202124;
+      padding: 10px 14px;
+    }
+
+    .status-tabs {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .status-tab {
+      min-width: 0;
+      height: 36px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      overflow: hidden;
+    }
+
+    .status-tab strong {
+      color: var(--soft);
+      font-weight: 600;
+    }
+
+    .input-area {
+      flex: 0 0 auto;
+      border-top: 1px solid var(--border-soft);
+      background: #1f2023;
+      padding: 10px 14px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .project-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 30px;
+      padding: 6px 10px;
+      border: 1px solid rgba(78, 161, 255, .2);
+      background: rgba(78, 161, 255, .09);
+      border-radius: 6px;
+      color: #67b8ff;
+      font-size: 12px;
+      min-width: 0;
+    }
+
+    .project-bar span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+
+    .editor {
+      min-height: 72px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #252628;
+      padding: 10px;
+      color: var(--faint);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+    }
+
+    .input-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .tool-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      flex-wrap: wrap;
+    }
+
+    .select-chip,
+    .mini-chip {
+      min-width: 0;
+      height: 30px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 6px;
+      color: var(--muted);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 9px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .select-chip {
+      max-width: 210px;
+    }
+
+    .select-chip span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+    }
+
+    .send {
+      flex: 0 0 auto;
+      height: 36px;
+      border: 0;
+      border-radius: 6px;
+      padding: 0 16px;
+      color: #fff;
+      background: #2cc36b;
+      font-weight: 650;
+      cursor: pointer;
+    }
+
+    .width-meter {
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      display: flex;
+      justify-content: center;
+      pointer-events: none;
+    }
+
+    .width-meter span {
+      margin-top: 8px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, .42);
+      color: var(--muted);
+      font-size: 11px;
+      border: 1px solid rgba(255, 255, 255, .08);
+    }
+
+    @container (max-width: 520px) {
+      .topbar {
+        padding: 0 10px;
+      }
+
+      .session-name {
+        font-size: 12px;
+      }
+
+      .top-actions .optional {
+        display: none;
+      }
+
+      .messages-container {
+        padding: 14px 10px 12px;
+      }
+
+      .message {
+        max-width: 96%;
+        gap: 8px;
+      }
+
+      .avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+      }
+
+      .bubble {
+        padding: 11px 12px;
+        font-size: 13px;
+      }
+
+      .status-panel {
+        padding: 8px 10px;
+      }
+
+      .status-tabs {
+        gap: 6px;
+      }
+
+      .status-tab {
+        height: 32px;
+        font-size: 0;
+        gap: 0;
+      }
+
+      .status-tab .count {
+        display: inline;
+        font-size: 11px;
+        margin-left: 4px;
+      }
+
+      .input-area {
+        padding: 8px 10px 10px;
+      }
+
+      .project-bar {
+        display: none;
+      }
+
+      .editor {
+        min-height: 58px;
+      }
+
+      .input-toolbar {
+        align-items: flex-end;
+      }
+
+      .select-chip.provider,
+      .select-chip.model {
+        max-width: 128px;
+      }
+
+      .mini-chip.optional,
+      .select-chip.optional {
+        display: none;
+      }
+
+      .send {
+        width: 42px;
+        padding: 0;
+        font-size: 0;
+      }
+
+      .send::before {
+        content: "↵";
+        font-size: 18px;
+      }
+    }
+
+    @container (min-width: 521px) and (max-width: 820px) {
+      .message {
+        max-width: 90%;
+      }
+
+      .messages-container {
+        padding: 16px;
+      }
+
+      .project-bar {
+        font-size: 11.5px;
+      }
+
+      .mini-chip.optional {
+        display: none;
+      }
+
+      .select-chip.model {
+        max-width: 180px;
+      }
+    }
+
+    @container (min-width: 980px) {
+      .messages-container {
+        padding-left: 24px;
+        padding-right: 24px;
+      }
+
+      .message {
+        max-width: min(82%, 1040px);
+      }
+
+      .editor {
+        min-height: 92px;
+      }
+    }
+
+    @media (max-width: 680px) {
+      .page {
+        padding: 12px;
+      }
+
+      .toolbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .size-controls {
+        justify-content: flex-start;
+      }
+
+      .resize-frame {
+        height: calc(100vh - 168px);
+        min-width: 320px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="toolbar">
+      <div class="title">
+        <h1>响应式聊天布局预览</h1>
+        <span>拖动预览框右下角或点击宽度按钮，观察消息、状态栏、输入区如何跟随容器宽度变化。</span>
+      </div>
+      <div class="size-controls" aria-label="宽度切换">
+        <button type="button" data-width="390">窄屏 390</button>
+        <button type="button" data-width="760">中等 760</button>
+        <button type="button" data-width="1120">宽屏 1120</button>
+        <button type="button" data-width="100%">铺满</button>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="resize-frame" id="frame">
+        <div class="app" id="app">
+          <div class="width-meter"><span id="meter">宽度</span></div>
+
+          <header class="topbar">
+            <div class="session-name">feature/v0.4.5 · jetbrains-melon-cc-gui</div>
+            <div class="top-actions">
+              <button class="icon-button" title="搜索">⌕</button>
+              <button class="icon-button optional" title="新会话">＋</button>
+              <button class="icon-button optional" title="布局">▣</button>
+              <button class="icon-button" title="历史">◴</button>
+              <button class="icon-button" title="设置">⚙</button>
+            </div>
+          </header>
+
+          <main class="main">
+            <section class="messages-shell">
+              <div class="messages-container">
+                <div class="message-list">
+                  <article class="message user">
+                    <div class="avatar">♙<span class="avatar-label">你</span></div>
+                    <div class="content-wrap">
+                      <div class="meta">15:34</div>
+                      <div class="bubble">你好</div>
+                    </div>
+                  </article>
+
+                  <article class="message assistant">
+                    <div class="avatar">◇<span class="avatar-label">Claude</span></div>
+                    <div class="content-wrap">
+                      <div class="bubble">
+                        <div class="thinking">Thinking · 正在分析当前布局的宽度约束和 flex 对齐关系。</div>
+                        你好！我看到你正在 <span class="code-line">jetbrains-melon-cc-gui</span> 项目上工作。这里模拟的是响应式布局：左侧 AI 回复保持左对齐，右侧用户消息始终贴近聊天区右侧。
+                      </div>
+                      <div class="usage">
+                        <span>Input: <strong>68,551</strong></span>
+                        <span>Output: <strong>144</strong></span>
+                        <span>Duration: <strong>0:18</strong></span>
+                      </div>
+                    </div>
+                  </article>
+
+                  <article class="message user">
+                    <div class="avatar">♙<span class="avatar-label">你</span></div>
+                    <div class="content-wrap">
+                      <div class="meta">15:38</div>
+                      <div class="bubble">整个插件布局这些不能做成响应式的吗，我拖动窗口大小跟随变化，这样能行吗？</div>
+                    </div>
+                  </article>
+
+                  <article class="message assistant">
+                    <div class="avatar">◇<span class="avatar-label">Claude</span></div>
+                    <div class="content-wrap">
+                      <div class="bubble">
+                        可以做。这个原型把外层容器设为 flex column，消息列表使用完整宽度，单条消息再用 <span class="code-line">max-width</span> 控制阅读宽度。窄屏时隐藏次要按钮，宽屏时恢复完整工具栏。
+                      </div>
+                    </div>
+                  </article>
+                </div>
+              </div>
+            </section>
+
+            <section class="status-panel">
+              <div class="status-tabs">
+                <div class="status-tab">☑ <strong>Tasks</strong> <span class="count">2</span></div>
+                <div class="status-tab">▣ <strong>Subagent</strong> <span class="count">1</span></div>
+                <div class="status-tab">✎ <strong>Edits</strong> <span class="count">5</span></div>
+              </div>
+            </section>
+
+            <section class="input-area">
+              <div class="project-bar">
+                <span>This project is guaranteed to be 100% open source (beware of pirated projects)</span>
+                <strong>×</strong>
+              </div>
+              <div class="editor">@reference files, #invoke agents, !insert prompts, Enter to send</div>
+              <div class="input-toolbar">
+                <div class="tool-group">
+                  <span class="mini-chip">☰</span>
+                  <span class="select-chip provider"><span>Agent Mode</span></span>
+                  <span class="select-chip model"><span>glm-5.1 (1M context)</span></span>
+                  <span class="select-chip optional"><span>High</span></span>
+                  <span class="mini-chip optional">40%</span>
+                </div>
+                <button class="send" type="button">vConsole</button>
+              </div>
+            </section>
+          </main>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const frame = document.getElementById('frame');
+    const meter = document.getElementById('meter');
+    const buttons = document.querySelectorAll('[data-width]');
+
+    function updateMeter() {
+      meter.textContent = `${Math.round(frame.getBoundingClientRect().width)}px`;
+    }
+
+    buttons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const width = button.getAttribute('data-width');
+        frame.style.width = width === '100%' ? '100%' : `${width}px`;
+        requestAnimationFrame(updateMeter);
+      });
+    });
+
+    new ResizeObserver(updateMeter).observe(frame);
+    updateMeter();
+  </script>
+</body>
+</html>

@@ -1,0 +1,790 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChatInputBox 图标优化预览</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #1e1f22;
+      --panel: #25262b;
+      --bar: #2b2d31;
+      --chip: #32343a;
+      --border: #464950;
+      --muted: #a8adb7;
+      --text: #f0f2f5;
+      --soft: #d8dde6;
+      --accent: #4ea1ff;
+      --green: #4cc38a;
+      --amber: #e7b85a;
+      --violet: #a989ff;
+      --red: #f07178;
+      --orange: #f5a623;
+      --shadow: 0 18px 48px rgba(0, 0, 0, .42);
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: linear-gradient(180deg, rgba(78, 161, 255, .08), transparent 38%), var(--bg);
+      color: var(--text);
+      padding: 40px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+      margin-bottom: 32px;
+    }
+
+    .section {
+      margin-bottom: 40px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 0 20px;
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--soft);
+    }
+
+    .section-title::before {
+      content: '';
+      width: 4px;
+      height: 20px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    .comparison-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 16px 20px;
+      background: var(--bar);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--soft);
+    }
+
+    .badge {
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .badge-current {
+      background: rgba(168, 173, 183, .2);
+      color: var(--muted);
+    }
+
+    .badge-optimized {
+      background: rgba(78, 161, 255, .2);
+      color: var(--accent);
+    }
+
+    .card-body {
+      padding: 20px;
+    }
+
+    /* ContextBar Preview */
+    .context-bar-preview {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      background: var(--bar);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    .tool-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      cursor: pointer;
+      color: var(--muted);
+      transition: all 0.2s;
+      background: transparent;
+      border: none;
+    }
+
+    .tool-btn:hover {
+      background: rgba(255, 255, 255, .08);
+      color: var(--text);
+    }
+
+    .tool-btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    /* Current codicon style */
+    .codicon-btn {
+      font-size: 16px;
+    }
+
+    /* Optimized SVG style */
+    .svg-btn svg {
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .divider {
+      width: 1px;
+      height: 20px;
+      background: var(--border);
+      margin: 0 4px;
+    }
+
+    .token-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: rgba(78, 161, 255, .15);
+      border: 1px solid rgba(78, 161, 255, .35);
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .token-ring {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: conic-gradient(var(--accent) 0 23%, rgba(255, 255, 255, .16) 23% 100%);
+      display: grid;
+      place-items: center;
+    }
+
+    .token-ring::before {
+      content: '';
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--bar);
+    }
+
+    .context-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: var(--chip);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--soft);
+    }
+
+    .context-chip.file {
+      border-color: rgba(78, 161, 255, .4);
+      background: linear-gradient(90deg, rgba(78, 161, 255, .12), var(--chip) 30%);
+    }
+
+    .context-chip.agent {
+      border-color: rgba(169, 137, 255, .4);
+      background: linear-gradient(90deg, rgba(169, 137, 255, .12), var(--chip) 30%);
+    }
+
+    .spacer { flex: 1; }
+
+    /* ButtonArea Preview */
+    .button-area-preview {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      background: var(--bar);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    .button-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .selector-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      background: var(--chip);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--soft);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .selector-btn:hover {
+      background: rgba(255, 255, 255, .08);
+      border-color: rgba(255, 255, 255, .15);
+    }
+
+    .selector-btn svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .enhance-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      background: rgba(245, 166, 35, .15);
+      border: 1px solid rgba(245, 166, 35, .3);
+      color: var(--orange);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .enhance-btn:hover {
+      background: rgba(245, 166, 35, .25);
+    }
+
+    .enhance-btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .send-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      background: var(--accent);
+      border: none;
+      color: white;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .send-btn:hover {
+      opacity: 0.9;
+      transform: scale(1.02);
+    }
+
+    .send-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .stop-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      background: var(--red);
+      border: none;
+      color: white;
+      cursor: pointer;
+    }
+
+    .stop-btn svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    /* Icon Comparison Section */
+    .icon-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 16px;
+    }
+
+    .icon-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 16px;
+      text-align: center;
+      transition: all 0.2s;
+    }
+
+    .icon-card:hover {
+      border-color: var(--accent);
+      background: rgba(78, 161, 255, .05);
+    }
+
+    .icon-preview {
+      width: 40px;
+      height: 40px;
+      margin: 0 auto 12px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .06);
+    }
+
+    .icon-preview svg {
+      width: 22px;
+      height: 22px;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .icon-name {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .icon-usage {
+      font-size: 11px;
+      color: var(--accent);
+      margin-top: 4px;
+    }
+
+    /* Optimization Notes */
+    .notes-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    .note-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+    }
+
+    .note-icon {
+      width: 36px;
+      height: 36px;
+      margin-bottom: 12px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      font-size: 18px;
+    }
+
+    .note-icon.blue {
+      background: rgba(78, 161, 255, .15);
+      color: var(--accent);
+    }
+
+    .note-icon.green {
+      background: rgba(76, 195, 138, .15);
+      color: var(--green);
+    }
+
+    .note-icon.amber {
+      background: rgba(231, 184, 90, .15);
+      color: var(--amber);
+    }
+
+    .note-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--soft);
+      margin-bottom: 8px;
+    }
+
+    .note-desc {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .comparison-grid {
+        grid-template-columns: 1fr;
+      }
+      body {
+        padding: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>ChatInputBox 图标优化预览</h1>
+    <p class="subtitle">
+      对比当前使用的 Codicon 图标与优化后的 SVG 图标方案。优化目标：更精细的视觉效果、更好的一致性、更小的资源占用。
+    </p>
+
+    <!-- ContextBar Section -->
+    <div class="section">
+      <div class="section-title">ContextBar 顶部工具栏</div>
+      <div class="comparison-grid">
+        <div class="comparison-card">
+          <div class="card-header">
+            <span class="card-label">当前设计</span>
+            <span class="badge badge-current">Codicon</span>
+          </div>
+          <div class="card-body">
+            <div class="context-bar-preview">
+              <button class="tool-btn codicon-btn" title="附件">
+                <span class="codicon codicon-attach" />
+              </button>
+              <div class="token-chip">
+                <div class="token-ring"></div>
+                <span>23%</span>
+              </div>
+              <div class="divider"></div>
+              <div class="context-chip agent">
+                <span class="codicon codicon-robot" style="font-size:14px" />
+                <span>dev...</span>
+                <span class="codicon codicon-close" style="font-size:12px;opacity:0.7" />
+              </div>
+              <div class="context-chip file">
+                <span class="codicon codicon-file-code" style="font-size:14px" />
+                <span>ContextBar.tsx#L1-L80</span>
+                <span class="codicon codicon-close" style="font-size:12px;opacity:0.7" />
+              </div>
+              <div class="spacer"></div>
+              <button class="tool-btn codicon-btn" title="状态面板">
+                <span class="codicon codicon-chevron-down" />
+              </button>
+              <button class="tool-btn codicon-btn" title="重绕">
+                <span class="codicon codicon-discard" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="comparison-card">
+          <div class="card-header">
+            <span class="card-label">优化设计</span>
+            <span class="badge badge-optimized">SVG</span>
+          </div>
+          <div class="card-body">
+            <div class="context-bar-preview">
+              <button class="tool-btn svg-btn" title="附件">
+                <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+              </button>
+              <div class="token-chip">
+                <div class="token-ring"></div>
+                <span>23%</span>
+              </div>
+              <div class="divider"></div>
+              <div class="context-chip agent">
+                <svg viewBox="0 0 24 24" width="14" height="14"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01M9 18h6"/></svg>
+                <span>dev...</span>
+                <svg viewBox="0 0 24 24" width="12" height="12" style="opacity:0.7"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              </div>
+              <div class="context-chip file">
+                <svg viewBox="0 0 24 24" width="14" height="14"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+                <span>ContextBar.tsx#L1-L80</span>
+                <svg viewBox="0 0 24 24" width="12" height="12" style="opacity:0.7"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              </div>
+              <div class="spacer"></div>
+              <button class="tool-btn svg-btn" title="状态面板">
+                <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <button class="tool-btn svg-btn" title="重绕">
+                <svg viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 00-15-6.7L3 13"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ButtonArea Section -->
+    <div class="section">
+      <div class="section-title">ButtonArea 底部按钮栏</div>
+      <div class="comparison-grid">
+        <div class="comparison-card">
+          <div class="card-header">
+            <span class="card-label">当前设计</span>
+            <span class="badge badge-current">Codicon</span>
+          </div>
+          <div class="card-body">
+            <div class="button-area-preview">
+              <div class="button-group">
+                <button class="selector-btn">
+                  <span class="codicon codicon-settings-gear" style="font-size:14px" />
+                  <span>设置</span>
+                </button>
+                <button class="selector-btn">
+                  <span class="codicon codicon-cloud" style="font-size:14px" />
+                  <span>Claude</span>
+                </button>
+                <button class="selector-btn">
+                  <span class="codicon codicon-shield" style="font-size:14px" />
+                  <span>接受编辑</span>
+                </button>
+                <button class="selector-btn">
+                  <span class="codicon codicon-symbol-method" style="font-size:14px" />
+                  <span>Sonnet 4.6</span>
+                </button>
+                <button class="selector-btn">
+                  <span class="codicon codicon-brain" style="font-size:14px" />
+                  <span>High</span>
+                </button>
+              </div>
+              <div class="button-group">
+                <button class="enhance-btn" title="增强提示">
+                  <span class="codicon codicon-sparkle" />
+                </button>
+                <button class="send-btn" title="发送">
+                  <span class="codicon codicon-send" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="comparison-card">
+          <div class="card-header">
+            <span class="card-label">优化设计</span>
+            <span class="badge badge-optimized">SVG</span>
+          </div>
+          <div class="card-body">
+            <div class="button-area-preview">
+              <div class="button-group">
+                <button class="selector-btn">
+                  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                  <span>设置</span>
+                </button>
+                <button class="selector-btn">
+                  <svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg>
+                  <span>Claude</span>
+                </button>
+                <button class="selector-btn">
+                  <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  <span>接受编辑</span>
+                </button>
+                <button class="selector-btn">
+                  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r=".5"/></svg>
+                  <span>Sonnet 4.6</span>
+                </button>
+                <button class="selector-btn">
+                  <svg viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0112 4.5v15a2.5 2.5 0 01-4.96.44 2.5 2.5 0 01-2.96-3.08 3 3 0 01-.34-5.58 2.5 2.5 0 011.32-4.24 2.5 2.5 0 011.98-3A2.5 2.5 0 019.5 2z"/><path d="M14.5 2A2.5 2.5 0 0012 4.5v15a2.5 2.5 0 004.96.44 2.5 2.5 0 002.96-3.08 3 3 0 00.34-5.58 2.5 2.5 0 00-1.32-4.24 2.5 2.5 0 00-1.98-3A2.5 2.5 0 0014.5 2z"/></svg>
+                  <span>High</span>
+                </button>
+              </div>
+              <div class="button-group">
+                <button class="enhance-btn" title="增强提示">
+                  <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                </button>
+                <button class="send-btn" title="发送">
+                  <svg viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Icon Library Section -->
+    <div class="section">
+      <div class="section-title">推荐图标库</div>
+      <div class="icon-grid">
+        <div class="icon-card">
+          <div class="icon-preview">
+            <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+          </div>
+          <div class="icon-name">附件</div>
+          <div class="icon-usage">attach</div>
+        </div>
+        <div class="icon-card">
+          <div class="icon-preview">
+            <svg viewBox="0 0 24 24"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01M9 18h6"/></svg>
+          </div>
+          <div class="icon-name">代理</div>
+          <div class="icon-usage">robot/agent</div>
+        </div>
+        <div class="icon-card">
+          <div class="icon-preview">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+          </div>
+          <div class="icon-name">文件</div>
+          <div class="icon-usage">file</div>
+        </div>
+        <div class="icon-card">
+          <div class="icon-preview">
+            <svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg>
+          </div>
+          <div class="icon-name">提供商</div>
+          <div class="icon-usage">cloud</div>
+        </div>
+        <div class="icon-card">
+          <div class="icon-preview">
+            <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <div class="icon-name">模式</div>
+          <div class="icon-usage">shield/mode</div>
+        </div>
+        <div class="icon-card">
+          <div class="icon-preview">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r=".5"/></svg>
+          </div>
+          <div class="icon-name">模型</div>
+          <div class="icon-usage">help-circle</div>
+        </div>
+        <div class="icon-card">
+          <div class="icon-preview" style="color:var(--orange)">
+            <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          </div>
+          <div class="icon-name">增强提示</div>
+          <div class="icon-usage">layers/sparkle</div>
+        </div>
+        <div class="icon-card">
+          <div class="icon-preview" style="color:var(--accent)">
+            <svg viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+          </div>
+          <div class="icon-name">发送</div>
+          <div class="icon-usage">send</div>
+        </div>
+        <div class="icon-card">
+          <div class="icon-preview" style="color:var(--red)">
+            <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+          </div>
+          <div class="icon-name">停止</div>
+          <div class="icon-usage">square/stop</div>
+        </div>
+        <div class="icon-card">
+          <div class="icon-preview">
+            <svg viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 00-15-6.7L3 13"/></svg>
+          </div>
+          <div class="icon-name">重绕</div>
+          <div class="icon-usage">rotate-ccw</div>
+        </div>
+        <div class="icon-card">
+          <div class="icon-preview">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          </div>
+          <div class="icon-name">设置</div>
+          <div class="icon-usage">settings</div>
+        </div>
+        <div class="icon-card">
+          <div class="icon-preview">
+            <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+          </div>
+          <div class="icon-name">展开/折叠</div>
+          <div class="icon-usage">chevron-down</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Optimization Notes -->
+    <div class="section">
+      <div class="section-title">优化建议</div>
+      <div class="notes-grid">
+        <div class="note-card">
+          <div class="note-icon blue">
+            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          </div>
+          <div class="note-title">统一图标方案</div>
+          <div class="note-desc">
+            建议使用 Lucide Icons 或自定义 SVG 图标集，替代 Codicon。SVG 图标可以精确控制粗细、圆角等细节，视觉效果更精致。
+          </div>
+        </div>
+        <div class="note-card">
+          <div class="note-icon green">
+            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M9 12l2 2 4-4"/></svg>
+          </div>
+          <div class="note-title">保持视觉一致性</div>
+          <div class="note-desc">
+            所有图标应使用相同的 stroke-width (1.8-2px)、stroke-linecap (round) 和 stroke-linejoin (round)，确保视觉风格统一。
+          </div>
+        </div>
+        <div class="note-card">
+          <div class="note-icon amber">
+            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
+          <div class="note-title">图标尺寸规范</div>
+          <div class="note-desc">
+            ContextBar 工具按钮建议 18px，选择器内图标 14px，发送/停止按钮 16-18px。保持合理的视觉层次。
+          </div>
+        </div>
+        <div class="note-card">
+          <div class="note-icon blue">
+            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+          </div>
+          <div class="note-title">交互反馈优化</div>
+          <div class="note-desc">
+            增加 hover 状态的颜色变化和轻微的 scale 动画 (transform: scale(1.05))，提升操作反馈感。发送按钮可增加点击涟漪效果。
+          </div>
+        </div>
+        <div class="note-card">
+          <div class="note-icon green">
+            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+          </div>
+          <div class="note-title">布局紧凑化</div>
+          <div class="note-desc">
+            选择器按钮可以更紧凑，减少 padding。当前的选择器间距较大，可以优化为更紧凑的布局，节省空间。
+          </div>
+        </div>
+        <div class="note-card">
+          <div class="note-icon amber">
+            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div class="note-title">性能优化</div>
+          <div class="note-desc">
+            SVG 图标内联可以减少网络请求，但要注意代码体积。建议使用 SVG sprite 或按需加载，避免所有图标一次性加载。
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="margin-top:40px;padding-top:24px;border-top:1px solid var(--border);text-align:center;color:var(--muted);font-size:13px;">
+      预览仅供参考 · 建议落地时使用项目现有设计系统和 CSS 变量
+    </div>
+  </div>
+</body>
+</html>
