@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>任务/子代理/编辑 数据展示优化草图</title>
+<style>
+  :root {
+    --bg: #1e1f22;
+    --panel: #25262b;
+    --bar: #2b2d31;
+    --surface: #2d2f34;
+    --chip: #32343a;
+    --hover: #3a3d44;
+    --border: #464950;
+    --input-border: #5a5d66;
+    --muted: #a8adb7;
+    --text: #f0f2f5;
+    --soft: #d8dde6;
+    --accent: #4ea1ff;
+    --accent-hover: #6bb3ff;
+    --green: #4cc38a;
+    --amber: #e7b85a;
+    --violet: #a989ff;
+    --red: #f07178;
+    --orange: #f5a623;
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, .2);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 40px;
+  }
+
+  svg.icon {
+    width: 1em;
+    height: 1em;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vertical-align: middle;
+  }
+
+  .preview-container {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .preview-title {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+
+  .preview-subtitle {
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 32px;
+  }
+
+  .section {
+    margin-bottom: 40px;
+  }
+
+  .section-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--soft);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section-title svg.icon {
+    width: 18px;
+    height: 18px;
+    color: var(--accent);
+  }
+
+  .chat-demo {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .messages-area {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .message {
+    display: flex;
+    gap: 12px;
+    max-width: 85%;
+  }
+
+  .message.assistant {
+    align-self: flex-start;
+  }
+
+  .message-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+  }
+
+  .message.assistant .message-avatar {
+    background: linear-gradient(135deg, var(--accent), var(--violet));
+    box-shadow: 0 2px 8px rgba(78, 161, 255, 0.3);
+  }
+
+  .message.assistant .message-avatar svg.icon {
+    width: 18px;
+    height: 18px;
+    color: white;
+  }
+
+  .message-content {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    font-size: 14px;
+    line-height: 1.7;
+  }
+
+  .message.assistant .message-content {
+    border-top-left-radius: 4px;
+  }
+
+  /* ===== Tool Call (参考 chat-message-preview 风格) ===== */
+  .tool-call {
+    margin-top: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .tool-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: var(--bar);
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+
+  .tool-icon {
+    width: 16px;
+    height: 16px;
+    color: var(--amber);
+  }
+
+  .tool-name {
+    font-weight: 500;
+    color: var(--soft);
+  }
+
+  .tool-status {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+  }
+
+  .tool-status.success {
+    color: var(--green);
+  }
+
+  .tool-status.running {
+    color: var(--accent);
+  }
+
+  .tool-status.error {
+    color: var(--red);
+  }
+
+  .tool-status-icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .tool-body {
+    padding: 12px 14px;
+    font-size: 12px;
+    font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+    color: var(--soft);
+    line-height: 1.6;
+  }
+
+  .tool-body .command {
+    color: var(--accent);
+  }
+
+  .tool-body .output {
+    color: var(--muted);
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+
+  .tool-body .highlight {
+    color: var(--green);
+    font-weight: 500;
+  }
+
+  .tool-body .error-text {
+    color: var(--red);
+  }
+
+  .file-ref {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    background: rgba(78, 161, 255, 0.1);
+    border: 1px solid rgba(78, 161, 255, 0.2);
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: "JetBrains Mono", monospace;
+    color: var(--accent);
+    text-decoration: none;
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+
+  .file-ref:hover {
+    background: rgba(78, 161, 255, 0.2);
+    border-color: rgba(78, 161, 255, 0.4);
+  }
+
+  .file-ref svg.icon {
+    width: 12px;
+    height: 12px;
+  }
+
+  /* ===== Task Tool (Agent/Spawn Agent) 优化 ===== */
+  .task-meta-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .meta-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    background: var(--chip);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: "JetBrains Mono", monospace;
+    color: var(--muted);
+  }
+
+  .meta-tag svg.icon {
+    width: 12px;
+    height: 12px;
+  }
+
+  .meta-tag.model {
+    color: var(--violet);
+    background: rgba(169, 137, 255, 0.1);
+    border-color: rgba(169, 137, 255, 0.2);
+  }
+
+  .meta-tag.agent-id {
+    color: var(--muted);
+    font-size: 10px;
+  }
+
+  .meta-tag.nickname {
+    color: var(--amber);
+    background: rgba(231, 184, 90, 0.1);
+    border-color: rgba(231, 184, 90, 0.2);
+  }
+
+  /* ===== Task Details (展开后的详情) ===== */
+  .task-details {
+    border-top: 1px solid var(--border);
+    padding: 12px 14px;
+  }
+
+  .detail-field {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 6px 0;
+    font-size: 12px;
+  }
+
+  .detail-field:not(:last-child) {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  }
+
+  .detail-label {
+    color: var(--muted);
+    min-width: 100px;
+    flex-shrink: 0;
+    font-family: "JetBrains Mono", monospace;
+  }
+
+  .detail-value {
+    color: var(--soft);
+    font-family: "JetBrains Mono", monospace;
+    word-break: break-all;
+  }
+
+  /* ===== Edit Tool 优化 ===== */
+  .diff-stats {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .diff-stat-added {
+    color: var(--green);
+  }
+
+  .diff-stat-deleted {
+    color: var(--red);
+  }
+
+  .diff-actions {
+    display: flex;
+    gap: 6px;
+    margin-left: 12px;
+  }
+
+  .diff-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: var(--chip);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .diff-action-btn:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+
+  .diff-action-btn svg.icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .line-info {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+    margin-left: 8px;
+  }
+
+  /* ===== Diff Preview ===== */
+  .diff-preview {
+    border-top: 1px solid var(--border);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    overflow-x: auto;
+  }
+
+  .diff-line {
+    display: flex;
+    min-width: fit-content;
+  }
+
+  .diff-gutter {
+    width: 40px;
+    text-align: center;
+    flex-shrink: 0;
+    user-select: none;
+    font-size: 11px;
+    color: var(--muted);
+    opacity: 0.5;
+  }
+
+  .diff-line-added .diff-gutter {
+    color: var(--green);
+    background: rgba(76, 195, 138, 0.08);
+    opacity: 1;
+  }
+
+  .diff-line-deleted .diff-gutter {
+    color: var(--red);
+    background: rgba(240, 113, 120, 0.08);
+    opacity: 1;
+  }
+
+  .diff-code {
+    flex: 1;
+    padding: 0 12px;
+    white-space: pre;
+  }
+
+  .diff-line-added .diff-code {
+    background: rgba(76, 195, 138, 0.06);
+  }
+
+  .diff-line-deleted .diff-code {
+    background: rgba(240, 113, 120, 0.06);
+  }
+
+  /* ===== Agent Dialog 优化 ===== */
+  .dialog-demo {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    max-width: 480px;
+  }
+
+  .dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: var(--bar);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .dialog-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .dialog-title-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background: rgba(169, 137, 255, 0.2);
+    display: grid;
+    place-items: center;
+  }
+
+  .dialog-title-icon svg.icon {
+    width: 14px;
+    height: 14px;
+    color: var(--violet);
+  }
+
+  .dialog-close {
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .dialog-close:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+
+  .dialog-close svg.icon {
+    width: 16px;
+    height: 16px;
+  }
+
+  .dialog-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .form-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--soft);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .form-label .required {
+    color: var(--red);
+    font-size: 14px;
+  }
+
+  .form-input {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    transition: all 0.15s;
+    outline: none;
+  }
+
+  .form-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(78, 161, 255, 0.2);
+  }
+
+  .form-input::placeholder {
+    color: var(--muted);
+  }
+
+  .form-input-wrapper {
+    position: relative;
+  }
+
+  .form-char-counter {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 11px;
+    color: var(--muted);
+    pointer-events: none;
+  }
+
+  .form-textarea {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 100px;
+    transition: all 0.15s;
+    outline: none;
+  }
+
+  .form-textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(78, 161, 255, 0.2);
+  }
+
+  .form-textarea::placeholder {
+    color: var(--muted);
+  }
+
+  .form-hint {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  .dialog-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    border: 1px solid transparent;
+  }
+
+  .btn svg.icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .btn-secondary {
+    background: var(--chip);
+    border-color: var(--border);
+    color: var(--soft);
+  }
+
+  .btn-secondary:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+
+  .btn-primary:hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+  }
+
+  /* ===== Spec Table ===== */
+  .spec-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .spec-table th {
+    text-align: left;
+    padding: 10px 12px;
+    color: var(--muted);
+    font-weight: 500;
+    border-bottom: 1px solid var(--border);
+    background: var(--bar);
+  }
+
+  .spec-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    vertical-align: top;
+  }
+
+  .spec-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .spec-table code {
+    background: var(--chip);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    color: var(--accent);
+  }
+
+  .color-swatch {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    vertical-align: middle;
+    margin-right: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+  }
+</style>
+</head>
+<body>
+<div class="preview-container">
+  <h1 class="preview-title">🔧 任务/子代理/编辑 数据展示优化</h1>
+  <p class="preview-subtitle">参考 chat-message-preview.html 风格，优化工具调用块的数据展示效果</p>
+
+  <!-- ============================== -->
+  <!-- Section: Task/Agent Tool -->
+  <!-- ============================== -->
+  <div class="section">
+    <h2 class="section-title">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01M9 18h6"/></svg>
+      任务/子代理工具 (Task/Agent/Spawn Agent)
+    </h2>
+    <div class="chat-demo">
+      <div class="messages-area">
+        <div class="message assistant">
+          <div class="message-avatar">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          </div>
+          <div>
+            <div class="message-content">
+              <p>我来派一个子代理帮你搜索项目中的错误：</p>
+
+              <!-- Agent Tool - 运行中 -->
+              <div class="tool-call">
+                <div class="tool-header">
+                  <svg class="tool-icon" viewBox="0 0 24 24"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01M9 18h6"/></svg>
+                  <span class="tool-name">spawn_agent</span>
+                  <div class="task-meta-tags">
+                    <span class="meta-tag nickname">general-purpose</span>
+                    <span class="meta-tag model">claude-sonnet-4-6</span>
+                  </div>
+                  <span class="tool-status running">
+                    <svg class="tool-status-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    运行中 12s
+                  </span>
+                </div>
+                <div class="task-details">
+                  <div class="detail-field">
+                    <span class="detail-label">agent_id</span>
+                    <span class="detail-value">a3f8b2c1…</span>
+                  </div>
+                  <div class="detail-field">
+                    <span class="detail-label">description</span>
+                    <span class="detail-value">搜索项目中的 TypeScript 错误</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Agent Tool - 已完成 -->
+              <div class="tool-call">
+                <div class="tool-header">
+                  <svg class="tool-icon" viewBox="0 0 24 24"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01M9 18h6"/></svg>
+                  <span class="tool-name">spawn_agent</span>
+                  <div class="task-meta-tags">
+                    <span class="meta-tag nickname">代码审查助手</span>
+                    <span class="meta-tag model">claude-sonnet-4-6</span>
+                    <span class="meta-tag agent-id">a3f8b2c1-4d5e…</span>
+                  </div>
+                  <span class="tool-status success">
+                    <svg class="tool-status-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                    完成
+                  </span>
+                </div>
+                <div class="task-details">
+                  <div class="detail-field">
+                    <span class="detail-label">耗时</span>
+                    <span class="detail-value">45.2s</span>
+                  </div>
+                  <div class="detail-field">
+                    <span class="detail-label">Token</span>
+                    <span class="detail-value">12,450</span>
+                  </div>
+                  <div class="detail-field">
+                    <span class="detail-label">工具调用</span>
+                    <span class="detail-value">8 次</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Task Tool - 错误 -->
+              <div class="tool-call">
+                <div class="tool-header">
+                  <svg class="tool-icon" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                  <span class="tool-name">task</span>
+                  <div class="task-meta-tags">
+                    <span class="meta-tag nickname">代码审查</span>
+                  </div>
+                  <span class="tool-status error">
+                    <svg class="tool-status-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                    失败
+                  </span>
+                </div>
+                <div class="task-details">
+                  <div class="detail-field">
+                    <span class="detail-label">错误</span>
+                    <span class="detail-value error-text">Agent timeout after 300s</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================== -->
+  <!-- Section: Edit Tool -->
+  <!-- ============================== -->
+  <div class="section">
+    <h2 class="section-title">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      编辑工具 (Edit Tool)
+    </h2>
+    <div class="chat-demo">
+      <div class="messages-area">
+        <div class="message assistant">
+          <div class="message-avatar">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          </div>
+          <div>
+            <div class="message-content">
+              <p>我来修改这个文件：</p>
+
+              <!-- Edit Tool - 折叠状态 -->
+              <div class="tool-call">
+                <div class="tool-header">
+                  <svg class="tool-icon" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  <span class="tool-name">Edit</span>
+                  <span class="file-ref">
+                    <svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+                    src/utils/helpers.ts
+                  </span>
+                  <span class="line-info">第 42-58 行</span>
+                  <div class="diff-stats">
+                    <span class="diff-stat-added">+5</span>
+                    <span class="diff-stat-deleted">-3</span>
+                  </div>
+                  <div class="diff-actions">
+                    <button class="diff-action-btn" title="在 IDEA 中查看 Diff">
+                      <svg class="icon" viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/></svg>
+                      Diff
+                    </button>
+                    <button class="diff-action-btn" title="刷新文件">
+                      <svg class="icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+                    </button>
+                  </div>
+                  <span class="tool-status success">
+                    <svg class="tool-status-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                    完成
+                  </span>
+                </div>
+              </div>
+
+              <!-- Edit Tool - 展开状态 -->
+              <div class="tool-call">
+                <div class="tool-header">
+                  <svg class="tool-icon" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  <span class="tool-name">Edit</span>
+                  <span class="file-ref">
+                    <svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+                    src/components/Button.tsx
+                  </span>
+                  <span class="line-info">第 15-28 行</span>
+                  <div class="diff-stats">
+                    <span class="diff-stat-added">+8</span>
+                    <span class="diff-stat-deleted">-4</span>
+                  </div>
+                  <span class="tool-status success">
+                    <svg class="tool-status-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                    完成
+                  </span>
+                </div>
+                <div class="diff-preview">
+                  <div class="diff-line diff-line-unchanged">
+                    <div class="diff-gutter">15</div>
+                    <div class="diff-code">interface ButtonProps {</div>
+                  </div>
+                  <div class="diff-line diff-line-unchanged">
+                    <div class="diff-gutter">16</div>
+                    <div class="diff-code">  children: React.ReactNode;</div>
+                  </div>
+                  <div class="diff-line diff-line-deleted">
+                    <div class="diff-gutter">17</div>
+                    <div class="diff-code">- onClick?: () => void;</div>
+                  </div>
+                  <div class="diff-line diff-line-added">
+                    <div class="diff-gutter">17</div>
+                    <div class="diff-code">+ onClick: (e: React.MouseEvent) => void;</div>
+                  </div>
+                  <div class="diff-line diff-line-added">
+                    <div class="diff-gutter">18</div>
+                    <div class="diff-code">+ variant?: 'primary' | 'secondary' | 'ghost';</div>
+                  </div>
+                  <div class="diff-line diff-line-added">
+                    <div class="diff-gutter">19</div>
+                    <div class="diff-code">+ size?: 'sm' | 'md' | 'lg';</div>
+                  </div>
+                  <div class="diff-line diff-line-unchanged">
+                    <div class="diff-gutter">20</div>
+                    <div class="diff-code">  disabled?: boolean;</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================== -->
+  <!-- Section: Agent Dialog -->
+  <!-- ============================== -->
+  <div class="section">
+    <h2 class="section-title">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      子代理对话框 (Agent Dialog)
+    </h2>
+    <div class="dialog-demo">
+      <div class="dialog-header">
+        <div class="dialog-title">
+          <div class="dialog-title-icon">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+          添加子代理
+        </div>
+        <button class="dialog-close">
+          <svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="dialog-body">
+        <div class="form-group">
+          <label class="form-label">
+            名称 <span class="required">*</span>
+          </label>
+          <div class="form-input-wrapper">
+            <input type="text" class="form-input" placeholder="输入代理名称" value="代码审查助手" />
+            <span class="form-char-counter">6/20</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">提示词</label>
+          <textarea class="form-textarea" placeholder="输入代理的系统提示词..." rows="5">你是一个专业的代码审查助手，负责检查代码质量、安全性和最佳实践。</textarea>
+          <div class="form-hint">定义代理的行为和能力范围</div>
+        </div>
+      </div>
+
+      <div class="dialog-footer">
+        <button class="btn btn-secondary">
+          <svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          取消
+        </button>
+        <button class="btn btn-primary">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          添加
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================== -->
+  <!-- Section: Design Spec -->
+  <!-- ============================== -->
+  <div class="section">
+    <h2 class="section-title">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      优化要点说明
+    </h2>
+    <div style="background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 24px;">
+      <table class="spec-table">
+        <thead>
+          <tr>
+            <th>组件</th>
+            <th>优化内容</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Task/Agent</strong></td>
+            <td>元数据标签</td>
+            <td>使用 <code>.meta-tag</code> 药丸样式展示 model、nickname、agent_id 等信息，颜色区分类型</td>
+          </tr>
+          <tr>
+            <td><strong>Task/Agent</strong></td>
+            <td>状态指示器</td>
+            <td>统一使用 <code>.tool-status</code> 样式，绿色=成功，蓝色=运行中，红色=失败</td>
+          </tr>
+          <tr>
+            <td><strong>Task/Agent</strong></td>
+            <td>详情字段</td>
+            <td>展开后使用 <code>.detail-field</code> 键值对布局，等宽字体显示</td>
+          </tr>
+          <tr>
+            <td><strong>Edit Tool</strong></td>
+            <td>文件引用</td>
+            <td>使用 <code>.file-ref</code> 蓝色链接样式，可点击跳转</td>
+          </tr>
+          <tr>
+            <td><strong>Edit Tool</strong></td>
+            <td>增删统计</td>
+            <td>使用 <code>.diff-stats</code> 显示 +N/-N，绿色/红色 monospace 字体</td>
+          </tr>
+          <tr>
+            <td><strong>Edit Tool</strong></td>
+            <td>操作按钮</td>
+            <td>Diff 和刷新按钮使用 <code>.diff-action-btn</code> 样式</td>
+          </tr>
+          <tr>
+            <td><strong>Agent Dialog</strong></td>
+            <td>表单样式</td>
+            <td>输入框聚焦时带蓝色边框和光晕，字符计数器在右侧</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="text-align: center; color: var(--muted); font-size: 12px; padding: 20px;">
+    jetbrains-melon-cc-gui · Task/Agent/Edit Data Display Optimization · 2026-06-04
+  </div>
+</div>
+</body>
+</html>

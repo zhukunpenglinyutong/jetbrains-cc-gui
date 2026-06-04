@@ -129,6 +129,10 @@
         font-size: 14px;
     }
 
+    svg {
+        flex-shrink: 0;
+    }
+
     &:hover:not(:disabled) {
         background-color: rgba(10, 132, 255, 0.1);
         border-color: #0a84ff;
@@ -152,6 +156,12 @@
         white-space: nowrap;
     }
 
+    /* SVG 图标样式 */
+    svg + span {
+        font-size: 12px;
+        white-space: nowrap;
+    }
+
     &.history-toolbar-danger:hover:not(:disabled) {
         background-color: rgba(255, 59, 48, 0.15);
         border-color: #ff3b30;
@@ -165,6 +175,12 @@
         color: #0a84ff;
         border-color: #0a84ff;
     }
+}
+
+/* 旋转动画（用于 SyncIcon） */
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }
 
 /* 搜索容器样式 */
@@ -244,6 +260,11 @@
         font-size: 14px;
         pointer-events: none;
     }
+
+    svg {
+        flex-shrink: 0;
+        pointer-events: none;
+    }
 }
 
 /* 收藏按钮样式 */
@@ -264,6 +285,11 @@
 
     .codicon {
         font-size: 14px;
+        pointer-events: none;
+    }
+
+    svg {
+        flex-shrink: 0;
         pointer-events: none;
     }
 
@@ -292,6 +318,11 @@
 
     .codicon {
         font-size: 14px;
+        pointer-events: none;
+    }
+
+    svg {
+        flex-shrink: 0;
         pointer-events: none;
     }
 }
@@ -384,6 +415,11 @@
         font-size: 14px;
         pointer-events: none;
     }
+
+    svg {
+        flex-shrink: 0;
+        pointer-events: none;
+    }
 }
 
 .history-item:hover .history-edit-btn {
@@ -446,6 +482,10 @@
     .codicon {
         font-size: 16px;
     }
+
+    svg {
+        flex-shrink: 0;
+    }
 }
 
 .history-title-save-btn:hover {
@@ -474,6 +514,10 @@
 
     .codicon {
         font-size: 16px;
+    }
+
+    svg {
+        flex-shrink: 0;
     }
 }
 
@@ -518,6 +562,11 @@
 
     .codicon {
         font-size: 12px;
+        pointer-events: none;
+    }
+
+    svg {
+        flex-shrink: 0;
         pointer-events: none;
     }
 }

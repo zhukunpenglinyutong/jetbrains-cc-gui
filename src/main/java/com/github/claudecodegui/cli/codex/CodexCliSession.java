@@ -20,6 +20,7 @@ import com.intellij.openapi.diagnostic.Logger;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.Charset;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
@@ -46,6 +47,7 @@ public class CodexCliSession {
 
     private static final Logger LOG = Logger.getInstance(CodexCliSession.class);
     private static final String ENV_CODEX_SANDBOX_NETWORK_DISABLED = "CODEX_SANDBOX_NETWORK_DISABLED";
+    private static final Charset WINDOWS_CHINESE_CHARSET = Charset.forName("GBK");
     private static final Pattern POWERSHELL_PROFILE_ERROR_PATTERN = Pattern.compile(
             "(?i)(PowerShell_profile\\.ps1|running scripts is disabled on this system|PSSecurityException|UnauthorizedAccess)"
     );
@@ -122,7 +124,9 @@ public class CodexCliSession {
                 List<File> images = attachmentHandler.processForCodex(request.attachments(), tempFiles);
                 boolean requestHasImages = !images.isEmpty();
                 List<String> cmd = buildCommand(request, images);
-                LOG.info("[CodexCliSession][" + tabId + "] Command: " + String.join(" ", cmd));
+                byte[] promptInput = buildPromptInput(request);
+                LOG.info("[CodexCliSession][" + tabId + "] Command: " + String.join(" ", cmd)
+                        + ", stdinBytes=" + promptInput.length);
 
                 ProcessBuilder pb = new ProcessBuilder(cmd);
                 pb.redirectErrorStream(true);
@@ -146,13 +150,15 @@ public class CodexCliSession {
                 }
 
                 process = pb.start();
-                // codex exec 通过 CLI 参数传递 prompt，不需要 stdin
-                // 立即关闭 stdin 防止 codex 卡在 "Reading additional input from stdin..."
-                process.getOutputStream().close();
+                // 将 prompt 通过 stdin 传给 Codex，避免 Windows 命令行长度限制。
+                try (OutputStream stdin = process.getOutputStream()) {
+                    stdin.write(promptInput);
+                    stdin.flush();
+                }
                 activeHandle = new CliProcessHandle(process, "codex-tab-" + tabId);
 
                 StringBuilder assistantContent = new StringBuilder();
-                // 逐行读取原始字节，先尝试 UTF-8 解码，失败则回退到平台默认编码（Windows GBK）。
+                // 逐行读取原始字节，先尝试 UTF-8 解码，失败则回退到 Windows 中文编码。
                 // 这解决了 Node.js (UTF-8) 和 cmd.exe (GBK) 混合输出的编码问题。
                 try (InputStream rawIn = process.getInputStream()) {
                     ByteArrayOutputStream lineBuf = new ByteArrayOutputStream();
@@ -531,6 +537,7 @@ public class CodexCliSession {
      *                  resume 子命令 *不接受* --color / --sandbox / -C / --add-dir。
      *                  resume 的 `-i, --image <FILE>` 是单值非贪婪,不需要 `--` 分隔符。
      * `-a, --ask-for-approval` 是 top-level 全局 flag,在 exec 与 exec resume 下都可用。
+     * prompt 统一通过 stdin 传递，命令行末尾使用 `-` 显式要求 Codex 从 stdin 读取。
      */
     private List<String> buildCommand(CliSendRequest request, List<File> images) {
         CodexCliCommandUtils.PermissionSelection perm = CodexCliCommandUtils.selectPermission(
@@ -579,7 +586,7 @@ public class CodexCliSession {
         if (!images.isEmpty()) {
             cmd.add("--");
         }
-        cmd.add(buildPrompt(request));
+        cmd.add("-");
     }
 
     /** 续接会话:codex exec resume --last ... PROMPT */
@@ -602,7 +609,11 @@ public class CodexCliSession {
             cmd.add("-i");
             cmd.add(img.getAbsolutePath());
         }
-        cmd.add(buildPrompt(request));
+        cmd.add("-");
+    }
+
+    private byte[] buildPromptInput(CliSendRequest request) {
+        return buildPrompt(request).getBytes(StandardCharsets.UTF_8);
     }
 
     private String buildPrompt(CliSendRequest request) {
@@ -931,8 +942,16 @@ public class CodexCliSession {
             CharBuffer cb = utf8Decoder.decode(ByteBuffer.wrap(bytes, 0, len));
             return cb.toString();
         } catch (CharacterCodingException e) {
-            // UTF-8 解码失败，使用平台默认编码（Windows 中文系统为 GBK）
-            return new String(bytes, 0, len, Charset.defaultCharset());
+            // UTF-8 解码失败，优先按 Windows 中文控制台编码解析；IDE/JVM 可能强制 defaultCharset=UTF-8。
+            Charset fallback = Charset.defaultCharset();
+            if (WINDOWS_CHINESE_CHARSET.equals(fallback)) {
+                return new String(bytes, 0, len, fallback);
+            }
+            String decoded = new String(bytes, 0, len, WINDOWS_CHINESE_CHARSET);
+            if (!decoded.contains("\uFFFD")) {
+                return decoded;
+            }
+            return new String(bytes, 0, len, fallback);
         }
     }
 

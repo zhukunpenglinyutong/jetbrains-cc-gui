@@ -3,6 +3,7 @@ import type { TFunction } from 'i18next';
 import type { HistorySessionSummary } from '../../types';
 import { extractCommandMessageContent } from '../../utils/messageUtils';
 import { ProviderModelIcon } from '../shared/ProviderModelIcon';
+import { EditIcon, DownloadIcon, TrashIcon, StarIcon, StarFilledIcon, CheckIcon, CloseIcon, CopyIcon, XCircleIcon } from '../Icons';
 
 // Module-level style constants (avoid breaking memoization)
 const PROVIDER_BADGE_STYLE: React.CSSProperties = {
@@ -232,14 +233,14 @@ export const HistoryListItem = memo(({
                 onClick={handleEditSave}
                 title={t('history.saveTitleButton')}
               >
-                <span className="codicon codicon-check"></span>
+                <CheckIcon size={16} />
               </button>
               <button
                 className="history-title-cancel-btn"
                 onClick={handleEditCancel}
                 title={t('history.cancelEditButton')}
               >
-                <span className="codicon codicon-close"></span>
+                <CloseIcon size={16} />
               </button>
             </div>
           ) : (
@@ -255,7 +256,7 @@ export const HistoryListItem = memo(({
               title={t('history.editTitle')}
               aria-label={t('history.editTitle')}
             >
-              <span className="codicon codicon-edit"></span>
+              <EditIcon size={14} />
             </button>
             <button
               className="history-export-btn"
@@ -263,7 +264,7 @@ export const HistoryListItem = memo(({
               title={t('history.exportSession')}
               aria-label={t('history.exportSession')}
             >
-              <span className="codicon codicon-arrow-down"></span>
+              <DownloadIcon size={14} />
             </button>
             <button
               className="history-delete-btn"
@@ -271,7 +272,7 @@ export const HistoryListItem = memo(({
               title={t('history.deleteSession')}
               aria-label={t('history.deleteSession')}
             >
-              <span className="codicon codicon-trash"></span>
+              <TrashIcon size={14} />
             </button>
             <button
               className={`history-favorite-btn ${session.isFavorited ? 'favorited' : ''}`}
@@ -279,7 +280,7 @@ export const HistoryListItem = memo(({
               title={session.isFavorited ? t('history.unfavoriteSession') : t('history.favoriteSession')}
               aria-label={session.isFavorited ? t('history.unfavoriteSession') : t('history.favoriteSession')}
             >
-              <span className={session.isFavorited ? 'codicon codicon-star-full' : 'codicon codicon-star-empty'}></span>
+              {session.isFavorited ? <StarFilledIcon size={14} /> : <StarIcon size={14} />}
             </button>
           </div>
         )}
@@ -306,7 +307,7 @@ export const HistoryListItem = memo(({
             title={isCopied ? t('history.sessionIdCopied') : isCopyFailed ? t('history.copyFailed') : t('history.copySessionId')}
             aria-label={t('history.copySessionId')}
           >
-            <span className={`codicon ${isCopied ? 'codicon-check' : isCopyFailed ? 'codicon-error' : 'codicon-copy'}`}></span>
+            {isCopied ? <CheckIcon size={12} /> : isCopyFailed ? <XCircleIcon size={12} /> : <CopyIcon size={12} />}
           </button>
         </div>
       </div>

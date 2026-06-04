@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import type { TFunction } from 'i18next';
+import { ChecklistIcon, CheckAllIcon, ClearAllIcon, TrashIcon, CloseIcon, RefreshIcon, SyncIcon } from '../Icons';
 
 export interface HistoryActionsProps {
   isSelectionMode: boolean;
@@ -38,7 +39,7 @@ export const HistoryActions = memo(({
           title={allVisibleSelected ? t('history.clearSelection') : t('history.selectAll')}
           aria-label={allVisibleSelected ? t('history.clearSelection') : t('history.selectAll')}
         >
-          <span className={`codicon ${allVisibleSelected ? 'codicon-clear-all' : 'codicon-check-all'}`}></span>
+          {allVisibleSelected ? <ClearAllIcon size={14} /> : <CheckAllIcon size={14} />}
           <span>{allVisibleSelected ? t('history.clearSelection') : t('history.selectAll')}</span>
         </button>
         <button
@@ -48,7 +49,7 @@ export const HistoryActions = memo(({
           title={t('history.deleteSelected')}
           aria-label={t('history.deleteSelected')}
         >
-          <span className="codicon codicon-trash"></span>
+          <TrashIcon size={14} />
           <span>{t('history.deleteSelected')}</span>
         </button>
         <button
@@ -57,7 +58,7 @@ export const HistoryActions = memo(({
           title={t('history.exitSelectMode')}
           aria-label={t('history.exitSelectMode')}
         >
-          <span className="codicon codicon-close"></span>
+          <CloseIcon size={14} />
         </button>
       </div>
     );
@@ -71,7 +72,7 @@ export const HistoryActions = memo(({
         title={t('history.selectMode')}
         aria-label={t('history.selectMode')}
       >
-        <span className="codicon codicon-checklist"></span>
+        <ChecklistIcon size={14} />
         <span>{t('history.selectMode')}</span>
       </button>
       {/* Deep search button */}
@@ -81,7 +82,7 @@ export const HistoryActions = memo(({
         disabled={isDeepSearching}
         title={t('history.deepSearchTooltip')}
       >
-        <span className={`codicon ${isDeepSearching ? 'codicon-sync codicon-modifier-spin' : 'codicon-refresh'}`}></span>
+        {isDeepSearching ? <SyncIcon size={14} spinning /> : <RefreshIcon size={14} />}
       </button>
     </div>
   );

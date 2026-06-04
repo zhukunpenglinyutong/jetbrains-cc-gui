@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { QueueDisplayState } from '../contexts/MessagesContext';
-import { ClockIcon, LoadingIcon } from './Icons';
 
 interface WaitingIndicatorProps {
   /** Loading start timestamp (ms), used to maintain continuous timing across view switches */
@@ -128,28 +127,28 @@ export const WaitingIndicator = ({
   return (
     <div className={containerClass}>
       {displayedMode === 'queued' ? (
-        <div className={`waiting-chip ${contentClass}`}>
-          <div className="chip-icon">
-            <ClockIcon size={16} />
-          </div>
-          <span className="chip-text">
+        <div className={`generating-strip queued ${contentClass}`}>
+          <div className="gen-orb" />
+          <span className="gen-text">
             {t('chat.queueWaiting', { count: queueAheadCount })}
           </span>
+          <div className="gen-sep" />
           {queueAheadCount > 0 && (
-            <span className="chip-time">
+            <span className="gen-time">
               {t('chat.estimatedWait', '预计')} {queueAheadCount * 5}s
             </span>
           )}
         </div>
       ) : (
-        <div className={`waiting-chip generating ${contentClass}`}>
-          <div className="chip-icon">
-            <LoadingIcon size={16} spinning={true} />
+        <div className={`generating-strip ${contentClass}`}>
+          <div className="gen-wave">
+            <span /><span /><span /><span /><span />
           </div>
-          <span className="chip-text">
-            {t('chat.generatingResponse', 'Claude 正在思考')}
+          <span className="gen-text">
+            {t('chat.generatingResponse', '正在生成响应')}
           </span>
-          <span className="chip-time">
+          <div className="gen-sep" />
+          <span className="gen-time">
             {formatElapsedTime(elapsedSeconds)}
           </span>
         </div>

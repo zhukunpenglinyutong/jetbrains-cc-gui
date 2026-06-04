@@ -1,0 +1,1318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>任务/子代理/编辑 UI 重设计草图</title>
+<style>
+  :root {
+    --bg: #1e1e1e;
+    --surface: #252526;
+    --surface-hover: #2d2d2d;
+    --surface-elevated: #2b2d30;
+    --border: #3c3c3c;
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-visible: rgba(255, 255, 255, 0.12);
+    --text-primary: #cccccc;
+    --text-secondary: #858585;
+    --text-tertiary: #585858;
+    --accent-blue: #3794ff;
+    --accent-blue-dim: rgba(55, 148, 255, 0.14);
+    --accent-blue-border: rgba(55, 148, 255, 0.55);
+    --accent-green: #4ec9b0;
+    --accent-green-dim: rgba(78, 201, 176, 0.12);
+    --accent-green-border: rgba(78, 201, 176, 0.4);
+    --accent-orange: #d98e04;
+    --accent-orange-dim: rgba(217, 142, 4, 0.12);
+    --accent-orange-border: rgba(217, 142, 4, 0.4);
+    --accent-red: #f44336;
+    --accent-red-dim: rgba(244, 67, 54, 0.12);
+    --accent-red-border: rgba(244, 67, 54, 0.4);
+    --accent-purple: #c586c0;
+    --accent-purple-dim: rgba(197, 134, 192, 0.12);
+    --accent-purple-border: rgba(197, 134, 192, 0.4);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 12px;
+    --radius-pill: 999px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    padding: 40px;
+    line-height: 1.6;
+  }
+
+  h1 {
+    font-size: 28px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #e0e0e0;
+  }
+
+  .subtitle {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin-bottom: 48px;
+  }
+
+  .section {
+    margin-bottom: 56px;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .section-header h2 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #e0e0e0;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: var(--radius-pill);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .badge-current { background: #333; color: #888; border: 1px solid #555; }
+  .badge-new { background: var(--accent-blue-dim); color: var(--accent-blue); border: 1px solid var(--accent-blue-border); }
+  .badge-recommended { background: var(--accent-green-dim); color: var(--accent-green); border: 1px solid var(--accent-green-border); }
+
+  .section-desc {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-bottom: 24px;
+  }
+
+  /* Demo card container */
+  .demo-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 24px;
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .demo-card::before {
+    content: attr(data-label);
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    font-size: 11px;
+    color: var(--text-tertiary);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .demo-row {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  .demo-col {
+    flex: 1;
+    min-width: 280px;
+  }
+
+  .demo-label {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 24px 0;
+  }
+
+  /* Notes */
+  .notes {
+    background: var(--accent-blue-dim);
+    border: 1px solid rgba(55, 148, 255, 0.2);
+    border-radius: var(--radius-md);
+    padding: 16px 20px;
+    margin-top: 16px;
+  }
+
+  .notes h4 {
+    font-size: 13px;
+    color: var(--accent-blue);
+    margin-bottom: 8px;
+  }
+
+  .notes ul {
+    list-style: none;
+    padding: 0;
+  }
+
+  .notes li {
+    font-size: 13px;
+    color: var(--text-secondary);
+    padding: 3px 0;
+    padding-left: 16px;
+    position: relative;
+  }
+
+  .notes li::before {
+    content: '→';
+    position: absolute;
+    left: 0;
+    color: var(--text-tertiary);
+  }
+
+  /* ===== Task Block (New Design) ===== */
+  .task-block {
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    transition: all 0.2s ease;
+  }
+
+  .task-block:hover {
+    border-color: var(--border-visible);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  .task-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .task-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .task-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .task-icon-agent {
+    background: var(--accent-purple-dim);
+    color: var(--accent-purple);
+  }
+
+  .task-icon-edit {
+    background: var(--accent-blue-dim);
+    color: var(--accent-blue);
+  }
+
+  .task-icon-task {
+    background: var(--accent-orange-dim);
+    color: var(--accent-orange);
+  }
+
+  .task-icon svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .task-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .task-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .task-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-tertiary);
+  }
+
+  .task-meta-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+  }
+
+  .task-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    font-size: 12px;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+
+  .status-pending {
+    background: var(--accent-orange-dim);
+    border: 1px solid var(--accent-orange-border);
+    color: var(--accent-orange);
+  }
+
+  .status-running {
+    background: var(--accent-blue-dim);
+    border: 1px solid var(--accent-blue-border);
+    color: var(--accent-blue);
+  }
+
+  .status-completed {
+    background: var(--accent-green-dim);
+    border: 1px solid var(--accent-green-border);
+    color: var(--accent-green);
+  }
+
+  .status-error {
+    background: var(--accent-red-dim);
+    border: 1px solid var(--accent-red-border);
+    color: var(--accent-red);
+  }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .status-running .status-dot {
+    animation: pulse-dot 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+
+  .task-expand-icon {
+    color: var(--text-tertiary);
+    font-size: 14px;
+    transition: transform 0.2s ease;
+    margin-left: 8px;
+  }
+
+  .task-expand-icon.expanded {
+    transform: rotate(90deg);
+  }
+
+  .task-details {
+    padding: 0 16px 16px;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .task-field {
+    display: flex;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  }
+
+  .task-field:last-child {
+    border-bottom: none;
+  }
+
+  .task-field-label {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    min-width: 100px;
+    flex-shrink: 0;
+  }
+
+  .task-field-value {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-family: 'JetBrains Mono', monospace;
+    word-break: break-all;
+  }
+
+  /* ===== Diff Block (New Design) ===== */
+  .diff-block {
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    transition: all 0.2s ease;
+  }
+
+  .diff-block:hover {
+    border-color: var(--border-visible);
+  }
+
+  .diff-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    cursor: pointer;
+  }
+
+  .diff-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .diff-file-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+    background: var(--accent-blue-dim);
+    color: var(--accent-blue);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .diff-file-icon svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .diff-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .diff-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .diff-file-name {
+    color: var(--accent-blue);
+    cursor: pointer;
+  }
+
+  .diff-file-name:hover {
+    text-decoration: underline;
+  }
+
+  .diff-line-info {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .diff-stats {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 12px;
+  }
+
+  .diff-stat {
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .diff-stat-added {
+    color: var(--accent-green);
+  }
+
+  .diff-stat-deleted {
+    color: var(--accent-red);
+  }
+
+  .diff-actions {
+    display: flex;
+    gap: 6px;
+  }
+
+  .diff-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .diff-action-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    border-color: var(--border-visible);
+  }
+
+  .diff-action-btn svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .diff-content {
+    border-top: 1px solid var(--border-subtle);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    overflow-x: auto;
+  }
+
+  .diff-line {
+    display: flex;
+    min-width: fit-content;
+  }
+
+  .diff-gutter {
+    width: 40px;
+    text-align: center;
+    flex-shrink: 0;
+    user-select: none;
+    font-size: 11px;
+  }
+
+  .diff-line-unchanged .diff-gutter { color: var(--text-tertiary); opacity: 0.5; }
+  .diff-line-added .diff-gutter { color: var(--accent-green); background: rgba(78, 201, 176, 0.08); }
+  .diff-line-deleted .diff-gutter { color: var(--accent-red); background: rgba(244, 67, 54, 0.08); }
+
+  .diff-code {
+    flex: 1;
+    padding: 0 12px;
+    white-space: pre;
+  }
+
+  .diff-line-added .diff-code { background: rgba(78, 201, 176, 0.06); }
+  .diff-line-deleted .diff-code { background: rgba(244, 67, 54, 0.06); }
+
+  /* ===== Agent Dialog (New Design) ===== */
+  .agent-dialog-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+
+  .agent-dialog {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    width: 480px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    animation: dialog-enter 0.2s ease;
+  }
+
+  @keyframes dialog-enter {
+    from { opacity: 0; transform: scale(0.95) translateY(8px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  .dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .dialog-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .dialog-title-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-sm);
+    background: var(--accent-purple-dim);
+    color: var(--accent-purple);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .dialog-title-icon svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .dialog-close-btn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--text-tertiary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .dialog-close-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+  }
+
+  .dialog-close-btn svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .dialog-body {
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .form-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .form-label .required {
+    color: var(--accent-red);
+    font-size: 14px;
+  }
+
+  .form-input {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 13px;
+    transition: all 0.15s ease;
+    outline: none;
+  }
+
+  .form-input:focus {
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 2px var(--accent-blue-dim);
+  }
+
+  .form-input::placeholder {
+    color: var(--text-tertiary);
+  }
+
+  .form-input-wrapper {
+    position: relative;
+  }
+
+  .form-char-counter {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 11px;
+    color: var(--text-tertiary);
+    pointer-events: none;
+  }
+
+  .form-textarea {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 120px;
+    transition: all 0.15s ease;
+    outline: none;
+  }
+
+  .form-textarea:focus {
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 2px var(--accent-blue-dim);
+  }
+
+  .form-textarea::placeholder {
+    color: var(--text-tertiary);
+  }
+
+  .form-hint {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    margin-top: 4px;
+  }
+
+  .form-error {
+    font-size: 12px;
+    color: var(--accent-red);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+  }
+
+  .form-error svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .dialog-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: 1px solid transparent;
+  }
+
+  .btn svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .btn-secondary {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--border);
+    color: var(--text-secondary);
+  }
+
+  .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+  }
+
+  .btn-primary {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+    color: white;
+  }
+
+  .btn-primary:hover {
+    background: #4ea1ff;
+    border-color: #4ea1ff;
+  }
+
+  /* ===== Status Indicator (New Design) ===== */
+  .status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: var(--radius-pill);
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .status-indicator .orb {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    position: relative;
+  }
+
+  .status-indicator .orb::before {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 1.5px solid currentColor;
+    animation: orb-ring 2s ease-out infinite;
+    opacity: 0;
+  }
+
+  @keyframes orb-ring {
+    0% { transform: scale(1); opacity: 0.6; }
+    100% { transform: scale(2); opacity: 0; }
+  }
+
+  .status-indicator .time {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    opacity: 0.7;
+  }
+
+  /* ===== Summary ===== */
+  .summary-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .summary-table th {
+    text-align: left;
+    padding: 10px 12px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .summary-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  }
+
+  .summary-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .color-swatch {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    vertical-align: middle;
+    margin-right: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+  }
+</style>
+</head>
+<body>
+
+<h1>🎨 任务/子代理/编辑 UI 重设计</h1>
+<p class="subtitle">适配 mockup 设计风格 · JetBrains 暗色主题 · 2026-06-04</p>
+
+<!-- ============================== -->
+<!-- Section: Task Block -->
+<!-- ============================== -->
+<div class="section">
+  <div class="section-header">
+    <h2>任务块 (Task Block)</h2>
+    <span class="badge badge-new">New Design</span>
+  </div>
+  <p class="section-desc">Agent/Task/Spawn Agent 工具调用的统一展示样式，支持展开查看详情。</p>
+
+  <div class="demo-card" data-label="任务块">
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <!-- Running Task -->
+      <div class="task-block">
+        <div class="task-header">
+          <div class="task-header-left">
+            <div class="task-icon task-icon-agent">
+              <svg viewBox="0 0 24 24"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01M9 18h6"/></svg>
+            </div>
+            <div class="task-info">
+              <div class="task-title">spawn_agent</div>
+              <div class="task-meta">
+                <span class="task-meta-tag">general-purpose</span>
+                <span class="task-meta-tag">claude-sonnet-4-6</span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px;">a3f8b2c1…</span>
+              </div>
+            </div>
+          </div>
+          <div class="task-status status-running">
+            <span class="status-dot"></span>
+            <span>运行中</span>
+            <span class="time">12s</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Completed Task -->
+      <div class="task-block">
+        <div class="task-header">
+          <div class="task-header-left">
+            <div class="task-icon task-icon-task">
+              <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+            </div>
+            <div class="task-info">
+              <div class="task-title">task</div>
+              <div class="task-meta">
+                <span class="task-meta-tag">搜索项目中的错误</span>
+              </div>
+            </div>
+          </div>
+          <div class="task-status status-completed">
+            <span class="status-dot"></span>
+            <span>已完成</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error Task -->
+      <div class="task-block">
+        <div class="task-header">
+          <div class="task-header-left">
+            <div class="task-icon task-icon-agent">
+              <svg viewBox="0 0 24 24"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01M9 18h6"/></svg>
+            </div>
+            <div class="task-info">
+              <div class="task-title">spawn_agent</div>
+              <div class="task-meta">
+                <span class="task-meta-tag">code-reviewer</span>
+              </div>
+            </div>
+          </div>
+          <div class="task-status status-error">
+            <span class="status-dot"></span>
+            <span>错误</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Expanded Task -->
+      <div class="task-block">
+        <div class="task-header">
+          <div class="task-header-left">
+            <div class="task-icon task-icon-agent">
+              <svg viewBox="0 0 24 24"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01M9 18h6"/></svg>
+            </div>
+            <div class="task-info">
+              <div class="task-title">spawn_agent</div>
+              <div class="task-meta">
+                <span class="task-meta-tag">general-purpose</span>
+                <span class="task-meta-tag">claude-sonnet-4-6</span>
+              </div>
+            </div>
+          </div>
+          <div class="task-status status-completed">
+            <span class="status-dot"></span>
+            <span>已完成</span>
+          </div>
+          <span class="task-expand-icon expanded">›</span>
+        </div>
+        <div class="task-details">
+          <div class="task-field">
+            <div class="task-field-label">nickname</div>
+            <div class="task-field-value">代码审查助手</div>
+          </div>
+          <div class="task-field">
+            <div class="task-field-label">model</div>
+            <div class="task-field-value">claude-sonnet-4-6</div>
+          </div>
+          <div class="task-field">
+            <div class="task-field-label">agent_id</div>
+            <div class="task-field-value">a3f8b2c1-4d5e-6f7a-8b9c-0d1e2f3a4b5c</div>
+          </div>
+          <div class="task-field">
+            <div class="task-field-label">耗时</div>
+            <div class="task-field-value">45.2s</div>
+          </div>
+          <div class="task-field">
+            <div class="task-field-label">Token</div>
+            <div class="task-field-value">12,450</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h4>设计要点</h4>
+    <ul>
+      <li>统一的卡片样式，圆角 10px，微妙边框 rgba(255,255,255, 0.08)</li>
+      <li>左侧图标带背景色，区分不同类型（Agent=紫色，Task=橙色）</li>
+      <li>状态使用胶囊指示器，带脉冲动画（运行中）</li>
+      <li>元数据标签使用小药丸样式，便于快速识别</li>
+      <li>展开时显示详细字段，保持简洁的键值对布局</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- Section: Edit/Diff Block -->
+<!-- ============================== -->
+<div class="section">
+  <div class="section-header">
+    <h2>编辑块 (Edit/Diff Block)</h2>
+    <span class="badge badge-new">New Design</span>
+  </div>
+  <p class="section-desc">文件编辑操作的展示，包含 diff 预览和操作按钮。</p>
+
+  <div class="demo-card" data-label="编辑块">
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <!-- Collapsed Edit -->
+      <div class="diff-block">
+        <div class="diff-header">
+          <div class="diff-header-left">
+            <div class="diff-file-icon">
+              <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </div>
+            <div class="diff-info">
+              <div class="diff-title">
+                编辑文件
+                <span class="diff-file-name">src/utils/helpers.ts</span>
+              </div>
+              <div class="diff-line-info">第 42-58 行</div>
+            </div>
+            <div class="diff-stats">
+              <span class="diff-stat diff-stat-added">+5</span>
+              <span class="diff-stat diff-stat-deleted">-3</span>
+            </div>
+          </div>
+          <div class="diff-actions">
+            <button class="diff-action-btn" title="在 IDEA 中查看 Diff">
+              <svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/></svg>
+              Diff
+            </button>
+            <button class="diff-action-btn" title="刷新文件">
+              <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Expanded Edit with Diff -->
+      <div class="diff-block">
+        <div class="diff-header">
+          <div class="diff-header-left">
+            <div class="diff-file-icon">
+              <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </div>
+            <div class="diff-info">
+              <div class="diff-title">
+                编辑文件
+                <span class="diff-file-name">src/components/Button.tsx</span>
+              </div>
+              <div class="diff-line-info">第 15-28 行</div>
+            </div>
+            <div class="diff-stats">
+              <span class="diff-stat diff-stat-added">+8</span>
+              <span class="diff-stat diff-stat-deleted">-4</span>
+            </div>
+          </div>
+          <span class="task-expand-icon expanded">›</span>
+        </div>
+        <div class="diff-content">
+          <div class="diff-line diff-line-unchanged">
+            <div class="diff-gutter">15</div>
+            <div class="diff-code">interface ButtonProps {</div>
+          </div>
+          <div class="diff-line diff-line-unchanged">
+            <div class="diff-gutter">16</div>
+            <div class="diff-code">  children: React.ReactNode;</div>
+          </div>
+          <div class="diff-line diff-line-deleted">
+            <div class="diff-gutter">17</div>
+            <div class="diff-code">- onClick?: () => void;</div>
+          </div>
+          <div class="diff-line diff-line-added">
+            <div class="diff-gutter">17</div>
+            <div class="diff-code">+ onClick: (e: React.MouseEvent) => void;</div>
+          </div>
+          <div class="diff-line diff-line-added">
+            <div class="diff-gutter">18</div>
+            <div class="diff-code">+ variant?: 'primary' | 'secondary' | 'ghost';</div>
+          </div>
+          <div class="diff-line diff-line-added">
+            <div class="diff-gutter">19</div>
+            <div class="diff-code">+ size?: 'sm' | 'md' | 'lg';</div>
+          </div>
+          <div class="diff-line diff-line-unchanged">
+            <div class="diff-gutter">20</div>
+            <div class="diff-code">  disabled?: boolean;</div>
+          </div>
+          <div class="diff-line diff-line-deleted">
+            <div class="diff-gutter">21</div>
+            <div class="diff-code">- className?: string;</div>
+          </div>
+          <div class="diff-line diff-line-added">
+            <div class="diff-gutter">21</div>
+            <div class="diff-code">+ className?: string;</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h4>设计要点</h4>
+    <ul>
+      <li>文件图标使用蓝色背景，与任务块的 Agent 图标区分</li>
+      <li>文件名使用可点击的蓝色链接样式</li>
+      <li>增删统计使用绿色(+)/红色(-)  monospace 字体</li>
+      <li>操作按钮（Diff、刷新）使用简洁的药丸样式</li>
+      <li>Diff 内容使用标准的 diff 颜色方案，绿色=新增，红色=删除</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- Section: Agent Dialog -->
+<!-- ============================== -->
+<div class="section">
+  <div class="section-header">
+    <h2>子代理对话框 (Agent Dialog)</h2>
+    <span class="badge badge-new">New Design</span>
+  </div>
+  <p class="section-desc">添加/编辑子代理配置的对话框，使用现代化的表单设计。</p>
+
+  <div class="demo-card" data-label="对话框">
+    <div class="agent-dialog-overlay" style="position: relative; background: var(--surface); padding: 0; min-height: 400px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-md);">
+      <div class="agent-dialog">
+        <div class="dialog-header">
+          <div class="dialog-title">
+            <div class="dialog-title-icon">
+              <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </div>
+            添加子代理
+          </div>
+          <button class="dialog-close-btn">
+            <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div class="dialog-body">
+          <div class="form-group">
+            <label class="form-label">
+              名称 <span class="required">*</span>
+            </label>
+            <div class="form-input-wrapper">
+              <input type="text" class="form-input" placeholder="输入代理名称" value="代码审查助手" />
+              <span class="form-char-counter">6/20</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">提示词</label>
+            <textarea class="form-textarea" placeholder="输入代理的系统提示词..." rows="6">你是一个专业的代码审查助手，负责检查代码质量、安全性和最佳实践。</textarea>
+            <div class="form-hint">定义代理的行为和能力范围</div>
+          </div>
+        </div>
+
+        <div class="dialog-footer">
+          <button class="btn btn-secondary">
+            <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            取消
+          </button>
+          <button class="btn btn-primary">
+            <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            添加
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h4>设计要点</h4>
+    <ul>
+      <li>对话框使用圆角 12px，带阴影和毛玻璃背景</li>
+      <li>标题栏左侧带紫色图标，与 Agent 主题色一致</li>
+      <li>表单输入框使用深色背景，聚焦时带蓝色边框和光晕</li>
+      <li>字符计数器显示在输入框右侧</li>
+      <li>按钮使用标准的主/次按钮样式</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- Section: Status Indicators -->
+<!-- ============================== -->
+<div class="section">
+  <div class="section-header">
+    <h2>状态指示器</h2>
+    <span class="badge badge-recommended">Recommended</span>
+  </div>
+  <p class="section-desc">用于任务和子代理运行状态的统一指示器组件。</p>
+
+  <div class="demo-card" data-label="状态">
+    <div class="demo-row">
+      <div class="demo-col">
+        <div class="demo-label">运行中</div>
+        <div class="status-indicator status-running">
+          <div class="orb"></div>
+          <span>正在生成响应</span>
+          <span class="time">12s</span>
+        </div>
+      </div>
+      <div class="demo-col">
+        <div class="demo-label">已完成</div>
+        <div class="status-indicator status-completed">
+          <div class="orb"></div>
+          <span>生成完成</span>
+        </div>
+      </div>
+      <div class="demo-col">
+        <div class="demo-label">错误</div>
+        <div class="status-indicator status-error">
+          <div class="orb"></div>
+          <span>执行失败</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- Section: Summary -->
+<!-- ============================== -->
+<div class="section">
+  <div class="section-header">
+    <h2>设计规范总结</h2>
+  </div>
+
+  <div class="demo-card" data-label="规范">
+    <table class="summary-table">
+      <thead>
+        <tr>
+          <th>元素</th>
+          <th>规范</th>
+          <th>示例</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>圆角</td>
+          <td>卡片: 10px, 按钮/标签: 6px, 胶囊: 999px</td>
+          <td><code style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; font-size: 12px;">border-radius: 10px</code></td>
+        </tr>
+        <tr>
+          <td>边框</td>
+          <td>默认: rgba(255,255,255, 0.08), 悬停: rgba(255,255,255, 0.12)</td>
+          <td><span class="color-swatch" style="background: rgba(255,255,255,0.08);"></span>Subtle</td>
+        </tr>
+        <tr>
+          <td>Agent 图标</td>
+          <td>紫色 (#c586c0), 背景 rgba(197,134,192, 0.12)</td>
+          <td><span class="color-swatch" style="background: #c586c0;"></span>Purple</td>
+        </tr>
+        <tr>
+          <td>Task 图标</td>
+          <td>橙色 (#d98e04), 背景 rgba(217,142,4, 0.12)</td>
+          <td><span class="color-swatch" style="background: #d98e04;"></span>Orange</td>
+        </tr>
+        <tr>
+          <td>Edit 图标</td>
+          <td>蓝色 (#3794ff), 背景 rgba(55,148,255, 0.14)</td>
+          <td><span class="color-swatch" style="background: #3794ff;"></span>Blue</td>
+        </tr>
+        <tr>
+          <td>成功状态</td>
+          <td>绿色 (#4ec9b0), 背景 rgba(78,201,176, 0.12)</td>
+          <td><span class="color-swatch" style="background: #4ec9b0;"></span>Green</td>
+        </tr>
+        <tr>
+          <td>错误状态</td>
+          <td>红色 (#f44336), 背景 rgba(244,67,54, 0.12)</td>
+          <td><span class="color-swatch" style="background: #f44336;"></span>Red</td>
+        </tr>
+        <tr>
+          <td>字体</td>
+          <td>UI: -apple-system, Code: JetBrains Mono</td>
+          <td><code style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; font-size: 12px; font-family: 'JetBrains Mono', monospace;">monospace</code></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div style="text-align: center; color: var(--text-tertiary); font-size: 12px; padding: 20px;">
+  jetbrains-melon-cc-gui · Task/Agent/Edit UI Redesign Mockup · 2026-06-04
+</div>
+
+</body>
+</html>

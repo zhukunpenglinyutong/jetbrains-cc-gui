@@ -881,6 +881,60 @@ export const TriangleIcon = createIcon(<path d="M10.29 3.86L1.82 18a2 2 0 001.71
 
 export const DiamondIcon = createIcon(<rect x="4.5" y="4.5" width="15" height="15" rx="1" transform="rotate(45 12 12)" />);
 
+// ==================== History Page Icons ====================
+
+export const ChecklistIcon = createIcon(
+  <>
+    <path d="M9 11l3 3L22 4" />
+    <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+  </>
+);
+
+export const CheckAllIcon = createIcon(
+  <>
+    <rect x="8" y="2" width="13" height="18" rx="2" />
+    <path d="M4 6l2 2 4-4" />
+    <path d="M4 12l2 2 4-4" />
+    <path d="M4 18l2 2 4-4" />
+  </>
+);
+
+export const ClearAllIcon = createIcon(
+  <>
+    <rect x="8" y="2" width="13" height="18" rx="2" />
+    <path d="M4 7l4 4M8 7l-4 4" />
+    <path d="M4 13l4 4M8 13l-4 4" />
+  </>
+);
+
+export const SyncIcon: React.FC<IconProps & { spinning?: boolean }> = ({
+  size = 16,
+  className,
+  style,
+  spinning = false,
+}) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    style={{
+      ...style,
+      animation: spinning ? 'spin 1s linear infinite' : undefined,
+    }}
+  >
+    <path d="M21 2v6h-6" />
+    <path d="M3 12a9 9 0 0115.36-6.36L21 8" />
+    <path d="M3 22v-6h6" />
+    <path d="M21 12a9 9 0 01-15.36 6.36L3 16" />
+  </svg>
+);
+
 // Export all icons as a map for convenience
 export const Icons = {
   back: BackIcon,
@@ -1004,6 +1058,10 @@ export const Icons = {
   squareFilled: SquareFilledIcon,
   triangle: TriangleIcon,
   diamond: DiamondIcon,
+  checklist: ChecklistIcon,
+  checkAll: CheckAllIcon,
+  clearAll: ClearAllIcon,
+  sync: SyncIcon,
 } as const;
 
 export type IconName = keyof typeof Icons;

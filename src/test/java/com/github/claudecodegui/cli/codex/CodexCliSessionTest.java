@@ -4,6 +4,8 @@ import com.github.claudecodegui.cli.CliSessionCallback;
 import org.junit.Test;
 
 import java.lang.reflect.Method;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -318,6 +320,62 @@ public class CodexCliSessionTest {
 
         assertEquals("", assistantContent.toString());
         assertFalse(callback.events.stream().anyMatch(event -> "content_delta".equals(event.type)));
+    }
+
+    @Test
+    public void longPromptIsNotPlacedOnWindowsCommandLine() throws Exception {
+        CodexCliSession session = new CodexCliSession("tab-long-prompt");
+        String longPrompt = "x".repeat(40_000);
+        var request = new com.github.claudecodegui.cli.CliSendRequest(
+                "tab-long-prompt",
+                "codex",
+                longPrompt,
+                null,
+                "D:\\project\\jetbrains-melon-cc-gui",
+                List.of(),
+                null,
+                List.of(),
+                null,
+                "acceptEdits",
+                "gpt-5.3-codex",
+                null,
+                null,
+                java.util.Map.of()
+        );
+
+        Method buildCommand = CodexCliSession.class.getDeclaredMethod(
+                "buildCommand",
+                com.github.claudecodegui.cli.CliSendRequest.class,
+                List.class
+        );
+        buildCommand.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        List<String> command = (List<String>) buildCommand.invoke(session, request, List.of());
+
+        assertFalse("Prompt must be sent via stdin instead of as a command-line argument", command.contains(longPrompt));
+
+        Method buildPromptInput = CodexCliSession.class.getDeclaredMethod(
+                "buildPromptInput",
+                com.github.claudecodegui.cli.CliSendRequest.class
+        );
+        buildPromptInput.setAccessible(true);
+        byte[] stdin = (byte[]) buildPromptInput.invoke(session, request);
+        assertEquals(longPrompt, new String(stdin, StandardCharsets.UTF_8));
+    }
+
+    @Test
+    public void gbkEncodedWindowsDiagnosticFallsBackToChineseText() throws Exception {
+        Method decodeLine = CodexCliSession.class.getDeclaredMethod(
+                "decodeLine",
+                byte[].class,
+                int.class
+        );
+        decodeLine.setAccessible(true);
+
+        byte[] bytes = "命令行太长。".getBytes(Charset.forName("GBK"));
+        String decoded = (String) decodeLine.invoke(null, bytes, bytes.length);
+
+        assertEquals("命令行太长。", decoded);
     }
 
     @Test
