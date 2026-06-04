@@ -207,6 +207,7 @@ class ClaudeDaemonRequestExecutor {
                         // an error message or toast notification.
                         long elapsed = System.currentTimeMillis() - startTime;
                         log.info("[DaemonExecutor] Request was aborted by user (elapsed: " + elapsed + "ms)");
+                        result.interrupted = true;
                         result.error = "User interrupted";
                         callback.onComplete(result);
                     } else {
@@ -231,6 +232,7 @@ class ClaudeDaemonRequestExecutor {
                     // Treat as graceful interruption, same as the wasAborted branch above.
                     log.info("[DaemonExecutor] Request was aborted by user (caught exception, elapsed: " + elapsed + "ms)");
                     result.success = false;
+                    result.interrupted = true;
                     result.error = "User interrupted";
                     callback.onComplete(result);
                 } else if (!hadSendError.get()) {

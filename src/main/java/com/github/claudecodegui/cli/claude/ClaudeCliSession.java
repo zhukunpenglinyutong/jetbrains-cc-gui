@@ -53,6 +53,7 @@ public class ClaudeCliSession {
     private volatile String sessionId;
     // 当前活跃进程（用于中断）
     private volatile CliProcessHandle activeHandle;
+    private final AtomicBoolean userInterrupted = new AtomicBoolean(false);
 
     public ClaudeCliSession(String tabId) {
         this.tabId = tabId;
@@ -65,12 +66,15 @@ public class ClaudeCliSession {
     }
 
     public void interrupt() {
+        userInterrupted.set(true);
         CliProcessHandle h = activeHandle;
         if (h != null) {
             long startNanos = System.nanoTime();
             h.interrupt();
             LOG.info("[TabPerf] ClaudeCliSession.interrupt returned in " + TabPerformanceLogger.elapsedMillis(
                     startNanos) + "ms: tab=" + tabId);
+        } else {
+            LOG.info("[ClaudeCliSession] Interrupt requested before active process handle was available: tab=" + tabId);
         }
     }
 
@@ -287,6 +291,7 @@ public class ClaudeCliSession {
     }
 
     public CompletableFuture<Void> send(CliSendRequest request, CliSessionCallback callback) {
+        prepareForSend();
         return CliSessionExecutor.runAsync(() -> {
             long sendStartNanos = System.nanoTime();
             List<File> tempFiles = new ArrayList<>();
@@ -366,37 +371,47 @@ public class ClaudeCliSession {
                                 .getName());
                 activeHandle = new CliProcessHandle(process, "claude-tab-" + tabId);
 
-                readOutput(callback, diagnostic, sendStartNanos, completedWithStructuredError);
+                AtomicBoolean interruptHandled = new AtomicBoolean(false);
+                readOutput(callback, diagnostic, sendStartNanos, completedWithStructuredError, interruptHandled);
 
                 process.waitFor();
                 int exitCode = process.exitValue();
-                boolean interrupted = activeHandle.wasInterrupted();
+                boolean interrupted = wasInterrupted();
                 LOG.info(
                         "[CliConcurrencyDiag][ClaudeCliSession] process exited" + ": tabId=" + tabId + ", exitCode=" + exitCode + ", " +
                                 "interrupted=" + interrupted + ", elapsedMs=" + elapsedMillis(
                                 sendStartNanos) + ", thread=" + Thread.currentThread()
                                 .getName());
 
-                if (interrupted) {
+                if (shouldEmitInterruptedCompletion(interruptHandled)) {
                     callback.onInterrupted(null, "__I18N__:chat.requestInterrupted");
-                } else if (exitCode != 0 && !completedWithStructuredError.get()) {
+                } else if (shouldReportExitError(exitCode, completedWithStructuredError.get())) {
                     String err = buildExitError(exitCode, diagnostic);
                     callback.onError(err);
                     callback.onComplete(false, null, err);
                 }
             } catch (Exception e) {
                 LOG.warn("[ClaudeCliSession][" + tabId + "] send failed", e);
-                callback.onError(e.getMessage());
-                callback.onComplete(false, null, e.getMessage());
+                if (wasInterrupted()) {
+                    callback.onInterrupted(null, "__I18N__:chat.requestInterrupted");
+                } else {
+                    callback.onError(e.getMessage());
+                    callback.onComplete(false, null, e.getMessage());
+                }
             } finally {
                 activeHandle = null;
                 cleanupTempFiles(tempFiles);
+                userInterrupted.set(false);
             }
         });
     }
 
+    void prepareForSend() {
+        userInterrupted.set(false);
+    }
+
     private void readOutput(CliSessionCallback callback, StringBuilder diagnostic, long sendStartNanos,
-                            AtomicBoolean completedWithStructuredError) throws Exception {
+                            AtomicBoolean completedWithStructuredError, AtomicBoolean interruptHandled) throws Exception {
         ClaudeCliStreamParser parser = new ClaudeCliStreamParser(gson);
         parser.resetState();
         StringBuilder assistantContent = new StringBuilder();
@@ -455,8 +470,9 @@ public class ClaudeCliSession {
         }
 
         // 进程 stdout 结束但没有 result 事件
-        boolean interrupted = activeHandle.wasInterrupted();
+        boolean interrupted = wasInterrupted();
         if (interrupted) {
+            interruptHandled.set(true);
             callback.onInterrupted(assistantContent.toString(), "__I18N__:chat.requestInterrupted");
         } else if (!hadError.get() && !assistantContent.isEmpty()) {
             callback.onMessage("stream_end", "");
@@ -465,6 +481,19 @@ public class ClaudeCliSession {
         } else {
             callback.onComplete(result.success, assistantContent.toString(), result.error);
         }
+    }
+
+    boolean wasInterrupted() {
+        CliProcessHandle handle = activeHandle;
+        return userInterrupted.get() || (handle != null && handle.wasInterrupted());
+    }
+
+    boolean shouldEmitInterruptedCompletion(AtomicBoolean interruptHandled) {
+        return wasInterrupted() && (interruptHandled == null || !interruptHandled.get());
+    }
+
+    boolean shouldReportExitError(int exitCode, boolean completedWithStructuredError) {
+        return exitCode != 0 && !completedWithStructuredError && !wasInterrupted();
     }
 
     private String getPermissionDirectory() {

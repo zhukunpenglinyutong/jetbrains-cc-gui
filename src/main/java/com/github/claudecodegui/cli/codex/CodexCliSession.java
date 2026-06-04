@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
 /**
@@ -98,6 +99,7 @@ public class CodexCliSession {
     private volatile String threadId;
     // 当前活跃进程（用于中断）
     private volatile CliProcessHandle activeHandle;
+    private final AtomicBoolean userInterrupted = new AtomicBoolean(false);
     private final Map<String, String> assistantTextByItemId = new HashMap<>();
     private final Map<String, String> reasoningTextByItemId = new HashMap<>();
     private final Set<String> emittedToolUseIds = new HashSet<>();
@@ -110,6 +112,7 @@ public class CodexCliSession {
     }
 
     public CompletableFuture<Void> send(CliSendRequest request, CliSessionCallback callback) {
+        prepareForSend();
         return CliSessionExecutor.runAsync(() -> {
             List<File> tempFiles = new ArrayList<>();
             StringBuilder diagnostic = new StringBuilder();
@@ -173,9 +176,8 @@ public class CodexCliSession {
 
                 process.waitFor();
                 int exitCode = process.exitValue();
-                boolean interrupted = activeHandle.wasInterrupted();
 
-                if (interrupted) {
+                if (wasInterrupted()) {
                     callback.onInterrupted(assistantContent.toString(), "__I18N__:chat.requestInterrupted");
                 } else if (exitCode == 0) {
                     if (!cliError.isEmpty()) {
@@ -187,24 +189,30 @@ public class CodexCliSession {
                         callback.onMessage("message_end", "");
                         callback.onComplete(true, assistantContent.toString(), null);
                     }
-                } else {
+                } else if (shouldReportExitError(exitCode)) {
                     String err = buildExitError(exitCode, diagnostic, cliError, requestHasImages);
                     callback.onError(err);
                     callback.onComplete(false, assistantContent.toString(), err);
                 }
             } catch (Exception e) {
                 LOG.warn("[CodexCliSession][" + tabId + "] send failed", e);
-                String err = CliErrorFormatter.formatError("Codex", e.getMessage());
-                callback.onError(err);
-                callback.onComplete(false, null, err);
+                if (wasInterrupted()) {
+                    callback.onInterrupted(null, "__I18N__:chat.requestInterrupted");
+                } else {
+                    String err = CliErrorFormatter.formatError("Codex", e.getMessage());
+                    callback.onError(err);
+                    callback.onComplete(false, null, err);
+                }
             } finally {
                 activeHandle = null;
                 cleanupTempFiles(tempFiles);
+                userInterrupted.set(false);
             }
         });
     }
 
     public void interrupt() {
+        userInterrupted.set(true);
         CliProcessHandle h = activeHandle;
         if (h != null) {
             long startNanos = System.nanoTime();
@@ -212,6 +220,19 @@ public class CodexCliSession {
             LOG.info("[TabPerf] CodexCliSession.interrupt returned in "
                     + TabPerformanceLogger.elapsedMillis(startNanos) + "ms: tab=" + tabId);
         }
+    }
+
+    void prepareForSend() {
+        userInterrupted.set(false);
+    }
+
+    boolean wasInterrupted() {
+        CliProcessHandle handle = activeHandle;
+        return userInterrupted.get() || (handle != null && handle.wasInterrupted());
+    }
+
+    boolean shouldReportExitError(int exitCode) {
+        return exitCode != 0 && !wasInterrupted();
     }
 
     public void dispose() {

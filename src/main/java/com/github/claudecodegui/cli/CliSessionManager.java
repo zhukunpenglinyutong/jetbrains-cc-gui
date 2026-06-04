@@ -31,12 +31,13 @@ public class CliSessionManager {
     }
 
     public void interrupt(String tabId, String provider) {
-        if ("claude".equals(provider)) {
+        String runtimeProvider = normalizeInterruptProvider(provider);
+        if ("claude".equals(runtimeProvider)) {
             ClaudeCliSession s = claudeSessions.get(tabId);
             if (s != null) {
                 s.interrupt();
             }
-        } else if ("codex".equals(provider)) {
+        } else if ("codex".equals(runtimeProvider)) {
             CodexCliSession s = codexSessions.get(tabId);
             if (s != null) {
                 s.interrupt();
@@ -95,6 +96,10 @@ public class CliSessionManager {
                     callback.onComplete(r);
                     return r;
                 });
+    }
+
+    static String normalizeInterruptProvider(String provider) {
+        return "codex".equals(provider) ? "codex" : "claude";
     }
 
     /** 将 CliSessionCallback 适配为 MessageCallback，统一回调格式。 */

@@ -54,6 +54,9 @@ public final class CliErrorFormatter {
         if (stripped.isEmpty()) {
             return;
         }
+        if (isNormalStreamJsonEvent(stripped)) {
+            return;
+        }
         if (diagnostic.length() > 0) {
             diagnostic.append('\n');
         }
@@ -181,6 +184,18 @@ public final class CliErrorFormatter {
             return true;
         }
         return stripCliPrefix(line.trim()).isEmpty();
+    }
+
+    private static boolean isNormalStreamJsonEvent(String line) {
+        if (line == null || !line.startsWith("{")) {
+            return false;
+        }
+        String compact = line.replace(" ", "");
+        return compact.startsWith("{\"type\":\"system\"")
+                || compact.startsWith("{\"type\":\"stream_event\"")
+                || compact.startsWith("{\"type\":\"assistant\"")
+                || compact.startsWith("{\"type\":\"user\"")
+                || compact.startsWith("{\"type\":\"result\"");
     }
 
     private static String stripTrailingPunctuation(String value) {
