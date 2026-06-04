@@ -31,6 +31,15 @@ export function resetOpenCodeAgentsState() {
   debugLog('[OpenCodeAgentProvider] State reset');
 }
 
+export function retryOpenCodeAgentsLoad() {
+  loadingState = 'idle';
+  lastRefreshTime = 0;
+  retryCount = 0;
+  pendingWaiters.forEach(w => w.reject(new Error('opencode agents retry requested')));
+  pendingWaiters = [];
+  requestRefresh();
+}
+
 export function setupOpenCodeAgentsCallback() {
   if (typeof window === 'undefined') return;
   if (callbackRegistered && window.updateOpenCodeAgents) return;

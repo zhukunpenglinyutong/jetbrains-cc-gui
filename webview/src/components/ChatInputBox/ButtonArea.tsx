@@ -162,9 +162,12 @@ export const ButtonArea = ({
       }
     };
 
-    const requestOpenCodeModels = () => {
+    const requestOpenCodeModels = (force = false) => {
       if (disposed) {
         return;
+      }
+      if (force) {
+        requestAttempts = 0;
       }
       requestAttempts += 1;
       if (sendBridgeEvent('get_opencode_models')) {
@@ -175,7 +178,7 @@ export const ButtonArea = ({
       }
     };
 
-    openCodeModelRequestRef.current = requestOpenCodeModels;
+    openCodeModelRequestRef.current = () => requestOpenCodeModels(true);
     setModelsLoading(true);
     setOpenCodeError(undefined);
     setOpenCodeModels([]);

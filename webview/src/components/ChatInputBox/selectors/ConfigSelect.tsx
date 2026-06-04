@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import Switch from 'antd/es/switch';
 import { agentProvider, CREATE_NEW_AGENT_ID, EMPTY_STATE_ID, type AgentItem } from '../providers/agentProvider';
-import { openCodeAgentProvider } from '../providers/openCodeAgentProvider';
+import { openCodeAgentProvider, retryOpenCodeAgentsLoad } from '../providers/openCodeAgentProvider';
 import type { SelectedAgent } from '../types';
 import { useDropdownPosition } from '../../../hooks/useDropdownPosition';
 import { RuntimeProviderSelect } from './RuntimeProviderSelect';
@@ -43,6 +43,7 @@ const SUBMENU_BASE_STYLE: CSSProperties = {
 };
 
 const LOADING_OPTION_STYLE: CSSProperties = { cursor: 'default' };
+const RETRY_OPTION_STYLE: CSSProperties = { cursor: 'pointer' };
 const SECTION_HEADER_STYLE: CSSProperties = {
   cursor: 'default',
   fontSize: '11px',
@@ -341,6 +342,7 @@ export const ConfigSelect = ({
           }
 
           const isInfo = agent.id === EMPTY_STATE_ID;
+          const isRetry = isInfo && currentProvider === 'opencode' && agent.name === t('settings.agent.loadFailed');
           const isCreate = agent.id === CREATE_NEW_AGENT_ID;
           const isSelected = !!displayedSelectedAgent && displayedSelectedAgent.id === agent.id;
           const description = agent.description || agent.prompt;
@@ -348,10 +350,15 @@ export const ConfigSelect = ({
           return (
             <div
               key={agent.id}
-              className={`selector-option ${isSelected ? 'selected' : ''} ${isInfo ? 'disabled' : ''}`}
-              style={getAgentOptionStyle(isInfo)}
+              className={`selector-option ${isSelected ? 'selected' : ''} ${isInfo && !isRetry ? 'disabled' : ''}`}
+              style={isRetry ? RETRY_OPTION_STYLE : getAgentOptionStyle(isInfo)}
               onClick={(e) => {
                 e.stopPropagation();
+                if (isRetry) {
+                  retryOpenCodeAgentsLoad();
+                  loadAgents();
+                  return;
+                }
                 if (isInfo) return;
 
                 if (isCreate) {
@@ -374,9 +381,13 @@ export const ConfigSelect = ({
                 setActiveSubmenu('none');
               }}
             >
-              <span className={`codicon ${isCreate ? 'codicon-add' : isInfo ? 'codicon-info' : 'codicon-robot'}`} />
+              <span className={`codicon ${isCreate ? 'codicon-add' : isRetry ? 'codicon-refresh' : isInfo ? 'codicon-info' : 'codicon-robot'}`} />
               <div style={AGENT_BODY_STYLE}>
-                <span style={AGENT_NAME_STYLE}>{agent.name}</span>
+                <span style={AGENT_NAME_STYLE}>
+                  {isRetry
+                    ? t('common.retry', { defaultValue: 'Retry' })
+                    : agent.name}
+                </span>
                 {description ? (
                   <span className="model-description" style={AGENT_DESC_STYLE}>
                     {description.length > 60 ? description.substring(0, 60) + '...' : description}

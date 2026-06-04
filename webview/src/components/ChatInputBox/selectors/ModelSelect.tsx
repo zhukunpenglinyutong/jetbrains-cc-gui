@@ -278,6 +278,10 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
     setIsOpen(false);
   };
 
+  const handleRefresh = () => {
+    onRefresh?.();
+  };
+
   return (
     <div style={RELATIVE_INLINE_BLOCK_STYLE}>
       <button
@@ -307,7 +311,15 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
             <div className="selector-error">
               <span className="codicon codicon-warning" />
               <pre>{error}</pre>
-              <button onClick={handleOpenSettings}>{t('settings.title')}</button>
+              <div className="selector-error-actions">
+                {onRefresh && (
+                  <button onClick={handleRefresh}>
+                    <span className="codicon codicon-refresh" />
+                    <span>{t('common.retry', { defaultValue: 'Retry' })}</span>
+                  </button>
+                )}
+                <button onClick={handleOpenSettings}>{t('settings.title')}</button>
+              </div>
             </div>
           ) : isLoading ? (
             <div className="selector-empty">{t('models.loading')}</div>
@@ -391,7 +403,7 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
               <div className="selector-divider" />
               <div
                 className="selector-option selector-option-add"
-                onClick={() => { onRefresh(); }}
+                onClick={handleRefresh}
               >
                 <span className={`codicon codicon-refresh ${isLoading ? 'codicon-modifier-spin' : ''}`} />
                 <span>{t('models.refreshModels')}</span>

@@ -38,6 +38,8 @@ const sendToJava = (message: string) => {
   }
 };
 
+const DEPENDENCY_STATUS_TIMEOUT_MS = 5000;
+
 const mergeDependencyUpdates = (
   previousStatus: Record<SdkId, SdkStatus>,
   updatePayload: UpdateCheckResult,
@@ -168,9 +170,11 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
   const [uninstallingSdk, setUninstallingSdk] = useState<SdkId | null>(null);
   const [updatingSdk, setUpdatingSdk] = useState<SdkId | null>(null);
   const updatingSdkRef = useRef<SdkId | null>(null);
+  const statusTimeoutRef = useRef<number | null>(null);
   const [installLogs, setInstallLogs] = useState<string>('');
   const [showLogs, setShowLogs] = useState(false);
   const [nodeAvailable, setNodeAvailable] = useState<boolean | null>(null);
+  const [statusTimedOut, setStatusTimedOut] = useState(false);
   const [sdkVersions, setSdkVersions] = useState<Record<SdkId, DependencyVersionInfo>>({} as Record<SdkId, DependencyVersionInfo>);
   const [selectedVersions, setSelectedVersions] = useState<Record<SdkId, string>>({} as Record<SdkId, string>);
   const [loadingVersions, setLoadingVersions] = useState<Record<SdkId, boolean>>({
@@ -195,6 +199,35 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
   useEffect(() => {
     sdkStatusRef.current = sdkStatus;
   }, [sdkStatus]);
+
+  const clearStatusTimeout = () => {
+    if (statusTimeoutRef.current !== null) {
+      window.clearTimeout(statusTimeoutRef.current);
+      statusTimeoutRef.current = null;
+    }
+  };
+
+  const requestDependencyStatus = () => {
+    clearStatusTimeout();
+    setLoading(true);
+    setStatusTimedOut(false);
+    setLoadingVersions({
+      'claude-sdk': true,
+      'codex-sdk': true,
+      'opencode-sdk': true,
+    });
+    sendToJava('get_dependency_status:');
+    sendToJava('check_dependency_updates:');
+    sendToJava('get_dependency_versions:');
+    if (isNodePathReadyRef.current) {
+      sendToJava('check_node_environment:');
+    }
+    statusTimeoutRef.current = window.setTimeout(() => {
+      statusTimeoutRef.current = null;
+      setStatusTimedOut(true);
+      setLoading(false);
+    }, DEPENDENCY_STATUS_TIMEOUT_MS);
+  };
 
   // Auto-scroll logs to bottom
   useEffect(() => {
@@ -228,9 +261,13 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
         setSdkStatus(status);
         sdkStatusRef.current = status;
         setLoading(false);
+        setStatusTimedOut(false);
+        clearStatusTimeout();
       } catch (error) {
         console.error('[DependencySection] Failed to parse dependency status:', error);
         setLoading(false);
+        setStatusTimedOut(true);
+        clearStatusTimeout();
       }
       if (typeof savedUpdateDependencyStatus === 'function') {
         try { savedUpdateDependencyStatus(jsonStr); } catch (e) {
@@ -430,6 +467,7 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
       window.checkNodeEnvironment = savedCheckNodeEnvironment;
       window.runNodeEnvironmentStressTest = savedRunNodeEnvironmentStressTest;
       window.removeEventListener('nodePathReady', handleNodePathReady);
+      clearStatusTimeout();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -439,17 +477,7 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
     if (!isActive) {
       return;
     }
-    setLoadingVersions({
-      'claude-sdk': true,
-      'codex-sdk': true,
-      'opencode-sdk': true,
-    });
-    sendToJava('get_dependency_status:');
-    sendToJava('check_dependency_updates:');
-    sendToJava('get_dependency_versions:');
-    if (isNodePathReadyRef.current) {
-      sendToJava('check_node_environment:');
-    }
+    requestDependencyStatus();
   }, [isActive]);
 
   const handleInstall = (sdkId: SdkId) => {
@@ -547,6 +575,23 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
             <span className="codicon codicon-loading codicon-modifier-spin" />
             <span>{t('settings.dependency.loading')}</span>
           </div>
+        ) : statusTimedOut ? (
+          <>
+            <div className={styles.sdkCard}>
+              <div className={styles.sdkName}>
+                <span className="codicon codicon-package" />
+                <span>{t('settings.dependency.opencodeSdkName')}</span>
+              </div>
+              <div className={styles.sdkDescription}>{t('settings.dependency.opencodeSdkDescription')}</div>
+              <div className={styles.opencodeRetryHint}>
+                <span>{t('settings.dependency.loadTimedOut', { defaultValue: 'OpenCode dependency status timed out.' })}</span>
+                <button type="button" className={styles.retryBtn} onClick={requestDependencyStatus}>
+                  <span className="codicon codicon-refresh" />
+                  <span>{t('common.retry', { defaultValue: 'Retry' })}</span>
+                </button>
+              </div>
+            </div>
+          </>
         ) : (
           SDK_DEFINITIONS.map((sdk) => {
             const info = getSdkInfo(sdk.id);
