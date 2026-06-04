@@ -1,6 +1,7 @@
 package com.github.claudecodegui.provider.opencode;
 
 import org.junit.Test;
+import com.github.claudecodegui.provider.common.SDKResult;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
@@ -61,6 +62,41 @@ public class OpenCodeSDKBridgeTest {
         assertFalse(OpenCodeSDKBridge.shouldTreatDaemonFailureAsCompleteAfterStreamEnd(
                 true,
                 "Input exceeds context window of this model"));
+    }
+
+    @Test
+    public void daemonStoppedAfterStructuredOutputIsComplete() {
+        assertTrue(OpenCodeSDKBridge.shouldTreatDaemonFailureAsComplete(
+                false,
+                "Daemon stopped",
+                true));
+    }
+
+    @Test
+    public void daemonStoppedBeforeStructuredOutputIsNotComplete() {
+        assertFalse(OpenCodeSDKBridge.shouldTreatDaemonFailureAsComplete(
+                false,
+                "Daemon stopped",
+                false));
+    }
+
+    @Test
+    public void daemonStoppedSendErrorWithStructuredOutputIsIgnored() {
+        SDKResult result = new SDKResult();
+        result.messages.add(new JsonObject());
+
+        assertTrue(OpenCodeSDKBridge.shouldIgnoreDaemonStoppedSendError(
+                "java.lang.RuntimeException: Daemon stopped",
+                result));
+    }
+
+    @Test
+    public void daemonStoppedSendErrorWithoutStructuredOutputIsNotIgnored() {
+        SDKResult result = new SDKResult();
+
+        assertFalse(OpenCodeSDKBridge.shouldIgnoreDaemonStoppedSendError(
+                "java.lang.RuntimeException: Daemon stopped",
+                result));
     }
 
     @Test
