@@ -164,7 +164,7 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
   );
 
   return (
-    <div onContextMenu={handleMessageContextMenu}>
+    <div className="message-list" onContextMenu={handleMessageContextMenu}>
       {ctxMenu.visible && (
         <ContextMenu
           x={ctxMenu.x}

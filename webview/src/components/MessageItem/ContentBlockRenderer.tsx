@@ -14,8 +14,6 @@ import { EDIT_TOOL_NAMES, BASH_TOOL_NAMES, isToolName, isTransientInternalToolNa
 import { TASK_STATUS_COLORS } from '../../utils/messageUtils';
 
 const IMAGE_BLOCK_STYLE: React.CSSProperties = { cursor: 'pointer' };
-const THINKING_VISIBLE_STYLE: React.CSSProperties = { display: 'block' };
-const THINKING_HIDDEN_STYLE: React.CSSProperties = { display: 'none' };
 
 function getImageStyle(isUser: boolean): React.CSSProperties {
   return {
@@ -243,24 +241,28 @@ export function ContentBlockRenderer({
 
   if (block.type === 'thinking') {
     return (
-      <div className="thinking-block">
+      <div className={`thinking-section${isThinkingExpanded ? ' expanded' : ''}`}>
         <div
-          className="thinking-header"
+          className="thinking-section-header"
           onClick={onToggleThinking}
         >
-          <span className="thinking-title">
+          <svg className="thinking-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9.5 2A2.5 2.5 0 0112 4.5v15a2.5 2.5 0 01-4.96.44 2.5 2.5 0 01-2.96-3.08 3 3 0 01-.34-5.58 2.5 2.5 0 011.32-4.24 2.5 2.5 0 011.98-3A2.5 2.5 0 019.5 2z" />
+            <path d="M14.5 2A2.5 2.5 0 0012 4.5v15a2.5 2.5 0 004.96.44 2.5 2.5 0 002.96-3.08 3 3 0 00.34-5.58 2.5 2.5 0 00-1.32-4.24 2.5 2.5 0 00-1.98-3A2.5 2.5 0 0014.5 2z" />
+          </svg>
+          <span className="thinking-section-label">
             {isThinking && isLastMessage && isLastBlock
               ? t('common.thinkingProcess')
               : t('common.thinking')}
           </span>
-          <span className="thinking-icon">
-            {isThinkingExpanded ? '▼' : '▶'}
+          <span className="thinking-section-duration">
+            {isThinking && isLastMessage && isLastBlock ? '...' : ''}
           </span>
+          <svg className="thinking-section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6 9l6 6 6-6" />
+          </svg>
         </div>
-        <div
-          className="thinking-content"
-          style={isThinkingExpanded ? THINKING_VISIBLE_STYLE : THINKING_HIDDEN_STYLE}
-        >
+        <div className="thinking-section-content">
           <MarkdownBlock
             content={block.thinking ?? block.text ?? t('chat.noThinkingContent')}
             isStreaming={isStreaming}
