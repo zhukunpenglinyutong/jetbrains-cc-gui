@@ -94,6 +94,11 @@
     "totalDuration": "इस जवाब में लगा समय",
     "waitingTimedOutDuration": "प्रतीक्षा समय समाप्त",
     "streamStalledRetrying": "कुछ समय से मॉडल आउटपुट नहीं मिला। CLI अभी भी पुनः प्रयास कर सकता है; विफल होने पर अंतिम त्रुटि दिखाई देगी।",
+    "usageStats": {
+      "input": "इनपुट：",
+      "output": "आउटपुट：",
+      "duration": "अवधि："
+    },
     "search": {
       "ariaLabel": "बातचीत में खोजें",
       "placeholder": "बातचीत में खोजें...",
@@ -118,6 +123,15 @@
       "userContext": "संदर्भ: \"{{context}}\"",
       "expand": "सारांश विस्तृत करें",
       "collapse": "सारांश संक्षिप्त करें"
+    },
+    "tokenIndicator": {
+      "contextStats": "संदर्भ आंकड़े",
+      "inputToken": "इनपुट Token",
+      "outputToken": "आउटपुट Token",
+      "cacheRead": "कैश पठन",
+      "cacheWrite": "कैश लेखन",
+      "cacheHitRate": "{{rate}}% हिट",
+      "total": "कुल {{used}} / {{max}}"
     }
   },
   "settings": {

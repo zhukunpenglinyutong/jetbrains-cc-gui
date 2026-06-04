@@ -94,6 +94,11 @@
     "totalDuration": "이번 응답 소요 시간",
     "waitingTimedOutDuration": "대기 시간 초과",
     "streamStalledRetrying": "한동안 모델 출력이 수신되지 않았습니다. CLI가 아직 재시도 중일 수 있으며, 실패하면 최종 오류가 표시됩니다.",
+    "usageStats": {
+      "input": "입력：",
+      "output": "출력：",
+      "duration": "소요 시간："
+    },
     "search": {
       "ariaLabel": "대화에서 검색",
       "placeholder": "대화에서 검색...",
@@ -118,6 +123,15 @@
       "userContext": "컨텍스트: \"{{context}}\"",
       "expand": "요약 펼치기",
       "collapse": "요약 접기"
+    },
+    "tokenIndicator": {
+      "contextStats": "컨텍스트 통계",
+      "inputToken": "입력 Token",
+      "outputToken": "출력 Token",
+      "cacheRead": "캐시 읽기",
+      "cacheWrite": "캐시 쓰기",
+      "cacheHitRate": "{{rate}}% 히트",
+      "total": "합계 {{used}} / {{max}}"
     }
   },
   "settings": {

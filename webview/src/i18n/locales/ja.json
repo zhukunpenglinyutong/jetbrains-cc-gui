@@ -94,6 +94,11 @@
     "totalDuration": "今回の応答時間",
     "waitingTimedOutDuration": "待機がタイムアウトしました",
     "streamStalledRetrying": "しばらくモデル出力を受信していません。CLI はまだ再試行中の可能性があり、失敗した場合は最終エラーが表示されます。",
+    "usageStats": {
+      "input": "入力：",
+      "output": "出力：",
+      "duration": "所要時間："
+    },
     "search": {
       "ariaLabel": "会話内を検索",
       "placeholder": "会話内を検索...",
@@ -118,6 +123,15 @@
       "userContext": "コンテキスト：「{{context}}」",
       "expand": "要約を展開",
       "collapse": "要約を折りたたむ"
+    },
+    "tokenIndicator": {
+      "contextStats": "コンテキスト統計",
+      "inputToken": "入力 Token",
+      "outputToken": "出力 Token",
+      "cacheRead": "キャッシュ読み取り",
+      "cacheWrite": "キャッシュ書き込み",
+      "cacheHitRate": "{{rate}}% ヒット",
+      "total": "合計 {{used}} / {{max}}"
     }
   },
   "settings": {

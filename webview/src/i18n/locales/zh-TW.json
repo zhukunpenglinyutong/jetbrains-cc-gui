@@ -97,6 +97,11 @@
     "totalDuration": "本次耗時",
     "waitingTimedOutDuration": "等待逾時",
     "streamStalledRetrying": "長時間未收到模型輸出，CLI 可能仍在重試；如果稍後失敗會顯示真實錯誤。",
+    "usageStats": {
+      "input": "輸入：",
+      "output": "輸出：",
+      "duration": "耗時："
+    },
     "search": {
       "ariaLabel": "在對話中搜尋",
       "placeholder": "在對話中搜尋...",
@@ -121,6 +126,15 @@
       "userContext": "補充說明：「{{context}}」",
       "expand": "展開摘要",
       "collapse": "摺疊摘要"
+    },
+    "tokenIndicator": {
+      "contextStats": "上下文統計",
+      "inputToken": "輸入 Token",
+      "outputToken": "輸出 Token",
+      "cacheRead": "快取讀取",
+      "cacheWrite": "快取寫入",
+      "cacheHitRate": "{{rate}}% 命中",
+      "total": "總計 {{used}} / {{max}}"
     }
   },
   "settings": {

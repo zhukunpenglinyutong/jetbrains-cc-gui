@@ -99,6 +99,11 @@
     "totalDuration": "This reply took",
     "waitingTimedOutDuration": "Wait timed out",
     "streamStalledRetrying": "No model output was received for a while. The CLI may still be retrying; the final error will appear if it fails.",
+    "usageStats": {
+      "input": "Input:",
+      "output": "Output:",
+      "duration": "Duration:"
+    },
     "search": {
       "ariaLabel": "Search in conversation",
       "placeholder": "Search in conversation…",
@@ -123,6 +128,15 @@
       "userContext": "Context: \"{{context}}\"",
       "expand": "Expand summary",
       "collapse": "Collapse summary"
+    },
+    "tokenIndicator": {
+      "contextStats": "Context Stats",
+      "inputToken": "Input Tokens",
+      "outputToken": "Output Tokens",
+      "cacheRead": "Cache Read",
+      "cacheWrite": "Cache Write",
+      "cacheHitRate": "{{rate}}% hit",
+      "total": "Total {{used}} / {{max}}"
     }
   },
   "settings": {

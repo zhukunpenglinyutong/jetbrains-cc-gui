@@ -94,6 +94,11 @@
     "totalDuration": "Этот ответ занял",
     "waitingTimedOutDuration": "Ожидание истекло",
     "streamStalledRetrying": "Вывод модели не поступал некоторое время. CLI может всё ещё повторять попытку; при сбое будет показана итоговая ошибка.",
+    "usageStats": {
+      "input": "Вход：",
+      "output": "Выход：",
+      "duration": "Время："
+    },
     "search": {
       "ariaLabel": "Поиск в беседе",
       "placeholder": "Поиск в беседе…",
@@ -118,6 +123,15 @@
       "userContext": "Контекст: «{{context}}»",
       "expand": "Развернуть сводку",
       "collapse": "Свернуть сводку"
+    },
+    "tokenIndicator": {
+      "contextStats": "Статистика контекста",
+      "inputToken": "Входные токены",
+      "outputToken": "Выходные токены",
+      "cacheRead": "Чтение кэша",
+      "cacheWrite": "Запись в кэш",
+      "cacheHitRate": "{{rate}}% попаданий",
+      "total": "Итого {{used}} / {{max}}"
     }
   },
   "settings": {

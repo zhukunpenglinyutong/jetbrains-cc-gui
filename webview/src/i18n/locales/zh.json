@@ -99,6 +99,11 @@
     "totalDuration": "本次耗时",
     "waitingTimedOutDuration": "等待超时",
     "streamStalledRetrying": "长时间未收到模型输出，CLI 可能仍在重试；如果稍后失败会显示真实错误。",
+    "usageStats": {
+      "input": "输入：",
+      "output": "输出：",
+      "duration": "耗时："
+    },
     "search": {
       "ariaLabel": "在对话中搜索",
       "placeholder": "在对话中搜索…",
@@ -123,6 +128,15 @@
       "userContext": "补充说明：「{{context}}」",
       "expand": "展开摘要",
       "collapse": "折叠摘要"
+    },
+    "tokenIndicator": {
+      "contextStats": "上下文统计",
+      "inputToken": "输入 Token",
+      "outputToken": "输出 Token",
+      "cacheRead": "缓存读取",
+      "cacheWrite": "缓存写入",
+      "cacheHitRate": "{{rate}}% 命中",
+      "total": "总计 {{used}} / {{max}}"
     }
   },
   "settings": {

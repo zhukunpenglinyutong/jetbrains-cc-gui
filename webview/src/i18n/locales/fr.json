@@ -94,6 +94,11 @@
     "totalDuration": "Cette réponse a pris",
     "waitingTimedOutDuration": "Délai d'attente dépassé",
     "streamStalledRetrying": "Aucune sortie du modèle n'a été reçue depuis un moment. La CLI peut encore réessayer ; l'erreur finale s'affichera en cas d'échec.",
+    "usageStats": {
+      "input": "Entrée：",
+      "output": "Sortie：",
+      "duration": "Durée："
+    },
     "search": {
       "ariaLabel": "Rechercher dans la conversation",
       "placeholder": "Rechercher dans la conversation…",
@@ -118,6 +123,15 @@
       "userContext": "Contexte : « {{context}} »",
       "expand": "Développer le résumé",
       "collapse": "Réduire le résumé"
+    },
+    "tokenIndicator": {
+      "contextStats": "Statistiques de contexte",
+      "inputToken": "Tokens d'entrée",
+      "outputToken": "Tokens de sortie",
+      "cacheRead": "Lecture cache",
+      "cacheWrite": "Écriture cache",
+      "cacheHitRate": "{{rate}}% succès",
+      "total": "Total {{used}} / {{max}}"
     }
   },
   "settings": {

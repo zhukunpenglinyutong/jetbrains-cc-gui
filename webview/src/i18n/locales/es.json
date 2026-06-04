@@ -94,6 +94,11 @@
     "totalDuration": "Esta respuesta tardó",
     "waitingTimedOutDuration": "Tiempo de espera agotado",
     "streamStalledRetrying": "No se recibió salida del modelo durante un tiempo. Es posible que la CLI siga reintentando; si falla, aparecerá el error final.",
+    "usageStats": {
+      "input": "Entrada：",
+      "output": "Salida：",
+      "duration": "Duración："
+    },
     "search": {
       "ariaLabel": "Buscar en la conversación",
       "placeholder": "Buscar en la conversación…",
@@ -118,6 +123,15 @@
       "userContext": "Contexto: \"{{context}}\"",
       "expand": "Expandir resumen",
       "collapse": "Contraer resumen"
+    },
+    "tokenIndicator": {
+      "contextStats": "Estadísticas de contexto",
+      "inputToken": "Tokens de entrada",
+      "outputToken": "Tokens de salida",
+      "cacheRead": "Lectura de caché",
+      "cacheWrite": "Escritura de caché",
+      "cacheHitRate": "{{rate}}% acierto",
+      "total": "Total {{used}} / {{max}}"
     }
   },
   "settings": {
