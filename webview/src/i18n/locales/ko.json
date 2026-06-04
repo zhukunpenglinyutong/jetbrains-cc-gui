@@ -35,6 +35,7 @@
     "emptyMessage": "빈 메시지",
     "clickToPreview": "클릭하여 미리보기",
     "userUploadedImage": "사용자가 이미지를 업로드했습니다",
+    "imageLoadFailed": "이미지 로드 실패",
     "inputPlaceholder": "@파일 참조, #에이전트 호출, !프롬프트 삽입, Enter로 전송",
     "inputPlaceholderEnter": "@파일 참조, #에이전트 호출, !프롬프트 삽입, Enter로 전송",
     "inputPlaceholderCmdEnter": "@파일 참조, #에이전트 호출, !프롬프트 삽입, ⌘Enter로 전송",
@@ -91,6 +92,13 @@
     "streamingConnected": "{{provider}} 연결됨, 질문을 이해하는 중",
     "showEarlierMessages": "이전 메시지 {{count}}개 보기",
     "totalDuration": "이번 응답 소요 시간",
+    "waitingTimedOutDuration": "대기 시간 초과",
+    "streamStalledRetrying": "한동안 모델 출력이 수신되지 않았습니다. CLI가 아직 재시도 중일 수 있으며, 실패하면 최종 오류가 표시됩니다.",
+    "usageStats": {
+      "input": "입력：",
+      "output": "출력：",
+      "duration": "소요 시간："
+    },
     "search": {
       "ariaLabel": "대화에서 검색",
       "placeholder": "대화에서 검색...",
@@ -115,6 +123,15 @@
       "userContext": "컨텍스트: \"{{context}}\"",
       "expand": "요약 펼치기",
       "collapse": "요약 접기"
+    },
+    "tokenIndicator": {
+      "contextStats": "컨텍스트 통계",
+      "inputToken": "입력 Token",
+      "outputToken": "출력 Token",
+      "cacheRead": "캐시 읽기",
+      "cacheWrite": "캐시 쓰기",
+      "cacheHitRate": "{{rate}}% 히트",
+      "total": "합계 {{used}} / {{max}}"
     }
   },
   "settings": {
@@ -1631,6 +1648,7 @@
     "dbParseProviderFailed": "제공자 설정 분석 실패",
     "aiResponseEmpty": "AI 응답이 비어있습니다",
     "enhancementFailed": "강화 실패",
+    "unsupportedImageVision": "현재 모델이 이미지 인식을 지원하지 않거나, 이 제공자의 Claude Code 호환 인터페이스가 이미지 도구 결과를 지원하지 않습니다.\n비전 지원 모델로 전환한 후 다시 시도해주세요.",
     "uploadedImages": "{{count}}개 이미지 업로드됨",
     "uploadedAttachments": "첨부파일 업로드됨",
     "emptyMessage": "빈 메시지",

@@ -1,0 +1,1100 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Claude Code GUI - 聊天对话消息样式预览</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #1e1f22;
+      --panel: #25262b;
+      --bar: #2b2d31;
+      --surface: #2d2f34;
+      --chip: #32343a;
+      --hover: #3a3d44;
+      --border: #464950;
+      --input-border: #5a5d66;
+      --muted: #a8adb7;
+      --text: #f0f2f5;
+      --soft: #d8dde6;
+      --accent: #4ea1ff;
+      --accent-hover: #6bb3ff;
+      --green: #4cc38a;
+      --amber: #e7b85a;
+      --violet: #a989ff;
+      --red: #f07178;
+      --orange: #f5a623;
+      --shadow-sm: 0 2px 8px rgba(0, 0, 0, .2);
+      --shadow-md: 0 8px 24px rgba(0, 0, 0, .3);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 14px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 40px;
+    }
+
+    /* SVG Icon Base */
+    svg.icon {
+      width: 1em;
+      height: 1em;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vertical-align: middle;
+    }
+
+    /* ==================== Page Layout ==================== */
+    .preview-container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .preview-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .preview-subtitle {
+      font-size: 14px;
+      color: var(--muted);
+      margin-bottom: 32px;
+    }
+
+    /* ==================== Section ==================== */
+    .section {
+      margin-bottom: 40px;
+    }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--soft);
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-title svg.icon {
+      width: 18px;
+      height: 18px;
+      color: var(--accent);
+    }
+
+    /* ==================== Chat Container ==================== */
+    .chat-demo {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .chat-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      background: var(--bar);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .chat-header-icon {
+      width: 28px;
+      height: 28px;
+      background: linear-gradient(135deg, var(--accent), var(--violet));
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+    }
+
+    .chat-header-icon svg.icon {
+      width: 16px;
+      height: 16px;
+      color: white;
+    }
+
+    .chat-header-text {
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .messages-area {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      min-height: 400px;
+    }
+
+    /* ==================== Message Base ==================== */
+    .message {
+      display: flex;
+      gap: 12px;
+      max-width: 85%;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* User Message - Right aligned */
+    .message.user {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+
+    /* Assistant Message - Left aligned */
+    .message.assistant {
+      align-self: flex-start;
+    }
+
+    /* ==================== Avatar ==================== */
+    .message-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    /* User Avatar */
+    .message.user .message-avatar {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+    }
+
+    .message.user .message-avatar svg.icon {
+      width: 18px;
+      height: 18px;
+      color: white;
+    }
+
+    /* Assistant Avatar */
+    .message.assistant .message-avatar {
+      background: linear-gradient(135deg, var(--accent), var(--violet));
+      box-shadow: 0 2px 8px rgba(78, 161, 255, 0.3);
+    }
+
+    .message.assistant .message-avatar svg.icon {
+      width: 18px;
+      height: 18px;
+      color: white;
+    }
+
+    /* Avatar Label */
+    .avatar-label {
+      position: absolute;
+      bottom: -18px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      color: var(--muted);
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .message:hover .avatar-label {
+      opacity: 1;
+    }
+
+    /* ==================== Message Content ==================== */
+    .message-content {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 18px;
+      font-size: 14px;
+      line-height: 1.7;
+      position: relative;
+    }
+
+    /* User Message Content */
+    .message.user .message-content {
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.1));
+      border-color: rgba(99, 102, 241, 0.3);
+      border-top-right-radius: 4px;
+    }
+
+    /* Assistant Message Content */
+    .message.assistant .message-content {
+      background: var(--surface);
+      border-color: var(--border);
+      border-top-left-radius: 4px;
+    }
+
+    /* Message Tail */
+    .message-content::before {
+      content: '';
+      position: absolute;
+      top: 12px;
+      width: 8px;
+      height: 8px;
+      background: inherit;
+      border: 1px solid var(--border);
+      border-top: none;
+      transform: rotate(45deg);
+    }
+
+    .message.user .message-content::before {
+      right: -5px;
+      border-right: none;
+      border-top: 1px solid rgba(99, 102, 241, 0.3);
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.1));
+    }
+
+    .message.assistant .message-content::before {
+      left: -5px;
+      border-left: none;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    /* ==================== Thinking Section ==================== */
+    .thinking-section {
+      margin-bottom: 14px;
+      background: rgba(169, 137, 255, 0.08);
+      border: 1px solid rgba(169, 137, 255, 0.2);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .thinking-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .thinking-header:hover {
+      background: rgba(169, 137, 255, 0.05);
+    }
+
+    .thinking-icon {
+      width: 18px;
+      height: 18px;
+      color: var(--violet);
+    }
+
+    .thinking-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--violet);
+    }
+
+    .thinking-duration {
+      font-size: 12px;
+      color: var(--muted);
+      margin-left: auto;
+    }
+
+    .thinking-chevron {
+      width: 14px;
+      height: 14px;
+      color: var(--muted);
+      transition: transform 0.2s;
+    }
+
+    .thinking-section.expanded .thinking-chevron {
+      transform: rotate(180deg);
+    }
+
+    .thinking-content {
+      padding: 0 14px 12px;
+      font-size: 13px;
+      color: var(--soft);
+      line-height: 1.6;
+      display: none;
+    }
+
+    .thinking-section.expanded .thinking-content {
+      display: block;
+    }
+
+    .thinking-content p {
+      margin-bottom: 8px;
+    }
+
+    .thinking-content p:last-child {
+      margin-bottom: 0;
+    }
+
+    /* ==================== Tool Call ==================== */
+    .tool-call {
+      margin-top: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .tool-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      background: var(--bar);
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+
+    .tool-icon {
+      width: 16px;
+      height: 16px;
+      color: var(--amber);
+    }
+
+    .tool-name {
+      font-weight: 500;
+      color: var(--soft);
+    }
+
+    .tool-status {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+    }
+
+    .tool-status.success {
+      color: var(--green);
+    }
+
+    .tool-status.running {
+      color: var(--accent);
+    }
+
+    .tool-status-icon {
+      width: 14px;
+      height: 14px;
+    }
+
+    .tool-body {
+      padding: 12px 14px;
+      font-size: 12px;
+      font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+      color: var(--soft);
+      line-height: 1.6;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .tool-body .command {
+      color: var(--accent);
+    }
+
+    .tool-body .output {
+      color: var(--muted);
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+    }
+
+    .tool-body .highlight {
+      color: var(--green);
+      font-weight: 500;
+    }
+
+    /* ==================== File Reference ==================== */
+    .file-ref {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      background: rgba(78, 161, 255, 0.1);
+      border: 1px solid rgba(78, 161, 255, 0.2);
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: "JetBrains Mono", monospace;
+      color: var(--accent);
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+
+    .file-ref:hover {
+      background: rgba(78, 161, 255, 0.2);
+      border-color: rgba(78, 161, 255, 0.4);
+    }
+
+    .file-ref svg.icon {
+      width: 12px;
+      height: 12px;
+    }
+
+    /* ==================== Code Block ==================== */
+    .code-block {
+      margin: 12px 0;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .code-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: var(--bar);
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .code-lang {
+      font-weight: 500;
+    }
+
+    .code-copy {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 12px;
+      transition: color 0.2s;
+    }
+
+    .code-copy:hover {
+      color: var(--text);
+    }
+
+    .code-copy svg.icon {
+      width: 14px;
+      height: 14px;
+    }
+
+    .code-content {
+      padding: 14px;
+      font-family: "JetBrains Mono", "Fira Code", monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      overflow-x: auto;
+    }
+
+    .code-content .keyword {
+      color: var(--violet);
+    }
+
+    .code-content .string {
+      color: var(--green);
+    }
+
+    .code-content .comment {
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .code-content .function {
+      color: var(--accent);
+    }
+
+    .code-content .number {
+      color: var(--orange);
+    }
+
+    /* ==================== List Styles ==================== */
+    .message-content ul,
+    .message-content ol {
+      margin: 10px 0;
+      padding-left: 24px;
+    }
+
+    .message-content li {
+      margin-bottom: 6px;
+    }
+
+    .message-content li:last-child {
+      margin-bottom: 0;
+    }
+
+    /* ==================== Streaming Indicator ==================== */
+    .streaming-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-left: 4px;
+    }
+
+    .streaming-dot {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: streaming 1.4s infinite ease-in-out;
+    }
+
+    .streaming-dot:nth-child(2) { animation-delay: 0.2s; }
+    .streaming-dot:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes streaming {
+      0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+
+    /* ==================== Message Meta ==================== */
+    .message-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .message.user .message-meta {
+      justify-content: flex-end;
+    }
+
+    .meta-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .meta-item svg.icon {
+      width: 12px;
+      height: 12px;
+    }
+
+    /* ==================== Usage Stats ==================== */
+    .usage-stats {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 12px;
+      padding: 10px 14px;
+      background: rgba(78, 161, 255, 0.06);
+      border: 1px solid rgba(78, 161, 255, 0.15);
+      border-radius: 8px;
+      font-size: 12px;
+    }
+
+    .usage-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+    }
+
+    .usage-item svg.icon {
+      width: 14px;
+      height: 14px;
+      color: var(--accent);
+    }
+
+    .usage-value {
+      font-weight: 600;
+      color: var(--soft);
+    }
+
+    .usage-divider {
+      width: 1px;
+      height: 16px;
+      background: var(--border);
+    }
+
+    /* ==================== Error Message ==================== */
+    .error-message {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 12px 14px;
+      background: rgba(240, 113, 120, 0.08);
+      border: 1px solid rgba(240, 113, 120, 0.2);
+      border-radius: 8px;
+      margin-top: 12px;
+    }
+
+    .error-icon {
+      width: 18px;
+      height: 18px;
+      color: var(--red);
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .error-text {
+      font-size: 13px;
+      color: var(--red);
+      line-height: 1.5;
+    }
+
+    /* ==================== Responsive ==================== */
+    @media (max-width: 768px) {
+      body { padding: 20px; }
+      .message { max-width: 95%; }
+      .message-avatar { width: 32px; height: 32px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="preview-container">
+    <h1 class="preview-title">💬 聊天对话消息样式预览</h1>
+    <p class="preview-subtitle">展示用户消息和 AI 回复的视觉区分效果，包含头像、卡片、思考区、工具调用区等元素</p>
+
+    <!-- Section 1: Basic Messages -->
+    <div class="section">
+      <h2 class="section-title">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        基础消息样式
+      </h2>
+      <div class="chat-demo">
+        <div class="chat-header">
+          <div class="chat-header-icon">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          </div>
+          <span class="chat-header-text">Claude Code 会话</span>
+        </div>
+        <div class="messages-area">
+          <!-- User Message -->
+          <div class="message user">
+            <div class="message-avatar">
+              <svg class="icon" viewBox="0 0 24 24">
+                <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+              <span class="avatar-label">你</span>
+            </div>
+            <div>
+              <div class="message-content">
+                帮我优化一下插件的图标显示，让它们看起来更精致统一
+              </div>
+              <div class="message-meta">
+                <span class="meta-item">
+                  <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  14:32
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Assistant Message -->
+          <div class="message assistant">
+            <div class="message-avatar">
+              <svg class="icon" viewBox="0 0 24 24">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                <path d="M2 17l10 5 10-5"/>
+                <path d="M2 12l10 5 10-5"/>
+              </svg>
+              <span class="avatar-label">Claude</span>
+            </div>
+            <div>
+              <div class="message-content">
+                <p>好的，我来分析当前的图标使用情况并提出优化方案。</p>
+                <p>主要可以从以下几个方面改进：</p>
+                <ul>
+                  <li>统一使用 SVG 内联图标替代 Codicon 字体</li>
+                  <li>规范图标尺寸和描边粗细</li>
+                  <li>优化交互反馈效果</li>
+                  <li>添加语义化的颜色标识</li>
+                </ul>
+              </div>
+              <div class="message-meta">
+                <span class="meta-item">
+                  <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  14:32
+                </span>
+                <span class="meta-item">
+                  <svg class="icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  Sonnet 4.6
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 2: Thinking + Tool Calls -->
+    <div class="section">
+      <h2 class="section-title">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0112 4.5v15a2.5 2.5 0 01-4.96.44 2.5 2.5 0 01-2.96-3.08 3 3 0 01-.34-5.58 2.5 2.5 0 011.32-4.24 2.5 2.5 0 011.98-3A2.5 2.5 0 019.5 2z"/><path d="M14.5 2A2.5 2.5 0 0012 4.5v15a2.5 2.5 0 004.96.44 2.5 2.5 0 002.96-3.08 3 3 0 00.34-5.58 2.5 2.5 0 00-1.32-4.24 2.5 2.5 0 00-1.98-3A2.5 2.5 0 0014.5 2z"/></svg>
+        思考区 + 工具调用
+      </h2>
+      <div class="chat-demo">
+        <div class="messages-area">
+          <!-- Assistant Message with Thinking and Tool Calls -->
+          <div class="message assistant">
+            <div class="message-avatar">
+              <svg class="icon" viewBox="0 0 24 24">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                <path d="M2 17l10 5 10-5"/>
+                <path d="M2 12l10 5 10-5"/>
+              </svg>
+              <span class="avatar-label">Claude</span>
+            </div>
+            <div>
+              <div class="message-content">
+                <!-- Thinking Section -->
+                <div class="thinking-section expanded">
+                  <div class="thinking-header">
+                    <svg class="thinking-icon" viewBox="0 0 24 24">
+                      <path d="M9.5 2A2.5 2.5 0 0112 4.5v15a2.5 2.5 0 01-4.96.44 2.5 2.5 0 01-2.96-3.08 3 3 0 01-.34-5.58 2.5 2.5 0 011.32-4.24 2.5 2.5 0 011.98-3A2.5 2.5 0 019.5 2z"/>
+                      <path d="M14.5 2A2.5 2.5 0 0012 4.5v15a2.5 2.5 0 004.96.44 2.5 2.5 0 002.96-3.08 3 3 0 00.34-5.58 2.5 2.5 0 00-1.32-4.24 2.5 2.5 0 00-1.98-3A2.5 2.5 0 0014.5 2z"/>
+                    </svg>
+                    <span class="thinking-label">思考过程</span>
+                    <span class="thinking-duration">2.3s</span>
+                    <svg class="thinking-chevron" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+                  </div>
+                  <div class="thinking-content">
+                    <p>用户希望优化插件的图标显示效果。我需要先分析当前代码中图标的使用情况。</p>
+                    <p>主要步骤：</p>
+                    <p>1. 搜索项目中所有使用 Codicon 的地方</p>
+                    <p>2. 分析哪些组件需要替换</p>
+                    <p>3. 设计统一的 SVG 图标方案</p>
+                  </div>
+                </div>
+
+                <p>我来分析当前的图标使用情况。首先让我搜索项目中所有的 Codicon 使用：</p>
+
+                <!-- Tool Call: Bash -->
+                <div class="tool-call">
+                  <div class="tool-header">
+                    <svg class="tool-icon" viewBox="0 0 24 24">
+                      <rect x="2" y="3" width="20" height="14" rx="2"/>
+                      <path d="M8 21h8M12 17v4"/>
+                    </svg>
+                    <span class="tool-name">Bash</span>
+                    <span class="tool-status success">
+                      <svg class="tool-status-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                      完成
+                    </span>
+                  </div>
+                  <div class="tool-body">
+                    <div class="command">$ grep -r "codicon" src/components --include="*.tsx" | wc -l</div>
+                    <div class="output">
+                      <span class="highlight">47</span> 处 Codicon 使用
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Tool Call: Read File -->
+                <div class="tool-call">
+                  <div class="tool-header">
+                    <svg class="tool-icon" viewBox="0 0 24 24">
+                      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                      <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
+                    </svg>
+                    <span class="tool-name">Read File</span>
+                    <span class="tool-status success">
+                      <svg class="tool-status-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                      完成
+                    </span>
+                  </div>
+                  <div class="tool-body">
+                    <div>读取文件：<span class="file-ref"><svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>ChatInputBox/ButtonArea.tsx</span></div>
+                    <div class="output">共 305 行，包含 12 处图标使用</div>
+                  </div>
+                </div>
+
+                <p style="margin-top: 14px;">分析完成！我发现了 <strong>47 处</strong> Codicon 使用，主要分布在：</p>
+                <ul>
+                  <li>ChatInputBox 组件（12 处）</li>
+                  <li>ChatHeader 组件（8 处）</li>
+                  <li>StatusPanel 组件（15 处）</li>
+                  <li>其他组件（12 处）</li>
+                </ul>
+              </div>
+              <div class="message-meta">
+                <span class="meta-item">
+                  <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  14:33
+                </span>
+                <span class="meta-item">
+                  <svg class="icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  Sonnet 4.6
+                </span>
+              </div>
+
+              <!-- Usage Stats -->
+              <div class="usage-stats">
+                <div class="usage-item">
+                  <svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  <span>输入：</span>
+                  <span class="usage-value">1,234 tokens</span>
+                </div>
+                <div class="usage-divider"></div>
+                <div class="usage-item">
+                  <svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  <span>输出：</span>
+                  <span class="usage-value">856 tokens</span>
+                </div>
+                <div class="usage-divider"></div>
+                <div class="usage-item">
+                  <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  <span>耗时：</span>
+                  <span class="usage-value">3.2s</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: Streaming & Code -->
+    <div class="section">
+      <h2 class="section-title">
+        <svg class="icon" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        代码块 & 流式输出
+      </h2>
+      <div class="chat-demo">
+        <div class="messages-area">
+          <!-- User Message -->
+          <div class="message user">
+            <div class="message-avatar">
+              <svg class="icon" viewBox="0 0 24 24">
+                <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+              <span class="avatar-label">你</span>
+            </div>
+            <div>
+              <div class="message-content">
+                帮我写一个函数来格式化 token 数量显示
+              </div>
+            </div>
+          </div>
+
+          <!-- Assistant Message with Code -->
+          <div class="message assistant">
+            <div class="message-avatar">
+              <svg class="icon" viewBox="0 0 24 24">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                <path d="M2 17l10 5 10-5"/>
+                <path d="M2 12l10 5 10-5"/>
+              </svg>
+              <span class="avatar-label">Claude</span>
+            </div>
+            <div>
+              <div class="message-content">
+                <p>好的，我来为你编写一个 token 数量格式化函数：</p>
+
+                <div class="code-block">
+                  <div class="code-header">
+                    <span class="code-lang">TypeScript</span>
+                    <button class="code-copy">
+                      <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                      复制
+                    </button>
+                  </div>
+                  <div class="code-content">
+<span class="comment">/**
+ * 格式化 token 数量显示
+ * @param count token 数量
+ * @returns 格式化后的字符串
+ */</span>
+<span class="keyword">export function</span> <span class="function">formatTokenCount</span>(count: <span class="keyword">number</span>): <span class="keyword">string</span> {
+  <span class="keyword">if</span> (count < <span class="number">1000</span>) {
+    <span class="keyword">return</span> <span class="string">`${count}`</span>;
+  }
+  <span class="keyword">if</span> (count < <span class="number">1000000</span>) {
+    <span class="keyword">return</span> <span class="string">`${(count / 1000).toFixed(1)}k`</span>;
+  }
+  <span class="keyword">return</span> <span class="string">`${(count / 1000000).toFixed(2)}M`</span>;
+}
+                  </div>
+                </div>
+
+                <p>这个函数会根据数量级自动选择合适的单位：</p>
+                <ul>
+                  <li>小于 1000：直接显示数字</li>
+                  <li>小于 1,000,000：显示为 <code>k</code> 单位</li>
+                  <li>大于等于 1,000,000：显示为 <code>M</code> 单位</li>
+                </ul>
+
+                <!-- Streaming indicator -->
+                <p style="margin-top: 12px; color: var(--muted);">
+                  正在生成示例
+                  <span class="streaming-indicator">
+                    <span class="streaming-dot"></span>
+                    <span class="streaming-dot"></span>
+                    <span class="streaming-dot"></span>
+                  </span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 4: Error State -->
+    <div class="section">
+      <h2 class="section-title">
+        <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        错误状态
+      </h2>
+      <div class="chat-demo">
+        <div class="messages-area">
+          <div class="message assistant">
+            <div class="message-avatar">
+              <svg class="icon" viewBox="0 0 24 24">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                <path d="M2 17l10 5 10-5"/>
+                <path d="M2 12l10 5 10-5"/>
+              </svg>
+              <span class="avatar-label">Claude</span>
+            </div>
+            <div>
+              <div class="message-content">
+                <p>抱歉，执行过程中遇到了错误：</p>
+
+                <div class="error-message">
+                  <svg class="error-icon" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="15" y1="9" x2="9" y2="15"/>
+                    <line x1="9" y1="9" x2="15" y2="15"/>
+                  </svg>
+                  <div class="error-text">
+                    <strong>Error:</strong> ENOENT: no such file or directory, open './src/components/missing-file.tsx'
+                  </div>
+                </div>
+
+                <!-- Failed Tool Call -->
+                <div class="tool-call" style="margin-top: 14px;">
+                  <div class="tool-header">
+                    <svg class="tool-icon" viewBox="0 0 24 24">
+                      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                      <path d="M14 2v6h6"/>
+                    </svg>
+                    <span class="tool-name">Read File</span>
+                    <span class="tool-status" style="color: var(--red);">
+                      <svg class="tool-status-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                      失败
+                    </span>
+                  </div>
+                  <div class="tool-body">
+                    <div class="command">$ cat ./src/components/missing-file.tsx</div>
+                    <div class="output" style="color: var(--red);">
+                      cat: ./src/components/missing-file.tsx: No such file or directory
+                    </div>
+                  </div>
+                </div>
+
+                <p style="margin-top: 14px;">文件不存在，请检查路径是否正确。你需要我帮你创建这个文件吗？</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 5: Design Spec -->
+    <div class="section">
+      <h2 class="section-title">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        设计规范说明
+      </h2>
+      <div style="background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 24px;">
+        <h3 style="font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 16px;">核心设计要点</h3>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px;">
+          <!-- User Message Spec -->
+          <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+              <div style="width: 24px; height: 24px; background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 6px; display: grid; place-items: center;">
+                <svg style="width: 14px; height: 14px; color: white;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+              </div>
+              <span style="font-weight: 600; color: var(--soft);">用户消息</span>
+            </div>
+            <ul style="font-size: 13px; color: var(--muted); line-height: 1.8; padding-left: 16px;">
+              <li>右对齐布局</li>
+              <li>紫色渐变头像</li>
+              <li>半透明紫色背景</li>
+              <li>消息气泡右上角圆角</li>
+              <li>时间戳在右侧</li>
+            </ul>
+          </div>
+
+          <!-- Assistant Message Spec -->
+          <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+              <div style="width: 24px; height: 24px; background: linear-gradient(135deg, var(--accent), var(--violet)); border-radius: 6px; display: grid; place-items: center;">
+                <svg style="width: 14px; height: 14px; color: white;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                  <path d="M2 17l10 5 10-5"/>
+                  <path d="M2 12l10 5 10-5"/>
+                </svg>
+              </div>
+              <span style="font-weight: 600; color: var(--soft);">AI 回复</span>
+            </div>
+            <ul style="font-size: 13px; color: var(--muted); line-height: 1.8; padding-left: 16px;">
+              <li>左对齐布局</li>
+              <li>蓝紫渐变头像</li>
+              <li>深色表面背景</li>
+              <li>消息气泡左上角圆角</li>
+              <li>显示模型名称和耗时</li>
+            </ul>
+          </div>
+
+          <!-- Thinking Section Spec -->
+          <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+              <div style="width: 24px; height: 24px; background: rgba(169, 137, 255, 0.2); border-radius: 6px; display: grid; place-items: center;">
+                <svg style="width: 14px; height: 14px; color: var(--violet);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9.5 2A2.5 2.5 0 0112 4.5v15a2.5 2.5 0 01-4.96.44 2.5 2.5 0 01-2.96-3.08 3 3 0 01-.34-5.58 2.5 2.5 0 011.32-4.24 2.5 2.5 0 011.98-3A2.5 2.5 0 019.5 2z"/>
+                </svg>
+              </div>
+              <span style="font-weight: 600; color: var(--soft);">思考区</span>
+            </div>
+            <ul style="font-size: 13px; color: var(--muted); line-height: 1.8; padding-left: 16px;">
+              <li>紫色主题配色</li>
+              <li>可折叠/展开</li>
+              <li>显示思考耗时</li>
+              <li>默认折叠状态</li>
+              <li>轻量背景色区分</li>
+            </ul>
+          </div>
+
+          <!-- Tool Call Spec -->
+          <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+              <div style="width: 24px; height: 24px; background: rgba(231, 184, 90, 0.2); border-radius: 6px; display: grid; place-items: center;">
+                <svg style="width: 14px; height: 14px; color: var(--amber);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="2" y="3" width="20" height="14" rx="2"/>
+                  <path d="M8 21h8M12 17v4"/>
+                </svg>
+              </div>
+              <span style="font-weight: 600; color: var(--soft);">工具调用</span>
+            </div>
+            <ul style="font-size: 13px; color: var(--muted); line-height: 1.8; padding-left: 16px;">
+              <li>琥珀色图标标识</li>
+              <li>显示工具名称</li>
+              <li>成功/失败状态</li>
+              <li>等宽字体显示命令</li>
+              <li>可折叠长输出</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

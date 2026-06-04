@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AVAILABLE_MODES, type PermissionMode } from '../types';
+import { ChatIcon, TaskIcon, RobotIcon, ZapIcon, ChevronDownIcon, ChevronUpIcon, CheckIcon } from '../../Icons';
 
 const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
-const CHEVRON_ICON_STYLE: React.CSSProperties = { fontSize: '10px', marginLeft: '2px' };
+const CHEVRON_ICON_STYLE: React.CSSProperties = { marginLeft: '2px' };
 const DROPDOWN_STYLE: React.CSSProperties = {
   position: 'absolute',
   bottom: '100%',
@@ -26,6 +27,22 @@ interface ModeSelectProps {
   provider?: string;
 }
 
+// Map mode ID to SVG icon component
+function getModeIcon(modeId: PermissionMode) {
+  switch (modeId) {
+    case 'default':
+      return <ChatIcon size={14} />;
+    case 'plan':
+      return <TaskIcon size={14} />;
+    case 'acceptEdits':
+      return <RobotIcon size={14} />;
+    case 'bypassPermissions':
+      return <ZapIcon size={14} />;
+    default:
+      return <ChatIcon size={14} />;
+  }
+}
+
 /**
  * ModeSelect - Mode selector component
  * Supports switching between default, agent, plan, and auto modes
@@ -38,8 +55,7 @@ export const ModeSelect = ({ value, onChange, provider }: ModeSelectProps) => {
 
   const modeOptions = useMemo(() => {
     if (provider === 'codex') {
-      // Codex supports default/acceptEdits/bypassPermissions; plan mode is not exposed yet.
-      return AVAILABLE_MODES.filter((mode) => mode.id !== 'plan');
+      return AVAILABLE_MODES;
     }
     return AVAILABLE_MODES;
   }, [provider]);
@@ -110,9 +126,9 @@ export const ModeSelect = ({ value, onChange, provider }: ModeSelectProps) => {
         onClick={handleToggle}
         title={getModeText(currentMode.id, 'tooltip') || `${t('chat.currentMode', { mode: getModeText(currentMode.id, 'label') })}`}
       >
-        <span className={`codicon ${currentMode.icon}`} />
+        {getModeIcon(currentMode.id)}
         <span className="selector-button-text">{getModeText(currentMode.id, 'label')}</span>
-        <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={CHEVRON_ICON_STYLE} />
+        {isOpen ? <ChevronUpIcon size={10} style={CHEVRON_ICON_STYLE} /> : <ChevronDownIcon size={10} style={CHEVRON_ICON_STYLE} />}
       </button>
 
       {isOpen && (
@@ -129,13 +145,13 @@ export const ModeSelect = ({ value, onChange, provider }: ModeSelectProps) => {
               title={getModeText(mode.id, 'tooltip')}
               style={getModeOptionStyle(!!mode.disabled)}
             >
-              <span className={`codicon ${mode.icon}`} />
+              {getModeIcon(mode.id)}
               <div style={MODE_INFO_STYLE}>
                 <span>{getModeText(mode.id, 'label')}</span>
                 <span className="mode-description">{getModeText(mode.id, 'description')}</span>
               </div>
               {mode.id === value && (
-                <span className="codicon codicon-check check-mark" />
+                <CheckIcon size={14} className="check-mark" />
               )}
             </div>
           ))}

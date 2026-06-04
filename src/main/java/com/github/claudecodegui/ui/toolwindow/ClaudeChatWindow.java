@@ -1,15 +1,18 @@
 package com.github.claudecodegui.ui.toolwindow;
 
 import com.github.claudecodegui.action.SendShortcutSync;
-import com.github.claudecodegui.handler.core.HandlerContext;
-import com.github.claudecodegui.handler.history.HistoryHandler;
-import com.github.claudecodegui.handler.core.MessageDispatcher;
 import com.github.claudecodegui.handler.PermissionHandler;
+import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.handler.core.MessageDispatcher;
+import com.github.claudecodegui.handler.history.HistoryHandler;
+import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.permission.PermissionService;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.common.DaemonBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
+import com.github.claudecodegui.provider.common.ProjectBridgeRegistry;
+import com.github.claudecodegui.provider.common.SharedBridgeReferenceCounter;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.session.SessionCallbackAdapter;
 import com.github.claudecodegui.session.SessionLifecycleManager;
@@ -21,6 +24,7 @@ import com.github.claudecodegui.ui.ChatWindowDelegate;
 import com.github.claudecodegui.ui.EditorContextTracker;
 import com.github.claudecodegui.ui.WebviewInitializer;
 import com.github.claudecodegui.ui.WebviewWatchdog;
+import com.github.claudecodegui.util.AttachmentStorageService;
 import com.github.claudecodegui.util.HtmlLoader;
 import com.github.claudecodegui.util.JsUtils;
 import com.google.gson.Gson;
@@ -29,59 +33,165 @@ import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentManager;
 import com.intellij.ui.jcef.JBCefBrowser;
 
-import javax.swing.*;
-import java.awt.*;
+import java.awt.BorderLayout;
+import com.intellij.util.Alarm;
+
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import javax.swing.JPanel;
 
 /**
  * Chat window instance. Coordinates UI components, session management,
  * and message dispatching. One instance per tab.
+ *
+ * @author melon
  */
 public class ClaudeChatWindow {
 
+    /**
+     * log.
+     */
     private static final Logger LOG = Logger.getInstance(ClaudeChatWindow.class);
 
+    /**
+     * main panel.
+     */
     private final JPanel mainPanel;
+    /**
+     * claude sdk bridge.
+     */
     private final ClaudeSDKBridge claudeSDKBridge;
+    /**
+     * codex sdk bridge.
+     */
     private final CodexSDKBridge codexSDKBridge;
+    /**
+     * project.
+     */
     private final Project project;
+    /**
+     * settings service.
+     */
     private final CodemossSettingsService settingsService;
+    /**
+     * html loader.
+     */
     private final HtmlLoader htmlLoader;
 
+    /**
+     * parent content.
+     */
     private Content parentContent;
+    /**
+     * original tab name.
+     */
     private String originalTabName;
+    /**
+     * session id.
+     */
     private volatile String sessionId = null;
 
+    /**
+     * browser.
+     */
     private JBCefBrowser browser;
+    /**
+     * session.
+     */
     private ClaudeSession session;
+    /**
+     * webview watchdog.
+     */
     private final WebviewWatchdog webviewWatchdog;
+    /**
+     * stream coalescer.
+     */
     private final StreamMessageCoalescer streamCoalescer;
 
+    /**
+     * disposed.
+     */
     private volatile boolean disposed = false;
+    /**
+     * initialized.
+     */
     private volatile boolean initialized = false;
+    /**
+     * frontend ready.
+     */
     private volatile boolean frontendReady = false;
+    /**
+     * slash commands fetched.
+     */
     private volatile boolean slashCommandsFetched = false;
+    /**
+     * restored history load started.
+     */
     private final AtomicBoolean restoredHistoryLoadStarted = new AtomicBoolean(false);
+    /**
+     * Persisted session id that still needs a one-time lazy history restore.
+     * Fresh tabs created in the current IDE run must never populate this field,
+     * otherwise switching tabs can overwrite live in-memory messages with a
+     * stale disk snapshot.
+     */
+    private volatile String deferredHistoryRestoreSessionId = null;
+    /**
+     * task completion notification sent.
+     */
+    private final AtomicBoolean taskCompletionNotificationSent = new AtomicBoolean(false);
+    private final Alarm notificationAlarm = new Alarm(Alarm.ThreadToUse.SWING_THREAD);
 
-    // Daemon event listener for AI title forwarding. Held so it can be removed on dispose.
+    /**
+     * title event listener.
+     */ // Daemon event listener for AI title forwarding. Held so it can be removed on dispose.
     private DaemonBridge.DaemonEventListener titleEventListener;
+    /**
+     * fetched slash commands count.
+     */
     private volatile int fetchedSlashCommandsCount = 0;
 
+    /**
+     * handler context.
+     */
     private HandlerContext handlerContext;
+    /**
+     * message dispatcher.
+     */
     private MessageDispatcher messageDispatcher;
+    /**
+     * permission handler.
+     */
     private PermissionHandler permissionHandler;
+    /**
+     * history handler.
+     */
     private HistoryHandler historyHandler;
+    /**
+     * session lifecycle manager.
+     */
     private final SessionLifecycleManager sessionLifecycleManager;
 
-    // Delegates
+    /**
+     * webview initializer.
+     */ // Delegates
     private WebviewInitializer webviewInitializer;
+    /**
+     * editor context tracker.
+     */
     private final EditorContextTracker editorContextTracker;
+    /**
+     * chat window delegate.
+     */
     private final ChatWindowDelegate chatWindowDelegate;
+    /**
+     * session callback adapter.
+     */
     private SessionCallbackAdapter sessionCallbackAdapter;
 
     public ClaudeChatWindow(Project project) {
@@ -90,8 +200,10 @@ public class ClaudeChatWindow {
 
     public ClaudeChatWindow(Project project, boolean skipRegister) {
         this.project = project;
-        this.claudeSDKBridge = new ClaudeSDKBridge();
-        this.codexSDKBridge = new CodexSDKBridge();
+        ProjectBridgeRegistry.SharedBridges sharedBridges = ProjectBridgeRegistry.get(project);
+        this.claudeSDKBridge = sharedBridges.getClaudeBridge();
+        this.codexSDKBridge = sharedBridges.getCodexBridge();
+        SharedBridgeReferenceCounter.retain(project);
         this.settingsService = new CodemossSettingsService();
         this.htmlLoader = new HtmlLoader(getClass());
         this.mainPanel = new JPanel(new BorderLayout());
@@ -133,6 +245,7 @@ public class ClaudeChatWindow {
 
         this.chatWindowDelegate = new ChatWindowDelegate(createDelegateHost());
         chatWindowDelegate.loadPermissionModeFromSettings();
+        chatWindowDelegate.loadInvocationModeFromSettings();
         chatWindowDelegate.loadNodePathFromSettings();
         chatWindowDelegate.syncActiveProvider();
         chatWindowDelegate.initializeHandlers();
@@ -228,6 +341,11 @@ public class ClaudeChatWindow {
             public void setFetchedSlashCommandsCount(int count) {
                 fetchedSlashCommandsCount = count;
             }
+
+            @Override
+            public void resetTabStatus() {
+                chatWindowDelegate.updateTabStatus(ChatWindowDelegate.TabAnswerStatus.IDLE);
+            }
         });
 
         this.editorContextTracker = new EditorContextTracker(project, new EditorContextTracker.ContextCallback() {
@@ -277,6 +395,7 @@ public class ClaudeChatWindow {
 
         this.parentContent = content;
         if (content != null) {
+            content.putUserData(ToolWindow.SHOW_CONTENT_ICON, true);
             ClaudeSDKToolWindow.registerContentMapping(content, this);
             LOG.debug("[MultiTab] Registered Content -> ClaudeChatWindow mapping for: " + content.getDisplayName());
 
@@ -370,6 +489,9 @@ public class ClaudeChatWindow {
         if (savedState.model != null && !savedState.model.trim().isEmpty()) {
             session.setModel(savedState.model);
         }
+        if (savedState.claudeInvocationMode != null && !savedState.claudeInvocationMode.trim().isEmpty()) {
+            session.setClaudeInvocationMode(savedState.claudeInvocationMode);
+        }
         if (savedState.reasoningEffort != null && !savedState.reasoningEffort.trim().isEmpty()) {
             session.setReasoningEffort(savedState.reasoningEffort);
         }
@@ -377,6 +499,7 @@ public class ClaudeChatWindow {
         String restoredSessionId = isNonEmpty(savedState.sessionId) ? savedState.sessionId : null;
         String restoredCwd = isNonEmpty(savedState.cwd) ? savedState.cwd : session.getCwd();
         session.setSessionInfo(restoredSessionId, restoredCwd);
+        deferredHistoryRestoreSessionId = TabSessionRestorePolicy.getDeferredRestoreSessionId(savedState);
         persistTabSessionState();
 
         LOG.info("[TabRestore] Restored tab session state: provider=" + savedState.provider
@@ -394,9 +517,16 @@ public class ClaudeChatWindow {
         if (session == null) {
             return;
         }
-
+        String currentSessionId = session.getSessionId();
+        String pendingSessionId = deferredHistoryRestoreSessionId;
+        if (!TabSessionRestorePolicy.shouldLoadDeferredHistory(pendingSessionId, currentSessionId)) {
+            if (pendingSessionId != null && !pendingSessionId.equals(currentSessionId)) {
+                deferredHistoryRestoreSessionId = null;
+            }
+            return;
+        }
         TabStateService.TabSessionState currentState = new TabStateService.TabSessionState();
-        currentState.sessionId = session.getSessionId();
+        currentState.sessionId = pendingSessionId;
         loadRestoredHistoryIfNeeded(currentState);
     }
 
@@ -407,12 +537,21 @@ public class ClaudeChatWindow {
         if (!restoredHistoryLoadStarted.compareAndSet(false, true)) {
             return;
         }
+        deferredHistoryRestoreSessionId = null;
+        long startNanos = System.nanoTime();
+        String tabDescriptor = TabPerformanceLogger.describeTab(getCurrentTabName(), savedState.sessionId);
+        LOG.info("[TabPerf] Restored history load started: " + tabDescriptor);
 
         session.loadFromServer().thenRun(() -> ApplicationManager.getApplication().invokeLater(() -> {
+            long elapsedMs = TabPerformanceLogger.elapsedMillis(startNanos);
+            LOG.info("[TabPerf] Restored history load finished in " + elapsedMs + "ms: " + tabDescriptor);
             if (!disposed) {
                 callJavaScript("historyLoadComplete");
             }
         })).exceptionally(ex -> {
+            long elapsedMs = TabPerformanceLogger.elapsedMillis(startNanos);
+            LOG.warn("[TabPerf] Restored history load failed after " + elapsedMs + "ms: "
+                    + tabDescriptor + ", error=" + ex.getMessage(), ex);
             LOG.warn("[TabRestore] Failed to load persisted tab history: " + ex.getMessage(), ex);
             ApplicationManager.getApplication().invokeLater(() -> {
                 if (!disposed) {
@@ -455,6 +594,9 @@ public class ClaudeChatWindow {
 
     // ==================== JavaScript Bridge ====================
 
+    /**
+     * safe js function name.
+     */
     private static final java.util.regex.Pattern SAFE_JS_FUNCTION_NAME =
             java.util.regex.Pattern.compile("^[a-zA-Z_$][a-zA-Z0-9_$.]*$");
 
@@ -532,14 +674,34 @@ public class ClaudeChatWindow {
             return;
         }
 
-        String[] parts = message.split(":", 2);
-        if (parts.length < 1) {
-            LOG.error("Invalid message format");
-            return;
+        String type;
+        String content;
+
+        BridgeMessage bridgeMessage = parseBridgeMessage(message);
+        if (bridgeMessage != null) {
+            type = bridgeMessage.type;
+            content = bridgeMessage.content;
+        } else {
+            String[] parts = message.split(":", 2);
+            if (parts.length < 1) {
+                LOG.error("Invalid message format");
+                return;
+            }
+            type = parts[0];
+            content = parts.length > 1 ? parts[1] : "";
         }
 
-        String type = parts[0];
-        String content = parts.length > 1 ? parts[1] : "";
+        if ("send_message".equals(type) || "send_message_with_attachments".equals(type)) {
+            ClaudeSession currentSession = session;
+            LOG.info(String.format(
+                    "[CliConcurrencyDiag][Webview->Java] received %s: tab=%s, contentIndex=%d, sessionId=%s, channelId=%s, provider=%s, payloadChars=%d, thread=%s",
+                    type, getCurrentTabName(), getTabIndex(),
+                    currentSession != null ? currentSession.getSessionId() : "(none)",
+                    currentSession != null ? currentSession.getChannelId() : "(none)",
+                    currentSession != null ? currentSession.getProvider() : "(none)",
+                    content.length(),
+                    Thread.currentThread().getName()));
+        }
 
         if (messageDispatcher.dispatch(type, content)) {
             return;
@@ -548,11 +710,40 @@ public class ClaudeChatWindow {
         LOG.warn("Unknown message type: " + type);
     }
 
+    private BridgeMessage parseBridgeMessage(String message) {
+        if (message == null || message.isEmpty() || message.charAt(0) != '{') {
+            return null;
+        }
+        try {
+            JsonObject json = new Gson().fromJson(message, JsonObject.class);
+            if (json == null || !json.has("type")) {
+                return null;
+            }
+            String type = json.get("type").getAsString();
+            String content = json.has("content") && !json.get("content").isJsonNull()
+                    ? json.get("content").getAsString()
+                    : "";
+            return new BridgeMessage(type, content);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static final class BridgeMessage {
+        private final String type;
+        private final String content;
+
+        private BridgeMessage(String type, String content) {
+            this.type = type;
+            this.content = content;
+        }
+    }
+
     // ==================== Session Delegates ====================
 
     private void setupSessionCallbacks() {
         if (this.sessionCallbackAdapter != null) {
-            this.sessionCallbackAdapter.deactivate();
+            this.sessionCallbackAdapter.dispose();
         }
         this.sessionCallbackAdapter = new SessionCallbackAdapter(
                 streamCoalescer,
@@ -564,13 +755,47 @@ public class ClaudeChatWindow {
                 },
                 permissionHandler,
                 () -> slashCommandsFetched,
-                this::onStreamEnded
+                this::onStreamCompleted
         ) {
+            @Override
+            public void onStreamStart() {
+                ClaudeChatWindow.this.onSendStarted();
+                super.onStreamStart();
+            }
+
             @Override
             public void onSessionIdReceived(String newSessionId) {
                 super.onSessionIdReceived(newSessionId);
+                String provider = session != null ? session.getProvider() : handlerContext.getCurrentProvider();
+                String runtimeEpoch = session != null ? session.getRuntimeSessionEpoch() : null;
+                if (runtimeEpoch != null && !runtimeEpoch.isBlank()) {
+                    AttachmentStorageService.getInstance()
+                            .promotePendingSession(provider, "epoch-" + runtimeEpoch, newSessionId);
+                }
                 sessionId = newSessionId;
                 persistTabSessionState();
+            }
+
+            @Override
+            public void onQueueDisplayStateChanged(ClaudeSession.SessionCallback.QueueDisplayState state, int aheadCount) {
+                super.onQueueDisplayStateChanged(state, aheadCount);
+                ChatWindowDelegate.TabAnswerStatus tabStatus;
+                switch (state) {
+                    case QUEUED:
+                        tabStatus = ChatWindowDelegate.TabAnswerStatus.QUEUED;
+                        break;
+                    case PROCESSING:
+                        tabStatus = ChatWindowDelegate.TabAnswerStatus.PROCESSING;
+                        break;
+                    case COMPLETED:
+                        tabStatus = ChatWindowDelegate.TabAnswerStatus.COMPLETED;
+                        break;
+                    case NONE:
+                    default:
+                        tabStatus = ChatWindowDelegate.TabAnswerStatus.IDLE;
+                        break;
+                }
+                chatWindowDelegate.updateTabStatus(tabStatus);
             }
         };
         session.setCallback(sessionCallbackAdapter);
@@ -603,16 +828,47 @@ public class ClaudeChatWindow {
         persistTabSessionState();
     }
 
-    private void onStreamEnded() {
+    private void onStreamCompleted() {
         if (session == null) {
             return;
         }
-        if ("claude".equals(session.getProvider()) && session.getError() == null) {
-            com.github.claudecodegui.notifications.ClaudeNotifier.showSuccess(
-                project,
-                com.github.claudecodegui.notifications.ClaudeNotifier.buildTitleFromSession(session),
-                com.github.claudecodegui.notifications.ClaudeNotifier.buildPreviewFromSession(session, "Task completed"));
+        notificationAlarm.cancelAllRequests();
+        notificationAlarm.addRequest(this::maybeShowTaskCompletionNotification, 500);
+    }
+
+    public void onSendStarted() {
+        taskCompletionNotificationSent.set(false);
+    }
+
+    public void maybeShowTaskCompletionNotification() {
+        if (disposed) {
+            return;
         }
+        if (!shouldShowTaskCompletionNotification(session)) {
+            return;
+        }
+        if (!taskCompletionNotificationSent.compareAndSet(false, true)) {
+            return;
+        }
+        com.github.claudecodegui.notifications.ClaudeNotifier.showTaskCompletionSuccess(
+            project,
+            com.github.claudecodegui.notifications.ClaudeNotifier.buildTitleFromSession(session),
+            com.github.claudecodegui.notifications.ClaudeNotifier.buildPreviewFromSession(session,
+                ClaudeCodeGuiBundle.message("notifier.taskComplete.title")));
+    }
+
+    static boolean shouldShowTaskCompletionNotification(ClaudeSession session) {
+        if (session == null) {
+            return false;
+        }
+        return shouldShowTaskCompletionNotification(session.getProvider(), session.getError());
+    }
+
+    static boolean shouldShowTaskCompletionNotification(String provider, String error) {
+        if (error != null) {
+            return false;
+        }
+        return provider != null && !provider.trim().isEmpty();
     }
 
     private void initializeSessionInfo() {
@@ -670,6 +926,7 @@ public class ClaudeChatWindow {
         snapshot.cwd = session.getCwd();
         snapshot.model = session.getModel();
         snapshot.permissionMode = session.getPermissionMode();
+        snapshot.claudeInvocationMode = session.getClaudeInvocationMode();
         snapshot.reasoningEffort = session.getReasoningEffort();
 
         TabStateService.getInstance(project).saveTabSessionState(tabIndex, snapshot);
@@ -691,8 +948,12 @@ public class ClaudeChatWindow {
 
     public synchronized void dispose() {
         if (this.disposed) { return; }
+        long disposeStartNanos = System.nanoTime();
+        String tabDescriptor = TabPerformanceLogger.describeTab(getCurrentTabName(),
+                session != null ? session.getSessionId() : null);
         this.disposed = true;
 
+        notificationAlarm.cancelAllRequests();
         chatWindowDelegate.dispose();
         editorContextTracker.dispose();
         streamCoalescer.dispose();
@@ -734,38 +995,26 @@ public class ClaudeChatWindow {
         ClaudeSDKToolWindow.unregisterWindow(project, this);
 
         try {
-            if (session != null) { session.interrupt(); }
+            long sessionDisposeStartNanos = System.nanoTime();
+            if (session != null) { session.dispose(); }
+            LOG.info("[TabPerf] Session dispose returned in "
+                    + TabPerformanceLogger.elapsedMillis(sessionDisposeStartNanos) + "ms: " + tabDescriptor);
         } catch (Exception e) {
             LOG.warn("Failed to clean up session: " + e.getMessage());
         }
 
-        try {
-            if (claudeSDKBridge != null) {
-                int activeCount = claudeSDKBridge.getActiveProcessCount();
-                if (activeCount > 0) {
-                    LOG.info("Cleaning up " + activeCount + " active Claude process(es)...");
-                }
-                claudeSDKBridge.cleanupAllProcesses();
-            }
-        } catch (Exception e) {
-            LOG.warn("Failed to clean up Claude processes: " + e.getMessage());
-        }
-
-        try {
-            if (codexSDKBridge != null) {
-                int activeCount = codexSDKBridge.getActiveProcessCount();
-                if (activeCount > 0) {
-                    LOG.info("Cleaning up " + activeCount + " active Codex process(es)...");
-                }
-                codexSDKBridge.cleanupAllProcesses();
-            }
-        } catch (Exception e) {
-            LOG.warn("Failed to clean up Codex processes: " + e.getMessage());
+        boolean lastBridgeOwner = SharedBridgeReferenceCounter.release(project);
+        if (lastBridgeOwner) {
+            ProjectBridgeRegistry.remove(project);
+            scheduleBridgeProcessCleanup(claudeSDKBridge, codexSDKBridge, project.getName());
         }
 
         try {
             if (browser != null) {
+                long browserDisposeStartNanos = System.nanoTime();
                 browser.dispose();
+                LOG.info("[TabPerf] Browser dispose returned in "
+                        + TabPerformanceLogger.elapsedMillis(browserDisposeStartNanos) + "ms: " + tabDescriptor);
                 browser = null;
             }
         } catch (Exception e) {
@@ -776,7 +1025,69 @@ public class ClaudeChatWindow {
             messageDispatcher.clear();
         }
 
+        LOG.info("[TabPerf] ClaudeChatWindow.dispose returned in "
+                + TabPerformanceLogger.elapsedMillis(disposeStartNanos) + "ms: " + tabDescriptor);
         LOG.info("Window resources fully cleaned up, project: " + project.getName());
+    }
+
+    private static void scheduleBridgeProcessCleanup(
+            ClaudeSDKBridge claudeBridge,
+            CodexSDKBridge codexBridge,
+            String projectName
+    ) {
+        LOG.info("Scheduling async bridge process cleanup, project: " + projectName);
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            long cleanupStartNanos = System.nanoTime();
+            LOG.info("Starting async bridge process cleanup, project: " + projectName);
+            cleanupClaudeProcesses(claudeBridge);
+            cleanupCodexProcesses(codexBridge);
+            LOG.info("[TabPerf] Async bridge process cleanup finished in "
+                    + TabPerformanceLogger.elapsedMillis(cleanupStartNanos) + "ms, project: " + projectName);
+            LOG.info("Async bridge process cleanup finished, project: " + projectName);
+        });
+    }
+
+    private static void cleanupClaudeProcesses(ClaudeSDKBridge claudeBridge) {
+        if (claudeBridge == null) {
+            return;
+        }
+        try {
+            long cleanupStartNanos = System.nanoTime();
+            int activeCount = claudeBridge.getActiveProcessCount();
+            if (activeCount > 0) {
+                LOG.info("Cleaning up " + activeCount + " active Claude process(es)...");
+            }
+            claudeBridge.cleanupAllProcesses();
+            LOG.info("[TabPerf] Claude bridge cleanup returned in "
+                    + TabPerformanceLogger.elapsedMillis(cleanupStartNanos) + "ms");
+        } catch (Exception e) {
+            LOG.warn("Failed to clean up Claude processes: " + e.getMessage());
+        }
+    }
+
+    private static void cleanupCodexProcesses(CodexSDKBridge codexBridge) {
+        if (codexBridge == null) {
+            return;
+        }
+        try {
+            long cleanupStartNanos = System.nanoTime();
+            int activeCount = codexBridge.getActiveProcessCount();
+            if (activeCount > 0) {
+                LOG.info("Cleaning up " + activeCount + " active Codex process(es)...");
+            }
+            codexBridge.cleanupAllProcesses();
+            LOG.info("[TabPerf] Codex bridge cleanup returned in "
+                    + TabPerformanceLogger.elapsedMillis(cleanupStartNanos) + "ms");
+        } catch (Exception e) {
+            LOG.warn("Failed to clean up Codex processes: " + e.getMessage());
+        }
+    }
+
+    String getCurrentTabName() {
+        if (parentContent != null && parentContent.getDisplayName() != null && !parentContent.getDisplayName().trim().isEmpty()) {
+            return parentContent.getDisplayName();
+        }
+        return originalTabName;
     }
 
     // ==================== Host Interface Factories ====================

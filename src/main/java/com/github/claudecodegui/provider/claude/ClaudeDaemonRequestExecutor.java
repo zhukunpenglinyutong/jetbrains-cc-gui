@@ -7,6 +7,8 @@ import com.github.claudecodegui.provider.common.SDKResult;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 
+import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -60,6 +62,7 @@ class ClaudeDaemonRequestExecutor {
             AtomicReference<String> lastNodeError = new AtomicReference<>(null);
             AtomicBoolean wasAborted = new AtomicBoolean(false);
             long startTime = System.currentTimeMillis();
+            final List<File> tempImageFiles = new ArrayList<>();
 
             try {
                 JsonObject params = requestParamsBuilder.buildSendParams(
@@ -74,7 +77,8 @@ class ClaudeDaemonRequestExecutor {
                         agentPrompt,
                         streaming,
                         disableThinking,
-                        reasoningEffort
+                        reasoningEffort,
+                        tempImageFiles
                 );
 
                 boolean hasAttachments = attachments != null && !attachments.isEmpty() && params.has("attachments");
@@ -134,6 +138,31 @@ class ClaudeDaemonRequestExecutor {
                             }
 
                             @Override
+                            public void onDaemonEvent(String event, JsonObject data) {
+                                if ("queue_waiting".equals(event)) {
+                                    int aheadCount = data.has("aheadCount") ? data.get("aheadCount").getAsInt() : 0;
+                                    callback.onQueueDisplayStateChanged(
+                                            ClaudeSession.SessionCallback.QueueDisplayState.QUEUED,
+                                            aheadCount
+                                    );
+                                    return;
+                                }
+                                if ("queue_started".equals(event)) {
+                                    callback.onQueueDisplayStateChanged(
+                                            ClaudeSession.SessionCallback.QueueDisplayState.PROCESSING,
+                                            0
+                                    );
+                                    return;
+                                }
+                                if ("queue_cleared".equals(event) && !wasAborted.get()) {
+                                    callback.onQueueDisplayStateChanged(
+                                            ClaudeSession.SessionCallback.QueueDisplayState.NONE,
+                                            0
+                                    );
+                                }
+                            }
+
+                            @Override
                             public void onAbort() {
                                 wasAborted.set(true);
                             }
@@ -178,6 +207,7 @@ class ClaudeDaemonRequestExecutor {
                         // an error message or toast notification.
                         long elapsed = System.currentTimeMillis() - startTime;
                         log.info("[DaemonExecutor] Request was aborted by user (elapsed: " + elapsed + "ms)");
+                        result.interrupted = true;
                         result.error = "User interrupted";
                         callback.onComplete(result);
                     } else {
@@ -202,6 +232,7 @@ class ClaudeDaemonRequestExecutor {
                     // Treat as graceful interruption, same as the wasAborted branch above.
                     log.info("[DaemonExecutor] Request was aborted by user (caught exception, elapsed: " + elapsed + "ms)");
                     result.success = false;
+                    result.interrupted = true;
                     result.error = "User interrupted";
                     callback.onComplete(result);
                 } else if (!hadSendError.get()) {
@@ -210,6 +241,8 @@ class ClaudeDaemonRequestExecutor {
                     callback.onError(result.error);
                 }
                 return result;
+            } finally {
+                ClaudeRequestParamsBuilder.cleanupTempImages(tempImageFiles);
             }
         }).exceptionally(ex -> {
             SDKResult errorResult = new SDKResult();

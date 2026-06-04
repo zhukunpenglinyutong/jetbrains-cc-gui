@@ -40,7 +40,8 @@ public class ClaudeMessageHandlerRawConsistencyTest {
                 new CallbackHandler(),
                 messageParser,
                 messageMerger,
-                gson
+                gson,
+                state.getRuntimeSessionEpoch()
         );
     }
 

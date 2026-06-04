@@ -64,6 +64,7 @@ const App = () => {
     subagentHistories, setSubagentHistories,
     setStatus,
     loading, setLoading, setLoadingStartTime,
+    setQueueDisplayState, setQueueAheadCount,
     setIsThinking,
     streamingActive, setStreamingActive,
   } = useMessages();
@@ -145,7 +146,8 @@ const App = () => {
     activeProviderConfig, claudeSettingsAlwaysThinkingEnabled,
     reasoningEffort, streamingEnabledSetting, sendShortcut, autoOpenFileEnabled,
     longContextEnabled,
-    usagePercentage, usageUsedTokens, usageMaxTokens,
+    usagePercentage, usageUsedTokens, usageMaxTokens, tokenDetail,
+      setCurrentProvider,
     setPermissionMode,
     setClaudePermissionMode, setCodexPermissionMode,
     setSelectedClaudeModel, setSelectedCodexModel,
@@ -154,6 +156,7 @@ const App = () => {
     setSendShortcut, setAutoOpenFileEnabled,
     setSdkStatus, setSdkStatusLoaded, setSelectedAgent,
     setUsagePercentage, setUsageUsedTokens, setUsageMaxTokens,
+    setTokenDetail,
     syncActiveProviderModelMapping,
     handleModeSelect, handleModelSelect, handleProviderSelect,
     handleReasoningChange, handleAgentSelect, handleToggleThinking,
@@ -269,14 +272,17 @@ const App = () => {
   useWindowCallbacks({
     t, addToast, clearToasts,
     setMessages, setStatus, setLoading, setLoadingStartTime,
+    setQueueDisplayState, setQueueAheadCount,
     setIsThinking, setStreamingActive, setHistoryData,
     setCurrentSessionId, setUsagePercentage, setUsageUsedTokens, setUsageMaxTokens,
+    setTokenDetail,
+      setCurrentProvider,
     setPermissionMode, setClaudePermissionMode, setCodexPermissionMode,
     setSelectedClaudeModel, setSelectedCodexModel,
     setProviderConfigVersion, setActiveProviderConfig,
     setClaudeSettingsAlwaysThinkingEnabled, setStreamingEnabledSetting,
     setSendShortcut, setAutoOpenFileEnabled,
-    setSdkStatus, setSdkStatusLoaded,
+    setSdkStatus, setSdkStatusLoaded, // These come from useUsageTracking
     setIsRewinding, setRewindDialogOpen, setCurrentRewindRequest,
     setContextInfo, setSelectedAgent,
     setSubagentHistories,
@@ -503,6 +509,7 @@ const App = () => {
           usagePercentage={usagePercentage}
           usageUsedTokens={usageUsedTokens}
           usageMaxTokens={usageMaxTokens}
+          tokenDetail={tokenDetail}
           onModeSelect={handleModeSelect}
           onModelSelect={handleModelSelect}
           onAgentSelect={handleAgentSelect}

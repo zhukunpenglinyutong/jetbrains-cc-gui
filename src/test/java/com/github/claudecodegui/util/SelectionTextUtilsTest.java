@@ -45,6 +45,28 @@ public class SelectionTextUtilsTest {
     }
 
     @Test
+    public void normalizeSendableText_stripsTerminalNoiseButKeepsCodeContent() {
+        String original = String.join("\n",
+                "请你查看会话记录",
+                "Wall time: 1.1 seconds",
+                "Check the spelling of the name, or if a path was included, verify that the path is correct and try again.",
+                "Cannot load PSReadline module. Console is running without PSReadline.",
+                "Output:",
+                "+ return resource;",
+                "+ ~~~~~~~~",
+                "真实正文"
+        );
+
+        String expected = String.join("\n",
+                "请你查看会话记录",
+                "+ return resource;",
+                "真实正文"
+        );
+
+        Assert.assertEquals(expected, SelectionTextUtils.normalizeSendableText(original));
+    }
+
+    @Test
     public void sendToChatWindow_reportsErrorWhenWindowMissing() {
         AtomicInteger errorCount = new AtomicInteger();
         SelectionTextUtils.setToolWindowProvider(project -> null);

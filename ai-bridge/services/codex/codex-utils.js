@@ -32,6 +32,7 @@ export const logDebug = (tag, ...args) => debugLog(4, tag, ...args);
 export const VALID_SANDBOX_MODES = new Set(['read-only', 'workspace-write', 'danger-full-access']);
 export const VALID_APPROVAL_POLICIES = new Set(['never', 'on-request', 'on-failure', 'untrusted']);
 export const CODEX_CLI_ENV_BLOCKLIST = new Set([
+  'CODEX_USE_STDIN',
   'CODEX_APPROVAL_POLICY',
   'CODEX_SANDBOX_MODE',
   'CODEX_SANDBOX',
@@ -149,6 +150,51 @@ export async function ensureCodexSdk() {
 
 export const MAX_TOOL_RESULT_CHARS = 20000;
 export const RAW_EVENT_LOG_MAX_CHARS = 12000;
+
+/**
+ * Regular expression to match the exact Windows taskkill termination message.
+ * A structural fallback handles mojibake variants that can appear when the
+ * localized output is decoded with the wrong console encoding.
+ */
+export const WINDOWS_TERMINATION_NOISE_RE =
+  /^(?:SUCCESS:\s+The process with PID \d+(?: \(child process of PID \d+\))? has been terminated\.|成功:\s+已终止 PID \d+(?: \(属于 PID \d+ 子进程\))? 的进程。)$/i;
+
+/**
+ * Check if a line is ignorable Windows termination noise.
+ *
+ * Uses a conservative heuristic to avoid filtering legitimate log lines:
+ * - First checks against the exact termination message patterns
+ * - Then checks for the taskkill-shaped mojibake variants seen on Windows
+ *
+ * @param {string} line - The line to check
+ * @returns {boolean} True if the line should be ignored
+ */
+export function isIgnorableWindowsTerminationNoiseLine(line) {
+  if (typeof line !== 'string') return false;
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+
+  // Check against known termination message patterns first
+  if (WINDOWS_TERMINATION_NOISE_RE.test(trimmed)) {
+    return true;
+  }
+
+  // Don't filter JSON lines
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    return false;
+  }
+
+  // Check for taskkill-shaped mojibake variants to reduce false positives.
+  const pidMatches = trimmed.match(/\bPID \d+\b/g) || [];
+  if (pidMatches.length < 2) {
+    return false;
+  }
+  if (!/\([^()]*\bPID \d+\b[^()]*\)/.test(trimmed)) {
+    return false;
+  }
+
+  return /[�锟\uFFFD]|success|terminated|成功|已终止|进程|子进程/i.test(trimmed);
+}
 
 // AGENTS.md max read size in bytes (32KB, consistent with Codex CLI)
 export const MAX_AGENTS_MD_BYTES = 32 * 1024;

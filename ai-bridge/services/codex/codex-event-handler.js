@@ -26,8 +26,10 @@ import {
   DEBUG_LEVEL, MAX_TOOL_RESULT_CHARS,
   SESSION_PATCH_SCAN_MAX_LINES, SESSION_CONTEXT_SCAN_MAX_LINES,
   logWarn, logInfo, logDebug,
-  isAutoEditPermissionMode, isReconnectNotice, emitStatusMessage
+  isAutoEditPermissionMode, isReconnectNotice, emitStatusMessage,
+  isIgnorableWindowsTerminationNoiseLine
 } from './codex-utils.js';
+export { isIgnorableWindowsTerminationNoiseLine };
 import {
   normalizeMcpToolName, normalizeMcpToolInput,
   parseFunctionCallArguments, normalizeFunctionCallTool,
@@ -35,6 +37,53 @@ import {
 } from './codex-tool-normalization.js';
 
 const COMMAND_DENIED_ABORT_ERROR = '__CODEX_COMMAND_DENIED_ABORT__';
+
+function createCodexAbortError() {
+  const error = new Error('Codex turn aborted by user');
+  error.name = 'AbortError';
+  error.code = 'ABORT_ERR';
+  return error;
+}
+
+function isAbortLikeError(error) {
+  const message = `${error?.name || ''}\n${error?.code || ''}\n${error?.message || ''}`;
+  return /AbortError|ABORT_ERR|aborted|abort|cancel|interrupt/i.test(message);
+}
+
+async function nextEventWithAbort(iterator, signal) {
+  if (!signal) {
+    return iterator.next();
+  }
+  if (signal.aborted) {
+    throw createCodexAbortError();
+  }
+
+  let abortListener = null;
+  const abortPromise = new Promise((_, reject) => {
+    abortListener = () => reject(createCodexAbortError());
+    signal.addEventListener('abort', abortListener, { once: true });
+  });
+
+  try {
+    return await Promise.race([iterator.next(), abortPromise]);
+  } catch (error) {
+    if (isAbortLikeError(error) && typeof iterator.return === 'function') {
+      try { await iterator.return(); } catch { /* best effort */ }
+    }
+    throw error;
+  } finally {
+    if (abortListener) {
+      signal.removeEventListener('abort', abortListener);
+    }
+  }
+}
+
+export function shouldSuppressCodexStreamParseErrorAfterCompletion(errorMessage, state) {
+  if (!state?.turnCompletedObserved) return false;
+  if (typeof errorMessage !== 'string' || !errorMessage.includes('Failed to parse item:')) return false;
+  const parsedItem = errorMessage.replace(/^.*Failed to parse item:\s*/i, '').trim();
+  return isIgnorableWindowsTerminationNoiseLine(parsedItem);
+}
 
 export function isWindowsTaskkillParseNoise(message) {
   if (typeof message !== 'string') return false;
@@ -126,9 +175,11 @@ export function createInitialEventState(emitMessage) {
     reasoningTextCache: new Map(),
     assistantTextCache: new Map(),
     reasoningObserved: false,
+    turnCompletedObserved: false,
     commandApprovalAbortRequested: false,
     runtimePolicyLogged: false,
     suppressNoResponseFallback: false,
+    userAbortObserved: false,
     turnCompleted: false,
     currentThreadId: null,
     finalResponse: '',
@@ -646,8 +697,13 @@ function handleMcpToolCall(item, state) {
  */
 export async function processCodexEventStream(events, state, config) {
   let rawEventIndex = 0;
+  const iterator = events[Symbol.asyncIterator]();
+  const signal = config?.turnAbortController?.signal;
   try {
-    for await (const event of events) {
+    while (true) {
+      const next = await nextEventWithAbort(iterator, signal);
+      if (next.done) break;
+      const event = next.value;
       rawEventIndex += 1;
       const rawEventJson = stringifyRawEvent(event);
       if (rawEventJson && DEBUG_LEVEL >= 5) console.log(`[RAW_EVENT][${rawEventIndex}]`, rawEventJson);
@@ -744,6 +800,7 @@ export async function processCodexEventStream(events, state, config) {
       case 'turn.completed': {
         state.turnCompleted = true;
         console.log('[DEBUG] Turn completed');
+        state.turnCompletedObserved = true;
         const replayed = await replayMissingFunctionCallsFromSession(state, config);
         if (replayed.toolUses > 0 || replayed.toolResults > 0) {
           console.log('[DEBUG] Replayed session function calls:', JSON.stringify(replayed));
@@ -835,13 +892,19 @@ export async function processCodexEventStream(events, state, config) {
     }
   } catch (streamError) {
     const streamErrorMessage = streamError?.message || String(streamError);
-    if (state.commandApprovalAbortRequested && (
+    if (signal?.aborted && isAbortLikeError(streamError)) {
+      state.userAbortObserved = true;
+      state.suppressNoResponseFallback = true;
+      logInfo('CODEX_ABORT', `Suppress user-aborted Codex stream: ${streamErrorMessage}`);
+    } else if (state.commandApprovalAbortRequested && (
       streamErrorMessage === COMMAND_DENIED_ABORT_ERROR ||
       /aborted|abort|cancel|interrupt/i.test(streamErrorMessage)
     )) {
       logInfo('PERM_DEBUG', `Suppress streamed turn abort after command denial: ${streamErrorMessage}`);
     } else if (state.turnCompleted && isWindowsTaskkillParseNoise(streamErrorMessage)) {
       console.warn('[DEBUG] Suppressed post-completion Codex taskkill parse noise:', streamErrorMessage);
+    } else if (shouldSuppressCodexStreamParseErrorAfterCompletion(streamErrorMessage, state)) {
+      logWarn('CODEX_JSON_STREAM', `Suppress post-completion Windows termination noise: ${streamErrorMessage}`);
     } else {
       throw streamError;
     }

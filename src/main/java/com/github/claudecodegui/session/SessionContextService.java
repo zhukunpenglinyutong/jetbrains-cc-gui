@@ -2,6 +2,8 @@ package com.github.claudecodegui.session;
 
 import com.github.claudecodegui.service.RunConfigMonitorService;
 import com.github.claudecodegui.terminal.TerminalMonitorService;
+import com.github.claudecodegui.util.AttachmentResourceService;
+import com.github.claudecodegui.util.AttachmentStorageService;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
@@ -367,18 +369,60 @@ public class SessionContextService {
             return false;
         }
         String mediaType = att.mediaType != null ? att.mediaType : "";
-        return mediaType.startsWith("image/") && att.data != null;
+        return mediaType.startsWith("image/")
+                && (att.data != null || att.resourceUrl != null || att.localPath != null);
     }
 
     private JsonObject createImageBlock(ClaudeSession.Attachment att) {
+        if (att.localPath != null && !att.localPath.isBlank()) {
+            JsonObject pathBlock = AttachmentStorageService.getInstance()
+                    .createImageBlockFromPath(att.localPath);
+            if (pathBlock != null) {
+                return pathBlock;
+            }
+        }
+
         JsonObject imageBlock = new JsonObject();
         imageBlock.addProperty("type", "image");
 
-        JsonObject source = new JsonObject();
-        source.addProperty("type", "base64");
-        source.addProperty("media_type", att.mediaType);
-        source.addProperty("data", att.data);
-        imageBlock.add("source", source);
+        if (att.resourceUrl != null && !att.resourceUrl.isBlank()) {
+            // 验证 resourceUrl 仍在 LRU 缓存中，否则尝试重新注册 localPath
+            String resourceUrl = att.resourceUrl;
+            String thumbnailUrl = att.thumbnailUrl;
+            if (AttachmentResourceService.resolveAttachmentUrl(resourceUrl) == null
+                    && att.localPath != null && !att.localPath.isBlank()) {
+                JsonObject reRegistered = AttachmentStorageService.getInstance()
+                        .createImageBlockFromPath(att.localPath);
+                if (reRegistered != null) {
+                    return reRegistered;
+                }
+            }
+
+            String displayUrl = thumbnailUrl != null && !thumbnailUrl.isBlank()
+                    ? thumbnailUrl
+                    : resourceUrl;
+            String previewDataUri = AttachmentResourceService.resolveAttachmentUrlAsDataUri(resourceUrl);
+            String thumbnailDataUri = AttachmentResourceService.resolveAttachmentUrlAsDataUri(displayUrl);
+            String displaySrc = thumbnailDataUri != null ? thumbnailDataUri : previewDataUri;
+            imageBlock.addProperty("src", displaySrc != null ? displaySrc : displayUrl);
+            imageBlock.addProperty("previewSrc", previewDataUri != null ? previewDataUri : resourceUrl);
+            imageBlock.addProperty("thumbnailSrc", displaySrc != null ? displaySrc : displayUrl);
+            imageBlock.addProperty("mediaType", att.mediaType);
+            imageBlock.addProperty("sourceKind", displaySrc != null ? "base64" : "resource_url");
+            if (att.localPath != null && !att.localPath.isBlank()) {
+                imageBlock.addProperty("localPath", att.localPath);
+            }
+            if (att.fileName != null && !att.fileName.isBlank()) {
+                imageBlock.addProperty("alt", att.fileName);
+            }
+        } else {
+            JsonObject source = new JsonObject();
+            source.addProperty("type", "base64");
+            source.addProperty("media_type", att.mediaType);
+            source.addProperty("data", att.data);
+            imageBlock.add("source", source);
+            imageBlock.addProperty("sourceKind", "base64");
+        }
 
         return imageBlock;
     }

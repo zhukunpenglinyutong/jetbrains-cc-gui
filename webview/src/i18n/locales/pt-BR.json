@@ -35,6 +35,7 @@
     "emptyMessage": "Mensagem vazia",
     "clickToPreview": "Clique para visualizar",
     "userUploadedImage": "Imagem enviada pelo usuário",
+    "imageLoadFailed": "Falha ao carregar imagem",
     "inputPlaceholder": "@referenciar arquivos, #invocar agentes, !inserir prompts, Enter para enviar",
     "inputPlaceholderEnter": "@referenciar arquivos, #invocar agentes, !inserir prompts, Enter para enviar",
     "inputPlaceholderCmdEnter": "@referenciar arquivos, #invocar agentes, !inserir prompts, ⌘Enter para enviar",
@@ -91,6 +92,13 @@
     "streamingConnected": "{{provider}} conectado, entendendo sua pergunta",
     "showEarlierMessages": "Mostrar {{count}} mensagens anteriores",
     "totalDuration": "Esta resposta levou",
+    "waitingTimedOutDuration": "Tempo de espera esgotado",
+    "streamStalledRetrying": "Nenhuma saída do modelo foi recebida por um tempo. A CLI ainda pode estar tentando novamente; se falhar, o erro final aparecerá.",
+    "usageStats": {
+      "input": "Entrada：",
+      "output": "Saída：",
+      "duration": "Duração："
+    },
     "search": {
       "ariaLabel": "Pesquisar na conversa",
       "placeholder": "Pesquisar na conversa…",
@@ -115,6 +123,15 @@
       "userContext": "Contexto: \"{{context}}\"",
       "expand": "Expandir resumo",
       "collapse": "Recolher resumo"
+    },
+    "tokenIndicator": {
+      "contextStats": "Estatísticas de contexto",
+      "inputToken": "Tokens de entrada",
+      "outputToken": "Tokens de saída",
+      "cacheRead": "Leitura de cache",
+      "cacheWrite": "Escrita de cache",
+      "cacheHitRate": "{{rate}}% acerto",
+      "total": "Total {{used}} / {{max}}"
     }
   },
   "settings": {
@@ -1686,6 +1703,7 @@
     "dbParseProviderFailed": "Falha ao interpretar configuração do provedor",
     "aiResponseEmpty": "Resposta da IA está vazia",
     "enhancementFailed": "Falha no aprimoramento",
+    "unsupportedImageVision": "O modelo atual não oferece suporte ao reconhecimento de imagens, ou a interface compatível com Claude Code deste provedor não oferece suporte a resultados de ferramentas de imagem.\nAlterne para um modelo com suporte a visão e tente novamente.",
     "uploadedImages": "{{count}} imagem(ns) enviada(s)",
     "uploadedAttachments": "Anexo(s) enviado(s)",
     "emptyMessage": "Mensagem vazia",

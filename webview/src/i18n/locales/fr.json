@@ -35,6 +35,7 @@
     "emptyMessage": "Message vide",
     "clickToPreview": "Cliquer pour prévisualiser",
     "userUploadedImage": "Image téléchargée par l'utilisateur",
+    "imageLoadFailed": "Échec du chargement de l'image",
     "inputPlaceholder": "@référencer fichiers, #invoquer agents, Entrée pour envoyer",
     "inputPlaceholderEnter": "@référencer fichiers, #invoquer agents, Entrée pour envoyer",
     "inputPlaceholderCmdEnter": "@référencer fichiers, #invoquer agents, ⌘Entrée pour envoyer",
@@ -91,6 +92,13 @@
     "streamingConnected": "{{provider}} connecté, en train de comprendre votre question",
     "showEarlierMessages": "Afficher {{count}} messages précédents",
     "totalDuration": "Cette réponse a pris",
+    "waitingTimedOutDuration": "Délai d'attente dépassé",
+    "streamStalledRetrying": "Aucune sortie du modèle n'a été reçue depuis un moment. La CLI peut encore réessayer ; l'erreur finale s'affichera en cas d'échec.",
+    "usageStats": {
+      "input": "Entrée：",
+      "output": "Sortie：",
+      "duration": "Durée："
+    },
     "search": {
       "ariaLabel": "Rechercher dans la conversation",
       "placeholder": "Rechercher dans la conversation…",
@@ -115,6 +123,15 @@
       "userContext": "Contexte : « {{context}} »",
       "expand": "Développer le résumé",
       "collapse": "Réduire le résumé"
+    },
+    "tokenIndicator": {
+      "contextStats": "Statistiques de contexte",
+      "inputToken": "Tokens d'entrée",
+      "outputToken": "Tokens de sortie",
+      "cacheRead": "Lecture cache",
+      "cacheWrite": "Écriture cache",
+      "cacheHitRate": "{{rate}}% succès",
+      "total": "Total {{used}} / {{max}}"
     }
   },
   "settings": {
@@ -1514,6 +1531,7 @@
     "dbParseProviderFailed": "Échec de l'analyse de la configuration du fournisseur",
     "aiResponseEmpty": "La réponse de l'IA est vide",
     "enhancementFailed": "Échec de l'amélioration",
+    "unsupportedImageVision": "Le modèle actuel ne prend pas en charge la reconnaissance d'images, ou l'interface compatible Claude Code de ce fournisseur ne prend pas en charge les résultats d'outils d'image.\nVeuillez passer à un modèle compatible avec la vision, puis réessayer.",
     "uploadedImages": "{{count}} image(s) téléchargée(s)",
     "uploadedAttachments": "Pièce(s) jointe(s) téléchargée(s)",
     "emptyMessage": "Message vide",

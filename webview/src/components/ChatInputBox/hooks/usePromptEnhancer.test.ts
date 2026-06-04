@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { usePromptEnhancer } from './usePromptEnhancer';
 
 describe('usePromptEnhancer', () => {
+  const bridgeCall = (type: string, content = '') =>
+    JSON.stringify({ type, content });
+
   beforeEach(() => {
     window.sendToJava = vi.fn();
   });
@@ -24,7 +27,7 @@ describe('usePromptEnhancer', () => {
     });
 
     expect(window.sendToJava).toHaveBeenCalledWith(
-      'enhance_prompt:{"prompt":"Please refactor this module"}'
+      bridgeCall('enhance_prompt', '{"prompt":"Please refactor this module"}')
     );
   });
 });

@@ -33,3 +33,11 @@ if (!globalThis.localStorage || typeof globalThis.localStorage.clear !== 'functi
     configurable: true,
   });
 }
+
+if (typeof globalThis.window === 'undefined') {
+  Object.defineProperty(globalThis, 'window', {
+    value: globalThis,
+    writable: true,
+    configurable: true,
+  });
+}

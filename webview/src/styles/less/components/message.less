@@ -8,10 +8,19 @@
     overflow-anchor: none; /* 手动跟随到底时禁用锚定，避免和程序滚动抢控制权 */
     padding: 0;
     background: var(--bg-chat);
+    display: flex;
+    flex-direction: column;
 }
 
 .messages-container.scroll-anchor-enabled {
     overflow-anchor: auto; /* 用户离开底部后，交还给浏览器维持当前可见位置 */
+}
+
+.message-list {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
 }
 
 /* Collapsed messages indicator */
@@ -46,43 +55,10 @@
  * Performance impact of skipping the optimization is minimal: chat sessions
  * rarely exceed 100 messages, and `contain: layout style` already isolates
  * each message from cross-recalculation during scroll. */
-.message {
-    padding: 16px 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    border-bottom: 1px solid var(--color-message-divider);
-    min-width: 0; /* 允许内容缩小 */
-    max-width: 100%; /* 防止超出容器 */
-    contain: layout style; /* Isolate layout — prevents cross-message recalculation during scroll */
-}
 
-.message:last-child {
-    border-bottom: none;
-}
+/* NOTE: .message base styles are now in chat-message-avatar.less */
 
-/* User Message: Bubble style */
-.message.user {
-    background-color: transparent;
-    border-left: none;
-    align-items: flex-end;
-    padding-top: 16px;
-    padding-bottom: 16px;
-    position: relative; /* Enable absolute positioning for copy button */
-}
-
-.message.user .message-content {
-    background-color: var(--color-message-user-bg);
-    color: var(--color-message-user-text);
-    padding: 10px 14px;
-    border-radius: 12px 12px 2px 12px;
-    max-width: 85%;
-    border: 1px solid rgba(255,255,255,0.06);
-    word-wrap: break-word;
-    word-break: break-word;
-    overflow-wrap: break-word;
-    white-space: pre-wrap;
-}
+/* User Message: Bubble style - Override in chat-message-avatar.less */
 
 /* System notification messages: left-aligned, no bubble (task_notification + compact_notification + non-human origin) */
 .message.task_notification,
@@ -92,6 +68,7 @@
     border-left: none;
     align-items: flex-start;
     padding: 8px 20px;
+    max-width: 100%;
 }
 
 .message.task_notification .message-content,
@@ -117,18 +94,7 @@
     line-height: 1;
 }
 
-/* Assistant Message: Row layout for alignment */
-.message.assistant {
-    background: transparent;
-    flex-direction: column; /* Revert to column to avoid alignment issues without dot */
-    gap: 6px;
-    padding-left: 20px;
-}
-
-.message.assistant .message-content {
-    max-width: 100%; /* 防止内容超出容器 */
-    min-width: 0; /* 允许内容缩小 */
-}
+/* Assistant Message: styles moved to chat-message-avatar.less */
 
 .message.assistant .message-role-label {
     display: none; /* Hide label for assistant */
@@ -273,9 +239,11 @@
     }
 }
 
+/* Error message styles - keep original */
 .message.error {
     background: rgba(90, 29, 29, 0.1);
     border-left: 2px solid var(--color-message-error-border);
+    max-width: 100%;
 }
 
 /* Provider Not Configured - override error styling to use amber/warning tone */
@@ -577,13 +545,7 @@
     color: var(--color-message-error-border);
 }
 
-/* Message Content */
-.message-content {
-    font-size: var(--idea-editor-font-size, 13.5px);
-    line-height: 1.6;
-    color: var(--text-primary);
-    min-width: 0; /* Allow flex items to shrink below content size */
-}
+/* Message Content - styles moved to chat-message-avatar.less */
 
 /* Content Block */
 .content-block {
@@ -988,6 +950,29 @@
     color: var(--text-tertiary);
     font-size: 12.5px;
     line-height: 1.4;
+}
+
+@keyframes streaming-connect-enter {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+        filter: blur(2px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+        filter: blur(0);
+    }
+}
+
+.streaming-connect-enter {
+    animation: streaming-connect-enter 350ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .streaming-connect-enter {
+        animation-duration: 0.01ms;
+    }
 }
 
 @keyframes thinking-pulse {

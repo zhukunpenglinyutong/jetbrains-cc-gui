@@ -3,12 +3,10 @@ import { useTranslation } from 'react-i18next';
 import type { ProviderConfig } from '../../../types/provider';
 import { SPECIAL_PROVIDER_IDS } from '../../../types/provider';
 import { writeClaudeModelMapping } from '../../../utils/claudeModelMapping';
+import { sendBridgeEvent } from '../../../utils/bridge';
 
-const sendToJava = (message: string) => {
-  if (window.sendToJava) {
-    window.sendToJava(message);
-  }
-  // Silently ignore when sendToJava is unavailable to avoid log pollution in production
+const sendToJava = (event: string, payload = '') => {
+  sendBridgeEvent(event, payload);
 };
 
 export interface ProviderDialogState {
@@ -65,7 +63,7 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
   // Load provider list
   const loadProviders = useCallback(() => {
     setLoading(true);
-    sendToJava('get_providers:');
+    sendToJava('get_providers');
   }, []);
 
   // Update provider list (used by window callback)
@@ -147,7 +145,7 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
           id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
           ...updates,
         };
-        sendToJava(`add_provider:${JSON.stringify(newProvider)}`);
+        sendToJava('add_provider', JSON.stringify(newProvider));
         onSuccess?.(t('toast.providerAdded'));
       } else {
         if (!providerDialog.provider) return false;
@@ -161,7 +159,7 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
           id: providerId,
           updates,
         };
-        sendToJava(`update_provider:${JSON.stringify(updateData)}`);
+        sendToJava('update_provider', JSON.stringify(updateData));
         onSuccess?.(t('toast.providerUpdated'));
 
         if (isActive) {
@@ -170,7 +168,7 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
             settingsConfig: parsedConfig,
           });
           setTimeout(() => {
-            sendToJava(`switch_provider:${JSON.stringify({ id: providerId })}`);
+            sendToJava('switch_provider', JSON.stringify({ id: providerId }));
           }, 100);
         }
       }
@@ -188,7 +186,7 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
       const data = { id };
       if (id === SPECIAL_PROVIDER_IDS.DISABLED) {
         syncActiveProviderModelMapping(null);
-        sendToJava(`switch_provider:${JSON.stringify(data)}`);
+        sendToJava('switch_provider', JSON.stringify(data));
         setLoading(true);
         return;
       }
@@ -196,7 +194,7 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
       if (target) {
         syncActiveProviderModelMapping(target);
       }
-      sendToJava(`switch_provider:${JSON.stringify(data)}`);
+      sendToJava('switch_provider', JSON.stringify(data));
       setLoading(true);
     },
     [providers, syncActiveProviderModelMapping]
@@ -213,7 +211,7 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
     if (!provider) return;
 
     const data = { id: provider.id };
-    sendToJava(`delete_provider:${JSON.stringify(data)}`);
+    sendToJava('delete_provider', JSON.stringify(data));
     onSuccess?.(t('toast.providerDeleted'));
     setLoading(true);
     setDeleteConfirm({ isOpen: false, provider: null });

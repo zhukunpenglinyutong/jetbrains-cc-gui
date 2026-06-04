@@ -33,6 +33,20 @@ interface UseChatComputationsParams {
   getContentBlocks: ReturnType<typeof useMessageProcessing>['getContentBlocks'];
 }
 
+export function isSessionTitleUserCandidate(message: ClaudeMessage): boolean {
+  if (message.type !== 'user') return false;
+  if ((message.content ?? '').trim() === '[tool_result]') return false;
+
+  const raw = message.raw;
+  if (!raw || typeof raw === 'string') return true;
+  if (raw.origin?.kind && raw.origin.kind !== 'human') return false;
+
+  const content = raw.content ?? raw.message?.content;
+  if (!Array.isArray(content) || content.length === 0) return true;
+
+  return !content.every((block) => block && block.type === 'tool_result');
+}
+
 /**
  * Bundles all chat-view derived computations: tool result lookup table,
  * subagent extraction, todos, rewindable messages, file change filtering,
@@ -185,7 +199,7 @@ export function useChatComputations({
   const sessionTitle = useMemo(() => {
     if (customSessionTitle) return customSessionTitle;
     if (messages.length === 0) return t('common.newSession');
-    const firstUserMessage = messages.find((message) => message.type === 'user');
+    const firstUserMessage = messages.find(isSessionTitleUserCandidate);
     if (!firstUserMessage) return t('common.newSession');
     const text = getMessageText(firstUserMessage);
     return text.length > 15 ? `${text.substring(0, 15)}...` : text;

@@ -61,11 +61,12 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
     {
       isLoading = false,
       selectedModel = 'claude-sonnet-4-6',
-      permissionMode = 'bypassPermissions',
+      permissionMode = 'acceptEdits',
       currentProvider = 'claude',
       usagePercentage = 0,
       usageUsedTokens,
       usageMaxTokens,
+      tokenDetail,
       showUsage = true,
       attachments: externalAttachments,
       placeholder = '', // Will be passed from parent via t('chat.inputPlaceholder')
@@ -599,6 +600,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
           usagePercentage={usagePercentage}
           usageUsedTokens={usageUsedTokens}
           usageMaxTokens={usageMaxTokens}
+          tokenDetail={tokenDetail}
           showUsage={showUsage}
           onClearContext={handleClearFileContext}
           onAddAttachment={handleAddAttachment}

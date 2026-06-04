@@ -3,25 +3,29 @@ import {
   openBrowser,
   openClass,
   openFile,
+  sendBridgeEvent,
   showEditableDiff,
   showInteractiveDiff,
   undoFileChanges,
 } from './bridge';
 
 describe('bridge navigation helpers', () => {
+  const bridgeCall = (type: string, content = '') =>
+    JSON.stringify({ type, content });
+
   beforeEach(() => {
     window.sendToJava = vi.fn();
   });
 
   it('allows relative navigation paths for openFile', () => {
     openFile('../shared/utils.ts');
-    expect(window.sendToJava).toHaveBeenCalledWith('open_file:../shared/utils.ts');
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('open_file', '../shared/utils.ts'));
   });
 
   it('sends openClass for valid Java FQCN values', () => {
     openClass('com.github.claudecodegui.handler.file.OpenFileHandler');
     expect(window.sendToJava).toHaveBeenCalledWith(
-      'open_class:com.github.claudecodegui.handler.file.OpenFileHandler',
+      bridgeCall('open_class', 'com.github.claudecodegui.handler.file.OpenFileHandler'),
     );
   });
 
@@ -31,8 +35,8 @@ describe('bridge navigation helpers', () => {
     openClass('org.junit.jupiter.api');
     openClass('com.github.foo.Bar.baz()');
 
-    expect(window.sendToJava).toHaveBeenNthCalledWith(1, 'open_class:com.github.foo.BarService');
-    expect(window.sendToJava).toHaveBeenNthCalledWith(2, 'open_class:com.github.foo.Outer.Inner');
+    expect(window.sendToJava).toHaveBeenNthCalledWith(1, bridgeCall('open_class', 'com.github.foo.BarService'));
+    expect(window.sendToJava).toHaveBeenNthCalledWith(2, bridgeCall('open_class', 'com.github.foo.Outer.Inner'));
     expect(window.sendToJava).toHaveBeenCalledTimes(2);
   });
 
@@ -54,9 +58,9 @@ describe('bridge navigation helpers', () => {
     openBrowser('http://example.com');
     openBrowser('mailto:test@example.com');
 
-    expect(window.sendToJava).toHaveBeenNthCalledWith(1, 'open_browser:https://example.com/docs');
-    expect(window.sendToJava).toHaveBeenNthCalledWith(2, 'open_browser:http://example.com');
-    expect(window.sendToJava).toHaveBeenNthCalledWith(3, 'open_browser:mailto:test@example.com');
+    expect(window.sendToJava).toHaveBeenNthCalledWith(1, bridgeCall('open_browser', 'https://example.com/docs'));
+    expect(window.sendToJava).toHaveBeenNthCalledWith(2, bridgeCall('open_browser', 'http://example.com'));
+    expect(window.sendToJava).toHaveBeenNthCalledWith(3, bridgeCall('open_browser', 'mailto:test@example.com'));
   });
 
   it('rejects file: and javascript: protocols in openBrowser', () => {
@@ -64,5 +68,16 @@ describe('bridge navigation helpers', () => {
     openBrowser('javascript:alert(1)');
 
     expect(window.sendToJava).not.toHaveBeenCalled();
+  });
+
+  it('encodes bridge events as structured JSON to preserve special characters', () => {
+    sendBridgeEvent('search_project', 'Checking SDK status|get_dependency_status\n---main.tsx---(foo');
+
+    expect(window.sendToJava).toHaveBeenCalledWith(
+      JSON.stringify({
+        type: 'search_project',
+        content: 'Checking SDK status|get_dependency_status\n---main.tsx---(foo',
+      }),
+    );
   });
 });

@@ -88,7 +88,103 @@ public class HistoryMessageInjectorTest {
         List<JsonObject> result = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(messages);
 
         assertEquals(1, result.size());
+        // When neither variant carries an image content block, fall back to the
+        // existing tiebreaker which keeps the first record.
         assertEquals("<image name=[Image #1]>\n</image>\nhello", result.get(0).get("content").getAsString());
+    }
+
+    @Test
+    public void convertCodexMessagesDeduplicatesAcrossSlightlyDifferentTimestamps() throws Exception {
+        // Codex SDK flushes `response_item` and `event_msg` records at slightly
+        // different moments; their timestamps differ by a handful of ms even when
+        // they represent the same user turn. Dedup must NOT depend on strict
+        // timestamp equality, otherwise the `<image ...>`-wrapped text leaks
+        // into the rendered history (Bug 2).
+        Path imagePath = Files.createTempFile("codex-history-image-jitter", ".png");
+        try {
+            Files.write(imagePath, "png-bytes".getBytes(StandardCharsets.UTF_8));
+
+            JsonArray messages = new JsonArray();
+            messages.add(responseItemUserMessage(
+                    "2026-05-20T13:53:10.701Z",
+                    "<image name=[Image #1]>\n</image>\n图片内容是啥"));
+            messages.add(eventUserMessage(
+                    "2026-05-20T13:53:10.832Z",
+                    "图片内容是啥",
+                    imagePath.toString()));
+
+            List<JsonObject> result = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(messages);
+
+            assertEquals(1, result.size());
+            assertEquals("图片内容是啥", result.get(0).get("content").getAsString());
+            JsonArray contentBlocks = result.get(0).getAsJsonObject("raw").getAsJsonArray("content");
+            assertEquals(2, contentBlocks.size());
+            // The variant with a real image content block wins.
+            assertEquals("image", contentBlocks.get(0).getAsJsonObject().get("type").getAsString());
+            assertTrue(contentBlocks.get(0).getAsJsonObject().get("src").getAsString()
+                    .startsWith("data:image/png;base64,"));
+            assertEquals("text", contentBlocks.get(1).getAsJsonObject().get("type").getAsString());
+            assertEquals("图片内容是啥", contentBlocks.get(1).getAsJsonObject().get("text").getAsString());
+        } finally {
+            Files.deleteIfExists(imagePath);
+        }
+    }
+
+    @Test
+    public void convertCodexMessagesKeepsRepeatedTextOnlyUserMessagesTypedSecondsApart() {
+        // Guard: two identical plain-text user messages with non-trivial time
+        // gap (no image signal) must remain as two separate messages.
+        JsonArray messages = new JsonArray();
+        messages.add(responseItemUserMessage("2026-04-30T09:40:26.701Z", "hello"));
+        messages.add(eventUserMessage("2026-04-30T09:41:00.701Z", "hello"));
+
+        List<JsonObject> result = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(messages);
+
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    public void convertCodexMessagesPreservesAllImagesWhenSingleTurnHasMultipleAttachments() throws Exception {
+        // Single user turn with two attachments: response_item wraps each image
+        // with its own `<image name=[Image #N]>...</image>` block, while
+        // event_msg carries both paths in `local_images`. Dedup must collapse the
+        // two records into the event_msg variant so both images stay rendered.
+        Path imagePath1 = Files.createTempFile("codex-history-multi-image-1", ".png");
+        Path imagePath2 = Files.createTempFile("codex-history-multi-image-2", ".png");
+        try {
+            Files.write(imagePath1, "png-bytes-1".getBytes(StandardCharsets.UTF_8));
+            Files.write(imagePath2, "png-bytes-2".getBytes(StandardCharsets.UTF_8));
+
+            JsonArray messages = new JsonArray();
+            messages.add(responseItemUserMessage(
+                    "2026-05-20T13:53:10.701Z",
+                    "<image name=[Image #1]>\n</image>\n<image name=[Image #2]>\n</image>\n图片内容是啥"));
+            messages.add(eventUserMessage(
+                    "2026-05-20T13:53:10.832Z",
+                    "图片内容是啥",
+                    imagePath1.toString(),
+                    imagePath2.toString()));
+
+            List<JsonObject> result = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(messages);
+
+            assertEquals(1, result.size());
+            assertEquals("图片内容是啥", result.get(0).get("content").getAsString());
+            JsonArray contentBlocks = result.get(0).getAsJsonObject("raw").getAsJsonArray("content");
+            assertEquals(3, contentBlocks.size());
+            assertEquals("image", contentBlocks.get(0).getAsJsonObject().get("type").getAsString());
+            assertEquals("image", contentBlocks.get(1).getAsJsonObject().get("type").getAsString());
+            // Both images must preserve distinct inline image data.
+            String src1 = contentBlocks.get(0).getAsJsonObject().get("src").getAsString();
+            String src2 = contentBlocks.get(1).getAsJsonObject().get("src").getAsString();
+            assertTrue(src1.startsWith("data:image/png;base64,"));
+            assertTrue(src2.startsWith("data:image/png;base64,"));
+            assertFalse("Two images must resolve to distinct base64 data", src1.equals(src2));
+            assertEquals("text", contentBlocks.get(2).getAsJsonObject().get("type").getAsString());
+            assertEquals("图片内容是啥", contentBlocks.get(2).getAsJsonObject().get("text").getAsString());
+        } finally {
+            Files.deleteIfExists(imagePath1);
+            Files.deleteIfExists(imagePath2);
+        }
     }
 
     @Test
@@ -131,7 +227,8 @@ public class HistoryMessageInjectorTest {
             assertEquals(2, contentBlocks.size());
             assertEquals("image", contentBlocks.get(0).getAsJsonObject().get("type").getAsString());
             assertEquals("image/png", contentBlocks.get(0).getAsJsonObject().get("mediaType").getAsString());
-            assertTrue(contentBlocks.get(0).getAsJsonObject().get("src").getAsString().startsWith("data:image/png;base64,"));
+            assertTrue(contentBlocks.get(0).getAsJsonObject().get("src").getAsString()
+                    .startsWith("data:image/png;base64,"));
             assertEquals("text", contentBlocks.get(1).getAsJsonObject().get("type").getAsString());
             assertEquals("hello", contentBlocks.get(1).getAsJsonObject().get("text").getAsString());
         } finally {
@@ -168,7 +265,8 @@ public class HistoryMessageInjectorTest {
             JsonArray contentBlocks = result.get(0).getAsJsonObject("raw").getAsJsonArray("content");
             assertEquals(1, contentBlocks.size());
             assertEquals("image", contentBlocks.get(0).getAsJsonObject().get("type").getAsString());
-            assertTrue(contentBlocks.get(0).getAsJsonObject().get("src").getAsString().startsWith("data:image/png;base64,"));
+            assertTrue(contentBlocks.get(0).getAsJsonObject().get("src").getAsString()
+                    .startsWith("data:image/png;base64,"));
         } finally {
             Files.deleteIfExists(imagePath);
         }
@@ -189,6 +287,30 @@ public class HistoryMessageInjectorTest {
         JsonArray contentBlocks = result.get(0).getAsJsonObject("raw").getAsJsonArray("content");
         assertEquals(1, contentBlocks.size());
         assertEquals("只保留用户输入", contentBlocks.get(0).getAsJsonObject().get("text").getAsString());
+    }
+
+    @Test
+    public void convertCodexMessagesKeepsBatchToolResultsWithinDedupWindow() {
+        // Two parallel bash calls (batch run) return their function_call_output
+        // entries within the dedup time window. Each tool_result is a separate
+        // user message whose `content` field is the literal placeholder
+        // "[tool_result]"; their raw payloads differ only by `tool_use_id`.
+        // The dedup pass must NOT collapse them — otherwise the trailing
+        // tool_use is left without a result and renders as a stuck pending
+        // spinner in the Batch Run Commands panel.
+        JsonArray messages = new JsonArray();
+        messages.add(functionCallOutputResponseItem("2026-05-21T08:00:00.100Z", "call_1", "first output"));
+        messages.add(functionCallOutputResponseItem("2026-05-21T08:00:00.180Z", "call_2", "second output"));
+
+        List<JsonObject> result = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(messages);
+
+        assertEquals(2, result.size());
+        assertEquals("user", result.get(0).get("type").getAsString());
+        assertEquals("user", result.get(1).get("type").getAsString());
+        assertEquals("call_1", result.get(0).getAsJsonObject("raw").getAsJsonArray("content")
+                .get(0).getAsJsonObject().get("tool_use_id").getAsString());
+        assertEquals("call_2", result.get(1).getAsJsonObject("raw").getAsJsonArray("content")
+                .get(0).getAsJsonObject().get("tool_use_id").getAsString());
     }
 
     private static JsonObject responseItemUserMessage(String timestamp, String text) {
@@ -236,10 +358,29 @@ public class HistoryMessageInjectorTest {
     }
 
     private static JsonObject eventUserMessage(String timestamp, String text, String localImagePath) {
+        return eventUserMessage(timestamp, text, new String[]{localImagePath});
+    }
+
+    private static JsonObject eventUserMessage(String timestamp, String text, String... localImagePaths) {
         JsonObject line = eventUserMessage(timestamp, text);
         JsonArray localImages = new JsonArray();
-        localImages.add(localImagePath);
+        for (String path : localImagePaths) {
+            localImages.add(path);
+        }
         line.getAsJsonObject("payload").add("local_images", localImages);
+        return line;
+    }
+
+    private static JsonObject functionCallOutputResponseItem(String timestamp, String callId, String output) {
+        JsonObject line = new JsonObject();
+        line.addProperty("timestamp", timestamp);
+        line.addProperty("type", "response_item");
+
+        JsonObject payload = new JsonObject();
+        payload.addProperty("type", "function_call_output");
+        payload.addProperty("call_id", callId);
+        payload.addProperty("output", output);
+        line.add("payload", payload);
         return line;
     }
 

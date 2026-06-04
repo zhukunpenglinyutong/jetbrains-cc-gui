@@ -34,13 +34,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
   cursor: pointer;
   color: var(--text-secondary);
-  transition: all 0.2s;
-  font-size: 14px;
+  transition: all 0.15s;
   /* Reset button styles */
   background: transparent;
   border: none;
@@ -57,6 +56,17 @@
 .context-tool-btn:disabled {
   cursor: not-allowed;
   opacity: 0.4;
+}
+
+/* SVG icon styling within context tool buttons */
+.context-tool-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .context-tool-divider {
@@ -216,13 +226,26 @@
 .context-close {
   cursor: pointer;
   opacity: 0.7;
-  font-size: 14px;
   margin-left: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s;
 }
 
 .context-close:hover {
   opacity: 1;
   color: var(--text-primary);
+}
+
+.context-close svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* ============================================================
@@ -261,8 +284,14 @@ button.context-file-placeholder:focus-visible {
   opacity: 1;
 }
 
-.context-file-placeholder .codicon {
-  font-size: 12px;
+.context-file-placeholder svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .context-file-placeholder .placeholder-text {

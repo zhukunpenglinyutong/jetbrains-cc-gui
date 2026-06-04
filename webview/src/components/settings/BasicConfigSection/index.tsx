@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import {useState} from 'react';
 import styles from './style.module.less';
-import { useTranslation } from 'react-i18next';
-import type { DiffThemeMode } from '../../../utils/diffTheme';
-import type { UiFontConfig } from '../hooks/useSettingsBasicActions';
+import {useTranslation} from 'react-i18next';
+import type {DiffThemeMode} from '../../../utils/diffTheme';
+import type {UiFontConfig} from '../hooks/useSettingsBasicActions';
 import AppearanceTab from './AppearanceTab';
 import BehaviorTab from './BehaviorTab';
 import EnvironmentTab from './EnvironmentTab';
@@ -72,21 +72,14 @@ interface BasicConfigSectionProps {
   // New-session confirm dialog (positive semantics: true = shown)
   newSessionConfirmEnabled?: boolean;
   onNewSessionConfirmEnabledChange?: (enabled: boolean) => void;
-  // Sound notification configuration
-  soundNotificationEnabled?: boolean;
-  onSoundNotificationEnabledChange?: (enabled: boolean) => void;
-  soundOnlyWhenUnfocused?: boolean;
-  onSoundOnlyWhenUnfocusedChange?: (enabled: boolean) => void;
-  selectedSound?: string;
-  onSelectedSoundChange?: (soundId: string) => void;
-  customSoundPath?: string;
-  onCustomSoundPathChange?: (path: string) => void;
-  onSaveCustomSoundPath?: () => void;
-  onTestSound?: () => void;
-  onBrowseSound?: () => void;
   // Task completion notification configuration
   taskCompletionNotificationEnabled?: boolean;
   onTaskCompletionNotificationEnabledChange?: (enabled: boolean) => void;
+  // Invocation mode configuration
+  invocationMode?: 'sdk' | 'cli';
+  onInvocationModeChange?: (mode: 'sdk' | 'cli') => void;
+  cliPath?: string;
+  onCliPathChange?: (path: string) => void;
   // Permission dialog timeout configuration
   permissionDialogTimeoutSeconds?: number;
   onPermissionDialogTimeoutChange?: (seconds: number) => void;
@@ -154,17 +147,6 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onAiTitleGenerationEnabledChange={props.onAiTitleGenerationEnabledChange}
           newSessionConfirmEnabled={props.newSessionConfirmEnabled}
           onNewSessionConfirmEnabledChange={props.onNewSessionConfirmEnabledChange}
-          soundNotificationEnabled={props.soundNotificationEnabled}
-          onSoundNotificationEnabledChange={props.onSoundNotificationEnabledChange}
-          soundOnlyWhenUnfocused={props.soundOnlyWhenUnfocused}
-          onSoundOnlyWhenUnfocusedChange={props.onSoundOnlyWhenUnfocusedChange}
-          selectedSound={props.selectedSound}
-          onSelectedSoundChange={props.onSelectedSoundChange}
-          customSoundPath={props.customSoundPath}
-          onCustomSoundPathChange={props.onCustomSoundPathChange}
-          onSaveCustomSoundPath={props.onSaveCustomSoundPath}
-          onTestSound={props.onTestSound}
-          onBrowseSound={props.onBrowseSound}
           taskCompletionNotificationEnabled={props.taskCompletionNotificationEnabled}
           onTaskCompletionNotificationEnabledChange={props.onTaskCompletionNotificationEnabledChange}
           permissionDialogTimeoutSeconds={props.permissionDialogTimeoutSeconds}
@@ -184,6 +166,10 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onWorkingDirectoryChange={props.onWorkingDirectoryChange}
           onSaveWorkingDirectory={props.onSaveWorkingDirectory}
           savingWorkingDirectory={props.savingWorkingDirectory}
+          invocationMode={props.invocationMode}
+          onInvocationModeChange={props.onInvocationModeChange}
+          cliPath={props.cliPath}
+          onCliPathChange={props.onCliPathChange}
         />
       )}
     </div>

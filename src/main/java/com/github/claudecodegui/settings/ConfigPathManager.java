@@ -17,6 +17,7 @@ public class ConfigPathManager {
 
     private static final String CONFIG_DIR_NAME = ".codemoss";
     private static final String CONFIG_FILE_NAME = "config.json";
+    private static final String CLI_SETTINGS_FILE_NAME = "cli-settings.json";
     private static final String BACKUP_FILE_NAME = "config.json.bak";
     private static final String AGENT_FILE_NAME = "agent.json";
     private static final String PROMPT_FILE_NAME = "prompt.json";
@@ -53,6 +54,13 @@ public class ConfigPathManager {
      */
     public Path getConfigFilePath() {
         return getConfigDir().resolve(CONFIG_FILE_NAME);
+    }
+
+    /**
+     * Get the CLI-only settings file as a Path object.
+     */
+    public Path getCliSettingsFilePath() {
+        return getConfigDir().resolve(CLI_SETTINGS_FILE_NAME);
     }
 
     /**

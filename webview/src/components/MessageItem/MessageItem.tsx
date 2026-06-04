@@ -19,6 +19,9 @@ import { ContentBlockRenderer } from './ContentBlockRenderer';
 import { formatTime } from '../../utils/helpers';
 import { copyToClipboard } from '../../utils/copyUtils';
 import { READ_TOOL_NAMES, EDIT_TOOL_NAMES, BASH_TOOL_NAMES, SEARCH_TOOL_NAMES, isToolName } from '../../utils/toolConstants';
+import { MessageAvatar } from './MessageAvatar';
+import { MessageUsageStats } from './MessageUsageStats';
+import { extractMessageUsage } from '../../utils/messageUsage';
 
 export interface MessageItemProps {
   message: ClaudeMessage;
@@ -91,17 +94,6 @@ const CopyButton = memo(function CopyButton({
     </button>
   );
 });
-
-function formatDurationMs(durationMs: number): string {
-  const seconds = Math.max(0, Math.floor(durationMs / 1000));
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const remainder = seconds % 60;
-  if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
-  }
-  return `${minutes}:${String(remainder).padStart(2, '0')}`;
-}
 
 function isToolBlockOfType(block: ClaudeContentBlock, toolNames: Set<string>): boolean {
   return block.type === 'tool_use' && isToolName(block.name, toolNames);
@@ -268,6 +260,9 @@ export const MessageItem = memo(function MessageItem({
   const isLastAssistantMessage = message.type === 'assistant' && isLast;
   const isMessageStreaming = streamingActive && isLastAssistantMessage;
 
+  // Cache per-message token usage extraction
+  const messageUsage = useMemo(() => extractMessageUsage(message), [message]);
+
   // Cache markdown content extraction for better performance
   const markdownContent = useMemo(() => {
     // Only extract for user and assistant messages that need copy functionality
@@ -405,7 +400,7 @@ export const MessageItem = memo(function MessageItem({
 
     if (isEmptyStreamingPlaceholder) {
       return (
-        <div className="streaming-connect-status">
+        <div className="streaming-connect-status streaming-connect-enter">
           <span className="streaming-connect-text">
             {t('chat.streamingConnected', { provider: getProviderDisplayName(currentProvider) })}
           </span>
@@ -567,61 +562,86 @@ export const MessageItem = memo(function MessageItem({
     return <></>;
   }
 
+  // 判断是否为用户或助手消息（需要显示头像）
+  const showAvatar = message.type === 'user' || message.type === 'assistant';
+
   return (
     <div
       className={`message ${message.type}${isLast ? ' is-last-message' : ''}${isProviderNotConfigured ? ' provider-not-configured' : ''}`}
       ref={anchorRefCallback}
       data-message-anchor-id={message.type === 'user' ? messageKey : undefined}
     >
-      {/* Timestamp and copy button for user messages */}
-      {message.type === 'user' && message.timestamp && (
-        <div className="message-header-row">
-          <div className="message-timestamp-header">
-            {formatTime(message.timestamp)}
+      {/* Avatar row - only for user and assistant messages */}
+      {showAvatar ? (
+        <div className="message-avatar-row">
+          <MessageAvatar type={message.type} />
+          <div className="message-content-wrapper">
+            {/* Timestamp and copy button for user messages */}
+            {message.type === 'user' && message.timestamp && (
+              <div className="message-header-row">
+                <div className="message-timestamp-header">
+                  {formatTime(message.timestamp)}
+                </div>
+                {hasCopyableText && (
+                  <CopyButton
+                    className="message-copy-btn-inline"
+                    isCopied={copiedMessageIndex === messageIndex}
+                    onClick={handleCopyMessage}
+                    copyLabel={t('markdown.copyMessage')}
+                    copySuccessText={t('markdown.copySuccess')}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Copy button for assistant messages only */}
+            {message.type === 'assistant' && !isMessageStreaming && hasCopyableText && (
+              <CopyButton
+                isCopied={copiedMessageIndex === messageIndex}
+                onClick={handleCopyMessage}
+                copyLabel={t('markdown.copyMessage')}
+                copySuccessText={t('markdown.copySuccess')}
+              />
+            )}
+
+            <div className="message-content">
+              {renderGroupedBlocks()}
+            </div>
+
+            {/* Usage stats bar after completed assistant message */}
+            {message.type === 'assistant' && !isMessageStreaming && (
+              <MessageUsageStats
+                inputTokens={messageUsage?.inputTokens ?? null}
+                outputTokens={messageUsage?.outputTokens ?? null}
+                durationMs={typeof message.durationMs === 'number' ? message.durationMs : null}
+                t={t}
+              />
+            )}
           </div>
-          {hasCopyableText && (
-            <CopyButton
-              className="message-copy-btn-inline"
-              isCopied={copiedMessageIndex === messageIndex}
-              onClick={handleCopyMessage}
-              copyLabel={t('markdown.copyMessage')}
-              copySuccessText={t('markdown.copySuccess')}
+        </div>
+      ) : (
+        <>
+          {/* Role label for non-user/assistant messages — hidden for notification types */}
+          {message.type !== 'notification' && message.type !== 'task_notification' && (
+            <div className="message-role-label">
+              {message.type}
+            </div>
+          )}
+
+          <div className="message-content">
+            {renderGroupedBlocks()}
+          </div>
+
+          {/* Usage stats bar for non-avatar assistant message */}
+          {message.type === 'assistant' && !isMessageStreaming && (
+            <MessageUsageStats
+              inputTokens={messageUsage?.inputTokens ?? null}
+              outputTokens={messageUsage?.outputTokens ?? null}
+              durationMs={typeof message.durationMs === 'number' ? message.durationMs : null}
+              t={t}
             />
           )}
-        </div>
-      )}
-
-      {/* Copy button for assistant messages only */}
-      {message.type === 'assistant' && !isMessageStreaming && hasCopyableText && (
-        <CopyButton
-          isCopied={copiedMessageIndex === messageIndex}
-          onClick={handleCopyMessage}
-          copyLabel={t('markdown.copyMessage')}
-          copySuccessText={t('markdown.copySuccess')}
-        />
-      )}
-
-      {/* Role label for non-user/assistant messages — hidden for notification types */}
-      {message.type !== 'assistant' && message.type !== 'user'
-        && message.type !== 'notification' && message.type !== 'task_notification' && (
-        <div className="message-role-label">
-          {message.type}
-        </div>
-      )}
-
-      <div className="message-content">
-        {renderGroupedBlocks()}
-      </div>
-
-      {/* Duration display after last assistant message */}
-      {message.type === 'assistant' && !isMessageStreaming && typeof message.durationMs === 'number' && (
-        <div className="message-duration">
-          <span className="message-duration-inner">
-            <span className="message-duration-flag codicon codicon-clock"></span>
-            <span className="message-duration-cost">{t('chat.totalDuration')}</span>
-            <span className="message-duration-value">{formatDurationMs(message.durationMs)}</span>
-          </span>
-        </div>
+        </>
       )}
     </div>
   );

@@ -3,6 +3,7 @@
  */
 import { sendMessage as codexSendMessage } from '../services/codex/message-service.js';
 import { getMcpServerTools as codexGetMcpServerTools } from '../services/codex/message-service.js';
+import { resetCodexThreadCache } from '../services/codex/message-service.js';
 
 /**
  * Execute a Codex command.
@@ -49,11 +50,17 @@ export async function handleCodexCommand(command, args, stdinData) {
       break;
     }
 
+    case 'clearThreadCache': {
+      const threadId = stdinData?.threadId || args[0] || null;
+      resetCodexThreadCache(threadId);
+      break;
+    }
+
     default:
       throw new Error(`Unknown Codex command: ${command}`);
   }
 }
 
 export function getCodexCommandList() {
-  return ['send', 'getMcpServerTools'];
+  return ['send', 'getMcpServerTools', 'clearThreadCache'];
 }

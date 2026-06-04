@@ -1,0 +1,1261 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Claude Code GUI - 图标优化主题预览</title>
+  <style>
+    /* ==================== Dark Theme (Default) ==================== */
+    :root, [data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #1e1f22;
+      --panel: #25262b;
+      --bar: #2b2d31;
+      --surface: #2d2f34;
+      --chip: #32343a;
+      --hover: #3a3d44;
+      --border: #464950;
+      --input-border: #5a5d66;
+      --muted: #a8adb7;
+      --text: #f0f2f5;
+      --soft: #d8dde6;
+      --accent: #4ea1ff;
+      --accent-hover: #6bb3ff;
+      --accent-bg: rgba(78, 161, 255, .12);
+      --accent-border: rgba(78, 161, 255, .3);
+      --green: #4cc38a;
+      --green-bg: rgba(76, 195, 138, .15);
+      --amber: #e7b85a;
+      --amber-bg: rgba(231, 184, 90, .15);
+      --violet: #a989ff;
+      --violet-bg: rgba(169, 137, 255, .15);
+      --red: #f07178;
+      --red-bg: rgba(240, 113, 120, .15);
+      --orange: #f5a623;
+      --orange-bg: rgba(245, 166, 35, .12);
+      --shadow: 0 8px 24px rgba(0, 0, 0, .3);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    /* ==================== Light Theme ==================== */
+    [data-theme="light"] {
+      color-scheme: light;
+      --bg: #f5f5f5;
+      --panel: #ffffff;
+      --bar: #f0f0f0;
+      --surface: #f8f8f8;
+      --chip: #e8e8e8;
+      --hover: #e0e0e0;
+      --border: #d0d0d0;
+      --input-border: #c0c0c0;
+      --muted: #666666;
+      --text: #1a1a1a;
+      --soft: #333333;
+      --accent: #0066cc;
+      --accent-hover: #0052a3;
+      --accent-bg: rgba(0, 102, 204, .1);
+      --accent-border: rgba(0, 102, 204, .3);
+      --green: #16a34a;
+      --green-bg: rgba(22, 163, 74, .12);
+      --amber: #d97706;
+      --amber-bg: rgba(217, 119, 6, .12);
+      --violet: #7c3aed;
+      --violet-bg: rgba(124, 58, 237, .12);
+      --red: #dc2626;
+      --red-bg: rgba(220, 38, 38, .12);
+      --orange: #ea580c;
+      --orange-bg: rgba(234, 88, 12, .1);
+      --shadow: 0 8px 24px rgba(0, 0, 0, .1);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: 14px;
+    }
+
+    /* ==================== Theme Switcher ==================== */
+    .theme-switcher {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 1000;
+      display: flex;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    .theme-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.15s;
+    }
+
+    .theme-btn:hover {
+      color: var(--text);
+      background: var(--hover);
+    }
+
+    .theme-btn.active {
+      color: var(--accent);
+      background: var(--accent-bg);
+    }
+
+    .theme-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    /* ==================== Page Layout ==================== */
+    .page-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .page-title {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .page-title h1 {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .page-title p {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .preview-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    @media (max-width: 1200px) {
+      .preview-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* ==================== Preview Card ==================== */
+    .preview-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: var(--bar);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .card-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .card-title .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .card-title .dot.dark { background: #1e1f22; }
+    .card-title .dot.light { background: #f5f5f5; border: 1px solid #ccc; }
+
+    .card-badge {
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .badge-dark {
+      background: rgba(255, 255, 255, .1);
+      color: var(--soft);
+    }
+
+    .badge-light {
+      background: rgba(0, 0, 0, .08);
+      color: var(--muted);
+    }
+
+    .card-body {
+      padding: 16px;
+    }
+
+    /* ==================== SVG Icon Base ==================== */
+    svg.icon {
+      width: 1em;
+      height: 1em;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vertical-align: middle;
+    }
+
+    /* ==================== Header Preview ==================== */
+    .preview-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: var(--bar);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-bottom: 12px;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-icon {
+      width: 24px;
+      height: 24px;
+      background: linear-gradient(135deg, var(--accent), var(--violet));
+      border-radius: 5px;
+      display: grid;
+      place-items: center;
+    }
+
+    .logo-icon svg {
+      width: 14px;
+      height: 14px;
+      color: white;
+    }
+
+    .session-chip {
+      padding: 3px 8px;
+      background: var(--chip);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 12px;
+      color: var(--soft);
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 4px;
+    }
+
+    .icon-btn {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 5px;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .icon-btn:hover {
+      background: var(--hover);
+      color: var(--text);
+    }
+
+    .icon-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    /* ==================== Context Bar Preview ==================== */
+    .preview-context-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--bar);
+      border-radius: 8px 8px 0 0;
+      border: 1px solid var(--border);
+      border-bottom: none;
+    }
+
+    .context-tools {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .tool-btn {
+      width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      border-radius: 5px;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .tool-btn:hover {
+      background: var(--hover);
+      color: var(--text);
+    }
+
+    .tool-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .context-divider {
+      width: 1px;
+      height: 18px;
+      background: var(--border);
+      margin: 0 4px;
+    }
+
+    .token-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      background: var(--accent-bg);
+      border: 1px solid var(--accent-border);
+      border-radius: 5px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .token-ring {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: conic-gradient(var(--accent) 0 23%, var(--hover) 23% 100%);
+      display: grid;
+      place-items: center;
+    }
+
+    .token-ring::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--bar);
+    }
+
+    .context-chip {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      background: var(--chip);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      font-size: 12px;
+      color: var(--soft);
+    }
+
+    .context-chip.file {
+      border-color: var(--accent-border);
+      background: var(--accent-bg);
+    }
+
+    .context-chip.agent {
+      border-color: rgba(169, 137, 255, .35);
+      background: var(--violet-bg);
+    }
+
+    .context-chip svg {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+    }
+
+    .context-chip-close {
+      opacity: 0.6;
+      cursor: pointer;
+    }
+
+    .context-chip-close:hover {
+      opacity: 1;
+    }
+
+    .context-chip-close svg {
+      width: 12px;
+      height: 12px;
+    }
+
+    .spacer { flex: 1; }
+
+    .context-tools-right {
+      display: flex;
+      gap: 4px;
+    }
+
+    /* ==================== Input Preview ==================== */
+    .preview-input {
+      min-height: 60px;
+      padding: 12px 14px;
+      background: var(--panel);
+      border-left: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    /* ==================== Button Area Preview ==================== */
+    .preview-button-area {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: var(--panel);
+      border-radius: 0 0 8px 8px;
+      border: 1px solid var(--border);
+      border-top: 1px solid var(--border);
+    }
+
+    .button-group {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .selector {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      background: var(--chip);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      font-size: 12px;
+      color: var(--soft);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .selector:hover {
+      background: var(--hover);
+      border-color: var(--input-border);
+    }
+
+    .selector svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .selector .chevron {
+      width: 10px;
+      height: 10px;
+      opacity: 0.6;
+    }
+
+    .enhance-btn {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 5px;
+      background: var(--orange-bg);
+      border: 1px solid rgba(245, 166, 35, .25);
+      color: var(--orange);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .enhance-btn:hover {
+      background: rgba(245, 166, 35, .2);
+    }
+
+    .enhance-btn svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .send-btn {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: 6px;
+      background: var(--accent);
+      border: none;
+      color: white;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .send-btn:hover {
+      opacity: 0.9;
+      transform: scale(1.02);
+    }
+
+    .send-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    /* ==================== Status Panel Preview ==================== */
+    .preview-status-panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-top: 12px;
+    }
+
+    .status-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .status-tab {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 8px 12px;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font-size: 12px;
+      cursor: pointer;
+      position: relative;
+      transition: color 0.15s;
+    }
+
+    .status-tab:hover {
+      color: var(--text);
+    }
+
+    .status-tab.active {
+      color: var(--accent);
+    }
+
+    .status-tab.active::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 12px;
+      right: 12px;
+      height: 2px;
+      background: var(--accent);
+      border-radius: 1px 1px 0 0;
+    }
+
+    .status-tab svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .status-badge {
+      min-width: 16px;
+      height: 16px;
+      padding: 0 4px;
+      border-radius: 8px;
+      background: var(--accent-bg);
+      color: var(--accent);
+      font-size: 10px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .status-content {
+      padding: 10px;
+    }
+
+    .todo-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: 5px;
+      font-size: 13px;
+      color: var(--soft);
+    }
+
+    .todo-item.completed {
+      color: var(--muted);
+      text-decoration: line-through;
+    }
+
+    .todo-icon {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+
+    .todo-icon.done {
+      background: var(--green);
+      border-color: var(--green);
+    }
+
+    .todo-icon.done svg {
+      width: 10px;
+      height: 10px;
+      stroke: white;
+      stroke-width: 3;
+    }
+
+    .todo-icon.active {
+      border-color: var(--accent);
+    }
+
+    /* ==================== Message Preview ==================== */
+    .preview-messages {
+      padding: 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 12px;
+      min-height: 120px;
+    }
+
+    .msg {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .msg:last-child {
+      margin-bottom: 0;
+    }
+
+    .msg-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+
+    .msg-avatar.ai {
+      background: linear-gradient(135deg, var(--accent), var(--violet));
+    }
+
+    .msg-avatar.user {
+      background: var(--chip);
+    }
+
+    .msg-avatar svg {
+      width: 14px;
+      height: 14px;
+      color: white;
+    }
+
+    .msg-content {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 13px;
+      line-height: 1.5;
+      flex: 1;
+    }
+
+    .msg.user-msg .msg-content {
+      background: var(--accent-bg);
+      border-color: var(--accent-border);
+    }
+
+    .tool-block {
+      margin-top: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .tool-block-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      background: var(--bar);
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .tool-block-header svg {
+      width: 12px;
+      height: 12px;
+      color: var(--amber);
+    }
+
+    .tool-block-body {
+      padding: 8px 10px;
+      font-size: 11px;
+      font-family: monospace;
+      color: var(--soft);
+    }
+
+    /* ==================== Icon Grid ==================== */
+    .icon-showcase {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .icon-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 12px 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      transition: all 0.15s;
+    }
+
+    .icon-item:hover {
+      border-color: var(--accent);
+      background: var(--accent-bg);
+    }
+
+    .icon-item svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .icon-item span {
+      font-size: 10px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    /* ==================== Color Contrast Check ==================== */
+    .contrast-check {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .contrast-item {
+      padding: 12px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .contrast-item svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .contrast-item span {
+      font-size: 12px;
+    }
+
+    .contrast-accent {
+      background: var(--accent-bg);
+      color: var(--accent);
+      border: 1px solid var(--accent-border);
+    }
+
+    .contrast-green {
+      background: var(--green-bg);
+      color: var(--green);
+      border: 1px solid rgba(76, 195, 138, .3);
+    }
+
+    .contrast-amber {
+      background: var(--amber-bg);
+      color: var(--amber);
+      border: 1px solid rgba(231, 184, 90, .3);
+    }
+
+    .contrast-violet {
+      background: var(--violet-bg);
+      color: var(--violet);
+      border: 1px solid rgba(169, 137, 255, .3);
+    }
+
+    .contrast-red {
+      background: var(--red-bg);
+      color: var(--red);
+      border: 1px solid rgba(240, 113, 120, .3);
+    }
+
+    .contrast-orange {
+      background: var(--orange-bg);
+      color: var(--orange);
+      border: 1px solid rgba(245, 166, 35, .25);
+    }
+
+    .contrast-muted {
+      background: var(--chip);
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+  <!-- Theme Switcher -->
+  <div class="theme-switcher">
+    <button class="theme-btn active" data-theme="dark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+      暗色
+    </button>
+    <button class="theme-btn" data-theme="light">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+      亮色
+    </button>
+    <button class="theme-btn" data-theme="compare">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18"/></svg>
+      对比
+    </button>
+  </div>
+
+  <div class="page-container">
+    <div class="page-title">
+      <h1>🎨 图标主题适配预览</h1>
+      <p>确保所有图标在暗色和亮色主题下都清晰可见，对比度符合 WCAG 标准</p>
+    </div>
+
+    <div class="preview-grid" id="previewGrid">
+      <!-- Dark Theme Preview -->
+      <div class="preview-card" data-theme="dark">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="dot dark"></span>
+            暗色主题
+          </div>
+          <span class="card-badge badge-dark">Dark</span>
+        </div>
+        <div class="card-body">
+          <!-- Header -->
+          <div class="preview-header">
+            <div class="header-left">
+              <div class="logo-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+              </div>
+              <span style="font-weight:600;font-size:14px">Claude Code</span>
+              <div class="session-chip">
+                <svg style="width:12px;height:12px;margin-right:3px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                会话 #3
+              </div>
+            </div>
+            <div class="header-actions">
+              <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></button>
+              <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>
+              <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg></button>
+            </div>
+          </div>
+
+          <!-- Messages -->
+          <div class="preview-messages">
+            <div class="msg user-msg">
+              <div class="msg-avatar user">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              </div>
+              <div class="msg-content">帮我优化一下图标显示</div>
+            </div>
+            <div class="msg">
+              <div class="msg-avatar ai">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+              </div>
+              <div class="msg-content">
+                <span>好的，我来分析...</span>
+                <div class="tool-block">
+                  <div class="tool-block-header">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                    <span>Bash</span>
+                    <span style="margin-left:auto;color:var(--green)">✓</span>
+                  </div>
+                  <div class="tool-block-body">$ grep -r "codicon" src</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Context Bar -->
+          <div class="preview-context-bar">
+            <div class="context-tools">
+              <button class="tool-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg></button>
+              <div class="token-chip">
+                <div class="token-ring"></div>
+                <span>23%</span>
+              </div>
+              <div class="context-divider"></div>
+            </div>
+            <div class="context-chip agent">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01M9 18h6"/></svg>
+              <span>dev...</span>
+              <span class="context-chip-close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></span>
+            </div>
+            <div class="context-chip file">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+              <span>ButtonArea.tsx</span>
+              <span class="context-chip-close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></span>
+            </div>
+            <div class="spacer"></div>
+            <div class="context-tools-right">
+              <button class="tool-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></button>
+              <button class="tool-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 00-15-6.7L3 13"/></svg></button>
+            </div>
+          </div>
+
+          <!-- Input -->
+          <div class="preview-input">输入消息... (@文件 /命令 #代理)</div>
+
+          <!-- Button Area -->
+          <div class="preview-button-area">
+            <div class="button-group">
+              <div class="selector">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+              </div>
+              <div class="selector">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg>
+                <span>Claude</span>
+              </div>
+              <div class="selector">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <span>接受编辑</span>
+              </div>
+              <div class="selector">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r=".5"/></svg>
+                <span>Sonnet</span>
+              </div>
+            </div>
+            <div class="button-group">
+              <button class="enhance-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></button>
+              <button class="send-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
+            </div>
+          </div>
+
+          <!-- Status Panel -->
+          <div class="preview-status-panel">
+            <div class="status-tabs">
+              <button class="status-tab active">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                <span>任务</span>
+                <span class="status-badge">2/4</span>
+              </button>
+              <button class="status-tab">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+                <span>文件</span>
+                <span class="status-badge">3</span>
+              </button>
+              <button class="status-tab">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+                <span>子代理</span>
+                <span class="status-badge">1</span>
+              </button>
+            </div>
+            <div class="status-content">
+              <div class="todo-item completed">
+                <div class="todo-icon done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+                <span>分析图标使用情况</span>
+              </div>
+              <div class="todo-item">
+                <div class="todo-icon active"></div>
+                <span>生成预览文件</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Color Contrast Check -->
+          <div class="contrast-check">
+            <div class="contrast-item contrast-accent">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+              <span>Accent</span>
+            </div>
+            <div class="contrast-item contrast-green">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              <span>Success</span>
+            </div>
+            <div class="contrast-item contrast-amber">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+              <span>Warning</span>
+            </div>
+            <div class="contrast-item contrast-violet">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01M9 18h6"/></svg>
+              <span>Agent</span>
+            </div>
+            <div class="contrast-item contrast-red">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+              <span>Error</span>
+            </div>
+            <div class="contrast-item contrast-muted">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
+              <span>Muted</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Light Theme Preview -->
+      <div class="preview-card" data-theme="light">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="dot light"></span>
+            亮色主题
+          </div>
+          <span class="card-badge badge-light">Light</span>
+        </div>
+        <div class="card-body">
+          <!-- Header -->
+          <div class="preview-header">
+            <div class="header-left">
+              <div class="logo-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+              </div>
+              <span style="font-weight:600;font-size:14px">Claude Code</span>
+              <div class="session-chip">
+                <svg style="width:12px;height:12px;margin-right:3px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                会话 #3
+              </div>
+            </div>
+            <div class="header-actions">
+              <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></button>
+              <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>
+              <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg></button>
+            </div>
+          </div>
+
+          <!-- Messages -->
+          <div class="preview-messages">
+            <div class="msg user-msg">
+              <div class="msg-avatar user">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              </div>
+              <div class="msg-content">帮我优化一下图标显示</div>
+            </div>
+            <div class="msg">
+              <div class="msg-avatar ai">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+              </div>
+              <div class="msg-content">
+                <span>好的，我来分析...</span>
+                <div class="tool-block">
+                  <div class="tool-block-header">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                    <span>Bash</span>
+                    <span style="margin-left:auto;color:var(--green)">✓</span>
+                  </div>
+                  <div class="tool-block-body">$ grep -r "codicon" src</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Context Bar -->
+          <div class="preview-context-bar">
+            <div class="context-tools">
+              <button class="tool-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg></button>
+              <div class="token-chip">
+                <div class="token-ring"></div>
+                <span>23%</span>
+              </div>
+              <div class="context-divider"></div>
+            </div>
+            <div class="context-chip agent">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01M9 18h6"/></svg>
+              <span>dev...</span>
+              <span class="context-chip-close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></span>
+            </div>
+            <div class="context-chip file">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+              <span>ButtonArea.tsx</span>
+              <span class="context-chip-close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></span>
+            </div>
+            <div class="spacer"></div>
+            <div class="context-tools-right">
+              <button class="tool-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></button>
+              <button class="tool-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 00-15-6.7L3 13"/></svg></button>
+            </div>
+          </div>
+
+          <!-- Input -->
+          <div class="preview-input">输入消息... (@文件 /命令 #代理)</div>
+
+          <!-- Button Area -->
+          <div class="preview-button-area">
+            <div class="button-group">
+              <div class="selector">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+              </div>
+              <div class="selector">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg>
+                <span>Claude</span>
+              </div>
+              <div class="selector">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <span>接受编辑</span>
+              </div>
+              <div class="selector">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r=".5"/></svg>
+                <span>Sonnet</span>
+              </div>
+            </div>
+            <div class="button-group">
+              <button class="enhance-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></button>
+              <button class="send-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
+            </div>
+          </div>
+
+          <!-- Status Panel -->
+          <div class="preview-status-panel">
+            <div class="status-tabs">
+              <button class="status-tab active">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                <span>任务</span>
+                <span class="status-badge">2/4</span>
+              </button>
+              <button class="status-tab">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+                <span>文件</span>
+                <span class="status-badge">3</span>
+              </button>
+              <button class="status-tab">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+                <span>子代理</span>
+                <span class="status-badge">1</span>
+              </button>
+            </div>
+            <div class="status-content">
+              <div class="todo-item completed">
+                <div class="todo-icon done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+                <span>分析图标使用情况</span>
+              </div>
+              <div class="todo-item">
+                <div class="todo-icon active"></div>
+                <span>生成预览文件</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Color Contrast Check -->
+          <div class="contrast-check">
+            <div class="contrast-item contrast-accent">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+              <span>Accent</span>
+            </div>
+            <div class="contrast-item contrast-green">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              <span>Success</span>
+            </div>
+            <div class="contrast-item contrast-amber">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+              <span>Warning</span>
+            </div>
+            <div class="contrast-item contrast-violet">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01M9 18h6"/></svg>
+              <span>Agent</span>
+            </div>
+            <div class="contrast-item contrast-red">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+              <span>Error</span>
+            </div>
+            <div class="contrast-item contrast-muted">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
+              <span>Muted</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div style="margin-top:32px;padding:20px;background:var(--panel);border:1px solid var(--border);border-radius:12px;">
+      <h3 style="margin-bottom:12px;font-size:16px">📋 主题适配检查清单</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;font-size:13px;color:var(--soft)">
+        <div>
+          <strong style="color:var(--accent)">✓ 图标可见性</strong>
+          <ul style="margin-top:6px;padding-left:20px;list-style:disc;color:var(--muted)">
+            <li>暗色主题：使用 <code>--muted</code> (#a8adb7) 作为默认色</li>
+            <li>亮色主题：使用 <code>--muted</code> (#666666) 作为默认色</li>
+            <li>Hover 状态：切换到 <code>--text</code> 颜色</li>
+          </ul>
+        </div>
+        <div>
+          <strong style="color:var(--green)">✓ 对比度要求</strong>
+          <ul style="margin-top:6px;padding-left:20px;list-style:disc;color:var(--muted)">
+            <li>普通文本/图标：至少 4.5:1</li>
+            <li>大号图标 (18px+)：至少 3:1</li>
+            <li>强调色在背景上：至少 3:1</li>
+          </ul>
+        </div>
+        <div>
+          <strong style="color:var(--amber)">✓ 特殊图标处理</strong>
+          <ul style="margin-top:6px;padding-left:20px;list-style:disc;color:var(--muted)">
+            <li>发送按钮：白色图标 + 彩色背景</li>
+            <li>状态图标：使用语义颜色</li>
+            <li>禁用状态：降低透明度至 0.4</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Theme Switcher Logic
+    document.querySelectorAll('.theme-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const theme = btn.dataset.theme;
+
+        // Update active button
+        document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // Update preview cards
+        if (theme === 'compare') {
+          // Show both side by side
+          document.querySelectorAll('.preview-card').forEach(card => {
+            card.style.display = 'block';
+          });
+        } else {
+          // Show only selected theme
+          document.querySelectorAll('.preview-card').forEach(card => {
+            if (card.dataset.theme === theme) {
+              card.style.display = 'block';
+            } else {
+              card.style.display = 'none';
+            }
+          });
+        }
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Generating Indicator - 优化方案草图</title>
+<style>
+  :root {
+    --bg: #1e1e1e;
+    --surface: #252526;
+    --surface-hover: #2d2d2d;
+    --border: #3c3c3c;
+    --text-primary: #cccccc;
+    --text-secondary: #858585;
+    --text-tertiary: #585858;
+    --accent-blue: #3794ff;
+    --accent-blue-dim: rgba(55, 148, 255, 0.14);
+    --accent-blue-border: rgba(55, 148, 255, 0.55);
+    --accent-orange: #d98e04;
+    --accent-orange-dim: rgba(217, 142, 4, 0.14);
+    --accent-orange-border: rgba(217, 142, 4, 0.55);
+    --accent-green: #4ec9b0;
+    --accent-purple: #c586c0;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-pill: 999px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    padding: 40px;
+    line-height: 1.6;
+  }
+
+  h1 {
+    font-size: 28px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #e0e0e0;
+  }
+
+  .subtitle {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin-bottom: 48px;
+  }
+
+  .section {
+    margin-bottom: 56px;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .section-header h2 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #e0e0e0;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: var(--radius-pill);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .badge-current { background: #333; color: #888; border: 1px solid #555; }
+  .badge-option { background: var(--accent-blue-dim); color: var(--accent-blue); border: 1px solid var(--accent-blue-border); }
+  .badge-recommended { background: rgba(78, 201, 176, 0.15); color: var(--accent-green); border: 1px solid rgba(78, 201, 176, 0.5); }
+
+  .section-desc {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-bottom: 24px;
+  }
+
+  /* Demo card container */
+  .demo-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 32px;
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .demo-card::before {
+    content: attr(data-label);
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    font-size: 11px;
+    color: var(--text-tertiary);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .demo-row {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+
+  .demo-col {
+    flex: 1;
+    min-width: 320px;
+  }
+
+  .demo-label {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    margin-bottom: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+
+  /* Chat message context */
+  .chat-context {
+    background: var(--bg);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .chat-msg {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+    align-items: flex-start;
+  }
+
+  .chat-msg:last-child { margin-bottom: 0; }
+
+  .chat-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .avatar-user { background: #4a4a4a; color: #ccc; }
+  .avatar-claude { background: linear-gradient(135deg, #e8a87c, #d4845e); color: #fff; }
+
+  .chat-bubble {
+    background: var(--surface);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: var(--text-primary);
+    max-width: 80%;
+  }
+
+  .chat-bubble-user {
+    background: #2d4a6e;
+    margin-left: auto;
+  }
+
+  /* ===== Current Design ===== */
+  .current-indicator {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 14px;
+    border-radius: var(--radius-pill);
+    background: var(--accent-blue-dim);
+    border: 1px solid var(--accent-blue-border);
+    color: var(--accent-blue);
+    font-size: 13px;
+    font-weight: 500;
+    gap: 8px;
+  }
+
+  .current-indicator .spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid transparent;
+    border-top-color: var(--accent-blue);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  .current-indicator .time {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ===== Option A: Refined Pill ===== */
+  .opt-a-indicator {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 16px 6px 12px;
+    border-radius: var(--radius-pill);
+    background: linear-gradient(135deg, rgba(55, 148, 255, 0.12), rgba(55, 148, 255, 0.06));
+    border: 1px solid rgba(55, 148, 255, 0.35);
+    color: var(--accent-blue);
+    font-size: 13px;
+    font-weight: 500;
+    gap: 10px;
+    backdrop-filter: blur(8px);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .opt-a-indicator::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 30%, rgba(55, 148, 255, 0.08) 50%, transparent 70%);
+    animation: shimmer 2.5s ease-in-out infinite;
+  }
+
+  .opt-a-indicator .dots {
+    display: flex;
+    gap: 3px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .opt-a-indicator .dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--accent-blue);
+    animation: dot-bounce 1.4s ease-in-out infinite;
+  }
+
+  .opt-a-indicator .dot:nth-child(2) { animation-delay: 0.16s; }
+  .opt-a-indicator .dot:nth-child(3) { animation-delay: 0.32s; }
+
+  .opt-a-indicator .text {
+    position: relative;
+    z-index: 1;
+  }
+
+  .opt-a-indicator .time {
+    color: rgba(55, 148, 255, 0.6);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ===== Option B: Minimal Inline ===== */
+  .opt-b-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+
+  .opt-b-indicator .wave {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+    height: 16px;
+  }
+
+  .opt-b-indicator .wave span {
+    display: block;
+    width: 3px;
+    height: 8px;
+    background: var(--accent-blue);
+    border-radius: 2px;
+    animation: wave 1.2s ease-in-out infinite;
+  }
+
+  .opt-b-indicator .wave span:nth-child(2) { animation-delay: 0.1s; height: 12px; }
+  .opt-b-indicator .wave span:nth-child(3) { animation-delay: 0.2s; height: 6px; }
+  .opt-b-indicator .wave span:nth-child(4) { animation-delay: 0.3s; height: 10px; }
+
+  .opt-b-indicator .time {
+    color: var(--text-tertiary);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ===== Option C: Progress Bar ===== */
+  .opt-c-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    border-radius: var(--radius-pill);
+    background: var(--accent-blue-dim);
+    border: 1px solid rgba(55, 148, 255, 0.2);
+    color: var(--accent-blue);
+    font-size: 13px;
+    font-weight: 500;
+    position: relative;
+  }
+
+  .opt-c-indicator .progress-ring {
+    width: 16px;
+    height: 16px;
+    position: relative;
+  }
+
+  .opt-c-indicator .progress-ring svg {
+    transform: rotate(-90deg);
+  }
+
+  .opt-c-indicator .progress-ring .track {
+    stroke: rgba(55, 148, 255, 0.2);
+    fill: none;
+    stroke-width: 2;
+  }
+
+  .opt-c-indicator .progress-ring .fill {
+    stroke: var(--accent-blue);
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-dasharray: 38;
+    stroke-dashoffset: 12;
+    animation: ring-progress 2s ease-in-out infinite;
+  }
+
+  .opt-c-indicator .time {
+    color: rgba(55, 148, 255, 0.6);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ===== Option D: Pulse Orb ===== */
+  .opt-d-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px 8px 12px;
+    border-radius: var(--radius-pill);
+    background: rgba(55, 148, 255, 0.08);
+    border: 1px solid rgba(55, 148, 255, 0.25);
+    color: var(--accent-blue);
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .opt-d-indicator .orb {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent-blue);
+    position: relative;
+    animation: orb-pulse 2s ease-in-out infinite;
+  }
+
+  .opt-d-indicator .orb::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 1.5px solid var(--accent-blue);
+    animation: orb-ring 2s ease-out infinite;
+    opacity: 0;
+  }
+
+  .opt-d-indicator .orb::after {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: 50%;
+    border: 1px solid var(--accent-blue);
+    animation: orb-ring 2s ease-out infinite 0.4s;
+    opacity: 0;
+  }
+
+  .opt-d-indicator .time {
+    color: rgba(55, 148, 255, 0.5);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ===== Option E: Typewriter ===== */
+  .opt-e-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    color: var(--accent-blue);
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .opt-e-indicator .typewriter {
+    display: inline-block;
+    overflow: hidden;
+    white-space: nowrap;
+    border-right: 2px solid var(--accent-blue);
+    animation: typewriter 3s steps(12) infinite, blink-cursor 0.6s step-end infinite;
+  }
+
+  .opt-e-indicator .time-sep {
+    margin: 0 6px;
+    color: var(--text-tertiary);
+  }
+
+  .opt-e-indicator .time {
+    color: var(--text-tertiary);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ===== Keyframes ===== */
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  @keyframes dot-bounce {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+    40% { transform: scale(1); opacity: 1; }
+  }
+
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  @keyframes wave {
+    0%, 100% { transform: scaleY(0.5); }
+    50% { transform: scaleY(1); }
+  }
+
+  @keyframes ring-progress {
+    0% { stroke-dashoffset: 38; }
+    50% { stroke-dashoffset: 8; }
+    100% { stroke-dashoffset: 38; }
+  }
+
+  @keyframes orb-pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(0.8); opacity: 0.6; }
+  }
+
+  @keyframes orb-ring {
+    0% { transform: scale(1); opacity: 0.6; }
+    100% { transform: scale(2.5); opacity: 0; }
+  }
+
+  @keyframes typewriter {
+    0% { width: 0; }
+    50% { width: 9.5em; }
+    100% { width: 9.5em; }
+  }
+
+  @keyframes blink-cursor {
+    50% { border-color: transparent; }
+  }
+
+  /* ===== Phase Transitions ===== */
+  .phase-demo {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .phase-arrow {
+    color: var(--text-tertiary);
+    font-size: 20px;
+  }
+
+  .phase-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .phase-label {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* ===== Color Variants ===== */
+  .color-row {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  /* Purple variant */
+  .variant-purple .opt-d-indicator {
+    background: rgba(197, 134, 192, 0.08);
+    border-color: rgba(197, 134, 192, 0.25);
+    color: var(--accent-purple);
+  }
+  .variant-purple .orb {
+    background: var(--accent-purple) !important;
+  }
+  .variant-purple .orb::before,
+  .variant-purple .orb::after {
+    border-color: var(--accent-purple) !important;
+  }
+
+  /* Green variant (for completion) */
+  .variant-green .opt-d-indicator {
+    background: rgba(78, 201, 176, 0.08);
+    border-color: rgba(78, 201, 176, 0.25);
+    color: var(--accent-green);
+  }
+  .variant-green .orb {
+    background: var(--accent-green) !important;
+  }
+  .variant-green .orb::before,
+  .variant-green .orb::after {
+    border-color: var(--accent-green) !important;
+  }
+
+  /* Notes */
+  .notes {
+    background: rgba(55, 148, 255, 0.06);
+    border: 1px solid rgba(55, 148, 255, 0.15);
+    border-radius: var(--radius-md);
+    padding: 16px 20px;
+    margin-top: 16px;
+  }
+
+  .notes h4 {
+    font-size: 13px;
+    color: var(--accent-blue);
+    margin-bottom: 8px;
+  }
+
+  .notes ul {
+    list-style: none;
+    padding: 0;
+  }
+
+  .notes li {
+    font-size: 13px;
+    color: var(--text-secondary);
+    padding: 3px 0;
+    padding-left: 16px;
+    position: relative;
+  }
+
+  .notes li::before {
+    content: '→';
+    position: absolute;
+    left: 0;
+    color: var(--text-tertiary);
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 24px 0;
+  }
+
+  /* Full chat simulation */
+  .chat-sim {
+    background: var(--bg);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    max-width: 560px;
+  }
+
+  .chat-sim .msg {
+    margin-bottom: 16px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  .chat-sim .msg:last-child { margin-bottom: 0; }
+
+  .chat-sim .bubble {
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.5;
+    max-width: 85%;
+  }
+
+  .chat-sim .bubble-user {
+    background: #2d4a6e;
+    color: #d0d0d0;
+    margin-left: auto;
+    order: 1;
+  }
+
+  .chat-sim .bubble-ai {
+    background: var(--surface);
+    color: var(--text-primary);
+  }
+
+  .chat-sim .indicator-wrap {
+    padding-left: 38px;
+    margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+
+<h1>正在生成响应 — 动画优化方案</h1>
+<p class="subtitle">WaitingIndicator 组件视觉优化草图 · 2026-06-04</p>
+
+<!-- ============================== -->
+<!-- Section: Current -->
+<!-- ============================== -->
+<div class="section">
+  <div class="section-header">
+    <h2>当前设计</h2>
+    <span class="badge badge-current">Current</span>
+  </div>
+  <p class="section-desc">蓝色胶囊 + 旋转圆环 + 文字 + 计时器。功能完整但视觉较为普通。</p>
+
+  <div class="demo-card" data-label="现状">
+    <div class="current-indicator">
+      <div class="spinner"></div>
+      <span>正在生成响应</span>
+      <span class="time">12s</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- Section: Option A -->
+<!-- ============================== -->
+<div class="section">
+  <div class="section-header">
+    <h2>方案 A：流光胶囊 + 弹跳圆点</h2>
+    <span class="badge badge-option">Option A</span>
+  </div>
+  <p class="section-desc">在现有胶囊基础上增加微光流动效果，用三点弹跳替代旋转圆环，更轻盈现代。</p>
+
+  <div class="demo-card" data-label="方案 A">
+    <div class="opt-a-indicator">
+      <div class="dots">
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+      </div>
+      <span class="text">正在生成响应</span>
+      <span class="time">12s</span>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h4>设计要点</h4>
+    <ul>
+      <li>胶囊背景使用渐变 + shimmer 流光动画，增加科技感</li>
+      <li>三点弹跳替代旋转 spinner，视觉更轻巧</li>
+      <li>毛玻璃 backdrop-filter 增加层次感</li>
+      <li>保持现有尺寸和布局，改动最小</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- Section: Option B -->
+<!-- ============================== -->
+<div class="section">
+  <div class="section-header">
+    <h2>方案 B：极简内联 + 音频波形</h2>
+    <span class="badge badge-option">Option B</span>
+  </div>
+  <p class="section-desc">去掉胶囊边框，用极简的音频波形动画暗示"AI 正在说话"，最不抢眼。</p>
+
+  <div class="demo-card" data-label="方案 B">
+    <div class="opt-b-indicator">
+      <div class="wave">
+        <span></span><span></span><span></span><span></span>
+      </div>
+      <span>正在生成响应</span>
+      <span class="time">12s</span>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h4>设计要点</h4>
+    <ul>
+      <li>无边框无背景，融入消息流中，最不干扰阅读</li>
+      <li>四条竖线音频波形动画，暗示"AI 正在输出"</li>
+      <li>适合消息密集的场景，不会打断视觉流</li>
+      <li>缺点：视觉存在感较弱，可能被忽略</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- Section: Option C -->
+<!-- ============================== -->
+<div class="section">
+  <div class="section-header">
+    <h2>方案 C：进度环 + 胶囊</h2>
+    <span class="badge badge-option">Option C</span>
+  </div>
+  <p class="section-desc">用 SVG 进度环替代旋转圆环，暗示任务进度感（非真实进度），视觉更精致。</p>
+
+  <div class="demo-card" data-label="方案 C">
+    <div class="opt-c-indicator">
+      <div class="progress-ring">
+        <svg width="16" height="16" viewBox="0 0 16 16">
+          <circle class="track" cx="8" cy="8" r="6" />
+          <circle class="fill" cx="8" cy="8" r="6" />
+        </svg>
+      </div>
+      <span>正在生成响应</span>
+      <span class="time">12s</span>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h4>设计要点</h4>
+    <ul>
+      <li>SVG 环形进度动画，stroke-dashoffset 往返模拟加载</li>
+      <li>比纯旋转圆环更有"在做某事"的暗示</li>
+      <li>适合需要强调"任务进行中"的场景</li>
+      <li>缺点：用户可能误以为是真实进度</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- Section: Option D (Recommended) -->
+<!-- ============================== -->
+<div class="section">
+  <div class="section-header">
+    <h2>方案 D：脉冲光球（推荐）</h2>
+    <span class="badge badge-recommended">Recommended</span>
+  </div>
+  <p class="section-desc">一个会呼吸发光的圆球 + 扩散光环，科技感强且辨识度高，可扩展颜色语义。</p>
+
+  <div class="demo-card" data-label="方案 D">
+    <div class="demo-row">
+      <div class="demo-col">
+        <div class="demo-label">生成中（蓝色）</div>
+        <div class="opt-d-indicator">
+          <div class="orb"></div>
+          <span>正在生成响应</span>
+          <span class="time">12s</span>
+        </div>
+      </div>
+      <div class="demo-col">
+        <div class="demo-label">思考中（紫色）</div>
+        <div class="variant-purple">
+          <div class="opt-d-indicator">
+            <div class="orb"></div>
+            <span>正在思考</span>
+            <span class="time">3s</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h4>设计要点</h4>
+    <ul>
+      <li>光球脉冲 + 双层扩散光环，视觉层次丰富</li>
+      <li>蓝色=生成中 / 紫色=思考中 / 橙色=排队中 / 绿色=完成——颜色语义清晰</li>
+      <li>动画柔和不刺眼，长时间显示也不会烦躁</li>
+      <li>与 JetBrains IDE 暗色主题风格契合</li>
+      <li>可选：光球点击展开显示详细 token 统计</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- Section: Option E -->
+<!-- ============================== -->
+<div class="section">
+  <div class="section-header">
+    <h2>方案 E：打字机效果</h2>
+    <span class="badge badge-option">Option E</span>
+  </div>
+  <p class="section-desc">用打字机逐字显示 + 闪烁光标，暗示"文字正在被生成"，概念最直观。</p>
+
+  <div class="demo-card" data-label="方案 E">
+    <div class="opt-e-indicator">
+      <span class="typewriter">正在生成响应</span>
+      <span class="time-sep">·</span>
+      <span class="time">12s</span>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h4>设计要点</h4>
+    <ul>
+      <li>文字从左到右逐步展开 + 闪烁光标</li>
+      <li>概念直观："文字正在被写出来"</li>
+      <li>缺点：循环播放时会有明显的跳回感</li>
+      <li>适合短文本提示，长文本效果不佳</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- Section: Chat Simulation -->
+<!-- ============================== -->
+<div class="section">
+  <div class="section-header">
+    <h2>完整对话场景模拟</h2>
+  </div>
+  <p class="section-desc">模拟真实聊天界面中推荐方案 D 的表现效果。</p>
+
+  <div class="demo-card" data-label="模拟">
+    <div class="chat-sim">
+      <div class="msg">
+        <div class="chat-avatar avatar-user">U</div>
+        <div class="bubble bubble-user">帮我写一个快速排序的 Java 实现</div>
+      </div>
+      <div class="msg">
+        <div class="chat-avatar avatar-claude">C</div>
+        <div class="bubble bubble-ai">好的，这是一个 Java 实现的快速排序算法：</div>
+      </div>
+      <div class="msg">
+        <div class="chat-avatar avatar-user">U</div>
+        <div class="bubble bubble-user">再加一个单元测试</div>
+      </div>
+      <div class="msg">
+        <div class="chat-avatar avatar-claude">C</div>
+        <div class="bubble bubble-ai" style="opacity: 0.4; font-style: italic;">正在生成...</div>
+      </div>
+      <div class="indicator-wrap" style="padding-left: 38px; margin-top: 8px;">
+        <div class="opt-d-indicator" style="font-size: 12px; padding: 5px 12px 5px 10px;">
+          <div class="orb" style="width: 8px; height: 8px;"></div>
+          <span>正在生成响应</span>
+          <span class="time">5s</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- Section: Transition States -->
+<!-- ============================== -->
+<div class="section">
+  <div class="section-header">
+    <h2>状态流转设计</h2>
+  </div>
+  <p class="section-desc">排队 → 生成中 → 完成的完整状态切换动效。</p>
+
+  <div class="demo-card" data-label="流转">
+    <div class="phase-demo">
+      <div class="phase-box">
+        <span class="phase-label">排队等待</span>
+        <div class="variant-orange-soft">
+          <div class="opt-d-indicator" style="background: rgba(217,142,4,0.08); border-color: rgba(217,142,4,0.25); color: #d98e04;">
+            <div class="orb" style="background: #d98e04;"></div>
+            <span>队列等待中</span>
+          </div>
+        </div>
+      </div>
+
+      <span class="phase-arrow">→</span>
+
+      <div class="phase-box">
+        <span class="phase-label">生成中</span>
+        <div class="opt-d-indicator">
+          <div class="orb"></div>
+          <span>正在生成响应</span>
+          <span class="time">12s</span>
+        </div>
+      </div>
+
+      <span class="phase-arrow">→</span>
+
+      <div class="phase-box">
+        <span class="phase-label">完成</span>
+        <div class="variant-green">
+          <div class="opt-d-indicator" style="animation: none;">
+            <div class="orb" style="animation: none;"></div>
+            <span>生成完成</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- Section: Summary -->
+<!-- ============================== -->
+<div class="section">
+  <div class="section-header">
+    <h2>方案对比总结</h2>
+  </div>
+
+  <div class="demo-card" data-label="对比">
+    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+      <thead>
+        <tr style="border-bottom: 1px solid var(--border);">
+          <th style="text-align: left; padding: 8px 12px; color: var(--text-secondary); font-weight: 500;">方案</th>
+          <th style="text-align: center; padding: 8px 12px; color: var(--text-secondary); font-weight: 500;">视觉冲击</th>
+          <th style="text-align: center; padding: 8px 12px; color: var(--text-secondary); font-weight: 500;">干扰度</th>
+          <th style="text-align: center; padding: 8px 12px; color: var(--text-secondary); font-weight: 500;">辨识度</th>
+          <th style="text-align: center; padding: 8px 12px; color: var(--text-secondary); font-weight: 500;">改动量</th>
+          <th style="text-align: left; padding: 8px 12px; color: var(--text-secondary); font-weight: 500;">推荐场景</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom: 1px solid #2a2a2a;">
+          <td style="padding: 10px 12px;">A 流光胶囊</td>
+          <td style="text-align: center; padding: 10px 12px;">⭐⭐⭐</td>
+          <td style="text-align: center; padding: 10px 12px;">⭐⭐</td>
+          <td style="text-align: center; padding: 10px 12px;">⭐⭐⭐</td>
+          <td style="text-align: center; padding: 10px 12px;">小</td>
+          <td style="padding: 10px 12px; color: var(--text-secondary);">渐进优化，风险最低</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #2a2a2a;">
+          <td style="padding: 10px 12px;">B 极简内联</td>
+          <td style="text-align: center; padding: 10px 12px;">⭐⭐</td>
+          <td style="text-align: center; padding: 10px 12px;">⭐</td>
+          <td style="text-align: center; padding: 10px 12px;">⭐⭐</td>
+          <td style="text-align: center; padding: 10px 12px;">小</td>
+          <td style="padding: 10px 12px; color: var(--text-secondary);">消息密集场景</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #2a2a2a;">
+          <td style="padding: 10px 12px;">C 进度环</td>
+          <td style="text-align: center; padding: 10px 12px;">⭐⭐⭐</td>
+          <td style="text-align: center; padding: 10px 12px;">⭐⭐</td>
+          <td style="text-align: center; padding: 10px 12px;">⭐⭐⭐</td>
+          <td style="text-align: center; padding: 10px 12px;">中</td>
+          <td style="padding: 10px 12px; color: var(--text-secondary);">需要进度暗示</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #2a2a2a; background: rgba(78, 201, 176, 0.04);">
+          <td style="padding: 10px 12px; color: var(--accent-green); font-weight: 600;">D 脉冲光球 ✓</td>
+          <td style="text-align: center; padding: 10px 12px;">⭐⭐⭐⭐</td>
+          <td style="text-align: center; padding: 10px 12px;">⭐⭐</td>
+          <td style="text-align: center; padding: 10px 12px;">⭐⭐⭐⭐</td>
+          <td style="text-align: center; padding: 10px 12px;">中</td>
+          <td style="padding: 10px 12px; color: var(--text-secondary);">综合最优，扩展性强</td>
+        </tr>
+        <tr>
+          <td style="padding: 10px 12px;">E 打字机</td>
+          <td style="text-align: center; padding: 10px 12px;">⭐⭐⭐</td>
+          <td style="text-align: center; padding: 10px 12px;">⭐⭐⭐</td>
+          <td style="text-align: center; padding: 10px 12px;">⭐⭐⭐</td>
+          <td style="text-align: center; padding: 10px 12px;">小</td>
+          <td style="padding: 10px 12px; color: var(--text-secondary);">短文本场景</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div style="text-align: center; color: var(--text-tertiary); font-size: 12px; padding: 20px;">
+  jetbrains-melon-cc-gui · Generating Indicator Mockup · 2026-06-04
+</div>
+
+</body>
+</html>

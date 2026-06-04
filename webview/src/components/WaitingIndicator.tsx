@@ -1,15 +1,41 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { QueueDisplayState } from '../contexts/MessagesContext';
 
 interface WaitingIndicatorProps {
-  size?: number;
   /** Loading start timestamp (ms), used to maintain continuous timing across view switches */
   startTime?: number;
+  queueDisplayState?: QueueDisplayState;
+  queueAheadCount?: number;
+  loading?: boolean;
+  onExitComplete?: () => void;
 }
 
-export const WaitingIndicator = ({ size = 18, startTime }: WaitingIndicatorProps) => {
+type ContentMode = 'queued' | 'generating';
+type AnimationPhase = 'entering' | 'exiting' | 'unmounting';
+
+export const WaitingIndicator = ({
+  startTime,
+  queueDisplayState = 'NONE',
+  queueAheadCount = 0,
+  loading = true,
+  onExitComplete,
+}: WaitingIndicatorProps) => {
   const { t } = useTranslation();
-  const [dotCount, setDotCount] = useState(1);
+  const isQueued = queueDisplayState === 'QUEUED';
+
+  // ── Content display state ──
+  const [displayedMode, setDisplayedMode] = useState<ContentMode>(
+    isQueued ? 'queued' : 'generating'
+  );
+  const [phase, setPhase] = useState<AnimationPhase>('entering');
+
+  // ── Refs for timer cleanup ──
+  const transitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevLoadingRef = useRef(loading);
+  const prevIsQueuedRef = useRef(isQueued);
+
+  // ── Existing state (unchanged) ──
   const [elapsedSeconds, setElapsedSeconds] = useState(() => {
     // If a start time is provided, calculate the elapsed seconds
     if (startTime) {
@@ -18,15 +44,48 @@ export const WaitingIndicator = ({ size = 18, startTime }: WaitingIndicatorProps
     return 0;
   });
 
-  // Ellipsis animation
+  // ── Cleanup timer on unmount ──
   useEffect(() => {
-    const timer = setInterval(() => {
-      setDotCount(prev => (prev % 3) + 1);
-    }, 500);
-    return () => clearInterval(timer);
+    return () => {
+      if (transitionTimerRef.current) {
+        clearTimeout(transitionTimerRef.current);
+      }
+    };
   }, []);
 
-  // Timer: track elapsed seconds for the current thinking round
+  // ── Animation state machine ──
+  useEffect(() => {
+    const wasLoading = prevLoadingRef.current;
+    const wasQueued = prevIsQueuedRef.current;
+    prevLoadingRef.current = loading;
+    prevIsQueuedRef.current = isQueued;
+
+    // Case 1: loading → false  →  container exit
+    if (wasLoading && !loading) {
+      if (transitionTimerRef.current) {
+        clearTimeout(transitionTimerRef.current);
+      }
+      setPhase('unmounting');
+      transitionTimerRef.current = setTimeout(() => {
+        onExitComplete?.();
+      }, 250);
+      return;
+    }
+
+    // Case 2: content swap (queued ↔ generating)
+    if (loading && wasQueued !== isQueued && phase !== 'unmounting') {
+      if (transitionTimerRef.current) {
+        clearTimeout(transitionTimerRef.current);
+      }
+      setPhase('exiting');
+      transitionTimerRef.current = setTimeout(() => {
+        setDisplayedMode(isQueued ? 'queued' : 'generating');
+        setPhase('entering');
+      }, 250);
+    }
+  }, [loading, isQueued, onExitComplete, phase]);
+
+  // ── Timer: track elapsed seconds for the current thinking round ──
   useEffect(() => {
     const timer = setInterval(() => {
       if (startTime) {
@@ -42,30 +101,60 @@ export const WaitingIndicator = ({ size = 18, startTime }: WaitingIndicatorProps
     };
   }, [startTime]);
 
-  const dots = '.'.repeat(dotCount);
-
-  const spinnerStyle: React.CSSProperties = { width: size, height: size };
-
-  // Format elapsed time: show "X seconds" under 60s, "X min Y sec" above 60s
+  // ── Formatting helpers ──
   const formatElapsedTime = (seconds: number): string => {
     if (seconds < 60) {
-      return `${seconds} ${t('common.seconds')}`;
+      return `${seconds}s`;
     }
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
-    return `${t('chat.minutesAndSeconds', { minutes, seconds: remainingSeconds })}`;
+    return `${minutes}m ${remainingSeconds}s`;
   };
 
+  // ── CSS class resolution ──
+  const containerClass = [
+    'waiting-indicator',
+    displayedMode === 'queued' ? 'waiting-indicator-queued' : '',
+    phase === 'unmounting' ? 'waiting-indicator-exit' : '',
+  ].filter(Boolean).join(' ');
+
+  const contentEnterClass = 'queue-pill-enter';
+  const contentExitClass = phase === 'exiting' ? 'waiting-content-exit' : '';
+  const contentClass = [phase === 'entering' ? contentEnterClass : '', contentExitClass]
+    .filter(Boolean).join(' ');
+
+  // ── Render ──
   return (
-    <div className="waiting-indicator">
-      <span className="waiting-spinner" style={spinnerStyle} />
-      <span className="waiting-text">
-	        {t('chat.generatingResponse')}<span className="waiting-dots">{dots}</span>
-	        <span className="waiting-seconds">（{t('chat.elapsedTime', { time: formatElapsedTime(elapsedSeconds) })}）</span>
-      </span>
+    <div className={containerClass}>
+      {displayedMode === 'queued' ? (
+        <div className={`generating-strip queued ${contentClass}`}>
+          <div className="gen-orb" />
+          <span className="gen-text">
+            {t('chat.queueWaiting', { count: queueAheadCount })}
+          </span>
+          <div className="gen-sep" />
+          {queueAheadCount > 0 && (
+            <span className="gen-time">
+              {t('chat.estimatedWait', '预计')} {queueAheadCount * 5}s
+            </span>
+          )}
+        </div>
+      ) : (
+        <div className={`generating-strip ${contentClass}`}>
+          <div className="gen-wave">
+            <span /><span /><span /><span /><span />
+          </div>
+          <span className="gen-text">
+            {t('chat.generatingResponse', '正在生成响应')}
+          </span>
+          <div className="gen-sep" />
+          <span className="gen-time">
+            {formatElapsedTime(elapsedSeconds)}
+          </span>
+        </div>
+      )}
     </div>
   );
 };
 
 export default WaitingIndicator;
-

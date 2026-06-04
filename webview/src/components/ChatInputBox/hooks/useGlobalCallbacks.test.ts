@@ -141,4 +141,20 @@ describe('useGlobalCallbacks', () => {
 
     expect(getTextContent()).toBe('draft question\n@/path/to/file ');
   });
+
+  it('sanitizes terminal noise before inserting external snippet', () => {
+    const editable = createEditable();
+    const { getTextContent } = renderUseGlobalCallbacks(editable);
+
+    window.insertCodeSnippetAtCursor?.([
+      'Wall time: 1.1 seconds',
+      'Cannot load PSReadline module. Console is running without PSReadline.',
+      '+ return resource;',
+      '+ ~~~~~~~~',
+      'real payload',
+    ].join('\n'));
+    vi.runAllTimers();
+
+    expect(getTextContent()).toBe('+ return resource;\nreal payload ');
+  });
 });

@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Generating Indicator V2 - JetBrains Native Style</title>
+<style>
+  /* JetBrains Darcula palette */
+  :root {
+    --bg: #1e1e1e;
+    --bg-secondary: #252526;
+    --bg-tertiary: #2b2d31;
+    --bg-elevated: #2d2d2d;
+    --bg-hover: #35373c;
+    --border: #3e3e42;
+    --border-subtle: #333;
+    --text-primary: #cccccc;
+    --text-secondary: #858585;
+    --text-muted: #585858;
+    --accent: #007fd4;
+    --accent-dim: rgba(0, 127, 212, 0.12);
+    --accent-border: rgba(0, 127, 212, 0.35);
+    --info: #64b5f6;
+    --warning: #d98e04;
+    --success: #4caf50;
+    --violet: #a989ff;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    padding: 40px 48px;
+    line-height: 1.6;
+    max-width: 1100px;
+  }
+
+  h1 { font-size: 24px; font-weight: 600; color: #e0e0e0; margin-bottom: 4px; }
+  .subtitle { color: var(--text-secondary); font-size: 13px; margin-bottom: 40px; }
+  h2 { font-size: 16px; font-weight: 600; color: #e0e0e0; margin-bottom: 4px; }
+  .desc { color: var(--text-secondary); font-size: 13px; margin-bottom: 20px; }
+
+  .section { margin-bottom: 48px; }
+
+  .tag {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+  .tag-current { background: #333; color: #777; border: 1px solid #4a4a4a; }
+  .tag-new { background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent-border); }
+  .tag-rec { background: rgba(76,175,80,0.12); color: var(--success); border: 1px solid rgba(76,175,80,0.35); }
+
+  .card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 28px 32px;
+    margin-bottom: 12px;
+  }
+
+  .card-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 20px;
+  }
+
+  /* ── Chat simulation shell ── */
+  .chat-shell {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    max-width: 640px;
+  }
+
+  .chat-titlebar {
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border);
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .chat-titlebar .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+  .chat-titlebar .dot-r { background: #ff5f57; }
+  .chat-titlebar .dot-y { background: #febc2e; }
+  .chat-titlebar .dot-g { background: #28c840; }
+
+  .chat-body { padding: 20px; }
+
+  .msg { margin-bottom: 16px; display: flex; gap: 10px; }
+  .msg:last-child { margin-bottom: 0; }
+
+  .avatar {
+    width: 26px; height: 26px; border-radius: 4px;
+    flex-shrink: 0; display: flex; align-items: center;
+    justify-content: center; font-size: 12px; font-weight: 700;
+  }
+  .avatar-user { background: #3a3d41; color: #aaa; }
+  .avatar-ai { background: linear-gradient(135deg, #c0704a, #a85a3a); color: #fff; }
+
+  .bubble {
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    line-height: 1.55;
+    max-width: 88%;
+  }
+  .bubble-user { background: #1a3a5c; color: #ccc; margin-left: auto; order: 1; }
+  .bubble-ai { background: rgba(255,255,255,0.03); color: var(--text-primary); }
+
+  /* ══════════════════════════════════════════════ */
+  /*  CURRENT                                       */
+  /* ══════════════════════════════════════════════ */
+  .current-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 5px 14px; border-radius: 999px;
+    background: rgba(0,127,212,0.12); border: 1px solid rgba(0,127,212,0.4);
+    color: var(--accent); font-size: 13px; font-weight: 500;
+  }
+  .current-pill .spinner {
+    width: 13px; height: 13px;
+    border: 2px solid transparent; border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 1s linear infinite;
+  }
+  .current-pill .time { color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+  /* ══════════════════════════════════════════════ */
+  /*  A. Cursor Blink — inline text only            */
+  /* ══════════════════════════════════════════════ */
+  .cursor-blink {
+    display: inline-flex; align-items: center; gap: 0;
+    color: var(--text-secondary); font-size: 13px; line-height: 1;
+  }
+  .cursor-blink .text { opacity: 0.7; }
+  .cursor-blink .caret {
+    display: inline-block; width: 2px; height: 14px;
+    background: var(--accent); margin-left: 3px;
+    animation: caret-blink 0.8s step-end infinite;
+    vertical-align: middle;
+  }
+  .cursor-blink .time {
+    margin-left: 10px; color: var(--text-muted);
+    font-size: 12px; font-variant-numeric: tabular-nums;
+  }
+
+  /* ══════════════════════════════════════════════ */
+  /*  B. Dotted underline — text with animated dots */
+  /* ══════════════════════════════════════════════ */
+  .dotted-underline {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: var(--text-secondary); font-size: 13px;
+  }
+  .dotted-underline .label { position: relative; padding-bottom: 3px; }
+  .dotted-underline .label::after {
+    content: ''; position: absolute; bottom: 0; left: 0; right: 0;
+    height: 2px;
+    background: repeating-linear-gradient(
+      90deg,
+      var(--accent) 0, var(--accent) 4px,
+      transparent 4px, transparent 8px
+    );
+    background-size: 16px 2px;
+    animation: underline-scroll 0.8s linear infinite;
+  }
+  .dotted-underline .dots::after {
+    content: '';
+    animation: dots 1.5s steps(4, end) infinite;
+  }
+  .dotted-underline .time {
+    color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums;
+  }
+
+  /* ══════════════════════════════════════════════ */
+  /*  C. Status Bar — JetBrains bottom bar style    */
+  /* ══════════════════════════════════════════════ */
+  .status-bar {
+    display: flex; align-items: center; gap: 0;
+    background: var(--bg-tertiary); border: 1px solid var(--border);
+    border-radius: 2px; height: 24px; padding: 0 10px;
+    font-size: 12px; color: var(--text-secondary);
+    overflow: hidden;
+  }
+  .status-bar .sb-section {
+    display: flex; align-items: center; gap: 6px;
+    padding: 0 10px; height: 100%;
+    border-right: 1px solid var(--border);
+  }
+  .status-bar .sb-section:last-child { border-right: none; }
+  .status-bar .sb-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent);
+    animation: sb-pulse 2s ease-in-out infinite;
+  }
+  .status-bar .sb-label { white-space: nowrap; }
+  .status-bar .sb-time {
+    color: var(--text-muted); font-variant-numeric: tabular-nums;
+  }
+  .status-bar .sb-tokens { color: var(--text-muted); }
+
+  /* ══════════════════════════════════════════════ */
+  /*  D. Sidebar Strip — thin vertical accent bar   */
+  /* ══════════════════════════════════════════════ */
+  .sidebar-strip {
+    display: flex; align-items: stretch; gap: 0;
+    background: rgba(255,255,255,0.02); border-radius: 2px;
+    overflow: hidden; max-width: fit-content;
+  }
+  .sidebar-strip .accent-bar {
+    width: 3px; flex-shrink: 0;
+    background: var(--accent);
+    animation: strip-glow 2s ease-in-out infinite;
+  }
+  .sidebar-strip .content {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 14px; font-size: 13px; color: var(--text-secondary);
+  }
+  .sidebar-strip .time {
+    color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums;
+  }
+  .sidebar-strip .wave {
+    display: flex; gap: 2px; align-items: center; height: 14px;
+  }
+  .sidebar-strip .wave span {
+    display: block; width: 2px; border-radius: 1px;
+    background: var(--accent);
+  }
+  .sidebar-strip .wave span:nth-child(1) { height: 5px; animation: wave 1.2s ease-in-out infinite; }
+  .sidebar-strip .wave span:nth-child(2) { height: 9px; animation: wave 1.2s ease-in-out 0.1s infinite; }
+  .sidebar-strip .wave span:nth-child(3) { height: 4px; animation: wave 1.2s ease-in-out 0.2s infinite; }
+  .sidebar-strip .wave span:nth-child(4) { height: 7px; animation: wave 1.2s ease-in-out 0.3s infinite; }
+
+  /* ══════════════════════════════════════════════ */
+  /*  E. Ghost Text — forming text effect           */
+  /* ══════════════════════════════════════════════ */
+  .ghost-text {
+    font-size: 13px; color: var(--text-secondary);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .ghost-text .chars {
+    display: inline-flex; gap: 1px;
+  }
+  .ghost-text .chars span {
+    display: inline-block;
+    animation: ghost-char 2s ease-in-out infinite;
+    opacity: 0.3;
+  }
+  .ghost-text .chars span:nth-child(1) { animation-delay: 0s; }
+  .ghost-text .chars span:nth-child(2) { animation-delay: 0.08s; }
+  .ghost-text .chars span:nth-child(3) { animation-delay: 0.16s; }
+  .ghost-text .chars span:nth-child(4) { animation-delay: 0.24s; }
+  .ghost-text .chars span:nth-child(5) { animation-delay: 0.32s; }
+  .ghost-text .chars span:nth-child(6) { animation-delay: 0.4s; }
+  .ghost-text .chars span:nth-child(7) { animation-delay: 0.48s; }
+  .ghost-text .chars span:nth-child(8) { animation-delay: 0.56s; }
+  .ghost-text .time {
+    color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums;
+    margin-left: 4px;
+  }
+
+  /* ══════════════════════════════════════════════ */
+  /*  F. Tab Label — IDE tab style                  */
+  /* ══════════════════════════════════════════════ */
+  .tab-label {
+    display: inline-flex; align-items: center; gap: 0;
+    background: var(--bg-tertiary); border: 1px solid var(--border);
+    border-bottom: none; border-radius: 3px 3px 0 0;
+    padding: 4px 14px; font-size: 12px; color: var(--text-secondary);
+    position: relative;
+  }
+  .tab-label .tab-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent); margin-right: 8px;
+    animation: sb-pulse 2s ease-in-out infinite;
+  }
+  .tab-label .tab-text { }
+  .tab-label .tab-time {
+    margin-left: 8px; color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .tab-label::after {
+    content: ''; position: absolute; bottom: -1px; left: 0; right: 0;
+    height: 1px; background: var(--bg-secondary);
+  }
+
+  /* ══════════════════════════════════════════════ */
+  /*  G. Progress Bar — thin top bar                */
+  /* ══════════════════════════════════════════════ */
+  .progress-bar-wrap {
+    width: 100%; max-width: 400px;
+  }
+  .progress-bar-wrap .pb-info {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 6px; font-size: 12px; color: var(--text-secondary);
+  }
+  .progress-bar-wrap .pb-time {
+    color: var(--text-muted); font-variant-numeric: tabular-nums;
+  }
+  .progress-bar-wrap .pb-track {
+    height: 2px; background: rgba(255,255,255,0.06);
+    border-radius: 1px; overflow: hidden;
+  }
+  .progress-bar-wrap .pb-fill {
+    height: 100%; background: var(--accent);
+    border-radius: 1px; width: 40%;
+    animation: pb-slide 2.5s ease-in-out infinite;
+  }
+
+  /* ══════════════════════════════════════════════ */
+  /*  H. Inline Dot Row — three bouncing dots       */
+  /* ══════════════════════════════════════════════ */
+  .inline-dots {
+    display: inline-flex; align-items: center; gap: 8px;
+    color: var(--text-secondary); font-size: 13px;
+  }
+  .inline-dots .dot-row {
+    display: flex; gap: 4px;
+  }
+  .inline-dots .dot {
+    width: 4px; height: 4px; border-radius: 50%;
+    background: var(--text-secondary);
+    animation: dot-bounce 1.4s ease-in-out infinite;
+  }
+  .inline-dots .dot:nth-child(2) { animation-delay: 0.16s; }
+  .inline-dots .dot:nth-child(3) { animation-delay: 0.32s; }
+  .inline-dots .time {
+    color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums;
+  }
+
+  /* ══════════════════════════════════════════════ */
+  /*  Keyframes                                     */
+  /* ══════════════════════════════════════════════ */
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @keyframes caret-blink {
+    50% { opacity: 0; }
+  }
+
+  @keyframes underline-scroll {
+    from { background-position: 0 0; }
+    to { background-position: 16px 0; }
+  }
+
+  @keyframes dots {
+    0%, 20% { content: ''; }
+    40% { content: '·'; }
+    60% { content: '··'; }
+    80%, 100% { content: '···'; }
+  }
+
+  @keyframes sb-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  @keyframes strip-glow {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  @keyframes wave {
+    0%, 100% { transform: scaleY(0.4); }
+    50% { transform: scaleY(1); }
+  }
+
+  @keyframes ghost-char {
+    0%, 100% { opacity: 0.2; }
+    50% { opacity: 0.8; }
+  }
+
+  @keyframes pb-slide {
+    0% { width: 0%; margin-left: 0%; }
+    50% { width: 60%; margin-left: 20%; }
+    100% { width: 0%; margin-left: 100%; }
+  }
+
+  @keyframes dot-bounce {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.3; }
+    40% { transform: scale(1); opacity: 1; }
+  }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 8px 12px; color: var(--text-secondary); font-weight: 500; border-bottom: 1px solid var(--border); }
+  td { padding: 10px 12px; border-bottom: 1px solid #2a2a2a; }
+  tr.rec { background: rgba(76,175,80,0.04); }
+  tr.rec td:first-child { color: var(--success); font-weight: 600; }
+
+  .notes {
+    background: rgba(0,127,212,0.05); border: 1px solid rgba(0,127,212,0.15);
+    border-radius: 3px; padding: 14px 18px; margin-top: 12px;
+  }
+  .notes h4 { font-size: 12px; color: var(--accent); margin-bottom: 6px; }
+  .notes ul { list-style: none; padding: 0; }
+  .notes li { font-size: 12px; color: var(--text-secondary); padding: 2px 0 2px 14px; position: relative; }
+  .notes li::before { content: '›'; position: absolute; left: 0; color: var(--text-muted); }
+
+  .row { display: flex; gap: 24px; flex-wrap: wrap; }
+  .col { flex: 1; min-width: 280px; }
+</style>
+</head>
+<body>
+
+<h1>正在生成响应 — JetBrains 原生风格方案</h1>
+<p class="subtitle">去掉胶囊，融入 IDE 设计语言 · V2 · 2026-06-04</p>
+
+<!-- ═══════════════════════════════════ -->
+<!-- Current -->
+<!-- ═══════════════════════════════════ -->
+<div class="section">
+  <h2>当前设计 <span class="tag tag-current">Current</span></h2>
+  <p class="desc">蓝色胶囊 pill，功能完整但风格偏"外部组件"，不够 JetBrains 原生。</p>
+  <div class="card">
+    <div class="current-pill">
+      <div class="spinner"></div>
+      <span>正在生成响应</span>
+      <span class="time">12s</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════ -->
+<!-- A. Cursor Blink -->
+<!-- ═══════════════════════════════════ -->
+<div class="section">
+  <h2>A. 光标闪烁 <span class="tag tag-new">Option</span></h2>
+  <p class="desc">纯文字 + 闪烁光标，像 IDE 编辑器里正在输入的感觉。零装饰，最 JetBrains。</p>
+
+  <div class="card">
+    <div class="card-label">独立展示</div>
+    <div class="cursor-blink">
+      <span class="text">正在生成响应</span>
+      <span class="caret"></span>
+      <span class="time">12s</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">在聊天界面中</div>
+    <div class="chat-shell">
+      <div class="chat-titlebar">
+        <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+        <span>Claude Code</span>
+      </div>
+      <div class="chat-body">
+        <div class="msg">
+          <div class="avatar avatar-user">U</div>
+          <div class="bubble bubble-user">帮我写一个快速排序</div>
+        </div>
+        <div class="msg">
+          <div class="avatar avatar-ai">C</div>
+          <div class="bubble bubble-ai">好的，这是一个快速排序实现：</div>
+        </div>
+        <div class="msg">
+          <div class="avatar avatar-user">U</div>
+          <div class="bubble bubble-user">加上单元测试</div>
+        </div>
+        <div style="padding-left: 36px; margin-top: 8px;">
+          <div class="cursor-blink">
+            <span class="text">正在生成响应</span>
+            <span class="caret"></span>
+            <span class="time">5s</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h4>特点</h4>
+    <ul>
+      <li>零边框零背景，完全融入消息流</li>
+      <li>光标闪烁 = IDE 编辑器的"正在输入"隐喻</li>
+      <li>改动量极小，只改文本样式</li>
+      <li>缺点：视觉存在感弱，快速滚动可能被忽略</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════ -->
+<!-- B. Dotted Underline -->
+<!-- ═══════════════════════════════════ -->
+<div class="section">
+  <h2>B. 动态虚线下划线 <span class="tag tag-new">Option</span></h2>
+  <p class="desc">文字下方一条滚动的虚线，类似 VS Code/JetBrains 的"处理中"下划线提示。</p>
+
+  <div class="card">
+    <div class="card-label">独立展示</div>
+    <div class="dotted-underline">
+      <span class="label">正在生成响应</span>
+      <span class="dots"></span>
+      <span class="time">12s</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">在聊天界面中</div>
+    <div class="chat-shell">
+      <div class="chat-titlebar">
+        <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+        <span>Claude Code</span>
+      </div>
+      <div class="chat-body">
+        <div class="msg">
+          <div class="avatar avatar-user">U</div>
+          <div class="bubble bubble-user">帮我写一个快速排序</div>
+        </div>
+        <div class="msg">
+          <div class="avatar avatar-ai">C</div>
+          <div class="bubble bubble-ai">好的，这是一个快速排序实现：</div>
+        </div>
+        <div class="msg">
+          <div class="avatar avatar-user">U</div>
+          <div class="bubble bubble-user">加上单元测试</div>
+        </div>
+        <div style="padding-left: 36px; margin-top: 8px;">
+          <div class="dotted-underline">
+            <span class="label">正在生成响应</span>
+            <span class="dots"></span>
+            <span class="time">5s</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h4>特点</h4>
+    <ul>
+      <li>动态虚线是 IDE 里"处理中"的经典隐喻</li>
+      <li>不需要额外图标，文字本身即载体</li>
+      <li>在消息流中存在感适中，不抢眼也不易忽略</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════ -->
+<!-- C. Status Bar -->
+<!-- ═══════════════════════════════════ -->
+<div class="section">
+  <h2>C. 状态栏 <span class="tag tag-new">Option</span></h2>
+  <p class="desc">模仿 JetBrains 底部状态栏，用分隔区段展示状态、耗时、token 数。信息密度最高。</p>
+
+  <div class="card">
+    <div class="card-label">独立展示</div>
+    <div class="status-bar">
+      <div class="sb-section">
+        <div class="sb-dot"></div>
+        <span class="sb-label">正在生成响应</span>
+      </div>
+      <div class="sb-section">
+        <span class="sb-time">12s</span>
+      </div>
+      <div class="sb-section">
+        <span class="sb-tokens">1,247 tokens</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">完整信息变体</div>
+    <div class="status-bar">
+      <div class="sb-section">
+        <div class="sb-dot"></div>
+        <span class="sb-label">正在生成响应</span>
+      </div>
+      <div class="sb-section">
+        <span class="sb-time">1m 23s</span>
+      </div>
+      <div class="sb-section">
+        <span class="sb-tokens">3,891 tokens</span>
+      </div>
+      <div class="sb-section">
+        <span class="sb-tokens">streaming</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h4>特点</h4>
+    <ul>
+      <li>与 JetBrains 底部状态栏视觉一致，天然适配</li>
+      <li>信息密度高：状态 + 耗时 + token 一目了然</li>
+      <li>可扩展：加入 model 名、cost 等区段</li>
+      <li>缺点：在消息流中略显"重"，适合固定位置展示</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════ -->
+<!-- D. Sidebar Strip -->
+<!-- ═══════════════════════════════════ -->
+<div class="section">
+  <h2>D. 侧边条纹（推荐）<span class="tag tag-rec">Recommended</span></h2>
+  <p class="desc">左侧竖线 + 微妙背景 + 音频波形动画。类似 JetBrains 代码检查的侧边标记，辨识度高且不喧宾夺主。</p>
+
+  <div class="card">
+    <div class="card-label">独立展示</div>
+    <div class="sidebar-strip">
+      <div class="accent-bar"></div>
+      <div class="content">
+        <div class="wave">
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <span>正在生成响应</span>
+        <span class="time">12s</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">在聊天界面中</div>
+    <div class="chat-shell">
+      <div class="chat-titlebar">
+        <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+        <span>Claude Code</span>
+      </div>
+      <div class="chat-body">
+        <div class="msg">
+          <div class="avatar avatar-user">U</div>
+          <div class="bubble bubble-user">帮我写一个快速排序</div>
+        </div>
+        <div class="msg">
+          <div class="avatar avatar-ai">C</div>
+          <div class="bubble bubble-ai">好的，这是一个快速排序实现：</div>
+        </div>
+        <div class="msg">
+          <div class="avatar avatar-user">U</div>
+          <div class="bubble bubble-user">加上单元测试</div>
+        </div>
+        <div style="padding-left: 36px; margin-top: 8px;">
+          <div class="sidebar-strip">
+            <div class="accent-bar"></div>
+            <div class="content" style="padding: 4px 12px; font-size: 12px;">
+              <div class="wave">
+                <span></span><span></span><span></span><span></span>
+              </div>
+              <span>正在生成响应</span>
+              <span class="time">5s</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h4>推荐理由</h4>
+    <ul>
+      <li>左侧竖线是 JetBrains 代码检查/warning/error 的经典视觉语言</li>
+      <li>音频波形暗示"AI 正在说话"，隐喻自然</li>
+      <li>无圆角胶囊，风格扁平，与 IDE 原生组件一致</li>
+      <li>颜色可扩展：蓝色=生成 / 紫色=思考 / 橙色=排队</li>
+      <li>背景极淡，不干扰消息阅读</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════ -->
+<!-- E. Ghost Text -->
+<!-- ═══════════════════════════════════ -->
+<div class="section">
+  <h2>E. 幽灵文字 <span class="tag tag-new">Option</span></h2>
+  <p class="desc">每个字依次呼吸明灭，像文字正在被"写入"。概念最贴近"生成"的本质。</p>
+
+  <div class="card">
+    <div class="card-label">独立展示</div>
+    <div class="ghost-text">
+      <div class="chars">
+        <span>正</span><span>在</span><span>生</span><span>成</span><span>响</span><span>应</span><span>中</span><span>…</span>
+      </div>
+      <span class="time">12s</span>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h4>特点</h4>
+    <ul>
+      <li>每个字依次明灭，视觉效果独特</li>
+      <li>隐喻"文字正在被逐字生成"</li>
+      <li>缺点：中文字符多时动画略慢，需要调整</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════ -->
+<!-- F. Tab Label -->
+<!-- ═══════════════════════════════════ -->
+<div class="section">
+  <h2>F. 标签页 <span class="tag tag-new">Option</span></h2>
+  <p class="desc">模仿 JetBrains 编辑器标签页样式，状态指示器像一个正在活跃的 tab。</p>
+
+  <div class="card">
+    <div class="card-label">独立展示</div>
+    <div style="border-bottom: 1px solid var(--border); padding-bottom: 0;">
+      <div class="tab-label">
+        <div class="tab-dot"></div>
+        <span class="tab-text">正在生成响应</span>
+        <span class="tab-time">12s</span>
+      </div>
+    </div>
+    <div style="padding: 16px 0; color: var(--text-muted); font-size: 12px; font-style: italic;">
+      ↳ 响应内容将显示在此区域下方...
+    </div>
+  </div>
+
+  <div class="notes">
+    <h4>特点</h4>
+    <ul>
+      <li>Tab 样式是 JetBrains 最标志性的 UI 元素</li>
+      <li>暗示"生成完成后这里会变成一个内容 tab"</li>
+      <li>适合侧边栏或底部面板场景</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════ -->
+<!-- G. Progress Bar -->
+<!-- ═══════════════════════════════════ -->
+<div class="section">
+  <h2>G. 进度条 <span class="tag tag-new">Option</span></h2>
+  <p class="desc">顶部细进度条，类似浏览器页面加载。最轻量的"正在处理"提示。</p>
+
+  <div class="card">
+    <div class="card-label">独立展示</div>
+    <div class="progress-bar-wrap">
+      <div class="pb-info">
+        <span>正在生成响应</span>
+        <span class="pb-time">12s</span>
+      </div>
+      <div class="pb-track">
+        <div class="pb-fill"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">极简变体（仅进度条）</div>
+    <div style="max-width: 300px;">
+      <div class="pb-track">
+        <div class="pb-fill" style="background: var(--success);"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h4>特点</h4>
+    <ul>
+      <li>浏览器加载进度条的隐喻，用户天然理解</li>
+      <li>极细（2px），几乎不占空间</li>
+      <li>缺点：无文字信息，不知道"在生成什么"</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════ -->
+<!-- H. Inline Dots -->
+<!-- ═══════════════════════════════════ -->
+<div class="section">
+  <h2>H. 行内弹跳点 <span class="tag tag-new">Option</span></h2>
+  <p class="desc">三个小圆点弹跳，类似 iMessage/微信的"对方正在输入"。最通用的社交隐喻。</p>
+
+  <div class="card">
+    <div class="card-label">独立展示</div>
+    <div class="inline-dots">
+      <span>正在生成响应</span>
+      <div class="dot-row">
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+      </div>
+      <span class="time">12s</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">在聊天界面中</div>
+    <div class="chat-shell">
+      <div class="chat-titlebar">
+        <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+        <span>Claude Code</span>
+      </div>
+      <div class="chat-body">
+        <div class="msg">
+          <div class="avatar avatar-user">U</div>
+          <div class="bubble bubble-user">帮我写一个快速排序</div>
+        </div>
+        <div style="padding-left: 36px; margin-top: 8px;">
+          <div class="inline-dots" style="font-size: 12px;">
+            <span>正在生成响应</span>
+            <div class="dot-row">
+              <div class="dot"></div>
+              <div class="dot"></div>
+              <div class="dot"></div>
+            </div>
+            <span class="time">5s</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h4>特点</h4>
+    <ul>
+      <li>"对方正在输入"的隐喻，用户零学习成本</li>
+      <li>三个点的弹跳动画轻巧自然</li>
+      <li>与文字同行，不增加视觉层级</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════ -->
+<!-- Summary -->
+<!-- ═══════════════════════════════════ -->
+<div class="section">
+  <h2>方案对比</h2>
+
+  <div class="card" style="overflow-x: auto;">
+    <table>
+      <thead>
+        <tr>
+          <th>方案</th>
+          <th>JetBrains 适配</th>
+          <th>辨识度</th>
+          <th>信息量</th>
+          <th>干扰度</th>
+          <th>改动量</th>
+          <th>说明</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>A 光标闪烁</td>
+          <td>⭐⭐⭐⭐⭐</td>
+          <td>⭐⭐⭐</td>
+          <td>⭐⭐</td>
+          <td>⭐</td>
+          <td>极小</td>
+          <td style="color:var(--text-muted)">最原生，但存在感弱</td>
+        </tr>
+        <tr>
+          <td>B 虚线下划线</td>
+          <td>⭐⭐⭐⭐</td>
+          <td>⭐⭐⭐</td>
+          <td>⭐⭐</td>
+          <td>⭐⭐</td>
+          <td>小</td>
+          <td style="color:var(--text-muted)">IDE 经典"处理中"隐喻</td>
+        </tr>
+        <tr>
+          <td>C 状态栏</td>
+          <td>⭐⭐⭐⭐⭐</td>
+          <td>⭐⭐⭐⭐</td>
+          <td>⭐⭐⭐⭐⭐</td>
+          <td>⭐⭐⭐</td>
+          <td>中</td>
+          <td style="color:var(--text-muted)">信息最全，适合固定位置</td>
+        </tr>
+        <tr class="rec">
+          <td>D 侧边条纹 ✓</td>
+          <td>⭐⭐⭐⭐⭐</td>
+          <td>⭐⭐⭐⭐</td>
+          <td>⭐⭐⭐</td>
+          <td>⭐⭐</td>
+          <td>小</td>
+          <td style="color:var(--text-muted)">综合最优，代码检查风格</td>
+        </tr>
+        <tr>
+          <td>E 幽灵文字</td>
+          <td>⭐⭐⭐</td>
+          <td>⭐⭐⭐⭐</td>
+          <td>⭐⭐</td>
+          <td>⭐⭐</td>
+          <td>小</td>
+          <td style="color:var(--text-muted)">效果独特，中文适配需调</td>
+        </tr>
+        <tr>
+          <td>F 标签页</td>
+          <td>⭐⭐⭐⭐</td>
+          <td>⭐⭐⭐⭐</td>
+          <td>⭐⭐⭐</td>
+          <td>⭐⭐</td>
+          <td>中</td>
+          <td style="color:var(--text-muted)">适合面板场景</td>
+        </tr>
+        <tr>
+          <td>G 进度条</td>
+          <td>⭐⭐⭐</td>
+          <td>⭐⭐</td>
+          <td>⭐</td>
+          <td>⭐</td>
+          <td>小</td>
+          <td style="color:var(--text-muted)">最轻量，无文字信息</td>
+        </tr>
+        <tr>
+          <td>H 行内弹跳点</td>
+          <td>⭐⭐⭐</td>
+          <td>⭐⭐⭐</td>
+          <td>⭐⭐</td>
+          <td>⭐</td>
+          <td>极小</td>
+          <td style="color:var(--text-muted)">社交隐喻，通用性强</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div style="text-align: center; color: var(--text-muted); font-size: 11px; padding: 20px;">
+  jetbrains-melon-cc-gui · Generating Indicator Mockup V2 · JetBrains Native Style · 2026-06-04
+</div>
+
+</body>
+</html>

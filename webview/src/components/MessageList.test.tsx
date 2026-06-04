@@ -175,6 +175,11 @@ describe('MessageList paged collapse', () => {
 describe('MessageList container behaviour', () => {
   afterEach(cleanup);
 
+  it('marks the root as a flex column layout boundary for message alignment', () => {
+    const { container } = renderList(makeMessages(3));
+    expect(container.firstElementChild?.classList.contains('message-list')).toBe(true);
+  });
+
   it('uses the latest message index for isLast even when paginated', () => {
     const messages = makeMessages(40);
     renderList(messages);

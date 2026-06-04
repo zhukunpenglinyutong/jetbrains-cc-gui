@@ -12,6 +12,10 @@ export interface EnvironmentTabProps {
   onWorkingDirectoryChange?: (dir: string) => void;
   onSaveWorkingDirectory?: () => void;
   savingWorkingDirectory?: boolean;
+  invocationMode?: 'sdk' | 'cli';
+  onInvocationModeChange?: (mode: 'sdk' | 'cli') => void;
+  cliPath?: string;
+  onCliPathChange?: (path: string) => void;
 }
 
 const EnvironmentTab = ({
@@ -25,6 +29,10 @@ const EnvironmentTab = ({
   onWorkingDirectoryChange = () => {},
   onSaveWorkingDirectory = () => {},
   savingWorkingDirectory = false,
+  invocationMode = 'sdk',
+  onInvocationModeChange = () => {},
+  cliPath = '',
+  onCliPathChange = () => {},
 }: EnvironmentTabProps) => {
   const { t } = useTranslation();
 
@@ -44,6 +52,57 @@ const EnvironmentTab = ({
 
   return (
     <div className={styles.tabContent}>
+      {/* Invocation mode configuration */}
+      <div className={styles.streamingSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-server-process" />
+          <span className={styles.fieldLabel}>{t('settings.basic.invocationMode.label')}</span>
+        </div>
+        <div className={styles.themeGrid}>
+          <div
+            className={`${styles.themeCard} ${invocationMode === 'sdk' ? styles.active : ''}`}
+            onClick={() => onInvocationModeChange('sdk')}
+          >
+            {invocationMode === 'sdk' && (
+              <div className={styles.checkBadge}>
+                <span className="codicon codicon-check" />
+              </div>
+            )}
+            <div className={styles.themeCardTitle}>{t('settings.basic.invocationMode.sdk')}</div>
+            <div className={styles.themeCardDesc}>{t('settings.basic.invocationMode.sdkDesc')}</div>
+          </div>
+          <div
+            className={`${styles.themeCard} ${invocationMode === 'cli' ? styles.active : ''}`}
+            onClick={() => onInvocationModeChange('cli')}
+          >
+            {invocationMode === 'cli' && (
+              <div className={styles.checkBadge}>
+                <span className="codicon codicon-check" />
+              </div>
+            )}
+            <div className={styles.themeCardTitle}>{t('settings.basic.invocationMode.cli')}</div>
+            <div className={styles.themeCardDesc}>{t('settings.basic.invocationMode.cliDesc')}</div>
+          </div>
+        </div>
+        {invocationMode === 'cli' && (
+          <div className={styles.nodePathInputWrapper} style={{ marginTop: 8 }}>
+            <input
+              type="text"
+              className={styles.nodePathInput}
+              placeholder={t('settings.basic.invocationMode.cliPathPlaceholder')}
+              value={cliPath}
+              onChange={(e) => onCliPathChange(e.target.value)}
+            />
+          </div>
+        )}
+        {invocationMode === 'cli' && (
+          <small className={styles.formHint}>
+            <span className="codicon codicon-info" />
+            <span>{t('settings.basic.invocationMode.hint')}</span>
+          </small>
+        )}
+      </div>
+
       {/* Node.js path configuration */}
       <div className={styles.nodePathSection}>
         <div className={styles.fieldHeader}>

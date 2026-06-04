@@ -26,10 +26,204 @@ import {
   resolveSandboxModeOverride,
   resolveApprovalPolicyOverride,
   buildCodexCliEnvironment,
-  buildErrorPayload
+  buildErrorPayload,
+  isIgnorableWindowsTerminationNoiseLine
 } from './codex-utils.js';
 import { collectAgentsInstructions } from './codex-agents-loader.js';
 import { createInitialEventState, processCodexEventStream } from './codex-event-handler.js';
+
+const CODEX_RUN_NOISE_FILTER_PATCHED = Symbol.for('ccgui.codex.runNoiseFilterPatched');
+const CODEX_THREAD_MAX_IDLE_MS = 30 * 60 * 1000;
+const CODEX_THREAD_CACHE_MAX_SIZE = 4;
+const codexThreadCache = new Map();
+
+// Module-level abort controller for the currently active Codex turn.
+let activeCodexAbortController = null;
+let activeCodexTurnInProgress = false;
+let activeCodexAbortRequested = false;
+let activeCodexTurnCompletionPromise = null;
+
+function buildCodexThreadCacheSignature(codexOptions, threadOptions) {
+  return JSON.stringify({
+    baseUrl: codexOptions?.baseUrl || '',
+    apiKey: codexOptions?.apiKey || '',
+    env: codexOptions?.env || {},
+    model: threadOptions?.model || '',
+    sandboxMode: threadOptions?.sandboxMode || '',
+    workingDirectory: threadOptions?.workingDirectory || '',
+    skipGitRepoCheck: !!threadOptions?.skipGitRepoCheck,
+    modelReasoningEffort: threadOptions?.modelReasoningEffort || '',
+    approvalPolicy: threadOptions?.approvalPolicy || '',
+  });
+}
+
+function cleanupStaleCodexThreads() {
+  const now = Date.now();
+  for (const [threadId, entry] of codexThreadCache.entries()) {
+    if (!entry || typeof entry !== 'object') {
+      codexThreadCache.delete(threadId);
+      continue;
+    }
+    if (now - (entry.lastUsedAt || 0) > CODEX_THREAD_MAX_IDLE_MS) {
+      codexThreadCache.delete(threadId);
+    }
+  }
+}
+
+const _codexThreadCleanupTimer = setInterval(() => {
+  cleanupStaleCodexThreads();
+}, 5 * 60 * 1000);
+_codexThreadCleanupTimer.unref();
+
+function rememberCodexThread(threadId, thread, signature, codex) {
+  if (!threadId || !thread) {
+    return;
+  }
+  if (codexThreadCache.has(threadId)) {
+    codexThreadCache.delete(threadId);
+  }
+  while (codexThreadCache.size >= CODEX_THREAD_CACHE_MAX_SIZE) {
+    const oldestKey = codexThreadCache.keys().next().value;
+    if (!oldestKey) {
+      break;
+    }
+    codexThreadCache.delete(oldestKey);
+  }
+  codexThreadCache.set(threadId, {
+    thread,
+    signature,
+    codex,
+    lastUsedAt: Date.now()
+  });
+}
+
+function acquireCachedCodexThread(threadId, signature) {
+  const entry = codexThreadCache.get(threadId);
+  if (!entry) {
+    return null;
+  }
+  if (entry.signature !== signature || !entry.thread) {
+    codexThreadCache.delete(threadId);
+    return null;
+  }
+  entry.lastUsedAt = Date.now();
+  return entry.thread;
+}
+
+export function resetCodexThreadCache(threadId = null) {
+  if (threadId && typeof threadId === 'string' && threadId.trim() !== '') {
+    codexThreadCache.delete(threadId.trim());
+    return;
+  }
+  codexThreadCache.clear();
+}
+
+export async function abortCurrentCodexTurn() {
+  activeCodexAbortRequested = true;
+  const controller = activeCodexAbortController;
+  if (!controller) {
+    return activeCodexTurnInProgress;
+  }
+  activeCodexAbortController = null;
+  controller.abort();
+  return true;
+}
+
+export function waitForCodexTurnCompletion() {
+  return activeCodexTurnCompletionPromise || Promise.resolve();
+}
+
+export function invalidateCodexThreadCacheForSignature(signature) {
+  if (!signature) {
+    return;
+  }
+  for (const [threadId, entry] of codexThreadCache.entries()) {
+    if (entry?.signature === signature) {
+      codexThreadCache.delete(threadId);
+    }
+  }
+}
+
+export function getCodexThreadCacheSizeForTest() {
+  return codexThreadCache.size;
+}
+
+export function isIgnorableCodexEventNoiseLine(line) {
+  return isIgnorableWindowsTerminationNoiseLine(line);
+}
+
+export async function* filterCodexExperimentalJsonLines(source, onNoise = () => {}) {
+  for await (const item of source) {
+    if (isIgnorableCodexEventNoiseLine(item)) {
+      onNoise(item);
+      continue;
+    }
+    yield item;
+  }
+}
+
+function installCodexRunNoiseFilter(codex) {
+  const execInstance = codex?.exec;
+  const execProto = execInstance ? Object.getPrototypeOf(execInstance) : null;
+  if (!execProto || typeof execProto.run !== 'function') {
+    logWarn('CODEX_JSON_STREAM', 'Cannot install noise filter: exec.run not found on prototype');
+    return;
+  }
+  if (execProto[CODEX_RUN_NOISE_FILTER_PATCHED]) {
+    return;
+  }
+
+  const originalRun = execProto.run;
+  execProto.run = function patchedCodexRun(...args) {
+    const source = originalRun.apply(this, args);
+    return filterCodexExperimentalJsonLines(source, (line) => {
+      logWarn('CODEX_JSON_STREAM', `Filtered non-JSON stdout line from Codex CLI: ${line}`);
+    });
+  };
+  Object.defineProperty(execProto, CODEX_RUN_NOISE_FILTER_PATCHED, {
+    value: true,
+    configurable: false,
+    enumerable: false,
+    writable: false
+  });
+}
+
+function isNoRolloutResumeError(error) {
+  const message = `${error?.message || ''}\n${error?.stack || ''}`;
+  return message.includes('thread/resume') && message.includes('no rollout found');
+}
+
+function createCodexInstance(Codex, codexOptions) {
+  const codex = new Codex(codexOptions);
+  installCodexRunNoiseFilter(codex);
+  return codex;
+}
+
+function buildNewThreadOptionsFromResume(threadOptions, cwd) {
+  const newThreadOptions = { ...threadOptions };
+  if (cwd && cwd.trim() !== '') {
+    newThreadOptions.workingDirectory = cwd;
+  }
+  return newThreadOptions;
+}
+
+function createCodexAbortError() {
+  const error = new Error('Codex turn aborted by user');
+  error.name = 'AbortError';
+  error.code = 'ABORT_ERR';
+  return error;
+}
+
+function throwIfCodexAbortRequested() {
+  if (activeCodexAbortRequested) {
+    throw createCodexAbortError();
+  }
+}
+
+function isCodexUserAbortError(error) {
+  const message = `${error?.name || ''}\n${error?.code || ''}\n${error?.message || ''}`;
+  return /AbortError|ABORT_ERR|aborted|abort|cancel|interrupt/i.test(message);
+}
 
 // ---------------------------------------------------------------------------
 // sendMessage
@@ -61,6 +255,11 @@ export async function sendMessage(
 ) {
   let streamStarted = false;
   let streamEnded = false;
+  let turnAbortController = null;
+  let turnCompletionResolve = null;
+  activeCodexTurnCompletionPromise = new Promise(resolve => { turnCompletionResolve = resolve; });
+  activeCodexTurnInProgress = true;
+  activeCodexAbortRequested = false;
   const emitStreamEndOnce = () => {
     if (!streamStarted || streamEnded) {
       return;
@@ -84,12 +283,14 @@ export async function sendMessage(
     });
 
     console.log('[MESSAGE_START]');
+    throwIfCodexAbortRequested();
 
     // ============================================================
     // 1. Initialize Codex SDK (dynamic loading)
     // ============================================================
 
     const sdk = await ensureCodexSdk();
+    throwIfCodexAbortRequested();
     const Codex = sdk.Codex || sdk.default || sdk;
 
     const codexOptions = {};
@@ -108,8 +309,6 @@ export async function sendMessage(
       removedKeys,
       removedCount: removedKeys.length
     }));
-
-    const codex = new Codex(codexOptions);
 
     // ============================================================
     // 2. Map Unified Permission Mode to Codex Format
@@ -187,51 +386,96 @@ export async function sendMessage(
     // 4. Create or Resume Thread
     // ============================================================
 
+    let activeThreadOptions = threadOptions;
+    let activeThreadSignature = buildCodexThreadCacheSignature(codexOptions, activeThreadOptions);
+    let startedNewThread = !isResumingThread;
     let thread;
     if (isResumingThread) {
-      console.log('[DEBUG] Resuming thread:', threadId);
-      thread = codex.resumeThread(threadId, threadOptions);
+      thread = acquireCachedCodexThread(threadId, activeThreadSignature);
+      if (thread) {
+        logInfo('CODEX_THREAD_CACHE', `Reusing cached Codex thread: ${threadId}`);
+      } else {
+        const codex = createCodexInstance(Codex, codexOptions);
+        console.log('[DEBUG] Resuming thread:', threadId);
+        thread = codex.resumeThread(threadId, activeThreadOptions);
+        rememberCodexThread(threadId, thread, activeThreadSignature, codex);
+        logInfo('CODEX_THREAD_CACHE', `Created cached Codex resume thread: ${threadId}`);
+      }
     } else {
+      const codex = createCodexInstance(Codex, codexOptions);
       console.log('[DEBUG] Starting new thread');
-      thread = codex.startThread(threadOptions);
+      thread = codex.startThread(activeThreadOptions);
     }
 
     // ============================================================
     // 5. Collect AGENTS.md Instructions (only for new threads)
     // ============================================================
 
-    let finalMessage = message;
-    if (!isResumingThread && cwd) {
+    const buildFinalMessage = (isNewThread) => {
+      let nextMessage = message;
+      if (!isNewThread || !cwd) {
+        return nextMessage;
+      }
       const agentsInstructions = collectAgentsInstructions(cwd);
       if (agentsInstructions) {
-        finalMessage = `<agents-instructions>\n${agentsInstructions}\n</agents-instructions>\n\n${message}`;
+        nextMessage = `<agents-instructions>\n${agentsInstructions}\n</agents-instructions>\n\n${message}`;
         logDebug('AGENTS.md', `Prepended ${agentsInstructions.length} chars of instructions to message`);
       }
-    }
+      return nextMessage;
+    };
 
     // ============================================================
     // 6. Build Input and Start Streaming
     // ============================================================
 
-    let runInput;
-    if (attachments && Array.isArray(attachments) && attachments.length > 0) {
-      runInput = [{ type: 'text', text: finalMessage }];
-      for (const attachment of attachments) {
-        if (attachment && attachment.type === 'local_image' && attachment.path) {
-          runInput.push({ type: 'local_image', path: attachment.path });
-          console.log('[DEBUG] Added local_image attachment:', attachment.path);
+    const buildRunInput = (finalMessage) => {
+      if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+        const input = [{ type: 'text', text: finalMessage }];
+        for (const attachment of attachments) {
+          if (attachment && attachment.type === 'local_image' && attachment.path) {
+            input.push({ type: 'local_image', path: attachment.path });
+            console.log('[DEBUG] Added local_image attachment:', attachment.path);
+          }
         }
+        console.log('[DEBUG] Using array input format with', input.length, 'entries');
+        return input;
       }
-      console.log('[DEBUG] Using array input format with', runInput.length, 'entries');
-    } else {
-      runInput = finalMessage;
       console.log('[DEBUG] Using string input format');
-    }
+      return finalMessage;
+    };
 
-    const turnAbortController = new AbortController();
-    const { events } = await thread.runStreamed(runInput, {
-      signal: turnAbortController.signal
-    });
+    let finalMessage = buildFinalMessage(startedNewThread);
+    let runInput = buildRunInput(finalMessage);
+    turnAbortController = new AbortController();
+    activeCodexAbortController = turnAbortController;
+    if (activeCodexAbortRequested) {
+      turnAbortController.abort();
+      throwIfCodexAbortRequested();
+    }
+    let events;
+    try {
+      ({ events } = await thread.runStreamed(runInput, {
+        signal: turnAbortController.signal
+      }));
+    } catch (error) {
+      if (!isResumingThread || !isNoRolloutResumeError(error)) {
+        throw error;
+      }
+
+      logWarn('CODEX_THREAD_RESUME', `Resume failed with no rollout for ${threadId}; starting a new thread`);
+      resetCodexThreadCache(threadId);
+      activeThreadOptions = buildNewThreadOptionsFromResume(threadOptions, cwd);
+      activeThreadSignature = buildCodexThreadCacheSignature(codexOptions, activeThreadOptions);
+      startedNewThread = true;
+      const codex = createCodexInstance(Codex, codexOptions);
+      thread = codex.startThread(activeThreadOptions);
+      finalMessage = buildFinalMessage(startedNewThread);
+      runInput = buildRunInput(finalMessage);
+      throwIfCodexAbortRequested();
+      ({ events } = await thread.runStreamed(runInput, {
+        signal: turnAbortController.signal
+      }));
+    }
     console.log('[STREAM_START]');
     streamStarted = true;
 
@@ -245,20 +489,62 @@ export async function sendMessage(
       console.log('[MESSAGE]', JSON.stringify(msg));
     };
 
-    const state = createInitialEventState(emitMessage);
+    let state = createInitialEventState(emitMessage);
 
-    const config = {
+    let config = {
       cwd: workingDirectory,
-      threadId,
-      threadOptions,
+      threadId: startedNewThread ? null : threadId,
+      threadOptions: activeThreadOptions,
       normalizedPermissionMode,
       turnAbortController,
       onTurnCompleted: emitStreamEndOnce,
       onTurnFailed: emitStreamEndOnce
     };
 
-    await processCodexEventStream(events, state, config);
+    try {
+      await processCodexEventStream(events, state, config);
+    } catch (error) {
+      if (!isResumingThread || startedNewThread || !isNoRolloutResumeError(error)) {
+        throw error;
+      }
+
+      logWarn('CODEX_THREAD_RESUME', `Resume stream failed with no rollout for ${threadId}; starting a new thread`);
+      resetCodexThreadCache(threadId);
+      activeThreadOptions = buildNewThreadOptionsFromResume(threadOptions, cwd);
+      activeThreadSignature = buildCodexThreadCacheSignature(codexOptions, activeThreadOptions);
+      startedNewThread = true;
+      const codex = createCodexInstance(Codex, codexOptions);
+      thread = codex.startThread(activeThreadOptions);
+      finalMessage = buildFinalMessage(startedNewThread);
+      runInput = buildRunInput(finalMessage);
+      throwIfCodexAbortRequested();
+      ({ events } = await thread.runStreamed(runInput, {
+        signal: turnAbortController.signal
+      }));
+      state = createInitialEventState(emitMessage);
+      config = {
+        ...config,
+        threadId: null,
+        threadOptions: activeThreadOptions
+      };
+      await processCodexEventStream(events, state, config);
+    }
     emitStreamEndOnce();
+
+    if (state.userAbortObserved) {
+      console.log('[MESSAGE_END]');
+      console.log(JSON.stringify({
+        success: false,
+        error: 'User interrupted',
+        threadId: state.currentThreadId
+      }));
+      return;
+    }
+
+    if (state.currentThreadId && state.currentThreadId.trim() !== '') {
+      rememberCodexThread(state.currentThreadId, thread, activeThreadSignature, null);
+      logInfo('CODEX_THREAD_CACHE', `Stored Codex thread in cache: ${state.currentThreadId}`);
+    }
 
     // ============================================================
     // 8. Completion Phase
@@ -300,12 +586,34 @@ export async function sendMessage(
 
   } catch (error) {
     emitStreamEndOnce();
+    if (activeCodexAbortRequested && isCodexUserAbortError(error)) {
+      logInfo('CODEX_ABORT', `Codex turn interrupted: ${error?.message || error}`);
+      console.log('[MESSAGE_END]');
+      console.log(JSON.stringify({
+        success: false,
+        error: 'User interrupted'
+      }));
+      return;
+    }
     console.error('[DEBUG] Error:', error.message);
     console.error('[DEBUG] Error stack:', error.stack);
 
     const errorPayload = buildErrorPayload(error);
     console.error('[SEND_ERROR]', JSON.stringify(errorPayload));
     console.log(JSON.stringify(errorPayload));
+  } finally {
+    if (activeCodexAbortController === turnAbortController) {
+      activeCodexAbortController = null;
+    }
+    activeCodexTurnInProgress = false;
+    activeCodexAbortRequested = false;
+    if (activeCodexTurnCompletionPromise) {
+      activeCodexTurnCompletionPromise = null;
+    }
+    if (turnCompletionResolve) {
+      turnCompletionResolve();
+      turnCompletionResolve = null;
+    }
   }
 }
 

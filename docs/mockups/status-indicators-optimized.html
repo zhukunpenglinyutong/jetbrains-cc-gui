@@ -1,0 +1,1392 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>状态指示器优化方案</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #1e1f22;
+      --panel: #25262b;
+      --bar: #2b2d31;
+      --surface: #2d2f34;
+      --chip: #32343a;
+      --hover: #3a3d44;
+      --border: #464950;
+      --input-border: #5a5d66;
+      --muted: #a8adb7;
+      --text: #f0f2f5;
+      --soft: #d8dde6;
+      --accent: #4ea1ff;
+      --accent-hover: #6bb3ff;
+      --accent-bg: rgba(78, 161, 255, .12);
+      --accent-border: rgba(78, 161, 255, .3);
+      --green: #4cc38a;
+      --green-bg: rgba(76, 195, 138, .12);
+      --green-border: rgba(76, 195, 138, .3);
+      --amber: #e7b85a;
+      --amber-bg: rgba(231, 184, 90, .12);
+      --amber-border: rgba(231, 184, 90, .3);
+      --violet: #a989ff;
+      --violet-bg: rgba(169, 137, 255, .12);
+      --violet-border: rgba(169, 137, 255, .3);
+      --red: #f07178;
+      --red-bg: rgba(240, 113, 120, .12);
+      --red-border: rgba(240, 113, 120, .3);
+      --orange: #f5a623;
+      --shadow-sm: 0 2px 8px rgba(0, 0, 0, .15);
+      --shadow-md: 0 8px 24px rgba(0, 0, 0, .25);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 40px;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 32px;
+    }
+
+    .section {
+      margin-bottom: 40px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--soft);
+      margin-bottom: 20px;
+    }
+
+    .section-title::before {
+      content: '';
+      width: 4px;
+      height: 18px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: var(--bar);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--soft);
+    }
+
+    .card-badge {
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      background: var(--accent-bg);
+      color: var(--accent);
+    }
+
+    .card-body {
+      padding: 20px;
+    }
+
+    .icon-base {
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    /* ==================== Comparison Layout ==================== */
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .comparison-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+
+    @media (max-width: 768px) {
+      .comparison-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* ==================== Status Pill - Optimized ==================== */
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 16px;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1;
+      transition: all 0.15s ease;
+    }
+
+    .status-pill svg {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+    }
+
+    .status-pill .pill-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* Variants */
+    .pill-default {
+      background: var(--chip);
+      border: 1px solid var(--border);
+      color: var(--soft);
+    }
+
+    .pill-accent {
+      background: var(--accent-bg);
+      border: 1px solid var(--accent-border);
+      color: var(--accent);
+    }
+
+    .pill-green {
+      background: var(--green-bg);
+      border: 1px solid var(--green-border);
+      color: var(--green);
+    }
+
+    .pill-amber {
+      background: var(--amber-bg);
+      border: 1px solid var(--amber-border);
+      color: var(--amber);
+    }
+
+    .pill-red {
+      background: var(--red-bg);
+      border: 1px solid var(--red-border);
+      color: var(--red);
+    }
+
+    .pill-violet {
+      background: var(--violet-bg);
+      border: 1px solid var(--violet-border);
+      color: var(--violet);
+    }
+
+    /* With icon */
+    .pill-with-icon .pill-dot {
+      display: none;
+    }
+
+    /* ==================== Waiting Indicator - Optimized ==================== */
+    .waiting-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      background: var(--chip);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--soft);
+      animation: chip-enter 0.25s ease-out;
+    }
+
+    .waiting-chip.generating {
+      background: var(--accent-bg);
+      border-color: var(--accent-border);
+      color: var(--accent);
+    }
+
+    .waiting-chip .chip-icon {
+      width: 18px;
+      height: 18px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+
+    .waiting-chip .chip-icon svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .waiting-chip .chip-text {
+      flex: 1;
+    }
+
+    .waiting-chip .chip-time {
+      font-size: 11px;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .waiting-chip.generating .chip-time {
+      color: rgba(78, 161, 255, .7);
+    }
+
+    /* Loading spinner */
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid transparent;
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    .spinner-sm {
+      width: 12px;
+      height: 12px;
+      border-width: 1.5px;
+    }
+
+    /* Dot animation */
+    .dot-animation {
+      display: inline-flex;
+      gap: 3px;
+      align-items: center;
+    }
+
+    .dot-animation span {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: dot-bounce 1.4s ease-in-out infinite;
+    }
+
+    .dot-animation span:nth-child(2) { animation-delay: 0.16s; }
+    .dot-animation span:nth-child(3) { animation-delay: 0.32s; }
+
+    @keyframes chip-enter {
+      from {
+        opacity: 0;
+        transform: translateY(4px) scale(0.98);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes dot-bounce {
+      0%, 80%, 100% {
+        transform: scale(0.6);
+        opacity: 0.4;
+      }
+      40% {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+
+    /* ==================== Todo Item - Optimized ==================== */
+    .todo-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      transition: all 0.15s;
+    }
+
+    .todo-item:hover {
+      background: var(--hover);
+      border-color: var(--input-border);
+    }
+
+    .todo-icon {
+      width: 22px;
+      height: 22px;
+      display: grid;
+      place-items: center;
+      border-radius: 6px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .todo-icon.pending {
+      border: 1.5px solid var(--border);
+      background: transparent;
+    }
+
+    .todo-icon.in-progress {
+      background: var(--accent-bg);
+      border: 1.5px solid var(--accent-border);
+      color: var(--accent);
+      position: relative;
+    }
+
+    .todo-icon.in-progress::before {
+      content: '';
+      position: absolute;
+      inset: -1.5px;
+      border-radius: 6px;
+      border: 1.5px solid transparent;
+      border-top-color: var(--accent);
+      animation: spin 1s linear infinite;
+    }
+
+    .todo-icon.in-progress svg {
+      width: 12px;
+      height: 12px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .todo-icon.completed {
+      background: var(--green);
+      border: 1.5px solid var(--green);
+    }
+
+    .todo-icon.completed svg {
+      width: 12px;
+      height: 12px;
+      stroke: white;
+      stroke-width: 2.5;
+      fill: none;
+    }
+
+    .todo-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .todo-content {
+      font-size: 13px;
+      color: var(--soft);
+      line-height: 1.4;
+    }
+
+    .todo-item.completed .todo-content {
+      color: var(--muted);
+      text-decoration: line-through;
+      text-decoration-color: var(--border);
+    }
+
+    .todo-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .todo-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .todo-tag.pending {
+      background: var(--chip);
+      color: var(--muted);
+    }
+
+    .todo-tag.in-progress {
+      background: var(--accent-bg);
+      color: var(--accent);
+    }
+
+    .todo-tag.completed {
+      background: var(--green-bg);
+      color: var(--green);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* ==================== Subagent Item - Optimized ==================== */
+    .subagent-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      transition: all 0.15s;
+      cursor: pointer;
+    }
+
+    .subagent-item:hover {
+      background: var(--hover);
+      border-color: var(--input-border);
+    }
+
+    .subagent-icon {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    .subagent-icon.running {
+      background: var(--accent-bg);
+      border: 1px solid var(--accent-border);
+      color: var(--accent);
+    }
+
+    .subagent-icon.running::after {
+      content: '';
+      position: absolute;
+      inset: -3px;
+      border-radius: 11px;
+      border: 2px solid transparent;
+      border-top-color: var(--accent);
+      border-right-color: var(--accent);
+      animation: spin 1.2s linear infinite;
+    }
+
+    .subagent-icon.completed {
+      background: var(--green-bg);
+      border: 1px solid var(--green-border);
+      color: var(--green);
+    }
+
+    .subagent-icon.error {
+      background: var(--red-bg);
+      border: 1px solid var(--red-border);
+      color: var(--red);
+    }
+
+    .subagent-icon svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .subagent-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .subagent-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .subagent-type {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--soft);
+    }
+
+    .subagent-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .subagent-badge.running {
+      background: var(--accent-bg);
+      color: var(--accent);
+    }
+
+    .subagent-badge.completed {
+      background: var(--green-bg);
+      color: var(--green);
+    }
+
+    .subagent-badge.error {
+      background: var(--red-bg);
+      color: var(--red);
+    }
+
+    .subagent-description {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.4;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .subagent-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .subagent-stat {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .subagent-stat svg {
+      width: 12px;
+      height: 12px;
+      opacity: 0.7;
+    }
+
+    .subagent-chevron {
+      color: var(--muted);
+      flex-shrink: 0;
+      margin-top: 8px;
+    }
+
+    .subagent-chevron svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    /* ==================== Status Tabs - Optimized ==================== */
+    .status-tabs {
+      display: flex;
+      background: var(--bar);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 3px;
+      gap: 2px;
+    }
+
+    .status-tab {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 12px;
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      position: relative;
+    }
+
+    .status-tab:hover {
+      background: var(--hover);
+      color: var(--text);
+    }
+
+    .status-tab.active {
+      background: var(--accent-bg);
+      color: var(--accent);
+    }
+
+    .status-tab svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .status-badge {
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 9px;
+      background: rgba(255, 255, 255, .08);
+      color: var(--soft);
+      font-size: 10px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .status-tab.active .status-badge {
+      background: rgba(78, 161, 255, .2);
+      color: var(--accent);
+    }
+
+    .tab-loading {
+      width: 12px;
+      height: 12px;
+      border: 1.5px solid transparent;
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    /* ==================== Message Queue - Optimized ==================== */
+    .message-queue {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 8px;
+      background: var(--bar);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    .queue-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: var(--chip);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      transition: all 0.15s;
+    }
+
+    .queue-item:hover {
+      background: var(--hover);
+      border-color: var(--input-border);
+    }
+
+    .queue-number {
+      width: 20px;
+      height: 20px;
+      display: grid;
+      place-items: center;
+      border-radius: 5px;
+      background: var(--accent-bg);
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .queue-content {
+      flex: 1;
+      font-size: 12px;
+      color: var(--soft);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .queue-remove {
+      width: 22px;
+      height: 22px;
+      display: grid;
+      place-items: center;
+      border-radius: 4px;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.15s;
+      flex-shrink: 0;
+      opacity: 0;
+    }
+
+    .queue-item:hover .queue-remove {
+      opacity: 1;
+    }
+
+    .queue-remove:hover {
+      background: var(--red-bg);
+      color: var(--red);
+    }
+
+    .queue-remove svg {
+      width: 12px;
+      height: 12px;
+    }
+
+    /* ==================== Progress Bar - Optimized ==================== */
+    .progress-container {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .progress-label {
+      color: var(--soft);
+      font-weight: 500;
+    }
+
+    .progress-value {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .progress-bar {
+      height: 6px;
+      background: var(--chip);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    .progress-fill.accent {
+      background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+    }
+
+    .progress-fill.green {
+      background: var(--green);
+    }
+
+    .progress-fill.amber {
+      background: var(--amber);
+    }
+
+    /* ==================== Streaming Indicator - Optimized ==================== */
+    .streaming-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      background: var(--accent-bg);
+      border: 1px solid var(--accent-border);
+      border-radius: 8px;
+    }
+
+    .streaming-dots {
+      display: flex;
+      gap: 4px;
+    }
+
+    .streaming-dots span {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: streaming-pulse 1.4s ease-in-out infinite;
+    }
+
+    .streaming-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .streaming-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+    .streaming-text {
+      flex: 1;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--accent);
+    }
+
+    .streaming-time {
+      font-size: 12px;
+      color: rgba(78, 161, 255, .7);
+      font-variant-numeric: tabular-nums;
+    }
+
+    @keyframes streaming-pulse {
+      0%, 100% {
+        transform: scale(0.7);
+        opacity: 0.3;
+      }
+      50% {
+        transform: scale(1.1);
+        opacity: 1;
+      }
+    }
+
+    /* ==================== Grid Layout ==================== */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    @media (max-width: 900px) {
+      .grid-3 {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .grid-2, .grid-3 {
+        grid-template-columns: 1fr;
+      }
+      body {
+        padding: 20px;
+      }
+    }
+
+    /* ==================== Diff View ==================== */
+    .diff-container {
+      display: flex;
+      gap: 4px;
+    }
+
+    .diff-add {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 6px;
+      background: rgba(76, 195, 138, .12);
+      border-radius: 3px;
+      color: var(--green);
+      font-size: 11px;
+      font-weight: 600;
+      font-family: monospace;
+    }
+
+    .diff-del {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 6px;
+      background: rgba(240, 113, 120, .12);
+      border-radius: 3px;
+      color: var(--red);
+      font-size: 11px;
+      font-weight: 600;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>✨ 状态指示器优化方案</h1>
+    <p class="subtitle">更适合 JetBrains 插件风格的图标和状态指示器设计</p>
+
+    <!-- Status Pills Section -->
+    <div class="section">
+      <div class="section-title">状态胶囊 (Status Pills)</div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">胶囊样式对比</span>
+        </div>
+        <div class="card-body">
+          <div class="comparison-grid">
+            <div>
+              <div class="comparison-label">带小圆点样式</div>
+              <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                <span class="status-pill pill-default">
+                  默认
+                  <span class="pill-dot"></span>
+                </span>
+                <span class="status-pill pill-accent">
+                  生成中
+                  <span class="pill-dot"></span>
+                </span>
+                <span class="status-pill pill-green">
+                  已完成
+                  <span class="pill-dot"></span>
+                </span>
+                <span class="status-pill pill-amber">
+                  警告
+                  <span class="pill-dot"></span>
+                </span>
+                <span class="status-pill pill-red">
+                  错误
+                  <span class="pill-dot"></span>
+                </span>
+                <span class="status-pill pill-violet">
+                  代理
+                  <span class="pill-dot"></span>
+                </span>
+              </div>
+            </div>
+            <div>
+              <div class="comparison-label">带图标样式</div>
+              <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                <span class="status-pill pill-default pill-with-icon">
+                  <svg viewBox="0 0 24 24" class="icon-base"><circle cx="12" cy="12" r="10"/></svg>
+                  待办
+                </span>
+                <span class="status-pill pill-accent pill-with-icon">
+                  <svg viewBox="0 0 24 24" class="icon-base"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                  生成中
+                </span>
+                <span class="status-pill pill-green pill-with-icon">
+                  <svg viewBox="0 0 24 24" class="icon-base"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                  已完成
+                </span>
+                <span class="status-pill pill-amber pill-with-icon">
+                  <svg viewBox="0 0 24 24" class="icon-base"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  警告
+                </span>
+                <span class="status-pill pill-red pill-with-icon">
+                  <svg viewBox="0 0 24 24" class="icon-base"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/></svg>
+                  错误
+                </span>
+                <span class="status-pill pill-violet pill-with-icon">
+                  <svg viewBox="0 0 24 24" class="icon-base"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01M9 18h6"/></svg>
+                  代理
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Waiting Indicator Section -->
+    <div class="section">
+      <div class="section-title">等待/响应指示器</div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">排队等待</span>
+            <span class="card-badge">Queued</span>
+          </div>
+          <div class="card-body">
+            <div class="waiting-chip">
+              <div class="chip-icon">
+                <svg viewBox="0 0 24 24" class="icon-base"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              </div>
+              <span class="chip-text">前方 3 条消息排队中</span>
+              <span class="chip-time">预计 15s</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">正在生成</span>
+            <span class="card-badge">Generating</span>
+          </div>
+          <div class="card-body">
+            <div class="waiting-chip generating">
+              <div class="chip-icon">
+                <div class="spinner"></div>
+              </div>
+              <span class="chip-text">Claude 正在思考</span>
+              <span class="chip-time">12s</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top: 16px;">
+        <div class="card-header">
+          <span class="card-title">流式传输</span>
+          <span class="card-badge">Streaming</span>
+        </div>
+        <div class="card-body">
+          <div class="streaming-bar">
+            <div class="streaming-dots">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <span class="streaming-text">Claude 正在输入...</span>
+            <span class="streaming-time">8s</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Message Queue Section -->
+    <div class="section">
+      <div class="section-title">消息队列</div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">排队中的消息</span>
+          <span class="card-badge">3 条</span>
+        </div>
+        <div class="card-body">
+          <div class="message-queue">
+            <div class="queue-item">
+              <span class="queue-number">3</span>
+              <span class="queue-content">帮我查看一下这个文件的实现逻辑...</span>
+              <button class="queue-remove">
+                <svg viewBox="0 0 24 24" class="icon-base"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <div class="queue-item">
+              <span class="queue-number">2</span>
+              <span class="queue-content">优化这段代码的性能</span>
+              <button class="queue-remove">
+                <svg viewBox="0 0 24 24" class="icon-base"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <div class="queue-item">
+              <span class="queue-number">1</span>
+              <span class="queue-content">添加单元测试</span>
+              <button class="queue-remove">
+                <svg viewBox="0 0 24 24" class="icon-base"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Todo Status Section -->
+    <div class="section">
+      <div class="section-title">任务状态指示器</div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">任务列表</span>
+          <span class="card-badge">2/4 完成</span>
+        </div>
+        <div class="card-body">
+          <!-- Status Tabs -->
+          <div class="status-tabs" style="margin-bottom: 16px;">
+            <button class="status-tab active">
+              <svg viewBox="0 0 24 24" class="icon-base">
+                <path d="M9 11l3 3L22 4"/>
+                <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+              </svg>
+              <span>任务</span>
+              <span class="status-badge">2/4</span>
+            </button>
+            <button class="status-tab">
+              <svg viewBox="0 0 24 24" class="icon-base">
+                <path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/>
+                <path d="M9 14h.01M15 14h.01M9 18h6"/>
+              </svg>
+              <span>子代理</span>
+              <span class="status-badge">1</span>
+            </button>
+            <button class="status-tab">
+              <svg viewBox="0 0 24 24" class="icon-base">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                <path d="M14 2v6h6"/>
+                <path d="M16 13H8M16 17H8M10 9H8"/>
+              </svg>
+              <span>文件</span>
+              <span class="status-badge">3</span>
+            </button>
+          </div>
+
+          <!-- Todo List -->
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div class="todo-item completed">
+              <div class="todo-icon completed">
+                <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <div class="todo-body">
+                <div class="todo-content">分析当前图标使用情况</div>
+                <div class="todo-meta">
+                  <span class="todo-tag completed">已完成</span>
+                  <span>2 分钟前</span>
+                </div>
+              </div>
+            </div>
+            <div class="todo-item completed">
+              <div class="todo-icon completed">
+                <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <div class="todo-body">
+                <div class="todo-content">设计 SVG 图标方案</div>
+                <div class="todo-meta">
+                  <span class="todo-tag completed">已完成</span>
+                  <span>1 分钟前</span>
+                </div>
+              </div>
+            </div>
+            <div class="todo-item">
+              <div class="todo-icon in-progress">
+                <svg viewBox="0 0 24 24" class="icon-base"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+              </div>
+              <div class="todo-body">
+                <div class="todo-content">生成预览文件</div>
+                <div class="todo-meta">
+                  <span class="todo-tag in-progress">进行中</span>
+                  <span>预计 30s</span>
+                </div>
+              </div>
+            </div>
+            <div class="todo-item">
+              <div class="todo-icon pending"></div>
+              <div class="todo-body">
+                <div class="todo-content">实施图标替换</div>
+                <div class="todo-meta">
+                  <span class="todo-tag pending">待办</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Subagent Status Section -->
+    <div class="section">
+      <div class="section-title">子代理状态指示器</div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">子代理列表</span>
+          <span class="card-badge">3 个</span>
+        </div>
+        <div class="card-body" style="display: flex; flex-direction: column; gap: 8px;">
+          <!-- Running -->
+          <div class="subagent-item">
+            <div class="subagent-icon running">
+              <svg viewBox="0 0 24 24" class="icon-base">
+                <path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/>
+                <path d="M9 14h.01M15 14h.01M9 18h6"/>
+              </svg>
+            </div>
+            <div class="subagent-body">
+              <div class="subagent-header">
+                <span class="subagent-type">Developer Agent</span>
+                <span class="subagent-badge running">运行中</span>
+              </div>
+              <div class="subagent-description">正在分析代码结构并生成优化建议...</div>
+              <div class="subagent-stats">
+                <span class="subagent-stat">
+                  <svg viewBox="0 0 24 24" class="icon-base"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  45s
+                </span>
+                <span class="subagent-stat">
+                  <svg viewBox="0 0 24 24" class="icon-base"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+                  12 次调用
+                </span>
+                <span class="subagent-stat">
+                  <svg viewBox="0 0 24 24" class="icon-base"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+                  2.4k tokens
+                </span>
+              </div>
+            </div>
+            <span class="subagent-chevron">
+              <svg viewBox="0 0 24 24" class="icon-base"><path d="M9 18l6-6-6-6"/></svg>
+            </span>
+          </div>
+
+          <!-- Completed -->
+          <div class="subagent-item">
+            <div class="subagent-icon completed">
+              <svg viewBox="0 0 24 24" class="icon-base">
+                <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+            </div>
+            <div class="subagent-body">
+              <div class="subagent-header">
+                <span class="subagent-type">Research Agent</span>
+                <span class="subagent-badge completed">已完成</span>
+              </div>
+              <div class="subagent-description">已完成代码库分析</div>
+              <div class="subagent-stats">
+                <span class="subagent-stat">
+                  <svg viewBox="0 0 24 24" class="icon-base"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  2m 15s
+                </span>
+                <span class="subagent-stat">
+                  <svg viewBox="0 0 24 24" class="icon-base"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+                  8 次调用
+                </span>
+                <span class="subagent-stat">
+                  <svg viewBox="0 0 24 24" class="icon-base"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+                  5.8k tokens
+                </span>
+              </div>
+            </div>
+            <span class="subagent-chevron">
+              <svg viewBox="0 0 24 24" class="icon-base"><path d="M9 18l6-6-6-6"/></svg>
+            </span>
+          </div>
+
+          <!-- Error -->
+          <div class="subagent-item">
+            <div class="subagent-icon error">
+              <svg viewBox="0 0 24 24" class="icon-base">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M15 9l-6 6"/>
+                <path d="M9 9l6 6"/>
+              </svg>
+            </div>
+            <div class="subagent-body">
+              <div class="subagent-header">
+                <span class="subagent-type">Test Agent</span>
+                <span class="subagent-badge error">错误</span>
+              </div>
+              <div class="subagent-description">执行失败：无法连接到测试服务器</div>
+              <div class="subagent-stats">
+                <span class="subagent-stat" style="color: var(--red);">
+                  <svg viewBox="0 0 24 24" class="icon-base"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/></svg>
+                  失败
+                </span>
+                <span class="subagent-stat">
+                  <svg viewBox="0 0 24 24" class="icon-base"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  30s
+                </span>
+              </div>
+            </div>
+            <span class="subagent-chevron">
+              <svg viewBox="0 0 24 24" class="icon-base"><path d="M9 18l6-6-6-6"/></svg>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress & Stats Section -->
+    <div class="section">
+      <div class="section-title">进度与统计</div>
+
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">任务进度</span>
+          </div>
+          <div class="card-body">
+            <div class="progress-container">
+              <div class="progress-header">
+                <span class="progress-label">已完成</span>
+                <span class="progress-value">50%</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill accent" style="width: 50%;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">文件变更</span>
+          </div>
+          <div class="card-body">
+            <div class="diff-container">
+              <span class="diff-add">+128</span>
+              <span class="diff-del">-45</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Token 使用</span>
+          </div>
+          <div class="card-body">
+            <div class="progress-container">
+              <div class="progress-header">
+                <span class="progress-label">上下文</span>
+                <span class="progress-value">23%</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill green" style="width: 23%;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Design Notes -->
+    <div class="section">
+      <div class="section-title">设计规范</div>
+
+      <div class="card">
+        <div class="card-body" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; font-size: 13px;">
+          <div>
+            <strong style="color: var(--accent); display: block; margin-bottom: 8px;">图标尺寸</strong>
+            <ul style="color: var(--muted); padding-left: 16px; line-height: 1.8;">
+              <li>状态图标：14-16px</li>
+              <li>胶囊内图标：14px</li>
+              <li>列表项图标：16px</li>
+              <li>标签页图标：14px</li>
+            </ul>
+          </div>
+          <div>
+            <strong style="color: var(--green); display: block; margin-bottom: 8px;">圆角规范</strong>
+            <ul style="color: var(--muted); padding-left: 16px; line-height: 1.8;">
+              <li>胶囊：16px (全圆角)</li>
+              <li>卡片：8-10px</li>
+              <li>按钮：6px</li>
+              <li>徽章：4px</li>
+            </ul>
+          </div>
+          <div>
+            <strong style="color: var(--amber); display: block; margin-bottom: 8px;">动画时长</strong>
+            <ul style="color: var(--muted); padding-left: 16px; line-height: 1.8;">
+              <li>入场动画：250ms</li>
+              <li>状态切换：150ms</li>
+              <li>旋转动画：0.8-1.2s</li>
+              <li>脉冲动画：2s</li>
+            </ul>
+          </div>
+          <div>
+            <strong style="color: var(--violet); display: block; margin-bottom: 8px;">描边规范</strong>
+            <ul style="color: var(--muted); padding-left: 16px; line-height: 1.8;">
+              <li>stroke-width: 1.8</li>
+              <li>stroke-linecap: round</li>
+              <li>stroke-linejoin: round</li>
+              <li>边框：1-1.5px</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border); text-align: center; color: var(--muted); font-size: 13px;">
+      <p>优化后的状态指示器更符合 JetBrains 插件的设计语言</p>
+      <p style="margin-top: 8px;">使用 SVG 图标确保在所有主题下清晰可见</p>
+    </div>
+  </div>
+</body>
+</html>

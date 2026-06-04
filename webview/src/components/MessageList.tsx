@@ -1,6 +1,7 @@
 import { memo, useState, useEffect, useRef, useMemo, useCallback, forwardRef, useImperativeHandle } from 'react';
 import type { TFunction } from 'i18next';
 import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock } from '../types';
+import type { QueueDisplayState } from '../contexts/MessagesContext';
 import { getMessageKey } from '../utils/messageUtils';
 import { MessageItem } from './MessageItem';
 import WaitingIndicator from './WaitingIndicator';
@@ -52,6 +53,8 @@ interface MessageListProps {
   isThinking: boolean;
   loading: boolean;
   loadingStartTime: number | null;
+  queueDisplayState: QueueDisplayState;
+  queueAheadCount: number;
   t: TFunction;
   getMessageText: (message: ClaudeMessage) => string;
   getContentBlocks: (message: ClaudeMessage) => ClaudeContentBlock[];
@@ -73,6 +76,8 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
   isThinking,
   loading,
   loadingStartTime,
+  queueDisplayState,
+  queueAheadCount,
   t,
   getMessageText,
   getContentBlocks,
@@ -90,6 +95,19 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
   // mount when sessions exceed hundreds of messages.
   const [revealedCount, setRevealedCount] = useState(0);
 
+  // Keep WaitingIndicator mounted during exit animation
+  const [waitingVisible, setWaitingVisible] = useState(false);
+
+  useEffect(() => {
+    if (loading) {
+      setWaitingVisible(true);
+    }
+  }, [loading]);
+
+  const handleWaitingExitComplete = useCallback(() => {
+    setWaitingVisible(false);
+  }, []);
+
   // Context menu for message list (copy only, when text selected)
   const ctxMenu = useContextMenu();
   const handleMessageContextMenu = useCallback((e: React.MouseEvent) => {
@@ -103,7 +121,10 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
   const firstMsgIdRef = useRef(messages[0]?.id);
   useEffect(() => {
     const currentFirstId = messages[0]?.id;
-    if (currentFirstId !== firstMsgIdRef.current) {
+    const isSessionStart = messages.length === 0;
+
+    // Reset on session start OR when first message ID changes
+    if (isSessionStart || currentFirstId !== firstMsgIdRef.current) {
       setRevealedCount(0);
     }
     firstMsgIdRef.current = currentFirstId;
@@ -143,7 +164,7 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
   );
 
   return (
-    <div onContextMenu={handleMessageContextMenu}>
+    <div className="message-list" onContextMenu={handleMessageContextMenu}>
       {ctxMenu.visible && (
         <ContextMenu
           x={ctxMenu.x}
@@ -192,8 +213,16 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
         );
       })}
 
-      {/* Loading indicator */}
-      {loading && <WaitingIndicator startTime={loadingStartTime ?? undefined} />}
+      {/* Loading / queue indicator */}
+      {waitingVisible && (
+        <WaitingIndicator
+          startTime={loadingStartTime ?? undefined}
+          queueDisplayState={queueDisplayState}
+          queueAheadCount={queueAheadCount}
+          loading={loading}
+          onExitComplete={handleWaitingExitComplete}
+        />
+      )}
       <div ref={messagesEndRef} />
     </div>
   );

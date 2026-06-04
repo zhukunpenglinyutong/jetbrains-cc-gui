@@ -15,11 +15,10 @@ import {
   subscribeCodexProviderList,
   subscribeProviderList,
 } from '../../../utils/runtimeProviderCapabilities';
+import { sendBridgeEvent } from '../../../utils/bridge';
 
-const sendToJava = (message: string) => {
-  if (window.sendToJava) {
-    window.sendToJava(message);
-  }
+const sendToJava = (event: string, payload = '') => {
+  sendBridgeEvent(event, payload);
 };
 
 export interface SettingsWindowCallbacksDeps {
@@ -50,11 +49,9 @@ export interface SettingsWindowCallbacksDeps {
   setAiTitleGenerationEnabled?: (enabled: boolean) => void;
   setStatusBarWidgetEnabled?: (enabled: boolean) => void;
   setTaskCompletionNotificationEnabled?: (enabled: boolean) => void;
-  // Sound notification setters
-  setSoundNotificationEnabled?: (enabled: boolean) => void;
-  setSoundOnlyWhenUnfocused?: (enabled: boolean) => void;
-  setSelectedSound?: (soundId: string) => void;
-  setCustomSoundPath?: (path: string) => void;
+  // Invocation mode setters
+  setInvocationMode: (mode: 'sdk' | 'cli') => void;
+  setCliPath: (path: string) => void;
 
   // Hook functions
   updateProviders: (providers: ProviderConfig[]) => void;
@@ -341,24 +338,21 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
     };
 
-    // Sound notification config callback
-    window.updateSoundNotificationConfig = (jsonStr: string) => {
+    // Invocation mode callback
+      const previousUpdateInvocationMode = window.updateInvocationMode;
+    window.updateInvocationMode = (jsonStr: string) => {
       try {
+          previousUpdateInvocationMode?.(jsonStr);
         const data = JSON.parse(jsonStr);
-        if (data.enabled !== undefined) {
-          d().setSoundNotificationEnabled?.(data.enabled);
+        const mode = data.invocationMode;
+        if (mode === 'sdk' || mode === 'cli') {
+          d().setInvocationMode(mode);
         }
-        if (data.onlyWhenUnfocused !== undefined) {
-          d().setSoundOnlyWhenUnfocused?.(data.onlyWhenUnfocused);
-        }
-        if (data.selectedSound !== undefined) {
-          d().setSelectedSound?.(data.selectedSound);
-        }
-        if (data.customSoundPath !== undefined) {
-          d().setCustomSoundPath?.(data.customSoundPath);
+        if (data.cliPath !== undefined) {
+          d().setCliPath(data.cliPath);
         }
       } catch (error) {
-        console.error('[SettingsView] Failed to parse sound notification config:', error);
+        console.error('[SettingsView] Failed to parse invocation mode:', error);
       }
     };
 
@@ -486,21 +480,21 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     d().loadAgents();
     // Note: loadPrompts is now handled by PromptSection component
     d().loadPrompts?.();
-    sendToJava('get_node_path:');
-    sendToJava('get_working_directory:');
-    sendToJava('get_editor_font_config:');
-    sendToJava('get_ui_font_config:');
-    sendToJava('get_streaming_enabled:');
-    sendToJava('get_codex_sandbox_mode:');
-    sendToJava('get_commit_prompt:');
-    sendToJava('get_commit_ai_config:');
-    sendToJava('get_prompt_enhancer_config:');
-    sendToJava('get_sound_notification_config:');
-    sendToJava('get_commit_generation_enabled:');
-    sendToJava('get_ai_title_generation_enabled:');
-    sendToJava('get_status_bar_widget_enabled:');
-    sendToJava('get_task_completion_notification_enabled:');
-    sendToJava('get_permission_dialog_timeout:');
+    sendToJava('get_node_path');
+    sendToJava('get_working_directory');
+    sendToJava('get_editor_font_config');
+    sendToJava('get_ui_font_config');
+    sendToJava('get_streaming_enabled');
+    sendToJava('get_codex_sandbox_mode');
+    sendToJava('get_commit_prompt');
+    sendToJava('get_commit_ai_config');
+    sendToJava('get_prompt_enhancer_config');
+    sendToJava('get_commit_generation_enabled');
+    sendToJava('get_ai_title_generation_enabled');
+    sendToJava('get_status_bar_widget_enabled');
+    sendToJava('get_task_completion_notification_enabled');
+    sendToJava('get_invocation_mode');
+    sendToJava('get_permission_dialog_timeout');
 
     return () => {
       d().cleanupAgentsTimeout();
@@ -530,11 +524,11 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.updateCommitAiConfig = undefined;
       window.updatePromptEnhancerConfig = undefined;
       window.updateProjectCommitPrompt = undefined;
-      window.updateSoundNotificationConfig = undefined;
       window.updateCommitGenerationEnabled = undefined;
       window.updateAiTitleGenerationEnabled = undefined;
       window.updateStatusBarWidgetEnabled = undefined;
       window.updateTaskCompletionNotificationEnabled = undefined;
+        window.updateInvocationMode = previousUpdateInvocationMode;
       window.updateAgents = previousUpdateAgents;
       window.agentOperationResult = undefined;
       window.agentImportPreviewResult = undefined;

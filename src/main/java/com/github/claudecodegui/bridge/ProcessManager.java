@@ -1,5 +1,6 @@
 package com.github.claudecodegui.bridge;
 
+import com.github.claudecodegui.session.runtime.RuntimeKey;
 import com.intellij.openapi.diagnostic.Logger;
 import com.github.claudecodegui.util.PlatformUtils;
 
@@ -25,6 +26,8 @@ public class ProcessManager {
 
     private final Map<String, Process> activeChannelProcesses = new ConcurrentHashMap<>();
     private final Set<String> interruptedChannels = ConcurrentHashMap.newKeySet();
+    private final Map<RuntimeKey, Process> activeRuntimeProcesses = new ConcurrentHashMap<>();
+    private final Set<RuntimeKey> interruptedRuntimes = ConcurrentHashMap.newKeySet();
 
     /**
      * Generates a unique channel ID by appending a random UUID to {@code prefix}.
@@ -50,11 +53,30 @@ public class ProcessManager {
     }
 
     /**
+     * Registers an active process for a tab-scoped runtime.
+     */
+    public void registerProcess(RuntimeKey key, Process process) {
+        if (key != null && process != null) {
+            activeRuntimeProcesses.put(key, process);
+            interruptedRuntimes.remove(key);
+        }
+    }
+
+    /**
      * Unregisters an active process.
      */
     public void unregisterProcess(String channelId, Process process) {
         if (channelId != null) {
             activeChannelProcesses.remove(channelId, process);
+        }
+    }
+
+    /**
+     * Unregisters an active runtime process.
+     */
+    public void unregisterProcess(RuntimeKey key, Process process) {
+        if (key != null) {
+            activeRuntimeProcesses.remove(key, process);
         }
     }
 
@@ -66,10 +88,24 @@ public class ProcessManager {
     }
 
     /**
+     * Gets an active process by runtime key.
+     */
+    public Process getProcess(RuntimeKey key) {
+        return key != null ? activeRuntimeProcesses.get(key) : null;
+    }
+
+    /**
      * Checks whether a channel was interrupted.
      */
     public boolean wasInterrupted(String channelId) {
         return channelId != null && interruptedChannels.remove(channelId);
+    }
+
+    /**
+     * Checks whether a runtime was interrupted.
+     */
+    public boolean wasInterrupted(RuntimeKey key) {
+        return key != null && interruptedRuntimes.remove(key);
     }
 
     /**
@@ -93,9 +129,15 @@ public class ProcessManager {
         interruptedChannels.add(channelId);
 
         // Use platform-aware process termination
-        // Windows: uses taskkill /F /T to kill the process tree
+        // Windows: uses taskkill /F /T to kill the process tree and cleans up conhost.exe
         // Unix: uses standard destroy/destroyForcibly
+        long pid = process.pid();
         PlatformUtils.terminateProcess(process);
+
+        // Additional cleanup for Windows conhost.exe processes
+        if (PlatformUtils.isWindows()) {
+            PlatformUtils.cleanupOrphanedConhosts(pid);
+        }
 
         // Wait for the process to fully terminate
         try {
@@ -103,8 +145,7 @@ public class ProcessManager {
                 boolean terminated = process.waitFor(3, TimeUnit.SECONDS);
                 if (!terminated) {
                     LOG.info("[Interrupt] Process still alive, force killing channel: " + channelId);
-                    process.destroyForcibly();
-                    process.waitFor(2, TimeUnit.SECONDS);
+                    PlatformUtils.terminateProcessAndWait(process, 2, TimeUnit.SECONDS);
                 }
             }
         } catch (InterruptedException e) {
@@ -116,6 +157,72 @@ public class ProcessManager {
                 LOG.warn("[Interrupt] Warning: Process may still be alive for channel: " + channelId);
             } else {
                 LOG.info("[Interrupt] Successfully terminated channel: " + channelId);
+            }
+        }
+    }
+
+    /**
+     * Interrupts the exact tab-scoped runtime.
+     */
+    public void interruptRuntime(RuntimeKey key) {
+        if (key == null) {
+            LOG.info("[Interrupt] RuntimeKey is null, nothing to interrupt");
+            return;
+        }
+
+        Process process = activeRuntimeProcesses.get(key);
+        if (process == null) {
+            LOG.info("[Interrupt] No active process found for runtime: " + key);
+            return;
+        }
+
+        LOG.info("[Interrupt] Attempting to interrupt runtime: " + key);
+        interruptedRuntimes.add(key);
+        terminateProcess(key.toString(), process);
+        activeRuntimeProcesses.remove(key, process);
+    }
+
+    /**
+     * Interrupts runtime processes that match provider/channel/tab. Null filters are treated as wildcards.
+     */
+    public void interruptChannel(String provider, String channelId, String tabId) {
+        for (Map.Entry<RuntimeKey, Process> entry : activeRuntimeProcesses.entrySet()) {
+            RuntimeKey key = entry.getKey();
+            if (key.matches(provider, channelId, tabId)) {
+                interruptRuntime(key);
+            }
+        }
+
+        if (provider == null && tabId == null && channelId != null) {
+            interruptChannel(channelId);
+        }
+    }
+
+    /**
+     * Cleans up one runtime and removes any interrupted marker for it.
+     */
+    public void cleanupRuntime(RuntimeKey key) {
+        if (key == null) {
+            return;
+        }
+        Process process = activeRuntimeProcesses.remove(key);
+        interruptedRuntimes.remove(key);
+        if (process != null && process.isAlive()) {
+            LOG.info("[ProcessManager] Cleaning runtime process: " + key);
+            terminateProcess(key.toString(), process);
+        }
+    }
+
+    /**
+     * Cleans up all runtimes owned by a tab.
+     */
+    public void cleanupTab(String tabId) {
+        if (tabId == null || tabId.trim().isEmpty()) {
+            return;
+        }
+        for (RuntimeKey key : activeRuntimeProcesses.keySet()) {
+            if (key.matches(null, null, tabId)) {
+                cleanupRuntime(key);
             }
         }
     }
@@ -139,11 +246,29 @@ public class ProcessManager {
             }
         }
 
+        for (Map.Entry<RuntimeKey, Process> entry : activeRuntimeProcesses.entrySet()) {
+            RuntimeKey key = entry.getKey();
+            Process process = entry.getValue();
+
+            if (process != null && process.isAlive()) {
+                LOG.info("[ProcessManager] Terminating process for runtime: " + key);
+                PlatformUtils.terminateProcess(process);
+                count++;
+            }
+        }
+
         activeChannelProcesses.clear();
         interruptedChannels.clear();
+        activeRuntimeProcesses.clear();
+        interruptedRuntimes.clear();
 
         // Clean up stale temp files on shutdown (safe for concurrent sessions)
         cleanupStaleTempFiles();
+
+        // Clean up any orphaned conhost.exe processes on Windows
+        if (PlatformUtils.isWindows()) {
+            PlatformUtils.cleanupAllPluginConhosts();
+        }
 
         LOG.info("[ProcessManager] Cleanup complete. Terminated " + count + " processes.");
     }
@@ -154,6 +279,11 @@ public class ProcessManager {
     public int getActiveProcessCount() {
         int count = 0;
         for (Process process : activeChannelProcesses.values()) {
+            if (process != null && process.isAlive()) {
+                count++;
+            }
+        }
+        for (Process process : activeRuntimeProcesses.values()) {
             if (process != null && process.isAlive()) {
                 count++;
             }
@@ -189,6 +319,77 @@ public class ProcessManager {
                 process.waitFor(5, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    /**
+     * Manual cleanup method for orphaned conhost.exe processes.
+     * Can be called manually to clean up accumulated conhost.exe processes.
+     */
+    public void manualConhostCleanup() {
+        if (!PlatformUtils.isWindows()) {
+            LOG.info("[ProcessManager] conhost.exe cleanup is Windows-specific, skipping on current platform");
+            return;
+        }
+
+        LOG.info("[ProcessManager] Starting manual conhost.exe cleanup...");
+        int cleanedCount = 0;
+
+        // Clean up conhosts for currently active processes
+        for (Map.Entry<String, Process> entry : activeChannelProcesses.entrySet()) {
+            String channelId = entry.getKey();
+            Process process = entry.getValue();
+
+            if (process != null && process.isAlive()) {
+                long pid = process.pid();
+                LOG.info("[ProcessManager] Cleaning conhosts for active process (channel: " + channelId + ", PID: " + pid + ")");
+                PlatformUtils.cleanupOrphanedConhosts(pid);
+                cleanedCount++;
+            }
+        }
+
+        for (Map.Entry<RuntimeKey, Process> entry : activeRuntimeProcesses.entrySet()) {
+            RuntimeKey key = entry.getKey();
+            Process process = entry.getValue();
+
+            if (process != null && process.isAlive()) {
+                long pid = process.pid();
+                LOG.info("[ProcessManager] Cleaning conhosts for active runtime (key: " + key + ", PID: " + pid + ")");
+                PlatformUtils.cleanupOrphanedConhosts(pid);
+                cleanedCount++;
+            }
+        }
+
+        // Clean up all plugin-related conhosts
+        PlatformUtils.cleanupAllPluginConhosts();
+
+        LOG.info("[ProcessManager] Manual conhost.exe cleanup completed");
+    }
+
+    private void terminateProcess(String label, Process process) {
+        long pid = process.pid();
+        PlatformUtils.terminateProcess(process);
+
+        if (PlatformUtils.isWindows()) {
+            PlatformUtils.cleanupOrphanedConhosts(pid);
+        }
+
+        try {
+            if (process.isAlive()) {
+                boolean terminated = process.waitFor(3, TimeUnit.SECONDS);
+                if (!terminated) {
+                    LOG.info("[Interrupt] Process still alive, force killing: " + label);
+                    PlatformUtils.terminateProcessAndWait(process, 2, TimeUnit.SECONDS);
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            if (process.isAlive()) {
+                LOG.warn("[Interrupt] Warning: Process may still be alive: " + label);
+            } else {
+                LOG.info("[Interrupt] Successfully terminated: " + label);
             }
         }
     }

@@ -12,6 +12,7 @@ import com.github.claudecodegui.dependency.DependencyManager;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.bridge.ProcessManager;
 import com.github.claudecodegui.provider.common.BaseSDKBridge;
+import com.github.claudecodegui.provider.common.DaemonBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.util.PlatformUtils;
@@ -22,11 +23,13 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -42,7 +45,6 @@ public class CodexSDKBridge extends BaseSDKBridge {
     private String apiKey = null;
     private static final String SANDBOX_MODE_WORKSPACE_WRITE = "workspace-write";
     private static final String SANDBOX_MODE_DANGER_FULL_ACCESS = "danger-full-access";
-    private static final String SANDBOX_MODE_READ_ONLY = "read-only";
     private static final String APPROVAL_POLICY_NEVER = "never";
     private static final String APPROVAL_POLICY_ON_REQUEST = "on-request";
     private static final String APPROVAL_POLICY_UNTRUSTED = "untrusted";
@@ -55,6 +57,8 @@ public class CodexSDKBridge extends BaseSDKBridge {
     private static final int MAX_ENV_VAR_VALUE_LENGTH = 16 * 1024;
     private final CodexHistoryReader historyReader;
     private final CodemossSettingsService settingsService = new CodemossSettingsService();
+    private final CodexDaemonCoordinator daemonCoordinator;
+    private final CodexDaemonRequestExecutor daemonRequestExecutor;
 
     private static final Set<String> PROTECTED_ENV_KEYS = new HashSet<>();
     static {
@@ -81,11 +85,19 @@ public class CodexSDKBridge extends BaseSDKBridge {
     public CodexSDKBridge() {
         super(CodexSDKBridge.class);
         this.historyReader = new CodexHistoryReader();
+        this.daemonCoordinator = new CodexDaemonCoordinator(
+                LOG, nodeDetector, this::getDirectoryResolver, envConfigurator
+        );
+        this.daemonRequestExecutor = new CodexDaemonRequestExecutor(LOG, this);
     }
 
     CodexSDKBridge(Path sessionsDir) {
         super(CodexSDKBridge.class);
         this.historyReader = new CodexHistoryReader(sessionsDir, gson);
+        this.daemonCoordinator = new CodexDaemonCoordinator(
+                LOG, nodeDetector, this::getDirectoryResolver, envConfigurator
+        );
+        this.daemonRequestExecutor = new CodexDaemonRequestExecutor(LOG, this);
     }
 
     // ============================================================================
@@ -99,7 +111,26 @@ public class CodexSDKBridge extends BaseSDKBridge {
 
     @Override
     protected void configureProviderEnv(Map<String, String> env, String stdinJson) {
-        env.put("CODEX_USE_STDIN", "true");
+    }
+
+    @Override
+    public void cleanupAllProcesses() {
+        daemonCoordinator.shutdownDaemon();
+        super.cleanupAllProcesses();
+    }
+
+    @Override
+    public void interruptChannel(String channelId) {
+        DaemonBridge db = daemonCoordinator.getCurrentDaemonBridge();
+        if (db != null && db.isAlive()) {
+            LOG.info("[CodexSDKBridge] Sending daemon abort for channel: " + channelId);
+            try {
+                db.sendAbort(channelId);
+            } catch (Exception e) {
+                LOG.error("[CodexSDKBridge] Daemon abort failed: " + e.getMessage());
+            }
+        }
+        super.interruptChannel(channelId);
     }
 
     /**
@@ -400,6 +431,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 // Note: Codex uses 'threadId' (not 'sessionId')
                 JsonObject stdinInput = new JsonObject();
                 stdinInput.addProperty("message", finalMessage);
+                stdinInput.addProperty("channelId", channelId != null ? channelId : "");
                 stdinInput.addProperty("threadId", threadId != null ? threadId : "");
                 stdinInput.addProperty("cwd", cwd != null ? cwd : "");
                 stdinInput.addProperty("permissionMode", permissionMode != null ? permissionMode : "");
@@ -452,7 +484,6 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 // Configure environment variables
                 Map<String, String> env = pb.environment();
                 envConfigurator.configureTempDir(env, processTempDir);
-                env.put("CODEX_USE_STDIN", "true");
 
                 // Set model via environment variable if specified
                 if (model != null && !model.isEmpty()) {
@@ -463,35 +494,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 if (permissionMode != null && !permissionMode.isEmpty()) {
                     String sandboxMode = resolveCodexSandboxMode(cwd);
 
-                    switch (permissionMode) {
-                        case "bypassPermissions":
-                            env.put(ENV_CODEX_SANDBOX_MODE, sandboxMode);
-                            env.put(ENV_CODEX_SANDBOX, sandboxMode);
-                            env.put(ENV_CODEX_APPROVAL_POLICY, APPROVAL_POLICY_NEVER);
-                            break;
-                        case "acceptEdits":
-                        case "autoEdit":
-                            env.put(ENV_CODEX_SANDBOX_MODE, sandboxMode);
-                            env.put(ENV_CODEX_SANDBOX, sandboxMode);
-                            env.put(ENV_CODEX_APPROVAL_POLICY, APPROVAL_POLICY_ON_REQUEST);
-                            break;
-                        case "plan":
-                            env.put(ENV_CODEX_SANDBOX_MODE, sandboxMode);
-                            env.put(ENV_CODEX_SANDBOX, sandboxMode);
-                            env.put(ENV_CODEX_APPROVAL_POLICY, APPROVAL_POLICY_UNTRUSTED);
-                            break;
-                        default:
-                            // Default mode: use configured sandbox mode with confirmation
-                            env.put(ENV_CODEX_SANDBOX_MODE, sandboxMode);
-                            env.put(ENV_CODEX_SANDBOX, sandboxMode);
-                            env.put(ENV_CODEX_APPROVAL_POLICY, APPROVAL_POLICY_UNTRUSTED);
-                            break;
-                    }
-                    LOG.info("[Codex] Permission env override: SANDBOX_MODE=" +
-                            env.get(ENV_CODEX_SANDBOX_MODE) + ", SANDBOX=" +
-                            env.get(ENV_CODEX_SANDBOX) + ", APPROVAL_POLICY=" +
-                            env.get(ENV_CODEX_APPROVAL_POLICY) + " (from permissionMode=" + permissionMode +
-                            ")");
+                    applyCodexPermissionModeEnv(env, sandboxMode, permissionMode);
                 }
 
                 pb.redirectErrorStream(true);
@@ -583,6 +586,94 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 return result;
             }
         });
+    }
+
+    /**
+     * Send message to Codex, preferring the shared daemon bridge when available.
+     * Falls back to the legacy per-process path to preserve behavior.
+     */
+    public CompletableFuture<SDKResult> sendMessageWithDaemonPreferred(
+            String channelId,
+            String message,
+            String threadId,
+            String cwd,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String model,
+            String agentPrompt,
+            String reasoningEffort,
+            MessageCallback callback
+    ) {
+        String accessMode = CodemossSettingsService.CODEX_RUNTIME_ACCESS_INACTIVE;
+        try {
+            accessMode = new CodemossSettingsService().getCodexRuntimeAccessMode();
+        } catch (Exception e) {
+            LOG.warn("[Codex] Failed to resolve runtime access mode before daemon send: " + e.getMessage());
+        }
+
+        if (CodemossSettingsService.CODEX_RUNTIME_ACCESS_INACTIVE.equals(accessMode)) {
+            return sendMessage(channelId, message, threadId, cwd, attachments, permissionMode, model, agentPrompt, reasoningEffort, callback);
+        }
+
+        File bridgeDir = getDirectoryResolver().findSdkDir();
+        if (bridgeDir == null || !bridgeDir.exists()) {
+            return sendMessage(channelId, message, threadId, cwd, attachments, permissionMode, model, agentPrompt, reasoningEffort, callback);
+        }
+
+        setCodexExecutablePermission(bridgeDir);
+
+        DaemonBridge daemon = daemonCoordinator.getDaemonBridge();
+        if (daemon == null) {
+            LOG.info("[Codex] Daemon unavailable, using per-process mode");
+            return sendMessage(channelId, message, threadId, cwd, attachments, permissionMode, model, agentPrompt, reasoningEffort, callback);
+        }
+
+        String finalMessage = message;
+        if (agentPrompt != null && !agentPrompt.isEmpty()) {
+            finalMessage = message + "\n\n## Agent Role and Instructions\n\n" + agentPrompt;
+            LOG.info("[Agent] Appending agentPrompt to Codex daemon request (length: " + agentPrompt.length() + " chars)");
+        }
+
+        final List<File> tempImageFiles = new ArrayList<>();
+        JsonObject stdinInput = new JsonObject();
+        stdinInput.addProperty("message", finalMessage);
+        stdinInput.addProperty("channelId", channelId != null ? channelId : "");
+        stdinInput.addProperty("threadId", threadId != null ? threadId : "");
+        stdinInput.addProperty("cwd", cwd != null ? cwd : "");
+        stdinInput.addProperty("permissionMode", permissionMode != null ? permissionMode : "");
+        stdinInput.addProperty("model", model != null ? model : "");
+        stdinInput.addProperty("reasoningEffort", reasoningEffort != null ? reasoningEffort : "medium");
+
+        boolean isCodexCliLogin = isCodexCliLoginActive();
+        if (!isCodexCliLogin) {
+            stdinInput.addProperty("baseUrl", baseUrl != null ? baseUrl : "");
+            stdinInput.addProperty("apiKey", apiKey != null ? apiKey : "");
+        } else {
+            stdinInput.addProperty("baseUrl", "");
+            stdinInput.addProperty("apiKey", "");
+            LOG.info("[Codex] CLI Login mode: daemon request will use native OAuth tokens");
+        }
+
+        JsonArray attachmentsArray = buildCodexAttachments(attachments, tempImageFiles);
+        if (attachmentsArray.size() > 0) {
+            stdinInput.add("attachments", attachmentsArray);
+            LOG.info("[Codex] Prepared " + attachmentsArray.size() + " daemon image attachment(s)");
+        }
+        stdinInput.add("env", buildCodexRuntimeEnv(cwd, permissionMode, model, "message"));
+
+        return daemonRequestExecutor.sendMessageViaDaemon(daemon, stdinInput, callback, tempImageFiles);
+    }
+
+    public void clearCachedThread(String threadId, String cwd) {
+        String trimmedThreadId = threadId != null ? threadId.trim() : "";
+        if (!trimmedThreadId.isEmpty()) {
+            DaemonBridge daemon = daemonCoordinator.getCurrentDaemonBridge();
+            if (daemon != null && daemon.isAlive()) {
+                JsonObject params = new JsonObject();
+                params.addProperty("threadId", trimmedThreadId);
+                daemon.sendCommand("codex.clearThreadCache", params, new NoopDaemonOutputCallback());
+            }
+        }
     }
 
     /**
@@ -693,7 +784,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
 
                 long elapsed = System.currentTimeMillis() - startTime;
                 if (process.isAlive()) {
-                    PlatformUtils.terminateProcess(process);
+                    PlatformUtils.terminateProcessAndWait(process, 3, TimeUnit.SECONDS);
                 }
 
                 String capturedTools = toolsJson.get();
@@ -736,7 +827,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 if (process != null) {
                     try {
                         if (process.isAlive()) {
-                            PlatformUtils.terminateProcess(process);
+                            PlatformUtils.terminateProcessAndWait(process, 3, TimeUnit.SECONDS);
                         }
                     } finally {
                         processManager.unregisterProcess(channelId, process);
@@ -806,36 +897,41 @@ public class CodexSDKBridge extends BaseSDKBridge {
             String data = attachment.data;
 
             // Only process image types
-            if (type == null || !type.startsWith("image/") || data == null) {
+            if (type == null || !type.startsWith("image/")) {
                 LOG.debug("[Codex] Skipping non-image attachment: " + type);
                 continue;
             }
 
             try {
-                // Determine file extension from MIME type
-                String extension = getImageExtension(type);
-
-                // Generate unique filename
-                String filename = "codex-img-" + System.currentTimeMillis() + "-" +
-                                  java.util.UUID.randomUUID().toString().substring(0, 8) + extension;
-                File imageFile = new File(tempDir, filename);
-
-                // Decode base64 and write to file
-                byte[] imageBytes = java.util.Base64.getDecoder().decode(data);
-                try (java.io.FileOutputStream fos = new java.io.FileOutputStream(imageFile)) {
-                    fos.write(imageBytes);
+                File imageFile;
+                long imageSize;
+                if (attachment.localPath != null && !attachment.localPath.isBlank()) {
+                    imageFile = new File(attachment.localPath);
+                    if (!imageFile.isFile()) {
+                        continue;
+                    }
+                    imageSize = imageFile.length();
+                } else {
+                    if (data == null) {
+                        continue;
+                    }
+                    String extension = getImageExtension(type);
+                    String filename = "codex-img-" + System.currentTimeMillis() + "-" +
+                                      java.util.UUID.randomUUID().toString().substring(0, 8) + extension;
+                    imageFile = new File(tempDir, filename);
+                    byte[] imageBytes = java.util.Base64.getDecoder().decode(data);
+                    try (java.io.FileOutputStream fos = new java.io.FileOutputStream(imageFile)) {
+                        fos.write(imageBytes);
+                    }
+                    imageFile.deleteOnExit();
+                    if (tempFiles != null) {
+                        tempFiles.add(imageFile);
+                    }
+                    imageSize = imageBytes.length;
                 }
 
-                // Mark for deletion on JVM exit (fallback cleanup)
-                imageFile.deleteOnExit();
-
-                // Track for immediate cleanup after send
-                if (tempFiles != null) {
-                    tempFiles.add(imageFile);
-                }
-
-                LOG.info("[Codex] Saved temp image: " + imageFile.getAbsolutePath() +
-                         " (" + imageBytes.length + " bytes, will auto-delete)");
+                LOG.info("[Codex] Prepared image file: " + imageFile.getAbsolutePath() +
+                         " (" + imageSize + " bytes)");
 
                 // Add to result array in Codex SDK format
                 JsonObject imageEntry = new JsonObject();
@@ -950,12 +1046,94 @@ public class CodexSDKBridge extends BaseSDKBridge {
      */
     private boolean isCodexCliLoginActive() {
         try {
-            CodemossSettingsService settingsService = new CodemossSettingsService();
             return CodemossSettingsService.CODEX_RUNTIME_ACCESS_CLI_LOGIN
                     .equals(settingsService.getCodexRuntimeAccessMode());
         } catch (Exception e) {
             LOG.debug("[Codex] Failed to check CLI login status: " + e.getMessage());
             return false;
+        }
+    }
+
+    private JsonObject buildCodexRuntimeEnv(String cwd, String permissionMode, String model, String category) {
+        Map<String, String> env = new LinkedHashMap<>();
+        populateCodexRuntimeEnv(env, cwd, permissionMode, model, category);
+
+        JsonObject json = new JsonObject();
+        for (Map.Entry<String, String> entry : env.entrySet()) {
+            if (entry.getValue() != null) {
+                json.addProperty(entry.getKey(), entry.getValue());
+            }
+        }
+        return json;
+    }
+
+    private void populateCodexRuntimeEnv(Map<String, String> env, String cwd, String permissionMode, String model, String category) {
+        if (model != null && !model.isEmpty()) {
+            env.put("CODEX_MODEL", model);
+        }
+
+        applyPermissionModeEnv(env, cwd, permissionMode);
+        envConfigurator.configureProjectPath(env, cwd);
+        envConfigurator.configurePermissionEnv(env);
+        envConfigurator.configureCodexEnv(env);
+        injectCustomEnvVars(env, category);
+    }
+
+    private void applyPermissionModeEnv(Map<String, String> env, String cwd, String permissionMode) {
+        if (env == null || permissionMode == null || permissionMode.isEmpty()) {
+            return;
+        }
+
+        applyCodexPermissionModeEnv(env, resolveCodexSandboxMode(cwd), permissionMode);
+    }
+
+    private void applyCodexPermissionModeEnv(Map<String, String> env, String sandboxMode, String permissionMode) {
+        switch (permissionMode) {
+            case "bypassPermissions":
+                env.put(ENV_CODEX_SANDBOX_MODE, SANDBOX_MODE_DANGER_FULL_ACCESS);
+                env.put(ENV_CODEX_SANDBOX, SANDBOX_MODE_DANGER_FULL_ACCESS);
+                env.put(ENV_CODEX_APPROVAL_POLICY, APPROVAL_POLICY_NEVER);
+                break;
+            case "acceptEdits":
+            case "autoEdit":
+                env.put(ENV_CODEX_SANDBOX_MODE, sandboxMode);
+                env.put(ENV_CODEX_SANDBOX, sandboxMode);
+                env.put(ENV_CODEX_APPROVAL_POLICY, APPROVAL_POLICY_ON_REQUEST);
+                break;
+            case "plan":
+                env.put(ENV_CODEX_SANDBOX_MODE, "read-only");
+                env.put(ENV_CODEX_SANDBOX, "read-only");
+                env.put(ENV_CODEX_APPROVAL_POLICY, APPROVAL_POLICY_UNTRUSTED);
+                break;
+            default:
+                env.put(ENV_CODEX_SANDBOX_MODE, sandboxMode);
+                env.put(ENV_CODEX_SANDBOX, sandboxMode);
+                env.put(ENV_CODEX_APPROVAL_POLICY, APPROVAL_POLICY_UNTRUSTED);
+                break;
+        }
+
+        LOG.info("[Codex] Permission env override: SANDBOX_MODE=" +
+                env.get(ENV_CODEX_SANDBOX_MODE) + ", SANDBOX=" +
+                env.get(ENV_CODEX_SANDBOX) + ", APPROVAL_POLICY=" +
+                env.get(ENV_CODEX_APPROVAL_POLICY) + " (from permissionMode=" + permissionMode +
+                ")");
+    }
+
+    private static class NoopDaemonOutputCallback implements DaemonBridge.DaemonOutputCallback {
+        @Override
+        public void onLine(String line) {
+        }
+
+        @Override
+        public void onStderr(String text) {
+        }
+
+        @Override
+        public void onError(String error) {
+        }
+
+        @Override
+        public void onComplete(boolean success) {
         }
     }
 }

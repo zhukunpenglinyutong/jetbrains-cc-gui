@@ -36,13 +36,25 @@ export function useMessageProcessing({ messages, currentSessionId, t }: UseMessa
   // Persistent storage: non-image attachment metadata from sent messages
   const sentAttachmentsRef = useRef(new Map<string, Array<{ fileName: string; mediaType: string }>>());
 
+  // Previous messages length to detect session transitions
+  const prevMessagesLengthRef = useRef(0);
+
   // Clear cache when dependencies change
   useEffect(() => {
-    normalizeBlocksCache.current = new WeakMap();
-    shouldShowMessageCache.current = new WeakMap();
-    mergedAssistantMessageCache.current = new Map();
-    sentAttachmentsRef.current.clear();
-  }, [localizeMessage, t, currentSessionId]);
+    const sessionChanged = prevMessagesLengthRef.current !== messages.length && messages.length === 0;
+
+    // Clear cache when:
+    // 1. Session ID changes (normal session switch)
+    // 2. Messages cleared AND previous had messages (session transition detection)
+    if (currentSessionId === undefined || sessionChanged) {
+      normalizeBlocksCache.current = new WeakMap();
+      shouldShowMessageCache.current = new WeakMap();
+      mergedAssistantMessageCache.current = new Map();
+      sentAttachmentsRef.current.clear();
+    }
+
+    prevMessagesLengthRef.current = messages.length;
+  }, [localizeMessage, t, currentSessionId, messages.length]);
 
   const normalizeBlocks = useCallback(
     (raw?: ClaudeRawMessage | string) => {

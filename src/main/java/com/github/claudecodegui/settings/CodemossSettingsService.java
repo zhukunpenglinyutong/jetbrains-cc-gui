@@ -1,11 +1,11 @@
 package com.github.claudecodegui.settings;
 
-import com.github.claudecodegui.util.FontConfigService;
+import com.github.claudecodegui.dependency.DependencyManager;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.model.ConflictStrategy;
 import com.github.claudecodegui.model.DeleteResult;
 import com.github.claudecodegui.model.PromptScope;
-import com.github.claudecodegui.dependency.DependencyManager;
+import com.github.claudecodegui.util.FontConfigService;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonNull;
@@ -40,6 +40,8 @@ public class CodemossSettingsService {
     private static final String UI_FONT_CONFIG_KEY = "uiFont";
     private static final String UI_FONT_MODE_KEY = "mode";
     private static final String UI_FONT_CUSTOM_PATH_KEY = "customFontPath";
+    private static final String CLAUDE_INVOCATION_MODE_KEY = "claudeInvocationMode";
+    private static final String CLAUDE_CLI_PATH_KEY = "claudeCliPath";
     private static final Set<String> VALID_UI_FONT_MODES = Set.of(
             FontConfigService.UI_FONT_MODE_FOLLOW_EDITOR,
             FontConfigService.UI_FONT_MODE_CUSTOM_FILE
@@ -1067,177 +1069,6 @@ public class CodemossSettingsService {
         return getPrompt(id, PromptScope.GLOBAL, null);
     }
 
-    // ==================== Sound Notification Management ====================
-
-    /**
-     * Get whether sound notification is enabled.
-     *
-     * @return whether sound notification is enabled, default is false
-     */
-    public boolean getSoundNotificationEnabled() throws IOException {
-        JsonObject config = readConfig();
-
-        if (!config.has("soundNotification")) {
-            return false;
-        }
-
-        JsonObject soundConfig = config.getAsJsonObject("soundNotification");
-        if (soundConfig.has("enabled")) {
-            return soundConfig.get("enabled").getAsBoolean();
-        }
-
-        return false;
-    }
-
-    /**
-     * Set whether sound notification is enabled.
-     *
-     * @param enabled whether to enable
-     */
-    public void setSoundNotificationEnabled(boolean enabled) throws IOException {
-        JsonObject config = readConfig();
-
-        JsonObject soundConfig;
-        if (config.has("soundNotification")) {
-            soundConfig = config.getAsJsonObject("soundNotification");
-        } else {
-            soundConfig = new JsonObject();
-            config.add("soundNotification", soundConfig);
-        }
-
-        soundConfig.addProperty("enabled", enabled);
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Set sound notification enabled: " + enabled);
-    }
-
-    /**
-     * Get custom sound file path.
-     *
-     * @return custom sound path, null means use default sound
-     */
-    public String getCustomSoundPath() throws IOException {
-        JsonObject config = readConfig();
-
-        if (!config.has("soundNotification")) {
-            return null;
-        }
-
-        JsonObject soundConfig = config.getAsJsonObject("soundNotification");
-        if (soundConfig.has("customSoundPath") && !soundConfig.get("customSoundPath").isJsonNull()) {
-            return soundConfig.get("customSoundPath").getAsString();
-        }
-
-        return null;
-    }
-
-    /**
-     * Set custom sound file path.
-     *
-     * @param path file path, null means use default sound
-     */
-    public void setCustomSoundPath(String path) throws IOException {
-        JsonObject config = readConfig();
-
-        JsonObject soundConfig;
-        if (config.has("soundNotification")) {
-            soundConfig = config.getAsJsonObject("soundNotification");
-        } else {
-            soundConfig = new JsonObject();
-            config.add("soundNotification", soundConfig);
-        }
-
-        if (path == null || path.isEmpty()) {
-            soundConfig.remove("customSoundPath");
-        } else {
-            soundConfig.addProperty("customSoundPath", path);
-        }
-
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Set custom sound path: " + path);
-    }
-
-    /**
-     * Get whether sound should only play when IDE window is not focused.
-     *
-     * @return whether only-when-unfocused is enabled, default is false
-     */
-    public boolean getSoundOnlyWhenUnfocused() throws IOException {
-        JsonObject config = readConfig();
-
-        if (!config.has("soundNotification")) {
-            return false;
-        }
-
-        JsonObject soundConfig = config.getAsJsonObject("soundNotification");
-        if (soundConfig.has("onlyWhenUnfocused")) {
-            return soundConfig.get("onlyWhenUnfocused").getAsBoolean();
-        }
-
-        return false;
-    }
-
-    /**
-     * Set whether sound should only play when IDE window is not focused.
-     *
-     * @param enabled whether to enable
-     */
-    public void setSoundOnlyWhenUnfocused(boolean enabled) throws IOException {
-        JsonObject config = readConfig();
-
-        JsonObject soundConfig;
-        if (config.has("soundNotification")) {
-            soundConfig = config.getAsJsonObject("soundNotification");
-        } else {
-            soundConfig = new JsonObject();
-            config.add("soundNotification", soundConfig);
-        }
-
-        soundConfig.addProperty("onlyWhenUnfocused", enabled);
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Set sound only when unfocused: " + enabled);
-    }
-
-    /**
-     * Get selected sound ID.
-     *
-     * @return sound ID (e.g. "default", "chime", "bell", "ding", "success", "custom"), defaults to "default"
-     */
-    public String getSelectedSound() throws IOException {
-        JsonObject config = readConfig();
-
-        if (!config.has("soundNotification")) {
-            return "default";
-        }
-
-        JsonObject soundConfig = config.getAsJsonObject("soundNotification");
-        if (soundConfig.has("selectedSound") && !soundConfig.get("selectedSound").isJsonNull()) {
-            return soundConfig.get("selectedSound").getAsString();
-        }
-
-        return "default";
-    }
-
-    /**
-     * Set selected sound ID.
-     *
-     * @param soundId sound ID, null or empty means "default"
-     */
-    public void setSelectedSound(String soundId) throws IOException {
-        JsonObject config = readConfig();
-
-        JsonObject soundConfig;
-        if (config.has("soundNotification")) {
-            soundConfig = config.getAsJsonObject("soundNotification");
-        } else {
-            soundConfig = new JsonObject();
-            config.add("soundNotification", soundConfig);
-        }
-
-        soundConfig.addProperty("selectedSound", (soundId == null || soundId.isEmpty()) ? "default" : soundId);
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Set selected sound: " + soundId);
-    }
-
     // ==================== Task Completion Notification Management ====================
 
     /**
@@ -1722,6 +1553,45 @@ public class CodemossSettingsService {
         }
 
         return CODEX_RUNTIME_ACCESS_INACTIVE;
+    }
+
+    public String getClaudeInvocationMode() throws IOException {
+        JsonObject config = readConfig();
+        if (config.has(CLAUDE_INVOCATION_MODE_KEY) && !config.get(CLAUDE_INVOCATION_MODE_KEY).isJsonNull()) {
+            String mode = config.get(CLAUDE_INVOCATION_MODE_KEY).getAsString();
+            if ("cli".equals(mode)) {
+                return "cli";
+            }
+        }
+        return "sdk";
+    }
+
+    public void setClaudeInvocationMode(String mode) throws IOException {
+        JsonObject config = readConfig();
+        config.addProperty(CLAUDE_INVOCATION_MODE_KEY, "cli".equals(mode) ? "cli" : "sdk");
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set Claude invocation mode: " + getClaudeInvocationMode());
+    }
+
+    public String getClaudeCliPath() throws IOException {
+        JsonObject config = readConfig();
+        if (!config.has(CLAUDE_CLI_PATH_KEY) || config.get(CLAUDE_CLI_PATH_KEY).isJsonNull()) {
+            return "";
+        }
+        String path = config.get(CLAUDE_CLI_PATH_KEY).getAsString();
+        return path != null ? path.trim() : "";
+    }
+
+    public void setClaudeCliPath(String path) throws IOException {
+        JsonObject config = readConfig();
+        String normalized = path != null ? path.trim() : "";
+        if (normalized.isEmpty()) {
+            config.remove(CLAUDE_CLI_PATH_KEY);
+        } else {
+            config.addProperty(CLAUDE_CLI_PATH_KEY, normalized);
+        }
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set Claude CLI path: " + (normalized.isEmpty() ? "(auto)" : normalized));
     }
 
     public int saveCodexProviders(List<JsonObject> providers) throws IOException {

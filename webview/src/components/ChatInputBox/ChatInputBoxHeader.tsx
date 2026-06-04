@@ -17,6 +17,7 @@ export function ChatInputBoxHeader({
   usagePercentage,
   usageUsedTokens,
   usageMaxTokens,
+  tokenDetail,
   showUsage,
   onClearContext,
   onAddAttachment,
@@ -45,6 +46,7 @@ export function ChatInputBoxHeader({
   usagePercentage: number;
   usageUsedTokens?: number;
   usageMaxTokens?: number;
+  tokenDetail?: any;
   showUsage: boolean;
   onClearContext?: () => void;
   onAddAttachment: (files: FileList) => void;
@@ -127,6 +129,7 @@ export function ChatInputBoxHeader({
         percentage={usagePercentage}
         usedTokens={usageUsedTokens}
         maxTokens={usageMaxTokens}
+        tokenDetail={tokenDetail}
         showUsage={showUsage}
         onClearFile={onClearContext}
         onAddAttachment={onAddAttachment}

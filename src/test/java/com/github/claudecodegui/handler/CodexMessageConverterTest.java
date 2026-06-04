@@ -132,7 +132,7 @@ public class CodexMessageConverterTest {
         JsonObject result = CodexMessageConverter.convertFunctionCallToToolUse(payload, null);
 
         assertEquals("assistant", result.get("type").getAsString());
-        assertEquals("Tool: glob", result.get("content").getAsString());
+        assertEquals("", result.get("content").getAsString());
 
         JsonObject toolUse = extractFirstBlock(result);
         assertEquals("tool_use", toolUse.get("type").getAsString());
@@ -152,7 +152,7 @@ public class CodexMessageConverterTest {
         JsonObject result = CodexMessageConverter.convertCustomToolCallToToolUse(payload, null);
 
         assertEquals("assistant", result.get("type").getAsString());
-        assertEquals("Tool: apply_patch", result.get("content").getAsString());
+        assertEquals("", result.get("content").getAsString());
 
         JsonObject toolUse = extractFirstBlock(result);
         assertEquals("tool_use", toolUse.get("type").getAsString());

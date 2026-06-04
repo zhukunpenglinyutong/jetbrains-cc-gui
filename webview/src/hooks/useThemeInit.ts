@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { sendBridgeEvent } from '../utils/bridge';
 
 /**
  * Manages IDE theme initialization and synchronization.
@@ -80,7 +81,7 @@ export function useThemeInit() {
 
     const requestIdeTheme = () => {
       if (window.sendToJava) {
-        window.sendToJava('get_ide_theme:');
+        sendBridgeEvent('get_ide_theme');
       } else {
         retryCount++;
         if (retryCount < MAX_RETRIES) {

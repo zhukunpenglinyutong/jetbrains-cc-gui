@@ -23,6 +23,17 @@ public class SendConsoleSelectionToInputActionTest {
     }
 
     @Test
+    public void consoleNoiseSelectionIsSanitized() {
+        String selection = String.join("\n",
+                "Exit code: 1",
+                "Output:",
+                "Check the spelling of the name, or if a path was included, verify that the path is correct and try again.",
+                "real payload"
+        );
+        Assert.assertEquals("real payload", SendConsoleSelectionToInputAction.resolveSelectedText(createConsoleView(selection)));
+    }
+
+    @Test
     public void unsupportedObjectReturnsNull() {
         Assert.assertNull(SendConsoleSelectionToInputAction.resolveSelectedText(new Object()));
     }

@@ -91,7 +91,10 @@ export default function AgentDialog({
     <div className="dialog-overlay">
       <div className="dialog agent-dialog">
         <div className="dialog-header">
-          <h3>{isAdding ? t('settings.agent.dialog.addTitle') : t('settings.agent.dialog.editTitle')}</h3>
+          <h3>
+            <span className="codicon codicon-person" style={{ fontSize: '16px', color: 'var(--violet)' }} />
+            {isAdding ? t('settings.agent.dialog.addTitle') : t('settings.agent.dialog.editTitle')}
+          </h3>
           <button className="close-btn" onClick={onClose}>
             <span className="codicon codicon-close"></span>
           </button>

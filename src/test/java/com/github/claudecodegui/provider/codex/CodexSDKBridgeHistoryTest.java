@@ -116,7 +116,7 @@ public class CodexSDKBridgeHistoryTest {
             assertEquals(1, messages.size());
             assertEquals("assistant", messages.get(0).get("type").getAsString());
             assertEquals("read", messages.get(0).getAsJsonObject("raw").getAsJsonArray("content").get(0).getAsJsonObject().get("name").getAsString());
-            assertEquals("Tool: read", messages.get(0).get("content").getAsString());
+            assertEquals("", messages.get(0).get("content").getAsString());
         } finally {
             deleteDirectory(sessionsDir);
         }
@@ -143,7 +143,8 @@ public class CodexSDKBridgeHistoryTest {
             assertEquals("Restore image", messages.get(0).get("content").getAsString());
             JsonArray contentBlocks = messages.get(0).getAsJsonObject("raw").getAsJsonArray("content");
             assertEquals("image", contentBlocks.get(0).getAsJsonObject().get("type").getAsString());
-            assertTrue(contentBlocks.get(0).getAsJsonObject().get("src").getAsString().startsWith("data:image/png;base64,"));
+            assertTrue(contentBlocks.get(0).getAsJsonObject().get("src").getAsString()
+                    .startsWith("data:image/png;base64,"));
         } finally {
             Files.deleteIfExists(imagePath);
             deleteDirectory(sessionsDir);
@@ -172,7 +173,8 @@ public class CodexSDKBridgeHistoryTest {
             JsonArray contentBlocks = messages.get(0).getAsJsonObject("raw").getAsJsonArray("content");
             assertEquals(1, contentBlocks.size());
             assertEquals("image", contentBlocks.get(0).getAsJsonObject().get("type").getAsString());
-            assertTrue(contentBlocks.get(0).getAsJsonObject().get("src").getAsString().startsWith("data:image/png;base64,"));
+            assertTrue(contentBlocks.get(0).getAsJsonObject().get("src").getAsString()
+                    .startsWith("data:image/png;base64,"));
         } finally {
             Files.deleteIfExists(imagePath);
             deleteDirectory(sessionsDir);

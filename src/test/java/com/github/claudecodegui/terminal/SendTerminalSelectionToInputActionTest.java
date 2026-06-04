@@ -80,6 +80,17 @@ public class SendTerminalSelectionToInputActionTest {
     }
 
     @Test
+    public void terminalNoiseSelectionIsSanitized() {
+        SendTerminalSelectionToInputAction.setSelectionProvider(event -> String.join("\n",
+                "Wall time: 3.2 seconds",
+                "Cannot load PSReadline module. Console is running without PSReadline.",
+                "+ return resource;"
+        ));
+
+        Assert.assertEquals("+ return resource;", SendTerminalSelectionToInputAction.resolveSelectedText(null));
+    }
+
+    @Test
     public void unsupportedEditorReturnsNull() {
         SendTerminalSelectionToInputAction.setSelectionProvider(event -> null);
         Assert.assertNull(SendTerminalSelectionToInputAction.resolveSelectedText(null));
@@ -143,6 +154,7 @@ public class SendTerminalSelectionToInputActionTest {
         return new AnActionEvent(null, dataContext, "TestPlace", new Presentation(), new TestActionManager(), 0);
     }
 
+    @SuppressWarnings("removal")
     private static DataContext createTerminalViewContext(Object terminalView) {
         DataKey<Object> terminalViewKey = DataKey.create("TerminalView");
         return dataId -> terminalViewKey.getName().equals(dataId) ? terminalView : null;

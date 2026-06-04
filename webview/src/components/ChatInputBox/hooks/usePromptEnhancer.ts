@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { sendBridgeEvent } from '../../../utils/bridge';
 
 declare global {
   interface Window {
@@ -66,11 +67,7 @@ export function usePromptEnhancer({
     setIsEnhancing(true);
 
     // Call backend for prompt enhancement, pass current selected model
-    if (window.sendToJava) {
-      window.sendToJava(
-        `enhance_prompt:${JSON.stringify({ prompt: content })}`
-      );
-    }
+    sendBridgeEvent('enhance_prompt', JSON.stringify({ prompt: content }));
   }, [getTextContent]);
 
   /**

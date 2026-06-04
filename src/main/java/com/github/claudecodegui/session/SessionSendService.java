@@ -1,16 +1,20 @@
 package com.github.claudecodegui.session;
 
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
-import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.session.runtime.CliRequest;
+import com.github.claudecodegui.session.runtime.RuntimeKey;
+import com.github.claudecodegui.session.runtime.SessionRuntimeRouter;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -29,6 +33,7 @@ public class SessionSendService {
     private final ClaudeSDKBridge claudeSDKBridge;
     private final CodexSDKBridge codexSDKBridge;
     private final SessionContextService contextService;
+    private final SessionRuntimeRouter runtimeRouter;
 
     public SessionSendService(
             Project project,
@@ -50,11 +55,20 @@ public class SessionSendService {
         this.claudeSDKBridge = claudeSDKBridge;
         this.codexSDKBridge = codexSDKBridge;
         this.contextService = contextService;
+        this.runtimeRouter = new SessionRuntimeRouter(claudeSDKBridge, codexSDKBridge);
     }
 
     public void prepareContextCollector(EditorContextCollector contextCollector) {
         contextCollector.setPsiContextEnabled(state.isPsiContextEnabled());
         contextCollector.setAutoOpenFileEnabled(readAutoOpenFileEnabled());
+    }
+
+    public void interruptRuntime(String provider, String channelId, String tabId) {
+        runtimeRouter.interrupt(provider, channelId, tabId);
+    }
+
+    public void cleanupRuntimeTab(String tabId) {
+        runtimeRouter.cleanupTab(tabId);
     }
 
     public void updateSessionStateForSend(ClaudeSession.Message userMessage, String normalizedInput) {
@@ -74,8 +88,72 @@ public class SessionSendService {
         state.setError(null);
         state.setBusy(true);
         state.setLoading(true);
+        state.setQueueDisplayState(ClaudeSession.SessionCallback.QueueDisplayState.PROCESSING);
+        state.setQueueAheadCount(0);
         ClaudeNotifier.setWaiting(project);
         callbackFacade.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+        callbackFacade.notifyQueueDisplayStateChanged(state.getQueueDisplayState(), state.getQueueAheadCount());
+    }
+
+    public static String resolveEffectivePermissionMode(String provider, String requestedMode, String sessionMode) {
+        String resolvedMode = normalizeRequestedPermissionMode(sessionMode);
+        if (resolvedMode == null) {
+            resolvedMode = requestedMode;
+        }
+        if (resolvedMode == null) {
+            resolvedMode = "default";
+        }
+
+        return resolvedMode;
+    }
+
+    public static String normalizeRequestedPermissionMode(String mode) {
+        if (mode == null) {
+            return null;
+        }
+        String trimmed = mode.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        if (SessionState.isValidPermissionMode(trimmed)) {
+            return trimmed;
+        }
+        LOG.warn("[ModeSync][Backend] Invalid requested permissionMode ignored: " + mode);
+        return null;
+    }
+
+    public static String resolveEffectiveClaudeInvocationMode(String requestedMode) {
+        return resolveEffectiveClaudeInvocationMode(requestedMode, null);
+    }
+
+    public static String getCodexRuntimeAccessError(String accessMode) {
+        if (CodemossSettingsService.CODEX_RUNTIME_ACCESS_MANAGED.equals(accessMode)
+                || CodemossSettingsService.CODEX_RUNTIME_ACCESS_CLI_LOGIN.equals(accessMode)) {
+            return null;
+        }
+        return ClaudeCodeGuiBundle.message("error.codexLocalAccessNotAuthorized");
+    }
+
+    public static String resolveEffectiveClaudeInvocationMode(String requestedMode, String sessionMode) {
+        String normalizedSessionMode = SessionState.isValidClaudeInvocationMode(sessionMode) ? sessionMode.trim() : null;
+
+        if (normalizedSessionMode != null) {
+            return normalizedSessionMode;
+        }
+
+        if (SessionState.isValidClaudeInvocationMode(requestedMode)) {
+            return requestedMode.trim();
+        }
+
+        try {
+            String configured = new CodemossSettingsService().getClaudeInvocationMode();
+            if (SessionState.isValidClaudeInvocationMode(configured)) {
+                return configured.trim();
+            }
+        } catch (Exception e) {
+            LOG.warn("[ModeSync][Backend] Failed to read Claude invocation mode, defaulting to sdk: " + e.getMessage());
+        }
+        return "sdk";
     }
 
     public CompletableFuture<Void> sendMessageToProvider(
@@ -85,7 +163,8 @@ public class SessionSendService {
             JsonObject openedFilesJson,
             String externalAgentPrompt,
             List<String> fileTagPaths,
-            String requestedPermissionMode
+            String requestedPermissionMode,
+            String requestedInvocationMode
     ) {
         String agentPrompt = externalAgentPrompt;
         if (agentPrompt == null) {
@@ -123,45 +202,11 @@ public class SessionSendService {
             );
         }
 
-        return sendToClaude(channelId, input, attachments, openedFilesJson, agentPrompt, effectivePermissionMode);
-    }
+        String effectiveInvocationMode = resolveEffectiveClaudeInvocationMode(requestedInvocationMode, state.getClaudeInvocationMode());
+        state.setClaudeInvocationMode(effectiveInvocationMode);
 
-    public static String normalizeRequestedPermissionMode(String mode) {
-        if (mode == null) {
-            return null;
-        }
-        String trimmed = mode.trim();
-        if (trimmed.isEmpty()) {
-            return null;
-        }
-        if (SessionState.isValidPermissionMode(trimmed)) {
-            return trimmed;
-        }
-        LOG.warn("[ModeSync][Backend] Invalid requested permissionMode ignored: " + mode);
-        return null;
-    }
-
-    public static String resolveEffectivePermissionMode(String provider, String requestedMode, String sessionMode) {
-        String resolvedMode = requestedMode;
-        if (resolvedMode == null) {
-            resolvedMode = normalizeRequestedPermissionMode(sessionMode);
-        }
-        if (resolvedMode == null) {
-            resolvedMode = "default";
-        }
-
-        if ("codex".equals(provider) && "plan".equals(resolvedMode)) {
-            return "default";
-        }
-        return resolvedMode;
-    }
-
-    public static String getCodexRuntimeAccessError(String accessMode) {
-        if (CodemossSettingsService.CODEX_RUNTIME_ACCESS_MANAGED.equals(accessMode)
-                || CodemossSettingsService.CODEX_RUNTIME_ACCESS_CLI_LOGIN.equals(accessMode)) {
-            return null;
-        }
-        return ClaudeCodeGuiBundle.message("error.codexLocalAccessNotAuthorized");
+        return sendToClaude(channelId, input, attachments, openedFilesJson, agentPrompt,
+                effectivePermissionMode, effectiveInvocationMode);
     }
 
     private CompletableFuture<Void> sendToCodex(
@@ -190,18 +235,32 @@ public class SessionSendService {
         String contextAppend = contextService.buildCodexContextAppend(openedFilesJson, fileTagPaths);
         String finalInput = (input != null ? input : "") + contextAppend;
 
-        return codexSDKBridge.sendMessage(
+        RuntimeKey key = new RuntimeKey(
+                "codex",
                 channelId,
+                channelId,
+                state.getRuntimeSessionEpoch()
+        );
+        CliRequest request = new CliRequest(
+                key,
                 finalInput,
                 state.getSessionId(),
                 state.getCwd(),
                 attachments,
+                openedFilesJson,
+                fileTagPaths,
+                agentPrompt,
                 effectivePermissionMode,
                 state.getModel(),
-                agentPrompt,
                 state.getReasoningEffort(),
-                handler
-        ).thenApply(result -> null);
+                state.getPermissionSessionId(),
+                Map.of()
+        );
+
+        boolean useCliRuntime = CodemossSettingsService.CODEX_RUNTIME_ACCESS_MANAGED.equals(accessMode)
+                || CodemossSettingsService.CODEX_RUNTIME_ACCESS_CLI_LOGIN.equals(accessMode);
+
+        return runtimeRouter.sendCodex(useCliRuntime, request, handler).thenApply(result -> null);
     }
 
     private CompletableFuture<Void> sendToClaude(
@@ -210,15 +269,36 @@ public class SessionSendService {
             List<ClaudeSession.Attachment> attachments,
             JsonObject openedFilesJson,
             String agentPrompt,
-            String effectivePermissionMode
+            String effectivePermissionMode,
+            String effectiveInvocationMode
     ) {
+        LOG.debug("[SessionSendService][DIAG] sendToClaude called, attachments="
+                + (attachments == null ? "NULL" : attachments.size()));
+        LOG.debug(String.format(
+                "[ClaudeImageDiag][SessionSendService] sendToClaude route: invocationMode=%s, provider=%s, sessionId=%s, attachments=%s",
+                effectiveInvocationMode, state.getProvider(),
+                state.getSessionId() != null ? state.getSessionId() : "(new)",
+                attachments == null ? "NULL" : attachments.size()));
+        if (attachments != null) {
+            for (int i = 0; i < attachments.size(); i++) {
+                ClaudeSession.Attachment att = attachments.get(i);
+                LOG.debug("[SessionSendService][DIAG] att[" + i + "]: fileName=" + att.fileName
+                        + ", localPath=" + att.localPath
+                        + ", data=" + (att.data != null ? att.data.length() + "chars" : "null"));
+                LOG.debug(String.format(
+                        "[ClaudeImageDiag][SessionSendService] att[%d]: fileName=%s, mediaType=%s, localPath=%s, resourceUrl=%s, data=%s",
+                        i, att.fileName, att.mediaType, att.localPath, att.resourceUrl,
+                        att.data != null ? att.data.length() + "chars" : "null"));
+            }
+        }
         ClaudeMessageHandler handler = new ClaudeMessageHandler(
                 project,
                 state,
                 callbackFacade.getCallbackHandler(),
                 messageParser,
                 messageMerger,
-                gson
+                gson,
+                state.getRuntimeSessionEpoch()
         );
 
         Boolean streaming = readStreamingEnabled();
@@ -229,7 +309,8 @@ public class SessionSendService {
                 + ", cwd=" + state.getCwd()
                 + ", model=" + currentModel);
 
-        return claudeSDKBridge.sendMessage(
+        return runtimeRouter.sendClaude(
+                        effectiveInvocationMode,
                         channelId,
                         input,
                         state.getSessionId(),
@@ -238,13 +319,13 @@ public class SessionSendService {
                         attachments,
                         effectivePermissionMode,
                         currentModel,
+                        state.getPermissionSessionId(),
                         openedFilesJson,
                         agentPrompt,
                         streaming,
-                        false,
                         state.getReasoningEffort(),
-                        handler
-                ).thenApply(result -> null);
+                handler
+        ).thenApply(result -> null);
     }
 
     private boolean readAutoOpenFileEnabled() {
@@ -289,8 +370,8 @@ public class SessionSendService {
                     String agentPrompt = agent.get("prompt").getAsString();
                     String agentName = agent.has("name") ? agent.get("name").getAsString() : "Unknown";
                     LOG.info("[Agent] ✓ Found agent: " + agentName);
-                    LOG.info("[Agent] ✓ Prompt length: " + agentPrompt.length() + " chars");
-                    LOG.info("[Agent] ✓ Prompt preview: "
+                    LOG.debug("[Agent] ✓ Prompt length: " + agentPrompt.length() + " chars");
+                    LOG.debug("[Agent] ✓ Prompt preview: "
                             + (agentPrompt.length() > 100 ? agentPrompt.substring(0, 100) + "..." : agentPrompt));
                     return agentPrompt;
                 }

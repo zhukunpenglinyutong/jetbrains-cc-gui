@@ -1,0 +1,782 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>按钮图标重设计方案</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #1e1f22;
+      --panel: #25262b;
+      --bar: #2b2d31;
+      --surface: #2d2f34;
+      --chip: #32343a;
+      --hover: #3a3d44;
+      --border: #464950;
+      --muted: #a8adb7;
+      --text: #f0f2f5;
+      --soft: #d8dde6;
+      --accent: #4ea1ff;
+      --accent-bg: rgba(78, 161, 255, .12);
+      --accent-border: rgba(78, 161, 255, .3);
+      --green: #4cc38a;
+      --amber: #e7b85a;
+      --red: #f07178;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 40px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 32px;
+    }
+
+    .section {
+      margin-bottom: 40px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--soft);
+      margin-bottom: 20px;
+    }
+
+    .section-title::before {
+      content: '';
+      width: 4px;
+      height: 18px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: var(--bar);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--soft);
+    }
+
+    .card-badge {
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .badge-current {
+      background: rgba(168, 173, 183, .15);
+      color: var(--muted);
+    }
+
+    .badge-new {
+      background: var(--accent-bg);
+      color: var(--accent);
+    }
+
+    .card-body {
+      padding: 20px;
+    }
+
+    /* Icon display */
+    .icon-showcase {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 16px;
+    }
+
+    .icon-option {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding: 20px 16px;
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .icon-option:hover {
+      background: var(--hover);
+      border-color: var(--accent);
+    }
+
+    .icon-option.selected {
+      border-color: var(--accent);
+      background: var(--accent-bg);
+    }
+
+    .icon-preview {
+      width: 48px;
+      height: 48px;
+      display: grid;
+      place-items: center;
+      background: var(--chip);
+      border-radius: 8px;
+    }
+
+    .icon-preview svg {
+      width: 24px;
+      height: 24px;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .icon-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--soft);
+    }
+
+    .icon-desc {
+      font-size: 11px;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.4;
+    }
+
+    /* Button preview */
+    .button-preview {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background: var(--bar);
+      border-radius: 8px;
+      margin-top: 16px;
+    }
+
+    .preview-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 5px;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .preview-btn:hover {
+      background: var(--hover);
+      color: var(--text);
+    }
+
+    .preview-btn svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .preview-btn.active {
+      background: var(--accent-bg);
+      color: var(--accent);
+    }
+
+    .preview-label {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* Context bar preview */
+    .context-bar-preview {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      background: var(--bar);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    .context-tools {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .context-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 5px;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .context-btn:hover {
+      background: var(--hover);
+      color: var(--text);
+    }
+
+    .context-btn svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .context-divider {
+      width: 1px;
+      height: 18px;
+      background: var(--border);
+      margin: 0 4px;
+    }
+
+    .spacer { flex: 1; }
+
+    .chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: var(--chip);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      font-size: 12px;
+      color: var(--soft);
+    }
+
+    .chip svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .chip-close {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      border-radius: 3px;
+      cursor: pointer;
+      opacity: 0.6;
+      transition: opacity 0.15s;
+    }
+
+    .chip-close:hover {
+      opacity: 1;
+    }
+
+    .chip-close svg {
+      width: 10px;
+      height: 10px;
+    }
+
+    /* Recommendation */
+    .recommendation {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background: var(--accent-bg);
+      border: 1px solid var(--accent-border);
+      border-radius: 8px;
+      margin-top: 20px;
+    }
+
+    .recommendation-icon {
+      width: 40px;
+      height: 40px;
+      display: grid;
+      place-items: center;
+      background: var(--accent);
+      border-radius: 8px;
+      flex-shrink: 0;
+    }
+
+    .recommendation-icon svg {
+      width: 20px;
+      height: 20px;
+      stroke: white;
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .recommendation-text {
+      flex: 1;
+    }
+
+    .recommendation-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+
+    .recommendation-desc {
+      font-size: 13px;
+      color: var(--soft);
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎨 按钮图标重设计方案</h1>
+    <p class="subtitle">为文件上传、收起状态面板、回溯三个按钮设计更适配的图标</p>
+
+    <!-- 1. File Upload Button -->
+    <div class="section">
+      <div class="section-title">文件上传按钮 (Add Attachment)</div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">图标方案对比</span>
+          <span class="card-badge badge-current">当前: 回形针</span>
+        </div>
+        <div class="card-body">
+          <div class="icon-showcase">
+            <!-- Option 1: Upload with plus -->
+            <div class="icon-option selected">
+              <div class="icon-preview">
+                <svg viewBox="0 0 24 24">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                  <line x1="8" y1="12" x2="16" y2="12" />
+                </svg>
+              </div>
+              <div class="icon-name">上传 + 加号</div>
+              <div class="icon-desc">清晰表达"添加文件"的含义</div>
+            </div>
+
+            <!-- Option 2: Paperclip modern -->
+            <div class="icon-option">
+              <div class="icon-preview">
+                <svg viewBox="0 0 24 24">
+                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+                  <circle cx="12" cy="12" r="1" fill="currentColor" />
+                </svg>
+              </div>
+              <div class="icon-name">现代回形针</div>
+              <div class="icon-desc">经典设计，加圆点装饰</div>
+            </div>
+
+            <!-- Option 3: File with plus -->
+            <div class="icon-option">
+              <div class="icon-preview">
+                <svg viewBox="0 0 24 24">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                  <path d="M14 2v6h6" />
+                  <line x1="12" y1="11" x2="12" y2="17" />
+                  <line x1="9" y1="14" x2="15" y2="14" />
+                </svg>
+              </div>
+              <div class="icon-name">文件 + 加号</div>
+              <div class="icon-desc">明确表示添加文件</div>
+            </div>
+
+            <!-- Option 4: Image plus -->
+            <div class="icon-option">
+              <div class="icon-preview">
+                <svg viewBox="0 0 24 24">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <polyline points="21 15 16 10 5 21" />
+                  <line x1="16" y1="3" x2="16" y2="9" />
+                  <line x1="13" y1="6" x2="19" y2="6" />
+                </svg>
+              </div>
+              <div class="icon-name">图片 + 加号</div>
+              <div class="icon-desc">适合图片上传场景</div>
+            </div>
+          </div>
+
+          <div class="recommendation">
+            <div class="recommendation-icon">
+              <svg viewBox="0 0 24 24">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+                <line x1="8" y1="12" x2="16" y2="12" />
+              </svg>
+            </div>
+            <div class="recommendation-text">
+              <div class="recommendation-title">推荐方案：上传 + 加号</div>
+              <div class="recommendation-desc">
+                上传箭头配合加号，直观表达"添加附件"的操作意图。比传统回形针更现代，且语义更清晰。
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Collapse Status Panel -->
+    <div class="section">
+      <div class="section-title">收起状态面板按钮</div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">图标方案对比</span>
+          <span class="card-badge badge-current">当前: 下箭头/图层</span>
+        </div>
+        <div class="card-body">
+          <div class="icon-showcase">
+            <!-- Option 1: Panel bottom -->
+            <div class="icon-option selected">
+              <div class="icon-preview">
+                <svg viewBox="0 0 24 24">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <line x1="3" y1="15" x2="21" y2="15" />
+                  <polyline points="15 19 12 16 9 19" />
+                </svg>
+              </div>
+              <div class="icon-name">面板折叠</div>
+              <div class="icon-desc">底部面板向上折叠</div>
+            </div>
+
+            <!-- Option 2: Panel right -->
+            <div class="icon-option">
+              <div class="icon-preview">
+                <svg viewBox="0 0 24 24">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <line x1="15" y1="3" x2="15" y2="21" />
+                  <polyline points="11 15 14 12 11 9" />
+                </svg>
+              </div>
+              <div class="icon-name">侧边面板</div>
+              <div class="icon-desc">右侧面板向左收起</div>
+            </div>
+
+            <!-- Option 3: Collapse -->
+            <div class="icon-option">
+              <div class="icon-preview">
+                <svg viewBox="0 0 24 24">
+                  <path d="M4 14h6v6" />
+                  <path d="M20 10h-6V4" />
+                  <path d="M14 10l7-7" />
+                  <path d="M3 21l7-7" />
+                </svg>
+              </div>
+              <div class="icon-name">收起折叠</div>
+              <div class="icon-desc">通用收起图标</div>
+            </div>
+
+            <!-- Option 4: Minimize -->
+            <div class="icon-option">
+              <div class="icon-preview">
+                <svg viewBox="0 0 24 24">
+                  <path d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3m0 18v-3a2 2 0 012-2h3M3 16h3a2 2 0 012 2v3" />
+                </svg>
+              </div>
+              <div class="icon-name">最小化</div>
+              <div class="icon-desc">四角收缩效果</div>
+            </div>
+          </div>
+
+          <div class="recommendation">
+            <div class="recommendation-icon">
+              <svg viewBox="0 0 24 24">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <line x1="3" y1="15" x2="21" y2="15" />
+                <polyline points="15 19 12 16 9 19" />
+              </svg>
+            </div>
+            <div class="recommendation-text">
+              <div class="recommendation-title">推荐方案：面板折叠</div>
+              <div class="recommendation-desc">
+                矩形面板 + 底部分割线 + 折叠箭头，清晰表达"收起底部面板"的意图。状态面板是从底部展开的，这个图标最符合实际交互。
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Rewind Button -->
+    <div class="section">
+      <div class="section-title">回溯按钮 (Rewind)</div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">图标方案对比</span>
+          <span class="card-badge badge-current">当前: 撤销箭头</span>
+        </div>
+        <div class="card-body">
+          <div class="icon-showcase">
+            <!-- Option 1: History with dot -->
+            <div class="icon-option selected">
+              <div class="icon-preview">
+                <svg viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                  <circle cx="12" cy="12" r="2" fill="currentColor" opacity="0.3" />
+                </svg>
+              </div>
+              <div class="icon-name">时钟回溯</div>
+              <div class="icon-desc">时钟 + 中心点，表示时间回溯</div>
+            </div>
+
+            <!-- Option 2: Rotate counter-clockwise -->
+            <div class="icon-option">
+              <div class="icon-preview">
+                <svg viewBox="0 0 24 24">
+                  <path d="M3 7v6h6" />
+                  <path d="M21 17a9 9 0 00-9-9 9 9 0 00-6.69 3L3 13" />
+                  <polyline points="3 7 3 13 9 13" />
+                </svg>
+              </div>
+              <div class="icon-name">逆时针旋转</div>
+              <div class="icon-desc">经典的撤销/回退图标</div>
+            </div>
+
+            <!-- Option 3: Step back -->
+            <div class="icon-option">
+              <div class="icon-preview">
+                <svg viewBox="0 0 24 24">
+                  <polygon points="11 19 2 12 11 5 11 19" />
+                  <polygon points="22 19 13 12 22 5 22 19" />
+                  <line x1="2" y1="5" x2="2" y2="19" stroke-width="2" />
+                </svg>
+              </div>
+              <div class="icon-name">步回退</div>
+              <div class="icon-desc">带竖线的回退，表示回到起点</div>
+            </div>
+
+            <!-- Option 4: Git revert -->
+            <div class="icon-option">
+              <div class="icon-preview">
+                <svg viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M12 3v3" />
+                  <path d="M12 18v3" />
+                  <path d="M3 12h3" />
+                  <path d="M18 12h3" />
+                  <path d="M5.6 5.6l2.1 2.1" />
+                  <path d="M16.3 16.3l2.1 2.1" />
+                  <path d="M5.6 18.4l2.1-2.1" />
+                  <path d="M16.3 7.7l2.1-2.1" />
+                </svg>
+              </div>
+              <div class="icon-name">版本回退</div>
+              <div class="icon-desc">类似 Git revert 的设计</div>
+            </div>
+          </div>
+
+          <div class="recommendation">
+            <div class="recommendation-icon">
+              <svg viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+                <circle cx="12" cy="12" r="2" fill="currentColor" opacity="0.3" />
+              </svg>
+            </div>
+            <div class="recommendation-text">
+              <div class="recommendation-title">推荐方案：时钟回溯</div>
+              <div class="recommendation-desc">
+                时钟图标配合中心圆点，直观表达"回到过去某个时间点"的概念。比单纯的撤销箭头更适合"回溯对话历史"的场景。
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preview Section -->
+    <div class="section">
+      <div class="section-title">整体效果预览</div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">ContextBar 预览</span>
+          <span class="card-badge badge-new">新设计</span>
+        </div>
+        <div class="card-body">
+          <div class="context-bar-preview">
+            <div class="context-tools">
+              <!-- File Upload Button -->
+              <button class="context-btn" title="添加附件">
+                <svg viewBox="0 0 24 24">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                  <line x1="8" y1="12" x2="16" y2="12" />
+                </svg>
+              </button>
+
+              <!-- Token indicator -->
+              <div style="display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; background: rgba(78, 161, 255, .12); border: 1px solid rgba(78, 161, 255, .3); border-radius: 5px; font-size: 12px; color: var(--accent);">
+                <div style="width: 14px; height: 14px; border-radius: 50%; background: conic-gradient(var(--accent) 0 23%, rgba(255,255,255,.12) 23% 100%); display: grid; place-items: center;">
+                  <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--bar);"></div>
+                </div>
+                <span>23%</span>
+              </div>
+
+              <div class="context-divider"></div>
+            </div>
+
+            <!-- Agent chip -->
+            <div class="chip">
+              <svg viewBox="0 0 24 24" style="color: var(--accent);">
+                <path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z" />
+                <path d="M9 14h.01M15 14h.01M9 18h6" />
+              </svg>
+              <span>developer</span>
+              <span class="chip-close">
+                <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" /></svg>
+              </span>
+            </div>
+
+            <!-- File chip -->
+            <div class="chip" style="border-color: rgba(78, 161, 255, .4);">
+              <svg viewBox="0 0 24 24" style="color: var(--accent);">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                <path d="M14 2v6h6" />
+              </svg>
+              <span>ButtonArea.tsx</span>
+              <span class="chip-close">
+                <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" /></svg>
+              </span>
+            </div>
+
+            <div class="spacer"></div>
+
+            <div class="context-tools">
+              <!-- Collapse Status Panel -->
+              <button class="context-btn" title="收起状态面板">
+                <svg viewBox="0 0 24 24">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <line x1="3" y1="15" x2="21" y2="15" />
+                  <polyline points="15 19 12 16 9 19" />
+                </svg>
+              </button>
+
+              <!-- Rewind Button -->
+              <button class="context-btn" title="回溯">
+                <svg viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                  <circle cx="12" cy="12" r="2" fill="currentColor" opacity="0.3" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Comparison -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px;">
+            <div>
+              <div style="font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 8px;">当前设计</div>
+              <div class="context-bar-preview">
+                <div class="context-tools">
+                  <button class="context-btn">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+                    </svg>
+                  </button>
+                  <div class="spacer"></div>
+                  <button class="context-btn">
+                    <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" /></svg>
+                  </button>
+                  <button class="context-btn">
+                    <svg viewBox="0 0 24 24"><path d="M3 7v6h6" /><path d="M21 17a9 9 0 00-15-6.7L3 13" /></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div style="font-size: 12px; font-weight: 600; color: var(--accent); margin-bottom: 8px;">新设计</div>
+              <div class="context-bar-preview">
+                <div class="context-tools">
+                  <button class="context-btn">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                      <polyline points="17 8 12 3 7 8" />
+                      <line x1="12" y1="3" x2="12" y2="15" />
+                      <line x1="8" y1="12" x2="16" y2="12" />
+                    </svg>
+                  </button>
+                  <div class="spacer"></div>
+                  <button class="context-btn">
+                    <svg viewBox="0 0 24 24">
+                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                      <line x1="3" y1="15" x2="21" y2="15" />
+                      <polyline points="15 19 12 16 9 19" />
+                    </svg>
+                  </button>
+                  <button class="context-btn">
+                    <svg viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                      <circle cx="12" cy="12" r="2" fill="currentColor" opacity="0.3" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border); text-align: center; color: var(--muted); font-size: 13px;">
+      <p>推荐方案：上传+加号、面板折叠、时钟回溯</p>
+      <p style="margin-top: 8px;">这些图标更符合 JetBrains 插件的设计语言，语义更清晰</p>
+    </div>
+  </div>
+</body>
+</html>

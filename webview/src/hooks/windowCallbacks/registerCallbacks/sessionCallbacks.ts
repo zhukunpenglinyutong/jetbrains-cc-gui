@@ -94,6 +94,7 @@ export function registerSessionAndSdkCallbacks(
       setSdkStatusLoaded(true);
     } catch (error) {
       console.error('[Frontend] Failed to parse dependency status:', error);
+      setSdkStatusLoaded(true);
     }
     if (
       originalUpdateDependencyStatus &&

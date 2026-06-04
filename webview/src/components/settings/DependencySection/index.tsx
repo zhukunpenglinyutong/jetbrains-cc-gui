@@ -17,6 +17,7 @@ import {
   getVersionAction,
 } from './versioning';
 import styles from './style.module.less';
+import { sendBridgeEvent } from '../../../utils/bridge';
 
 interface DependencySectionProps {
   addToast?: (message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
@@ -32,10 +33,9 @@ interface VersionSelectProps {
   onChange: (version: string) => void;
 }
 
-const sendToJava = (message: string) => {
-  if (window.sendToJava) {
-    window.sendToJava(message);
-  }
+const sendToJava = (event: string, payload?: unknown) => {
+  const content = payload === undefined ? '' : JSON.stringify(payload);
+  sendBridgeEvent(event, content);
 };
 
 const mergeDependencyUpdates = (
@@ -259,9 +259,9 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
           const sdkName = sdkDef ? tRef.current(sdkDef.nameKey) : result.sdkId;
           const msgKey = wasUpdating ? 'settings.dependency.updateSuccess' : 'settings.dependency.installSuccess';
           addToastRef.current?.(tRef.current(msgKey, { name: sdkName }), 'success');
-          sendToJava('get_dependency_status:');
-          sendToJava(`check_dependency_updates:${JSON.stringify({ id: result.sdkId })}`);
-          sendToJava(`get_dependency_versions:${JSON.stringify({ id: result.sdkId })}`);
+          sendToJava('get_dependency_status');
+          sendToJava('check_dependency_updates', { id: result.sdkId });
+          sendToJava('get_dependency_versions', { id: result.sdkId });
         } else if (result.error === 'node_not_configured') {
           addToastRef.current?.(tRef.current('settings.dependency.nodeNotConfigured'), 'warning');
         } else {
@@ -299,7 +299,7 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
               errorMessage: undefined,
             },
           }));
-          sendToJava(`get_dependency_versions:${JSON.stringify({ id: result.sdkId })}`);
+          sendToJava('get_dependency_versions', { id: result.sdkId });
         } else {
           addToastRef.current?.(tRef.current('settings.dependency.uninstallFailed', { error: result.error }), 'error');
         }
@@ -383,13 +383,13 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
       }
     };
     window.checkNodeEnvironment = () => {
-      sendToJava('check_node_environment:');
+      sendToJava('check_node_environment');
       savedCheckNodeEnvironment?.();
     };
     if (import.meta.env.DEV) {
       window.runNodeEnvironmentStressTest = (count: number = 10) => {
         for (let i = 0; i < count; i += 1) {
-          sendToJava('check_node_environment:');
+          sendToJava('check_node_environment');
         }
         savedRunNodeEnvironmentStressTest?.(count);
       };
@@ -407,7 +407,7 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
     const handleNodePathReady = () => {
       isNodePathReadyRef.current = true;
       if (isActiveRef.current) {
-        sendToJava('check_node_environment:');
+        sendToJava('check_node_environment');
       }
     };
     window.addEventListener('nodePathReady', handleNodePathReady);
@@ -436,11 +436,11 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
       'claude-sdk': true,
       'codex-sdk': true,
     });
-    sendToJava('get_dependency_status:');
-    sendToJava('check_dependency_updates:');
-    sendToJava('get_dependency_versions:');
+    sendToJava('get_dependency_status');
+    sendToJava('check_dependency_updates');
+    sendToJava('get_dependency_versions');
     if (isNodePathReadyRef.current) {
-      sendToJava('check_node_environment:');
+      sendToJava('check_node_environment');
     }
   }, [isActive]);
 
@@ -453,12 +453,15 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
     setInstallingSdk(sdkId);
     setInstallLogs('');
     setShowLogs(true);
-    sendToJava(`install_dependency:${JSON.stringify({ id: sdkId, version: getRequestedVersion(selectedVersions[sdkId]) })}`);
+    sendToJava('install_dependency', {
+      id: sdkId,
+      version: getRequestedVersion(selectedVersions[sdkId]),
+    });
   };
 
   const handleUninstall = (sdkId: SdkId) => {
     setUninstallingSdk(sdkId);
-    sendToJava(`uninstall_dependency:${JSON.stringify({ id: sdkId })}`);
+    sendToJava('uninstall_dependency', { id: sdkId });
   };
 
   const handleUpdate = (sdkId: SdkId) => {
@@ -471,7 +474,10 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
     updatingSdkRef.current = sdkId;
     setInstallLogs('');
     setShowLogs(true);
-    sendToJava(`update_dependency:${JSON.stringify({ id: sdkId, version: getRequestedVersion(selectedVersions[sdkId]) })}`);
+    sendToJava('update_dependency', {
+      id: sdkId,
+      version: getRequestedVersion(selectedVersions[sdkId]),
+    });
   };
 
   const getSdkInfo = (sdkId: SdkId): SdkStatus | undefined => {

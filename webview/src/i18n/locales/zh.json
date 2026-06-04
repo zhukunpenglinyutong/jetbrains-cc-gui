@@ -30,11 +30,13 @@
     "createNewSession": "创建新会话",
     "confirmNewSession": "当前会话已有消息，确定要创建新会话吗？",
     "confirmInterrupt": "当前正在对话中，创建新会话将中断当前对话，是否继续？",
-    "requestInterrupted": "请求已被用户中断",
+    "requestInterrupted": "用户已中断",
+    "userInterrupted": "用户已中断",
     "uploadedFiles": "已上传附件: {{files}}",
     "emptyMessage": "空消息",
     "clickToPreview": "点击预览大图",
     "userUploadedImage": "用户上传的图片",
+    "imageLoadFailed": "图片加载失败",
     "inputPlaceholder": "@引用文件，#唤起智能体，!插入提示词，Enter 发送",
     "inputPlaceholderEnter": "@引用文件，#唤起智能体，!插入提示词，Enter 发送",
     "inputPlaceholderCmdEnter": "@引用文件，#唤起智能体，!插入提示词，⌘Enter 发送",
@@ -49,6 +51,7 @@
     "addAttachment": "添加附件",
     "stopGeneration": "停止生成",
     "generatingResponse": "正在生成响应",
+    "queueWaiting": "队列中，前面还有 {{count}} 条等待",
     "elapsedTime": "已用 {{time}}",
     "minutesAndSeconds": "{{minutes}} 分 {{seconds}} 秒",
     "imagePreview": "预览",
@@ -81,6 +84,9 @@
     "disabled": "已停用",
     "sdkNotInstalled": "{{provider}} SDK 尚未安装，请先安装 SDK 才能开始对话",
     "sdkStatusLoading": "正在检查 SDK 状态...",
+    "sdkStatusCheckDeferred": "{{provider}} SDK 状态仍在加载，当前会继续发送，并在后端执行前自动校验。",
+    "planModeEnabled": "已启用规划模式",
+    "invocationModeRequired": "尚未读取到 Claude 调用模式，请先在设置中选择 SDK 或 CLI 模式后再发送。",
     "openSourceBanner": "本项目保证100%开源（谨防盗版项目）",
     "goInstallSdk": "前往安装",
     "commandNotImplemented": "`{{command}}` 功能暂未实现。",
@@ -91,6 +97,13 @@
     "streamingConnected": "{{provider}} 已成功连接，正在理解问题",
     "showEarlierMessages": "显示之前的 {{count}} 条消息",
     "totalDuration": "本次耗时",
+    "waitingTimedOutDuration": "等待超时",
+    "streamStalledRetrying": "长时间未收到模型输出，CLI 可能仍在重试；如果稍后失败会显示真实错误。",
+    "usageStats": {
+      "input": "输入：",
+      "output": "输出：",
+      "duration": "耗时："
+    },
     "search": {
       "ariaLabel": "在对话中搜索",
       "placeholder": "在对话中搜索…",
@@ -115,6 +128,15 @@
       "userContext": "补充说明：「{{context}}」",
       "expand": "展开摘要",
       "collapse": "折叠摘要"
+    },
+    "tokenIndicator": {
+      "contextStats": "上下文统计",
+      "inputToken": "输入 Token",
+      "outputToken": "输出 Token",
+      "cacheRead": "缓存读取",
+      "cacheWrite": "缓存写入",
+      "cacheHitRate": "{{rate}}% 命中",
+      "total": "总计 {{used}} / {{max}}"
     }
   },
   "settings": {
@@ -150,6 +172,15 @@
         "korean": "한국어",
         "portuguese": "Português (Brasil)"
       },
+      "invocationMode": {
+        "label": "调用模式",
+        "sdk": "SDK 模式",
+        "sdkDesc": "使用官方 SDK 集成（默认，稳定，支持权限确认）",
+        "cli": "CLI 模式",
+        "cliDesc": "直接调用本地 Claude CLI",
+        "cliPathPlaceholder": "Claude CLI 可执行文件路径（留空自动检测）",
+        "hint": "CLI 模式不支持 thinking / /context 等部分能力，权限模式跟随上方设置。"
+      },
       "nodePath": {
         "label": "Node.js 路径",
         "placeholder": "Windows: C:\\Program Files\\nodejs\\node.exe (必须以 .exe 结尾) | macOS/Linux: /usr/local/bin/node",
@@ -166,6 +197,15 @@
         "label": "工作目录",
         "placeholder": "例如 project1 或留空使用项目根目录",
         "hint": "指定 Claude 工作的目录。可以使用相对路径（相对于项目根目录）或绝对路径。留空则使用项目根目录。"
+      },
+      "invocationMode": {
+        "label": "调用模式",
+        "sdk": "SDK 模式",
+        "sdkDesc": "通过内置桥接与常驻运行时调用，状态反馈更完整，兼容性更好。",
+        "cli": "CLI 模式",
+        "cliDesc": "直接调用本地 CLI，可复用本机环境与登录态，但能力和输出受 CLI 本身限制。",
+        "cliPathPlaceholder": "可选：指定 Claude CLI 可执行文件路径，留空则自动检测",
+        "hint": "切换后新请求将按所选模式发起。CLI 模式下部分能力可能与 SDK 模式存在差异。"
       },
       "fontSize": {
         "label": "字体大小",
@@ -266,28 +306,6 @@
         "lightDesc": "更轻、更贴近当前设置页背景",
         "softDark": "柔和深色",
         "softDarkDesc": "保留代码感，但弱化纯黑对比"
-      },
-      "soundNotification": {
-        "label": "任务完成提示音",
-        "enabled": "已开启",
-        "disabled": "已关闭",
-        "hint": "开启后，AI 完成任务时会播放提示音，方便您离开屏幕时也能知道任务已完成。",
-        "onlyWhenUnfocused": "仅在 IDE 未聚焦时播放",
-        "onlyWhenUnfocusedHint": "开启后，仅在 IDE 窗口未聚焦时播放提示音。",
-        "selectSound": "提示音",
-        "soundDefault": "默认",
-        "soundChime": "清脆铃声",
-        "soundBell": "钟声",
-        "soundDing": "叮咚",
-        "soundSuccess": "成功提示",
-        "soundCustom": "自定义...",
-        "customSound": "自定义音频文件",
-        "customSoundPlaceholder": "选择或输入音频文件路径",
-        "customSoundHint": "支持 WAV、MP3、AIFF 格式",
-        "testSound": "试听",
-        "browse": "浏览",
-        "useDefault": "使用默认",
-        "customSoundSaved": "自定义提示音已保存"
       },
       "userMsgColor": {
         "label": "用户消息颜色",
@@ -1779,6 +1797,7 @@
     "dbParseProviderFailed": "解析供应商配置失败",
     "aiResponseEmpty": "AI 响应为空",
     "enhancementFailed": "增强失败",
+    "unsupportedImageVision": "当前模型不支持图片识别，或该服务商兼容接口不支持图片工具结果。\n请切换到支持视觉的模型后重试。",
     "uploadedImages": "已上传 {{count}} 张图片",
     "uploadedAttachments": "已上传附件",
     "emptyMessage": "空消息",

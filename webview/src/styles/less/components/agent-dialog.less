@@ -1,11 +1,11 @@
-/* Agent Dialog Styles */
+/* Agent Dialog Styles - 参考 chat-message-preview 风格 */
 .agent-dialog {
     background: var(--bg-secondary);
     border: 1px solid var(--border-secondary);
-    border-radius: 8px;
+    border-radius: 12px;
     box-shadow: var(--shadow-lg);
     width: 90%;
-    max-width: 800px; /* Optional: Keep a reasonable max-width if needed, or remove if strictly 90% always */
+    max-width: 480px;
     display: flex;
     flex-direction: column;
     animation: slideIn 0.2s ease-out;
@@ -18,6 +18,7 @@
     right: 0;
     bottom: 0;
     background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -31,24 +32,32 @@
     justify-content: space-between;
     padding: 16px 20px;
     border-bottom: 1px solid var(--border-secondary);
+    background: var(--bg-tertiary);
+    border-radius: 12px 12px 0 0;
 
     h3 {
         margin: 0;
-        font-size: 16px;
+        font-size: 15px;
         font-weight: 600;
         color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
 
     .close-btn {
+        width: 28px;
+        height: 28px;
         background: transparent;
         border: none;
-        color: var(--text-secondary);
+        color: var(--text-tertiary);
         cursor: pointer;
-        padding: 4px;
-        border-radius: 4px;
+        padding: 0;
+        border-radius: 6px;
         display: flex;
         align-items: center;
         justify-content: center;
+        transition: all 0.15s;
 
         &:hover {
             background: var(--bg-hover);
@@ -62,25 +71,27 @@
     flex: 1;
     overflow-y: auto;
     max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
 
 .form-group {
-    margin-bottom: 20px;
-
-    &:last-child {
-        margin-bottom: 0;
-    }
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 
     label {
-        display: block;
-        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
         font-size: 13px;
         font-weight: 500;
         color: var(--text-secondary);
 
         .required {
             color: var(--color-error);
-            margin-left: 4px;
+            font-size: 14px;
         }
     }
 }
@@ -94,18 +105,18 @@
 .form-input,
 .form-textarea {
     width: 100%;
-    background: var(--bg-tertiary);
+    background: var(--bg-primary);
     border: 1px solid var(--border-secondary);
-    border-radius: 4px;
+    border-radius: 6px;
     color: var(--text-primary);
     font-size: 13px;
     font-family: inherit;
-    transition: all 0.2s;
+    transition: all 0.15s;
 
     &:focus {
         outline: none;
         border-color: var(--accent-primary);
-        box-shadow: 0 0 0 1px var(--accent-primary);
+        box-shadow: 0 0 0 2px rgba(78, 161, 255, 0.2);
     }
 
     &.has-error {
@@ -122,9 +133,9 @@
 }
 
 .form-textarea {
-    padding: 12px;
-    padding-bottom: 28px; /* Make room for counter */
-    min-height: 120px;
+    padding: 10px 12px;
+    padding-bottom: 28px;
+    min-height: 100px;
     resize: vertical;
     line-height: 1.5;
     display: block;
@@ -134,20 +145,20 @@
     position: absolute;
     bottom: 8px;
     right: 12px;
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-tertiary);
     background: transparent;
     pointer-events: none;
 }
 
-/* Specific adjustment for single line input counter */
+/* 单行输入框的计数器居中显示 */
 .input-with-counter .char-counter {
     bottom: 50%;
     transform: translateY(50%);
 }
 
 .form-error {
-    margin: 6px 0 0;
+    margin: 4px 0 0;
     font-size: 12px;
     color: var(--color-error);
     display: flex;
@@ -157,7 +168,7 @@
 
 .form-hint {
     display: block;
-    margin-top: 8px;
+    margin-top: 4px;
     font-size: 12px;
     color: var(--text-tertiary);
     line-height: 1.4;
@@ -168,46 +179,50 @@
     border-top: 1px solid var(--border-secondary);
     display: flex;
     justify-content: flex-end;
+    gap: 8px;
 }
 
 .footer-actions {
     display: flex;
-    gap: 12px;
+    gap: 8px;
 }
 
 .btn {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 16px;
-    border-radius: 4px;
+    padding: 6px 14px;
+    border-radius: 6px;
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s;
-    border: none;
+    transition: all 0.15s;
+    border: 1px solid transparent;
 
     &.btn-secondary {
-        background: transparent;
-        border: 1px solid var(--border-secondary);
-        color: var(--text-primary);
+        background: var(--bg-hover);
+        border-color: var(--border-secondary);
+        color: var(--text-secondary);
 
         &:hover {
-            background: rgba(255, 255, 255, 0.05);
-            border-color: var(--border-hover);
+            background: var(--bg-active);
+            color: var(--text-primary);
         }
     }
 
     &.btn-primary {
         background: var(--accent-primary);
+        border-color: var(--accent-primary);
         color: white;
 
         &:hover {
             background: var(--accent-primary-hover);
+            border-color: var(--accent-primary-hover);
         }
 
         &:active {
             background: var(--accent-primary-active);
+            border-color: var(--accent-primary-active);
         }
     }
 }

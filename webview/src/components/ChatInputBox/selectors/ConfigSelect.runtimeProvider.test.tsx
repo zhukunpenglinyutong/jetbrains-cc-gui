@@ -34,6 +34,9 @@ vi.mock('react-i18next', () => ({
 }));
 
 describe('ConfigSelect runtime provider submenu', () => {
+  const bridgeCall = (type: string, content = '') =>
+    JSON.stringify({ type, content });
+
   beforeEach(() => {
     window.sendToJava = vi.fn();
     window.updateProviders = undefined;
@@ -51,7 +54,7 @@ describe('ConfigSelect runtime provider submenu', () => {
     expect(providerMenuItem.nextElementSibling?.className).toContain('selector-divider');
     fireEvent.mouseEnter(providerMenuItem);
 
-    expect(window.sendToJava).toHaveBeenCalledWith('get_providers:');
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('get_providers'));
 
     act(() => {
       window.updateProviders?.(JSON.stringify([
@@ -68,7 +71,7 @@ describe('ConfigSelect runtime provider submenu', () => {
 
     fireEvent.click(within(submenu).getByText('Proxy A'));
 
-    expect(window.sendToJava).toHaveBeenCalledWith('switch_provider:{"id":"proxy-a"}');
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('switch_provider', '{"id":"proxy-a"}'));
     expect(await screen.findByText('Provider switched to Proxy A')).toBeTruthy();
   });
 
@@ -78,7 +81,7 @@ describe('ConfigSelect runtime provider submenu', () => {
     fireEvent.click(screen.getByRole('button', { name: /Configure/i }));
     fireEvent.mouseEnter(screen.getByText('Switch provider').closest('.selector-option')!);
 
-    expect(window.sendToJava).toHaveBeenCalledWith('get_codex_providers:');
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('get_codex_providers'));
 
     act(() => {
       window.updateCodexProviders?.(JSON.stringify([
@@ -93,7 +96,7 @@ describe('ConfigSelect runtime provider submenu', () => {
 
     fireEvent.click(within(submenu).getByText('Codex Proxy'));
 
-    expect(window.sendToJava).toHaveBeenCalledWith('switch_codex_provider:{"id":"codex-proxy"}');
+    expect(window.sendToJava).toHaveBeenCalledWith(bridgeCall('switch_codex_provider', '{"id":"codex-proxy"}'));
   });
 
   it('refreshes selected provider when backend confirms active provider change', async () => {

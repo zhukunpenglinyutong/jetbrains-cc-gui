@@ -15,19 +15,24 @@ public class SessionSendServiceTest {
     }
 
     @Test
-    public void resolveEffectivePermissionModePrefersRequestedModeWhenValid() {
+    public void resolveEffectivePermissionModeKeepsSessionModeWhenRequestedDiffers() {
+        assertEquals("default", SessionSendService.resolveEffectivePermissionMode("claude", "bypassPermissions", "default"));
         assertEquals(
-                "acceptEdits",
-                SessionSendService.resolveEffectivePermissionMode("claude", "acceptEdits", "default")
+                "acceptEdits", SessionSendService.resolveEffectivePermissionMode("codex", "bypassPermissions", "acceptEdits")
         );
     }
 
     @Test
-    public void resolveEffectivePermissionModeFallsBackToSessionModeAndDowngradesCodexPlan() {
+    public void resolveEffectivePermissionModeDowngradesCodexPlanAfterSessionResolution() {
         assertEquals(
-                "default",
+                "plan",
                 SessionSendService.resolveEffectivePermissionMode("codex", null, "plan")
         );
+    }
+
+    @Test
+    public void resolveEffectivePermissionModeFallsBackToRequestedModeWhenSessionModeMissing() {
+        assertEquals("acceptEdits", SessionSendService.resolveEffectivePermissionMode("claude", "acceptEdits", null));
         assertEquals(
                 "default",
                 SessionSendService.resolveEffectivePermissionMode("claude", null, null)
@@ -42,5 +47,31 @@ public class SessionSendServiceTest {
         );
         assertNull(SessionSendService.getCodexRuntimeAccessError("managed"));
         assertNull(SessionSendService.getCodexRuntimeAccessError("cli_login"));
+    }
+
+    @Test
+    public void resolveEffectiveClaudeInvocationModeKeepsRequestedCliMode() {
+        assertEquals(
+                "cli",
+                SessionSendService.resolveEffectiveClaudeInvocationMode("cli")
+        );
+    }
+
+    @Test
+    public void resolveEffectiveClaudeInvocationModeKeepsRequestedSdkMode() {
+        assertEquals(
+                "sdk", SessionSendService.resolveEffectiveClaudeInvocationMode("sdk", "sdk"));
+    }
+
+    @Test
+    public void resolveEffectiveClaudeInvocationModeKeepsConfiguredCliWhenFrontendSendsDefaultSdk() {
+        assertEquals("cli", SessionSendService.resolveEffectiveClaudeInvocationMode("sdk", "cli"));
+    }
+
+    @Test
+    public void resolveEffectiveClaudeInvocationModeIgnoresRequestedModeWhenSessionModeExists() {
+        assertEquals("cli", SessionSendService.resolveEffectiveClaudeInvocationMode("sdk", "cli"));
+        assertEquals("sdk", SessionSendService.resolveEffectiveClaudeInvocationMode("cli", "sdk")
+        );
     }
 }

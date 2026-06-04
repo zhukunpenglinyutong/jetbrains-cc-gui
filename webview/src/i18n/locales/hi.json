@@ -35,6 +35,7 @@
     "emptyMessage": "खाली संदेश",
     "clickToPreview": "पूर्वावलोकन के लिए क्लिक करें",
     "userUploadedImage": "उपयोगकर्ता द्वारा अपलोड की गई छवि",
+    "imageLoadFailed": "छवि लोड करने में विफल",
     "inputPlaceholder": "@फाइल संदर्भ, #एजेंट बुलाएं, Enter भेजने के लिए",
     "inputPlaceholderEnter": "@फाइल संदर्भ, #एजेंट बुलाएं, Enter भेजने के लिए",
     "inputPlaceholderCmdEnter": "@फाइल संदर्भ, #एजेंट बुलाएं, ⌘Enter भेजने के लिए",
@@ -91,6 +92,13 @@
     "streamingConnected": "{{provider}} कनेक्ट हो गया, आपके प्रश्न को समझ रहा है",
     "showEarlierMessages": "{{count}} पुराने संदेश दिखाएं",
     "totalDuration": "इस जवाब में लगा समय",
+    "waitingTimedOutDuration": "प्रतीक्षा समय समाप्त",
+    "streamStalledRetrying": "कुछ समय से मॉडल आउटपुट नहीं मिला। CLI अभी भी पुनः प्रयास कर सकता है; विफल होने पर अंतिम त्रुटि दिखाई देगी।",
+    "usageStats": {
+      "input": "इनपुट：",
+      "output": "आउटपुट：",
+      "duration": "अवधि："
+    },
     "search": {
       "ariaLabel": "बातचीत में खोजें",
       "placeholder": "बातचीत में खोजें...",
@@ -115,6 +123,15 @@
       "userContext": "संदर्भ: \"{{context}}\"",
       "expand": "सारांश विस्तृत करें",
       "collapse": "सारांश संक्षिप्त करें"
+    },
+    "tokenIndicator": {
+      "contextStats": "संदर्भ आंकड़े",
+      "inputToken": "इनपुट Token",
+      "outputToken": "आउटपुट Token",
+      "cacheRead": "कैश पठन",
+      "cacheWrite": "कैश लेखन",
+      "cacheHitRate": "{{rate}}% हिट",
+      "total": "कुल {{used}} / {{max}}"
     }
   },
   "settings": {
@@ -1513,6 +1530,7 @@
     "dbParseProviderFailed": "प्रदाता कॉन्फ़िगरेशन पार्स करने में विफल",
     "aiResponseEmpty": "AI प्रतिक्रिया खाली है",
     "enhancementFailed": "संवर्धन विफल",
+    "unsupportedImageVision": "वर्तमान मॉडल छवि पहचान का समर्थन नहीं करता है, या इस प्रदाता का Claude Code संगत इंटरफ़ेस छवि टूल परिणामों का समर्थन नहीं करता है।\nकृपया विज़न-सक्षम मॉडल पर स्विच करें और फिर से प्रयास करें।",
     "uploadedImages": "{{count}} छवि(यां) अपलोड की गईं",
     "uploadedAttachments": "अनुलग्नक अपलोड किए गए",
     "emptyMessage": "खाली संदेश",

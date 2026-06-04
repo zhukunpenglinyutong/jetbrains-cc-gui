@@ -35,6 +35,7 @@
     "emptyMessage": "メッセージが空です",
     "clickToPreview": "クリックしてプレビュー",
     "userUploadedImage": "ユーザーがアップロードした画像",
+    "imageLoadFailed": "画像の読み込みに失敗しました",
     "inputPlaceholder": "@でファイルを参照、#でエージェントを呼び出し、Enterで送信",
     "inputPlaceholderEnter": "@でファイルを参照、#でエージェントを呼び出し、Enterで送信",
     "inputPlaceholderCmdEnter": "@でファイルを参照、#でエージェントを呼び出し、⌘Enterで送信",
@@ -91,6 +92,13 @@
     "streamingConnected": "{{provider}}に接続しました、質問を理解しています",
     "showEarlierMessages": "以前の{{count}}件のメッセージを表示",
     "totalDuration": "今回の応答時間",
+    "waitingTimedOutDuration": "待機がタイムアウトしました",
+    "streamStalledRetrying": "しばらくモデル出力を受信していません。CLI はまだ再試行中の可能性があり、失敗した場合は最終エラーが表示されます。",
+    "usageStats": {
+      "input": "入力：",
+      "output": "出力：",
+      "duration": "所要時間："
+    },
     "search": {
       "ariaLabel": "会話内を検索",
       "placeholder": "会話内を検索...",
@@ -115,6 +123,15 @@
       "userContext": "コンテキスト：「{{context}}」",
       "expand": "要約を展開",
       "collapse": "要約を折りたたむ"
+    },
+    "tokenIndicator": {
+      "contextStats": "コンテキスト統計",
+      "inputToken": "入力 Token",
+      "outputToken": "出力 Token",
+      "cacheRead": "キャッシュ読み取り",
+      "cacheWrite": "キャッシュ書き込み",
+      "cacheHitRate": "{{rate}}% ヒット",
+      "total": "合計 {{used}} / {{max}}"
     }
   },
   "settings": {
@@ -1519,6 +1536,7 @@
     "dbParseProviderFailed": "プロバイダー設定の解析に失敗しました",
     "aiResponseEmpty": "AI レスポンスが空です",
     "enhancementFailed": "強化に失敗しました",
+    "unsupportedImageVision": "現在のモデルは画像認識をサポートしていないか、このプロバイダーの Claude Code 互換インターフェースが画像ツール結果をサポートしていません。\n視覚対応モデルに切り替えて、もう一度お試しください。",
     "uploadedImages": "{{count}} 枚の画像をアップロードしました",
     "uploadedAttachments": "添付ファイルをアップロードしました",
     "emptyMessage": "空のメッセージ",

@@ -28,7 +28,10 @@
     100% { transform: rotate(360deg); }
 }
 
-/* Waiting Indicator 样式 */
+/* ══════════════════════════════════════════════ */
+/*  Waiting Indicator — 波形条纹样式（无竖线）      */
+/* ══════════════════════════════════════════════ */
+
 .waiting-indicator {
     display: inline-flex;
     flex-direction: row;
@@ -36,6 +39,166 @@
     gap: 12px;
     color: var(--vscode-foreground, #d4d4d4);
     padding: 14px 24px;
+}
+
+.waiting-indicator-queued {
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+/* ── Generating Strip — 核心容器 ── */
+
+.generating-strip {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    background: color-mix(in srgb, var(--vscode-editorInfo-foreground, #4ea1ff) 6%, transparent);
+    border: 1px solid color-mix(in srgb, var(--vscode-editorInfo-foreground, #4ea1ff) 15%, transparent);
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--vscode-editorInfo-foreground, #4ea1ff);
+    position: relative;
+    overflow: hidden;
+}
+
+/* 呼吸光晕背景 */
+.generating-strip::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(
+        ellipse at center,
+        color-mix(in srgb, var(--vscode-editorInfo-foreground, #4ea1ff) 6%, transparent) 0%,
+        transparent 70%
+    );
+    animation: strip-breathe 3s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes strip-breathe {
+    0%, 100% { opacity: 0.3; transform: scale(0.95); }
+    50% { opacity: 1; transform: scale(1.05); }
+}
+
+/* ── 排队中变体（橙色） ── */
+
+.generating-strip.queued {
+    background: color-mix(in srgb, var(--vscode-editorWarning-foreground, #d98e04) 6%, transparent);
+    border-color: color-mix(in srgb, var(--vscode-editorWarning-foreground, #d98e04) 15%, transparent);
+    color: var(--vscode-editorWarning-foreground, #d98e04);
+}
+
+.generating-strip.queued::before {
+    background: radial-gradient(
+        ellipse at center,
+        color-mix(in srgb, var(--vscode-editorWarning-foreground, #d98e04) 6%, transparent) 0%,
+        transparent 70%
+    );
+}
+
+/* ── 音频波形 ── */
+
+.gen-wave {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+    height: 16px;
+    position: relative;
+    z-index: 1;
+}
+
+.gen-wave span {
+    display: block;
+    width: 3px;
+    border-radius: 1.5px;
+    background: currentColor;
+}
+
+.gen-wave span:nth-child(1) { height: 6px;  animation: gen-wave 1.2s ease-in-out infinite; }
+.gen-wave span:nth-child(2) { height: 10px; animation: gen-wave 1.2s ease-in-out 0.1s infinite; }
+.gen-wave span:nth-child(3) { height: 4px;  animation: gen-wave 1.2s ease-in-out 0.2s infinite; }
+.gen-wave span:nth-child(4) { height: 8px;  animation: gen-wave 1.2s ease-in-out 0.3s infinite; }
+.gen-wave span:nth-child(5) { height: 5px;  animation: gen-wave 1.2s ease-in-out 0.4s infinite; }
+
+@keyframes gen-wave {
+    0%, 100% { transform: scaleY(0.4); opacity: 0.5; }
+    50% { transform: scaleY(1); opacity: 1; }
+}
+
+/* ── 光球（排队中使用） ── */
+
+.gen-orb {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    position: relative;
+    z-index: 1;
+    animation: orb-pulse 2s ease-in-out infinite;
+}
+
+.gen-orb::before {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 1.5px solid currentColor;
+    animation: orb-ring 2s ease-out infinite;
+    opacity: 0;
+}
+
+@keyframes orb-pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(0.75); opacity: 0.5; }
+}
+
+@keyframes orb-ring {
+    0% { transform: scale(1); opacity: 0.5; }
+    100% { transform: scale(2.8); opacity: 0; }
+}
+
+/* ── 文字与分隔线 ── */
+
+.gen-text {
+    position: relative;
+    z-index: 1;
+    font-weight: 500;
+    letter-spacing: 0.2px;
+}
+
+.gen-time {
+    position: relative;
+    z-index: 1;
+    opacity: 0.5;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.gen-sep {
+    width: 1px;
+    height: 14px;
+    background: currentColor;
+    opacity: 0.2;
+    position: relative;
+    z-index: 1;
+}
+
+/* ── 旧样式兼容（等待移除） ── */
+
+.waiting-text {
+    font-size: 14px;
+    color: var(--vscode-descriptionForeground, #858585);
+    letter-spacing: 1px;
+}
+
+.waiting-dots {
+    display: inline-block;
+    min-width: 2em;
+    text-align: left;
 }
 
 .waiting-spinner {
@@ -72,14 +235,98 @@
     100% { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
-.waiting-text {
-    font-size: 14px;
-    color: var(--vscode-descriptionForeground, #858585);
-    letter-spacing: 1px;
+/* ══════════════════════════════════════════════ */
+/*  过渡动画                                       */
+/* ══════════════════════════════════════════════ */
+
+@keyframes waiting-pill-enter {
+    from {
+        opacity: 0;
+        transform: translateY(12px) scale(0.92);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
 }
 
-.waiting-dots {
-    display: inline-block;
-    min-width: 2em;
-    text-align: left;
+@keyframes waiting-generating-enter {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes waiting-content-exit {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+        filter: blur(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-6px);
+        filter: blur(2px);
+    }
+}
+
+@keyframes waiting-container-exit {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+        filter: blur(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-8px);
+        filter: blur(3px);
+    }
+}
+
+/* ── 过渡动画类 ── */
+
+.queue-pill-enter {
+    animation: waiting-pill-enter 400ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.waiting-generating-enter {
+    animation: waiting-generating-enter 350ms ease-out both;
+}
+
+.waiting-content-exit {
+    animation: waiting-content-exit 250ms ease-in forwards;
+    pointer-events: none;
+}
+
+.waiting-indicator-exit {
+    animation: waiting-container-exit 250ms ease-in forwards;
+    pointer-events: none;
+}
+
+/* ══════════════════════════════════════════════ */
+/*  无障碍：减少动画                                 */
+/* ══════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+    .queue-pill-enter,
+    .waiting-generating-enter,
+    .waiting-content-exit,
+    .waiting-indicator-exit {
+        animation-duration: 0.01ms;
+    }
+
+    .gen-wave span,
+    .gen-orb,
+    .gen-orb::before,
+    .generating-strip::before {
+        animation: none;
+    }
+
+    .gen-orb {
+        opacity: 0.7;
+    }
 }

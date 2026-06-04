@@ -21,7 +21,6 @@ public class SettingsHandler extends BaseMessageHandler {
     private final Gson gson = new Gson();
 
     private final InputHistoryHandler inputHistoryHandler;
-    private final SoundSettingsHandler soundSettingsHandler;
     private final UsagePushService usagePushService;
     private final PermissionModeHandler permissionModeHandler;
     private final ModelProviderHandler modelProviderHandler;
@@ -30,9 +29,9 @@ public class SettingsHandler extends BaseMessageHandler {
 
     private static final String[] SUPPORTED_TYPES = {
         "get_mode",
-        "set_mode",
-        "set_model",
-        "set_provider",
+        "set_mode", "set_session_mode",
+        "set_model", "set_session_model",
+        "set_provider", "set_session_provider",
         "set_reasoning_effort",
         "get_node_path",
         "set_node_path",
@@ -45,6 +44,9 @@ public class SettingsHandler extends BaseMessageHandler {
         "browse_ui_font_file",
         "get_streaming_enabled",
         "set_streaming_enabled",
+        "get_invocation_mode", "get_session_invocation_mode", "get_session_runtime_state",
+        "set_invocation_mode",
+        "set_cli_path",
         "get_codex_sandbox_mode",
         "set_codex_sandbox_mode",
         "get_send_shortcut",
@@ -72,14 +74,6 @@ public class SettingsHandler extends BaseMessageHandler {
         "record_input_history",
         "delete_input_history_item",
         "clear_input_history",
-        // Sound notification configuration
-        "get_sound_notification_config",
-        "set_sound_notification_enabled",
-        "set_sound_only_when_unfocused",
-        "set_selected_sound",
-        "set_custom_sound_path",
-        "test_sound",
-        "browse_sound_file",
         // User language preference
         "set_user_language",
         "get_user_language",
@@ -89,7 +83,6 @@ public class SettingsHandler extends BaseMessageHandler {
     public SettingsHandler(HandlerContext context) {
         super(context);
         this.inputHistoryHandler = new InputHistoryHandler(context);
-        this.soundSettingsHandler = new SoundSettingsHandler(context);
         this.usagePushService = new UsagePushService(context);
         this.permissionModeHandler = new PermissionModeHandler(context);
         this.modelProviderHandler = new ModelProviderHandler(context, usagePushService);
@@ -125,12 +118,21 @@ public class SettingsHandler extends BaseMessageHandler {
             case "set_mode":
                 permissionModeHandler.handleSetMode(content);
                 return true;
+            case "set_session_mode":
+                permissionModeHandler.handleSetSessionMode(content);
+                return true;
             // Model and provider
             case "set_model":
                 modelProviderHandler.handleSetModel(content);
                 return true;
+            case "set_session_model":
+                modelProviderHandler.handleSetSessionModel(content);
+                return true;
             case "set_provider":
                 modelProviderHandler.handleSetProvider(content);
+                return true;
+            case "set_session_provider":
+                modelProviderHandler.handleSetSessionProvider(content);
                 return true;
             case "set_reasoning_effort":
                 modelProviderHandler.handleSetReasoningEffort(content);
@@ -169,6 +171,21 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_streaming_enabled":
                 projectConfigHandler.handleSetStreamingEnabled(content);
+                return true;
+            case "get_invocation_mode":
+                projectConfigHandler.handleGetInvocationMode();
+                return true;
+            case "get_session_invocation_mode":
+                projectConfigHandler.handleGetSessionInvocationMode();
+                return true;
+            case "get_session_runtime_state":
+                projectConfigHandler.handleGetSessionRuntimeState();
+                return true;
+            case "set_invocation_mode":
+                projectConfigHandler.handleSetInvocationMode(content);
+                return true;
+            case "set_cli_path":
+                projectConfigHandler.handleSetCliPath(content);
                 return true;
             case "get_codex_sandbox_mode":
                 projectConfigHandler.handleGetCodexSandboxMode();
@@ -257,28 +274,6 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "clear_input_history":
                 inputHistoryHandler.handleClearInputHistory();
-                return true;
-            // Sound notification configuration
-            case "get_sound_notification_config":
-                soundSettingsHandler.handleGetSoundNotificationConfig();
-                return true;
-            case "set_sound_notification_enabled":
-                soundSettingsHandler.handleSetSoundNotificationEnabled(content);
-                return true;
-            case "set_sound_only_when_unfocused":
-                soundSettingsHandler.handleSetSoundOnlyWhenUnfocused(content);
-                return true;
-            case "set_selected_sound":
-                soundSettingsHandler.handleSetSelectedSound(content);
-                return true;
-            case "set_custom_sound_path":
-                soundSettingsHandler.handleSetCustomSoundPath(content);
-                return true;
-            case "test_sound":
-                soundSettingsHandler.handleTestSound(content);
-                return true;
-            case "browse_sound_file":
-                soundSettingsHandler.handleBrowseSoundFile();
                 return true;
             // User language preference
             case "set_user_language":

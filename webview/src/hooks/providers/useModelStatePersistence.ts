@@ -1,11 +1,9 @@
 import { useEffect } from 'react';
-import { sendBridgeEvent } from '../../utils/bridge';
 import {
   CLAUDE_MODELS,
   CODEX_MODELS,
   isValidPermissionMode,
   normalizeClaudeModelId,
-  apply1MContextSuffix,
   strip1MContextSuffix,
 } from '../../components/ChatInputBox/types';
 import type { PermissionMode, ReasoningEffort } from '../../components/ChatInputBox/types';
@@ -47,8 +45,7 @@ export interface UseModelStatePersistenceOptions {
 
 /**
  * Two effects for persisting cross-slice provider/model state to localStorage:
- *  1. On mount: hydrate state from localStorage and sync the restored values
- *     to the backend (retrying until the JCEF bridge is ready).
+ *  1. On mount: hydrate local UI preferences from localStorage.
  *  2. On change: re-save the snapshot to localStorage.
  *
  * Save uses `JSON.stringify` of the seven persisted keys; load applies
@@ -74,18 +71,15 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     reasoningEffort,
   } = options;
 
-  // Hydrate from localStorage and sync to backend (mount only).
+    // Hydrate local UI preferences from localStorage (mount only).
   // Setters are stable; deps left empty to ensure single execution.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       let restoredProvider = 'claude';
-      let restoredClaudeModel = CLAUDE_MODELS[0].id;
-      let restoredCodexModel = CODEX_MODELS[0].id;
-      let restoredClaudePermissionMode: PermissionMode = 'bypassPermissions';
+      let restoredClaudePermissionMode: PermissionMode = 'acceptEdits';
       let restoredCodexPermissionMode: PermissionMode = 'default';
-      let restoredLongContextEnabled = true;
 
       if (saved) {
         const state = JSON.parse(saved);
@@ -99,13 +93,10 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           restoredClaudePermissionMode = state.claudePermissionMode;
         }
         if (isValidPermissionMode(state.codexPermissionMode)) {
-          restoredCodexPermissionMode = state.codexPermissionMode === 'plan'
-            ? 'default'
-            : state.codexPermissionMode;
+          restoredCodexPermissionMode = state.codexPermissionMode;
         }
 
         if (typeof state.longContextEnabled === 'boolean') {
-          restoredLongContextEnabled = state.longContextEnabled;
           setLongContextEnabled(state.longContextEnabled);
         }
 
@@ -120,7 +111,6 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           CLAUDE_MODELS.find(m => m.id === normalizedClaudeModel) ||
           savedClaudeCustomModels.find(m => m.id === normalizedClaudeModel)
         ) {
-          restoredClaudeModel = normalizedClaudeModel;
           setSelectedClaudeModel(normalizedClaudeModel);
         }
 
@@ -129,7 +119,6 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           CODEX_MODELS.find(m => m.id === state.codexModel) ||
           savedCodexCustomModels.find(m => m.id === state.codexModel)
         ) {
-          restoredCodexModel = state.codexModel;
           setSelectedCodexModel(state.codexModel);
         }
       }
@@ -141,25 +130,6 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
       setCodexPermissionMode(restoredCodexPermissionMode);
       setPermissionMode(initialPermissionMode);
 
-      let syncRetryCount = 0;
-      const MAX_SYNC_RETRIES = 30;
-
-      const syncToBackend = () => {
-        if (window.sendToJava) {
-          sendBridgeEvent('set_provider', restoredProvider);
-          const modelToSync = restoredProvider === 'codex'
-            ? restoredCodexModel
-            : apply1MContextSuffix(restoredClaudeModel, restoredLongContextEnabled);
-          sendBridgeEvent('set_model', modelToSync);
-          sendBridgeEvent('set_mode', initialPermissionMode);
-        } else {
-          syncRetryCount++;
-          if (syncRetryCount < MAX_SYNC_RETRIES) {
-            setTimeout(syncToBackend, 100);
-          }
-        }
-      };
-      setTimeout(syncToBackend, 200);
     } catch {
       // Failed to load model selection state — fall back to defaults already
       // set by individual slice hooks.

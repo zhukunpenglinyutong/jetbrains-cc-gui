@@ -38,9 +38,29 @@ interface Window {
   showLoading?: (value: string | boolean) => void;
 
   /**
+   * Show provider queue state.
+   */
+  showQueueStatus?: (state: string, aheadCount?: string | number) => void;
+
+  /**
    * Show thinking status
    */
   showThinkingStatus?: (value: string | boolean) => void;
+
+  /**
+   * Update configured default invocation mode.
+   */
+  updateInvocationMode?: (json: string) => void;
+
+    /**
+     * Update cached session invocation mode for Claude sends.
+     */
+    updateSessionInvocationMode?: (json: string) => void;
+
+    /**
+     * Update session-scoped runtime state from the backend authority.
+     */
+    updateSessionRuntimeState?: (json: string) => void;
 
   /**
    * Show conversation summary/compaction notice
@@ -273,11 +293,6 @@ interface Window {
    * Update project-level commit AI prompt configuration
    */
   updateProjectCommitPrompt?: (json: string) => void;
-
-  /**
-   * Update sound notification configuration
-   */
-  updateSoundNotificationConfig?: (json: string) => void;
 
   /**
    * Update AI commit generation enabled state
@@ -693,6 +708,13 @@ interface Window {
    __streamEndProcessedTurnId?: number;
 
    /**
+   * Source of the last onStreamEnd call ('watchdog' | 'backend').
+   * Used for diagnostic logging to identify premature stream-end events.
+   * Set by the stall watchdog before calling onStreamEnd, cleared after processing.
+   */
+  __lastStreamEndSource?: string;
+
+   /**
    * Timestamp when the current streaming turn started.
    * Used to calculate durationMs on the assistant message when the stream ends.
    */
@@ -711,9 +733,14 @@ interface Window {
   __pendingUpdateRaf?: number | null;
   __pendingUpdateJson?: string | null;
   __pendingUpdateSequence?: number | null;
+  __streamingDeltaRenderingFrame?: number;
   __minAcceptedUpdateSequence?: number;
   /** Cancel pending rAF-deferred updateMessages (set by messageCallbacks, called by onStreamEnd). */
   __cancelPendingUpdateMessages?: () => void;
+  /** Currently active streaming scope key: provider:tabId:turnId. */
+  __activeStreamScopeKey?: string | null;
+  /** Cached chat-side Claude invocation mode, populated by backend settings callback. */
+  __CLAUDE_INVOCATION_MODE__?: 'sdk' | 'cli' | 'unknown';
 
   /**
    * Rewind result callback - returns the result of a rewind operation
@@ -819,6 +846,11 @@ interface Window {
    * Pending auto open file enabled status before React initialization
    */
   __pendingAutoOpenFileEnabled?: string;
+
+    /**
+     * Pending session runtime state before callbacks are registered.
+     */
+    __pendingSessionRuntimeState?: string;
 
   /**
    * Pending permission dialog timeout before React initialization

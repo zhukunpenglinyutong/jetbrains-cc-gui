@@ -95,6 +95,7 @@ export interface ChatScreenProps {
   usagePercentage: ProviderState['usagePercentage'];
   usageUsedTokens: ProviderState['usageUsedTokens'];
   usageMaxTokens: ProviderState['usageMaxTokens'];
+  tokenDetail: ProviderState['tokenDetail'];
 
   // Model handlers
   onModeSelect: ProviderState['handleModeSelect'];
@@ -134,14 +135,17 @@ export const ChatScreen = ({
   sdkStatusLoaded, currentSdkInstalled,
   activeProviderConfig, claudeSettingsAlwaysThinkingEnabled,
   reasoningEffort, streamingEnabledSetting, sendShortcut, autoOpenFileEnabled,
-  longContextEnabled, usagePercentage, usageUsedTokens, usageMaxTokens,
+  longContextEnabled, usagePercentage, usageUsedTokens, usageMaxTokens, tokenDetail,
   onModeSelect, onModelSelect, onAgentSelect, onReasoningChange, onToggleThinking,
   onStreamingEnabledChange,
   onAutoOpenFileEnabledChange, onLongContextChange,
   messageQueue, onRemoveFromQueue,
 }: ChatScreenProps) => {
   const { t } = useTranslation();
-  const { messages, loading, isThinking, streamingActive, loadingStartTime, subagentHistories } = useMessages();
+  const {
+    messages, loading, isThinking, streamingActive, loadingStartTime,
+    queueDisplayState, queueAheadCount, subagentHistories,
+  } = useMessages();
   const { currentSessionId } = useSession();
   const {
     setSettingsInitialTab, setCurrentView,
@@ -236,6 +240,8 @@ export const ChatScreen = ({
                   isThinking={isThinking}
                   loading={loading}
                   loadingStartTime={loadingStartTime}
+                  queueDisplayState={queueDisplayState}
+                  queueAheadCount={queueAheadCount}
                   t={t}
                   getMessageText={getMessageText}
                   getContentBlocks={getContentBlocks}
@@ -284,6 +290,7 @@ export const ChatScreen = ({
           usagePercentage={usagePercentage}
           usageUsedTokens={usageUsedTokens}
           usageMaxTokens={usageMaxTokens}
+          tokenDetail={tokenDetail}
           showUsage={true}
           alwaysThinkingEnabled={activeProviderConfig?.settingsConfig?.alwaysThinkingEnabled ?? claudeSettingsAlwaysThinkingEnabled}
           placeholder={sendShortcut === 'cmdEnter' ? t('chat.inputPlaceholderCmdEnter') : t('chat.inputPlaceholderEnter')}

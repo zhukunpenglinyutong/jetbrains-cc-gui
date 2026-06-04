@@ -1,0 +1,1031 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Generating Indicator - 完整聊天界面效果图</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #1e1f22;
+      --panel: #25262b;
+      --bar: #2b2d31;
+      --surface: #2d2f34;
+      --chip: #32343a;
+      --hover: #3a3d44;
+      --border: #464950;
+      --input-border: #5a5d66;
+      --muted: #a8adb7;
+      --text: #f0f2f5;
+      --soft: #d8dde6;
+      --accent: #4ea1ff;
+      --accent-hover: #6bb3ff;
+      --green: #4cc38a;
+      --amber: #e7b85a;
+      --violet: #a989ff;
+      --red: #f07178;
+      --orange: #f5a623;
+      --shadow-sm: 0 2px 8px rgba(0, 0, 0, .2);
+      --shadow-md: 0 8px 24px rgba(0, 0, 0, .3);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 14px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 40px;
+    }
+
+    svg.icon {
+      width: 1em; height: 1em;
+      stroke: currentColor; stroke-width: 1.8; fill: none;
+      stroke-linecap: round; stroke-linejoin: round;
+      vertical-align: middle;
+    }
+
+    .preview-container { max-width: 900px; margin: 0 auto; }
+    .preview-title { font-size: 24px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+    .preview-subtitle { font-size: 14px; color: var(--muted); margin-bottom: 32px; }
+    .section { margin-bottom: 48px; }
+    .section-title {
+      font-size: 16px; font-weight: 600; color: var(--soft);
+      margin-bottom: 16px; padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .section-title svg.icon { width: 18px; height: 18px; color: var(--accent); }
+
+    /* Chat shell */
+    .chat-demo {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .chat-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 16px;
+      background: var(--bar);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .chat-header-icon {
+      width: 28px; height: 28px;
+      background: linear-gradient(135deg, var(--accent), var(--violet));
+      border-radius: 6px; display: grid; place-items: center;
+    }
+    .chat-header-icon svg.icon { width: 16px; height: 16px; color: white; }
+    .chat-header-text { font-size: 14px; font-weight: 500; }
+
+    .messages-area {
+      padding: 24px;
+      display: flex; flex-direction: column; gap: 20px;
+      min-height: 400px;
+    }
+
+    /* Message base */
+    .message {
+      display: flex; gap: 12px; max-width: 85%;
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .message.user { align-self: flex-end; flex-direction: row-reverse; }
+    .message.assistant { align-self: flex-start; }
+
+    /* Avatar */
+    .message-avatar {
+      width: 36px; height: 36px; border-radius: 10px;
+      display: grid; place-items: center; flex-shrink: 0; position: relative;
+    }
+    .message.user .message-avatar {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+    }
+    .message.user .message-avatar svg.icon { width: 18px; height: 18px; color: white; }
+    .message.assistant .message-avatar {
+      background: linear-gradient(135deg, var(--accent), var(--violet));
+      box-shadow: 0 2px 8px rgba(78, 161, 255, 0.3);
+    }
+    .message.assistant .message-avatar svg.icon { width: 18px; height: 18px; color: white; }
+    .avatar-label {
+      position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%);
+      font-size: 10px; color: var(--muted); white-space: nowrap;
+      opacity: 0; transition: opacity 0.2s;
+    }
+    .message:hover .avatar-label { opacity: 1; }
+
+    /* Message content */
+    .message-content {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px 18px;
+      font-size: 14px; line-height: 1.7; position: relative;
+    }
+    .message.user .message-content {
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.1));
+      border-color: rgba(99, 102, 241, 0.3);
+      border-top-right-radius: 4px;
+    }
+    .message.assistant .message-content {
+      background: var(--surface); border-color: var(--border);
+      border-top-left-radius: 4px;
+    }
+    .message-content::before {
+      content: ''; position: absolute; top: 12px;
+      width: 8px; height: 8px; background: inherit;
+      border: 1px solid var(--border); border-top: none;
+      transform: rotate(45deg);
+    }
+    .message.user .message-content::before {
+      right: -5px; border-right: none;
+      border-top: 1px solid rgba(99, 102, 241, 0.3);
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.1));
+    }
+    .message.assistant .message-content::before {
+      left: -5px; border-left: none;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    /* Thinking section */
+    .thinking-section {
+      margin-bottom: 14px;
+      background: rgba(169, 137, 255, 0.08);
+      border: 1px solid rgba(169, 137, 255, 0.2);
+      border-radius: 8px; overflow: hidden;
+    }
+    .thinking-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 14px; cursor: pointer; transition: background 0.2s;
+    }
+    .thinking-header:hover { background: rgba(169, 137, 255, 0.05); }
+    .thinking-icon { width: 18px; height: 18px; color: var(--violet); }
+    .thinking-label { font-size: 13px; font-weight: 500; color: var(--violet); }
+    .thinking-duration { font-size: 12px; color: var(--muted); margin-left: auto; }
+    .thinking-chevron { width: 14px; height: 14px; color: var(--muted); transition: transform 0.2s; }
+    .thinking-section.expanded .thinking-chevron { transform: rotate(180deg); }
+    .thinking-content {
+      padding: 0 14px 12px; font-size: 13px; color: var(--soft);
+      line-height: 1.6; display: none;
+    }
+    .thinking-section.expanded .thinking-content { display: block; }
+    .thinking-content p { margin-bottom: 8px; }
+    .thinking-content p:last-child { margin-bottom: 0; }
+
+    /* Tool call */
+    .tool-call {
+      margin-top: 14px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+    }
+    .tool-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 14px; background: var(--bar);
+      border-bottom: 1px solid var(--border); font-size: 13px;
+    }
+    .tool-icon { width: 16px; height: 16px; color: var(--amber); }
+    .tool-name { font-weight: 500; color: var(--soft); }
+    .tool-status { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 12px; }
+    .tool-status.success { color: var(--green); }
+    .tool-status.running { color: var(--accent); }
+    .tool-status-icon { width: 14px; height: 14px; }
+    .tool-body {
+      padding: 12px 14px; font-size: 12px;
+      font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+      color: var(--soft); line-height: 1.6; max-height: 200px; overflow-y: auto;
+    }
+    .tool-body .command { color: var(--accent); }
+    .tool-body .output { color: var(--muted); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+    .tool-body .highlight { color: var(--green); font-weight: 500; }
+
+    /* File ref */
+    .file-ref {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; background: rgba(78, 161, 255, 0.1);
+      border: 1px solid rgba(78, 161, 255, 0.2); border-radius: 4px;
+      font-size: 12px; font-family: "JetBrains Mono", monospace;
+      color: var(--accent); text-decoration: none; transition: all 0.2s;
+    }
+    .file-ref:hover { background: rgba(78, 161, 255, 0.2); border-color: rgba(78, 161, 255, 0.4); }
+    .file-ref svg.icon { width: 12px; height: 12px; }
+
+    /* Code block */
+    .code-block {
+      margin: 12px 0; background: var(--bg);
+      border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+    }
+    .code-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px; background: var(--bar);
+      border-bottom: 1px solid var(--border); font-size: 12px; color: var(--muted);
+    }
+    .code-lang { font-weight: 500; }
+    .code-copy {
+      display: flex; align-items: center; gap: 4px;
+      background: transparent; border: none; color: var(--muted);
+      cursor: pointer; font-size: 12px; transition: color 0.2s;
+    }
+    .code-copy:hover { color: var(--text); }
+    .code-copy svg.icon { width: 14px; height: 14px; }
+    .code-content {
+      padding: 14px; font-family: "JetBrains Mono", "Fira Code", monospace;
+      font-size: 13px; line-height: 1.6; overflow-x: auto;
+    }
+    .code-content .keyword { color: var(--violet); }
+    .code-content .string { color: var(--green); }
+    .code-content .comment { color: var(--muted); font-style: italic; }
+    .code-content .function { color: var(--accent); }
+    .code-content .number { color: var(--orange); }
+
+    /* Lists */
+    .message-content ul, .message-content ol { margin: 10px 0; padding-left: 24px; }
+    .message-content li { margin-bottom: 6px; }
+    .message-content li:last-child { margin-bottom: 0; }
+
+    /* Streaming dots (existing style from preview) */
+    .streaming-indicator { display: inline-flex; align-items: center; gap: 4px; margin-left: 4px; }
+    .streaming-dot {
+      width: 4px; height: 4px; border-radius: 50%;
+      background: var(--accent); animation: streaming 1.4s infinite ease-in-out;
+    }
+    .streaming-dot:nth-child(2) { animation-delay: 0.2s; }
+    .streaming-dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes streaming {
+      0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+
+    /* Message meta */
+    .message-meta {
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 8px; font-size: 11px; color: var(--muted);
+    }
+    .message.user .message-meta { justify-content: flex-end; }
+    .meta-item { display: flex; align-items: center; gap: 4px; }
+    .meta-item svg.icon { width: 12px; height: 12px; }
+
+    /* Usage stats */
+    .usage-stats {
+      display: flex; align-items: center; gap: 12px;
+      margin-top: 12px; padding: 10px 14px;
+      background: rgba(78, 161, 255, 0.06);
+      border: 1px solid rgba(78, 161, 255, 0.15);
+      border-radius: 8px; font-size: 12px;
+    }
+    .usage-item { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+    .usage-item svg.icon { width: 14px; height: 14px; color: var(--accent); }
+    .usage-value { font-weight: 600; color: var(--soft); }
+    .usage-divider { width: 1px; height: 16px; background: var(--border); }
+
+    /* ══════════════════════════════════════════════ */
+    /*  NEW: Generating Indicator — Side Strip (no bar) */
+    /* ══════════════════════════════════════════════ */
+
+    /*
+     * 方案：侧边条纹（无竖线）
+     * - 去掉左侧竖线
+     * - 用微妙的背景色 + 圆角标识区域
+     * - 音频波形动画暗示"AI 正在说话"
+     * - 与 JetBrains 消息卡片风格一致
+     */
+
+    .generating-strip {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      background: rgba(78, 161, 255, 0.06);
+      border: 1px solid rgba(78, 161, 255, 0.15);
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--accent);
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* 微妙的呼吸光晕背景 */
+    .generating-strip::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(
+        ellipse at center,
+        rgba(78, 161, 255, 0.06) 0%,
+        transparent 70%
+      );
+      animation: strip-breathe 3s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    @keyframes strip-breathe {
+      0%, 100% { opacity: 0.3; transform: scale(0.95); }
+      50% { opacity: 1; transform: scale(1.05); }
+    }
+
+    /* 音频波形 */
+    .gen-wave {
+      display: flex;
+      gap: 2px;
+      align-items: center;
+      height: 16px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .gen-wave span {
+      display: block;
+      width: 3px;
+      border-radius: 1.5px;
+      background: var(--accent);
+    }
+
+    .gen-wave span:nth-child(1) { height: 6px; animation: gen-wave 1.2s ease-in-out infinite; }
+    .gen-wave span:nth-child(2) { height: 10px; animation: gen-wave 1.2s ease-in-out 0.1s infinite; }
+    .gen-wave span:nth-child(3) { height: 4px; animation: gen-wave 1.2s ease-in-out 0.2s infinite; }
+    .gen-wave span:nth-child(4) { height: 8px; animation: gen-wave 1.2s ease-in-out 0.3s infinite; }
+    .gen-wave span:nth-child(5) { height: 5px; animation: gen-wave 1.2s ease-in-out 0.4s infinite; }
+
+    @keyframes gen-wave {
+      0%, 100% { transform: scaleY(0.4); opacity: 0.5; }
+      50% { transform: scaleY(1); opacity: 1; }
+    }
+
+    .gen-text {
+      position: relative;
+      z-index: 1;
+      font-weight: 500;
+      letter-spacing: 0.2px;
+    }
+
+    .gen-time {
+      position: relative;
+      z-index: 1;
+      color: rgba(78, 161, 255, 0.5);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .gen-sep {
+      width: 1px;
+      height: 14px;
+      background: rgba(78, 161, 255, 0.2);
+      position: relative;
+      z-index: 1;
+    }
+
+    /* 紧凑版（嵌入消息流中） */
+    .generating-strip.compact {
+      padding: 5px 12px;
+      gap: 8px;
+      font-size: 12px;
+      border-radius: 6px;
+    }
+
+    .generating-strip.compact .gen-wave {
+      height: 12px;
+    }
+
+    .generating-strip.compact .gen-wave span {
+      width: 2px;
+    }
+
+    .generating-strip.compact .gen-wave span:nth-child(1) { height: 4px; }
+    .generating-strip.compact .gen-wave span:nth-child(2) { height: 7px; }
+    .generating-strip.compact .gen-wave span:nth-child(3) { height: 3px; }
+    .generating-strip.compact .gen-wave span:nth-child(4) { height: 6px; }
+    .generating-strip.compact .gen-wave span:nth-child(5) { height: 4px; }
+
+    /* 思考中变体（紫色） */
+    .generating-strip.thinking {
+      background: rgba(169, 137, 255, 0.06);
+      border-color: rgba(169, 137, 255, 0.15);
+      color: var(--violet);
+    }
+
+    .generating-strip.thinking::before {
+      background: radial-gradient(
+        ellipse at center,
+        rgba(169, 137, 255, 0.06) 0%,
+        transparent 70%
+      );
+    }
+
+    .generating-strip.thinking .gen-wave span { background: var(--violet); }
+    .generating-strip.thinking .gen-time { color: rgba(169, 137, 255, 0.5); }
+    .generating-strip.thinking .gen-sep { background: rgba(169, 137, 255, 0.2); }
+
+    /* 排队中变体（橙色） */
+    .generating-strip.queued {
+      background: rgba(231, 184, 90, 0.06);
+      border-color: rgba(231, 184, 90, 0.15);
+      color: var(--amber);
+    }
+
+    .generating-strip.queued::before {
+      background: radial-gradient(
+        ellipse at center,
+        rgba(231, 184, 90, 0.06) 0%,
+        transparent 70%
+      );
+    }
+
+    .generating-strip.queued .gen-wave span { background: var(--amber); }
+    .generating-strip.queued .gen-time { color: rgba(231, 184, 90, 0.5); }
+    .generating-strip.queued .gen-sep { background: rgba(231, 184, 90, 0.2); }
+
+    /* 生成中变体 — 蓝色光球（推荐） */
+    .generating-strip .gen-orb {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      position: relative;
+      z-index: 1;
+      animation: orb-pulse 2s ease-in-out infinite;
+    }
+
+    .generating-strip .gen-orb::before {
+      content: '';
+      position: absolute;
+      inset: -3px;
+      border-radius: 50%;
+      border: 1.5px solid var(--accent);
+      animation: orb-ring 2s ease-out infinite;
+      opacity: 0;
+    }
+
+    @keyframes orb-pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(0.75); opacity: 0.5; }
+    }
+
+    @keyframes orb-ring {
+      0% { transform: scale(1); opacity: 0.5; }
+      100% { transform: scale(2.8); opacity: 0; }
+    }
+
+    /* 思考中 — 紫色光球 */
+    .generating-strip.thinking .gen-orb { background: var(--violet); }
+    .generating-strip.thinking .gen-orb::before { border-color: var(--violet); }
+
+    /* 排队中 — 橙色光球 */
+    .generating-strip.queued .gen-orb { background: var(--amber); }
+    .generating-strip.queued .gen-orb::before { border-color: var(--amber); }
+
+    /* Token 行内统计 */
+    .gen-tokens {
+      position: relative;
+      z-index: 1;
+      color: rgba(78, 161, 255, 0.4);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ══════════════════════════════════════════════ */
+    /*  Tool status running (generating state)        */
+    /* ══════════════════════════════════════════════ */
+    .tool-status.running .tool-status-icon {
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Notes */
+    .notes {
+      background: rgba(78, 161, 255, 0.06); border: 1px solid rgba(78, 161, 255, 0.15);
+      border-radius: 8px; padding: 16px 20px; margin-top: 16px;
+    }
+    .notes h4 { font-size: 13px; color: var(--accent); margin-bottom: 8px; }
+    .notes ul { list-style: none; padding: 0; }
+    .notes li { font-size: 13px; color: var(--muted); padding: 3px 0 3px 16px; position: relative; }
+    .notes li::before { content: '→'; position: absolute; left: 0; color: var(--border); }
+
+    /* Spec grid */
+    .spec-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px; margin-top: 16px;
+    }
+    .spec-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 16px;
+    }
+    .spec-card-head {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+    }
+    .spec-card-icon {
+      width: 24px; height: 24px; border-radius: 6px;
+      display: grid; place-items: center;
+    }
+    .spec-card-title { font-weight: 600; color: var(--soft); font-size: 14px; }
+    .spec-card ul {
+      font-size: 13px; color: var(--muted); line-height: 1.8;
+      padding-left: 16px; list-style: disc;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      body { padding: 20px; }
+      .message { max-width: 95%; }
+      .message-avatar { width: 32px; height: 32px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="preview-container">
+    <h1 class="preview-title">⚡ 生成指示器 — 完整效果图</h1>
+    <p class="preview-subtitle">侧边条纹方案（无竖线）· 融入 JetBrains 聊天消息设计语言 · 2026-06-04</p>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- Section 1: 独立组件展示                      -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div class="section">
+      <h2 class="section-title">
+        <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        组件独立展示
+      </h2>
+
+      <!-- 三种状态 -->
+      <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 24px;">
+        <div>
+          <div style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px;">生成中 · 蓝色</div>
+          <div class="generating-strip">
+            <div class="gen-orb"></div>
+            <span class="gen-text">正在生成响应</span>
+            <div class="gen-sep"></div>
+            <span class="gen-time">12s</span>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px;">思考中 · 紫色</div>
+          <div class="generating-strip thinking">
+            <div class="gen-orb"></div>
+            <span class="gen-text">正在思考</span>
+            <div class="gen-sep"></div>
+            <span class="gen-time">3s</span>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px;">排队中 · 橙色</div>
+          <div class="generating-strip queued">
+            <div class="gen-orb"></div>
+            <span class="gen-text">队列等待中</span>
+            <div class="gen-sep"></div>
+            <span class="gen-time">预计 15s</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 波形变体 -->
+      <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 24px;">
+        <div>
+          <div style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px;">波形变体</div>
+          <div class="generating-strip">
+            <div class="gen-wave">
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <span class="gen-text">正在生成响应</span>
+            <div class="gen-sep"></div>
+            <span class="gen-time">12s</span>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px;">带 Token 统计</div>
+          <div class="generating-strip">
+            <div class="gen-orb"></div>
+            <span class="gen-text">正在生成响应</span>
+            <div class="gen-sep"></div>
+            <span class="gen-time">1m 23s</span>
+            <div class="gen-sep"></div>
+            <span class="gen-tokens">1,247 tk</span>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px;">紧凑版</div>
+          <div class="generating-strip compact">
+            <div class="gen-orb"></div>
+            <span class="gen-text">正在生成响应</span>
+            <span class="gen-time">12s</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- Section 2: 完整聊天场景 — 生成中             -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div class="section">
+      <h2 class="section-title">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        场景 1：AI 正在生成响应
+      </h2>
+      <div class="chat-demo">
+        <div class="chat-header">
+          <div class="chat-header-icon">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          </div>
+          <span class="chat-header-text">Claude Code 会话</span>
+        </div>
+        <div class="messages-area">
+          <!-- 用户消息 -->
+          <div class="message user">
+            <div class="message-avatar">
+              <svg class="icon" viewBox="0 0 24 24">
+                <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+              <span class="avatar-label">你</span>
+            </div>
+            <div>
+              <div class="message-content">帮我写一个快速排序的 Java 实现</div>
+              <div class="message-meta">
+                <span class="meta-item">
+                  <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  14:32
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- AI 回复（已完成） -->
+          <div class="message assistant">
+            <div class="message-avatar">
+              <svg class="icon" viewBox="0 0 24 24">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                <path d="M2 17l10 5 10-5"/>
+                <path d="M2 12l10 5 10-5"/>
+              </svg>
+              <span class="avatar-label">Claude</span>
+            </div>
+            <div>
+              <div class="message-content">
+                <p>好的，这是一个 Java 实现的快速排序算法：</p>
+                <div class="code-block">
+                  <div class="code-header">
+                    <span class="code-lang">Java</span>
+                    <button class="code-copy">
+                      <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                      复制
+                    </button>
+                  </div>
+                  <div class="code-content">
+<span class="keyword">public class</span> <span class="function">QuickSort</span> {
+  <span class="keyword">public static void</span> <span class="function">sort</span>(<span class="keyword">int</span>[] arr, <span class="keyword">int</span> low, <span class="keyword">int</span> high) {
+    <span class="keyword">if</span> (low < high) {
+      <span class="keyword">int</span> pi = <span class="function">partition</span>(arr, low, high);
+      <span class="function">sort</span>(arr, low, pi - <span class="number">1</span>);
+      <span class="function">sort</span>(arr, pi + <span class="number">1</span>, high);
+    }
+  }
+}</div>
+                </div>
+              </div>
+              <div class="message-meta">
+                <span class="meta-item">
+                  <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  14:32
+                </span>
+                <span class="meta-item">
+                  <svg class="icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  Sonnet 4.6
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 用户新消息 -->
+          <div class="message user">
+            <div class="message-avatar">
+              <svg class="icon" viewBox="0 0 24 24">
+                <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+              <span class="avatar-label">你</span>
+            </div>
+            <div>
+              <div class="message-content">再加一个完整的单元测试</div>
+              <div class="message-meta">
+                <span class="meta-item">
+                  <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  14:33
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- AI 正在生成 — 指示器在这里 -->
+          <div class="message assistant" style="opacity: 0.7;">
+            <div class="message-avatar">
+              <svg class="icon" viewBox="0 0 24 24">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                <path d="M2 17l10 5 10-5"/>
+                <path d="M2 12l10 5 10-5"/>
+              </svg>
+              <span class="avatar-label">Claude</span>
+            </div>
+            <div>
+              <div class="message-content" style="padding: 10px 14px; min-width: 280px;">
+                <!-- 生成指示器嵌入消息气泡内 -->
+                <div class="generating-strip compact" style="border: none; background: none; padding: 0;">
+                  <div class="gen-orb"></div>
+                  <span class="gen-text">正在生成响应</span>
+                  <div class="gen-sep"></div>
+                  <span class="gen-time">5s</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- Section 3: 完整场景 — 思考 + 工具调用 + 生成 -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div class="section">
+      <h2 class="section-title">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0112 4.5v15a2.5 2.5 0 01-4.96.44 2.5 2.5 0 01-2.96-3.08 3 3 0 01-.34-5.58 2.5 2.5 0 011.32-4.24 2.5 2.5 0 011.98-3A2.5 2.5 0 019.5 2z"/><path d="M14.5 2A2.5 2.5 0 0012 4.5v15a2.5 2.5 0 004.96.44 2.5 2.5 0 002.96-3.08 3 3 0 00.34-5.58 2.5 2.5 0 00-1.32-4.24 2.5 2.5 0 00-1.98-3A2.5 2.5 0 0014.5 2z"/></svg>
+        场景 2：思考 + 工具调用 + 正在生成
+      </h2>
+      <div class="chat-demo">
+        <div class="messages-area">
+          <!-- AI 完整回复（含思考+工具+生成中） -->
+          <div class="message assistant">
+            <div class="message-avatar">
+              <svg class="icon" viewBox="0 0 24 24">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                <path d="M2 17l10 5 10-5"/>
+                <path d="M2 12l10 5 10-5"/>
+              </svg>
+              <span class="avatar-label">Claude</span>
+            </div>
+            <div>
+              <div class="message-content">
+                <!-- 思考区 -->
+                <div class="thinking-section expanded">
+                  <div class="thinking-header">
+                    <svg class="thinking-icon" viewBox="0 0 24 24">
+                      <path d="M9.5 2A2.5 2.5 0 0112 4.5v15a2.5 2.5 0 01-4.96.44 2.5 2.5 0 01-2.96-3.08 3 3 0 01-.34-5.58 2.5 2.5 0 011.32-4.24 2.5 2.5 0 011.98-3A2.5 2.5 0 019.5 2z"/>
+                      <path d="M14.5 2A2.5 2.5 0 0012 4.5v15a2.5 2.5 0 004.96.44 2.5 2.5 0 002.96-3.08 3 3 0 00.34-5.58 2.5 2.5 0 00-1.32-4.24 2.5 2.5 0 00-1.98-3A2.5 2.5 0 0014.5 2z"/>
+                    </svg>
+                    <span class="thinking-label">思考过程</span>
+                    <span class="thinking-duration">1.8s</span>
+                    <svg class="thinking-chevron" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+                  </div>
+                  <div class="thinking-content">
+                    <p>用户要求添加单元测试。我需要先检查项目结构，看看已有的测试框架。</p>
+                    <p>然后为 QuickSort 编写全面的单元测试用例。</p>
+                  </div>
+                </div>
+
+                <p>好的，我先检查一下项目的测试框架：</p>
+
+                <!-- 工具调用 -->
+                <div class="tool-call">
+                  <div class="tool-header">
+                    <svg class="tool-icon" viewBox="0 0 24 24">
+                      <rect x="2" y="3" width="20" height="14" rx="2"/>
+                      <path d="M8 21h8M12 17v4"/>
+                    </svg>
+                    <span class="tool-name">Bash</span>
+                    <span class="tool-status success">
+                      <svg class="tool-status-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                      完成
+                    </span>
+                  </div>
+                  <div class="tool-body">
+                    <div class="command">$ find . -name "pom.xml" -o -name "build.gradle" | head -5</div>
+                    <div class="output">./build.gradle</div>
+                  </div>
+                </div>
+
+                <div class="tool-call">
+                  <div class="tool-header">
+                    <svg class="tool-icon" viewBox="0 0 24 24">
+                      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                      <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
+                    </svg>
+                    <span class="tool-name">Read File</span>
+                    <span class="tool-status running">
+                      <svg class="tool-status-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                      执行中
+                    </span>
+                  </div>
+                  <div class="tool-body">
+                    <div class="command">$ cat src/test/java/QuickSortTest.java</div>
+                  </div>
+                </div>
+
+                <!-- 正在生成指示器 -->
+                <div style="margin-top: 16px;">
+                  <div class="generating-strip compact" style="border: none; background: none; padding: 0;">
+                    <div class="gen-orb"></div>
+                    <span class="gen-text">正在生成响应</span>
+                    <div class="gen-sep"></div>
+                    <span class="gen-time">8s</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="message-meta">
+                <span class="meta-item">
+                  <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  14:33
+                </span>
+                <span class="meta-item">
+                  <svg class="icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  Sonnet 4.6
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- Section 4: 独立指示器（消息外）              -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div class="section">
+      <h2 class="section-title">
+        <svg class="icon" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        场景 3：独立指示器（消息气泡外部）
+      </h2>
+      <div class="chat-demo">
+        <div class="messages-area">
+          <div class="message user">
+            <div class="message-avatar">
+              <svg class="icon" viewBox="0 0 24 24">
+                <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+              <span class="avatar-label">你</span>
+            </div>
+            <div>
+              <div class="message-content">帮我重构一下这个模块</div>
+            </div>
+          </div>
+
+          <!-- 独立指示器 — 不在消息气泡内 -->
+          <div style="align-self: flex-start; padding-left: 48px;">
+            <div class="generating-strip">
+              <div class="gen-orb"></div>
+              <span class="gen-text">正在生成响应</span>
+              <div class="gen-sep"></div>
+              <span class="gen-time">12s</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- Section 5: 对比 — 带竖线 vs 无竖线           -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div class="section">
+      <h2 class="section-title">
+        <svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        方案对比：带竖线 vs 无竖线
+      </h2>
+      <div style="display: flex; gap: 24px; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 300px;">
+          <div style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px;">V1 · 带左侧竖线</div>
+          <div style="display: flex; align-items: stretch; background: rgba(255,255,255,0.02); border-radius: 6px; overflow: hidden;">
+            <div style="width: 3px; background: var(--accent); animation: strip-glow 2s ease-in-out infinite;"></div>
+            <div style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; font-size: 13px; color: var(--accent);">
+              <div style="display: flex; gap: 2px; align-items: center; height: 14px;">
+                <span style="display: block; width: 2px; height: 5px; background: var(--accent); border-radius: 1px; animation: gen-wave 1.2s ease-in-out infinite;"></span>
+                <span style="display: block; width: 2px; height: 9px; background: var(--accent); border-radius: 1px; animation: gen-wave 1.2s ease-in-out 0.1s infinite;"></span>
+                <span style="display: block; width: 2px; height: 4px; background: var(--accent); border-radius: 1px; animation: gen-wave 1.2s ease-in-out 0.2s infinite;"></span>
+                <span style="display: block; width: 2px; height: 7px; background: var(--accent); border-radius: 1px; animation: gen-wave 1.2s ease-in-out 0.3s infinite;"></span>
+              </div>
+              <span>正在生成响应</span>
+              <span style="color: rgba(78,161,255,0.5); font-size: 12px;">12s</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="flex: 1; min-width: 300px;">
+          <div style="font-size: 11px; color: var(--green); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px;">V2 · 无竖线（推荐）✓</div>
+          <div class="generating-strip" style="display: inline-flex;">
+            <div class="gen-orb"></div>
+            <span class="gen-text">正在生成响应</span>
+            <div class="gen-sep"></div>
+            <span class="gen-time">12s</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes" style="margin-top: 20px;">
+        <h4>无竖线方案的优势</h4>
+        <ul>
+          <li>与消息卡片的圆角风格更统一，视觉更柔和</li>
+          <li>光球脉冲动画比波形更精致，辨识度更高</li>
+          <li>背景呼吸光晕增加层次感但不抢眼</li>
+          <li>颜色语义清晰：蓝=生成 / 紫=思考 / 橙=排队</li>
+          <li>可选波形变体，满足不同审美偏好</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- Section 6: 设计规范                          -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div class="section">
+      <h2 class="section-title">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        设计规范
+      </h2>
+      <div class="spec-grid">
+        <div class="spec-card">
+          <div class="spec-card-head">
+            <div class="spec-card-icon" style="background: rgba(78, 161, 255, 0.15);">
+              <svg style="width: 14px; height: 14px; color: var(--accent);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+              </svg>
+            </div>
+            <span class="spec-card-title">生成中</span>
+          </div>
+          <ul>
+            <li>蓝色主色调 <code style="color: var(--accent);">#4ea1ff</code></li>
+            <li>背景 6% 透明度</li>
+            <li>边框 15% 透明度</li>
+            <li>光球脉冲 + 扩散光环</li>
+            <li>8px 圆角</li>
+          </ul>
+        </div>
+
+        <div class="spec-card">
+          <div class="spec-card-head">
+            <div class="spec-card-icon" style="background: rgba(169, 137, 255, 0.15);">
+              <svg style="width: 14px; height: 14px; color: var(--violet);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+              </svg>
+            </div>
+            <span class="spec-card-title">思考中</span>
+          </div>
+          <ul>
+            <li>紫色主色调 <code style="color: var(--violet);">#a989ff</code></li>
+            <li>与思考区颜色一致</li>
+            <li>光球脉冲 + 扩散光环</li>
+            <li>可选波形变体</li>
+          </ul>
+        </div>
+
+        <div class="spec-card">
+          <div class="spec-card-head">
+            <div class="spec-card-icon" style="background: rgba(231, 184, 90, 0.15);">
+              <svg style="width: 14px; height: 14px; color: var(--amber);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+              </svg>
+            </div>
+            <span class="spec-card-title">排队中</span>
+          </div>
+          <ul>
+            <li>橙色主色调 <code style="color: var(--amber);">#e7b85a</code></li>
+            <li>与警告色系一致</li>
+            <li>显示预计等待时间</li>
+            <li>光球脉冲动画</li>
+          </ul>
+        </div>
+
+        <div class="spec-card">
+          <div class="spec-card-head">
+            <div class="spec-card-icon" style="background: rgba(255,255,255,0.08);">
+              <svg style="width: 14px; height: 14px; color: var(--muted);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+              </svg>
+            </div>
+            <span class="spec-card-title">动画参数</span>
+          </div>
+          <ul>
+            <li>光球脉冲: 2s ease-in-out infinite</li>
+            <li>扩散光环: 2s ease-out infinite</li>
+            <li>波形动画: 1.2s ease-in-out</li>
+            <li>呼吸光晕: 3s ease-in-out</li>
+            <li>reduce-motion: 关闭所有动画</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    @keyframes strip-glow {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+  </style>
+</body>
+</html>

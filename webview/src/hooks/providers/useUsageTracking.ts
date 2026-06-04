@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import type { TokenDetail } from '../../components/ChatInputBox/types';
 
 const PROVIDER_TO_SDK: Record<string, string> = {
   claude: 'claude-sdk',
@@ -20,6 +21,7 @@ export function useUsageTracking() {
   const [usagePercentage, setUsagePercentage] = useState(0);
   const [usageUsedTokens, setUsageUsedTokens] = useState<number | undefined>(undefined);
   const [usageMaxTokens, setUsageMaxTokens] = useState<number | undefined>(undefined);
+  const [tokenDetail, setTokenDetail] = useState<TokenDetail | undefined>(undefined);
   const [sdkStatus, setSdkStatus] = useState<SdkStatus>({});
   const [sdkStatusLoaded, setSdkStatusLoaded] = useState(false);
 
@@ -40,6 +42,8 @@ export function useUsageTracking() {
     setUsageUsedTokens,
     usageMaxTokens,
     setUsageMaxTokens,
+    tokenDetail,
+    setTokenDetail,
     sdkStatus,
     setSdkStatus,
     sdkStatusLoaded,

@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>消息卡片边框效果对比 - JetBrains #2b2d30 背景</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #1a1a1a;
+    color: #cccccc;
+    padding: 24px;
+  }
+
+  h1 {
+    text-align: center;
+    font-size: 20px;
+    color: #e0e0e0;
+    margin-bottom: 8px;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 13px;
+    color: #858585;
+    margin-bottom: 32px;
+  }
+
+  .section {
+    max-width: 680px;
+    margin: 0 auto 40px;
+  }
+  .section-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-title .badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 500;
+  }
+  .badge-problem {
+    background: rgba(244, 67, 54, 0.15);
+    color: #f44336;
+    border: 1px solid rgba(244, 67, 54, 0.3);
+  }
+  .badge-solution {
+    background: rgba(76, 175, 80, 0.15);
+    color: #4caf50;
+    border: 1px solid rgba(76, 175, 80, 0.3);
+  }
+  .section-desc {
+    font-size: 12px;
+    color: #858585;
+    margin-bottom: 16px;
+    line-height: 1.6;
+  }
+
+  /* Chat area - JetBrains background */
+  .chat-area {
+    background: #2b2d30;
+    border-radius: 12px;
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .chat-area::before {
+    content: '聊天区域背景: #2b2d30';
+    position: absolute;
+    top: 6px;
+    right: 10px;
+    font-size: 10px;
+    color: rgba(255,255,255,0.2);
+    pointer-events: none;
+  }
+
+  /* ==================== Message Layout ==================== */
+  .message {
+    display: flex;
+    gap: 12px;
+    max-width: 85%;
+    animation: fadeIn 0.3s ease;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .message.user {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+    align-items: flex-start;
+  }
+  .message.assistant {
+    align-self: flex-start;
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  /* Avatar */
+  .avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+  }
+  .message.user .avatar {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+  }
+  .message.assistant .avatar {
+    background: linear-gradient(135deg, #4ea1ff, #a989ff);
+    box-shadow: 0 2px 8px rgba(78, 161, 255, 0.3);
+  }
+  .avatar svg {
+    width: 18px;
+    height: 18px;
+    color: white;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* ==================== CURRENT (Problem) ==================== */
+  .current .message.user .content {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.1));
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-top-right-radius: 4px;
+  }
+  .current .message.assistant .content {
+    background: #2b2d31; /* --bg-tertiary */
+    border: 1px solid #333; /* --border-primary */
+    border-top-left-radius: 4px;
+  }
+
+  /* ==================== SOLUTION A: Subtle border ==================== */
+  .solution-a .message.user .content {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.1));
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-top-right-radius: 4px;
+  }
+  .solution-a .message.assistant .content {
+    background: #2e3035;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-top-left-radius: 4px;
+  }
+
+  /* ==================== SOLUTION B: Shadow approach ==================== */
+  .solution-b .message.user .content {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.1));
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-top-right-radius: 4px;
+  }
+  .solution-b .message.assistant .content {
+    background: #2b2d31;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    border-top-left-radius: 4px;
+  }
+
+  /* ==================== SOLUTION C: Slightly darker bg ==================== */
+  .solution-c .message.user .content {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.1));
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-top-right-radius: 4px;
+  }
+  .solution-c .message.assistant .content {
+    background: #252729;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-top-left-radius: 4px;
+  }
+
+  /* Content base */
+  .content {
+    padding: 14px 18px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1.7;
+    position: relative;
+    max-width: 100%;
+    word-wrap: break-word;
+  }
+  .content::before {
+    content: '';
+    position: absolute;
+    top: 12px;
+    width: 8px;
+    height: 8px;
+    background: inherit;
+    border: 1px solid inherit;
+    transform: rotate(45deg);
+  }
+  .message.user .content::before {
+    right: -5px;
+    border-right: none;
+    border-top: none;
+    border-color: rgba(99, 102, 241, 0.3);
+  }
+  .message.assistant .content::before {
+    left: -5px;
+    border-left: none;
+    border-bottom: none;
+  }
+
+  /* Tail border fix for current */
+  .current .message.assistant .content::before {
+    border-color: #333;
+  }
+  /* Tail border fix for solutions */
+  .solution-a .message.assistant .content::before {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: #2e3035;
+  }
+  .solution-b .message.assistant .content::before {
+    border-color: rgba(255, 255, 255, 0.06);
+    background: #2b2d31;
+  }
+  .solution-c .message.assistant .content::before {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: #252729;
+  }
+
+  /* Code inline */
+  code {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 13px;
+  }
+
+  /* Color info strip */
+  .color-info {
+    display: flex;
+    gap: 16px;
+    margin-top: 12px;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .color-info .swatch {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    vertical-align: middle;
+    margin-right: 4px;
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+
+  /* ==================== History Mockup ==================== */
+  .history-area {
+    background: #252526;
+    border-radius: 12px;
+    padding: 16px;
+    position: relative;
+  }
+  .history-area::before {
+    content: '历史记录页面';
+    position: absolute;
+    top: 6px;
+    right: 10px;
+    font-size: 10px;
+    color: rgba(255,255,255,0.2);
+    pointer-events: none;
+  }
+
+  .history-toolbar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .toolbar-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    color: #cccccc;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .toolbar-btn:hover {
+    background: rgba(255,255,255,0.1);
+  }
+  .toolbar-btn svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .toolbar-btn.danger {
+    color: #f44336;
+  }
+
+  .history-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin-bottom: 4px;
+    transition: background 0.15s;
+  }
+  .history-item:hover {
+    background: rgba(255,255,255,0.04);
+  }
+  .history-item-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+  }
+  .history-item-title {
+    font-size: 13px;
+    color: #e0e0e0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .history-item-meta {
+    font-size: 11px;
+    color: #858585;
+    margin-left: 12px;
+    white-space: nowrap;
+  }
+
+  .history-item-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .history-item:hover .history-item-actions {
+    opacity: 1;
+  }
+
+  .action-btn {
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    border: none;
+    background: transparent;
+    border-radius: 6px;
+    color: #858585;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .action-btn:hover {
+    background: rgba(255,255,255,0.08);
+    color: #cccccc;
+  }
+  .action-btn svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .action-btn.favorited svg {
+    fill: #f5a623;
+    stroke: #f5a623;
+  }
+  .action-btn.danger:hover {
+    color: #f44336;
+    background: rgba(244, 67, 54, 0.1);
+  }
+
+  /* ==================== Codicon vs SVG comparison ==================== */
+  .comparison-row {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding: 8px 0;
+  }
+  .comparison-label {
+    font-size: 12px;
+    color: #858585;
+    width: 80px;
+    text-align: right;
+  }
+  .comparison-icons {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .icon-sample {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .icon-sample .icon-box {
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.05);
+  }
+  .icon-sample .icon-box svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .icon-sample .label {
+    font-size: 10px;
+    color: #666;
+  }
+
+  .divider {
+    height: 1px;
+    background: rgba(255,255,255,0.06);
+    margin: 16px 0;
+  }
+
+  /* Recommendation highlight */
+  .recommendation {
+    margin-top: 24px;
+    padding: 16px 20px;
+    background: rgba(76, 175, 80, 0.08);
+    border: 1px solid rgba(76, 175, 80, 0.25);
+    border-radius: 10px;
+  }
+  .recommendation h3 {
+    font-size: 14px;
+    color: #4caf50;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .recommendation p {
+    font-size: 13px;
+    color: #b0b0b0;
+    line-height: 1.6;
+  }
+  .recommendation code {
+    background: rgba(76, 175, 80, 0.15);
+    color: #81c784;
+  }
+</style>
+</head>
+<body>
+
+<h1>🎨 消息卡片边框效果对比</h1>
+<p class="subtitle">聊天背景: #2b2d30 (JetBrains 暗色预设) · 消息卡片背景: #2b2d31 (仅差1个色值)</p>
+
+<!-- ==================== PROBLEM ==================== -->
+<div class="section">
+  <div class="section-title">
+    ❌ 当前效果 (问题)
+    <span class="badge badge-problem">问题</span>
+  </div>
+  <div class="section-desc">
+    消息卡片背景 <code>#2b2d31</code> 与聊天背景 <code>#2b2d30</code> 几乎一致，边框 <code>#333</code> 对比度不足，
+    导致 assistant 消息卡片看起来"没有边框"，视觉上与背景融为一体。
+  </div>
+  <div class="chat-area current">
+    <!-- User message -->
+    <div class="message user">
+      <div class="avatar">
+        <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      <div class="content">
+        帮我写一个快速排序算法，用 TypeScript 实现
+      </div>
+    </div>
+    <!-- Assistant message -->
+    <div class="message assistant">
+      <div class="avatar">
+        <svg viewBox="0 0 24 24"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01M9 18h6"/></svg>
+      </div>
+      <div class="content">
+        好的，这是一个 TypeScript 实现的快速排序：<br><br>
+        <code>function quickSort&lt;T&gt;(arr: T[]): T[]</code><br><br>
+        该算法使用泛型支持任意可比较类型，平均时间复杂度 O(n log n)。
+      </div>
+    </div>
+    <!-- User message -->
+    <div class="message user">
+      <div class="avatar">
+        <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      <div class="content">
+        能不能加上注释说明每一步的逻辑？
+      </div>
+    </div>
+    <!-- Assistant message -->
+    <div class="message assistant">
+      <div class="avatar">
+        <svg viewBox="0 0 24 24"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01M9 18h6"/></svg>
+      </div>
+      <div class="content">
+        当然，我已经为每一行添加了详细的中文注释，包括分区操作的思路和递归终止条件的说明。
+      </div>
+    </div>
+    <div class="color-info">
+      <span><span class="swatch" style="background:#2b2d30"></span>聊天背景 #2b2d30</span>
+      <span><span class="swatch" style="background:#2b2d31"></span>卡片背景 #2b2d31</span>
+      <span><span class="swatch" style="background:#333"></span>边框 #333</span>
+      <span style="color:#f44336">← 差异仅 1 个色值!</span>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SOLUTION A ==================== -->
+<div class="section">
+  <div class="section-title">
+    ✅ 方案 A: 提亮边框 + 微调卡片背景
+    <span class="badge badge-solution">推荐</span>
+  </div>
+  <div class="section-desc">
+    将 assistant 卡片背景微调至 <code>#2e3035</code>（比聊天背景亮约3个色值），边框改为 <code>rgba(255,255,255, 0.1)</code>，
+    既保持暗色风格统一，又有清晰的视觉分隔。改动最小，效果最佳。
+  </div>
+  <div class="chat-area solution-a">
+    <div class="message user">
+      <div class="avatar">
+        <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      <div class="content">
+        帮我写一个快速排序算法，用 TypeScript 实现
+      </div>
+    </div>
+    <div class="message assistant">
+      <div class="avatar">
+        <svg viewBox="0 0 24 24"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01M9 18h6"/></svg>
+      </div>
+      <div class="content">
+        好的，这是一个 TypeScript 实现的快速排序：<br><br>
+        <code>function quickSort&lt;T&gt;(arr: T[]): T[]</code><br><br>
+        该算法使用泛型支持任意可比较类型，平均时间复杂度 O(n log n)。
+      </div>
+    </div>
+    <div class="message user">
+      <div class="avatar">
+        <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      <div class="content">
+        能不能加上注释说明每一步的逻辑？
+      </div>
+    </div>
+    <div class="message assistant">
+      <div class="avatar">
+        <svg viewBox="0 0 24 24"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01M9 18h6"/></svg>
+      </div>
+      <div class="content">
+        当然，我已经为每一行添加了详细的中文注释，包括分区操作的思路和递归终止条件的说明。
+      </div>
+    </div>
+    <div class="color-info">
+      <span><span class="swatch" style="background:#2b2d30"></span>聊天背景 #2b2d30</span>
+      <span><span class="swatch" style="background:#2e3035"></span>卡片背景 #2e3035</span>
+      <span><span class="swatch" style="background:rgba(255,255,255,0.1)"></span>边框 rgba(255,255,255,0.1)</span>
+      <span style="color:#4caf50">← 清晰可见的分隔</span>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SOLUTION B ==================== -->
+<div class="section">
+  <div class="section-title">
+    ✅ 方案 B: 保持原背景 + 增加阴影
+    <span class="badge badge-solution">备选</span>
+  </div>
+  <div class="section-desc">
+    保持卡片背景不变 <code>#2b2d31</code>，通过添加 <code>box-shadow</code> 制造层次感。
+    视觉效果柔和，但阴影在极暗背景下可能不够明显。
+  </div>
+  <div class="chat-area solution-b">
+    <div class="message user">
+      <div class="avatar">
+        <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      <div class="content">
+        帮我写一个快速排序算法，用 TypeScript 实现
+      </div>
+    </div>
+    <div class="message assistant">
+      <div class="avatar">
+        <svg viewBox="0 0 24 24"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01M9 18h6"/></svg>
+      </div>
+      <div class="content">
+        好的，这是一个 TypeScript 实现的快速排序：<br><br>
+        <code>function quickSort&lt;T&gt;(arr: T[]): T[]</code><br><br>
+        该算法使用泛型支持任意可比较类型，平均时间复杂度 O(n log n)。
+      </div>
+    </div>
+    <div class="message user">
+      <div class="avatar">
+        <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      <div class="content">
+        能不能加上注释说明每一步的逻辑？
+      </div>
+    </div>
+    <div class="message assistant">
+      <div class="avatar">
+        <svg viewBox="0 0 24 24"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01M9 18h6"/></svg>
+      </div>
+      <div class="content">
+        当然，我已经为每一行添加了详细的中文注释，包括分区操作的思路和递归终止条件的说明。
+      </div>
+    </div>
+    <div class="color-info">
+      <span><span class="swatch" style="background:#2b2d30"></span>聊天背景 #2b2d30</span>
+      <span><span class="swatch" style="background:#2b2d31"></span>卡片背景 #2b2d31</span>
+      <span><span class="swatch" style="background:rgba(255,255,255,0.06)"></span>边框 rgba(255,255,255,0.06)</span>
+      <span>+ box-shadow</span>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SOLUTION C ==================== -->
+<div class="section">
+  <div class="section-title">
+    ✅ 方案 C: 暗化卡片背景
+    <span class="badge badge-solution">备选</span>
+  </div>
+  <div class="section-desc">
+    将 assistant 卡片背景调暗至 <code>#252729</code>（比聊天背景暗约6个色值），边框 <code>rgba(255,255,255, 0.08)</code>。
+    采用"内凹"视觉效果，卡片看起来像是凹陷在聊天区域中。
+  </div>
+  <div class="chat-area solution-c">
+    <div class="message user">
+      <div class="avatar">
+        <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      <div class="content">
+        帮我写一个快速排序算法，用 TypeScript 实现
+      </div>
+    </div>
+    <div class="message assistant">
+      <div class="avatar">
+        <svg viewBox="0 0 24 24"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01M9 18h6"/></svg>
+      </div>
+      <div class="content">
+        好的，这是一个 TypeScript 实现的快速排序：<br><br>
+        <code>function quickSort&lt;T&gt;(arr: T[]): T[]</code><br><br>
+        该算法使用泛型支持任意可比较类型，平均时间复杂度 O(n log n)。
+      </div>
+    </div>
+    <div class="message user">
+      <div class="avatar">
+        <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      <div class="content">
+        能不能加上注释说明每一步的逻辑？
+      </div>
+    </div>
+    <div class="message assistant">
+      <div class="avatar">
+        <svg viewBox="0 0 24 24"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01M9 18h6"/></svg>
+      </div>
+      <div class="content">
+        当然，我已经为每一行添加了详细的中文注释，包括分区操作的思路和递归终止条件的说明。
+      </div>
+    </div>
+    <div class="color-info">
+      <span><span class="swatch" style="background:#2b2d30"></span>聊天背景 #2b2d30</span>
+      <span><span class="swatch" style="background:#252729"></span>卡片背景 #252729</span>
+      <span><span class="swatch" style="background:rgba(255,255,255,0.08)"></span>边框 rgba(255,255,255,0.08)</span>
+    </div>
+  </div>
+</div>
+
+<div class="divider" style="max-width:680px; margin:32px auto;"></div>
+
+<!-- ==================== History Icon Mockup ==================== -->
+<div class="section">
+  <div class="section-title">
+    🔧 历史记录按钮 SVG 图标适配预览
+  </div>
+  <div class="section-desc">
+    将历史记录页面的 Codicon 字体图标替换为项目统一的 SVG 图标组件，保持视觉风格一致。
+  </div>
+
+  <div class="history-area">
+    <!-- Toolbar -->
+    <div class="history-toolbar">
+      <button class="toolbar-btn">
+        <!-- ChecklistIcon (新增) -->
+        <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+        <span>多选</span>
+      </button>
+      <button class="toolbar-btn">
+        <!-- RefreshIcon -->
+        <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+        <span>深度搜索</span>
+      </button>
+    </div>
+
+    <!-- History items -->
+    <div class="history-item">
+      <div class="history-item-left">
+        <span class="history-item-title">🔧 修复登录页面的表单验证逻辑</span>
+        <span class="history-item-meta">3 小时前 · 12 条消息 · 45.2 KB</span>
+      </div>
+      <div class="history-item-actions">
+        <button class="action-btn" title="编辑">
+          <!-- EditIcon -->
+          <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="action-btn" title="导出">
+          <!-- DownloadIcon -->
+          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </button>
+        <button class="action-btn danger" title="删除">
+          <!-- TrashIcon -->
+          <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        </button>
+        <button class="action-btn" title="收藏">
+          <!-- StarIcon (empty) -->
+          <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="history-item">
+      <div class="history-item-left">
+        <span class="history-item-title">✨ 实现用户头像上传功能</span>
+        <span class="history-item-meta">昨天 · 8 条消息 · 23.1 KB</span>
+      </div>
+      <div class="history-item-actions">
+        <button class="action-btn" title="编辑">
+          <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="action-btn" title="导出">
+          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </button>
+        <button class="action-btn danger" title="删除">
+          <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        </button>
+        <button class="action-btn favorited" title="取消收藏">
+          <!-- StarFilledIcon -->
+          <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" fill="#f5a623" stroke="#f5a623"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="history-item">
+      <div class="history-item-left">
+        <span class="history-item-title">🐛 修复暗色主题下的对比度问题</span>
+        <span class="history-item-meta">2 天前 · 5 条消息 · 12.8 KB</span>
+      </div>
+      <div class="history-item-actions">
+        <button class="action-btn" title="编辑">
+          <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="action-btn" title="导出">
+          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </button>
+        <button class="action-btn danger" title="删除">
+          <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        </button>
+        <button class="action-btn" title="收藏">
+          <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== Recommendation ==================== -->
+<div class="section">
+  <div class="recommendation">
+    <h3>💡 推荐方案</h3>
+    <p>
+      <strong>消息卡片边框</strong>：推荐<strong>方案 A</strong>，将 assistant 消息卡片背景从 <code>#2b2d31</code> 调整为 <code>#2e3035</code>，
+      边框从 <code>#333</code> 改为 <code>rgba(255,255,255, 0.1)</code>。这样对所有暗色背景预设都有更好的适应性，
+      而不仅仅是 JetBrains 的 #2b2d30。<br><br>
+      <strong>历史记录图标</strong>：直接替换为 <code>Icons.tsx</code> 中已有的 SVG 组件，
+      新增 <code>ChecklistIcon</code>、<code>CheckAllIcon</code>、<code>ClearAllIcon</code>、<code>SyncIcon</code> 四个图标即可。
+    </p>
+  </div>
+</div>
+
+</body>
+</html>

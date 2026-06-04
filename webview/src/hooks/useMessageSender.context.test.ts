@@ -1,9 +1,13 @@
+// @vitest-environment happy-dom
+
 import { act, renderHook } from '@testing-library/react';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { useMessageSender } from './useMessageSender';
 import type { UseMessageSenderOptions } from './useMessageSender';
 
 describe('useMessageSender - /context command', () => {
   const t = ((key: string, opts?: any) => opts?.defaultValue ?? key) as any;
+  const parseBridgeCall = (call: string) => JSON.parse(call) as { type: string; content: string };
 
   const createOptions = (overrides: Partial<UseMessageSenderOptions> = {}): UseMessageSenderOptions => ({
     t,
@@ -36,6 +40,7 @@ describe('useMessageSender - /context command', () => {
 
   beforeEach(() => {
     window.sendToJava = vi.fn();
+    window.__CLAUDE_INVOCATION_MODE__ = 'sdk';
   });
 
   it('sends get_context_usage with base model when longContext is disabled', () => {
@@ -52,9 +57,9 @@ describe('useMessageSender - /context command', () => {
 
     expect(window.sendToJava).toHaveBeenCalledTimes(1);
     const call = (window.sendToJava as any).mock.calls[0][0] as string;
-    expect(call).toMatch(/^get_context_usage:/);
-
-    const payload = JSON.parse(call.substring('get_context_usage:'.length));
+    const bridgePayload = parseBridgeCall(call);
+    expect(bridgePayload.type).toBe('get_context_usage');
+    const payload = JSON.parse(bridgePayload.content);
     expect(payload.model).toBe('claude-opus-4-7');
     expect(payload.requestId).toBeTruthy();
   });
@@ -73,7 +78,9 @@ describe('useMessageSender - /context command', () => {
 
     expect(window.sendToJava).toHaveBeenCalledTimes(1);
     const call = (window.sendToJava as any).mock.calls[0][0] as string;
-    const payload = JSON.parse(call.substring('get_context_usage:'.length));
+    const bridgePayload = parseBridgeCall(call);
+    expect(bridgePayload.type).toBe('get_context_usage');
+    const payload = JSON.parse(bridgePayload.content);
     expect(payload.model).toBe('claude-opus-4-7[1m]');
   });
 
@@ -119,6 +126,59 @@ describe('useMessageSender - /context command', () => {
     );
   });
 
+  it('shows warning toast and does not send bridge event in Claude CLI mode', () => {
+    window.__CLAUDE_INVOCATION_MODE__ = 'cli';
+    const addToast = vi.fn();
+    const opts = createOptions({ addToast });
+
+    const { result } = renderHook(() => useMessageSender(opts));
+
+    act(() => {
+      result.current.handleSubmit('/context');
+    });
+
+    expect(window.sendToJava).not.toHaveBeenCalled();
+    expect(addToast).toHaveBeenCalledWith(
+      expect.stringContaining('CLI mode'),
+      'warning',
+    );
+  });
+
+    it('blocks normal Claude messages while invocation mode is unknown', () => {
+        window.__CLAUDE_INVOCATION_MODE__ = 'unknown';
+        const addToast = vi.fn();
+        const opts = createOptions({addToast});
+
+        const {result} = renderHook(() => useMessageSender(opts));
+
+        act(() => {
+            result.current.handleSubmit('hello');
+        });
+
+        expect(window.sendToJava).not.toHaveBeenCalled();
+        expect(addToast).toHaveBeenCalledWith(
+            expect.stringContaining('Invocation mode'),
+            'error',
+        );
+    });
+
+    it('does not include permissionMode in normal send payload', () => {
+        const opts = createOptions({
+            currentProvider: 'codex',
+            permissionMode: 'bypassPermissions',
+        });
+        const {result} = renderHook(() => useMessageSender(opts));
+
+        act(() => {
+            result.current.handleSubmit('hello');
+        });
+
+        const calls = (window.sendToJava as any).mock.calls.map(([payload]: [string]) => parseBridgeCall(payload));
+        const sendMessageCall = calls.find((payload: { type: string }) => payload.type === 'send_message');
+        const payload = JSON.parse(sendMessageCall!.content);
+        expect(payload).not.toHaveProperty('permissionMode');
+    });
+
   it('closes dialog with error toast when bridge is unavailable', () => {
     // Don't set window.sendToJava → bridge unavailable
     delete (window as any).sendToJava;
@@ -137,6 +197,28 @@ describe('useMessageSender - /context command', () => {
     expect(addToast).toHaveBeenCalledWith(
       expect.any(String),
       'error',
+    );
+  });
+
+  it('allows sending while SDK status is still loading and shows an informational toast', () => {
+    const addToast = vi.fn();
+    const opts = createOptions({
+      currentProvider: 'codex',
+      sdkStatusLoaded: false,
+      currentSdkInstalled: true,
+      addToast,
+    });
+
+    const { result } = renderHook(() => useMessageSender(opts));
+
+    act(() => {
+      result.current.handleSubmit('hello');
+    });
+
+    expect(window.sendToJava).toHaveBeenCalled();
+    expect(addToast).toHaveBeenCalledWith(
+      expect.stringContaining('backend will verify'),
+      'info',
     );
   });
 });

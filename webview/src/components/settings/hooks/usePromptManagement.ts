@@ -13,12 +13,10 @@ import type {
   ProjectInfo
 } from '../../../types/prompt';
 import type { ImportPreviewResult, ConflictStrategy } from '../../../types/import';
+import { sendBridgeEvent } from '../../../utils/bridge';
 
-const sendToJava = (message: string) => {
-  if (window.sendToJava) {
-    window.sendToJava(message);
-  }
-  // Silently ignore when sendToJava is unavailable to avoid log pollution in production
+const sendToJava = (event: string, payload = '') => {
+  sendBridgeEvent(event, payload);
 };
 
 export interface PromptDialogState {
@@ -98,7 +96,7 @@ export function usePromptManagement(options: UsePromptManagementOptions = {}) {
 
     setPromptsLoading(true);
     const message: GetPromptsMessage = { scope };
-    sendToJava(`get_prompts:${JSON.stringify(message)}`);
+    sendToJava('get_prompts', JSON.stringify(message));
 
     // Set up timeout timer - show empty list after timeout
     const timeoutId = setTimeout(() => {
@@ -193,7 +191,7 @@ export function usePromptManagement(options: UsePromptManagementOptions = {}) {
             createdAt: Date.now(),
           },
         };
-        sendToJava(`add_prompt:${JSON.stringify(message)}`);
+        sendToJava('add_prompt', JSON.stringify(message));
       } else if (promptDialog.prompt) {
         // Update existing prompt
         const message: UpdatePromptMessage = {
@@ -205,7 +203,7 @@ export function usePromptManagement(options: UsePromptManagementOptions = {}) {
             updatedAt: Date.now(),
           },
         };
-        sendToJava(`update_prompt:${JSON.stringify(message)}`);
+        sendToJava('update_prompt', JSON.stringify(message));
       }
 
       setPromptDialog({ isOpen: false, prompt: null, scope: 'global' });
@@ -225,7 +223,7 @@ export function usePromptManagement(options: UsePromptManagementOptions = {}) {
       scope,
       id: prompt.id,
     };
-    sendToJava(`delete_prompt:${JSON.stringify(message)}`);
+    sendToJava('delete_prompt', JSON.stringify(message));
     setDeletePromptConfirm({ isOpen: false, prompt: null, scope: 'global' });
     // Reload list after deletion (with timeout protection)
     loadPrompts(scope);
@@ -270,7 +268,7 @@ export function usePromptManagement(options: UsePromptManagementOptions = {}) {
       scope,
       promptIds: selectedIds,
     };
-    sendToJava(`export_prompts:${JSON.stringify(message)}`);
+    sendToJava('export_prompts', JSON.stringify(message));
     setExportDialog({ isOpen: false, scope: 'global' });
   }, [exportDialog.scope]);
 
@@ -278,7 +276,7 @@ export function usePromptManagement(options: UsePromptManagementOptions = {}) {
   const handleImportPromptsFile = useCallback((scope: PromptScope) => {
     currentImportScopeRef.current = scope;
     const message: ImportPromptsFileMessage = { scope };
-    sendToJava(`import_prompts_file:${JSON.stringify(message)}`);
+    sendToJava('import_prompts_file', JSON.stringify(message));
   }, []);
 
   // Handle import preview result (used by window callback)
@@ -317,7 +315,7 @@ export function usePromptManagement(options: UsePromptManagementOptions = {}) {
         strategy,
       };
 
-      sendToJava(`save_imported_prompts:${JSON.stringify(message)}`);
+      sendToJava('save_imported_prompts', JSON.stringify(message));
       setImportPreviewDialog({ isOpen: false, previewData: null, scope: 'global' });
     },
     [importPreviewDialog.previewData]
