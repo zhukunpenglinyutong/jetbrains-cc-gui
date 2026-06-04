@@ -1,50 +1,55 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, type CSSProperties, type RefObject } from 'react';
 import { getAppViewport } from '../utils/viewport';
 
 type DropdownAlignment = 'left' | 'right';
 
 interface UseDropdownPositionOptions {
-  buttonRef: React.RefObject<HTMLElement | null>;
+  buttonRef: RefObject<HTMLElement | null>;
+  dropdownRef?: RefObject<HTMLElement | null>;
   preferredAlignment?: DropdownAlignment;
   minWidth?: number;
+  submenuMaxHeight?: number;
+  submenuBottomClearance?: number;
   submenu?: boolean;
 }
 
 interface PositionState {
-  left: number;
-  bottom: number;
+  left?: number;
+  top?: number | string;
+  bottom?: number;
   maxHeight: number;
-  submenuSide: 'right' | 'left';
+  submenuSide?: 'right' | 'left';
+  submenuOverlap?: number;
 }
 
-const FALLBACK_ABSOLUTE_LEFT: React.CSSProperties = {
+const FALLBACK_ABSOLUTE_LEFT: CSSProperties = {
   position: 'absolute',
   bottom: '100%',
   marginBottom: '4px',
   left: 0,
 };
 
-const FALLBACK_ABSOLUTE_RIGHT: React.CSSProperties = {
+const FALLBACK_ABSOLUTE_RIGHT: CSSProperties = {
   position: 'absolute',
   bottom: '100%',
   marginBottom: '4px',
   right: 0,
 };
 
-const FALLBACK_SUBMENU_RIGHT: React.CSSProperties = {
+const FALLBACK_SUBMENU_RIGHT: CSSProperties = {
   position: 'absolute',
-  bottom: 0,
+  top: 0,
   left: '100%',
 };
 
-const FALLBACK_SUBMENU_LEFT: React.CSSProperties = {
+const FALLBACK_SUBMENU_LEFT: CSSProperties = {
   position: 'absolute',
-  bottom: 0,
+  top: 0,
   right: '100%',
 };
 
 /**
- * Hook that computes fixed-position styles for a dropdown to ensure
+ * Hook that computes dropdown styles to ensure
  * it stays completely within the visible #app viewport area.
  *
  * Uses the same coordinate-space Convention as the completion Dropdown:
@@ -52,15 +57,18 @@ const FALLBACK_SUBMENU_LEFT: React.CSSProperties = {
  * CSS zoom), then divided by fixedPosDivisor for the final CSS values.
  *
  * For normal dropdowns: positions above the trigger button.
- * For submenus: positions beside the trigger row.
+ * For submenus: positions beside the trigger row in the row's own coordinate space.
  */
 export function useDropdownPosition({
   buttonRef,
+  dropdownRef,
   preferredAlignment = 'left',
   minWidth = 200,
+  submenuMaxHeight = 300,
+  submenuBottomClearance = 96,
   submenu = false,
 }: UseDropdownPositionOptions): {
-  positionedStyle: React.CSSProperties;
+  positionedStyle: CSSProperties;
   maxHeight: number | undefined;
   recalculate: () => void;
 } {
@@ -82,28 +90,31 @@ export function useDropdownPosition({
     const buttonLeft = rect.left - viewportLeft;
     const buttonRight = rect.right - viewportLeft;
     const buttonTop = rect.top - viewportTop;
-    const buttonBottom = rect.bottom - viewportTop;
-
     if (submenu) {
-      const side: 'right' | 'left' =
-        buttonRight + minWidth + padding <= viewportWidth ? 'right' : 'left';
+      const availableRight = Math.max(0, viewportWidth - padding - buttonRight);
+      const availableLeft = Math.max(0, buttonLeft - padding);
+      const side: 'right' | 'left' = availableRight >= minWidth
+        ? 'right'
+        : availableLeft >= minWidth
+          ? 'left'
+          : availableRight >= availableLeft ? 'right' : 'left';
+      const availableSideWidth = side === 'right' ? availableRight : availableLeft;
+      const submenuOverlap = Math.max(0, minWidth - availableSideWidth);
+      const dropdown = dropdownRef?.current;
+      const measuredHeight = dropdown
+        ? Math.max(dropdown.getBoundingClientRect().height, dropdown.scrollHeight)
+        : submenuMaxHeight;
+      const desiredHeight = Math.min(submenuMaxHeight, Math.max(1, measuredHeight));
+      const availableBelow = viewportHeight - padding - buttonTop;
+      const minTopOffset = padding - buttonTop;
+      const topOffset = Math.max(
+        minTopOffset,
+        Math.min(0, availableBelow - desiredHeight - submenuBottomClearance),
+      );
+      const availableHeight = viewportHeight - padding - buttonTop - topOffset;
+      const maxHeight = Math.max(1, Math.min(submenuMaxHeight, availableHeight));
 
-      let left: number;
-      if (side === 'right') {
-        left = buttonRight + padding;
-      } else {
-        left = buttonLeft - minWidth - padding;
-      }
-      left = Math.max(padding, Math.min(left, viewportWidth - minWidth - padding));
-
-      // Submenu bottom aligns with button vertical center (half-height overlap)
-      const submenuOverlap = rect.height / 2;
-      const bottomValue = viewportHeight - buttonBottom + submenuOverlap;
-
-      // Max height: from the submenu top to the viewport top (with padding)
-      const submenuMaxHeight = buttonBottom - submenuOverlap - padding;
-
-      setPositionState({ left, bottom: bottomValue, maxHeight: submenuMaxHeight, submenuSide: side });
+      setPositionState({ top: topOffset, maxHeight, submenuSide: side, submenuOverlap });
       return;
     }
 
@@ -130,7 +141,7 @@ export function useDropdownPosition({
     const dropdownMaxHeight = buttonTop - gap - padding;
 
     setPositionState({ left, bottom: bottomValue, maxHeight: dropdownMaxHeight, submenuSide: 'right' });
-  }, [buttonRef, preferredAlignment, minWidth, submenu]);
+  }, [buttonRef, dropdownRef, preferredAlignment, minWidth, submenu, submenuBottomClearance, submenuMaxHeight]);
 
   if (!positionState) {
     if (submenu) {
@@ -149,11 +160,28 @@ export function useDropdownPosition({
 
   const { fixedPosDivisor } = getAppViewport();
 
+  if (submenu) {
+    const sideStyle: CSSProperties = positionState.submenuSide === 'left'
+      ? { right: '100%', marginRight: `-${positionState.submenuOverlap ?? 0}px` }
+      : { left: '100%', marginLeft: `-${positionState.submenuOverlap ?? 0}px` };
+
+    return {
+      positionedStyle: {
+        position: 'absolute',
+        top: positionState.top,
+        ...sideStyle,
+        zIndex: 10001,
+      },
+      maxHeight: positionState.maxHeight,
+      recalculate,
+    };
+  }
+
   return {
     positionedStyle: {
       position: 'fixed',
-      left: positionState.left / fixedPosDivisor,
-      bottom: positionState.bottom / fixedPosDivisor,
+      left: (positionState.left ?? 0) / fixedPosDivisor,
+      bottom: (positionState.bottom ?? 0) / fixedPosDivisor,
       zIndex: submenu ? 10001 : 10000,
     },
     maxHeight: positionState.maxHeight / fixedPosDivisor,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import Switch from 'antd/es/switch';
@@ -25,25 +25,25 @@ interface ConfigSelectProps {
   currentProvider?: string;
 }
 
-const WRAPPER_STYLE: React.CSSProperties = {
+const WRAPPER_STYLE: CSSProperties = {
   position: 'relative',
   display: 'inline-block',
 };
 
-const TOGGLE_BUTTON_STYLE: React.CSSProperties = {
+const TOGGLE_BUTTON_STYLE: CSSProperties = {
   marginLeft: '5px',
   marginRight: '-2px',
 };
 
-const SUBMENU_BASE_STYLE: React.CSSProperties = {
+const SUBMENU_BASE_STYLE: CSSProperties = {
   minWidth: '320px',
   maxWidth: '360px',
   maxHeight: '300px',
   overflowY: 'auto',
 };
 
-const LOADING_OPTION_STYLE: React.CSSProperties = { cursor: 'default' };
-const SECTION_HEADER_STYLE: React.CSSProperties = {
+const LOADING_OPTION_STYLE: CSSProperties = { cursor: 'default' };
+const SECTION_HEADER_STYLE: CSSProperties = {
   cursor: 'default',
   fontSize: '11px',
   fontWeight: 600,
@@ -52,7 +52,7 @@ const SECTION_HEADER_STYLE: React.CSSProperties = {
   letterSpacing: 0,
 };
 
-const AGENT_BODY_STYLE: React.CSSProperties = {
+const AGENT_BODY_STYLE: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: '2px',
@@ -60,35 +60,35 @@ const AGENT_BODY_STYLE: React.CSSProperties = {
   flex: 1,
 };
 
-const AGENT_NAME_STYLE: React.CSSProperties = {
+const AGENT_NAME_STYLE: CSSProperties = {
   whiteSpace: 'nowrap',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
 };
 
-const AGENT_DESC_STYLE: React.CSSProperties = {
+const AGENT_DESC_STYLE: CSSProperties = {
   fontStyle: 'normal',
   whiteSpace: 'nowrap',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
 };
 
-const AGENT_DESC_PLAIN_STYLE: React.CSSProperties = {
+const AGENT_DESC_PLAIN_STYLE: CSSProperties = {
   fontStyle: 'normal',
 };
 
-const SELECTOR_OPTION_RELATIVE_STYLE: React.CSSProperties = {
+const SELECTOR_OPTION_RELATIVE_STYLE: CSSProperties = {
   position: 'relative',
   overflow: 'visible',
 };
 
-const ITEM_INFO_STYLE: React.CSSProperties = {
+const ITEM_INFO_STYLE: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: '2px',
 };
 
-const ARROW_CONTAINER_STYLE: React.CSSProperties = {
+const ARROW_CONTAINER_STYLE: CSSProperties = {
   marginLeft: 'auto',
   display: 'flex',
   alignItems: 'center',
@@ -97,29 +97,29 @@ const ARROW_CONTAINER_STYLE: React.CSSProperties = {
   cursor: 'pointer',
 };
 
-const ARROW_ICON_STYLE: React.CSSProperties = { fontSize: '12px' };
+const ARROW_ICON_STYLE: CSSProperties = { fontSize: '12px' };
 
-const SWITCH_OPTION_STYLE: React.CSSProperties = {
+const SWITCH_OPTION_STYLE: CSSProperties = {
   justifyContent: 'space-between',
   cursor: 'pointer',
 };
 
-const SWITCH_LABEL_STYLE: React.CSSProperties = {
+const SWITCH_LABEL_STYLE: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 8,
 };
 
-const FAINT_DIVIDER_STYLE: React.CSSProperties = {
+const FAINT_DIVIDER_STYLE: CSSProperties = {
   height: 1,
   background: 'var(--dropdown-border)',
   margin: '4px 0',
   opacity: 0.5,
 };
 
-const TOAST_STYLE: React.CSSProperties = { zIndex: 20000 };
+const TOAST_STYLE: CSSProperties = { zIndex: 20000 };
 
-function getAgentOptionStyle(isInfo: boolean): React.CSSProperties {
+function getAgentOptionStyle(isInfo: boolean): CSSProperties {
   return {
     alignItems: 'flex-start',
     cursor: isInfo ? 'default' : 'pointer',
@@ -153,6 +153,7 @@ export const ConfigSelect = ({
 
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const agentSubmenuRef = useRef<HTMLDivElement>(null);
   const agentTriggerRef = useRef<HTMLDivElement>(null);
   const runtimeProviderTriggerRef = useRef<HTMLDivElement>(null);
   const agentAbortControllerRef = useRef<AbortController | null>(null);
@@ -164,11 +165,14 @@ export const ConfigSelect = ({
   });
   const { positionedStyle: submenuPositionedStyle, maxHeight: submenuMaxHeight, recalculate: submenuRecalculate } = useDropdownPosition({
     buttonRef: agentTriggerRef,
+    dropdownRef: agentSubmenuRef,
     submenu: true,
     minWidth: 320,
+    submenuMaxHeight: 300,
+    submenuBottomClearance: 96,
   });
 
-  const handleToggle = useCallback((e: React.MouseEvent) => {
+  const handleToggle = useCallback((e: ReactMouseEvent) => {
     e.stopPropagation();
     const next = !isOpen;
     setIsOpen(next);
@@ -240,10 +244,9 @@ export const ConfigSelect = ({
   // Subscribe to node process snapshots so the badge counter stays in sync
   // with whatever the panel (or other consumers) see.
   useEffect(() => {
-    const unsubscribe = subscribeNodeProcesses((snapshot: NodeProcessSnapshot) => {
+    return subscribeNodeProcesses((snapshot: NodeProcessSnapshot) => {
       setNodeProcessTotals({ all: snapshot.totals.all, orphan: snapshot.totals.orphan });
     });
-    return unsubscribe;
   }, []);
 
   // Refresh node process counts whenever the main menu opens, so the badge
@@ -281,8 +284,13 @@ export const ConfigSelect = ({
 
   useEffect(() => {
     if (activeSubmenu !== 'agent') return;
-    loadAgents();
+    void loadAgents();
   }, [activeSubmenu, loadAgents]);
+
+  useLayoutEffect(() => {
+    if (activeSubmenu !== 'agent') return;
+    submenuRecalculate();
+  }, [activeSubmenu, agentItems.length, agentsLoading, submenuRecalculate]);
 
   useEffect(() => {
     return () => {
@@ -297,13 +305,14 @@ export const ConfigSelect = ({
 
   const renderAgentSubmenu = () => {
     const submenuMaxHeightPx = submenuMaxHeight ? `${Math.min(300, submenuMaxHeight)}px` : '300px';
-    const submenuStyle: React.CSSProperties = {
+    const submenuStyle: CSSProperties = {
       ...SUBMENU_BASE_STYLE,
       ...submenuPositionedStyle,
       maxHeight: submenuMaxHeightPx,
     };
     return (
     <div
+      ref={agentSubmenuRef}
       className="selector-dropdown"
       style={submenuStyle}
       onMouseEnter={(e) => {

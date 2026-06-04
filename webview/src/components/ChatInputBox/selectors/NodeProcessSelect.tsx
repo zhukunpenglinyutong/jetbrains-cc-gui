@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import ConfirmDialog from '../../ConfirmDialog';
+import { getAppViewport } from '../../../utils/viewport';
 import {
   fetchNodeProcesses,
   killAllOrphanProcesses,
@@ -19,15 +20,15 @@ interface NodeProcessSelectProps {
   onToast?: (message: string) => void;
 }
 
-const DROPDOWN_STYLE_EMBEDDED: React.CSSProperties = {
+const DROPDOWN_STYLE_EMBEDDED: CSSProperties = {
   position: 'absolute',
-  bottom: 0,
+  top: 0,
   left: '100%',
-  marginLeft: '-30px',
+  marginLeft: 0,
   zIndex: 10001,
   minWidth: '260px',
   width: 'max-content',
-  maxWidth: 'min(360px, calc(100vw - 60px))',
+  maxWidth: '360px',
   maxHeight: 'min(380px, calc(100vh - 100px))',
   overflowY: 'auto',
   overflowX: 'hidden',
@@ -36,8 +37,13 @@ const DROPDOWN_STYLE_EMBEDDED: React.CSSProperties = {
 
 const DROPDOWN_SIDE_OVERLAP_PX = 30;
 const DROPDOWN_VIEWPORT_PADDING_PX = 8;
+const DROPDOWN_MIN_WIDTH_PX = 260;
+const DROPDOWN_MIN_FLUSH_WIDTH_PX = 180;
+const DROPDOWN_MAX_WIDTH_PX = 360;
+const DROPDOWN_MAX_HEIGHT_PX = 380;
+const DROPDOWN_BOTTOM_CLEARANCE_PX = 72;
 
-const GROUP_HEADER_STYLE: React.CSSProperties = {
+const GROUP_HEADER_STYLE: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: '6px',
@@ -49,12 +55,12 @@ const GROUP_HEADER_STYLE: React.CSSProperties = {
   letterSpacing: '0.5px',
 };
 
-const GROUP_HEADER_ORPHAN_STYLE: React.CSSProperties = {
+const GROUP_HEADER_ORPHAN_STYLE: CSSProperties = {
   ...GROUP_HEADER_STYLE,
   color: 'var(--error-color, #d9534f)',
 };
 
-const PROCESS_ROW_STYLE: React.CSSProperties = {
+const PROCESS_ROW_STYLE: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: '8px',
@@ -62,12 +68,12 @@ const PROCESS_ROW_STYLE: React.CSSProperties = {
   cursor: 'default',
 };
 
-const PROCESS_LEADING_ICON_STYLE: React.CSSProperties = {
+const PROCESS_LEADING_ICON_STYLE: CSSProperties = {
   fontSize: '14px',
   flexShrink: 0,
 };
 
-const PROCESS_BODY_STYLE: React.CSSProperties = {
+const PROCESS_BODY_STYLE: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: '2px',
@@ -76,7 +82,7 @@ const PROCESS_BODY_STYLE: React.CSSProperties = {
   overflow: 'hidden',
 };
 
-const PROCESS_TITLE_STYLE: React.CSSProperties = {
+const PROCESS_TITLE_STYLE: CSSProperties = {
   fontSize: '12px',
   color: 'var(--text-primary)',
   overflow: 'hidden',
@@ -84,7 +90,7 @@ const PROCESS_TITLE_STYLE: React.CSSProperties = {
   whiteSpace: 'nowrap',
 };
 
-const PROCESS_META_STYLE: React.CSSProperties = {
+const PROCESS_META_STYLE: CSSProperties = {
   fontSize: '11px',
   color: 'var(--text-secondary)',
   overflow: 'hidden',
@@ -92,7 +98,7 @@ const PROCESS_META_STYLE: React.CSSProperties = {
   whiteSpace: 'nowrap',
 };
 
-const PROCESS_ACTIONS_STYLE: React.CSSProperties = {
+const PROCESS_ACTIONS_STYLE: CSSProperties = {
   display: 'flex',
   flexDirection: 'row',
   gap: '2px',
@@ -100,7 +106,7 @@ const PROCESS_ACTIONS_STYLE: React.CSSProperties = {
   flexShrink: 0,
 };
 
-const ICON_BUTTON_STYLE: React.CSSProperties = {
+const ICON_BUTTON_STYLE: CSSProperties = {
   background: 'transparent',
   border: 'none',
   borderRadius: '4px',
@@ -116,19 +122,19 @@ const ICON_BUTTON_STYLE: React.CSSProperties = {
   transition: 'background 0.15s, color 0.15s',
 };
 
-const ICON_BUTTON_DANGER_STYLE: React.CSSProperties = {
+const ICON_BUTTON_DANGER_STYLE: CSSProperties = {
   ...ICON_BUTTON_STYLE,
   color: 'var(--error-color, #d9534f)',
 };
 
-const EMPTY_STATE_STYLE: React.CSSProperties = {
+const EMPTY_STATE_STYLE: CSSProperties = {
   padding: '20px 12px',
   textAlign: 'center',
   color: 'var(--text-secondary)',
   fontSize: '12px',
 };
 
-const FOOTER_STYLE: React.CSSProperties = {
+const FOOTER_STYLE: CSSProperties = {
   display: 'flex',
   justifyContent: 'center',
   padding: '6px 12px 2px',
@@ -136,7 +142,7 @@ const FOOTER_STYLE: React.CSSProperties = {
   marginTop: '4px',
 };
 
-const FOOTER_BUTTON_STYLE: React.CSSProperties = {
+const FOOTER_BUTTON_STYLE: CSSProperties = {
   background: 'transparent',
   border: 'none',
   color: 'var(--error-color, #d9534f)',
@@ -146,7 +152,7 @@ const FOOTER_BUTTON_STYLE: React.CSSProperties = {
   borderRadius: '4px',
 };
 
-const REFRESH_ROW_STYLE: React.CSSProperties = {
+const REFRESH_ROW_STYLE: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
@@ -156,7 +162,7 @@ const REFRESH_ROW_STYLE: React.CSSProperties = {
   borderBottom: '1px solid var(--dropdown-border)',
 };
 
-const REFRESH_BUTTON_STYLE: React.CSSProperties = {
+const REFRESH_BUTTON_STYLE: CSSProperties = {
   background: 'transparent',
   border: 'none',
   color: 'var(--text-primary)',
@@ -176,6 +182,76 @@ type PendingConfirm =
 interface HorizontalRect {
   left: number;
   right: number;
+  top?: number;
+}
+
+interface EmbeddedDropdownLayout {
+  flipToLeft: boolean;
+  maxWidth: number;
+  maxHeight: number;
+  topOffset: number;
+  horizontalOverlap: number;
+}
+
+export function getEmbeddedNodeProcessDropdownLayout(
+  parentRect: HorizontalRect,
+  dropdownWidth: number,
+  viewportWidth: number,
+  viewportHeight = 0,
+  viewportTop = 0,
+  dropdownHeight = DROPDOWN_MAX_HEIGHT_PX,
+): EmbeddedDropdownLayout {
+  if (dropdownWidth <= 0 || viewportWidth <= 0) {
+    return {
+      flipToLeft: false,
+      maxWidth: DROPDOWN_MAX_WIDTH_PX,
+      maxHeight: DROPDOWN_MAX_HEIGHT_PX,
+      topOffset: 0,
+      horizontalOverlap: 0,
+    };
+  }
+
+  const normalAvailableWidth = Math.max(
+    0,
+    viewportWidth - DROPDOWN_VIEWPORT_PADDING_PX - parentRect.right,
+  );
+  const flippedAvailableWidth = Math.max(
+    0,
+    parentRect.left - DROPDOWN_VIEWPORT_PADDING_PX,
+  );
+  const normalShortfall = Math.max(0, DROPDOWN_MIN_FLUSH_WIDTH_PX - normalAvailableWidth);
+  const flippedShortfall = Math.max(0, DROPDOWN_MIN_FLUSH_WIDTH_PX - flippedAvailableWidth);
+  const flipToLeft = normalShortfall > 0 && flippedShortfall < normalShortfall;
+  const availableWidthWithoutOverlap = flipToLeft ? flippedAvailableWidth : normalAvailableWidth;
+  const horizontalOverlap = Math.min(
+    DROPDOWN_SIDE_OVERLAP_PX,
+    Math.max(0, DROPDOWN_MIN_FLUSH_WIDTH_PX - availableWidthWithoutOverlap),
+  );
+  const availableWidth = availableWidthWithoutOverlap + horizontalOverlap;
+  const parentTop = typeof parentRect.top === 'number' ? parentRect.top - viewportTop : 0;
+  const desiredHeight = Math.min(
+    DROPDOWN_MAX_HEIGHT_PX,
+    Math.max(1, Math.ceil(dropdownHeight)),
+  );
+  const availableBelow = viewportHeight > 0
+    ? viewportHeight - DROPDOWN_VIEWPORT_PADDING_PX - parentTop
+    : DROPDOWN_MAX_HEIGHT_PX;
+  const minTopOffset = viewportHeight > 0 ? DROPDOWN_VIEWPORT_PADDING_PX - parentTop : 0;
+  const topOffset = Math.max(
+    minTopOffset,
+    Math.min(0, availableBelow - desiredHeight - DROPDOWN_BOTTOM_CLEARANCE_PX),
+  );
+  const availableHeight = viewportHeight > 0
+    ? viewportHeight - DROPDOWN_VIEWPORT_PADDING_PX - parentTop - topOffset
+    : DROPDOWN_MAX_HEIGHT_PX;
+
+  return {
+    flipToLeft,
+    maxWidth: Math.max(1, Math.min(DROPDOWN_MAX_WIDTH_PX, Math.floor(availableWidth))),
+    maxHeight: Math.max(1, Math.min(DROPDOWN_MAX_HEIGHT_PX, Math.floor(availableHeight))),
+    topOffset,
+    horizontalOverlap,
+  };
 }
 
 export function shouldFlipEmbeddedNodeProcessDropdown(
@@ -183,14 +259,7 @@ export function shouldFlipEmbeddedNodeProcessDropdown(
   dropdownWidth: number,
   viewportWidth: number,
 ): boolean {
-  if (dropdownWidth <= 0 || viewportWidth <= 0) return false;
-
-  const normalRight = parentRect.right - DROPDOWN_SIDE_OVERLAP_PX + dropdownWidth;
-  const flippedLeft = parentRect.left + DROPDOWN_SIDE_OVERLAP_PX - dropdownWidth;
-  const rightOverflow = Math.max(0, normalRight - (viewportWidth - DROPDOWN_VIEWPORT_PADDING_PX));
-  const leftOverflow = Math.max(0, DROPDOWN_VIEWPORT_PADDING_PX - flippedLeft);
-
-  return rightOverflow > 0 && leftOverflow < rightOverflow;
+  return getEmbeddedNodeProcessDropdownLayout(parentRect, dropdownWidth, viewportWidth).flipToLeft;
 }
 
 function formatUptime(ms: number): string {
@@ -238,7 +307,13 @@ export const NodeProcessSelect = ({ embedded = false, onClose, onToast }: NodePr
   const [snapshot, setSnapshot] = useState<NodeProcessSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [pendingPids, setPendingPids] = useState<Set<number>>(() => new Set());
-  const [flipToLeft, setFlipToLeft] = useState(false);
+  const [embeddedLayout, setEmbeddedLayout] = useState<EmbeddedDropdownLayout>(() => ({
+    flipToLeft: false,
+    maxWidth: DROPDOWN_MAX_WIDTH_PX,
+    maxHeight: DROPDOWN_MAX_HEIGHT_PX,
+    topOffset: 0,
+    horizontalOverlap: 0,
+  }));
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
   const refreshTimerRef = useRef<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -253,11 +328,29 @@ export const NodeProcessSelect = ({ embedded = false, onClose, onToast }: NodePr
     const rect = node.getBoundingClientRect();
     const parentRect = node.parentElement?.getBoundingClientRect();
     if (!parentRect) return;
-    const shouldFlip = shouldFlipEmbeddedNodeProcessDropdown(parentRect, rect.width, window.innerWidth);
-    if (shouldFlip !== flipToLeft) {
-      setFlipToLeft(shouldFlip);
-    }
-  }, [embedded, snapshot, flipToLeft]);
+    const viewport = getAppViewport();
+    const nextLayout = getEmbeddedNodeProcessDropdownLayout(
+      {
+        left: parentRect.left - viewport.left,
+        right: parentRect.right - viewport.left,
+        top: parentRect.top,
+      },
+      Math.max(rect.width, node.scrollWidth),
+      viewport.width,
+      viewport.height,
+      viewport.top,
+      Math.max(rect.height, node.scrollHeight),
+    );
+    setEmbeddedLayout((current) => (
+      current.flipToLeft === nextLayout.flipToLeft
+      && current.maxWidth === nextLayout.maxWidth
+      && current.maxHeight === nextLayout.maxHeight
+      && current.topOffset === nextLayout.topOffset
+      && current.horizontalOverlap === nextLayout.horizontalOverlap
+        ? current
+        : nextLayout
+    ));
+  }, [embedded, snapshot]);
 
   const requestRefresh = useCallback(() => {
     setLoading(true);
@@ -497,7 +590,7 @@ export const NodeProcessSelect = ({ embedded = false, onClose, onToast }: NodePr
   const renderGroup = (
     label: string,
     items: NodeProcessInfo[],
-    headerStyle: React.CSSProperties = GROUP_HEADER_STYLE,
+    headerStyle: CSSProperties = GROUP_HEADER_STYLE,
     icon?: string,
   ) => {
     if (items.length === 0) return null;
@@ -515,15 +608,29 @@ export const NodeProcessSelect = ({ embedded = false, onClose, onToast }: NodePr
   // When the right edge would overflow the viewport, anchor the dropdown to
   // the parent menu item's LEFT side instead so it grows leftward and stays
   // entirely visible on narrow IDE windows.
-  const dropdownStyle: React.CSSProperties = flipToLeft
+  const embeddedWidthStyle: CSSProperties = embedded
+    ? {
+        minWidth: `${Math.min(DROPDOWN_MIN_WIDTH_PX, embeddedLayout.maxWidth)}px`,
+        maxWidth: `${embeddedLayout.maxWidth}px`,
+        maxHeight: `${embeddedLayout.maxHeight}px`,
+        top: `${embeddedLayout.topOffset}px`,
+      }
+    : {};
+
+  const dropdownStyle: CSSProperties = embeddedLayout.flipToLeft
     ? {
         ...DROPDOWN_STYLE_EMBEDDED,
+        ...embeddedWidthStyle,
         left: 'auto',
         right: '100%',
         marginLeft: 0,
-        marginRight: '-30px',
+        marginRight: `-${embeddedLayout.horizontalOverlap}px`,
       }
-    : DROPDOWN_STYLE_EMBEDDED;
+    : {
+        ...DROPDOWN_STYLE_EMBEDDED,
+        ...embeddedWidthStyle,
+        marginLeft: `-${embeddedLayout.horizontalOverlap}px`,
+      };
 
   const renderDropdown = () => (
     <div
