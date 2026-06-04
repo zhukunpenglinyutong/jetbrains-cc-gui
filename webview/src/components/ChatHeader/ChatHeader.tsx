@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 
-import { BackIcon } from '../Icons';
+import { BackIcon, SearchIcon, PlusIcon, LayoutIcon, HistoryIcon, SettingsIcon, CheckIcon, CloseIcon, EditIcon } from '../Icons';
 
 export interface ChatHeaderProps {
   currentView: 'chat' | 'history' | 'settings';
@@ -97,7 +97,7 @@ export function ChatHeader({
       <div className="header-left">
         {currentView === 'history' ? (
           <button className="back-button" onClick={onBack} data-tooltip={t('common.back')}>
-            <BackIcon /> {t('common.back')}
+            <BackIcon size={16} /> {t('common.back')}
           </button>
         ) : editing ? (
           <div className="session-title-edit-mode" onClick={(e) => e.stopPropagation()}>
@@ -114,10 +114,10 @@ export function ChatHeader({
               aria-label="Session title"
             />
             <button className="session-title-save-btn" onClick={commitEdit} aria-label="Save title">
-              <span className="codicon codicon-check" />
+              <CheckIcon size={14} />
             </button>
             <button className="session-title-cancel-btn" onClick={cancelEdit} aria-label="Cancel editing">
-              <span className="codicon codicon-close" />
+              <CloseIcon size={14} />
             </button>
           </div>
         ) : (
@@ -127,7 +127,7 @@ export function ChatHeader({
             </div>
             {titleEditable && (
               <button className="session-title-edit-btn" onClick={startEditing} aria-label="Edit session title">
-                <span className="codicon codicon-edit" />
+                <EditIcon size={14} />
               </button>
             )}
           </div>
@@ -143,32 +143,32 @@ export function ChatHeader({
                 data-tooltip={t('chat.search.openTooltip', { defaultValue: 'Search in conversation' })}
                 aria-label={t('chat.search.openTooltip', { defaultValue: 'Search in conversation' })}
               >
-                <span className="codicon codicon-search" />
+                <SearchIcon size={16} />
               </button>
             )}
             <button className="icon-button" onClick={onNewSession} data-tooltip={t('common.newSession')}>
-              <span className="codicon codicon-plus" />
+              <PlusIcon size={16} />
             </button>
             <button
               className="icon-button"
               onClick={onNewTab}
               data-tooltip={t('common.newTab')}
             >
-              <span className="codicon codicon-split-horizontal" />
+              <LayoutIcon size={16} />
             </button>
             <button
               className="icon-button"
               onClick={onHistory}
               data-tooltip={t('common.history')}
             >
-              <span className="codicon codicon-history" />
+              <HistoryIcon size={16} />
             </button>
             <button
               className="icon-button"
               onClick={onSettings}
               data-tooltip={t('common.settings')}
             >
-              <span className="codicon codicon-settings-gear" />
+              <SettingsIcon size={16} />
             </button>
           </>
         )}

@@ -1,4 +1,5 @@
 import type { QueuedMessage } from '../../hooks/useMessageQueue';
+import { CloseIcon } from '../Icons';
 
 export interface MessageQueueProps {
   /** Queue items */
@@ -33,7 +34,7 @@ export function MessageQueue({ queue, onRemove }: MessageQueueProps) {
               onClick={() => onRemove(item.id)}
               title="Remove from queue"
             >
-              <span className="codicon codicon-close" />
+              <CloseIcon size={12} />
             </button>
           </div>
         );

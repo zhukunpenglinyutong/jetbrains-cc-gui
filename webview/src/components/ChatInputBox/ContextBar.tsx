@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { getFileIcon } from '../../utils/fileIcons';
 import { TokenIndicator } from './TokenIndicator';
 import type { SelectedAgent } from './types';
+import { UploadPlusIcon, CloseIcon, FileIcon, PanelCollapseIcon, RotateCounterClockwiseIcon, RobotIcon } from '../Icons';
 
 const HIDDEN_INPUT_STYLE: React.CSSProperties = { display: 'none' };
 const CURSOR_DEFAULT_STYLE: React.CSSProperties = { cursor: 'default' };
@@ -154,7 +155,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
           onClick={handleAttachClick}
           title="Add attachment"
         >
-          <span className="codicon codicon-attach" />
+          <UploadPlusIcon size={16} />
         </div>
 
         {/* Token Indicator */}
@@ -190,22 +191,21 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
           data-tooltip={selectedAgent.name}
           style={CURSOR_DEFAULT_STYLE}
         >
-          <span
-            className="codicon codicon-robot"
-            style={ROBOT_ICON_STYLE}
-          />
+          <RobotIcon size={14} style={ROBOT_ICON_STYLE} />
           <span className="context-text">
             <span dir="ltr">
-              {selectedAgent.name.length > 3 
-                ? `${selectedAgent.name.slice(0, 3)}...` 
+              {selectedAgent.name.length > 3
+                ? `${selectedAgent.name.slice(0, 3)}...`
                 : selectedAgent.name}
             </span>
           </span>
-          <span 
-            className="codicon codicon-close context-close" 
+          <span
+            className="context-close"
             onClick={onClearAgent}
             title="Remove agent"
-          />
+          >
+            <CloseIcon size={12} />
+          </span>
         </div>
       )}
 
@@ -227,10 +227,12 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
             <span dir="ltr">{displayText}</span>
           </span>
           <span
-            className="codicon codicon-close context-close"
+            className="context-close"
             onClick={onClearFile}
             title="Remove file context"
-          />
+          >
+            <CloseIcon size={12} />
+          </span>
         </div>
       ) : !autoOpenFileEnabled && (
         <div className="context-file-placeholder-wrapper" ref={popoverRef}>
@@ -240,7 +242,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
             title={t('fileContext.placeholder')}
             type="button"
           >
-            <span className="codicon codicon-file" />
+            <FileIcon size={12} />
             <span className="placeholder-text">{t('fileContext.placeholder')}</span>
           </button>
 
@@ -276,7 +278,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
             onClick={onToggleStatusPanel}
             data-tooltip={statusPanelExpanded ? t('statusPanel.collapse') : t('statusPanel.expand')}
           >
-            <span className={`codicon ${statusPanelExpanded ? 'codicon-chevron-down' : 'codicon-layers'}`} />
+            <PanelCollapseIcon size={16} />
           </button>
         )}
 
@@ -288,7 +290,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
             disabled={!hasMessages}
             data-tooltip={t('rewind.tooltip')}
           >
-            <span className="codicon codicon-discard" />
+            <RotateCounterClockwiseIcon size={16} />
           </button>
         )}
       </div>
