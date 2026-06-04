@@ -15,7 +15,7 @@ export function isContextWindowExceededError(errorText: string): boolean {
 interface ContextRecoveryCardProps {
   t: TFunction;
   failedPrompt?: string;
-  onStartRecovery?: (failedPrompt: string) => void;
+  onStartRecovery?: (failedPrompt: string, action?: 'compact' | 'fresh') => void;
   onStartEmptySession?: () => void;
 }
 
@@ -32,8 +32,12 @@ export const ContextRecoveryCard = memo(function ContextRecoveryCard({
   onStartRecovery,
   onStartEmptySession,
 }: ContextRecoveryCardProps) {
-  const handleStartRecovery = useCallback(() => {
-    onStartRecovery?.(failedPrompt ?? '');
+  const handleCompactSession = useCallback(() => {
+    onStartRecovery?.(failedPrompt ?? '', 'compact');
+  }, [failedPrompt, onStartRecovery]);
+
+  const handleStartFreshRecovery = useCallback(() => {
+    onStartRecovery?.(failedPrompt ?? '', 'fresh');
   }, [failedPrompt, onStartRecovery]);
 
   return (
@@ -49,7 +53,7 @@ export const ContextRecoveryCard = memo(function ContextRecoveryCard({
 
       <p className="context-recovery-intro">
         {t('contextRecovery.intro', {
-          defaultValue: 'This opencode session is too large for the selected model. Start a fresh session with a bounded handoff prompt, then review it before sending.',
+          defaultValue: 'This opencode session is too large for the selected model. Compact the current session, then review the failed prompt before sending it again.',
         })}
       </p>
 
@@ -57,12 +61,19 @@ export const ContextRecoveryCard = memo(function ContextRecoveryCard({
         <button
           type="button"
           className="context-recovery-primary-btn"
-          onClick={handleStartRecovery}
+          onClick={handleCompactSession}
         >
-          {t('contextRecovery.startWithSummary', { defaultValue: 'Start new session with summary' })}
+          {t('contextRecovery.compactCurrent', { defaultValue: 'Compact current session' })}
           <span className="context-recovery-recommended">
             {t('contextRecovery.recommended', { defaultValue: 'Recommended' })}
           </span>
+        </button>
+        <button
+          type="button"
+          className="context-recovery-secondary-btn"
+          onClick={handleStartFreshRecovery}
+        >
+          {t('contextRecovery.startWithSummary', { defaultValue: 'Start new session with summary' })}
         </button>
         <button
           type="button"
@@ -75,7 +86,7 @@ export const ContextRecoveryCard = memo(function ContextRecoveryCard({
 
       <p className="context-recovery-hint">
         {t('contextRecovery.retryHint', {
-          defaultValue: 'Or retry with fewer attachments, file references, and pasted context.',
+          defaultValue: 'If compaction fails, start a new summary session or retry with fewer attachments, file references, and pasted context.',
         })}
       </p>
     </div>

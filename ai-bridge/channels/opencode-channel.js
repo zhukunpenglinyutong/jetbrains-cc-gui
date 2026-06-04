@@ -3,6 +3,7 @@
  */
 import {
   abortSession as openCodeAbortSession,
+  compactSession as openCodeCompactSession,
   deleteSession as openCodeDeleteSession,
   getMcpServerTools as openCodeGetMcpServerTools,
   getSessionMessages as openCodeGetSessionMessages,
@@ -65,6 +66,14 @@ export async function handleOpenCodeCommand(command, args, stdinData) {
       const sessionId = stdinData?.sessionId || args[0] || '';
       const cwd = stdinData?.cwd || args[1] || '';
       await openCodeDeleteSession(sessionId, cwd, options);
+      break;
+    }
+
+    case 'compactSession': {
+      const sessionId = stdinData?.sessionId || args[0] || '';
+      const cwd = stdinData?.cwd || args[1] || '';
+      const model = stdinData?.model || args[2] || '';
+      await openCodeCompactSession(sessionId, cwd, model, options);
       break;
     }
 
@@ -132,5 +141,5 @@ export async function handleOpenCodeCommand(command, args, stdinData) {
 }
 
 export function getOpenCodeCommandList() {
-  return ['send', 'abort', 'deleteSession', 'getSessionMessages', 'listSessions', 'usageStatistics', 'listModels', 'listAgents', 'listCommands', 'listMcpServers', 'listMcpServerStatus', 'getMcpServerTools'];
+  return ['send', 'abort', 'deleteSession', 'compactSession', 'getSessionMessages', 'listSessions', 'usageStatistics', 'listModels', 'listAgents', 'listCommands', 'listMcpServers', 'listMcpServerStatus', 'getMcpServerTools'];
 }

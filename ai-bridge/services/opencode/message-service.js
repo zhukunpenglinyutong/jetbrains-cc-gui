@@ -1808,6 +1808,14 @@ async function resolveOpenCodePromptModel(client, cwd, selectedModel) {
   return resolveOpenCodeDefaultModel(client, cwd);
 }
 
+async function resolveOpenCodeSummarizeModel(client, cwd, selectedModel) {
+  const parsedModel = parseOpenCodeModel(selectedModel);
+  if (parsedModel) {
+    return parsedModel;
+  }
+  return resolveOpenCodeDefaultModel(client, cwd);
+}
+
 async function resolveOpenCodeModelContextLimit(client, cwd, parsedModel) {
   let modelRef = parsedModel;
   if (!modelRef?.providerID || !modelRef?.modelID) {
@@ -3866,6 +3874,60 @@ export async function deleteSession(sessionId = '', cwd = '', options = {}) {
   }
 }
 
+export async function compactSession(sessionId = '', cwd = '', model = '', options = {}) {
+  let runtime = null;
+  try {
+    const normalizedSessionId = sessionId && sessionId.trim();
+    if (!normalizedSessionId) {
+      throw new Error('sessionId is required to compact an opencode session');
+    }
+
+    runtime = await acquireOpenCodeRuntime(cwd, options);
+    const compactModel = await resolveOpenCodeSummarizeModel(runtime.client, cwd, model);
+    if (!compactModel?.providerID || !compactModel?.modelID) {
+      throw new Error('Unable to resolve an opencode model for session compaction');
+    }
+
+    const body = {
+      providerID: compactModel.providerID,
+      modelID: compactModel.modelID,
+      auto: false
+    };
+    if (typeof runtime.client.session?.summarize === 'function') {
+      await unwrapSdkResult(
+        runtime.client.session.summarize({
+          path: { id: normalizedSessionId },
+          query: directoryQuery(cwd),
+          body
+        }),
+        'compact opencode session'
+      );
+    } else {
+      await postJson(
+        runtime.baseUrl,
+        `/session/${encodeURIComponent(normalizedSessionId)}/summarize`,
+        cwd,
+        body
+      );
+    }
+
+    console.log(JSON.stringify({
+      success: true,
+      sessionId: normalizedSessionId,
+      model: compactModel
+    }));
+  } catch (error) {
+    await discardPersistentOpenCodeRuntimeOnError(runtime, error);
+    console.log(JSON.stringify({
+      success: false,
+      error: normalizeOpenCodeSdkError(error).error,
+      sessionId
+    }));
+  } finally {
+    await releaseOpenCodeRuntime(runtime, options);
+  }
+}
+
 export async function getSessionMessages(sessionId = '', cwd = '', options = {}) {
   let runtime = null;
   try {
@@ -4294,6 +4356,7 @@ export {
   buildOpenCodeUsageStatistics,
   parseOpenCodeSlashCommand,
   resolveOpenCodePromptModel,
+  resolveOpenCodeSummarizeModel,
   resolveLastUsedSessionModel,
   filterOpenCodeProvidersByConfig,
   isOpenCodeRuntimeTransportError,

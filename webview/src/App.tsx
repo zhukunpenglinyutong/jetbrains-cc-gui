@@ -332,15 +332,38 @@ const App = () => {
     forceCreateNewSessionWithProvider(providerId);
   }, [forceCreateNewSessionWithProvider, handleProviderSelect]);
 
-  const handleStartContextRecovery = useCallback((failedPrompt: string) => {
-    sendBridgeEvent('recover_context_window', JSON.stringify({ failedPrompt }));
-    addToast(t('contextRecovery.building', { defaultValue: 'Building recovery prompt...' }), 'info');
-  }, [addToast, t]);
+  const handleStartContextRecovery = useCallback((failedPrompt: string, action: 'compact' | 'fresh' = 'fresh') => {
+    sendBridgeEvent('recover_context_window', JSON.stringify({
+      action,
+      failedPrompt,
+      model: selectedModel,
+    }));
+    addToast(action === 'compact'
+      ? t('contextRecovery.compacting', { defaultValue: 'Compacting opencode session...' })
+      : t('contextRecovery.building', { defaultValue: 'Building recovery prompt...' }), 'info');
+  }, [addToast, selectedModel, t]);
 
   const handleContextRecoveryPrompt = useCallback((json: string) => {
     try {
-      const payload = JSON.parse(json) as { success?: boolean; prompt?: string; error?: string };
-      if (!payload.success || !payload.prompt) {
+      const payload = JSON.parse(json) as { success?: boolean; prompt?: string; retryPrompt?: string; action?: 'compact' | 'fresh'; error?: string };
+      if (!payload.success) {
+        addToast(payload.error || t('contextRecovery.failed', { defaultValue: 'Failed to build recovery prompt' }), 'error');
+        return;
+      }
+
+      if (payload.action === 'compact') {
+        setCurrentView('chat');
+        window.setTimeout(() => {
+          if (payload.retryPrompt) {
+            chatInputRef.current?.setValue(payload.retryPrompt);
+          }
+          chatInputRef.current?.focus();
+          addToast(t('contextRecovery.compactReady', { defaultValue: 'Session compacted. Review and resend the failed prompt.' }), 'success');
+        }, 0);
+        return;
+      }
+
+      if (!payload.prompt) {
         addToast(payload.error || t('contextRecovery.failed', { defaultValue: 'Failed to build recovery prompt' }), 'error');
         return;
       }

@@ -116,30 +116,60 @@ public class WindowEventHandler extends BaseMessageHandler {
         if ((cwd == null || cwd.trim().isEmpty()) && context.getProject() != null) {
             cwd = context.getProject().getBasePath();
         }
-        String failedPrompt = parseFailedPrompt(content);
+        JsonObject payload = parseRecoveryPayload(content);
+        String failedPrompt = stringField(payload, "failedPrompt");
+        String action = stringField(payload, "action");
+        String model = firstNonBlank(
+                stringField(payload, "model"),
+                session.getModel(),
+                context.getCurrentModel()
+        );
         final String recoveryCwd = cwd;
+        final String recoveryModel = model;
 
         CompletableFuture.runAsync(() -> {
-            JsonObject result = context.getOpenCodeSDKBridge()
-                    .buildRecoveryPrompt(sessionId, recoveryCwd, failedPrompt);
+            JsonObject result;
+            if ("compact".equals(action)) {
+                result = context.getOpenCodeSDKBridge()
+                        .compactSession(sessionId, recoveryCwd, recoveryModel);
+                result.addProperty("action", "compact");
+                result.addProperty("retryPrompt", failedPrompt);
+            } else {
+                result = context.getOpenCodeSDKBridge()
+                        .buildRecoveryPrompt(sessionId, recoveryCwd, failedPrompt);
+                result.addProperty("action", "fresh");
+            }
             context.callJavaScript("onContextRecoveryPrompt", context.escapeJs(result.toString()));
         }).exceptionally(error -> {
-            sendContextRecoveryError(error.getMessage() != null ? error.getMessage() : "Failed to build recovery prompt");
+            sendContextRecoveryError(error.getMessage() != null ? error.getMessage() : "Failed to recover context window");
             return null;
         });
     }
 
-    private String parseFailedPrompt(String content) {
+    private JsonObject parseRecoveryPayload(String content) {
         if (content == null || content.trim().isEmpty()) {
-            return "";
+            return new JsonObject();
         }
         try {
             JsonObject json = new Gson().fromJson(content, JsonObject.class);
-            if (json != null && json.has("failedPrompt") && !json.get("failedPrompt").isJsonNull()) {
-                return json.get("failedPrompt").getAsString();
-            }
+            return json != null ? json : new JsonObject();
         } catch (Exception e) {
             LOG.warn("[ContextRecovery] Failed to parse recovery payload: " + e.getMessage());
+        }
+        return new JsonObject();
+    }
+
+    private String stringField(JsonObject json, String field) {
+        return json != null && json.has(field) && !json.get(field).isJsonNull()
+                ? json.get(field).getAsString()
+                : "";
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.trim().isEmpty()) {
+                return value.trim();
+            }
         }
         return "";
     }

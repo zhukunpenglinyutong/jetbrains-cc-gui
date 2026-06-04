@@ -77,7 +77,7 @@ export interface ChatScreenProps {
   onRewind: () => void;
   onNavigateToProviderSettings: () => void;
   onProviderSelect: (providerId: string) => void;
-  onStartContextRecovery?: (failedPrompt: string) => void;
+  onStartContextRecovery?: (failedPrompt: string, action?: 'compact' | 'fresh') => void;
   onStartEmptySession?: () => void;
 
   // Model / provider state (slice from useModelProviderState)

@@ -36,7 +36,7 @@ export interface MessageItemProps {
   onNodeRef?: (id: string, node: HTMLDivElement | null) => void;
   onNavigateToProviderSettings?: () => void;
   onNavigateToDependencySettings?: () => void;
-  onStartContextRecovery?: (failedPrompt: string) => void;
+  onStartContextRecovery?: (failedPrompt: string, action?: 'compact' | 'fresh') => void;
   onStartEmptySession?: () => void;
   failedPrompt?: string;
   toolResultSignature?: string;

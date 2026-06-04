@@ -63,7 +63,7 @@ interface MessageListProps {
   onCollapsedCountChange?: (count: number) => void;
   onNavigateToProviderSettings?: () => void;
   onNavigateToDependencySettings?: () => void;
-  onStartContextRecovery?: (failedPrompt: string) => void;
+  onStartContextRecovery?: (failedPrompt: string, action?: 'compact' | 'fresh') => void;
   onStartEmptySession?: () => void;
   /** Current active provider id; forwarded to MessageItem for streaming-connect label. */
   currentProvider?: string;

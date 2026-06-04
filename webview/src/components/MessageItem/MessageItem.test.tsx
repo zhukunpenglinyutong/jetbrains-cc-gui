@@ -171,8 +171,11 @@ describe('MessageItem copy button visibility', () => {
     });
 
     expect(screen.getByText('Context window exceeded')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Compact current session/i }));
+    expect(onStartContextRecovery).toHaveBeenCalledWith('finish the docs update', 'compact');
+
     fireEvent.click(screen.getByRole('button', { name: /Start new session with summary/i }));
-    expect(onStartContextRecovery).toHaveBeenCalledWith('finish the docs update');
+    expect(onStartContextRecovery).toHaveBeenCalledWith('finish the docs update', 'fresh');
 
     fireEvent.click(screen.getByRole('button', { name: /Start empty new session/i }));
     expect(onStartEmptySession).toHaveBeenCalled();

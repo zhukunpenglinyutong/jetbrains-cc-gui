@@ -6,6 +6,7 @@ import {
   normalizeOpenCodeModels,
   parseOpenCodeModel,
   resolveOpenCodePromptModel,
+  resolveOpenCodeSummarizeModel,
   resolveLastUsedSessionModel,
   filterOpenCodeProvidersByConfig
 } from './message-service.js';
@@ -184,6 +185,40 @@ test('opencode provider discovery merges connected provider catalogs only', asyn
     'openai/gpt-5.4-mini',
   ]);
   assert.equal(models[0].description, 'Uses openai/gpt-5.4-mini provider default.');
+});
+
+test('opencode summarize model resolves CLI default to explicit provider model', async () => {
+  const model = await resolveOpenCodeSummarizeModel({
+    config: {
+      get: async () => ({
+        data: {
+          model: 'openai/gpt-5.5',
+        },
+      }),
+      providers: async () => ({
+        data: {
+          providers: [
+            {
+              id: 'openai',
+              name: 'OpenAI',
+              models: {
+                'gpt-5.5': { id: 'gpt-5.5', name: 'GPT-5.5' },
+              },
+            },
+          ],
+          default: { openai: 'gpt-5.5' },
+        },
+      }),
+    },
+    session: {
+      list: async () => ({ data: [] }),
+    },
+  }, '/tmp/project', 'opencode-default');
+
+  assert.deepEqual(model, {
+    providerID: 'openai',
+    modelID: 'gpt-5.5',
+  });
 });
 
 test('opencode model discovery ignores stale configured default labels', () => {

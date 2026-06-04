@@ -35,6 +35,7 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
 
     private static final int QUERY_TIMEOUT_SECONDS = 30;
     private static final int MCP_STATUS_QUERY_TIMEOUT_SECONDS = 45;
+    private static final int COMPACT_QUERY_TIMEOUT_SECONDS = 120;
     private static final long DAEMON_RETRY_DELAY_MS = 60_000;
     private static final int RECOVERY_MAX_MESSAGES = 14;
     private static final int RECOVERY_MAX_MESSAGE_CHARS = 900;
@@ -496,6 +497,22 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
         }
     }
 
+    public JsonObject compactSession(String sessionId, String cwd, String model) {
+        try {
+            return runJsonCommand("compactSession", List.of(
+                    sessionId != null ? sessionId : "",
+                    cwd != null ? cwd : "",
+                    model != null ? model : ""
+            ));
+        } catch (Exception e) {
+            LOG.warn("[OpenCodeSDKBridge] Failed to compact opencode session: " + e.getMessage(), e);
+            JsonObject error = new JsonObject();
+            error.addProperty("success", false);
+            error.addProperty("error", e.getMessage());
+            return error;
+        }
+    }
+
     static String buildRecoveryPrompt(List<JsonObject> messages, String failedPrompt, String sessionId, String cwd) {
         StringBuilder prompt = new StringBuilder();
         prompt.append("Continue this work in a fresh opencode session.\n\n");
@@ -900,6 +917,11 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
                 params.addProperty("sessionId", args.size() > 0 ? args.get(0) : "");
                 params.addProperty("cwd", args.size() > 1 ? args.get(1) : "");
                 break;
+            case "compactSession":
+                params.addProperty("sessionId", args.size() > 0 ? args.get(0) : "");
+                params.addProperty("cwd", args.size() > 1 ? args.get(1) : "");
+                params.addProperty("model", args.size() > 2 ? args.get(2) : "");
+                break;
             case "getMcpServerTools":
                 params.addProperty("serverId", args.size() > 0 ? args.get(0) : "");
                 params.addProperty("cwd", args.size() > 1 ? args.get(1) : "");
@@ -957,6 +979,9 @@ public class OpenCodeSDKBridge extends BaseSDKBridge {
     }
 
     private int jsonCommandTimeoutSeconds(String action) {
+        if ("compactSession".equals(action)) {
+            return COMPACT_QUERY_TIMEOUT_SECONDS;
+        }
         return "listMcpServerStatus".equals(action) || "usageStatistics".equals(action)
                 ? MCP_STATUS_QUERY_TIMEOUT_SECONDS
                 : QUERY_TIMEOUT_SECONDS;
