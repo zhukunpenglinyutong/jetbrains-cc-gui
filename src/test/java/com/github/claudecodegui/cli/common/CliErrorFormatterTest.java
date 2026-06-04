@@ -81,4 +81,17 @@ public class CliErrorFormatterTest {
         assertFalse(CliErrorFormatter.isCliNoiseLine("◇ error text"));
         assertFalse(CliErrorFormatter.isCliNoiseLine("normal output"));
     }
+
+    @Test
+    public void appendDiagnosticLineIgnoresNormalClaudeStreamJsonEvents() {
+        StringBuilder diagnostic = new StringBuilder();
+        CliErrorFormatter.appendDiagnosticLine(diagnostic,
+                "{\"type\":\"system\",\"subtype\":\"thinking_tokens\",\"estimated_tokens\":23}");
+        CliErrorFormatter.appendDiagnosticLine(diagnostic,
+                "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\","
+                        + "\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"模型。\"}}}");
+        CliErrorFormatter.appendDiagnosticLine(diagnostic, "Authentication failed");
+
+        assertEquals("Authentication failed", diagnostic.toString());
+    }
 }

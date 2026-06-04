@@ -431,13 +431,33 @@ public class CodexMessageHandlerTest {
         // Assistant message with longer text triggers conservative sync
         handler.onMessage("assistant", "{\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"hello world\"}]}}");
 
-        // After the assistant message activates replay dedup, a duplicate of the already-synced
-        // portion should be consumed (the full "hello world" is already in the replay buffer,
-        // so "hello world" as a delta would be fully consumed)
-        int deltasBefore = callback.contentDeltas.size();
+        // Snapshot text is not visible until it arrives through the delta channel.
+        // If the CLI replays a cumulative delta, only the already-visible prefix is consumed.
         handler.onMessage("content_delta", "hello world");
-        assertEquals("Duplicate content delta should be consumed by replay dedup",
-                deltasBefore, callback.contentDeltas.size());
+        assertEquals(List.of("hello", " world"), callback.contentDeltas);
+        assertEquals("hello world", state.getMessages().get(0).content);
+    }
+
+    @Test
+    public void streamingTextSnapshotDoesNotAdvanceVisibleContentBeyondDeltas() {
+        SessionState state = new SessionState();
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("stream_start", "");
+        handler.onMessage("content_delta", "hello");
+        handler.onMessage("assistant", "{\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"hello world\"}]}}");
+
+        assertEquals("Only streamed delta should be visible before the matching delta arrives",
+                "hello", state.getMessages().get(0).content);
+        assertEquals(List.of("hello"), callback.contentDeltas);
+
+        handler.onMessage("content_delta", " world");
+
+        assertEquals("hello world", state.getMessages().get(0).content);
+        assertEquals(List.of("hello", " world"), callback.contentDeltas);
     }
 
     @Test

@@ -287,6 +287,28 @@ public class CodexCliSessionTest {
     }
 
     @Test
+    public void interruptedExitDoesNotReportExitCodeError() {
+        CodexCliSession session = new CodexCliSession("tab-codex");
+
+        session.interrupt();
+
+        assertTrue(session.wasInterrupted());
+        assertFalse(session.shouldReportExitError(1));
+    }
+
+    @Test
+    public void sendPreparationClearsOnlyPreviousCodexInterrupts() {
+        CodexCliSession session = new CodexCliSession("tab-codex");
+
+        session.interrupt();
+        session.prepareForSend();
+        assertFalse(session.wasInterrupted());
+
+        session.interrupt();
+        assertTrue(session.wasInterrupted());
+    }
+
+    @Test
     public void readingAdditionalInputFromStdinIsIgnored() throws Exception {
         CodexCliSession session = new CodexCliSession("tab-2");
         RecordingCallback callback = new RecordingCallback();

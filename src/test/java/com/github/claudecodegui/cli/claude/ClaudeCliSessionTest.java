@@ -7,6 +7,7 @@ import org.junit.Test;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -80,6 +81,50 @@ public class ClaudeCliSessionTest {
         assertFalse(command.contains("--mcp-config"));
         assertFalse(command.contains("--add-dir"));
         assertFalse(command.contains("--include-partial-messages"));
+    }
+
+    @Test
+    public void interruptBeforeActiveHandleStillMarksSessionInterrupted() {
+        ClaudeCliSession session = new ClaudeCliSession("tab-claude");
+
+        session.interrupt();
+
+        assertTrue(session.wasInterrupted());
+    }
+
+    @Test
+    public void interruptedExitEmitsInterruptedCompletionOnlyOnce() {
+        ClaudeCliSession session = new ClaudeCliSession("tab-claude");
+        AtomicBoolean interruptHandled = new AtomicBoolean(false);
+
+        session.interrupt();
+
+        assertTrue(session.shouldEmitInterruptedCompletion(interruptHandled));
+        interruptHandled.set(true);
+        assertFalse(session.shouldEmitInterruptedCompletion(interruptHandled));
+    }
+
+    @Test
+    public void interruptedExitNeverReportsExitCodeErrorEvenAfterInterruptedCompletionWasHandled() {
+        ClaudeCliSession session = new ClaudeCliSession("tab-claude");
+        AtomicBoolean interruptHandled = new AtomicBoolean(true);
+
+        session.interrupt();
+
+        assertFalse(session.shouldEmitInterruptedCompletion(interruptHandled));
+        assertFalse(session.shouldReportExitError(1, false));
+    }
+
+    @Test
+    public void sendPreparationClearsOnlyPreviousInterrupts() {
+        ClaudeCliSession session = new ClaudeCliSession("tab-claude");
+
+        session.interrupt();
+        session.prepareForSend();
+        assertFalse(session.wasInterrupted());
+
+        session.interrupt();
+        assertTrue(session.wasInterrupted());
     }
 
     private static List<String> buildCommand(
