@@ -1,9 +1,12 @@
 package com.github.claudecodegui.session;
 
 import com.github.claudecodegui.handler.CodexMessageConverter;
+import com.github.claudecodegui.handler.SettingsHandler;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.session.ClaudeSession.Message;
+import com.github.claudecodegui.util.ClaudeHistoryWriter;
+import com.github.claudecodegui.util.TokenUsageUtils;
 import com.intellij.openapi.diagnostic.Logger;
 
 /**
@@ -201,6 +204,12 @@ public class CodexMessageHandler implements MessageCallback {
 
         if (result.error != null && !result.error.isBlank()) {
             state.addMessage(new Message(Message.Type.ASSISTANT, result.error));
+            // Persist the interruption message to JSONL so it appears in history
+            String sessionId = state.getSessionId();
+            String cwd = state.getCwd();
+            if (sessionId != null && cwd != null) {
+                ClaudeHistoryWriter.appendAssistantMessage(cwd, sessionId, result.error);
+            }
         }
 
         callbackHandler.notifyMessageUpdate(state.getMessages());
@@ -247,15 +256,21 @@ public class CodexMessageHandler implements MessageCallback {
 
             if (currentAssistantMessage != null) {
                 com.google.gson.JsonObject mergedRaw = messageMerger.mergeAssistantMessage(currentAssistantMessage.raw, parsed.raw);
-                currentAssistantMessage.content = parsed.content;
+                if (!isStreaming) {
+                    currentAssistantMessage.content = parsed.content;
+                    assistantContent.setLength(0);
+                    assistantContent.append(parsed.content != null ? parsed.content : "");
+                }
                 currentAssistantMessage.raw = mergedRaw;
-                assistantContent.setLength(0);
-                assistantContent.append(parsed.content != null ? parsed.content : "");
             } else {
                 currentAssistantMessage = parsed;
+                if (isStreaming) {
+                    currentAssistantMessage.content = assistantContent.toString();
+                } else {
+                    assistantContent.setLength(0);
+                    assistantContent.append(parsed.content != null ? parsed.content : "");
+                }
                 state.addMessage(parsed);
-                assistantContent.setLength(0);
-                assistantContent.append(parsed.content != null ? parsed.content : "");
             }
 
             // Conservative sync: during streaming, activate replay dedup so that
@@ -264,16 +279,18 @@ public class CodexMessageHandler implements MessageCallback {
             if (isStreaming) {
                 String streamingText = ReplayDeduplicator.extractTextContent(currentAssistantMessage.raw);
                 if (streamingText.length() > previousAssistantContent.length()) {
+                    String replayedVisibleText = previousAssistantContent;
                     replayDedup.beginContentReplay(
-                            streamingText,
-                            ReplayDeduplicator.replayOffset(previousAssistantContent.length(), replayDedup.contentOffset())
+                            replayedVisibleText,
+                            ReplayDeduplicator.replayOffset(0, replayDedup.contentOffset())
                     );
                 }
                 String mergedThinkingContent = ReplayDeduplicator.extractThinkingContent(currentAssistantMessage.raw);
                 if (mergedThinkingContent.length() > previousThinkingContent.length()) {
+                    String replayedVisibleThinking = previousThinkingContent;
                     replayDedup.beginThinkingReplay(
-                            mergedThinkingContent,
-                            ReplayDeduplicator.replayOffset(previousThinkingContent.length(), replayDedup.thinkingOffset())
+                            replayedVisibleThinking,
+                            ReplayDeduplicator.replayOffset(0, replayDedup.thinkingOffset())
                     );
                 }
             }
@@ -371,6 +388,7 @@ public class CodexMessageHandler implements MessageCallback {
             com.google.gson.JsonObject usage = msgJson.getAsJsonObject("usage");
             boolean updated = attachUsageToLastAssistant(usage);
             if (updated) {
+                pushUsageUpdate(usage);
                 callbackHandler.notifyMessageUpdate(state.getMessages());
                 LOG.info("Codex usage applied from result message");
             } else {
@@ -421,6 +439,7 @@ public class CodexMessageHandler implements MessageCallback {
 
             boolean updated = attachUsageToLastAssistant(usage);
             if (updated) {
+                pushUsageUpdate(usage);
                 callbackHandler.notifyMessageUpdate(state.getMessages());
                 LOG.debug("Codex token_count applied: input=" + inputTokens + ", output=" + outputTokens + ", cached=" + cachedInputTokens);
             } else {
@@ -447,6 +466,13 @@ public class CodexMessageHandler implements MessageCallback {
             }
         }
         return false;
+    }
+
+    private void pushUsageUpdate(com.google.gson.JsonObject usage) {
+        int maxTokens = SettingsHandler.getModelContextLimit(state.getModel());
+        callbackHandler.notifyUsageUpdate(
+                TokenUsageUtils.buildUsageUpdatePayload(usage, state.getProvider(), maxTokens).toString()
+        );
     }
 
     /**

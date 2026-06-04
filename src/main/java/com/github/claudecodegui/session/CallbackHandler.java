@@ -159,6 +159,15 @@ public class CallbackHandler {
     }
 
     /**
+     * Notify of a usage update with provider-native token breakdown fields.
+     */
+    public void notifyUsageUpdate(String usageJson) {
+        if (callback != null) {
+            callback.onUsageUpdate(usageJson);
+        }
+    }
+
+    /**
      * Notify that a specific message received its provider UUID.
      */
     public void notifyUserMessageUuidPatched(String content, String uuid) {

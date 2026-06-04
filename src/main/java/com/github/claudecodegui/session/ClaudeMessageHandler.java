@@ -5,6 +5,7 @@ import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.session.ClaudeSession.Message;
+import com.github.claudecodegui.util.ClaudeHistoryWriter;
 import com.github.claudecodegui.util.TokenUsageUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -303,6 +304,12 @@ public class ClaudeMessageHandler implements MessageCallback {
         String interruptionMessage = result.error;
         if (interruptionMessage != null && !interruptionMessage.isBlank()) {
             state.addMessage(new Message(Message.Type.ASSISTANT, interruptionMessage));
+            // Persist the interruption message to JSONL so it appears in history
+            String sessionId = state.getSessionId();
+            String cwd = state.getCwd();
+            if (sessionId != null && cwd != null) {
+                ClaudeHistoryWriter.appendAssistantMessage(cwd, sessionId, interruptionMessage);
+            }
         }
 
         callbackHandler.notifyMessageUpdate(state.getMessages());
@@ -443,7 +450,9 @@ public class ClaudeMessageHandler implements MessageCallback {
                     int usedTokens = TokenUsageUtils.extractUsedTokens(usage, state.getProvider());
                     int maxTokens = SettingsHandler.getModelContextLimit(state.getModel());
                     ClaudeNotifier.setTokenUsage(project, usedTokens, maxTokens);
-                    callbackHandler.notifyUsageUpdate(usedTokens, maxTokens);
+                    callbackHandler.notifyUsageUpdate(
+                            TokenUsageUtils.buildUsageUpdatePayload(usage, state.getProvider(), maxTokens).toString()
+                    );
                     LOG.debug("Updated token usage from assistant message: " + usedTokens);
                 }
             }
@@ -723,7 +732,11 @@ public class ClaudeMessageHandler implements MessageCallback {
                     int usedTokens = TokenUsageUtils.extractUsedTokens(usageJson, state.getProvider());
                     int maxTokens = SettingsHandler.getModelContextLimit(state.getModel());
                     ClaudeNotifier.setTokenUsage(project, usedTokens, maxTokens);
-                    callbackHandler.notifyUsageUpdate(usedTokens, maxTokens);
+                    callbackHandler.notifyUsageUpdate(
+                            TokenUsageUtils.buildUsageUpdatePayload(usageJson, state.getProvider(), maxTokens).toString()
+                    );
+                    // Push updated messages so the frontend receives the raw with usage data
+                    callbackHandler.notifyMessageUpdate(state.getMessages());
                     LOG.debug("Fallback: updated token usage from result message: " + usedTokens);
                 }
             }
@@ -1033,10 +1046,16 @@ public class ClaudeMessageHandler implements MessageCallback {
             int maxTokens = SettingsHandler.getModelContextLimit(state.getModel());
             ClaudeNotifier.setTokenUsage(project, usedTokens, maxTokens);
             // Notify webview of usage update
-            callbackHandler.notifyUsageUpdate(usedTokens, maxTokens);
+            callbackHandler.notifyUsageUpdate(
+                    TokenUsageUtils.buildUsageUpdatePayload(usageJson, state.getProvider(), maxTokens).toString()
+            );
             // Ensure assistant message exists before backfilling usage
             ensureCurrentAssistantMessageExists();
             backfillUsageToAssistantMessage(usageJson);
+            // Push updated messages to frontend so per-message usage is available in raw.
+            // Without this, text-only turns never emit notifyMessageUpdate, leaving the
+            // frontend's message raw without usage data for MessageUsageStats display.
+            callbackHandler.notifyMessageUpdate(state.getMessages());
             LOG.debug("Updated token usage from [USAGE] tag: " + usedTokens);
         } catch (Exception e) {
             LOG.warn("Failed to parse usage data: " + e.getMessage());

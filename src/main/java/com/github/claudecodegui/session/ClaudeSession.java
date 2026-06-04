@@ -137,6 +137,9 @@ public class ClaudeSession {
         default void onUsageUpdate(int usedTokens, int maxTokens) {
         }
 
+        default void onUsageUpdate(String usageJson) {
+        }
+
         default void onUserMessageUuidPatched(String content, String uuid) {
         }
 
