@@ -1,6 +1,24 @@
 import { useTranslation } from 'react-i18next';
 import type { TokenIndicatorProps } from './types';
+import { ArrowDownIcon, ArrowUpIcon, DatabaseIcon, LayersIcon } from '../Icons';
 
+// SVG Icon component for token detail metrics
+const TokenIcon = ({ name, size = 14 }: { name: string; size?: number }) => {
+  switch (name) {
+    case 'arrow-down':
+      return <ArrowDownIcon size={size} className="token-detail-icon" />;
+    case 'arrow-up':
+      return <ArrowUpIcon size={size} className="token-detail-icon" />;
+    case 'database':
+      return <DatabaseIcon size={size} className="token-detail-icon" />;
+    case 'archive':
+      return <LayersIcon size={size} className="token-detail-icon" />;
+    case 'dashboard':
+      return <LayersIcon size={size} className="token-detail-icon" />;
+    default:
+      return <LayersIcon size={size} className="token-detail-icon" />;
+  }
+};
 
 /**
  * TokenIndicator - Usage ring progress bar component
@@ -47,52 +65,79 @@ export const TokenIndicator = ({
     ? `${tooltipPercentage} · ${usedText} / ${maxText} ${' '}${t('chat.context')}`
     : t('chat.usagePercentage', { percentage: tooltipPercentage });
 
+  const formatNumber = (num: number) => {
+    return num.toLocaleString('en-US');
+  };
+
+  const renderMetric = (
+    className: string,
+    icon: string,
+    label: string,
+    value: number,
+    subText?: string,
+  ) => (
+    <div className={`token-detail-metric ${className}`}>
+      <div className="token-detail-metric-label">
+        <TokenIcon name={icon} />
+        <span>{label}</span>
+      </div>
+      <div className="token-detail-metric-value">
+        {formatNumber(value)}
+        {subText ? <span className="token-detail-metric-sub">{subText}</span> : null}
+      </div>
+    </div>
+  );
+
   // Render detailed tooltip if tokenDetail is available
   const renderDetailedTooltip = () => {
-    if (!tokenDetail) return simpleTooltip;
-
-    const formatNumber = (num: number) => {
-      return num.toLocaleString('en-US');
-    };
+    if (!tokenDetail) {
+      return <div className="token-detail-simple">{simpleTooltip}</div>;
+    }
 
     return (
       <div className="token-detail-tooltip">
-        <div className="token-detail-header">📊 Token 使用详情</div>
-        <div className="token-detail-row">
-          <span className="token-detail-label">输入 Token:</span>
-          <span className="token-detail-value">{formatNumber(tokenDetail.inputTokens)}</span>
+        <div className="token-detail-header">
+          <div className="token-detail-header-icon">
+            <TokenIcon name="dashboard" size={16} />
+          </div>
+          <div>
+            <div className="token-detail-title">{t('chat.tokenIndicator.contextStats')}</div>
+            <div className="token-detail-subtitle">{tooltipPercentage} · {usedText ?? formatNumber(tokenDetail.totalTokens)} / {maxText ?? formatNumber(tokenDetail.maxTokens)} {t('chat.context')}</div>
+          </div>
         </div>
-        <div className="token-detail-row">
-          <span className="token-detail-label">输出 Token:</span>
-          <span className="token-detail-value">{formatNumber(tokenDetail.outputTokens)}</span>
+        <div className="token-detail-grid">
+          {renderMetric('input', 'arrow-down', t('chat.tokenIndicator.inputToken'), tokenDetail.inputTokens)}
+          {renderMetric('output', 'arrow-up', t('chat.tokenIndicator.outputToken'), tokenDetail.outputTokens)}
+          {renderMetric('cache-read', 'database', t('chat.tokenIndicator.cacheRead'), tokenDetail.cacheReadTokens, t('chat.tokenIndicator.cacheHitRate', { rate: tokenDetail.cacheHitRate.toFixed(1) }))}
+          {renderMetric('cache-write', 'archive', t('chat.tokenIndicator.cacheWrite'), tokenDetail.cacheCreationTokens)}
         </div>
-        <div className="token-detail-row">
-          <span className="token-detail-label">缓存创建:</span>
-          <span className="token-detail-value">{formatNumber(tokenDetail.cacheCreationTokens)}</span>
-        </div>
-        <div className="token-detail-row">
-          <span className="token-detail-label">缓存读取:</span>
-          <span className="token-detail-value">{formatNumber(tokenDetail.cacheReadTokens)}</span>
-        </div>
-        <div className="token-detail-row token-detail-total">
-          <span className="token-detail-label">总计:</span>
-          <span className="token-detail-value">{formatNumber(tokenDetail.totalTokens)} / {formatNumber(tokenDetail.maxTokens)}</span>
-        </div>
-        <div className="token-detail-row">
-          <span className="token-detail-label">使用率:</span>
-          <span className="token-detail-value">{tokenDetail.percentage.toFixed(1)}%</span>
-        </div>
-        <div className="token-detail-row">
-          <span className="token-detail-label">缓存命中率:</span>
-          <span className="token-detail-value">{tokenDetail.cacheHitRate.toFixed(1)}%</span>
+        <div className="token-detail-total">
+          <div className="token-detail-total-top">
+            <span>{t('chat.tokenIndicator.total', { used: formatNumber(tokenDetail.totalTokens), max: formatNumber(tokenDetail.maxTokens) })}</span>
+            <span>{tokenDetail.percentage.toFixed(1)}%</span>
+          </div>
+          <div className="token-detail-progress">
+            <div
+              className="token-detail-progress-fill"
+              style={{ width: `${Math.max(0, Math.min(100, tokenDetail.percentage))}%` }}
+            />
+          </div>
         </div>
       </div>
     );
   };
 
   return (
-    <div className="token-indicator">
-      <div className="token-indicator-wrap">
+    <div
+      className="token-indicator"
+      role="meter"
+      tabIndex={0}
+      aria-label={`${t('chat.tokenIndicator.contextStats')} ${labelPercentage}`}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.max(0, Math.min(100, Math.round(percentage)))}
+    >
+      <div className="token-indicator-wrap" aria-hidden="true">
         <svg
           className="token-indicator-ring"
           width={size}
@@ -116,12 +161,11 @@ export const TokenIndicator = ({
             strokeDashoffset={strokeOffset}
           />
         </svg>
-        {/* Hover tooltip */}
-        <div className="token-tooltip">
-          {renderDetailedTooltip()}
-        </div>
       </div>
       <span className="token-percentage-label">{labelPercentage}</span>
+      <div className="token-tooltip">
+        {renderDetailedTooltip()}
+      </div>
     </div>
   );
 };
