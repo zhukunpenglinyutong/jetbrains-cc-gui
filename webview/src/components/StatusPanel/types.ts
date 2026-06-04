@@ -26,14 +26,15 @@ export const statusClassMap: Record<TodoItem['status'], string> = {
   completed: 'status-completed',
 };
 
-export const statusIconMap: Record<TodoItem['status'], string> = {
-  pending: 'codicon-circle-outline',
-  in_progress: 'codicon-loading',
-  completed: 'codicon-check',
+// Icon type identifiers for SVG icons (replacing codicon class names)
+export const statusIconTypeMap: Record<TodoItem['status'], string> = {
+  pending: 'circle',
+  in_progress: 'spinner',
+  completed: 'check',
 };
 
-export const subagentStatusIconMap: Record<SubagentInfo['status'], string> = {
-  running: 'codicon-loading',
-  completed: 'codicon-check',
-  error: 'codicon-error',
+export const subagentStatusIconTypeMap: Record<SubagentInfo['status'], string> = {
+  running: 'robot',
+  completed: 'check-circle',
+  error: 'x-circle',
 };
