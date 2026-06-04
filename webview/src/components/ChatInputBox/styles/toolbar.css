@@ -39,6 +39,21 @@
   opacity: 0.5;
 }
 
+@container button-area (max-width: 520px) {
+  .button-area {
+    gap: 6px;
+  }
+
+  .button-area-left {
+    flex-wrap: wrap;
+    align-content: center;
+  }
+
+  .button-area-right {
+    align-self: flex-end;
+  }
+}
+
 /* ============================================================
    Agent Tag Styles
    ============================================================ */

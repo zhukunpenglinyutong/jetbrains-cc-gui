@@ -5,19 +5,23 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  background: var(--button-bg);
-  border: none;
-  border-radius: 4px;
-  color: var(--text-secondary);
+  width: 32px;
+  height: 32px;
+  background: rgba(245, 166, 35, 0.12);
+  border: 1px solid rgba(245, 166, 35, 0.25);
+  border-radius: 6px;
+  color: var(--orange, #f5a623);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: all 0.2s;
 }
 
 .enhance-prompt-button:hover:not(:disabled) {
-  background: var(--button-hover);
-  color: var(--text-primary);
+  background: rgba(245, 166, 35, 0.2);
+  transform: scale(1.02);
+}
+
+.enhance-prompt-button:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .enhance-prompt-button:disabled {
@@ -25,8 +29,18 @@
   cursor: not-allowed;
 }
 
-.enhance-prompt-button .codicon {
-  font-size: 16px;
+.enhance-prompt-button svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.enhance-prompt-button svg.spinning {
+  animation: spin 1s linear infinite;
 }
 
 /* ============================================================

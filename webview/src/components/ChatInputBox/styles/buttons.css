@@ -35,18 +35,23 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   background: var(--button-primary);
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   color: white;
   cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
+  transition: all 0.2s;
 }
 
 .submit-button:hover:not(:disabled) {
-  opacity: 0.85;
+  opacity: 0.9;
+  transform: scale(1.02);
+}
+
+.submit-button:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .submit-button:disabled {
@@ -55,8 +60,14 @@
   opacity: 0.5;
 }
 
-.submit-button .codicon {
-  font-size: 14px;
+.submit-button svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .stop-button {
