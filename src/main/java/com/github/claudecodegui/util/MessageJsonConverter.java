@@ -199,6 +199,8 @@ public class MessageJsonConverter {
         copyFieldIfPresent(raw, transport, "summarizeMetadata");
         // Origin field for distinguishing human input from synthetic messages
         copyFieldIfPresent(raw, transport, "origin");
+        // Copy top-level usage data for per-message stats display
+        copyFieldIfPresent(raw, transport, "usage");
 
         if (raw.has("content")) {
             transport.add("content", raw.get("content").deepCopy());
@@ -209,6 +211,10 @@ public class MessageJsonConverter {
             JsonObject transportMessage = new JsonObject();
             if (sourceMessage.has("content")) {
                 transportMessage.add("content", sourceMessage.get("content").deepCopy());
+            }
+            // Copy usage data (input_tokens, output_tokens, etc.) for per-message stats display
+            if (sourceMessage.has("usage") && sourceMessage.get("usage").isJsonObject()) {
+                transportMessage.add("usage", sourceMessage.get("usage").deepCopy());
             }
             if (transportMessage.size() > 0) {
                 transport.add("message", transportMessage);
@@ -266,12 +272,7 @@ public class MessageJsonConverter {
 
             LOG.debug("Pushing usage update: provider=" + currentProvider + ", usedTokens=" + usedTokens + ", max=" + maxTokens + ", percentage=" + percentage + "%");
 
-            JsonObject usageUpdate = new JsonObject();
-            usageUpdate.addProperty("percentage", percentage);
-            usageUpdate.addProperty("totalTokens", usedTokens);
-            usageUpdate.addProperty("limit", maxTokens);
-            usageUpdate.addProperty("usedTokens", usedTokens);
-            usageUpdate.addProperty("maxTokens", maxTokens);
+            JsonObject usageUpdate = TokenUsageUtils.buildUsageUpdatePayload(lastUsage, currentProvider, maxTokens);
 
             String usageJson = new Gson().toJson(usageUpdate);
             ApplicationManager.getApplication().invokeLater(() -> {

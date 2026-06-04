@@ -42,6 +42,34 @@ public final class TokenUsageUtils {
     }
 
     /**
+     * Build the frontend usage update payload from provider-native usage JSON.
+     * Keeps the provider-specific used-token formula while also exposing the
+     * raw breakdown fields used by the context bar hover detail.
+     */
+    public static JsonObject buildUsageUpdatePayload(JsonObject usage, String provider, int maxTokens) {
+        int input = usage != null && usage.has("input_tokens") ? usage.get("input_tokens").getAsInt() : 0;
+        int output = usage != null && usage.has("output_tokens") ? usage.get("output_tokens").getAsInt() : 0;
+        int cacheCreation = usage != null && usage.has("cache_creation_input_tokens")
+                ? usage.get("cache_creation_input_tokens").getAsInt() : 0;
+        int cacheRead = usage != null && usage.has("cache_read_input_tokens")
+                ? usage.get("cache_read_input_tokens").getAsInt() : 0;
+        int usedTokens = extractUsedTokens(usage, provider);
+        double percentage = maxTokens > 0 ? Math.min(100.0, usedTokens * 100.0 / maxTokens) : 0.0;
+
+        JsonObject usageUpdate = new JsonObject();
+        usageUpdate.addProperty("percentage", percentage);
+        usageUpdate.addProperty("totalTokens", usedTokens);
+        usageUpdate.addProperty("limit", maxTokens);
+        usageUpdate.addProperty("usedTokens", usedTokens);
+        usageUpdate.addProperty("maxTokens", maxTokens);
+        usageUpdate.addProperty("inputTokens", input);
+        usageUpdate.addProperty("outputTokens", output);
+        usageUpdate.addProperty("cacheCreationTokens", cacheCreation);
+        usageUpdate.addProperty("cacheReadTokens", cacheRead);
+        return usageUpdate;
+    }
+
+    /**
      * Find the last usage JSON from a list of raw server messages (JsonObject).
      * Scans from end to find the last assistant message with usage data.
      */

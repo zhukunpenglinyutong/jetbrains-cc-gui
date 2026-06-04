@@ -86,19 +86,12 @@ public class UsagePushService {
         LOG.info("[UsagePushService] Sending usage update: usedTokens=" + usedTokens + ", maxTokens=" + maxTokens +
                  ", percentage=" + percentage + "%");
 
-        // Build usage update data with detailed breakdown
-        JsonObject usageUpdate = new JsonObject();
-        usageUpdate.addProperty("percentage", percentage);
-        usageUpdate.addProperty("totalTokens", usedTokens);
-        usageUpdate.addProperty("limit", maxTokens);
-        usageUpdate.addProperty("usedTokens", usedTokens);
-        usageUpdate.addProperty("maxTokens", maxTokens);
-
-        // Add detailed token breakdown
-        usageUpdate.addProperty("inputTokens", inputTokens);
-        usageUpdate.addProperty("outputTokens", outputTokens);
-        usageUpdate.addProperty("cacheCreationTokens", cacheCreationTokens);
-        usageUpdate.addProperty("cacheReadTokens", cacheReadTokens);
+        JsonObject rawUsage = new JsonObject();
+        rawUsage.addProperty("input_tokens", inputTokens);
+        rawUsage.addProperty("output_tokens", outputTokens);
+        rawUsage.addProperty("cache_creation_input_tokens", cacheCreationTokens);
+        rawUsage.addProperty("cache_read_input_tokens", cacheReadTokens);
+        JsonObject usageUpdate = TokenUsageUtils.buildUsageUpdatePayload(rawUsage, context.getCurrentProvider(), maxTokens);
 
         String usageJson = gson.toJson(usageUpdate);
 
