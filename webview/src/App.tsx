@@ -43,6 +43,7 @@ import { useUIState } from './contexts/UIStateContext';
 import { useDialogs } from './contexts/DialogContext';
 import { AppDialogs } from './components/AppDialogs';
 import { DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS } from './utils/permissionDialogTimeout';
+import { isContextWindowExceededError } from './components/MessageItem/ContextRecoveryCard';
 
 const App = () => {
   const { t } = useTranslation();
@@ -97,6 +98,9 @@ const App = () => {
   // ── Local refs (don't trigger re-render, kept in App.tsx) ──
   const isFirstMountRef = useRef(true);
   const chatInputRef = useRef<ChatInputBoxHandle>(null);
+  const pendingContextRecoveryRef = useRef<{ prompt: string; createNewSession: boolean } | null>(null);
+  const contextRecoveryTimerRef = useRef<number | null>(null);
+  const [contextRecoveryAttempt, setContextRecoveryAttempt] = useState(0);
 
   // StatusPanel collapse state — kept in App.tsx because forceStatusUpdate is
   // intentionally local: a tiny re-render trigger paired with userCollapsedRef.
@@ -332,63 +336,6 @@ const App = () => {
     forceCreateNewSessionWithProvider(providerId);
   }, [forceCreateNewSessionWithProvider, handleProviderSelect]);
 
-  const handleStartContextRecovery = useCallback((failedPrompt: string, action: 'compact' | 'fresh' = 'fresh') => {
-    sendBridgeEvent('recover_context_window', JSON.stringify({
-      action,
-      failedPrompt,
-      model: selectedModel,
-    }));
-    addToast(action === 'compact'
-      ? t('contextRecovery.compacting', { defaultValue: 'Compacting opencode session...' })
-      : t('contextRecovery.building', { defaultValue: 'Building recovery prompt...' }), 'info');
-  }, [addToast, selectedModel, t]);
-
-  const handleContextRecoveryPrompt = useCallback((json: string) => {
-    try {
-      const payload = JSON.parse(json) as { success?: boolean; prompt?: string; retryPrompt?: string; action?: 'compact' | 'fresh'; error?: string };
-      if (!payload.success) {
-        addToast(payload.error || t('contextRecovery.failed', { defaultValue: 'Failed to build recovery prompt' }), 'error');
-        return;
-      }
-
-      if (payload.action === 'compact') {
-        setCurrentView('chat');
-        window.setTimeout(() => {
-          if (payload.retryPrompt) {
-            chatInputRef.current?.setValue(payload.retryPrompt);
-          }
-          chatInputRef.current?.focus();
-          addToast(t('contextRecovery.compactReady', { defaultValue: 'Session compacted. Review and resend the failed prompt.' }), 'success');
-        }, 0);
-        return;
-      }
-
-      if (!payload.prompt) {
-        addToast(payload.error || t('contextRecovery.failed', { defaultValue: 'Failed to build recovery prompt' }), 'error');
-        return;
-      }
-
-      forceCreateNewSession();
-      setCurrentView('chat');
-      window.setTimeout(() => {
-        chatInputRef.current?.setValue(payload.prompt ?? '');
-        chatInputRef.current?.focus();
-        addToast(t('contextRecovery.ready', { defaultValue: 'Recovery prompt is ready to review' }), 'success');
-      }, 0);
-    } catch {
-      addToast(t('contextRecovery.failed', { defaultValue: 'Failed to build recovery prompt' }), 'error');
-    }
-  }, [addToast, forceCreateNewSession, setCurrentView, t]);
-
-  useEffect(() => {
-    window.onContextRecoveryPrompt = handleContextRecoveryPrompt;
-    return () => {
-      if (window.onContextRecoveryPrompt === handleContextRecoveryPrompt) {
-        delete window.onContextRecoveryPrompt;
-      }
-    };
-  }, [handleContextRecoveryPrompt]);
-
   const {
     handleSubmit: hookHandleSubmit,
     executeMessage,
@@ -414,6 +361,117 @@ const App = () => {
     enqueue: enqueueMessage,
     dequeue: dequeueMessage,
   } = useMessageQueue({ isLoading: loading, onExecute: executeMessage });
+
+  const clearContextWindowErrors = useCallback(() => {
+    setMessages((prev) => prev.filter((message) => {
+      if (message.type !== 'error') return true;
+      return !isContextWindowExceededError(getMessageText(message));
+    }));
+  }, [getMessageText, setMessages]);
+
+  const scheduleContextRecoverySubmit = useCallback((delayMs = 0) => {
+    if (contextRecoveryTimerRef.current !== null) {
+      window.clearTimeout(contextRecoveryTimerRef.current);
+    }
+    contextRecoveryTimerRef.current = window.setTimeout(() => {
+      contextRecoveryTimerRef.current = null;
+      setContextRecoveryAttempt((attempt) => attempt + 1);
+    }, delayMs);
+  }, []);
+
+  const queueRecoveredPrompt = useCallback((prompt: string, createNewSession: boolean) => {
+    const trimmedPrompt = prompt.trim();
+    if (!trimmedPrompt) {
+      addToast(t('contextRecovery.failed', { defaultValue: 'Failed to build recovery prompt' }), 'error');
+      return;
+    }
+
+    pendingContextRecoveryRef.current = { prompt: trimmedPrompt, createNewSession };
+    if (currentProvider !== 'opencode') {
+      handleProviderSelect('opencode');
+    }
+    if (createNewSession) {
+      forceCreateNewSession();
+    }
+    scheduleContextRecoverySubmit(0);
+  }, [addToast, currentProvider, forceCreateNewSession, handleProviderSelect, scheduleContextRecoverySubmit, t]);
+
+  useEffect(() => {
+    const pending = pendingContextRecoveryRef.current;
+    if (!pending) return;
+
+    if (currentProvider !== 'opencode') {
+      scheduleContextRecoverySubmit(50);
+      return;
+    }
+    if (window.__sessionTransitioning) {
+      scheduleContextRecoverySubmit(100);
+      return;
+    }
+
+    pendingContextRecoveryRef.current = null;
+    chatInputRef.current?.clear();
+    executeMessage(pending.prompt);
+    addToast(t('contextRecovery.continuing', { defaultValue: 'Continuing recovered prompt...' }), 'success');
+  }, [addToast, contextRecoveryAttempt, currentProvider, executeMessage, scheduleContextRecoverySubmit, t]);
+
+  useEffect(() => {
+    return () => {
+      if (contextRecoveryTimerRef.current !== null) {
+        window.clearTimeout(contextRecoveryTimerRef.current);
+        contextRecoveryTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleStartContextRecovery = useCallback((failedPrompt: string, action: 'compact' | 'fresh' = 'fresh') => {
+    if (currentProvider !== 'opencode') {
+      handleProviderSelect('opencode');
+    }
+    const sent = sendBridgeEvent('recover_context_window', JSON.stringify({
+      action,
+      failedPrompt,
+      model: selectedModel,
+    }));
+    if (!sent) {
+      addToast(t('chat.bridgeUnavailable', { defaultValue: 'Bridge is not available right now' }), 'error');
+      return;
+    }
+    addToast(action === 'compact'
+      ? t('contextRecovery.compacting', { defaultValue: 'Compacting opencode session...' })
+      : t('contextRecovery.building', { defaultValue: 'Building recovery prompt...' }), 'info');
+  }, [addToast, currentProvider, handleProviderSelect, selectedModel, t]);
+
+  const handleContextRecoveryPrompt = useCallback((json: string) => {
+    try {
+      const payload = JSON.parse(json) as { success?: boolean; prompt?: string; retryPrompt?: string; action?: 'compact' | 'fresh'; error?: string };
+      if (!payload.success) {
+        addToast(payload.error || t('contextRecovery.failed', { defaultValue: 'Failed to build recovery prompt' }), 'error');
+        return;
+      }
+
+      const recoveredPrompt = payload.action === 'compact' ? payload.retryPrompt : payload.prompt;
+      if (!recoveredPrompt) {
+        addToast(payload.error || t('contextRecovery.failed', { defaultValue: 'Failed to build recovery prompt' }), 'error');
+        return;
+      }
+
+      clearContextWindowErrors();
+      setCurrentView('chat');
+      queueRecoveredPrompt(recoveredPrompt, payload.action !== 'compact');
+    } catch {
+      addToast(t('contextRecovery.failed', { defaultValue: 'Failed to build recovery prompt' }), 'error');
+    }
+  }, [addToast, clearContextWindowErrors, queueRecoveredPrompt, setCurrentView, t]);
+
+  useEffect(() => {
+    window.onContextRecoveryPrompt = handleContextRecoveryPrompt;
+    return () => {
+      if (window.onContextRecoveryPrompt === handleContextRecoveryPrompt) {
+        delete window.onContextRecoveryPrompt;
+      }
+    };
+  }, [handleContextRecoveryPrompt]);
 
   // handleSubmit with queue support (new session and local commands bypass loading check)
   const handleSubmit = useCallback((content: string, attachments?: Attachment[]) => {

@@ -53,7 +53,7 @@ export const ContextRecoveryCard = memo(function ContextRecoveryCard({
 
       <p className="context-recovery-intro">
         {t('contextRecovery.intro', {
-          defaultValue: 'This opencode session is too large for the selected model. Compact the current session, then review the failed prompt before sending it again.',
+          defaultValue: 'This opencode session is too large for the selected model. Compact the current session or create a summary handoff, then CC GUI will retry the failed prompt automatically.',
         })}
       </p>
 
@@ -86,7 +86,7 @@ export const ContextRecoveryCard = memo(function ContextRecoveryCard({
 
       <p className="context-recovery-hint">
         {t('contextRecovery.retryHint', {
-          defaultValue: 'If compaction fails, start a new summary session or retry with fewer attachments, file references, and pasted context.',
+          defaultValue: 'If recovery fails, start an empty session or retry with fewer attachments, file references, and pasted context.',
         })}
       </p>
     </div>
