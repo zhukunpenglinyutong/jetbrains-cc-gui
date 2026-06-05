@@ -38,16 +38,18 @@ export function collectUnresolvedToolUseIds(
   scope: 'lastTurn' | 'all' = 'lastTurn',
 ): string[] {
   const idsToAdd: string[] = [];
+  const extractRawContent = (message: ClaudeMessage): Array<{ type?: string; id?: string; tool_use_id?: string }> => {
+    if (!message.raw) return [];
+    const rawObj = typeof message.raw === 'string' ? JSON.parse(message.raw) : message.raw;
+    const content = rawObj?.content ?? rawObj?.message?.content;
+    return Array.isArray(content) ? content : [];
+  };
   try {
     if (scope === 'all') {
       // Pass 1: gather every tool_result id present anywhere in the conversation.
       const resolvedIds = new Set<string>();
       for (const msg of messages) {
-        if (!msg.raw) continue;
-        const rawObj = typeof msg.raw === 'string' ? JSON.parse(msg.raw) : msg.raw;
-        const content = rawObj?.content ?? rawObj?.message?.content;
-        if (!Array.isArray(content)) continue;
-        for (const block of content as Array<{ type?: string; tool_use_id?: string }>) {
+        for (const block of extractRawContent(msg)) {
           if (block?.type === 'tool_result' && block.tool_use_id) {
             resolvedIds.add(block.tool_use_id);
           }
@@ -55,11 +57,8 @@ export function collectUnresolvedToolUseIds(
       }
       // Pass 2: flag every assistant tool_use without a matching result.
       for (const msg of messages) {
-        if (msg.type !== 'assistant' || !msg.raw) continue;
-        const rawObj = typeof msg.raw === 'string' ? JSON.parse(msg.raw) : msg.raw;
-        const content = rawObj?.content ?? rawObj?.message?.content;
-        if (!Array.isArray(content)) continue;
-        for (const block of content as Array<{ type?: string; id?: string }>) {
+        if (msg.type !== 'assistant') continue;
+        for (const block of extractRawContent(msg)) {
           if (block?.type === 'tool_use' && block.id
               && !resolvedIds.has(block.id)
               && !window.__deniedToolIds?.has(block.id)) {
@@ -73,10 +72,9 @@ export function collectUnresolvedToolUseIds(
     // scope === 'lastTurn'
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
-      if (msg.type !== 'assistant' || !msg.raw) continue;
-      const rawObj = typeof msg.raw === 'string' ? JSON.parse(msg.raw) : msg.raw;
-      const content = rawObj.content || rawObj.message?.content;
-      if (!Array.isArray(content)) continue;
+      if (msg.type !== 'assistant') continue;
+      const content = extractRawContent(msg);
+      if (content.length === 0) continue;
 
       const toolUses = content.filter(
         (block: { type?: string; id?: string }) =>
@@ -86,16 +84,16 @@ export function collectUnresolvedToolUseIds(
 
       const nextMsg = messages[i + 1];
       const existingResultIds = new Set<string>();
-      if (nextMsg?.type === 'user' && nextMsg.raw) {
-        const nextRaw =
-          typeof nextMsg.raw === 'string' ? JSON.parse(nextMsg.raw) : nextMsg.raw;
-        const nextContent = nextRaw.content || nextRaw.message?.content;
-        if (Array.isArray(nextContent)) {
-          nextContent.forEach((block: { type?: string; tool_use_id?: string }) => {
-            if (block.type === 'tool_result' && block.tool_use_id) {
-              existingResultIds.add(block.tool_use_id);
-            }
-          });
+      for (const block of content) {
+        if (block.type === 'tool_result' && block.tool_use_id) {
+          existingResultIds.add(block.tool_use_id);
+        }
+      }
+      if (nextMsg?.type === 'user') {
+        for (const block of extractRawContent(nextMsg)) {
+          if (block.type === 'tool_result' && block.tool_use_id) {
+            existingResultIds.add(block.tool_use_id);
+          }
         }
       }
 

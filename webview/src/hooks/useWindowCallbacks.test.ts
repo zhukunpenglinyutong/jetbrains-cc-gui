@@ -1065,6 +1065,30 @@ describe('useWindowCallbacks integration', () => {
       expect(window.__deniedToolIds?.has('tool-x')).toBe(false);
     });
 
+    it('does not mark restored same-message opencode tool results as unresolved', () => {
+      const assistant: ClaudeMessage = {
+        type: 'assistant',
+        content: '',
+        raw: {
+          content: [
+            { type: 'tool_use', id: 'task-1', name: 'task', input: { description: 'Inspect UI' } },
+            { type: 'tool_result', tool_use_id: 'task-1', content: 'done' },
+            { type: 'tool_use', id: 'task-2', name: 'task', input: { description: 'Run tests' } },
+            { type: 'tool_result', tool_use_id: 'task-2', content: 'done' },
+          ],
+        } as never,
+        timestamp: new Date().toISOString(),
+      };
+      const { opts } = createOptsWithMessages([assistant]);
+      renderHook(() => useWindowCallbacks(opts));
+
+      act(() => { window.onStreamStart!(); });
+      act(() => { window.onStreamEnd!('5'); });
+
+      expect(window.__deniedToolIds?.has('task-1')).toBe(false);
+      expect(window.__deniedToolIds?.has('task-2')).toBe(false);
+    });
+
     it('historyLoadComplete scans ALL turns and marks orphan tool_use as denied', () => {
       // Simulates loading a Codex history with two aborted batches across
       // separate turns. The "lastTurn" heuristic used by onStreamEnd would
