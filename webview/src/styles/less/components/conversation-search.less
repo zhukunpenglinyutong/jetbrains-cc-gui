@@ -18,7 +18,7 @@
 }
 
 /* Floating panel anchored to the messages container top-right.
- * Width grew to 460 in v0.4.4 to host the three mode toggles + counter
+ * Width 458px to host the three mode toggles + counter + divider
  * + nav + close in one row without crowding the input. */
 .cc-search-panel {
     position: absolute;
@@ -27,13 +27,13 @@
     z-index: 50;
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 6px 8px;
+    gap: 6px;
+    padding: 7px 8px;
     width: 460px;
     max-width: calc(100% - 36px);
     background: var(--bg-elevated);
     border: 1px solid var(--border-secondary);
-    border-radius: 6px;
+    border-radius: 8px;
     box-shadow: var(--shadow-md);
     color: var(--text-primary);
     font-size: 12px;
@@ -42,19 +42,21 @@
 
 .cc-search-icon {
     flex: 0 0 auto;
-    font-size: 14px;
+    display: grid;
+    place-items: center;
+    width: 18px;
     color: var(--text-tertiary);
 }
 
 .cc-search-input {
     flex: 1 1 auto;
     min-width: 0;
-    height: 24px;
+    height: 28px;
     background: var(--bg-primary);
-    border: 1px solid var(--border-primary);
-    border-radius: 4px;
+    border: 1px solid var(--accent-primary, rgba(78, 161, 255, .28));
+    border-radius: 6px;
     color: var(--text-primary);
-    padding: 0 6px;
+    padding: 0 8px;
     font-size: 12px;
     outline: none;
     transition: border-color 120ms ease;
@@ -70,7 +72,7 @@
 
 .cc-search-counter {
     flex: 0 0 auto;
-    min-width: 38px;
+    min-width: 44px;
     text-align: right;
     color: var(--text-tertiary);
     font-variant-numeric: tabular-nums;
@@ -81,12 +83,12 @@
     }
 }
 
-/* Mode toggles (Aa / Whole-word / .*). Stay narrower than nav buttons so
- * they read as a tight modifier cluster, not separate primary actions. */
+/* Mode toggles (Aa / Whole-word / .*). Match mockup chip-btn style:
+ * 26×26px, border-radius 6px, accent highlight when active. */
 .cc-search-toggle {
     flex: 0 0 auto;
-    width: 22px;
-    height: 22px;
+    width: 26px;
+    height: 26px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -94,7 +96,7 @@
     border: 1px solid transparent;
     color: var(--text-tertiary);
     cursor: pointer;
-    border-radius: 4px;
+    border-radius: 6px;
     padding: 0;
     transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
 
@@ -104,9 +106,9 @@
     }
 
     &.is-active {
-        background: var(--color-button-accent-hover-bg);
-        border-color: var(--accent-primary);
-        color: var(--accent-primary);
+        background: var(--color-button-accent-hover-bg, rgba(78, 161, 255, .12));
+        border-color: var(--accent-primary, rgba(78, 161, 255, .28));
+        color: var(--accent-primary, #4ea1ff);
     }
 
     .codicon {
@@ -114,20 +116,38 @@
     }
 }
 
+/* "Aa" text glyph inside case-sensitive toggle */
+.cc-search-mode-glyph {
+    font-size: 11px;
+    letter-spacing: 0;
+    font-weight: 600;
+    line-height: 1;
+}
+
+/* Divider between mode toggles and nav buttons */
+.cc-search-divider {
+    flex: 0 0 auto;
+    width: 1px;
+    height: 18px;
+    background: var(--border-secondary);
+}
+
+/* Navigation & close buttons. Match mockup mini-btn style:
+ * 26×26px, border-radius 6px, with border for consistency. */
 .cc-search-btn {
     flex: 0 0 auto;
-    width: 22px;
-    height: 22px;
+    width: 26px;
+    height: 26px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     background: transparent;
-    border: none;
+    border: 1px solid transparent;
     color: var(--text-secondary);
     cursor: pointer;
-    border-radius: 4px;
+    border-radius: 6px;
     padding: 0;
-    transition: background-color 120ms ease, color 120ms ease;
+    transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
 
     &:hover:not(:disabled) {
         background: var(--bg-hover);

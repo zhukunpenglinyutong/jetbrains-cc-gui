@@ -67,6 +67,7 @@ export function useThemeInit() {
     const savedUserMsgColor = localStorage.getItem('userMsgColor');
     if (savedUserMsgColor && isValidHexColor(savedUserMsgColor)) {
       document.documentElement.style.setProperty('--color-message-user-bg', savedUserMsgColor);
+      document.documentElement.style.setProperty('--color-message-user-fade', savedUserMsgColor);
     }
 
     // Apply the user's explicit theme choice (light/dark) first

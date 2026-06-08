@@ -130,9 +130,9 @@
     overflow-wrap: break-word;
 }
 
-/* User Message Content - Purple tint + right top corner small radius */
+/* User Message Content - uses --color-message-user-bg variable for customization */
 .message.user .message-content {
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.1));
+    background: var(--color-message-user-bg);
     border-color: rgba(99, 102, 241, 0.3);
     border-top-right-radius: 4px;
     width: fit-content;

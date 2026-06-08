@@ -761,6 +761,29 @@ export const DiffIcon = createIcon(
   </>
 );
 
+// Dual-column diff view icon — double brackets with center axis
+export const DiffViewIcon = createIcon(
+  <>
+    <path d="M7 5H5v14h2" />
+    <path d="M17 5h2v14h-2" />
+    <path d="M10 9h4" />
+    <path d="M10 15h4" />
+    <path d="M12 5v14" />
+  </>
+);
+
+// Keep-all / checklist icon — multiple lines with checkmarks
+export const KeepAllIcon = createIcon(
+  <>
+    <path d="M9 6h10" />
+    <path d="M9 12h10" />
+    <path d="M9 18h10" />
+    <polyline points="4 6 5.5 7.5 7.5 5.5" />
+    <polyline points="4 12 5.5 13.5 7.5 11.5" />
+    <polyline points="4 18 5.5 19.5 7.5 17.5" />
+  </>
+);
+
 export const PlayIcon = createIcon(<polygon points="5 3 19 12 5 21 5 3" />);
 
 export const PauseIcon = createIcon(
@@ -1036,6 +1059,8 @@ export const Icons = {
   task: TaskIcon,
   subtask: SubtaskIcon,
   diff: DiffIcon,
+  diffView: DiffViewIcon,
+  keepAll: KeepAllIcon,
   play: PlayIcon,
   pause: PauseIcon,
   skip: SkipIcon,

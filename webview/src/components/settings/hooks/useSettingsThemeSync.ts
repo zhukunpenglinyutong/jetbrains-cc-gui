@@ -127,9 +127,11 @@ export function useSettingsThemeSync(): UseSettingsThemeSyncReturn {
   useEffect(() => {
     if (userMsgColor) {
       document.documentElement.style.setProperty('--color-message-user-bg', userMsgColor);
+      document.documentElement.style.setProperty('--color-message-user-fade', userMsgColor);
       localStorage.setItem('userMsgColor', userMsgColor);
     } else {
       document.documentElement.style.removeProperty('--color-message-user-bg');
+      document.documentElement.style.removeProperty('--color-message-user-fade');
       localStorage.removeItem('userMsgColor');
     }
   }, [userMsgColor]);

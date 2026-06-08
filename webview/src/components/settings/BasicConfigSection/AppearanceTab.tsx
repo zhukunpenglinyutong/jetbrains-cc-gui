@@ -34,23 +34,23 @@ const DEFAULT_LIGHT_BG = '#ffffff';
 // User message bubble color presets
 const USER_MSG_DARK_PRESETS = [
   { color: '#005fb8', label: 'Default' },
-  { color: '#1a7f37', label: 'Green' },
+  { color: '#6366f1', label: 'Lavender' },
   { color: '#6e40c9', label: 'Purple' },
+  { color: '#1a7f37', label: 'Green' },
   { color: '#9a6700', label: 'Amber' },
   { color: '#cf222e', label: 'Red' },
   { color: '#0e6b8a', label: 'Teal' },
-  { color: '#6b4c9a', label: 'Violet' },
   { color: '#4a5568', label: 'Gray' },
 ];
 
 const USER_MSG_LIGHT_PRESETS = [
   { color: '#0078d4', label: 'Default' },
-  { color: '#1a7f37', label: 'Green' },
+  { color: '#818cf8', label: 'Lavender' },
   { color: '#8250df', label: 'Purple' },
+  { color: '#1a7f37', label: 'Green' },
   { color: '#bf8700', label: 'Amber' },
   { color: '#cf222e', label: 'Red' },
   { color: '#0e8a9a', label: 'Teal' },
-  { color: '#7c5cbf', label: 'Violet' },
   { color: '#57606a', label: 'Gray' },
 ];
 

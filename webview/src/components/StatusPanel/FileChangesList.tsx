@@ -5,7 +5,7 @@ import type { TFunction } from 'i18next';
 import type { FileChangeSummary } from '../../types';
 import { showEditableDiff, openFile } from '../../utils/bridge';
 import FileIcon from './FileIcon';
-import { LoadingIcon, TrashIcon, UndoIcon, LayersIcon, CheckCircleIcon } from '../Icons';
+import { LoadingIcon, TrashIcon, UndoIcon, DiffViewIcon, KeepAllIcon } from '../Icons';
 
 interface FileChangesListProps {
   fileChanges: FileChangeSummary[];
@@ -85,7 +85,7 @@ const FileChangeRow = memo(({ fileChange, isUndoing, onOpen, onShowDiff, onUndo,
           onClick={handleShowDiff}
           title={t('statusPanel.showDiff')}
         >
-          <LayersIcon size={12} />
+          <DiffViewIcon size={15} />
         </button>
         <button
           className="file-change-action-btn undo-btn"
@@ -94,9 +94,9 @@ const FileChangeRow = memo(({ fileChange, isUndoing, onOpen, onShowDiff, onUndo,
           disabled={isUndoing}
         >
           {isUndoing ? (
-            <LoadingIcon size={12} className="status-panel-spin-icon" />
+            <LoadingIcon size={15} className="status-panel-spin-icon" />
           ) : (
-            <UndoIcon size={12} />
+            <UndoIcon size={15} />
           )}
         </button>
       </div>
@@ -146,9 +146,9 @@ const FileChangesList = memo(({
           title={t('statusPanel.discardAll')}
         >
           {isDiscardingAll ? (
-            <LoadingIcon size={14} className="status-panel-spin-icon" />
+            <LoadingIcon size={16} className="status-panel-spin-icon" />
           ) : (
-            <TrashIcon size={14} />
+            <TrashIcon size={16} />
           )}
           <span>{t('statusPanel.discardAll')}</span>
         </button>
@@ -157,7 +157,7 @@ const FileChangesList = memo(({
           onClick={onKeepAllClick}
           title={t('statusPanel.keepAll')}
         >
-          <CheckCircleIcon size={14} />
+          <KeepAllIcon size={16} />
           <span>{t('statusPanel.keepAll')}</span>
         </button>
       </div>

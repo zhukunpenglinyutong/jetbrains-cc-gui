@@ -254,26 +254,26 @@
 .file-change-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
 .file-change-action-btn {
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: none;
+  border: 1px solid transparent;
   background: transparent;
   color: var(--text-muted);
-  border-radius: 3px;
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
 
   &:hover {
     color: var(--text-primary);
-    background: var(--bg-tertiary);
+    background: var(--bg-hover);
   }
 
   &:disabled {
@@ -289,8 +289,8 @@
   }
 
   svg {
-    width: 12px;
-    height: 12px;
+    width: 15px;
+    height: 15px;
     stroke: currentColor;
     stroke-width: 1.8;
     fill: none;
@@ -1104,28 +1104,29 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 10px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--border-primary);
   background: var(--bg-tertiary);
 
   .file-changes-action-btn {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
-    border-radius: 4px;
-    font-size: 12px;
+    gap: 8px;
+    height: 34px;
+    padding: 0 12px;
+    border-radius: 8px;
+    font-size: 13px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.15s ease;
     border: 1px solid var(--border-primary);
-    background: transparent;
+    background: var(--bg-secondary, #2d2f34);
     color: var(--text-secondary);
 
     svg {
-      width: 14px;
-      height: 14px;
+      width: 16px;
+      height: 16px;
       stroke: currentColor;
       stroke-width: 1.8;
       fill: none;
@@ -1144,21 +1145,24 @@
     }
 
     &.discard-all-btn {
+      color: #f5c06b;
+
       &:hover:not(:disabled) {
-        color: #ff6b6b;
-        border-color: rgba(255, 107, 107, 0.5);
-        background: rgba(255, 107, 107, 0.1);
+        color: #f5c06b;
+        border-color: rgba(245, 192, 107, 0.5);
+        background: rgba(245, 192, 107, 0.1);
       }
 
     }
 
     &.keep-all-btn {
-      border-color: var(--button-primary-bg);
-      color: var(--button-primary-bg);
+      color: var(--green, #4cc38a);
+      border-color: rgba(76, 195, 138, 0.3);
 
       &:hover:not(:disabled) {
-        background: var(--button-primary-bg);
-        color: var(--button-primary-text);
+        background: rgba(76, 195, 138, 0.1);
+        border-color: rgba(76, 195, 138, 0.4);
+        color: var(--green, #4cc38a);
       }
     }
   }

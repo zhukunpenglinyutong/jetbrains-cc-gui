@@ -18,7 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { useConversationSearch, DEFAULT_SEARCH_OPTIONS } from '../../hooks/useConversationSearch';
 import type { SearchOptions } from '../../hooks/useConversationSearch';
 import type { MessageListRevealHandle } from './types';
-import { SearchIcon, ArrowUpIcon, ArrowDownIcon, CloseIcon } from '../Icons';
+import { SearchIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon } from '../Icons';
 
 const STORAGE_KEY = 'cc-gui.search.options';
 
@@ -67,15 +67,6 @@ export interface ConversationSearchProps {
 }
 
 // SVG icons for search toggles
-const CaseSensitiveIcon = ({ size = 14 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 7V4h16v3" />
-    <path d="M9 20h6" />
-    <path d="M12 4v16" />
-    <path d="M17 20l3-12" />
-    <path d="M14 20l3-12" />
-  </svg>
-);
 
 const WholeWordIcon = ({ size = 14 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -244,6 +235,9 @@ export const ConversationSearch = memo(function ConversationSearch({
         spellCheck={false}
         autoComplete="off"
       />
+      <span className={`cc-search-counter${isRegexInvalid ? ' is-error' : ''}`} aria-live="polite">
+        {counterText}
+      </span>
       <button
         type="button"
         className={`cc-search-toggle${searchOptions.matchCase ? ' is-active' : ''}`}
@@ -252,7 +246,7 @@ export const ConversationSearch = memo(function ConversationSearch({
         aria-label={t('chat.search.matchCase', { defaultValue: 'Match Case' })}
         aria-pressed={searchOptions.matchCase}
       >
-        <CaseSensitiveIcon size={14} />
+        <span className="cc-search-mode-glyph">Aa</span>
       </button>
       <button
         type="button"
@@ -274,9 +268,7 @@ export const ConversationSearch = memo(function ConversationSearch({
       >
         <RegexIcon size={14} />
       </button>
-      <span className={`cc-search-counter${isRegexInvalid ? ' is-error' : ''}`} aria-live="polite">
-        {counterText}
-      </span>
+      <span className="cc-search-divider" />
       <button
         type="button"
         className="cc-search-btn"
@@ -285,7 +277,7 @@ export const ConversationSearch = memo(function ConversationSearch({
         title={t('chat.search.previous', { defaultValue: 'Previous match (Shift+Enter)' })}
         aria-label={t('chat.search.previous', { defaultValue: 'Previous match' })}
       >
-        <ArrowUpIcon size={14} />
+        <ChevronLeftIcon size={15} />
       </button>
       <button
         type="button"
@@ -295,7 +287,7 @@ export const ConversationSearch = memo(function ConversationSearch({
         title={t('chat.search.next', { defaultValue: 'Next match (Enter)' })}
         aria-label={t('chat.search.next', { defaultValue: 'Next match' })}
       >
-        <ArrowDownIcon size={14} />
+        <ChevronRightIcon size={15} />
       </button>
       <button
         type="button"
@@ -304,7 +296,7 @@ export const ConversationSearch = memo(function ConversationSearch({
         title={t('chat.search.close', { defaultValue: 'Close (Esc)' })}
         aria-label={t('chat.search.close', { defaultValue: 'Close' })}
       >
-        <CloseIcon size={14} />
+        <CloseIcon size={15} />
       </button>
       {expandedCount > 0 && (
         <div className="cc-search-hint" role="status">
