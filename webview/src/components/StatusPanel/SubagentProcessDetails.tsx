@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { SubagentHistoryResponse } from '../../types';
 import { buildSubagentProcessModel, formatSubagentDuration } from './subagentProcess';
+import { MessageIcon, FileCodeIcon, LayersIcon, CheckCircleIcon, LoadingIcon } from '../Icons';
 
 interface SubagentProcessDetailsProps {
   agentId?: string;
@@ -61,7 +62,7 @@ const SubagentProcessDetails = memo(function SubagentProcessDetails({
           {process.notes.length > 0 && (
             <section className="subagent-process-section">
               <div className="subagent-section-heading">
-                <span className="codicon codicon-comment-discussion" />
+                <MessageIcon size={14} />
                 {t('subagent.process.thought')}
               </div>
               <div className="subagent-note-card">{process.notes[0]}</div>
@@ -71,13 +72,13 @@ const SubagentProcessDetails = memo(function SubagentProcessDetails({
           {process.readFiles.length > 0 && (
             <section className="subagent-process-section">
               <div className="subagent-section-heading">
-                <span className="codicon codicon-files" />
+                <FileCodeIcon size={14} />
                 {t('subagent.process.filesRead', { count: process.readFiles.length })}
               </div>
               <div className="subagent-file-grid">
                 {process.readFiles.map((file) => (
                   <div key={file} className="subagent-file-chip" title={file}>
-                    <span className="codicon codicon-file-code" />
+                    <FileCodeIcon size={12} />
                     <span>{file}</span>
                   </div>
                 ))}
@@ -88,7 +89,7 @@ const SubagentProcessDetails = memo(function SubagentProcessDetails({
           {process.toolCalls.length > 0 && (
             <section className="subagent-process-section">
               <div className="subagent-section-heading">
-                <span className="codicon codicon-tools" />
+                <LayersIcon size={14} />
                 {t('subagent.process.otherTools')}
               </div>
               <div className="subagent-tool-list">
@@ -105,7 +106,7 @@ const SubagentProcessDetails = memo(function SubagentProcessDetails({
           {finalSummary && (
             <section className="subagent-process-section">
               <div className="subagent-section-heading">
-                <span className="codicon codicon-pass-filled" />
+                <CheckCircleIcon size={14} />
                 {t('subagent.process.result')}
               </div>
               <div className="subagent-result-card">{finalSummary}</div>
@@ -118,7 +119,7 @@ const SubagentProcessDetails = memo(function SubagentProcessDetails({
         </div>
       ) : (
         <div className="subagent-loading-card">
-          <span className="codicon codicon-loading" />
+          <LoadingIcon size={14} className="status-panel-spin-icon" />
           {canLoad ? t('subagent.process.loading') : t('subagent.process.unavailable')}
         </div>
       )}

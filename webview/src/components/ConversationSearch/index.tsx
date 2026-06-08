@@ -79,18 +79,19 @@ const CaseSensitiveIcon = ({ size = 14 }: { size?: number }) => (
 
 const WholeWordIcon = ({ size = 14 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 5h4l2 14h6l2-14h4" />
-    <path d="M7 12h10" />
+    <path d="M5 6v12" />
+    <path d="M19 6v12" />
+    <path d="M8 9l2 6 2-4 2 4 2-6" />
   </svg>
 );
 
 const RegexIcon = ({ size = 14 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M17 3v10" />
-    <path d="M12 3v10" />
-    <path d="M7 3v10" />
-    <path d="M3 17l4-4 4 4" />
-    <path d="M14 17h7" />
+    <circle cx="7.5" cy="12" r="1.5" />
+    <path d="M13 8v8" />
+    <path d="M10 12h6" />
+    <path d="M11.5 9.5l3 5" />
+    <path d="M14.5 9.5l-3 5" />
   </svg>
 );
 

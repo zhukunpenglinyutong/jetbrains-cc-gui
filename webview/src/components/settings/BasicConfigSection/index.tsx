@@ -10,10 +10,23 @@ import EnvironmentTab from './EnvironmentTab';
 type BasicTab = 'appearance' | 'behavior' | 'environment';
 
 const BASIC_TABS: { key: BasicTab; icon: string; labelKey: string }[] = [
-  { key: 'appearance', icon: 'codicon-symbol-color', labelKey: 'settings.basic.tabs.appearance' },
-  { key: 'behavior', icon: 'codicon-gear', labelKey: 'settings.basic.tabs.behavior' },
-  { key: 'environment', icon: 'codicon-terminal', labelKey: 'settings.basic.tabs.environment' },
+  { key: 'appearance', icon: 'palette', labelKey: 'settings.basic.tabs.appearance' },
+  { key: 'behavior', icon: 'zap', labelKey: 'settings.basic.tabs.behavior' },
+  { key: 'environment', icon: 'wrench', labelKey: 'settings.basic.tabs.environment' },
 ];
+
+// SVG icon paths for sub-tabs (Lucide-style, 24×24 viewBox, stroke-based)
+const subTabIconPaths: Record<string, string> = {
+  // Palette / Color
+  palette:
+    '<circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="10.5" r="2.5" fill="currentColor" stroke="none" opacity="0.3"/><circle cx="8.5" cy="7.5" r="2.5" fill="currentColor" stroke="none" opacity="0.3"/><circle cx="6.5" cy="12.5" r="2.5" fill="currentColor" stroke="none" opacity="0.3"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.04-.23-.29-.38-.63-.38-1.04C12.73 17.56 13.57 17 14.5 17H16c3.31 0 6-2.69 6-6 0-5.17-4.36-9-10-9z"/>',
+  // Zap / Lightning
+  zap:
+    '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  // Wrench / Tool
+  wrench:
+    '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+};
 
 interface BasicConfigSectionProps {
   theme: 'light' | 'dark' | 'system';
@@ -102,7 +115,17 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
             className={`${styles.basicTabBtn} ${activeTab === tab.key ? styles.active : ''}`}
             onClick={() => setActiveTab(tab.key)}
           >
-            <span className={`codicon ${tab.icon}`} />
+            <span className={styles.tabIcon}>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                dangerouslySetInnerHTML={{ __html: subTabIconPaths[tab.icon] || '' }}
+              />
+            </span>
             <span>{t(tab.labelKey)}</span>
           </button>
         ))}

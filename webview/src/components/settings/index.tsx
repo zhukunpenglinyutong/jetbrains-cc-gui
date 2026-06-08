@@ -414,7 +414,7 @@ const SettingsView = ({
   return (
     <div className={styles.settingsPage}>
       {/* Top header bar */}
-      <SettingsHeader onClose={onClose} />
+      <SettingsHeader onClose={onClose} version="0.4.5" />
 
       {/* Main content */}
       <div className={styles.settingsMain}>
@@ -426,6 +426,8 @@ const SettingsView = ({
           onToggleCollapse={toggleManualCollapse}
           disabledTabs={disabledTabs}
           onDisabledTabClick={() => addToast(t('settings.codexFeatureUnavailable'), 'warning')}
+          providerCount={providers.length}
+          agentCount={agents.length}
         />
 
         {/* Content area */}

@@ -465,7 +465,14 @@
     "codexFeatureUnavailable": "This settings section is not available in Codex yet. Please switch to Claude Code.",
     "sidebar": {
       "expand": "Expand Sidebar",
-      "collapse": "Collapse Sidebar"
+      "collapse": "Collapse Sidebar",
+      "search": "Search settings...",
+      "group": {
+        "core": "Core",
+        "tools": "Tools",
+        "resources": "Resources",
+        "other": "Other"
+      }
     },
     "community": "Community",
     "communityDesc": "Scan the QR code below to join the official WeChat group for the latest news and technical support",

@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { FileChangeSummary } from '../../types';
 import FileIcon from './FileIcon';
+import { AlertIcon, UndoIcon } from '../Icons';
 
 interface UndoConfirmDialogProps {
   fileChange: FileChangeSummary | null;
@@ -22,7 +23,7 @@ const UndoConfirmDialog = memo(({ fileChange, onConfirm, onCancel }: UndoConfirm
     <div className="undo-confirm-overlay" onClick={onCancel}>
       <div className="undo-confirm-dialog" onClick={(e) => e.stopPropagation()}>
         <div className="undo-confirm-header">
-          <span className="codicon codicon-discard" />
+          <UndoIcon size={18} />
           <h3>{t('statusPanel.undoConfirmTitle')}</h3>
         </div>
         <div className="undo-confirm-body">
@@ -38,7 +39,9 @@ const UndoConfirmDialog = memo(({ fileChange, onConfirm, onCancel }: UndoConfirm
             </span>
           </div>
           <div className="undo-warning">
-            <span className="warning-icon">⚠️</span>
+            <span className="warning-icon" aria-hidden="true">
+              <AlertIcon size={18} />
+            </span>
             <div className="warning-text">
               <p>
                 {isAdded

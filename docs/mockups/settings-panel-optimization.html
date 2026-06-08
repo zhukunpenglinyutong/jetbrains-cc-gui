@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings Panel Style Optimization - All Tabs</title>
+  <style>
+    :root {
+      --bg-primary: #1e1e1e;
+      --bg-secondary: #252526;
+      --bg-tertiary: #2d2d30;
+      --bg-hover: rgba(255,255,255,0.06);
+      --bg-selected: rgba(0,120,212,0.1);
+      --text-primary: #cccccc;
+      --text-secondary: #9d9d9d;
+      --text-tertiary: #6d6d6d;
+      --text-placeholder: #4d4d4d;
+      --border-primary: #3c3c3c;
+      --border-secondary: #404040;
+      --border-hover: #555;
+      --accent-primary: #0078d4;
+      --accent-hover: #0063b1;
+      --success: #4caf50;
+      --warning: #ff9800;
+      --error: #f85149;
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.2);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.3);
+      --transition: all 0.2s ease;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.5;
+    }
+    svg.icon {
+      width: 1em; height: 1em; stroke: currentColor; stroke-width: 1.8;
+      fill: none; stroke-linecap: round; stroke-linejoin: round; vertical-align: middle;
+    }
+    svg.icon-lg { width: 20px; height: 20px; }
+    svg.icon-sm { width: 14px; height: 14px; }
+
+    /* ========== Tab Navigation ========== */
+    .page-tabs {
+      display: flex; gap: 4px; padding: 12px 24px; background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-primary); position: sticky; top: 0; z-index: 10;
+      overflow-x: auto; flex-wrap: nowrap;
+    }
+    .page-tab {
+      display: flex; align-items: center; gap: 6px; padding: 6px 14px;
+      border: 1px solid var(--border-secondary); border-radius: 6px;
+      background: transparent; color: var(--text-secondary); font-size: 13px;
+      cursor: pointer; white-space: nowrap; transition: var(--transition);
+    }
+    .page-tab:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .page-tab.active { background: var(--accent-primary); color: #fff; border-color: var(--accent-primary); }
+    .page-tab svg { width: 14px; height: 14px; }
+
+    /* ========== Panel Sections ========== */
+    .panel { display: none; padding: 24px 32px 60px; max-width: 860px; animation: fadeIn .2s ease; }
+    .panel.active { display: block; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+
+    .section-title { font-size: 22px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+    .section-desc { font-size: 13px; color: var(--text-tertiary); margin-bottom: 24px; line-height: 1.5; }
+
+    /* ========== Sub Tabs (pill) ========== */
+    .sub-tabs {
+      display: inline-flex; background: var(--bg-tertiary); padding: 3px;
+      border-radius: var(--radius-md); border: 1px solid var(--border-secondary);
+      margin-bottom: 20px; gap: 2px;
+    }
+    .sub-tab {
+      display: flex; align-items: center; gap: 6px; padding: 6px 16px;
+      border: none; border-radius: 6px; background: transparent;
+      color: var(--text-secondary); font-size: 13px; cursor: pointer;
+      transition: var(--transition); white-space: nowrap;
+    }
+    .sub-tab:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .sub-tab.active { background: var(--accent-primary); color: #fff; box-shadow: var(--shadow-sm); }
+    .sub-tab svg { width: 14px; height: 14px; }
+
+    /* ========== Card Groups ========== */
+    .card-group { margin-bottom: 24px; }
+    .card-group-title {
+      font-size: 14px; font-weight: 600; color: var(--text-secondary);
+      margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+    }
+    .card-group-title svg { color: var(--accent-primary); width: 16px; height: 16px; }
+
+    /* ========== Settings Card ========== */
+    .settings-card {
+      background: var(--bg-secondary); border: 1px solid var(--border-primary);
+      border-radius: var(--radius-md); padding: 16px; transition: var(--transition);
+    }
+    .settings-card:hover { border-color: var(--border-hover); }
+
+    /* ========== Toggle Row ========== */
+    .toggle-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px; background: var(--bg-secondary);
+      border: 1px solid var(--border-primary); border-radius: var(--radius-md);
+      margin-bottom: 8px; transition: var(--transition);
+    }
+    .toggle-row:hover { border-color: var(--border-hover); }
+    .toggle-info { display: flex; flex-direction: column; gap: 2px; }
+    .toggle-label { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+    .toggle-desc { font-size: 12px; color: var(--text-tertiary); }
+    .toggle-switch { position: relative; width: 40px; height: 22px; flex-shrink: 0; cursor: pointer; }
+    .toggle-switch input { display: none; }
+    .toggle-slider {
+      position: absolute; inset: 0; background: var(--bg-tertiary);
+      border: 1px solid var(--border-secondary); border-radius: 11px; transition: var(--transition);
+    }
+    .toggle-slider::after {
+      content:''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+      background: var(--text-tertiary); border-radius: 50%; transition: var(--transition);
+    }
+    .toggle-switch input:checked + .toggle-slider { background: var(--accent-primary); border-color: var(--accent-primary); }
+    .toggle-switch input:checked + .toggle-slider::after { left: 20px; background: #fff; }
+
+    /* ========== Form ========== */
+    .form-group { margin-bottom: 20px; }
+    .form-label {
+      display: flex; align-items: center; gap: 6px; font-size: 13px;
+      font-weight: 500; color: var(--text-secondary); margin-bottom: 8px;
+    }
+    .form-label svg { color: var(--accent-primary); width: 14px; height: 14px; }
+    .form-hint { font-size: 12px; color: var(--text-tertiary); margin-top: 6px; display: flex; align-items: flex-start; gap: 4px; }
+    .form-hint svg { flex-shrink: 0; margin-top: 2px; }
+    .form-hint code {
+      background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 3px;
+      font-family: 'JetBrains Mono','Consolas',monospace; font-size: 11px;
+    }
+    .input-field {
+      width: 100%; max-width: 420px; padding: 8px 12px; background: var(--bg-tertiary);
+      border: 1px solid var(--border-secondary); border-radius: var(--radius-sm);
+      color: var(--text-primary); font-size: 13px; font-family: inherit; transition: var(--transition);
+    }
+    .input-field:focus { outline: none; border-color: var(--accent-primary); box-shadow: 0 0 0 1px var(--accent-primary); }
+    .input-field::placeholder { color: var(--text-placeholder); }
+    .input-row { display: flex; gap: 8px; align-items: stretch; }
+    .input-row .input-field { flex: 1; }
+    .select-field {
+      width: 100%; max-width: 420px; padding: 8px 12px; background: var(--bg-tertiary);
+      border: 1px solid var(--border-secondary); border-radius: var(--radius-sm);
+      color: var(--text-primary); font-size: 13px; font-family: inherit; cursor: pointer;
+      transition: var(--transition); appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%236d6d6d' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px;
+    }
+    .select-field:focus { outline: none; border-color: var(--accent-primary); box-shadow: 0 0 0 1px var(--accent-primary); }
+
+    /* ========== Buttons ========== */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 6px 14px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500;
+      cursor: pointer; transition: var(--transition); white-space: nowrap; border: none;
+    }
+    .btn svg { width: 14px; height: 14px; }
+    .btn-primary { background: var(--accent-primary); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-secondary { background: transparent; border: 1px solid var(--border-secondary); color: var(--text-secondary); }
+    .btn-secondary:hover { background: var(--bg-hover); border-color: var(--border-hover); color: var(--text-primary); }
+    .btn-ghost { background: transparent; color: var(--text-secondary); padding: 6px 10px; }
+    .btn-ghost:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .btn-danger { background: transparent; border: 1px solid rgba(248,81,73,0.3); color: var(--error); }
+    .btn-danger:hover { background: rgba(248,81,73,0.1); }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+    .btn-pill { border-radius: 20px; }
+
+    /* ========== Theme Options ========== */
+    .theme-options { display: flex; gap: 10px; flex-wrap: wrap; }
+    .theme-option {
+      display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+      background: var(--bg-secondary); border: 2px solid var(--border-secondary);
+      border-radius: var(--radius-md); cursor: pointer; transition: var(--transition); min-width: 120px;
+    }
+    .theme-option:hover { border-color: var(--border-hover); background: var(--bg-tertiary); }
+    .theme-option.active { border-color: var(--accent-primary); background: rgba(0,120,212,0.06); }
+    .theme-icon {
+      width: 28px; height: 28px; border-radius: 6px; display: flex;
+      align-items: center; justify-content: center; flex-shrink: 0; font-size: 14px;
+    }
+    .theme-icon-light { background: linear-gradient(135deg,#fff,#f5f5f5); border: 1px solid #e0e0e0; color: #333; }
+    .theme-icon-dark { background: linear-gradient(135deg,#2d2d2d,#1e1e1e); border: 1px solid #404040; color: #fff; }
+    .theme-icon-system { background: linear-gradient(135deg,#6366f1,#8b5cf6); border: 1px solid #818cf8; color: #fff; }
+    .theme-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+
+    /* ========== Color Swatches ========== */
+    .color-presets { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+    .color-swatch {
+      width: 32px; height: 32px; border-radius: var(--radius-md); cursor: pointer;
+      padding: 2px; border: 2px solid var(--border-secondary); transition: var(--transition);
+    }
+    .color-swatch:hover { border-color: var(--border-hover); transform: scale(1.1); }
+    .color-swatch.active { border-color: var(--accent-primary); box-shadow: 0 0 0 2px rgba(0,120,212,0.2); }
+    .color-swatch-inner { width: 100%; height: 100%; border-radius: 5px; border: 1px solid rgba(128,128,128,0.2); }
+
+    /* ========== Provider Cards ========== */
+    .provider-list { display: flex; flex-direction: column; gap: 8px; }
+    .provider-card {
+      display: flex; align-items: center; padding: 14px 16px;
+      background: var(--bg-secondary); border: 1px solid var(--border-primary);
+      border-radius: var(--radius-md); transition: var(--transition); cursor: pointer;
+    }
+    .provider-card:hover { border-color: var(--border-hover); background: var(--bg-tertiary); }
+    .provider-card.active { border-color: var(--accent-primary); box-shadow: 0 0 0 1px rgba(0,120,212,0.12); }
+    .provider-avatar {
+      width: 36px; height: 36px; border-radius: var(--radius-md); background: var(--bg-tertiary);
+      border: 1px solid var(--border-secondary); display: flex; align-items: center;
+      justify-content: center; flex-shrink: 0; margin-right: 12px;
+    }
+    .provider-avatar svg { width: 18px; height: 18px; color: var(--text-tertiary); }
+    .provider-info { flex: 1; min-width: 0; }
+    .provider-name { font-size: 14px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
+    .active-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
+    .provider-remark { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .provider-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .provider-card.special { border-left: 3px solid var(--warning); background: linear-gradient(90deg,rgba(243,156,18,0.04),transparent 50%); }
+
+    /* ========== Item Cards (Agents/Prompts) ========== */
+    .item-card {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px; background: var(--bg-secondary); border: 1px solid var(--border-primary);
+      border-radius: var(--radius-md); transition: var(--transition); margin-bottom: 8px;
+    }
+    .item-card:hover { border-color: var(--border-hover); }
+    .item-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+    .item-name { font-size: 14px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
+    .item-name svg { width: 16px; height: 16px; color: var(--accent-primary); }
+    .item-desc { font-size: 12px; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .item-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+    /* ========== Dep Grid ========== */
+    .dep-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(220px,1fr)); gap: 12px; }
+    .dep-card {
+      padding: 16px; background: var(--bg-secondary); border: 1px solid var(--border-primary);
+      border-radius: var(--radius-md); transition: var(--transition);
+    }
+    .dep-card:hover { border-color: var(--border-hover); }
+    .dep-icon {
+      width: 32px; height: 32px; border-radius: var(--radius-sm); background: var(--bg-tertiary);
+      display: flex; align-items: center; justify-content: center; margin-bottom: 10px;
+    }
+    .dep-icon svg { width: 18px; height: 18px; }
+    .dep-name { font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+    .dep-status { font-size: 12px; display: flex; align-items: center; gap: 4px; }
+    .dep-status.ok { color: var(--success); }
+    .dep-status.warn { color: var(--warning); }
+    .dep-status svg { width: 12px; height: 12px; }
+
+    /* ========== Stats Grid ========== */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(180px,1fr)); gap: 12px; margin-bottom: 24px; }
+    .stat-card { padding: 16px; background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: var(--radius-md); }
+    .stat-value { font-size: 24px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; }
+    .stat-label { font-size: 12px; color: var(--text-tertiary); }
+
+    /* ========== Empty State ========== */
+    .empty-state {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 60px 20px; text-align: center; background: var(--bg-secondary);
+      border: 2px dashed var(--border-secondary); border-radius: var(--radius-lg);
+    }
+    .empty-icon { margin-bottom: 16px; opacity: 0.5; }
+    .empty-icon svg { width: 48px; height: 48px; color: var(--text-tertiary); }
+    .empty-title { font-size: 15px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
+    .empty-desc { font-size: 13px; color: var(--text-tertiary); max-width: 320px; line-height: 1.5; }
+
+    /* ========== Community Link Card ========== */
+    .link-card {
+      display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+      background: var(--bg-secondary); border: 1px solid var(--border-primary);
+      border-radius: var(--radius-md); cursor: pointer; transition: var(--transition);
+      text-decoration: none; margin-bottom: 8px;
+    }
+    .link-card:hover { border-color: var(--border-hover); background: var(--bg-tertiary); }
+    .link-card svg { width: 22px; height: 22px; color: var(--accent-primary); flex-shrink: 0; }
+    .link-card-info { flex: 1; }
+    .link-card-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+    .link-card-desc { font-size: 12px; color: var(--text-tertiary); }
+    .link-card-arrow { color: var(--text-tertiary); }
+    .link-card-arrow svg { width: 16px; height: 16px; color: var(--text-tertiary); }
+
+    /* ========== List Header ========== */
+    .list-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;
+    }
+    .list-count { font-size: 14px; color: var(--text-secondary); }
+    .list-actions { display: flex; gap: 8px; }
+
+    /* ========== Status tag ========== */
+    .status-tag {
+      font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 500;
+    }
+    .status-tag-special { background: rgba(243,156,18,0.1); color: #f39c12; }
+    .status-tag-info { background: rgba(0,120,212,0.1); color: var(--accent-primary); }
+
+    /* ========== Usage Bar ========== */
+    .usage-badge {
+      display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px;
+      border-radius: 8px; background: var(--bg-tertiary); color: var(--text-tertiary); font-size: 12px;
+    }
+
+    /* Section separator */
+    .section-sep { border: none; border-top: 1px solid var(--border-primary); margin: 20px 0; }
+  </style>
+</head>
+<body>
+
+<!-- ==================== TAB NAV ==================== -->
+<div class="page-tabs" id="pageTabs">
+  <button class="page-tab active" data-panel="p-basic" onclick="showPanel('p-basic',this)">
+    <svg viewBox="0 0 24 24"><line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/></svg>
+    基础配置
+  </button>
+  <button class="page-tab" data-panel="p-providers" onclick="showPanel('p-providers',this)">
+    <svg viewBox="0 0 24 24"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a6 6 0 0 1-12 0V8z"/></svg>
+    供应商管理
+  </button>
+  <button class="page-tab" data-panel="p-deps" onclick="showPanel('p-deps',this)">
+    <svg viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+    依赖管理
+  </button>
+  <button class="page-tab" data-panel="p-usage" onclick="showPanel('p-usage',this)">
+    <svg viewBox="0 0 24 24"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+    用量统计
+  </button>
+  <button class="page-tab" data-panel="p-mcp" onclick="showPanel('p-mcp',this)">
+    <svg viewBox="0 0 24 24"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>
+    MCP 服务
+  </button>
+  <button class="page-tab" data-panel="p-perm" onclick="showPanel('p-perm',this)">
+    <svg viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+    权限配置
+  </button>
+  <button class="page-tab" data-panel="p-prompt" onclick="showPanel('p-prompt',this)">
+    <svg viewBox="0 0 24 24"><path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5L12 2z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15z"/></svg>
+    提示增强
+  </button>
+  <button class="page-tab" data-panel="p-commit" onclick="showPanel('p-commit',this)">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M3 12h6"/><path d="M15 12h6"/></svg>
+    提交配置
+  </button>
+  <button class="page-tab" data-panel="p-agents" onclick="showPanel('p-agents',this)">
+    <svg viewBox="0 0 24 24"><rect x="5" y="7" width="14" height="11" rx="3"/><path d="M12 3v4"/><path d="M9 15h6"/></svg>
+    Agent 管理
+  </button>
+  <button class="page-tab" data-panel="p-prompts" onclick="showPanel('p-prompts',this)">
+    <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+    提示词管理
+  </button>
+  <button class="page-tab" data-panel="p-skills" onclick="showPanel('p-skills',this)">
+    <svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+    技能管理
+  </button>
+  <button class="page-tab" data-panel="p-community" onclick="showPanel('p-community',this)">
+    <svg viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>
+    社区
+  </button>
+</div>
+
+<!-- ============================================================ -->
+<!-- PANEL: 基础配置 -->
+<!-- ============================================================ -->
+<div class="panel active" id="p-basic">
+  <div class="section-title">基础配置</div>
+  <div class="section-desc">配置外观、行为和环境参数，定制你的开发体验</div>
+
+  <div class="sub-tabs">
+    <button class="sub-tab active" onclick="switchSub(this,'basic-app')">
+      <svg viewBox="0 0 24 24"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="10.5" r="2.5" fill="currentColor" stroke="none" opacity=".3"/><circle cx="8.5" cy="7.5" r="2.5" fill="currentColor" stroke="none" opacity=".3"/><circle cx="6.5" cy="12.5" r="2.5" fill="currentColor" stroke="none" opacity=".3"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.04C11.88 19.17 11.73 18.83 11.73 18.42 11.73 17.56 12.57 17 13.5 17H16c3.31 0 6-2.69 6-6C22 5.83 17.64 2 12 2z"/></svg>
+      外观
+    </button>
+    <button class="sub-tab" onclick="switchSub(this,'basic-beh')">
+      <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      行为
+    </button>
+    <button class="sub-tab" onclick="switchSub(this,'basic-env')">
+      <svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+      环境
+    </button>
+  </div>
+
+  <!-- Appearance -->
+  <div class="sub-content" id="basic-app" style="display:block">
+    <div class="card-group">
+      <div class="card-group-title">
+        <svg viewBox="0 0 24 24"><circle cx="13.5" cy="6.5" r="2.5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.04C11.88 19.17 11.73 18.83 11.73 18.42 11.73 17.56 12.57 17 13.5 17H16c3.31 0 6-2.69 6-6C22 5.83 17.64 2 12 2z"/></svg>
+        主题选择
+      </div>
+      <div class="theme-options">
+        <div class="theme-option"><div class="theme-icon theme-icon-light"><svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg></div><span class="theme-name">浅色</span></div>
+        <div class="theme-option active"><div class="theme-icon theme-icon-dark"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div><span class="theme-name">深色</span></div>
+        <div class="theme-option"><div class="theme-icon theme-icon-system"><svg viewBox="0 0 24 24" width="16" height="16"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg></div><span class="theme-name">跟随系统</span></div>
+      </div>
+    </div>
+    <div class="card-group">
+      <div class="card-group-title">
+        <svg viewBox="0 0 24 24"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>
+        字体大小
+      </div>
+      <select class="select-field"><option>较小 (12px)</option><option selected>默认 (14px)</option><option>较大 (16px)</option><option>超大 (18px)</option></select>
+    </div>
+    <div class="card-group">
+      <div class="card-group-title">
+        <svg viewBox="0 0 24 24"><circle cx="13.5" cy="6.5" r="2.5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.5-.67 1.5-1.5v-.01C11.73 17.56 12.57 17 13.5 17H16c3.31 0 6-2.69 6-6C22 5.83 17.64 2 12 2z"/></svg>
+        聊天背景色
+      </div>
+      <div class="color-presets">
+        <div class="color-swatch active"><div class="color-swatch-inner" style="background:#1e1e1e"></div></div>
+        <div class="color-swatch"><div class="color-swatch-inner" style="background:#1a1b26"></div></div>
+        <div class="color-swatch"><div class="color-swatch-inner" style="background:#282a36"></div></div>
+        <div class="color-swatch"><div class="color-swatch-inner" style="background:#0d1117"></div></div>
+        <div class="color-swatch"><div class="color-swatch-inner" style="background:#1e2030"></div></div>
+        <div class="color-swatch"><div class="color-swatch-inner" style="background:#24283b"></div></div>
+      </div>
+      <div class="input-row" style="max-width:300px">
+        <input type="text" class="input-field" value="#1e1e1e" style="max-width:120px;font-family:monospace">
+        <input type="color" value="#1e1e1e" style="width:36px;height:34px;border:none;border-radius:4px;cursor:pointer;background:transparent">
+        <button class="btn btn-secondary btn-sm">重置</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Behavior -->
+  <div class="sub-content" id="basic-beh" style="display:none">
+    <div class="toggle-row"><div class="toggle-info"><span class="toggle-label">流式传输</span><span class="toggle-desc">实时显示 AI 响应内容，提升交互体验</span></div><label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
+    <div class="toggle-row"><div class="toggle-info"><span class="toggle-label">自动打开文件</span><span class="toggle-desc">AI 操作文件后自动在编辑器中打开</span></div><label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
+    <div class="toggle-row"><div class="toggle-info"><span class="toggle-label">Diff 默认展开</span><span class="toggle-desc">代码差异对比默认为展开状态</span></div><label class="toggle-switch"><input type="checkbox"><span class="toggle-slider"></span></label></div>
+    <div class="toggle-row"><div class="toggle-info"><span class="toggle-label">历史补全</span><span class="toggle-desc">输入时自动补全历史命令</span></div><label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
+    <div class="toggle-row"><div class="toggle-info"><span class="toggle-label">任务完成通知</span><span class="toggle-desc">后台任务完成时发送系统通知</span></div><label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
+    <hr class="section-sep">
+    <div class="form-group">
+      <div class="form-label"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h8"/></svg> 发送快捷键</div>
+      <div class="theme-options">
+        <div class="theme-option active"><span class="theme-name">Enter</span></div>
+        <div class="theme-option"><span class="theme-name">Cmd/Ctrl + Enter</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Environment -->
+  <div class="sub-content" id="basic-env" style="display:none">
+    <div class="form-group">
+      <div class="form-label">
+        <svg viewBox="0 0 24 24"><rect x="5" y="7" width="14" height="11" rx="3"/><path d="M12 3v4"/><path d="M9 15h6"/></svg>
+        Node.js 路径
+        <span style="color:var(--success);font-size:12px;font-weight:400;margin-left:8px">v20.11.0 ✓</span>
+      </div>
+      <div class="input-row">
+        <input type="text" class="input-field" value="/usr/local/bin/node">
+        <button class="btn btn-secondary">保存</button>
+      </div>
+      <div class="form-hint">
+        <svg viewBox="0 0 24 24" width="12" height="12"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        需要 Node.js >= 18.0，可通过 <code>which node</code> 查看路径
+      </div>
+    </div>
+    <div class="form-group">
+      <div class="form-label"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> 工作目录</div>
+      <div class="input-row"><input type="text" class="input-field" value="/home/user/projects"><button class="btn btn-secondary">保存</button></div>
+    </div>
+    <div class="form-group">
+      <div class="form-label"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> 调用模式</div>
+      <div class="theme-options">
+        <div class="theme-option active"><span class="theme-name">内置 CLI</span></div>
+        <div class="theme-option"><span class="theme-name">自定义路径</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PANEL: 供应商管理 -->
+<!-- ============================================================ -->
+<div class="panel" id="p-providers">
+  <div class="section-title">供应商管理</div>
+  <div class="section-desc">配置 AI 供应商的连接信息，管理 API 密钥和模型设置</div>
+
+  <div class="sub-tabs">
+    <button class="sub-tab active">
+      <svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="5" y="7" width="14" height="11" rx="3"/><path d="M9 12h.01"/><path d="M15 12h.01"/><path d="M10 15h4"/></svg>
+      Claude
+    </button>
+    <button class="sub-tab">
+      <svg viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>
+      Codex
+    </button>
+  </div>
+
+  <!-- Plugin models row -->
+  <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--bg-secondary);border:1px solid var(--border-secondary);border-radius:var(--radius-md);margin-bottom:16px;cursor:pointer;transition:var(--transition)">
+    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6M6 8h12M8 8v8a4 4 0 0 0 8 0V8"/></svg>
+    <span style="font-size:13px;font-weight:500;color:var(--text-primary);flex:1">插件模型管理</span>
+    <span style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--accent-primary);color:#fff;font-size:11px;font-weight:600">4</span>
+    <button class="btn btn-secondary btn-sm">管理</button>
+  </div>
+
+  <div class="list-header">
+    <span class="list-count">共 3 个供应商</span>
+    <div class="list-actions">
+      <button class="btn btn-secondary btn-sm">
+        <svg viewBox="0 0 24 24" width="12" height="12"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+        导入
+      </button>
+      <button class="btn btn-primary btn-sm">+ 添加供应商</button>
+    </div>
+  </div>
+
+  <div class="provider-list">
+    <div class="provider-card special">
+      <div class="provider-avatar"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div>
+      <div class="provider-info"><div class="provider-name">本地配置 <span class="status-tag status-tag-special">特殊</span></div><div class="provider-remark">使用 settings.local.json 中的 API Key</div></div>
+      <div class="provider-actions"><button class="btn btn-secondary btn-sm">配置</button></div>
+    </div>
+    <div class="provider-card active">
+      <div class="provider-avatar"><svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="5" y="7" width="14" height="11" rx="3"/><path d="M9 15h6"/></svg></div>
+      <div class="provider-info"><div class="provider-name">Anthropic 官方 <span class="active-dot"></span></div><div class="provider-remark">api.anthropic.com — 主要供应商</div></div>
+      <div class="provider-actions"><span class="usage-badge">当前使用</span><button class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button></div>
+    </div>
+    <div class="provider-card">
+      <div class="provider-avatar"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></div>
+      <div class="provider-info"><div class="provider-name">OpenRouter</div><div class="provider-remark">openrouter.ai — 多模型聚合</div></div>
+      <div class="provider-actions"><button class="btn btn-primary btn-sm btn-pill">切换</button><button class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M3 6h18M8 6V4h8v2M19 6v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PANEL: 依赖管理 -->
+<!-- ============================================================ -->
+<div class="panel" id="p-deps">
+  <div class="section-title">依赖管理</div>
+  <div class="section-desc">检查和管理插件运行所需的 SDK 依赖</div>
+  <div class="dep-grid">
+    <div class="dep-card">
+      <div class="dep-icon"><svg viewBox="0 0 24 24" width="18" height="18"><rect x="5" y="7" width="14" height="11" rx="3"/><path d="M12 3v4"/><path d="M9 15h6"/></svg></div>
+      <div class="dep-name">Node.js</div>
+      <div class="dep-status ok"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14 9 11"/></svg> v20.11.0 已安装</div>
+    </div>
+    <div class="dep-card">
+      <div class="dep-icon"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/></svg></div>
+      <div class="dep-name">Claude SDK</div>
+      <div class="dep-status ok"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14 9 11"/></svg> v1.2.3 已安装</div>
+    </div>
+    <div class="dep-card">
+      <div class="dep-icon"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div>
+      <div class="dep-name">CLI 工具</div>
+      <div class="dep-status ok"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14 9 11"/></svg> v2.1.0 已安装</div>
+    </div>
+    <div class="dep-card">
+      <div class="dep-icon" style="color:var(--warning)"><svg viewBox="0 0 24 24" width="18" height="18" style="color:var(--warning)"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg></div>
+      <div class="dep-name">Git</div>
+      <div class="dep-status warn"><svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg> 版本过低 (需 >= 2.30)</div>
+    </div>
+  </div>
+  <div style="margin-top:16px"><button class="btn btn-secondary"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/></svg> 刷新依赖状态</button></div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PANEL: 用量统计 -->
+<!-- ============================================================ -->
+<div class="panel" id="p-usage">
+  <div class="section-title">用量统计</div>
+  <div class="section-desc">查看 API 调用次数和 Token 消耗情况</div>
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-value">1,247</div><div class="stat-label">总请求数</div></div>
+    <div class="stat-card"><div class="stat-value">856K</div><div class="stat-label">输入 Tokens</div></div>
+    <div class="stat-card"><div class="stat-value">234K</div><div class="stat-label">输出 Tokens</div></div>
+    <div class="stat-card"><div class="stat-value">$12.45</div><div class="stat-label">估算费用</div></div>
+  </div>
+  <div class="settings-card" style="padding:20px">
+    <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:12px;display:flex;align-items:center;gap:8px">
+      <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+      本周用量趋势
+    </div>
+    <div style="display:flex;align-items:flex-end;gap:6px;height:120px;padding:10px 0">
+      <div style="flex:1;background:var(--accent-primary);border-radius:4px 4px 0 0;height:30%;opacity:.7"></div>
+      <div style="flex:1;background:var(--accent-primary);border-radius:4px 4px 0 0;height:55%;opacity:.7"></div>
+      <div style="flex:1;background:var(--accent-primary);border-radius:4px 4px 0 0;height:40%;opacity:.7"></div>
+      <div style="flex:1;background:var(--accent-primary);border-radius:4px 4px 0 0;height:80%;opacity:.7"></div>
+      <div style="flex:1;background:var(--accent-primary);border-radius:4px 4px 0 0;height:65%;opacity:.7"></div>
+      <div style="flex:1;background:var(--accent-primary);border-radius:4px 4px 0 0;height:45%;opacity:.7"></div>
+      <div style="flex:1;background:var(--accent-primary);border-radius:4px 4px 0 0;height:20%;opacity:.5"></div>
+    </div>
+    <div style="display:flex;gap:6px;font-size:11px;color:var(--text-tertiary);text-align:center"><span style="flex:1">一</span><span style="flex:1">二</span><span style="flex:1">三</span><span style="flex:1">四</span><span style="flex:1">五</span><span style="flex:1">六</span><span style="flex:1">日</span></div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PANEL: MCP 服务 -->
+<!-- ============================================================ -->
+<div class="panel" id="p-mcp">
+  <div class="section-title">MCP 服务</div>
+  <div class="section-desc">管理 Model Context Protocol 服务器连接</div>
+  <div class="empty-state">
+    <div class="empty-icon"><svg viewBox="0 0 24 24"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg></div>
+    <div class="empty-title">MCP 服务管理</div>
+    <div class="empty-desc">配置 MCP 服务器以扩展 AI 的能力边界，支持文件系统、数据库等外部工具</div>
+    <button class="btn btn-primary" style="margin-top:16px">+ 添加 MCP 服务</button>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PANEL: 权限配置 -->
+<!-- ============================================================ -->
+<div class="panel" id="p-perm">
+  <div class="section-title">权限配置</div>
+  <div class="section-desc">管理 AI 操作的权限策略和沙箱设置</div>
+  <div class="toggle-row"><div class="toggle-info"><span class="toggle-label">沙箱模式</span><span class="toggle-desc">限制 AI 在安全沙箱中执行命令</span></div><label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
+  <div class="toggle-row"><div class="toggle-info"><span class="toggle-label">自动批准文件读取</span><span class="toggle-desc">AI 读取文件时无需手动确认</span></div><label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
+  <div class="toggle-row"><div class="toggle-info"><span class="toggle-label">自动批准文件写入</span><span class="toggle-desc">AI 写入文件时无需手动确认</span></div><label class="toggle-switch"><input type="checkbox"><span class="toggle-slider"></span></label></div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PANEL: 提示增强 -->
+<!-- ============================================================ -->
+<div class="panel" id="p-prompt">
+  <div class="section-title">提示增强</div>
+  <div class="section-desc">配置 AI 辅助优化你的输入提示词</div>
+  <div class="form-group">
+    <div class="form-label"><svg viewBox="0 0 24 24"><path d="M12 2v6M6 8h12M8 8v8a4 4 0 0 0 8 0V8"/></svg> 增强供应商</div>
+    <select class="select-field"><option selected>使用当前活跃供应商</option><option>Anthropic</option><option>OpenRouter</option></select>
+  </div>
+  <div class="form-group">
+    <div class="form-label"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14"/></svg> 增强模型</div>
+    <select class="select-field"><option selected>claude-3-haiku-20240307</option><option>claude-3-sonnet-20240229</option></select>
+  </div>
+  <button class="btn btn-secondary btn-sm"><svg viewBox="0 0 24 24" width="12" height="12"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> 恢复默认设置</button>
+</div>
+
+<!-- ============================================================ -->
+<!-- PANEL: 提交配置 -->
+<!-- ============================================================ -->
+<div class="panel" id="p-commit">
+  <div class="section-title">提交配置</div>
+  <div class="section-desc">配置 AI 自动生成 Git 提交信息的行为</div>
+  <div class="toggle-row"><div class="toggle-info"><span class="toggle-label">启用提交信息生成</span><span class="toggle-desc">提交代码时自动生成 AI 提交信息</span></div><label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
+  <hr class="section-sep">
+  <div class="form-group">
+    <div class="form-label"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M3 12h6M15 12h6"/></svg> 提交 AI 供应商</div>
+    <select class="select-field"><option selected>使用当前活跃供应商</option></select>
+  </div>
+  <div class="form-group">
+    <div class="form-label"><svg viewBox="0 0 24 24"><path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5L12 2z"/></svg> 提交模型</div>
+    <select class="select-field"><option selected>claude-3-haiku-20240307</option></select>
+  </div>
+  <div class="form-group">
+    <div class="form-label"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg> 全局提交提示词</div>
+    <textarea class="input-field" rows="3" style="max-width:100%;resize:vertical;font-family:inherit" placeholder="自定义提交信息生成的提示词...">请根据代码变更生成简洁明了的中文提交信息，遵循 Conventional Commits 规范。</textarea>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PANEL: Agent 管理 -->
+<!-- ============================================================ -->
+<div class="panel" id="p-agents">
+  <div class="section-title">Agent 管理</div>
+  <div class="section-desc">创建和管理自定义 Agent，赋予 AI 特定的角色和能力</div>
+  <div class="list-header">
+    <span class="list-count">共 5 个 Agent</span>
+    <div class="list-actions">
+      <button class="btn btn-secondary btn-sm"><svg viewBox="0 0 24 24" width="12" height="12"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg> 导入</button>
+      <button class="btn btn-secondary btn-sm"><svg viewBox="0 0 24 24" width="12" height="12"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5"/><path d="M23 10V3h-7"/></svg> 导出</button>
+      <button class="btn btn-primary btn-sm">+ 创建 Agent</button>
+    </div>
+  </div>
+  <div class="item-card">
+    <div class="item-info"><div class="item-name"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="20 6 22 6 22 12"/></svg> 代码审查专家</div><div class="item-desc">专注于代码质量审查，发现潜在问题和优化建议</div></div>
+    <div class="item-actions"><button class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg></button><button class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M3 6h18M8 6V4h8v2M19 6v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button></div>
+  </div>
+  <div class="item-card">
+    <div class="item-info"><div class="item-name"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg> 文档撰写助手</div><div class="item-desc">帮助编写技术文档、README 和 API 说明</div></div>
+    <div class="item-actions"><button class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg></button><button class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M3 6h18M8 6V4h8v2M19 6v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button></div>
+  </div>
+  <div class="item-card">
+    <div class="item-info"><div class="item-name"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg> 调试助手</div><div class="item-desc">协助定位和修复代码中的 Bug</div></div>
+    <div class="item-actions"><button class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg></button><button class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M3 6h18M8 6V4h8v2M19 6v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button></div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PANEL: 提示词管理 -->
+<!-- ============================================================ -->
+<div class="panel" id="p-prompts">
+  <div class="section-title">提示词管理</div>
+  <div class="section-desc">创建和管理可复用的提示词模板，提升工作效率</div>
+  <div class="list-header">
+    <span class="list-count">共 3 个提示词</span>
+    <div class="list-actions">
+      <button class="btn btn-secondary btn-sm"><svg viewBox="0 0 24 24" width="12" height="12"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg> 导入</button>
+      <button class="btn btn-primary btn-sm">+ 创建提示词</button>
+    </div>
+  </div>
+  <div class="item-card">
+    <div class="item-info"><div class="item-name"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg> 代码重构</div><div class="item-desc">对指定代码进行重构，提升可读性和性能</div></div>
+    <div class="item-actions"><button class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M3 6h18M8 6V4h8v2M19 6v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button></div>
+  </div>
+  <div class="item-card">
+    <div class="item-info"><div class="item-name"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg> 代码分析</div><div class="item-desc">深度分析代码结构，发现潜在问题</div></div>
+    <div class="item-actions"><button class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M3 6h18M8 6V4h8v2M19 6v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button></div>
+  </div>
+  <div class="item-card">
+    <div class="item-info"><div class="item-name"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10"/></svg> 国际化翻译</div><div class="item-desc">将代码中的硬编码文本提取并翻译</div></div>
+    <div class="item-actions"><button class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M3 6h18M8 6V4h8v2M19 6v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button></div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PANEL: 技能管理 -->
+<!-- ============================================================ -->
+<div class="panel" id="p-skills">
+  <div class="section-title">技能管理</div>
+  <div class="section-desc">管理 AI 可使用的技能和工具集</div>
+  <div class="toggle-row"><div class="toggle-info"><span class="toggle-label">📂 文件操作</span><span class="toggle-desc">读取、写入和编辑文件</span></div><label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
+  <div class="toggle-row"><div class="toggle-info"><span class="toggle-label">💻 终端命令</span><span class="toggle-desc">执行 Shell 命令</span></div><label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
+  <div class="toggle-row"><div class="toggle-info"><span class="toggle-label">🌐 网络请求</span><span class="toggle-desc">发送 HTTP 请求和搜索</span></div><label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
+  <div class="toggle-row"><div class="toggle-info"><span class="toggle-label">🔍 代码搜索</span><span class="toggle-desc">在项目中搜索代码和符号</span></div><label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PANEL: 社区 -->
+<!-- ============================================================ -->
+<div class="panel" id="p-community">
+  <div class="section-title">社区</div>
+  <div class="section-desc">加入社区，获取帮助和分享经验</div>
+  <div class="link-card">
+    <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    <div class="link-card-info"><div class="link-card-title">GitHub Discussions</div><div class="link-card-desc">参与讨论，提出建议和反馈</div></div>
+    <span class="link-card-arrow"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></span>
+  </div>
+  <div class="link-card">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+    <div class="link-card-info"><div class="link-card-title">Issue Tracker</div><div class="link-card-desc">报告 Bug 和跟踪问题</div></div>
+    <span class="link-card-arrow"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></span>
+  </div>
+  <div class="link-card">
+    <svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+    <div class="link-card-info"><div class="link-card-title">文档中心</div><div class="link-card-desc">查看使用文档和教程</div></div>
+    <span class="link-card-arrow"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></span>
+  </div>
+</div>
+
+<script>
+function showPanel(id, el) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.page-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+function switchSub(btn, id) {
+  btn.parentElement.querySelectorAll('.sub-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const panel = btn.closest('.panel');
+  panel.querySelectorAll('.sub-content').forEach(c => c.style.display = 'none');
+  document.getElementById(id).style.display = 'block';
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,1198 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SVG 图标补充草图</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #1e1f22;
+      --panel: #25262b;
+      --bar: #2b2d31;
+      --surface: #2d2f34;
+      --surface-2: #32353c;
+      --chip: #32343a;
+      --hover: #3a3d44;
+      --border: #464950;
+      --muted: #a8adb7;
+      --text: #f0f2f5;
+      --soft: #d8dde6;
+      --accent: #4ea1ff;
+      --accent-bg: rgba(78, 161, 255, .12);
+      --accent-border: rgba(78, 161, 255, .28);
+      --green: #4cc38a;
+      --amber: #e7b85a;
+      --violet: #a989ff;
+      --red: #f07178;
+      --shadow-sm: 0 2px 8px rgba(0, 0, 0, .22);
+      --shadow-md: 0 10px 26px rgba(0, 0, 0, .32);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 14px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 36px;
+    }
+
+    svg.icon {
+      width: 1em;
+      height: 1em;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vertical-align: middle;
+      flex: 0 0 auto;
+    }
+
+    .page {
+      max-width: 1160px;
+      margin: 0 auto;
+      display: grid;
+      gap: 28px;
+    }
+
+    .hero {
+      display: grid;
+      gap: 10px;
+      padding: 24px 28px;
+      background: linear-gradient(180deg, rgba(78, 161, 255, .12), rgba(169, 137, 255, .06));
+      border: 1px solid var(--accent-border);
+      border-radius: 12px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .hero h1 {
+      font-size: 26px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .hero p {
+      color: var(--muted);
+      line-height: 1.6;
+      max-width: 920px;
+    }
+
+    .scope-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .scope-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(240, 242, 245, .04);
+      border: 1px solid var(--border);
+      color: var(--soft);
+      font-size: 12px;
+    }
+
+    .section {
+      display: grid;
+      gap: 16px;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--soft);
+      font-size: 17px;
+      font-weight: 600;
+    }
+
+    .section-title .icon-wrap {
+      width: 26px;
+      height: 26px;
+      display: grid;
+      place-items: center;
+      border-radius: 7px;
+      background: var(--accent-bg);
+      color: var(--accent);
+      border: 1px solid var(--accent-border);
+    }
+
+    .section-note {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .preview-surface {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .surface-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 16px;
+      background: var(--bar);
+      border-bottom: 1px solid var(--border);
+      color: var(--soft);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .surface-body {
+      padding: 20px;
+    }
+
+    .app-frame {
+      background: linear-gradient(180deg, #202226, #1e2024);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .app-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: var(--bar);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .toolbar-left,
+    .toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .session-chip {
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: var(--chip);
+      border: 1px solid var(--border);
+      color: var(--soft);
+      font-size: 12px;
+    }
+
+    .icon-btn,
+    .mini-btn,
+    .chip-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid transparent;
+      border-radius: 6px;
+      transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+    }
+
+    .icon-btn {
+      width: 32px;
+      height: 32px;
+    }
+
+    .icon-btn.active,
+    .mini-btn.active,
+    .chip-btn.active {
+      color: var(--accent);
+      background: var(--accent-bg);
+      border-color: var(--accent-border);
+    }
+
+    .icon-btn:hover,
+    .mini-btn:hover,
+    .chip-btn:hover {
+      color: var(--text);
+      background: var(--hover);
+    }
+
+    .icon-btn svg.icon { width: 18px; height: 18px; }
+    .mini-btn svg.icon { width: 15px; height: 15px; }
+    .chip-btn svg.icon { width: 14px; height: 14px; }
+
+    .chat-canvas {
+      position: relative;
+      min-height: 250px;
+      padding: 18px;
+      background:
+        linear-gradient(180deg, rgba(78, 161, 255, .04), rgba(0, 0, 0, 0)),
+        #1f2125;
+    }
+
+    .message-stack {
+      display: grid;
+      gap: 12px;
+      max-width: 620px;
+    }
+
+    .msg {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    .avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, var(--accent), var(--violet));
+      color: white;
+    }
+
+    .bubble {
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--soft);
+      line-height: 1.6;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .bubble mark {
+      padding: 0 2px;
+      border-radius: 3px;
+      background: rgba(255, 167, 38, .42);
+      box-shadow: 0 0 0 1px rgba(255, 167, 38, .85);
+      color: inherit;
+    }
+
+    .search-panel {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      width: 458px;
+      max-width: calc(100% - 36px);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 8px;
+      background: #2a2c30;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow-md);
+    }
+
+    .search-panel .search-icon {
+      color: var(--muted);
+      display: grid;
+      place-items: center;
+      width: 18px;
+    }
+
+    .search-input {
+      flex: 1;
+      min-width: 0;
+      height: 28px;
+      padding: 0 8px;
+      border-radius: 6px;
+      border: 1px solid var(--accent-border);
+      background: #1f2125;
+      color: var(--text);
+      font-size: 12px;
+    }
+
+    .search-counter {
+      min-width: 44px;
+      text-align: right;
+      color: var(--muted);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .chip-btn,
+    .mini-btn {
+      width: 26px;
+      height: 26px;
+    }
+
+    .toolbar-divider {
+      width: 1px;
+      height: 18px;
+      background: var(--border);
+    }
+
+    .mode-glyph {
+      font-size: 11px;
+      letter-spacing: 0;
+      font-weight: 600;
+    }
+
+    .history-card {
+      display: grid;
+      gap: 12px;
+      padding: 16px;
+      border-radius: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+
+    .history-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .history-edit-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .title-input {
+      flex: 1;
+      min-width: 0;
+      height: 34px;
+      padding: 0 12px;
+      border-radius: 8px;
+      border: 1px solid var(--accent-border);
+      background: #1f2125;
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .title-action-btn {
+      width: 30px;
+      height: 30px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--muted);
+    }
+
+    .title-action-btn.confirm {
+      color: var(--green);
+      background: rgba(76, 195, 138, .1);
+      border-color: rgba(76, 195, 138, .2);
+    }
+
+    .title-action-btn.cancel {
+      color: #c1c6cf;
+      background: rgba(240, 242, 245, .04);
+      border-color: var(--border);
+    }
+
+    .history-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .dot {
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: var(--muted);
+      opacity: .8;
+    }
+
+    .file-panel {
+      display: grid;
+      gap: 14px;
+    }
+
+    .action-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .action-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      height: 34px;
+      padding: 0 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--soft);
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .action-pill svg.icon { width: 16px; height: 16px; }
+    .action-pill.warning { color: #f5c06b; }
+    .action-pill.success { color: var(--green); }
+
+    .file-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .file-row {
+      display: grid;
+      grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+
+    .status-mark {
+      width: 20px;
+      height: 20px;
+      display: grid;
+      place-items: center;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(76, 195, 138, .12);
+      color: var(--green);
+    }
+
+    .file-name {
+      min-width: 0;
+      color: var(--soft);
+      font-weight: 500;
+    }
+
+    .file-stats {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .plus { color: var(--green); }
+    .minus { color: var(--red); }
+
+    .row-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-shell {
+      display: grid;
+      gap: 14px;
+    }
+
+    .status-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px;
+      border-radius: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+
+    .status-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 34px;
+      padding: 0 12px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      color: var(--muted);
+      background: transparent;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .status-tab.active {
+      color: var(--accent);
+      background: var(--accent-bg);
+      border-color: var(--accent-border);
+    }
+
+    .status-tab .count {
+      padding-left: 2px;
+      color: inherit;
+      opacity: .92;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .status-content {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .status-card {
+      display: grid;
+      gap: 10px;
+      padding: 16px;
+      border-radius: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+
+    .status-card-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--soft);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .todo-list,
+    .subagent-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .todo-item,
+    .subagent-item {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border-radius: 10px;
+      background: rgba(0, 0, 0, .12);
+      border: 1px solid rgba(255, 255, 255, .04);
+    }
+
+    .todo-icon,
+    .subagent-status {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .05);
+      color: var(--muted);
+    }
+
+    .todo-icon.running,
+    .subagent-status.running { color: var(--accent); }
+    .todo-icon.done,
+    .subagent-status.done { color: var(--green); }
+    .subagent-status.error { color: var(--red); }
+
+    .todo-body,
+    .subagent-body {
+      min-width: 0;
+      display: grid;
+      gap: 6px;
+    }
+
+    .todo-title,
+    .subagent-type {
+      color: var(--soft);
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .todo-tag,
+    .subagent-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      width: fit-content;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .todo-tag.pending { background: rgba(168, 173, 183, .12); color: var(--muted); }
+    .todo-tag.running,
+    .subagent-badge.running { background: rgba(78, 161, 255, .12); color: var(--accent); }
+    .todo-tag.done,
+    .subagent-badge.done { background: rgba(76, 195, 138, .12); color: var(--green); }
+    .subagent-badge.error { background: rgba(240, 113, 120, .12); color: var(--red); }
+
+    .subagent-desc {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .subagent-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .subagent-stat {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .legend-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .legend-item {
+      display: grid;
+      gap: 8px;
+      padding: 14px;
+      border-radius: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+
+    .legend-top {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--soft);
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .legend-top .icon-box {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .05);
+      color: var(--accent);
+    }
+
+    .legend-desc {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .spin {
+      animation: spin 1s linear infinite;
+      transform-origin: center;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 980px) {
+      .status-content,
+      .legend-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .file-row {
+        grid-template-columns: auto auto minmax(0, 1fr) auto;
+      }
+
+      .file-stats {
+        grid-column: 3 / -1;
+        padding-left: 32px;
+      }
+    }
+
+    @media (max-width: 720px) {
+      body { padding: 18px; }
+      .hero { padding: 20px; }
+      .search-panel {
+        position: static;
+        width: 100%;
+        max-width: none;
+        margin-top: 14px;
+      }
+      .chat-canvas {
+        display: grid;
+        gap: 14px;
+      }
+      .file-row {
+        grid-template-columns: auto auto minmax(0, 1fr);
+      }
+      .row-actions {
+        grid-column: 1 / -1;
+        justify-content: flex-end;
+      }
+    }
+  </style>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute">
+    <symbol id="i-search" viewBox="0 0 24 24">
+      <circle cx="11" cy="11" r="7"></circle>
+      <path d="M20 20l-3.8-3.8"></path>
+    </symbol>
+    <symbol id="i-left" viewBox="0 0 24 24">
+      <path d="M15 18l-6-6 6-6"></path>
+    </symbol>
+    <symbol id="i-right" viewBox="0 0 24 24">
+      <path d="M9 18l6-6-6-6"></path>
+    </symbol>
+    <symbol id="i-close" viewBox="0 0 24 24">
+      <path d="M18 6L6 18"></path>
+      <path d="M6 6l12 12"></path>
+    </symbol>
+    <symbol id="i-check" viewBox="0 0 24 24">
+      <polyline points="20 6 9 17 4 12"></polyline>
+    </symbol>
+    <symbol id="i-word" viewBox="0 0 24 24">
+      <path d="M5 6v12"></path>
+      <path d="M19 6v12"></path>
+      <path d="M8 9l2 6 2-4 2 4 2-6"></path>
+    </symbol>
+    <symbol id="i-regex" viewBox="0 0 24 24">
+      <circle cx="7.5" cy="12" r="1.5"></circle>
+      <path d="M13 8v8"></path>
+      <path d="M10 12h6"></path>
+      <path d="M11.5 9.5l3 5"></path>
+      <path d="M14.5 9.5l-3 5"></path>
+    </symbol>
+    <symbol id="i-diff" viewBox="0 0 24 24">
+      <path d="M7 5H5v14h2"></path>
+      <path d="M17 5h2v14h-2"></path>
+      <path d="M10 9h4"></path>
+      <path d="M10 15h4"></path>
+      <path d="M12 5v14"></path>
+    </symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24">
+      <path d="M3 7v6h6"></path>
+      <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
+    </symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24">
+      <path d="M3 6h18"></path>
+      <path d="M8 6V4h8v2"></path>
+      <path d="M19 6v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
+      <path d="M10 11v5"></path>
+      <path d="M14 11v5"></path>
+    </symbol>
+    <symbol id="i-keep" viewBox="0 0 24 24">
+      <path d="M9 6h10"></path>
+      <path d="M9 12h10"></path>
+      <path d="M9 18h10"></path>
+      <polyline points="4 6 5.5 7.5 7.5 5.5"></polyline>
+      <polyline points="4 12 5.5 13.5 7.5 11.5"></polyline>
+      <polyline points="4 18 5.5 19.5 7.5 17.5"></polyline>
+    </symbol>
+    <symbol id="i-task" viewBox="0 0 24 24">
+      <path d="M9 6h11"></path>
+      <path d="M9 12h11"></path>
+      <path d="M9 18h11"></path>
+      <polyline points="4 6 5.5 7.5 7.5 5.5"></polyline>
+      <circle cx="5.8" cy="12" r="1.2"></circle>
+      <circle cx="5.8" cy="18" r="1.2"></circle>
+    </symbol>
+    <symbol id="i-robot" viewBox="0 0 24 24">
+      <rect x="5" y="7" width="14" height="11" rx="3"></rect>
+      <path d="M12 3v4"></path>
+      <path d="M8 12h.01"></path>
+      <path d="M16 12h.01"></path>
+      <path d="M9 15h6"></path>
+      <path d="M2.5 11.5H5"></path>
+      <path d="M19 11.5h2.5"></path>
+    </symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+      <path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+    </symbol>
+    <symbol id="i-loading" viewBox="0 0 24 24">
+      <path d="M21 12a9 9 0 1 1-6.2-8.6"></path>
+    </symbol>
+    <symbol id="i-circle" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="8"></circle>
+    </symbol>
+    <symbol id="i-check-circle" viewBox="0 0 24 24">
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+      <polyline points="22 4 12 14 9 11"></polyline>
+    </symbol>
+    <symbol id="i-x-circle" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="10"></circle>
+      <path d="M15 9l-6 6"></path>
+      <path d="M9 9l6 6"></path>
+    </symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9"></circle>
+      <path d="M12 7v5l3 2"></path>
+    </symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24">
+      <path d="M12 4l8 4-8 4-8-4 8-4z"></path>
+      <path d="M4 12l8 4 8-4"></path>
+      <path d="M4 16l8 4 8-4"></path>
+    </symbol>
+    <symbol id="i-file" viewBox="0 0 24 24">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+      <path d="M14 2v6h6"></path>
+    </symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24">
+      <path d="M12 5v14"></path>
+      <path d="M5 12h14"></path>
+    </symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24">
+      <path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5L12 2z"></path>
+      <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15z"></path>
+    </symbol>
+  </svg>
+
+  <div class="page">
+    <section class="hero">
+      <h1>SVG 图标补充草图</h1>
+      <p>这一页只补之前还没覆盖到的区域，目标不是重做布局，而是把遗漏按钮和状态展示统一到同一套线性 SVG 语言里。重点看按钮识别度、状态层次、以及在深色界面里的轻重关系。</p>
+      <div class="scope-list">
+        <span class="scope-pill"><svg class="icon"><use href="#i-search"></use></svg>对话搜索按钮</span>
+        <span class="scope-pill"><svg class="icon"><use href="#i-check"></use></svg>编辑标签确认 / 取消</span>
+        <span class="scope-pill"><svg class="icon"><use href="#i-diff"></use></svg>查看差异 / 撤销更改 / 回撤全部 / 保存全部</span>
+        <span class="scope-pill"><svg class="icon"><use href="#i-task"></use></svg>任务展示图标</span>
+        <span class="scope-pill"><svg class="icon"><use href="#i-robot"></use></svg>子代理展示图标</span>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div class="section-title">
+          <span class="icon-wrap"><svg class="icon"><use href="#i-search"></use></svg></span>
+          <span>对话搜索</span>
+        </div>
+        <div class="section-note">搜索入口、面板导航、模式切换和关闭按钮统一成一套 SVG 手感</div>
+      </div>
+      <div class="preview-surface">
+        <div class="surface-bar">
+          <span>Chat Header + In-Conversation Search</span>
+          <span>建议保留 22px 控件密度</span>
+        </div>
+        <div class="surface-body">
+          <div class="app-frame">
+            <div class="app-toolbar">
+              <div class="toolbar-left">
+                <span class="session-chip">修复搜索工具分组显示问题</span>
+              </div>
+              <div class="toolbar-right">
+                <button class="icon-btn active" aria-label="Search">
+                  <svg class="icon"><use href="#i-search"></use></svg>
+                </button>
+                <button class="icon-btn" aria-label="New session">
+                  <svg class="icon"><use href="#i-plus"></use></svg>
+                </button>
+              </div>
+            </div>
+            <div class="chat-canvas">
+              <div class="message-stack">
+                <div class="msg">
+                  <div class="avatar"><svg class="icon"><use href="#i-spark"></use></svg></div>
+                  <div class="bubble">我已经把最近的搜索类工具调用合并成一个批量块，现在会把连续的 <mark>grep / rg / find</mark> 归并展示。</div>
+                </div>
+                <div class="msg">
+                  <div class="avatar"><svg class="icon"><use href="#i-spark"></use></svg></div>
+                  <div class="bubble">如果你想继续查 diff 面板的问题，我可以再去看一下 <mark>status panel</mark> 的文件变更区域。</div>
+                </div>
+              </div>
+              <div class="search-panel">
+                <span class="search-icon"><svg class="icon"><use href="#i-search"></use></svg></span>
+                <input class="search-input" value="status panel" aria-label="Search input">
+                <span class="search-counter">2 / 12</span>
+                <button class="chip-btn active" aria-label="Match case">
+                  <span class="mode-glyph">Aa</span>
+                </button>
+                <button class="chip-btn" aria-label="Whole word">
+                  <svg class="icon"><use href="#i-word"></use></svg>
+                </button>
+                <button class="chip-btn" aria-label="Regex">
+                  <svg class="icon"><use href="#i-regex"></use></svg>
+                </button>
+                <span class="toolbar-divider"></span>
+                <button class="mini-btn" aria-label="Previous match">
+                  <svg class="icon"><use href="#i-left"></use></svg>
+                </button>
+                <button class="mini-btn active" aria-label="Next match">
+                  <svg class="icon"><use href="#i-right"></use></svg>
+                </button>
+                <button class="mini-btn" aria-label="Close search">
+                  <svg class="icon"><use href="#i-close"></use></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div class="section-title">
+          <span class="icon-wrap"><svg class="icon"><use href="#i-edit"></use></svg></span>
+          <span>编辑标签</span>
+        </div>
+        <div class="section-note">确认用绿色正反馈，取消回到中性色，不抢输入框焦点</div>
+      </div>
+      <div class="preview-surface">
+        <div class="surface-bar">
+          <span>Title Editing</span>
+          <span>适用于会话标题 / 历史项重命名</span>
+        </div>
+        <div class="surface-body">
+          <div class="history-card">
+            <div class="history-top">
+              <div class="history-edit-group">
+                <input class="title-input" value="修复状态面板 diff 图标残留 codicon" aria-label="Session title">
+                <button class="title-action-btn confirm" aria-label="Confirm">
+                  <svg class="icon"><use href="#i-check"></use></svg>
+                </button>
+                <button class="title-action-btn cancel" aria-label="Cancel">
+                  <svg class="icon"><use href="#i-close"></use></svg>
+                </button>
+              </div>
+              <span class="section-note">50 chars</span>
+            </div>
+            <div class="history-meta">
+              <span>Claude</span>
+              <span class="dot"></span>
+              <span>18 条消息</span>
+              <span class="dot"></span>
+              <span>2 小时前</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div class="section-title">
+          <span class="icon-wrap"><svg class="icon"><use href="#i-diff"></use></svg></span>
+          <span>编辑选项</span>
+        </div>
+        <div class="section-note">单文件动作维持无标签轻按钮；批量动作保留图标加文字，避免误触</div>
+      </div>
+      <div class="preview-surface">
+        <div class="surface-bar">
+          <span>File Changes</span>
+          <span>查看差异 / 撤销更改 / 回撤全部 / 保存全部</span>
+        </div>
+        <div class="surface-body">
+          <div class="file-panel">
+            <div class="action-bar">
+              <button class="action-pill warning">
+                <svg class="icon"><use href="#i-trash"></use></svg>
+                <span>回撤全部</span>
+              </button>
+              <button class="action-pill success">
+                <svg class="icon"><use href="#i-keep"></use></svg>
+                <span>保存全部</span>
+              </button>
+            </div>
+            <div class="file-list">
+              <div class="file-row">
+                <span class="status-mark">M</span>
+                <svg class="icon" style="color:var(--muted); width:16px; height:16px;"><use href="#i-file"></use></svg>
+                <div class="file-name">webview/src/components/StatusPanel/FileChangesList.tsx</div>
+                <div class="file-stats"><span class="plus">+14</span><span class="minus">-6</span></div>
+                <div class="row-actions">
+                  <button class="mini-btn" aria-label="Show diff">
+                    <svg class="icon"><use href="#i-diff"></use></svg>
+                  </button>
+                  <button class="mini-btn" aria-label="Undo changes">
+                    <svg class="icon"><use href="#i-undo"></use></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="file-row">
+                <span class="status-mark">A</span>
+                <svg class="icon" style="color:var(--muted); width:16px; height:16px;"><use href="#i-file"></use></svg>
+                <div class="file-name">docs/mockups/svg-icon-migration-supplement.html</div>
+                <div class="file-stats"><span class="plus">+312</span><span class="minus">-0</span></div>
+                <div class="row-actions">
+                  <button class="mini-btn" aria-label="Show diff">
+                    <svg class="icon"><use href="#i-diff"></use></svg>
+                  </button>
+                  <button class="mini-btn" aria-label="Undo changes">
+                    <svg class="icon"><use href="#i-undo"></use></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div class="section-title">
+          <span class="icon-wrap"><svg class="icon"><use href="#i-task"></use></svg></span>
+          <span>任务与子代理展示</span>
+        </div>
+        <div class="section-note">状态面板上层 tab、任务行状态、子代理状态和统计图标一起看，确认是否同一语义层级</div>
+      </div>
+      <div class="preview-surface">
+        <div class="surface-bar">
+          <span>Status Panel</span>
+          <span>任务 / 子代理 / 编辑</span>
+        </div>
+        <div class="surface-body">
+          <div class="status-shell">
+            <div class="status-tabs">
+              <button class="status-tab active">
+                <svg class="icon"><use href="#i-task"></use></svg>
+                <span>任务</span>
+                <span class="count">2/3</span>
+                <svg class="icon spin" style="width:13px;height:13px;"><use href="#i-loading"></use></svg>
+              </button>
+              <button class="status-tab">
+                <svg class="icon"><use href="#i-robot"></use></svg>
+                <span>子代理</span>
+                <span class="count">1/2</span>
+              </button>
+              <button class="status-tab">
+                <svg class="icon"><use href="#i-edit"></use></svg>
+                <span>编辑</span>
+                <span class="count">+26 -6</span>
+              </button>
+            </div>
+
+            <div class="status-content">
+              <div class="status-card">
+                <div class="status-card-title">
+                  <span>任务列表</span>
+                  <span class="section-note">TodoList</span>
+                </div>
+                <div class="todo-list">
+                  <div class="todo-item">
+                    <div class="todo-icon done"><svg class="icon"><use href="#i-check"></use></svg></div>
+                    <div class="todo-body">
+                      <div class="todo-title">梳理现有 mockup 风格和遗漏位置</div>
+                      <span class="todo-tag done">已完成</span>
+                    </div>
+                    <svg class="icon" style="color:var(--muted); width:14px; height:14px;"><use href="#i-right"></use></svg>
+                  </div>
+                  <div class="todo-item">
+                    <div class="todo-icon running"><svg class="icon spin"><use href="#i-loading"></use></svg></div>
+                    <div class="todo-body">
+                      <div class="todo-title">绘制补充 SVG 图标草图页</div>
+                      <span class="todo-tag running">进行中</span>
+                    </div>
+                    <svg class="icon" style="color:var(--muted); width:14px; height:14px;"><use href="#i-right"></use></svg>
+                  </div>
+                  <div class="todo-item">
+                    <div class="todo-icon"><svg class="icon"><use href="#i-circle"></use></svg></div>
+                    <div class="todo-body">
+                      <div class="todo-title">确认最终图标映射后再落实现代码</div>
+                      <span class="todo-tag pending">待办</span>
+                    </div>
+                    <svg class="icon" style="color:var(--muted); width:14px; height:14px;"><use href="#i-right"></use></svg>
+                  </div>
+                </div>
+              </div>
+
+              <div class="status-card">
+                <div class="status-card-title">
+                  <span>子代理列表</span>
+                  <span class="section-note">SubagentList</span>
+                </div>
+                <div class="subagent-list">
+                  <div class="subagent-item">
+                    <div class="subagent-status running"><svg class="icon"><use href="#i-robot"></use></svg></div>
+                    <div class="subagent-body">
+                      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                        <span class="subagent-type">research</span>
+                        <span class="subagent-badge running">运行中</span>
+                      </div>
+                      <div class="subagent-desc">检查剩余 codicon 替换点，补齐状态面板和搜索面板中的遗留按钮。</div>
+                      <div class="subagent-stats">
+                        <span class="subagent-stat"><svg class="icon"><use href="#i-clock"></use></svg>42s</span>
+                        <span class="subagent-stat"><svg class="icon"><use href="#i-layers"></use></svg>7 次调用</span>
+                        <span class="subagent-stat">2.1k tokens</span>
+                      </div>
+                    </div>
+                    <svg class="icon" style="color:var(--muted); width:14px; height:14px;"><use href="#i-right"></use></svg>
+                  </div>
+
+                  <div class="subagent-item">
+                    <div class="subagent-status done"><svg class="icon"><use href="#i-check-circle"></use></svg></div>
+                    <div class="subagent-body">
+                      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                        <span class="subagent-type">review</span>
+                        <span class="subagent-badge done">已完成</span>
+                      </div>
+                      <div class="subagent-desc">已确认 FileChangesList 仍在使用 diff / discard / trash / check-all 的旧 codicon。</div>
+                      <div class="subagent-stats">
+                        <span class="subagent-stat"><svg class="icon"><use href="#i-clock"></use></svg>19s</span>
+                        <span class="subagent-stat"><svg class="icon"><use href="#i-layers"></use></svg>4 次调用</span>
+                        <span class="subagent-stat">1.3k tokens</span>
+                      </div>
+                    </div>
+                    <svg class="icon" style="color:var(--muted); width:14px; height:14px;"><use href="#i-right"></use></svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div class="section-title">
+          <span class="icon-wrap"><svg class="icon"><use href="#i-spark"></use></svg></span>
+          <span>建议映射</span>
+        </div>
+        <div class="section-note">便于你快速判断哪些图形可以直接进入实现</div>
+      </div>
+      <div class="legend-grid">
+        <div class="legend-item">
+          <div class="legend-top">
+            <span class="icon-box"><svg class="icon"><use href="#i-word"></use></svg></span>
+            <span>Whole Word</span>
+          </div>
+          <div class="legend-desc">用左右边界线包住字形，中性但可读，比单纯文字按钮更像一个模式开关。</div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-top">
+            <span class="icon-box"><svg class="icon"><use href="#i-regex"></use></svg></span>
+            <span>Regex</span>
+          </div>
+          <div class="legend-desc">保留 “符号规则” 的感觉，不走复杂数学图形，避免在 14px 下糊成一团。</div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-top">
+            <span class="icon-box"><svg class="icon"><use href="#i-diff"></use></svg></span>
+            <span>Show Diff</span>
+          </div>
+          <div class="legend-desc">用双栏和中轴表达“前后对照”，比文件加减更贴近 diff 行为本身。</div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-top">
+            <span class="icon-box"><svg class="icon"><use href="#i-keep"></use></svg></span>
+            <span>Keep All</span>
+          </div>
+          <div class="legend-desc">不用单个勾，改为清单式多勾，和“保存全部 / 作为新基准”这个批量语义更一致。</div>
+        </div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

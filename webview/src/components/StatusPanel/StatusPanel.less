@@ -288,12 +288,14 @@
     }
   }
 
-  .codicon {
-    font-size: 11px;
-  }
-
-  .codicon-modifier-spin {
-    animation: status-spin 1s linear infinite;
+  svg {
+    width: 12px;
+    height: 12px;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 }
 
@@ -585,9 +587,15 @@
   text-transform: uppercase;
   letter-spacing: 0.03em;
 
-  .codicon {
-    font-size: 13px;
+  svg {
+    width: 13px;
+    height: 13px;
     color: var(--text-tertiary);
+    stroke: currentColor;
+    stroke-width: 1.8;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 }
 
@@ -628,9 +636,16 @@
     white-space: nowrap;
   }
 
-  .codicon {
+  svg {
     flex-shrink: 0;
     color: var(--text-tertiary);
+    width: 12px;
+    height: 12px;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 }
 
@@ -669,8 +684,14 @@
   background: var(--bg-primary);
   color: var(--text-secondary);
 
-  .codicon {
-    animation: status-spin 1s linear infinite;
+  svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 }
 
@@ -904,9 +925,15 @@
   padding: 16px;
   border-bottom: 1px solid var(--border-primary);
 
-  .codicon {
-    font-size: 18px;
+  svg {
+    width: 18px;
+    height: 18px;
     color: #ff6b6b;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 
   h3 {
@@ -980,8 +1007,18 @@
   border-left: 3px solid #ffc107;
 
   .warning-icon {
-    font-size: 18px;
     flex-shrink: 0;
+
+    svg {
+      width: 18px;
+      height: 18px;
+      color: #ffc107;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
   }
 
   .warning-text {
@@ -1086,8 +1123,14 @@
     background: transparent;
     color: var(--text-secondary);
 
-    .codicon {
-      font-size: 12px;
+    svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
 
     &:hover:not(:disabled) {
@@ -1107,9 +1150,6 @@
         background: rgba(255, 107, 107, 0.1);
       }
 
-      .codicon-modifier-spin {
-        animation: status-spin 1s linear infinite;
-      }
     }
 
     &.keep-all-btn {
@@ -1135,7 +1175,6 @@
   }
 }
 
-/* Dialog header icon colors */
-.undo-confirm-header .codicon-check-all {
-  color: #3b82f6;
+.status-panel-spin-icon {
+  animation: status-spin 1s linear infinite;
 }

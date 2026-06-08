@@ -1,0 +1,1916 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings Redesign Mockup - JetBrains Melon CC GUI</title>
+  <style>
+    /* ========== CSS Variables (Dark Theme) ========== */
+    :root {
+      --bg-primary: #1e1e1e;
+      --bg-secondary: #252526;
+      --bg-tertiary: #2d2d30;
+      --bg-hover: rgba(255, 255, 255, 0.06);
+      --bg-selected: rgba(0, 120, 212, 0.1);
+      --text-primary: #cccccc;
+      --text-secondary: #9d9d9d;
+      --text-tertiary: #6d6d6d;
+      --text-placeholder: #4d4d4d;
+      --border-primary: #3c3c3c;
+      --border-secondary: #404040;
+      --border-hover: #555;
+      --accent-primary: #0078d4;
+      --accent-hover: #0063b1;
+      --success-color: #4caf50;
+      --warning-color: #ff9800;
+      --error-color: #f85149;
+      --sidebar-width: 220px;
+      --sidebar-collapsed-width: 56px;
+      --header-height: 48px;
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.2);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.3);
+      --shadow-lg: 0 8px 24px rgba(0,0,0,0.4);
+      --transition: all 0.2s ease;
+    }
+
+    /* ========== Reset ========== */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ========== Page Layout ========== */
+    .settings-page {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    /* ========== Header ========== */
+    .settings-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      height: var(--header-height);
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-primary);
+      flex-shrink: 0;
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .back-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--text-tertiary);
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    .back-btn:hover {
+      background: var(--bg-hover);
+      color: var(--text-secondary);
+    }
+    .header-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .header-badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: var(--bg-tertiary);
+      color: var(--text-tertiary);
+      border: 1px solid var(--border-primary);
+    }
+
+    /* ========== Main Content ========== */
+    .settings-main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ========== Sidebar ========== */
+    .sidebar {
+      width: var(--sidebar-width);
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border-primary);
+      display: flex;
+      flex-direction: column;
+      transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .sidebar.collapsed {
+      width: var(--sidebar-collapsed-width);
+    }
+
+    /* Sidebar search */
+    .sidebar-search {
+      padding: 8px 12px;
+      flex-shrink: 0;
+    }
+    .sidebar.collapsed .sidebar-search {
+      padding: 8px 6px;
+    }
+    .search-input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .search-icon {
+      position: absolute;
+      left: 8px;
+      color: var(--text-tertiary);
+      font-size: 14px;
+      pointer-events: none;
+    }
+    .search-input {
+      width: 100%;
+      padding: 6px 8px 6px 28px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-secondary);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-size: 12px;
+      outline: none;
+      transition: var(--transition);
+    }
+    .search-input:focus {
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 1px var(--accent-primary);
+    }
+    .search-input::placeholder {
+      color: var(--text-placeholder);
+    }
+    .sidebar.collapsed .search-input-wrapper {
+      display: none;
+    }
+
+    /* Sidebar sections (group labels) */
+    .sidebar-section-label {
+      padding: 16px 16px 4px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-tertiary);
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .sidebar.collapsed .sidebar-section-label {
+      text-align: center;
+      padding: 12px 4px 4px;
+      font-size: 9px;
+    }
+
+    /* Sidebar items */
+    .sidebar-items {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 8px;
+    }
+    .sidebar-items::-webkit-scrollbar {
+      width: 4px;
+    }
+    .sidebar-items::-webkit-scrollbar-thumb {
+      background: var(--border-primary);
+      border-radius: 2px;
+    }
+
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text-secondary);
+      position: relative;
+      white-space: nowrap;
+      transition: var(--transition);
+      margin-bottom: 1px;
+    }
+    .sidebar-item:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+    .sidebar-item.active {
+      background: var(--accent-primary);
+      color: #ffffff;
+      font-weight: 500;
+    }
+    .sidebar-item.active .sidebar-icon {
+      color: #ffffff;
+    }
+    .sidebar-item .sidebar-icon {
+      font-size: 16px;
+      width: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: var(--text-tertiary);
+      transition: color 0.15s ease;
+    }
+    .sidebar-item:hover .sidebar-icon {
+      color: var(--text-primary);
+    }
+    .sidebar-item-text {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sidebar-item-badge {
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 8px;
+      background: var(--accent-primary);
+      color: #fff;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .sidebar-item.active .sidebar-item-badge {
+      background: rgba(255,255,255,0.25);
+    }
+
+    .sidebar.collapsed .sidebar-item {
+      justify-content: center;
+      padding: 10px 8px;
+    }
+    .sidebar.collapsed .sidebar-item-text,
+    .sidebar.collapsed .sidebar-item-badge {
+      display: none;
+    }
+
+    /* Sidebar toggle */
+    .sidebar-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+      margin: 4px 8px 8px;
+      cursor: pointer;
+      color: var(--text-tertiary);
+      border-radius: var(--radius-sm);
+      transition: var(--transition);
+      border-top: 1px solid var(--border-primary);
+      flex-shrink: 0;
+    }
+    .sidebar-toggle:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    /* ========== Content Area ========== */
+    .settings-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0;
+    }
+    .settings-content::-webkit-scrollbar {
+      width: 6px;
+    }
+    .settings-content::-webkit-scrollbar-thumb {
+      background: var(--border-primary);
+      border-radius: 3px;
+    }
+    .settings-content::-webkit-scrollbar-thumb:hover {
+      background: var(--border-hover);
+    }
+
+    /* Content section (one per tab) */
+    .content-section {
+      display: none;
+      padding: 24px 32px 60px;
+      max-width: 860px;
+      animation: fadeIn 0.2s ease;
+    }
+    .content-section.active {
+      display: block;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Section header */
+    .section-header {
+      margin-bottom: 24px;
+    }
+    .section-title {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+    .section-desc {
+      font-size: 13px;
+      color: var(--text-tertiary);
+      line-height: 1.5;
+    }
+
+    /* ========== Sub-tabs (pill style) ========== */
+    .sub-tabs {
+      display: inline-flex;
+      background: var(--bg-tertiary);
+      padding: 3px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-secondary);
+      margin-bottom: 20px;
+      gap: 2px;
+    }
+    .sub-tab {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 16px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 13px;
+      cursor: pointer;
+      transition: var(--transition);
+      white-space: nowrap;
+    }
+    .sub-tab:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+    .sub-tab.active {
+      background: var(--accent-primary);
+      color: #ffffff;
+      box-shadow: var(--shadow-sm);
+    }
+
+    /* ========== Card Groups ========== */
+    .card-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .card-group-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-group-title .icon {
+      color: var(--accent-primary);
+      font-size: 16px;
+    }
+
+    /* Settings card */
+    .settings-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-primary);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      transition: var(--transition);
+    }
+    .settings-card:hover {
+      border-color: var(--border-hover);
+    }
+    .settings-card.active-provider {
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 1px rgba(0, 120, 212, 0.15);
+    }
+
+    /* ========== Form Elements ========== */
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+    .form-label .icon {
+      color: var(--accent-primary);
+      font-size: 14px;
+    }
+    .form-hint {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      margin-top: 6px;
+      display: flex;
+      align-items: flex-start;
+      gap: 4px;
+    }
+    .form-hint code {
+      background: rgba(255,255,255,0.06);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: 'JetBrains Mono', 'Consolas', monospace;
+      font-size: 11px;
+    }
+
+    .input-field {
+      width: 100%;
+      max-width: 420px;
+      padding: 8px 12px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-secondary);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-size: 13px;
+      font-family: inherit;
+      transition: var(--transition);
+    }
+    .input-field:focus {
+      outline: none;
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 1px var(--accent-primary);
+    }
+    .input-field::placeholder {
+      color: var(--text-placeholder);
+    }
+
+    .input-row {
+      display: flex;
+      gap: 8px;
+      align-items: stretch;
+    }
+    .input-row .input-field {
+      flex: 1;
+    }
+
+    .select-field {
+      width: 100%;
+      max-width: 420px;
+      padding: 8px 12px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-secondary);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-size: 13px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: var(--transition);
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%236d6d6d' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 32px;
+    }
+    .select-field:focus {
+      outline: none;
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 1px var(--accent-primary);
+    }
+
+    /* ========== Buttons ========== */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: var(--transition);
+      white-space: nowrap;
+      border: none;
+    }
+    .btn-primary {
+      background: var(--accent-primary);
+      color: #ffffff;
+    }
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--border-secondary);
+      color: var(--text-secondary);
+    }
+    .btn-secondary:hover {
+      background: var(--bg-hover);
+      border-color: var(--border-hover);
+      color: var(--text-primary);
+    }
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-secondary);
+      border: none;
+      padding: 6px 10px;
+    }
+    .btn-ghost:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+    .btn-danger {
+      background: transparent;
+      border: 1px solid rgba(248, 81, 73, 0.3);
+      color: var(--error-color);
+    }
+    .btn-danger:hover {
+      background: rgba(248, 81, 73, 0.1);
+    }
+    .btn-sm {
+      padding: 4px 10px;
+      font-size: 12px;
+    }
+    .btn-pill {
+      border-radius: 20px;
+    }
+
+    /* ========== Toggle Switch ========== */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-primary);
+      border-radius: var(--radius-md);
+      margin-bottom: 8px;
+      transition: var(--transition);
+    }
+    .toggle-row:hover {
+      border-color: var(--border-hover);
+    }
+    .toggle-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .toggle-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+    .toggle-desc {
+      font-size: 12px;
+      color: var(--text-tertiary);
+    }
+    .toggle-switch {
+      position: relative;
+      width: 40px;
+      height: 22px;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+    .toggle-switch input {
+      display: none;
+    }
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-secondary);
+      border-radius: 11px;
+      transition: var(--transition);
+    }
+    .toggle-slider::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      background: var(--text-tertiary);
+      border-radius: 50%;
+      transition: var(--transition);
+    }
+    .toggle-switch input:checked + .toggle-slider {
+      background: var(--accent-primary);
+      border-color: var(--accent-primary);
+    }
+    .toggle-switch input:checked + .toggle-slider::after {
+      left: 20px;
+      background: #ffffff;
+    }
+
+    /* ========== Theme Selector ========== */
+    .theme-options {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .theme-option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      background: var(--bg-secondary);
+      border: 2px solid var(--border-secondary);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: var(--transition);
+      min-width: 120px;
+    }
+    .theme-option:hover {
+      border-color: var(--border-hover);
+      background: var(--bg-tertiary);
+    }
+    .theme-option.active {
+      border-color: var(--accent-primary);
+      background: rgba(0, 120, 212, 0.06);
+    }
+    .theme-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 14px;
+    }
+    .theme-icon-light {
+      background: linear-gradient(135deg, #fff 0%, #f5f5f5 100%);
+      border: 1px solid #e0e0e0;
+      color: #333;
+    }
+    .theme-icon-dark {
+      background: linear-gradient(135deg, #2d2d2d 0%, #1e1e1e 100%);
+      border: 1px solid #404040;
+      color: #fff;
+    }
+    .theme-icon-system {
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      border: 1px solid #818cf8;
+      color: #fff;
+    }
+    .theme-meta {
+      display: flex;
+      flex-direction: column;
+    }
+    .theme-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    /* ========== Provider Cards ========== */
+    .provider-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .provider-card {
+      display: flex;
+      align-items: center;
+      padding: 14px 16px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-primary);
+      border-radius: var(--radius-md);
+      transition: var(--transition);
+      cursor: pointer;
+    }
+    .provider-card:hover {
+      border-color: var(--border-hover);
+      background: var(--bg-tertiary);
+    }
+    .provider-card.active {
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 1px rgba(0, 120, 212, 0.12);
+    }
+    .provider-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-md);
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+      margin-right: 12px;
+    }
+    .provider-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .provider-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .provider-name .active-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success-color);
+    }
+    .provider-remark {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      margin-top: 2px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .provider-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    /* Special provider card */
+    .provider-card.special {
+      border-left: 3px solid var(--warning-color);
+      background: linear-gradient(90deg, rgba(243, 156, 18, 0.04) 0%, transparent 50%);
+    }
+
+    /* ========== Agent / Prompt Cards ========== */
+    .item-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-primary);
+      border-radius: var(--radius-md);
+      transition: var(--transition);
+    }
+    .item-card:hover {
+      border-color: var(--border-hover);
+    }
+    .item-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex: 1;
+      min-width: 0;
+    }
+    .item-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .item-desc {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .item-actions {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    /* ========== Dependency Items ========== */
+    .dep-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 12px;
+    }
+    .dep-card {
+      padding: 16px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-primary);
+      border-radius: var(--radius-md);
+      transition: var(--transition);
+    }
+    .dep-card:hover {
+      border-color: var(--border-hover);
+    }
+    .dep-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-tertiary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+    .dep-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+    .dep-status {
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .dep-status.ok { color: var(--success-color); }
+    .dep-status.warn { color: var(--warning-color); }
+    .dep-status.err { color: var(--error-color); }
+
+    /* ========== Empty State ========== */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+      text-align: center;
+      background: var(--bg-secondary);
+      border: 2px dashed var(--border-secondary);
+      border-radius: var(--radius-lg);
+    }
+    .empty-icon {
+      font-size: 48px;
+      color: var(--text-tertiary);
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+    .empty-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+    .empty-desc {
+      font-size: 13px;
+      color: var(--text-tertiary);
+      max-width: 320px;
+      line-height: 1.5;
+    }
+
+    /* ========== Usage Stats ========== */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      padding: 16px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-primary);
+      border-radius: var(--radius-md);
+    }
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+    .stat-label {
+      font-size: 12px;
+      color: var(--text-tertiary);
+    }
+
+    /* ========== Color Swatches ========== */
+    .color-presets {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .color-swatch {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      padding: 2px;
+      border: 2px solid var(--border-secondary);
+      transition: var(--transition);
+    }
+    .color-swatch:hover {
+      border-color: var(--border-hover);
+      transform: scale(1.1);
+    }
+    .color-swatch.active {
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.2);
+    }
+    .color-swatch-inner {
+      width: 100%;
+      height: 100%;
+      border-radius: 5px;
+      border: 1px solid rgba(128,128,128,0.2);
+    }
+
+    /* ========== SVG Icon Utility ========== */
+    .svg-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+    }
+    .svg-icon svg {
+      width: 100%;
+      height: 100%;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .svg-icon-sm { width: 14px; height: 14px; }
+    .svg-icon-lg { width: 20px; height: 20px; }
+
+    /* ========== Scrollbar (global) ========== */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-primary); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
+
+    /* ========== Responsive ========== */
+    @media (max-width: 640px) {
+      .sidebar {
+        width: var(--sidebar-collapsed-width);
+      }
+      .sidebar .sidebar-item-text,
+      .sidebar .sidebar-item-badge,
+      .sidebar .sidebar-section-label,
+      .sidebar .sidebar-search {
+        display: none;
+      }
+      .sidebar .sidebar-item {
+        justify-content: center;
+        padding: 10px 8px;
+      }
+      .content-section {
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="settings-page">
+    <!-- ==================== HEADER ==================== -->
+    <div class="settings-header">
+      <div class="header-left">
+        <button class="back-btn" title="返回">
+          <span class="svg-icon"><svg viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></span>
+        </button>
+        <span class="header-title">设置</span>
+        <span class="header-badge">v0.4.5</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-ghost btn-sm" title="重置所有设置">
+          <span class="svg-icon svg-icon-sm"><svg viewBox="0 0 24 24"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg></span>
+          重置
+        </button>
+      </div>
+    </div>
+
+    <!-- ==================== MAIN ==================== -->
+    <div class="settings-main">
+      <!-- ========== SIDEBAR ========== -->
+      <div class="sidebar" id="sidebar">
+        <div class="sidebar-search">
+          <div class="search-input-wrapper">
+            <span class="search-icon">🔍</span>
+            <input type="text" class="search-input" placeholder="搜索设置..." id="sidebarSearch" />
+          </div>
+        </div>
+
+        <!-- Group: Core -->
+        <div class="sidebar-section-label">核心</div>
+        <div class="sidebar-items">
+          <div class="sidebar-item active" data-tab="basic" onclick="switchTab('basic', this)">
+            <span class="sidebar-icon">⚙️</span>
+            <span class="sidebar-item-text">基础配置</span>
+          </div>
+          <div class="sidebar-item" data-tab="providers" onclick="switchTab('providers', this)">
+            <span class="sidebar-icon">🔌</span>
+            <span class="sidebar-item-text">供应商管理</span>
+            <span class="sidebar-item-badge">3</span>
+          </div>
+          <div class="sidebar-item" data-tab="dependencies" onclick="switchTab('dependencies', this)">
+            <span class="sidebar-icon">📦</span>
+            <span class="sidebar-item-text">依赖管理</span>
+          </div>
+          <div class="sidebar-item" data-tab="usage" onclick="switchTab('usage', this)">
+            <span class="sidebar-icon">📊</span>
+            <span class="sidebar-item-text">用量统计</span>
+          </div>
+        </div>
+
+        <!-- Group: Tools -->
+        <div class="sidebar-section-label">工具</div>
+        <div class="sidebar-items">
+          <div class="sidebar-item" data-tab="mcp" onclick="switchTab('mcp', this)">
+            <span class="sidebar-icon">🖥️</span>
+            <span class="sidebar-item-text">MCP 服务</span>
+          </div>
+          <div class="sidebar-item" data-tab="permissions" onclick="switchTab('permissions', this)">
+            <span class="sidebar-icon">🛡️</span>
+            <span class="sidebar-item-text">权限配置</span>
+          </div>
+          <div class="sidebar-item" data-tab="promptEnhancer" onclick="switchTab('promptEnhancer', this)">
+            <span class="sidebar-icon">✨</span>
+            <span class="sidebar-item-text">提示增强</span>
+          </div>
+          <div class="sidebar-item" data-tab="commit" onclick="switchTab('commit', this)">
+            <span class="sidebar-icon">📝</span>
+            <span class="sidebar-item-text">提交配置</span>
+          </div>
+        </div>
+
+        <!-- Group: Resources -->
+        <div class="sidebar-section-label">资源</div>
+        <div class="sidebar-items">
+          <div class="sidebar-item" data-tab="agents" onclick="switchTab('agents', this)">
+            <span class="sidebar-icon">🤖</span>
+            <span class="sidebar-item-text">Agent 管理</span>
+            <span class="sidebar-item-badge">5</span>
+          </div>
+          <div class="sidebar-item" data-tab="prompts" onclick="switchTab('prompts', this)">
+            <span class="sidebar-icon">📓</span>
+            <span class="sidebar-item-text">提示词管理</span>
+          </div>
+          <div class="sidebar-item" data-tab="skills" onclick="switchTab('skills', this)">
+            <span class="sidebar-icon">📖</span>
+            <span class="sidebar-item-text">技能管理</span>
+          </div>
+        </div>
+
+        <!-- Group: Other -->
+        <div class="sidebar-section-label">其他</div>
+        <div class="sidebar-items">
+          <div class="sidebar-item" data-tab="other" onclick="switchTab('other', this)">
+            <span class="sidebar-icon">⋯</span>
+            <span class="sidebar-item-text">其他设置</span>
+          </div>
+          <div class="sidebar-item" data-tab="community" onclick="switchTab('community', this)">
+            <span class="sidebar-icon">💬</span>
+            <span class="sidebar-item-text">社区</span>
+          </div>
+        </div>
+
+        <!-- Toggle button -->
+        <div class="sidebar-toggle" onclick="toggleSidebar()" title="收起侧边栏">
+          ◀
+        </div>
+      </div>
+
+      <!-- ========== CONTENT AREA ========== -->
+      <div class="settings-content">
+
+        <!-- ==================== BASIC ==================== -->
+        <div class="content-section active" id="tab-basic">
+          <div class="section-header">
+            <div class="section-title">基础配置</div>
+            <div class="section-desc">配置外观、行为和环境参数，定制你的开发体验</div>
+          </div>
+
+          <!-- Sub tabs -->
+          <div class="sub-tabs">
+            <button class="sub-tab active" onclick="switchSubTab(this, 'basic-appearance')">🎨 外观</button>
+            <button class="sub-tab" onclick="switchSubTab(this, 'basic-behavior')">⚡ 行为</button>
+            <button class="sub-tab" onclick="switchSubTab(this, 'basic-env')">🔧 环境</button>
+          </div>
+
+          <!-- Appearance sub-tab -->
+          <div class="sub-content active" id="basic-appearance">
+            <div class="card-group">
+              <div class="card-group-title"><span class="icon">🎨</span> 主题选择</div>
+              <div class="theme-options">
+                <div class="theme-option" onclick="selectTheme(this)">
+                  <div class="theme-icon theme-icon-light">☀️</div>
+                  <div class="theme-meta">
+                    <span class="theme-name">浅色</span>
+                  </div>
+                </div>
+                <div class="theme-option active" onclick="selectTheme(this)">
+                  <div class="theme-icon theme-icon-dark">🌙</div>
+                  <div class="theme-meta">
+                    <span class="theme-name">深色</span>
+                  </div>
+                </div>
+                <div class="theme-option" onclick="selectTheme(this)">
+                  <div class="theme-icon theme-icon-system">💻</div>
+                  <div class="theme-meta">
+                    <span class="theme-name">跟随系统</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card-group">
+              <div class="card-group-title"><span class="icon">🔤</span> 字体大小</div>
+              <div class="form-group">
+                <select class="select-field">
+                  <option>较小 (12px)</option>
+                  <option selected>默认 (14px)</option>
+                  <option>较大 (16px)</option>
+                  <option>超大 (18px)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="card-group">
+              <div class="card-group-title"><span class="icon">🎨</span> 聊天背景色</div>
+              <div class="color-presets">
+                <div class="color-swatch active"><div class="color-swatch-inner" style="background:#1e1e1e"></div></div>
+                <div class="color-swatch"><div class="color-swatch-inner" style="background:#1a1b26"></div></div>
+                <div class="color-swatch"><div class="color-swatch-inner" style="background:#282a36"></div></div>
+                <div class="color-swatch"><div class="color-swatch-inner" style="background:#0d1117"></div></div>
+                <div class="color-swatch"><div class="color-swatch-inner" style="background:#1e2030"></div></div>
+                <div class="color-swatch"><div class="color-swatch-inner" style="background:#24283b"></div></div>
+                <div class="color-swatch"><div class="color-swatch-inner" style="background:#2b2e3b"></div></div>
+                <div class="color-swatch"><div class="color-swatch-inner" style="background:#212337"></div></div>
+              </div>
+              <div class="input-row" style="max-width:300px;">
+                <input type="text" class="input-field" value="#1e1e1e" style="max-width:120px;font-family:monospace;" />
+                <input type="color" value="#1e1e1e" style="width:36px;height:34px;border:none;border-radius:4px;cursor:pointer;background:transparent;" />
+                <button class="btn btn-secondary btn-sm">重置</button>
+              </div>
+            </div>
+
+            <div class="card-group">
+              <div class="card-group-title"><span class="icon">🎯</span> 用户消息颜色</div>
+              <div class="color-presets">
+                <div class="color-swatch active"><div class="color-swatch-inner" style="background:#0078d4"></div></div>
+                <div class="color-swatch"><div class="color-swatch-inner" style="background:#6366f1"></div></div>
+                <div class="color-swatch"><div class="color-swatch-inner" style="background:#059669"></div></div>
+                <div class="color-swatch"><div class="color-swatch-inner" style="background:#d97706"></div></div>
+                <div class="color-swatch"><div class="color-swatch-inner" style="background:#dc2626"></div></div>
+                <div class="color-swatch"><div class="color-swatch-inner" style="background:#7c3aed"></div></div>
+              </div>
+            </div>
+
+            <div class="card-group">
+              <div class="card-group-title"><span class="icon">📝</span> Diff 主题</div>
+              <div class="theme-options">
+                <div class="theme-option active" onclick="selectTheme(this)">
+                  <div class="theme-icon" style="background:linear-gradient(135deg,#252526,#1e1e1e);border:1px solid #404040;color:#fff;font-size:10px;">M</div>
+                  <div class="theme-meta">
+                    <span class="theme-name">编辑器</span>
+                  </div>
+                </div>
+                <div class="theme-option" onclick="selectTheme(this)">
+                  <div class="theme-icon" style="background:linear-gradient(135deg,#272d3a,#1f2430);border:1px solid #313847;color:#fff;font-size:10px;">S</div>
+                  <div class="theme-meta">
+                    <span class="theme-name">柔和深色</span>
+                  </div>
+                </div>
+                <div class="theme-option" onclick="selectTheme(this)">
+                  <div class="theme-icon" style="background:linear-gradient(135deg,#f7f9fc,#fff);border:1px solid #edf2f7;color:#333;font-size:10px;">L</div>
+                  <div class="theme-meta">
+                    <span class="theme-name">浅色</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Behavior sub-tab -->
+          <div class="sub-content" id="basic-behavior" style="display:none;">
+            <div class="toggle-row">
+              <div class="toggle-info">
+                <span class="toggle-label">流式传输</span>
+                <span class="toggle-desc">实时显示 AI 响应内容，提升交互体验</span>
+              </div>
+              <label class="toggle-switch"><input type="checkbox" checked /><span class="toggle-slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div class="toggle-info">
+                <span class="toggle-label">自动打开文件</span>
+                <span class="toggle-desc">AI 操作文件后自动在编辑器中打开</span>
+              </div>
+              <label class="toggle-switch"><input type="checkbox" checked /><span class="toggle-slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div class="toggle-info">
+                <span class="toggle-label">Diff 默认展开</span>
+                <span class="toggle-desc">代码差异对比默认为展开状态</span>
+              </div>
+              <label class="toggle-switch"><input type="checkbox" /><span class="toggle-slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div class="toggle-info">
+                <span class="toggle-label">历史补全</span>
+                <span class="toggle-desc">输入时自动补全历史命令</span>
+              </div>
+              <label class="toggle-switch"><input type="checkbox" checked /><span class="toggle-slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div class="toggle-info">
+                <span class="toggle-label">新会话确认</span>
+                <span class="toggle-desc">创建新会话前显示确认对话框</span>
+              </div>
+              <label class="toggle-switch"><input type="checkbox" checked /><span class="toggle-slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div class="toggle-info">
+                <span class="toggle-label">任务完成通知</span>
+                <span class="toggle-desc">后台任务完成时发送系统通知</span>
+              </div>
+              <label class="toggle-switch"><input type="checkbox" checked /><span class="toggle-slider"></span></label>
+            </div>
+
+            <div class="form-group" style="margin-top:20px;">
+              <div class="form-label"><span class="icon">⌨️</span> 发送快捷键</div>
+              <div class="theme-options">
+                <div class="theme-option active" onclick="selectTheme(this)">
+                  <div class="theme-meta"><span class="theme-name">Enter</span></div>
+                </div>
+                <div class="theme-option" onclick="selectTheme(this)">
+                  <div class="theme-meta"><span class="theme-name">Cmd/Ctrl + Enter</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <div class="form-label"><span class="icon">⏱️</span> 权限对话框超时</div>
+              <div class="input-row" style="max-width:200px;">
+                <input type="number" class="input-field" value="30" style="max-width:100px;" />
+                <span style="color:var(--text-tertiary);font-size:13px;display:flex;align-items:center;">秒</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Environment sub-tab -->
+          <div class="sub-content" id="basic-env" style="display:none;">
+            <div class="form-group">
+              <div class="form-label"><span class="icon">🟢</span> Node.js 路径 <span style="color:var(--success-color);font-size:12px;font-weight:400;">v20.11.0 ✓</span></div>
+              <div class="input-row">
+                <input type="text" class="input-field" value="/usr/local/bin/node" placeholder="Node.js 可执行文件路径" />
+                <button class="btn btn-secondary">保存</button>
+              </div>
+              <div class="form-hint">💡 需要 Node.js >= 18.0，可通过 <code>which node</code> 查看路径</div>
+            </div>
+
+            <div class="form-group">
+              <div class="form-label"><span class="icon">📁</span> 工作目录</div>
+              <div class="input-row">
+                <input type="text" class="input-field" value="/home/user/projects" placeholder="默认工作目录" />
+                <button class="btn btn-secondary">保存</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <div class="form-label"><span class="icon">🔤</span> 编辑器字体</div>
+              <div class="input-field" style="font-family:'JetBrains Mono',monospace;padding:8px 12px;background:var(--bg-tertiary);border:1px solid var(--border-secondary);border-radius:4px;max-width:420px;">
+                JetBrains Mono — 跟随 IDE 设置
+              </div>
+            </div>
+
+            <div class="form-group">
+              <div class="form-label"><span class="icon">🖥️</span> UI 字体</div>
+              <select class="select-field">
+                <option selected>跟随系统默认</option>
+                <option>自定义字体路径...</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <div class="form-label"><span class="icon">🚀</span> 调用模式</div>
+              <div class="theme-options">
+                <div class="theme-option active" onclick="selectTheme(this)">
+                  <div class="theme-meta"><span class="theme-name">内置 CLI</span></div>
+                </div>
+                <div class="theme-option" onclick="selectTheme(this)">
+                  <div class="theme-meta"><span class="theme-name">自定义路径</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== PROVIDERS ==================== -->
+        <div class="content-section" id="tab-providers">
+          <div class="section-header">
+            <div class="section-title">供应商管理</div>
+            <div class="section-desc">配置 AI 供应商的连接信息，管理 API 密钥和模型设置</div>
+          </div>
+
+          <div class="sub-tabs">
+            <button class="sub-tab active" onclick="switchSubTab(this, 'providers-claude')">🤖 Claude</button>
+            <button class="sub-tab" onclick="switchSubTab(this, 'providers-codex')">⚡ Codex</button>
+          </div>
+
+          <!-- Claude providers -->
+          <div class="sub-content active" id="providers-claude">
+            <!-- Plugin models row -->
+            <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--bg-secondary);border:1px solid var(--border-secondary);border-radius:var(--radius-md);margin-bottom:16px;cursor:pointer;transition:var(--transition);" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='var(--bg-secondary)'">
+              <span style="font-size:14px;">🧩</span>
+              <span style="font-size:13px;font-weight:500;color:var(--text-primary);flex:1;">插件模型管理</span>
+              <span style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--accent-primary);color:#fff;font-size:11px;font-weight:600;">4</span>
+              <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation()">管理</button>
+            </div>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+              <span style="font-size:14px;color:var(--text-secondary);">共 3 个供应商</span>
+              <div style="display:flex;gap:8px;">
+                <button class="btn btn-secondary btn-sm">📥 导入</button>
+                <button class="btn btn-primary btn-sm">+ 添加供应商</button>
+              </div>
+            </div>
+
+            <div class="provider-list">
+              <!-- Special: Local settings -->
+              <div class="provider-card special">
+                <div class="provider-avatar" style="color:var(--warning-color);">⚙️</div>
+                <div class="provider-info">
+                  <div class="provider-name">
+                    本地配置
+                    <span style="font-size:11px;padding:2px 6px;background:rgba(243,156,18,0.1);color:#f39c12;border-radius:4px;">特殊</span>
+                  </div>
+                  <div class="provider-remark">使用 settings.local.json 中的 API Key</div>
+                </div>
+                <div class="provider-actions">
+                  <button class="btn btn-secondary btn-sm">配置</button>
+                </div>
+              </div>
+
+              <!-- Active provider -->
+              <div class="provider-card active">
+                <div class="provider-avatar">🤖</div>
+                <div class="provider-info">
+                  <div class="provider-name">
+                    Anthropic 官方
+                    <span class="active-dot"></span>
+                  </div>
+                  <div class="provider-remark">api.anthropic.com — 主要供应商</div>
+                </div>
+                <div class="provider-actions">
+                  <span style="display:flex;align-items:center;gap:6px;padding:4px 12px;border-radius:8px;background:var(--bg-tertiary);color:var(--text-tertiary);font-size:12px;">当前使用</span>
+                  <button class="btn btn-ghost btn-sm">✏️</button>
+                  <button class="btn btn-ghost btn-sm">🗑️</button>
+                </div>
+              </div>
+
+              <!-- Normal provider -->
+              <div class="provider-card">
+                <div class="provider-avatar">🔗</div>
+                <div class="provider-info">
+                  <div class="provider-name">OpenRouter</div>
+                  <div class="provider-remark">openrouter.ai — 多模型聚合</div>
+                </div>
+                <div class="provider-actions">
+                  <button class="btn btn-primary btn-sm btn-pill">切换</button>
+                  <button class="btn btn-ghost btn-sm">✏️</button>
+                  <button class="btn btn-ghost btn-sm">🗑️</button>
+                </div>
+              </div>
+
+              <!-- Another provider -->
+              <div class="provider-card">
+                <div class="provider-avatar">🏠</div>
+                <div class="provider-info">
+                  <div class="provider-name">本地 Ollama</div>
+                  <div class="provider-remark">localhost:11434 — 本地部署</div>
+                </div>
+                <div class="provider-actions">
+                  <button class="btn btn-primary btn-sm btn-pill">切换</button>
+                  <button class="btn btn-ghost btn-sm">✏️</button>
+                  <button class="btn btn-ghost btn-sm">🗑️</button>
+                </div>
+              </div>
+
+              <!-- CLI Login -->
+              <div class="provider-card special" style="border-left-color:var(--accent-primary);">
+                <div class="provider-avatar" style="color:var(--accent-primary);">💻</div>
+                <div class="provider-info">
+                  <div class="provider-name">
+                    CLI 登录
+                    <span style="font-size:11px;padding:2px 6px;background:rgba(0,120,212,0.1);color:var(--accent-primary);border-radius:4px;">特殊</span>
+                  </div>
+                  <div class="provider-remark">使用 claude login 命令登录的配置</div>
+                </div>
+                <div class="provider-actions">
+                  <button class="btn btn-secondary btn-sm">查看</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Codex providers -->
+          <div class="sub-content" id="providers-codex" style="display:none;">
+            <div class="empty-state">
+              <div class="empty-icon">⚡</div>
+              <div class="empty-title">暂无 Codex 供应商</div>
+              <div class="empty-desc">添加 Codex 供应商以使用 OpenAI Codex 模型</div>
+              <button class="btn btn-primary" style="margin-top:16px;">+ 添加 Codex 供应商</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== DEPENDENCIES ==================== -->
+        <div class="content-section" id="tab-dependencies">
+          <div class="section-header">
+            <div class="section-title">依赖管理</div>
+            <div class="section-desc">检查和管理插件运行所需的 SDK 依赖</div>
+          </div>
+
+          <div class="dep-grid">
+            <div class="dep-card">
+              <div class="dep-icon">🟢</div>
+              <div class="dep-name">Node.js</div>
+              <div class="dep-status ok">✓ v20.11.0 已安装</div>
+            </div>
+            <div class="dep-card">
+              <div class="dep-icon">📦</div>
+              <div class="dep-name">Claude SDK</div>
+              <div class="dep-status ok">✓ v1.2.3 已安装</div>
+            </div>
+            <div class="dep-card">
+              <div class="dep-icon">🔧</div>
+              <div class="dep-name">CLI 工具</div>
+              <div class="dep-status ok">✓ v2.1.0 已安装</div>
+            </div>
+            <div class="dep-card">
+              <div class="dep-icon">⚠️</div>
+              <div class="dep-name">Git</div>
+              <div class="dep-status warn">⚠ 版本过低 (需 >= 2.30)</div>
+            </div>
+          </div>
+
+          <div style="margin-top:16px;">
+            <button class="btn btn-secondary">🔄 刷新依赖状态</button>
+          </div>
+        </div>
+
+        <!-- ==================== USAGE ==================== -->
+        <div class="content-section" id="tab-usage">
+          <div class="section-header">
+            <div class="section-title">用量统计</div>
+            <div class="section-desc">查看 API 调用次数和 Token 消耗情况</div>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-value">1,247</div>
+              <div class="stat-label">总请求数</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">856K</div>
+              <div class="stat-label">输入 Tokens</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">234K</div>
+              <div class="stat-label">输出 Tokens</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">$12.45</div>
+              <div class="stat-label">估算费用</div>
+            </div>
+          </div>
+
+          <div class="settings-card" style="padding:20px;">
+            <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:12px;">📊 本周用量趋势</div>
+            <div style="display:flex;align-items:flex-end;gap:6px;height:120px;padding:10px 0;">
+              <div style="flex:1;background:var(--accent-primary);border-radius:4px 4px 0 0;height:30%;opacity:0.7;" title="周一"></div>
+              <div style="flex:1;background:var(--accent-primary);border-radius:4px 4px 0 0;height:55%;opacity:0.7;" title="周二"></div>
+              <div style="flex:1;background:var(--accent-primary);border-radius:4px 4px 0 0;height:40%;opacity:0.7;" title="周三"></div>
+              <div style="flex:1;background:var(--accent-primary);border-radius:4px 4px 0 0;height:80%;opacity:0.7;" title="周四"></div>
+              <div style="flex:1;background:var(--accent-primary);border-radius:4px 4px 0 0;height:65%;opacity:0.7;" title="周五"></div>
+              <div style="flex:1;background:var(--accent-primary);border-radius:4px 4px 0 0;height:45%;opacity:0.7;" title="周六"></div>
+              <div style="flex:1;background:var(--accent-primary);border-radius:4px 4px 0 0;height:20%;opacity:0.5;" title="周日"></div>
+            </div>
+            <div style="display:flex;gap:6px;font-size:11px;color:var(--text-tertiary);text-align:center;">
+              <span style="flex:1;">一</span><span style="flex:1;">二</span><span style="flex:1;">三</span><span style="flex:1;">四</span><span style="flex:1;">五</span><span style="flex:1;">六</span><span style="flex:1;">日</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== MCP ==================== -->
+        <div class="content-section" id="tab-mcp">
+          <div class="section-header">
+            <div class="section-title">MCP 服务</div>
+            <div class="section-desc">管理 Model Context Protocol 服务器连接</div>
+          </div>
+
+          <div class="empty-state">
+            <div class="empty-icon">🖥️</div>
+            <div class="empty-title">MCP 服务管理</div>
+            <div class="empty-desc">配置 MCP 服务器以扩展 AI 的能力边界，支持文件系统、数据库等外部工具</div>
+            <button class="btn btn-primary" style="margin-top:16px;">+ 添加 MCP 服务</button>
+          </div>
+        </div>
+
+        <!-- ==================== PERMISSIONS ==================== -->
+        <div class="content-section" id="tab-permissions">
+          <div class="section-header">
+            <div class="section-title">权限配置</div>
+            <div class="section-desc">管理 AI 操作的权限策略和沙箱设置</div>
+          </div>
+
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-label">沙箱模式</span>
+              <span class="toggle-desc">限制 AI 在安全沙箱中执行命令</span>
+            </div>
+            <label class="toggle-switch"><input type="checkbox" checked /><span class="toggle-slider"></span></label>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-label">自动批准文件读取</span>
+              <span class="toggle-desc">AI 读取文件时无需手动确认</span>
+            </div>
+            <label class="toggle-switch"><input type="checkbox" checked /><span class="toggle-slider"></span></label>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-label">自动批准文件写入</span>
+              <span class="toggle-desc">AI 写入文件时无需手动确认</span>
+            </div>
+            <label class="toggle-switch"><input type="checkbox" /><span class="toggle-slider"></span></label>
+          </div>
+        </div>
+
+        <!-- ==================== PROMPT ENHANCER ==================== -->
+        <div class="content-section" id="tab-promptEnhancer">
+          <div class="section-header">
+            <div class="section-title">提示增强</div>
+            <div class="section-desc">配置 AI 辅助优化你的输入提示词</div>
+          </div>
+
+          <div class="form-group">
+            <div class="form-label"><span class="icon">🤖</span> 增强供应商</div>
+            <select class="select-field">
+              <option selected>使用当前活跃供应商</option>
+              <option>Anthropic</option>
+              <option>OpenRouter</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <div class="form-label"><span class="icon">🧠</span> 增强模型</div>
+            <select class="select-field">
+              <option selected>claude-3-haiku-20240307</option>
+              <option>claude-3-sonnet-20240229</option>
+              <option>自定义模型...</option>
+            </select>
+          </div>
+          <div style="margin-top:12px;">
+            <button class="btn btn-secondary btn-sm">🔄 恢复默认设置</button>
+          </div>
+        </div>
+
+        <!-- ==================== COMMIT ==================== -->
+        <div class="content-section" id="tab-commit">
+          <div class="section-header">
+            <div class="section-title">提交配置</div>
+            <div class="section-desc">配置 AI 自动生成 Git 提交信息的行为</div>
+          </div>
+
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-label">启用提交信息生成</span>
+              <span class="toggle-desc">提交代码时自动生成 AI 提交信息</span>
+            </div>
+            <label class="toggle-switch"><input type="checkbox" checked /><span class="toggle-slider"></span></label>
+          </div>
+
+          <div class="form-group" style="margin-top:16px;">
+            <div class="form-label"><span class="icon">🤖</span> 提交 AI 供应商</div>
+            <select class="select-field">
+              <option selected>使用当前活跃供应商</option>
+              <option>Anthropic</option>
+              <option>OpenRouter</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <div class="form-label"><span class="icon">🧠</span> 提交模型</div>
+            <select class="select-field">
+              <option selected>claude-3-haiku-20240307</option>
+              <option>claude-3-sonnet-20240229</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <div class="form-label"><span class="icon">📝</span> 全局提交提示词</div>
+            <textarea class="input-field" rows="4" style="max-width:100%;resize:vertical;font-family:inherit;" placeholder="自定义提交信息生成的提示词...">请根据代码变更生成简洁明了的中文提交信息，遵循 Conventional Commits 规范。</textarea>
+          </div>
+        </div>
+
+        <!-- ==================== AGENTS ==================== -->
+        <div class="content-section" id="tab-agents">
+          <div class="section-header">
+            <div class="section-title">Agent 管理</div>
+            <div class="section-desc">创建和管理自定义 Agent，赋予 AI 特定的角色和能力</div>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <span style="font-size:14px;color:var(--text-secondary);">共 5 个 Agent</span>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-secondary btn-sm">📥 导入</button>
+              <button class="btn btn-secondary btn-sm">📤 导出</button>
+              <button class="btn btn-primary btn-sm">+ 创建 Agent</button>
+            </div>
+          </div>
+
+          <div class="card-group">
+            <div class="item-card">
+              <div class="item-info">
+                <div class="item-name">🛠️ 代码审查专家</div>
+                <div class="item-desc">专注于代码质量审查，发现潜在问题和优化建议</div>
+              </div>
+              <div class="item-actions">
+                <button class="btn btn-ghost btn-sm">✏️</button>
+                <button class="btn btn-ghost btn-sm">📋</button>
+                <button class="btn btn-ghost btn-sm">🗑️</button>
+              </div>
+            </div>
+            <div class="item-card">
+              <div class="item-info">
+                <div class="item-name">📚 文档撰写助手</div>
+                <div class="item-desc">帮助编写技术文档、README 和 API 说明</div>
+              </div>
+              <div class="item-actions">
+                <button class="btn btn-ghost btn-sm">✏️</button>
+                <button class="btn btn-ghost btn-sm">📋</button>
+                <button class="btn btn-ghost btn-sm">🗑️</button>
+              </div>
+            </div>
+            <div class="item-card">
+              <div class="item-info">
+                <div class="item-name">🐛 调试助手</div>
+                <div class="item-desc">协助定位和修复代码中的 Bug</div>
+              </div>
+              <div class="item-actions">
+                <button class="btn btn-ghost btn-sm">✏️</button>
+                <button class="btn btn-ghost btn-sm">📋</button>
+                <button class="btn btn-ghost btn-sm">🗑️</button>
+              </div>
+            </div>
+            <div class="item-card">
+              <div class="item-info">
+                <div class="item-name">🧪 测试工程师</div>
+                <div class="item-desc">自动生成单元测试和集成测试代码</div>
+              </div>
+              <div class="item-actions">
+                <button class="btn btn-ghost btn-sm">✏️</button>
+                <button class="btn btn-ghost btn-sm">📋</button>
+                <button class="btn btn-ghost btn-sm">🗑️</button>
+              </div>
+            </div>
+            <div class="item-card">
+              <div class="item-info">
+                <div class="item-name">🎨 UI 设计顾问</div>
+                <div class="item-desc">提供 UI/UX 设计建议和前端优化方案</div>
+              </div>
+              <div class="item-actions">
+                <button class="btn btn-ghost btn-sm">✏️</button>
+                <button class="btn btn-ghost btn-sm">📋</button>
+                <button class="btn btn-ghost btn-sm">🗑️</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== PROMPTS ==================== -->
+        <div class="content-section" id="tab-prompts">
+          <div class="section-header">
+            <div class="section-title">提示词管理</div>
+            <div class="section-desc">创建和管理可复用的提示词模板，提升工作效率</div>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <span style="font-size:14px;color:var(--text-secondary);">共 3 个提示词</span>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-secondary btn-sm">📥 导入</button>
+              <button class="btn btn-primary btn-sm">+ 创建提示词</button>
+            </div>
+          </div>
+
+          <div class="card-group">
+            <div class="item-card">
+              <div class="item-info">
+                <div class="item-name">📝 代码重构</div>
+                <div class="item-desc">对指定代码进行重构，提升可读性和性能</div>
+              </div>
+              <div class="item-actions">
+                <button class="btn btn-ghost btn-sm">✏️</button>
+                <button class="btn btn-ghost btn-sm">🗑️</button>
+              </div>
+            </div>
+            <div class="item-card">
+              <div class="item-info">
+                <div class="item-name">🔍 代码分析</div>
+                <div class="item-desc">深度分析代码结构，发现潜在问题</div>
+              </div>
+              <div class="item-actions">
+                <button class="btn btn-ghost btn-sm">✏️</button>
+                <button class="btn btn-ghost btn-sm">🗑️</button>
+              </div>
+            </div>
+            <div class="item-card">
+              <div class="item-info">
+                <div class="item-name">🌐 国际化翻译</div>
+                <div class="item-desc">将代码中的硬编码文本提取并翻译</div>
+              </div>
+              <div class="item-actions">
+                <button class="btn btn-ghost btn-sm">✏️</button>
+                <button class="btn btn-ghost btn-sm">🗑️</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== SKILLS ==================== -->
+        <div class="content-section" id="tab-skills">
+          <div class="section-header">
+            <div class="section-title">技能管理</div>
+            <div class="section-desc">管理 AI 可使用的技能和工具集</div>
+          </div>
+
+          <div class="card-group">
+            <div class="toggle-row">
+              <div class="toggle-info">
+                <span class="toggle-label">📂 文件操作</span>
+                <span class="toggle-desc">读取、写入和编辑文件</span>
+              </div>
+              <label class="toggle-switch"><input type="checkbox" checked /><span class="toggle-slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div class="toggle-info">
+                <span class="toggle-label">💻 终端命令</span>
+                <span class="toggle-desc">执行 Shell 命令</span>
+              </div>
+              <label class="toggle-switch"><input type="checkbox" checked /><span class="toggle-slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div class="toggle-info">
+                <span class="toggle-label">🌐 网络请求</span>
+                <span class="toggle-desc">发送 HTTP 请求和搜索</span>
+              </div>
+              <label class="toggle-switch"><input type="checkbox" checked /><span class="toggle-slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div class="toggle-info">
+                <span class="toggle-label">🔍 代码搜索</span>
+                <span class="toggle-desc">在项目中搜索代码和符号</span>
+              </div>
+              <label class="toggle-switch"><input type="checkbox" checked /><span class="toggle-slider"></span></label>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== OTHER ==================== -->
+        <div class="content-section" id="tab-other">
+          <div class="section-header">
+            <div class="section-title">其他设置</div>
+            <div class="section-desc">杂项配置和高级选项</div>
+          </div>
+
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-label">历史补全</span>
+              <span class="toggle-desc">输入时自动补全历史消息</span>
+            </div>
+            <label class="toggle-switch"><input type="checkbox" checked /><span class="toggle-slider"></span></label>
+          </div>
+
+          <div class="card-group" style="margin-top:24px;">
+            <div class="card-group-title"><span class="icon">📋</span> 历史项编辑器</div>
+            <div class="settings-card">
+              <div style="font-size:13px;color:var(--text-tertiary);text-align:center;padding:20px;">
+                暂无自定义历史项
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== COMMUNITY ==================== -->
+        <div class="content-section" id="tab-community">
+          <div class="section-header">
+            <div class="section-title">社区</div>
+            <div class="section-desc">加入社区，获取帮助和分享经验</div>
+          </div>
+
+          <div class="card-group">
+            <a class="settings-card" style="display:flex;align-items:center;gap:12px;text-decoration:none;cursor:pointer;" href="#">
+              <span style="font-size:24px;">💬</span>
+              <div>
+                <div style="font-size:14px;font-weight:600;color:var(--text-primary);">GitHub Discussions</div>
+                <div style="font-size:12px;color:var(--text-tertiary);">参与讨论，提出建议和反馈</div>
+              </div>
+              <span style="margin-left:auto;color:var(--text-tertiary);">→</span>
+            </a>
+            <a class="settings-card" style="display:flex;align-items:center;gap:12px;text-decoration:none;cursor:pointer;" href="#">
+              <span style="font-size:24px;">🐛</span>
+              <div>
+                <div style="font-size:14px;font-weight:600;color:var(--text-primary);">Issue Tracker</div>
+                <div style="font-size:12px;color:var(--text-tertiary);">报告 Bug 和跟踪问题</div>
+              </div>
+              <span style="margin-left:auto;color:var(--text-tertiary);">→</span>
+            </a>
+            <a class="settings-card" style="display:flex;align-items:center;gap:12px;text-decoration:none;cursor:pointer;" href="#">
+              <span style="font-size:24px;">📖</span>
+              <div>
+                <div style="font-size:14px;font-weight:600;color:var(--text-primary);">文档中心</div>
+                <div style="font-size:12px;color:var(--text-tertiary);">查看使用文档和教程</div>
+              </div>
+              <span style="margin-left:auto;color:var(--text-tertiary);">→</span>
+            </a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== JAVASCRIPT ==================== -->
+  <script>
+    // Tab switching
+    function switchTab(tabId, el) {
+      // Update sidebar
+      document.querySelectorAll('.sidebar-item').forEach(item => {
+        item.classList.remove('active');
+      });
+      el.classList.add('active');
+
+      // Update content
+      document.querySelectorAll('.content-section').forEach(section => {
+        section.classList.remove('active');
+      });
+      const target = document.getElementById('tab-' + tabId);
+      if (target) {
+        target.classList.add('active');
+      }
+
+      // Scroll content to top
+      document.querySelector('.settings-content').scrollTop = 0;
+    }
+
+    // Sub-tab switching
+    function switchSubTab(btn, contentId) {
+      // Update buttons
+      const parent = btn.parentElement;
+      parent.querySelectorAll('.sub-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      // Update content
+      const section = btn.closest('.content-section');
+      section.querySelectorAll('.sub-content').forEach(c => c.style.display = 'none');
+      const target = document.getElementById(contentId);
+      if (target) {
+        target.style.display = 'block';
+      }
+    }
+
+    // Sidebar toggle
+    function toggleSidebar() {
+      const sidebar = document.getElementById('sidebar');
+      const toggle = sidebar.querySelector('.sidebar-toggle');
+      sidebar.classList.toggle('collapsed');
+      if (sidebar.classList.contains('collapsed')) {
+        toggle.textContent = '▶';
+        toggle.title = '展开侧边栏';
+      } else {
+        toggle.textContent = '◀';
+        toggle.title = '收起侧边栏';
+      }
+    }
+
+    // Theme selection (visual only)
+    function selectTheme(el) {
+      const parent = el.parentElement;
+      parent.querySelectorAll('.theme-option').forEach(o => o.classList.remove('active'));
+      el.classList.add('active');
+    }
+
+    // Sidebar search filter
+    document.getElementById('sidebarSearch').addEventListener('input', function(e) {
+      const query = e.target.value.toLowerCase();
+      document.querySelectorAll('.sidebar-item').forEach(item => {
+        const text = item.querySelector('.sidebar-item-text');
+        if (text) {
+          const match = text.textContent.toLowerCase().includes(query);
+          item.style.display = match ? '' : 'none';
+        }
+      });
+      // Show/hide section labels based on visible items
+      document.querySelectorAll('.sidebar-section-label').forEach(label => {
+        const items = label.nextElementSibling;
+        if (items) {
+          const hasVisible = Array.from(items.querySelectorAll('.sidebar-item')).some(i => i.style.display !== 'none');
+          label.style.display = hasVisible ? '' : 'none';
+        }
+      });
+    });
+  </script>
+</body>
+</html>

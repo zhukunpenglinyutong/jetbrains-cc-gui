@@ -10,8 +10,17 @@ import styles from './style.module.less';
 
 const BLOCK_STYLE: React.CSSProperties = { display: 'block' };
 const NONE_STYLE: React.CSSProperties = { display: 'none' };
-const ICON_14_STYLE: React.CSSProperties = { fontSize: 14 };
 const FLEX_1_STYLE: React.CSSProperties = { flex: 1 };
+
+// SVG tab icon paths (24×24 viewBox, stroke-based)
+const tabIconPaths: Record<string, string> = {
+  // Claude - robot/AI face
+  claude: '<path d="M12 8V4H8"/><rect x="5" y="7" width="14" height="11" rx="3"/><path d="M9 12h.01"/><path d="M15 12h.01"/><path d="M10 15h4"/>',
+  // Codex - terminal/code
+  codex: '<polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/>',
+  // Plugin puzzle
+  plugin: '<path d="M12 2v6M6 8h12M8 8v8a4 4 0 0 0 8 0V8"/>',
+};
 
 interface ProviderTabSectionProps {
   currentProvider: 'claude' | 'codex' | string;
@@ -93,7 +102,9 @@ const ProviderTabSection = ({
           className={`${styles.tabBtn} ${activeTab === 'claude' ? styles.active : ''}`}
           onClick={() => setActiveTab('claude')}
         >
-          <span className="codicon codicon-vm-connect" aria-hidden="true" />
+          <span className={styles.tabIcon}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: tabIconPaths.claude }} />
+          </span>
           {t('settings.providerTab.claude')}
         </button>
         <button
@@ -103,7 +114,9 @@ const ProviderTabSection = ({
           className={`${styles.tabBtn} ${activeTab === 'codex' ? styles.active : ''}`}
           onClick={() => setActiveTab('codex')}
         >
-          <span className="codicon codicon-terminal" aria-hidden="true" />
+          <span className={styles.tabIcon}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: tabIconPaths.codex }} />
+          </span>
           {t('settings.providerTab.codex')}
         </button>
       </div>
@@ -117,7 +130,9 @@ const ProviderTabSection = ({
           tabIndex={0}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') openModelDialog('claude'); }}
         >
-          <span className="codicon codicon-symbol-misc" style={ICON_14_STYLE} />
+          <span className={styles.pluginIcon}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: tabIconPaths.plugin }} />
+          </span>
           <span className={styles.pluginModelsLabel}>
             {t('settings.pluginModels.title')}
           </span>
@@ -152,7 +167,9 @@ const ProviderTabSection = ({
           tabIndex={0}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') openModelDialog('codex'); }}
         >
-          <span className="codicon codicon-symbol-misc" style={ICON_14_STYLE} />
+          <span className={styles.pluginIcon}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: tabIconPaths.plugin }} />
+          </span>
           <span className={styles.pluginModelsLabel}>
             {t('settings.pluginModels.title')}
           </span>

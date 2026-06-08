@@ -14,8 +14,25 @@
 
 .settingsContent {
   flex: 1;
-  padding: 24px 24px 80px 24px;
+  padding: 24px 32px 60px 32px;
   overflow-y: auto;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--border-primary);
+    border-radius: 3px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: var(--border-hover);
+  }
 }
 
 .providerSettingsContent {
