@@ -7,6 +7,7 @@ import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.session.runtime.CliRequest;
 import com.github.claudecodegui.session.runtime.RuntimeKey;
 import com.github.claudecodegui.session.runtime.SessionRuntimeRouter;
+import com.github.claudecodegui.session.normalize.MessageNormalizers;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -260,7 +261,11 @@ public class SessionSendService {
         boolean useCliRuntime = CodemossSettingsService.CODEX_RUNTIME_ACCESS_MANAGED.equals(accessMode)
                 || CodemossSettingsService.CODEX_RUNTIME_ACCESS_CLI_LOGIN.equals(accessMode);
 
-        return runtimeRouter.sendCodex(useCliRuntime, request, handler).thenApply(result -> null);
+        return runtimeRouter.sendCodex(
+                useCliRuntime,
+                request,
+                MessageNormalizers.forRuntime("codex", useCliRuntime ? "cli" : "sdk", handler)
+        ).thenApply(result -> null);
     }
 
     private CompletableFuture<Void> sendToClaude(
@@ -324,7 +329,7 @@ public class SessionSendService {
                         agentPrompt,
                         streaming,
                         state.getReasoningEffort(),
-                handler
+                MessageNormalizers.forRuntime("claude", effectiveInvocationMode, handler)
         ).thenApply(result -> null);
     }
 
