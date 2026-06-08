@@ -1,0 +1,823 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Streaming Message Layout Options</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #202225;
+      --panel: #2a2d31;
+      --panel-2: #30343a;
+      --card: rgba(255, 255, 255, 0.045);
+      --card-strong: rgba(255, 255, 255, 0.075);
+      --border: rgba(255, 255, 255, 0.11);
+      --border-strong: rgba(141, 119, 255, 0.45);
+      --text: #e8e8ea;
+      --muted: #a5a9b3;
+      --faint: #767b86;
+      --accent: #8d77ff;
+      --blue: #43a6ff;
+      --green: #42d391;
+      --orange: #ffb15c;
+      --red: #ff6f7d;
+      --tool: #17191d;
+      --code: rgba(255, 255, 255, 0.1);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Inter", "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 14px;
+      letter-spacing: 0;
+    }
+
+    .page {
+      max-width: 1260px;
+      margin: 0 auto;
+      padding: 28px 22px 44px;
+    }
+
+    .top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 18px;
+      align-items: end;
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 22px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 22px;
+      font-weight: 650;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      line-height: 1.7;
+      max-width: 860px;
+    }
+
+    .legend {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      white-space: nowrap;
+      color: var(--muted);
+      background: rgba(67, 166, 255, 0.08);
+      border: 1px solid rgba(67, 166, 255, 0.24);
+      border-radius: 6px;
+      padding: 9px 12px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+      align-items: start;
+    }
+
+    .option {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .option.recommended {
+      border-color: rgba(66, 211, 145, 0.42);
+      box-shadow: 0 0 0 1px rgba(66, 211, 145, 0.08);
+    }
+
+    .option-head {
+      padding: 14px 16px 13px;
+      background: var(--panel-2);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .option-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 15px;
+      font-weight: 650;
+      margin-bottom: 7px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      height: 20px;
+      padding: 0 7px;
+      border-radius: 5px;
+      background: rgba(66, 211, 145, 0.12);
+      color: #9ef0c4;
+      border: 1px solid rgba(66, 211, 145, 0.28);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .option-desc {
+      color: var(--muted);
+      line-height: 1.55;
+      min-height: 44px;
+    }
+
+    .chat {
+      padding: 16px;
+      min-height: 620px;
+    }
+
+    .assistant-row {
+      display: grid;
+      grid-template-columns: 40px 1fr;
+      gap: 12px;
+      align-items: start;
+      margin-bottom: 14px;
+    }
+
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, #56a8ff, #9174ff);
+      color: white;
+      font-size: 12px;
+      font-weight: 700;
+      box-shadow: 0 6px 18px rgba(75, 115, 255, 0.32);
+    }
+
+    .avatar-label {
+      text-align: center;
+      color: var(--muted);
+      font-size: 11px;
+      margin-top: 5px;
+    }
+
+    .bubble {
+      position: relative;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      min-width: 0;
+    }
+
+    .bubble::before {
+      content: "";
+      position: absolute;
+      left: -7px;
+      top: 18px;
+      width: 12px;
+      height: 12px;
+      background: inherit;
+      border-left: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      transform: rotate(45deg);
+    }
+
+    .thinking {
+      border: 1px solid var(--border-strong);
+      background: rgba(141, 119, 255, 0.12);
+      border-radius: 8px;
+      padding: 10px 11px;
+      margin-bottom: 10px;
+    }
+
+    .thinking.collapsed {
+      padding: 9px 11px;
+    }
+
+    .thinking-head,
+    .tool-line,
+    .segment-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .thinking-head {
+      color: #bbaaff;
+      font-weight: 600;
+    }
+
+    .thinking-text {
+      color: #ece8ff;
+      line-height: 1.75;
+      margin-top: 9px;
+    }
+
+    .text {
+      color: var(--text);
+      line-height: 1.75;
+      margin: 9px 0 11px;
+    }
+
+    .text p {
+      margin: 0 0 8px;
+    }
+
+    .text ul {
+      margin: 8px 0 0;
+      padding-left: 20px;
+    }
+
+    .text li {
+      margin: 5px 0;
+    }
+
+    code {
+      background: var(--code);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: "JetBrains Mono", Consolas, monospace;
+      color: #f0f2f8;
+    }
+
+    .tool {
+      background: var(--tool);
+      border-radius: 7px;
+      padding: 10px 11px;
+      margin-top: 10px;
+      color: var(--muted);
+    }
+
+    .tool-name {
+      color: var(--text);
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .file {
+      color: var(--blue);
+      border: 1px solid rgba(67, 166, 255, 0.35);
+      background: rgba(67, 166, 255, 0.08);
+      border-radius: 5px;
+      padding: 3px 7px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 100%;
+    }
+
+    .ok {
+      margin-left: auto;
+      width: 8px;
+      height: 8px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: var(--green);
+    }
+
+    .diff {
+      margin-left: auto;
+      color: var(--green);
+      font-weight: 700;
+      font-size: 12px;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .usage {
+      margin: 12px 0 0 52px;
+      border: 1px solid rgba(67, 166, 255, 0.25);
+      background: rgba(67, 166, 255, 0.08);
+      border-radius: 7px;
+      padding: 9px 12px;
+      color: var(--muted);
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+
+    .usage strong {
+      color: var(--text);
+    }
+
+    .option-notes {
+      border-top: 1px solid var(--border);
+      padding: 12px 16px 15px;
+      color: var(--muted);
+      background: rgba(0, 0, 0, 0.12);
+      line-height: 1.65;
+    }
+
+    .option-notes b {
+      color: var(--text);
+    }
+
+    .single .bubble {
+      min-height: 440px;
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 12px 0;
+    }
+
+    .response-shell {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .response-head {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.035);
+    }
+
+    .response-title {
+      font-weight: 650;
+      color: var(--text);
+    }
+
+    .response-status {
+      margin-left: auto;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .segment {
+      display: block;
+      padding: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    .segment:last-child {
+      border-bottom: 0;
+    }
+
+    .segment-body {
+      min-width: 0;
+    }
+
+    .segment-title {
+      color: var(--text);
+      font-weight: 650;
+      margin-bottom: 9px;
+    }
+
+    .segment-sub {
+      color: var(--muted);
+      font-weight: 400;
+      font-size: 12px;
+      margin-left: auto;
+    }
+
+    .stat-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: -2px 0 9px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 22px;
+      padding: 2px 7px;
+      border-radius: 5px;
+      border: 1px solid rgba(255, 255, 255, 0.11);
+      background: rgba(255, 255, 255, 0.055);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .chip.read {
+      color: #9ed4ff;
+      border-color: rgba(67, 166, 255, 0.24);
+      background: rgba(67, 166, 255, 0.08);
+    }
+
+    .chip.edit {
+      color: #b9f0d0;
+      border-color: rgba(66, 211, 145, 0.24);
+      background: rgba(66, 211, 145, 0.08);
+    }
+
+    .chip.create {
+      color: #ffd49b;
+      border-color: rgba(255, 177, 92, 0.28);
+      background: rgba(255, 177, 92, 0.08);
+    }
+
+    .compact-thinking {
+      border: 1px solid rgba(141, 119, 255, 0.35);
+      background: rgba(141, 119, 255, 0.1);
+      color: #bbaaff;
+      border-radius: 6px;
+      padding: 8px 9px;
+      margin-bottom: 9px;
+      font-weight: 600;
+    }
+
+    .mini-text {
+      line-height: 1.7;
+      color: var(--text);
+      margin-bottom: 9px;
+    }
+
+    .final-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 12px;
+      padding: 10px 11px;
+      border-radius: 7px;
+      background: rgba(66, 211, 145, 0.08);
+      border: 1px solid rgba(66, 211, 145, 0.2);
+      color: #b9f0d0;
+    }
+
+    .tradeoffs {
+      margin-top: 22px;
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .analysis-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .analysis-card h2 {
+      margin: 0 0 10px;
+      font-size: 16px;
+    }
+
+    .analysis-card p,
+    .analysis-card li {
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .analysis-card ul {
+      margin: 10px 0 0;
+      padding-left: 20px;
+    }
+
+    .decision {
+      border-color: rgba(66, 211, 145, 0.36);
+      background: rgba(66, 211, 145, 0.06);
+    }
+
+    @media (max-width: 1180px) {
+      .grid,
+      .tradeoffs {
+        grid-template-columns: 1fr;
+      }
+
+      .chat {
+        min-height: auto;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .page {
+        padding: 18px 12px 28px;
+      }
+
+      .top {
+        grid-template-columns: 1fr;
+      }
+
+      .assistant-row {
+        grid-template-columns: 34px 1fr;
+        gap: 8px;
+      }
+
+      .avatar {
+        width: 32px;
+        height: 32px;
+      }
+
+      .usage {
+        margin-left: 42px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="top">
+      <div>
+        <h1>流式分段渲染方案对比</h1>
+        <div class="subtitle">
+          目标是避免“实时阶段分段，完成后又合并成大卡片”的跳变，同时保留工具调用、思考区、最终回答之间的清晰关系。
+        </div>
+      </div>
+      <div class="legend">建议方向：单次响应容器 + 内部分段时间线</div>
+    </section>
+
+    <section class="grid">
+      <article class="option">
+        <header class="option-head">
+          <div class="option-title">方案 A：最终也保留分段卡片</div>
+          <div class="option-desc">实时怎么显示，完成后就怎么保留。每次 `message_start` 都是独立 assistant 卡片。</div>
+        </header>
+        <div class="chat">
+          <div class="assistant-row">
+            <div>
+              <div class="avatar">AI</div>
+              <div class="avatar-label">Claude</div>
+            </div>
+            <div class="bubble">
+              <div class="thinking">
+                <div class="thinking-head">思考</div>
+                <div class="thinking-text">我需要先读取当前类，确认硬编码阈值所在位置。</div>
+              </div>
+              <div class="text">让我先查看当前文件中是否有硬编码的数值比较。</div>
+              <div class="tool">
+                <div class="tool-line">
+                  <span class="tool-name">读取文件</span>
+                  <span class="file">PlantDataCenterServiceImpl.java</span>
+                  <span class="ok"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="assistant-row">
+            <div></div>
+            <div class="bubble">
+              <div class="thinking collapsed">
+                <div class="thinking-head">思考</div>
+              </div>
+              <div class="text">
+                <p>我找到了！在 <code>checkHealthWarning</code> 方法中有多个硬编码阈值：</p>
+                <ul>
+                  <li><code>43000</code> 光照阈值</li>
+                  <li><code>15</code> 和 <code>35</code> 空气温度范围</li>
+                  <li><code>1.5</code> EC 阈值</li>
+                </ul>
+              </div>
+              <div class="tool">
+                <div class="tool-line">
+                  <span class="tool-name">编辑文件</span>
+                  <span class="file">PlantDataCenterServiceImpl.java</span>
+                  <span class="diff">+19</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="assistant-row">
+            <div></div>
+            <div class="bubble">
+              <div class="thinking collapsed">
+                <div class="thinking-head">思考</div>
+              </div>
+              <div class="text">继续把后续方法调用改成使用类级别常量，避免 inline magic number。</div>
+              <div class="tool">
+                <div class="tool-line">
+                  <span class="tool-name">编辑文件</span>
+                  <span class="file">PlantDataCenterServiceImpl.java</span>
+                  <span class="diff">+12 -12</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="usage"><span>输入：<strong>81,823 tokens</strong></span><span>输出：<strong>209 tokens</strong></span></div>
+        </div>
+        <footer class="option-notes">
+          <b>优点：</b>最贴近实时过程，没有完成后的视觉跳变。<br />
+          <b>代价：</b>同一次回答会产生较多大卡片，历史记录会显得碎。
+        </footer>
+      </article>
+
+      <article class="option single">
+        <header class="option-head">
+          <div class="option-title">方案 B：单卡片持续追加</div>
+          <div class="option-desc">整次 assistant 响应只有一个卡片。工具、思考、文字都不断追加到同一个卡片内部。</div>
+        </header>
+        <div class="chat">
+          <div class="assistant-row">
+            <div>
+              <div class="avatar">AI</div>
+              <div class="avatar-label">Claude</div>
+            </div>
+            <div class="bubble">
+              <div class="thinking">
+                <div class="thinking-head">思考</div>
+                <div class="thinking-text">我需要先读取当前类，确认硬编码阈值所在位置。</div>
+              </div>
+              <div class="text">让我先查看当前文件中是否有硬编码的数值比较。</div>
+              <div class="tool">
+                <div class="tool-line">
+                  <span class="tool-name">读取文件</span>
+                  <span class="file">PlantDataCenterServiceImpl.java</span>
+                  <span class="ok"></span>
+                </div>
+              </div>
+              <div class="divider"></div>
+              <div class="thinking collapsed">
+                <div class="thinking-head">思考</div>
+              </div>
+              <div class="text">
+                <p>我找到了！在 <code>checkHealthWarning</code> 方法中有多个硬编码阈值。让我将这些数值提取为 <code>private static final</code> 常量。</p>
+              </div>
+              <div class="tool">
+                <div class="tool-line">
+                  <span class="tool-name">编辑文件</span>
+                  <span class="file">PlantDataCenterServiceImpl.java</span>
+                  <span class="diff">+19</span>
+                </div>
+              </div>
+              <div class="divider"></div>
+              <div class="thinking collapsed">
+                <div class="thinking-head">思考</div>
+              </div>
+              <div class="tool">
+                <div class="tool-line">
+                  <span class="tool-name">编辑文件</span>
+                  <span class="file">PlantDataCenterServiceImpl.java</span>
+                  <span class="diff">+12 -12</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="usage"><span>输入：<strong>81,823 tokens</strong></span><span>输出：<strong>209 tokens</strong></span></div>
+        </div>
+        <footer class="option-notes">
+          <b>优点：</b>实现和历史合并最接近，不容易出现结束后重排。<br />
+          <b>代价：</b>长任务阅读压迫感强，后续阶段会黏在第一段下面。
+        </footer>
+      </article>
+
+      <article class="option recommended">
+        <header class="option-head">
+          <div class="option-title">方案 C：响应容器 + 内容流分隔 <span class="badge">推荐</span></div>
+          <div class="option-desc">外层只显示一次 Claude 响应，内部用轻量分隔保持阅读节奏；不展示编号或任务外标题。</div>
+        </header>
+        <div class="chat">
+          <div class="assistant-row">
+            <div>
+              <div class="avatar">AI</div>
+              <div class="avatar-label">Claude</div>
+            </div>
+            <div class="response-shell">
+              <div class="response-head">
+                <span class="response-title">Claude 响应</span>
+                <span class="muted">按输出顺序展示</span>
+                <span class="response-status">完成</span>
+              </div>
+
+              <div class="segment">
+                <div class="segment-body">
+                  <div class="stat-chips">
+                    <span class="chip read">读取文件 1</span>
+                  </div>
+                  <div class="compact-thinking">思考</div>
+                  <div class="mini-text">让我先查看当前文件中是否有硬编码的数值比较。</div>
+                  <div class="tool">
+                    <div class="tool-line">
+                      <span class="tool-name">读取文件</span>
+                      <span class="file">PlantDataCenterServiceImpl.java</span>
+                      <span class="ok"></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="segment">
+                <div class="segment-body">
+                  <div class="stat-chips">
+                    <span class="chip edit">编辑文件 1</span>
+                  </div>
+                  <div class="compact-thinking">思考</div>
+                  <div class="mini-text">
+                    我找到了！在 <code>checkHealthWarning</code> 方法中有多个硬编码阈值。现在将它们提取到类顶部，便于维护。
+                  </div>
+                  <div class="tool">
+                    <div class="tool-line">
+                      <span class="tool-name">编辑文件</span>
+                      <span class="file">PlantDataCenterServiceImpl.java</span>
+                      <span class="diff">+19</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="segment">
+                <div class="segment-body">
+                  <div class="stat-chips">
+                    <span class="chip read">读取文件 1</span>
+                  </div>
+                  <div class="compact-thinking">思考</div>
+                  <div class="mini-text">我需要再检查另一个相关配置类，确认是否还有重复阈值定义。</div>
+                  <div class="tool">
+                    <div class="tool-line">
+                      <span class="tool-name">读取文件</span>
+                      <span class="file">WarningThresholdConfig.java</span>
+                      <span class="ok"></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="segment">
+                <div class="segment-body">
+                  <div class="stat-chips">
+                    <span class="chip edit">编辑文件 1</span>
+                    <span class="chip create">新增文件 1</span>
+                  </div>
+                  <div class="compact-thinking">思考</div>
+                  <div class="mini-text">相关配置类需要同步引用常量，同时新增一个测试覆盖阈值边界。</div>
+                  <div class="tool">
+                    <div class="tool-line">
+                      <span class="tool-name">编辑文件</span>
+                      <span class="file">WarningThresholdConfig.java</span>
+                      <span class="diff">+8 -4</span>
+                    </div>
+                  </div>
+                  <div class="tool">
+                    <div class="tool-line">
+                      <span class="tool-name">新增文件</span>
+                      <span class="file">PlantWarningThresholdTest.java</span>
+                      <span class="diff">+42</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="segment">
+                <div class="segment-body">
+                  <div class="stat-chips">
+                    <span class="chip">无工具调用</span>
+                  </div>
+                  <div class="mini-text">
+                    已完成阈值常量提取、相关配置同步和边界测试补充。后续可以直接调整类级常量，不需要再搜索方法内 magic number。
+                  </div>
+                </div>
+              </div>
+
+              <div class="final-bar">最终摘要：响应内部保留阅读分隔；只展示真实工具统计，不增加任务外描述。</div>
+            </div>
+          </div>
+          <div class="usage"><span>输入：<strong>81,823 tokens</strong></span><span>输出：<strong>209 tokens</strong></span></div>
+        </div>
+        <footer class="option-notes">
+          <b>优点：</b>一次响应边界清楚，内部只用视觉分隔保持阅读节奏；长任务里反复读取、编辑、新增文件也能按实际顺序展示。<br />
+          <b>代价：</b>需要在最终消息协议里保留内容组边界，但不需要做不可靠的语义阶段识别。
+        </footer>
+      </article>
+    </section>
+
+    <section class="tradeoffs">
+      <article class="analysis-card decision">
+        <h2>我的建议</h2>
+        <p>
+          优先选方案 C 的修正版：不是“智能阶段分组”，也不显示任何编号式任务外标签。
+          它只通过轻量视觉分隔保持阅读节奏，并按工具事件顺序展示真实内容。
+        </p>
+        <ul>
+          <li>实时阶段：每次识别到新输出边界，就在响应容器内部追加一个无标题内容组。</li>
+          <li>标题生成：只根据工具调用做结构统计，例如“读取文件 1”“编辑文件 1”“新增文件 1”。</li>
+          <li>完成阶段：最终快照同步时保留内容组边界，合并只发生在同一内容组内。</li>
+          <li>历史回显：有内容组边界的新消息按该结构渲染；没有边界的旧历史继续走现有合并逻辑。</li>
+        </ul>
+      </article>
+      <article class="analysis-card">
+        <h2>为什么不做语义阶段</h2>
+        <p>
+          长任务里工具调用会交错出现：读取文件、编辑文件、再次读取、再编辑、新增文件、跑测试都可能重复多轮。
+          如果前端强行归类成“定位”“修改”“收尾”，很容易出现错误标题。
+        </p>
+        <p>
+          结构统计更稳定，因为它来自工具调用本身。用户能看到真实顺序，也能快速扫出每段内容发生了什么。
+        </p>
+      </article>
+    </section>
+</main>
+</body>
+</html>
