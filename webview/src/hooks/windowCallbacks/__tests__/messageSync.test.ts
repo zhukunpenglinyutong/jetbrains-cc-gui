@@ -9,6 +9,7 @@ import {
   getRawUuid,
   getMessageTimestampMs,
   preserveLastAssistantIdentity,
+  preserveAssistantResponseGrouping,
   preserveLatestMessagesOnShrink,
   preserveMessageIdentity,
   preserveStreamingAssistantContent,
@@ -1041,6 +1042,62 @@ describe('preserveLastAssistantIdentity — turn ID guards', () => {
     const result = preserveLastAssistantIdentity(prev, next, findLastAssistantIndex);
     expect(result).toBe(next);
     expect(result[0].timestamp).not.toBe(prevTs);
+  });
+});
+
+describe('preserveAssistantResponseGrouping', () => {
+  it('copies response ids from streamed assistant groups into backend snapshots by assistant order', () => {
+    const prev = [
+      makeUserMsg('q'),
+      makeAssistantMsg('read file', { __responseId: 'response-1', __turnId: 1 }),
+      makeAssistantMsg('edit file', { __responseId: 'response-1', __turnId: 2 }),
+      makeAssistantMsg('summary', { __responseId: 'response-1', __turnId: 3 }),
+    ];
+    const next = [
+      makeUserMsg('q'),
+      makeAssistantMsg('read file'),
+      makeAssistantMsg('edit file'),
+      makeAssistantMsg('summary'),
+    ];
+
+    const result = preserveAssistantResponseGrouping(prev, next);
+
+    expect(result).not.toBe(next);
+    expect(result.filter((message) => message.type === 'assistant').map((message) => message.__responseId)).toEqual([
+      'response-1',
+      'response-1',
+      'response-1',
+    ]);
+  });
+
+  it('returns next list unchanged when there is no streamed response grouping to preserve', () => {
+    const prev = [makeAssistantMsg('history 1')];
+    const next = [makeAssistantMsg('history 1'), makeAssistantMsg('history 2')];
+
+    const result = preserveAssistantResponseGrouping(prev, next);
+
+    expect(result).toBe(next);
+  });
+
+  it('preserves response ids by overall assistant order without assigning them to older ungrouped assistant messages', () => {
+    const prev = [
+      makeAssistantMsg('older assistant'),
+      makeUserMsg('q'),
+      makeAssistantMsg('read file', { __responseId: 'response-1', __turnId: 1 }),
+      makeAssistantMsg('edit file', { __responseId: 'response-1', __turnId: 2 }),
+    ];
+    const next = [
+      makeAssistantMsg('older assistant snapshot'),
+      makeUserMsg('q'),
+      makeAssistantMsg('read file'),
+      makeAssistantMsg('edit file'),
+    ];
+
+    const result = preserveAssistantResponseGrouping(prev, next);
+
+    expect(result[0].__responseId).toBeUndefined();
+    expect(result[2].__responseId).toBe('response-1');
+    expect(result[3].__responseId).toBe('response-1');
   });
 });
 

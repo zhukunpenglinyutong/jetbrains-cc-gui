@@ -323,6 +323,32 @@ export const preserveLastAssistantIdentity = (
   return copy;
 };
 
+export const preserveAssistantResponseGrouping = (
+  prevList: ClaudeMessage[],
+  nextList: ClaudeMessage[],
+): ClaudeMessage[] => {
+  const previousAssistants = prevList.filter((message) => message.type === 'assistant');
+  if (!previousAssistants.some((message) => typeof message.__responseId === 'string' && message.__responseId.length > 0)) {
+    return nextList;
+  }
+
+  let changed = false;
+  let assistantOrdinal = 0;
+  const next = nextList.map((message) => {
+    if (message.type !== 'assistant') return message;
+    const previousAssistant = previousAssistants[assistantOrdinal];
+    assistantOrdinal += 1;
+    if (!previousAssistant?.__responseId || message.__responseId) return message;
+    changed = true;
+    return {
+      ...message,
+      __responseId: previousAssistant.__responseId,
+    };
+  });
+
+  return changed ? next : nextList;
+};
+
 // ---------------------------------------------------------------------------
 // Raw blocks merging during streaming
 // ---------------------------------------------------------------------------

@@ -16,6 +16,7 @@ import {
   appendOptimisticMessageIfMissing,
   ensureStreamingAssistantInList,
   getRawUuid,
+  preserveAssistantResponseGrouping,
   preserveLastAssistantIdentity,
   preserveLatestMessagesOnShrink,
   preserveStreamingAssistantContent,
@@ -24,6 +25,7 @@ import {
 import { releaseSessionTransition } from '../sessionTransition';
 import { parseSequence } from '../parseSequence';
 import { collectUnresolvedToolUseIds } from './streamingCallbacks';
+import { getActiveStreamScopeKey, queueScopedPendingUpdate } from '../streamScopeState';
 
 const isTruthy = (v: unknown) => v === true || v === 'true';
 
@@ -110,7 +112,8 @@ export function registerMessageCallbacks(
       resultList,
       options.currentProviderRef.current,
     );
-    return ensureStreamingAssistantPreserved(prevList, withoutDuplicateToolTail);
+    const withResponseGrouping = preserveAssistantResponseGrouping(prevList, withoutDuplicateToolTail);
+    return ensureStreamingAssistantPreserved(prevList, withResponseGrouping);
   };
 
   // During streaming, buffer updateMessages calls and process only the latest
@@ -220,6 +223,12 @@ export function registerMessageCallbacks(
                 result[lastAssistantIdx] = {
                   ...result[lastAssistantIdx],
                   __turnId: streamingTurnIdRef.current,
+                  __responseId: window.__activeStreamingResponseId ?? result[lastAssistantIdx].__responseId,
+                };
+              } else if (!result[lastAssistantIdx].__responseId && window.__activeStreamingResponseId) {
+                result[lastAssistantIdx] = {
+                  ...result[lastAssistantIdx],
+                  __responseId: window.__activeStreamingResponseId,
                 };
               }
 
@@ -319,6 +328,7 @@ export function registerMessageCallbacks(
             patched[patchedAssistantIdx] = patchAssistantForStreaming({
               ...patchedAssistant,
               __turnId: currentTurnId,
+              __responseId: window.__activeStreamingResponseId ?? patchedAssistant.__responseId,
             });
           }
         }
@@ -397,6 +407,7 @@ export function registerMessageCallbacks(
       pendingUpdateSequence = sequence;
       window.__pendingUpdateJson = json;
       window.__pendingUpdateSequence = sequence;
+      queueScopedPendingUpdate(getActiveStreamScopeKey(), json, sequence);
       if (pendingUpdateRaf === null) {
         const timerId = setTimeout(() => {
           pendingUpdateRaf = null;
@@ -701,4 +712,3 @@ export function registerMessageCallbacks(
   };
 
 }
-
