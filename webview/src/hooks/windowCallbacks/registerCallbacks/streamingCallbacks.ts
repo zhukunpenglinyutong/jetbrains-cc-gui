@@ -231,6 +231,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     // Clear the previous stream-ended marker when a new turn starts
     window.__lastStreamEndedTurnId = undefined;
     window.__lastStreamEndedAt = undefined;
+    window.__activeStreamingResponseId = `response-${Date.now()}-${turnIdCounterRef.current + 1}`;
     // Clear idempotency guard for the new turn
     window.__streamEndProcessedTurnId = undefined;
     window.__streamingDeltaRenderingFrame = undefined;
@@ -275,6 +276,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
           ...updated[prev.length - 1],
           isStreaming: true,
           __turnId: streamingTurnIdRef.current,
+          __responseId: window.__activeStreamingResponseId ?? undefined,
         };
         return updated;
       }
@@ -288,6 +290,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
           isStreaming: true,
           timestamp: new Date().toISOString(),
           __turnId: streamingTurnIdRef.current,
+          __responseId: window.__activeStreamingResponseId ?? undefined,
         },
       ];
     });
@@ -583,6 +586,8 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
       clearStreamScopeState(scopeKey);
       setActiveStreamScopeKey(null);
     }
+    const endedStreamingResponseId = window.__activeStreamingResponseId ?? undefined;
+    window.__activeStreamingResponseId = null;
 
     // Mark that streaming just ended - used by mergeConsecutiveAssistantMessages to
     // distinguish recently-ended streaming messages from true history messages.
@@ -618,6 +623,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
           raw: finalRaw,
           isStreaming: false,
           __turnId: endedStreamingTurnId, // Keep __turnId for merge guard
+          __responseId: newMessages[idx].__responseId ?? endedStreamingResponseId,
           ...(durationMs != null ? { durationMs } : {}),
           ...(source === 'watchdog' ? { streamEndSource: 'watchdog', streamEndReason: 'stalled' } : {}),
         };
@@ -712,13 +718,32 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
       // Stream not active, ignore (could be stale signal after stream ended)
       return;
     }
-    // Clear content buffers - new deltas will start fresh
+
+    const previousScopeKey = getActiveStreamScopeKey();
+    const previousScopeState = previousScopeKey ? getOrCreateStreamScopeState(previousScopeKey) : null;
+
+    // Flush the current buffered segment into its existing card before resetting
+    // refs. Otherwise a block reset that arrives before the next rAF can lose the
+    // last visible chunk or let the next segment overwrite the same card.
+    if (streamingMessageIndexRef.current >= 0 && (streamingContentRef.current || streamingThinkingRef.current)) {
+      setMessages((prev) => {
+        const idx = streamingMessageIndexRef.current;
+        if (idx < 0 || idx >= prev.length || prev[idx]?.type !== 'assistant') {
+          return prev;
+        }
+        const next = [...prev];
+        next[idx] = patchAssistantForStreaming({
+          ...next[idx],
+          isStreaming: false,
+          __turnId: streamingTurnIdRef.current,
+        });
+        return next;
+      });
+    }
+
     streamingContentRef.current = '';
     streamingThinkingRef.current = '';
-    // Intentionally NOT resetting streamingMessageIndexRef here: the backend will
-    // send a new updateMessages snapshot for this turn, which will eventually set
-    // the correct index via the isStaleSnapshot guard. Resetting the index now
-    // would leave a window where incoming deltas have nowhere to land.
+
     // Reset throttle timeouts to ensure clean state for new deltas
     if (contentUpdateTimeoutRef.current != null) {
       cancelAnimationFrame(contentUpdateTimeoutRef.current);
@@ -733,5 +758,48 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     lastThinkingUpdateRef.current = 0;
     // Clear auto-expanded thinking keys for the new turn
     autoExpandedThinkingKeysRef.current.clear();
+
+    if (previousScopeState) {
+      previousScopeState.isStreaming = false;
+      previousScopeState.messageIndex = streamingMessageIndexRef.current;
+      previousScopeState.lastActivityAt = Date.now();
+    }
+
+    turnIdCounterRef.current += 1;
+    streamingTurnIdRef.current = turnIdCounterRef.current;
+    const scopeKey = getStreamScopeKey(
+      options.currentProviderRef.current,
+      options.currentSessionIdRef.current,
+      streamingTurnIdRef.current,
+    );
+    setActiveStreamScopeKey(scopeKey);
+    const scopeState = getOrCreateStreamScopeState(scopeKey);
+    scopeState.content = '';
+    scopeState.thinking = '';
+    scopeState.isStreaming = true;
+    scopeState.backendRendering = false;
+    scopeState.pendingUpdateJson = null;
+    scopeState.pendingUpdateSequence = null;
+    scopeState.pendingUpdateRaf = null;
+    scopeState.lastActivityAt = Date.now();
+    scopeState.minAcceptedSequence = 0;
+
+    setMessages((prev) => {
+      const nextIndex = prev.length;
+      streamingMessageIndexRef.current = nextIndex;
+      scopeState.messageIndex = nextIndex;
+      return [
+        ...prev,
+        {
+          type: 'assistant',
+          content: '',
+          isStreaming: true,
+          timestamp: new Date().toISOString(),
+          __turnId: streamingTurnIdRef.current,
+          __responseId: window.__activeStreamingResponseId ?? undefined,
+          __suppressStreamingConnectHint: true,
+        },
+      ];
+    });
   };
 }
