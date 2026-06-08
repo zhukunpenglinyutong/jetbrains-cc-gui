@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import {
   createInitialEventState,
   isWindowsTaskkillParseNoise,
@@ -44,6 +47,14 @@ function makeConfig() {
   };
 }
 
+function sessionLine(payload) {
+  return JSON.stringify({
+    timestamp: '2026-06-08T07:00:00.000Z',
+    type: 'response_item',
+    payload,
+  });
+}
+
 test('Codex item.updated agent_message emits incremental content deltas before completion', async () => {
   const emittedMessages = [];
   const state = createInitialEventState((message) => emittedMessages.push(message));
@@ -83,6 +94,93 @@ test('Codex item.updated agent_message emits incremental content deltas before c
       content: [{ type: 'text', text: 'Hello' }],
     },
   });
+});
+
+test('Codex agent_message completion with different item id does not replay identical text delta', async () => {
+  const emittedMessages = [];
+  const state = createInitialEventState((message) => emittedMessages.push(message));
+
+  const text = '好的，我继续基于之前的探索结果来设计方案并实现。';
+  const captured = await captureStdout(async () => {
+    await processCodexEventStream(
+      eventsFrom([
+        {
+          type: 'item.updated',
+          item: { id: 'msg-updated', type: 'agent_message', text },
+        },
+        {
+          type: 'item.completed',
+          item: { id: 'msg-completed', type: 'agent_message', text },
+        },
+      ]),
+      state,
+      makeConfig(),
+    );
+  });
+
+  const deltaLines = tagLines(captured, '[CONTENT_DELTA]');
+
+  assert.equal(deltaLines.length, 1);
+  assert.match(deltaLines[0], new RegExp(JSON.stringify(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.equal(state.assistantText, text);
+  assert.equal(emittedMessages.length, 1);
+});
+
+test('Codex new thread replays function calls from current thread session file during stream', async () => {
+  const originalSessionsDir = process.env.CODEX_SESSIONS_DIR;
+  const fakeHome = join(tmpdir(), `codex-event-handler-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  const threadId = 'thread-live-tools';
+  const sessionsDir = join(fakeHome, '.codex', 'sessions', '2026', '06', '08');
+  const sessionFile = join(sessionsDir, `rollout-2026-06-08T07-00-00-${threadId}.jsonl`);
+  await mkdir(sessionsDir, { recursive: true });
+  await writeFile(sessionFile, '', 'utf8');
+  process.env.CODEX_SESSIONS_DIR = join(fakeHome, '.codex', 'sessions');
+
+  try {
+    async function* liveEvents() {
+      yield { type: 'thread.started', thread_id: threadId };
+      yield { type: 'turn.started' };
+      await writeFile(
+        sessionFile,
+        [
+          sessionLine({
+            type: 'function_call',
+            call_id: 'call-read',
+            name: 'shell_command',
+            arguments: JSON.stringify({ command: 'cat README.md' }),
+          }),
+          sessionLine({
+            type: 'function_call_output',
+            call_id: 'call-read',
+            output: 'README content',
+          }),
+        ].join('\n') + '\n',
+        'utf8',
+      );
+      yield { type: 'event_msg', payload: { type: 'token_count' } };
+    }
+
+    const emittedMessages = [];
+    const state = createInitialEventState((message) => emittedMessages.push(message));
+    await processCodexEventStream(
+      liveEvents(),
+      state,
+      makeConfig(),
+    );
+
+    assert.equal(emittedMessages.length, 2);
+    assert.equal(emittedMessages[0].type, 'assistant');
+    assert.equal(emittedMessages[0].message.content[0].type, 'tool_use');
+    assert.equal(emittedMessages[1].type, 'user');
+    assert.equal(emittedMessages[1].message.content[0].type, 'tool_result');
+  } finally {
+    if (originalSessionsDir === undefined) {
+      delete process.env.CODEX_SESSIONS_DIR;
+    } else {
+      process.env.CODEX_SESSIONS_DIR = originalSessionsDir;
+    }
+    await rm(fakeHome, { recursive: true, force: true });
+  }
 });
 
 test('isWindowsTaskkillParseNoise: matches English SUCCESS taskkill output', () => {

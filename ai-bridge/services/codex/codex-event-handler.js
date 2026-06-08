@@ -223,6 +223,16 @@ function ensureSessionFilePath(state, threadId) {
   return state.sessionFilePath;
 }
 
+function resolveSessionThreadId(state, config) {
+  const configuredThreadId = typeof config?.threadId === 'string' && config.threadId.trim()
+    ? config.threadId.trim()
+    : null;
+  if (configuredThreadId) return configuredThreadId;
+  return typeof state?.currentThreadId === 'string' && state.currentThreadId.trim()
+    ? state.currentThreadId.trim()
+    : null;
+}
+
 function splitSessionJsonlEntries(content) {
   if (typeof content !== 'string' || !content.length) return [];
   return content.split('\n').filter((line) => line.trim());
@@ -256,7 +266,7 @@ async function readLatestTurnContextFromSession(state, threadId) {
 }
 
 async function collectPatchOperationsFromSession(state, config) {
-  const sessionPath = ensureSessionFilePath(state, config.threadId);
+  const sessionPath = ensureSessionFilePath(state, resolveSessionThreadId(state, config));
   if (!sessionPath) return [];
   let content = '';
   try { content = await readFile(sessionPath, 'utf8'); } catch (error) {
@@ -297,7 +307,7 @@ async function collectPatchOperationsFromSession(state, config) {
 }
 
 async function replayMissingFunctionCallsFromSession(state, config) {
-  const sessionPath = ensureSessionFilePath(state, config.threadId);
+  const sessionPath = ensureSessionFilePath(state, resolveSessionThreadId(state, config));
   if (!sessionPath) return { toolUses: 0, toolResults: 0 };
 
   let content = '';
@@ -546,7 +556,7 @@ function maybeEmitReasoning(state, item) {
 
 async function maybeLogRuntimePolicy(state, config) {
   if (state.runtimePolicyLogged) return;
-  const turnContext = await readLatestTurnContextFromSession(state, config.threadId);
+  const turnContext = await readLatestTurnContextFromSession(state, resolveSessionThreadId(state, config));
   if (!turnContext) return;
   const actualApproval = typeof turnContext.approval_policy === 'string' ? turnContext.approval_policy : '';
   const actualSandbox = turnContext?.sandbox_policy?.type || '';
@@ -592,7 +602,11 @@ function handleAgentMessage(item, state, { emitSnapshot = true } = {}) {
   console.log('[DEBUG] agent_message text length:', text.length);
   console.log('[DEBUG] agent_message text (first 100 chars):', text.substring(0, 100));
   const stableId = getStableItemId(item) ?? 'agent_message';
-  const previousText = state.assistantTextCache.get(stableId) ?? '';
+  const cachedText = state.assistantTextCache.get(stableId);
+  let previousText = cachedText ?? '';
+  if (cachedText === undefined && state.assistantText && text.startsWith(state.assistantText)) {
+    previousText = state.assistantText;
+  }
   const delta = extractAppendedDelta(previousText, text);
   state.finalResponse = text;
   state.assistantTextCache.set(stableId, text);
@@ -729,7 +743,7 @@ export async function processCodexEventStream(events, state, config) {
 
       case 'turn.started': {
         state.turnCompleted = false;
-        const sessionPath = ensureSessionFilePath(state, config.threadId);
+        const sessionPath = ensureSessionFilePath(state, resolveSessionThreadId(state, config));
         if (sessionPath && existsSync(sessionPath)) {
           try {
             const content = await readFile(sessionPath, 'utf8');

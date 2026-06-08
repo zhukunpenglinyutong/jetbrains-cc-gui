@@ -105,6 +105,7 @@ public class CodexCliSession {
     private final Map<String, String> assistantTextByItemId = new HashMap<>();
     private final Map<String, String> reasoningTextByItemId = new HashMap<>();
     private final Set<String> emittedToolUseIds = new HashSet<>();
+    private final Set<String> emittedToolResultIds = new HashSet<>();
     private final Set<String> emittedThinkingStartIds = new HashSet<>();
 
     public CodexCliSession(String tabId) {
@@ -293,11 +294,19 @@ public class CodexCliSession {
                     callback.onMessage("stream_start", "");
                     callback.onMessage("message_start", "");
                 }
-                case "turn.started" -> callback.onMessage("message_start", "");
+                case "turn.started" -> {
+                    callback.onMessage("message_start", "");
+                    callback.onMessage("status", "Codex 正在处理");
+                }
                 case "item.started", "item.updated", "item.completed" -> {
                     if (event.has("item") && event.get("item").isJsonObject()) {
                         JsonObject item = event.getAsJsonObject("item");
                         handleItem(type, item, callback, assistantContent);
+                    }
+                }
+                case "response_item" -> {
+                    if (event.has("payload") && event.get("payload").isJsonObject()) {
+                        handleResponseItem(event.getAsJsonObject("payload"), callback);
                     }
                 }
                 case "turn.completed" -> {
@@ -399,7 +408,13 @@ public class CodexCliSession {
             return;
         }
         String id = stableItemId(item, "agent_message");
-        String previous = assistantTextByItemId.getOrDefault(id, "");
+        String previous = assistantTextByItemId.get(id);
+        if (previous == null && assistantContent.length() > 0 && text.startsWith(assistantContent.toString())) {
+            previous = assistantContent.toString();
+        }
+        if (previous == null) {
+            previous = "";
+        }
         String delta = appendedDelta(previous, text);
         assistantTextByItemId.put(id, text);
         if (!delta.isEmpty()) {
@@ -413,12 +428,14 @@ public class CodexCliSession {
         String id = stableItemId(item, "command_execution");
         String command = extractCommand(item);
         if ("item.started".equals(eventType) || "item.updated".equals(eventType)) {
+            callback.onMessage("status", "正在执行命令: " + command);
             emitToolUseOnce(callback, id, "Bash", commandInput(command));
             return;
         }
 
+        callback.onMessage("status", "命令执行完成: " + command);
         emitToolUseOnce(callback, id, "Bash", commandInput(command));
-        callback.onMessage("user", buildToolResultMessage(id, isItemError(item), extractCommandOutput(item)).toString());
+        emitToolResultOnce(callback, id, isItemError(item), extractCommandOutput(item));
     }
 
     private void handleMcpToolCallItem(String eventType, JsonObject item, CliSessionCallback callback) {
@@ -434,19 +451,69 @@ public class CodexCliSession {
 
         boolean isError = isItemError(item) || item.has("error");
         emitToolUseOnce(callback, id, toolName, input);
-        callback.onMessage("user", buildToolResultMessage(id, isError, extractMcpResult(item)).toString());
+        emitToolResultOnce(callback, id, isError, extractMcpResult(item));
     }
 
     private void handleWebSearchItem(String eventType, JsonObject item, CliSessionCallback callback) {
-        // no status toast for web search events
+        if ("item.started".equals(eventType) || "item.updated".equals(eventType)) {
+            callback.onMessage("status", "正在搜索");
+        }
     }
 
     private void handleFileChangeItem(String eventType, JsonObject item, CliSessionCallback callback) {
-        // no status toast for file change events
+        if ("item.completed".equals(eventType)) {
+            callback.onMessage("status", "文件变更");
+        }
     }
 
     private void handlePlanUpdateItem(String eventType, JsonObject item, CliSessionCallback callback) {
-        // no status toast for plan update events
+        if ("item.completed".equals(eventType)) {
+            callback.onMessage("status", "计划已更新");
+        }
+    }
+
+    private void handleResponseItem(JsonObject payload, CliSessionCallback callback) {
+        String payloadType = getString(payload, "type");
+        if (payloadType == null) {
+            return;
+        }
+        switch (payloadType) {
+            case "function_call" -> handleFunctionCallPayload(payload, callback);
+            case "function_call_output" -> handleFunctionCallOutputPayload(payload, callback);
+            case "custom_tool_call" -> handleCustomToolCallPayload(payload, callback);
+            default -> {
+            }
+        }
+    }
+
+    private void handleFunctionCallPayload(JsonObject payload, CliSessionCallback callback) {
+        String name = firstNonBlank(getString(payload, "name"), "unknown");
+        String id = stableItemId(payload, "unknown");
+        JsonObject input = parseFunctionCallArguments(payload);
+        emitToolUseOnce(callback, id, name, input);
+    }
+
+    private void handleFunctionCallOutputPayload(JsonObject payload, CliSessionCallback callback) {
+        String id = stableItemId(payload, "unknown");
+        boolean isError = isItemError(payload);
+        String output = firstNonBlank(getString(payload, "output"), getString(payload, "result"));
+        emitToolResultOnce(callback, id, isError, output != null ? output : "(no output)");
+    }
+
+    private void handleCustomToolCallPayload(JsonObject payload, CliSessionCallback callback) {
+        String name = firstNonBlank(getString(payload, "name"), "unknown");
+        String id = stableItemId(payload, "unknown");
+        JsonObject input = new JsonObject();
+        String toolInput = firstNonBlank(getString(payload, "input"), getString(payload, "arguments"));
+        if (toolInput != null) {
+            input.addProperty("patch", toolInput);
+            input.addProperty("input", toolInput);
+            String filePath = extractPatchFilePath(toolInput);
+            if (filePath != null) {
+                input.addProperty("file_path", filePath);
+            }
+        }
+        emitToolUseOnce(callback, id, name, input);
     }
 
     private JsonObject buildAssistantMessage(String text) {
@@ -515,6 +582,33 @@ public class CodexCliSession {
             return;
         }
         callback.onMessage("assistant", buildToolUseMessage(id, name, input).toString());
+    }
+
+    private void emitToolResultOnce(CliSessionCallback callback, String id, boolean isError, String content) {
+        if (!emittedToolResultIds.add(id)) {
+            return;
+        }
+        callback.onMessage("user", buildToolResultMessage(id, isError, content).toString());
+    }
+
+    private JsonObject parseFunctionCallArguments(JsonObject payload) {
+        JsonObject empty = new JsonObject();
+        if (!payload.has("arguments") || payload.get("arguments").isJsonNull()) {
+            return empty;
+        }
+        JsonElement arguments = payload.get("arguments");
+        if (arguments.isJsonObject()) {
+            return arguments.getAsJsonObject();
+        }
+        if (!arguments.isJsonPrimitive()) {
+            return empty;
+        }
+        try {
+            JsonElement parsed = gson.fromJson(arguments.getAsString(), JsonElement.class);
+            return parsed != null && parsed.isJsonObject() ? parsed.getAsJsonObject() : empty;
+        } catch (Exception ignored) {
+            return empty;
+        }
     }
 
     private JsonObject commandInput(String command) {
@@ -683,6 +777,22 @@ public class CodexCliSession {
                 getString(item, "result")
         );
         return output != null ? output : "(no output)";
+    }
+
+    private static String extractPatchFilePath(String patchText) {
+        if (patchText == null || patchText.isBlank()) {
+            return null;
+        }
+        String[] lines = patchText.split("\\R");
+        for (String line : lines) {
+            if (line.startsWith("*** Add File:") || line.startsWith("*** Update File:")) {
+                String filePath = line.substring(line.indexOf(':') + 1).trim();
+                if (!filePath.isBlank()) {
+                    return filePath;
+                }
+            }
+        }
+        return null;
     }
 
     private static String extractMcpResult(JsonObject item) {

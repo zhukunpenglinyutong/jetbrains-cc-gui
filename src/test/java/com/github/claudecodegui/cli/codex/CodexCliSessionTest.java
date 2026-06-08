@@ -118,6 +118,29 @@ public class CodexCliSessionTest {
     }
 
     @Test
+    public void agentMessageCompletionWithDifferentItemIdDoesNotReplayIdenticalTextDelta() throws Exception {
+        CodexCliSession session = new CodexCliSession("tab-agent-different-id");
+        RecordingCallback callback = new RecordingCallback();
+        StringBuilder assistantContent = new StringBuilder();
+
+        invokeParseEvent(
+                session,
+                "{\"type\":\"item.updated\",\"item\":{\"id\":\"item_stream\",\"type\":\"agent_message\",\"text\":\"hello world\"}}",
+                callback,
+                assistantContent
+        );
+        invokeParseEvent(
+                session,
+                "{\"type\":\"item.completed\",\"item\":{\"id\":\"item_completed\",\"type\":\"agent_message\",\"text\":\"hello world\"}}",
+                callback,
+                assistantContent
+        );
+
+        assertEquals("hello world", assistantContent.toString());
+        assertEquals(List.of("hello world"), callback.contentsOfType("content_delta"));
+    }
+
+    @Test
     public void commandExecutionStartedAndCompletedEmitToolUseAndResult() throws Exception {
         CodexCliSession session = new CodexCliSession("tab-command");
         RecordingCallback callback = new RecordingCallback();
@@ -171,6 +194,56 @@ public class CodexCliSessionTest {
         assertTrue(callback.events.stream().anyMatch(event -> "user".equals(event.type)
                 && event.content.contains("\"type\":\"tool_result\"")
                 && event.content.contains("/facebook/react")));
+    }
+
+    @Test
+    public void responseItemFunctionCallAndOutputEmitToolUseAndResult() throws Exception {
+        CodexCliSession session = new CodexCliSession("tab-response-item-tool");
+        RecordingCallback callback = new RecordingCallback();
+        StringBuilder assistantContent = new StringBuilder();
+
+        invokeParseEvent(
+                session,
+                "{\"type\":\"response_item\",\"payload\":{\"type\":\"function_call\",\"call_id\":\"call-1\",\"name\":\"shell_command\",\"arguments\":\"{\\\"command\\\":\\\"rtk git status\\\"}\"}}",
+                callback,
+                assistantContent
+        );
+        invokeParseEvent(
+                session,
+                "{\"type\":\"response_item\",\"payload\":{\"type\":\"function_call_output\",\"call_id\":\"call-1\",\"output\":\"clean\"}}",
+                callback,
+                assistantContent
+        );
+
+        assertTrue(callback.events.stream().anyMatch(event -> "assistant".equals(event.type)
+                && event.content.contains("\"type\":\"tool_use\"")
+                && event.content.contains("\"id\":\"call-1\"")
+                && event.content.contains("\"name\":\"shell_command\"")
+                && event.content.contains("rtk git status")));
+        assertTrue(callback.events.stream().anyMatch(event -> "user".equals(event.type)
+                && event.content.contains("\"type\":\"tool_result\"")
+                && event.content.contains("\"tool_use_id\":\"call-1\"")
+                && event.content.contains("clean")));
+    }
+
+    @Test
+    public void responseItemCustomToolCallEmitsToolUse() throws Exception {
+        CodexCliSession session = new CodexCliSession("tab-response-item-custom-tool");
+        RecordingCallback callback = new RecordingCallback();
+        StringBuilder assistantContent = new StringBuilder();
+
+        invokeParseEvent(
+                session,
+                "{\"type\":\"response_item\",\"payload\":{\"type\":\"custom_tool_call\",\"call_id\":\"patch-1\",\"name\":\"apply_patch\",\"input\":\"*** Update File: README.md\\n-old\\n+new\"}}",
+                callback,
+                assistantContent
+        );
+
+        assertTrue(callback.events.stream().anyMatch(event -> "assistant".equals(event.type)
+                && event.content.contains("\"type\":\"tool_use\"")
+                && event.content.contains("\"id\":\"patch-1\"")
+                && event.content.contains("\"name\":\"apply_patch\"")
+                && event.content.contains("README.md")));
     }
 
     @Test

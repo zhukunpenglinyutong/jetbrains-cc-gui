@@ -8,6 +8,7 @@ interface MessageUsageStatsProps {
   outputTokens: number | null;
   durationMs: number | null;
   t: TFunction;
+  durationLabelKey?: string;
 }
 
 /**
@@ -23,6 +24,7 @@ export const MessageUsageStats = memo(function MessageUsageStats({
   outputTokens,
   durationMs,
   t,
+  durationLabelKey = 'chat.usageStats.duration',
 }: MessageUsageStatsProps) {
   const hasTokens = (inputTokens !== null && inputTokens > 0) || (outputTokens !== null && outputTokens > 0);
   const hasDuration = durationMs !== null && durationMs > 0;
@@ -68,7 +70,7 @@ export const MessageUsageStats = memo(function MessageUsageStats({
             <circle cx="12" cy="12" r="10" />
             <polyline points="12 6 12 12 16 14" />
           </svg>
-          <span>{t('chat.usageStats.duration')}</span>
+          <span>{t(durationLabelKey)}</span>
           <span className="usage-value">{formatDurationMs(durationMs!)}</span>
         </div>
       )}

@@ -313,6 +313,72 @@ public class HistoryMessageInjectorTest {
                 .get(0).getAsJsonObject().get("tool_use_id").getAsString());
     }
 
+    @Test
+    public void convertCodexMessagesConvertsCliCommandExecutionItemsToToolBlocks() {
+        JsonArray messages = new JsonArray();
+        messages.add(cliItemMessage(
+                "2026-06-08T07:00:00.100Z",
+                "item.started",
+                "{\"id\":\"cmd_1\",\"type\":\"command_execution\",\"command\":\"git status\",\"status\":\"in_progress\"}"));
+        messages.add(cliItemMessage(
+                "2026-06-08T07:00:00.300Z",
+                "item.completed",
+                "{\"id\":\"cmd_1\",\"type\":\"command_execution\",\"command\":\"git status\",\"exit_code\":0,\"output\":\"clean\"}"));
+
+        List<JsonObject> result = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(messages);
+
+        assertEquals(2, result.size());
+
+        JsonObject toolUse = result.get(0).getAsJsonObject("raw").getAsJsonArray("content")
+                .get(0).getAsJsonObject();
+        assertEquals("assistant", result.get(0).get("type").getAsString());
+        assertEquals("tool_use", toolUse.get("type").getAsString());
+        assertEquals("cmd_1", toolUse.get("id").getAsString());
+        assertEquals("Bash", toolUse.get("name").getAsString());
+        assertEquals("git status", toolUse.getAsJsonObject("input").get("command").getAsString());
+
+        JsonObject toolResult = result.get(1).getAsJsonObject("raw").getAsJsonArray("content")
+                .get(0).getAsJsonObject();
+        assertEquals("user", result.get(1).get("type").getAsString());
+        assertEquals("tool_result", toolResult.get("type").getAsString());
+        assertEquals("cmd_1", toolResult.get("tool_use_id").getAsString());
+        assertEquals("clean", toolResult.get("content").getAsString());
+        assertFalse(toolResult.get("is_error").getAsBoolean());
+    }
+
+    @Test
+    public void convertCodexMessagesConvertsCliMcpToolItemsToToolBlocks() {
+        JsonArray messages = new JsonArray();
+        messages.add(cliItemMessage(
+                "2026-06-08T07:01:00.100Z",
+                "item.started",
+                "{\"id\":\"mcp_1\",\"type\":\"mcp_tool_call\",\"server\":\"context7\",\"tool\":\"resolve-library-id\","
+                        + "\"arguments\":{\"libraryName\":\"react\"}}"));
+        messages.add(cliItemMessage(
+                "2026-06-08T07:01:00.300Z",
+                "item.completed",
+                "{\"id\":\"mcp_1\",\"type\":\"mcp_tool_call\",\"server\":\"context7\",\"tool\":\"resolve-library-id\","
+                        + "\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"/facebook/react\"}]}}"));
+
+        List<JsonObject> result = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(messages);
+
+        assertEquals(2, result.size());
+
+        JsonObject toolUse = result.get(0).getAsJsonObject("raw").getAsJsonArray("content")
+                .get(0).getAsJsonObject();
+        assertEquals("tool_use", toolUse.get("type").getAsString());
+        assertEquals("mcp_1", toolUse.get("id").getAsString());
+        assertEquals("mcp__context7__resolve-library-id", toolUse.get("name").getAsString());
+        assertEquals("react", toolUse.getAsJsonObject("input").get("libraryName").getAsString());
+
+        JsonObject toolResult = result.get(1).getAsJsonObject("raw").getAsJsonArray("content")
+                .get(0).getAsJsonObject();
+        assertEquals("tool_result", toolResult.get("type").getAsString());
+        assertEquals("mcp_1", toolResult.get("tool_use_id").getAsString());
+        assertEquals("/facebook/react", toolResult.get("content").getAsString());
+        assertFalse(toolResult.get("is_error").getAsBoolean());
+    }
+
     private static JsonObject responseItemUserMessage(String timestamp, String text) {
         return responseItemMessage(timestamp, "user", "input_text", text);
     }
@@ -381,6 +447,14 @@ public class HistoryMessageInjectorTest {
         payload.addProperty("call_id", callId);
         payload.addProperty("output", output);
         line.add("payload", payload);
+        return line;
+    }
+
+    private static JsonObject cliItemMessage(String timestamp, String type, String itemJson) {
+        JsonObject line = new JsonObject();
+        line.addProperty("timestamp", timestamp);
+        line.addProperty("type", type);
+        line.add("item", com.google.gson.JsonParser.parseString(itemJson).getAsJsonObject());
         return line;
     }
 

@@ -8,6 +8,12 @@ import { join, dirname } from 'path';
 import { getRealHomeDir } from '../../utils/path-utils.js';
 import { MAX_AGENTS_MD_BYTES, AGENTS_FILE_NAMES, SESSION_PATCH_SCAN_MAX_FILES, logWarn, logInfo, logDebug } from './codex-utils.js';
 
+function getCodexSessionsRoot() {
+  return process.env.CODEX_SESSIONS_DIR && process.env.CODEX_SESSIONS_DIR.trim()
+    ? process.env.CODEX_SESSIONS_DIR.trim()
+    : join(getRealHomeDir(), '.codex', 'sessions');
+}
+
 /**
  * Finds a session file containing the threadId under ~/.codex/sessions.
  */
@@ -16,7 +22,7 @@ export function findSessionFileByThreadId(threadId) {
     return null;
   }
 
-  const sessionsRoot = join(getRealHomeDir(), '.codex', 'sessions');
+  const sessionsRoot = getCodexSessionsRoot();
   if (!existsSync(sessionsRoot)) {
     return null;
   }

@@ -259,6 +259,10 @@ export const MessageItem = memo(function MessageItem({
 
   const isLastAssistantMessage = message.type === 'assistant' && isLast;
   const isMessageStreaming = streamingActive && isLastAssistantMessage;
+  const durationLabelKey =
+    message.streamEndSource === 'watchdog' || message.streamEndReason === 'stalled'
+      ? 'chat.waitingTimedOutDuration'
+      : 'chat.usageStats.duration';
 
   // Cache per-message token usage extraction
   const messageUsage = useMemo(() => extractMessageUsage(message), [message]);
@@ -614,6 +618,7 @@ export const MessageItem = memo(function MessageItem({
                 inputTokens={messageUsage?.inputTokens ?? null}
                 outputTokens={messageUsage?.outputTokens ?? null}
                 durationMs={typeof message.durationMs === 'number' ? message.durationMs : null}
+                durationLabelKey={durationLabelKey}
                 t={t}
               />
             )}
@@ -638,6 +643,7 @@ export const MessageItem = memo(function MessageItem({
               inputTokens={messageUsage?.inputTokens ?? null}
               outputTokens={messageUsage?.outputTokens ?? null}
               durationMs={typeof message.durationMs === 'number' ? message.durationMs : null}
+              durationLabelKey={durationLabelKey}
               t={t}
             />
           )}

@@ -36,6 +36,7 @@ const t = ((key: string) => {
     'chat.streamingConnected': '已连接',
     'chat.totalDuration': '本次耗时',
     'chat.waitingTimedOutDuration': '等待超时',
+    'chat.usageStats.duration': '本次耗时',
   };
   return translations[key] ?? key;
 }) as any;
@@ -151,6 +152,30 @@ describe('MessageItem copy button visibility', () => {
     renderMessageItem(message);
 
     expect(screen.getByTestId('bash-tool-group-block')).toBeTruthy();
+    expect(screen.queryAllByTestId('content-block-tool_use')).toHaveLength(0);
+  });
+
+  it('renders Codex apply_patch tool uses through the edit tool block', () => {
+    const message: ClaudeMessage = {
+      type: 'assistant',
+      raw: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'patch-1',
+            name: 'apply_patch',
+            input: {
+              patch: '*** Update File: README.md\n-old\n+new',
+              file_path: 'README.md',
+            },
+          },
+        ],
+      } as any,
+    };
+
+    renderMessageItem(message);
+
+    expect(screen.getByTestId('edit-tool-block')).toBeTruthy();
     expect(screen.queryAllByTestId('content-block-tool_use')).toHaveLength(0);
   });
 

@@ -16,7 +16,9 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -173,10 +175,11 @@ public class HistoryMessageInjector {
      */
     public static List<JsonObject> convertCodexMessagesToFrontendBatch(JsonArray messages) {
         List<JsonObject> frontendMessages = new ArrayList<>();
+        Set<String> emittedCliToolUseIds = new HashSet<>();
         for (int i = 0; i < messages.size(); i++) {
             JsonObject msg = messages.get(i).getAsJsonObject();
-            JsonObject frontendMsg = convertCodexMessageToFrontend(msg);
-            if (frontendMsg != null) {
+            List<JsonObject> convertedMessages = convertCodexMessageToFrontendMessages(msg, emittedCliToolUseIds);
+            for (JsonObject frontendMsg : convertedMessages) {
                 addCodexFrontendMessage(frontendMessages, frontendMsg);
             }
         }
@@ -414,46 +417,338 @@ public class HistoryMessageInjector {
      * Handles both event_msg (user messages) and response_item (assistant/tool messages).
      */
     public static JsonObject convertCodexMessageToFrontend(JsonObject msg) {
+        List<JsonObject> messages = convertCodexMessageToFrontendMessages(msg, new HashSet<>());
+        return messages.isEmpty() ? null : messages.get(0);
+    }
+
+    private static List<JsonObject> convertCodexMessageToFrontendMessages(JsonObject msg, Set<String> emittedCliToolUseIds) {
         if (!msg.has("type")) {
-            return null;
+            return List.of();
         }
 
         String type = msg.get("type").getAsString();
         JsonObject payload = msg.has("payload") && msg.get("payload").isJsonObject()
                 ? msg.getAsJsonObject("payload") : null;
-        if (payload == null) {
-            return null;
+        String timestamp = msg.has("timestamp") ? msg.get("timestamp").getAsString() : null;
+
+        if (type.startsWith("item.")) {
+            JsonObject item = msg.has("item") && msg.get("item").isJsonObject()
+                    ? msg.getAsJsonObject("item") : null;
+            return convertCliItemToFrontendMessages(type, item, timestamp, emittedCliToolUseIds);
         }
 
-        String timestamp = msg.has("timestamp") ? msg.get("timestamp").getAsString() : null;
+        if (payload == null) {
+            return List.of();
+        }
 
         // Handle event_msg containing user_message
         if ("event_msg".equals(type)) {
-            return convertEventMsgToFrontend(payload, timestamp);
+            JsonObject converted = convertEventMsgToFrontend(payload, timestamp);
+            return converted == null ? List.of() : List.of(converted);
         }
 
         // Handle response_item (assistant messages, function calls, etc.)
         if ("response_item".equals(type)) {
             if (!payload.has("type")) {
-                return null;
+                return List.of();
             }
             String payloadType = payload.get("type").getAsString();
 
+            JsonObject converted = null;
             if ("message".equals(payloadType)) {
-                return CodexMessageConverter.convertCodexMessageToFrontend(payload, timestamp);
+                converted = CodexMessageConverter.convertCodexMessageToFrontend(payload, timestamp);
+            } else if ("function_call".equals(payloadType)) {
+                converted = CodexMessageConverter.convertFunctionCallToToolUse(payload, timestamp);
+            } else if ("function_call_output".equals(payloadType)) {
+                converted = CodexMessageConverter.convertFunctionCallOutputToToolResult(payload, timestamp);
+            } else if ("custom_tool_call".equals(payloadType)) {
+                converted = CodexMessageConverter.convertCustomToolCallToToolUse(payload, timestamp);
             }
-            if ("function_call".equals(payloadType)) {
-                return CodexMessageConverter.convertFunctionCallToToolUse(payload, timestamp);
-            }
-            if ("function_call_output".equals(payloadType)) {
-                return CodexMessageConverter.convertFunctionCallOutputToToolResult(payload, timestamp);
-            }
-            if ("custom_tool_call".equals(payloadType)) {
-                return CodexMessageConverter.convertCustomToolCallToToolUse(payload, timestamp);
-            }
+            return converted == null ? List.of() : List.of(converted);
         }
 
+        return List.of();
+    }
+
+    private static List<JsonObject> convertCliItemToFrontendMessages(
+            String eventType,
+            JsonObject item,
+            String timestamp,
+            Set<String> emittedToolUseIds
+    ) {
+        if (item == null || !item.has("type")) {
+            return List.of();
+        }
+
+        String itemType = item.get("type").getAsString();
+        if ("agent_message".equals(itemType)) {
+            String text = getString(item, "text");
+            if (text == null || text.isBlank()) {
+                return List.of();
+            }
+            return List.of(createTextAssistantMessage(text, timestamp));
+        }
+
+        if ("command_execution".equals(itemType)) {
+            return convertCliCommandExecutionItem(eventType, item, timestamp, emittedToolUseIds);
+        }
+
+        if ("mcp_tool_call".equals(itemType)) {
+            return convertCliMcpToolCallItem(eventType, item, timestamp, emittedToolUseIds);
+        }
+
+        return List.of();
+    }
+
+    private static List<JsonObject> convertCliCommandExecutionItem(
+            String eventType,
+            JsonObject item,
+            String timestamp,
+            Set<String> emittedToolUseIds
+    ) {
+        String id = firstNonBlank(getString(item, "id"), getString(item, "call_id"), "command_execution");
+        String command = firstNonBlank(getString(item, "command"), getString(item, "cmd"), getString(item, "program"), "(unknown command)");
+        JsonObject input = new JsonObject();
+        input.addProperty("command", command);
+        input.addProperty("description", commandDescription(command));
+
+        List<JsonObject> messages = new ArrayList<>();
+        addToolUseIfNeeded(messages, emittedToolUseIds, id, "Bash", input, timestamp);
+
+        if ("item.completed".equals(eventType)) {
+            messages.add(createToolResultMessage(id, isCliItemError(item), extractCliCommandOutput(item), timestamp));
+        }
+
+        return messages;
+    }
+
+    private static List<JsonObject> convertCliMcpToolCallItem(
+            String eventType,
+            JsonObject item,
+            String timestamp,
+            Set<String> emittedToolUseIds
+    ) {
+        String id = firstNonBlank(getString(item, "id"), getString(item, "call_id"), "mcp_tool_call");
+        String toolName = normalizeMcpToolName(getString(item, "server"), getString(item, "tool"));
+        JsonObject input = item.has("arguments") && item.get("arguments").isJsonObject()
+                ? item.getAsJsonObject("arguments")
+                : new JsonObject();
+
+        List<JsonObject> messages = new ArrayList<>();
+        addToolUseIfNeeded(messages, emittedToolUseIds, id, toolName, input, timestamp);
+
+        if ("item.completed".equals(eventType)) {
+            messages.add(createToolResultMessage(id, isCliItemError(item) || item.has("error"), extractCliMcpResult(item), timestamp));
+        }
+
+        return messages;
+    }
+
+    private static void addToolUseIfNeeded(
+            List<JsonObject> messages,
+            Set<String> emittedToolUseIds,
+            String id,
+            String name,
+            JsonObject input,
+            String timestamp
+    ) {
+        if (!emittedToolUseIds.add(id)) {
+            return;
+        }
+        messages.add(createToolUseMessage(id, name, input, timestamp));
+    }
+
+    private static JsonObject createTextAssistantMessage(String text, String timestamp) {
+        JsonObject frontendMsg = new JsonObject();
+        frontendMsg.addProperty("type", "assistant");
+        frontendMsg.addProperty("content", text);
+
+        JsonObject textBlock = new JsonObject();
+        textBlock.addProperty("type", "text");
+        textBlock.addProperty("text", text);
+        JsonArray content = new JsonArray();
+        content.add(textBlock);
+
+        JsonObject rawObj = new JsonObject();
+        rawObj.add("content", content);
+        rawObj.addProperty("role", "assistant");
+        frontendMsg.add("raw", rawObj);
+
+        if (timestamp != null) {
+            frontendMsg.addProperty("timestamp", timestamp);
+        }
+        return frontendMsg;
+    }
+
+    private static JsonObject createToolUseMessage(String id, String name, JsonObject input, String timestamp) {
+        JsonObject frontendMsg = new JsonObject();
+        frontendMsg.addProperty("type", "assistant");
+        frontendMsg.addProperty("content", "");
+
+        JsonObject toolUse = new JsonObject();
+        toolUse.addProperty("type", "tool_use");
+        toolUse.addProperty("id", id);
+        toolUse.addProperty("name", name);
+        toolUse.add("input", input != null ? input : new JsonObject());
+
+        JsonArray content = new JsonArray();
+        content.add(toolUse);
+
+        JsonObject rawObj = new JsonObject();
+        rawObj.add("content", content);
+        rawObj.addProperty("role", "assistant");
+        frontendMsg.add("raw", rawObj);
+
+        if (timestamp != null) {
+            frontendMsg.addProperty("timestamp", timestamp);
+        }
+        return frontendMsg;
+    }
+
+    private static JsonObject createToolResultMessage(String toolUseId, boolean isError, String contentText, String timestamp) {
+        JsonObject frontendMsg = new JsonObject();
+        frontendMsg.addProperty("type", "user");
+        frontendMsg.addProperty("content", "[tool_result]");
+
+        JsonObject toolResult = new JsonObject();
+        toolResult.addProperty("type", "tool_result");
+        toolResult.addProperty("tool_use_id", toolUseId);
+        toolResult.addProperty("is_error", isError);
+        toolResult.addProperty("content", contentText == null || contentText.isBlank() ? "(no output)" : contentText);
+
+        JsonArray content = new JsonArray();
+        content.add(toolResult);
+
+        JsonObject rawObj = new JsonObject();
+        rawObj.add("content", content);
+        rawObj.addProperty("role", "user");
+        frontendMsg.add("raw", rawObj);
+
+        if (timestamp != null) {
+            frontendMsg.addProperty("timestamp", timestamp);
+        }
+        return frontendMsg;
+    }
+
+    private static boolean isCliItemError(JsonObject item) {
+        String status = getString(item, "status");
+        if (status != null && ("failed".equalsIgnoreCase(status) || "error".equalsIgnoreCase(status))) {
+            return true;
+        }
+        if (item.has("is_error") && item.get("is_error").isJsonPrimitive() && item.get("is_error").getAsBoolean()) {
+            return true;
+        }
+        if (item.has("error") && !item.get("error").isJsonNull()) {
+            return true;
+        }
+        if (item.has("exit_code") && item.get("exit_code").isJsonPrimitive()) {
+            try {
+                return item.get("exit_code").getAsInt() != 0;
+            } catch (Exception ignored) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private static String extractCliCommandOutput(JsonObject item) {
+        return firstNonBlank(
+                getString(item, "aggregated_output"),
+                getString(item, "output"),
+                getString(item, "stdout"),
+                getString(item, "stderr"),
+                getString(item, "result"),
+                "(no output)"
+        );
+    }
+
+    private static String extractCliMcpResult(JsonObject item) {
+        if (item.has("error") && item.get("error").isJsonObject()) {
+            String message = getString(item.getAsJsonObject("error"), "message");
+            if (message != null) {
+                return message;
+            }
+        }
+        if (!item.has("result") || item.get("result").isJsonNull()) {
+            return "(no output)";
+        }
+
+        JsonElement result = item.get("result");
+        if (result.isJsonPrimitive()) {
+            return result.getAsString();
+        }
+        if (result.isJsonObject()) {
+            JsonObject resultObj = result.getAsJsonObject();
+            if (resultObj.has("content") && resultObj.get("content").isJsonArray()) {
+                List<String> parts = new ArrayList<>();
+                for (JsonElement element : resultObj.getAsJsonArray("content")) {
+                    if (!element.isJsonObject()) {
+                        continue;
+                    }
+                    JsonObject block = element.getAsJsonObject();
+                    if ("text".equals(getString(block, "type"))) {
+                        String text = getString(block, "text");
+                        if (text != null && !text.isBlank()) {
+                            parts.add(text);
+                        }
+                    }
+                }
+                if (!parts.isEmpty()) {
+                    return String.join("\n", parts);
+                }
+            }
+            if (resultObj.has("structured_content")) {
+                return resultObj.get("structured_content").toString();
+            }
+        }
+        return result.toString();
+    }
+
+    private static String normalizeMcpToolName(String server, String tool) {
+        String normalizedServer = server == null || server.isBlank() ? "mcp" : sanitizeToolNamePart(server);
+        String normalizedTool = tool == null || tool.isBlank() ? "tool" : sanitizeToolNamePart(tool);
+        return "mcp__" + normalizedServer + "__" + normalizedTool;
+    }
+
+    private static String sanitizeToolNamePart(String value) {
+        return value.trim().replaceAll("[^A-Za-z0-9_-]", "_");
+    }
+
+    private static String commandDescription(String command) {
+        if (command == null || command.isBlank()) {
+            return "Run command";
+        }
+        String trimmed = command.trim();
+        if (trimmed.startsWith("git status")) {
+            return "Check git status";
+        }
+        if (trimmed.startsWith("git diff")) {
+            return "Inspect git diff";
+        }
+        if (trimmed.startsWith("ls") || trimmed.contains(" Get-ChildItem")) {
+            return "List files";
+        }
+        return "Run command";
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
         return null;
+    }
+
+    private static String getString(JsonObject obj, String key) {
+        if (obj == null || !obj.has(key) || obj.get(key).isJsonNull()) {
+            return null;
+        }
+        JsonElement element = obj.get(key);
+        return element.isJsonPrimitive() ? element.getAsString() : element.toString();
     }
 
     /**
@@ -558,4 +853,3 @@ public class HistoryMessageInjector {
         });
     }
 }
-
