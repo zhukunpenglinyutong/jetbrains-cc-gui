@@ -146,6 +146,38 @@
     border-top-left-radius: 4px;
 }
 
+.assistant-response-group {
+    animation: messageFadeIn 0.3s ease;
+}
+
+.assistant-response-group .assistant-response-content {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+}
+
+.assistant-response-segment {
+    padding: 14px 18px;
+    min-width: 0;
+}
+
+.assistant-response-segment + .assistant-response-segment {
+    border-top: 1px solid var(--color-message-divider);
+}
+
+.assistant-response-segment .content-block:first-child > .thinking-section {
+    margin-top: 0;
+}
+
+.assistant-response-segment .content-block:last-child > * {
+    margin-bottom: 0;
+}
+
+.message-response-segment-content {
+    min-width: 0;
+}
+
 /* Message Tail - pointing to avatar */
 .message.user .message-content::before,
 .message.assistant .message-content::before {

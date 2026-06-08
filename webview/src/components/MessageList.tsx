@@ -3,7 +3,10 @@ import type { TFunction } from 'i18next';
 import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock } from '../types';
 import type { QueueDisplayState } from '../contexts/MessagesContext';
 import { getMessageKey } from '../utils/messageUtils';
+import { extractMessageUsage } from '../utils/messageUsage';
 import { MessageItem } from './MessageItem';
+import { MessageAvatar } from './MessageItem/MessageAvatar';
+import { MessageUsageStats } from './MessageItem/MessageUsageStats';
 import WaitingIndicator from './WaitingIndicator';
 import { ContextMenu } from './ContextMenu';
 import { useContextMenu, copySelection } from '../hooks/useContextMenu.js';
@@ -13,6 +16,10 @@ import type { MessageListRevealHandle } from './ConversationSearch/types';
 const VISIBLE_MESSAGE_WINDOW = 15;
 /** Number of additional earlier messages to reveal per "show earlier" click. */
 const REVEAL_PAGE_SIZE = 30;
+
+type VisibleMessageUnit =
+  | { kind: 'message'; message: ClaudeMessage; messageIndex: number }
+  | { kind: 'assistant_response_group'; responseId: string; items: Array<{ message: ClaudeMessage; messageIndex: number }> };
 
 function extractToolResultPreview(result: ToolResultBlock | null | undefined): string {
   if (!result) return 'pending';
@@ -45,6 +52,42 @@ function getMessageToolResultSignature(
   return toolUses
     .map((block) => `${block.id ?? 'unknown'}:${extractToolResultPreview(findToolResult(block.id, messageIndex))}`)
     .join('|');
+}
+
+function getGroupedAssistantUsage(items: Array<{ message: ClaudeMessage }>): {
+  inputTokens: number | null;
+  outputTokens: number | null;
+  durationMs: number | null;
+  durationLabelKey: string;
+} {
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let hasTokens = false;
+  let durationMs: number | null = null;
+  let durationLabelKey = 'chat.usageStats.duration';
+
+  for (const { message } of items) {
+    const usage = extractMessageUsage(message);
+    if (usage) {
+      inputTokens += usage.inputTokens;
+      outputTokens += usage.outputTokens;
+      hasTokens = true;
+    }
+    if (typeof message.durationMs === 'number' && message.durationMs > 0) {
+      durationMs = message.durationMs;
+      durationLabelKey =
+        message.streamEndSource === 'watchdog' || message.streamEndReason === 'stalled'
+          ? 'chat.waitingTimedOutDuration'
+          : 'chat.usageStats.duration';
+    }
+  }
+
+  return {
+    inputTokens: hasTokens ? inputTokens : null,
+    outputTokens: hasTokens ? outputTokens : null,
+    durationMs,
+    durationLabelKey,
+  };
 }
 
 interface MessageListProps {
@@ -163,6 +206,48 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
     [messages, shouldCollapse, collapsedCount]
   );
 
+  const visibleMessageUnits = useMemo((): VisibleMessageUnit[] => {
+    const units: VisibleMessageUnit[] = [];
+    let visibleIndex = 0;
+
+    while (visibleIndex < visibleMessages.length) {
+      const messageIndex = shouldCollapse ? visibleIndex + collapsedCount : visibleIndex;
+      const message = visibleMessages[visibleIndex];
+      const responseId = message.type === 'assistant' && typeof message.__responseId === 'string'
+        ? message.__responseId
+        : undefined;
+
+      if (!responseId) {
+        units.push({ kind: 'message', message, messageIndex });
+        visibleIndex += 1;
+        continue;
+      }
+
+      const items: Array<{ message: ClaudeMessage; messageIndex: number }> = [];
+      let cursor = visibleIndex;
+      while (cursor < visibleMessages.length) {
+        const candidate = visibleMessages[cursor];
+        if (candidate.type !== 'assistant' || candidate.__responseId !== responseId) {
+          break;
+        }
+        items.push({
+          message: candidate,
+          messageIndex: shouldCollapse ? cursor + collapsedCount : cursor,
+        });
+        cursor += 1;
+      }
+
+      if (items.length > 1) {
+        units.push({ kind: 'assistant_response_group', responseId, items });
+      } else {
+        units.push({ kind: 'message', message, messageIndex });
+      }
+      visibleIndex = cursor;
+    }
+
+    return units;
+  }, [visibleMessages, shouldCollapse, collapsedCount]);
+
   return (
     <div className="message-list" onContextMenu={handleMessageContextMenu}>
       {ctxMenu.visible && (
@@ -185,8 +270,68 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
         </div>
       )}
 
-      {visibleMessages.map((message, visibleIndex) => {
-        const messageIndex = shouldCollapse ? visibleIndex + collapsedCount : visibleIndex;
+      {visibleMessageUnits.map((unit) => {
+        if (unit.kind === 'assistant_response_group') {
+          const firstIndex = unit.items[0].messageIndex;
+          const lastIndex = unit.items[unit.items.length - 1].messageIndex;
+          const usage = getGroupedAssistantUsage(unit.items);
+          return (
+            <div
+              key={`response-${unit.responseId}-${firstIndex}-${lastIndex}`}
+              className="message assistant assistant-response-group"
+              data-response-id={unit.responseId}
+            >
+              <div className="message-avatar-row">
+                <MessageAvatar type="assistant" />
+                <div className="message-content-wrapper">
+                  <div className="message-content assistant-response-content">
+                    {unit.items.map(({ message, messageIndex }, itemIndex) => {
+                      const messageKey = getMessageKey(message, messageIndex);
+                      const toolResultSignature = getMessageToolResultSignature(message, messageIndex, getContentBlocks, findToolResult);
+                      return (
+                        <div
+                          key={messageKey}
+                          className="assistant-response-segment"
+                          data-segment-index={itemIndex}
+                        >
+                          <MessageItem
+                            message={message}
+                            messageIndex={messageIndex}
+                            messageKey={messageKey}
+                            isLast={messageIndex === messages.length - 1}
+                            streamingActive={streamingActive}
+                            isThinking={isThinking}
+                            t={t}
+                            getMessageText={getMessageText}
+                            getContentBlocks={getContentBlocks}
+                            findToolResult={findToolResult}
+                            extractMarkdownContent={extractMarkdownContent}
+                            onNodeRef={onMessageNodeRef}
+                            onNavigateToProviderSettings={onNavigateToProviderSettings}
+                            onNavigateToDependencySettings={onNavigateToDependencySettings}
+                            toolResultSignature={toolResultSignature}
+                            currentProvider={currentProvider}
+                            withinResponseGroup={true}
+                            renderMode="response-segment"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <MessageUsageStats
+                    inputTokens={usage.inputTokens}
+                    outputTokens={usage.outputTokens}
+                    durationMs={usage.durationMs}
+                    durationLabelKey={usage.durationLabelKey}
+                    t={t}
+                  />
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        const { message, messageIndex } = unit;
         const messageKey = getMessageKey(message, messageIndex);
         const toolResultSignature = getMessageToolResultSignature(message, messageIndex, getContentBlocks, findToolResult);
 

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ClaudeContentBlock, ClaudeMessage, ToolResultBlock } from '../../types';
 import { extractMarkdownContent } from '../../utils/copyUtils';
@@ -60,7 +60,10 @@ const getContentBlocks = (message: ClaudeMessage): ClaudeContentBlock[] => {
 
 const findToolResult = (_toolId: string | undefined, _messageIndex: number): ToolResultBlock | null => null;
 
-function renderMessageItem(message: ClaudeMessage) {
+function renderMessageItem(
+  message: ClaudeMessage,
+  overrides: Partial<React.ComponentProps<typeof MessageItem>> = {},
+) {
   return render(
     <MessageItem
       message={message}
@@ -74,6 +77,7 @@ function renderMessageItem(message: ClaudeMessage) {
       getContentBlocks={getContentBlocks}
       findToolResult={findToolResult}
       extractMarkdownContent={extractMarkdownContent}
+      {...overrides}
     />
   );
 }
@@ -193,5 +197,29 @@ describe('MessageItem copy button visibility', () => {
     expect(screen.getByText('等待超时')).toBeTruthy();
     expect(screen.getByText('3:01')).toBeTruthy();
     expect(screen.queryByText('本次耗时')).toBeNull();
+  });
+
+  it('does not show the streaming connection hint for block-reset assistant placeholders', () => {
+    vi.useFakeTimers();
+    const message: ClaudeMessage = {
+      type: 'assistant',
+      content: '',
+      isStreaming: true,
+      __turnId: 2,
+      __suppressStreamingConnectHint: true,
+    };
+
+    renderMessageItem(message, {
+      isLast: true,
+      streamingActive: true,
+      currentProvider: 'claude',
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(screen.queryByText('已连接')).toBeNull();
+    vi.useRealTimers();
   });
 });

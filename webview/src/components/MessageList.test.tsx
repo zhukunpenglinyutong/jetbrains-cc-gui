@@ -6,11 +6,31 @@ import { MessageList } from './MessageList';
 
 // Mock MessageItem to keep this suite focused on list-level paging behaviour.
 vi.mock('./MessageItem', () => ({
-  MessageItem: ({ messageKey, message }: { messageKey: string; message: ClaudeMessage }) => (
-    <div data-testid="message-item" data-key={messageKey} data-type={message.type}>
+  MessageItem: ({
+    messageKey,
+    message,
+    withinResponseGroup,
+    renderMode,
+  }: {
+    messageKey: string;
+    message: ClaudeMessage;
+    withinResponseGroup?: boolean;
+    renderMode?: string;
+  }) => (
+    <div
+      data-testid="message-item"
+      data-key={messageKey}
+      data-type={message.type}
+      data-within-response-group={withinResponseGroup ? 'true' : 'false'}
+      data-render-mode={renderMode ?? 'full'}
+    >
       {message.content}
     </div>
   ),
+}));
+
+vi.mock('./MessageItem/MessageUsageStats', () => ({
+  MessageUsageStats: () => <div data-testid="usage-stats">usage</div>,
 }));
 
 vi.mock('./WaitingIndicator', () => ({
@@ -64,6 +84,8 @@ function renderList(messages: ClaudeMessage[]) {
       isThinking={false}
       loading={false}
       loadingStartTime={null}
+      queueDisplayState="NONE"
+      queueAheadCount={0}
       t={t}
       getMessageText={noopGetText}
       getContentBlocks={noopGetBlocks}
@@ -132,6 +154,8 @@ describe('MessageList paged collapse', () => {
         isThinking={false}
         loading={false}
         loadingStartTime={null}
+        queueDisplayState="NONE"
+        queueAheadCount={0}
         t={t}
         getMessageText={noopGetText}
         getContentBlocks={noopGetBlocks}
@@ -158,6 +182,8 @@ describe('MessageList paged collapse', () => {
         isThinking={false}
         loading={false}
         loadingStartTime={null}
+        queueDisplayState="NONE"
+        queueAheadCount={0}
         t={t}
         getMessageText={noopGetText}
         getContentBlocks={noopGetBlocks}
@@ -198,6 +224,8 @@ describe('MessageList container behaviour', () => {
         isThinking={false}
         loading={true}
         loadingStartTime={Date.now()}
+        queueDisplayState="NONE"
+        queueAheadCount={0}
         t={t}
         getMessageText={noopGetText}
         getContentBlocks={noopGetBlocks}
@@ -207,5 +235,46 @@ describe('MessageList container behaviour', () => {
       />
     );
     expect(screen.getByTestId('waiting-indicator')).toBeTruthy();
+  });
+});
+
+describe('MessageList response grouping', () => {
+  afterEach(cleanup);
+
+  it('renders adjacent assistant messages with the same response id inside one response container', () => {
+    const messages: ClaudeMessage[] = [
+      { type: 'user', content: 'please update thresholds', id: 'u-1' },
+      {
+        type: 'assistant',
+        content: 'read file',
+        id: 'a-1',
+        __responseId: 'response-1',
+        raw: { usage: { input_tokens: 10, output_tokens: 20 } } as any,
+      },
+      {
+        type: 'assistant',
+        content: 'edit file',
+        id: 'a-2',
+        __responseId: 'response-1',
+        raw: { usage: { input_tokens: 30, output_tokens: 40 } } as any,
+      },
+      {
+        type: 'assistant',
+        content: 'final summary',
+        id: 'a-3',
+        __responseId: 'response-1',
+        raw: { usage: { input_tokens: 50, output_tokens: 60 } } as any,
+      },
+    ];
+
+    const { container } = renderList(messages);
+
+    const responseGroup = container.querySelector('.assistant-response-group');
+    expect(responseGroup).toBeTruthy();
+    expect(responseGroup?.classList.contains('message')).toBe(true);
+    expect(responseGroup?.classList.contains('assistant')).toBe(true);
+    expect(responseGroup?.querySelectorAll('.assistant-response-segment')).toHaveLength(3);
+    expect(responseGroup?.querySelectorAll('[data-render-mode="response-segment"]')).toHaveLength(3);
+    expect(responseGroup?.querySelectorAll('[data-testid="usage-stats"]')).toHaveLength(1);
   });
 });

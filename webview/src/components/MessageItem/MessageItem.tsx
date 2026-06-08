@@ -41,6 +41,10 @@ export interface MessageItemProps {
   toolResultSignature?: string;
   /** Current active provider id (e.g. 'claude', 'codex'); drives the streaming-connect label. */
   currentProvider?: string;
+  /** Rendered inside a grouped assistant response container. */
+  withinResponseGroup?: boolean;
+  /** Render only message blocks, without avatar, bubble, copy button, or usage stats. */
+  renderMode?: 'full' | 'response-segment';
 }
 
 /** Map provider id to a human-readable label used in UI text. */
@@ -225,6 +229,8 @@ export const MessageItem = memo(function MessageItem({
   onNavigateToDependencySettings,
   toolResultSignature: _toolResultSignature,
   currentProvider,
+  withinResponseGroup = false,
+  renderMode = 'full',
 }: MessageItemProps): React.ReactElement {
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
   const [showStreamingConnectHint, setShowStreamingConnectHint] = useState(false);
@@ -310,9 +316,11 @@ export const MessageItem = memo(function MessageItem({
 
   // Memoize blocks and grouped blocks to avoid recalculation on every render
   const blocks = useMemo(() => getContentBlocks(message), [message, getContentBlocks]);
+  const shouldSuppressStreamingConnectHint = message.__suppressStreamingConnectHint === true;
   const isEmptyStreamingPlaceholder =
     message.type === 'assistant' &&
     isMessageStreaming &&
+    !shouldSuppressStreamingConnectHint &&
     blocks.length === 0 &&
     !(message.content && message.content.trim().length > 0);
 
@@ -566,12 +574,20 @@ export const MessageItem = memo(function MessageItem({
     return <></>;
   }
 
+  if (renderMode === 'response-segment') {
+    return (
+      <div className={`message-response-segment-content ${message.type}`}>
+        {renderGroupedBlocks()}
+      </div>
+    );
+  }
+
   // 判断是否为用户或助手消息（需要显示头像）
   const showAvatar = message.type === 'user' || message.type === 'assistant';
 
   return (
     <div
-      className={`message ${message.type}${isLast ? ' is-last-message' : ''}${isProviderNotConfigured ? ' provider-not-configured' : ''}`}
+      className={`message ${message.type}${isLast ? ' is-last-message' : ''}${isProviderNotConfigured ? ' provider-not-configured' : ''}${withinResponseGroup ? ' in-response-group' : ''}`}
       ref={anchorRefCallback}
       data-message-anchor-id={message.type === 'user' ? messageKey : undefined}
     >
