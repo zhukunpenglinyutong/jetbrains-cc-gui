@@ -367,6 +367,55 @@ public class ClaudeMessageHandlerDedupTest {
     }
 
     @Test
+    public void messageStartDuringStreamingNotifiesFrontendBlockResetForNewAssistantCard() {
+        handler.onMessage("stream_start", "");
+        callbackHandler.clear();
+
+        handler.onMessage("content_delta", "第一段");
+        handler.onMessage("message_start", "");
+        handler.onMessage("content_delta", "第二段");
+
+        assertEquals("Frontend must be told to open a new streaming assistant card",
+                1, callbackHandler.blockResetCount);
+        assertEquals(2, state.getMessages().size());
+        assertEquals("第一段", state.getMessages().get(0).content);
+        assertEquals("第二段", state.getMessages().get(1).content);
+    }
+
+    @Test
+    public void firstMessageStartDuringStreamingDoesNotCreateEmptyFrontendCard() {
+        handler.onMessage("stream_start", "");
+        callbackHandler.clear();
+
+        handler.onMessage("message_start", "");
+        handler.onMessage("content_delta", "第一段");
+
+        assertEquals(0, callbackHandler.blockResetCount);
+        assertEquals(1, state.getMessages().size());
+        assertEquals("第一段", state.getMessages().get(0).content);
+    }
+
+    @Test
+    public void cliToolUseEventIsMergedIntoCurrentAssistantMessageForRealtimeRendering() {
+        handler.onMessage("stream_start", "");
+        handler.onMessage("content_delta", "现在更新文件：");
+        callbackHandler.clear();
+
+        handler.onMessage("tool_use", "{\"type\":\"tool_use\",\"id\":\"tool-1\",\"name\":\"Edit\",\"input\":{\"file_path\":\"Plant.java\"}}");
+
+        assertEquals(1, state.getMessages().size());
+        ClaudeSession.Message message = state.getMessages().get(0);
+        assertEquals("现在更新文件：", message.content);
+        com.google.gson.JsonArray blocks = message.raw
+                .getAsJsonObject("message")
+                .getAsJsonArray("content");
+        assertEquals("text", blocks.get(0).getAsJsonObject().get("type").getAsString());
+        assertEquals("tool_use", blocks.get(1).getAsJsonObject().get("type").getAsString());
+        assertEquals("tool-1", blocks.get(1).getAsJsonObject().get("id").getAsString());
+        assertEquals(1, callbackHandler.messageUpdateCount);
+    }
+
+    @Test
     public void onCompleteWithStructuredErrorAddsErrorMessageToChat() {
         com.github.claudecodegui.provider.common.SDKResult result = new com.github.claudecodegui.provider.common.SDKResult();
         result.success = false;
@@ -390,11 +439,13 @@ public class ClaudeMessageHandlerDedupTest {
         int streamStartCount = 0;
         int streamEndCount = 0;
         int messageUpdateCount = 0;
+        int blockResetCount = 0;
 
         void clear() {
             contentDeltas.clear();
             thinkingDeltas.clear();
             messageUpdateCount = 0;
+            blockResetCount = 0;
         }
 
         @Override
@@ -420,6 +471,11 @@ public class ClaudeMessageHandlerDedupTest {
         @Override
         public void notifyStreamEnd() {
             streamEndCount++;
+        }
+
+        @Override
+        public void notifyBlockReset() {
+            blockResetCount++;
         }
     }
 }

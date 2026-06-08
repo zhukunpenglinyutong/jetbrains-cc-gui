@@ -140,6 +140,9 @@ public class ClaudeMessageHandler implements MessageCallback {
             case "session_id":
                 handleSessionId(content);
                 break;
+            case "tool_use":
+                handleToolUse(content);
+                break;
             case "tool_result":
                 handleToolResult(content);
                 break;
@@ -631,6 +634,32 @@ public class ClaudeMessageHandler implements MessageCallback {
     /**
      * Handle a tool call result.
      */
+    private void handleToolUse(String content) {
+        if (content == null || !content.startsWith("{")) {
+            return;
+        }
+
+        try {
+            JsonObject toolUseBlock = gson.fromJson(content, JsonObject.class);
+            JsonArray contentArray = new JsonArray();
+            contentArray.add(toolUseBlock);
+
+            JsonObject messageObj = new JsonObject();
+            messageObj.add("content", contentArray);
+
+            JsonObject rawAssistant = new JsonObject();
+            rawAssistant.addProperty("type", "assistant");
+            rawAssistant.add("message", messageObj);
+
+            handleAssistantMessage(rawAssistant.toString());
+        } catch (Exception e) {
+            LOG.warn("Failed to parse tool_use JSON: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Handle a tool call result.
+     */
     private void handleToolResult(String content) {
         if (!content.startsWith("{")) {
             return;
@@ -695,6 +724,13 @@ public class ClaudeMessageHandler implements MessageCallback {
         if (!isStreaming) {
             return;
         }
+        if (currentAssistantMessage == null && assistantContent.length() == 0) {
+            textSegmentActive = false;
+            thinkingSegmentActive = false;
+            replayDedup.reset();
+            return;
+        }
+        callbackHandler.notifyBlockReset();
         currentAssistantMessage = null;
         assistantContent.setLength(0);
         textSegmentActive = false;
