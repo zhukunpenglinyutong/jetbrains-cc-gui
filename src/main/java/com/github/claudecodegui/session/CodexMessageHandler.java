@@ -94,6 +94,10 @@ public class CodexMessageHandler implements MessageCallback {
         } else if ("user".equals(type)) {
             // Handle user message (tool_result)
             handleUserMessage(content);
+        } else if ("tool_use".equals(type)) {
+            handleToolUse(content);
+        } else if ("tool_result".equals(type)) {
+            handleToolResult(content);
         } else if ("result".equals(type)) {
             // Handle result message (usage stats, etc.)
             handleResultMessage(content);
@@ -350,6 +354,66 @@ public class CodexMessageHandler implements MessageCallback {
             LOG.debug("Codex user message (tool_result) added");
         } catch (Exception e) {
             LOG.warn("Failed to parse user message: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Handle a direct tool_use block event by wrapping it as an assistant message.
+     *
+     * @param jsonContent json content
+     */
+    private void handleToolUse(String jsonContent) {
+        if (jsonContent == null || !jsonContent.startsWith("{")) {
+            return;
+        }
+
+        try {
+            com.google.gson.Gson gson = new com.google.gson.Gson();
+            com.google.gson.JsonObject toolUseBlock = gson.fromJson(jsonContent, com.google.gson.JsonObject.class);
+            com.google.gson.JsonArray contentArray = new com.google.gson.JsonArray();
+            contentArray.add(toolUseBlock);
+
+            com.google.gson.JsonObject messageObj = new com.google.gson.JsonObject();
+            messageObj.addProperty("role", "assistant");
+            messageObj.add("content", contentArray);
+
+            com.google.gson.JsonObject rawAssistant = new com.google.gson.JsonObject();
+            rawAssistant.addProperty("type", "assistant");
+            rawAssistant.add("message", messageObj);
+
+            handleAssistantMessage(rawAssistant.toString());
+        } catch (Exception e) {
+            LOG.warn("Failed to parse tool_use JSON: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Handle a direct tool_result block event by wrapping it as a user message.
+     *
+     * @param jsonContent json content
+     */
+    private void handleToolResult(String jsonContent) {
+        if (jsonContent == null || !jsonContent.startsWith("{")) {
+            return;
+        }
+
+        try {
+            com.google.gson.Gson gson = new com.google.gson.Gson();
+            com.google.gson.JsonObject toolResultBlock = gson.fromJson(jsonContent, com.google.gson.JsonObject.class);
+            com.google.gson.JsonArray contentArray = new com.google.gson.JsonArray();
+            contentArray.add(toolResultBlock);
+
+            com.google.gson.JsonObject messageObj = new com.google.gson.JsonObject();
+            messageObj.addProperty("role", "user");
+            messageObj.add("content", contentArray);
+
+            com.google.gson.JsonObject rawUser = new com.google.gson.JsonObject();
+            rawUser.addProperty("type", "user");
+            rawUser.add("message", messageObj);
+
+            handleUserMessage(rawUser.toString());
+        } catch (Exception e) {
+            LOG.warn("Failed to parse tool_result JSON: " + e.getMessage());
         }
     }
 
@@ -812,13 +876,9 @@ public class CodexMessageHandler implements MessageCallback {
         }
 
         assistantContent.append(novelContent);
-
-        if (currentAssistantMessage == null) {
-            currentAssistantMessage = new Message(Message.Type.ASSISTANT, assistantContent.toString());
-            state.addMessage(currentAssistantMessage);
-        } else {
-            currentAssistantMessage.content = assistantContent.toString();
-        }
+        ensureCurrentAssistantMessageExists();
+        currentAssistantMessage.content = assistantContent.toString();
+        applyTextDeltaToRaw(novelContent);
 
         callbackHandler.notifyContentDelta(novelContent);
         // During streaming, skip full message update to avoid JCEF IPC overload.
@@ -936,6 +996,47 @@ public class CodexMessageHandler implements MessageCallback {
         String next = existing + delta;
         target.addProperty("thinking", next);
         target.addProperty("text", next);
+
+        message.add("content", content);
+        raw.add("message", message);
+        currentAssistantMessage.raw = raw;
+    }
+
+    private void applyTextDeltaToRaw(String delta) {
+        if (delta == null || delta.isEmpty()) {
+            return;
+        }
+
+        com.google.gson.JsonObject raw = currentAssistantMessage.raw;
+        com.google.gson.JsonObject message = raw.has("message") && raw.get("message").isJsonObject()
+                ? raw.getAsJsonObject("message")
+                : new com.google.gson.JsonObject();
+        com.google.gson.JsonArray content = message.has("content") && message.get("content").isJsonArray()
+                ? message.getAsJsonArray("content")
+                : new com.google.gson.JsonArray();
+
+        com.google.gson.JsonObject target = null;
+        if (content.size() > 0) {
+            com.google.gson.JsonElement last = content.get(content.size() - 1);
+            if (last.isJsonObject()) {
+                com.google.gson.JsonObject block = last.getAsJsonObject();
+                if (block.has("type") && "text".equals(block.get("type").getAsString())) {
+                    target = block;
+                }
+            }
+        }
+
+        if (target == null) {
+            target = new com.google.gson.JsonObject();
+            target.addProperty("type", "text");
+            target.addProperty("text", "");
+            content.add(target);
+        }
+
+        String existing = target.has("text") && !target.get("text").isJsonNull()
+                ? target.get("text").getAsString()
+                : "";
+        target.addProperty("text", existing + delta);
 
         message.add("content", content);
         raw.add("message", message);

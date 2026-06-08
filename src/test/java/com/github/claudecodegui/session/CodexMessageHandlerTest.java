@@ -419,6 +419,87 @@ public class CodexMessageHandlerTest {
     }
 
     @Test
+    public void streamingContentDeltaIsPreservedInRawBeforeCliToolUseSnapshot() {
+        SessionState state = new SessionState();
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("stream_start", "");
+        handler.onMessage("content_delta", "明白了，预警判断应该跟设备挂钩，不是跟植物关联。");
+        handler.onMessage("assistant", "{\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"tool-1\",\"name\":\"mcp__iot__history\",\"input\":{}}]}}");
+
+        assertEquals(1, state.getMessages().size());
+        Message message = state.getMessages().get(0);
+        assertEquals("明白了，预警判断应该跟设备挂钩，不是跟植物关联。", message.content);
+        assertNotNull(message.raw);
+
+        com.google.gson.JsonArray blocks = message.raw
+                .getAsJsonObject("message")
+                .getAsJsonArray("content");
+
+        assertEquals(2, blocks.size());
+        assertEquals("text", blocks.get(0).getAsJsonObject().get("type").getAsString());
+        assertEquals("明白了，预警判断应该跟设备挂钩，不是跟植物关联。",
+                blocks.get(0).getAsJsonObject().get("text").getAsString());
+        assertEquals("tool_use", blocks.get(1).getAsJsonObject().get("type").getAsString());
+        assertEquals("tool-1", blocks.get(1).getAsJsonObject().get("id").getAsString());
+    }
+
+    @Test
+    public void directToolUseEventIsMergedIntoCurrentAssistantMessage() {
+        SessionState state = new SessionState();
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("stream_start", "");
+        handler.onMessage("content_delta", "准备编辑文件：");
+        int updatesBefore = callback.messageUpdateCount;
+
+        handler.onMessage("tool_use", "{\"type\":\"tool_use\",\"id\":\"tool-1\",\"name\":\"Edit\",\"input\":{\"file_path\":\"Plant.java\"}}");
+
+        assertEquals(1, state.getMessages().size());
+        Message message = state.getMessages().get(0);
+        assertEquals("准备编辑文件：", message.content);
+
+        com.google.gson.JsonArray blocks = message.raw
+                .getAsJsonObject("message")
+                .getAsJsonArray("content");
+        assertEquals(2, blocks.size());
+        assertEquals("text", blocks.get(0).getAsJsonObject().get("type").getAsString());
+        assertEquals("tool_use", blocks.get(1).getAsJsonObject().get("type").getAsString());
+        assertEquals("tool-1", blocks.get(1).getAsJsonObject().get("id").getAsString());
+        assertTrue(callback.messageUpdateCount > updatesBefore);
+    }
+
+    @Test
+    public void directToolResultEventAddsSyntheticUserToolResultMessage() {
+        SessionState state = new SessionState();
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("tool_result", "{\"type\":\"tool_result\",\"tool_use_id\":\"tool-1\",\"content\":\"done\",\"is_error\":false}");
+
+        assertEquals(1, state.getMessages().size());
+        Message message = state.getMessages().get(0);
+        assertEquals(Message.Type.USER, message.type);
+        assertEquals("[tool_result]", message.content);
+
+        com.google.gson.JsonArray blocks = message.raw
+                .getAsJsonObject("message")
+                .getAsJsonArray("content");
+        assertEquals(1, blocks.size());
+        assertEquals("tool_result", blocks.get(0).getAsJsonObject().get("type").getAsString());
+        assertEquals("tool-1", blocks.get(0).getAsJsonObject().get("tool_use_id").getAsString());
+        assertEquals(1, callback.messageUpdateCount);
+    }
+
+    @Test
     public void streamingDeduplicationPreventsDuplicateContent() {
         SessionState state = new SessionState();
         CallbackHandler callbackHandler = new CallbackHandler();
