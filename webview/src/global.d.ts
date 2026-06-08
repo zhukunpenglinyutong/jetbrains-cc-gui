@@ -695,7 +695,12 @@ interface Window {
    * Used with __lastStreamEndedTurnId to implement a time-based cleanup.
    * @default undefined (no stream end recorded)
    */
-   __lastStreamEndedAt?: number;
+  __lastStreamEndedAt?: number;
+  /**
+   * Runtime-only id for grouping assistant content groups from the same
+   * streamed response in the frontend.
+   */
+  __activeStreamingResponseId?: string | null;
 
    /**
     * Turn ID for which onStreamEnd has already been processed.

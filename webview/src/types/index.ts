@@ -81,13 +81,24 @@ export interface ClaudeMessage {
     durationMs?: number;
     streamEndSource?: 'backend' | 'watchdog' | string;
     streamEndReason?: string;
-    /**
+  /**
    * Runtime-only: numeric turn identifier for streaming assistant isolation.
    * Set by frontend during streaming to distinguish messages from different
    * conversation turns. Messages with different __turnId values should never
    * be merged. Undefined for history messages loaded from JSONL files.
    */
   __turnId?: number;
+  /**
+   * Runtime-only: groups multiple assistant content groups that belong to the
+   * same streamed model response. Used by the frontend to render one response
+   * container with lightweight internal separators.
+   */
+  __responseId?: string;
+  /**
+   * Runtime-only: suppresses the initial streaming connection hint on assistant
+   * placeholders created for later stream segments.
+   */
+  __suppressStreamingConnectHint?: boolean;
   [key: string]: unknown;
 }
 

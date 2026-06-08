@@ -548,6 +548,12 @@ export function mergeConsecutiveAssistantMessages(
     // streaming messages from true history messages.
     const prevTurnId = previous.__turnId;
     const nextTurnId = next.__turnId;
+    const prevResponseId = previous.__responseId;
+    const nextResponseId = next.__responseId;
+
+    if (prevResponseId !== undefined && nextResponseId !== undefined && prevResponseId === nextResponseId) {
+      return false;
+    }
 
     // If either message has the recently-ended turn ID, block merging
     if (hasRecentlyEndedTurnId(prevTurnId) || hasRecentlyEndedTurnId(nextTurnId)) {
@@ -558,6 +564,15 @@ export function mergeConsecutiveAssistantMessages(
     if ((prevTurnId !== undefined || nextTurnId !== undefined) &&
         prevTurnId !== nextTurnId) {
       return false;
+    }
+
+    // Fragments from the same active streaming turn are one assistant message.
+    // Codex CLI can emit text snapshots and tool_use snapshots as adjacent
+    // assistant messages; splitting them makes text repeat and moves tool rows
+    // outside the current message card. Different-turn isolation is handled
+    // above, and recently-ended turns are blocked before this branch.
+    if (prevTurnId !== undefined && prevTurnId === nextTurnId) {
+      return true;
     }
 
     const previousSummary = getAssistantBlockSummary(previous);
@@ -631,6 +646,7 @@ export function mergeConsecutiveAssistantMessages(
       content: mergedContent,
       raw: nextRaw,
       __turnId: first.__turnId,
+      __responseId: first.__responseId,
     };
   };
 

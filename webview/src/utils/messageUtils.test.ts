@@ -219,6 +219,25 @@ describe('mergeConsecutiveAssistantMessages', () => {
     expect(result.map((message) => message.__turnId)).toEqual([10, 11]);
   });
 
+  it('does not merge assistant messages that are separate groups in the same response', () => {
+    const messages: ClaudeMessage[] = [
+      makeMsg('assistant', 'first group', {
+        __responseId: 'response-1',
+        raw: { content: [{ type: 'text', text: 'first group' }] } as any,
+      }),
+      makeMsg('assistant', 'second group', {
+        __responseId: 'response-1',
+        raw: { content: [{ type: 'text', text: 'second group' }] } as any,
+      }),
+    ];
+
+    const result = mergeConsecutiveAssistantMessages(messages, normalizeBlocks);
+
+    expect(result).toHaveLength(2);
+    expect(result.map((message) => message.content)).toEqual(['first group', 'second group']);
+    expect(result.map((message) => message.__responseId)).toEqual(['response-1', 'response-1']);
+  });
+
   it('does not merge streaming message (has __turnId) with history message (no __turnId)', () => {
     const messages: ClaudeMessage[] = [
       makeMsg('assistant', 'streaming turn', {
@@ -312,7 +331,7 @@ describe('mergeConsecutiveAssistantMessages', () => {
     expect(mergedRaw.content?.some((b) => b.type === 'text')).toBe(true);
   });
 
-  it('keeps tool_use separated from final answer for streaming messages (has __turnId)', () => {
+  it('merges tool_use with final answer for streaming messages from the same turn', () => {
     const messages: ClaudeMessage[] = [
       makeMsg('assistant', '', {
         __turnId: 1,
@@ -328,9 +347,45 @@ describe('mergeConsecutiveAssistantMessages', () => {
     ];
 
     const result = mergeConsecutiveAssistantMessages(messages, normalizeBlocks);
-    // Should have 2 assistant messages: tool_use block and final answer block
-    // (user tool_result is skipped, but assistant blocks stay separated)
-    expect(result.filter((m) => m.type === 'assistant')).toHaveLength(2);
+    expect(result).toHaveLength(1);
+    const mergedRaw = result[0].raw as { content?: Array<{ type?: string }> };
+    expect(mergedRaw.content?.some((b) => b.type === 'tool_use')).toBe(true);
+    expect(mergedRaw.content?.some((b) => b.type === 'text')).toBe(true);
+    expect(result[0].__turnId).toBe(1);
+  });
+
+  it('merges Codex CLI streamed text and tool snapshot from the same turn', () => {
+    const messages: ClaudeMessage[] = [
+      makeMsg('assistant', '明白了，预警判断应该跟设备挂钩', {
+        __turnId: 7,
+        raw: {
+          message: {
+            content: [
+              { type: 'text', text: '明白了，预警判断应该跟设备挂钩' },
+            ],
+          },
+        } as any,
+      }),
+      makeMsg('assistant', '', {
+        __turnId: 7,
+        raw: {
+          message: {
+            content: [
+              { type: 'tool_use', id: 'read-1', name: 'Read', input: { file_path: 'init.sql' } },
+            ],
+          },
+        } as any,
+      }),
+    ];
+
+    const result = mergeConsecutiveAssistantMessages(messages, normalizeBlocks);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].content).toBe('明白了，预警判断应该跟设备挂钩');
+    const mergedRaw = result[0].raw as { content?: Array<{ type?: string; id?: string; text?: string }> };
+    expect(mergedRaw.content?.map((block) => block.type)).toEqual(['text', 'tool_use']);
+    expect(mergedRaw.content?.[0].text).toBe('明白了，预警判断应该跟设备挂钩');
+    expect(mergedRaw.content?.[1].id).toBe('read-1');
   });
 });
 
@@ -1053,4 +1108,3 @@ describe('buildCompactNotification', () => {
     expect(result!.content).toBe('/compact');
   });
 });
-
