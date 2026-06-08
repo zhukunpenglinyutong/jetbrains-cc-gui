@@ -3,14 +3,11 @@ package com.github.claudecodegui.handler.diff;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.openapi.vfs.LocalFileSystem;
-import com.intellij.openapi.vfs.VirtualFile;
-
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 
 /**
  * Shared file-system operations for diff handlers.
@@ -59,25 +56,13 @@ public class DiffFileOperations {
             return;
         }
 
-        ApplicationManager.getApplication().invokeLater(() -> {
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
             try {
-                VirtualFile file = LocalFileSystem.getInstance()
-                        .refreshAndFindFileByPath(filePath.replace('\\', '/'));
-                if (file != null) {
-                    ApplicationManager.getApplication().runWriteAction(() -> {
-                        try {
-                            file.delete(this);
-                            LOG.info("File deleted (reject new file): " + filePath);
-                        } catch (IOException e) {
-                            LOG.error("Failed to delete file: " + filePath, e);
-                        }
-                    });
-                } else {
-                    File javaFile = new File(filePath);
-                    if (javaFile.exists() && javaFile.delete()) {
-                        LOG.info("File deleted via fallback (reject new file): " + filePath);
-                    }
+                Path path = Path.of(filePath);
+                if (Files.deleteIfExists(path)) {
+                    LOG.info("File deleted (reject new file): " + filePath);
                 }
+                refreshFileSystem(filePath);
             } catch (Exception e) {
                 LOG.error("Failed to delete file: " + filePath, e);
             }
@@ -98,37 +83,25 @@ public class DiffFileOperations {
             return;
         }
 
-        ApplicationManager.getApplication().invokeLater(() -> {
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
             try {
-                VirtualFile file = LocalFileSystem.getInstance()
-                        .refreshAndFindFileByPath(filePath.replace('\\', '/'));
-
-                if (file != null) {
-                    Charset charset = file.getCharset() != null ? file.getCharset() : StandardCharsets.UTF_8;
-
-                    ApplicationManager.getApplication().runWriteAction(() -> {
-                        try {
-                            file.setBinaryContent(content.getBytes(charset));
-                            file.refresh(false, false);
-                            LOG.info("File content written successfully: " + filePath);
-                        } catch (IOException e) {
-                            LOG.error("Failed to write file content: " + filePath, e);
-                        }
-                    });
-                } else {
-                    File javaFile = new File(filePath);
-                    File parentDir = javaFile.getParentFile();
-                    if (parentDir != null && !parentDir.exists() && !parentDir.mkdirs()) {
-                        LOG.error("Failed to create parent directories: " + parentDir.getAbsolutePath());
-                        return;
-                    }
-                    Files.write(javaFile.toPath(), content.getBytes(StandardCharsets.UTF_8));
-                    LocalFileSystem.getInstance().refreshAndFindFileByPath(filePath.replace('\\', '/'));
-                    LOG.info("New file created: " + filePath);
+                File javaFile = new File(filePath);
+                File parentDir = javaFile.getParentFile();
+                if (parentDir != null && !parentDir.exists() && !parentDir.mkdirs()) {
+                    LOG.error("Failed to create parent directories: " + parentDir.getAbsolutePath());
+                    return;
                 }
+                Files.write(javaFile.toPath(), content.getBytes(StandardCharsets.UTF_8));
+                refreshFileSystem(filePath);
+                LOG.info("File content written successfully: " + filePath);
             } catch (Exception e) {
                 LOG.error("Failed to write content to file: " + filePath, e);
             }
         });
+    }
+
+    private void refreshFileSystem(String filePath) {
+        ApplicationManager.getApplication().invokeLater(() ->
+                com.intellij.openapi.vfs.VirtualFileManager.getInstance().asyncRefresh(null));
     }
 }

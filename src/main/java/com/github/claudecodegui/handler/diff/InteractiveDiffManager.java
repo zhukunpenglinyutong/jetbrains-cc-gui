@@ -21,11 +21,9 @@ import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.fileEditor.FileEditorManagerListener;
 import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.openapi.fileTypes.FileTypeManager;
-import com.intellij.openapi.fileTypes.FileTypes;
 import com.github.claudecodegui.util.LineSeparatorUtil;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.testFramework.LightVirtualFile;
 import com.intellij.util.concurrency.AppExecutorUtil;
@@ -41,8 +39,6 @@ import javax.swing.JPanel;
 import javax.swing.JRootPane;
 import java.awt.*;
 import java.io.File;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -101,21 +97,6 @@ public class InteractiveDiffManager {
         // Use the original content from the request (before modifications)
         String originalContent = request.getOriginalContent();
         String newContent = request.getNewFileContents();
-        Charset charset = StandardCharsets.UTF_8;
-        FileType fileType = null;
-
-        // Try to get file type from the actual file
-        VirtualFile actualFile = LocalFileSystem.getInstance()
-                .refreshAndFindFileByPath(request.getFilePath().replace('\\', '/'));
-
-        if (actualFile != null && actualFile.exists()) {
-            try {
-                charset = actualFile.getCharset() != null ? actualFile.getCharset() : StandardCharsets.UTF_8;
-                fileType = actualFile.getFileType();
-            } catch (Exception e) {
-                LOG.warn("Failed to read file metadata: " + request.getFilePath(), e);
-            }
-        }
 
         // Normalize both contents to LF for consistent diff comparison
         // IntelliJ Document internally uses LF, so this ensures correct diff positioning
@@ -125,9 +106,7 @@ public class InteractiveDiffManager {
 
         // Detect file type from filename if not already detected
         String fileName = new File(request.getFilePath()).getName();
-        if (fileType == null || fileType == FileTypes.UNKNOWN) {
-            fileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName);
-        }
+        FileType fileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName);
 
         // Create LightVirtualFile for proposed content (new content after modifications)
         LightVirtualFile proposedFile = new LightVirtualFile(fileName, fileType, newContent);

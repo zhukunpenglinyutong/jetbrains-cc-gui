@@ -3,7 +3,6 @@ package com.github.claudecodegui.handler.diff;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.util.ContentRebuildUtil;
-import com.github.claudecodegui.util.EditorFileUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -15,13 +14,12 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.openapi.fileTypes.FileTypeManager;
-import com.intellij.openapi.vfs.LocalFileSystem;
-import com.intellij.openapi.vfs.VirtualFile;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 /**
  * Handles non-interactive diff display requests.
@@ -128,17 +126,13 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
 
             LOG.info("Showing multi-edit diff for file: " + filePath + " with " + edits.size() + " edits");
 
-            ApplicationManager.getApplication().invokeLater(() -> {
+            ApplicationManager.getApplication().executeOnPooledThread(() -> {
                 try {
                     String afterContent = currentContent;
                     if (afterContent == null) {
-                        File file = new File(filePath);
-                        if (file.exists()) {
-                            VirtualFile virtualFile = EditorFileUtils.refreshAndFindFileSync(file);
-                            if (virtualFile != null) {
-                                virtualFile.refresh(false, false);
-                                afterContent = new String(virtualFile.contentsToByteArray(), StandardCharsets.UTF_8);
-                            }
+                        Path path = Path.of(filePath);
+                        if (Files.exists(path)) {
+                            afterContent = Files.readString(path, StandardCharsets.UTF_8);
                         }
                     }
 
@@ -148,26 +142,17 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
                     }
 
                     String beforeContent = ContentRebuildUtil.rebuildBeforeContent(afterContent, edits);
-
-                    String fileName = new File(filePath).getName();
-                    FileType fileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName);
-
-                    DiffContent leftContent = DiffContentFactory.getInstance()
-                            .create(context.getProject(), beforeContent, fileType);
-                    DiffContent rightContent = DiffContentFactory.getInstance()
-                            .create(context.getProject(), afterContent, fileType);
-
-                    String diffTitle = ClaudeCodeGuiBundle.message("diff.tabName", fileName, edits.size());
-                    SimpleDiffRequest diffRequest = new SimpleDiffRequest(
-                            diffTitle,
-                            leftContent,
-                            rightContent,
-                            ClaudeCodeGuiBundle.message("diff.editBefore", fileName),
-                            ClaudeCodeGuiBundle.message("diff.editAfter", fileName)
-                    );
-
-                    DiffManager.getInstance().showDiff(context.getProject(), diffRequest);
-                    LOG.info("Multi-edit diff view opened for: " + filePath);
+                    String finalAfterContent = afterContent;
+                    ApplicationManager.getApplication().invokeLater(() ->
+                            showDiffOnEdt(
+                                    filePath,
+                                    beforeContent,
+                                    finalAfterContent,
+                                    ClaudeCodeGuiBundle.message("diff.tabName", new File(filePath).getName(), edits.size()),
+                                    ClaudeCodeGuiBundle.message("diff.editBefore", new File(filePath).getName()),
+                                    ClaudeCodeGuiBundle.message("diff.editAfter", new File(filePath).getName()),
+                                    "Multi-edit diff view opened for: " + filePath
+                            ));
                 } catch (Exception e) {
                     LOG.error("Failed to show multi-edit diff: " + e.getMessage(), e);
                 }
@@ -191,21 +176,18 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
                 return;
             }
 
-            ApplicationManager.getApplication().invokeLater(() -> {
+            ApplicationManager.getApplication().executeOnPooledThread(() -> {
                 try {
-                    VirtualFile file = LocalFileSystem.getInstance().refreshAndFindFileByPath(filePath.replace('\\', '/'));
-                    if (file != null && file.isDirectory()) {
+                    Path path = Path.of(filePath);
+                    if (Files.isDirectory(path)) {
                         LOG.warn("Cannot show preview diff for directory: " + filePath);
                         return;
                     }
 
                     String currentContent = "";
-                    Charset charset = StandardCharsets.UTF_8;
-                    if (file != null) {
-                        file.refresh(false, false);
-                        charset = file.getCharset() != null ? file.getCharset() : StandardCharsets.UTF_8;
+                    if (Files.exists(path)) {
                         try {
-                            currentContent = new String(file.contentsToByteArray(), charset);
+                            currentContent = Files.readString(path, StandardCharsets.UTF_8);
                         } catch (IOException e) {
                             LOG.error("Failed to read file content: " + filePath, e);
                             return;
@@ -234,24 +216,16 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
                     }
 
                     String fileName = new File(filePath).getName();
-                    FileType fileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName);
-
-                    DiffContent leftContent = DiffContentFactory.getInstance()
-                            .create(context.getProject(), currentContent, fileType);
-                    DiffContent rightContent = DiffContentFactory.getInstance()
-                            .create(context.getProject(), afterContent, fileType);
-
                     String diffTitle = title != null ? title : ClaudeCodeGuiBundle.message("diff.editPreview", fileName);
-                    SimpleDiffRequest diffRequest = new SimpleDiffRequest(
+                    showDiffLater(
+                            filePath,
+                            currentContent,
+                            afterContent,
                             diffTitle,
-                            leftContent,
-                            rightContent,
                             ClaudeCodeGuiBundle.message("diff.editPreviewCurrent", fileName),
-                            ClaudeCodeGuiBundle.message("diff.editPreviewAfter", fileName)
+                            ClaudeCodeGuiBundle.message("diff.editPreviewAfter", fileName),
+                            "Edit preview diff view opened for: " + filePath
                     );
-
-                    DiffManager.getInstance().showDiff(context.getProject(), diffRequest);
-                    LOG.info("Edit preview diff view opened for: " + filePath);
                 } catch (Exception e) {
                     LOG.error("Failed to show edit preview diff: " + e.getMessage(), e);
                 }
@@ -278,16 +252,15 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
                 return;
             }
 
-            ApplicationManager.getApplication().invokeLater(() -> {
+            ApplicationManager.getApplication().executeOnPooledThread(() -> {
                 try {
-                    VirtualFile file = LocalFileSystem.getInstance().refreshAndFindFileByPath(filePath.replace('\\', '/'));
-                    if (file != null && file.isDirectory()) {
+                    Path path = Path.of(filePath);
+                    if (Files.isDirectory(path)) {
                         LOG.warn("Cannot show diff for directory: " + filePath);
                         return;
                     }
 
                     String fileName = new File(filePath).getName();
-                    FileType fileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName);
 
                     String beforeContent;
                     String afterContent;
@@ -304,9 +277,9 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
                                 afterContent = beforeContent.substring(0, index)
                                         + newString
                                         + beforeContent.substring(index + oldString.length());
-                            } else if (file != null) {
+                            } else if (Files.exists(path)) {
                                 try {
-                                    afterContent = new String(file.contentsToByteArray(), file.getCharset());
+                                    afterContent = Files.readString(path, StandardCharsets.UTF_8);
                                 } catch (IOException e) {
                                     afterContent = "";
                                 }
@@ -319,11 +292,6 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
                         beforeContent = oldString;
                         afterContent = newString;
                     }
-
-                    DiffContent leftContent = DiffContentFactory.getInstance()
-                            .create(context.getProject(), beforeContent, fileType);
-                    DiffContent rightContent = DiffContentFactory.getInstance()
-                            .create(context.getProject(), afterContent, fileType);
 
                     String diffTitle;
                     String leftLabel;
@@ -340,22 +308,67 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
                         rightLabel = ClaudeCodeGuiBundle.message("diff.editAfter", fileName);
                     }
 
-                    SimpleDiffRequest diffRequest = new SimpleDiffRequest(
+                    showDiffLater(
+                            filePath,
+                            beforeContent,
+                            afterContent,
                             diffTitle,
-                            leftContent,
-                            rightContent,
                             leftLabel,
-                            rightLabel
+                            rightLabel,
+                            "Edit full diff view opened for: " + filePath
                     );
-
-                    DiffManager.getInstance().showDiff(context.getProject(), diffRequest);
-                    LOG.info("Edit full diff view opened for: " + filePath);
                 } catch (Exception e) {
                     LOG.error("Failed to show edit full diff: " + e.getMessage(), e);
                 }
             });
         } catch (Exception e) {
             LOG.error("Failed to parse show_edit_full_diff request: " + e.getMessage(), e);
+        }
+    }
+
+    private void showDiffLater(
+            String filePath,
+            String leftText,
+            String rightText,
+            String diffTitle,
+            String leftLabel,
+            String rightLabel,
+            String successLog
+    ) {
+        ApplicationManager.getApplication().invokeLater(() ->
+                showDiffOnEdt(filePath, leftText, rightText, diffTitle, leftLabel, rightLabel, successLog));
+    }
+
+    private void showDiffOnEdt(
+            String filePath,
+            String leftText,
+            String rightText,
+            String diffTitle,
+            String leftLabel,
+            String rightLabel,
+            String successLog
+    ) {
+        try {
+            String fileName = new File(filePath).getName();
+            FileType fileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName);
+
+            DiffContent leftContent = DiffContentFactory.getInstance()
+                    .create(context.getProject(), leftText, fileType);
+            DiffContent rightContent = DiffContentFactory.getInstance()
+                    .create(context.getProject(), rightText, fileType);
+
+            SimpleDiffRequest diffRequest = new SimpleDiffRequest(
+                    diffTitle,
+                    leftContent,
+                    rightContent,
+                    leftLabel,
+                    rightLabel
+            );
+
+            DiffManager.getInstance().showDiff(context.getProject(), diffRequest);
+            LOG.info(successLog);
+        } catch (Exception e) {
+            LOG.error("Failed to show diff: " + e.getMessage(), e);
         }
     }
 }

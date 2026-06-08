@@ -3,7 +3,6 @@ package com.github.claudecodegui.util;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.util.Computable;
 import com.intellij.openapi.application.ModalityState;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.SelectionModel;
@@ -216,50 +215,36 @@ public class EditorFileUtils {
         try {
             final String canonicalPath = file.getCanonicalPath();
 
-            // Step 1: Refresh file system on UI thread (not under read lock)
-            ApplicationManager.getApplication().invokeLater(() -> {
+            AppExecutorUtil.getAppExecutorService().execute(() -> {
                 try {
-                    // Async refresh - this doesn't block and doesn't require read lock
-                    LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file);
+                    VirtualFile virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file);
+                    if (virtualFile == null) {
+                        virtualFile = LocalFileSystem.getInstance().findFileByPath(canonicalPath);
+                    }
+                    if (virtualFile == null) {
+                        virtualFile = LocalFileSystem.getInstance().findFileByIoFile(file);
+                    }
 
-                    // Step 2: Find the file in a non-blocking read action
-                    ReadAction
-                            .nonBlocking(() -> {
-                                // Only perform find operations, no refresh
-                                VirtualFile vf = LocalFileSystem.getInstance().findFileByPath(canonicalPath);
-                                if (vf == null) {
-                                    // Fallback to finding by File object
-                                    vf = LocalFileSystem.getInstance().findFileByIoFile(file);
-                                }
-                                return vf;
-                            })
-                            .finishOnUiThread(ModalityState.nonModal(), virtualFile -> {
-                                // Step 3: Handle the result on UI thread
-                                if (virtualFile == null) {
-                                    LOG.warn("Could not find virtual file: " + file.getAbsolutePath() + ", retrying with sync refresh...");
-                                    // Retry: sync refresh and find (already on UI thread, not under read lock)
-                                    VirtualFile retryVf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file);
-                                    if (retryVf != null) {
-                                        onSuccess.accept(retryVf);
-                                    } else {
-                                        LOG.error("Failed to find virtual file after retry: " + file.getAbsolutePath());
-                                        if (onFailure != null) {
-                                            onFailure.run();
-                                        }
-                                    }
-                                    return;
-                                }
-
-                                onSuccess.accept(virtualFile);
-                            })
-                            .submit(AppExecutorUtil.getAppExecutorService());
+                    VirtualFile result = virtualFile;
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        if (result != null) {
+                            onSuccess.accept(result);
+                        } else {
+                            LOG.error("Failed to find virtual file after refresh: " + file.getAbsolutePath());
+                            if (onFailure != null) {
+                                onFailure.run();
+                            }
+                        }
+                    }, ModalityState.nonModal());
                 } catch (Exception e) {
                     LOG.error("Failed to refresh file system: " + file.getAbsolutePath(), e);
-                    if (onFailure != null) {
-                        onFailure.run();
-                    }
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        if (onFailure != null) {
+                            onFailure.run();
+                        }
+                    }, ModalityState.nonModal());
                 }
-            }, ModalityState.nonModal());
+            });
 
         } catch (Exception e) {
             LOG.error("Failed to get canonical path: " + file.getAbsolutePath(), e);
