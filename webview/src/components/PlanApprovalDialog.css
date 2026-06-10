@@ -40,7 +40,7 @@
   height: 3px;
   background: var(--border-secondary);
   border-radius: 2px;
-  transition: background 0.15s;
+  transition: background-color 0.15s;
 }
 
 .plan-approval-resize-handle:hover::after {
@@ -129,7 +129,7 @@
   background: var(--bg-elevated);
   color: var(--text-primary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .collapse-button:hover,
@@ -300,7 +300,7 @@
   border-radius: 6px;
   background: var(--bg-elevated);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s ease, color 0.2s ease;
   text-align: left;
   width: 100%;
 }

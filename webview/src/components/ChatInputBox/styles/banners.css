@@ -35,7 +35,7 @@
   border-radius: 4px;
   font-size: 11px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
   margin-left: 12px;
   white-space: nowrap;
   display: flex;
@@ -199,7 +199,7 @@
   border-radius: 4px;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .message-queue-remove:hover {

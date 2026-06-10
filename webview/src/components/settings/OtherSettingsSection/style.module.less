@@ -104,7 +104,7 @@
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease;
 
   &:hover {
     background: var(--accent-primary);
@@ -127,7 +127,7 @@
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease;
 
   &:hover {
     background: rgba(255, 165, 0, 0.1);
@@ -150,7 +150,7 @@
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
-  transition: background 0.2s ease;
+  transition: background-color 0.2s ease;
 
   &:hover {
     background: rgba(255, 0, 0, 0.1);
@@ -175,7 +175,7 @@
   gap: 8px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--border-secondary);
-  transition: background 0.15s ease;
+  transition: background-color 0.15s ease;
 
   &:last-child {
     border-bottom: none;
@@ -236,7 +236,7 @@
   cursor: pointer;
   border-radius: 4px;
   opacity: 0;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
 
   &:hover {
     color: var(--accent-primary);
@@ -260,7 +260,7 @@
   cursor: pointer;
   border-radius: 4px;
   opacity: 0;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
   flex-shrink: 0;
 
   &:hover {
@@ -303,7 +303,7 @@
   cursor: pointer;
   user-select: none;
   margin-bottom: 8px;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 
   &:hover {
     border-color: var(--border-hover);
@@ -321,7 +321,7 @@
   background: var(--bg-tertiary);
   border: 1px solid var(--border-secondary);
   border-radius: 12px;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
   flex-shrink: 0;
 
   &::after {
@@ -333,7 +333,7 @@
     height: 18px;
     background: var(--text-tertiary);
     border-radius: 50%;
-    transition: all 0.2s ease;
+    transition: background-color 0.2s ease, left 0.2s ease;
   }
 }
 
@@ -491,7 +491,7 @@
   color: var(--text-tertiary);
   cursor: pointer;
   border-radius: 4px;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
 
   &:hover {
     background: var(--bg-tertiary);
@@ -563,7 +563,7 @@
   border-radius: 6px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 
   &:hover:not(:disabled) {
     background: var(--bg-tertiary);
@@ -640,7 +640,7 @@
   font-size: 13px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 
   &:hover {
     background: var(--bg-tertiary);
@@ -657,7 +657,7 @@
   font-weight: 500;
   color: #ffffff;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, filter 0.15s ease;
 
   &:hover:not(:disabled) {
     filter: brightness(1.1);

@@ -61,7 +61,7 @@
   border-radius: 999px;
   background: var(--text-muted);
   opacity: 0.55;
-  transition: opacity 0.15s ease, background 0.15s ease;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
 }
 
 /* Only highlight when hovering over the resize handle itself or while dragging */

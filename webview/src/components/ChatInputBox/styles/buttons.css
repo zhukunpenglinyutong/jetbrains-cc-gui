@@ -12,7 +12,7 @@
   border-radius: 4px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background-color 0.15s, color 0.15s;
 }
 
 .attach-button:hover {
@@ -42,7 +42,7 @@
   border-radius: 6px;
   color: white;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 .submit-button:hover:not(:disabled) {

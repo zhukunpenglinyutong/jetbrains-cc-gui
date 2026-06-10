@@ -13,7 +13,7 @@
   font-size: 12px;
   font-family: inherit;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .selector-button:hover {
@@ -175,7 +175,7 @@
   color: var(--text-primary);
   font-size: 12px;
   font-family: inherit;
-  transition: background 0.1s;
+  transition: background-color 0.1s;
 }
 
 .selector-option:hover {
@@ -265,7 +265,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background-color 0.15s, color 0.15s;
   flex-shrink: 0;
 }
 
@@ -342,7 +342,7 @@
   font-weight: 700;
   cursor: default;
   outline: none;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 .token-indicator:hover,

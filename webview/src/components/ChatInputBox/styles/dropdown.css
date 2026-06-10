@@ -21,7 +21,7 @@
   gap: 8px;
   padding: 8px 12px;
   cursor: pointer;
-  transition: background 0.1s;
+  transition: background-color 0.1s;
 }
 
 .dropdown-item:hover,

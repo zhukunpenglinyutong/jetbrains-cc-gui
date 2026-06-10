@@ -12,7 +12,7 @@
   border-radius: 6px;
   color: var(--orange, #f5a623);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
 }
 
 .enhance-prompt-button:hover:not(:disabled) {
@@ -126,7 +126,7 @@
   border-radius: 4px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background-color 0.15s, color 0.15s;
 }
 
 .prompt-enhancer-close:hover {
@@ -251,7 +251,7 @@
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .prompt-enhancer-btn:disabled {

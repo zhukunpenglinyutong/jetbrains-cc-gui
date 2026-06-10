@@ -20,7 +20,7 @@
     max-width: 400px;
     box-shadow: var(--shadow-md);
     animation: toast-slide-in 0.3s ease-out;
-    transition: all 0.3s ease-out;
+    transition: opacity 0.3s ease-out, transform 0.3s ease-out;
 }
 
 .toast-exit {
@@ -77,7 +77,7 @@
     align-items: center;
     justify-content: center;
     border-radius: 4px;
-    transition: all 0.2s;
+    transition: background-color 0.2s ease, color 0.2s ease;
     flex-shrink: 0;
 }
 
