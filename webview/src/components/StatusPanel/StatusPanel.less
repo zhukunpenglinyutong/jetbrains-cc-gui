@@ -111,11 +111,11 @@
     font-weight: 600;
 
     .stat-additions {
-      color: #89d185;
+      color: var(--color-additions, #89d185);
     }
 
     .stat-deletions {
-      color: #ff6b6b;
+      color: var(--color-deletions, #ff6b6b);
     }
   }
 }
@@ -202,11 +202,11 @@
   font-family: var(--idea-editor-font-family, monospace);
 
   &.status-added {
-    color: #89d185;
+    color: var(--color-additions, #89d185);
   }
 
   &.status-modified {
-    color: #6bb3f0;
+    color: var(--color-status-modified, #6bb3f0);
   }
 }
 
@@ -244,11 +244,11 @@
   gap: 4px;
 
   .additions {
-    color: #89d185;
+    color: var(--color-additions, #89d185);
   }
 
   .deletions {
-    color: #ff6b6b;
+    color: var(--color-deletions, #ff6b6b);
   }
 }
 
@@ -284,7 +284,7 @@
 
   &.undo-btn {
     &:hover:not(:disabled) {
-      color: #ff6b6b;
+      color: var(--color-deletions, #ff6b6b);
       background: rgba(255, 107, 107, 0.1);
     }
   }
@@ -564,7 +564,7 @@
 
 .subagent-error {
   margin-bottom: 8px;
-  color: #ff6b6b;
+  color: var(--color-deletions, #ff6b6b);
 }
 
 .subagent-process-sections {
@@ -932,7 +932,7 @@
   svg {
     width: 18px;
     height: 18px;
-    color: #ff6b6b;
+    color: var(--color-deletions, #ff6b6b);
     stroke: currentColor;
     stroke-width: 1.8;
     fill: none;
@@ -993,11 +993,11 @@
     gap: 4px;
 
     .additions {
-      color: #89d185;
+      color: var(--color-additions, #89d185);
     }
 
     .deletions {
-      color: #ff6b6b;
+      color: var(--color-deletions, #ff6b6b);
     }
   }
 }
@@ -1008,7 +1008,7 @@
   padding: 12px;
   background: rgba(255, 193, 7, 0.1);
   border-radius: 6px;
-  border-left: 3px solid #ffc107;
+  border-left: 3px solid var(--color-warning-amber, #ffc107);
 
   .warning-icon {
     flex-shrink: 0;
@@ -1080,10 +1080,10 @@
     }
 
     &.danger {
-      background: #dc3545;
+      background: var(--color-danger, #dc3545);
 
       &:hover {
-        background: #c82333;
+        background: var(--color-dialog-button-danger-hover, #c82333);
       }
     }
 
@@ -1149,10 +1149,10 @@
     }
 
     &.discard-all-btn {
-      color: #f5c06b;
+      color: var(--color-warning-amber, #f5c06b);
 
       &:hover:not(:disabled) {
-        color: #f5c06b;
+        color: var(--color-warning-amber, #f5c06b);
         border-color: rgba(245, 192, 107, 0.5);
         background: rgba(245, 192, 107, 0.1);
       }

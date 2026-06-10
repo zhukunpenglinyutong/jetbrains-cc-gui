@@ -313,12 +313,12 @@
 .mode-option.selected {
   background: var(--accent-primary);
   border-color: var(--accent-primary);
-  color: #ffffff;
+  color: var(--color-button-text, #ffffff);
 }
 
 .mode-option.selected .mode-label,
 .mode-option.selected .mode-option-description {
-  color: #ffffff;
+  color: var(--color-button-text, #ffffff);
 }
 
 .mode-radio {

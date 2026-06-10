@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import Switch from 'antd/es/switch';
+import { Switch } from '../../shared/Switch';
 import { modelSupports1MContext } from '../types';
 
 const TOGGLE_BASE_STYLE: React.CSSProperties = {

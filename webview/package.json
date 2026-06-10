@@ -28,7 +28,6 @@
   },
   "dependencies": {
     "@lobehub/icons": "^5.8.0",
-    "antd": "^6.1.1",
     "dompurify": "^3.3.1",
     "highlight.js": "^11.11.1",
     "i18next": "^25.7.2",

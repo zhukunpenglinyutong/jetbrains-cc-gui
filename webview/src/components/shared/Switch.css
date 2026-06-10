@@ -1,0 +1,45 @@
+.custom-switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  background: var(--bg-tertiary, #3e3e42);
+  transition: background 0.2s;
+  padding: 0;
+  flex-shrink: 0;
+}
+.custom-switch.switch-small {
+  width: 28px;
+  height: 16px;
+  border-radius: 8px;
+}
+.custom-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-button-text, #fff);
+  transition: transform 0.2s;
+}
+.custom-switch.switch-small::after {
+  width: 12px;
+  height: 12px;
+}
+.custom-switch.switch-checked {
+  background: var(--accent-primary, #007fd4);
+}
+.custom-switch.switch-checked::after {
+  transform: translateX(16px);
+}
+.custom-switch.switch-small.switch-checked::after {
+  transform: translateX(12px);
+}
+.custom-switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

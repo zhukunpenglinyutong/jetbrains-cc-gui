@@ -79,14 +79,14 @@ export interface ClaudeRawMessage {
 
 /** Represents a single message in the chat conversation. */
 export interface ClaudeMessage {
-  type: 'user' | 'assistant' | 'error' | 'task_notification' | 'notification' | 'compact_notification' | string;
+  type: 'user' | 'assistant' | 'error' | 'task_notification' | 'notification' | 'compact_notification';
   content?: string;
   raw?: ClaudeRawMessage | string;
     timestamp?: string;
     isStreaming?: boolean;
     isOptimistic?: boolean;
     durationMs?: number;
-    streamEndSource?: 'backend' | 'watchdog' | string;
+    streamEndSource?: 'backend' | 'watchdog';
     streamEndReason?: string;
   /**
    * Runtime-only: numeric turn identifier for streaming assistant isolation.

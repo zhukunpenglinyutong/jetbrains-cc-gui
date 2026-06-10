@@ -257,12 +257,12 @@
 .question-option.selected {
   background: var(--accent-primary);
   border-color: var(--accent-primary);
-  color: #ffffff;
+  color: var(--color-button-text, #ffffff);
 }
 
 .question-option.selected .option-label,
 .question-option.selected .option-description {
-  color: #ffffff;
+  color: var(--color-button-text, #ffffff);
 }
 
 .option-checkbox {

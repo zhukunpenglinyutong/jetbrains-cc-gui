@@ -4,7 +4,7 @@ import { AVAILABLE_MODELS, normalizeClaudeModelId, modelSupports1MContext, strip
 import type { ModelInfo } from '../types';
 import { readClaudeModelMapping } from '../../../utils/claudeModelMapping';
 import { ProviderModelIcon } from '../../shared/ProviderModelIcon';
-import Switch from 'antd/es/switch';
+import { Switch } from '../../shared/Switch';
 
 const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
 const CHEVRON_ICON_STYLE: React.CSSProperties = { fontSize: '10px', marginLeft: '2px' };

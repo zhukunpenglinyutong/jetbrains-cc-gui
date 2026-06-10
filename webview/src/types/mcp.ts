@@ -33,7 +33,7 @@ export interface McpServerSpec {
   headers?: Record<string, string>;
 
   /** Allow extension fields */
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
@@ -69,7 +69,7 @@ export interface McpServer {
   /** Whether enabled (legacy format compatibility) */
   enabled?: boolean;
   /** Allow extension fields */
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
@@ -169,5 +169,5 @@ export interface CodexMcpServerSpec {
   disabled_tools?: string[];
 
   /** Allow extension fields */
-  [key: string]: any;
+  [key: string]: unknown;
 }

@@ -222,7 +222,7 @@ export const openBrowser = (url?: string) => {
   sendBridgeEvent('open_browser', url);
 };
 
-export const sendToJava = (message: string, payload: any = {}) => {
+export const sendToJava = (message: string, payload: Record<string, unknown> | string = {}) => {
   const payloadStr = typeof payload === 'string' ? payload : JSON.stringify(payload);
   sendBridgeEvent(message, payloadStr);
 };
