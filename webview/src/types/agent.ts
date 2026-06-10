@@ -11,12 +11,3 @@ export interface AgentConfig {
   /** Creation timestamp */
   createdAt?: number;
 }
-
-/**
- * Agent operation result
- */
-export interface AgentOperationResult {
-  success: boolean;
-  operation: 'add' | 'update' | 'delete';
-  error?: string;
-}

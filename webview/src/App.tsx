@@ -27,7 +27,6 @@ import {
 } from './hooks/useMessageSender';
 import { applyDiffTheme, getStoredDiffTheme } from './utils/diffTheme';
 import type { Attachment, ChatInputBoxHandle } from './components/ChatInputBox/types';
-import { ToastContainer } from './components/Toast';
 import { ChatHeader } from './components/ChatHeader';
 import { ChatScreen } from './components/ChatScreen';
 import type { MessageListRevealHandle } from './components/ConversationSearch/types';
@@ -82,7 +81,7 @@ const App = () => {
   const {
     currentView, setCurrentView,
     settingsInitialTab, setSettingsInitialTab,
-    toasts, addToast, dismissToast, clearToasts,
+    addToast, clearToasts,
     setContextInfo,
     searchOpen, setSearchOpen,
   } = useUIState();
@@ -423,7 +422,6 @@ const App = () => {
   // ── Render ──
   return (
     <>
-      <ToastContainer messages={toasts} onDismiss={dismissToast} />
       <ChatHeader
         currentView={currentView}
         sessionTitle={sessionTitle}

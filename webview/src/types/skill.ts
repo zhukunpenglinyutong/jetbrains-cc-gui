@@ -11,7 +11,7 @@
 /**
  * Skill type: file or directory
  */
-export type SkillType = 'file' | 'directory';
+type SkillType = 'file' | 'directory';
 
 /**
  * Skill scope:
@@ -47,23 +47,18 @@ export interface Skill {
 }
 
 /**
- * Skills map (id -> Skill)
- */
-export type SkillsMap = Record<string, Skill>;
-
-/**
  * Skills configuration structure
  * Claude uses global/local, Codex uses user/repo
  */
 export interface SkillsConfig {
   /** Global skills (Claude only) */
-  global: SkillsMap;
+  global: Record<string, Skill>;
   /** Local skills (Claude only) */
-  local: SkillsMap;
+  local: Record<string, Skill>;
   /** User-level skills (Codex only) */
-  user?: SkillsMap;
+  user?: Record<string, Skill>;
   /** Repository-level skills (Codex only) */
-  repo?: SkillsMap;
+  repo?: Record<string, Skill>;
 }
 
 /**

@@ -23,15 +23,6 @@ export interface PromptConfig {
   scope?: PromptScope;
 }
 
-/**
- * Prompt operation result
- */
-export interface PromptOperationResult {
-  success: boolean;
-  operation: 'add' | 'update' | 'delete';
-  error?: string;
-}
-
 // ============================================================================
 // Message Types for Backend Communication
 // ============================================================================
@@ -90,18 +81,6 @@ export interface SaveImportedPromptsMessage {
   scope: PromptScope;
   prompts: PromptConfig[];
   strategy: ConflictStrategy;
-}
-
-// ============================================================================
-// Helper Types
-// ============================================================================
-
-/**
- * Generic scoped operation wrapper
- */
-export interface ScopedOperation<T = void> {
-  scope: PromptScope;
-  data?: T;
 }
 
 /**

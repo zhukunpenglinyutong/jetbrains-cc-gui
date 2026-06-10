@@ -19,7 +19,7 @@ export type SdkId = 'claude-sdk' | 'codex-sdk';
 /**
  * SDK installation status
  */
-export type SdkInstallStatus = 'installed' | 'not_installed' | 'installing' | 'error';
+type SdkInstallStatus = 'installed' | 'not_installed' | 'installing' | 'error';
 
 /**
  * Status information for a single SDK
@@ -95,31 +95,26 @@ export interface UninstallResult {
 }
 
 /**
- * Update information
- */
-export interface UpdateInfo {
-  /** SDK ID */
-  sdkId: SdkId;
-  /** SDK name */
-  sdkName: string;
-  /** Whether an update is available */
-  hasUpdate: boolean;
-  /** Current version */
-  currentVersion?: string;
-  /** Latest version */
-  latestVersion?: string;
-  /** Error message */
-  error?: string;
-}
-
-/**
  * Update check result
  */
 export interface UpdateCheckResult {
-  [key: string]: UpdateInfo;
+  [key: string]: {
+    /** SDK ID */
+    sdkId: SdkId;
+    /** SDK name */
+    sdkName: string;
+    /** Whether an update is available */
+    hasUpdate: boolean;
+    /** Current version */
+    currentVersion?: string;
+    /** Latest version */
+    latestVersion?: string;
+    /** Error message */
+    error?: string;
+  };
 }
 
-export type DependencyVersionSource = 'remote' | 'fallback';
+type DependencyVersionSource = 'remote' | 'fallback';
 
 export interface DependencyVersionInfo {
   sdkId: SdkId;

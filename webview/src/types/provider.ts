@@ -55,13 +55,6 @@ export const CLAUDE_MODEL_MAPPING_ENV_KEYS = [
   'ANTHROPIC_DEFAULT_OPUS_MODEL',
 ] as const;
 
-/**
- * Model ID validation regular expression
- * Allowed: letters, numbers, hyphens, underscores, dots, slashes, colons
- * Used to validate user-input model ID format
- */
-export const MODEL_ID_PATTERN = /^[a-zA-Z0-9._\-/:]+$/;
-
 // ============ Validation Helpers ============
 
 /**
@@ -88,7 +81,7 @@ export function isValidModelId(id: string): boolean {
  * @param model - Object to validate
  * @returns Whether it is a valid CodexCustomModel
  */
-export function isValidCodexCustomModel(model: unknown): model is CodexCustomModel {
+function isValidCodexCustomModel(model: unknown): model is CodexCustomModel {
   if (!model || typeof model !== 'object') return false;
   const obj = model as Record<string, unknown>;
 
@@ -115,6 +108,16 @@ export function validateCodexCustomModels(models: unknown): CodexCustomModel[] {
 }
 
 // ============ Types ============
+
+/**
+ * Provider category
+ */
+type ProviderCategory =
+  | 'official'      // Official
+  | 'cn_official'   // Chinese official
+  | 'aggregator'    // Aggregator service
+  | 'third_party'   // Third-party
+  | 'custom';       // Custom
 
 /**
  * Provider configuration (simplified, adapted for current project)
@@ -151,16 +154,6 @@ export interface ProviderConfig {
 }
 
 /**
- * Provider category
- */
-export type ProviderCategory =
-  | 'official'      // Official
-  | 'cn_official'   // Chinese official
-  | 'aggregator'    // Aggregator service
-  | 'third_party'   // Third-party
-  | 'custom';       // Custom
-
-/**
  * Codex custom model configuration
  */
 export interface CodexCustomModel {
@@ -183,9 +176,25 @@ export interface EnvVarEntry {
 }
 
 /**
+ * Maximum length for env var values. Long values risk exceeding the OS
+ * ARG_MAX limit when the child process is spawned.
+ * Must stay in sync with MAX_ENV_VAR_VALUE_LENGTH in CodexSDKBridge.java.
+ */
+export const ENV_VAR_VALUE_MAX_LENGTH = 16 * 1024;
+
+/**
+ * Validate whether an env var key name is valid.
+ * Must start with letter or underscore, followed by letters, digits, or underscores.
+ */
+export function isValidEnvVarKey(key: string): boolean {
+  if (!key || typeof key !== 'string') return false;
+  return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key);
+}
+
+/**
  * Codex protected environment variable names that cannot be overridden by custom env vars.
  */
-export const CODEX_PROTECTED_ENV_KEYS: ReadonlySet<string> = new Set([
+const CODEX_PROTECTED_ENV_KEYS: ReadonlySet<string> = new Set([
   'CODEX_USE_STDIN',
   'CODEX_MODEL',
   'CODEX_SANDBOX_MODE',
@@ -205,22 +214,6 @@ export const CODEX_PROTECTED_ENV_KEYS: ReadonlySet<string> = new Set([
   'PROJECT_PATH',
   'CLAUDE_USE_STDIN',
 ]);
-
-/**
- * Maximum length for env var values. Long values risk exceeding the OS
- * ARG_MAX limit when the child process is spawned.
- * Must stay in sync with MAX_ENV_VAR_VALUE_LENGTH in CodexSDKBridge.java.
- */
-export const ENV_VAR_VALUE_MAX_LENGTH = 16 * 1024;
-
-/**
- * Validate whether an env var key name is valid.
- * Must start with letter or underscore, followed by letters, digits, or underscores.
- */
-export function isValidEnvVarKey(key: string): boolean {
-  if (!key || typeof key !== 'string') return false;
-  return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key);
-}
 
 /**
  * Check if an env var key is a protected Codex built-in variable.

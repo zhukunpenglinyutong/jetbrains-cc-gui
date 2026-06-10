@@ -270,48 +270,6 @@ export const showEditableDiff = (
 };
 
 /**
- * Show edit preview diff (current content → after edit)
- * Used to preview the effect before executing edits
- * @param filePath - Absolute path to the file
- * @param edits - Array of edit operations to preview
- * @param title - Optional title for the diff view
- */
-export const showEditPreviewDiff = (
-  filePath: string,
-  edits: Array<{ oldString: string; newString: string; replaceAll?: boolean }>,
-  title?: string
-) => {
-  if (!isValidMutatingPath(filePath)) {
-    return;
-  }
-  sendToJava('show_edit_preview_diff', { filePath, edits, title });
-};
-
-/**
- * Show edit full diff (original content → modified content)
- * Used to show complete file comparison before and after modification
- * @param filePath - Absolute path to the file
- * @param oldString - The original string that was replaced
- * @param newString - The new string that replaced the original
- * @param originalContent - Optional cached original file content (for full file diff)
- * @param replaceAll - Whether to replace all occurrences
- * @param title - Optional title for the diff view
- */
-export const showEditFullDiff = (
-  filePath: string,
-  oldString: string,
-  newString: string,
-  originalContent?: string,
-  replaceAll?: boolean,
-  title?: string
-) => {
-  if (!isValidMutatingPath(filePath)) {
-    return;
-  }
-  sendToJava('show_edit_full_diff', { filePath, oldString, newString, originalContent, replaceAll, title });
-};
-
-/**
  * Show interactive diff view with Apply/Reject buttons
  * Based on the official Claude Code JetBrains plugin implementation
  * @param filePath - Absolute path to the file

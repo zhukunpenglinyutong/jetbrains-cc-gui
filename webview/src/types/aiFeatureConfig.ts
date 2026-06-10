@@ -21,7 +21,6 @@ export interface AiFeatureConfig {
 }
 
 export type CommitAiProvider = AiFeatureProvider;
-export type CommitAiResolutionSource = AiFeatureResolutionSource;
 export type CommitAiConfig = AiFeatureConfig;
 
 export const DEFAULT_COMMIT_AI_CONFIG: CommitAiConfig = {

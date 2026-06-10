@@ -40,7 +40,7 @@ export interface McpServerSpec {
  * MCP app enablement status (cc-switch v3.7.0 format)
  * Indicates which clients the server is applied to
  */
-export interface McpApps {
+interface McpApps {
   claude: boolean;
   codex: boolean;
   gemini: boolean;
@@ -69,40 +69,6 @@ export interface McpServer {
   /** Whether enabled (legacy format compatibility) */
   enabled?: boolean;
   /** Allow extension fields */
-  [key: string]: any;
-}
-
-/**
- * MCP server map (id -> McpServer)
- */
-export type McpServersMap = Record<string, McpServer>;
-
-/**
- * cc-switch config file structure (~/.cc-switch/config.json)
- */
-export interface CCSwitchConfig {
-  /** MCP configuration */
-  mcp?: {
-    /** Server list */
-    servers?: Record<string, McpServer>;
-  };
-  /** Claude provider configuration */
-  claude?: {
-    providers?: Record<string, any>;
-    current?: string;
-  };
-  /** Other configuration */
-  [key: string]: any;
-}
-
-/**
- * Claude config file structure (~/.claude.json)
- * Based on the official format
- */
-export interface ClaudeConfig {
-  /** MCP server configuration */
-  mcpServers?: Record<string, McpServerSpec>;
-  /** Other configuration */
   [key: string]: any;
 }
 
@@ -157,16 +123,6 @@ export interface McpLogEntry {
   message: string;
 }
 
-/**
- * MCP server validation result
- */
-export interface McpServerValidationResult {
-  valid: boolean;
-  serverId?: string;
-  errors?: string[];
-  warnings?: string[];
-}
-
 // ==================== Codex MCP Types ====================
 
 /**
@@ -213,41 +169,5 @@ export interface CodexMcpServerSpec {
   disabled_tools?: string[];
 
   /** Allow extension fields */
-  [key: string]: any;
-}
-
-/**
- * Codex MCP server full configuration
- */
-export interface CodexMcpServer {
-  /** Unique identifier (key in config file) */
-  id: string;
-  /** Display name */
-  name?: string;
-  /** Server connection specification */
-  server: CodexMcpServerSpec;
-  /** App enablement status */
-  apps?: McpApps;
-  /** Whether enabled */
-  enabled?: boolean;
-  /** Startup timeout in seconds */
-  startup_timeout_sec?: number;
-  /** Tool call timeout in seconds */
-  tool_timeout_sec?: number;
-  /** List of enabled tools */
-  enabled_tools?: string[];
-  /** List of disabled tools */
-  disabled_tools?: string[];
-  /** Allow extension fields */
-  [key: string]: any;
-}
-
-/**
- * Codex config.toml structure (~/.codex/config.toml)
- */
-export interface CodexConfig {
-  /** MCP server configuration */
-  mcp_servers?: Record<string, CodexMcpServerSpec>;
-  /** Other configuration */
   [key: string]: any;
 }
