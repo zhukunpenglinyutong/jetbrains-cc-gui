@@ -140,6 +140,44 @@ public class CodexMessageHandlerTest {
     }
 
     @Test
+    public void onErrorAddsProviderErrorBlockToAssistantMessage() {
+        SessionState state = new SessionState();
+        state.setBusy(true);
+        state.setLoading(true);
+
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("stream_start", "");
+        handler.onMessage("content_delta", "partial answer");
+
+        handler.onError("Codex CLI 请求失败，原因：服务暂时不可用 (503)");
+
+        assertFalse(state.isBusy());
+        assertFalse(state.isLoading());
+        assertEquals(1, callback.streamEndCount);
+        assertEquals(1, state.getMessages().size());
+
+        Message message = state.getMessages().get(0);
+        assertEquals(Message.Type.ASSISTANT, message.type);
+        assertTrue(message.content.contains("partial answer"));
+        assertTrue(message.content.contains("Codex CLI 请求失败"));
+        assertNotNull(message.raw);
+
+        com.google.gson.JsonArray blocks = message.raw
+                .getAsJsonObject("message")
+                .getAsJsonArray("content");
+        assertEquals("text", blocks.get(0).getAsJsonObject().get("type").getAsString());
+        com.google.gson.JsonObject errorBlock = blocks.get(blocks.size() - 1).getAsJsonObject();
+        assertEquals("provider_error", errorBlock.get("type").getAsString());
+        assertEquals("codex", errorBlock.get("provider").getAsString());
+        assertEquals("Codex CLI 请求失败，原因：服务暂时不可用 (503)",
+                errorBlock.get("details").getAsString());
+    }
+
+    @Test
     public void contentDeltaIsForwardedToFrontendStreamingCallback() {
         SessionState state = new SessionState();
 
@@ -497,6 +535,64 @@ public class CodexMessageHandlerTest {
         assertEquals("tool_result", blocks.get(0).getAsJsonObject().get("type").getAsString());
         assertEquals("tool-1", blocks.get(0).getAsJsonObject().get("tool_use_id").getAsString());
         assertEquals(1, callback.messageUpdateCount);
+    }
+
+    @Test
+    public void blockResetSplitsCodexCliSegmentsLikeClaudeCli() {
+        SessionState state = new SessionState();
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("stream_start", "");
+        handler.onMessage("thinking", "");
+        handler.onMessage("thinking_delta", "先分析");
+        handler.onMessage("content_delta", "准备读取。");
+        handler.onMessage("block_reset", "");
+        handler.onMessage("tool_use", "{\"type\":\"tool_use\",\"id\":\"read-1\",\"name\":\"Read\",\"input\":{\"file_path\":\"WeatherCard.vue\"}}");
+        handler.onMessage("block_reset", "");
+        handler.onMessage("thinking", "");
+        handler.onMessage("thinking_delta", "再分析");
+        handler.onMessage("content_delta", "准备测试。");
+        handler.onMessage("block_reset", "");
+        handler.onMessage("tool_use", "{\"type\":\"tool_use\",\"id\":\"bash-1\",\"name\":\"Bash\",\"input\":{\"command\":\"vitest run\"}}");
+
+        assertEquals(4, state.getMessages().size());
+        assertEquals("准备读取。", state.getMessages().get(0).content);
+        assertEquals("", state.getMessages().get(1).content);
+        assertEquals("准备测试。", state.getMessages().get(2).content);
+        assertEquals("", state.getMessages().get(3).content);
+
+        com.google.gson.JsonArray firstBlocks = state.getMessages().get(0).raw
+                .getAsJsonObject("message")
+                .getAsJsonArray("content");
+        assertEquals("thinking", firstBlocks.get(0).getAsJsonObject().get("type").getAsString());
+        assertEquals("先分析", firstBlocks.get(0).getAsJsonObject().get("thinking").getAsString());
+        assertEquals("text", firstBlocks.get(1).getAsJsonObject().get("type").getAsString());
+        assertEquals("准备读取。", firstBlocks.get(1).getAsJsonObject().get("text").getAsString());
+
+        com.google.gson.JsonArray firstToolBlocks = state.getMessages().get(1).raw
+                .getAsJsonObject("message")
+                .getAsJsonArray("content");
+        assertEquals(1, firstToolBlocks.size());
+        assertEquals("tool_use", firstToolBlocks.get(0).getAsJsonObject().get("type").getAsString());
+        assertEquals("read-1", firstToolBlocks.get(0).getAsJsonObject().get("id").getAsString());
+
+        com.google.gson.JsonArray secondBlocks = state.getMessages().get(2).raw
+                .getAsJsonObject("message")
+                .getAsJsonArray("content");
+        assertEquals("thinking", secondBlocks.get(0).getAsJsonObject().get("type").getAsString());
+        assertEquals("再分析", secondBlocks.get(0).getAsJsonObject().get("thinking").getAsString());
+        assertEquals("text", secondBlocks.get(1).getAsJsonObject().get("type").getAsString());
+        assertEquals("准备测试。", secondBlocks.get(1).getAsJsonObject().get("text").getAsString());
+
+        com.google.gson.JsonArray secondToolBlocks = state.getMessages().get(3).raw
+                .getAsJsonObject("message")
+                .getAsJsonArray("content");
+        assertEquals(1, secondToolBlocks.size());
+        assertEquals("tool_use", secondToolBlocks.get(0).getAsJsonObject().get("type").getAsString());
+        assertEquals("bash-1", secondToolBlocks.get(0).getAsJsonObject().get("id").getAsString());
     }
 
     @Test

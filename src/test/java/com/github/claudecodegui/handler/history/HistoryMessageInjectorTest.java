@@ -314,6 +314,32 @@ public class HistoryMessageInjectorTest {
     }
 
     @Test
+    public void convertCodexMessagesRestoresProviderErrorAsAssistantBlock() {
+        JsonArray messages = new JsonArray();
+        messages.add(responseItemAssistantMessage("2026-06-09T08:00:00.000Z", "partial answer"));
+        messages.add(providerErrorMessage(
+                "2026-06-09T08:00:01.000Z",
+                "服务暂时不可用",
+                "Codex CLI 请求失败，原因：服务暂时不可用 (503)"));
+
+        List<JsonObject> result = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(messages);
+
+        assertEquals(2, result.size());
+        JsonObject errorMessage = result.get(1);
+        assertEquals("assistant", errorMessage.get("type").getAsString());
+        assertEquals("服务暂时不可用", errorMessage.get("content").getAsString());
+
+        JsonArray blocks = errorMessage.getAsJsonObject("raw").getAsJsonArray("content");
+        assertEquals(1, blocks.size());
+        JsonObject errorBlock = blocks.get(0).getAsJsonObject();
+        assertEquals("provider_error", errorBlock.get("type").getAsString());
+        assertEquals("codex", errorBlock.get("provider").getAsString());
+        assertEquals("服务暂时不可用", errorBlock.get("summary").getAsString());
+        assertEquals("Codex CLI 请求失败，原因：服务暂时不可用 (503)",
+                errorBlock.get("details").getAsString());
+    }
+
+    @Test
     public void convertCodexMessagesConvertsCliCommandExecutionItemsToToolBlocks() {
         JsonArray messages = new JsonArray();
         messages.add(cliItemMessage(
@@ -455,6 +481,20 @@ public class HistoryMessageInjectorTest {
         line.addProperty("timestamp", timestamp);
         line.addProperty("type", type);
         line.add("item", com.google.gson.JsonParser.parseString(itemJson).getAsJsonObject());
+        return line;
+    }
+
+    private static JsonObject providerErrorMessage(String timestamp, String summary, String details) {
+        JsonObject line = new JsonObject();
+        line.addProperty("timestamp", timestamp);
+        line.addProperty("type", "provider_error");
+
+        JsonObject payload = new JsonObject();
+        payload.addProperty("provider", "codex");
+        payload.addProperty("summary", summary);
+        payload.addProperty("details", details);
+        payload.addProperty("exitCode", 1);
+        line.add("payload", payload);
         return line;
     }
 

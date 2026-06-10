@@ -95,6 +95,44 @@ public class ClaudeHistoryWriterTest {
     }
 
     @Test
+    public void appendProviderError_withExistingSession_appendsProviderErrorBlock() throws Exception {
+        String projectPath = tempDir.resolve("test-project").toString();
+        String sessionId = "33333333-3333-3333-3333-333333333333";
+        Path projectDir = tempDir.resolve(PathUtils.sanitizePath(projectPath));
+        Files.createDirectories(projectDir);
+        Path sessionFile = projectDir.resolve(sessionId + ".jsonl");
+        Files.writeString(sessionFile,
+                "{\"type\":\"user\",\"uuid\":\"parent-uuid\",\"timestamp\":\"2026-01-01T00:00:00Z\","
+                        + "\"message\":{\"role\":\"user\",\"content\":\"hello\"}}\n",
+                StandardCharsets.UTF_8);
+
+        boolean appended = ClaudeHistoryWriter.appendProviderError(
+                projectPath,
+                sessionId,
+                "服务暂时不可用",
+                "Claude CLI 请求失败，原因：服务暂时不可用 (503)",
+                null,
+                tempDir
+        );
+
+        assertTrue(appended);
+        List<String> lines = Files.readAllLines(sessionFile, StandardCharsets.UTF_8);
+        assertEquals(2, lines.size());
+
+        JsonObject appendedLine = JsonParser.parseString(lines.get(1)).getAsJsonObject();
+        assertEquals("assistant", appendedLine.get("type").getAsString());
+        JsonArray content = appendedLine
+                .getAsJsonObject("message")
+                .getAsJsonArray("content");
+        JsonObject errorBlock = content.get(0).getAsJsonObject();
+        assertEquals("provider_error", errorBlock.get("type").getAsString());
+        assertEquals("claude", errorBlock.get("provider").getAsString());
+        assertEquals("服务暂时不可用", errorBlock.get("summary").getAsString());
+        assertEquals("Claude CLI 请求失败，原因：服务暂时不可用 (503)",
+                errorBlock.get("details").getAsString());
+    }
+
+    @Test
     public void appendAssistantMessage_withNullProjectPath_doesNotThrow() {
         ClaudeHistoryWriter.appendAssistantMessage(null, "session-123", "Test");
         // Should not throw

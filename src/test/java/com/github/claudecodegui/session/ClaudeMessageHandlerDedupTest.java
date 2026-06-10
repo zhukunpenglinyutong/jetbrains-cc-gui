@@ -416,7 +416,7 @@ public class ClaudeMessageHandlerDedupTest {
     }
 
     @Test
-    public void onCompleteWithStructuredErrorAddsErrorMessageToChat() {
+    public void onCompleteWithStructuredErrorAddsProviderErrorBlockToAssistantMessage() {
         com.github.claudecodegui.provider.common.SDKResult result = new com.github.claudecodegui.provider.common.SDKResult();
         result.success = false;
         result.error = "当前模型不支持图片识别，或该服务商的 Claude Code 兼容接口不支持图片工具结果。";
@@ -425,8 +425,42 @@ public class ClaudeMessageHandlerDedupTest {
 
         assertFalse("Structured completion error should be added to chat", state.getMessages().isEmpty());
         ClaudeSession.Message last = state.getMessages().get(state.getMessages().size() - 1);
-        assertEquals(ClaudeSession.Message.Type.ERROR, last.type);
+        assertEquals(ClaudeSession.Message.Type.ASSISTANT, last.type);
         assertEquals(result.error, last.content);
+
+        com.google.gson.JsonArray blocks = last.raw
+                .getAsJsonObject("message")
+                .getAsJsonArray("content");
+        com.google.gson.JsonObject errorBlock = blocks.get(blocks.size() - 1).getAsJsonObject();
+        assertEquals("provider_error", errorBlock.get("type").getAsString());
+        assertEquals("claude", errorBlock.get("provider").getAsString());
+        assertEquals(result.error, errorBlock.get("details").getAsString());
+    }
+
+    @Test
+    public void onErrorAppendsProviderErrorBlockToExistingAssistantMessage() {
+        handler.onMessage("stream_start", "");
+        handler.onMessage("content_delta", "partial answer");
+
+        handler.onError("Claude CLI 请求失败，原因：服务暂时不可用 (503)");
+
+        assertFalse(state.isBusy());
+        assertFalse(state.isLoading());
+        assertEquals(1, state.getMessages().size());
+        ClaudeSession.Message message = state.getMessages().get(0);
+        assertEquals(ClaudeSession.Message.Type.ASSISTANT, message.type);
+        assertTrue(message.content.contains("partial answer"));
+        assertTrue(message.content.contains("Claude CLI 请求失败"));
+
+        com.google.gson.JsonArray blocks = message.raw
+                .getAsJsonObject("message")
+                .getAsJsonArray("content");
+        assertEquals("text", blocks.get(0).getAsJsonObject().get("type").getAsString());
+        com.google.gson.JsonObject errorBlock = blocks.get(blocks.size() - 1).getAsJsonObject();
+        assertEquals("provider_error", errorBlock.get("type").getAsString());
+        assertEquals("claude", errorBlock.get("provider").getAsString());
+        assertEquals("Claude CLI 请求失败，原因：服务暂时不可用 (503)",
+                errorBlock.get("details").getAsString());
     }
 
     /**

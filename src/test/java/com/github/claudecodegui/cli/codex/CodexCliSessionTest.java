@@ -95,7 +95,7 @@ public class CodexCliSessionTest {
     }
 
     @Test
-    public void agentMessageUpdatesEmitOnlyAppendedContentDelta() throws Exception {
+    public void agentMessageUpdatesAreBufferedUntilTurnCompletion() throws Exception {
         CodexCliSession session = new CodexCliSession("tab-agent");
         RecordingCallback callback = new RecordingCallback();
         StringBuilder assistantContent = new StringBuilder();
@@ -113,31 +113,123 @@ public class CodexCliSessionTest {
                 assistantContent
         );
 
-        assertEquals("hello world", assistantContent.toString());
-        assertEquals(List.of("hello", " world"), callback.contentsOfType("content_delta"));
-    }
-
-    @Test
-    public void agentMessageCompletionWithDifferentItemIdDoesNotReplayIdenticalTextDelta() throws Exception {
-        CodexCliSession session = new CodexCliSession("tab-agent-different-id");
-        RecordingCallback callback = new RecordingCallback();
-        StringBuilder assistantContent = new StringBuilder();
+        assertEquals("", assistantContent.toString());
+        assertEquals(List.of(), callback.contentsOfType("content_delta"));
 
         invokeParseEvent(
                 session,
-                "{\"type\":\"item.updated\",\"item\":{\"id\":\"item_stream\",\"type\":\"agent_message\",\"text\":\"hello world\"}}",
-                callback,
-                assistantContent
-        );
-        invokeParseEvent(
-                session,
-                "{\"type\":\"item.completed\",\"item\":{\"id\":\"item_completed\",\"type\":\"agent_message\",\"text\":\"hello world\"}}",
+                "{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}",
                 callback,
                 assistantContent
         );
 
         assertEquals("hello world", assistantContent.toString());
         assertEquals(List.of("hello world"), callback.contentsOfType("content_delta"));
+    }
+
+    @Test
+    public void agentMessageBeforeToolIsRoutedToThinking() throws Exception {
+        CodexCliSession session = new CodexCliSession("tab-agent-different-id");
+        RecordingCallback callback = new RecordingCallback();
+        StringBuilder assistantContent = new StringBuilder();
+
+        invokeParseEvent(
+                session,
+                "{\"type\":\"item.updated\",\"item\":{\"id\":\"item_stream\",\"type\":\"agent_message\",\"text\":\"Wall time: 3.6 seconds\\nvitest failed\"}}",
+                callback,
+                assistantContent
+        );
+        invokeParseEvent(
+                session,
+                "{\"type\":\"item.started\",\"item\":{\"id\":\"cmd_1\",\"type\":\"command_execution\",\"command\":\"git status\",\"status\":\"in_progress\"}}",
+                callback,
+                assistantContent
+        );
+
+        assertEquals("", assistantContent.toString());
+        assertEquals(List.of(), callback.contentsOfType("content_delta"));
+        assertEquals(List.of("Wall time: 3.6 seconds\nvitest failed"), callback.contentsOfType("thinking_delta"));
+        assertTrue(callback.events.stream().anyMatch(event -> "assistant".equals(event.type)
+                && event.content.contains("\"type\":\"tool_use\"")
+                && event.content.contains("git status")));
+    }
+
+    @Test
+    public void agentMessageAfterToolStillStreamsAsAssistantContentOnTurnCompletion() throws Exception {
+        CodexCliSession session = new CodexCliSession("tab-agent-tool-transcript");
+        RecordingCallback callback = new RecordingCallback();
+        StringBuilder assistantContent = new StringBuilder();
+        String transcript = "Wall time: 3.6 seconds\n"
+                + "vitest run tests/views/plant-center/plantCenterLayout.test.js\n"
+                + "RUN v4.0.18 D:/project/zh-newpark-webui\n"
+                + "FAIL tests/views/plant-center/plantCenterLayout.test.js > plant-center layout";
+
+        invokeParseEvent(
+                session,
+                "{\"type\":\"item.started\",\"item\":{\"id\":\"cmd_1\",\"type\":\"command_execution\",\"command\":\"vitest run tests/views/plant-center/plantCenterLayout.test.js\",\"status\":\"in_progress\"}}",
+                callback,
+                assistantContent
+        );
+        invokeParseEvent(
+                session,
+                "{\"type\":\"item.completed\",\"item\":{\"id\":\"cmd_1\",\"type\":\"command_execution\",\"command\":\"vitest run tests/views/plant-center/plantCenterLayout.test.js\",\"exit_code\":1,\"output\":\"failed\"}}",
+                callback,
+                assistantContent
+        );
+        invokeParseEvent(
+                session,
+                "{\"type\":\"item.completed\",\"item\":{\"id\":\"msg_1\",\"type\":\"agent_message\",\"text\":\""
+                        + transcript.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
+                        + "\"}}",
+                callback,
+                assistantContent
+        );
+        invokeParseEvent(
+                session,
+                "{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}",
+                callback,
+                assistantContent
+        );
+
+        assertEquals(transcript, assistantContent.toString());
+        assertEquals(List.of(transcript), callback.contentsOfType("content_delta"));
+        assertEquals(List.of(), callback.contentsOfType("thinking_delta"));
+    }
+
+    @Test
+    public void agentMessageSummaryAfterToolRemainsVisibleContentOnTurnCompletion() throws Exception {
+        CodexCliSession session = new CodexCliSession("tab-agent-tool-summary");
+        RecordingCallback callback = new RecordingCallback();
+        StringBuilder assistantContent = new StringBuilder();
+
+        invokeParseEvent(
+                session,
+                "{\"type\":\"item.started\",\"item\":{\"id\":\"cmd_1\",\"type\":\"command_execution\",\"command\":\"git status\",\"status\":\"in_progress\"}}",
+                callback,
+                assistantContent
+        );
+        invokeParseEvent(
+                session,
+                "{\"type\":\"item.completed\",\"item\":{\"id\":\"cmd_1\",\"type\":\"command_execution\",\"command\":\"git status\",\"exit_code\":0,\"output\":\"clean\"}}",
+                callback,
+                assistantContent
+        );
+        invokeParseEvent(
+                session,
+                "{\"type\":\"item.completed\",\"item\":{\"id\":\"msg_1\",\"type\":\"agent_message\",\"text\":\"测试已经通过，可以继续。\"}}",
+                callback,
+                assistantContent
+        );
+        invokeParseEvent(
+                session,
+                "{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}",
+                callback,
+                assistantContent
+        );
+
+        assertEquals("测试已经通过，可以继续。", assistantContent.toString());
+        assertEquals(List.of("测试已经通过，可以继续。"), callback.contentsOfType("content_delta"));
+        assertEquals(List.of(), callback.contentsOfType("thinking_delta"));
     }
 
     @Test
@@ -159,7 +251,8 @@ public class CodexCliSessionTest {
                 assistantContent
         );
 
-        assertTrue(callback.events.stream().anyMatch(event -> "status".equals(event.type) && event.content.contains("正在执行命令")));
+        assertFalse(callback.events.stream().anyMatch(event -> "status".equals(event.type) && event.content.contains("正在执行命令")));
+        assertFalse(callback.events.stream().anyMatch(event -> "status".equals(event.type) && event.content.contains("命令执行完成")));
         assertTrue(callback.events.stream().anyMatch(event -> "assistant".equals(event.type)
                 && event.content.contains("\"type\":\"tool_use\"")
                 && event.content.contains("\"name\":\"Bash\"")
@@ -167,6 +260,67 @@ public class CodexCliSessionTest {
         assertTrue(callback.events.stream().anyMatch(event -> "user".equals(event.type)
                 && event.content.contains("\"type\":\"tool_result\"")
                 && event.content.contains("clean")));
+    }
+
+    @Test
+    public void commandExecutionBoundariesResetStreamingBlocksWithoutStatusCards() throws Exception {
+        CodexCliSession session = new CodexCliSession("tab-command-boundaries");
+        RecordingCallback callback = new RecordingCallback();
+        StringBuilder assistantContent = new StringBuilder();
+
+        invokeParseEvent(
+                session,
+                "{\"type\":\"item.updated\",\"item\":{\"id\":\"msg_1\",\"type\":\"agent_message\",\"text\":\"before tool\"}}",
+                callback,
+                assistantContent
+        );
+        invokeParseEvent(
+                session,
+                "{\"type\":\"item.started\",\"item\":{\"id\":\"cmd_1\",\"type\":\"command_execution\",\"command\":\"git status\",\"status\":\"in_progress\"}}",
+                callback,
+                assistantContent
+        );
+        invokeParseEvent(
+                session,
+                "{\"type\":\"item.completed\",\"item\":{\"id\":\"cmd_1\",\"type\":\"command_execution\",\"command\":\"git status\",\"exit_code\":0,\"output\":\"clean\"}}",
+                callback,
+                assistantContent
+        );
+        invokeParseEvent(
+                session,
+                "{\"type\":\"item.started\",\"item\":{\"id\":\"reason_2\",\"type\":\"reasoning\",\"text\":\"after tool thinking\"}}",
+                callback,
+                assistantContent
+        );
+        invokeParseEvent(
+                session,
+                "{\"type\":\"item.updated\",\"item\":{\"id\":\"msg_2\",\"type\":\"agent_message\",\"text\":\"after tool text\"}}",
+                callback,
+                assistantContent
+        );
+        invokeParseEvent(
+                session,
+                "{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}",
+                callback,
+                assistantContent
+        );
+
+        assertEquals(List.of("after tool text"), callback.contentsOfType("content_delta"));
+        assertEquals(List.of("before tool", "after tool thinking"), callback.contentsOfType("thinking_delta"));
+        assertTrue(callback.events.stream().anyMatch(event -> "assistant".equals(event.type)
+                && event.content.contains("\"type\":\"tool_use\"")
+                && event.content.contains("git status")));
+        assertTrue(callback.events.stream().anyMatch(event -> "user".equals(event.type)
+                && event.content.contains("\"type\":\"tool_result\"")
+                && event.content.contains("clean")));
+        assertFalse(callback.events.stream().anyMatch(event -> "status".equals(event.type)));
+        assertEquals(
+                List.of("block_reset", "block_reset"),
+                callback.events.stream()
+                        .filter(event -> "block_reset".equals(event.type))
+                        .map(Event::type)
+                        .toList()
+        );
     }
 
     @Test
@@ -247,7 +401,7 @@ public class CodexCliSessionTest {
     }
 
     @Test
-    public void nonToolItemsEmitProgressStatus() throws Exception {
+    public void nonToolItemsDoNotEmitProgressStatus() throws Exception {
         CodexCliSession session = new CodexCliSession("tab-status");
         RecordingCallback callback = new RecordingCallback();
         StringBuilder assistantContent = new StringBuilder();
@@ -257,10 +411,10 @@ public class CodexCliSessionTest {
         invokeParseEvent(session, "{\"type\":\"item.completed\",\"item\":{\"id\":\"file_1\",\"type\":\"file_change\",\"path\":\"README.md\",\"status\":\"completed\"}}", callback, assistantContent);
         invokeParseEvent(session, "{\"type\":\"item.completed\",\"item\":{\"id\":\"plan_1\",\"type\":\"plan_update\",\"status\":\"completed\"}}", callback, assistantContent);
 
-        assertTrue(callback.events.stream().anyMatch(event -> "status".equals(event.type) && event.content.contains("Codex 正在处理")));
-        assertTrue(callback.events.stream().anyMatch(event -> "status".equals(event.type) && event.content.contains("正在搜索")));
-        assertTrue(callback.events.stream().anyMatch(event -> "status".equals(event.type) && event.content.contains("文件变更")));
-        assertTrue(callback.events.stream().anyMatch(event -> "status".equals(event.type) && event.content.contains("计划")));
+        assertFalse(callback.events.stream().anyMatch(event -> "status".equals(event.type) && event.content.contains("Codex 正在处理")));
+        assertFalse(callback.events.stream().anyMatch(event -> "status".equals(event.type) && event.content.contains("正在搜索")));
+        assertFalse(callback.events.stream().anyMatch(event -> "status".equals(event.type) && event.content.contains("文件变更")));
+        assertFalse(callback.events.stream().anyMatch(event -> "status".equals(event.type) && event.content.contains("计划")));
     }
 
     @Test
@@ -517,6 +671,56 @@ public class CodexCliSessionTest {
     }
 
     @Test
+    public void plainAssistantMessageMentioningWallTimeIsNotTreatedAsToolTranscript() throws Exception {
+        CodexCliSession session = new CodexCliSession("tab-wall-time-text");
+        RecordingCallback callback = new RecordingCallback();
+        StringBuilder assistantContent = new StringBuilder();
+
+        invokeParseEvent(
+                session,
+                "{\"type\":\"item.completed\",\"item\":{\"id\":\"item_msg\",\"type\":\"agent_message\",\"text\":\"如图，错误信息里包含 Wall time: 0:40，这里不应该被识别成工具转录。\"}}",
+                callback,
+                assistantContent
+        );
+        invokeParseEvent(
+                session,
+                "{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":1,\"cached_input_tokens\":0,\"output_tokens\":1}}",
+                callback,
+                assistantContent
+        );
+
+        assertTrue(callback.events.stream().anyMatch(event -> "content_delta".equals(event.type)
+                && event.content.contains("Wall time: 0:40")));
+        assertFalse(callback.events.stream().anyMatch(event -> "thinking_delta".equals(event.type)
+                && event.content.contains("Wall time: 0:40")));
+    }
+
+    @Test
+    public void agentMessageAlwaysStreamsAsAssistantContentPerOfficialJsonContract() throws Exception {
+        CodexCliSession session = new CodexCliSession("tab-agent-message-contract");
+        RecordingCallback callback = new RecordingCallback();
+        StringBuilder assistantContent = new StringBuilder();
+
+        invokeParseEvent(
+                session,
+                "{\"type\":\"item.completed\",\"item\":{\"id\":\"item_msg\",\"type\":\"agent_message\",\"text\":\"RUN v3.2.4 D:/project/webview\\n✓ src/utils/messageUtils.test.ts (96 tests) 9ms\\nDuration 2.52s\"}}",
+                callback,
+                assistantContent
+        );
+        invokeParseEvent(
+                session,
+                "{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":1,\"cached_input_tokens\":0,\"output_tokens\":1}}",
+                callback,
+                assistantContent
+        );
+
+        assertTrue(callback.events.stream().anyMatch(event -> "content_delta".equals(event.type)
+                && event.content.contains("RUN v3.2.4")));
+        assertFalse(callback.events.stream().anyMatch(event -> "thinking_delta".equals(event.type)
+                && event.content.contains("RUN v3.2.4")));
+    }
+
+    @Test
     public void exitErrorIncludesFormattedDiagnosticOutput() throws Exception {
         Method method = CodexCliSession.class.getDeclaredMethod(
                 "buildExitError",
@@ -609,3 +813,7 @@ public class CodexCliSessionTest {
     private record Event(String type, String content) {
     }
 }
+
+
+
+

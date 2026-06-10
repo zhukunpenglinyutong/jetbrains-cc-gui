@@ -20,7 +20,10 @@ vi.mock('../toolBlocks', () => ({
 
 vi.mock('./ContentBlockRenderer', () => ({
   ContentBlockRenderer: ({ block }: { block: ClaudeContentBlock }) => (
-    <div data-testid={`content-block-${block.type}`}>{block.type}</div>
+    <div data-testid={`content-block-${block.type}`}>
+      {block.type}
+      {block.type === 'provider_error' ? `:${(block as any).summary}` : ''}
+    </div>
   ),
 }));
 
@@ -221,5 +224,34 @@ describe('MessageItem copy button visibility', () => {
 
     expect(screen.queryByText('已连接')).toBeNull();
     vi.useRealTimers();
+  });
+
+  it('renders provider errors inside the assistant message card', () => {
+    const message: ClaudeMessage = {
+      type: 'assistant',
+      content: 'Codex 已连接，正在理解问题',
+      raw: {
+        content: [
+          {
+            type: 'text',
+            text: 'Codex 已连接，正在理解问题',
+          },
+          {
+            type: 'provider_error',
+            provider: 'codex',
+            summary: '服务暂时不可用',
+            details: 'Codex CLI 请求失败，原因：服务暂时不可用 (503)',
+            exitCode: 1,
+          },
+        ],
+      } as any,
+    };
+
+    renderMessageItem(message);
+
+    expect(screen.getByTestId('content-block-text')).toBeTruthy();
+    expect(screen.getByTestId('content-block-provider_error').textContent).toContain('provider_error:服务暂时不可用');
+    expect(document.querySelector('.message.assistant')).toBeTruthy();
+    expect(document.querySelector('.message.error')).toBeNull();
   });
 });

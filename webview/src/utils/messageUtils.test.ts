@@ -19,6 +19,7 @@ import {
   extractCompactItems,
   buildCompactNotification,
   TASK_STATUS_COLORS,
+  normalizeBlocks as normalizeContentBlocks,
 } from './messageUtils';
 
 // ---------------------------------------------------------------------------
@@ -129,6 +130,59 @@ describe('getContentBlocks', () => {
 
     expect(result.map((block) => block.type)).toEqual(['tool_use', 'text']);
     expect((result[1] as any).text).toBe('命令已经执行完成。');
+  });
+
+  it('does not append provider error content that is already rendered in details', () => {
+    const details = 'Codex CLI 请求失败，原因：Reconnecting... 1/5 (stream disconnected before completion: stream closed before response.completed)';
+    const message: ClaudeMessage = {
+      type: 'assistant',
+      content: details,
+      raw: {
+        content: [
+          {
+            type: 'provider_error',
+            provider: 'codex',
+            summary: 'Reconnecting... 1/5 (stream disconnected before completion: stream closed before response.completed)',
+            details,
+            exitCode: 1,
+          },
+        ],
+      } as any,
+    };
+
+    const result = getContentBlocks(message, normalizeBlocks, localizeMessage);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].type).toBe('provider_error');
+  });
+});
+
+describe('normalizeBlocks provider_error', () => {
+  it('preserves provider error fields from raw content blocks', () => {
+    const result = normalizeContentBlocks(
+      {
+        content: [
+          {
+            type: 'provider_error',
+            provider: 'codex',
+            summary: '服务暂时不可用',
+            details: 'Codex CLI 请求失败，原因：服务暂时不可用 (503)',
+            exitCode: 1,
+          },
+        ],
+      } as any,
+      (text) => text,
+      ((key: string) => key) as any,
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result?.[0]).toEqual({
+      type: 'provider_error',
+      provider: 'codex',
+      summary: '服务暂时不可用',
+      details: 'Codex CLI 请求失败，原因：服务暂时不可用 (503)',
+      exitCode: 1,
+    });
   });
 });
 
@@ -386,6 +440,33 @@ describe('mergeConsecutiveAssistantMessages', () => {
     expect(mergedRaw.content?.map((block) => block.type)).toEqual(['text', 'tool_use']);
     expect(mergedRaw.content?.[0].text).toBe('明白了，预警判断应该跟设备挂钩');
     expect(mergedRaw.content?.[1].id).toBe('read-1');
+  });
+
+  it('preserves provider error blocks when merging history assistant messages', () => {
+    const messages: ClaudeMessage[] = [
+      makeMsg('assistant', 'partial answer', {
+        raw: { content: [{ type: 'text', text: 'partial answer' }] } as any,
+      }),
+      makeMsg('assistant', '服务暂时不可用', {
+        raw: {
+          content: [
+            {
+              type: 'provider_error',
+              provider: 'codex',
+              summary: '服务暂时不可用',
+              details: 'Codex CLI 请求失败，原因：服务暂时不可用 (503)',
+            },
+          ],
+        } as any,
+      }),
+    ];
+
+    const result = mergeConsecutiveAssistantMessages(messages, normalizeBlocks);
+
+    expect(result).toHaveLength(1);
+    const mergedRaw = result[0].raw as { content?: Array<{ type?: string; details?: string }> };
+    expect(mergedRaw.content?.map((block) => block.type)).toEqual(['text', 'provider_error']);
+    expect(mergedRaw.content?.[1].details).toBe('Codex CLI 请求失败，原因：服务暂时不可用 (503)');
   });
 });
 
