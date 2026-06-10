@@ -11,6 +11,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 
@@ -32,6 +33,10 @@ import java.util.Set;
  * Delegates specific functionality to specialized managers.
  */
 public class CodemossSettingsService {
+
+    public static CodemossSettingsService getInstance() {
+        return ApplicationManager.getApplication().getService(CodemossSettingsService.class);
+    }
 
     private static final Logger LOG = Logger.getInstance(CodemossSettingsService.class);
     private static final int CONFIG_VERSION = 2;

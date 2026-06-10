@@ -124,7 +124,7 @@ public class UsagePushService {
                 // Check if auto-open file is enabled
                 String projectPath = context.getProject().getBasePath();
                 if (projectPath != null) {
-                    CodemossSettingsService settingsService = new CodemossSettingsService();
+                    CodemossSettingsService settingsService = CodemossSettingsService.getInstance();
                     boolean autoOpenFileEnabled = settingsService.getAutoOpenFileEnabled(projectPath);
                     if (!autoOpenFileEnabled) {
                         // If auto-open file is disabled, clear the ContextBar display

@@ -56,7 +56,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
     private static final long MCP_TOOLS_TIMEOUT_MS = 65_000;
     private static final int MAX_ENV_VAR_VALUE_LENGTH = 16 * 1024;
     private final CodexHistoryReader historyReader;
-    private final CodemossSettingsService settingsService = new CodemossSettingsService();
+    private final CodemossSettingsService settingsService = CodemossSettingsService.getInstance();
     private final CodexDaemonCoordinator daemonCoordinator;
     private final CodexDaemonRequestExecutor daemonRequestExecutor;
 
@@ -387,7 +387,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
             try {
                 String accessMode = CodemossSettingsService.CODEX_RUNTIME_ACCESS_INACTIVE;
                 try {
-                    accessMode = new CodemossSettingsService().getCodexRuntimeAccessMode();
+                    accessMode = CodemossSettingsService.getInstance().getCodexRuntimeAccessMode();
                 } catch (Exception e) {
                     LOG.warn("[Codex] Failed to resolve runtime access mode before send: " + e.getMessage());
                 }
@@ -598,7 +598,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
     ) {
         String accessMode = CodemossSettingsService.CODEX_RUNTIME_ACCESS_INACTIVE;
         try {
-            accessMode = new CodemossSettingsService().getCodexRuntimeAccessMode();
+            accessMode = CodemossSettingsService.getInstance().getCodexRuntimeAccessMode();
         } catch (Exception e) {
             LOG.warn("[Codex] Failed to resolve runtime access mode before daemon send: " + e.getMessage());
         }
@@ -1022,7 +1022,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 : SANDBOX_MODE_WORKSPACE_WRITE;
 
         try {
-            CodemossSettingsService settingsService = new CodemossSettingsService();
+            CodemossSettingsService settingsService = CodemossSettingsService.getInstance();
             String configured = settingsService.getCodexSandboxMode(cwd);
             if (SANDBOX_MODE_WORKSPACE_WRITE.equals(configured) || SANDBOX_MODE_DANGER_FULL_ACCESS.equals(configured)) {
                 return configured;

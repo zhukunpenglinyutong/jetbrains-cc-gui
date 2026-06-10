@@ -9,6 +9,7 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowFactory;
 import com.intellij.openapi.wm.ToolWindowManager;
@@ -322,6 +323,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         toolWindow.setAdditionalGearActions(gearActions);
 
         registerProjectCloseListener(project);
+
+        Disposer.register(project, () -> instances.remove(project));
 
         contentManager.addContentManagerListener(new ContentManagerListener() {
             @Override

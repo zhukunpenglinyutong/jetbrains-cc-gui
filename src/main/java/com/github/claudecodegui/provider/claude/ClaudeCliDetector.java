@@ -111,7 +111,7 @@ public class ClaudeCliDetector {
 
     private String detectViaConfiguredPath(List<String> triedPaths) {
         try {
-            String configuredPath = new CodemossSettingsService().getClaudeCliPath();
+            String configuredPath = CodemossSettingsService.getInstance().getClaudeCliPath();
             if (configuredPath == null || configuredPath.trim().isEmpty()) {
                 return null;
             }

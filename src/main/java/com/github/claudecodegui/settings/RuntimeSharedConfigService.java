@@ -18,7 +18,7 @@ public class RuntimeSharedConfigService {
     private final CodemossSettingsService settingsService;
 
     public RuntimeSharedConfigService() {
-        this(new CodemossSettingsService());
+        this(CodemossSettingsService.getInstance());
     }
 
     RuntimeSharedConfigService(CodemossSettingsService settingsService) {

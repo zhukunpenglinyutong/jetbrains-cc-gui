@@ -646,7 +646,7 @@ public class WebviewInitializer {
 
     private String getClaudeInvocationMode() {
         try {
-            return new CodemossSettingsService().getClaudeInvocationMode();
+            return CodemossSettingsService.getInstance().getClaudeInvocationMode();
         } catch (Exception e) {
             LOG.warn("Failed to read Claude invocation mode, defaulting to sdk: " + e.getMessage());
             return "sdk";

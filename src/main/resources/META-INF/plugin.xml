@@ -65,6 +65,9 @@
     <depends optional="true" config-file="python-features.xml">com.intellij.modules.python</depends>
 
     <extensions defaultExtensionNs="com.intellij">
+        <!-- Application-scoped singleton for settings -->
+        <applicationService serviceImplementation="com.github.claudecodegui.settings.CodemossSettingsService"/>
+
         <!-- CC GUI tool window (includes history feature) -->
         <toolWindow id="CCG"
                     anchor="right"

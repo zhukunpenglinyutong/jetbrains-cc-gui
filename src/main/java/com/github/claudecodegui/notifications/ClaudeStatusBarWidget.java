@@ -292,7 +292,7 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
         public boolean isAvailable(@NotNull Project project) {
             if (project == null) { return false; }
             try {
-                return new CodemossSettingsService().getStatusBarWidgetEnabled();
+                return CodemossSettingsService.getInstance().getStatusBarWidgetEnabled();
             } catch (Exception e) {
                 return true;
             }

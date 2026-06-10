@@ -257,7 +257,7 @@ public class SessionLifecycleManager {
         }
 
         try {
-            CodemossSettingsService settingsService = new CodemossSettingsService();
+            CodemossSettingsService settingsService = CodemossSettingsService.getInstance();
             String customWorkingDir = settingsService.getCustomWorkingDirectory(projectPath);
 
             if (customWorkingDir != null && !customWorkingDir.isEmpty()) {
@@ -397,7 +397,7 @@ public class SessionLifecycleManager {
 
     private String readClaudeInvocationMode() {
         try {
-            String mode = new CodemossSettingsService().getClaudeInvocationMode();
+            String mode = CodemossSettingsService.getInstance().getClaudeInvocationMode();
             return SessionState.isValidClaudeInvocationMode(mode) ? mode : "sdk";
         } catch (Exception e) {
             LOG.warn("Failed to read Claude invocation mode, defaulting to sdk: " + e.getMessage());

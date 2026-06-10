@@ -111,7 +111,7 @@ public class SystemNotificationService {
      */
     private boolean isEnabled() {
         try {
-            return new CodemossSettingsService().getTaskCompletionNotificationEnabled();
+            return CodemossSettingsService.getInstance().getTaskCompletionNotificationEnabled();
         } catch (Exception e) {
             LOG.debug("[SystemNotification] Failed to read enabled flag, defaulting to false: " + e.getMessage());
             return false;

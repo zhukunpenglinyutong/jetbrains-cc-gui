@@ -204,7 +204,7 @@ public class ClaudeChatWindow {
         this.claudeSDKBridge = sharedBridges.getClaudeBridge();
         this.codexSDKBridge = sharedBridges.getCodexBridge();
         SharedBridgeReferenceCounter.retain(project);
-        this.settingsService = new CodemossSettingsService();
+        this.settingsService = CodemossSettingsService.getInstance();
         this.htmlLoader = new HtmlLoader(getClass());
         this.mainPanel = new JPanel(new BorderLayout());
 

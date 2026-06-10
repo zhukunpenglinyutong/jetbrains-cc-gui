@@ -137,7 +137,7 @@ Footer 包含：
 
     public GitCommitMessageService(@NotNull Project project) {
         this.project = project;
-        this.settingsService = new CodemossSettingsService();
+        this.settingsService = CodemossSettingsService.getInstance();
     }
 
     /**

@@ -56,7 +56,7 @@ public final class CliSettings {
             }
         }
         try {
-            long timeoutSeconds = new CodemossSettingsService().getPermissionDialogTimeoutSeconds();
+            long timeoutSeconds = CodemossSettingsService.getInstance().getPermissionDialogTimeoutSeconds();
             return (timeoutSeconds + CodemossSettingsService.PERMISSION_SAFETY_NET_BUFFER_SECONDS) * 1000L;
         } catch (Exception ignored) {
             return (CodemossSettingsService.DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS
@@ -75,7 +75,7 @@ public final class CliSettings {
             }
         }
         try {
-            String configured = new CodemossSettingsService().getCodexSandboxMode(cwd);
+            String configured = CodemossSettingsService.getInstance().getCodexSandboxMode(cwd);
             if ("read-only".equals(configured)
                     || "workspace-write".equals(configured)
                     || "danger-full-access".equals(configured)) {

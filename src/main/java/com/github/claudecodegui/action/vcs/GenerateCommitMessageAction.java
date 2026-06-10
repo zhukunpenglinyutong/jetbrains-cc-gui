@@ -249,7 +249,7 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
         // Check if commit generation feature is enabled in settings
         if (enabled) {
             try {
-                enabled = new CodemossSettingsService().getCommitGenerationEnabled();
+                enabled = CodemossSettingsService.getInstance().getCommitGenerationEnabled();
             } catch (Exception ex) {
                 LOG.debug("Failed to check commit generation enabled setting: " + ex.getMessage());
             }

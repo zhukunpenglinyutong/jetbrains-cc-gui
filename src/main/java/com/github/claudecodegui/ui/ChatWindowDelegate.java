@@ -166,7 +166,7 @@ public class ChatWindowDelegate {
 
     public void loadInvocationModeFromSettings() {
         try {
-            String mode = new CodemossSettingsService().getClaudeInvocationMode();
+            String mode = CodemossSettingsService.getInstance().getClaudeInvocationMode();
             ClaudeSession session = host.getSession();
             if (mode != null && session != null) {
                 session.setClaudeInvocationMode(mode);

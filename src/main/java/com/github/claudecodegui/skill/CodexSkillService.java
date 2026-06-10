@@ -732,7 +732,7 @@ public class CodexSkillService {
 
     private static boolean isCodexLocalConfigAuthorized() {
         try {
-            return new CodemossSettingsService().isCodexLocalConfigAuthorized();
+            return CodemossSettingsService.getInstance().isCodexLocalConfigAuthorized();
         } catch (Exception e) {
             LOG.warn("[CodexSkills] Failed to read Codex local authorization state: " + e.getMessage());
             return false;

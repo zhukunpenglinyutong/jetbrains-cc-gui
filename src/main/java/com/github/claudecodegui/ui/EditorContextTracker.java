@@ -91,7 +91,7 @@ public class EditorContextTracker {
                 String projectPath = project.getBasePath();
                 if (projectPath != null) {
                     CodemossSettingsService settingsService =
-                        new CodemossSettingsService();
+                        CodemossSettingsService.getInstance();
                     boolean autoOpenFileEnabled = settingsService.getAutoOpenFileEnabled(projectPath);
                     if (!autoOpenFileEnabled) {
                         // If auto-open file is disabled, clear the ContextBar display

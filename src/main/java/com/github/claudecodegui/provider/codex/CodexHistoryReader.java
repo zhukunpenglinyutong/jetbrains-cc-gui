@@ -289,7 +289,7 @@ public class CodexHistoryReader {
 
     boolean isCodexLocalConfigAuthorized() {
         try {
-            return new CodemossSettingsService().isCodexLocalConfigAuthorized();
+            return CodemossSettingsService.getInstance().isCodexLocalConfigAuthorized();
         } catch (Exception e) {
             LOG.warn("[CodexHistoryReader] Failed to read Codex local authorization state: " + e.getMessage());
             return false;

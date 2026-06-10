@@ -147,7 +147,7 @@ public class SessionSendService {
         }
 
         try {
-            String configured = new CodemossSettingsService().getClaudeInvocationMode();
+            String configured = CodemossSettingsService.getInstance().getClaudeInvocationMode();
             if (SessionState.isValidClaudeInvocationMode(configured)) {
                 return configured.trim();
             }
@@ -222,7 +222,7 @@ public class SessionSendService {
         CodexMessageHandler handler = new CodexMessageHandler(state, callbackFacade.getCallbackHandler());
         String accessMode = CodemossSettingsService.CODEX_RUNTIME_ACCESS_INACTIVE;
         try {
-            accessMode = new CodemossSettingsService().getCodexRuntimeAccessMode();
+            accessMode = CodemossSettingsService.getInstance().getCodexRuntimeAccessMode();
         } catch (Exception e) {
             LOG.warn("[Codex] Failed to resolve runtime access mode: " + e.getMessage());
         }
@@ -337,7 +337,7 @@ public class SessionSendService {
         try {
             String projectPath = project.getBasePath();
             if (projectPath != null) {
-                CodemossSettingsService settingsService = new CodemossSettingsService();
+                CodemossSettingsService settingsService = CodemossSettingsService.getInstance();
                 boolean autoOpenFileEnabled = settingsService.getAutoOpenFileEnabled(projectPath);
                 LOG.info("[EditorContext] Auto open file enabled: " + autoOpenFileEnabled);
                 return autoOpenFileEnabled;
@@ -353,7 +353,7 @@ public class SessionSendService {
         try {
             String projectPath = project.getBasePath();
             if (projectPath != null) {
-                CodemossSettingsService settingsService = new CodemossSettingsService();
+                CodemossSettingsService settingsService = CodemossSettingsService.getInstance();
                 streaming = settingsService.getStreamingEnabled(projectPath);
                 LOG.info("[Streaming] Read streaming config: " + streaming);
             }
@@ -365,7 +365,7 @@ public class SessionSendService {
 
     private String getAgentPrompt() {
         try {
-            CodemossSettingsService settingsService = new CodemossSettingsService();
+            CodemossSettingsService settingsService = CodemossSettingsService.getInstance();
             String selectedAgentId = settingsService.getSelectedAgentId();
             LOG.info("[Agent] Checking selected agent ID: " + (selectedAgentId != null ? selectedAgentId : "null"));
 

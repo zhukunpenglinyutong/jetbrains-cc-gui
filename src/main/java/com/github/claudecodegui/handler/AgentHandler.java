@@ -50,7 +50,7 @@ public class AgentHandler extends BaseMessageHandler {
 
     public AgentHandler(HandlerContext context) {
         super(context);
-        this.settingsService = new CodemossSettingsService();
+        this.settingsService = CodemossSettingsService.getInstance();
         this.gson = GsonHolder.GSON;
     }
 
