@@ -56,27 +56,27 @@ public class CodexCliSession {
     );
     private static final Pattern DIAGNOSTIC_BODY_PATTERN = Pattern.compile(
             "(?i)^(?:Line \\||\\d+\\s*\\|\\s*.+|\\|\\s*[~^]+.*"
-            + "|\\|\\s*(?:Cannot find path|The term|Could not find|Cannot bind argument"
-            + "|A positional parameter cannot be found|The system cannot find the file specified"
-            + "|Access is denied|The directory name is invalid"
-            + "|The filename, directory name, or volume label syntax is incorrect"
-            + "|Unexpected token|Missing .+|ParserError|Exception|Error).*)$"
+                    + "|\\|\\s*(?:Cannot find path|The term|Could not find|Cannot bind argument"
+                    + "|A positional parameter cannot be found|The system cannot find the file specified"
+                    + "|Access is denied|The directory name is invalid"
+                    + "|The filename, directory name, or volume label syntax is incorrect"
+                    + "|Unexpected token|Missing .+|ParserError|Exception|Error).*)$"
     );
     private static final Pattern DIAGNOSTIC_GENERIC_PATTERN = Pattern.compile(
             "(?i)^\\s*.*\\b(?:not recognized as the name of a cmdlet|cannot find path"
-            + "|could not find a part of the path|file .* cannot be loaded"
-            + "|cannot bind argument|a positional parameter cannot be found"
-            + "|the system cannot find the file specified|access is denied"
-            + "|the directory name is invalid"
-            + "|the filename, directory name, or volume label syntax is incorrect"
-            + "|unexpected token|missing .+|parsererror|exception).*$"
+                    + "|could not find a part of the path|file .* cannot be loaded"
+                    + "|cannot bind argument|a positional parameter cannot be found"
+                    + "|the system cannot find the file specified|access is denied"
+                    + "|the directory name is invalid"
+                    + "|the filename, directory name, or volume label syntax is incorrect"
+                    + "|unexpected token|missing .+|parsererror|exception).*$"
     );
     // 非 JSON 的 CLI 错误/诊断行（HTTP 错误、网络错误、重试等）
     private static final Pattern CLI_ERROR_KEYWORD_PATTERN = Pattern.compile(
             "(?i)\\b(?:error|failed|failure|exception|timeout|timed.out|retry|exceeded"
-            + "|refused|denied|unauthorized|forbidden|not.found|too.many.requests"
-            + "|rate.limit|quota|abort|fatal|panic|unexpected.status"
-            + "|[45]\\d{2}\\b)\\b"
+                    + "|refused|denied|unauthorized|forbidden|not.found|too.many.requests"
+                    + "|rate.limit|quota|abort|fatal|panic|unexpected.status"
+                    + "|[45]\\d{2}\\b)\\b"
     );
     private static final String UNSUPPORTED_IMAGE_MESSAGE = "__I18N__:aiBridge.unsupportedImageVision";
     private static final Pattern UNSUPPORTED_IMAGE_CONTEXT_PATTERN = Pattern.compile(
@@ -84,12 +84,12 @@ public class CodexCliSession {
     );
     private static final Pattern UNSUPPORTED_IMAGE_REASON_PATTERN = Pattern.compile(
             "(?i)(?:\\b(?:not|n't)\\s+support(?:ed|s)?\\b|\\bunsupported\\b"
-            + "|\\bvision[- ]?capable\\b|\\bmultimodal\\b.*\\brequired\\b"
-            + "|\\brequires?\\b.*\\bvision\\b|\\bonly\\s+supported\\b)"
+                    + "|\\bvision[- ]?capable\\b|\\bmultimodal\\b.*\\brequired\\b"
+                    + "|\\brequires?\\b.*\\bvision\\b|\\bonly\\s+supported\\b)"
     );
     private static final Pattern RATE_LIMIT_OR_QUOTA_PATTERN = Pattern.compile(
             "(?i)(?:\\b429\\b|too\\s+many\\s+requests|rate\\s*limit|quota|request\\s+rejected"
-            + "|使用上限|限额)"
+                    + "|使用上限|限额)"
     );
 
     private final String tabId;
@@ -107,6 +107,15 @@ public class CodexCliSession {
     private final Set<String> emittedToolUseIds = new HashSet<>();
     private final Set<String> emittedToolResultIds = new HashSet<>();
     private final Set<String> emittedThinkingStartIds = new HashSet<>();
+    private String pendingAgentMessageText = "";
+    private SegmentKind lastSegmentKind = SegmentKind.NONE;
+
+    private enum SegmentKind {
+        NONE,
+        TEXT,
+        THINKING,
+        TOOL
+    }
 
     public CodexCliSession(String tabId) {
         this.tabId = tabId;
@@ -131,12 +140,6 @@ public class CodexCliSession {
 
                 ProcessBuilder pb = new ProcessBuilder(cmd);
                 pb.redirectErrorStream(true);
-                if (request.cwd() != null && !request.cwd().isBlank()) {
-                    File cwd = new File(request.cwd());
-                    if (cwd.isDirectory()) {
-                        pb.directory(cwd);
-                    }
-                }
                 Map<String, String> cliEnv = pb.environment();
                 cliEnv.clear();
                 cliEnv.putAll(CliEnvironmentBuilder.buildBaseEnvironment());
@@ -148,6 +151,22 @@ public class CodexCliSession {
                 cliEnv.remove(ENV_CODEX_SANDBOX_NETWORK_DISABLED);
                 if (!request.extraEnv().isEmpty()) {
                     cliEnv.putAll(CodexCliCommandUtils.sanitizeEnv(request.extraEnv()));
+                }
+
+                // CWD 设置放在 pb.start() 紧前面，避免 TOCTOU 竞态：
+                // 如果目录在 check 和 start 之间被删除，Windows CreateProcess 会报
+                // "系统找不到指定的路径" (ERROR_PATH_NOT_FOUND)。
+                if (request.cwd() != null && !request.cwd().isBlank()) {
+                    File cwd = new File(request.cwd());
+                    if (cwd.isDirectory()) {
+                        pb.directory(cwd);
+                    } else {
+                        LOG.warn("[CodexCliSession][" + tabId + "] CWD does not exist, falling back to home: " + request.cwd());
+                        File homeDir = new File(System.getProperty("user.home"));
+                        if (homeDir.isDirectory()) {
+                            pb.directory(homeDir);
+                        }
+                    }
                 }
 
                 process = pb.start();
@@ -192,6 +211,7 @@ public class CodexCliSession {
                         callback.onError(err);
                         callback.onComplete(false, assistantContent.toString(), err);
                     } else {
+                        flushPendingAgentMessageAsContent(callback, assistantContent);
                         callback.onMessage("stream_end", "");
                         callback.onMessage("message_end", "");
                         callback.onComplete(true, assistantContent.toString(), null);
@@ -231,6 +251,8 @@ public class CodexCliSession {
 
     void prepareForSend() {
         userInterrupted.set(false);
+        lastSegmentKind = SegmentKind.NONE;
+        pendingAgentMessageText = "";
     }
 
     boolean wasInterrupted() {
@@ -258,6 +280,15 @@ public class CodexCliSession {
     }
 
     // ── event parsing ────────────────────────────────────────────────────────
+    // Official `codex exec --json` contract (docs/codex/docs/exec.md):
+    // - reasoning -> thinking summary block
+    // - agent_message -> assistant body text
+    // - command_execution / mcp_tool_call -> tool timeline
+    // - turn.failed / error -> provider diagnostic path
+    //
+    // This session intentionally treats event type as the primary routing signal.
+    // We no longer reinterpret agent_message content as tool transcript based on
+    // its text shape; tool output should come from structured tool events.
 
     private void parseEvent(
             String line,
@@ -291,12 +322,13 @@ public class CodexCliSession {
                         threadId = id;
                         callback.onMessage("session_id", id);
                     }
+                    lastSegmentKind = SegmentKind.NONE;
                     callback.onMessage("stream_start", "");
                     callback.onMessage("message_start", "");
                 }
                 case "turn.started" -> {
+                    lastSegmentKind = SegmentKind.NONE;
                     callback.onMessage("message_start", "");
-                    callback.onMessage("status", "Codex 正在处理");
                 }
                 case "item.started", "item.updated", "item.completed" -> {
                     if (event.has("item") && event.get("item").isJsonObject()) {
@@ -310,6 +342,7 @@ public class CodexCliSession {
                     }
                 }
                 case "turn.completed" -> {
+                    flushPendingAgentMessageAsContent(callback, assistantContent);
                     if (event.has("usage") && event.get("usage").isJsonObject()) {
                         callback.onMessage("usage", event.getAsJsonObject("usage").toString());
                         callback.onMessage("result", buildUsageResultMessage(event.getAsJsonObject("usage")).toString());
@@ -347,13 +380,32 @@ public class CodexCliSession {
                 if (cliError != null) {
                     CliErrorFormatter.appendDiagnosticLine(cliError, line);
                 }
+                // 工具执行阶段的诊断信息（如路径错误）路由到 thinking 区域，
+                // 避免用户看到空白的工具结果而不知道发生了什么。
+                if (lastSegmentKind == SegmentKind.TOOL) {
+                    emitThinkingText(callback, line + "\n");
+                }
                 return;
             }
-            assistantContent.append(line).append('\n');
-            callback.onMessage("content_delta", line + "\n");
+            String text = line + "\n";
+            if (lastSegmentKind == SegmentKind.TOOL) {
+                emitThinkingText(callback, text);
+            } else {
+                assistantContent.append(text);
+                markSegment(callback, SegmentKind.TEXT);
+                callback.onMessage("content_delta", text);
+            }
         }
     }
 
+    /**
+     * Route official item.* payloads by item type.
+     * <p>
+     * Mapping follows Codex `--json` docs:
+     * - reasoning -> thinking area
+     * - agent_message -> assistant response body
+     * - command_execution / mcp_tool_call -> tool blocks
+     */
     private void handleItem(
             String eventType,
             JsonObject item,
@@ -369,13 +421,15 @@ public class CodexCliSession {
             case "agent_message" -> handleAgentMessageItem(item, callback, assistantContent);
             case "command_execution" -> handleCommandExecutionItem(eventType, item, callback);
             case "mcp_tool_call" -> handleMcpToolCallItem(eventType, item, callback);
-            case "web_search" -> handleWebSearchItem(eventType, item, callback);
-            case "file_change" -> handleFileChangeItem(eventType, item, callback);
-            case "plan_update" -> handlePlanUpdateItem(eventType, item, callback);
-            default -> {}
+            default -> {
+            }
         }
     }
 
+    /**
+     * Official reasoning items are rendered into the thinking area.
+     * Codex documents reasoning as a summary of assistant thinking, not command output.
+     */
     private void handleReasoningItem(JsonObject item, CliSessionCallback callback) {
         String text = firstNonBlank(
                 getString(item, "text"),
@@ -386,6 +440,7 @@ public class CodexCliSession {
             return;
         }
         String id = stableItemId(item, "reasoning");
+        markSegment(callback, SegmentKind.THINKING);
         // 首次遇到该 reasoning item 时发送 thinking 开始信号
         if (emittedThinkingStartIds.add(id)) {
             callback.onMessage("thinking", "");
@@ -398,6 +453,11 @@ public class CodexCliSession {
         }
     }
 
+    /**
+     * Official agent_message items are rendered as assistant body text.
+     * Even if the text contains command/test-looking content, routing still follows
+     * the event contract rather than text heuristics.
+     */
     private void handleAgentMessageItem(
             JsonObject item,
             CliSessionCallback callback,
@@ -417,33 +477,41 @@ public class CodexCliSession {
         }
         String delta = appendedDelta(previous, text);
         assistantTextByItemId.put(id, text);
-        if (!delta.isEmpty()) {
-            assistantContent.append(delta);
-            callback.onMessage("content_delta", delta);
+        if (!delta.isEmpty() || pendingAgentMessageText.isEmpty()) {
+            pendingAgentMessageText = text;
         }
-        callback.onMessage("assistant", buildAssistantMessage(text).toString());
     }
 
+    /**
+     * Official command_execution items become tool_use/tool_result pairs.
+     * Structured command output comes from aggregated_output/output/stdout/stderr,
+     * not from agent_message.
+     */
     private void handleCommandExecutionItem(String eventType, JsonObject item, CliSessionCallback callback) {
         String id = stableItemId(item, "command_execution");
         String command = extractCommand(item);
+        flushPendingAgentMessageAsThinking(callback);
+        markSegment(callback, SegmentKind.TOOL);
         if ("item.started".equals(eventType) || "item.updated".equals(eventType)) {
-            callback.onMessage("status", "正在执行命令: " + command);
             emitToolUseOnce(callback, id, "Bash", commandInput(command));
             return;
         }
 
-        callback.onMessage("status", "命令执行完成: " + command);
         emitToolUseOnce(callback, id, "Bash", commandInput(command));
         emitToolResultOnce(callback, id, isItemError(item), extractCommandOutput(item));
     }
 
+    /**
+     * Official mcp_tool_call items are normalized into tool_use/tool_result pairs.
+     */
     private void handleMcpToolCallItem(String eventType, JsonObject item, CliSessionCallback callback) {
         String id = stableItemId(item, "mcp_tool_call");
         String toolName = normalizeMcpToolName(getString(item, "server"), getString(item, "tool"));
         JsonObject input = item.has("arguments") && item.get("arguments").isJsonObject()
                 ? item.getAsJsonObject("arguments")
                 : new JsonObject();
+        flushPendingAgentMessageAsThinking(callback);
+        markSegment(callback, SegmentKind.TOOL);
         if ("item.started".equals(eventType) || "item.updated".equals(eventType)) {
             emitToolUseOnce(callback, id, toolName, input);
             return;
@@ -454,24 +522,11 @@ public class CodexCliSession {
         emitToolResultOnce(callback, id, isError, extractMcpResult(item));
     }
 
-    private void handleWebSearchItem(String eventType, JsonObject item, CliSessionCallback callback) {
-        if ("item.started".equals(eventType) || "item.updated".equals(eventType)) {
-            callback.onMessage("status", "正在搜索");
-        }
-    }
-
-    private void handleFileChangeItem(String eventType, JsonObject item, CliSessionCallback callback) {
-        if ("item.completed".equals(eventType)) {
-            callback.onMessage("status", "文件变更");
-        }
-    }
-
-    private void handlePlanUpdateItem(String eventType, JsonObject item, CliSessionCallback callback) {
-        if ("item.completed".equals(eventType)) {
-            callback.onMessage("status", "计划已更新");
-        }
-    }
-
+    /**
+     * Compatibility path for response_item payloads.
+     * These are not part of the primary exec.md event list, but the project keeps
+     * them to recover tool calls from older/alternate Codex event shapes.
+     */
     private void handleResponseItem(JsonObject payload, CliSessionCallback callback) {
         String payloadType = getString(payload, "type");
         if (payloadType == null) {
@@ -490,6 +545,8 @@ public class CodexCliSession {
         String name = firstNonBlank(getString(payload, "name"), "unknown");
         String id = stableItemId(payload, "unknown");
         JsonObject input = parseFunctionCallArguments(payload);
+        flushPendingAgentMessageAsThinking(callback);
+        markSegment(callback, SegmentKind.TOOL);
         emitToolUseOnce(callback, id, name, input);
     }
 
@@ -497,6 +554,8 @@ public class CodexCliSession {
         String id = stableItemId(payload, "unknown");
         boolean isError = isItemError(payload);
         String output = firstNonBlank(getString(payload, "output"), getString(payload, "result"));
+        flushPendingAgentMessageAsThinking(callback);
+        markSegment(callback, SegmentKind.TOOL);
         emitToolResultOnce(callback, id, isError, output != null ? output : "(no output)");
     }
 
@@ -513,7 +572,74 @@ public class CodexCliSession {
                 input.addProperty("file_path", filePath);
             }
         }
+        flushPendingAgentMessageAsThinking(callback);
+        markSegment(callback, SegmentKind.TOOL);
         emitToolUseOnce(callback, id, name, input);
+    }
+
+    /**
+     * Flush the buffered agent_message text into the assistant body stream.
+     * This is the normal completion path for official agent_message items.
+     */
+    private void flushPendingAgentMessageAsContent(CliSessionCallback callback, StringBuilder assistantContent) {
+        if (pendingAgentMessageText == null || pendingAgentMessageText.isBlank()) {
+            pendingAgentMessageText = "";
+            return;
+        }
+        String text = pendingAgentMessageText;
+        pendingAgentMessageText = "";
+
+        String delta = appendedDelta(assistantContent.toString(), text);
+        if (!delta.isEmpty()) {
+            assistantContent.append(delta);
+            markSegment(callback, SegmentKind.TEXT);
+            callback.onMessage("content_delta", delta);
+        }
+        callback.onMessage("assistant", buildAssistantMessage(text).toString());
+    }
+
+    /**
+     * Flush buffered text into thinking only when a real structured tool event is about
+     * to start. This keeps pre-tool coordination text visually attached to the tool
+     * boundary without reclassifying standalone agent_message items.
+     */
+    private void flushPendingAgentMessageAsThinking(CliSessionCallback callback) {
+        if (pendingAgentMessageText == null || pendingAgentMessageText.isBlank()) {
+            pendingAgentMessageText = "";
+            return;
+        }
+        String text = pendingAgentMessageText;
+        pendingAgentMessageText = "";
+        emitThinkingText(callback, text);
+    }
+
+    /**
+     * Emit text through the thinking channel.
+     * Used for official reasoning items and for buffered pre-tool text flushed at a
+     * structured tool boundary.
+     */
+    private void emitThinkingText(CliSessionCallback callback, String text) {
+        if (text == null || text.isEmpty()) {
+            return;
+        }
+        markSegment(callback, SegmentKind.THINKING);
+        callback.onMessage("thinking", "");
+        callback.onMessage("thinking_delta", text);
+    }
+
+    private void markSegment(CliSessionCallback callback, SegmentKind nextKind) {
+        if (nextKind == null || nextKind == SegmentKind.NONE) {
+            return;
+        }
+        boolean crossesToolBoundary =
+                (lastSegmentKind == SegmentKind.TOOL && nextKind != SegmentKind.TOOL)
+                        || (lastSegmentKind != SegmentKind.NONE
+                        && lastSegmentKind != SegmentKind.TOOL
+                        && nextKind == SegmentKind.TOOL);
+        if (crossesToolBoundary) {
+            callback.onMessage("block_reset", "");
+        }
+        lastSegmentKind = nextKind;
     }
 
     private JsonObject buildAssistantMessage(String text) {
@@ -623,13 +749,13 @@ public class CodexCliSession {
     /**
      * 构造 codex 命令。
      * 注意:codex 0.131.0 中 `codex exec` 与 `codex exec resume` 接受的 flag 集合是不同的:
-     *   - exec:        --color / -s --sandbox / -C --cd / --add-dir / -m / -i --image<FILE>... / --json
-     *                  `-i, --image <FILE>...` 是 num_args=1.. 贪婪参数,后续位置参数 prompt 会被吞掉,
-     *                  因此带图片时需要在 prompt 前插入 `--` 分隔符。
-     *   - exec resume: 仅 --last / --all / -m / -i --image<FILE> / --json / -c / 各种 --dangerously-* /
-     *                  --skip-git-repo-check / --ephemeral 等;
-     *                  resume 子命令 *不接受* --color / --sandbox / -C / --add-dir。
-     *                  resume 的 `-i, --image <FILE>` 是单值非贪婪,不需要 `--` 分隔符。
+     * - exec:        --color / -s --sandbox / -C --cd / --add-dir / -m / -i --image<FILE>... / --json
+     * `-i, --image <FILE>...` 是 num_args=1.. 贪婪参数,后续位置参数 prompt 会被吞掉,
+     * 因此带图片时需要在 prompt 前插入 `--` 分隔符。
+     * - exec resume: 仅 --last / --all / -m / -i --image<FILE> / --json / -c / 各种 --dangerously-* /
+     * --skip-git-repo-check / --ephemeral 等;
+     * resume 子命令 *不接受* --color / --sandbox / -C / --add-dir。
+     * resume 的 `-i, --image <FILE>` 是单值非贪婪,不需要 `--` 分隔符。
      * `-a, --ask-for-approval` 是 top-level 全局 flag,在 exec 与 exec resume 下都可用。
      * prompt 统一通过 stdin 传递，命令行末尾使用 `-` 显式要求 Codex 从 stdin 读取。
      */
@@ -649,7 +775,9 @@ public class CodexCliSession {
         return cmd;
     }
 
-    /** 首次会话:codex exec ... [-- PROMPT] */
+    /**
+     * 首次会话:codex exec ... [-- PROMPT]
+     */
     private void appendExecArgs(List<String> cmd, CliSendRequest request, List<File> images,
                                 CodexCliCommandUtils.PermissionSelection perm) {
         cmd.add("exec");
@@ -683,7 +811,9 @@ public class CodexCliSession {
         cmd.add("-");
     }
 
-    /** 续接会话:codex exec resume --last ... PROMPT */
+    /**
+     * 续接会话:codex exec resume --last ... PROMPT
+     */
     private void appendResumeArgs(List<String> cmd, CliSendRequest request, List<File> images) {
         cmd.add("exec");
         cmd.add("resume");
@@ -1076,3 +1206,7 @@ public class CodexCliSession {
         }
     }
 }
+
+
+
+
