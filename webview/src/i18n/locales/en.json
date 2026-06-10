@@ -1560,6 +1560,10 @@
     "max": {
       "label": "Max",
       "description": "Maximum reasoning for demanding tasks (session only)"
+    },
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "XHigh effort plus workflows"
     }
   },
   "models": {
@@ -1590,6 +1594,10 @@
       "opus48": {
         "label": "Opus 4.8",
         "description": "Opus 4.8 · Latest and most capable"
+      },
+      "fable5": {
+        "label": "Fable 5",
+        "description": "Fable 5 · Built for long-running, complex work · 2x token usage"
       }
     },
     "codex": {
@@ -1786,6 +1794,10 @@
     "max": {
       "label": "Max",
       "description": "Maximum reasoning depth"
+    },
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "XHigh effort plus workflows"
     }
   },
   "errorBoundary": {

@@ -1348,6 +1348,10 @@
       "opus48": {
         "label": "Opus 4.8",
         "description": "Opus 4.8 · नवीनतम और सबसे सक्षम"
+      },
+      "fable5": {
+        "label": "Fable 5",
+        "description": "Fable 5 · लंबे, जटिल कार्यों के लिए निर्मित · 2x टोकन खपत"
       }
     },
     "longContext": {
@@ -1512,6 +1516,10 @@
     "xhigh": {
       "label": "अधिकतम",
       "description": "अधिकतम तर्क गहराई"
+    },
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "XHigh प्रयास और वर्कफ़्लो"
     }
   },
   "errorBoundary": {

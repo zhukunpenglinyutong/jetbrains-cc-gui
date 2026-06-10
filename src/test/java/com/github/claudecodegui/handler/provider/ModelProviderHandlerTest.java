@@ -75,10 +75,14 @@ public class ModelProviderHandlerTest {
     public void shouldReturnCorrectContextLimitsForClaudeModels() {
         // Base IDs without [1m] suffix - 200k context by default
         assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-sonnet-4-6"));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-fable-5"));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-opus-4-8"));
         assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-opus-4-7"));
         assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-opus-4-6"));
         // IDs with [1m] suffix - 1M context
         assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-sonnet-4-6[1m]"));
+        assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-fable-5[1m]"));
+        assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-opus-4-8[1m]"));
         assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-opus-4-7[1m]"));
         assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-opus-4-6[1m]"));
         // Haiku - no 1M context available

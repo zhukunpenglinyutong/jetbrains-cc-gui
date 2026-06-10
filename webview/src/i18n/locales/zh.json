@@ -1565,6 +1565,10 @@
     "max": {
       "label": "max",
       "description": "高难度任务的最大推理深度（仅当前会话）"
+    },
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "XHigh 推理 + 工作流，最全面"
     }
   },
   "models": {
@@ -1595,6 +1599,10 @@
       "opus48": {
         "label": "Opus 4.8",
         "description": "Opus 4.8 · 最新最强大的模型"
+      },
+      "fable5": {
+        "label": "Fable 5",
+        "description": "Fable 5 · 专为长时间复杂任务打造 · 消耗 2 倍 Token"
       }
     },
     "codex": {
@@ -1791,6 +1799,10 @@
     "max": {
       "label": "max",
       "description": "最大推理深度"
+    },
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "XHigh 推理 + 工作流，最全面"
     }
   },
   "errorBoundary": {

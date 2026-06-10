@@ -1375,6 +1375,10 @@
       "opus48": {
         "label": "Opus 4.8",
         "description": "Opus 4.8 · Новейшая и самая мощная"
+      },
+      "fable5": {
+        "label": "Fable 5",
+        "description": "Fable 5 · Создан для длительной сложной работы · Расход токенов 2x"
       }
     },
     "longContext": {
@@ -1539,6 +1543,10 @@
     "xhigh": {
       "label": "Максимальная",
       "description": "Максимальная глубина рассуждений"
+    },
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "Усилие XHigh плюс рабочие процессы"
     }
   },
   "errorBoundary": {

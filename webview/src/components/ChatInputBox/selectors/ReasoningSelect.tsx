@@ -5,6 +5,7 @@ import {
   EFFORT_SUPPORTED_CLAUDE_MODELS,
   MAX_EFFORT_CLAUDE_MODELS,
   XHIGH_EFFORT_CLAUDE_MODELS,
+  ULTRACODE_EFFORT_CLAUDE_MODELS,
   type ReasoningEffort,
 } from '../types';
 
@@ -32,7 +33,7 @@ interface ReasoningSelectProps {
  * Controls the depth of reasoning for AI models.
  * Visibility and available levels depend on the selected model:
  * - Codex: low/medium/high/xhigh
- * - Claude Opus 4.7: low/medium/high/xhigh/max
+ * - Claude Fable 5 and Opus 4.7/4.8: low/medium/high/xhigh/max/ultracode
  * - Claude Opus 4.6 and Sonnet 4.6: low/medium/high/max
  * - Claude Haiku 4.5 and legacy models: hidden (no adaptive thinking support)
  */
@@ -48,16 +49,19 @@ export const ReasoningSelect = ({ value, onChange, disabled, selectedModel, curr
   // Build the list of available levels for the current model
   const availableLevels = REASONING_LEVELS.filter(level => {
     if (currentProvider !== 'claude') {
-      return level.id !== 'max';
+      return level.id !== 'max' && level.id !== 'ultracode';
     }
     if (!selectedModel) {
-      return true;
+      return level.id !== 'ultracode';
     }
     if (level.id === 'xhigh') {
       return XHIGH_EFFORT_CLAUDE_MODELS.has(selectedModel);
     }
     if (level.id === 'max') {
       return MAX_EFFORT_CLAUDE_MODELS.has(selectedModel);
+    }
+    if (level.id === 'ultracode') {
+      return ULTRACODE_EFFORT_CLAUDE_MODELS.has(selectedModel);
     }
     return true;
   });

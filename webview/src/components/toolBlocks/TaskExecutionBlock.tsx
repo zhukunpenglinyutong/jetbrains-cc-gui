@@ -80,14 +80,14 @@ function parseSpawnAgentMeta(input: ToolInput, result?: ToolResultBlock | null):
   const model = getString(
     parsed?.model,
     input.model,
-  ) ?? (text?.match(/\(([A-Za-z0-9._:-]+)(?:\s+(low|medium|high|xhigh))?\)/i)?.[1]);
+  ) ?? (text?.match(/\(([A-Za-z0-9._:-]+)(?:\s+(low|medium|high|xhigh|max|ultracode))?\)/i)?.[1]);
 
   const reasoningEffort = getString(
     parsed?.reasoning_effort,
     parsed?.reasoningEffort,
     input.reasoning_effort,
     input.reasoningEffort,
-  ) ?? (text?.match(/\(([A-Za-z0-9._:-]+)(?:\s+(low|medium|high|xhigh))?\)/i)?.[2]);
+  ) ?? (text?.match(/\(([A-Za-z0-9._:-]+)(?:\s+(low|medium|high|xhigh|max|ultracode))?\)/i)?.[2]);
 
   return { agentId, nickname, model, reasoningEffort };
 }
