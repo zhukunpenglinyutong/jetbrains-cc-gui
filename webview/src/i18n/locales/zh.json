@@ -1544,33 +1544,6 @@
       }
     }
   },
-  "claudeEffort": {
-    "title": "选择推理强度",
-    "low": {
-      "label": "low",
-      "description": "短小、范围明确、对延迟敏感的任务"
-    },
-    "medium": {
-      "label": "medium",
-      "description": "成本敏感型工作，可牺牲部分智能"
-    },
-    "high": {
-      "label": "high",
-      "description": "平衡 Token 用量与智能水平"
-    },
-    "xhigh": {
-      "label": "xhigh",
-      "description": "大多数编程任务的最佳效果（推荐）"
-    },
-    "max": {
-      "label": "max",
-      "description": "高难度任务的最大推理深度（仅当前会话）"
-    },
-    "ultracode": {
-      "label": "Ultracode",
-      "description": "XHigh 推理 + 工作流，最全面"
-    }
-  },
   "models": {
     "addModel": "添加模型",
     "longContext": {
