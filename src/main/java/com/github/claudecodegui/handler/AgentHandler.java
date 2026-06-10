@@ -5,6 +5,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.model.ConflictStrategy;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -50,7 +51,7 @@ public class AgentHandler extends BaseMessageHandler {
     public AgentHandler(HandlerContext context) {
         super(context);
         this.settingsService = new CodemossSettingsService();
-        this.gson = new Gson();
+        this.gson = GsonHolder.GSON;
     }
 
     @Override

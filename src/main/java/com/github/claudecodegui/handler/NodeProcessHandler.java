@@ -4,6 +4,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.handler.core.MessageHandler;
 import com.github.claudecodegui.service.NodeProcessInfo;
 import com.github.claudecodegui.service.NodeProcessRegistry;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -48,7 +49,7 @@ public class NodeProcessHandler implements MessageHandler {
     private static final long RESTART_REFRESH_DELAY_MS = 500L;
 
     private final HandlerContext context;
-    private final Gson gson = new Gson();
+    private final Gson gson = GsonHolder.GSON;
 
     public NodeProcessHandler(HandlerContext context) {
         this.context = context;

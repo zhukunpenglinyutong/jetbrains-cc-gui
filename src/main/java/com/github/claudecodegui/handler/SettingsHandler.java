@@ -6,6 +6,7 @@ import com.github.claudecodegui.handler.provider.ModelProviderHandler;
 
 import com.github.claudecodegui.util.LanguageConfigService;
 import com.github.claudecodegui.util.ThemeConfigService;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
@@ -18,7 +19,7 @@ import com.intellij.openapi.diagnostic.Logger;
 public class SettingsHandler extends BaseMessageHandler {
 
     private static final Logger LOG = Logger.getInstance(SettingsHandler.class);
-    private final Gson gson = new Gson();
+    private final Gson gson = GsonHolder.GSON;
 
     private final InputHistoryHandler inputHistoryHandler;
     private final UsagePushService usagePushService;

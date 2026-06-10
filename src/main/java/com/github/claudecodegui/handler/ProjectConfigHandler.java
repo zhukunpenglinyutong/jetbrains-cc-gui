@@ -10,6 +10,7 @@ import com.github.claudecodegui.provider.claude.ClaudeHistoryReader;
 import com.github.claudecodegui.provider.codex.CodexHistoryReader;
 import com.github.claudecodegui.util.FontConfigService;
 import com.github.claudecodegui.util.ThemeConfigService;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -34,7 +35,7 @@ public class ProjectConfigHandler {
 
     private final HandlerContext context;
     private final CodemossSettingsService settingsService;
-    private final Gson gson = new Gson();
+    private final Gson gson = GsonHolder.GSON;
 
     public ProjectConfigHandler(HandlerContext context) {
         this.context = context;

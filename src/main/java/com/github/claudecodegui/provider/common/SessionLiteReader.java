@@ -9,6 +9,7 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import com.github.claudecodegui.util.GsonHolder;
 
 /**
  * Lightweight session file reader that only reads head and tail chunks.
@@ -20,7 +21,7 @@ public class SessionLiteReader {
 
     private static final Logger LOG = Logger.getInstance(SessionLiteReader.class);
 
-    private static final Gson GSON = new Gson();
+    private static final Gson GSON = GsonHolder.GSON;
 
     /**
      * Size of the head/tail buffer for lite metadata reads (64KB).

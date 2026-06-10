@@ -4,6 +4,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.model.NodeDetectionResult;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.ide.util.PropertiesComponent;
@@ -23,7 +24,7 @@ public class NodePathHandler {
     static final String NODE_PATH_PROPERTY_KEY = "claude.code.node.path";
 
     private final HandlerContext context;
-    private final Gson gson = new Gson();
+    private final Gson gson = GsonHolder.GSON;
 
     public NodePathHandler(HandlerContext context) {
         this.context = context;

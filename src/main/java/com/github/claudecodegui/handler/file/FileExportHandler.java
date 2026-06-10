@@ -2,6 +2,7 @@ package com.github.claudecodegui.handler.file;
 
 import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.util.GsonHolder;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -29,7 +30,7 @@ public class FileExportHandler extends BaseMessageHandler {
         "save_json"
     };
 
-    private final Gson gson = new Gson();
+    private final Gson gson = GsonHolder.GSON;
 
     public FileExportHandler(HandlerContext context) {
         super(context);

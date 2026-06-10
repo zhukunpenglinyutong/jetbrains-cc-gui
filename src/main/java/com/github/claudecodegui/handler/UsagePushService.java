@@ -6,6 +6,7 @@ import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.util.TokenUsageUtils;
 import com.github.claudecodegui.util.IgnoreRuleMatcher;
 import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
@@ -26,7 +27,7 @@ public class UsagePushService {
     private static final Logger LOG = Logger.getInstance(UsagePushService.class);
 
     private final HandlerContext context;
-    private final Gson gson = new Gson();
+    private final Gson gson = GsonHolder.GSON;
 
     public UsagePushService(HandlerContext context) {
         this.context = context;

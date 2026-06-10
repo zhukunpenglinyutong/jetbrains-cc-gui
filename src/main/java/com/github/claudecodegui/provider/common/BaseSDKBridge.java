@@ -9,6 +9,7 @@ import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.bridge.ProcessManager;
 import com.github.claudecodegui.startup.BridgePreloader;
 import com.github.claudecodegui.util.PlatformUtils;
+import com.github.claudecodegui.util.GsonHolder;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.util.concurrency.AppExecutorUtil;
 
@@ -32,7 +33,7 @@ public abstract class BaseSDKBridge {
     protected static final String CHANNEL_SCRIPT = "channel-manager.js";
 
     protected final Logger LOG;
-    protected final Gson gson = new Gson();
+    protected final Gson gson = GsonHolder.GSON;
     /**
      * Shared NodeDetector instance (singleton pattern).
      * This ensures that ClaudeSDKBridge and CodexSDKBridge share the same cache,

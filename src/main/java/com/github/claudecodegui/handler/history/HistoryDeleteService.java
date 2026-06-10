@@ -8,6 +8,7 @@ import com.github.claudecodegui.cache.SessionIndexManager;
 import com.github.claudecodegui.util.AttachmentStorageService;
 import com.github.claudecodegui.util.PathUtils;
 import com.github.claudecodegui.util.PlatformUtils;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -34,7 +35,7 @@ import java.util.stream.Stream;
 class HistoryDeleteService {
 
     private static final Logger LOG = Logger.getInstance(HistoryDeleteService.class);
-    private static final Gson GSON = new Gson();
+    private static final Gson GSON = GsonHolder.GSON;
 
     // Reject anything outside [A-Za-z0-9._-] to defeat path-traversal payloads such as "../foo"
     // before they reach Path.resolve. Session IDs in both providers are alphanumeric/UUID style.

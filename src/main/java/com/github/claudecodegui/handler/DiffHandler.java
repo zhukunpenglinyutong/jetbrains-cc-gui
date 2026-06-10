@@ -10,6 +10,7 @@ import com.github.claudecodegui.handler.diff.EditableDiffHandler;
 import com.github.claudecodegui.handler.diff.InteractiveDiffMessageHandler;
 import com.github.claudecodegui.handler.diff.RefreshFileHandler;
 import com.github.claudecodegui.handler.diff.SimpleDiffDisplayHandler;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.intellij.openapi.diagnostic.Logger;
 import java.util.List;
@@ -25,7 +26,7 @@ public class DiffHandler extends BaseMessageHandler {
 
     public DiffHandler(HandlerContext context) {
         super(context);
-        Gson gson = new Gson();
+        Gson gson = GsonHolder.GSON;
         DiffBrowserBridge browserBridge = new DiffBrowserBridge(context, gson);
         DiffFileOperations fileOperations = new DiffFileOperations(context);
         this.dispatcher = new DiffRequestDispatcher(List.of(

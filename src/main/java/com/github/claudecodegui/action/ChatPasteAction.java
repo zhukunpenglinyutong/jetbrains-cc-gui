@@ -1,6 +1,7 @@
 package com.github.claudecodegui.action;
 
 import com.github.claudecodegui.ui.toolwindow.ClaudeChatWindow;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.diagnostic.Logger;
@@ -23,7 +24,7 @@ import java.util.Base64;
 public class ChatPasteAction extends ChatToolWindowAction {
 
     private static final Logger LOG = Logger.getInstance(ChatPasteAction.class);
-    private static final Gson GSON = new Gson();
+    private static final Gson GSON = GsonHolder.GSON;
 
     @Override
     protected void performAction(@NotNull AnActionEvent e, @NotNull Project project, @NotNull ClaudeChatWindow chatWindow) {

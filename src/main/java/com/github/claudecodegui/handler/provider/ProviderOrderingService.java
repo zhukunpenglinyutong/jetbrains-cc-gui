@@ -1,6 +1,7 @@
 package com.github.claudecodegui.handler.provider;
 
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.util.GsonHolder;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -18,7 +19,7 @@ import java.util.List;
 public class ProviderOrderingService {
 
     private static final Logger LOG = Logger.getInstance(ProviderOrderingService.class);
-    private static final Gson GSON = new Gson();
+    private static final Gson GSON = GsonHolder.GSON;
 
     private final HandlerContext context;
     private final ClaudeProviderOperations claudeOps;

@@ -11,6 +11,7 @@ import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.session.SessionState;
 import com.github.claudecodegui.util.AttachmentStorageService;
 import com.github.claudecodegui.util.PlatformUtils;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -138,7 +139,7 @@ public class SessionHandler extends BaseMessageHandler {
         String requestedPermissionMode = null;
         String resolvedRequestedInvocationMode = requestedInvocationMode;
         try {
-            Gson gson = new Gson();
+            Gson gson = GsonHolder.GSON;
             JsonObject payload = gson.fromJson(content, JsonObject.class);
             prompt = payload != null && payload.has("text") && !payload.get("text").isJsonNull()
                              ? payload.get("text").getAsString()
@@ -254,7 +255,7 @@ public class SessionHandler extends BaseMessageHandler {
      */
     private void handleSendMessageWithAttachments(String content) {
         try {
-            Gson gson = new Gson();
+            Gson gson = GsonHolder.GSON;
             JsonObject payload = gson.fromJson(content, JsonObject.class);
             String text = payload != null && payload.has("text") && !payload.get("text").isJsonNull()
                                   ? payload.get("text").getAsString()
@@ -486,7 +487,7 @@ public class SessionHandler extends BaseMessageHandler {
 
     private String extractInvocationMode(String content) {
         try {
-            JsonObject payload = new Gson().fromJson(content, JsonObject.class);
+            JsonObject payload = GsonHolder.GSON.fromJson(content, JsonObject.class);
             if (payload != null && payload.has("invocationMode") && !payload.get("invocationMode").isJsonNull()) {
                 String mode = payload.get("invocationMode").getAsString();
                 if (SessionState.isValidClaudeInvocationMode(mode)) {

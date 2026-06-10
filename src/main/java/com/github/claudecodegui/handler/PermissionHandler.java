@@ -6,6 +6,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.permission.PermissionService;
 import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
@@ -150,7 +151,7 @@ public class PermissionHandler extends BaseMessageHandler {
         LOG.info("[PERM_SHOW] Stored pending request, total pending: " + pendingPermissionRequests.size());
 
         try {
-            Gson gson = new Gson();
+            Gson gson = GsonHolder.GSON;
             JsonObject requestData = new JsonObject();
             requestData.addProperty("channelId", channelId);
             requestData.addProperty("toolName", toolName);
@@ -197,7 +198,7 @@ public class PermissionHandler extends BaseMessageHandler {
         LOG.info("[PermissionHandler] 显示权限请求对话框: " + request.getToolName());
 
         try {
-            Gson gson = new Gson();
+            Gson gson = GsonHolder.GSON;
             JsonObject requestData = new JsonObject();
             requestData.addProperty("channelId", request.getChannelId());
             requestData.addProperty("toolName", request.getToolName());
@@ -262,7 +263,7 @@ public class PermissionHandler extends BaseMessageHandler {
         LOG.info("[PERM_DECISION] Received permission decision from JS");
         LOG.debug("[PERM_DEBUG][HANDLE_DECISION] payloadLength=" + payloadLength(jsonContent));
         try {
-            Gson gson = new Gson();
+            Gson gson = GsonHolder.GSON;
             JsonObject decision = gson.fromJson(jsonContent, JsonObject.class);
 
             String channelId = decision.get("channelId").getAsString();
@@ -373,7 +374,7 @@ public class PermissionHandler extends BaseMessageHandler {
         pendingAskUserQuestionRequests.put(requestId, future);
 
         try {
-            Gson gson = new Gson();
+            Gson gson = GsonHolder.GSON;
             String requestJson = gson.toJson(questionsData);
             String escapedJson = escapeJs(requestJson);
 
@@ -413,7 +414,7 @@ public class PermissionHandler extends BaseMessageHandler {
     private void handleAskUserQuestionResponse(String jsonContent) {
         LOG.debug("[ASK_USER_QUESTION][HANDLE_RESPONSE] payloadLength=" + payloadLength(jsonContent));
         try {
-            Gson gson = new Gson();
+            Gson gson = GsonHolder.GSON;
             JsonObject response = gson.fromJson(jsonContent, JsonObject.class);
 
             String requestId = response.get("requestId").getAsString();
@@ -447,7 +448,7 @@ public class PermissionHandler extends BaseMessageHandler {
         pendingPlanApprovalRequests.put(requestId, future);
 
         try {
-            Gson gson = new Gson();
+            Gson gson = GsonHolder.GSON;
             String requestJson = gson.toJson(planData);
             String escapedJson = escapeJs(requestJson);
 
@@ -495,7 +496,7 @@ public class PermissionHandler extends BaseMessageHandler {
     private void handlePlanApprovalResponse(String jsonContent) {
         LOG.debug("[PLAN_APPROVAL][HANDLE_RESPONSE] payloadLength=" + payloadLength(jsonContent));
         try {
-            Gson gson = new Gson();
+            Gson gson = GsonHolder.GSON;
             JsonObject response = gson.fromJson(jsonContent, JsonObject.class);
 
             String requestId = response.get("requestId").getAsString();

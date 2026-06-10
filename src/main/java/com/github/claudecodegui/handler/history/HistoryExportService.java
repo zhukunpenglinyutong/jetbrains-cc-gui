@@ -4,7 +4,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.provider.claude.ClaudeHistoryReader;
 import com.github.claudecodegui.provider.codex.CodexHistoryReader;
-import com.google.gson.Gson;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.intellij.openapi.application.ApplicationManager;
@@ -37,7 +37,7 @@ class HistoryExportService {
 
             try {
                 // Parse JSON from frontend to extract sessionId and title
-                JsonObject exportRequest = new Gson().fromJson(content, JsonObject.class);
+                JsonObject exportRequest = GsonHolder.GSON.fromJson(content, JsonObject.class);
                 String sessionId = exportRequest.get("sessionId").getAsString();
                 String title = exportRequest.get("title").getAsString();
 
@@ -69,7 +69,7 @@ class HistoryExportService {
                 exportData.addProperty("title", title);
                 exportData.add("messages", JsonParser.parseString(messagesJson));
 
-                String wrappedJson = new Gson().toJson(exportData);
+                String wrappedJson = GsonHolder.GSON.toJson(exportData);
 
                 LOG.info("[HistoryHandler] 读取到会话消息，准备注入到前端");
 

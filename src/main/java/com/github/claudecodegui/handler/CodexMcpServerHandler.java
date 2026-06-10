@@ -4,6 +4,7 @@ import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.settings.CodexMcpServerManager;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
@@ -93,7 +94,7 @@ public class CodexMcpServerHandler extends BaseMessageHandler {
                 }
 
                 List<JsonObject> servers = codexMcpServerManager.getMcpServers();
-                Gson gson = new Gson();
+                Gson gson = GsonHolder.GSON;
                 String serversJson = gson.toJson(servers);
 
                 LOG.info("[CodexMcpServerHandler] Loaded " + servers.size() + " Codex MCP servers");
@@ -130,7 +131,7 @@ public class CodexMcpServerHandler extends BaseMessageHandler {
                 }
 
                 List<JsonObject> statusList = codexMcpServerManager.getMcpServerStatus();
-                Gson gson = new Gson();
+                Gson gson = GsonHolder.GSON;
                 String statusJson = gson.toJson(statusList);
 
                 LOG.info("[CodexMcpServerHandler] Got status for " + statusList.size() + " Codex MCP servers");
@@ -163,12 +164,12 @@ public class CodexMcpServerHandler extends BaseMessageHandler {
     private void handleGetMcpServerTools(String content) {
         try {
             if (!isCodexLocalConfigAuthorized()) {
-                Gson gson = new Gson();
+                Gson gson = GsonHolder.GSON;
                 sendToolsError("", com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("error.codexLocalAccessNotAuthorized"), gson);
                 return;
             }
 
-            Gson gson = new Gson();
+            Gson gson = GsonHolder.GSON;
             JsonObject json = gson.fromJson(content, JsonObject.class);
             if (json == null || !json.has("serverId")) {
                 sendToolsError("", "Missing required field: serverId", gson);
@@ -207,7 +208,7 @@ public class CodexMcpServerHandler extends BaseMessageHandler {
                 });
         } catch (Exception e) {
             LOG.error("[CodexMcpServerHandler] Failed to get MCP server tools: " + e.getMessage(), e);
-            Gson gson = new Gson();
+            Gson gson = GsonHolder.GSON;
             sendToolsError("", e.getMessage(), gson);
         }
     }
@@ -237,7 +238,7 @@ public class CodexMcpServerHandler extends BaseMessageHandler {
      */
     private void handleAddMcpServer(String content) {
         try {
-            Gson gson = new Gson();
+            Gson gson = GsonHolder.GSON;
             JsonObject server = gson.fromJson(content, JsonObject.class);
 
             codexMcpServerManager.upsertMcpServer(server);
@@ -263,7 +264,7 @@ public class CodexMcpServerHandler extends BaseMessageHandler {
      */
     private void handleUpdateMcpServer(String content) {
         try {
-            Gson gson = new Gson();
+            Gson gson = GsonHolder.GSON;
             JsonObject server = gson.fromJson(content, JsonObject.class);
 
             codexMcpServerManager.upsertMcpServer(server);
@@ -289,7 +290,7 @@ public class CodexMcpServerHandler extends BaseMessageHandler {
      */
     private void handleDeleteMcpServer(String content) {
         try {
-            Gson gson = new Gson();
+            Gson gson = GsonHolder.GSON;
             JsonObject json = gson.fromJson(content, JsonObject.class);
             String serverId = json.get("id").getAsString();
 
@@ -322,7 +323,7 @@ public class CodexMcpServerHandler extends BaseMessageHandler {
      */
     private void handleToggleMcpServer(String content) {
         try {
-            Gson gson = new Gson();
+            Gson gson = GsonHolder.GSON;
             JsonObject server = gson.fromJson(content, JsonObject.class);
 
             codexMcpServerManager.upsertMcpServer(server);
@@ -351,7 +352,7 @@ public class CodexMcpServerHandler extends BaseMessageHandler {
      */
     private void handleValidateMcpServer(String content) {
         try {
-            Gson gson = new Gson();
+            Gson gson = GsonHolder.GSON;
             JsonObject server = gson.fromJson(content, JsonObject.class);
 
             Map<String, Object> validation = codexMcpServerManager.validateMcpServer(server);

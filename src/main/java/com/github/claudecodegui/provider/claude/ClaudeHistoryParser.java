@@ -2,6 +2,7 @@ package com.github.claudecodegui.provider.claude;
 
 import com.github.claudecodegui.util.TagExtractor;
 import com.github.claudecodegui.util.TextSanitizer;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.intellij.openapi.diagnostic.Logger;
 
@@ -22,7 +23,7 @@ class ClaudeHistoryParser {
 
     private static final Logger LOG = Logger.getInstance(ClaudeHistoryParser.class);
 
-    private final Gson gson = new Gson();
+    private final Gson gson = GsonHolder.GSON;
     private final BiConsumer<Path, Exception> scanFailureReporter;
 
     ClaudeHistoryParser() {

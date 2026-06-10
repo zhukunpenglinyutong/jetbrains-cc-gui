@@ -5,6 +5,7 @@ import com.github.claudecodegui.model.PromptScope;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.github.claudecodegui.util.PlatformUtils;
+import com.github.claudecodegui.util.GsonHolder;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -45,7 +46,7 @@ public class PromptFileWatcher implements BulkFileListener {
     ) {
         this.project = project;
         this.settingsService = settingsService;
-        this.gson = new Gson();
+        this.gson = GsonHolder.GSON;
         this.onPromptsChanged = onPromptsChanged;
     }
 

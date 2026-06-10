@@ -25,6 +25,7 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
+import com.github.claudecodegui.util.GsonHolder;
 import com.intellij.openapi.diagnostic.Logger;
 /**
  * Permission request dialog.
@@ -36,7 +37,7 @@ public class PermissionDialog extends DialogWrapper {
     private final JBCefJSQuery jsQuery;
     private final PermissionRequest request;
     private Consumer<PermissionDecision> decisionCallback;
-    private final Gson gson = new Gson();
+    private final Gson gson = GsonHolder.GSON;
 
     public static class PermissionDecision {
         public final String channelId;

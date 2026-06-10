@@ -7,7 +7,7 @@ import com.github.claudecodegui.cache.SessionIndexCache;
 import com.github.claudecodegui.cache.SessionIndexManager;
 import com.github.claudecodegui.provider.claude.ClaudeHistoryReader;
 import com.github.claudecodegui.provider.codex.CodexHistoryReader;
-import com.google.gson.Gson;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
@@ -159,8 +159,8 @@ class HistoryLoadService {
             String favoritesJson = nodeJsServiceCaller.callNodeJsFavoritesService("loadFavorites", "");
 
             // Parse history data and favorite data
-            JsonObject history = new Gson().fromJson(historyJson, JsonObject.class);
-            JsonObject favorites = new Gson().fromJson(favoritesJson, JsonObject.class);
+            JsonObject history = GsonHolder.GSON.fromJson(historyJson, JsonObject.class);
+            JsonObject favorites = GsonHolder.GSON.fromJson(favoritesJson, JsonObject.class);
 
             // Add favorite info and provider info to each session
             if (history.has("sessions") && history.get("sessions").isJsonArray()) {
@@ -185,7 +185,7 @@ class HistoryLoadService {
             // Also add favorite data to the history data
             history.add("favorites", favorites);
 
-            return new Gson().toJson(history);
+            return GsonHolder.GSON.toJson(history);
 
         } catch (Exception e) {
             LOG.warn("[HistoryHandler] 增强历史数据失败，返回原始数据: " + e.getMessage());
@@ -202,8 +202,8 @@ class HistoryLoadService {
             String titlesJson = nodeJsServiceCaller.callNodeJsTitlesService("loadTitles");
 
             // Parse history data and title data
-            JsonObject history = new Gson().fromJson(historyJson, JsonObject.class);
-            JsonObject titles = new Gson().fromJson(titlesJson, JsonObject.class);
+            JsonObject history = GsonHolder.GSON.fromJson(historyJson, JsonObject.class);
+            JsonObject titles = GsonHolder.GSON.fromJson(titlesJson, JsonObject.class);
 
             // Add custom title to each session
             if (history.has("sessions") && history.get("sessions").isJsonArray()) {
@@ -224,7 +224,7 @@ class HistoryLoadService {
                 }
             }
 
-            return new Gson().toJson(history);
+            return GsonHolder.GSON.toJson(history);
 
         } catch (Exception e) {
             LOG.warn("[HistoryHandler] 增强标题数据失败，返回原始数据: " + e.getMessage());

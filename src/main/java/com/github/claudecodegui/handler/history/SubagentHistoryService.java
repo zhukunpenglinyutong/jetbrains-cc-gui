@@ -4,6 +4,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.util.PathUtils;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.github.claudecodegui.util.JsUtils;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -27,7 +28,7 @@ class SubagentHistoryService {
 
     private static final Logger LOG = Logger.getInstance(SubagentHistoryService.class);
     private static final Pattern SAFE_ID = Pattern.compile("[A-Za-z0-9_-]+");
-    private static final Gson GSON = new Gson();
+    private static final Gson GSON = GsonHolder.GSON;
     private static final int MAX_JSONL_LINES = 50_000;
 
     private final HandlerContext context;

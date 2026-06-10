@@ -8,6 +8,7 @@ import com.github.claudecodegui.model.ConflictStrategy;
 import com.github.claudecodegui.model.PromptScope;
 import com.github.claudecodegui.settings.AbstractPromptManager;
 import com.github.claudecodegui.watcher.PromptFileWatcher;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -59,7 +60,7 @@ public class PromptHandler extends BaseMessageHandler {
     public PromptHandler(HandlerContext context) {
         super(context);
         this.settingsService = context.getSettingsService();
-        this.gson = new Gson();
+        this.gson = GsonHolder.GSON;
 
         // Initialize file watcher to monitor .codemoss/prompt.json changes
         this.fileWatcher = new PromptFileWatcher(

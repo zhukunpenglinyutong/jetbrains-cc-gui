@@ -2,8 +2,8 @@ package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.util.GsonHolder;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 
@@ -71,7 +71,7 @@ public class WindowEventHandler extends BaseMessageHandler {
 
     private void handleTabLoadingChanged(String content) {
         try {
-            JsonObject json = new Gson().fromJson(content, JsonObject.class);
+            JsonObject json = GsonHolder.GSON.fromJson(content, JsonObject.class);
             boolean loading = json.has("loading") && json.get("loading").getAsBoolean();
             callback.onTabLoadingChanged(loading);
         } catch (Exception e) {
@@ -81,7 +81,7 @@ public class WindowEventHandler extends BaseMessageHandler {
 
     private void handleTabStatusChanged(String content) {
         try {
-            JsonObject json = new Gson().fromJson(content, JsonObject.class);
+            JsonObject json = GsonHolder.GSON.fromJson(content, JsonObject.class);
             String statusStr = json.has("status") ? json.get("status").getAsString() : "idle";
             callback.onTabStatusChanged(statusStr);
         } catch (Exception e) {

@@ -3,6 +3,7 @@ package com.github.claudecodegui.util;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.handler.SettingsHandler;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -31,7 +32,7 @@ public class MessageJsonConverter {
      * Convert a list of session messages to JSON string for webview transport.
      */
     public static String convertMessagesToJson(List<ClaudeSession.Message> messages) {
-        Gson gson = new Gson();
+        Gson gson = GsonHolder.GSON;
         JsonArray messagesArray = new JsonArray();
         for (ClaudeSession.Message msg : messages) {
             JsonObject msgObj = new JsonObject();
@@ -274,7 +275,7 @@ public class MessageJsonConverter {
 
             JsonObject usageUpdate = TokenUsageUtils.buildUsageUpdatePayload(lastUsage, currentProvider, maxTokens);
 
-            String usageJson = new Gson().toJson(usageUpdate);
+            String usageJson = GsonHolder.GSON.toJson(usageUpdate);
             ApplicationManager.getApplication().invokeLater(() -> {
                 if (browser != null && !disposed) {
                     // Use safe call pattern, check if function exists

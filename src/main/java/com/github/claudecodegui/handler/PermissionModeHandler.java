@@ -1,6 +1,7 @@
 package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.util.GsonHolder;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -18,7 +19,7 @@ public class PermissionModeHandler {
     static final String PERMISSION_MODE_PROPERTY_KEY = "claude.code.permission.mode";
 
     private final HandlerContext context;
-    private final Gson gson = new Gson();
+    private final Gson gson = GsonHolder.GSON;
 
     public PermissionModeHandler(HandlerContext context) {
         this.context = context;

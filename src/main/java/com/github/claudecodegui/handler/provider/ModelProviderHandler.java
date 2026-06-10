@@ -5,6 +5,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.skill.SlashCommandRegistry;
 import com.github.claudecodegui.util.EditorFileUtils;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
@@ -57,7 +58,7 @@ public class ModelProviderHandler {
 
     private final HandlerContext context;
     private final UsagePushService usagePushService;
-    private final Gson gson = new Gson();
+    private final Gson gson = GsonHolder.GSON;
 
     public ModelProviderHandler(HandlerContext context, UsagePushService usagePushService) {
         this.context = context;

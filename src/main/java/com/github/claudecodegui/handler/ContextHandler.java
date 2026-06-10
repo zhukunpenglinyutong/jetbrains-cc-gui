@@ -2,6 +2,7 @@ package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.util.GsonHolder;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -15,7 +16,7 @@ import com.intellij.openapi.diagnostic.Logger;
 public class ContextHandler extends BaseMessageHandler {
 
     private static final Logger LOG = Logger.getInstance(ContextHandler.class);
-    private final Gson gson = new Gson();
+    private final Gson gson = GsonHolder.GSON;
 
     private static final String[] SUPPORTED_TYPES = {"get_context_usage"};
 

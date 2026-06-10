@@ -5,6 +5,7 @@ import com.github.claudecodegui.settings.ProviderManager;
 
 import com.github.claudecodegui.model.DeleteResult;
 import com.github.claudecodegui.util.PlatformUtils;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonSyntaxException;
@@ -20,7 +21,7 @@ import java.nio.file.Paths;
  */
 public class ClaudeProviderOperations {
     private static final Logger LOG = Logger.getInstance(ClaudeProviderOperations.class);
-    private static final Gson GSON = new Gson();
+    private static final Gson GSON = GsonHolder.GSON;
 
     private final HandlerContext context;
 

@@ -3,6 +3,7 @@ package com.github.claudecodegui.handler.provider;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.util.PlatformUtils;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -24,7 +25,7 @@ import java.util.concurrent.CompletableFuture;
 public class ProviderImportExportSupport {
 
     private static final Logger LOG = Logger.getInstance(ProviderImportExportSupport.class);
-    private static final Gson GSON = new Gson();
+    private static final Gson GSON = GsonHolder.GSON;
 
     private final HandlerContext context;
     private final ClaudeProviderOperations claudeOps;

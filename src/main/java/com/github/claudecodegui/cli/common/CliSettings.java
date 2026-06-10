@@ -4,7 +4,7 @@ import com.github.claudecodegui.settings.ConfigPathManager;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.settings.CodexSettingsManager;
 import com.github.claudecodegui.util.PlatformUtils;
-import com.google.gson.Gson;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonElement;
@@ -129,7 +129,7 @@ public final class CliSettings {
     public static Map<String, String> readCodexCliEnvironment() {
         Map<String, String> env = new LinkedHashMap<>();
         try {
-            CodexSettingsManager manager = new CodexSettingsManager(new Gson());
+            CodexSettingsManager manager = new CodexSettingsManager(GsonHolder.GSON);
             Map<String, Object> config = manager.readConfigToml();
             if (config != null) {
                 String model = stringValue(config.get("model"));

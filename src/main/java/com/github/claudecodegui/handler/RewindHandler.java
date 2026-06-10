@@ -2,6 +2,7 @@ package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.util.GsonHolder;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -17,7 +18,7 @@ import java.util.concurrent.CompletableFuture;
 public class RewindHandler extends BaseMessageHandler {
 
     private static final Logger LOG = Logger.getInstance(RewindHandler.class);
-    private static final Gson gson = new Gson();
+    private static final Gson gson = GsonHolder.GSON;
 
     private static final String[] SUPPORTED_TYPES = {
         "rewind_files"

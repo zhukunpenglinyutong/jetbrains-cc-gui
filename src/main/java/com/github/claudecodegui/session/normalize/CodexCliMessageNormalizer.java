@@ -1,12 +1,13 @@
 package com.github.claudecodegui.session.normalize;
 
 import com.github.claudecodegui.provider.common.MessageCallback;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
 public final class CodexCliMessageNormalizer extends ForwardingMessageNormalizer {
-    private final Gson gson = new Gson();
+    private final Gson gson = GsonHolder.GSON;
 
     public CodexCliMessageNormalizer(MessageCallback delegate) {
         super(delegate);

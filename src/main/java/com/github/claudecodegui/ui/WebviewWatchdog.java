@@ -1,7 +1,7 @@
 package com.github.claudecodegui.ui;
 
 import com.github.claudecodegui.util.HtmlLoader;
-import com.google.gson.Gson;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
@@ -127,7 +127,7 @@ public class WebviewWatchdog {
         }
 
         try {
-            JsonObject json = new Gson().fromJson(content, JsonObject.class);
+            JsonObject json = GsonHolder.GSON.fromJson(content, JsonObject.class);
             if (json != null) {
                 if (json.has("raf")) {
                     lastRafAtMs = json.get("raf").getAsLong();

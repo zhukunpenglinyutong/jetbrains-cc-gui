@@ -4,6 +4,7 @@ import com.github.claudecodegui.permission.PermissionManager;
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
@@ -27,7 +28,7 @@ public class ClaudeSession {
      */
     private static final int MAX_FILE_SIZE_BYTES = 100 * 1024;
 
-    private final Gson gson = new Gson();
+    private final Gson gson = GsonHolder.GSON;
     private final Project project;
 
     // Session state manager

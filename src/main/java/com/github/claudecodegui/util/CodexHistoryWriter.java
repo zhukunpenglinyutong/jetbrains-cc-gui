@@ -12,6 +12,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.stream.Stream;
+import com.github.claudecodegui.util.GsonHolder;
 
 /**
  * Appends plugin-generated Codex history events to ~/.codex/sessions JSONL files.
@@ -20,7 +21,7 @@ public final class CodexHistoryWriter {
 
     private static final Logger LOG = Logger.getInstance(CodexHistoryWriter.class);
     private static final Path CODEX_SESSIONS_DIR = Paths.get(PlatformUtils.getHomeDirectory(), ".codex", "sessions");
-    private static final Gson GSON = new Gson();
+    private static final Gson GSON = GsonHolder.GSON;
 
     private CodexHistoryWriter() {
     }

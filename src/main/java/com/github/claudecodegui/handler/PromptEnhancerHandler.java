@@ -5,6 +5,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.ProcessManager;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
@@ -37,7 +38,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class PromptEnhancerHandler extends BaseMessageHandler {
 
     private static final Logger LOG = Logger.getInstance(PromptEnhancerHandler.class);
-    private final Gson gson = new Gson();
+    private final Gson gson = GsonHolder.GSON;
     private final EnvironmentConfigurator envConfigurator = new EnvironmentConfigurator();
 
     // Hard timeout for the enhancement Node.js process. Without this, a network-stalled

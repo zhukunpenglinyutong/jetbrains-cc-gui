@@ -1,6 +1,7 @@
 package com.github.claudecodegui.skill;
 
 import com.github.claudecodegui.util.PlatformUtils;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -33,7 +34,7 @@ import java.util.regex.Pattern;
  */
 public class SkillService {
     private static final Logger LOG = Logger.getInstance(SkillService.class);
-    private static final Gson gson = new Gson();
+    private static final Gson gson = GsonHolder.GSON;
 
     // Management directory root path
     private static final String CONFIG_DIR_NAME = ".codemoss";

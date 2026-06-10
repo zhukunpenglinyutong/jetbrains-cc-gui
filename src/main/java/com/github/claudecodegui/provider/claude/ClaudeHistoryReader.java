@@ -1,6 +1,7 @@
 package com.github.claudecodegui.provider.claude;
 
 import com.github.claudecodegui.util.PlatformUtils;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.intellij.openapi.diagnostic.Logger;
 
@@ -29,7 +30,7 @@ public class ClaudeHistoryReader {
     private static final Path HISTORY_FILE = CLAUDE_DIR.resolve("history.jsonl");
     static final Path PROJECTS_DIR = CLAUDE_DIR.resolve("projects");
 
-    private final Gson gson = new Gson();
+    private final Gson gson = GsonHolder.GSON;
 
     // Sub-services
     private final ClaudeHistoryParser parser;

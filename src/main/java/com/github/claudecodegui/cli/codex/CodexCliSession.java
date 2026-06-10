@@ -11,6 +11,7 @@ import com.github.claudecodegui.cli.common.CliProcessHandle;
 import com.github.claudecodegui.cli.common.CliSettings;
 import com.github.claudecodegui.session.runtime.CodexCliResolver;
 import com.github.claudecodegui.ui.toolwindow.TabPerformanceLogger;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -93,7 +94,7 @@ public class CodexCliSession {
     );
 
     private final String tabId;
-    private final Gson gson = new Gson();
+    private final Gson gson = GsonHolder.GSON;
     private final CliAttachmentHandler attachmentHandler = new CliAttachmentHandler();
     private final CliMcpConfig mcpConfig;
 

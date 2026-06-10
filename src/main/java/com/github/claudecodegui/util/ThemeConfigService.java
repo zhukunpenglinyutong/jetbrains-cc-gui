@@ -5,10 +5,10 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.ide.ui.LafManager;
 import com.intellij.ide.ui.LafManagerListener;
 import com.intellij.ui.JBColor;
-import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 
 import java.awt.Color;
+import com.github.claudecodegui.util.GsonHolder;
 
 /**
  * IDE theme configuration service.
@@ -164,7 +164,7 @@ public class ThemeConfigService {
         // After initial load, only actual changes will trigger notifications
         lastKnownIsDark = config.get("isDark").getAsBoolean();
 
-        return new Gson().toJson(config);
+        return GsonHolder.GSON.toJson(config);
     }
 
     /**

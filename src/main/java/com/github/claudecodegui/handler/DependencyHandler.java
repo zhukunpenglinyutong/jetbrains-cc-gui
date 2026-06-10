@@ -9,6 +9,7 @@ import com.github.claudecodegui.model.NodeDetectionResult;
 import com.github.claudecodegui.dependency.InstallResult;
 import com.github.claudecodegui.dependency.SdkDefinition;
 import com.github.claudecodegui.dependency.UpdateInfo;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.ide.util.PropertiesComponent;
@@ -48,7 +49,7 @@ public class DependencyHandler extends BaseMessageHandler {
         super(context);
         this.nodeDetector = NodeDetector.getInstance();
         this.dependencyManager = new DependencyManager(this.nodeDetector);
-        this.gson = new Gson();
+        this.gson = GsonHolder.GSON;
         this.initFuture = null;
         this.initLock = new Object();
     }

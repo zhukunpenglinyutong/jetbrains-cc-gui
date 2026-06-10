@@ -27,7 +27,7 @@ import com.github.claudecodegui.ui.WebviewWatchdog;
 import com.github.claudecodegui.util.AttachmentStorageService;
 import com.github.claudecodegui.util.HtmlLoader;
 import com.github.claudecodegui.util.JsUtils;
-import com.google.gson.Gson;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
@@ -651,7 +651,7 @@ public class ClaudeChatWindow {
     void handleJavaScriptMessage(String message) {
         if (message.startsWith("{\"type\":\"console.")) {
             try {
-                JsonObject json = new Gson().fromJson(message, JsonObject.class);
+                JsonObject json = GsonHolder.GSON.fromJson(message, JsonObject.class);
                 String logType = json.get("type").getAsString();
                 JsonArray args = json.getAsJsonArray("args");
 
@@ -715,7 +715,7 @@ public class ClaudeChatWindow {
             return null;
         }
         try {
-            JsonObject json = new Gson().fromJson(message, JsonObject.class);
+            JsonObject json = GsonHolder.GSON.fromJson(message, JsonObject.class);
             if (json == null || !json.has("type")) {
                 return null;
             }

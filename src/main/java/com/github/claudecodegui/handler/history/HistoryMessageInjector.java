@@ -7,9 +7,9 @@ import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.session.SessionState;
 import com.github.claudecodegui.util.AttachmentStorageService;
 import com.github.claudecodegui.util.JsUtils;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
-import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.intellij.openapi.application.ApplicationManager;
@@ -51,7 +51,7 @@ public class HistoryMessageInjector {
         String resolvedSessionId = sessionId;
 
         try {
-            JsonObject payload = new Gson().fromJson(sessionId, JsonObject.class);
+            JsonObject payload = GsonHolder.GSON.fromJson(sessionId, JsonObject.class);
             if (payload != null) {
                 if (payload.has("sessionId") && !payload.get("sessionId").isJsonNull()) {
                     resolvedSessionId = payload.get("sessionId").getAsString();
@@ -903,7 +903,7 @@ public class HistoryMessageInjector {
      * 批量注入前端消息，复用 updateMessages 链路，避免长历史逐条追加导致最新消息显示滞后。
      */
     private void injectBatchToFrontend(List<JsonObject> frontendMessages) {
-        String messagesJson = new Gson().toJson(frontendMessages);
+        String messagesJson = GsonHolder.GSON.toJson(frontendMessages);
         String escapedMessagesJson = JsUtils.escapeJs(messagesJson);
 
         ApplicationManager.getApplication().invokeLater(() -> {

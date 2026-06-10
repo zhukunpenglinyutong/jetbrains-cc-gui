@@ -3,6 +3,7 @@ package com.github.claudecodegui.handler.provider;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.model.DeleteResult;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
@@ -16,7 +17,7 @@ import java.util.List;
 public class CodexProviderOperations {
 
     private static final Logger LOG = Logger.getInstance(CodexProviderOperations.class);
-    private static final Gson GSON = new Gson();
+    private static final Gson GSON = GsonHolder.GSON;
 
     private final HandlerContext context;
 

@@ -3,6 +3,7 @@ package com.github.claudecodegui.provider.codex;
 import com.github.claudecodegui.util.TagExtractor;
 import com.github.claudecodegui.util.TextSanitizer;
 import com.github.claudecodegui.util.UserMessageSanitizer;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
@@ -26,7 +27,7 @@ class CodexHistoryParser {
     private final Gson gson;
 
     CodexHistoryParser() {
-        this(new Gson());
+        this(GsonHolder.GSON);
     }
 
     CodexHistoryParser(Gson gson) {

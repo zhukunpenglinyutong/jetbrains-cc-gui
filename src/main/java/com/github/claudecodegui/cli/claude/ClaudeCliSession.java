@@ -14,6 +14,7 @@ import com.github.claudecodegui.provider.claude.ClaudeCliStreamParser;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.ui.toolwindow.TabPerformanceLogger;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
@@ -43,7 +44,7 @@ public class ClaudeCliSession {
     private static final Logger LOG = Logger.getInstance(ClaudeCliSession.class);
 
     private final String tabId;
-    private final Gson gson = new Gson();
+    private final Gson gson = GsonHolder.GSON;
     private final CliAttachmentHandler attachmentHandler = new CliAttachmentHandler();
     private final CliMcpConfig mcpConfig;
     private volatile String permissionDir;

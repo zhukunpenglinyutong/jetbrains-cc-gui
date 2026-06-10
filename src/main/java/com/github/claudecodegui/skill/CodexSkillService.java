@@ -3,6 +3,7 @@ package com.github.claudecodegui.skill;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.settings.CodexSettingsManager;
 import com.github.claudecodegui.util.PlatformUtils;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -40,7 +41,7 @@ import java.util.regex.Pattern;
  */
 public class CodexSkillService {
     private static final Logger LOG = Logger.getInstance(CodexSkillService.class);
-    private static final Gson gson = new Gson();
+    private static final Gson gson = GsonHolder.GSON;
     private static final int MAX_SCAN_LEVELS = 3;
 
     // Shared instance to avoid repeated instantiation (I1)

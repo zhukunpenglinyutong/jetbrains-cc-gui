@@ -1,6 +1,7 @@
 package com.github.claudecodegui.util;
 
 import com.github.claudecodegui.session.ProviderErrorMessageSupport;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -27,7 +28,7 @@ public final class ClaudeHistoryWriter {
     private static final Logger LOG = Logger.getInstance(ClaudeHistoryWriter.class);
     private static final String HOME_DIR = PlatformUtils.getHomeDirectory();
     private static final Path PROJECTS_DIR = Paths.get(HOME_DIR, ".claude", "projects");
-    private static final Gson GSON = new Gson();
+    private static final Gson GSON = GsonHolder.GSON;
 
     private ClaudeHistoryWriter() {
     }

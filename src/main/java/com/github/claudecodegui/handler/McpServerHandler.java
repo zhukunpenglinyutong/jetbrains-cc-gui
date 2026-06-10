@@ -4,6 +4,7 @@ import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.startup.BridgePreloader;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
@@ -85,7 +86,7 @@ public class McpServerHandler extends BaseMessageHandler {
                 : null;
 
             List<JsonObject> servers = context.getSettingsService().getMcpServersWithProjectPath(projectPath);
-            Gson gson = new Gson();
+            Gson gson = GsonHolder.GSON;
             String serversJson = gson.toJson(servers);
 
             LOG.info("[McpServerHandler] Loaded " + servers.size() + " MCP servers for project: "
@@ -142,7 +143,7 @@ public class McpServerHandler extends BaseMessageHandler {
                 // Get server status
                 context.getClaudeSDKBridge().getMcpServerStatus(cwd)
                     .thenAccept(statusList -> {
-                        Gson gson = new Gson();
+                        Gson gson = GsonHolder.GSON;
                         String statusJson = gson.toJson(statusList);
 
                         // Add debug logging to help troubleshoot name matching issues
@@ -183,7 +184,7 @@ public class McpServerHandler extends BaseMessageHandler {
      */
     private void handleGetMcpServerTools(String content) {
         try {
-            Gson gson = new Gson();
+            Gson gson = GsonHolder.GSON;
             JsonObject json = gson.fromJson(content, JsonObject.class);
             String serverId = json.get("serverId").getAsString();
 
@@ -255,7 +256,7 @@ public class McpServerHandler extends BaseMessageHandler {
      */
     private void handleAddMcpServer(String content) {
         try {
-            Gson gson = new Gson();
+            Gson gson = GsonHolder.GSON;
             JsonObject server = gson.fromJson(content, JsonObject.class);
 
             context.getSettingsService().upsertMcpServer(server);
@@ -278,7 +279,7 @@ public class McpServerHandler extends BaseMessageHandler {
      */
     private void handleUpdateMcpServer(String content) {
         try {
-            Gson gson = new Gson();
+            Gson gson = GsonHolder.GSON;
             JsonObject server = gson.fromJson(content, JsonObject.class);
 
             context.getSettingsService().upsertMcpServer(server);
@@ -301,7 +302,7 @@ public class McpServerHandler extends BaseMessageHandler {
      */
     private void handleDeleteMcpServer(String content) {
         try {
-            Gson gson = new Gson();
+            Gson gson = GsonHolder.GSON;
             JsonObject json = gson.fromJson(content, JsonObject.class);
             String serverId = json.get("id").getAsString();
 
@@ -334,7 +335,7 @@ public class McpServerHandler extends BaseMessageHandler {
      */
     private void handleToggleMcpServer(String content) {
         try {
-            Gson gson = new Gson();
+            Gson gson = GsonHolder.GSON;
             JsonObject server = gson.fromJson(content, JsonObject.class);
 
             // Update server configuration
@@ -368,7 +369,7 @@ public class McpServerHandler extends BaseMessageHandler {
      */
     private void handleValidateMcpServer(String content) {
         try {
-            Gson gson = new Gson();
+            Gson gson = GsonHolder.GSON;
             JsonObject server = gson.fromJson(content, JsonObject.class);
 
             Map<String, Object> validation = context.getSettingsService().validateMcpServer(server);

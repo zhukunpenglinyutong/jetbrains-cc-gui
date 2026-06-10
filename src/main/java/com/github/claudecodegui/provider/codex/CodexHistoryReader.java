@@ -2,6 +2,7 @@ package com.github.claudecodegui.provider.codex;
 
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.util.PlatformUtils;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
@@ -32,7 +33,7 @@ public class CodexHistoryReader {
     private final CodexHistorySessionService sessionService;
 
     public CodexHistoryReader() {
-        this(CODEX_SESSIONS_DIR, new Gson());
+        this(CODEX_SESSIONS_DIR, GsonHolder.GSON);
     }
 
     CodexHistoryReader(Path sessionsDir, Gson gson) {

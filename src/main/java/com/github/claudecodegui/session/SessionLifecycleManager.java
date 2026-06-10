@@ -10,7 +10,7 @@ import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.skill.SlashCommandRegistry;
 import com.github.claudecodegui.util.JsUtils;
 import com.github.claudecodegui.util.PlatformUtils;
-import com.google.gson.Gson;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.JsonObject;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
@@ -373,7 +373,7 @@ public class SessionLifecycleManager {
         usageUpdate.addProperty("usedTokens", 0);
         usageUpdate.addProperty("maxTokens", maxTokens);
 
-        String usageJson = new Gson().toJson(usageUpdate);
+        String usageJson = GsonHolder.GSON.toJson(usageUpdate);
 
         JBCefBrowser browser = host.getBrowser();
         if (browser != null && !host.isDisposed()) {
@@ -486,7 +486,7 @@ public class SessionLifecycleManager {
         if ("claude".equals(session.getProvider()) && session.getClaudeInvocationMode() != null) {
             payload.addProperty("claudeInvocationMode", session.getClaudeInvocationMode());
         }
-        String json = new Gson().toJson(payload);
+        String json = GsonHolder.GSON.toJson(payload);
         ApplicationManager.getApplication().invokeLater(() -> host.callJavaScript("window.updateSessionRuntimeState", JsUtils.escapeJs(json)));
     }
 

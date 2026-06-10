@@ -10,6 +10,7 @@ import javax.swing.*;
 import java.nio.file.*;
 import java.util.Set;
 import java.util.concurrent.*;
+import com.github.claudecodegui.util.GsonHolder;
 
 /**
  * Permission service - handles permission requests from the Node.js process
@@ -21,7 +22,7 @@ public class PermissionService {
     private final Project project;
     private final Path permissionDir;
     private final String sessionId;
-    private final Gson gson = new Gson();
+    private final Gson gson = GsonHolder.GSON;
     private volatile long lastActivityTime = System.currentTimeMillis();
     private volatile PermissionDecisionListener decisionListener;
 

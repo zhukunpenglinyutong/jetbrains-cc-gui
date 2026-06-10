@@ -1,6 +1,7 @@
 package com.github.claudecodegui.provider.claude;
 
 import com.github.claudecodegui.util.PathUtils;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonParser;
 import com.intellij.openapi.diagnostic.Logger;
@@ -29,7 +30,7 @@ class ClaudeHistorySearchService {
     private final Path projectsDir;
     private final ClaudeHistoryReader reader;
     private final ClaudeHistoryIndexService indexService;
-    private final Gson gson = new Gson();
+    private final Gson gson = GsonHolder.GSON;
 
     ClaudeHistorySearchService(Path projectsDir, ClaudeHistoryReader reader, ClaudeHistoryIndexService indexService) {
         this.projectsDir = projectsDir;

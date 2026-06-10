@@ -5,6 +5,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.skill.CodexSkillService;
 import com.github.claudecodegui.skill.SkillService;
+import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
@@ -30,7 +31,7 @@ import java.util.concurrent.CompletableFuture;
 public class SkillHandler extends BaseMessageHandler {
 
     private static final Logger LOG = Logger.getInstance(SkillHandler.class);
-    private static final Gson GSON = new Gson();
+    private static final Gson GSON = GsonHolder.GSON;
 
     private static final String[] SUPPORTED_TYPES = {
         "get_all_skills",

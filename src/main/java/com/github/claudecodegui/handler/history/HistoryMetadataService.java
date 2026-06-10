@@ -2,8 +2,8 @@ package com.github.claudecodegui.handler.history;
 
 import com.github.claudecodegui.handler.NodeJsServiceCaller;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.util.GsonHolder;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
@@ -64,7 +64,7 @@ class HistoryMetadataService {
                 LOG.info("[HistoryHandler] ========== 更新会话标题 ==========");
 
                 // Parse JSON from frontend to extract sessionId and customTitle
-                JsonObject request = new Gson().fromJson(content, JsonObject.class);
+                JsonObject request = GsonHolder.GSON.fromJson(content, JsonObject.class);
                 String sessionId = request.get("sessionId").getAsString();
                 String customTitle = request.get("customTitle").getAsString();
 
@@ -76,7 +76,7 @@ class HistoryMetadataService {
                 LOG.info("[HistoryHandler] 标题更新结果: " + result);
 
                 // Parse the result
-                JsonObject resultObj = new Gson().fromJson(result, JsonObject.class);
+                JsonObject resultObj = GsonHolder.GSON.fromJson(result, JsonObject.class);
                 boolean success = resultObj.get("success").getAsBoolean();
 
                 if (!success && resultObj.has("error")) {
