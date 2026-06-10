@@ -1,0 +1,667 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Codex 错误内嵌消息效果预览</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #232428;
+      --panel: #292b30;
+      --panel-soft: #30323a;
+      --bubble: #313144;
+      --bubble-border: #54548a;
+      --text: #e8eaf2;
+      --muted: #a7adbd;
+      --faint: #777d8c;
+      --blue: #4ea1ff;
+      --violet: #8b6cff;
+      --red: #f07178;
+      --red-bg: rgba(240, 113, 120, 0.09);
+      --red-border: rgba(240, 113, 120, 0.28);
+      --green: #4cc38a;
+      --line: #434653;
+      --code: #202127;
+      --shadow: 0 18px 50px rgba(0, 0, 0, 0.22);
+      font-family: Inter, "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+    }
+
+    .app {
+      width: min(1180px, 100vw);
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 286px;
+      background: var(--bg);
+    }
+
+    .chat {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid #333640;
+    }
+
+    .chat-header {
+      height: 48px;
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #333640;
+      background: #25262b;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .provider-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 10px;
+      border: 1px solid #454957;
+      border-radius: 6px;
+      color: #d8dde6;
+      background: #2d2f36;
+    }
+
+    .provider-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 0 3px rgba(76, 195, 138, 0.12);
+    }
+
+    .message-list {
+      flex: 1;
+      padding: 34px 22px 26px;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .message {
+      display: flex;
+      gap: 12px;
+      max-width: 86%;
+    }
+
+    .message.user {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+
+    .message.assistant {
+      align-self: flex-start;
+    }
+
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.26);
+    }
+
+    .user .avatar {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    }
+
+    .assistant .avatar {
+      background: linear-gradient(135deg, #4ea1ff, #a989ff);
+    }
+
+    .avatar svg {
+      width: 19px;
+      height: 19px;
+      color: #fff;
+      stroke-width: 2;
+    }
+
+    .message-body {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .message-meta {
+      height: 18px;
+      margin-bottom: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      color: var(--faint);
+      font-size: 11px;
+    }
+
+    .assistant .message-meta {
+      justify-content: flex-start;
+    }
+
+    .bubble {
+      position: relative;
+      padding: 14px 18px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.68;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      box-shadow: var(--shadow);
+    }
+
+    .user .bubble {
+      background: #373356;
+      border: 1px solid rgba(139, 108, 255, 0.36);
+      border-top-right-radius: 4px;
+    }
+
+    .assistant .bubble {
+      width: min(680px, 100%);
+      background: var(--bubble);
+      border: 1px solid var(--bubble-border);
+      border-top-left-radius: 4px;
+    }
+
+    .bubble::before {
+      content: "";
+      position: absolute;
+      top: 13px;
+      width: 9px;
+      height: 9px;
+      background: inherit;
+      border: inherit;
+      transform: rotate(45deg);
+    }
+
+    .user .bubble::before {
+      right: -5px;
+      border-left: 0;
+      border-bottom: 0;
+    }
+
+    .assistant .bubble::before {
+      left: -5px;
+      border-right: 0;
+      border-top: 0;
+    }
+
+    .status-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .bars {
+      display: inline-flex;
+      align-items: end;
+      gap: 3px;
+      height: 12px;
+      color: var(--blue);
+    }
+
+    .bars span {
+      width: 3px;
+      border-radius: 3px;
+      background: currentColor;
+    }
+
+    .bars span:nth-child(1) { height: 5px; opacity: .7; }
+    .bars span:nth-child(2) { height: 9px; }
+    .bars span:nth-child(3) { height: 6px; opacity: .8; }
+
+    .divider {
+      margin: 13px 0;
+      border: 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .error-summary {
+      display: grid;
+      grid-template-columns: 32px minmax(0, 1fr);
+      gap: 11px;
+      padding: 12px;
+      background: var(--red-bg);
+      border: 1px solid var(--red-border);
+      border-radius: 8px;
+    }
+
+    .error-icon {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: 7px;
+      background: rgba(240, 113, 120, 0.12);
+      color: var(--red);
+    }
+
+    .error-icon svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .error-title {
+      margin: 0 0 5px;
+      color: #ff9aa0;
+      font-weight: 650;
+      font-size: 13.5px;
+    }
+
+    .error-desc {
+      margin: 0;
+      color: #d8bac0;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .error-meta-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 11px;
+    }
+
+    .meta-box {
+      min-width: 0;
+      padding: 8px 10px;
+      border: 1px solid rgba(240, 113, 120, 0.18);
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.12);
+    }
+
+    .meta-label {
+      margin-bottom: 3px;
+      color: #bd8790;
+      font-size: 11px;
+    }
+
+    .meta-value {
+      color: #f2d1d5;
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    details {
+      margin-top: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.14);
+      overflow: hidden;
+    }
+
+    summary {
+      cursor: pointer;
+      padding: 9px 12px;
+      color: var(--muted);
+      font-size: 12.5px;
+      user-select: none;
+    }
+
+    pre {
+      margin: 0;
+      max-height: 210px;
+      overflow: auto;
+      padding: 12px;
+      background: var(--code);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      color: #d5d8e2;
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+    }
+
+    .persist-note {
+      display: flex;
+      align-items: flex-start;
+      gap: 9px;
+      margin-top: 11px;
+      padding: 10px 12px;
+      border: 1px solid rgba(78, 161, 255, 0.18);
+      border-radius: 8px;
+      background: rgba(78, 161, 255, 0.07);
+      color: #c5d9f5;
+      font-size: 12.5px;
+      line-height: 1.55;
+    }
+
+    .persist-note svg {
+      width: 17px;
+      height: 17px;
+      margin-top: 1px;
+      flex: 0 0 auto;
+      color: var(--blue);
+    }
+
+    .usage {
+      display: flex;
+      justify-content: center;
+      margin-top: 9px;
+    }
+
+    .usage-inner {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 12px;
+      border: 1px solid #444756;
+      border-radius: 6px;
+      color: var(--faint);
+      font-size: 12px;
+      background: rgba(0, 0, 0, 0.08);
+    }
+
+    .composer {
+      padding: 14px 18px 18px;
+      border-top: 1px solid #333640;
+      background: #25262b;
+    }
+
+    .composer-box {
+      height: 44px;
+      border: 1px solid #424653;
+      border-radius: 8px;
+      background: #2b2d33;
+      color: var(--faint);
+      display: flex;
+      align-items: center;
+      padding: 0 13px;
+      font-size: 13px;
+    }
+
+    .history {
+      min-width: 0;
+      background: #202126;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .history-header {
+      height: 48px;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #333640;
+      color: #d8dde6;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .history-list {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .history-item {
+      border: 1px solid #3a3d48;
+      border-radius: 8px;
+      background: #292b31;
+      padding: 10px;
+    }
+
+    .history-item.active {
+      border-color: rgba(78, 161, 255, 0.55);
+      background: #2b3040;
+    }
+
+    .history-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .history-title {
+      min-width: 0;
+      color: #e4e7ef;
+      font-size: 12.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .badge {
+      flex: 0 0 auto;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 11px;
+      line-height: 1.4;
+      border: 1px solid transparent;
+    }
+
+    .badge.error {
+      color: #ff9aa0;
+      background: rgba(240, 113, 120, 0.1);
+      border-color: rgba(240, 113, 120, 0.28);
+    }
+
+    .badge.ok {
+      color: #8ce0b1;
+      background: rgba(76, 195, 138, 0.1);
+      border-color: rgba(76, 195, 138, 0.25);
+    }
+
+    .history-excerpt {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .json-preview {
+      margin-top: 14px;
+      padding: 12px;
+      border-top: 1px solid #333640;
+    }
+
+    .json-title {
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .json-preview pre {
+      max-height: none;
+      border: 1px solid #393c47;
+      border-radius: 8px;
+      font-size: 11px;
+      color: #aeb7cc;
+      background: #1b1c20;
+    }
+
+    @media (max-width: 900px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+
+      .history {
+        display: none;
+      }
+
+      .message {
+        max-width: 96%;
+      }
+
+      .error-meta-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="chat" aria-label="聊天预览">
+      <header class="chat-header">
+        <span class="provider-pill"><span class="provider-dot"></span>Codex 已连接</span>
+        <span>会话：PW-AUTO-20260609</span>
+      </header>
+
+      <div class="message-list">
+        <article class="message user">
+          <div class="avatar" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+          </div>
+          <div class="message-body">
+            <div class="message-meta">15:41</div>
+            <div class="bubble">
+              <code>case "turn.started" -&gt; { ... }</code><br>
+              为什么会弹出侧边弹窗提示 Codex 正在处理，不要这个弹窗提示
+            </div>
+          </div>
+        </article>
+
+        <article class="message assistant">
+          <div class="avatar" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M12 3l1.9 5.7L20 10l-5 3.8L16.5 21 12 17.4 7.5 21 9 13.8 4 10l6.1-1.3L12 3z"></path>
+            </svg>
+          </div>
+          <div class="message-body">
+            <div class="message-meta">15:43</div>
+            <div class="bubble">
+              <div class="status-line">
+                <span class="bars" aria-hidden="true"><span></span><span></span><span></span></span>
+                <span>Codex 已连接，正在理解问题</span>
+              </div>
+
+              <hr class="divider">
+
+              <section class="error-summary" aria-label="错误信息">
+                <div class="error-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="9"></circle>
+                    <path d="M12 7v6"></path>
+                    <path d="M12 17h.01"></path>
+                  </svg>
+                </div>
+                <div>
+                  <h2 class="error-title">本次响应已停止：服务暂时不可用</h2>
+                  <p class="error-desc">
+                    Codex CLI 请求失败，连续重试 5 次后仍收到 <strong>503 Service Unavailable</strong>，最后一次网关返回 <strong>502 Bad Gateway</strong>。
+                  </p>
+                  <div class="error-meta-grid">
+                    <div class="meta-box">
+                      <div class="meta-label">退出码</div>
+                      <div class="meta-value">Codex CLI exited with code 1</div>
+                    </div>
+                    <div class="meta-box">
+                      <div class="meta-label">请求地址</div>
+                      <div class="meta-value">https://gpt.eacase.de5.net/v1/responses</div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <details open>
+                <summary>错误详情</summary>
+                <pre>Codex CLI 请求失败
+原因：服务暂时不可用 (503)
+退出码：Codex CLI exited with code: 1
+URL: https://gpt.eacase.de5.net/v1/responses
+Request ID: 584d88bc-0f69-4104-a88d-be34308f5807
+
+Details:
+Reconnecting... 1/5 unexpected status 503 Service Unavailable
+Reconnecting... 2/5 unexpected status 503 Service Unavailable
+Reconnecting... 3/5 unexpected status 503 Service Unavailable
+Reconnecting... 4/5 unexpected status 503 Service Unavailable
+Reconnecting... 5/5 unexpected status 503 Service Unavailable
+unexpected status 502 Bad Gateway</pre>
+              </details>
+
+              <div class="persist-note">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 6L9 17l-5-5"></path>
+                </svg>
+                <span>该错误作为本轮 AI 消息的一部分写入会话 JSON。重新打开历史记录时，会随这条 AI 消息一起还原显示。</span>
+              </div>
+            </div>
+
+            <div class="usage">
+              <div class="usage-inner">
+                <span>停止原因：provider_error</span>
+                <span>·</span>
+                <span>13s</span>
+              </div>
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <footer class="composer">
+        <div class="composer-box">继续输入...</div>
+      </footer>
+    </section>
+
+    <aside class="history" aria-label="历史记录预览">
+      <div class="history-header">
+        <span>历史记录</span>
+        <span style="color: var(--faint); font-weight: 400;">3 条</span>
+      </div>
+      <div class="history-list">
+        <div class="history-item active">
+          <div class="history-top">
+            <div class="history-title">侧边弹窗提示问题</div>
+            <span class="badge error">已停止</span>
+          </div>
+          <div class="history-excerpt">Codex CLI 请求失败：503 Service Unavailable，最后返回 502 Bad Gateway。</div>
+        </div>
+        <div class="history-item">
+          <div class="history-top">
+            <div class="history-title">工具调用样式调整</div>
+            <span class="badge ok">完成</span>
+          </div>
+          <div class="history-excerpt">已更新工具块折叠展示和状态条。</div>
+        </div>
+      </div>
+
+      <div class="json-preview">
+        <div class="json-title">会话 JSON 中的目标结构示意</div>
+        <pre>{
+  "type": "assistant",
+  "content": [
+    { "type": "text", "text": "Codex 已连接..." },
+    {
+      "type": "provider_error",
+      "provider": "codex",
+      "exitCode": 1,
+      "summary": "服务暂时不可用",
+      "details": "Reconnecting... 1/5..."
+    }
+  ],
+  "streamEndReason": "provider_error"
+}</pre>
+      </div>
+    </aside>
+  </main>
+</body>
+</html>
