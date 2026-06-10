@@ -32,12 +32,12 @@ describe('useThemeInit theme initialization', () => {
     ).toBe('');
   });
 
-  it('clamps negative value up to 0.0 and sets CSS property', () => {
+  it('ignores negative value and does not set CSS property', () => {
     localStorage.setItem('windowOpacity', '-0.2');
     renderHook(() => useThemeInit());
     expect(
       document.documentElement.style.getPropertyValue('--window-opacity')
-    ).toBe('0');
+    ).toBe('');
   });
 
   it('ignores NaN value and does not set CSS property', () => {

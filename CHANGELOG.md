@@ -1,16 +1,38 @@
-##### **2026年6月4日（v0.4.5）**
+##### **2026年6月10日（v0.4.5）**
 
 English:
 
 ✨ Features
 - Add a separate **Code Font** setting (Settings → Basic → Appearance), independent from the global UI font. Regular UI text follows the IDEA UI font, while Markdown inline code / code blocks and Run command (Bash) command + output text use the code font. Both default to following the IDE (UI font ← IDEA UI font, code font ← IDEA editor font), and each accepts a custom `.ttf` / `.otf` file. Localized across 10 languages (closes #1240)
 - ⚠️ Behavior change: the plugin's default **UI font source changed from the IDEA editor font to the IDEA UI font** (the system Label font). After upgrading, regular chat text that previously followed your monospaced editor font will follow your IDE's UI (usually sans-serif) font instead; code and command areas now use the dedicated code font. Override either under Settings → Basic → Appearance if you preferred the old look
+- Add window opacity slider in Settings → Appearance: real-time transparency control (0–100%) with localStorage persistence and unified `--window-opacity` CSS variable
+
+🔧 Improvements
+- Large-area elements (message bubbles, code blocks, tool blocks, task blocks, input box) now follow `--window-opacity` for consistent transparent window appearance
+- Floating dialogs (import, warning, confirm) use `max(--overlay-min-opacity, --window-opacity)` to prevent transparency bleed-through
+- Consolidate window opacity management into `useSettingsThemeSync` hook: single source of truth for opacity state, debounced localStorage writes (500ms), robust input validation that defaults to 1.0 for all invalid values
+- Add `--overlay-min-opacity: 0.85` CSS variable and RGB variants for all large-area background colors
+
+🐛 Fixes
+- Fix window opacity not defaulting to 1.0 for negative values, NaN, and Infinite values
+- Fix duplicate `🔧 Improvements` header in v0.4.4 changelog entry
 
 中文：
 
 ✨ 新功能
 - 设置 → 基础 → 外观新增独立的「代码字体」配置，与全局 UI 字体分离。普通界面文本跟随 IDEA UI 字体，Markdown 行内代码 / 代码块以及 Run command（Bash）的命令与输出文本使用代码字体。两者默认均跟随 IDE（UI 字体 ← IDEA UI 字体，代码字体 ← IDEA 编辑器字体），且各自支持自定义 `.ttf` / `.otf` 字体文件。覆盖 10 种语言（关闭 #1240）
 - ⚠️ 行为变更：插件默认 **UI 字体来源由 IDEA 编辑器字体改为 IDEA UI 字体**（即系统 Label 字体）。升级后，原本跟随等宽编辑器字体的普通聊天文本会改为跟随 IDE 的 UI 字体（通常是无衬线），代码与命令区域则改用专门的代码字体。如偏好旧观感，可在设置 → 基础 → 外观中自行覆盖
+- 设置 → 外观新增窗口透明度滑块：实时透明度控制（0–100%），localStorage 持久化，统一 `--window-opacity` CSS 变量
+
+🔧 改进
+- 大面积元素（消息气泡、代码块、工具块、任务块、输入框）现在跟随 `--window-opacity` 变化，实现一致的透明窗口效果
+- 浮动对话框（导入、警告、确认）使用 `max(--overlay-min-opacity, --window-opacity)` 防止透明穿透
+- 将窗口透明度管理统一整合到 `useSettingsThemeSync` hook：透明度状态唯一来源，localStorage 写入防抖（500ms），健壮的输入校验，所有无效值默认回退到 1.0
+- 新增 `--overlay-min-opacity: 0.85` CSS 变量及所有大面积背景色的 RGB 变体
+
+🐛 修复
+- 修复窗口透明度对负值、NaN 和无穷大值没有正确默认到 1.0 的问题
+- 修复 v0.4.4 更新日志条目重复的 `🔧 Improvements` 标题
 
 ---
 
@@ -189,32 +211,6 @@ English:
 - 重构 `ContextUsageDialog`：提取通用 `DetailsTable` 子组件，整合 MCP/子代理/记忆/技能四张近乎相同的表格
 - 统一各 Bridge 组件中 WSL 感知的 Node 命令构建逻辑，统一使用 `NodeDetector.buildNodeScriptCommand()` helper
 - 新增 `-PskipWebview=true` Gradle 属性，在纯后端迭代时跳过 Webview 构建
-
----
-
-##### **2026年5月23日（v0.4.4）**
-
-English:
-
-✨ Features
-- Add window opacity slider in Settings → Appearance: real-time transparency control (0–100%) with localStorage persistence and unified `--window-opacity` CSS variable
-
-🔧 Improvements
-- Large-area elements (message bubbles, code blocks, tool blocks, task blocks, input box) now follow `--window-opacity` for consistent transparent window appearance
-- Floating dialogs (import, warning, confirm) use `max(--overlay-min-opacity, --window-opacity)` to prevent transparency bleed-through
-- Extract unified `useWindowOpacity` hook: single source of truth for opacity state, debounced localStorage writes (500ms), `Number.isFinite` validation for robust input parsing
-- Add `--overlay-min-opacity: 0.85` CSS variable and RGB variants for all large-area background colors
-
-中文：
-
-✨ Features
-- 设置 → 外观新增窗口透明度滑块：实时透明度控制（0–100%），localStorage 持久化，统一 `--window-opacity` CSS 变量
-
-🔧 Improvements
-- 大面积元素（消息气泡、代码块、工具块、任务块、输入框）现在跟随 `--window-opacity` 变化，实现一致的透明窗口效果
-- 浮动对话框（导入、警告、确认）使用 `max(--overlay-min-opacity, --window-opacity)` 防止透明穿透
-- 提取统一的 `useWindowOpacity` hook：透明度状态唯一来源，localStorage 写入防抖（500ms），`Number.isFinite` 输入校验保证解析健壮性
-- 新增 `--overlay-min-opacity: 0.85` CSS 变量及所有大面积背景色的 RGB 变体
 
 ---
 
