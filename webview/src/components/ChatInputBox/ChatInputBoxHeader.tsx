@@ -1,10 +1,11 @@
+import { memo } from 'react';
 import type { TFunction } from 'i18next';
 import type { Attachment, SelectedAgent, QueuedMessage } from './types.js';
 import { AttachmentList } from './AttachmentList.js';
 import { ContextBar } from './ContextBar.js';
 import { MessageQueue } from './MessageQueue.js';
 
-export function ChatInputBoxHeader({
+export const ChatInputBoxHeader = memo(function ChatInputBoxHeader({
   sdkStatusLoading,
   sdkInstalled,
   currentProvider,
@@ -145,5 +146,5 @@ export function ChatInputBoxHeader({
       />
     </>
   );
-}
+});
 

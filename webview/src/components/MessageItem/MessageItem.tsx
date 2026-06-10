@@ -4,8 +4,6 @@ import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock } from '../../t
 
 import MarkdownBlock from '../MarkdownBlock';
 import { ProviderNotConfiguredCard, isProviderNotConfiguredError } from './ProviderNotConfiguredCard';
-import { ErrorDiagnosticCard } from './ErrorDiagnosticCard';
-import { matchErrorPattern } from '../../utils/errorMatcher';
 import {
   EditToolBlock,
   EditToolGroupBlock,
@@ -19,9 +17,6 @@ import { ContentBlockRenderer } from './ContentBlockRenderer';
 import { formatTime } from '../../utils/helpers';
 import { copyToClipboard } from '../../utils/copyUtils';
 import { READ_TOOL_NAMES, EDIT_TOOL_NAMES, BASH_TOOL_NAMES, SEARCH_TOOL_NAMES, isToolName } from '../../utils/toolConstants';
-import { MessageAvatar } from './MessageAvatar';
-import { MessageUsageStats } from './MessageUsageStats';
-import { extractMessageUsage } from '../../utils/messageUsage';
 
 export interface MessageItemProps {
   message: ClaudeMessage;
@@ -101,6 +96,17 @@ export const CopyButton = memo(function CopyButton({
     </button>
   );
 });
+
+function formatDurationMs(durationMs: number): string {
+  const seconds = Math.max(0, Math.floor(durationMs / 1000));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainder = seconds % 60;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
+  }
+  return `${minutes}:${String(remainder).padStart(2, '0')}`;
+}
 
 function isToolBlockOfType(block: ClaudeContentBlock, toolNames: Set<string>): boolean {
   return block.type === 'tool_use' && isToolName(block.name, toolNames);
@@ -215,6 +221,221 @@ function groupBlocks(blocks: ClaudeContentBlock[]): GroupedBlock[] {
   return groupedBlocks;
 }
 
+// ---------------------------------------------------------------------------
+// GroupedBlocksRenderer — extracted from renderGroupedBlocks() for memoisation
+// ---------------------------------------------------------------------------
+
+interface GroupedBlocksRendererProps {
+  groupedBlocks: GroupedBlock[];
+  messageIndex: number;
+  message: ClaudeMessage;
+  messageType: string;
+  isMessageStreaming: boolean;
+  isEmptyStreamingPlaceholder: boolean;
+  isProviderNotConfigured: boolean;
+  currentProvider?: string;
+  blocks: ClaudeContentBlock[];
+  isThinking: boolean;
+  isLast: boolean;
+  isThinkingExpanded: (blockIndex: number) => boolean;
+  toggleThinking: (blockIndex: number) => void;
+  findToolResult: (toolId: string | undefined, messageIndex: number) => ToolResultBlock | null | undefined;
+  t: TFunction;
+  getMessageText: (message: ClaudeMessage) => string;
+  onNavigateToProviderSettings?: () => void;
+}
+
+const GroupedBlocksRenderer = memo(function GroupedBlocksRenderer({
+  groupedBlocks,
+  messageIndex,
+  message,
+  messageType,
+  isMessageStreaming,
+  isEmptyStreamingPlaceholder,
+  isProviderNotConfigured,
+  currentProvider,
+  blocks,
+  isThinking,
+  isLast,
+  isThinkingExpanded,
+  toggleThinking,
+  findToolResult,
+  t,
+  getMessageText,
+  onNavigateToProviderSettings,
+}: GroupedBlocksRendererProps) {
+  if (messageType === 'error') {
+    if (isProviderNotConfigured) {
+      return (
+        <ProviderNotConfiguredCard
+          t={t}
+          onNavigateToSettings={onNavigateToProviderSettings}
+        />
+      );
+    }
+    return <MarkdownBlock content={getMessageText(message)} />;
+  }
+
+  if (isEmptyStreamingPlaceholder) {
+    return (
+      <div className="streaming-connect-status">
+        <span className="streaming-connect-text">
+          {t('chat.streamingConnected', { provider: getProviderDisplayName(currentProvider) })}
+        </span>
+      </div>
+    );
+  }
+
+  return groupedBlocks.map((grouped) => {
+    if (grouped.type === 'read_group') {
+      const readItems = grouped.blocks.map((b) => {
+        const block = b as { type: 'tool_use'; id?: string; name?: string; input?: Record<string, unknown> };
+        return {
+          name: block.name,
+          input: block.input,
+          result: findToolResult(block.id, messageIndex),
+          toolId: block.id,
+        };
+      });
+
+      if (readItems.length === 1) {
+        return (
+          <div key={`${messageIndex}-readgroup-${grouped.startIndex}`} className="content-block">
+            <ReadToolBlock
+              input={readItems[0].input}
+              result={readItems[0].result}
+              toolId={readItems[0].toolId}
+            />
+          </div>
+        );
+      }
+
+      return (
+        <div key={`${messageIndex}-readgroup-${grouped.startIndex}`} className="content-block">
+          <ReadToolGroupBlock items={readItems} />
+        </div>
+      );
+    }
+
+    if (grouped.type === 'edit_group') {
+      const editItems = grouped.blocks.map((b) => {
+        const block = b as { type: 'tool_use'; id?: string; name?: string; input?: Record<string, unknown> };
+        return {
+          name: block.name,
+          input: block.input,
+          result: findToolResult(block.id, messageIndex),
+        };
+      });
+
+      if (editItems.length === 1) {
+        return (
+          <div key={`${messageIndex}-editgroup-${grouped.startIndex}`} className="content-block">
+            <EditToolBlock
+              name={editItems[0].name}
+              input={editItems[0].input}
+              result={editItems[0].result}
+            />
+          </div>
+        );
+      }
+
+      return (
+        <div key={`${messageIndex}-editgroup-${grouped.startIndex}`} className="content-block">
+          <EditToolGroupBlock items={editItems} />
+        </div>
+      );
+    }
+
+    if (grouped.type === 'bash_group') {
+      const bashItems = grouped.blocks.map((b) => {
+        const block = b as { type: 'tool_use'; id?: string; name?: string; input?: Record<string, unknown> };
+        return {
+          name: block.name,
+          input: block.input,
+          result: findToolResult(block.id, messageIndex),
+          toolId: block.id,
+        };
+      });
+
+      if (bashItems.length === 1) {
+        return (
+          <div key={`${messageIndex}-bashgroup-${grouped.startIndex}`} className="content-block">
+            <BashToolBlock
+              name={bashItems[0].name}
+              input={bashItems[0].input}
+              result={bashItems[0].result}
+              toolId={bashItems[0].toolId}
+            />
+          </div>
+        );
+      }
+
+      return (
+        <div key={`${messageIndex}-bashgroup-${grouped.startIndex}`} className="content-block">
+          <BashToolGroupBlock items={bashItems} deniedToolIds={window.__deniedToolIds} />
+        </div>
+      );
+    }
+
+    if (grouped.type === 'search_group') {
+      const searchItems = grouped.blocks.map((b) => {
+        const block = b as { type: 'tool_use'; id?: string; name?: string; input?: Record<string, unknown> };
+        return {
+          name: block.name,
+          input: block.input,
+          result: findToolResult(block.id, messageIndex),
+        };
+      });
+
+      if (searchItems.length === 1) {
+        return (
+          <div key={`${messageIndex}-searchgroup-${grouped.startIndex}`} className="content-block">
+            <ContentBlockRenderer
+              block={grouped.blocks[0]}
+              messageIndex={messageIndex}
+              messageType={messageType}
+              isStreaming={isMessageStreaming}
+              isThinkingExpanded={false}
+              isThinking={isThinking}
+              isLastMessage={isLast}
+              isLastBlock={grouped.startIndex === blocks.length - 1}
+              t={t}
+              onToggleThinking={() => {}}
+              findToolResult={findToolResult}
+            />
+          </div>
+        );
+      }
+
+      return (
+        <div key={`${messageIndex}-searchgroup-${grouped.startIndex}`} className="content-block">
+          <SearchToolGroupBlock items={searchItems} />
+        </div>
+      );
+    }
+
+    const { block, originalIndex: blockIndex } = grouped;
+
+    return (
+      <div key={`${messageIndex}-${blockIndex}`} className="content-block">
+        <ContentBlockRenderer
+          block={block}
+          messageIndex={messageIndex}
+          messageType={messageType}
+          isStreaming={isMessageStreaming}
+          isThinkingExpanded={isThinkingExpanded(blockIndex)}
+          isThinking={isThinking}
+          isLastMessage={isLast}
+          isLastBlock={blockIndex === blocks.length - 1}
+          t={t}
+          onToggleThinking={() => toggleThinking(blockIndex)}
+          findToolResult={findToolResult}
+        />
+      </div>
+    );
+  });
+});
+
 export const MessageItem = memo(function MessageItem({
   message,
   messageIndex,
@@ -229,12 +450,8 @@ export const MessageItem = memo(function MessageItem({
   extractMarkdownContent,
   onNodeRef,
   onNavigateToProviderSettings,
-  onNavigateToDependencySettings,
   toolResultSignature: _toolResultSignature,
   currentProvider,
-  withinResponseGroup = false,
-  renderMode = 'full',
-  shouldAnimateIn = false,
 }: MessageItemProps): React.ReactElement {
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
   const [showStreamingConnectHint, setShowStreamingConnectHint] = useState(false);
@@ -269,13 +486,6 @@ export const MessageItem = memo(function MessageItem({
 
   const isLastAssistantMessage = message.type === 'assistant' && isLast;
   const isMessageStreaming = streamingActive && isLastAssistantMessage;
-  const durationLabelKey =
-    message.streamEndSource === 'watchdog' || message.streamEndReason === 'stalled'
-      ? 'chat.waitingTimedOutDuration'
-      : 'chat.usageStats.duration';
-
-  // Cache per-message token usage extraction
-  const messageUsage = useMemo(() => extractMessageUsage(message), [message]);
 
   // Cache markdown content extraction for better performance
   const markdownContent = useMemo(() => {
@@ -320,11 +530,9 @@ export const MessageItem = memo(function MessageItem({
 
   // Memoize blocks and grouped blocks to avoid recalculation on every render
   const blocks = useMemo(() => getContentBlocks(message), [message, getContentBlocks]);
-  const shouldSuppressStreamingConnectHint = message.__suppressStreamingConnectHint === true;
   const isEmptyStreamingPlaceholder =
     message.type === 'assistant' &&
     isMessageStreaming &&
-    !shouldSuppressStreamingConnectHint &&
     blocks.length === 0 &&
     !(message.content && message.content.trim().length > 0);
 
@@ -383,291 +591,83 @@ export const MessageItem = memo(function MessageItem({
   }, [message.type, messageKey, onNodeRef]);
 
   const isProviderNotConfigured = message.type === 'error' && isProviderNotConfiguredError(getMessageText(message));
-  const errorDiagnosticPattern = useMemo(
-    () => (message.type === 'error' && !isProviderNotConfigured
-      ? matchErrorPattern(getMessageText(message))
-      : null),
-    [message, isProviderNotConfigured, getMessageText]
-  );
-
-  const renderGroupedBlocks = () => {
-    if (message.type === 'error') {
-      if (isProviderNotConfigured) {
-        return (
-          <ProviderNotConfiguredCard
-            t={t}
-            onNavigateToSettings={onNavigateToProviderSettings}
-          />
-        );
-      }
-      return (
-        <>
-          <MarkdownBlock content={getMessageText(message)} />
-          {errorDiagnosticPattern && (
-            <ErrorDiagnosticCard
-              t={t}
-              pattern={errorDiagnosticPattern}
-              onNavigateToDependencySettings={onNavigateToDependencySettings}
-            />
-          )}
-        </>
-      );
-    }
-
-    if (isEmptyStreamingPlaceholder) {
-      return (
-        <div className="streaming-connect-status streaming-connect-enter">
-          <span className="streaming-connect-text">
-            {t('chat.streamingConnected', { provider: getProviderDisplayName(currentProvider) })}
-          </span>
-        </div>
-      );
-    }
-
-    return groupedBlocks.map((grouped) => {
-      if (grouped.type === 'read_group') {
-        const readItems = grouped.blocks.map((b) => {
-          const block = b as { type: 'tool_use'; id?: string; name?: string; input?: Record<string, unknown> };
-          return {
-            name: block.name,
-            input: block.input,
-            result: findToolResult(block.id, messageIndex),
-            toolId: block.id,
-          };
-        });
-
-        if (readItems.length === 1) {
-          return (
-            <div key={`${messageIndex}-readgroup-${grouped.startIndex}`} className="content-block">
-              <ReadToolBlock
-                input={readItems[0].input}
-                result={readItems[0].result}
-                toolId={readItems[0].toolId}
-              />
-            </div>
-          );
-        }
-
-        return (
-          <div key={`${messageIndex}-readgroup-${grouped.startIndex}`} className="content-block">
-            <ReadToolGroupBlock items={readItems} />
-          </div>
-        );
-      }
-
-      if (grouped.type === 'edit_group') {
-        const editItems = grouped.blocks.map((b) => {
-          const block = b as { type: 'tool_use'; id?: string; name?: string; input?: Record<string, unknown> };
-          return {
-            name: block.name,
-            input: block.input,
-            result: findToolResult(block.id, messageIndex),
-          };
-        });
-
-        if (editItems.length === 1) {
-          return (
-            <div key={`${messageIndex}-editgroup-${grouped.startIndex}`} className="content-block">
-              <EditToolBlock
-                name={editItems[0].name}
-                input={editItems[0].input}
-                result={editItems[0].result}
-              />
-            </div>
-          );
-        }
-
-        return (
-          <div key={`${messageIndex}-editgroup-${grouped.startIndex}`} className="content-block">
-            <EditToolGroupBlock items={editItems} />
-          </div>
-        );
-      }
-
-      if (grouped.type === 'bash_group') {
-        const bashItems = grouped.blocks.map((b) => {
-          const block = b as { type: 'tool_use'; id?: string; name?: string; input?: Record<string, unknown> };
-          return {
-            name: block.name,
-            input: block.input,
-            result: findToolResult(block.id, messageIndex),
-            toolId: block.id,
-          };
-        });
-
-        if (bashItems.length === 1) {
-          return (
-            <div key={`${messageIndex}-bashgroup-${grouped.startIndex}`} className="content-block">
-              <BashToolBlock
-                name={bashItems[0].name}
-                input={bashItems[0].input}
-                result={bashItems[0].result}
-                toolId={bashItems[0].toolId}
-              />
-            </div>
-          );
-        }
-
-        return (
-          <div key={`${messageIndex}-bashgroup-${grouped.startIndex}`} className="content-block">
-            <BashToolGroupBlock items={bashItems} deniedToolIds={window.__deniedToolIds} />
-          </div>
-        );
-      }
-
-      if (grouped.type === 'search_group') {
-        const searchItems = grouped.blocks.map((b) => {
-          const block = b as { type: 'tool_use'; id?: string; name?: string; input?: Record<string, unknown> };
-          return {
-            name: block.name,
-            input: block.input,
-            result: findToolResult(block.id, messageIndex),
-          };
-        });
-
-        if (searchItems.length === 1) {
-          return (
-            <div key={`${messageIndex}-searchgroup-${grouped.startIndex}`} className="content-block">
-              <ContentBlockRenderer
-                block={grouped.blocks[0]}
-                messageIndex={messageIndex}
-                messageType={message.type}
-                isStreaming={isMessageStreaming}
-                isThinkingExpanded={false}
-                isThinking={isThinking}
-                isLastMessage={isLast}
-                isLastBlock={grouped.startIndex === blocks.length - 1}
-                t={t}
-                onToggleThinking={() => {}}
-                findToolResult={findToolResult}
-              />
-            </div>
-          );
-        }
-
-        return (
-          <div key={`${messageIndex}-searchgroup-${grouped.startIndex}`} className="content-block">
-            <SearchToolGroupBlock items={searchItems} />
-          </div>
-        );
-      }
-
-      const { block, originalIndex: blockIndex } = grouped;
-
-      return (
-        <div key={`${messageIndex}-${blockIndex}`} className="content-block">
-          <ContentBlockRenderer
-            block={block}
-            messageIndex={messageIndex}
-            messageType={message.type}
-            isStreaming={isMessageStreaming}
-            isThinkingExpanded={isThinkingExpanded(blockIndex)}
-            isThinking={isThinking}
-            isLastMessage={isLast}
-            isLastBlock={blockIndex === blocks.length - 1}
-            t={t}
-            onToggleThinking={() => toggleThinking(blockIndex)}
-            findToolResult={findToolResult}
-          />
-        </div>
-      );
-    });
-  };
 
   if (isEmptyStreamingPlaceholder && !showStreamingConnectHint) {
     return <></>;
   }
 
-  if (renderMode === 'response-segment') {
-    return (
-      <div className={`message-response-segment-content ${message.type}`}>
-        {renderGroupedBlocks()}
-      </div>
-    );
-  }
-
-  // 判断是否为用户或助手消息（需要显示头像）
-  const showAvatar = message.type === 'user' || message.type === 'assistant';
-
   return (
     <div
-      className={`message ${message.type}${isLast ? ' is-last-message' : ''}${isProviderNotConfigured ? ' provider-not-configured' : ''}${withinResponseGroup ? ' in-response-group' : ''}${shouldAnimateIn ? ' animate-in' : ''}`}
+      className={`message ${message.type}${isLast ? ' is-last-message' : ''}${isProviderNotConfigured ? ' provider-not-configured' : ''}`}
       ref={anchorRefCallback}
       data-message-anchor-id={message.type === 'user' ? messageKey : undefined}
     >
-      {/* Avatar row - only for user and assistant messages */}
-      {showAvatar ? (
-        <div className="message-avatar-row">
-          <MessageAvatar type={message.type} />
-          <div className="message-content-wrapper">
-            {/* Timestamp and copy button for user messages */}
-            {message.type === 'user' && message.timestamp && (
-              <div className="message-header-row">
-                <div className="message-timestamp-header">
-                  {formatTime(message.timestamp)}
-                </div>
-                {hasCopyableText && (
-                  <CopyButton
-                    className="message-copy-btn-inline"
-                    isCopied={copiedMessageIndex === messageIndex}
-                    onClick={handleCopyMessage}
-                    copyLabel={t('markdown.copyMessage')}
-                    copySuccessText={t('markdown.copySuccess')}
-                  />
-                )}
-              </div>
-            )}
-
-            {/* Copy button for assistant messages only */}
-            {message.type === 'assistant' && !isMessageStreaming && hasCopyableText && (
-              <CopyButton
-                isCopied={copiedMessageIndex === messageIndex}
-                onClick={handleCopyMessage}
-                copyLabel={t('markdown.copyMessage')}
-                copySuccessText={t('markdown.copySuccess')}
-              />
-            )}
-
-            <div className="message-content">
-              {renderGroupedBlocks()}
-            </div>
-
-            {/* Usage stats bar after completed assistant message */}
-            {message.type === 'assistant' && !isMessageStreaming && (
-              <MessageUsageStats
-                inputTokens={messageUsage?.inputTokens ?? null}
-                outputTokens={messageUsage?.outputTokens ?? null}
-                durationMs={typeof message.durationMs === 'number' ? message.durationMs : null}
-                durationLabelKey={durationLabelKey}
-                t={t}
-              />
-            )}
+      {/* Timestamp and copy button for user messages */}
+      {message.type === 'user' && message.timestamp && (
+        <div className="message-header-row">
+          <div className="message-timestamp-header">
+            {formatTime(message.timestamp)}
           </div>
-        </div>
-      ) : (
-        <>
-          {/* Role label for non-user/assistant messages — hidden for notification types */}
-          {message.type !== 'notification' && message.type !== 'task_notification' && (
-            <div className="message-role-label">
-              {message.type}
-            </div>
-          )}
-
-          <div className="message-content">
-            {renderGroupedBlocks()}
-          </div>
-
-          {/* Usage stats bar for non-avatar assistant message */}
-          {message.type === 'assistant' && !isMessageStreaming && (
-            <MessageUsageStats
-              inputTokens={messageUsage?.inputTokens ?? null}
-              outputTokens={messageUsage?.outputTokens ?? null}
-              durationMs={typeof message.durationMs === 'number' ? message.durationMs : null}
-              durationLabelKey={durationLabelKey}
-              t={t}
+          {hasCopyableText && (
+            <CopyButton
+              className="message-copy-btn-inline"
+              isCopied={copiedMessageIndex === messageIndex}
+              onClick={handleCopyMessage}
+              copyLabel={t('markdown.copyMessage')}
+              copySuccessText={t('markdown.copySuccess')}
             />
           )}
-        </>
+        </div>
+      )}
+
+      {/* Copy button for assistant messages only */}
+      {message.type === 'assistant' && !isMessageStreaming && hasCopyableText && (
+        <CopyButton
+          isCopied={copiedMessageIndex === messageIndex}
+          onClick={handleCopyMessage}
+          copyLabel={t('markdown.copyMessage')}
+          copySuccessText={t('markdown.copySuccess')}
+        />
+      )}
+
+      {/* Role label for non-user/assistant messages */}
+      {message.type !== 'assistant' && message.type !== 'user' && (
+        <div className="message-role-label">
+          {message.type}
+        </div>
+      )}
+
+      <div className="message-content">
+        <GroupedBlocksRenderer
+          groupedBlocks={groupedBlocks}
+          messageIndex={messageIndex}
+          message={message}
+          messageType={message.type}
+          isMessageStreaming={isMessageStreaming}
+          isEmptyStreamingPlaceholder={isEmptyStreamingPlaceholder}
+          isProviderNotConfigured={isProviderNotConfigured}
+          currentProvider={currentProvider}
+          blocks={blocks}
+          isThinking={isThinking}
+          isLast={isLast}
+          isThinkingExpanded={isThinkingExpanded}
+          toggleThinking={toggleThinking}
+          findToolResult={findToolResult}
+          t={t}
+          getMessageText={getMessageText}
+          onNavigateToProviderSettings={onNavigateToProviderSettings}
+        />
+      </div>
+
+      {/* Duration display after last assistant message */}
+      {message.type === 'assistant' && !isMessageStreaming && typeof message.durationMs === 'number' && (
+        <div className="message-duration">
+          <span className="message-duration-inner">
+            <span className="message-duration-flag codicon codicon-clock"></span>
+            <span className="message-duration-cost">{t('chat.totalDuration')}</span>
+            <span className="message-duration-value">{formatDurationMs(message.durationMs)}</span>
+          </span>
+        </div>
       )}
     </div>
   );

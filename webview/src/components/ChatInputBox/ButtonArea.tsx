@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, useEffect } from 'react';
+import { useCallback, useMemo, useState, useEffect, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ButtonAreaProps, ModelInfo, PermissionMode, ReasoningEffort } from './types';
 import { ConfigSelect, ModelSelect, ModeSelect, ProviderSelect, ReasoningSelect } from './selectors';
@@ -6,7 +6,6 @@ import { CLAUDE_MODELS, CODEX_MODELS } from './types';
 import { STORAGE_KEYS, validateCodexCustomModels } from '../../types/provider';
 import type { CodexCustomModel } from '../../types/provider';
 import { readClaudeModelMapping } from '../../utils/claudeModelMapping';
-import { SparklesIcon, SendIcon, StopIcon } from '../Icons';
 
 /**
  * Get custom Codex model list from localStorage
@@ -67,13 +66,13 @@ function getCustomClaudeModels(): ModelInfo[] {
  * ButtonArea - Bottom toolbar component
  * Contains mode selector, model selector, attachment button, prompt enhancer button, send/stop button
  */
-export const ButtonArea = ({
+export const ButtonArea = memo(function ButtonArea({
   disabled = false,
   hasInputContent = false,
   isLoading = false,
   isEnhancing = false,
   selectedModel = 'claude-sonnet-4-6',
-  permissionMode = 'acceptEdits',
+  permissionMode = 'bypassPermissions',
   currentProvider = 'claude',
   reasoningEffort = 'high',
   onSubmit,
@@ -93,7 +92,7 @@ export const ButtonArea = ({
   onAddModel,
   longContextEnabled = true,
   onLongContextChange,
-}: ButtonAreaProps) => {
+}: ButtonAreaProps) {
   const { t } = useTranslation();
   // const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -132,7 +131,6 @@ export const ButtonArea = ({
   const applyModelMapping = useCallback((model: ModelInfo, mapping: { main?: string; haiku?: string; sonnet?: string; opus?: string }): ModelInfo => {
     const modelKeyMap: Record<string, keyof typeof mapping> = {
       'claude-sonnet-4-6': 'sonnet',
-      'claude-opus-4-8': 'opus',
       'claude-opus-4-7': 'opus',
       'claude-haiku-4-5': 'haiku',
     };
@@ -278,13 +276,7 @@ export const ButtonArea = ({
           disabled={disabled || !hasInputContent || isLoading || isEnhancing}
           data-tooltip={`${t('promptEnhancer.tooltip')} (${t('promptEnhancer.shortcut')})`}
         >
-          {isEnhancing ? (
-            <svg className="icon spinning" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 12a9 9 0 11-6.219-8.56" />
-            </svg>
-          ) : (
-            <SparklesIcon size={16} />
-          )}
+          <span className={`codicon ${isEnhancing ? 'codicon-loading codicon-modifier-spin' : 'codicon-sparkle'}`} />
         </button>
 
         {/* Send/Stop button */}
@@ -294,7 +286,7 @@ export const ButtonArea = ({
             onClick={handleStopClick}
             title={t('chat.stopGeneration')}
           >
-            <StopIcon size={14} />
+            <span className="codicon codicon-debug-stop" />
           </button>
         ) : (
           <button
@@ -303,12 +295,10 @@ export const ButtonArea = ({
             disabled={disabled || !hasInputContent}
             title={t('chat.sendMessageEnter')}
           >
-            <SendIcon size={16} />
+            <span className="codicon codicon-send" />
           </button>
         )}
       </div>
     </div>
   );
-};
-
-export default ButtonArea;
+});

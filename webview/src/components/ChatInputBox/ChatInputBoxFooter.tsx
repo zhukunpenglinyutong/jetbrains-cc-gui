@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { TFunction } from 'i18next';
 import type { DropdownItemData, DropdownPosition, PermissionMode, ReasoningEffort, SelectedAgent } from './types.js';
 import type { TooltipState } from './hooks/useTooltip.js';
@@ -16,7 +17,7 @@ interface CompletionController {
   handleMouseEnter: (index: number) => void;
 }
 
-export function ChatInputBoxFooter({
+export const ChatInputBoxFooter = memo(function ChatInputBoxFooter({
   disabled,
   hasInputContent,
   isLoading,
@@ -230,5 +231,5 @@ export function ChatInputBoxFooter({
       />
     </>
   );
-}
+});
 

@@ -8,8 +8,8 @@
 .status-panel-tabs {
   display: flex;
   align-items: center;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-primary);
+  background: var(--bg-chat-overlay-light);
+  border: 1px solid var(--bg-chat-border);
   border-radius: 6px;
   padding: 5px 8px;
   gap: 0;
@@ -54,7 +54,7 @@
 
   /* 分割线 - 除了最后一个 tab */
   &:not(:last-child) {
-    border-right: 1px solid var(--border-primary);
+    border-right: 1px solid var(--bg-chat-border);
     border-radius: 4px 0 0 4px;
     margin-right: -1px;
   }

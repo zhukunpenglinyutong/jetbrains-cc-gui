@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { FileChangeSummary } from '../../types';
 import { undoFileChanges, sendToJava } from '../../utils/bridge';
@@ -9,10 +9,9 @@ import FileChangesList from './FileChangesList';
 import UndoConfirmDialog from './UndoConfirmDialog';
 import DiscardAllDialog from './DiscardAllDialog';
 import type { TabType, StatusPanelProps } from './types';
-import { TaskIcon, RobotIcon, EditIcon, LoadingIcon } from '../Icons';
 import './StatusPanel.less';
 
-const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, currentSessionId, expanded = true, isStreaming = false, onUndoFile, onDiscardAll, onKeepAll }: StatusPanelProps) => {
+const StatusPanel = memo(function StatusPanel({ todos, fileChanges, subagents, subagentHistories, currentSessionId, expanded = true, isStreaming = false, onUndoFile, onDiscardAll, onKeepAll }: StatusPanelProps) {
   const { t } = useTranslation();
   const [openPopover, setOpenPopover] = useState<TabType | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -234,7 +233,7 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
           className={`status-panel-tab ${openPopover === 'todo' ? 'active' : ''}`}
           onClick={() => handleTabClick('todo')}
         >
-          <TaskIcon size={14} />
+          <span className="codicon codicon-checklist" />
           <span className="tab-label">{t('statusPanel.tasksTab')}</span>
           {hasTodos && (
             <span className="tab-progress">
@@ -242,7 +241,7 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
             </span>
           )}
           {isStreaming && hasInProgressTodo && (
-            <LoadingIcon size={14} className="status-panel-tab-loading" />
+            <span className="codicon codicon-loading status-panel-tab-loading" />
           )}
         </div>
 
@@ -251,7 +250,7 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
           className={`status-panel-tab ${openPopover === 'subagent' ? 'active' : ''}`}
           onClick={() => handleTabClick('subagent')}
         >
-          <RobotIcon size={14} />
+          <span className="codicon codicon-hubot" />
           <span className="tab-label">{t('statusPanel.subagentTab')}</span>
           {hasSubagents && (
             <span className="tab-progress">
@@ -259,7 +258,7 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
             </span>
           )}
           {isStreaming && hasRunningSubagent && (
-            <LoadingIcon size={14} className="status-panel-tab-loading" />
+            <span className="codicon codicon-loading status-panel-tab-loading" />
           )}
         </div>
 
@@ -268,7 +267,7 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
           className={`status-panel-tab ${openPopover === 'files' ? 'active' : ''}`}
           onClick={() => handleTabClick('files')}
         >
-          <EditIcon size={14} />
+          <span className="codicon codicon-edit" />
           <span className="tab-label">{t('statusPanel.editsTab')}</span>
           {hasFileChanges && (
             <span className="tab-stats">
@@ -299,6 +298,6 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
       />
     </div>
   );
-};
+});
 
 export default StatusPanel;
