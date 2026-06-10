@@ -30,7 +30,7 @@ checkstyle {
 }
 
 group = 'com.github.idea-claude-code-gui'
-version = '0.4.5-Alpha1'
+version = '0.4.5-Alpha2'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -75,7 +75,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.google.code.gson:gson:2.10.1'
+    compileOnly 'com.google.code.gson:gson:2.10.1'
     implementation 'javazoom:jlayer:1.0.1'
     implementation 'org.snakeyaml:snakeyaml-engine:3.0.1'
     testImplementation 'junit:junit:4.13.2'
@@ -222,24 +222,8 @@ patchPluginXml {
     changeNotes = computedChangeNotes ?: '<p>No changelog found.</p>'
 }
 
-// Disable product-specific searchable options/instrument tasks if present
-// Use matching to cover task name variants like buildSearchableOptionsIC / buildSearchableOptionsIU etc.
-tasks.matching { it.name.startsWith('buildSearchableOptions') }.configureEach {
-    enabled = false
-}
-
-tasks.named('buildSearchableOptions') {
-    enabled = false
-}
-
-tasks.named('instrumentCode') {
-    enabled = false
-}
-
-tasks.named('jarSearchableOptions') {
-    enabled = false
-}
-
+// Re-enabled for correctness and plugin discoverability
+// instrumentCode provides @NotNull assertions; buildSearchableOptions enables Settings search
 tasks.named('runIde') {
     jvmArgumentProviders.add({
         [
@@ -591,20 +575,12 @@ tasks.named('buildPlugin') {
                     into pluginDir
                 }
 
-                // Delete searchableOptions jar if present
-                fileTree(new File(pluginDir, 'lib')).matching {
-                    include '**/*searchableOptions*.jar'
-                }.each { jarFile ->
-                    delete(jarFile)
-                    println "Deleted searchableOptions jar: ${jarFile.name}"
-                }
-
                 // Repackage
                 delete(distributionFile)
                 ant.zip(destfile: distributionFile) {
                     fileset(dir: tempDir)
                 }
-                println "Added ai-bridge.zip and ai-bridge.hash to plugin package and removed searchableOptions jar"
+                println "Added ai-bridge.zip and ai-bridge.hash to plugin package"
             }
 
             delete(tempDir)
