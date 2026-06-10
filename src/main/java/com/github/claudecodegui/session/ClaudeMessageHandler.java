@@ -212,6 +212,8 @@ public class ClaudeMessageHandler implements MessageCallback {
         }
         callbackHandler.notifyQueueDisplayStateChanged(state.getQueueDisplayState(), state.getQueueAheadCount());
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+        // Sync status bar: error also means the turn is over, clear stale status.
+        ClaudeNotifier.clearStatus(project);
     }
 
     private void appendProviderErrorToAssistantMessage(String error) {
@@ -271,6 +273,9 @@ public class ClaudeMessageHandler implements MessageCallback {
             state.setQueueAheadCount(0);
             callbackHandler.notifyQueueDisplayStateChanged(state.getQueueDisplayState(), state.getQueueAheadCount());
             callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+            // Sync status bar: stream_end may not trigger message_end in all cases,
+            // so ensure the status bar is cleared on completion.
+            ClaudeNotifier.clearStatus(project);
             return;
         }
 
@@ -306,6 +311,9 @@ public class ClaudeMessageHandler implements MessageCallback {
 
         callbackHandler.notifyQueueDisplayStateChanged(state.getQueueDisplayState(), state.getQueueAheadCount());
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+        // Sync status bar: when onComplete fires without stream_end (SDK error, timeout, etc.)
+        // the status bar would otherwise remain stuck in the last status (e.g., "waiting").
+        ClaudeNotifier.clearStatus(project);
     }
 
     private void handleInterruptedCompletion(SDKResult result) {
@@ -347,6 +355,8 @@ public class ClaudeMessageHandler implements MessageCallback {
         streamEndedThisTurn = false;
         callbackHandler.notifyQueueDisplayStateChanged(state.getQueueDisplayState(), state.getQueueAheadCount());
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+        // Sync status bar: interruption also means the turn is over.
+        ClaudeNotifier.clearStatus(project);
     }
 
     @Override
@@ -897,6 +907,10 @@ public class ClaudeMessageHandler implements MessageCallback {
         state.updateLastModifiedTime();
         callbackHandler.notifyQueueDisplayStateChanged(state.getQueueDisplayState(), state.getQueueAheadCount());
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+        // Sync status bar: stream_end is the definitive turn boundary.
+        // If message_end was not emitted (or lost), the status bar would stay stuck
+        // in "waiting" / "thinking" / "generating". Clear it here as a safety net.
+        ClaudeNotifier.clearStatus(project);
     }
 
     /**

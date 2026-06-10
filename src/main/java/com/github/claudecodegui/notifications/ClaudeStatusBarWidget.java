@@ -160,18 +160,16 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
 
         StringBuilder text = new StringBuilder("GUI " + icon);
 
-        // Add Model Info (Shorten names)
+        // Add Model Info — match webview ModelSelect display names
         if (model != null && !model.isEmpty()) {
-            String shortModel = model;
-            if (model.contains("sonnet")) { shortModel = "Sonnet"; }
-            else if (model.contains("opus")) { shortModel = "Opus"; }
-            else if (model.contains("haiku")) { shortModel = "Haiku"; }
+            String shortModel = shortenModelName(model);
             text.append(" [").append(shortModel).append("]");
         }
 
-        // Add Mode Info
-        if (mode != null && !"default".equals(mode)) {
+        // Add Mode Info — always show mode, matching webview ModeSelect labels
+        if (mode != null && !mode.isEmpty()) {
             String modeLabel = switch (mode) {
+                case "default" -> ClaudeCodeGuiBundle.message("status.mode.default");
                 case "plan" -> ClaudeCodeGuiBundle.message("status.mode.plan");
                 case "acceptEdits" -> ClaudeCodeGuiBundle.message("status.mode.acceptEdits");
                 case "bypassPermissions" -> ClaudeCodeGuiBundle.message("status.mode.bypassPermissions");
@@ -204,6 +202,37 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
         }
 
         updateLabel(text.toString(), tooltip.toString());
+    }
+
+    /**
+     * Shorten model ID to a display name matching the webview ModelSelect component.
+     * e.g. "claude-sonnet-4-6" → "Sonnet 4.6", "gpt-5.4" → "GPT-5.4"
+     */
+    private static String shortenModelName(String model) {
+        // Claude models with version numbers
+        if (model.contains("sonnet")) {
+            if (model.contains("4-6")) return "Sonnet 4.6";
+            return "Sonnet";
+        }
+        if (model.contains("opus")) {
+            if (model.contains("4-8")) return "Opus 4.8";
+            if (model.contains("4-7")) return "Opus 4.7";
+            if (model.contains("4-6")) return "Opus 4.6";
+            return "Opus";
+        }
+        if (model.contains("haiku")) {
+            if (model.contains("4-5")) return "Haiku 4.5";
+            return "Haiku";
+        }
+        // GPT / Codex models — capitalize like webview
+        if (model.startsWith("gpt-")) {
+            return "GPT-" + model.substring(4);
+        }
+        if (model.startsWith("o") && model.length() <= 3) {
+            return model.toUpperCase(); // o1, o3 etc
+        }
+        // Fallback: return raw ID
+        return model;
     }
 
     public void show(String text, String tooltip, long durationMs) {
