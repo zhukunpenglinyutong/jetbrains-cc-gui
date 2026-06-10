@@ -20,7 +20,8 @@ function readStoredOpacity(): number {
   if (!raw) return OPACITY_DEFAULT;
   const val = parseFloat(raw);
   if (!Number.isFinite(val)) return OPACITY_DEFAULT;
-  return Math.max(0, Math.min(1, val));
+  if (val < 0 || val > 1) return OPACITY_DEFAULT;
+  return val;
 }
 
 function applyOpacityCSS(value: number) {
