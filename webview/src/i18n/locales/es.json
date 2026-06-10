@@ -1518,6 +1518,10 @@
       "label": "Máximo",
       "description": "Profundidad máxima de razonamiento"
     },
+    "max": {
+      "label": "max",
+      "description": "Razonamiento máximo para tareas exigentes"
+    },
     "ultracode": {
       "label": "Ultracode",
       "description": "Esfuerzo XHigh más flujos de trabajo"

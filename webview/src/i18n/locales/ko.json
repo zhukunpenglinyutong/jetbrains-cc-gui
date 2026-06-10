@@ -1635,6 +1635,10 @@
       "label": "최대",
       "description": "최대 추론 깊이"
     },
+    "max": {
+      "label": "max",
+      "description": "고난도 작업을 위한 최대 추론"
+    },
     "ultracode": {
       "label": "Ultracode",
       "description": "XHigh 추론과 워크플로우"

@@ -1544,6 +1544,10 @@
       "label": "Максимальная",
       "description": "Максимальная глубина рассуждений"
     },
+    "max": {
+      "label": "max",
+      "description": "Максимальное рассуждение для сложных задач"
+    },
     "ultracode": {
       "label": "Ultracode",
       "description": "Усилие XHigh плюс рабочие процессы"

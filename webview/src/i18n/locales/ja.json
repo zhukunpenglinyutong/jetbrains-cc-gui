@@ -1523,6 +1523,10 @@
       "label": "最大",
       "description": "最大の推論深度"
     },
+    "max": {
+      "label": "max",
+      "description": "高難度タスク向けの最大推論"
+    },
     "ultracode": {
       "label": "Ultracode",
       "description": "XHigh 推論とワークフロー"

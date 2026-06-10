@@ -1523,6 +1523,10 @@
       "label": "最多",
       "description": "最深推理，最高精度"
     },
+    "max": {
+      "label": "max",
+      "description": "最大推理深度"
+    },
     "ultracode": {
       "label": "Ultracode",
       "description": "XHigh 推理 + 工作流，最全面"

@@ -1690,6 +1690,10 @@
       "label": "Máximo",
       "description": "Profundidade máxima de raciocínio"
     },
+    "max": {
+      "label": "max",
+      "description": "Raciocínio máximo para tarefas exigentes"
+    },
     "ultracode": {
       "label": "Ultracode",
       "description": "Esforço XHigh mais fluxos de trabalho"

@@ -1517,6 +1517,10 @@
       "label": "अधिकतम",
       "description": "अधिकतम तर्क गहराई"
     },
+    "max": {
+      "label": "max",
+      "description": "कठिन कार्यों के लिए अधिकतम तर्क"
+    },
     "ultracode": {
       "label": "Ultracode",
       "description": "XHigh प्रयास और वर्कफ़्लो"
