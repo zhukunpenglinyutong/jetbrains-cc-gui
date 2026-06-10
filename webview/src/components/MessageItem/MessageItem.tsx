@@ -45,6 +45,9 @@ export interface MessageItemProps {
   withinResponseGroup?: boolean;
   /** Render only message blocks, without avatar, bubble, copy button, or usage stats. */
   renderMode?: 'full' | 'response-segment';
+  /** Play the messageFadeIn entry animation on this card. Set only on the card's
+   *  first logical appearance so React remounts never replay the animation. */
+  shouldAnimateIn?: boolean;
 }
 
 /** Map provider id to a human-readable label used in UI text. */
@@ -76,7 +79,7 @@ interface CopyButtonProps {
   copySuccessText: string;
 }
 
-const CopyButton = memo(function CopyButton({
+export const CopyButton = memo(function CopyButton({
   className,
   isCopied,
   onClick,
@@ -231,6 +234,7 @@ export const MessageItem = memo(function MessageItem({
   currentProvider,
   withinResponseGroup = false,
   renderMode = 'full',
+  shouldAnimateIn = false,
 }: MessageItemProps): React.ReactElement {
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
   const [showStreamingConnectHint, setShowStreamingConnectHint] = useState(false);
@@ -587,7 +591,7 @@ export const MessageItem = memo(function MessageItem({
 
   return (
     <div
-      className={`message ${message.type}${isLast ? ' is-last-message' : ''}${isProviderNotConfigured ? ' provider-not-configured' : ''}${withinResponseGroup ? ' in-response-group' : ''}`}
+      className={`message ${message.type}${isLast ? ' is-last-message' : ''}${isProviderNotConfigured ? ' provider-not-configured' : ''}${withinResponseGroup ? ' in-response-group' : ''}${shouldAnimateIn ? ' animate-in' : ''}`}
       ref={anchorRefCallback}
       data-message-anchor-id={message.type === 'user' ? messageKey : undefined}
     >

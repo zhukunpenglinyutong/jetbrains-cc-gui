@@ -4,18 +4,29 @@ import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock } from '../type
 import type { QueueDisplayState } from '../contexts/MessagesContext';
 import { getMessageKey } from '../utils/messageUtils';
 import { extractMessageUsage } from '../utils/messageUsage';
-import { MessageItem } from './MessageItem';
+import { MessageItem, CopyButton } from './MessageItem';
 import { MessageAvatar } from './MessageItem/MessageAvatar';
 import { MessageUsageStats } from './MessageItem/MessageUsageStats';
 import WaitingIndicator from './WaitingIndicator';
 import { ContextMenu } from './ContextMenu';
 import { useContextMenu, copySelection } from '../hooks/useContextMenu.js';
+import { copyToClipboard } from '../utils/copyUtils';
 import type { MessageListRevealHandle } from './ConversationSearch/types';
 
 /** Always render at least this many recent messages. Earlier messages are collapsed. */
 const VISIBLE_MESSAGE_WINDOW = 15;
 /** Number of additional earlier messages to reveal per "show earlier" click. */
 const REVEAL_PAGE_SIZE = 30;
+
+/**
+ * Tracks card keys (group responseId / single message key) that have already
+ * played their messageFadeIn entry animation. A card animates ONLY on its first
+ * logical appearance; subsequent re-renders — including any React remount from
+ * streaming structural changes — do NOT replay the animation. This is what
+ * removes the streaming "flicker" while keeping the full entry animation.
+ * Cleared on session switch so a freshly loaded conversation animates in.
+ */
+const animatedEntryKeys = new Set<string>();
 
 type VisibleMessageUnit =
   | { kind: 'message'; message: ClaudeMessage; messageIndex: number }
@@ -138,6 +149,35 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
   // mount when sessions exceed hundreds of messages.
   const [revealedCount, setRevealedCount] = useState(0);
 
+  // Whole-response copy state. The grouped card hosts one copy button per turn
+  // (segments themselves carry no copy button), so this state lives at the list.
+  const [copiedResponseId, setCopiedResponseId] = useState<string | null>(null);
+  const copyResponseTimeoutRef = useRef<number | null>(null);
+
+  const handleCopyResponse = useCallback(async (responseId: string, text: string) => {
+    if (copiedResponseId === responseId) return;
+    const success = await copyToClipboard(text);
+    if (success) {
+      setCopiedResponseId(responseId);
+      if (copyResponseTimeoutRef.current !== null) {
+        window.clearTimeout(copyResponseTimeoutRef.current);
+      }
+      copyResponseTimeoutRef.current = window.setTimeout(() => {
+        setCopiedResponseId(null);
+        copyResponseTimeoutRef.current = null;
+      }, 1500);
+    }
+  }, [copiedResponseId]);
+
+  useEffect(() => {
+    return () => {
+      if (copyResponseTimeoutRef.current !== null) {
+        window.clearTimeout(copyResponseTimeoutRef.current);
+        copyResponseTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
   // Keep WaitingIndicator mounted during exit animation
   const [waitingVisible, setWaitingVisible] = useState(false);
 
@@ -169,6 +209,8 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
     // Reset on session start OR when first message ID changes
     if (isSessionStart || currentFirstId !== firstMsgIdRef.current) {
       setRevealedCount(0);
+      // Clear entry-animation memory so the newly loaded conversation animates in.
+      animatedEntryKeys.clear();
     }
     firstMsgIdRef.current = currentFirstId;
   }, [messages]);
@@ -237,11 +279,12 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
         cursor += 1;
       }
 
-      if (items.length > 1) {
-        units.push({ kind: 'assistant_response_group', responseId, items });
-      } else {
-        units.push({ kind: 'message', message, messageIndex });
-      }
+      // Any assistant carrying a __responseId renders as a group container —
+      // even a single segment. Keeping the structure independent of segment
+      // count keeps the top-level React key stable as segments are added or
+      // removed during streaming, so the card never remounts (a remount would
+      // replay the entry animation = the flicker we are fixing).
+      units.push({ kind: 'assistant_response_group', responseId, items });
       visibleIndex = cursor;
     }
 
@@ -272,18 +315,40 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
 
       {visibleMessageUnits.map((unit) => {
         if (unit.kind === 'assistant_response_group') {
-          const firstIndex = unit.items[0].messageIndex;
-          const lastIndex = unit.items[unit.items.length - 1].messageIndex;
           const usage = getGroupedAssistantUsage(unit.items);
+          const groupKey = `response-${unit.responseId}`;
+          // Animate ONLY on the card's first appearance; never replay on remount.
+          const groupFirstAppearance = !animatedEntryKeys.has(groupKey);
+          if (groupFirstAppearance) {
+            animatedEntryKeys.add(groupKey);
+          }
+          // A group is "streaming" while its last segment is still the active
+          // streaming tail — copy is hidden then to avoid copying partial text.
+          const isStreamingGroup = streamingActive
+            && unit.items[unit.items.length - 1].messageIndex === messages.length - 1;
+          const groupCopyableText = unit.items
+            .map(({ message }) => extractMarkdownContent(message))
+            .map((text) => text.trim())
+            .filter((text) => text.length > 0)
+            .join('\n\n');
+          const groupHasCopyable = groupCopyableText.length > 0;
           return (
             <div
-              key={`response-${unit.responseId}-${firstIndex}-${lastIndex}`}
-              className="message assistant assistant-response-group"
+              key={groupKey}
+              className={`message assistant assistant-response-group${groupFirstAppearance ? ' animate-in' : ''}`}
               data-response-id={unit.responseId}
             >
               <div className="message-avatar-row">
                 <MessageAvatar type="assistant" />
                 <div className="message-content-wrapper">
+                  {!isStreamingGroup && groupHasCopyable && (
+                    <CopyButton
+                      isCopied={copiedResponseId === unit.responseId}
+                      onClick={() => handleCopyResponse(unit.responseId, groupCopyableText)}
+                      copyLabel={t('markdown.copyMessage')}
+                      copySuccessText={t('markdown.copySuccess')}
+                    />
+                  )}
                   <div className="message-content assistant-response-content">
                     {unit.items.map(({ message, messageIndex }, itemIndex) => {
                       const messageKey = getMessageKey(message, messageIndex);
@@ -334,6 +399,10 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
         const { message, messageIndex } = unit;
         const messageKey = getMessageKey(message, messageIndex);
         const toolResultSignature = getMessageToolResultSignature(message, messageIndex, getContentBlocks, findToolResult);
+        const singleFirstAppearance = !animatedEntryKeys.has(messageKey);
+        if (singleFirstAppearance) {
+          animatedEntryKeys.add(messageKey);
+        }
 
         return (
           <MessageItem
@@ -341,6 +410,7 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
             message={message}
             messageIndex={messageIndex}
             messageKey={messageKey}
+            shouldAnimateIn={singleFirstAppearance}
             isLast={messageIndex === messages.length - 1}
             streamingActive={streamingActive}
             isThinking={isThinking}

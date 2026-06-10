@@ -9,6 +9,14 @@
     max-width: 85%;
     padding: 16px 20px;
     border-bottom: none;
+}
+
+/* Entry animation plays ONLY on a card's first logical appearance (see the
+   .animate-in modifier, added once per key by MessageList). Keeping the
+   animation off the base .message rule means a React remount never replays
+   the fade-in — which is what removes the streaming flicker while still
+   preserving the full entry animation for genuinely new messages. */
+.message.animate-in {
     animation: messageFadeIn 0.3s ease;
 }
 
@@ -147,6 +155,10 @@
 }
 
 .assistant-response-group {
+    /* animation moved to .assistant-response-group.animate-in (first appearance only) */
+}
+
+.assistant-response-group.animate-in {
     animation: messageFadeIn 0.3s ease;
 }
 
@@ -246,7 +258,7 @@
     gap: 8px;
     padding: 10px 14px;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: background-color 0.2s;
 }
 
 .thinking-section-header:hover {
@@ -394,7 +406,7 @@
     font-family: 'JetBrains Mono', monospace;
     color: var(--accent, #4ea1ff);
     text-decoration: none;
-    transition: all 0.2s;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .file-ref:hover {
@@ -447,6 +459,7 @@
     border-radius: 50%;
     background: var(--accent, #4ea1ff);
     animation: streaming 1.4s infinite ease-in-out;
+    will-change: transform, opacity;
 }
 
 .streaming-dot:nth-child(2) { animation-delay: 0.2s; }
@@ -496,6 +509,7 @@
 .tool-status-indicator.pending {
     background: var(--accent, #4ea1ff);
     animation: pulse 2s infinite;
+    will-change: transform, opacity;
 }
 
 .tool-status-indicator.error {
