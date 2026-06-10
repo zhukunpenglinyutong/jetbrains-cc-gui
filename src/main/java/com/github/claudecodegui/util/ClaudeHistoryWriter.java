@@ -1,5 +1,6 @@
 package com.github.claudecodegui.util;
 
+import com.github.claudecodegui.session.ProviderErrorMessageSupport;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -124,6 +125,111 @@ public final class ClaudeHistoryWriter {
             LOG.warn("[HistoryWriter] Failed to append message to JSONL: " + e.getMessage());
         } catch (Exception e) {
             LOG.warn("[HistoryWriter] Unexpected error appending to JSONL: " + e.getMessage());
+        }
+        return false;
+    }
+
+    /**
+     * Append a provider error as an assistant message with a provider_error content block.
+     *
+     * @param projectPath the project base path
+     * @param sessionId   the session UUID
+     * @param summary     short display summary
+     * @param details     full error details
+     * @param exitCode    optional process exit code
+     */
+    public static boolean appendProviderError(
+            String projectPath,
+            String sessionId,
+            String summary,
+            String details,
+            Integer exitCode
+    ) {
+        return appendProviderError(projectPath, sessionId, summary, details, exitCode, PROJECTS_DIR);
+    }
+
+    static boolean appendProviderError(
+            String projectPath,
+            String sessionId,
+            String summary,
+            String details,
+            Integer exitCode,
+            Path projectsDir
+    ) {
+        if (projectPath == null || projectPath.isBlank() || sessionId == null || sessionId.isBlank()) {
+            LOG.debug("[HistoryWriter] Skipping provider error append: projectPath or sessionId is blank");
+            return false;
+        }
+        if (details == null || details.isBlank()) {
+            LOG.debug("[HistoryWriter] Skipping provider error append: details is blank");
+            return false;
+        }
+
+        try {
+            Path sessionFile = resolveSessionFile(projectPath, sessionId, projectsDir);
+            if (sessionFile == null) {
+                return false;
+            }
+            if (!Files.isRegularFile(sessionFile)) {
+                LOG.debug("[HistoryWriter] Skipping provider error append: session file does not exist: " + sessionFile);
+                return false;
+            }
+
+            String timestamp = Instant.now().toString();
+            String messageUuid = UUID.randomUUID().toString();
+            String parentUuid = findLastUuid(sessionFile);
+
+            JsonObject line = new JsonObject();
+            if (parentUuid != null && !parentUuid.isBlank()) {
+                line.addProperty("parentUuid", parentUuid);
+            } else {
+                line.add("parentUuid", null);
+            }
+            line.addProperty("isSidechain", false);
+
+            JsonObject message = new JsonObject();
+            message.addProperty("id", "msg_" + System.currentTimeMillis() + messageUuid.substring(0, 8));
+            message.addProperty("type", "message");
+            message.addProperty("role", "assistant");
+            message.addProperty("model", "plugin-error");
+
+            JsonArray contentArray = new JsonArray();
+            contentArray.add(ProviderErrorMessageSupport.createProviderErrorBlock(
+                    "claude",
+                    details,
+                    summary,
+                    exitCode
+            ));
+            message.add("content", contentArray);
+            message.addProperty("stop_reason", "error");
+            message.add("stop_sequence", null);
+
+            JsonObject usage = new JsonObject();
+            usage.addProperty("input_tokens", 0);
+            usage.addProperty("output_tokens", 0);
+            usage.addProperty("cache_creation_input_tokens", 0);
+            usage.addProperty("cache_read_input_tokens", 0);
+            message.add("usage", usage);
+
+            line.add("message", message);
+            line.addProperty("type", "assistant");
+            line.addProperty("uuid", messageUuid);
+            line.addProperty("timestamp", timestamp);
+            line.addProperty("userType", "external");
+            line.addProperty("entrypoint", "cli");
+            line.addProperty("cwd", projectPath);
+            line.addProperty("sessionId", sessionId);
+
+            Files.writeString(sessionFile, GSON.toJson(line) + "\n",
+                    StandardCharsets.UTF_8,
+                    StandardOpenOption.APPEND);
+
+            LOG.info("[HistoryWriter] Appended provider error to JSONL: " + sessionFile);
+            return true;
+        } catch (IOException e) {
+            LOG.warn("[HistoryWriter] Failed to append provider error to JSONL: " + e.getMessage());
+        } catch (Exception e) {
+            LOG.warn("[HistoryWriter] Unexpected error appending provider error to JSONL: " + e.getMessage());
         }
         return false;
     }

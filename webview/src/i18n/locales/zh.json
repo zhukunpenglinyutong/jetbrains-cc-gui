@@ -99,6 +99,13 @@
     "totalDuration": "本次耗时",
     "waitingTimedOutDuration": "等待超时",
     "streamStalledRetrying": "长时间未收到模型输出，CLI 可能仍在重试；如果稍后失败会显示真实错误。",
+    "providerError": {
+      "title": "本次响应已停止",
+      "details": "错误详情",
+      "provider": "服务：{{provider}}",
+      "exitCode": "退出码：{{exitCode}}",
+      "fallbackSummary": "Codex 响应失败"
+    },
     "usageStats": {
       "input": "输入：",
       "output": "输出：",

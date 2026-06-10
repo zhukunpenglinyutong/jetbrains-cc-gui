@@ -1,5 +1,3 @@
-export type ClaudeRole = 'user' | 'assistant' | 'error' | 'task_notification' | 'notification' | 'compact_notification' | string;
-
 export type ToolInput = Record<string, unknown>;
 
 export interface CompactNotificationItem {
@@ -44,6 +42,15 @@ export type ClaudeContentBlock =
       localPath?: string;
     }
   | { type: 'attachment'; fileName?: string; mediaType?: string }
+  | {
+      type: 'provider_error';
+      provider?: string;
+      summary?: string;
+      details?: string;
+      exitCode?: number | string;
+      requestId?: string;
+      url?: string;
+    }
   | { type: 'task_notification'; icon: string; summary: string; status: string }
   | { type: 'compact_notification'; headerText: string; items: CompactNotificationItem[] }
   | { type: 'compact_summary'; title: string; content: string; metadata?: CompactSummaryMetadata };
@@ -72,7 +79,7 @@ export interface ClaudeRawMessage {
 
 /** Represents a single message in the chat conversation. */
 export interface ClaudeMessage {
-  type: ClaudeRole;
+  type: 'user' | 'assistant' | 'error' | 'task_notification' | 'notification' | 'compact_notification' | string;
   content?: string;
   raw?: ClaudeRawMessage | string;
     timestamp?: string;

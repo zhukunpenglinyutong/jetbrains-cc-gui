@@ -219,6 +219,36 @@ export function buildCompactNotification(group: ClaudeMessage[]): ClaudeMessage 
   };
 }
 
+function normalizeComparableMessageText(text: string | undefined): string {
+  return (text ?? '').replace(/\s+/g, ' ').trim();
+}
+
+function isProviderErrorContentAlreadyRendered(
+  content: string | undefined,
+  blocks: readonly ClaudeContentBlock[],
+): boolean {
+  const normalizedContent = normalizeComparableMessageText(content);
+  if (!normalizedContent) {
+    return false;
+  }
+
+  return blocks.some((block) => {
+    if (block.type !== 'provider_error') {
+      return false;
+    }
+
+    return [block.details, block.summary].some((value) => {
+      const normalizedValue = normalizeComparableMessageText(value);
+      return Boolean(
+        normalizedValue &&
+        (normalizedValue === normalizedContent ||
+          normalizedValue.includes(normalizedContent) ||
+          normalizedContent.includes(normalizedValue))
+      );
+    });
+  });
+}
+
 /**
  * Get text content from a message
  */
@@ -481,7 +511,8 @@ export function getContentBlocks(
       !hasTextBlock &&
       message.content &&
       message.content.trim() &&
-      !isSyntheticToolMessageContent(message.content, rawBlocks)
+      !isSyntheticToolMessageContent(message.content, rawBlocks) &&
+      !isProviderErrorContentAlreadyRendered(message.content, rawBlocks)
     ) {
       return [...rawBlocks, { type: 'text', text: localizeMessage(message.content) }];
     }

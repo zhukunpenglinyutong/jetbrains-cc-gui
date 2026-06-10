@@ -1319,6 +1319,93 @@
     }
 }
 
+.provider-error-block {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 8px 0 2px;
+    padding: 10px 12px;
+    border: 1px solid rgba(239, 68, 68, 0.32);
+    border-left: 3px solid var(--color-error, #ef4444);
+    border-radius: 6px;
+    background: rgba(239, 68, 68, 0.08);
+    color: var(--text-primary);
+}
+
+.provider-error-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.provider-error-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    margin-top: 2px;
+    border-radius: 50%;
+    background: var(--color-error, #ef4444);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.provider-error-heading {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.provider-error-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.provider-error-summary {
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+    overflow-wrap: anywhere;
+}
+
+.provider-error-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    padding-left: 24px;
+    font-size: 12px;
+    color: var(--text-tertiary);
+}
+
+.provider-error-details {
+    padding-left: 24px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.provider-error-details summary {
+    width: fit-content;
+    cursor: pointer;
+    color: var(--text-secondary);
+}
+
+.provider-error-details pre {
+    margin: 8px 0 0;
+    max-height: 180px;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
 /* Compact Notification Block - matching CLI's compact output display */
 .compact-notification-block {
     display: flex;

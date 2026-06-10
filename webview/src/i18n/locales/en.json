@@ -99,6 +99,13 @@
     "totalDuration": "This reply took",
     "waitingTimedOutDuration": "Wait timed out",
     "streamStalledRetrying": "No model output was received for a while. The CLI may still be retrying; the final error will appear if it fails.",
+    "providerError": {
+      "title": "This response stopped",
+      "details": "Error details",
+      "provider": "Service: {{provider}}",
+      "exitCode": "Exit code: {{exitCode}}",
+      "fallbackSummary": "Codex response failed"
+    },
     "usageStats": {
       "input": "Input:",
       "output": "Output:",

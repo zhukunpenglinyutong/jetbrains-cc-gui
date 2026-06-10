@@ -15,6 +15,19 @@ import { TASK_STATUS_COLORS } from '../../utils/messageUtils';
 
 const IMAGE_BLOCK_STYLE: React.CSSProperties = { cursor: 'pointer' };
 
+function normalizeProviderErrorText(text: string | undefined): string {
+  return (text ?? '').replace(/\s+/g, ' ').trim();
+}
+
+function shouldShowProviderErrorSummary(summary: string, details: string | undefined): boolean {
+  const normalizedSummary = normalizeProviderErrorText(summary);
+  const normalizedDetails = normalizeProviderErrorText(details);
+  return Boolean(
+    normalizedSummary &&
+    (!normalizedDetails || !normalizedDetails.includes(normalizedSummary))
+  );
+}
+
 function getImageStyle(isUser: boolean): React.CSSProperties {
   return {
     maxWidth: isUser ? '200px' : '100%',
@@ -235,6 +248,40 @@ export function ContentBlockRenderer({
         <span className={`message-attachment-chip-icon codicon ${getFileIcon(block.mediaType)}`} />
         {ext && <span className="message-attachment-chip-ext">{ext}</span>}
         <span className="message-attachment-chip-name">{displayName}</span>
+      </div>
+    );
+  }
+
+  if (block.type === 'provider_error') {
+    const summary = block.summary || block.details || t('chat.providerError.fallbackSummary');
+    const details = block.details || summary;
+    const showSummary = shouldShowProviderErrorSummary(summary, block.details);
+    const provider = block.provider || 'codex';
+    const metadata: string[] = [t('chat.providerError.provider', { provider })];
+    if (block.exitCode !== undefined && block.exitCode !== null) {
+      metadata.push(t('chat.providerError.exitCode', { exitCode: block.exitCode }));
+    }
+
+    return (
+      <div className="provider-error-block">
+        <div className="provider-error-header">
+          <span className="provider-error-icon" aria-hidden="true">!</span>
+          <div className="provider-error-heading">
+            <span className="provider-error-title">{t('chat.providerError.title')}</span>
+            {showSummary && <span className="provider-error-summary">{summary}</span>}
+          </div>
+        </div>
+        <div className="provider-error-meta">
+          {metadata.map((item, index) => (
+            <span key={index}>{item}</span>
+          ))}
+        </div>
+        {details && (
+          <details className="provider-error-details">
+            <summary>{t('chat.providerError.details')}</summary>
+            <pre>{details}</pre>
+          </details>
+        )}
       </div>
     );
   }

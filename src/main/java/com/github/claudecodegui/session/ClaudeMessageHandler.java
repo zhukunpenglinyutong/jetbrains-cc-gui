@@ -204,14 +204,39 @@ public class ClaudeMessageHandler implements MessageCallback {
         state.setQueueDisplayState(ClaudeSession.SessionCallback.QueueDisplayState.NONE);
         state.setQueueAheadCount(0);
 
-        Message errorMessage = new Message(Message.Type.ERROR, error);
-        state.addMessage(errorMessage);
+        appendProviderErrorToAssistantMessage(error);
+        persistProviderError(error);
         callbackHandler.notifyMessageUpdate(state.getMessages());
         if (wasStreaming) {
             callbackHandler.notifyStreamEnd();
         }
         callbackHandler.notifyQueueDisplayStateChanged(state.getQueueDisplayState(), state.getQueueAheadCount());
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+    }
+
+    private void appendProviderErrorToAssistantMessage(String error) {
+        currentAssistantMessage = ProviderErrorMessageSupport.appendToAssistantMessage(
+                state,
+                currentAssistantMessage,
+                "claude",
+                error
+        );
+    }
+
+    private void persistProviderError(String error) {
+        String sessionId = state.getSessionId();
+        String cwd = state.getCwd();
+        if (sessionId == null || sessionId.isBlank() || cwd == null || cwd.isBlank()
+                || error == null || error.isBlank()) {
+            return;
+        }
+        ClaudeHistoryWriter.appendProviderError(
+                cwd,
+                sessionId,
+                ProviderErrorMessageSupport.summarize(error),
+                error,
+                null
+        );
     }
 
     /**

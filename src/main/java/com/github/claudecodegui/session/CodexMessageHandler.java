@@ -5,6 +5,7 @@ import com.github.claudecodegui.handler.SettingsHandler;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.session.ClaudeSession.Message;
+import com.github.claudecodegui.util.CodexHistoryWriter;
 import com.github.claudecodegui.util.ClaudeHistoryWriter;
 import com.github.claudecodegui.util.TokenUsageUtils;
 import com.intellij.openapi.diagnostic.Logger;
@@ -112,6 +113,8 @@ public class CodexMessageHandler implements MessageCallback {
             handleThinkingMessage();
         } else if ("stream_end".equals(type)) {
             handleStreamEnd();
+        } else if ("block_reset".equals(type)) {
+            handleBlockReset();
         } else if ("thinking_delta".equals(type)) {
             handleThinkingDelta(content);
         } else if ("content_delta".equals(type) || "content".equals(type)) {
@@ -148,8 +151,8 @@ public class CodexMessageHandler implements MessageCallback {
         state.setQueueDisplayState(ClaudeSession.SessionCallback.QueueDisplayState.NONE);
         state.setQueueAheadCount(0);
 
-        Message errorMessage = new Message(Message.Type.ERROR, error);
-        state.addMessage(errorMessage);
+        appendProviderErrorToAssistantMessage(error);
+        persistProviderError(error);
         callbackHandler.notifyMessageUpdate(state.getMessages());
         if (wasStreaming) {
             callbackHandler.notifyStreamEnd();
@@ -157,6 +160,23 @@ public class CodexMessageHandler implements MessageCallback {
         resetStreamingAccumulator();
         callbackHandler.notifyQueueDisplayStateChanged(state.getQueueDisplayState(), state.getQueueAheadCount());
         callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+    }
+
+    private void appendProviderErrorToAssistantMessage(String error) {
+        currentAssistantMessage = ProviderErrorMessageSupport.appendToAssistantMessage(
+                state,
+                currentAssistantMessage,
+                "codex",
+                error
+        );
+    }
+
+    private void persistProviderError(String error) {
+        String sessionId = state.getSessionId();
+        if (sessionId == null || sessionId.isBlank() || error == null || error.isBlank()) {
+            return;
+        }
+        CodexHistoryWriter.appendProviderError(sessionId, ProviderErrorMessageSupport.summarize(error), error, null);
     }
 
     /**
@@ -1087,6 +1107,15 @@ public class CodexMessageHandler implements MessageCallback {
     private void handleMessageEnd() {
         resetThinkingStatus();
         LOG.debug("Codex message_end received, deferring stream cleanup to stream_end/onComplete");
+    }
+
+    private void handleBlockReset() {
+        resetThinkingStatus();
+        assistantContent.setLength(0);
+        currentAssistantMessage = null;
+        replayDedup.reset();
+        callbackHandler.notifyBlockReset();
+        LOG.debug("Codex block_reset received");
     }
 
     /**

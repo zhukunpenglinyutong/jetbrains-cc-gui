@@ -441,6 +441,11 @@ public class HistoryMessageInjector {
             return List.of();
         }
 
+        if ("provider_error".equals(type)) {
+            JsonObject converted = convertProviderErrorToFrontend(payload, timestamp);
+            return converted == null ? List.of() : List.of(converted);
+        }
+
         // Handle event_msg containing user_message
         if ("event_msg".equals(type)) {
             JsonObject converted = convertEventMsgToFrontend(payload, timestamp);
@@ -468,6 +473,61 @@ public class HistoryMessageInjector {
         }
 
         return List.of();
+    }
+
+    private static JsonObject convertProviderErrorToFrontend(JsonObject payload, String timestamp) {
+        String details = firstNonBlank(getString(payload, "details"), getString(payload, "message"), getString(payload, "error"));
+        String summary = firstNonBlank(getString(payload, "summary"), summarizeProviderError(details));
+        if (details == null || details.isBlank()) {
+            details = summary;
+        }
+        if (summary == null || summary.isBlank()) {
+            summary = "Codex 响应失败";
+        }
+
+        JsonObject frontendMsg = new JsonObject();
+        frontendMsg.addProperty("type", "assistant");
+        frontendMsg.addProperty("content", summary);
+
+        JsonObject errorBlock = new JsonObject();
+        errorBlock.addProperty("type", "provider_error");
+        errorBlock.addProperty("provider", firstNonBlank(getString(payload, "provider"), "codex"));
+        errorBlock.addProperty("summary", summary);
+        errorBlock.addProperty("details", details);
+        if (payload.has("exitCode") && !payload.get("exitCode").isJsonNull()) {
+            errorBlock.add("exitCode", payload.get("exitCode").deepCopy());
+        }
+        if (payload.has("requestId") && !payload.get("requestId").isJsonNull()) {
+            errorBlock.add("requestId", payload.get("requestId").deepCopy());
+        }
+        if (payload.has("url") && !payload.get("url").isJsonNull()) {
+            errorBlock.add("url", payload.get("url").deepCopy());
+        }
+
+        JsonArray content = new JsonArray();
+        content.add(errorBlock);
+
+        JsonObject rawObj = new JsonObject();
+        rawObj.add("content", content);
+        rawObj.addProperty("role", "assistant");
+        frontendMsg.add("raw", rawObj);
+
+        if (timestamp != null) {
+            frontendMsg.addProperty("timestamp", timestamp);
+        }
+        return frontendMsg;
+    }
+
+    private static String summarizeProviderError(String details) {
+        if (details == null || details.isBlank()) {
+            return null;
+        }
+        String trimmed = details.trim();
+        int reasonIndex = trimmed.indexOf("原因：");
+        if (reasonIndex >= 0 && reasonIndex + 3 < trimmed.length()) {
+            return trimmed.substring(reasonIndex + 3).trim();
+        }
+        return trimmed.length() <= 80 ? trimmed : trimmed.substring(0, 80) + "...";
     }
 
     private static List<JsonObject> convertCliItemToFrontendMessages(

@@ -380,6 +380,19 @@ export function normalizeBlocks(
           fileName: typeof candidate.fileName === 'string' ? candidate.fileName : undefined,
           mediaType: typeof candidate.mediaType === 'string' ? candidate.mediaType : undefined,
         });
+      } else if (type === 'provider_error') {
+        blocks.push({
+          type: 'provider_error',
+          provider: typeof candidate.provider === 'string' ? candidate.provider : undefined,
+          summary: typeof candidate.summary === 'string' ? candidate.summary : undefined,
+          details: typeof candidate.details === 'string' ? candidate.details : undefined,
+          exitCode:
+            typeof candidate.exitCode === 'number' || typeof candidate.exitCode === 'string'
+              ? candidate.exitCode
+              : undefined,
+          requestId: typeof candidate.requestId === 'string' ? candidate.requestId : undefined,
+          url: typeof candidate.url === 'string' ? candidate.url : undefined,
+        });
       }
     });
 
