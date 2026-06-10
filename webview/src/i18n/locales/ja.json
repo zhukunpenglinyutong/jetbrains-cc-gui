@@ -1360,6 +1360,10 @@
       "opus48": {
         "label": "Opus 4.8",
         "description": "Opus 4.8 · 最新かつ最も優れたモデル"
+      },
+      "fable5": {
+        "label": "Fable 5",
+        "description": "Fable 5 · 長時間の複雑な作業向けに構築 · トークン消費 2 倍"
       }
     },
     "codex": {
@@ -1518,6 +1522,14 @@
     "xhigh": {
       "label": "最大",
       "description": "最大の推論深度"
+    },
+    "max": {
+      "label": "max",
+      "description": "高難度タスク向けの最大推論"
+    },
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "XHigh 推論とワークフロー"
     }
   },
   "errorBoundary": {

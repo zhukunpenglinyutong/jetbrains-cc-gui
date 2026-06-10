@@ -42,7 +42,7 @@ import { getClaudeCliPathOverride } from '../../utils/claude-cli-path.js';
 
 // ========== Internal helpers for deduplication ==========
 
-const SUPPORTED_EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
+const SUPPORTED_EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max', 'ultracode']);
 
 function normalizeReasoningEffort(reasoningEffort) {
   const effort = typeof reasoningEffort === 'string' ? reasoningEffort.trim() : '';

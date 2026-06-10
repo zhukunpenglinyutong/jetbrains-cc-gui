@@ -1349,6 +1349,10 @@
       "opus48": {
         "label": "Opus 4.8",
         "description": "Opus 4.8 · Le plus récent et le plus performant"
+      },
+      "fable5": {
+        "label": "Fable 5",
+        "description": "Fable 5 · Conçu pour les tâches longues et complexes · Consommation de jetons 2x"
       }
     },
     "longContext": {
@@ -1513,6 +1517,14 @@
     "xhigh": {
       "label": "Maximum",
       "description": "Profondeur de raisonnement maximale"
+    },
+    "max": {
+      "label": "max",
+      "description": "Raisonnement maximal pour les tâches exigeantes"
+    },
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "Effort XHigh plus workflows"
     }
   },
   "errorBoundary": {

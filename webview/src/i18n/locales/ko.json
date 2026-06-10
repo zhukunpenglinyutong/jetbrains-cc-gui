@@ -1466,6 +1466,10 @@
       "opus48": {
         "label": "Opus 4.8",
         "description": "Opus 4.8 · 최신 및 가장 강력한 모델"
+      },
+      "fable5": {
+        "label": "Fable 5",
+        "description": "Fable 5 · 장시간 복잡한 작업을 위해 설계 · 토큰 2배 소모"
       }
     },
     "longContext": {
@@ -1630,6 +1634,14 @@
     "xhigh": {
       "label": "최대",
       "description": "최대 추론 깊이"
+    },
+    "max": {
+      "label": "max",
+      "description": "고난도 작업을 위한 최대 추론"
+    },
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "XHigh 추론과 워크플로우"
     }
   },
   "errorBoundary": {

@@ -1354,6 +1354,10 @@
       "opus48": {
         "label": "Opus 4.8",
         "description": "Opus 4.8 · 最新最強大的模型"
+      },
+      "fable5": {
+        "label": "Fable 5",
+        "description": "Fable 5 · 專為長時間複雜任務打造 · 消耗 2 倍 Token"
       }
     },
     "longContext": {
@@ -1518,6 +1522,14 @@
     "xhigh": {
       "label": "最多",
       "description": "最深推理，最高精度"
+    },
+    "max": {
+      "label": "max",
+      "description": "最大推理深度"
+    },
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "XHigh 推理 + 工作流，最全面"
     }
   },
   "errorBoundary": {

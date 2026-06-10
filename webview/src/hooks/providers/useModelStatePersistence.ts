@@ -11,7 +11,7 @@ import {
 import type { CodexFastMode, PermissionMode, ReasoningEffort } from '../../components/ChatInputBox/types';
 
 const STORAGE_KEY = 'model-selection-state';
-const REASONING_VALUES = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+const REASONING_VALUES = ['low', 'medium', 'high', 'xhigh', 'max', 'ultracode'] as const;
 const CODEX_FAST_MODE_VALUES = ['normal', 'fast'] as const;
 
 const getCustomModels = (key: string): { id: string }[] => {

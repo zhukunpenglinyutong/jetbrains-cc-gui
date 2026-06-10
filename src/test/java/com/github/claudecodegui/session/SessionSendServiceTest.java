@@ -42,6 +42,7 @@ public class SessionSendServiceTest {
         assertEquals("low", SessionSendService.normalizeRequestedReasoningEffort(" low "));
         assertEquals("xhigh", SessionSendService.normalizeRequestedReasoningEffort("xhigh"));
         assertEquals("max", SessionSendService.normalizeRequestedReasoningEffort("max"));
+        assertEquals("ultracode", SessionSendService.normalizeRequestedReasoningEffort("ultracode"));
     }
 
     @Test

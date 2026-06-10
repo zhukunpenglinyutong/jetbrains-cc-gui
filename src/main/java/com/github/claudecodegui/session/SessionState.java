@@ -47,6 +47,7 @@ public class SessionState {
         efforts.add("high");
         efforts.add("xhigh");
         efforts.add("max");
+        efforts.add("ultracode");
         VALID_REASONING_EFFORTS = Collections.unmodifiableSet(efforts);
     }
 

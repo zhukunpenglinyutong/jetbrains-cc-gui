@@ -319,6 +319,11 @@ export const CLAUDE_MODELS: ModelInfo[] = [
     description: 'Sonnet 4.6 · Use the default model',
   },
   {
+    id: 'claude-fable-5',
+    label: 'Fable 5',
+    description: 'Fable 5 · Built for long-running, complex work · 2x token usage',
+  },
+  {
     id: 'claude-opus-4-8',
     label: 'Opus 4.8',
     description: 'Opus 4.8 · Latest and most capable',
@@ -421,6 +426,7 @@ export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
  * Based on: https://code.claude.com/docs/en/model-config#adjust-effort-level
  */
 export const EFFORT_SUPPORTED_CLAUDE_MODELS = new Set([
+  'claude-fable-5',
   'claude-opus-4-8',
   'claude-opus-4-7',
   'claude-opus-4-6',
@@ -433,6 +439,7 @@ export const EFFORT_SUPPORTED_CLAUDE_MODELS = new Set([
  * Opus 4.7 is currently the only Claude Code model with xhigh support.
  */
 export const XHIGH_EFFORT_CLAUDE_MODELS = new Set([
+  'claude-fable-5',
   'claude-opus-4-8',
   'claude-opus-4-7',
 ]);
@@ -441,6 +448,7 @@ export const XHIGH_EFFORT_CLAUDE_MODELS = new Set([
  * Claude models that support the 'max' effort level.
  */
 export const MAX_EFFORT_CLAUDE_MODELS = new Set([
+  'claude-fable-5',
   'claude-opus-4-8',
   'claude-opus-4-7',
   'claude-opus-4-6',
@@ -449,12 +457,22 @@ export const MAX_EFFORT_CLAUDE_MODELS = new Set([
 ]);
 
 /**
+ * Claude models that support the 'ultracode' effort level
+ * (xhigh effort plus workflows): Fable 5 and Opus 4.7/4.8.
+ */
+export const ULTRACODE_EFFORT_CLAUDE_MODELS = new Set([
+  'claude-fable-5',
+  'claude-opus-4-8',
+  'claude-opus-4-7',
+]);
+
+/**
  * Reasoning Effort (thinking depth)
  * Controls the depth of reasoning for AI models
- * Claude API values: low, medium, high, xhigh, max
+ * Claude API values: low, medium, high, xhigh, max, ultracode
  * Codex API values: low, medium, high, xhigh
  */
-export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultracode';
 
 /**
  * Codex execution speed mode.
@@ -505,6 +523,12 @@ export const REASONING_LEVELS: ReasoningInfo[] = [
     label: 'Max',
     icon: 'codicon-rocket',
     description: 'Maximum reasoning depth',
+  },
+  {
+    id: 'ultracode',
+    label: 'Ultracode',
+    icon: 'codicon-code-oss',
+    description: 'XHigh effort plus workflows',
   },
 ];
 
