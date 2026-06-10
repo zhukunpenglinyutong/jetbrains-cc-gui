@@ -124,6 +124,7 @@
   width: 14px;
   height: 14px;
   animation: status-spin 1s linear infinite;
+  will-change: transform;
 }
 
 /* Popover - Floating content panel */
@@ -269,7 +270,7 @@
   color: var(--text-muted);
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 
   &:hover {
     color: var(--text-primary);
@@ -361,7 +362,7 @@
   padding: 12px 14px;
   border-radius: 8px;
   gap: 12px;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   cursor: pointer;
   text-align: left;
 
@@ -480,6 +481,7 @@
       border-top-color: var(--accent, #4ea1ff);
       border-right-color: var(--accent, #4ea1ff);
       animation: status-spin 1.2s linear infinite;
+      will-change: transform;
     }
   }
 
@@ -734,7 +736,7 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
   border-radius: 8px;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 
   &:hover {
     background: var(--bg-hover);
@@ -789,10 +791,12 @@
       border: 1.5px solid transparent;
       border-top-color: var(--accent, #4ea1ff);
       animation: status-spin 1s linear infinite;
+      will-change: transform;
     }
 
     svg {
       animation: todo-pulse 2s ease-in-out infinite;
+      will-change: opacity;
     }
   }
 
@@ -1052,7 +1056,7 @@
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   }
 
   .cancel-btn {
@@ -1119,7 +1123,7 @@
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
     border: 1px solid var(--border-primary);
     background: var(--bg-secondary, #2d2f34);
     color: var(--text-secondary);
@@ -1181,4 +1185,5 @@
 
 .status-panel-spin-icon {
   animation: status-spin 1s linear infinite;
+  will-change: transform;
 }

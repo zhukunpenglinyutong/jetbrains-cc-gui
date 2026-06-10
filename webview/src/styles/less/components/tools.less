@@ -102,6 +102,7 @@
     border-top-color: transparent;
     border-radius: 50%;
     animation: tool-status-spin 0.85s linear infinite;
+    will-change: transform;
 }
 
 .tool-status-indicator.completed {
@@ -331,6 +332,7 @@
 .bash-timeline-node.pending {
     background-color: var(--color-warning);
     animation: breathing 1.5s ease-in-out infinite;
+    will-change: transform, opacity;
 }
 
 .bash-timeline-node.completed {

@@ -58,7 +58,7 @@ const ACTION_BUTTON_STYLE: React.CSSProperties = {
   border: '1px solid var(--border-primary)',
   borderRadius: '4px',
   cursor: 'pointer',
-  transition: 'all 0.15s ease',
+  transition: 'background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease',
   whiteSpace: 'nowrap',
   gap: '4px',
 };
@@ -407,7 +407,7 @@ const EditToolBlock = ({ name, input, result, toolId }: EditToolBlockProps) => {
                 fontSize: '12px',
                 fontFamily: "var(--idea-editor-font-family, 'JetBrains Mono', monospace)",
                 cursor: 'pointer',
-                transition: 'all 0.2s',
+                transition: 'background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease',
               }}
             >
               <span

@@ -313,7 +313,8 @@ export const LoadingIcon: React.FC<IconProps & { spinning?: boolean }> = ({
     className={className}
     style={{
       ...style,
-      animation: spinning ? 'spin 1s linear infinite' : undefined,
+      animation: spinning ? 'icon-spin 1s cubic-bezier(0.4, 0, 0.2, 1) infinite' : undefined,
+      willChange: spinning ? 'transform' : undefined,
     }}
   >
     <path d="M21 12a9 9 0 11-6.219-8.56" />
@@ -948,7 +949,8 @@ export const SyncIcon: React.FC<IconProps & { spinning?: boolean }> = ({
     className={className}
     style={{
       ...style,
-      animation: spinning ? 'spin 1s linear infinite' : undefined,
+      animation: spinning ? 'icon-spin 1s cubic-bezier(0.4, 0, 0.2, 1) infinite' : undefined,
+      willChange: spinning ? 'transform' : undefined,
     }}
   >
     <path d="M21 2v6h-6" />

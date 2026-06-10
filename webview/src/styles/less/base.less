@@ -118,4 +118,16 @@ html {
     margin-bottom: 10px;
 }
 
+/* ==================== 无障碍：全局减少动画 ==================== */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
 /* vConsole 调试工具 - 初始位置由 main.tsx 设置，支持拖动 */

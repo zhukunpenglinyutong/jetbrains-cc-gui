@@ -77,6 +77,7 @@
     );
     animation: strip-breathe 3s ease-in-out infinite;
     pointer-events: none;
+    will-change: transform, opacity;
 }
 
 @keyframes strip-breathe {
@@ -116,6 +117,7 @@
     width: 3px;
     border-radius: 1.5px;
     background: currentColor;
+    will-change: transform, opacity;
 }
 
 .gen-wave span:nth-child(1) { height: 6px;  animation: gen-wave 1.2s ease-in-out infinite; }
@@ -139,6 +141,7 @@
     position: relative;
     z-index: 1;
     animation: orb-pulse 2s ease-in-out infinite;
+    will-change: transform, opacity;
 }
 
 .gen-orb::before {
@@ -149,6 +152,7 @@
     border: 1.5px solid currentColor;
     animation: orb-ring 2s ease-out infinite;
     opacity: 0;
+    will-change: transform, opacity;
 }
 
 @keyframes orb-pulse {
@@ -220,6 +224,7 @@
     border-top-color: #b0b0b0;
     transform: translate(-50%, -50%);
     animation: waiting-spin 1s linear infinite;
+    will-change: transform;
 }
 
 .waiting-spinner::after {
@@ -265,12 +270,10 @@
     from {
         opacity: 1;
         transform: translateY(0);
-        filter: blur(0);
     }
     to {
         opacity: 0;
         transform: translateY(-6px);
-        filter: blur(2px);
     }
 }
 
@@ -278,12 +281,10 @@
     from {
         opacity: 1;
         transform: translateY(0);
-        filter: blur(0);
     }
     to {
         opacity: 0;
         transform: translateY(-8px);
-        filter: blur(3px);
     }
 }
 
