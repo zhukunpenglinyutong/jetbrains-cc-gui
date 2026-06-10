@@ -527,7 +527,7 @@ export const REASONING_LEVELS: ReasoningInfo[] = [
   {
     id: 'ultracode',
     label: 'Ultracode',
-    icon: 'codicon-sparkle',
+    icon: 'codicon-code-oss',
     description: 'XHigh effort plus workflows',
   },
 ];
