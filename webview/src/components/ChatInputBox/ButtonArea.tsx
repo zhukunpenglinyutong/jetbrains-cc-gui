@@ -6,6 +6,7 @@ import { CLAUDE_MODELS, CODEX_MODELS } from './types';
 import { STORAGE_KEYS, validateCodexCustomModels } from '../../types/provider';
 import type { CodexCustomModel } from '../../types/provider';
 import { readClaudeModelMapping } from '../../utils/claudeModelMapping';
+import { SparklesIcon, SendIcon, StopIcon } from '../Icons';
 
 /**
  * Get custom Codex model list from localStorage
@@ -72,7 +73,7 @@ export const ButtonArea = memo(function ButtonArea({
   isLoading = false,
   isEnhancing = false,
   selectedModel = 'claude-sonnet-4-6',
-  permissionMode = 'bypassPermissions',
+  permissionMode = 'acceptEdits',
   currentProvider = 'claude',
   reasoningEffort = 'high',
   onSubmit,
@@ -131,6 +132,7 @@ export const ButtonArea = memo(function ButtonArea({
   const applyModelMapping = useCallback((model: ModelInfo, mapping: { main?: string; haiku?: string; sonnet?: string; opus?: string }): ModelInfo => {
     const modelKeyMap: Record<string, keyof typeof mapping> = {
       'claude-sonnet-4-6': 'sonnet',
+      'claude-opus-4-8': 'opus',
       'claude-opus-4-7': 'opus',
       'claude-haiku-4-5': 'haiku',
     };
@@ -276,7 +278,13 @@ export const ButtonArea = memo(function ButtonArea({
           disabled={disabled || !hasInputContent || isLoading || isEnhancing}
           data-tooltip={`${t('promptEnhancer.tooltip')} (${t('promptEnhancer.shortcut')})`}
         >
-          <span className={`codicon ${isEnhancing ? 'codicon-loading codicon-modifier-spin' : 'codicon-sparkle'}`} />
+          {isEnhancing ? (
+            <svg className="icon spinning" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 12a9 9 0 11-6.219-8.56" />
+            </svg>
+          ) : (
+            <SparklesIcon size={16} />
+          )}
         </button>
 
         {/* Send/Stop button */}
@@ -286,7 +294,7 @@ export const ButtonArea = memo(function ButtonArea({
             onClick={handleStopClick}
             title={t('chat.stopGeneration')}
           >
-            <span className="codicon codicon-debug-stop" />
+            <StopIcon size={14} />
           </button>
         ) : (
           <button
@@ -295,10 +303,12 @@ export const ButtonArea = memo(function ButtonArea({
             disabled={disabled || !hasInputContent}
             title={t('chat.sendMessageEnter')}
           >
-            <span className="codicon codicon-send" />
+            <SendIcon size={16} />
           </button>
         )}
       </div>
     </div>
   );
 });
+
+export default ButtonArea;

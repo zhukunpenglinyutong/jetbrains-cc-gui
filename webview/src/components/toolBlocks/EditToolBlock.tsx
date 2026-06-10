@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolInput, ToolResultBlock } from '../../types';
 import { useIsToolDenied } from '../../hooks/useIsToolDenied';
+import { useResolvedFileLinkTooltip } from '../../hooks/useResolvedFileLinkTooltip';
 import { openFile, showDiff, refreshFile } from '../../utils/bridge';
 import { getFileIcon } from '../../utils/fileIcons';
 import { getToolLineInfo, getToolEditCount, resolveToolTarget } from '../../utils/toolPresentation';
@@ -44,29 +45,53 @@ const TOP_BAR_INNER_STYLE: React.CSSProperties = {
   gap: '8px',
 };
 
+// 操作按钮样式 - 参考 chat-message-preview 风格
 const ACTION_BUTTON_STYLE: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  padding: '2px 6px',
-  fontSize: '11px',
+  padding: '4px 10px',
+  fontSize: '12px',
   fontFamily: 'inherit',
-  color: 'var(--text-secondary)',
-  background: 'var(--bg-tertiary)',
+  color: 'var(--text-tertiary)',
+  background: 'var(--bg-hover)',
   border: '1px solid var(--border-primary)',
   borderRadius: '4px',
   cursor: 'pointer',
-  transition: 'all 0.15s ease',
+  transition: 'background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease',
   whiteSpace: 'nowrap',
+  gap: '4px',
 };
 
 const DIFF_BUTTON_ICON_STYLE: React.CSSProperties = {
-  marginRight: '4px',
   fontSize: '12px',
 };
 
 const REFRESH_BUTTON_ICON_STYLE: React.CSSProperties = {
   fontSize: '12px',
+};
+
+// 增删统计样式 - 参考 chat-message-preview 风格
+const STATS_STYLE: React.CSSProperties = {
+  marginLeft: '12px',
+  fontSize: '12px',
+  fontFamily: 'var(--idea-editor-font-family, monospace)',
+  fontWeight: 600,
+  whiteSpace: 'nowrap',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+};
+
+const ADDED_TEXT_STYLE: React.CSSProperties = { color: 'var(--green)' };
+const DELETED_TEXT_STYLE: React.CSSProperties = { color: 'var(--red)' };
+
+// 行号信息样式
+const LINE_INFO_STYLE: React.CSSProperties = {
+  marginLeft: '8px',
+  fontSize: '11px',
+  color: 'var(--text-muted)',
+  fontFamily: 'var(--idea-editor-font-family, monospace)',
 };
 
 const TASK_CONTAINER_STYLE: React.CSSProperties = { margin: 0 };
@@ -84,21 +109,6 @@ const FILE_ICON_STYLE: React.CSSProperties = {
   height: '16px',
 };
 
-const LINE_INFO_STYLE: React.CSSProperties = {
-  marginLeft: '8px',
-  fontSize: '12px',
-};
-
-const STATS_STYLE: React.CSSProperties = {
-  marginLeft: '12px',
-  fontSize: '12px',
-  fontFamily: 'var(--idea-editor-font-family, monospace)',
-  fontWeight: 600,
-  whiteSpace: 'nowrap',
-};
-
-const ADDED_TEXT_STYLE: React.CSSProperties = { color: 'var(--diff-added-accent)' };
-const DELETED_TEXT_STYLE: React.CSSProperties = { color: 'var(--diff-deleted-accent)' };
 const STATS_SPACER_STYLE: React.CSSProperties = { margin: '0 4px' };
 
 const TASK_DETAILS_STYLE: React.CSSProperties = {
@@ -260,6 +270,10 @@ const EditToolBlock = memo(function EditToolBlock({ name, input, result, toolId 
       (typeof normalizedInput.targetFile === 'string' ? normalizedInput.targetFile : undefined),
   }, name) : undefined;
   const filePath = target?.openPath;
+  const fileLinkTooltip = useResolvedFileLinkTooltip(
+    filePath,
+    target?.displayPath || filePath || undefined,
+  );
 
   const oldString =
     (typeof normalizedInput?.old_string === 'string' ? normalizedInput.old_string : undefined) ??
@@ -338,12 +352,12 @@ const EditToolBlock = memo(function EditToolBlock({ name, input, result, toolId 
             title={t('tools.showDiffInIdea')}
             style={ACTION_BUTTON_STYLE}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--bg-hover)';
-              e.currentTarget.style.color = 'var(--text-primary)';
+              e.currentTarget.style.background = 'var(--hover)';
+              e.currentTarget.style.color = 'var(--text)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'var(--bg-tertiary)';
-              e.currentTarget.style.color = 'var(--text-secondary)';
+              e.currentTarget.style.background = 'var(--bg-hover)';
+              e.currentTarget.style.color = 'var(--text-tertiary)';
             }}
           >
             <span className="codicon codicon-diff" style={DIFF_BUTTON_ICON_STYLE} />
@@ -357,12 +371,12 @@ const EditToolBlock = memo(function EditToolBlock({ name, input, result, toolId 
             title={t('tools.refreshFileInIdea')}
             style={ACTION_BUTTON_STYLE}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--bg-hover)';
-              e.currentTarget.style.color = 'var(--text-primary)';
+              e.currentTarget.style.background = 'var(--hover)';
+              e.currentTarget.style.color = 'var(--text)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'var(--bg-tertiary)';
-              e.currentTarget.style.color = 'var(--text-secondary)';
+              e.currentTarget.style.background = 'var(--bg-hover)';
+              e.currentTarget.style.color = 'var(--text-tertiary)';
             }}
           >
             <span className="codicon codicon-refresh" style={REFRESH_BUTTON_ICON_STYLE} />
@@ -378,11 +392,23 @@ const EditToolBlock = memo(function EditToolBlock({ name, input, result, toolId 
             <span className="tool-title-text">
               {t('tools.editFileTitle')}
             </span>
+            {/* 文件引用 - 使用蓝色链接样式 */}
             <span
               className="tool-title-summary clickable-file"
               onClick={handleFileClick}
-              title={t('tools.clickToOpen', { filePath: target?.displayPath ?? filePath })}
-              style={FILE_LINK_STYLE}
+              {...fileLinkTooltip}
+              style={{
+                ...FILE_LINK_STYLE,
+                color: 'var(--accent-primary)',
+                background: 'rgba(78, 161, 255, 0.1)',
+                border: '1px solid rgba(78, 161, 255, 0.2)',
+                borderRadius: '4px',
+                padding: '2px 8px',
+                fontSize: '12px',
+                fontFamily: "var(--idea-editor-font-family, 'JetBrains Mono', monospace)",
+                cursor: 'pointer',
+                transition: 'background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease',
+              }}
             >
               <span
                 style={FILE_ICON_STYLE}
@@ -390,6 +416,7 @@ const EditToolBlock = memo(function EditToolBlock({ name, input, result, toolId 
               />
               {target?.displayPath || filePath}
             </span>
+            {/* 行号信息 */}
             {lineInfo.start && (
               <span className="tool-title-summary" style={LINE_INFO_STYLE}>
                 {lineInfo.end && lineInfo.end !== lineInfo.start
@@ -404,6 +431,7 @@ const EditToolBlock = memo(function EditToolBlock({ name, input, result, toolId 
               </span>
             )}
 
+            {/* 增删统计 - 使用绿色/红色 */}
             {(diff.additions > 0 || diff.deletions > 0) && (
               <span style={STATS_STYLE}>
                 {diff.additions > 0 && <span style={ADDED_TEXT_STYLE}>+{diff.additions}</span>}
