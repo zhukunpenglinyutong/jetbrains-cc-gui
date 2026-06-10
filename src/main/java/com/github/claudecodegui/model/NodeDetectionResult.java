@@ -1,7 +1,6 @@
 package com.github.claudecodegui.model;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -122,39 +121,11 @@ public class NodeDetectionResult {
     }
 
     /**
-     * Gets the detection method used.
-     * @return the detection method enum value, or null if not found
-     */
-    public DetectionMethod getMethod() {
-        return method;
-    }
-
-    /**
-     * Gets the list of paths that were tried during detection.
-     * @return an unmodifiable list of paths
-     */
-    public List<String> getTriedPaths() {
-        return Collections.unmodifiableList(triedPaths);
-    }
-
-    /**
      * Gets the error message.
      * @return the error message, or null if detection was successful
      */
     public String getErrorMessage() {
         return errorMessage;
-    }
-
-    // ==================== Convenience Methods ====================
-
-    /**
-     * Adds a path that was tried during detection (for internal use).
-     * @param path the path that was attempted
-     */
-    public void addTriedPath(String path) {
-        if (path != null && !path.isEmpty()) {
-            this.triedPaths.add(path);
-        }
     }
 
     /**
@@ -200,30 +171,6 @@ public class NodeDetectionResult {
         }
 
         return sb.toString();
-    }
-
-    /**
-     * Gets a human-readable description of the detection method.
-     * @return detection method description
-     */
-    public String getMethodDescription() {
-        if (method == null) {
-            return "未知";
-        }
-        switch (method) {
-            case WHERE_COMMAND:
-                return "Windows where 命令";
-            case WHICH_COMMAND:
-                return "Unix which 命令";
-            case KNOWN_PATH:
-                return "已知安装路径";
-            case PATH_VARIABLE:
-                return "PATH 环境变量";
-            case FALLBACK:
-                return "直接调用 node";
-            default:
-                return "未知";
-        }
     }
 
     @Override

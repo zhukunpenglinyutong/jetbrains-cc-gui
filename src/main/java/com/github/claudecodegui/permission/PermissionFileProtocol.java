@@ -18,11 +18,8 @@ class PermissionFileProtocol {
 
     private static final Logger LOG = Logger.getInstance(PermissionFileProtocol.class);
 
-    private static final String REQUEST_FILE_PREFIX = "request-%s-%s.json";
     private static final String RESPONSE_FILE_PREFIX = "response-%s-%s.json";
-    private static final String ASK_USER_QUESTION_FILE_PREFIX = "ask-user-question-%s-%s.json";
     private static final String ASK_USER_QUESTION_RESPONSE_FILE_PREFIX = "ask-user-question-response-%s-%s.json";
-    private static final String PLAN_APPROVAL_FILE_PREFIX = "plan-approval-%s-%s.json";
     private static final String PLAN_APPROVAL_RESPONSE_FILE_PREFIX = "plan-approval-response-%s-%s.json";
 
     private static final int FILE_WAIT_INITIAL_DELAY_MS = 50;

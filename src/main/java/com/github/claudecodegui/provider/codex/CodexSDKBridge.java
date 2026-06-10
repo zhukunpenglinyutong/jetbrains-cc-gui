@@ -220,14 +220,6 @@ public class CodexSDKBridge extends BaseSDKBridge {
                             : "unknown";
 
                     if ("status".equals(msgType)) {
-                        String status = "";
-                        if (msg.has("message") && !msg.get("message").isJsonNull()) {
-                            JsonElement statusEl = msg.get("message");
-                            status = statusEl.isJsonPrimitive() ? statusEl.getAsString() : statusEl.toString();
-                        }
-                        if (status != null && !status.isEmpty()) {
-                            callback.onMessage("status", status);
-                        }
                         return;
                     }
 

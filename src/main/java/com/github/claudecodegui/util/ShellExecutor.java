@@ -51,14 +51,6 @@ public final class ShellExecutor {
             return output;
         }
 
-        public List<String> getAllLines() {
-            return allLines;
-        }
-
-        public List<String> getFilteredLines() {
-            return filteredLines;
-        }
-
         public static ExecutionResult success(String output, List<String> allLines, List<String> filteredLines) {
             return new ExecutionResult(true, output, allLines, filteredLines);
         }

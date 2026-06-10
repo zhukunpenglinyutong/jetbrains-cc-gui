@@ -30,10 +30,6 @@ public enum ConflictStrategy {
         this.value = value;
     }
 
-    public String getValue() {
-        return value;
-    }
-
     /**
      * Parse a string value into a ConflictStrategy enum.
      * @param value The string value to parse

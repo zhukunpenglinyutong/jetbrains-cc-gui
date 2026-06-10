@@ -2,7 +2,6 @@ package com.github.claudecodegui.cli.claude;
 
 import com.github.claudecodegui.cli.common.CliSettings;
 import com.google.gson.JsonObject;
-import com.intellij.openapi.diagnostic.Logger;
 
 import java.util.Map;
 
@@ -10,8 +9,6 @@ import java.util.Map;
  * Claude CLI 模型映射工具（从用户 ~/.claude/settings.json 的 env 中读取自定义映射）。
  */
 final class ClaudeCliModelResolver {
-
-    private static final Logger LOG = Logger.getInstance(ClaudeCliModelResolver.class);
 
     private ClaudeCliModelResolver() {}
 
@@ -24,15 +21,6 @@ final class ClaudeCliModelResolver {
     }
 
     record ResolvedModel(String model, Capabilities capabilities) {
-    }
-
-    static String resolve(String selectedModel) {
-        try {
-            return resolveProfile(selectedModel).model();
-        } catch (Exception e) {
-            LOG.warn("[ClaudeCliModelResolver] Failed: " + e.getMessage());
-            return selectedModel;
-        }
     }
 
     static ResolvedModel resolveProfile(String selectedModel) {

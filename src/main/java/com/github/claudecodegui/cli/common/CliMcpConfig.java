@@ -57,16 +57,6 @@ public class CliMcpConfig {
         }
     }
 
-    public void addServer(String name, JsonObject config) {
-        servers.add(name, config);
-        persist();
-    }
-
-    public void removeServer(String name) {
-        servers.remove(name);
-        persist();
-    }
-
     /** 返回配置文件路径，传给 --mcp-config。 */
     public String getConfigFilePath() {
         return configPath.toAbsolutePath().toString();

@@ -85,15 +85,6 @@ public class PlatformUtils {
     }
 
     /**
-     * Check whether the current platform is Linux.
-     *
-     * @return true if running on Linux
-     */
-    public static boolean isLinux() {
-        return getPlatformType() == PlatformType.LINUX;
-    }
-
-    /**
      * Get the current plugin ID.
      * Automatically detects the ID by iterating over all plugins and matching the classloader,
      * avoiding hardcoded values.
@@ -611,15 +602,6 @@ public class PlatformUtils {
     }
 
     /**
-     * Get the operating system version.
-     *
-     * @return the OS version
-     */
-    public static String getOsVersion() {
-        return System.getProperty("os.version", "Unknown");
-    }
-
-    /**
      * Get the user's home directory, bypassing any JVM-level user.home overrides.
      * IDEA may override user.home to a custom directory (e.g. E:/Untitled/IDEA-Jconfig),
      * so this method resolves the real OS home via USERPROFILE (Windows) / HOME (Unix).
@@ -679,12 +661,4 @@ public class PlatformUtils {
         return cachedTempDir;
     }
 
-    /**
-     * Get the maximum path length for the current platform.
-     *
-     * @return the maximum path length (260 for Windows, 4096 for other platforms)
-     */
-    public static int getMaxPathLength() {
-        return isWindows() ? 260 : 4096;
-    }
 }

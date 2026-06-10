@@ -1,7 +1,5 @@
 package com.github.claudecodegui.util;
 
-import com.github.claudecodegui.model.PathCheckResult;
-
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -15,9 +13,6 @@ import java.util.Set;
  */
 public class PathUtils {
 
-    // Windows path length limit
-    private static final int WINDOWS_MAX_PATH = 260;
-    private static final int SAFE_PATH_LENGTH = 200; // Leave room for file names
 
     // ==================== Path Normalization ====================
 
@@ -172,48 +167,6 @@ public class PathUtils {
         return path;
     }
 
-    // ==================== Path Length Checks ====================
-
-    /**
-     * Check whether a path length is safe (primarily for Windows).
-     *
-     * @param path the path to check
-     * @return PathCheckResult containing the check result and recommendations
-     */
-    public static PathCheckResult checkPathLength(String path) {
-        if (path == null || path.isEmpty()) {
-            return PathCheckResult.ok();
-        }
-
-        // No check needed on non-Windows platforms
-        if (!PlatformUtils.isWindows()) {
-            return PathCheckResult.ok();
-        }
-
-        int pathLength = path.length();
-
-        if (pathLength >= WINDOWS_MAX_PATH) {
-            return PathCheckResult.error(
-                "Project path is too long (" + pathLength + " characters)\n" +
-                "Windows limits path length to 260 characters.\n" +
-                "Suggestion: move the project to a shorter path, e.g. D:\\projects\\",
-                path,
-                pathLength
-            );
-        }
-
-        if (pathLength >= SAFE_PATH_LENGTH) {
-            return PathCheckResult.warning(
-                "Project path is relatively long (" + pathLength + " characters)\n" +
-                "It may exceed the Windows path limit when creating deeply nested files.",
-                path,
-                pathLength
-            );
-        }
-
-        return PathCheckResult.ok(path, pathLength);
-    }
-
     // ==================== Temporary Directory Detection ====================
 
     /**
@@ -251,58 +204,6 @@ public class PathUtils {
     }
 
     /**
-     * Check whether a given path is a temporary directory.
-     *
-     * @param path the path to check
-     * @return true if the path is a temp directory or is located within one
-     */
-    public static boolean isTempDirectory(String path) {
-        if (path == null || path.isEmpty()) {
-            return false;
-        }
-
-        String normalizedPath = normalizeToUnix(path).toLowerCase();
-        List<String> tempPaths = getTempPaths();
-
-        for (String tempPath : tempPaths) {
-            if (tempPath != null && normalizedPath.startsWith(tempPath)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    // ==================== Path Validation ====================
-
-    /**
-     * Check whether a path is writable.
-     *
-     * @param path the path to verify
-     * @return true if the path exists and is writable
-     */
-    public static boolean isWritable(String path) {
-        if (path == null || path.isEmpty()) {
-            return false;
-        }
-        File file = new File(path);
-        return file.exists() && file.canWrite();
-    }
-
-    /**
-     * Check whether a path exists.
-     *
-     * @param path the path to verify
-     * @return true if the path exists
-     */
-    public static boolean exists(String path) {
-        if (path == null || path.isEmpty()) {
-            return false;
-        }
-        return new File(path).exists();
-    }
-
-    /**
      * Get the parent directory of a path.
      *
      * @param path the file or directory path
@@ -317,20 +218,4 @@ public class PathUtils {
         return parent != null ? parent.getAbsolutePath() : null;
     }
 
-    /**
-     * Join two path segments.
-     *
-     * @param basePath     the base path
-     * @param relativePath the relative path to append
-     * @return the combined path
-     */
-    public static String joinPath(String basePath, String relativePath) {
-        if (basePath == null || basePath.isEmpty()) {
-            return relativePath;
-        }
-        if (relativePath == null || relativePath.isEmpty()) {
-            return basePath;
-        }
-        return new File(basePath, relativePath).getAbsolutePath();
-    }
 }

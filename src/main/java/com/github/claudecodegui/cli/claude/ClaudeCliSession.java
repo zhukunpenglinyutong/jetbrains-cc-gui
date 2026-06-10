@@ -337,13 +337,6 @@ public class ClaudeCliSession {
 
                 ProcessBuilder pb = new ProcessBuilder(cmd);
                 pb.redirectErrorStream(true);
-                if (request.cwd() != null && !request.cwd()
-                        .isBlank()) {
-                    File cwd = new File(request.cwd());
-                    if (cwd.isDirectory()) {
-                        pb.directory(cwd);
-                    }
-                }
                 Map<String, String> cliEnv = pb.environment();
                 cliEnv.clear();
                 cliEnv.putAll(CliEnvironmentBuilder.buildBaseEnvironment());
@@ -356,6 +349,22 @@ public class ClaudeCliSession {
                         getPermissionSafetyNetMs()
                 );
                 CliEnvironmentBuilder.configureProjectPath(cliEnv, request.cwd());
+
+                // CWD 设置放在 pb.start() 紧前面，避免 TOCTOU 竞态：
+                // 如果目录在 check 和 start 之间被删除，Windows CreateProcess 会报
+                // "系统找不到指定的路径" (ERROR_PATH_NOT_FOUND)。
+                if (request.cwd() != null && !request.cwd().isBlank()) {
+                    File cwd = new File(request.cwd());
+                    if (cwd.isDirectory()) {
+                        pb.directory(cwd);
+                    } else {
+                        LOG.warn("[ClaudeCliSession][" + tabId + "] CWD does not exist, falling back to home: " + request.cwd());
+                        File homeDir = new File(System.getProperty("user.home"));
+                        if (homeDir.isDirectory()) {
+                            pb.directory(homeDir);
+                        }
+                    }
+                }
 
                 LOG.info("[CliConcurrencyDiag][ClaudeCliSession] starting process" + ": tabId=" + tabId + ", elapsedMs=" + elapsedMillis(
                         sendStartNanos) + ", thread=" + Thread.currentThread()

@@ -46,15 +46,6 @@ public class DeleteResult {
     // ==================== Factory Methods ====================
 
     /**
-     * Creates a successful result.
-     *
-     * @return a successful DeleteResult
-     */
-    public static DeleteResult success() {
-        return new DeleteResult(true, ErrorType.NONE, null, null, null);
-    }
-
-    /**
      * Creates a successful result with path information.
      *
      * @param deletedPath the path that was deleted
@@ -73,18 +64,6 @@ public class DeleteResult {
      */
     public static DeleteResult failure(ErrorType errorType, String errorMessage) {
         return new DeleteResult(false, errorType, errorMessage, null, null);
-    }
-
-    /**
-     * Creates a failure result with path information.
-     *
-     * @param errorType the type of error
-     * @param errorMessage the error message
-     * @param affectedPath the path affected by the error
-     * @return a failed DeleteResult
-     */
-    public static DeleteResult failure(ErrorType errorType, String errorMessage, String affectedPath) {
-        return new DeleteResult(false, errorType, errorMessage, affectedPath, null);
     }
 
     /**
@@ -155,22 +134,6 @@ public class DeleteResult {
      */
     public ErrorType getErrorType() {
         return errorType;
-    }
-
-    /**
-     * Gets the affected path.
-     * @return the affected path, may be null
-     */
-    public String getAffectedPath() {
-        return affectedPath;
-    }
-
-    /**
-     * Gets the suggested resolution.
-     * @return the suggestion, may be null
-     */
-    public String getSuggestion() {
-        return suggestion;
     }
 
     /**

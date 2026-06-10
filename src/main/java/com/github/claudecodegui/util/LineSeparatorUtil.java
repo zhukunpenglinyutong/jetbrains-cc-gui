@@ -27,7 +27,7 @@ public final class LineSeparatorUtil {
     public static final String LF = "\n";
 
     /** Windows line separator */
-    public static final String CRLF = "\r\n";
+    private static final String CRLF = "\r\n";
 
     private LineSeparatorUtil() {
     }
