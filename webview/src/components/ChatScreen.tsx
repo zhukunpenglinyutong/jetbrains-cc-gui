@@ -18,15 +18,15 @@ import {
   ToolResultRawContext,
 } from '../contexts/SubagentContext';
 import { useMessages } from '../contexts/MessagesContext';
+import { useModelProvider } from '../contexts/ModelProviderContext';
 import { useSession } from '../contexts/SessionContext';
 import { useUIState } from '../contexts/UIStateContext';
 import { extractMarkdownContent } from '../utils/copyUtils';
 import type { ClaudeMessage, TodoItem, ToolResultBlock } from '../types';
-import type { useMessageProcessing, useFileChanges, useSubagents, useFileChangesManagement, useModelProviderState, useMessageQueue } from '../hooks';
+import type { useMessageProcessing, useFileChanges, useSubagents, useFileChangesManagement, useMessageQueue } from '../hooks';
 import type { GetToolResultRawFn } from '../contexts/SubagentContext';
 
 type SubagentHistoryGetter = (key: string) => ReturnType<typeof useMessages>['subagentHistories'][string] | undefined;
-type ProviderState = ReturnType<typeof useModelProviderState>;
 type MessageQueueValue = ReturnType<typeof useMessageQueue>['queue'];
 type SubagentList = ReturnType<typeof useSubagents>;
 type FileChangeList = ReturnType<typeof useFileChanges>;
@@ -78,35 +78,6 @@ export interface ChatScreenProps {
   onNavigateToProviderSettings: () => void;
   onProviderSelect: (providerId: string) => void;
 
-  // Model / provider state (slice from useModelProviderState)
-  currentProvider: ProviderState['currentProvider'];
-  selectedModel: ProviderState['selectedModel'];
-  permissionMode: ProviderState['permissionMode'];
-  selectedAgent: ProviderState['selectedAgent'];
-  sdkStatusLoaded: ProviderState['sdkStatusLoaded'];
-  currentSdkInstalled: ProviderState['currentSdkInstalled'];
-  activeProviderConfig: ProviderState['activeProviderConfig'];
-  claudeSettingsAlwaysThinkingEnabled: ProviderState['claudeSettingsAlwaysThinkingEnabled'];
-  reasoningEffort: ProviderState['reasoningEffort'];
-  streamingEnabledSetting: ProviderState['streamingEnabledSetting'];
-  sendShortcut: ProviderState['sendShortcut'];
-  autoOpenFileEnabled: ProviderState['autoOpenFileEnabled'];
-  longContextEnabled: ProviderState['longContextEnabled'];
-  usagePercentage: ProviderState['usagePercentage'];
-  usageUsedTokens: ProviderState['usageUsedTokens'];
-  usageMaxTokens: ProviderState['usageMaxTokens'];
-  tokenDetail: ProviderState['tokenDetail'];
-
-  // Model handlers
-  onModeSelect: ProviderState['handleModeSelect'];
-  onModelSelect: ProviderState['handleModelSelect'];
-  onAgentSelect: ProviderState['handleAgentSelect'];
-  onReasoningChange: ProviderState['handleReasoningChange'];
-  onToggleThinking: ProviderState['handleToggleThinking'];
-  onStreamingEnabledChange: ProviderState['handleStreamingEnabledChange'];
-  onAutoOpenFileEnabledChange: ProviderState['handleAutoOpenFileEnabledChange'];
-  onLongContextChange: ProviderState['handleLongContextChange'];
-
   // Message queue
   messageQueue: MessageQueueValue;
   onRemoveFromQueue: (id: string) => void;
@@ -115,8 +86,9 @@ export interface ChatScreenProps {
 /**
  * Renders the chat view (messages list, status panel, input box, scroll control).
  * Reads loading / streaming flags directly from MessagesContext, navigation
- * actions from UIStateContext, and currentSessionId from SessionContext to
- * avoid prop drilling those fields from App.tsx.
+ * actions from UIStateContext, currentSessionId from SessionContext, and
+ * model/provider state from ModelProviderContext to avoid prop drilling
+ * those fields from App.tsx.
  *
  * Stage 5 of TASK-P1-01.
  */
@@ -131,17 +103,23 @@ export const ChatScreen = ({
   onUndoFile, onDiscardAll, onKeepAll,
   onSubmit, onInterrupt, onRewind,
   onNavigateToProviderSettings, onProviderSelect,
-  currentProvider, selectedModel, permissionMode, selectedAgent,
-  sdkStatusLoaded, currentSdkInstalled,
-  activeProviderConfig, claudeSettingsAlwaysThinkingEnabled,
-  reasoningEffort, streamingEnabledSetting, sendShortcut, autoOpenFileEnabled,
-  longContextEnabled, usagePercentage, usageUsedTokens, usageMaxTokens, tokenDetail,
-  onModeSelect, onModelSelect, onAgentSelect, onReasoningChange, onToggleThinking,
-  onStreamingEnabledChange,
-  onAutoOpenFileEnabledChange, onLongContextChange,
   messageQueue, onRemoveFromQueue,
 }: ChatScreenProps) => {
   const { t } = useTranslation();
+
+  // Model / provider state from context (replaces ~26 props)
+  const {
+    currentProvider, selectedModel, permissionMode, selectedAgent,
+    sdkStatusLoaded, currentSdkInstalled,
+    activeProviderConfig, claudeSettingsAlwaysThinkingEnabled,
+    reasoningEffort, streamingEnabledSetting, sendShortcut, autoOpenFileEnabled,
+    longContextEnabled, usagePercentage, usageUsedTokens, usageMaxTokens, tokenDetail,
+    handleModeSelect, handleModelSelect, handleAgentSelect,
+    handleReasoningChange, handleToggleThinking,
+    handleStreamingEnabledChange, handleAutoOpenFileEnabledChange,
+    handleLongContextChange,
+  } = useModelProvider();
+
   const {
     messages, loading, isThinking, streamingActive, loadingStartTime,
     queueDisplayState, queueAheadCount, subagentHistories,
@@ -304,17 +282,17 @@ export const ChatScreen = ({
           onInput={setDraftInput}
           onSubmit={onSubmit}
           onStop={onInterrupt}
-          onModeSelect={onModeSelect}
-          onModelSelect={onModelSelect}
+          onModeSelect={handleModeSelect}
+          onModelSelect={handleModelSelect}
           onProviderSelect={onProviderSelect}
           reasoningEffort={reasoningEffort}
-          onReasoningChange={onReasoningChange}
-          onToggleThinking={onToggleThinking}
+          onReasoningChange={handleReasoningChange}
+          onToggleThinking={handleToggleThinking}
           streamingEnabled={streamingEnabledSetting}
-          onStreamingEnabledChange={onStreamingEnabledChange}
+          onStreamingEnabledChange={handleStreamingEnabledChange}
           sendShortcut={sendShortcut}
           selectedAgent={selectedAgent}
-          onAgentSelect={onAgentSelect}
+          onAgentSelect={handleAgentSelect}
           activeFile={contextInfo?.file}
           selectedLines={contextInfo?.startLine !== undefined && contextInfo?.endLine !== undefined
             ? (contextInfo.startLine === contextInfo.endLine
@@ -344,9 +322,9 @@ export const ChatScreen = ({
           messageQueue={messageQueue}
           onRemoveFromQueue={onRemoveFromQueue}
           autoOpenFileEnabled={autoOpenFileEnabled}
-          onAutoOpenFileEnabledChange={onAutoOpenFileEnabledChange}
+          onAutoOpenFileEnabledChange={handleAutoOpenFileEnabledChange}
           longContextEnabled={longContextEnabled}
-          onLongContextChange={onLongContextChange}
+          onLongContextChange={handleLongContextChange}
         />
       </div>
     </>

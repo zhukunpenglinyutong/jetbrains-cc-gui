@@ -30,6 +30,7 @@ import type { Attachment, ChatInputBoxHandle } from './components/ChatInputBox/t
 import { ChatHeader } from './components/ChatHeader';
 import { ChatScreen } from './components/ChatScreen';
 import type { MessageListRevealHandle } from './components/ConversationSearch/types';
+import { ModelProviderProvider } from './contexts/ModelProviderContext';
 import { useSubagentContextValues } from './contexts/SubagentContext';
 import { useMessages } from './contexts/MessagesContext';
 import { useSession } from './contexts/SessionContext';
@@ -459,66 +460,53 @@ const App = () => {
           onPermissionDialogTimeoutChange={setPermissionDialogTimeoutSeconds}
         />
       ) : currentView === 'chat' ? (
-        <ChatScreen
-          mergedMessages={mergedMessages}
-          getMessageText={getMessageText}
-          getContentBlocks={getContentBlocks}
-          findToolResult={findToolResult}
-          getToolResultRaw={getToolResultRaw}
-          subagents={subagents}
-          globalTodos={globalTodos}
-          filteredFileChanges={filteredFileChanges}
-          subagentHistoryCtxValue={subagentHistoryCtxValue}
-          sessionIdCtxValue={sessionIdCtxValue}
-          chatInputRef={chatInputRef}
-          messagesContainerRef={messagesContainerRef}
-          messagesEndRef={messagesEndRef}
-          inputAreaRef={inputAreaRef}
-          messageNodeMapRef={messageNodeMapRef}
-          userCollapsedRef={userCollapsedRef}
-          messageListRef={messageListRef}
-          isAutoScrollingRef={isAutoScrollingRef}
-          anchorCollapsedCount={anchorCollapsedCount}
-          setAnchorCollapsedCount={setAnchorCollapsedCount}
-          onMessageNodeRef={handleMessageNodeRef}
-          statusPanelExpanded={statusPanelExpanded}
-          forceStatusUpdate={forceStatusUpdate}
-          onUndoFile={handleUndoFile}
-          onDiscardAll={onDiscardAll}
-          onKeepAll={handleKeepAll}
-          onSubmit={handleSubmit}
-          onInterrupt={interruptSession}
-          onRewind={handleOpenRewindSelectDialog}
-          onNavigateToProviderSettings={handleNavigateToProviderSettings}
-          onProviderSelect={wrappedHandleProviderSelect}
-          currentProvider={currentProvider}
-          selectedModel={selectedModel}
-          permissionMode={permissionMode}
-          selectedAgent={selectedAgent}
-          sdkStatusLoaded={sdkStatusLoaded}
-          currentSdkInstalled={currentSdkInstalled}
-          activeProviderConfig={activeProviderConfig}
-          claudeSettingsAlwaysThinkingEnabled={claudeSettingsAlwaysThinkingEnabled}
-          reasoningEffort={reasoningEffort}
-          streamingEnabledSetting={streamingEnabledSetting}
-          sendShortcut={sendShortcut}
-          autoOpenFileEnabled={autoOpenFileEnabled}
-          longContextEnabled={longContextEnabled}
-          usagePercentage={usagePercentage}
-          usageUsedTokens={usageUsedTokens}
-          usageMaxTokens={usageMaxTokens}
-          tokenDetail={tokenDetail}
-          onModeSelect={handleModeSelect}
-          onModelSelect={handleModelSelect}
-          onAgentSelect={handleAgentSelect}
-          onReasoningChange={handleReasoningChange}
-          onToggleThinking={handleToggleThinking}
-          onStreamingEnabledChange={handleStreamingEnabledChange}
-          onAutoOpenFileEnabledChange={handleAutoOpenFileEnabledChange}
-          onLongContextChange={handleLongContextChange}
-          messageQueue={messageQueue}
-          onRemoveFromQueue={dequeueMessage}
-        />
+        <ModelProviderProvider value={{
+          currentProvider, selectedModel, permissionMode, selectedAgent,
+          sdkStatusLoaded, currentSdkInstalled,
+          activeProviderConfig, claudeSettingsAlwaysThinkingEnabled,
+          reasoningEffort, streamingEnabledSetting, sendShortcut, autoOpenFileEnabled,
+          longContextEnabled, usagePercentage, usageUsedTokens, usageMaxTokens, tokenDetail,
+          handleModeSelect, handleModelSelect, handleAgentSelect,
+          handleReasoningChange, handleToggleThinking,
+          handleStreamingEnabledChange, handleAutoOpenFileEnabledChange,
+          handleLongContextChange,
+        }}>
+          <ChatScreen
+            mergedMessages={mergedMessages}
+            getMessageText={getMessageText}
+            getContentBlocks={getContentBlocks}
+            findToolResult={findToolResult}
+            getToolResultRaw={getToolResultRaw}
+            subagents={subagents}
+            globalTodos={globalTodos}
+            filteredFileChanges={filteredFileChanges}
+            subagentHistoryCtxValue={subagentHistoryCtxValue}
+            sessionIdCtxValue={sessionIdCtxValue}
+            chatInputRef={chatInputRef}
+            messagesContainerRef={messagesContainerRef}
+            messagesEndRef={messagesEndRef}
+            inputAreaRef={inputAreaRef}
+            messageNodeMapRef={messageNodeMapRef}
+            userCollapsedRef={userCollapsedRef}
+            messageListRef={messageListRef}
+            isAutoScrollingRef={isAutoScrollingRef}
+            anchorCollapsedCount={anchorCollapsedCount}
+            setAnchorCollapsedCount={setAnchorCollapsedCount}
+            onMessageNodeRef={handleMessageNodeRef}
+            statusPanelExpanded={statusPanelExpanded}
+            forceStatusUpdate={forceStatusUpdate}
+            onUndoFile={handleUndoFile}
+            onDiscardAll={onDiscardAll}
+            onKeepAll={handleKeepAll}
+            onSubmit={handleSubmit}
+            onInterrupt={interruptSession}
+            onRewind={handleOpenRewindSelectDialog}
+            onNavigateToProviderSettings={handleNavigateToProviderSettings}
+            onProviderSelect={wrappedHandleProviderSelect}
+            messageQueue={messageQueue}
+            onRemoveFromQueue={dequeueMessage}
+          />
+        </ModelProviderProvider>
       ) : (
         <HistoryView
           historyData={historyData}
