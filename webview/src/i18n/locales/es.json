@@ -1329,6 +1329,9 @@
   },
   "models": {
     "addModel": "Agregar modelo",
+    "searchPlaceholder": "Buscar modelos",
+    "noModelsFound": "No se encontraron modelos",
+    "hiddenModelCount": "+ {{count}} modelos más. Escribe para buscar.",
     "claude": {
       "sonnet46": {
         "label": "Sonnet 4.6",

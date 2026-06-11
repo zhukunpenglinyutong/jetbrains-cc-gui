@@ -1569,6 +1569,9 @@
   },
   "models": {
     "addModel": "添加模型",
+    "searchPlaceholder": "搜索模型",
+    "noModelsFound": "未找到模型",
+    "hiddenModelCount": "+ 还有 {{count}} 个模型。输入以搜索。",
     "longContext": {
       "label": "1M",
       "shortLabel": "1M上下文",

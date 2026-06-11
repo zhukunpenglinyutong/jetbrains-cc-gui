@@ -1334,6 +1334,9 @@
   },
   "models": {
     "addModel": "新增模型",
+    "searchPlaceholder": "搜尋模型",
+    "noModelsFound": "找不到模型",
+    "hiddenModelCount": "+ 還有 {{count}} 個模型。輸入以搜尋。",
     "claude": {
       "sonnet46": {
         "label": "Sonnet 4.6",

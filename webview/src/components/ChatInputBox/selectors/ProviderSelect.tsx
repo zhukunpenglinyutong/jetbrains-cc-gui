@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { AVAILABLE_PROVIDERS } from '../types';
@@ -8,15 +8,17 @@ import {
   subscribeCodexSubscriptionQuota,
   type CodexSubscriptionQuotaSnapshot,
 } from '../../../utils/codexSubscriptionQuotaCapabilities';
+import { useDropdownPosition } from '../../../hooks/useDropdownPosition';
 
 const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
 const CHEVRON_ICON_STYLE: React.CSSProperties = { fontSize: '10px', marginLeft: '2px' };
 const DROPDOWN_STYLE: React.CSSProperties = {
   position: 'absolute',
   bottom: '100%',
-  left: 0,
   marginBottom: '4px',
   zIndex: 10000,
+  maxWidth: 'calc(100vw - 16px)',
+  overflowX: 'hidden',
 };
 const TOAST_STYLE: React.CSSProperties = { zIndex: 20000 };
 const SUBMENU_MAX_WIDTH_PX = 360;
@@ -81,6 +83,7 @@ export const ProviderSelect = ({ value, onChange, compact = false }: ProviderSel
   const [submenuShiftX, setSubmenuShiftX] = useState(0);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const { positionedStyle, recalculate } = useDropdownPosition({ buttonRef, dropdownRef });
 
   const currentProvider = AVAILABLE_PROVIDERS.find(p => p.id === value) || AVAILABLE_PROVIDERS[0];
 
@@ -94,9 +97,13 @@ export const ProviderSelect = ({ value, onChange, compact = false }: ProviderSel
    */
   const handleToggle = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsOpen(!isOpen);
+    const nextOpen = !isOpen;
+    setIsOpen(nextOpen);
     setActiveSubmenu('none');
-  }, [isOpen]);
+    if (nextOpen) {
+      recalculate();
+    }
+  }, [isOpen, recalculate]);
 
   /**
    * Show toast message
@@ -174,6 +181,12 @@ export const ProviderSelect = ({ value, onChange, compact = false }: ProviderSel
     if (!isOpen || activeSubmenu !== 'codexQuota') return;
     requestCodexQuota();
   }, [activeSubmenu, isOpen, requestCodexQuota]);
+
+  useLayoutEffect(() => {
+    if (isOpen) {
+      recalculate();
+    }
+  }, [isOpen, recalculate]);
 
   const renderCodexQuotaSubmenu = () => {
     const fiveHour = codexQuota?.windows.fiveHour;
@@ -295,7 +308,7 @@ export const ProviderSelect = ({ value, onChange, compact = false }: ProviderSel
           <div
             ref={dropdownRef}
             className="selector-dropdown"
-            style={DROPDOWN_STYLE}
+            style={{ ...DROPDOWN_STYLE, ...positionedStyle }}
           >
             {AVAILABLE_PROVIDERS.map((provider) => (
               <div

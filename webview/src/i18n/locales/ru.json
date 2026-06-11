@@ -1355,6 +1355,9 @@
   },
   "models": {
     "addModel": "Добавить модель",
+    "searchPlaceholder": "Поиск моделей",
+    "noModelsFound": "Модели не найдены",
+    "hiddenModelCount": "+ {{count}} дополнительных моделей. Введите текст для поиска.",
     "claude": {
       "sonnet46": {
         "label": "Sonnet 4.6",

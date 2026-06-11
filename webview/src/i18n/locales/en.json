@@ -1564,6 +1564,9 @@
   },
   "models": {
     "addModel": "Add Model",
+    "searchPlaceholder": "Search models",
+    "noModelsFound": "No models found",
+    "hiddenModelCount": "+ {{count}} more models. Type to search.",
     "longContext": {
       "label": "1M",
       "shortLabel": "1M context",
