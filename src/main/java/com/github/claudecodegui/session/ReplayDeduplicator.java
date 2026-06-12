@@ -1,5 +1,6 @@
 package com.github.claudecodegui.session;
 
+import com.github.claudecodegui.common.CommonConstants;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
@@ -115,29 +116,29 @@ final class ReplayDeduplicator {
         if (raw == null) {
             return "";
         }
-        JsonObject message = raw.has("message") && raw.get("message").isJsonObject()
-                ? raw.getAsJsonObject("message") : null;
-        if (message == null || !message.has("content") || !message.get("content").isJsonArray()) {
+        JsonObject message = raw.has(CommonConstants.JSON_KEY_MESSAGE) && raw.get(CommonConstants.JSON_KEY_MESSAGE).isJsonObject()
+                ? raw.getAsJsonObject(CommonConstants.JSON_KEY_MESSAGE) : null;
+        if (message == null || !message.has(CommonConstants.JSON_KEY_CONTENT) || !message.get(CommonConstants.JSON_KEY_CONTENT).isJsonArray()) {
             return "";
         }
 
         StringBuilder sb = new StringBuilder();
-        JsonArray contentArray = message.getAsJsonArray("content");
+        JsonArray contentArray = message.getAsJsonArray(CommonConstants.JSON_KEY_CONTENT);
         for (int i = 0; i < contentArray.size(); i++) {
             if (!contentArray.get(i).isJsonObject()) {
                 continue;
             }
             JsonObject block = contentArray.get(i).getAsJsonObject();
-            String type = block.has("type") && !block.get("type").isJsonNull()
-                    ? block.get("type").getAsString() : "";
-            if (!"thinking".equals(type)) {
+            String type = block.has(CommonConstants.JSON_KEY_TYPE) && !block.get(CommonConstants.JSON_KEY_TYPE).isJsonNull()
+                    ? block.get(CommonConstants.JSON_KEY_TYPE).getAsString() : "";
+            if (!CommonConstants.BLOCK_TYPE_THINKING.equals(type)) {
                 continue;
             }
             String thinking = "";
-            if (block.has("thinking") && !block.get("thinking").isJsonNull()) {
-                thinking = block.get("thinking").getAsString();
-            } else if (block.has("text") && !block.get("text").isJsonNull()) {
-                thinking = block.get("text").getAsString();
+            if (block.has(CommonConstants.JSON_KEY_THINKING) && !block.get(CommonConstants.JSON_KEY_THINKING).isJsonNull()) {
+                thinking = block.get(CommonConstants.JSON_KEY_THINKING).getAsString();
+            } else if (block.has(CommonConstants.JSON_KEY_TEXT) && !block.get(CommonConstants.JSON_KEY_TEXT).isJsonNull()) {
+                thinking = block.get(CommonConstants.JSON_KEY_TEXT).getAsString();
             }
             if (!thinking.isEmpty()) {
                 if (sb.length() > 0) {
@@ -153,46 +154,46 @@ final class ReplayDeduplicator {
         if (raw == null) {
             return "";
         }
-        JsonObject message = raw.has("message") && raw.get("message").isJsonObject()
-                ? raw.getAsJsonObject("message") : null;
-        if (message == null || !message.has("content") || !message.get("content").isJsonArray()) {
+        JsonObject message = raw.has(CommonConstants.JSON_KEY_MESSAGE) && raw.get(CommonConstants.JSON_KEY_MESSAGE).isJsonObject()
+                ? raw.getAsJsonObject(CommonConstants.JSON_KEY_MESSAGE) : null;
+        if (message == null || !message.has(CommonConstants.JSON_KEY_CONTENT) || !message.get(CommonConstants.JSON_KEY_CONTENT).isJsonArray()) {
             return "";
         }
 
         StringBuilder sb = new StringBuilder();
-        JsonArray contentArray = message.getAsJsonArray("content");
+        JsonArray contentArray = message.getAsJsonArray(CommonConstants.JSON_KEY_CONTENT);
         for (int i = 0; i < contentArray.size(); i++) {
             if (!contentArray.get(i).isJsonObject()) {
                 continue;
             }
             JsonObject block = contentArray.get(i).getAsJsonObject();
-            String type = block.has("type") && !block.get("type").isJsonNull()
-                    ? block.get("type").getAsString() : "";
-            if ("text".equals(type) && block.has("text") && !block.get("text").isJsonNull()) {
-                sb.append(block.get("text").getAsString());
+            String type = block.has(CommonConstants.JSON_KEY_TYPE) && !block.get(CommonConstants.JSON_KEY_TYPE).isJsonNull()
+                    ? block.get(CommonConstants.JSON_KEY_TYPE).getAsString() : "";
+            if (CommonConstants.BLOCK_TYPE_TEXT.equals(type) && block.has(CommonConstants.JSON_KEY_TEXT) && !block.get(CommonConstants.JSON_KEY_TEXT).isJsonNull()) {
+                sb.append(block.get(CommonConstants.JSON_KEY_TEXT).getAsString());
             }
         }
         return sb.toString();
     }
 
     static SegmentActivity syncSegmentActivity(JsonObject raw) {
-        JsonObject message = raw != null && raw.has("message") && raw.get("message").isJsonObject()
-                ? raw.getAsJsonObject("message") : null;
-        if (message == null || !message.has("content") || !message.get("content").isJsonArray()) {
+        JsonObject message = raw != null && raw.has(CommonConstants.JSON_KEY_MESSAGE) && raw.get(CommonConstants.JSON_KEY_MESSAGE).isJsonObject()
+                ? raw.getAsJsonObject(CommonConstants.JSON_KEY_MESSAGE) : null;
+        if (message == null || !message.has(CommonConstants.JSON_KEY_CONTENT) || !message.get(CommonConstants.JSON_KEY_CONTENT).isJsonArray()) {
             return new SegmentActivity(false, false);
         }
 
-        JsonArray contentArray = message.getAsJsonArray("content");
+        JsonArray contentArray = message.getAsJsonArray(CommonConstants.JSON_KEY_CONTENT);
         for (int i = contentArray.size() - 1; i >= 0; i--) {
             if (!contentArray.get(i).isJsonObject()) {
                 continue;
             }
             JsonObject block = contentArray.get(i).getAsJsonObject();
-            if (!block.has("type") || block.get("type").isJsonNull()) {
+            if (!block.has(CommonConstants.JSON_KEY_TYPE) || block.get(CommonConstants.JSON_KEY_TYPE).isJsonNull()) {
                 continue;
             }
-            String type = block.get("type").getAsString();
-            return new SegmentActivity("text".equals(type), "thinking".equals(type));
+            String type = block.get(CommonConstants.JSON_KEY_TYPE).getAsString();
+            return new SegmentActivity(CommonConstants.BLOCK_TYPE_TEXT.equals(type), CommonConstants.BLOCK_TYPE_THINKING.equals(type));
         }
         return new SegmentActivity(false, false);
     }

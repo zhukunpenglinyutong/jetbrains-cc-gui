@@ -1,5 +1,6 @@
 package com.github.claudecodegui.session;
 
+import com.github.claudecodegui.common.CommonConstants;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -34,7 +35,7 @@ public class MessageParser {
             // Check if it contains a tool_result
             if (content == null || content.trim().isEmpty()) {
                 if (hasToolResult(msg)) {
-                    return new ClaudeSession.Message(ClaudeSession.Message.Type.USER, "[tool_result]", msg);
+                    return new ClaudeSession.Message(ClaudeSession.Message.Type.USER, CommonConstants.TOOL_RESULT_PLACEHOLDER, msg);
                 }
                 if (hasImageContent(msg)) {
                     return new ClaudeSession.Message(ClaudeSession.Message.Type.USER, "", msg);
@@ -92,13 +93,13 @@ public class MessageParser {
 
         // Filter content with command tags (allow user input containing <command-message>)
         if (contentStr != null) {
-            boolean hasCommandMessage = contentStr.contains("<command-message>") &&
-                contentStr.contains("</command-message>");
+            boolean hasCommandMessage = contentStr.contains(CommonConstants.TAG_COMMAND_MESSAGE_OPEN) &&
+                contentStr.contains(CommonConstants.TAG_COMMAND_MESSAGE_CLOSE);
             if (!hasCommandMessage && (
-                contentStr.contains("<command-name>") ||
-                contentStr.contains("<local-command-stdout>") ||
-                contentStr.contains("<local-command-stderr>") ||
-                contentStr.contains("<command-args>")
+                contentStr.contains(CommonConstants.TAG_COMMAND_NAME) ||
+                contentStr.contains(CommonConstants.TAG_LOCAL_COMMAND_STDOUT) ||
+                contentStr.contains(CommonConstants.TAG_LOCAL_COMMAND_STDERR) ||
+                contentStr.contains(CommonConstants.TAG_COMMAND_ARGS)
             )) {
                 return true;
             }

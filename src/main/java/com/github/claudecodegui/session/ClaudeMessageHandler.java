@@ -1,6 +1,6 @@
 package com.github.claudecodegui.session;
 
-import com.github.claudecodegui.handler.SettingsHandler;
+import com.github.claudecodegui.common.CommonConstants;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
@@ -106,16 +106,16 @@ public class ClaudeMessageHandler implements MessageCallback {
         }
         // Route to the appropriate handler based on message type
         switch (type) {
-            case "user":
+            case CommonConstants.MSG_TYPE_USER:
                 handleUserMessage(content);
                 break;
-            case "assistant":
+            case CommonConstants.MSG_TYPE_ASSISTANT:
                 handleAssistantMessage(content);
                 break;
-            case "thinking":
+            case CommonConstants.MSG_TYPE_THINKING:
                 handleThinkingMessage();
                 break;
-            case "content":
+            case CommonConstants.MSG_TYPE_TEXT:
                 // Non-streaming mode: complete content block, update message
                 handleContent(content);
                 break;
@@ -140,10 +140,10 @@ public class ClaudeMessageHandler implements MessageCallback {
             case "session_id":
                 handleSessionId(content);
                 break;
-            case "tool_use":
+            case CommonConstants.MSG_TYPE_TOOL_USE:
                 handleToolUse(content);
                 break;
-            case "tool_result":
+            case CommonConstants.MSG_TYPE_TOOL_RESULT:
                 handleToolResult(content);
                 break;
             case "message_end":
@@ -220,7 +220,7 @@ public class ClaudeMessageHandler implements MessageCallback {
         currentAssistantMessage = ProviderErrorMessageSupport.appendToAssistantMessage(
                 state,
                 currentAssistantMessage,
-                "claude",
+                CommonConstants.PROVIDER_CLAUDE,
                 error
         );
     }
@@ -431,21 +431,7 @@ public class ClaudeMessageHandler implements MessageCallback {
 
             // Streaming: check if the message contains tool calls
             // If tool_use is present, we need to update messages even in streaming mode to render tool blocks
-            boolean hasToolUse = false;
-            if (mergedRaw.has("message") && mergedRaw.getAsJsonObject("message").has("content")) {
-                var contentArray = mergedRaw.getAsJsonObject("message").get("content");
-                if (contentArray.isJsonArray()) {
-                    for (var element : contentArray.getAsJsonArray()) {
-                        if (element.isJsonObject() && element.getAsJsonObject().has("type")) {
-                            String type = element.getAsJsonObject().get("type").getAsString();
-                            if ("tool_use".equals(type)) {
-                                hasToolUse = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
+            boolean hasToolUse = RawMessageHelper.hasToolUse(mergedRaw);
             boolean shouldNotifyMessageUpdate = !isStreaming || hasToolUse;
 
             // Tool calls act as segment boundaries: subsequent text/thinking should go into new blocks
@@ -481,12 +467,12 @@ public class ClaudeMessageHandler implements MessageCallback {
             // [USAGE] tags emitted by emitUsageTag() in persistent-query-service.executeTurn become
             // the only authoritative source — handled by handleUsage(). Do not move the [USAGE]
             // emission behind shouldOutputMessage without re-routing this final-usage update.
-            if (mergedRaw.has("message") && mergedRaw.get("message").isJsonObject()) {
-                JsonObject messageObj = mergedRaw.getAsJsonObject("message");
-                if (messageObj.has("usage") && messageObj.get("usage").isJsonObject()) {
-                    JsonObject usage = messageObj.getAsJsonObject("usage");
+            if (mergedRaw.has(CommonConstants.JSON_KEY_MESSAGE) && mergedRaw.get(CommonConstants.JSON_KEY_MESSAGE).isJsonObject()) {
+                JsonObject messageObj = mergedRaw.getAsJsonObject(CommonConstants.JSON_KEY_MESSAGE);
+                if (messageObj.has(CommonConstants.JSON_KEY_USAGE) && messageObj.get(CommonConstants.JSON_KEY_USAGE).isJsonObject()) {
+                    JsonObject usage = messageObj.getAsJsonObject(CommonConstants.JSON_KEY_USAGE);
                     int usedTokens = TokenUsageUtils.extractUsedTokens(usage, state.getProvider());
-                    int maxTokens = SettingsHandler.getModelContextLimit(state.getModel());
+                    int maxTokens = state.getEffectiveMaxTokens();
                     ClaudeNotifier.setTokenUsage(project, usedTokens, maxTokens);
                     callbackHandler.notifyUsageUpdate(
                             TokenUsageUtils.buildUsageUpdatePayload(usage, state.getProvider(), maxTokens).toString()
@@ -620,7 +606,7 @@ public class ClaudeMessageHandler implements MessageCallback {
             // Check if the message contains a tool_result
             if (messageParser.hasToolResult(userMsg)) {
                 // This is a user message with tool_result; add it to the message list
-                Message toolResultMessage = new Message(Message.Type.USER, "[tool_result]", userMsg);
+                Message toolResultMessage = new Message(Message.Type.USER, CommonConstants.TOOL_RESULT_PLACEHOLDER, userMsg);
                 state.addMessage(toolResultMessage);
                 LOG.debug("Added tool_result user message to state");
                 callbackHandler.notifyMessageUpdate(state.getMessages());
@@ -667,7 +653,10 @@ public class ClaudeMessageHandler implements MessageCallback {
     }
 
     /**
-     * Handle a tool call result.
+     * 处理 tool_use 事件，将其包装为 assistant 消息后交给 handleAssistantMessage 处理。
+     * 使用 {@link RawMessageHelper#wrapAsAssistantRaw} 统一包装。
+     *
+     * @param content tool_use 块的 JSON 内容
      */
     private void handleToolUse(String content) {
         if (content == null || !content.startsWith("{")) {
@@ -676,16 +665,7 @@ public class ClaudeMessageHandler implements MessageCallback {
 
         try {
             JsonObject toolUseBlock = gson.fromJson(content, JsonObject.class);
-            JsonArray contentArray = new JsonArray();
-            contentArray.add(toolUseBlock);
-
-            JsonObject messageObj = new JsonObject();
-            messageObj.add("content", contentArray);
-
-            JsonObject rawAssistant = new JsonObject();
-            rawAssistant.addProperty("type", "assistant");
-            rawAssistant.add("message", messageObj);
-
+            JsonObject rawAssistant = RawMessageHelper.wrapAsAssistantRaw(toolUseBlock);
             handleAssistantMessage(rawAssistant.toString());
         } catch (Exception e) {
             LOG.warn("Failed to parse tool_use JSON: " + e.getMessage());
@@ -693,7 +673,10 @@ public class ClaudeMessageHandler implements MessageCallback {
     }
 
     /**
-     * Handle a tool call result.
+     * 处理 tool_result 事件，将其包装为 user 消息并添加到消息列表。
+     * 使用 {@link RawMessageHelper#wrapAsUserRaw} 统一包装。
+     *
+     * @param content tool_result 块的 JSON 内容
      */
     private void handleToolResult(String content) {
         if (!content.startsWith("{")) {
@@ -702,24 +685,13 @@ public class ClaudeMessageHandler implements MessageCallback {
 
         try {
             JsonObject toolResultBlock = gson.fromJson(content, JsonObject.class);
-            String toolUseId = toolResultBlock.has("tool_use_id")
-                    ? toolResultBlock.get("tool_use_id").getAsString()
+            String toolUseId = toolResultBlock.has(CommonConstants.JSON_KEY_TOOL_USE_ID)
+                    ? toolResultBlock.get(CommonConstants.JSON_KEY_TOOL_USE_ID).getAsString()
                     : null;
 
             if (toolUseId != null) {
-                // Build a user message containing the tool_result
-                JsonArray contentArray = new JsonArray();
-                contentArray.add(toolResultBlock);
-
-                JsonObject messageObj = new JsonObject();
-                messageObj.add("content", contentArray);
-
-                JsonObject rawUser = new JsonObject();
-                rawUser.addProperty("type", "user");
-                rawUser.add("message", messageObj);
-
-                // Create the user message and add it to the message list
-                Message toolResultMessage = new Message(Message.Type.USER, "[tool_result]", rawUser);
+                JsonObject rawUser = RawMessageHelper.wrapAsUserRaw(toolResultBlock);
+                Message toolResultMessage = new Message(Message.Type.USER, CommonConstants.TOOL_RESULT_PLACEHOLDER, rawUser);
                 state.addMessage(toolResultMessage);
 
                 LOG.debug("Tool result received for tool_use_id: " + toolUseId);
@@ -791,17 +763,17 @@ public class ClaudeMessageHandler implements MessageCallback {
             // Fallback: only update usage from result if no usage was received via [USAGE] tag or assistant message
             if (resultJson.has("usage") && resultJson.get("usage").isJsonObject()
                     && currentAssistantMessage != null && currentAssistantMessage.raw != null) {
-                JsonObject msg = currentAssistantMessage.raw.has("message")
-                        && currentAssistantMessage.raw.get("message").isJsonObject()
-                        ? currentAssistantMessage.raw.getAsJsonObject("message") : null;
-                boolean hasExistingUsage = msg != null && msg.has("usage") && msg.get("usage").isJsonObject();
+                JsonObject msg = currentAssistantMessage.raw.has(CommonConstants.JSON_KEY_MESSAGE)
+                        && currentAssistantMessage.raw.get(CommonConstants.JSON_KEY_MESSAGE).isJsonObject()
+                        ? currentAssistantMessage.raw.getAsJsonObject(CommonConstants.JSON_KEY_MESSAGE) : null;
+                boolean hasExistingUsage = msg != null && msg.has(CommonConstants.JSON_KEY_USAGE) && msg.get(CommonConstants.JSON_KEY_USAGE).isJsonObject();
                 if (!hasExistingUsage) {
                     JsonObject usageJson = resultJson.getAsJsonObject("usage");
                     if (msg != null) {
-                        msg.add("usage", usageJson);
+                        msg.add(CommonConstants.JSON_KEY_USAGE, usageJson);
                     }
                     int usedTokens = TokenUsageUtils.extractUsedTokens(usageJson, state.getProvider());
-                    int maxTokens = SettingsHandler.getModelContextLimit(state.getModel());
+                    int maxTokens = state.getEffectiveMaxTokens();
                     ClaudeNotifier.setTokenUsage(project, usedTokens, maxTokens);
                     callbackHandler.notifyUsageUpdate(
                             TokenUsageUtils.buildUsageUpdatePayload(usageJson, state.getProvider(), maxTokens).toString()
@@ -962,39 +934,31 @@ public class ClaudeMessageHandler implements MessageCallback {
         }
     }
 
+    /**
+     * 确保当前存在一个有效的 assistant 消息用于流式 raw 更新。
+     * 如果不存在则创建空的 assistant 消息并添加到消息列表；
+     * 如果 raw 为 null 则通过 {@link RawMessageHelper#ensureAssistantRaw} 初始化结构。
+     */
     private void ensureCurrentAssistantMessageExists() {
         if (currentAssistantMessage == null) {
-            JsonObject raw = new JsonObject();
-            raw.addProperty("type", "assistant");
-            JsonObject messageObj = new JsonObject();
-            messageObj.add("content", new JsonArray());
-            raw.add("message", messageObj);
+            JsonObject raw = RawMessageHelper.ensureAssistantRaw(null);
             currentAssistantMessage = new Message(Message.Type.ASSISTANT, "", raw);
             state.addMessage(currentAssistantMessage);
         }
         if (currentAssistantMessage.raw == null) {
-            JsonObject raw = new JsonObject();
-            raw.addProperty("type", "assistant");
-            JsonObject messageObj = new JsonObject();
-            messageObj.add("content", new JsonArray());
-            raw.add("message", messageObj);
-            currentAssistantMessage.raw = raw;
+            currentAssistantMessage.raw = RawMessageHelper.ensureAssistantRaw(null);
         }
     }
 
+    /**
+     * 获取或创建当前 assistant raw 中的 message.content 数组。
+     * 先确保 assistant 消息存在，再委托给 {@link RawMessageHelper#ensureContentArray} 获取内容数组。
+     *
+     * @return message.content JsonArray
+     */
     private JsonArray ensureAssistantContentArray() {
         ensureCurrentAssistantMessageExists();
-        JsonObject raw = currentAssistantMessage.raw;
-        JsonObject message = raw.has("message") && raw.get("message").isJsonObject()
-                ? raw.getAsJsonObject("message")
-                : new JsonObject();
-        JsonArray content = message.has("content") && message.get("content").isJsonArray()
-                ? message.getAsJsonArray("content")
-                : new JsonArray();
-        message.add("content", content);
-        raw.add("message", message);
-        currentAssistantMessage.raw = raw;
-        return content;
+        return RawMessageHelper.ensureContentArray(currentAssistantMessage.raw);
     }
 
     private boolean applyTextDeltaToRaw(String delta) {
@@ -1010,7 +974,7 @@ public class ClaudeMessageHandler implements MessageCallback {
                     continue;
                 }
                 JsonObject block = contentArray.get(i).getAsJsonObject();
-                if (block.has("type") && "text".equals(block.get("type").getAsString())) {
+                if (block.has(CommonConstants.JSON_KEY_TYPE) && CommonConstants.BLOCK_TYPE_TEXT.equals(block.get(CommonConstants.JSON_KEY_TYPE).getAsString())) {
                     target = block;
                     break;
                 }
@@ -1019,16 +983,16 @@ public class ClaudeMessageHandler implements MessageCallback {
 
         if (target == null) {
             target = new JsonObject();
-            target.addProperty("type", "text");
-            target.addProperty("text", "");
+            target.addProperty(CommonConstants.JSON_KEY_TYPE, CommonConstants.BLOCK_TYPE_TEXT);
+            target.addProperty(CommonConstants.JSON_KEY_TEXT, "");
             contentArray.add(target);
         }
 
-        String existing = target.has("text") && !target.get("text").isJsonNull()
-                ? target.get("text").getAsString()
+        String existing = target.has(CommonConstants.JSON_KEY_TEXT) && !target.get(CommonConstants.JSON_KEY_TEXT).isJsonNull()
+                ? target.get(CommonConstants.JSON_KEY_TEXT).getAsString()
                 : "";
 
-        target.addProperty("text", existing + delta);
+        target.addProperty(CommonConstants.JSON_KEY_TEXT, existing + delta);
         return true;
     }
 
@@ -1053,12 +1017,12 @@ public class ClaudeMessageHandler implements MessageCallback {
             return;
         }
         JsonObject raw = this.currentAssistantMessage.raw;
-        JsonObject message = raw.has("message") && raw.get("message").isJsonObject()
-                ? raw.getAsJsonObject("message") : null;
-        if (message == null || !message.has("content") || !message.get("content").isJsonArray()) {
+        JsonObject message = raw.has(CommonConstants.JSON_KEY_MESSAGE) && raw.get(CommonConstants.JSON_KEY_MESSAGE).isJsonObject()
+                ? raw.getAsJsonObject(CommonConstants.JSON_KEY_MESSAGE) : null;
+        if (message == null || !message.has(CommonConstants.JSON_KEY_CONTENT) || !message.get(CommonConstants.JSON_KEY_CONTENT).isJsonArray()) {
             return;
         }
-        JsonArray contentArray = message.getAsJsonArray("content");
+        JsonArray contentArray = message.getAsJsonArray(CommonConstants.JSON_KEY_CONTENT);
 
         String accumulatedText = this.assistantContent.toString();
         if (accumulatedText.isEmpty()) {
@@ -1075,20 +1039,20 @@ public class ClaudeMessageHandler implements MessageCallback {
                 continue;
             }
             JsonObject block = contentArray.get(i).getAsJsonObject();
-            String blockType = block.has("type") && !block.get("type").isJsonNull()
-                    ? block.get("type").getAsString() : "";
-            if ("text".equals(blockType)) {
+            String blockType = block.has(CommonConstants.JSON_KEY_TYPE) && !block.get(CommonConstants.JSON_KEY_TYPE).isJsonNull()
+                    ? block.get(CommonConstants.JSON_KEY_TYPE).getAsString() : "";
+            if (CommonConstants.BLOCK_TYPE_TEXT.equals(blockType)) {
                 lastTextBlock = block;
-                precedingTextLength += block.has("text") && !block.get("text").isJsonNull()
-                        ? block.get("text").getAsString().length() : 0;
+                precedingTextLength += block.has(CommonConstants.JSON_KEY_TEXT) && !block.get(CommonConstants.JSON_KEY_TEXT).isJsonNull()
+                        ? block.get(CommonConstants.JSON_KEY_TEXT).getAsString().length() : 0;
             }
         }
 
         // The last iteration added the last block's length to precedingTextLength,
         // so subtract it to get the actual preceding length.
         if (lastTextBlock != null) {
-            String lastBlockText = lastTextBlock.has("text") && !lastTextBlock.get("text").isJsonNull()
-                    ? lastTextBlock.get("text").getAsString() : "";
+            String lastBlockText = lastTextBlock.has(CommonConstants.JSON_KEY_TEXT) && !lastTextBlock.get(CommonConstants.JSON_KEY_TEXT).isJsonNull()
+                    ? lastTextBlock.get(CommonConstants.JSON_KEY_TEXT).getAsString() : "";
             precedingTextLength -= lastBlockText.length();
 
             // Invariant: assistantContent must cover all preceding text blocks.
@@ -1105,7 +1069,7 @@ public class ClaudeMessageHandler implements MessageCallback {
             // starting from the end of all preceding text blocks.
             String expectedLastBlockText = accumulatedText.substring(precedingTextLength);
             if (lastBlockText.length() < expectedLastBlockText.length()) {
-                lastTextBlock.addProperty("text", expectedLastBlockText);
+                lastTextBlock.addProperty(CommonConstants.JSON_KEY_TEXT, expectedLastBlockText);
             }
         }
     }
@@ -1118,7 +1082,7 @@ public class ClaudeMessageHandler implements MessageCallback {
         try {
             JsonObject usageJson = gson.fromJson(content, JsonObject.class);
             int usedTokens = TokenUsageUtils.extractUsedTokens(usageJson, state.getProvider());
-            int maxTokens = SettingsHandler.getModelContextLimit(state.getModel());
+            int maxTokens = state.getEffectiveMaxTokens();
             ClaudeNotifier.setTokenUsage(project, usedTokens, maxTokens);
             // Notify webview of usage update
             callbackHandler.notifyUsageUpdate(
@@ -1150,12 +1114,12 @@ public class ClaudeMessageHandler implements MessageCallback {
      */
     private void backfillUsageToAssistantMessage(JsonObject usageJson) {
         if (currentAssistantMessage == null || currentAssistantMessage.raw == null) { return; }
-        JsonObject message = currentAssistantMessage.raw.has("message") && currentAssistantMessage.raw.get("message").isJsonObject()
-                ? currentAssistantMessage.raw.getAsJsonObject("message") : null;
+        JsonObject message = currentAssistantMessage.raw.has(CommonConstants.JSON_KEY_MESSAGE) && currentAssistantMessage.raw.get(CommonConstants.JSON_KEY_MESSAGE).isJsonObject()
+                ? currentAssistantMessage.raw.getAsJsonObject(CommonConstants.JSON_KEY_MESSAGE) : null;
         if (message == null) { return; }
 
         // Always update usage during streaming to capture accumulating values
-        message.add("usage", usageJson);
+        message.add(CommonConstants.JSON_KEY_USAGE, usageJson);
         LOG.debug("Updated assistant message usage from [USAGE] tag");
     }
 
@@ -1172,7 +1136,7 @@ public class ClaudeMessageHandler implements MessageCallback {
                     continue;
                 }
                 JsonObject block = contentArray.get(i).getAsJsonObject();
-                if (block.has("type") && "thinking".equals(block.get("type").getAsString())) {
+                if (block.has(CommonConstants.JSON_KEY_TYPE) && CommonConstants.BLOCK_TYPE_THINKING.equals(block.get(CommonConstants.JSON_KEY_TYPE).getAsString())) {
                     target = block;
                     break;
                 }
@@ -1181,14 +1145,14 @@ public class ClaudeMessageHandler implements MessageCallback {
 
         if (target == null) {
             target = new JsonObject();
-            target.addProperty("type", "thinking");
-            target.addProperty("thinking", "");
+            target.addProperty(CommonConstants.JSON_KEY_TYPE, CommonConstants.BLOCK_TYPE_THINKING);
+            target.addProperty(CommonConstants.JSON_KEY_THINKING, "");
             // Insert before the first text block to ensure thinking renders above text.
             int insertPos = 0;
             for (int j = 0; j < contentArray.size(); j++) {
                 if (contentArray.get(j).isJsonObject()) {
                     JsonObject b = contentArray.get(j).getAsJsonObject();
-                    if (b.has("type") && "text".equals(b.get("type").getAsString())) {
+                    if (b.has(CommonConstants.JSON_KEY_TYPE) && CommonConstants.BLOCK_TYPE_TEXT.equals(b.get(CommonConstants.JSON_KEY_TYPE).getAsString())) {
                         insertPos = j;
                         break;
                     }
@@ -1204,11 +1168,11 @@ public class ClaudeMessageHandler implements MessageCallback {
                 reordered.add(contentArray.get(j));
             }
             // Replace the content array in the parent message object
-            JsonObject msg = currentAssistantMessage.raw.has("message")
-                    && currentAssistantMessage.raw.get("message").isJsonObject()
-                    ? currentAssistantMessage.raw.getAsJsonObject("message") : null;
+            JsonObject msg = currentAssistantMessage.raw.has(CommonConstants.JSON_KEY_MESSAGE)
+                    && currentAssistantMessage.raw.get(CommonConstants.JSON_KEY_MESSAGE).isJsonObject()
+                    ? currentAssistantMessage.raw.getAsJsonObject(CommonConstants.JSON_KEY_MESSAGE) : null;
             if (msg != null) {
-                msg.add("content", reordered);
+                msg.add(CommonConstants.JSON_KEY_CONTENT, reordered);
             } else {
                 // Fallback: should not happen, but just append
                 contentArray.add(target);
@@ -1216,11 +1180,11 @@ public class ClaudeMessageHandler implements MessageCallback {
             }
         }
 
-        String existing = target.has("thinking") && !target.get("thinking").isJsonNull()
-                ? target.get("thinking").getAsString()
+        String existing = target.has(CommonConstants.JSON_KEY_THINKING) && !target.get(CommonConstants.JSON_KEY_THINKING).isJsonNull()
+                ? target.get(CommonConstants.JSON_KEY_THINKING).getAsString()
                 : "";
 
-        target.addProperty("thinking", existing + delta);
+        target.addProperty(CommonConstants.JSON_KEY_THINKING, existing + delta);
         return true;
     }
 

@@ -1,5 +1,6 @@
 package com.github.claudecodegui.session;
 
+import com.github.claudecodegui.common.CommonConstants;
 import com.github.claudecodegui.service.RunConfigMonitorService;
 import com.github.claudecodegui.terminal.TerminalMonitorService;
 import com.github.claudecodegui.util.AttachmentResourceService;
@@ -152,7 +153,7 @@ public class SessionContextService {
 
         if (fileTagPaths != null && !fileTagPaths.isEmpty()) {
             for (String path : fileTagPaths) {
-                if (path != null && path.startsWith("terminal://")) {
+                if (path != null && path.startsWith(CommonConstants.TERMINAL_PROTOCOL)) {
                     terminalPaths.add(path);
                 } else {
                     regularFilePaths.add(path);
@@ -164,7 +165,7 @@ public class SessionContextService {
             sb.append("\n\n## Active Terminal Session\n\n");
             sb.append("The user is working in the following terminal context:\n\n");
             for (String terminalPath : terminalPaths) {
-                String sessionName = terminalPath.substring("terminal://".length());
+                String sessionName = terminalPath.substring(CommonConstants.TERMINAL_PROTOCOL.length());
                 sb.append("- **Terminal**: `").append(sessionName).append("`\n");
             }
             sb.append("\nCommands should be executed in this terminal context.\n\n");

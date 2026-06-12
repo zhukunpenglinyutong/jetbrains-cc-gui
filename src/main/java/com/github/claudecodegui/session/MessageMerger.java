@@ -1,5 +1,6 @@
 package com.github.claudecodegui.session;
 
+import com.github.claudecodegui.common.CommonConstants;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -192,54 +193,76 @@ public class MessageMerger {
         return -1;
     }
 
+    /**
+     * 合并无 key 的内容块（text / thinking），选择更完整的内容保留。
+     * 使用 switch 表达式按块类型分发处理逻辑。
+     *
+     * @param existingBlock  已有的内容块
+     * @param incomingBlock  新到达的内容块
+     * @return 合并后的内容块
+     */
     private JsonObject mergeUnkeyedBlock(JsonObject existingBlock, JsonObject incomingBlock) {
         String type = getContentBlockType(incomingBlock);
         JsonObject merged = incomingBlock.deepCopy();
 
-        if ("text".equals(type)) {
-            merged.addProperty("text", preferMoreCompleteContent(
-                    getTextContent(existingBlock),
-                    getTextContent(incomingBlock)
-            ));
-            return merged;
-        }
+        switch (type != null ? type : "") {
+            case CommonConstants.BLOCK_TYPE_TEXT:
+                merged.addProperty(CommonConstants.JSON_KEY_TEXT, preferMoreCompleteContent(
+                        getTextContent(existingBlock),
+                        getTextContent(incomingBlock)
+                ));
+                return merged;
 
-        if ("thinking".equals(type)) {
-            String thinking = preferMoreCompleteContent(
-                    getThinkingContent(existingBlock),
-                    getThinkingContent(incomingBlock)
-            );
-            if (thinking != null && !thinking.isEmpty()) {
-                merged.addProperty("thinking", thinking);
-                merged.addProperty("text", thinking);
-            }
+            case CommonConstants.BLOCK_TYPE_THINKING:
+                String thinking = preferMoreCompleteContent(
+                        getThinkingContent(existingBlock),
+                        getThinkingContent(incomingBlock)
+                );
+                if (thinking != null && !thinking.isEmpty()) {
+                    merged.addProperty(CommonConstants.JSON_KEY_THINKING, thinking);
+                    merged.addProperty(CommonConstants.JSON_KEY_TEXT, thinking);
+                }
+                break;
+
+            default:
+                break;
         }
 
         return merged;
     }
 
+    /**
+     * 判断两个无 key 的内容块是否属于同一段落（segment）。
+     * 使用 switch 表达式按块类型分发：text 块通过文本相关性判断，
+     * thinking 块在早期流式阶段基于类型匹配，其他类型直接比较 JSON 内容。
+     *
+     * @param existingBlock  已有的内容块
+     * @param incomingBlock  新到达的内容块
+     * @return 如果两个块属于同一段落返回 true
+     */
     private boolean blocksLikelyRepresentSameSegment(JsonObject existingBlock, JsonObject incomingBlock) {
         String type = getContentBlockType(incomingBlock);
         if (type == null || !type.equals(getContentBlockType(existingBlock))) {
             return false;
         }
 
-        if ("text".equals(type)) {
-            return textLooksRelated(getTextContent(existingBlock), getTextContent(incomingBlock));
-        }
+        switch (type) {
+            case CommonConstants.BLOCK_TYPE_TEXT:
+                return textLooksRelated(getTextContent(existingBlock), getTextContent(incomingBlock));
 
-        if ("thinking".equals(type)) {
-            String existingThinking = getThinkingContent(existingBlock);
-            String incomingThinking = getThinkingContent(incomingBlock);
-            // During early streaming, thinking content may not yet be populated,
-            // so type-based matching alone determines block identity.
-            if (existingThinking.isEmpty() || incomingThinking.isEmpty()) {
-                return true;
-            }
-            return textLooksRelated(existingThinking, incomingThinking);
-        }
+            case CommonConstants.BLOCK_TYPE_THINKING:
+                String existingThinking = getThinkingContent(existingBlock);
+                String incomingThinking = getThinkingContent(incomingBlock);
+                // During early streaming, thinking content may not yet be populated,
+                // so type-based matching alone determines block identity.
+                if (existingThinking.isEmpty() || incomingThinking.isEmpty()) {
+                    return true;
+                }
+                return textLooksRelated(existingThinking, incomingThinking);
 
-        return existingBlock.equals(incomingBlock);
+            default:
+                return existingBlock.equals(incomingBlock);
+        }
     }
 
     private int findLastSameTypeBlockIndex(JsonArray baseContent, JsonObject incomingBlock) {

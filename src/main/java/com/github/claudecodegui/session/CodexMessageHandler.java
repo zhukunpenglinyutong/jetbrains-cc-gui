@@ -1,12 +1,12 @@
 package com.github.claudecodegui.session;
 
+import com.github.claudecodegui.common.CommonConstants;
 import com.github.claudecodegui.handler.CodexMessageConverter;
-import com.github.claudecodegui.handler.SettingsHandler;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.session.ClaudeSession.Message;
-import com.github.claudecodegui.util.CodexHistoryWriter;
 import com.github.claudecodegui.util.ClaudeHistoryWriter;
+import com.github.claudecodegui.util.CodexHistoryWriter;
 import com.github.claudecodegui.util.TokenUsageUtils;
 import com.intellij.openapi.diagnostic.Logger;
 
@@ -89,47 +89,58 @@ public class CodexMessageHandler implements MessageCallback {
         // - type='user': contains tool_result
         LOG.debug("CodexMessageHandler.onMessage: type=" + type + ", content length=" + (content != null ? content.length() : 0));
 
-        if ("assistant".equals(type)) {
-            // Handle assistant message (thinking, tool_use, text)
-            handleAssistantMessage(content);
-        } else if ("user".equals(type)) {
-            // Handle user message (tool_result)
-            handleUserMessage(content);
-        } else if ("tool_use".equals(type)) {
-            handleToolUse(content);
-        } else if ("tool_result".equals(type)) {
-            handleToolResult(content);
-        } else if ("result".equals(type)) {
-            // Handle result message (usage stats, etc.)
-            handleResultMessage(content);
-        } else if ("session_id".equals(type)) {
-            // Handle session_id/thread_id (for session recovery)
-            handleSessionId(content);
-        } else if ("event_msg".equals(type)) {
-            handleEventMessage(content);
-        } else if ("stream_start".equals(type)) {
-            handleStreamStart();
-        } else if ("thinking".equals(type)) {
-            handleThinkingMessage();
-        } else if ("stream_end".equals(type)) {
-            handleStreamEnd();
-        } else if ("block_reset".equals(type)) {
-            handleBlockReset();
-        } else if ("thinking_delta".equals(type)) {
-            handleThinkingDelta(content);
-        } else if ("content_delta".equals(type) || "content".equals(type)) {
-            // Handle streaming content delta (legacy format, kept for compatibility)
-            // content_delta: streaming incremental
-            // content: complete content block
-            handleContentDelta(content);
-        } else if ("status".equals(type)) {
-            if (content != null && !content.trim().isEmpty()) {
-                callbackHandler.notifyStatusMessage(content);
-            }
-        } else if ("message_end".equals(type)) {
-            handleMessageEnd();
-        } else {
-            LOG.debug("CodexMessageHandler: Unhandled message type: " + type);
+        switch (type) {
+            case CommonConstants.MSG_TYPE_ASSISTANT:
+                handleAssistantMessage(content);
+                break;
+            case CommonConstants.MSG_TYPE_USER:
+                handleUserMessage(content);
+                break;
+            case CommonConstants.MSG_TYPE_TOOL_USE:
+                handleToolUse(content);
+                break;
+            case CommonConstants.MSG_TYPE_TOOL_RESULT:
+                handleToolResult(content);
+                break;
+            case "result":
+                handleResultMessage(content);
+                break;
+            case "session_id":
+                handleSessionId(content);
+                break;
+            case "event_msg":
+                handleEventMessage(content);
+                break;
+            case "stream_start":
+                handleStreamStart();
+                break;
+            case CommonConstants.MSG_TYPE_THINKING:
+                handleThinkingMessage();
+                break;
+            case "stream_end":
+                handleStreamEnd();
+                break;
+            case "block_reset":
+                handleBlockReset();
+                break;
+            case "thinking_delta":
+                handleThinkingDelta(content);
+                break;
+            case "content_delta":
+            case CommonConstants.MSG_TYPE_TEXT:
+                handleContentDelta(content);
+                break;
+            case "status":
+                if (content != null && !content.trim().isEmpty()) {
+                    callbackHandler.notifyStatusMessage(content);
+                }
+                break;
+            case "message_end":
+                handleMessageEnd();
+                break;
+            default:
+                LOG.debug("CodexMessageHandler: Unhandled message type: " + type);
+                break;
         }
     }
 
@@ -166,7 +177,7 @@ public class CodexMessageHandler implements MessageCallback {
         currentAssistantMessage = ProviderErrorMessageSupport.appendToAssistantMessage(
                 state,
                 currentAssistantMessage,
-                "codex",
+                CommonConstants.PROVIDER_CODEX,
                 error
         );
     }
@@ -333,22 +344,15 @@ public class CodexMessageHandler implements MessageCallback {
         }
     }
 
+    /**
+     * 检查 raw 消息中是否包含 tool_use 块。
+     * 委托给 {@link RawMessageHelper#hasToolUse} 统一实现。
+     *
+     * @param raw 要检查的 raw JsonObject
+     * @return 如果包含 tool_use 块返回 true
+     */
     private boolean rawHasToolUse(com.google.gson.JsonObject raw) {
-        if (raw == null || !raw.has("message") || !raw.get("message").isJsonObject()) {
-            return false;
-        }
-        com.google.gson.JsonObject messageObj = raw.getAsJsonObject("message");
-        if (!messageObj.has("content") || !messageObj.get("content").isJsonArray()) {
-            return false;
-        }
-        for (var element : messageObj.getAsJsonArray("content")) {
-            if (element.isJsonObject() && element.getAsJsonObject().has("type")) {
-                if ("tool_use".equals(element.getAsJsonObject().get("type").getAsString())) {
-                    return true;
-                }
-            }
-        }
-        return false;
+        return RawMessageHelper.hasToolUse(raw);
     }
 
     /**
@@ -378,9 +382,10 @@ public class CodexMessageHandler implements MessageCallback {
     }
 
     /**
-     * Handle a direct tool_use block event by wrapping it as an assistant message.
+     * 处理直接的 tool_use 块事件，将其包装为 assistant 消息。
+     * 使用 {@link RawMessageHelper#wrapAsAssistantRaw} 统一包装。
      *
-     * @param jsonContent json content
+     * @param jsonContent tool_use 块的 JSON 内容
      */
     private void handleToolUse(String jsonContent) {
         if (jsonContent == null || !jsonContent.startsWith("{")) {
@@ -390,17 +395,7 @@ public class CodexMessageHandler implements MessageCallback {
         try {
             com.google.gson.Gson gson = new com.google.gson.Gson();
             com.google.gson.JsonObject toolUseBlock = gson.fromJson(jsonContent, com.google.gson.JsonObject.class);
-            com.google.gson.JsonArray contentArray = new com.google.gson.JsonArray();
-            contentArray.add(toolUseBlock);
-
-            com.google.gson.JsonObject messageObj = new com.google.gson.JsonObject();
-            messageObj.addProperty("role", "assistant");
-            messageObj.add("content", contentArray);
-
-            com.google.gson.JsonObject rawAssistant = new com.google.gson.JsonObject();
-            rawAssistant.addProperty("type", "assistant");
-            rawAssistant.add("message", messageObj);
-
+            com.google.gson.JsonObject rawAssistant = RawMessageHelper.wrapAsAssistantRaw(toolUseBlock);
             handleAssistantMessage(rawAssistant.toString());
         } catch (Exception e) {
             LOG.warn("Failed to parse tool_use JSON: " + e.getMessage());
@@ -408,9 +403,10 @@ public class CodexMessageHandler implements MessageCallback {
     }
 
     /**
-     * Handle a direct tool_result block event by wrapping it as a user message.
+     * 处理直接的 tool_result 块事件，将其包装为 user 消息。
+     * 使用 {@link RawMessageHelper#wrapAsUserRaw} 统一包装。
      *
-     * @param jsonContent json content
+     * @param jsonContent tool_result 块的 JSON 内容
      */
     private void handleToolResult(String jsonContent) {
         if (jsonContent == null || !jsonContent.startsWith("{")) {
@@ -420,17 +416,7 @@ public class CodexMessageHandler implements MessageCallback {
         try {
             com.google.gson.Gson gson = new com.google.gson.Gson();
             com.google.gson.JsonObject toolResultBlock = gson.fromJson(jsonContent, com.google.gson.JsonObject.class);
-            com.google.gson.JsonArray contentArray = new com.google.gson.JsonArray();
-            contentArray.add(toolResultBlock);
-
-            com.google.gson.JsonObject messageObj = new com.google.gson.JsonObject();
-            messageObj.addProperty("role", "user");
-            messageObj.add("content", contentArray);
-
-            com.google.gson.JsonObject rawUser = new com.google.gson.JsonObject();
-            rawUser.addProperty("type", "user");
-            rawUser.add("message", messageObj);
-
+            com.google.gson.JsonObject rawUser = RawMessageHelper.wrapAsUserRaw(toolResultBlock);
             handleUserMessage(rawUser.toString());
         } catch (Exception e) {
             LOG.warn("Failed to parse tool_result JSON: " + e.getMessage());
@@ -553,7 +539,7 @@ public class CodexMessageHandler implements MessageCallback {
     }
 
     private void pushUsageUpdate(com.google.gson.JsonObject usage) {
-        int maxTokens = SettingsHandler.getModelContextLimit(state.getModel());
+        int maxTokens = state.getEffectiveMaxTokens();
         callbackHandler.notifyUsageUpdate(
                 TokenUsageUtils.buildUsageUpdatePayload(usage, state.getProvider(), maxTokens).toString()
         );
@@ -614,15 +600,15 @@ public class CodexMessageHandler implements MessageCallback {
         }
 
         String filterContent = CodexMessageConverter.stripSystemTags(contentStr);
-        boolean hasCommandMessage = contentStr.contains("<command-message>")
-            && contentStr.contains("</command-message>");
+        boolean hasCommandMessage = contentStr.contains(CommonConstants.TAG_COMMAND_MESSAGE_OPEN)
+            && contentStr.contains(CommonConstants.TAG_COMMAND_MESSAGE_CLOSE);
         if (hasCommandMessage) {
             return false;
         }
-        return filterContent.contains("<command-name>")
-            || filterContent.contains("<local-command-stdout>")
-            || filterContent.contains("<local-command-stderr>")
-            || filterContent.contains("<command-args>");
+        return filterContent.contains(CommonConstants.TAG_COMMAND_NAME)
+            || filterContent.contains(CommonConstants.TAG_LOCAL_COMMAND_STDOUT)
+            || filterContent.contains(CommonConstants.TAG_LOCAL_COMMAND_STDERR)
+            || filterContent.contains(CommonConstants.TAG_COMMAND_ARGS);
     }
 
     private String extractFirstTextContent(com.google.gson.JsonElement contentElement) {
@@ -639,7 +625,7 @@ public class CodexMessageHandler implements MessageCallback {
                 continue;
             }
             com.google.gson.JsonObject block = element.getAsJsonObject();
-            if (block.has("type") && "text".equals(block.get("type").getAsString())
+            if (block.has("type") && CommonConstants.BLOCK_TYPE_TEXT.equals(block.get("type").getAsString())
                 && block.has("text")) {
                 return block.get("text").getAsString();
             }
@@ -658,7 +644,7 @@ public class CodexMessageHandler implements MessageCallback {
         if (content == null || content.trim().isEmpty()) {
             if (hasToolResult) {
                 markSyntheticToolResultRaw(msg);
-                Message result = new Message(Message.Type.USER, "[tool_result]");
+                Message result = new Message(Message.Type.USER, CommonConstants.TOOL_RESULT_PLACEHOLDER);
                 result.raw = msg;
                 return result;
             }
@@ -728,7 +714,7 @@ public class CodexMessageHandler implements MessageCallback {
                         : null;
 
                     // Handle different content block types
-                    if (("text".equals(blockType) || "input_text".equals(blockType) || "output_text".equals(blockType))
+                    if ((CommonConstants.BLOCK_TYPE_TEXT.equals(blockType) || CommonConstants.BLOCK_TYPE_INPUT_TEXT.equals(blockType) || CommonConstants.BLOCK_TYPE_OUTPUT_TEXT.equals(blockType))
                             && block.has("text") && !block.get("text").isJsonNull()) {
                         String text = block.get("text").getAsString();
                         if (sb.length() > 0) {
@@ -736,14 +722,14 @@ public class CodexMessageHandler implements MessageCallback {
                         }
                         sb.append(text);
                         hasContent = true;
-                    } else if ("tool_use".equals(blockType)) {
+                    } else if (CommonConstants.BLOCK_TYPE_TOOL_USE.equals(blockType)) {
                         // Skip tool_use, don't display tool usage text
-                    } else if ("tool_result".equals(blockType)) {
+                    } else if (CommonConstants.BLOCK_TYPE_TOOL_RESULT.equals(blockType)) {
                         // Tool result - skip display as it provides no direct value to the user
                         // and is typically long and already reflected in the assistant's response
-                    } else if ("thinking".equals(blockType)) {
+                    } else if (CommonConstants.BLOCK_TYPE_THINKING.equals(blockType)) {
                         // Skip thinking block, don't display fixed text
-                    } else if ("image".equals(blockType)) {
+                    } else if (CommonConstants.BLOCK_TYPE_IMAGE.equals(blockType)) {
                         // Skip image block, don't display fixed text
                     }
                 } else if (element.isJsonPrimitive()) {
@@ -792,7 +778,7 @@ public class CodexMessageHandler implements MessageCallback {
             com.google.gson.JsonElement element = contentArray.get(i);
             if (element.isJsonObject()) {
                 com.google.gson.JsonObject block = element.getAsJsonObject();
-                if (block.has("type") && "tool_result".equals(block.get("type").getAsString())) {
+                if (block.has("type") && CommonConstants.BLOCK_TYPE_TOOL_RESULT.equals(block.get("type").getAsString())) {
                     return true;
                 }
             }
@@ -828,7 +814,7 @@ public class CodexMessageHandler implements MessageCallback {
                 String blockType = block.has("type") && !block.get("type").isJsonNull()
                         ? block.get("type").getAsString()
                         : null;
-                if ("text".equals(blockType) || "input_text".equals(blockType) || "output_text".equals(blockType)) {
+                if (CommonConstants.BLOCK_TYPE_TEXT.equals(blockType) || CommonConstants.BLOCK_TYPE_INPUT_TEXT.equals(blockType) || CommonConstants.BLOCK_TYPE_OUTPUT_TEXT.equals(blockType)) {
                     if (!textUpdated) {
                         block.addProperty("type", "text");
                         block.addProperty("text", content);
@@ -954,113 +940,39 @@ public class CodexMessageHandler implements MessageCallback {
     }
 
     /**
-     * Ensure an assistant message exists for streaming raw updates.
-     *
+     * 确保当前存在一个有效的 assistant 消息用于流式 raw 更新。
+     * 如果不存在则创建空的 assistant 消息并添加到消息列表；
+     * 如果 raw 为 null 则通过 {@link RawMessageHelper#ensureAssistantRaw} 初始化结构。
      */
     private void ensureCurrentAssistantMessageExists() {
         if (currentAssistantMessage == null) {
-            com.google.gson.JsonObject raw = new com.google.gson.JsonObject();
-            raw.addProperty("type", "assistant");
-            com.google.gson.JsonObject messageObj = new com.google.gson.JsonObject();
-            messageObj.add("content", new com.google.gson.JsonArray());
-            raw.add("message", messageObj);
+            com.google.gson.JsonObject raw = RawMessageHelper.ensureAssistantRaw(null);
             currentAssistantMessage = new Message(Message.Type.ASSISTANT, "", raw);
             state.addMessage(currentAssistantMessage);
         }
         if (currentAssistantMessage.raw == null) {
-            com.google.gson.JsonObject raw = new com.google.gson.JsonObject();
-            raw.addProperty("type", "assistant");
-            com.google.gson.JsonObject messageObj = new com.google.gson.JsonObject();
-            messageObj.add("content", new com.google.gson.JsonArray());
-            raw.add("message", messageObj);
-            currentAssistantMessage.raw = raw;
+            currentAssistantMessage.raw = RawMessageHelper.ensureAssistantRaw(null);
         }
     }
 
     /**
-     * Append thinking delta to the current assistant raw block.
+     * 将思考增量追加到当前 assistant raw 中的 thinking 块。
+     * 委托给 {@link RawMessageHelper#applyThinkingDelta} 统一实现。
      *
-     * @param delta delta
+     * @param delta 思考增量文本
      */
     private void applyThinkingDeltaToRaw(String delta) {
-        com.google.gson.JsonObject raw = currentAssistantMessage.raw;
-        com.google.gson.JsonObject message = raw.has("message") && raw.get("message").isJsonObject()
-                ? raw.getAsJsonObject("message")
-                : new com.google.gson.JsonObject();
-        com.google.gson.JsonArray content = message.has("content") && message.get("content").isJsonArray()
-                ? message.getAsJsonArray("content")
-                : new com.google.gson.JsonArray();
-
-        com.google.gson.JsonObject target = null;
-        if (content.size() > 0) {
-            com.google.gson.JsonElement last = content.get(content.size() - 1);
-            if (last.isJsonObject()) {
-                com.google.gson.JsonObject block = last.getAsJsonObject();
-                if (block.has("type") && "thinking".equals(block.get("type").getAsString())) {
-                    target = block;
-                }
-            }
-        }
-
-        if (target == null) {
-            target = new com.google.gson.JsonObject();
-            target.addProperty("type", "thinking");
-            target.addProperty("thinking", "");
-            target.addProperty("text", "");
-            content.add(target);
-        }
-
-        String existing = target.has("thinking") && !target.get("thinking").isJsonNull()
-                ? target.get("thinking").getAsString()
-                : "";
-        String next = existing + delta;
-        target.addProperty("thinking", next);
-        target.addProperty("text", next);
-
-        message.add("content", content);
-        raw.add("message", message);
-        currentAssistantMessage.raw = raw;
+        RawMessageHelper.applyThinkingDelta(currentAssistantMessage.raw, delta);
     }
 
+    /**
+     * 将文本增量追加到当前 assistant raw 中的 text 块。
+     * 委托给 {@link RawMessageHelper#applyTextDelta} 统一实现。
+     *
+     * @param delta 文本增量
+     */
     private void applyTextDeltaToRaw(String delta) {
-        if (delta == null || delta.isEmpty()) {
-            return;
-        }
-
-        com.google.gson.JsonObject raw = currentAssistantMessage.raw;
-        com.google.gson.JsonObject message = raw.has("message") && raw.get("message").isJsonObject()
-                ? raw.getAsJsonObject("message")
-                : new com.google.gson.JsonObject();
-        com.google.gson.JsonArray content = message.has("content") && message.get("content").isJsonArray()
-                ? message.getAsJsonArray("content")
-                : new com.google.gson.JsonArray();
-
-        com.google.gson.JsonObject target = null;
-        if (content.size() > 0) {
-            com.google.gson.JsonElement last = content.get(content.size() - 1);
-            if (last.isJsonObject()) {
-                com.google.gson.JsonObject block = last.getAsJsonObject();
-                if (block.has("type") && "text".equals(block.get("type").getAsString())) {
-                    target = block;
-                }
-            }
-        }
-
-        if (target == null) {
-            target = new com.google.gson.JsonObject();
-            target.addProperty("type", "text");
-            target.addProperty("text", "");
-            content.add(target);
-        }
-
-        String existing = target.has("text") && !target.get("text").isJsonNull()
-                ? target.get("text").getAsString()
-                : "";
-        target.addProperty("text", existing + delta);
-
-        message.add("content", content);
-        raw.add("message", message);
-        currentAssistantMessage.raw = raw;
+        RawMessageHelper.applyTextDelta(currentAssistantMessage.raw, delta);
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.github.claudecodegui.session;
 
+import com.github.claudecodegui.common.CommonConstants;
 import com.github.claudecodegui.session.ClaudeSession.Message;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -42,7 +43,7 @@ public final class ProviderErrorMessageSupport {
     ) {
         String normalizedDetails = details != null ? details : "";
         JsonObject errorBlock = new JsonObject();
-        errorBlock.addProperty("type", "provider_error");
+        errorBlock.addProperty(CommonConstants.JSON_KEY_TYPE, "provider_error");
         errorBlock.addProperty("provider", provider != null && !provider.isBlank() ? provider : "unknown");
         errorBlock.addProperty("summary", summary != null && !summary.isBlank()
                 ? summary
@@ -86,10 +87,10 @@ public final class ProviderErrorMessageSupport {
 
     private static JsonObject createAssistantRaw() {
         JsonObject raw = new JsonObject();
-        raw.addProperty("type", "assistant");
+        raw.addProperty(CommonConstants.JSON_KEY_TYPE, CommonConstants.MSG_TYPE_ASSISTANT);
         JsonObject messageObj = new JsonObject();
-        messageObj.add("content", new JsonArray());
-        raw.add("message", messageObj);
+        messageObj.add(CommonConstants.JSON_KEY_CONTENT, new JsonArray());
+        raw.add(CommonConstants.JSON_KEY_MESSAGE, messageObj);
         return raw;
     }
 
@@ -99,15 +100,15 @@ public final class ProviderErrorMessageSupport {
         }
 
         JsonObject raw = assistantMessage.raw;
-        JsonObject message = raw.has("message") && raw.get("message").isJsonObject()
-                ? raw.getAsJsonObject("message")
+        JsonObject message = raw.has(CommonConstants.JSON_KEY_MESSAGE) && raw.get(CommonConstants.JSON_KEY_MESSAGE).isJsonObject()
+                ? raw.getAsJsonObject(CommonConstants.JSON_KEY_MESSAGE)
                 : new JsonObject();
-        JsonArray content = message.has("content") && message.get("content").isJsonArray()
-                ? message.getAsJsonArray("content")
+        JsonArray content = message.has(CommonConstants.JSON_KEY_CONTENT) && message.get(CommonConstants.JSON_KEY_CONTENT).isJsonArray()
+                ? message.getAsJsonArray(CommonConstants.JSON_KEY_CONTENT)
                 : new JsonArray();
 
-        message.add("content", content);
-        raw.add("message", message);
+        message.add(CommonConstants.JSON_KEY_CONTENT, content);
+        raw.add(CommonConstants.JSON_KEY_MESSAGE, message);
         assistantMessage.raw = raw;
         return content;
     }

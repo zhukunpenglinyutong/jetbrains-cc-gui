@@ -1,12 +1,9 @@
 package com.github.claudecodegui.session;
 
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
+import com.github.claudecodegui.common.CommonConstants;
+
+import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -24,21 +21,21 @@ public class SessionState {
     public static final Set<String> VALID_PROVIDERS;
     static {
         Set<String> modes = new HashSet<>();
-        modes.add("default");
-        modes.add("plan");
-        modes.add("acceptEdits");
-        modes.add("autoEdit");
-        modes.add("bypassPermissions");
+        modes.add(CommonConstants.PERMISSION_MODE_DEFAULT);
+        modes.add(CommonConstants.PERMISSION_MODE_PLAN);
+        modes.add(CommonConstants.PERMISSION_MODE_ACCEPT_EDITS);
+        modes.add(CommonConstants.PERMISSION_MODE_AUTO_EDIT);
+        modes.add(CommonConstants.PERMISSION_MODE_BYPASS);
         VALID_PERMISSION_MODES = Collections.unmodifiableSet(modes);
 
         Set<String> invocationModes = new HashSet<>();
-        invocationModes.add("sdk");
-        invocationModes.add("cli");
+        invocationModes.add(CommonConstants.INVOCATION_MODE_SDK);
+        invocationModes.add(CommonConstants.INVOCATION_MODE_CLI);
         VALID_CLAUDE_INVOCATION_MODES = Collections.unmodifiableSet(invocationModes);
 
         Set<String> providers = new HashSet<>();
-        providers.add("claude");
-        providers.add("codex");
+        providers.add(CommonConstants.PROVIDER_CLAUDE);
+        providers.add(CommonConstants.PROVIDER_CODEX);
         VALID_PROVIDERS = Collections.unmodifiableSet(providers);
     }
 
@@ -78,13 +75,15 @@ public class SessionState {
     // Configuration fields below are volatile because set_mode / set_model / set_provider
     // and send_message may execute on different async handler threads with no other
     // happens-before guarantee between them.
-    private volatile String permissionMode = "acceptEdits";
-    private volatile String model = "claude-sonnet-4-6";
-    private volatile String provider = "claude";
+    private volatile String permissionMode = CommonConstants.DEFAULT_PERMISSION_MODE;
+    private volatile String model = CommonConstants.DEFAULT_MODEL;
+    private volatile String provider = CommonConstants.DEFAULT_PROVIDER;
     private volatile String claudeInvocationMode = null;
     private volatile String permissionSessionId = null;
     // Reasoning effort (thinking depth)
-    private volatile String reasoningEffort = "high";
+    private volatile String reasoningEffort = CommonConstants.DEFAULT_REASONING_EFFORT;
+    // Context window override from frontend (null = use backend default)
+    private volatile Integer contextWindowOverride;
 
     // Slash commands — volatile for cross-thread visibility (same reason as permissionMode/model/provider)
     private volatile List<String> slashCommands = new ArrayList<>();
@@ -303,6 +302,33 @@ public class SessionState {
 
     public void setPsiContextEnabled(boolean psiContextEnabled) {
         this.psiContextEnabled = psiContextEnabled;
+    }
+
+    public Integer getContextWindowOverride() {
+        return contextWindowOverride;
+    }
+
+    /**
+     * Get effective max tokens: use frontend override if set, capped at model's actual limit.
+     * For known models (in MODEL_CONTEXT_LIMITS), the override is capped.
+     * For unknown models, the override is trusted as-is.
+     */
+    public int getEffectiveMaxTokens() {
+        if (contextWindowOverride != null && contextWindowOverride > 0) {
+            // Strip [1m]/[258k] suffix to look up the base model's limit
+            String baseModel = model != null
+                    ? model.replaceFirst("(?i)\\s*\\[[0-9.]+[kKmM]\\]\\s*$", "")
+                    : null;
+            int modelMaxLimit = com.github.claudecodegui.handler.provider.ModelProviderHandler
+                    .getModelContextLimit(baseModel);
+            // Cap at model's actual limit for known models
+            return Math.min(contextWindowOverride, modelMaxLimit);
+        }
+        return com.github.claudecodegui.handler.provider.ModelProviderHandler.getModelContextLimit(model);
+    }
+
+    public void setContextWindowOverride(Integer contextWindowOverride) {
+        this.contextWindowOverride = contextWindowOverride;
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.github.claudecodegui.session;
 
+import com.github.claudecodegui.common.CommonConstants;
 import com.github.claudecodegui.handler.SettingsHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
@@ -8,9 +9,9 @@ import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.skill.SlashCommandRegistry;
+import com.github.claudecodegui.util.GsonHolder;
 import com.github.claudecodegui.util.JsUtils;
 import com.github.claudecodegui.util.PlatformUtils;
-import com.github.claudecodegui.util.GsonHolder;
 import com.google.gson.JsonObject;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
@@ -29,7 +30,7 @@ import java.util.concurrent.CompletableFuture;
 public class SessionLifecycleManager {
 
     private static final Logger LOG = Logger.getInstance(SessionLifecycleManager.class);
-    private static final String PERMISSION_MODE_PROPERTY_KEY = "claude.code.permission.mode";
+    private static final String PERMISSION_MODE_PROPERTY_KEY = CommonConstants.PROP_PERMISSION_MODE;
 
     static void prepareForSessionReset(SessionHost host) {
         host.invalidateSessionCallbacks();
@@ -365,7 +366,9 @@ public class SessionLifecycleManager {
      * Reset token usage statistics in the frontend (used after new session creation).
      */
     private void resetTokenUsage() {
-        int maxTokens = SettingsHandler.getModelContextLimit(host.getHandlerContext().getCurrentModel());
+        int maxTokens = host.getHandlerContext().getSession() != null
+                ? host.getHandlerContext().getSession().getState().getEffectiveMaxTokens()
+                : SettingsHandler.getModelContextLimit(host.getHandlerContext().getCurrentModel());
         JsonObject usageUpdate = new JsonObject();
         usageUpdate.addProperty("percentage", 0);
         usageUpdate.addProperty("totalTokens", 0);
@@ -428,7 +431,7 @@ public class SessionLifecycleManager {
         if (SessionState.VALID_PROVIDERS.contains(provider)) {
             return provider;
         }
-        return "claude";
+        return CommonConstants.DEFAULT_PROVIDER;
     }
 
     private String readDefaultModel(String provider) {
@@ -436,13 +439,13 @@ public class SessionLifecycleManager {
         if (model != null && !model.trim().isEmpty()) {
             return model.trim();
         }
-        return "codex".equals(provider) ? "gpt-5.3-codex" : "claude-sonnet-4-6";
+        return CommonConstants.PROVIDER_CODEX.equals(provider) ? "gpt-5.3-codex" : CommonConstants.DEFAULT_MODEL;
     }
 
     private String readDefaultPermissionMode(String provider) {
         String mode = PropertiesComponent.getInstance().getValue(PERMISSION_MODE_PROPERTY_KEY);
         if (mode == null || mode.trim().isEmpty() || !SessionState.isValidPermissionMode(mode)) {
-            mode = "acceptEdits";
+            mode = CommonConstants.DEFAULT_PERMISSION_MODE;
         } else {
             mode = mode.trim();
         }

@@ -1,5 +1,6 @@
 package com.github.claudecodegui.session;
 
+import com.github.claudecodegui.common.CommonConstants;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
@@ -102,7 +103,7 @@ public class SessionSendService {
             resolvedMode = requestedMode;
         }
         if (resolvedMode == null) {
-            resolvedMode = "default";
+            resolvedMode = CommonConstants.PERMISSION_MODE_DEFAULT;
         }
 
         return resolvedMode;
@@ -154,7 +155,7 @@ public class SessionSendService {
         } catch (Exception e) {
             LOG.warn("[ModeSync][Backend] Failed to read Claude invocation mode, defaulting to sdk: " + e.getMessage());
         }
-        return "sdk";
+        return CommonConstants.INVOCATION_MODE_SDK;
     }
 
     public CompletableFuture<Void> sendMessageToProvider(
@@ -191,7 +192,7 @@ public class SessionSendService {
                         + ", effective=" + effectivePermissionMode
         );
 
-        if ("codex".equals(currentProvider)) {
+        if (CommonConstants.PROVIDER_CODEX.equals(currentProvider)) {
             return sendToCodex(
                     channelId,
                     input,
@@ -237,7 +238,7 @@ public class SessionSendService {
         String finalInput = (input != null ? input : "") + contextAppend;
 
         RuntimeKey key = new RuntimeKey(
-                "codex",
+                CommonConstants.PROVIDER_CODEX,
                 channelId,
                 channelId,
                 state.getRuntimeSessionEpoch()
@@ -264,7 +265,7 @@ public class SessionSendService {
         return runtimeRouter.sendCodex(
                 useCliRuntime,
                 request,
-                MessageNormalizers.forRuntime("codex", useCliRuntime ? "cli" : "sdk", handler)
+                MessageNormalizers.forRuntime(CommonConstants.PROVIDER_CODEX, useCliRuntime ? CommonConstants.INVOCATION_MODE_CLI : CommonConstants.INVOCATION_MODE_SDK, handler)
         ).thenApply(result -> null);
     }
 
@@ -329,7 +330,7 @@ public class SessionSendService {
                         agentPrompt,
                         streaming,
                         state.getReasoningEffort(),
-                MessageNormalizers.forRuntime("claude", effectiveInvocationMode, handler)
+                MessageNormalizers.forRuntime(CommonConstants.PROVIDER_CLAUDE, effectiveInvocationMode, handler)
         ).thenApply(result -> null);
     }
 
