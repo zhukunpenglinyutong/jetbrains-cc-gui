@@ -143,13 +143,15 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
     <div className="context-bar">
       {/* Tool Icons Group */}
       <div className="context-tools">
-        <div
+        <button
+          type="button"
           className="context-tool-btn"
           onClick={handleAttachClick}
           title={t('chat.addAttachment', { defaultValue: 'Add attachment' })}
+          aria-label={t('chat.addAttachment', { defaultValue: 'Add attachment' })}
         >
           <CoDriverIcon name="attachment" size={16} aria-hidden="true" />
-        </div>
+        </button>
 
         {/* Token Indicator */}
         {showUsage && (

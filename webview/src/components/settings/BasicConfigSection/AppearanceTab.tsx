@@ -645,7 +645,7 @@ const AppearanceTab = ({
         >
           {diffThemeOptions.map((option) => (
             <option key={option.value} value={option.value}>
-              {option.label} â€” {option.desc}
+              {option.label} — {option.desc}
             </option>
           ))}
         </select>

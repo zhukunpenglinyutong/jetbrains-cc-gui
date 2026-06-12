@@ -5,6 +5,17 @@ import { isImageAttachment } from './types';
 import { CoDriverIcon } from '../codriverIcons';
 import { getFileIconKind } from '../../utils/fileIconKind';
 
+const ATTACHMENT_PREVIEW_BUTTON_STYLE: React.CSSProperties = {
+  background: 'none',
+  border: 0,
+  padding: 0,
+  margin: 0,
+  font: 'inherit',
+  color: 'inherit',
+  cursor: 'pointer',
+  display: 'inline-flex',
+};
+
 /**
  * AttachmentList - Attachment list component
  * Displays image thumbnails or file icons
@@ -61,32 +72,40 @@ export const AttachmentList = ({
             <div
               key={attachment.id}
               className={`attachment-item ${imageAttachment ? 'attachment-item-image' : 'attachment-item-file'}`}
-              onClick={() => handleClick(attachment)}
               title={attachment.fileName}
               role="listitem"
             >
-              <span className="attachment-preview-frame">
-                {imageAttachment ? (
+              {imageAttachment ? (
+                <button
+                  type="button"
+                  className="attachment-preview-frame attachment-preview-button"
+                  style={ATTACHMENT_PREVIEW_BUTTON_STYLE}
+                  onClick={() => handleClick(attachment)}
+                  aria-label={t('chat.previewImage', { defaultValue: 'Preview image' })}
+                >
                   <img
                     className="attachment-thumbnail"
                     src={`data:${attachment.mediaType};base64,${attachment.data}`}
                     alt={attachment.fileName}
                   />
-                ) : (
+                </button>
+              ) : (
+                <span className="attachment-preview-frame">
                   <CoDriverIcon
                     className={`attachment-file-icon attachment-file-icon-${iconName}`}
                     name={iconName}
                     size={17}
                     aria-hidden="true"
                   />
-                )}
-              </span>
+                </span>
+              )}
 
               <span className="attachment-label">
                 {imageAttachment ? attachment.fileName : fallbackName}
               </span>
 
               <button
+                type="button"
                 className="attachment-remove"
                 onClick={(e) => handleRemove(e, attachment.id)}
                 title={t('chat.removeAttachment')}
@@ -114,6 +133,7 @@ export const AttachmentList = ({
             onClick={(e) => e.stopPropagation()}
           />
           <button
+            type="button"
             className="image-preview-close"
             onClick={closePreview}
             title={t('chat.closePreview')}

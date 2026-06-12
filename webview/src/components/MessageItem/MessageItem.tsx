@@ -145,7 +145,7 @@ function extractTokenUsage(raw: ClaudeMessage['raw']): TokenUsageInfo | null {
   };
 }
 
-/** Format a token count for compact display (e.g., 1234 â†’ "1.2K"). */
+/** Format a token count for compact display (e.g., 1234 → "1.2K"). */
 function formatTokenCount(count: number): string {
   if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
   if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K`;
@@ -240,12 +240,12 @@ export function groupBlocks(blocks: ClaudeContentBlock[]): GroupedBlock[] {
     // While inside an agent group, absorb subsequent tool_use blocks until a
     // structural boundary: the next agent tool, a non-tool block (text/thinking),
     // or the end of the message. Keeping this purely structural guarantees that
-    // live streaming and history reload produce identical groups â€” the previous
+    // live streaming and history reload produce identical groups — the previous
     // streaming-only "frozen count" could not be reconstructed from a snapshot,
     // so reloaded agent groups dropped all their absorbed children.
     if (currentAgentBlock) {
       if (isToolBlockOfType(block, AGENT_TOOL_NAMES)) {
-        // Next agent tool â€” close this group and open a new one below.
+        // Next agent tool — close this group and open a new one below.
         flushAgentGroup();
       } else if (block.type === 'tool_use') {
         // Absorb the following tool_use into the running agent group.
@@ -716,7 +716,7 @@ export const MessageItem = memo(function MessageItem({
         />
       )}
 
-      {/* Role label for non-user/assistant messages â€” hidden for notification types */}
+      {/* Role label for non-user/assistant messages — hidden for notification types */}
       {message.type !== 'assistant' && message.type !== 'user'
         && message.type !== 'notification' && message.type !== 'task_notification' && (
         <div className="message-role-label">
@@ -740,7 +740,7 @@ export const MessageItem = memo(function MessageItem({
               if (!tokenInfo) return null;
               return (
                 <>
-                  <span className="message-duration-separator">Â·</span>
+                  <span className="message-duration-separator">·</span>
                   <span
                     className="message-duration-tokens"
                     title={t('chat.tokenUsageDetail', {
