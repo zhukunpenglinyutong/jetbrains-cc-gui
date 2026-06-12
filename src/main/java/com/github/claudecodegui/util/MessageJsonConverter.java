@@ -1,9 +1,8 @@
 package com.github.claudecodegui.util;
 
-import com.github.claudecodegui.session.ClaudeSession;
-import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.handler.SettingsHandler;
-import com.github.claudecodegui.util.GsonHolder;
+import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.session.ClaudeSession;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -268,7 +267,9 @@ public class MessageJsonConverter {
 
             String currentProvider = handlerContext.getCurrentProvider();
             int usedTokens = TokenUsageUtils.extractUsedTokens(lastUsage, currentProvider);
-            int maxTokens = SettingsHandler.getModelContextLimit(handlerContext.getCurrentModel());
+            int maxTokens = handlerContext.getSession() != null
+                    ? handlerContext.getSession().getState().getEffectiveMaxTokens()
+                    : SettingsHandler.getModelContextLimit(handlerContext.getCurrentModel());
             int percentage = Math.min(100, maxTokens > 0 ? (int) ((usedTokens * 100.0) / maxTokens) : 0);
 
             LOG.debug("Pushing usage update: provider=" + currentProvider + ", usedTokens=" + usedTokens + ", max=" + maxTokens + ", percentage=" + percentage + "%");

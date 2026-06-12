@@ -12,7 +12,6 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.stream.Stream;
-import com.github.claudecodegui.util.GsonHolder;
 
 /**
  * Appends plugin-generated Codex history events to ~/.codex/sessions JSONL files.

@@ -1,14 +1,13 @@
 package com.github.claudecodegui.util;
 
-import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.openapi.application.ApplicationManager;
+import com.google.gson.JsonObject;
 import com.intellij.ide.ui.LafManager;
 import com.intellij.ide.ui.LafManagerListener;
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.ui.JBColor;
-import com.google.gson.JsonObject;
 
-import java.awt.Color;
-import com.github.claudecodegui.util.GsonHolder;
+import java.awt.*;
 
 /**
  * IDE theme configuration service.

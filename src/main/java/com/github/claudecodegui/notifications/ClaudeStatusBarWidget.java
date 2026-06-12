@@ -3,17 +3,11 @@ package com.github.claudecodegui.notifications;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.intellij.openapi.Disposable;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.wm.CustomStatusBarWidget;
-import com.intellij.openapi.wm.StatusBar;
-import com.intellij.openapi.wm.StatusBarWidget;
-import com.intellij.openapi.wm.StatusBarWidgetFactory;
-import com.intellij.openapi.wm.ToolWindowManager;
-import com.intellij.openapi.wm.WindowManager;
+import com.intellij.openapi.wm.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-
-import com.intellij.openapi.application.ApplicationManager;
 
 import javax.swing.*;
 import java.awt.event.MouseAdapter;
@@ -211,17 +205,27 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
     private static String shortenModelName(String model) {
         // Claude models with version numbers
         if (model.contains("sonnet")) {
-            if (model.contains("4-6")) return "Sonnet 4.6";
+            if (model.contains("4-6")) {
+                return "Sonnet 4.6";
+            }
             return "Sonnet";
         }
         if (model.contains("opus")) {
-            if (model.contains("4-8")) return "Opus 4.8";
-            if (model.contains("4-7")) return "Opus 4.7";
-            if (model.contains("4-6")) return "Opus 4.6";
+            if (model.contains("4-8")) {
+                return "Opus 4.8";
+            }
+            if (model.contains("4-7")) {
+                return "Opus 4.7";
+            }
+            if (model.contains("4-6")) {
+                return "Opus 4.6";
+            }
             return "Opus";
         }
         if (model.contains("haiku")) {
-            if (model.contains("4-5")) return "Haiku 4.5";
+            if (model.contains("4-5")) {
+                return "Haiku 4.5";
+            }
             return "Haiku";
         }
         // GPT / Codex models — capitalize like webview

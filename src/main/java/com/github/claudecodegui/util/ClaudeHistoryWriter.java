@@ -1,12 +1,7 @@
 package com.github.claudecodegui.util;
 
 import com.github.claudecodegui.session.ProviderErrorMessageSupport;
-import com.github.claudecodegui.util.GsonHolder;
-import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import com.google.gson.*;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.IOException;
