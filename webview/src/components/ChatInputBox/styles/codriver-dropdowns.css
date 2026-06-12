@@ -7,16 +7,16 @@
  * that the project only defines for the dark and light themes. In the Copilot
  * theme they are therefore undefined (e.g. hover/selected highlights disappear).
  * Here we define the full GitHub palette for the Copilot skin and add a little
- * structural polish. Everything is scoped to html[data-theme="github-copilot"].
+ * structural polish. Everything is scoped to html[data-theme="codriver"].
  */
 
-html[data-theme="github-copilot"] {
+html[data-theme="codriver"] {
   /* Used by portal surfaces rendered outside .chat-input-box as well */
   --dropdown-bg: #161b22;
   --dropdown-border: #30363d;
 }
 
-html[data-theme="github-copilot"] .chat-input-box {
+html[data-theme="codriver"] .chat-input-box {
   --input-bg: #0d1117;
   --input-border: #30363d;
   --input-focus-border: #58a6ff;
@@ -50,50 +50,50 @@ html[data-theme="github-copilot"] .chat-input-box {
 }
 
 /* Popup surfaces: GitHub elevation + radius */
-html[data-theme="github-copilot"] .completion-dropdown,
-html[data-theme="github-copilot"] .selector-dropdown {
+html[data-theme="codriver"] .completion-dropdown,
+html[data-theme="codriver"] .selector-dropdown {
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(1, 4, 9, 0.5);
 }
 
 /* Hover / active rows */
-html[data-theme="github-copilot"] .dropdown-item.active,
-html[data-theme="github-copilot"] .dropdown-item:hover,
-html[data-theme="github-copilot"] .selector-option:hover {
+html[data-theme="codriver"] .dropdown-item.active,
+html[data-theme="codriver"] .dropdown-item:hover,
+html[data-theme="codriver"] .selector-option:hover {
   background: var(--dropdown-hover);
 }
 
 /* Selected row: GitHub blue tint + left accent, like the command palette */
-html[data-theme="github-copilot"] .dropdown-item.selected,
-html[data-theme="github-copilot"] .selector-option.selected {
+html[data-theme="codriver"] .dropdown-item.selected,
+html[data-theme="codriver"] .selector-option.selected {
   background: var(--dropdown-selected);
   box-shadow: inset 2px 0 0 #58a6ff;
 }
 
 /* Row icons */
-html[data-theme="github-copilot"] .dropdown-item-icon {
+html[data-theme="codriver"] .dropdown-item-icon {
   color: #8b949e;
 }
 
-html[data-theme="github-copilot"] .dropdown-item-icon.codicon-terminal,
-html[data-theme="github-copilot"] .dropdown-item-icon.codicon-file-code {
+html[data-theme="codriver"] .dropdown-item-icon.codicon-terminal,
+html[data-theme="codriver"] .dropdown-item-icon.codicon-file-code {
   color: #d29922;
 }
 
-html[data-theme="github-copilot"] .dropdown-item-icon.codicon-folder {
+html[data-theme="codriver"] .dropdown-item-icon.codicon-folder {
   color: #58a6ff;
 }
 
-html[data-theme="github-copilot"] .dropdown-item-label {
+html[data-theme="codriver"] .dropdown-item-label {
   color: #c9d1d9;
 }
 
-html[data-theme="github-copilot"] .dropdown-item-description {
+html[data-theme="codriver"] .dropdown-item-description {
   color: #6e7681;
 }
 
 /* Section header + separator are unstyled in every theme — give them a quiet GitHub look */
-html[data-theme="github-copilot"] .dropdown-section-header {
+html[data-theme="codriver"] .dropdown-section-header {
   padding: 6px 12px 4px;
   color: #6e7681;
   font-size: 11px;
@@ -102,24 +102,24 @@ html[data-theme="github-copilot"] .dropdown-section-header {
   text-transform: uppercase;
 }
 
-html[data-theme="github-copilot"] .dropdown-separator {
+html[data-theme="codriver"] .dropdown-separator {
   height: 1px;
   margin: 4px 0;
   background: var(--dropdown-border);
 }
 
 /* Selector check-mark + states */
-html[data-theme="github-copilot"] .selector-option .check-mark {
+html[data-theme="codriver"] .selector-option .check-mark {
   color: #3fb950;
 }
 
-html[data-theme="github-copilot"] .selector-option .model-description,
-html[data-theme="github-copilot"] .selector-option .mode-description {
+html[data-theme="codriver"] .selector-option .model-description,
+html[data-theme="codriver"] .selector-option .mode-description {
   color: #8b949e;
 }
 
 /* Empty / loading states */
-html[data-theme="github-copilot"] .dropdown-empty,
-html[data-theme="github-copilot"] .dropdown-loading {
+html[data-theme="codriver"] .dropdown-empty,
+html[data-theme="codriver"] .dropdown-loading {
   color: #6e7681;
 }

@@ -1,7 +1,7 @@
-/* GitHub Copilot inspired skin.
-   Keep this scoped to data-theme="github-copilot" so the existing dark/light themes remain unchanged. */
+/* CoDriver skin.
+   Keep this scoped to data-theme="codriver" so the existing dark/light themes remain unchanged. */
 
-[data-theme="github-copilot"] {
+[data-theme="codriver"] {
     /* Primer / GitHub Dark inspired base */
     --bg-primary: #0d1117;
     --bg-chat: #0d1117;
@@ -176,7 +176,7 @@
     --copilot-heading: #e6edf3;
     --copilot-hover-overlay: rgba(177, 186, 196, 0.12);
 
-    /* User message bubble: neutral elevated surface (GitHub/Copilot look),
+    /* User message bubble: neutral elevated surface (neutral dark look),
        not a saturated fill. The collapse overlay gradient also reads this var. */
     --color-message-user-bg: #1c2128;
     --color-message-user-text: #e6edf3;
@@ -185,83 +185,83 @@
 }
 
 /* =========================================================================
-   GitHub Copilot inspired skin — shared shell, surfaces and scrollbars.
+   CoDriver skin — shared shell, surfaces and scrollbars.
    Component-level polish lives next to each component (header.less,
    message.less, input.less, loading.less, buttons.less, scroll-control.less).
-   Everything stays scoped to [data-theme="github-copilot"] so dark/light
+   Everything stays scoped to [data-theme="codriver"] so dark/light
    themes are never affected.
    ========================================================================= */
 
-[data-theme="github-copilot"] body,
-[data-theme="github-copilot"] #root,
-[data-theme="github-copilot"] #app {
+[data-theme="codriver"] body,
+[data-theme="codriver"] #root,
+[data-theme="codriver"] #app {
     background: var(--copilot-shell-bg);
     color: var(--text-primary);
 }
 
 /* Flat chat canvas — closer to the GitHub dark surface, no colored glow */
-[data-theme="github-copilot"] .messages-shell,
-[data-theme="github-copilot"] .messages-container {
+[data-theme="codriver"] .messages-shell,
+[data-theme="codriver"] .messages-container {
     background: var(--copilot-shell-bg);
 }
 
 /* Shared elevated surfaces */
-[data-theme="github-copilot"] .tool-block {
+[data-theme="codriver"] .tool-block {
     border-color: var(--border-primary);
 }
 
-[data-theme="github-copilot"] .dialog-content,
-[data-theme="github-copilot"] .context-menu,
-[data-theme="github-copilot"] .settings-page,
-[data-theme="github-copilot"] .settings-content {
+[data-theme="codriver"] .dialog-content,
+[data-theme="codriver"] .context-menu,
+[data-theme="codriver"] .settings-page,
+[data-theme="codriver"] .settings-content {
     background: var(--copilot-panel-bg);
     border-color: var(--border-primary);
     color: var(--text-primary);
 }
 
 /* Generic form controls */
-[data-theme="github-copilot"] textarea,
-[data-theme="github-copilot"] input,
-[data-theme="github-copilot"] select {
+[data-theme="codriver"] textarea,
+[data-theme="codriver"] input,
+[data-theme="codriver"] select {
     background: var(--bg-secondary);
     border-color: var(--border-primary);
     color: var(--text-primary);
 }
 
-[data-theme="github-copilot"] textarea:focus,
-[data-theme="github-copilot"] input:focus,
-[data-theme="github-copilot"] select:focus {
+[data-theme="codriver"] textarea:focus,
+[data-theme="codriver"] input:focus,
+[data-theme="codriver"] select:focus {
     border-color: var(--accent-primary);
     box-shadow: var(--copilot-focus-ring);
     outline: none;
 }
 
-[data-theme="github-copilot"] pre,
-[data-theme="github-copilot"] code {
+[data-theme="codriver"] pre,
+[data-theme="codriver"] code {
     border-radius: var(--copilot-radius-sm);
 }
 
 /* Thin GitHub-style scrollbars */
-[data-theme="github-copilot"] .messages-container {
+[data-theme="codriver"] .messages-container {
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
-[data-theme="github-copilot"] ::-webkit-scrollbar {
+[data-theme="codriver"] ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
 }
 
-[data-theme="github-copilot"] ::-webkit-scrollbar-track {
+[data-theme="codriver"] ::-webkit-scrollbar-track {
     background: transparent;
 }
 
-[data-theme="github-copilot"] ::-webkit-scrollbar-thumb {
+[data-theme="codriver"] ::-webkit-scrollbar-thumb {
     background-color: var(--scrollbar-thumb);
     border: 2px solid var(--copilot-shell-bg);
     border-radius: 999px;
 }
 
-[data-theme="github-copilot"] ::-webkit-scrollbar-thumb:hover {
+[data-theme="codriver"] ::-webkit-scrollbar-thumb:hover {
     background-color: var(--scrollbar-thumb-hover);
 }

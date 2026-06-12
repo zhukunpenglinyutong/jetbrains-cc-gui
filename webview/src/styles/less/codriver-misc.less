@@ -1,5 +1,5 @@
-/* GitHub Copilot inspired skin — remaining surfaces.
- * Font stack, welcome screen, toasts and dialogs. All scoped to the Copilot
+/* CoDriver skin — remaining surfaces.
+ * Font stack, welcome screen, toasts and dialogs. All scoped to the CoDriver
  * theme so the regular dark/light themes keep their IDE fonts and styling.
  */
 
@@ -9,31 +9,31 @@
  * so we override the variable itself (with !important to win over the value
  * Java injects inline) and then restore a real monospace stack for code.
  * ------------------------------------------------------------------------- */
-html[data-theme="github-copilot"] {
+html[data-theme="codriver"] {
     --cc-gui-ui-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif !important;
     --copilot-mono-font: ui-monospace, "SFMono-Regular", "SF Mono", "Cascadia Code", "JetBrains Mono", "Liberation Mono", Menlo, Consolas, monospace;
 }
 
-html[data-theme="github-copilot"] .markdown-content pre,
-html[data-theme="github-copilot"] .markdown-content pre code,
-html[data-theme="github-copilot"] .markdown-content :not(pre) > code,
-html[data-theme="github-copilot"] .hljs,
-html[data-theme="github-copilot"] .tool-summary,
-html[data-theme="github-copilot"] .tool-params,
-html[data-theme="github-copilot"] .bash-command-block,
-html[data-theme="github-copilot"] .error-diagnostic-command-text,
-html[data-theme="github-copilot"] .compact-notification-prefix {
+html[data-theme="codriver"] .markdown-content pre,
+html[data-theme="codriver"] .markdown-content pre code,
+html[data-theme="codriver"] .markdown-content :not(pre) > code,
+html[data-theme="codriver"] .hljs,
+html[data-theme="codriver"] .tool-summary,
+html[data-theme="codriver"] .tool-params,
+html[data-theme="codriver"] .bash-command-block,
+html[data-theme="codriver"] .error-diagnostic-command-text,
+html[data-theme="codriver"] .compact-notification-prefix {
     font-family: var(--copilot-mono-font) !important;
 }
 
 /* ---------------------------------------------------------------------------
  * Welcome screen
  * ------------------------------------------------------------------------- */
-html[data-theme="github-copilot"] .welcome-screen {
+html[data-theme="codriver"] .welcome-screen {
     color: var(--text-tertiary);
 }
 
-html[data-theme="github-copilot"] .version-tag {
+html[data-theme="codriver"] .version-tag {
     background: rgba(163, 113, 247, 0.12);
     border: 1px solid rgba(163, 113, 247, 0.40);
     color: #d2a8ff;
@@ -44,14 +44,14 @@ html[data-theme="github-copilot"] .version-tag {
 /* ---------------------------------------------------------------------------
  * Toasts
  * ------------------------------------------------------------------------- */
-html[data-theme="github-copilot"] .toast {
+html[data-theme="codriver"] .toast {
     background: var(--copilot-panel-bg);
     border: 1px solid var(--border-primary);
     border-radius: 8px;
     box-shadow: 0 8px 24px rgba(1, 4, 9, 0.5);
 }
 
-html[data-theme="github-copilot"] .toast-close:hover {
+html[data-theme="codriver"] .toast-close:hover {
     background: var(--copilot-hover-overlay);
     color: var(--text-secondary);
 }
@@ -59,27 +59,27 @@ html[data-theme="github-copilot"] .toast-close:hover {
 /* ---------------------------------------------------------------------------
  * Dialogs & modals
  * ------------------------------------------------------------------------- */
-html[data-theme="github-copilot"] .confirm-dialog-overlay,
-html[data-theme="github-copilot"] .modal-overlay {
+html[data-theme="codriver"] .confirm-dialog-overlay,
+html[data-theme="codriver"] .modal-overlay {
     background: rgba(1, 4, 9, 0.62);
     backdrop-filter: blur(2px);
 }
 
-html[data-theme="github-copilot"] .confirm-dialog,
-html[data-theme="github-copilot"] .modal-content {
+html[data-theme="codriver"] .confirm-dialog,
+html[data-theme="codriver"] .modal-content {
     background: var(--copilot-panel-bg);
     border: 1px solid var(--border-primary);
     border-radius: 12px;
     box-shadow: 0 16px 48px rgba(1, 4, 9, 0.6);
 }
 
-html[data-theme="github-copilot"] .confirm-dialog-header,
-html[data-theme="github-copilot"] .confirm-dialog-footer {
+html[data-theme="codriver"] .confirm-dialog-header,
+html[data-theme="codriver"] .confirm-dialog-footer {
     border-color: var(--border-primary);
 }
 
-html[data-theme="github-copilot"] .confirm-dialog-button.cancel-button:hover,
-html[data-theme="github-copilot"] .modal-btn-cancel:hover {
+html[data-theme="codriver"] .confirm-dialog-button.cancel-button:hover,
+html[data-theme="codriver"] .modal-btn-cancel:hover {
     background: var(--copilot-hover-overlay);
     border-color: var(--border-hover);
 }

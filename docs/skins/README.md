@@ -8,16 +8,16 @@ built-in `light` / `dark` themes.
 The repository currently ships one custom skin in addition to the IDE-following
 themes:
 
-| Theme mode      | Description                                               |
-| --------------- | --------------------------------------------------------- |
-| `system`        | Follows the IDE (light/dark), default                     |
-| `light`         | Explicit light theme                                      |
-| `dark`          | Explicit dark theme                                       |
-| `github-copilot`| GitHub Copilot / Primer inspired dark skin (bundled)      |
+| Theme mode | Description                                              |
+| ---------- | -------------------------------------------------------- |
+| `system`   | Follows the IDE (light/dark), default                    |
+| `light`    | Explicit light theme                                     |
+| `dark`     | Explicit dark theme                                      |
+| `codriver` | **CoDriver** — a calm, Primer-like dark skin (bundled)   |
 
-> The patch scripts that originally bootstrapped the `github-copilot` skin have
-> been removed — the skin is now part of the source tree. This folder only keeps
-> this guide so future skins can follow the same pattern.
+> The patch scripts that originally bootstrapped the `codriver` skin have been
+> removed — the skin is now part of the source tree. This folder only keeps this
+> guide so future skins can follow the same pattern.
 
 ---
 
@@ -26,14 +26,14 @@ themes:
 Theming is driven by a single attribute on the root element:
 
 ```html
-<html data-theme="github-copilot">
+<html data-theme="codriver">
 ```
 
 - `webview/index.html` sets `data-theme` **before React loads** (reads
   `localStorage('theme')`, falls back to the IDE theme injected by Java). It must
   recognise every explicit skin id, otherwise there is a flash on load.
 - `webview/src/types/uiThemeMode.ts` is the single source of truth for the
-  `UiThemeMode` union (`'light' | 'dark' | 'system' | 'github-copilot'`) plus the
+  `UiThemeMode` union (`'light' | 'dark' | 'system' | 'codriver'`) plus the
   type guards used across the settings code.
 - `webview/src/hooks/useThemeInit.ts` re-applies the persisted explicit theme.
 - `webview/src/components/settings/hooks/useSettingsThemeSync.ts` persists the
@@ -53,7 +53,7 @@ variables are not enough.
 
 ```less
 /* good — scoped */
-html[data-theme="github-copilot"] .input-container { ... }
+html[data-theme="codriver"] .input-container { ... }
 
 /* bad — leaks into all themes */
 .input-container { ... }
@@ -61,24 +61,24 @@ html[data-theme="github-copilot"] .input-container { ... }
 
 ---
 
-## The `github-copilot` skin: file map
+## The `codriver` skin: file map
 
 The skin is split into a few focused files, all scoped to
-`[data-theme="github-copilot"]` (or the higher-specificity
-`html[data-theme="github-copilot"]`).
+`[data-theme="codriver"]` (or the higher-specificity
+`html[data-theme="codriver"]`).
 
 **LESS, imported from `webview/src/styles/app.less`:**
 
 | File | Responsibility |
 | --- | --- |
-| `styles/less/copilot-skin.less` | Core palette: redefines all `--*` design tokens + base shell, scrollbars, generic form controls |
-| `styles/less/copilot-laf-v3.less` | Look-and-feel pass: app shell, header, messages, composer, tool blocks, anchor rail |
-| `styles/less/copilot-icon-pack.less` | Icon tone adapter for Codicons + the local `CopilotIcon` pack |
-| `styles/less/copilot-syntax.less` | GitHub Dark `.hljs-*` syntax-highlighting palette |
-| `styles/less/copilot-misc.less` | Primer font stack, welcome screen, toasts, dialogs |
+| `styles/less/codriver-skin.less` | Core palette: redefines all `--*` design tokens + base shell, scrollbars, generic form controls |
+| `styles/less/codriver-laf-v3.less` | Look-and-feel pass: app shell, header, messages, composer, tool blocks, anchor rail |
+| `styles/less/codriver-icon-pack.less` | Icon tone adapter for Codicons + the local `CoDriverIcon` pack |
+| `styles/less/codriver-syntax.less` | Dark `.hljs-*` syntax-highlighting palette |
+| `styles/less/codriver-misc.less` | Primer-like font stack, welcome screen, toasts, dialogs |
 
 **Scoped blocks appended inside existing component LESS files** (each guarded by
-`[data-theme="github-copilot"] { ... }`):
+`[data-theme="codriver"] { ... }`):
 `components/message.less`, `components/loading.less`, `components/input.less`,
 `components/header.less`, `components/buttons.less`,
 `components/scroll-control.less`.
@@ -88,16 +88,16 @@ The skin is split into a few focused files, all scoped to
 
 | File | Responsibility |
 | --- | --- |
-| `ChatInputBox/styles/copilot-attachments.css` | Attachment strip chips |
-| `ChatInputBox/styles/copilot-context-file-icons.css` | Active file/context chip icons |
-| `ChatInputBox/styles/copilot-dropdowns.css` | Slash / @-mention / model / mode / provider popups (defines the `--dropdown-*` / `--button-*` vars the dark/light themes provide) |
+| `ChatInputBox/styles/codriver-attachments.css` | Attachment strip chips |
+| `ChatInputBox/styles/codriver-context-file-icons.css` | Active file/context chip icons |
+| `ChatInputBox/styles/codriver-dropdowns.css` | Slash / @-mention / model / mode / provider popups (defines the `--dropdown-*` / `--button-*` vars the dark/light themes provide) |
 
 **TypeScript:**
 
 | File | Responsibility |
 | --- | --- |
-| `components/copilotIcons/` | Original MIT-licensed stroke-SVG icon pack (`CopilotIcon`). Used by ContextBar, AttachmentList, WaitingIndicator, ContentBlockRenderer, ButtonArea |
-| `utils/diffTheme.ts` | Adds a `github` resolved diff palette used when the Copilot skin is active and the diff mode is `follow` |
+| `components/codriverIcons/` | Original MIT-licensed stroke-SVG icon pack (`CoDriverIcon`). Used by ContextBar, AttachmentList, WaitingIndicator, ContentBlockRenderer, ButtonArea |
+| `utils/diffTheme.ts` | Adds a `codriver` resolved diff palette used when the CoDriver skin is active and the diff mode is `follow` |
 
 ---
 
@@ -113,7 +113,7 @@ Use the same pattern. Example for a hypothetical `solarized` skin:
 
 3. **Add the picker button** in
    `components/settings/BasicConfigSection/AppearanceTab.tsx` (clone the existing
-   `github-copilot` button, give it its own icon and i18n labels).
+   `codriver` button, give it its own icon and i18n labels).
 
 4. **Create the skin stylesheet** `webview/src/styles/less/solarized-skin.less`
    and `@import` it from `webview/src/styles/app.less` after `variables.less`.
@@ -139,7 +139,7 @@ Use the same pattern. Example for a hypothetical `solarized` skin:
    `components/ChatInputBox/styles.css`.
 
 6. **Optional integrations**: if your skin needs custom syntax colors, mirror
-   `copilot-syntax.less`; for a custom diff palette, extend `utils/diffTheme.ts`.
+   `codriver-syntax.less`; for a custom diff palette, extend `utils/diffTheme.ts`.
 
 7. **Build & verify**:
 
@@ -163,10 +163,11 @@ Use the same pattern. Example for a hypothetical `solarized` skin:
   `--dropdown-*`, `--diff-*`) instead of hard-coding colors in many places.
 - **Match real class names** — check the component/LESS before writing selectors;
   guessed `[class*="…"]` selectors tend to match nothing.
-- **No third-party brand assets.** The bundled icon pack
-  (`components/copilotIcons`) is original artwork, MIT-licensed
-  (`components/copilotIcons/LICENSE.md`). Do not add official GitHub Copilot logos
-  or other vendor brand assets.
+- **No third-party brand assets or brand names.** The bundled icon pack
+  (`components/codriverIcons`) is original artwork, MIT-licensed
+  (`components/codriverIcons/LICENSE.md`). Do not add vendor brand assets or name
+  skins after third-party products (e.g. GitHub Copilot, Claude); pick a neutral
+  name instead.
 - **Keep `light` / `dark` untouched.**
 - Run `npm run build` (it runs `tsc` + Vite and copies the bundle into
   `src/main/resources/html/`) before committing.

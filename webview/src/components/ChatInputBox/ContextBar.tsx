@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TokenIndicator } from './TokenIndicator';
-import { CopilotIcon } from '../copilotIcons';
+import { CoDriverIcon } from '../codriverIcons';
 import type { SelectedAgent } from './types';
 
 const HIDDEN_INPUT_STYLE: React.CSSProperties = { display: 'none' };
@@ -158,7 +158,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
           onClick={handleAttachClick}
           title="Add attachment"
         >
-          <CopilotIcon name="attachment" size={16} aria-hidden="true" />
+          <CoDriverIcon name="attachment" size={16} aria-hidden="true" />
         </div>
 
         {/* Token Indicator */}
@@ -193,7 +193,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
           data-tooltip={selectedAgent.name}
           style={CURSOR_DEFAULT_STYLE}
         >
-          <CopilotIcon
+          <CoDriverIcon
             className="context-agent-icon"
             name="agent"
             size={15}
@@ -214,7 +214,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
             role="button"
             tabIndex={0}
           >
-            <CopilotIcon name="x" size={12} aria-hidden="true" />
+            <CoDriverIcon name="x" size={12} aria-hidden="true" />
           </span>
         </div>
       )}
@@ -227,7 +227,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
           style={CURSOR_DEFAULT_STYLE}
         >
           {activeFile && (
-            <CopilotIcon
+            <CoDriverIcon
               className={`context-file-icon context-file-icon-${getContextFileIconName(activeFile)}`}
               name={getContextFileIconName(activeFile)}
               size={15}
@@ -245,7 +245,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
             role="button"
             tabIndex={0}
           >
-            <CopilotIcon name="x" size={12} aria-hidden="true" />
+            <CoDriverIcon name="x" size={12} aria-hidden="true" />
           </span>
         </div>
       ) : !autoOpenFileEnabled && (
@@ -256,7 +256,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
             title={t('fileContext.placeholder')}
             type="button"
           >
-            <CopilotIcon name="file" size={14} aria-hidden="true" />
+            <CoDriverIcon name="file" size={14} aria-hidden="true" />
             <span className="placeholder-text">{t('fileContext.placeholder')}</span>
           </button>
 
@@ -292,7 +292,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
             onClick={onToggleStatusPanel}
             data-tooltip={statusPanelExpanded ? t('statusPanel.collapse') : t('statusPanel.expand')}
           >
-            <CopilotIcon name={statusPanelExpanded ? 'chevronDown' : 'tool'} size={15} aria-hidden="true" />
+            <CoDriverIcon name={statusPanelExpanded ? 'chevronDown' : 'tool'} size={15} aria-hidden="true" />
           </button>
         )}
 
@@ -304,7 +304,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
             disabled={!hasMessages}
             data-tooltip={t('rewind.tooltip')}
           >
-            <CopilotIcon name="history" size={15} aria-hidden="true" />
+            <CoDriverIcon name="history" size={15} aria-hidden="true" />
           </button>
         )}
       </div>

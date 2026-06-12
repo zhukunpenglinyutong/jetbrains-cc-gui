@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Attachment, AttachmentListProps } from './types';
 import { isImageAttachment } from './types';
-import { CopilotIcon } from '../copilotIcons';
+import { CoDriverIcon } from '../codriverIcons';
 
 /**
  * AttachmentList - Attachment list component
@@ -54,7 +54,7 @@ export const AttachmentList = ({
   };
 
   /**
-   * Map attachments to the local Copilot-inspired icon vocabulary.
+   * Map attachments to the local CoDriver icon vocabulary.
    */
   const getAttachmentFileIconName = (attachment: Attachment): 'code' | 'file' => {
     const extension = getExtension(attachment.fileName).toLowerCase();
@@ -93,7 +93,7 @@ export const AttachmentList = ({
                     alt={attachment.fileName}
                   />
                 ) : (
-                  <CopilotIcon
+                  <CoDriverIcon
                     className={`attachment-file-icon attachment-file-icon-${getAttachmentFileIconName(attachment)}`}
                     name={getAttachmentFileIconName(attachment)}
                     size={17}
@@ -112,7 +112,7 @@ export const AttachmentList = ({
                 title={t('chat.removeAttachment')}
                 aria-label={t('chat.removeAttachment')}
               >
-                <CopilotIcon name="x" size={12} />
+                <CoDriverIcon name="x" size={12} />
               </button>
             </div>
           );

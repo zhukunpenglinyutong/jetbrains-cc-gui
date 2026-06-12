@@ -136,7 +136,7 @@ export function ChatInputBoxHeader({
         onRequestEnableFileContext={onRequestEnableFileContext}
       />
 
-      {/* Attachment strip - keep it closest to the editable prompt, like GitHub Copilot. */}
+      {/* Attachment strip - keep it closest to the editable prompt, like modern chat composers. */}
       {attachments.length > 0 && (
         <AttachmentList attachments={attachments} onRemove={onRemoveAttachment} />
       )}

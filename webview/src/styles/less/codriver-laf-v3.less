@@ -1,8 +1,8 @@
-/* GitHub Copilot inspired look-and-feel v3.
+/* CoDriver look-and-feel.
  *
- * Scope every rule to data-theme="github-copilot". The goal is not to clone
+ * Scope every rule to data-theme="codriver". The goal is not to clone
  * private GitHub assets, but to translate this plugin's real UI primitives
- * into the calmer GitHub Copilot / Primer visual language:
+ * into a calmer, Primer-like visual language:
  * - nearly black canvas
  * - quiet borders
  * - blue for links, focus and user-authored content
@@ -12,7 +12,7 @@
  * - prominent but restrained bottom composer
  */
 
-html[data-theme="github-copilot"] {
+html[data-theme="codriver"] {
     color-scheme: dark;
 
     --copilot-canvas: #0d1117;
@@ -94,7 +94,7 @@ html[data-theme="github-copilot"] {
     --shadow-lg: var(--copilot-shadow);
 }
 
-html[data-theme="github-copilot"] body {
+html[data-theme="codriver"] body {
     background:
         radial-gradient(circle at 50% -18%, rgba(88, 166, 255, 0.20), transparent 26rem),
         radial-gradient(circle at 50% -10%, rgba(163, 113, 247, 0.14), transparent 32rem),
@@ -102,7 +102,7 @@ html[data-theme="github-copilot"] body {
     color: var(--copilot-fg-default);
 }
 
-html[data-theme="github-copilot"] #app {
+html[data-theme="codriver"] #app {
     margin: 12px;
     height: calc((100vh - 24px) / var(--font-scale, 1));
     width: calc((100vw - 24px) / var(--font-scale, 1));
@@ -116,7 +116,7 @@ html[data-theme="github-copilot"] #app {
 }
 
 /* Header / top controls --------------------------------------------------- */
-html[data-theme="github-copilot"] .header {
+html[data-theme="codriver"] .header {
     min-height: 42px;
     padding: 6px 8px 6px 12px;
     background: rgba(13, 17, 23, 0.86);
@@ -124,11 +124,11 @@ html[data-theme="github-copilot"] .header {
     box-shadow: var(--copilot-inner-shadow);
 }
 
-html[data-theme="github-copilot"] .header-left {
+html[data-theme="codriver"] .header-left {
     gap: 8px;
 }
 
-html[data-theme="github-copilot"] .session-title {
+html[data-theme="codriver"] .session-title {
     color: #dbe7f3;
     font-size: 13px;
     font-weight: 500;
@@ -136,19 +136,19 @@ html[data-theme="github-copilot"] .session-title {
     letter-spacing: 0;
 }
 
-html[data-theme="github-copilot"] .new-chat-button,
-html[data-theme="github-copilot"] .back-button,
-html[data-theme="github-copilot"] .icon-button,
-html[data-theme="github-copilot"] .session-title-edit-btn,
-html[data-theme="github-copilot"] .session-title-save-btn,
-html[data-theme="github-copilot"] .session-title-cancel-btn {
+html[data-theme="codriver"] .new-chat-button,
+html[data-theme="codriver"] .back-button,
+html[data-theme="codriver"] .icon-button,
+html[data-theme="codriver"] .session-title-edit-btn,
+html[data-theme="codriver"] .session-title-save-btn,
+html[data-theme="codriver"] .session-title-cancel-btn {
     color: var(--copilot-fg-muted);
     background: transparent;
     border: 1px solid transparent;
     box-shadow: none;
 }
 
-html[data-theme="github-copilot"] .new-chat-button {
+html[data-theme="codriver"] .new-chat-button {
     min-height: 26px;
     padding: 3px 9px;
     border-color: var(--copilot-border-muted);
@@ -158,69 +158,69 @@ html[data-theme="github-copilot"] .new-chat-button {
     font-weight: 500;
 }
 
-html[data-theme="github-copilot"] .icon-button,
-html[data-theme="github-copilot"] .back-button {
+html[data-theme="codriver"] .icon-button,
+html[data-theme="codriver"] .back-button {
     width: 28px;
     height: 28px;
     border-radius: var(--copilot-radius-sm);
 }
 
-html[data-theme="github-copilot"] .back-button {
+html[data-theme="codriver"] .back-button {
     width: auto;
     padding: 3px 7px;
 }
 
-html[data-theme="github-copilot"] .new-chat-button:hover,
-html[data-theme="github-copilot"] .back-button:hover,
-html[data-theme="github-copilot"] .icon-button:hover,
-html[data-theme="github-copilot"] .session-title-edit-btn:hover {
+html[data-theme="codriver"] .new-chat-button:hover,
+html[data-theme="codriver"] .back-button:hover,
+html[data-theme="codriver"] .icon-button:hover,
+html[data-theme="codriver"] .session-title-edit-btn:hover {
     color: #f0f6fc;
     background: rgba(177, 186, 196, 0.08);
     border-color: var(--copilot-border);
 }
 
-html[data-theme="github-copilot"] .icon-button svg,
-html[data-theme="github-copilot"] .icon-button .codicon {
+html[data-theme="codriver"] .icon-button svg,
+html[data-theme="codriver"] .icon-button .codicon {
     width: 15px;
     height: 15px;
     font-size: 15px;
 }
 
 /* Main shell / message area ---------------------------------------------- */
-html[data-theme="github-copilot"] .messages-shell {
+html[data-theme="codriver"] .messages-shell {
     position: relative;
     background:
         linear-gradient(180deg, rgba(88, 166, 255, 0.045), transparent 118px),
         var(--copilot-canvas);
 }
 
-html[data-theme="github-copilot"] .messages-container {
+html[data-theme="codriver"] .messages-container {
     padding: 6px 10px 18px 28px;
     background: transparent;
 }
 
-html[data-theme="github-copilot"] .message {
+html[data-theme="codriver"] .message {
     padding: 12px 12px 13px 14px;
     border-bottom: none;
     gap: 7px;
 }
 
-html[data-theme="github-copilot"] .message.assistant {
+html[data-theme="codriver"] .message.assistant {
     padding-left: 14px;
 }
 
-html[data-theme="github-copilot"] .message.assistant .message-content {
+html[data-theme="codriver"] .message.assistant .message-content {
     color: var(--copilot-fg-default);
     max-width: 100%;
 }
 
-html[data-theme="github-copilot"] .message.user {
+html[data-theme="codriver"] .message.user {
     align-items: flex-end;
     padding-top: 10px;
     padding-bottom: 10px;
 }
 
-html[data-theme="github-copilot"] .message.user .message-content {
+html[data-theme="codriver"] .message.user .message-content {
     max-width: min(86%, 920px);
     padding: 12px 14px;
     color: #f0f6fc;
@@ -234,31 +234,31 @@ html[data-theme="github-copilot"] .message.user .message-content {
         0 10px 28px rgba(1, 4, 9, 0.24);
 }
 
-html[data-theme="github-copilot"] .message.user .message-content a,
-html[data-theme="github-copilot"] .message.user .message-content code {
+html[data-theme="codriver"] .message.user .message-content a,
+html[data-theme="codriver"] .message.user .message-content code {
     color: #fff8c5;
 }
 
-html[data-theme="github-copilot"] .message-header-row,
-html[data-theme="github-copilot"] .message-role-label,
-html[data-theme="github-copilot"] .message-timestamp-header,
-html[data-theme="github-copilot"] .message-duration {
+html[data-theme="codriver"] .message-header-row,
+html[data-theme="codriver"] .message-role-label,
+html[data-theme="codriver"] .message-timestamp-header,
+html[data-theme="codriver"] .message-duration {
     color: var(--copilot-fg-subtle);
     font-size: 11px;
     font-weight: 400;
 }
 
-html[data-theme="github-copilot"] .message-duration {
+html[data-theme="codriver"] .message-duration {
     opacity: 0.62;
 }
 
-html[data-theme="github-copilot"] .message:hover .message-duration {
+html[data-theme="codriver"] .message:hover .message-duration {
     opacity: 0.92;
 }
 
-html[data-theme="github-copilot"] .message-copy-btn,
-html[data-theme="github-copilot"] .message-copy-btn-inline,
-html[data-theme="github-copilot"] .copy-code-btn {
+html[data-theme="codriver"] .message-copy-btn,
+html[data-theme="codriver"] .message-copy-btn-inline,
+html[data-theme="codriver"] .copy-code-btn {
     color: var(--copilot-fg-subtle);
     background: rgba(22, 27, 34, 0.82);
     border: 1px solid transparent;
@@ -266,71 +266,71 @@ html[data-theme="github-copilot"] .copy-code-btn {
     box-shadow: none;
 }
 
-html[data-theme="github-copilot"] .message-copy-btn:hover,
-html[data-theme="github-copilot"] .message-copy-btn-inline:hover,
-html[data-theme="github-copilot"] .copy-code-btn:hover {
+html[data-theme="codriver"] .message-copy-btn:hover,
+html[data-theme="codriver"] .message-copy-btn-inline:hover,
+html[data-theme="codriver"] .copy-code-btn:hover {
     color: #f0f6fc;
     background: rgba(177, 186, 196, 0.10);
     border-color: var(--copilot-border);
 }
 
 /* Markdown / prose -------------------------------------------------------- */
-html[data-theme="github-copilot"] .message-content h1,
-html[data-theme="github-copilot"] .message-content h2,
-html[data-theme="github-copilot"] .message-content h3,
-html[data-theme="github-copilot"] .message-content h4,
-html[data-theme="github-copilot"] .message-content h5,
-html[data-theme="github-copilot"] .message-content h6 {
+html[data-theme="codriver"] .message-content h1,
+html[data-theme="codriver"] .message-content h2,
+html[data-theme="codriver"] .message-content h3,
+html[data-theme="codriver"] .message-content h4,
+html[data-theme="codriver"] .message-content h5,
+html[data-theme="codriver"] .message-content h6 {
     color: #f0f6fc;
     font-weight: 650;
     line-height: 1.25;
     margin: 14px 0 8px;
 }
 
-html[data-theme="github-copilot"] .message-content h1 { font-size: 20px; }
-html[data-theme="github-copilot"] .message-content h2 { font-size: 18px; }
-html[data-theme="github-copilot"] .message-content h3 { font-size: 16px; }
-html[data-theme="github-copilot"] .message-content h4,
-html[data-theme="github-copilot"] .message-content h5,
-html[data-theme="github-copilot"] .message-content h6 { font-size: 14px; }
+html[data-theme="codriver"] .message-content h1 { font-size: 20px; }
+html[data-theme="codriver"] .message-content h2 { font-size: 18px; }
+html[data-theme="codriver"] .message-content h3 { font-size: 16px; }
+html[data-theme="codriver"] .message-content h4,
+html[data-theme="codriver"] .message-content h5,
+html[data-theme="codriver"] .message-content h6 { font-size: 14px; }
 
-html[data-theme="github-copilot"] .message-content p,
-html[data-theme="github-copilot"] .message-content li {
+html[data-theme="codriver"] .message-content p,
+html[data-theme="codriver"] .message-content li {
     color: var(--copilot-fg-default);
     font-size: 13.5px;
     line-height: 1.62;
 }
 
-html[data-theme="github-copilot"] .message-content p {
+html[data-theme="codriver"] .message-content p {
     margin: 7px 0;
 }
 
-html[data-theme="github-copilot"] .message-content ul,
-html[data-theme="github-copilot"] .message-content ol {
+html[data-theme="codriver"] .message-content ul,
+html[data-theme="codriver"] .message-content ol {
     margin: 7px 0 9px 22px;
     padding-left: 0;
 }
 
-html[data-theme="github-copilot"] .message-content li::marker {
+html[data-theme="codriver"] .message-content li::marker {
     color: var(--copilot-fg-muted);
 }
 
-html[data-theme="github-copilot"] .message-content a,
-html[data-theme="github-copilot"] .message-content .markdown-link,
-html[data-theme="github-copilot"] .message-content .file-link,
-html[data-theme="github-copilot"] .message-content .class-link {
+html[data-theme="codriver"] .message-content a,
+html[data-theme="codriver"] .message-content .markdown-link,
+html[data-theme="codriver"] .message-content .file-link,
+html[data-theme="codriver"] .message-content .class-link {
     color: var(--copilot-link);
     text-decoration: none;
 }
 
-html[data-theme="github-copilot"] .message-content a:hover,
-html[data-theme="github-copilot"] .message-content .markdown-link:hover,
-html[data-theme="github-copilot"] .message-content .file-link:hover,
-html[data-theme="github-copilot"] .message-content .class-link:hover {
+html[data-theme="codriver"] .message-content a:hover,
+html[data-theme="codriver"] .message-content .markdown-link:hover,
+html[data-theme="codriver"] .message-content .file-link:hover,
+html[data-theme="codriver"] .message-content .class-link:hover {
     text-decoration: underline;
 }
 
-html[data-theme="github-copilot"] .message-content code:not(pre code) {
+html[data-theme="codriver"] .message-content code:not(pre code) {
     padding: 0.12em 0.34em;
     color: #ffd479;
     background: rgba(210, 153, 34, 0.12);
@@ -339,12 +339,12 @@ html[data-theme="github-copilot"] .message-content code:not(pre code) {
     font-size: 0.92em;
 }
 
-html[data-theme="github-copilot"] .message-content strong {
+html[data-theme="codriver"] .message-content strong {
     color: #f0f6fc;
     font-weight: 650;
 }
 
-html[data-theme="github-copilot"] .message-content blockquote {
+html[data-theme="codriver"] .message-content blockquote {
     color: var(--copilot-fg-muted);
     border-left: 2px solid var(--copilot-border);
     padding-left: 12px;
@@ -352,7 +352,7 @@ html[data-theme="github-copilot"] .message-content blockquote {
 }
 
 /* Code block renderer: real structure is .code-block-wrapper + .copy-code-btn + pre/code. */
-html[data-theme="github-copilot"] .code-block-wrapper {
+html[data-theme="codriver"] .code-block-wrapper {
     position: relative;
     margin: 12px 0 16px;
     overflow: hidden;
@@ -362,7 +362,7 @@ html[data-theme="github-copilot"] .code-block-wrapper {
     box-shadow: var(--copilot-inner-shadow);
 }
 
-html[data-theme="github-copilot"] .code-block-wrapper::before {
+html[data-theme="codriver"] .code-block-wrapper::before {
     content: '';
     display: block;
     height: 30px;
@@ -372,7 +372,7 @@ html[data-theme="github-copilot"] .code-block-wrapper::before {
     border-bottom: 1px solid var(--copilot-border-muted);
 }
 
-html[data-theme="github-copilot"] .code-block-wrapper::after {
+html[data-theme="codriver"] .code-block-wrapper::after {
     content: '›';
     position: absolute;
     top: 5px;
@@ -383,7 +383,7 @@ html[data-theme="github-copilot"] .code-block-wrapper::after {
     transform: rotate(90deg);
 }
 
-html[data-theme="github-copilot"] .code-block-wrapper pre {
+html[data-theme="codriver"] .code-block-wrapper pre {
     margin: 0;
     padding: 12px 14px 14px;
     background: #0d1117 !important;
@@ -391,7 +391,7 @@ html[data-theme="github-copilot"] .code-block-wrapper pre {
     overflow-x: auto;
 }
 
-html[data-theme="github-copilot"] .code-block-wrapper pre code {
+html[data-theme="codriver"] .code-block-wrapper pre code {
     color: #c9d1d9;
     background: transparent;
     font-size: 13px;
@@ -399,8 +399,8 @@ html[data-theme="github-copilot"] .code-block-wrapper pre code {
     tab-size: 4;
 }
 
-html[data-theme="github-copilot"] .code-block-wrapper .copy-code-btn,
-html[data-theme="github-copilot"] .copy-code-btn {
+html[data-theme="codriver"] .code-block-wrapper .copy-code-btn,
+html[data-theme="codriver"] .copy-code-btn {
     top: 4px;
     right: 8px;
     width: 24px;
@@ -410,109 +410,109 @@ html[data-theme="github-copilot"] .copy-code-btn {
 }
 
 /* Status, compact information and diagnostics ---------------------------- */
-html[data-theme="github-copilot"] .streaming-connect-status,
-html[data-theme="github-copilot"] .compact-summary-block,
-html[data-theme="github-copilot"] .compact-notification-block,
-html[data-theme="github-copilot"] .task-notification-block,
-html[data-theme="github-copilot"] .provider-not-configured-card,
-html[data-theme="github-copilot"] .error-diagnostic-card,
-html[data-theme="github-copilot"] .thinking-block {
+html[data-theme="codriver"] .streaming-connect-status,
+html[data-theme="codriver"] .compact-summary-block,
+html[data-theme="codriver"] .compact-notification-block,
+html[data-theme="codriver"] .task-notification-block,
+html[data-theme="codriver"] .provider-not-configured-card,
+html[data-theme="codriver"] .error-diagnostic-card,
+html[data-theme="codriver"] .thinking-block {
     background: rgba(22, 27, 34, 0.62);
     border: 1px solid var(--copilot-border-muted);
     border-radius: var(--copilot-radius-md);
     box-shadow: var(--copilot-inner-shadow);
 }
 
-html[data-theme="github-copilot"] .thinking-block,
-html[data-theme="github-copilot"] .compact-summary-block,
-html[data-theme="github-copilot"] .compact-notification-block {
+html[data-theme="codriver"] .thinking-block,
+html[data-theme="codriver"] .compact-summary-block,
+html[data-theme="codriver"] .compact-notification-block {
     color: var(--copilot-fg-muted);
 }
 
-html[data-theme="github-copilot"] .thinking-header,
-html[data-theme="github-copilot"] .compact-summary-title {
+html[data-theme="codriver"] .thinking-header,
+html[data-theme="codriver"] .compact-summary-title {
     color: var(--copilot-fg-muted);
     background: transparent;
 }
 
-html[data-theme="github-copilot"] .thinking-header:hover,
-html[data-theme="github-copilot"] .compact-summary-title:hover {
+html[data-theme="codriver"] .thinking-header:hover,
+html[data-theme="codriver"] .compact-summary-title:hover {
     color: #f0f6fc;
     background: rgba(177, 186, 196, 0.06);
 }
 
-html[data-theme="github-copilot"] .task-notification-completed,
-html[data-theme="github-copilot"] .task-notification-success,
-html[data-theme="github-copilot"] .task-notification-green,
-html[data-theme="github-copilot"] .compact-summary-icon {
+html[data-theme="codriver"] .task-notification-completed,
+html[data-theme="codriver"] .task-notification-success,
+html[data-theme="codriver"] .task-notification-green,
+html[data-theme="codriver"] .compact-summary-icon {
     color: var(--copilot-success);
 }
 
-html[data-theme="github-copilot"] .error-diagnostic-recommended-badge {
+html[data-theme="codriver"] .error-diagnostic-recommended-badge {
     background: var(--copilot-attention-muted);
     color: #ffd479;
     border: 1px solid rgba(210, 153, 34, 0.24);
 }
 
 /* Tool blocks: keep additional plugin capabilities, but translate them into a calm activity style. */
-html[data-theme="github-copilot"] .tool-block,
-html[data-theme="github-copilot"] .tool-use-block,
-html[data-theme="github-copilot"] .tool-result-block,
-html[data-theme="github-copilot"] .read-tool-block,
-html[data-theme="github-copilot"] .edit-tool-block,
-html[data-theme="github-copilot"] .bash-tool-block,
-html[data-theme="github-copilot"] .generic-tool-block,
-html[data-theme="github-copilot"] .task-execution-block,
-html[data-theme="github-copilot"] .tool-group-block,
-html[data-theme="github-copilot"] .read-tool-group-block,
-html[data-theme="github-copilot"] .edit-tool-group-block,
-html[data-theme="github-copilot"] .bash-tool-group-block,
-html[data-theme="github-copilot"] .search-tool-group-block {
+html[data-theme="codriver"] .tool-block,
+html[data-theme="codriver"] .tool-use-block,
+html[data-theme="codriver"] .tool-result-block,
+html[data-theme="codriver"] .read-tool-block,
+html[data-theme="codriver"] .edit-tool-block,
+html[data-theme="codriver"] .bash-tool-block,
+html[data-theme="codriver"] .generic-tool-block,
+html[data-theme="codriver"] .task-execution-block,
+html[data-theme="codriver"] .tool-group-block,
+html[data-theme="codriver"] .read-tool-group-block,
+html[data-theme="codriver"] .edit-tool-group-block,
+html[data-theme="codriver"] .bash-tool-group-block,
+html[data-theme="codriver"] .search-tool-group-block {
     background: rgba(22, 27, 34, 0.56);
     border: 1px solid var(--copilot-border-muted);
     border-radius: var(--copilot-radius-md);
     box-shadow: none;
 }
 
-html[data-theme="github-copilot"] .tool-header,
-html[data-theme="github-copilot"] .tool-block-header,
-html[data-theme="github-copilot"] .tool-title,
-html[data-theme="github-copilot"] .tool-name {
+html[data-theme="codriver"] .tool-header,
+html[data-theme="codriver"] .tool-block-header,
+html[data-theme="codriver"] .tool-title,
+html[data-theme="codriver"] .tool-name {
     color: #dbe7f3;
     font-weight: 500;
 }
 
-html[data-theme="github-copilot"] .tool-icon,
-html[data-theme="github-copilot"] .tool-block-icon,
-html[data-theme="github-copilot"] .codicon-symbol-method,
-html[data-theme="github-copilot"] .codicon-file-code {
+html[data-theme="codriver"] .tool-icon,
+html[data-theme="codriver"] .tool-block-icon,
+html[data-theme="codriver"] .codicon-symbol-method,
+html[data-theme="codriver"] .codicon-file-code {
     color: var(--copilot-link);
 }
 
-html[data-theme="github-copilot"] .tool-summary,
-html[data-theme="github-copilot"] .tool-param,
-html[data-theme="github-copilot"] .tool-description {
+html[data-theme="codriver"] .tool-summary,
+html[data-theme="codriver"] .tool-param,
+html[data-theme="codriver"] .tool-description {
     color: var(--copilot-fg-muted);
 }
 
-html[data-theme="github-copilot"] .tool-file-link,
-html[data-theme="github-copilot"] .tool-class-link {
+html[data-theme="codriver"] .tool-file-link,
+html[data-theme="codriver"] .tool-class-link {
     color: var(--copilot-link);
 }
 
-/* Anchor rail: not in GitHub Copilot, but fits as a subtle Copilot-style timeline. */
-html[data-theme="github-copilot"] .messages-anchor-rail {
+/* Anchor rail: a subtle timeline that fits the CoDriver skin. */
+html[data-theme="codriver"] .messages-anchor-rail {
     left: 10px;
     width: 12px;
     opacity: 0.78;
 }
 
-html[data-theme="github-copilot"] .messages-anchor-track {
+html[data-theme="codriver"] .messages-anchor-track {
     width: 1px;
     background: linear-gradient(180deg, transparent, rgba(88, 166, 255, 0.26), transparent);
 }
 
-html[data-theme="github-copilot"] .messages-anchor-dot {
+html[data-theme="codriver"] .messages-anchor-dot {
     width: 6px;
     height: 6px;
     margin-left: -2px;
@@ -521,14 +521,14 @@ html[data-theme="github-copilot"] .messages-anchor-dot {
     box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.05);
 }
 
-html[data-theme="github-copilot"] .messages-anchor-dot:hover,
-html[data-theme="github-copilot"] .messages-anchor-dot.is-active {
+html[data-theme="codriver"] .messages-anchor-dot:hover,
+html[data-theme="codriver"] .messages-anchor-dot.is-active {
     background: #79c0ff;
     border-color: #a5d6ff;
     box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.16);
 }
 
-html[data-theme="github-copilot"] .anchor-tooltip {
+html[data-theme="codriver"] .anchor-tooltip {
     color: var(--copilot-fg-default);
     background: #161b22;
     border: 1px solid var(--copilot-border);
@@ -537,7 +537,7 @@ html[data-theme="github-copilot"] .anchor-tooltip {
 }
 
 /* Bottom composer --------------------------------------------------------- */
-html[data-theme="github-copilot"] .input-area {
+html[data-theme="codriver"] .input-area {
     padding: 10px 20px 12px 32px;
     background:
         linear-gradient(180deg, rgba(13, 17, 23, 0), rgba(13, 17, 23, 0.92) 28%),
@@ -545,7 +545,7 @@ html[data-theme="github-copilot"] .input-area {
     border-top: 1px solid transparent;
 }
 
-html[data-theme="github-copilot"] .input-container {
+html[data-theme="codriver"] .input-container {
     position: relative;
     gap: 9px;
     padding: 12px 14px 10px;
@@ -558,7 +558,7 @@ html[data-theme="github-copilot"] .input-container {
         0 14px 38px rgba(1, 4, 9, 0.42);
 }
 
-html[data-theme="github-copilot"] .input-container::before {
+html[data-theme="codriver"] .input-container::before {
     content: '';
     position: absolute;
     inset: -1px;
@@ -568,7 +568,7 @@ html[data-theme="github-copilot"] .input-container::before {
     opacity: 0.76;
 }
 
-html[data-theme="github-copilot"] .input-container:focus-within {
+html[data-theme="codriver"] .input-container:focus-within {
     border-color: #79c0ff;
     box-shadow:
         0 0 0 1px rgba(121, 192, 255, 0.52),
@@ -576,29 +576,29 @@ html[data-theme="github-copilot"] .input-container:focus-within {
         0 18px 46px rgba(1, 4, 9, 0.46);
 }
 
-html[data-theme="github-copilot"] #messageInput {
+html[data-theme="codriver"] #messageInput {
     color: #f0f6fc;
     font-size: 13.5px;
     line-height: 1.45;
 }
 
-html[data-theme="github-copilot"] #messageInput::placeholder {
+html[data-theme="codriver"] #messageInput::placeholder {
     color: rgba(240, 246, 252, 0.48);
 }
 
-html[data-theme="github-copilot"] .input-footer {
+html[data-theme="codriver"] .input-footer {
     padding-top: 3px;
 }
 
-html[data-theme="github-copilot"] .input-tools-left,
-html[data-theme="github-copilot"] .input-actions {
+html[data-theme="codriver"] .input-tools-left,
+html[data-theme="codriver"] .input-actions {
     gap: 6px;
 }
 
-html[data-theme="github-copilot"] .tool-button-placeholder,
-html[data-theme="github-copilot"] .action-button,
-html[data-theme="github-copilot"] .send-button,
-html[data-theme="github-copilot"] .stop-button {
+html[data-theme="codriver"] .tool-button-placeholder,
+html[data-theme="codriver"] .action-button,
+html[data-theme="codriver"] .send-button,
+html[data-theme="codriver"] .stop-button {
     width: 28px;
     height: 28px;
     border-radius: 50%;
@@ -608,41 +608,41 @@ html[data-theme="github-copilot"] .stop-button {
     box-shadow: none;
 }
 
-html[data-theme="github-copilot"] .tool-button-placeholder:hover,
-html[data-theme="github-copilot"] .action-button:hover {
+html[data-theme="codriver"] .tool-button-placeholder:hover,
+html[data-theme="codriver"] .action-button:hover {
     color: #f0f6fc;
     background: rgba(255, 255, 255, 0.08);
 }
 
-html[data-theme="github-copilot"] .send-button {
+html[data-theme="codriver"] .send-button {
     background: rgba(240, 246, 252, 0.10);
     color: rgba(240, 246, 252, 0.64);
 }
 
-html[data-theme="github-copilot"] .send-button:not(:disabled) {
+html[data-theme="codriver"] .send-button:not(:disabled) {
     background: #f0f6fc;
     color: #0d1117;
 }
 
-html[data-theme="github-copilot"] .send-button:not(:disabled):hover {
+html[data-theme="codriver"] .send-button:not(:disabled):hover {
     background: #ffffff;
 }
 
-html[data-theme="github-copilot"] .send-button:disabled {
+html[data-theme="codriver"] .send-button:disabled {
     background: rgba(240, 246, 252, 0.08);
     color: rgba(240, 246, 252, 0.26);
 }
 
-html[data-theme="github-copilot"] .stop-button {
+html[data-theme="codriver"] .stop-button {
     color: #ff7b72;
     background: rgba(248, 81, 73, 0.10);
     border-color: rgba(248, 81, 73, 0.28);
 }
 
-html[data-theme="github-copilot"] .attachment-chip,
-html[data-theme="github-copilot"] .file-chip,
-html[data-theme="github-copilot"] .context-chip,
-html[data-theme="github-copilot"] .message-attachment-chip {
+html[data-theme="codriver"] .attachment-chip,
+html[data-theme="codriver"] .file-chip,
+html[data-theme="codriver"] .context-chip,
+html[data-theme="codriver"] .message-attachment-chip {
     color: #dbe7f3;
     background: rgba(88, 166, 255, 0.10);
     border: 1px solid rgba(88, 166, 255, 0.26);
@@ -650,13 +650,13 @@ html[data-theme="github-copilot"] .message-attachment-chip {
     box-shadow: none;
 }
 
-html[data-theme="github-copilot"] .message-attachment-chip-icon,
-html[data-theme="github-copilot"] .message-attachment-chip-ext {
+html[data-theme="codriver"] .message-attachment-chip-icon,
+html[data-theme="codriver"] .message-attachment-chip-ext {
     color: var(--copilot-link);
 }
 
 /* Waiting / streaming ----------------------------------------------------- */
-html[data-theme="github-copilot"] .waiting-indicator {
+html[data-theme="codriver"] .waiting-indicator {
     margin: 10px 0 12px 8px;
     padding: 7px 11px;
     gap: 9px;
@@ -667,65 +667,65 @@ html[data-theme="github-copilot"] .waiting-indicator {
     box-shadow: none;
 }
 
-html[data-theme="github-copilot"] .waiting-spinner::before {
+html[data-theme="codriver"] .waiting-spinner::before {
     border: 2px solid rgba(139, 148, 158, 0.22);
     border-top-color: #8b949e;
     animation: waiting-spin 0.8s linear infinite;
 }
 
-html[data-theme="github-copilot"] .waiting-spinner::after {
+html[data-theme="codriver"] .waiting-spinner::after {
     display: none;
 }
 
-html[data-theme="github-copilot"] .waiting-text {
+html[data-theme="codriver"] .waiting-text {
     color: var(--copilot-fg-muted);
     font-size: 12.5px;
     letter-spacing: 0;
 }
 
-html[data-theme="github-copilot"] .waiting-seconds {
+html[data-theme="codriver"] .waiting-seconds {
     color: var(--copilot-fg-subtle);
 }
 
 /* Search, menus, scrollbars ---------------------------------------------- */
-html[data-theme="github-copilot"] .conversation-search,
-html[data-theme="github-copilot"] .context-menu,
-html[data-theme="github-copilot"] .menu,
-html[data-theme="github-copilot"] .dropdown-menu {
+html[data-theme="codriver"] .conversation-search,
+html[data-theme="codriver"] .context-menu,
+html[data-theme="codriver"] .menu,
+html[data-theme="codriver"] .dropdown-menu {
     background: #161b22;
     border: 1px solid var(--copilot-border);
     border-radius: var(--copilot-radius-md);
     box-shadow: var(--copilot-shadow);
 }
 
-html[data-theme="github-copilot"] *::-webkit-scrollbar {
+html[data-theme="codriver"] *::-webkit-scrollbar {
     width: 8px !important;
     height: 8px !important;
 }
 
-html[data-theme="github-copilot"] *::-webkit-scrollbar-thumb {
+html[data-theme="codriver"] *::-webkit-scrollbar-thumb {
     border: 2px solid transparent !important;
     border-radius: 999px !important;
     background-color: rgba(139, 148, 158, 0.34) !important;
 }
 
-html[data-theme="github-copilot"] *::-webkit-scrollbar-thumb:hover {
+html[data-theme="codriver"] *::-webkit-scrollbar-thumb:hover {
     background-color: rgba(139, 148, 158, 0.56) !important;
 }
 
 @media (max-width: 768px) {
-    html[data-theme="github-copilot"] #app {
+    html[data-theme="codriver"] #app {
         margin: 0;
         width: calc(100vw / var(--font-scale, 1));
         height: calc(100vh / var(--font-scale, 1));
         border-radius: 0;
     }
 
-    html[data-theme="github-copilot"] .messages-container {
+    html[data-theme="codriver"] .messages-container {
         padding-left: 18px;
     }
 
-    html[data-theme="github-copilot"] .input-area {
+    html[data-theme="codriver"] .input-area {
         padding-left: 10px;
         padding-right: 10px;
     }

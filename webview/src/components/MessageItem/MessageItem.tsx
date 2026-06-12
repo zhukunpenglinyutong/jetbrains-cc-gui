@@ -18,7 +18,7 @@ import {
 import { ContentBlockRenderer } from './ContentBlockRenderer';
 import { formatTime } from '../../utils/helpers';
 import { copyToClipboard } from '../../utils/copyUtils';
-import { CopilotIcon } from '../copilotIcons';
+import { CoDriverIcon } from '../codriverIcons';
 import { READ_TOOL_NAMES, EDIT_TOOL_NAMES, BASH_TOOL_NAMES, SEARCH_TOOL_NAMES, isToolName } from '../../utils/toolConstants';
 
 export interface MessageItemProps {
@@ -55,7 +55,7 @@ type GroupedBlock =
   | { type: 'search_group'; blocks: ClaudeContentBlock[]; startIndex: number };
 
 /** Render the shared copy icon used by both user and assistant message copy buttons. */
-const CopyIcon = () => <CopilotIcon name="copy" size={14} strokeWidth={1.75} />;
+const CopyIcon = () => <CoDriverIcon name="copy" size={14} strokeWidth={1.75} />;
 
 interface CopyButtonProps {
   className?: string;

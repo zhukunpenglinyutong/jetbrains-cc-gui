@@ -1,6 +1,6 @@
 import type React from 'react';
 
-export type CopilotIconName =
+export type CoDriverIconName =
   | 'agent'
   | 'attachment'
   | 'back'
@@ -31,13 +31,13 @@ export type CopilotIconName =
   | 'warning'
   | 'x';
 
-export interface CopilotIconProps extends Omit<React.SVGProps<SVGSVGElement>, 'name'> {
-  name: CopilotIconName;
+export interface CoDriverIconProps extends Omit<React.SVGProps<SVGSVGElement>, 'name'> {
+  name: CoDriverIconName;
   size?: number;
   strokeWidth?: number;
 }
 
-function renderIcon(name: CopilotIconName): React.ReactNode {
+function renderIcon(name: CoDriverIconName): React.ReactNode {
   switch (name) {
     case 'agent':
       return (
@@ -217,14 +217,14 @@ function renderIcon(name: CopilotIconName): React.ReactNode {
   }
 }
 
-export function CopilotIcon({
+export function CoDriverIcon({
   name,
   size = 16,
   strokeWidth = 1.7,
   className,
   ...svgProps
-}: CopilotIconProps) {
-  const classes = ['copilot-icon', `copilot-icon-${name}`, className]
+}: CoDriverIconProps) {
+  const classes = ['codriver-icon', `codriver-icon-${name}`, className]
     .filter(Boolean)
     .join(' ');
 

@@ -3,7 +3,7 @@ import type { TFunction } from 'i18next';
 import type { ClaudeContentBlock, ToolResultBlock, CompactSummaryMetadata } from '../../types';
 
 import MarkdownBlock from '../MarkdownBlock';
-import { CopilotIcon } from '../copilotIcons';
+import { CoDriverIcon } from '../codriverIcons';
 import CollapsibleTextBlock from '../CollapsibleTextBlock';
 import {
   BashToolBlock,
@@ -88,9 +88,9 @@ const CompactSummaryBlock = memo(function CompactSummaryBlock({ block, t }: Comp
         onClick={toggleExpanded}
         onKeyDown={onKeyDown}
       >
-        <CopilotIcon className="compact-summary-icon" name="spark" size={12} aria-hidden="true" />
+        <CoDriverIcon className="compact-summary-icon" name="spark" size={12} aria-hidden="true" />
         <span className="compact-summary-title-text">{titleText}</span>
-        <CopilotIcon className="compact-summary-toggle" name={expanded ? 'chevronDown' : 'chevronRight'} size={12} aria-hidden="true" />
+        <CoDriverIcon className="compact-summary-toggle" name={expanded ? 'chevronDown' : 'chevronRight'} size={12} aria-hidden="true" />
       </div>
       {hasMeta && (
         <div className="compact-summary-metadata">
@@ -230,7 +230,7 @@ export function ContentBlockRenderer({
               ? t('common.thinkingProcess')
               : t('common.thinking')}
           </span>
-          <CopilotIcon className="thinking-icon" name={isThinkingExpanded ? 'chevronDown' : 'chevronRight'} size={13} aria-hidden="true" />
+          <CoDriverIcon className="thinking-icon" name={isThinkingExpanded ? 'chevronDown' : 'chevronRight'} size={13} aria-hidden="true" />
         </div>
         <div
           className="thinking-content"

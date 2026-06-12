@@ -1,6 +1,6 @@
 export type DiffThemeMode = 'follow' | 'editor' | 'light' | 'soft-dark';
 
-type ResolvedDiffTheme = 'light' | 'dark' | 'soft-dark' | 'github';
+type ResolvedDiffTheme = 'light' | 'dark' | 'soft-dark' | 'codriver';
 
 const DIFF_THEME_KEYS = [
   '--diff-surface',
@@ -31,8 +31,8 @@ const resolveDiffTheme = (
   const uiThemeAttr = document.documentElement.getAttribute('data-theme');
   const currentUiTheme: ResolvedDiffTheme = uiThemeAttr === 'light'
     ? 'light'
-    : uiThemeAttr === 'github-copilot'
-      ? 'github'
+    : uiThemeAttr === 'codriver'
+      ? 'codriver'
       : 'dark';
   if (diffTheme === 'follow') {
     return currentUiTheme;
@@ -68,7 +68,7 @@ export const applyDiffTheme = (
     return;
   }
 
-  if (resolvedDiffTheme === 'github') {
+  if (resolvedDiffTheme === 'codriver') {
     root.style.setProperty('--diff-surface', '#0d1117');
     root.style.setProperty('--diff-gutter-bg', '#161b22');
     root.style.setProperty('--diff-gutter-border', '#30363d');

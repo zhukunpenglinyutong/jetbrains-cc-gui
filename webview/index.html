@@ -18,8 +18,8 @@
           var ideTheme = window.__INITIAL_IDE_THEME__;
           var theme;
 
-          if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'github-copilot') {
-            // User's explicit theme selection takes priority (incl. the Copilot skin)
+          if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'codriver') {
+            // User's explicit theme selection takes priority (incl. the CoDriver skin)
             theme = savedTheme;
           } else if (ideTheme === 'light' || ideTheme === 'dark') {
             // Follow IDE mode, using the theme injected by Java

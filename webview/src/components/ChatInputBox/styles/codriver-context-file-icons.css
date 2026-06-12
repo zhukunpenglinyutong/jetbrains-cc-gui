@@ -1,0 +1,98 @@
+/* Copilot active-file and file-attachment icon cleanup v6.
+   The goal is to remove IDE/file-type logo noise (for example the bright Java cup)
+   and render source-file chips with the local, quiet Copilot-inspired icon pack. */
+
+html[data-theme="codriver"] .context-bar {
+  gap: 6px;
+}
+
+html[data-theme="codriver"] .context-item {
+  min-height: 28px;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 9px;
+  background: rgba(22, 27, 34, 0.86);
+  border-color: rgba(88, 166, 255, 0.22);
+  box-shadow: 0 1px 0 rgba(240, 246, 252, 0.04) inset;
+}
+
+html[data-theme="codriver"] .context-item:hover {
+  border-color: rgba(88, 166, 255, 0.38);
+  background: rgba(33, 38, 45, 0.92);
+}
+
+html[data-theme="codriver"] .context-file-icon,
+html[data-theme="codriver"] .context-agent-icon,
+html[data-theme="codriver"] .context-file-placeholder .codriver-icon,
+html[data-theme="codriver"] .context-tool-btn .codriver-icon {
+  flex: 0 0 auto;
+  margin-right: 4px;
+  color: #8b949e;
+}
+
+html[data-theme="codriver"] .context-file-icon-code,
+html[data-theme="codriver"] .attachment-file-icon-code {
+  color: #58a6ff;
+}
+
+html[data-theme="codriver"] .context-file-icon-file,
+html[data-theme="codriver"] .attachment-file-icon-file {
+  color: #8b949e;
+}
+
+html[data-theme="codriver"] .context-agent-icon {
+  color: #a371f7;
+}
+
+html[data-theme="codriver"] .context-text {
+  color: #c9d1d9;
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
+html[data-theme="codriver"] .context-close-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin-left: 2px;
+  border-radius: 999px;
+  color: #8b949e;
+  opacity: 0.76;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease, opacity 0.15s ease;
+}
+
+html[data-theme="codriver"] .context-close-button:hover,
+html[data-theme="codriver"] .context-close-button:focus-visible {
+  color: #ff7b72;
+  opacity: 1;
+  background: rgba(248, 81, 73, 0.14);
+  outline: none;
+}
+
+html[data-theme="codriver"] .attachment-preview-frame .attachment-file-icon {
+  margin: 0;
+}
+
+html[data-theme="codriver"] .attachment-file-icon {
+  color: #58a6ff;
+}
+
+html[data-theme="codriver"] .attachment-label {
+  color: #c9d1d9;
+}
+
+/* Guard against SVG icons injected by IDE file-type providers in older chips.
+   If such markup still appears inside a context-file-icon span, neutralize its native colors. */
+html[data-theme="codriver"] .context-file-icon svg [fill]:not([fill="none"]),
+html[data-theme="codriver"] .context-file-icon svg path[fill]:not([fill="none"]) {
+  fill: currentColor !important;
+}
+
+html[data-theme="codriver"] .context-file-icon svg [stroke]:not([stroke="none"]),
+html[data-theme="codriver"] .context-file-icon svg path[stroke]:not([stroke="none"]) {
+  stroke: currentColor !important;
+}

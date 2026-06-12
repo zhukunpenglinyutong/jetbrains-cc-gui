@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CopilotIcon } from './copilotIcons';
+import { CoDriverIcon } from './codriverIcons';
 
 interface WaitingIndicatorProps {
   size?: number;
@@ -60,7 +60,7 @@ export const WaitingIndicator = ({ size = 18, startTime }: WaitingIndicatorProps
   return (
     <div className="waiting-indicator">
       <span className="waiting-spinner" style={spinnerStyle}>
-        <CopilotIcon className="waiting-spinner-icon" name="spinner" size={size} aria-hidden="true" />
+        <CoDriverIcon className="waiting-spinner-icon" name="spinner" size={size} aria-hidden="true" />
       </span>
       <span className="waiting-text">
 	        {t('chat.generatingResponse')}<span className="waiting-dots">{dots}</span>

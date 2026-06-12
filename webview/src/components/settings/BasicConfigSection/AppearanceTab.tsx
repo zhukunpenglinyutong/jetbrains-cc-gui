@@ -93,7 +93,7 @@ const SystemIcon = () => (
   </svg>
 );
 
-const CopilotIcon = () => (
+const CoDriverIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <path d="M12 3.75C7.44 3.75 3.75 7.44 3.75 12S7.44 20.25 12 20.25 20.25 16.56 20.25 12 16.56 3.75 12 3.75Z" stroke="currentColor" strokeWidth="1.8"/>
     <path d="M8.2 12.1c.7-1.35 1.95-2.15 3.8-2.15s3.1.8 3.8 2.15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
@@ -188,7 +188,7 @@ const AppearanceTab = ({
 
   const resolvedTheme = useMemo(() => {
     if (theme !== 'system') return theme;
-    return (document.documentElement.getAttribute('data-theme') as 'light' | 'dark' | 'github-copilot') || 'dark';
+    return (document.documentElement.getAttribute('data-theme') as 'light' | 'dark' | 'codriver') || 'dark';
   }, [theme]);
 
   const defaultBgColor = resolvedTheme === 'light' ? DEFAULT_LIGHT_BG : DEFAULT_DARK_BG;
@@ -369,13 +369,13 @@ const AppearanceTab = ({
           </div>
 
           <div
-            className={`${styles.themeOption} ${theme === 'github-copilot' ? styles.active : ''}`}
-            onClick={() => onThemeChange('github-copilot')}
+            className={`${styles.themeOption} ${theme === 'codriver' ? styles.active : ''}`}
+            onClick={() => onThemeChange('codriver')}
           >
             <div className={styles.themeIconSystem}>
-              <CopilotIcon />
+              <CoDriverIcon />
             </div>
-            <span className={styles.themeOptionLabel}>{t('settings.basic.theme.githubCopilot', 'GitHub Copilot Inspired')}</span>
+            <span className={styles.themeOptionLabel}>{t('settings.basic.theme.codriver', 'CoDriver')}</span>
           </div>
 
           <div
