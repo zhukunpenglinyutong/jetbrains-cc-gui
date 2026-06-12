@@ -1,6 +1,10 @@
 package com.github.claudecodegui.cli.common;
 
+import com.github.claudecodegui.cli.common.CliConstants;
+import com.github.claudecodegui.cli.common.CliJsonHelper;
+
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -10,6 +14,8 @@ import java.util.regex.Pattern;
  */
 public final class CliErrorFormatter {
     private static final int DEFAULT_MAX_CHARS = 4000;
+    private static final String ERROR_REQUEST_FAILED = " CLI 请求失败\n";
+    private static final String ERROR_REASON_PREFIX = "原因: ";
     private static final Pattern STATUS_PATTERN = Pattern.compile("(?i)\\b(?:unexpected status\\s+)?([45]\\d{2})\\b");
     private static final Pattern URL_PATTERN = Pattern.compile("(?i)\\burl:\\s*(\\S+)");
     private static final Pattern REQUEST_ID_PATTERN = Pattern.compile("(?i)\\brequest id:\\s*([\\w.-]+)");
@@ -23,8 +29,8 @@ public final class CliErrorFormatter {
         String providerName = normalizeProvider(provider);
         String details = normalizeDiagnostic(diagnostic);
         StringBuilder message = new StringBuilder();
-        message.append(providerName).append(" CLI 请求失败\n");
-        message.append("原因: ").append(summarize(details)).append('\n');
+        message.append(providerName).append(ERROR_REQUEST_FAILED);
+        message.append(ERROR_REASON_PREFIX).append(summarize(details)).append('\n');
         message.append("退出码: ").append(providerName).append(" CLI exited with code: ").append(exitCode);
         appendMetadata(message, details);
         appendDetails(message, details);
@@ -35,8 +41,8 @@ public final class CliErrorFormatter {
         String providerName = normalizeProvider(provider);
         String details = normalizeDiagnostic(rawError);
         StringBuilder message = new StringBuilder();
-        message.append(providerName).append(" CLI 请求失败\n");
-        message.append("原因: ").append(summarize(details));
+        message.append(providerName).append(ERROR_REQUEST_FAILED);
+        message.append(ERROR_REASON_PREFIX).append(summarize(details));
         appendMetadata(message, details);
         appendDetails(message, details);
         return message.toString();
@@ -91,16 +97,16 @@ public final class CliErrorFormatter {
             };
         }
         String lower = details.toLowerCase();
-        if (lower.contains("timeout") || lower.contains("timed out")) {
+        if (CliJsonHelper.containsAnyKeyword(lower, CliConstants.TIMEOUT_KEYWORDS)) {
             return "请求超时";
         }
-        if (lower.contains("unauthorized") || lower.contains("authentication") || lower.contains("auth failed")) {
+        if (CliJsonHelper.containsAnyKeyword(lower, CliConstants.AUTH_KEYWORDS)) {
             return "认证失败";
         }
-        if (lower.contains("rate limit") || lower.contains("quota")) {
+        if (CliJsonHelper.containsAnyKeyword(lower, CliConstants.RATE_LIMIT_KEYWORDS)) {
             return "请求频率或额度受限";
         }
-        if (lower.contains("network") || lower.contains("connection") || lower.contains("dns")) {
+        if (CliJsonHelper.containsAnyKeyword(lower, CliConstants.NETWORK_KEYWORDS)) {
             return "网络连接异常";
         }
         return firstLine(details);
@@ -191,11 +197,7 @@ public final class CliErrorFormatter {
             return false;
         }
         String compact = line.replace(" ", "");
-        return compact.startsWith("{\"type\":\"system\"")
-                || compact.startsWith("{\"type\":\"stream_event\"")
-                || compact.startsWith("{\"type\":\"assistant\"")
-                || compact.startsWith("{\"type\":\"user\"")
-                || compact.startsWith("{\"type\":\"result\"");
+        return CliConstants.NORMAL_STREAM_EVENT_PREFIXES.stream().anyMatch(compact::startsWith);
     }
 
     private static String stripTrailingPunctuation(String value) {

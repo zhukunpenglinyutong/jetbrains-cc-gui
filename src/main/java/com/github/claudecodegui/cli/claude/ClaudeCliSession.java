@@ -3,18 +3,14 @@ package com.github.claudecodegui.cli.claude;
 import com.github.claudecodegui.cli.CliSendRequest;
 import com.github.claudecodegui.cli.CliSessionCallback;
 import com.github.claudecodegui.cli.CliSessionExecutor;
-import com.github.claudecodegui.cli.common.CliAttachmentHandler;
-import com.github.claudecodegui.cli.common.CliEnvironmentBuilder;
-import com.github.claudecodegui.cli.common.CliErrorFormatter;
-import com.github.claudecodegui.cli.common.CliMcpConfig;
-import com.github.claudecodegui.cli.common.CliProcessHandle;
-import com.github.claudecodegui.cli.common.CliSettings;
+import com.github.claudecodegui.cli.common.*;
 import com.github.claudecodegui.provider.claude.ClaudeCliDetector;
 import com.github.claudecodegui.provider.claude.ClaudeCliStreamParser;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.ui.toolwindow.TabPerformanceLogger;
 import com.github.claudecodegui.util.GsonHolder;
+import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
@@ -27,11 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -120,7 +112,7 @@ public class ClaudeCliSession {
     private boolean isResultLine(String line) {
         try {
             JsonObject obj = gson.fromJson(line, JsonObject.class);
-            return obj != null && "result".equals(getString(obj, "type"));
+            return obj != null && CliConstants.MSG_RESULT.equals(getString(obj, "type"));
         } catch (Exception e) {
             return false;
         }
@@ -152,39 +144,39 @@ public class ClaudeCliSession {
     ) {
         List<String> cmd = new ArrayList<>();
         cmd.add(cliPath);
-        cmd.add("-p");
-        cmd.add("--output-format");
-        cmd.add("stream-json");
-        cmd.add("--verbose");
+        cmd.add(CliConstants.ARG_P);
+        cmd.add(CliConstants.ARG_OUTPUT_FORMAT);
+        cmd.add(CliConstants.ARG_STREAM_JSON);
+        cmd.add(CliConstants.ARG_VERBOSE);
         if (profile.capabilities().supportsPartialMessages()) {
-            cmd.add("--include-partial-messages");
+            cmd.add(CliConstants.ARG_INCLUDE_PARTIAL);
         }
 
         ClaudeCliPermissionMode.apply(cmd, request.permissionMode());
 
         String model = profile.model();
         if (model != null && !model.isBlank()) {
-            cmd.add("--model");
+            cmd.add(CliConstants.ARG_MODEL);
             cmd.add(model);
         }
 
         if (profile.capabilities().supportsEffort()
                 && request.reasoningEffort() != null && !request.reasoningEffort()
                 .isBlank()) {
-            cmd.add("--effort");
+            cmd.add(CliConstants.ARG_EFFORT);
             cmd.add(request.reasoningEffort());
         }
 
         // per-tab MCP 配置
         if (profile.capabilities().supportsMcp() && hasMcpServers) {
-            cmd.add("--mcp-config");
+            cmd.add(CliConstants.ARG_MCP_CONFIG);
             cmd.add(mcpConfigFilePath);
         }
 
         // 附件父目录授权，使 Claude 可以读取持久化目录下的图片
         if (profile.capabilities().supportsAddDir() && addDirs != null) {
             for (String dir : addDirs) {
-                cmd.add("--add-dir");
+                cmd.add(CliConstants.ARG_ADD_DIR);
                 cmd.add(dir);
             }
         }
@@ -192,7 +184,7 @@ public class ClaudeCliSession {
         // 续接已有会话（优先使用本地保存的 sessionId，其次用请求传入的）
         String resumeId = currentSessionId != null ? currentSessionId : request.sessionId();
         if (resumeId != null && !resumeId.isBlank()) {
-            cmd.add("--resume");
+            cmd.add(CliConstants.ARG_RESUME);
             cmd.add(resumeId);
         }
 
@@ -233,12 +225,12 @@ public class ClaudeCliSession {
 
         if (request.openedFiles() != null && request.openedFiles()
                 .size() > 0) {
-            sb.append("\n\n## Opened Files Context\n\n")
+            sb.append(CliConstants.PROMPT_OPENED_FILES)
                     .append(gson.toJson(request.openedFiles()));
         }
         if (request.fileTagPaths() != null && !request.fileTagPaths()
                 .isEmpty()) {
-            sb.append("\n\n## Referenced Files\n\n");
+            sb.append(CliConstants.PROMPT_REFERENCED);
             for (String p : request.fileTagPaths()) {
                 sb.append("- ")
                         .append(p)
@@ -247,7 +239,7 @@ public class ClaudeCliSession {
         }
         if (request.agentPrompt() != null && !request.agentPrompt()
                 .isBlank()) {
-            sb.append("\n\n## Agent Role and Instructions\n\n")
+            sb.append(CliConstants.PROMPT_AGENT_ROLE)
                     .append(request.agentPrompt());
         }
         return sb.toString();
@@ -330,7 +322,7 @@ public class ClaudeCliSession {
                         tabId,
                         request.attachments() != null ? request.attachments().size() : 0,
                         blocks.size(), imageBlockCount, addDirs,
-                        prompt.contains("Use the Read tool to inspect this image file"),
+                        prompt.contains(CliConstants.PROMPT_READ_IMAGE),
                         previewPrompt(prompt)));
 
                 List<String> cmd = buildCommand(cliPath, request, prompt, addDirs);
@@ -342,7 +334,7 @@ public class ClaudeCliSession {
                 cliEnv.clear();
                 cliEnv.putAll(CliEnvironmentBuilder.buildBaseEnvironment());
                 cliEnv.putAll(CliSettings.readClaudeCliEnvironment());
-                cliEnv.put("NO_COLOR", "1");
+                cliEnv.put(CliConstants.ARG_NO_COLOR, "1");
                 CliEnvironmentBuilder.configureClaudePermissionEnv(
                         cliEnv,
                         getPermissionDirectory(),
@@ -360,7 +352,7 @@ public class ClaudeCliSession {
                         pb.directory(cwd);
                     } else {
                         LOG.warn("[ClaudeCliSession][" + tabId + "] CWD does not exist, falling back to home: " + request.cwd());
-                        File homeDir = new File(System.getProperty("user.home"));
+                        File homeDir = new File(PlatformUtils.getHomeDirectory());
                         if (homeDir.isDirectory()) {
                             pb.directory(homeDir);
                         }
@@ -394,7 +386,7 @@ public class ClaudeCliSession {
                                 .getName());
 
                 if (shouldEmitInterruptedCompletion(interruptHandled)) {
-                    callback.onInterrupted(null, "__I18N__:chat.requestInterrupted");
+                    callback.onInterrupted(null, CliConstants.I18N_REQUEST_INTERRUPTED);
                 } else if (shouldReportExitError(exitCode, completedWithStructuredError.get())) {
                     String err = buildExitError(exitCode, diagnostic);
                     callback.onError(err);
@@ -403,7 +395,7 @@ public class ClaudeCliSession {
             } catch (Exception e) {
                 LOG.warn("[ClaudeCliSession][" + tabId + "] send failed", e);
                 if (wasInterrupted()) {
-                    callback.onInterrupted(null, "__I18N__:chat.requestInterrupted");
+                    callback.onInterrupted(null, CliConstants.I18N_REQUEST_INTERRUPTED);
                 } else {
                     callback.onError(e.getMessage());
                     callback.onComplete(false, null, e.getMessage());
@@ -432,7 +424,7 @@ public class ClaudeCliSession {
         MessageCallback mcb = new MessageCallback() {
             @Override
             public void onMessage(String type, String content) {
-                if ("session_id".equals(type) && content != null && !content.isBlank()) {
+                if (CliConstants.MSG_SESSION_ID.equals(type) && content != null && !content.isBlank()) {
                     sessionId = content;
                 }
                 callback.onMessage(type, content);
@@ -469,7 +461,7 @@ public class ClaudeCliSession {
                 // result 事件 = 本轮结束
                 if (isResultLine(line)) {
                     if (sessionId != null) {
-                        callback.onMessage("session_id", sessionId);
+                        callback.onMessage(CliConstants.MSG_SESSION_ID, sessionId);
                     }
                     boolean success = !hadError.get() && result.success;
                     completedWithStructuredError.set(!success && result.error != null && !result.error.isBlank());
@@ -483,10 +475,10 @@ public class ClaudeCliSession {
         boolean interrupted = wasInterrupted();
         if (interrupted) {
             interruptHandled.set(true);
-            callback.onInterrupted(assistantContent.toString(), "__I18N__:chat.requestInterrupted");
+            callback.onInterrupted(assistantContent.toString(), CliConstants.I18N_REQUEST_INTERRUPTED);
         } else if (!hadError.get() && !assistantContent.isEmpty()) {
-            callback.onMessage("stream_end", "");
-            callback.onMessage("message_end", "");
+            callback.onMessage(CliConstants.MSG_STREAM_END, "");
+            callback.onMessage(CliConstants.MSG_MESSAGE_END, "");
             callback.onComplete(true, assistantContent.toString(), null);
         } else {
             callback.onComplete(result.success, assistantContent.toString(), result.error);

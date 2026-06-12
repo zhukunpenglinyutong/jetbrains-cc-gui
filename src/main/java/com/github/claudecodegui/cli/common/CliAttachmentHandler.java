@@ -24,6 +24,7 @@ import java.util.Locale;
 public class CliAttachmentHandler {
 
     private static final Logger LOG = Logger.getInstance(CliAttachmentHandler.class);
+    private static final String LOG_PREFIX = CliConstants.LOG_PREFIX_IMAGE_DIAG;
 
     private final AttachmentStorageService storage = AttachmentStorageService.getInstance();
 
@@ -41,14 +42,14 @@ public class CliAttachmentHandler {
     ) {
         List<ContentBlock> blocks = new ArrayList<>();
         if (attachments == null || attachments.isEmpty()) {
-            LOG.debug("[ClaudeImageDiag][CliAttachmentHandler] processForClaude: no attachments" + ", provider=" + provider + ", sessionKey=" + sessionKey);
+            LOG.debug(LOG_PREFIX + "processForClaude: no attachments" + ", provider=" + provider + ", sessionKey=" + sessionKey);
             return blocks;
         }
-        LOG.debug("[ClaudeImageDiag][CliAttachmentHandler] processForClaude: attachments=" + attachments.size() + ", provider=" + provider + ", sessionKey=" + sessionKey);
+        LOG.debug(LOG_PREFIX + "processForClaude: attachments=" + attachments.size() + ", provider=" + provider + ", sessionKey=" + sessionKey);
 
         for (ClaudeSession.Attachment att : attachments) {
             if (att == null) {
-                LOG.debug("[ClaudeImageDiag][CliAttachmentHandler] skip null attachment");
+                LOG.debug(LOG_PREFIX + "skip null attachment");
                 continue;
             }
             try {
@@ -60,13 +61,13 @@ public class CliAttachmentHandler {
                     if (file != null && file.isFile()) {
                         blocks.add(new ContentBlock(ContentBlock.Kind.IMAGE, att.mediaType, file, null));
                         LOG.debug(String.format(
-                                "[ClaudeImageDiag][CliAttachmentHandler] image block created: fileName=%s, mediaType=%s, localPath=%s, resolvedFile=%s, exists=%s, data=%s",
+                                LOG_PREFIX + "image block created: fileName=%s, mediaType=%s, localPath=%s, resolvedFile=%s, exists=%s, data=%s",
                                 att.fileName, att.mediaType, att.localPath,
                                 file.getAbsolutePath(), file.isFile(),
                                 att.data != null ? att.data.length() + "chars" : "null"));
                     } else {
                         LOG.debug(String.format(
-                                "[ClaudeImageDiag][CliAttachmentHandler] image attachment could not resolve to file: fileName=%s, mediaType=%s, localPath=%s, data=%s",
+                                LOG_PREFIX + "image attachment could not resolve to file: fileName=%s, mediaType=%s, localPath=%s, data=%s",
                                 att.fileName, att.mediaType, att.localPath,
                                 att.data != null ? att.data.length() + "chars" : "null"));
                     }
@@ -75,23 +76,23 @@ public class CliAttachmentHandler {
                     String text = resolveTextContent(att);
                     if (text == null) {
                         LOG.debug(String.format(
-                                "[ClaudeImageDiag][CliAttachmentHandler] text attachment could not resolve content: fileName=%s, mediaType=%s, localPath=%s",
+                                LOG_PREFIX + "text attachment could not resolve content: fileName=%s, mediaType=%s, localPath=%s",
                                 att.fileName, att.mediaType, att.localPath));
                         continue;
                     }
                     blocks.add(new ContentBlock(ContentBlock.Kind.TEXT,
                             null, null,
                             "[File: " + att.fileName + "]\n" + text));
-                    LOG.debug("[ClaudeImageDiag][CliAttachmentHandler] " + "text block created: fileName=" + att.fileName + ", mediaType=" + att.mediaType + ", textChars=" + text.length());
+                    LOG.debug(LOG_PREFIX + "text block created: fileName=" + att.fileName + ", mediaType=" + att.mediaType + ", textChars=" + text.length());
                 }
             } catch (Exception e) {
                 LOG.warn("[CliAttachmentHandler] Failed to process attachment: " + att.fileName, e);
                 LOG.debug(String.format(
-                        "[ClaudeImageDiag][CliAttachmentHandler] exception while processing attachment: fileName=%s, mediaType=%s, localPath=%s",
+                        LOG_PREFIX + "exception while processing attachment: fileName=%s, mediaType=%s, localPath=%s",
                         att.fileName, att.mediaType, att.localPath), e);
             }
         }
-        LOG.debug("[ClaudeImageDiag][CliAttachmentHandler] processForClaude result: blocks=" + blocks.size());
+        LOG.debug(LOG_PREFIX + "processForClaude result: blocks=" + blocks.size());
         return blocks;
     }
 
@@ -216,8 +217,8 @@ public class CliAttachmentHandler {
             return false;
         }
         String lower = att.fileName.toLowerCase(Locale.ROOT);
-        return lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg")
-                || lower.endsWith(".gif") || lower.endsWith(".webp") || lower.endsWith(".bmp");
+        int dot = lower.lastIndexOf('.');
+        return dot >= 0 && CliConstants.IMAGE_EXTENSIONS.contains(lower.substring(dot));
     }
 
     private static String getExt(String mediaType, String fileName) {

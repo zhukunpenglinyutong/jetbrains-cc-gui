@@ -3,7 +3,6 @@ package com.github.claudecodegui.cli;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -14,13 +13,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class CliSessionExecutor {
 
     private static final AtomicInteger THREAD_COUNTER = new AtomicInteger(1);
-    private static final ExecutorService EXECUTOR = Executors.newCachedThreadPool(new ThreadFactory() {
-        @Override
-        public Thread newThread(Runnable runnable) {
-            Thread thread = new Thread(runnable, "CCG-CLI-Session-" + THREAD_COUNTER.getAndIncrement());
-            thread.setDaemon(true);
-            return thread;
-        }
+    private static final ExecutorService EXECUTOR = Executors.newCachedThreadPool(runnable -> {
+        Thread thread = new Thread(runnable, "CCG-CLI-Session-" + THREAD_COUNTER.getAndIncrement());
+        thread.setDaemon(true);
+        return thread;
     });
 
     private CliSessionExecutor() {

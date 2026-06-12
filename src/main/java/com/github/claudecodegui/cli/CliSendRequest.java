@@ -3,9 +3,9 @@ package com.github.claudecodegui.cli;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.google.gson.JsonObject;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * CLI 模式发送请求，完全独立于 SDK。
@@ -33,9 +33,9 @@ public record CliSendRequest(
         if (provider == null || provider.isBlank()) {
             throw new IllegalArgumentException("provider required");
         }
-        message = message != null ? message : "";
-        attachments = attachments != null ? List.copyOf(attachments) : Collections.emptyList();
-        fileTagPaths = fileTagPaths != null ? List.copyOf(fileTagPaths) : Collections.emptyList();
-        extraEnv = extraEnv != null ? Map.copyOf(extraEnv) : Collections.emptyMap();
+        message = Objects.requireNonNullElse(message, "");
+        attachments = attachments != null ? List.copyOf(attachments) : List.of();
+        fileTagPaths = fileTagPaths != null ? List.copyOf(fileTagPaths) : List.of();
+        extraEnv = extraEnv != null ? Map.copyOf(extraEnv) : Map.of();
     }
 }

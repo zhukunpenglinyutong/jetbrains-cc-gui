@@ -1,14 +1,29 @@
 package com.github.claudecodegui.cli.claude;
 
+import com.github.claudecodegui.cli.common.CliConstants;
 import com.github.claudecodegui.cli.common.CliSettings;
 import com.google.gson.JsonObject;
 
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * Claude CLI 模型映射工具（从用户 ~/.claude/settings.json 的 env 中读取自定义映射）。
  */
 final class ClaudeCliModelResolver {
+
+    private static final Pattern ONE_M_SUFFIX = Pattern.compile("(?i)\\[1m\\]$");
+    private static final String SUFFIX_1M = "[1m]";
+
+    /** 模型家族枚举，用于统一 resolveMapped 和 readCapabilityOverride 中的分派逻辑。 */
+    private enum ModelFamily { OPUS, HAIKU, SONNET, OTHER }
+
+    private static ModelFamily detectFamily(String normalizedModel) {
+        if (normalizedModel.contains("opus"))  return ModelFamily.OPUS;
+        if (normalizedModel.contains("haiku")) return ModelFamily.HAIKU;
+        if (normalizedModel.contains("sonnet")) return ModelFamily.SONNET;
+        return ModelFamily.OTHER;
+    }
 
     private ClaudeCliModelResolver() {}
 
@@ -37,30 +52,34 @@ final class ClaudeCliModelResolver {
             return selectedModel;
         }
 
-        String mainModel = readEnvValue(env, "ANTHROPIC_MODEL");
+        String mainModel = readEnvValue(env, CliConstants.ENV_ANTHROPIC_MODEL);
         if (mainModel != null) {
             return mainModel;
         }
 
-        String normalized = selectedModel.replaceFirst("(?i)\\[1m\\]$", "").toLowerCase();
-        if (!normalized.startsWith("claude-") && !normalized.startsWith("claude_")) {
+        // Check if original model has [1m] suffix (to preserve it after mapping)
+        boolean has1mSuffix = ONE_M_SUFFIX.matcher(selectedModel).find();
+
+        String normalized = ONE_M_SUFFIX.matcher(selectedModel).replaceFirst("").toLowerCase();
+        if (!normalized.startsWith(CliConstants.MODEL_PREFIX) && !normalized.startsWith(CliConstants.MODEL_PREFIX_ALT)) {
             return selectedModel;
         }
 
-        if (normalized.contains("opus")) {
-            String m = readEnvValue(env, "ANTHROPIC_DEFAULT_OPUS_MODEL");
-            return m != null ? m : selectedModel;
-        }
-        if (normalized.contains("haiku")) {
-            String m = readEnvValue(env, "ANTHROPIC_SMALL_FAST_MODEL");
-            if (m == null) {
-                m = readEnvValue(env, "ANTHROPIC_DEFAULT_HAIKU_MODEL");
+        String mapped = switch (detectFamily(normalized)) {
+            case OPUS   -> readEnvValue(env, CliConstants.ENV_ANTHROPIC_DEFAULT_OPUS_MODEL);
+            case HAIKU  -> firstNonBlank(
+                               readEnvValue(env, CliConstants.ENV_ANTHROPIC_SMALL_FAST_MODEL),
+                               readEnvValue(env, CliConstants.ENV_ANTHROPIC_DEFAULT_HAIKU_MODEL));
+            case SONNET -> readEnvValue(env, CliConstants.ENV_ANTHROPIC_DEFAULT_SONNET_MODEL);
+            case OTHER  -> null;
+        };
+
+        if (mapped != null) {
+            // Preserve [1m] suffix from original model if the mapped model doesn't already have it
+            if (has1mSuffix && !ONE_M_SUFFIX.matcher(mapped).find()) {
+                return mapped + SUFFIX_1M;
             }
-            return m != null ? m : selectedModel;
-        }
-        if (normalized.contains("sonnet")) {
-            String m = readEnvValue(env, "ANTHROPIC_DEFAULT_SONNET_MODEL");
-            return m != null ? m : selectedModel;
+            return mapped;
         }
         return selectedModel;
     }
@@ -111,26 +130,22 @@ final class ClaudeCliModelResolver {
     }
 
     private static String readCapabilityOverride(String selectedModel, String resolvedModel, JsonObject env) {
-        String explicit = readEnvValue(env, "ANTHROPIC_MODEL_CAPABILITIES");
+        String explicit = readEnvValue(env, CliConstants.ENV_ANTHROPIC_MODEL_CAPABILITIES);
         if (explicit != null) {
             return explicit;
         }
 
-        String normalized = selectedModel != null ? selectedModel.replaceFirst("(?i)\\[1m\\]$", "").toLowerCase() : "";
-        if (normalized.contains("opus")) {
-            return readEnvValue(env, "ANTHROPIC_DEFAULT_OPUS_MODEL_CAPABILITIES");
-        }
-        if (normalized.contains("haiku")) {
-            String smallFast = readEnvValue(env, "ANTHROPIC_SMALL_FAST_MODEL_CAPABILITIES");
-            return smallFast != null ? smallFast : readEnvValue(env, "ANTHROPIC_DEFAULT_HAIKU_MODEL_CAPABILITIES");
-        }
-        if (normalized.contains("sonnet")) {
-            return readEnvValue(env, "ANTHROPIC_DEFAULT_SONNET_MODEL_CAPABILITIES");
-        }
-
-        return isCanonicalClaudeModel(resolvedModel)
-                ? readEnvValue(env, "ANTHROPIC_DEFAULT_SONNET_MODEL_CAPABILITIES")
-                : null;
+        String normalized = selectedModel != null ? ONE_M_SUFFIX.matcher(selectedModel).replaceFirst("").toLowerCase() : "";
+        return switch (detectFamily(normalized)) {
+            case OPUS   -> readEnvValue(env, CliConstants.ENV_ANTHROPIC_DEFAULT_OPUS_MODEL_CAPS);
+            case HAIKU  -> firstNonBlank(
+                               readEnvValue(env, CliConstants.ENV_ANTHROPIC_SMALL_FAST_MODEL_CAPS),
+                               readEnvValue(env, CliConstants.ENV_ANTHROPIC_DEFAULT_HAIKU_MODEL_CAPS));
+            case SONNET -> readEnvValue(env, CliConstants.ENV_ANTHROPIC_DEFAULT_SONNET_MODEL_CAPS);
+            case OTHER  -> isCanonicalClaudeModel(resolvedModel)
+                               ? readEnvValue(env, CliConstants.ENV_ANTHROPIC_DEFAULT_SONNET_MODEL_CAPS)
+                               : null;
+        };
     }
 
     private static boolean containsCapability(String capabilities, String expected) {
@@ -150,16 +165,14 @@ final class ClaudeCliModelResolver {
         return token == null ? "" : token.trim().toLowerCase().replace('-', '_');
     }
 
+    private static String firstNonBlank(String a, String b) {
+        return a != null ? a : b;
+    }
+
     private static JsonObject toJsonObject(Map<String, String> env) {
         JsonObject json = new JsonObject();
-        if (env == null) {
-            return json;
-        }
-        for (Map.Entry<String, String> entry : env.entrySet()) {
-            if (entry.getKey() != null && entry.getValue() != null) {
-                json.addProperty(entry.getKey(), entry.getValue());
-            }
-        }
+        if (env == null) return json;
+        env.forEach((k, v) -> { if (k != null && v != null) json.addProperty(k, v); });
         return json;
     }
 

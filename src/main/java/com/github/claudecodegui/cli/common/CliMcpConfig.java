@@ -42,8 +42,8 @@ public class CliMcpConfig {
                 JsonObject existing = GSON.fromJson(content, JsonObject.class);
                 if (existing != null) {
                     // 兼容旧格式（纯 servers）和新格式（mcpServers 包裹）
-                    if (existing.has("mcpServers") && existing.get("mcpServers").isJsonObject()) {
-                        servers = existing.getAsJsonObject("mcpServers");
+                    if (existing.has(CliConstants.MCP_SERVERS_KEY) && existing.get(CliConstants.MCP_SERVERS_KEY).isJsonObject()) {
+                        servers = existing.getAsJsonObject(CliConstants.MCP_SERVERS_KEY);
                     } else {
                         servers = existing;
                     }
@@ -78,7 +78,7 @@ public class CliMcpConfig {
             Files.createDirectories(configPath.getParent());
             // Claude CLI --mcp-config 要求 { "mcpServers": { ... } } 格式
             JsonObject wrapper = new JsonObject();
-            wrapper.add("mcpServers", servers);
+            wrapper.add(CliConstants.MCP_SERVERS_KEY, servers);
             Files.writeString(configPath, GSON.toJson(wrapper), StandardCharsets.UTF_8);
         } catch (Exception e) {
             LOG.warn("[CliMcpConfig] Failed to persist MCP config: " + e.getMessage());

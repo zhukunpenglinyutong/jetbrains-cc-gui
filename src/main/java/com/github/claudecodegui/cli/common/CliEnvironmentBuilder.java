@@ -1,5 +1,6 @@
 package com.github.claudecodegui.cli.common;
 
+import com.github.claudecodegui.common.CommonConstants;
 import com.github.claudecodegui.util.PlatformUtils;
 
 import java.nio.file.Paths;
@@ -13,21 +14,14 @@ import java.util.Map;
  */
 public final class CliEnvironmentBuilder {
 
-    private static final String ENV_CODEX_HOME = "CODEX_HOME";
-    private static final String ENV_CLAUDE_PERMISSION_DIR = "CLAUDE_PERMISSION_DIR";
-    private static final String ENV_CLAUDE_SESSION_ID = "CLAUDE_SESSION_ID";
-    private static final String ENV_CLAUDE_PERMISSION_SAFETY_NET_MS = "CLAUDE_PERMISSION_SAFETY_NET_MS";
-
     private CliEnvironmentBuilder() {
     }
 
     public static Map<String, String> buildBaseEnvironment() {
         Map<String, String> env = new LinkedHashMap<>();
-        copyIfPresent(env, "SystemRoot");
-        copyIfPresent(env, "ComSpec");
-        copyIfPresent(env, "PATHEXT");
-        copyIfPresent(env, "WINDIR");
-        copyIfPresent(env, "NUMBER_OF_PROCESSORS");
+        for (String key : CliConstants.WINDOWS_SYSTEM_ENV_KEYS) {
+            copyIfPresent(env, key);
+        }
         copyPath(env);
         copyHome(env);
         copyProxy(env);
@@ -37,11 +31,11 @@ public final class CliEnvironmentBuilder {
     }
 
     public static void configureProjectPath(Map<String, String> env, String cwd) {
-        if (env == null || cwd == null || cwd.isBlank() || "undefined".equals(cwd) || "null".equals(cwd)) {
+        if (env == null || cwd == null || cwd.isBlank() || CommonConstants.UNDEFINED.equals(cwd) || CommonConstants.NULL_SENTINEL.equals(cwd)) {
             return;
         }
-        env.put("IDEA_PROJECT_PATH", cwd);
-        env.put("PROJECT_PATH", cwd);
+        env.put(CliConstants.ENV_IDEA_PROJECT_PATH, cwd);
+        env.put(CliConstants.ENV_PROJECT_PATH, cwd);
     }
 
     public static void configureClaudePermissionEnv(
@@ -54,12 +48,12 @@ public final class CliEnvironmentBuilder {
             return;
         }
         if (permissionDir != null && !permissionDir.isBlank()) {
-            env.put(ENV_CLAUDE_PERMISSION_DIR, permissionDir);
+            env.put(CliConstants.ENV_CLAUDE_PERMISSION_DIR, permissionDir);
         }
         if (sessionId != null && !sessionId.isBlank()) {
-            env.put(ENV_CLAUDE_SESSION_ID, sessionId);
+            env.put(CliConstants.ENV_CLAUDE_SESSION_ID, sessionId);
         }
-        env.put(ENV_CLAUDE_PERMISSION_SAFETY_NET_MS, String.valueOf(safetyNetMs));
+        env.put(CliConstants.ENV_CLAUDE_PERMISSION_SAFETY_NET_MS, String.valueOf(safetyNetMs));
     }
 
     private static void copyPath(Map<String, String> env) {
@@ -69,11 +63,9 @@ public final class CliEnvironmentBuilder {
         if (path == null || path.isBlank()) {
             return;
         }
+        env.put("PATH", path);
         if (PlatformUtils.isWindows()) {
-            env.put("PATH", path);
             env.put("Path", path);
-        } else {
-            env.put("PATH", path);
         }
     }
 
@@ -85,30 +77,25 @@ public final class CliEnvironmentBuilder {
                 env.put("USERPROFILE", home);
             }
         }
-        copyIfPresent(env, "HOMEDRIVE");
-        copyIfPresent(env, "HOMEPATH");
+        copyIfPresent(env, CommonConstants.ENV_HOMEDRIVE);
+        copyIfPresent(env, CommonConstants.ENV_HOMEPATH);
     }
 
     private static void copyProxy(Map<String, String> env) {
-        for (String key : new String[]{"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY"}) {
+        for (String key : CliConstants.PROXY_ENV_KEYS) {
             copyIfPresent(env, key);
             copyIfPresent(env, key.toLowerCase(Locale.ROOT));
         }
     }
 
     private static void copyTerminalHints(Map<String, String> env) {
-        copyIfPresent(env, "TERM");
-        copyIfPresent(env, "TERM_PROGRAM");
-        copyIfPresent(env, "COLORTERM");
-        copyIfPresent(env, "LANG");
-        copyIfPresent(env, "LC_ALL");
-        copyIfPresent(env, "TMPDIR");
-        copyIfPresent(env, "TEMP");
-        copyIfPresent(env, "TMP");
+        for (String key : CliConstants.TERMINAL_HINT_ENV_KEYS) {
+            copyIfPresent(env, key);
+        }
     }
 
     private static void ensureCodexHome(Map<String, String> env) {
-        if (env.containsKey(ENV_CODEX_HOME) && !env.get(ENV_CODEX_HOME).isBlank()) {
+        if (env.containsKey(CliConstants.ENV_CODEX_HOME) && !env.get(CliConstants.ENV_CODEX_HOME).isBlank()) {
             return;
         }
         String home = env.get("HOME");
@@ -116,7 +103,7 @@ public final class CliEnvironmentBuilder {
             home = PlatformUtils.getHomeDirectory();
         }
         if (home != null && !home.isBlank()) {
-            env.put(ENV_CODEX_HOME, Paths.get(home, ".codex").toString());
+            env.put(CliConstants.ENV_CODEX_HOME, Paths.get(home, CommonConstants.DIR_CODEX).toString());
         }
     }
 

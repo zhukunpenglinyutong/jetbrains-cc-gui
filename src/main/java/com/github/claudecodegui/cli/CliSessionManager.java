@@ -2,6 +2,7 @@ package com.github.claudecodegui.cli;
 
 import com.github.claudecodegui.cli.claude.ClaudeCliSession;
 import com.github.claudecodegui.cli.codex.CodexCliSession;
+import com.github.claudecodegui.cli.common.CliConstants;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.ui.toolwindow.TabPerformanceLogger;
@@ -9,6 +10,8 @@ import com.intellij.openapi.diagnostic.Logger;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 /**
  * CLI 模式统一入口。每个 Tab 拥有独立的 ClaudeCliSession / CodexCliSession。
@@ -23,25 +26,24 @@ public class CliSessionManager {
 
     public CompletableFuture<SDKResult> send(CliSendRequest request, MessageCallback callback) {
         return switch (request.provider()) {
-            case "claude" -> sendClaude(request, callback);
-            case "codex" -> sendCodex(request, callback);
+            case CliConstants.PROVIDER_CLAUDE -> sendClaude(request, callback);
+            case CliConstants.PROVIDER_CODEX -> sendCodex(request, callback);
             default -> CompletableFuture.failedFuture(
                     new IllegalArgumentException("Unknown CLI provider: " + request.provider()));
         };
     }
 
     public void interrupt(String tabId, String provider) {
-        String runtimeProvider = normalizeInterruptProvider(provider);
-        if ("claude".equals(runtimeProvider)) {
-            ClaudeCliSession s = claudeSessions.get(tabId);
-            if (s != null) {
-                s.interrupt();
+        switch (normalizeInterruptProvider(provider)) {
+            case CliConstants.PROVIDER_CLAUDE -> {
+                ClaudeCliSession s = claudeSessions.get(tabId);
+                if (s != null) { s.interrupt(); }
             }
-        } else if ("codex".equals(runtimeProvider)) {
-            CodexCliSession s = codexSessions.get(tabId);
-            if (s != null) {
-                s.interrupt();
+            case CliConstants.PROVIDER_CODEX -> {
+                CodexCliSession s = codexSessions.get(tabId);
+                if (s != null) { s.interrupt(); }
             }
+            default -> {}
         }
     }
 
@@ -68,27 +70,24 @@ public class CliSessionManager {
     // ── private ──────────────────────────────────────────────────────────────
 
     private CompletableFuture<SDKResult> sendClaude(CliSendRequest request, MessageCallback callback) {
-        ClaudeCliSession session = claudeSessions.computeIfAbsent(
-                request.tabId(), ClaudeCliSession::new);
-        LOG.info(String.format("[CliConcurrencyDiag][CliSessionManager] sendClaude: tabId=%s, sessionId=%s, activeTabs=%d, thread=%s",
-                request.tabId(),
-                request.sessionId() != null ? request.sessionId() : "(new)",
-                claudeSessions.size(),
-                Thread.currentThread().getName()));
-        return session.send(request, adapt(callback))
-                .thenApply(v -> SDKResult.success(null))
-                .exceptionally(ex -> {
-                    SDKResult r = SDKResult.error(ex.getMessage());
-                    callback.onError(ex.getMessage());
-                    callback.onComplete(r);
-                    return r;
-                });
+        return sendToSession(request, callback, claudeSessions, ClaudeCliSession::new,
+                (session, cb) -> session.send(request, cb));
     }
 
     private CompletableFuture<SDKResult> sendCodex(CliSendRequest request, MessageCallback callback) {
-        CodexCliSession session = codexSessions.computeIfAbsent(
-                request.tabId(), CodexCliSession::new);
-        return session.send(request, adapt(callback))
+        return sendToSession(request, callback, codexSessions, CodexCliSession::new,
+                (session, cb) -> session.send(request, cb));
+    }
+
+    private <S> CompletableFuture<SDKResult> sendToSession(
+            CliSendRequest request,
+            MessageCallback callback,
+            ConcurrentHashMap<String, S> sessions,
+            Function<String, S> sessionFactory,
+            BiFunction<S, CliSessionCallback, CompletableFuture<Void>> sender
+    ) {
+        S session = sessions.computeIfAbsent(request.tabId(), sessionFactory);
+        return sender.apply(session, adapt(callback))
                 .thenApply(v -> SDKResult.success(null))
                 .exceptionally(ex -> {
                     SDKResult r = SDKResult.error(ex.getMessage());
@@ -99,7 +98,10 @@ public class CliSessionManager {
     }
 
     static String normalizeInterruptProvider(String provider) {
-        return "codex".equals(provider) ? "codex" : "claude";
+        return switch (provider) {
+            case CliConstants.PROVIDER_CODEX -> CliConstants.PROVIDER_CODEX;
+            default -> CliConstants.PROVIDER_CLAUDE;
+        };
     }
 
     /** 将 CliSessionCallback 适配为 MessageCallback，统一回调格式。 */

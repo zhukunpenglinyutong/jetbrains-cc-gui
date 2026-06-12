@@ -3,15 +3,11 @@ package com.github.claudecodegui.cli.codex;
 import com.github.claudecodegui.cli.CliSendRequest;
 import com.github.claudecodegui.cli.CliSessionCallback;
 import com.github.claudecodegui.cli.CliSessionExecutor;
-import com.github.claudecodegui.cli.common.CliAttachmentHandler;
-import com.github.claudecodegui.cli.common.CliEnvironmentBuilder;
-import com.github.claudecodegui.cli.common.CliErrorFormatter;
-import com.github.claudecodegui.cli.common.CliMcpConfig;
-import com.github.claudecodegui.cli.common.CliProcessHandle;
-import com.github.claudecodegui.cli.common.CliSettings;
+import com.github.claudecodegui.cli.common.*;
 import com.github.claudecodegui.session.runtime.CodexCliResolver;
 import com.github.claudecodegui.ui.toolwindow.TabPerformanceLogger;
 import com.github.claudecodegui.util.GsonHolder;
+import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -22,19 +18,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.charset.Charset;
-import java.nio.charset.CharacterCodingException;
-import java.nio.charset.CodingErrorAction;
-import java.nio.charset.StandardCharsets;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
-import java.nio.charset.CharsetDecoder;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.nio.charset.*;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
@@ -47,7 +34,7 @@ import java.util.regex.Pattern;
 public class CodexCliSession {
 
     private static final Logger LOG = Logger.getInstance(CodexCliSession.class);
-    private static final String ENV_CODEX_SANDBOX_NETWORK_DISABLED = "CODEX_SANDBOX_NETWORK_DISABLED";
+    private static final String ENV_CODEX_SANDBOX_NETWORK_DISABLED = CliConstants.ENV_CODEX_SANDBOX_NETWORK_DISABLED;
     private static final Charset WINDOWS_CHINESE_CHARSET = Charset.forName("GBK");
     private static final Pattern POWERSHELL_PROFILE_ERROR_PATTERN = Pattern.compile(
             "(?i)(PowerShell_profile\\.ps1|running scripts is disabled on this system|PSSecurityException|UnauthorizedAccess)"
@@ -79,7 +66,7 @@ public class CodexCliSession {
                     + "|rate.limit|quota|abort|fatal|panic|unexpected.status"
                     + "|[45]\\d{2}\\b)\\b"
     );
-    private static final String UNSUPPORTED_IMAGE_MESSAGE = "__I18N__:aiBridge.unsupportedImageVision";
+    private static final String UNSUPPORTED_IMAGE_MESSAGE = CliConstants.I18N_UNSUPPORTED_IMAGE;
     private static final Pattern UNSUPPORTED_IMAGE_CONTEXT_PATTERN = Pattern.compile(
             "(?i)\\b(?:image|images|vision|visual|multimodal|local_image|image_url)\\b"
     );
@@ -145,7 +132,7 @@ public class CodexCliSession {
                 cliEnv.clear();
                 cliEnv.putAll(CliEnvironmentBuilder.buildBaseEnvironment());
                 cliEnv.putAll(CliSettings.readCodexCliEnvironment());
-                cliEnv.put("NO_COLOR", "1");
+                cliEnv.put(CliConstants.ARG_NO_COLOR, "1");
                 CliEnvironmentBuilder.configureProjectPath(cliEnv, request.cwd());
                 // CLI mode must be allowed to reach the real Codex API even if the host
                 // process was launched with sandbox-network restrictions.
@@ -163,7 +150,7 @@ public class CodexCliSession {
                         pb.directory(cwd);
                     } else {
                         LOG.warn("[CodexCliSession][" + tabId + "] CWD does not exist, falling back to home: " + request.cwd());
-                        File homeDir = new File(System.getProperty("user.home"));
+                        File homeDir = new File(PlatformUtils.getHomeDirectory());
                         if (homeDir.isDirectory()) {
                             pb.directory(homeDir);
                         }
@@ -205,7 +192,7 @@ public class CodexCliSession {
                 int exitCode = process.exitValue();
 
                 if (wasInterrupted()) {
-                    callback.onInterrupted(assistantContent.toString(), "__I18N__:chat.requestInterrupted");
+                    callback.onInterrupted(assistantContent.toString(), CliConstants.I18N_REQUEST_INTERRUPTED);
                 } else if (exitCode == 0) {
                     if (!cliError.isEmpty()) {
                         String err = formatCodexError(cliError.toString(), requestHasImages);
@@ -213,8 +200,8 @@ public class CodexCliSession {
                         callback.onComplete(false, assistantContent.toString(), err);
                     } else {
                         flushPendingAgentMessageAsContent(callback, assistantContent);
-                        callback.onMessage("stream_end", "");
-                        callback.onMessage("message_end", "");
+                        callback.onMessage(CliConstants.MSG_STREAM_END, "");
+                        callback.onMessage(CliConstants.MSG_MESSAGE_END, "");
                         callback.onComplete(true, assistantContent.toString(), null);
                     }
                 } else if (shouldReportExitError(exitCode)) {
@@ -225,7 +212,7 @@ public class CodexCliSession {
             } catch (Exception e) {
                 LOG.warn("[CodexCliSession][" + tabId + "] send failed", e);
                 if (wasInterrupted()) {
-                    callback.onInterrupted(null, "__I18N__:chat.requestInterrupted");
+                    callback.onInterrupted(null, CliConstants.I18N_REQUEST_INTERRUPTED);
                 } else {
                     String err = CliErrorFormatter.formatError("Codex", e.getMessage());
                     callback.onError(err);
@@ -321,15 +308,15 @@ public class CodexCliSession {
                     String id = getString(event, "thread_id");
                     if (id != null) {
                         threadId = id;
-                        callback.onMessage("session_id", id);
+                        callback.onMessage(CliConstants.MSG_SESSION_ID, id);
                     }
                     lastSegmentKind = SegmentKind.NONE;
-                    callback.onMessage("stream_start", "");
-                    callback.onMessage("message_start", "");
+                    callback.onMessage(CliConstants.MSG_STREAM_START, "");
+                    callback.onMessage(CliConstants.MSG_MESSAGE_START, "");
                 }
                 case "turn.started" -> {
                     lastSegmentKind = SegmentKind.NONE;
-                    callback.onMessage("message_start", "");
+                    callback.onMessage(CliConstants.MSG_MESSAGE_START, "");
                 }
                 case "item.started", "item.updated", "item.completed" -> {
                     if (event.has("item") && event.get("item").isJsonObject()) {
@@ -345,8 +332,8 @@ public class CodexCliSession {
                 case "turn.completed" -> {
                     flushPendingAgentMessageAsContent(callback, assistantContent);
                     if (event.has("usage") && event.get("usage").isJsonObject()) {
-                        callback.onMessage("usage", event.getAsJsonObject("usage").toString());
-                        callback.onMessage("result", buildUsageResultMessage(event.getAsJsonObject("usage")).toString());
+                        callback.onMessage(CliConstants.MSG_USAGE, event.getAsJsonObject("usage").toString());
+                        callback.onMessage(CliConstants.MSG_RESULT, buildUsageResultMessage(event.getAsJsonObject("usage")).toString());
                     }
                 }
                 case "turn.failed" -> {
@@ -394,7 +381,7 @@ public class CodexCliSession {
             } else {
                 assistantContent.append(text);
                 markSegment(callback, SegmentKind.TEXT);
-                callback.onMessage("content_delta", text);
+                callback.onMessage(CliConstants.MSG_CONTENT_DELTA, text);
             }
         }
     }
@@ -444,13 +431,13 @@ public class CodexCliSession {
         markSegment(callback, SegmentKind.THINKING);
         // 首次遇到该 reasoning item 时发送 thinking 开始信号
         if (emittedThinkingStartIds.add(id)) {
-            callback.onMessage("thinking", "");
+            callback.onMessage(CliConstants.MSG_THINKING, "");
         }
         String previous = reasoningTextByItemId.getOrDefault(id, "");
         String delta = appendedDelta(previous, text);
         reasoningTextByItemId.put(id, text);
         if (!delta.isEmpty()) {
-            callback.onMessage("thinking_delta", delta);
+            callback.onMessage(CliConstants.MSG_THINKING_DELTA, delta);
         }
     }
 
@@ -594,9 +581,9 @@ public class CodexCliSession {
         if (!delta.isEmpty()) {
             assistantContent.append(delta);
             markSegment(callback, SegmentKind.TEXT);
-            callback.onMessage("content_delta", delta);
+            callback.onMessage(CliConstants.MSG_CONTENT_DELTA, delta);
         }
-        callback.onMessage("assistant", buildAssistantMessage(text).toString());
+        callback.onMessage(CliConstants.MSG_ASSISTANT, buildAssistantMessage(text).toString());
     }
 
     /**
@@ -624,8 +611,8 @@ public class CodexCliSession {
             return;
         }
         markSegment(callback, SegmentKind.THINKING);
-        callback.onMessage("thinking", "");
-        callback.onMessage("thinking_delta", text);
+        callback.onMessage(CliConstants.MSG_THINKING, "");
+        callback.onMessage(CliConstants.MSG_THINKING_DELTA, text);
     }
 
     private void markSegment(CliSessionCallback callback, SegmentKind nextKind) {
@@ -638,7 +625,7 @@ public class CodexCliSession {
                         && lastSegmentKind != SegmentKind.TOOL
                         && nextKind == SegmentKind.TOOL);
         if (crossesToolBoundary) {
-            callback.onMessage("block_reset", "");
+            callback.onMessage(CliConstants.MSG_BLOCK_RESET, "");
         }
         lastSegmentKind = nextKind;
     }
@@ -708,14 +695,14 @@ public class CodexCliSession {
         if (!emittedToolUseIds.add(id)) {
             return;
         }
-        callback.onMessage("assistant", buildToolUseMessage(id, name, input).toString());
+        callback.onMessage(CliConstants.MSG_ASSISTANT, buildToolUseMessage(id, name, input).toString());
     }
 
     private void emitToolResultOnce(CliSessionCallback callback, String id, boolean isError, String content) {
         if (!emittedToolResultIds.add(id)) {
             return;
         }
-        callback.onMessage("user", buildToolResultMessage(id, isError, content).toString());
+        callback.onMessage(CliConstants.MSG_USER, buildToolResultMessage(id, isError, content).toString());
     }
 
     private JsonObject parseFunctionCallArguments(JsonObject payload) {
@@ -781,60 +768,60 @@ public class CodexCliSession {
      */
     private void appendExecArgs(List<String> cmd, CliSendRequest request, List<File> images,
                                 CodexCliCommandUtils.PermissionSelection perm) {
-        cmd.add("exec");
-        cmd.add("--json");
-        cmd.add("--color");
-        cmd.add("never");
-        cmd.add("--sandbox");
+        cmd.add(CliConstants.CODEX_ARG_EXEC);
+        cmd.add(CliConstants.CODEX_ARG_JSON);
+        cmd.add(CliConstants.CODEX_ARG_COLOR);
+        cmd.add(CliConstants.CODEX_ARG_NEVER);
+        cmd.add(CliConstants.CODEX_ARG_SANDBOX);
         cmd.add(perm.sandbox());
 
         if (request.cwd() != null && !request.cwd().isBlank()) {
-            cmd.add("-C");
+            cmd.add(CliConstants.CODEX_ARG_C);
             cmd.add(request.cwd());
         }
         if (request.model() != null && !request.model().isBlank()) {
-            cmd.add("-m");
+            cmd.add(CliConstants.CODEX_ARG_M);
             cmd.add(request.model());
         }
         if (request.reasoningEffort() != null && !request.reasoningEffort().isBlank()) {
-            cmd.add("-c");
+            cmd.add(CliConstants.CODEX_ARG_C_CONFIG);
             cmd.add("model_reasoning_effort=\"" + request.reasoningEffort() + "\"");
         }
         for (File img : images) {
-            cmd.add("--image");
+            cmd.add(CliConstants.CODEX_ARG_IMAGE);
             cmd.add(img.getAbsolutePath());
         }
 
         // exec 子命令的 --image 是贪婪参数,必须用 `--` 分隔位置参数 prompt。
         if (!images.isEmpty()) {
-            cmd.add("--");
+            cmd.add(CliConstants.CODEX_ARG_SEPARATOR);
         }
-        cmd.add("-");
+        cmd.add(CliConstants.CODEX_ARG_STDIN);
     }
 
     /**
      * 续接会话:codex exec resume --last ... PROMPT
      */
     private void appendResumeArgs(List<String> cmd, CliSendRequest request, List<File> images) {
-        cmd.add("exec");
-        cmd.add("resume");
-        cmd.add("--last");
-        cmd.add("--json");
+        cmd.add(CliConstants.CODEX_ARG_EXEC);
+        cmd.add(CliConstants.CODEX_ARG_RESUME);
+        cmd.add(CliConstants.CODEX_ARG_LAST);
+        cmd.add(CliConstants.CODEX_ARG_JSON);
 
         if (request.model() != null && !request.model().isBlank()) {
-            cmd.add("-m");
+            cmd.add(CliConstants.CODEX_ARG_M);
             cmd.add(request.model());
         }
         if (request.reasoningEffort() != null && !request.reasoningEffort().isBlank()) {
-            cmd.add("-c");
+            cmd.add(CliConstants.CODEX_ARG_C_CONFIG);
             cmd.add("model_reasoning_effort=\"" + request.reasoningEffort() + "\"");
         }
         // resume 的 --image 是单值非贪婪,无需 `--` 分隔符。
         for (File img : images) {
-            cmd.add("-i");
+            cmd.add(CliConstants.CODEX_ARG_I_CONFIG);
             cmd.add(img.getAbsolutePath());
         }
-        cmd.add("-");
+        cmd.add(CliConstants.CODEX_ARG_STDIN);
     }
 
     private byte[] buildPromptInput(CliSendRequest request) {
@@ -844,16 +831,16 @@ public class CodexCliSession {
     private String buildPrompt(CliSendRequest request) {
         StringBuilder sb = new StringBuilder(request.message());
         if (request.openedFiles() != null && request.openedFiles().size() > 0) {
-            sb.append("\n\n## Opened Files Context\n\n").append(gson.toJson(request.openedFiles()));
+            sb.append(CliConstants.PROMPT_OPENED_FILES).append(gson.toJson(request.openedFiles()));
         }
         if (!request.fileTagPaths().isEmpty()) {
-            sb.append("\n\n## Referenced Files\n\n");
+            sb.append(CliConstants.PROMPT_REFERENCED);
             for (String p : request.fileTagPaths()) {
                 sb.append("- ").append(p).append('\n');
             }
         }
         if (request.agentPrompt() != null && !request.agentPrompt().isBlank()) {
-            sb.append("\n\n## Agent Role and Instructions\n\n").append(request.agentPrompt());
+            sb.append(CliConstants.PROMPT_AGENT_ROLE).append(request.agentPrompt());
         }
         return sb.toString();
     }
@@ -1094,9 +1081,7 @@ public class CodexCliSession {
         if (DIAGNOSTIC_BODY_PATTERN.matcher(trimmed).matches()) {
             return true;
         }
-        if (trimmed.startsWith("At line:")
-                || trimmed.startsWith("CategoryInfo :")
-                || trimmed.startsWith("FullyQualifiedErrorId :")) {
+        if (CliConstants.POWERSHELL_DIAGNOSTIC_PREFIXES.stream().anyMatch(trimmed::startsWith)) {
             return true;
         }
         if (trimmed.matches("(?i)^\\S+\\s*:\\s*The term '.+' is not recognized as the name of a cmdlet.*")) {

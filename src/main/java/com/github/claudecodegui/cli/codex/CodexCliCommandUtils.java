@@ -1,5 +1,6 @@
 package com.github.claudecodegui.cli.codex;
 
+import com.github.claudecodegui.cli.common.CliConstants;
 import com.github.claudecodegui.util.PlatformUtils;
 
 import java.util.LinkedHashMap;
@@ -25,32 +26,25 @@ public final class CodexCliCommandUtils {
 
     static PermissionSelection selectPermission(String permissionMode, String configuredSandbox) {
         String sandbox = normalizeSandbox(configuredSandbox);
-        String approval;
-        if ("bypassPermissions".equals(permissionMode)) {
-            approval = "never";
-            sandbox = "danger-full-access";
-        } else if ("plan".equals(permissionMode)) {
-            approval = "untrusted";
-            sandbox = "read-only";
-        } else if ("acceptEdits".equals(permissionMode) || "autoEdit".equals(permissionMode)) {
-            approval = "on-request";
-        } else {
-            approval = "untrusted";
-        }
-        return new PermissionSelection(approval, sandbox);
+        return switch (permissionMode == null ? "" : permissionMode) {
+            case CliConstants.PERM_BYPASS -> new PermissionSelection("never", CliConstants.SANDBOX_DANGER_FULL_ACCESS);
+            case CliConstants.PERM_PLAN   -> new PermissionSelection("untrusted", CliConstants.SANDBOX_READ_ONLY);
+            case CliConstants.PERM_ACCEPT_EDITS, CliConstants.PERM_AUTO_EDIT -> new PermissionSelection("on-request", sandbox);
+            default -> new PermissionSelection("untrusted", sandbox);
+        };
     }
 
     static String normalizeSandbox(String sandbox) {
-        if ("read-only".equals(sandbox) || "workspace-write".equals(sandbox) || "danger-full-access".equals(sandbox)) {
+        if (CliConstants.VALID_SANDBOX_MODES.contains(sandbox)) {
             return sandbox;
         }
-        return PlatformUtils.isWindows() ? "danger-full-access" : "workspace-write";
+        return PlatformUtils.isWindows() ? CliConstants.SANDBOX_DANGER_FULL_ACCESS : CliConstants.SANDBOX_WORKSPACE_WRITE;
     }
 
     public static void addCodexExecutable(List<String> command, String executable) {
         String resolved = executable != null && !executable.isBlank() ? executable : "codex";
         String lower = resolved.toLowerCase(Locale.ROOT);
-        if (PlatformUtils.isWindows() && (lower.endsWith(".cmd") || lower.endsWith(".bat"))) {
+        if (PlatformUtils.isWindows() && CliConstants.WINDOWS_SCRIPT_SUFFIXES.stream().anyMatch(lower::endsWith)) {
             command.add("cmd");
             command.add("/c");
             command.add(resolved);
@@ -60,7 +54,7 @@ public final class CodexCliCommandUtils {
     }
 
     static void addCodexGlobalOptions(List<String> command, PermissionSelection permission) {
-        command.add("--ask-for-approval");
+        command.add(CliConstants.CODEX_ARG_ASK_APPROVAL);
         command.add(permission.approval());
     }
 
