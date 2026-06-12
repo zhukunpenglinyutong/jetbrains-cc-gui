@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback, memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getFileIcon } from '../../utils/fileIcons';
 import { TokenIndicator } from './TokenIndicator';
+import { CopilotIcon } from '../copilotIcons';
 import type { SelectedAgent } from './types';
 
 const HIDDEN_INPUT_STYLE: React.CSSProperties = { display: 'none' };
@@ -128,10 +128,17 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
     return path.split(/[/\\]/).pop() || path;
   };
 
-  const getFileIconSvg = (path: string) => {
+  const getContextFileIconName = (path: string): 'code' | 'file' => {
     const fileName = getFileName(path);
-    const extension = fileName.indexOf('.') !== -1 ? fileName.split('.').pop() : '';
-    return getFileIcon(extension, fileName);
+    const extension = fileName.indexOf('.') !== -1
+      ? (fileName.split('.').pop() || '').toLowerCase()
+      : '';
+    const codeExtensions = new Set([
+      'bat', 'c', 'cmd', 'cpp', 'cs', 'css', 'go', 'gradle', 'groovy', 'h', 'hpp',
+      'html', 'java', 'js', 'json', 'jsx', 'kt', 'kts', 'less', 'md', 'properties',
+      'py', 'rs', 'scss', 'sh', 'sql', 'ts', 'tsx', 'xml', 'yaml', 'yml',
+    ]);
+    return codeExtensions.has(extension) ? 'code' : 'file';
   };
 
   const displayText = activeFile ? (
@@ -151,7 +158,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
           onClick={handleAttachClick}
           title="Add attachment"
         >
-          <span className="codicon codicon-attach" />
+          <CopilotIcon name="attachment" size={16} aria-hidden="true" />
         </div>
 
         {/* Token Indicator */}
@@ -186,9 +193,12 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
           data-tooltip={selectedAgent.name}
           style={CURSOR_DEFAULT_STYLE}
         >
-          <span
-            className="codicon codicon-robot"
+          <CopilotIcon
+            className="context-agent-icon"
+            name="agent"
+            size={15}
             style={ROBOT_ICON_STYLE}
+            aria-hidden="true"
           />
           <span className="context-text">
             <span dir="ltr">
@@ -197,11 +207,15 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
                 : selectedAgent.name}
             </span>
           </span>
-          <span 
-            className="codicon codicon-close context-close" 
+          <span
+            className="context-close context-close-button"
             onClick={onClearAgent}
             title="Remove agent"
-          />
+            role="button"
+            tabIndex={0}
+          >
+            <CopilotIcon name="x" size={12} aria-hidden="true" />
+          </span>
         </div>
       )}
 
@@ -213,20 +227,26 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
           style={CURSOR_DEFAULT_STYLE}
         >
           {activeFile && (
-            <span
-              className="context-file-icon"
+            <CopilotIcon
+              className={`context-file-icon context-file-icon-${getContextFileIconName(activeFile)}`}
+              name={getContextFileIconName(activeFile)}
+              size={15}
               style={FILE_ICON_STYLE}
-              dangerouslySetInnerHTML={{ __html: getFileIconSvg(activeFile) }}
+              aria-hidden="true"
             />
           )}
           <span className="context-text">
             <span dir="ltr">{displayText}</span>
           </span>
           <span
-            className="codicon codicon-close context-close"
+            className="context-close context-close-button"
             onClick={onClearFile}
             title="Remove file context"
-          />
+            role="button"
+            tabIndex={0}
+          >
+            <CopilotIcon name="x" size={12} aria-hidden="true" />
+          </span>
         </div>
       ) : !autoOpenFileEnabled && (
         <div className="context-file-placeholder-wrapper" ref={popoverRef}>
@@ -236,7 +256,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
             title={t('fileContext.placeholder')}
             type="button"
           >
-            <span className="codicon codicon-file" />
+            <CopilotIcon name="file" size={14} aria-hidden="true" />
             <span className="placeholder-text">{t('fileContext.placeholder')}</span>
           </button>
 
@@ -272,7 +292,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
             onClick={onToggleStatusPanel}
             data-tooltip={statusPanelExpanded ? t('statusPanel.collapse') : t('statusPanel.expand')}
           >
-            <span className={`codicon ${statusPanelExpanded ? 'codicon-chevron-down' : 'codicon-layers'}`} />
+            <CopilotIcon name={statusPanelExpanded ? 'chevronDown' : 'tool'} size={15} aria-hidden="true" />
           </button>
         )}
 
@@ -284,7 +304,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
             disabled={!hasMessages}
             data-tooltip={t('rewind.tooltip')}
           >
-            <span className="codicon codicon-discard" />
+            <CopilotIcon name="history" size={15} aria-hidden="true" />
           </button>
         )}
       </div>

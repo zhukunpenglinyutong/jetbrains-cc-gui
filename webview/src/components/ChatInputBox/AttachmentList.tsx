@@ -44,16 +44,6 @@ export const AttachmentList = ({
     setPreviewImage(null);
   }, []);
 
-  /**
-   * Get file icon
-   */
-  const getFileIcon = (mediaType: string): string => {
-    if (mediaType.startsWith('text/')) return 'codicon-file-text';
-    if (mediaType.includes('json')) return 'codicon-json';
-    if (mediaType.includes('javascript') || mediaType.includes('typescript')) return 'codicon-file-code';
-    if (mediaType.includes('pdf')) return 'codicon-file-pdf';
-    return 'codicon-file';
-  };
 
   /**
    * Get file extension
@@ -61,6 +51,19 @@ export const AttachmentList = ({
   const getExtension = (fileName: string): string => {
     const parts = fileName.split('.');
     return parts.length > 1 ? parts[parts.length - 1].toUpperCase() : '';
+  };
+
+  /**
+   * Map attachments to the local Copilot-inspired icon vocabulary.
+   */
+  const getAttachmentFileIconName = (attachment: Attachment): 'code' | 'file' => {
+    const extension = getExtension(attachment.fileName).toLowerCase();
+    const codeExtensions = new Set([
+      'bat', 'c', 'cmd', 'cpp', 'cs', 'css', 'go', 'gradle', 'groovy', 'h', 'hpp',
+      'html', 'java', 'js', 'json', 'jsx', 'kt', 'kts', 'less', 'md', 'properties',
+      'py', 'rs', 'scss', 'sh', 'sql', 'ts', 'tsx', 'xml', 'yaml', 'yml',
+    ]);
+    return codeExtensions.has(extension) ? 'code' : 'file';
   };
 
   if (attachments.length === 0) {
@@ -72,8 +75,7 @@ export const AttachmentList = ({
       <div className="attachment-list" role="list" aria-label="Attachments">
         {attachments.map((attachment) => {
           const imageAttachment = isImageAttachment(attachment);
-          const extension = getExtension(attachment.fileName);
-          const fallbackName = extension || attachment.fileName.slice(0, 6);
+          const fallbackName = attachment.fileName;
 
           return (
             <div
@@ -91,7 +93,12 @@ export const AttachmentList = ({
                     alt={attachment.fileName}
                   />
                 ) : (
-                  <span className={`attachment-file-icon codicon ${getFileIcon(attachment.mediaType)}`} />
+                  <CopilotIcon
+                    className={`attachment-file-icon attachment-file-icon-${getAttachmentFileIconName(attachment)}`}
+                    name={getAttachmentFileIconName(attachment)}
+                    size={17}
+                    aria-hidden="true"
+                  />
                 )}
               </span>
 
