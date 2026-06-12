@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
-import type { CodexCustomModel } from '../../../types/provider';
+import {useCallback, useEffect, useState} from 'react';
+import {useTranslation} from 'react-i18next';
+import type {CodexCustomModel} from '../../../types/provider';
 // Model ID format is intentionally not restricted — see isValidModelId() JSDoc for rationale
 import styles from './style.module.less';
 
@@ -48,6 +48,7 @@ export function CustomModelDialog({
   const [newModelId, setNewModelId] = useState('');
   const [newModelLabel, setNewModelLabel] = useState('');
   const [newModelDesc, setNewModelDesc] = useState('');
+    const [newModelContextWindow, setNewModelContextWindow] = useState<number | undefined>(undefined);
   const [validationError, setValidationError] = useState<string | null>(null);
 
   // Auto-open add form when initialAddMode is true
@@ -58,6 +59,7 @@ export function CustomModelDialog({
       setNewModelId('');
       setNewModelLabel('');
       setNewModelDesc('');
+        setNewModelContextWindow(undefined);
       setValidationError(null);
     }
   }, [isOpen, initialAddMode]);
@@ -70,6 +72,7 @@ export function CustomModelDialog({
       setNewModelId('');
       setNewModelLabel('');
       setNewModelDesc('');
+        setNewModelContextWindow(undefined);
       setValidationError(null);
     }
   }, [isOpen]);
@@ -110,14 +113,16 @@ export function CustomModelDialog({
       id: sanitizeInput(newModelId).trim(),
       label: sanitizeInput(newModelLabel).trim() || sanitizeInput(newModelId).trim(),
       description: sanitizeInput(newModelDesc).trim() || undefined,
+        contextWindow: newModelContextWindow || undefined,
     };
     onModelsChange([...models, newModel]);
     setNewModelId('');
     setNewModelLabel('');
     setNewModelDesc('');
+      setNewModelContextWindow(undefined);
     setIsAdding(false);
     setValidationError(null);
-  }, [models, newModelId, newModelLabel, newModelDesc, onModelsChange, validateModelId]);
+  }, [models, newModelId, newModelLabel, newModelDesc, newModelContextWindow, onModelsChange, validateModelId]);
 
   const handleSaveEdit = useCallback(() => {
     if (!editingModel) return;
@@ -132,6 +137,7 @@ export function CustomModelDialog({
           id: sanitizeInput(newModelId).trim(),
           label: sanitizeInput(newModelLabel).trim() || sanitizeInput(newModelId).trim(),
           description: sanitizeInput(newModelDesc).trim() || undefined,
+            contextWindow: newModelContextWindow || undefined,
         };
       }
       return m;
@@ -141,15 +147,17 @@ export function CustomModelDialog({
     setNewModelId('');
     setNewModelLabel('');
     setNewModelDesc('');
+      setNewModelContextWindow(undefined);
     setIsAdding(false);
     setValidationError(null);
-  }, [models, editingModel, newModelId, newModelLabel, newModelDesc, onModelsChange, validateModelId]);
+  }, [models, editingModel, newModelId, newModelLabel, newModelDesc, newModelContextWindow, onModelsChange, validateModelId]);
 
   const handleEditModel = useCallback((model: CodexCustomModel) => {
     setEditingModel(model);
     setNewModelId(model.id);
     setNewModelLabel(model.label);
     setNewModelDesc(model.description || '');
+      setNewModelContextWindow(model.contextWindow);
     setIsAdding(true);
     setValidationError(null);
   }, []);
@@ -163,6 +171,7 @@ export function CustomModelDialog({
     setNewModelId('');
     setNewModelLabel('');
     setNewModelDesc('');
+      setNewModelContextWindow(undefined);
     setIsAdding(false);
     setValidationError(null);
   }, []);
@@ -278,6 +287,50 @@ export function CustomModelDialog({
                 onChange={(e) => setNewModelDesc(e.target.value)}
                 style={DESC_INPUT_STYLE}
               />
+                {/* Context window presets */}
+                <div className={styles.contextWindowSection}>
+                    <label style={{
+                        fontSize: '12px',
+                        color: 'var(--text-secondary)',
+                        marginBottom: '4px',
+                        display: 'block'
+                    }}>
+                        {t('settings.pluginModels.contextWindow')}
+                    </label>
+                    <div style={{display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '4px'}}>
+                        {[
+                            {value: 128_000, label: '128K'},
+                            {value: 200_000, label: '200K'},
+                            {value: 258_000, label: '258K'},
+                            {value: 400_000, label: '400K'},
+                            {value: 500_000, label: '500K'},
+                            {value: 1_000_000, label: '1M'},
+                        ].map(({value, label}) => (
+                            <button
+                                key={value}
+                                type="button"
+                                className={`btn btn-sm ${newModelContextWindow === value ? 'btn-primary' : 'btn-secondary'}`}
+                                style={{fontSize: '11px', padding: '2px 8px'}}
+                                onClick={() => setNewModelContextWindow(newModelContextWindow === value ? undefined : value)}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+                    <div style={{display: 'flex', alignItems: 'center', gap: '4px'}}>
+                        <input
+                            type="number"
+                            className="form-input"
+                            placeholder={t('settings.pluginModels.contextWindowPlaceholder') || 'Custom tokens'}
+                            value={newModelContextWindow && ![128_000, 200_000, 258_000, 400_000, 500_000, 1_000_000].includes(newModelContextWindow) ? newModelContextWindow : ''}
+                            onChange={(e) => {
+                                const val = parseInt(e.target.value, 10);
+                                setNewModelContextWindow(val > 0 ? val : undefined);
+                            }}
+                            style={{flex: 1, fontSize: '12px'}}
+                        />
+                    </div>
+                </div>
               <div className={styles.formActions}>
                 <button className="btn btn-secondary btn-sm" onClick={handleCancelEdit}>
                   {t('common.cancel')}

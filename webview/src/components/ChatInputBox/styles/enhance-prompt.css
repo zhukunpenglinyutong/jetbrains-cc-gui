@@ -5,23 +5,24 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  background: rgba(245, 166, 35, 0.12);
-  border: 1px solid rgba(245, 166, 35, 0.25);
-  border-radius: 6px;
+    width: 30px;
+    height: 30px;
+    background: rgba(245, 166, 35, 0.08);
+    border: 1px solid rgba(245, 166, 35, 0.18);
+    border-radius: 50%;
   color: var(--orange, #f5a623);
   cursor: pointer;
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+    transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .enhance-prompt-button:hover:not(:disabled) {
-  background: rgba(245, 166, 35, 0.2);
-  transform: scale(1.02);
+    background: rgba(245, 166, 35, 0.16);
+    border-color: rgba(245, 166, 35, 0.3);
+    transform: scale(1.08);
 }
 
 .enhance-prompt-button:active:not(:disabled) {
-  transform: scale(0.98);
+    transform: scale(0.95);
 }
 
 .enhance-prompt-button:disabled {
@@ -30,8 +31,8 @@
 }
 
 .enhance-prompt-button svg {
-  width: 16px;
-  height: 16px;
+    width: 15px;
+    height: 15px;
   stroke: currentColor;
   stroke-width: 1.8;
   fill: none;
@@ -231,6 +232,21 @@
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+@keyframes twinkle {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.7;
+        transform: scale(0.92);
+    }
+}
+
+.enhance-prompt-button:hover:not(:disabled) svg:not(.spinning) {
+    animation: twinkle 0.6s ease-in-out;
 }
 
 .prompt-enhancer-footer {

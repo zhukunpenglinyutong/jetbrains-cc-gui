@@ -34,6 +34,7 @@ export const ChatInputBoxHeader = memo(function ChatInputBoxHeader({
   onDismissOpenSourceBanner,
   autoOpenFileEnabled,
   onRequestEnableFileContext,
+  selectedModel,
 }: {
   sdkInstalled: boolean;
   sdkStatusLoading: boolean;
@@ -63,6 +64,7 @@ export const ChatInputBoxHeader = memo(function ChatInputBoxHeader({
   onDismissOpenSourceBanner?: () => void;
   autoOpenFileEnabled?: boolean;
   onRequestEnableFileContext?: () => void;
+  selectedModel?: string;
 }) {
   return (
     <>
@@ -143,6 +145,7 @@ export const ChatInputBoxHeader = memo(function ChatInputBoxHeader({
         onToggleStatusPanel={onToggleStatusPanel}
         autoOpenFileEnabled={autoOpenFileEnabled}
         onRequestEnableFileContext={onRequestEnableFileContext}
+        selectedModel={selectedModel}
       />
     </>
   );

@@ -1,18 +1,14 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
-import type { TFunction } from 'i18next';
-import { sendBridgeEvent } from '../utils/bridge';
-import {
-  apply1MContextSuffix,
-  normalizeClaudeModelId,
-  strip1MContextSuffix,
-} from '../components/ChatInputBox/types';
-import type { PermissionMode } from '../components/ChatInputBox/types';
-import { isSpecialProviderId } from '../types/provider';
-import { useClaudeProvider } from './providers/useClaudeProvider';
-import { useCodexProvider } from './providers/useCodexProvider';
-import { useUsageTracking } from './providers/useUsageTracking';
-import { useProviderSettings } from './providers/useProviderSettings';
-import { useModelStatePersistence } from './providers/useModelStatePersistence';
+import {useCallback, useMemo, useRef, useState} from 'react';
+import type {TFunction} from 'i18next';
+import {sendBridgeEvent} from '../utils/bridge';
+import type {PermissionMode} from '../components/ChatInputBox/types';
+import {modelSupports1MContext, normalizeClaudeModelId, strip1MContextSuffix,} from '../components/ChatInputBox/types';
+import {isSpecialProviderId} from '../types/provider';
+import {useClaudeProvider} from './providers/useClaudeProvider';
+import {useCodexProvider} from './providers/useCodexProvider';
+import {useUsageTracking} from './providers/useUsageTracking';
+import {useProviderSettings} from './providers/useProviderSettings';
+import {useModelStatePersistence} from './providers/useModelStatePersistence';
 
 export type ViewMode = 'chat' | 'history' | 'settings';
 
@@ -103,19 +99,38 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
       sendBridgeEvent('set_session_mode', mode);
   }, [currentProvider, setCodexPermissionMode, setClaudePermissionMode]);
 
-  const handleModelSelect = useCallback((modelId: string) => {
+    const handleModelSelect = useCallback((modelId: string, contextWindow?: number) => {
     if (currentProvider === 'claude') {
       const strippedModelId = strip1MContextSuffix(modelId);
       const normalizedModelId = normalizeClaudeModelId(strippedModelId);
       setSelectedClaudeModel(normalizedModelId);
-        sendBridgeEvent('set_session_model', apply1MContextSuffix(normalizedModelId, longContextEnabled));
+
+      // Auto-reset: disable longContext if new model doesn't support 1M
+      if (longContextEnabled && !modelSupports1MContext(normalizedModelId)) {
+        setLongContextEnabled(false);
+      }
+
+      // Calculate effective contextWindow based on toggle + model capability
+      const effectiveContextWindow = longContextEnabled && modelSupports1MContext(normalizedModelId)
+        ? 1_000_000
+        : (contextWindow ?? 200_000);
+
+      // Send clean model ID (no [1m]) + contextWindow to backend
+      // Backend will handle [1m] suffix internally for Claude models
+      sendBridgeEvent('set_session_model', JSON.stringify({
+        model: normalizedModelId,
+        contextWindow: effectiveContextWindow,
+      }));
     } else if (currentProvider === 'codex') {
       setSelectedCodexModel(modelId);
-        sendBridgeEvent('set_session_model', modelId);
+        const payload = contextWindow
+            ? JSON.stringify({model: modelId, contextWindow})
+            : modelId;
+        sendBridgeEvent('set_session_model', payload);
     }
   }, [currentProvider, longContextEnabled, setSelectedClaudeModel, setSelectedCodexModel]);
 
-  const handleProviderSelect = useCallback((providerId: string) => {
+    const handleProviderSelect = useCallback((providerId: string, contextWindow?: number) => {
     setCurrentProvider(providerId);
       sendBridgeEvent('set_session_provider', providerId);
 
@@ -127,8 +142,17 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
 
     const newModel = providerId === 'codex'
       ? selectedCodexModel
-      : apply1MContextSuffix(selectedClaudeModel, longContextEnabled);
-      sendBridgeEvent('set_session_model', newModel);
+      : selectedClaudeModel;  // Clean ID, no [1m]
+
+    // Calculate effective contextWindow
+    const effectiveContextWindow = (providerId === 'claude' && longContextEnabled && modelSupports1MContext(selectedClaudeModel))
+      ? 1_000_000
+      : (contextWindow ?? 200_000);
+
+    sendBridgeEvent('set_session_model', JSON.stringify({
+      model: newModel,
+      contextWindow: effectiveContextWindow,
+    }));
   }, [
     claudePermissionMode,
     codexPermissionMode,
@@ -137,10 +161,19 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     longContextEnabled,
   ]);
 
-  const handleLongContextChange = useCallback((enabled: boolean) => {
+    const handleLongContextChange = useCallback((enabled: boolean, contextWindow?: number) => {
     setLongContextEnabled(enabled);
     if (currentProvider === 'claude') {
-        sendBridgeEvent('set_session_model', apply1MContextSuffix(selectedClaudeModel, enabled));
+      // Calculate effective contextWindow
+      const effectiveContextWindow = enabled && modelSupports1MContext(selectedClaudeModel)
+        ? 1_000_000
+        : (contextWindow ?? 200_000);
+
+      // Send clean model ID (no [1m]) + contextWindow to backend
+      sendBridgeEvent('set_session_model', JSON.stringify({
+        model: selectedClaudeModel,
+        contextWindow: effectiveContextWindow,
+      }));
     }
   }, [currentProvider, selectedClaudeModel, setLongContextEnabled]);
 

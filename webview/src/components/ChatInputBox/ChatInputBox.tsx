@@ -616,6 +616,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
           onDismissOpenSourceBanner={handleDismissOpenSourceBanner}
           autoOpenFileEnabled={autoOpenFileEnabled}
           onRequestEnableFileContext={handleRequestEnableFileContext}
+          selectedModel={selectedModel}
         />
 
         {/* Input area */}

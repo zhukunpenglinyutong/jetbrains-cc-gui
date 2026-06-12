@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { AVAILABLE_MODES, type PermissionMode } from '../types';
-import { ChatIcon, TaskIcon, RobotIcon, ZapIcon, ChevronDownIcon, ChevronUpIcon, CheckIcon } from '../../Icons';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {useTranslation} from 'react-i18next';
+import {AVAILABLE_MODES, type PermissionMode} from '../types';
+import {ChatIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, RobotIcon, TaskIcon, ZapIcon} from '../../Icons';
 
 const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
 const CHEVRON_ICON_STYLE: React.CSSProperties = { marginLeft: '2px' };
@@ -122,7 +122,7 @@ export const ModeSelect = ({ value, onChange, provider }: ModeSelectProps) => {
     <div style={RELATIVE_INLINE_BLOCK_STYLE}>
       <button
         ref={buttonRef}
-        className={`selector-button${value === 'bypassPermissions' ? ' mode-auto-active' : ''}`}
+        className={`selector-button${value === 'bypassPermissions' ? ' mode-auto-active' : ' mode-active-highlight'}`}
         onClick={handleToggle}
         title={getModeText(currentMode.id, 'tooltip') || `${t('chat.currentMode', { mode: getModeText(currentMode.id, 'label') })}`}
       >

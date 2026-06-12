@@ -1,12 +1,12 @@
-import { useCallback, useMemo, useState, useEffect, memo } from 'react';
-import { useTranslation } from 'react-i18next';
-import type { ButtonAreaProps, ModelInfo, PermissionMode, ReasoningEffort } from './types';
-import { ConfigSelect, ModelSelect, ModeSelect, ProviderSelect, ReasoningSelect } from './selectors';
-import { CLAUDE_MODELS, CODEX_MODELS } from './types';
-import { STORAGE_KEYS, validateCodexCustomModels } from '../../types/provider';
-import type { CodexCustomModel } from '../../types/provider';
-import { readClaudeModelMapping } from '../../utils/claudeModelMapping';
-import { SparklesIcon, SendIcon, StopIcon } from '../Icons';
+import {memo, useCallback, useEffect, useMemo, useState} from 'react';
+import {useTranslation} from 'react-i18next';
+import type {ButtonAreaProps, ModelInfo, PermissionMode, ReasoningEffort} from './types';
+import {CLAUDE_MODELS, CODEX_MODELS, strip1MContextSuffix} from './types';
+import {ConfigSelect, ModelSelect, ModeSelect, ProviderSelect, ReasoningSelect} from './selectors';
+import type {CodexCustomModel} from '../../types/provider';
+import {STORAGE_KEYS, validateCodexCustomModels} from '../../types/provider';
+import {readClaudeModelMapping} from '../../utils/claudeModelMapping';
+import {SendIcon, SparklesIcon, StopIcon} from '../Icons';
 
 /**
  * Get custom Codex model list from localStorage
@@ -25,9 +25,10 @@ function getCustomCodexModels(): ModelInfo[] {
     // Use runtime type validation
     const validModels = validateCodexCustomModels(parsed);
     return validModels.map(m => ({
-      id: m.id,
-      label: m.label || m.id,
+      id: strip1MContextSuffix(m.id),  // Strip [1m] from ID for clean display
+      label: m.label || strip1MContextSuffix(m.id),
       description: m.description,
+      contextWindow: m.contextWindow,
     }));
   } catch {
     return [];
@@ -54,9 +55,10 @@ function getCustomClaudeModels(): ModelInfo[] {
     return parsed
       .filter((m): m is CodexCustomModel => !!m && typeof m === 'object' && typeof m.id === 'string' && m.id.trim().length > 0)
       .map(m => ({
-        id: m.id,
-        label: m.label || m.id,
+        id: strip1MContextSuffix(m.id),  // Strip [1m] from ID for clean display
+        label: m.label || strip1MContextSuffix(m.id),
         description: m.description,
+        contextWindow: m.contextWindow,
       }));
   } catch {
     return [];
@@ -218,8 +220,12 @@ export const ButtonArea = memo(function ButtonArea({
    * Handle model selection
    */
   const handleModelSelect = useCallback((modelId: string) => {
-    onModelSelect?.(modelId);
-  }, [onModelSelect]);
+      // Strip [1m] suffix and look up contextWindow from the merged model list
+      const stripped = strip1MContextSuffix(modelId);
+      const modelInfo = availableModels.find(m => m.id === stripped);
+      // Pass clean model ID (no [1m]) to the bridge
+      onModelSelect?.(stripped, modelInfo?.contextWindow);
+  }, [onModelSelect, availableModels]);
 
   /**
    * Handle provider selection
@@ -257,13 +263,17 @@ export const ButtonArea = memo(function ButtonArea({
           onOpenAgentSettings={onOpenAgentSettings}
           currentProvider={currentProvider}
         />
+        <span className="selector-separator" />
         <ProviderSelect
           value={currentProvider}
           onChange={handleProviderSelect}
           compact
         />
+        <span className="selector-separator" />
         <ModeSelect value={permissionMode} onChange={handleModeSelect} provider={currentProvider} />
+        <span className="selector-separator" />
         <ModelSelect value={selectedModel} onChange={handleModelSelect} models={availableModels} currentProvider={currentProvider} onAddModel={onAddModel} longContextEnabled={longContextEnabled} onLongContextChange={onLongContextChange} />
+        <span className="selector-separator" />
         <ReasoningSelect value={reasoningEffort} onChange={handleReasoningChange} selectedModel={selectedModel} currentProvider={currentProvider} />
       </div>
 

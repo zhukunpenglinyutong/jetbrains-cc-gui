@@ -319,79 +319,96 @@
 }
 
 /* ============================================================
-   Usage Indicator
+   Ring Indicator (centered percentage in conic ring)
+   32×32px 圆环，conic-gradient 进度，百分比居中，无边框无背景
    ============================================================ */
-.token-indicator {
+.ring-indicator {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  height: 24px;
-  min-width: 52px;
-  padding: 0 7px 0 6px;
-  border: 1px solid color-mix(in srgb, var(--progress-fill) 45%, var(--input-border));
-  border-radius: 5px;
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--progress-fill) 18%, transparent),
-    color-mix(in srgb, var(--success-color, #4cc38a) 10%, transparent)
-  );
-  color: var(--text-primary);
-  font-size: 12px;
-  font-weight: 700;
+  width: 32px;
+  height: 32px;
   cursor: default;
   outline: none;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  border-radius: 6px;
+  transition: background-color 0.15s ease;
 }
 
-.token-indicator:hover,
-.token-indicator:focus-visible {
-  border-color: color-mix(in srgb, var(--progress-fill) 70%, var(--input-border));
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--progress-fill) 24%, transparent),
-    color-mix(in srgb, var(--success-color, #4cc38a) 14%, transparent)
-  );
+.ring-indicator:hover,
+.ring-indicator:focus-visible {
+  background: var(--button-hover);
 }
 
-.token-indicator-wrap {
-  position: relative;
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  flex: 0 0 auto;
-}
-
-.token-indicator-ring {
-  transform: rotate(-90deg);
-}
-
-.token-indicator-bg {
-  fill: none;
-  stroke: var(--progress-bg);
-  stroke-width: 1.5;
-}
-
-.token-indicator-fill {
-  fill: none;
-  stroke: var(--progress-fill);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  transition: stroke-dashoffset 0.3s;
-}
-
-/* Usage hover tooltip bubble */
-.token-tooltip {
+/* conic-gradient 圆环 */
+.ring-indicator .ring {
   position: absolute;
-  bottom: calc(100% + 8px);
+  inset: 2px;
+  border-radius: 50%;
+}
+
+/* 圆环内圆切孔 */
+.ring-indicator .ring::before {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--context-bar-bg);
+}
+
+/* 中心百分比文字 */
+.ring-indicator .ring-pct {
+  position: relative;
+  z-index: 1;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.3px;
+}
+
+/* --- 颜色等级 (dark theme) --- */
+/* 正常: < 50% — 绿色 */
+.ring-indicator.level-ok .ring-pct {
+  color: #4cc38a;
+}
+
+/* 警告: 50% ~ 80% — 黄色 */
+.ring-indicator.level-warn .ring-pct {
+  color: #e7b85a;
+}
+
+/* 高危: ≥ 80% — 红色 */
+.ring-indicator.level-high .ring-pct {
+  color: #d9534f;
+}
+
+/* --- 颜色等级 (light theme) --- */
+[data-theme="light"] .ring-indicator.level-ok .ring-pct {
+  color: #107c10;
+}
+
+[data-theme="light"] .ring-indicator.level-warn .ring-pct {
+  color: #a06e0a;
+}
+
+[data-theme="light"] .ring-indicator.level-high .ring-pct {
+  color: #c82828;
+}
+
+/* ============================================================
+   Ring Hover Tooltip (悬浮详情弹窗)
+   ============================================================ */
+.ring-tooltip {
+  position: absolute;
+  bottom: calc(100% + 12px);
   left: 0;
   transform: translateY(4px);
   background: var(--dropdown-bg);
   color: var(--text-primary);
-  border: 1px solid var(--dropdown-border);
+  border: 1px solid color-mix(in srgb, var(--dropdown-border) 80%, transparent);
   border-radius: 8px;
-  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.36);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
   padding: 0;
   font-size: 12px;
   white-space: normal;
@@ -402,47 +419,46 @@
   z-index: 1002;
 }
 
-.token-tooltip::after {
+.ring-tooltip::after {
   content: '';
   position: absolute;
-  left: 18px;
+  left: 12px;
   bottom: -6px;
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
   transform: rotate(45deg);
   background: var(--dropdown-bg);
-  border-right: 1px solid var(--dropdown-border);
-  border-bottom: 1px solid var(--dropdown-border);
+  border-right: 1px solid color-mix(in srgb, var(--dropdown-border) 80%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--dropdown-border) 80%, transparent);
 }
 
-.token-indicator:hover .token-tooltip,
-.token-indicator:focus-visible .token-tooltip {
+.ring-indicator:hover .ring-tooltip,
+.ring-indicator:focus-visible .ring-tooltip {
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
 }
 
 /* ============================================================
-   Detailed Token Usage Tooltip
+   Detailed Token Usage Tooltip (matches context-hover-detail-preview.html)
    ============================================================ */
 .token-detail-tooltip {
-  width: 380px;
+  width: 382px;
   white-space: normal;
   overflow: hidden;
 }
 
+/* Header: 32px icon + title + subtitle */
 .token-detail-header {
   display: grid;
   grid-template-columns: 32px 1fr;
-  align-items: center;
   gap: 10px;
-  padding: 13px 14px;
+  padding: 14px;
   background: linear-gradient(
     90deg,
-    color-mix(in srgb, var(--progress-fill) 16%, transparent),
-    transparent 72%
+    color-mix(in srgb, var(--progress-fill) 18%, transparent),
+    transparent 70%
   );
-  border-bottom: 1px solid color-mix(in srgb, var(--dropdown-border) 82%, transparent);
 }
 
 .token-detail-header-icon {
@@ -453,7 +469,7 @@
   border-radius: 7px;
   color: var(--progress-fill);
   background: color-mix(in srgb, var(--progress-fill) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--progress-fill) 28%, var(--dropdown-border));
+  border: 1px solid color-mix(in srgb, var(--progress-fill) 26%, var(--dropdown-border));
 }
 
 .token-detail-header-icon svg {
@@ -471,28 +487,39 @@
   font-size: 13px;
   font-weight: 700;
   line-height: 1.3;
+  margin-bottom: 3px;
 }
 
 .token-detail-subtitle {
-  margin-top: 3px;
   color: var(--text-secondary);
   font-size: 11px;
   line-height: 1.4;
+  word-break: break-all;
 }
 
+.token-detail-includes {
+  margin-top: 2px;
+  opacity: 0.85;
+}
+
+/* Body */
+.token-detail-body {
+  padding: 12px 14px 14px;
+}
+
+/* 2×2 metric grid */
 .token-detail-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  padding: 12px 14px 0;
 }
 
 .token-detail-metric {
   min-height: 54px;
   padding: 9px;
-  border: 1px solid color-mix(in srgb, var(--dropdown-border) 65%, transparent);
+  border: 1px solid color-mix(in srgb, var(--dropdown-border) 50%, transparent);
   border-radius: 7px;
-  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
+  background: color-mix(in srgb, var(--text-primary) 3.5%, transparent);
 }
 
 .token-detail-metric-label {
@@ -515,27 +542,16 @@
   stroke-linejoin: round;
 }
 
-.token-detail-metric.input .token-detail-icon {
-  color: var(--progress-fill);
-}
-
-.token-detail-metric.output .token-detail-icon {
-  color: var(--link-color, #a989ff);
-}
-
-.token-detail-metric.cache-read .token-detail-icon {
-  color: var(--success-color, #4cc38a);
-}
-
-.token-detail-metric.cache-write .token-detail-icon {
-  color: var(--warning-color, #e7b85a);
-}
+.token-detail-metric.input .token-detail-icon { color: var(--progress-fill); }
+.token-detail-metric.output .token-detail-icon { color: var(--link-color, #a989ff); }
+.token-detail-metric.cache-read .token-detail-icon { color: var(--success-color, #4cc38a); }
+.token-detail-metric.cache-write .token-detail-icon { color: var(--warning-color, #e7b85a); }
 
 .token-detail-metric-value {
   color: var(--text-primary);
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 750;
   line-height: 1.25;
 }
 
@@ -547,12 +563,13 @@
   font-weight: 500;
 }
 
+/* Usage total + progress bar */
 .token-detail-total {
-  margin: 10px 14px 14px;
+  margin-top: 10px;
   padding: 10px;
-  border: 1px solid color-mix(in srgb, var(--dropdown-border) 65%, transparent);
+  border: 1px solid color-mix(in srgb, var(--dropdown-border) 50%, transparent);
   border-radius: 7px;
-  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
+  background: color-mix(in srgb, var(--text-primary) 3.5%, transparent);
 }
 
 .token-detail-total-top {
@@ -579,7 +596,23 @@
   background: linear-gradient(90deg, var(--progress-fill), var(--success-color, #4cc38a));
 }
 
-.token-detail-simple {
-  padding: 7px 10px;
-  white-space: nowrap;
+/* Source row */
+.token-detail-source {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 8px 9px;
+  border-radius: 7px;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--progress-fill) 8%, transparent);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.token-detail-source svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--progress-fill);
 }

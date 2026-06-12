@@ -1,6 +1,7 @@
-import { useTranslation } from 'react-i18next';
-import { Switch } from '../../shared/Switch';
-import { modelSupports1MContext } from '../types';
+import {useTranslation} from 'react-i18next';
+import {Switch} from '../../shared/Switch';
+import type {ModelInfo} from '../types';
+import {modelSupports1MContext} from '../types';
 
 const TOGGLE_BASE_STYLE: React.CSSProperties = {
   display: 'inline-flex',
@@ -21,19 +22,22 @@ interface LongContextToggleProps {
   enabled: boolean;
   /** Toggle callback */
   onChange: (enabled: boolean) => void;
+    /** Available models list (for accurate 1M support detection) */
+    models?: ModelInfo[];
 }
 
 /**
  * LongContextToggle - Toggle switch for 1M context window.
- * Positioned next to model selector. Only enabled for non-Haiku models.
+ * Positioned next to model selector. Only enabled for models that support 1M context.
  */
 export const LongContextToggle = ({
   modelId,
   enabled,
   onChange,
+                                      models,
 }: LongContextToggleProps) => {
   const { t } = useTranslation();
-  const supports1M = modelSupports1MContext(modelId);
+    const supports1M = modelSupports1MContext(modelId, models);
 
   const displayEnabled = supports1M ? enabled : false;
 

@@ -27,7 +27,6 @@
 .context-token-indicator {
   display: flex;
   align-items: center;
-  justify-content: center;
 }
 
 .context-tool-btn {

@@ -5,9 +5,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 4px;
-  border-top: none;
-  background: rgba(0, 0, 0, 0.1);
+    padding: 4px 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+    backdrop-filter: blur(10px);
   font-family: inherit;
   /* Enable container queries for responsive button behavior */
   container-type: inline-size;
@@ -19,7 +20,7 @@
 .button-area-left {
   display: flex;
   align-items: center;
-  gap: 4px;
+    gap: 0;
   flex: 1;
   min-width: 0;
   overflow: visible;
@@ -28,15 +29,15 @@
 .button-area-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+    gap: 6px;
   flex-shrink: 0;
 }
 
 .button-divider {
   width: 1px;
   height: 16px;
-  background: var(--border-color);
-  opacity: 0.5;
+    background: rgba(255, 255, 255, 0.06);
+    opacity: 1;
 }
 
 @container button-area (max-width: 520px) {

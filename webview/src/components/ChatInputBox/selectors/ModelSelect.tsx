@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { AVAILABLE_MODELS, normalizeClaudeModelId, modelSupports1MContext, strip1MContextSuffix } from '../types';
-import type { ModelInfo } from '../types';
-import { readClaudeModelMapping } from '../../../utils/claudeModelMapping';
-import { ProviderModelIcon } from '../../shared/ProviderModelIcon';
-import { Switch } from '../../shared/Switch';
+import {useCallback, useEffect, useRef, useState} from 'react';
+import {useTranslation} from 'react-i18next';
+import type {ModelInfo} from '../types';
+import {AVAILABLE_MODELS, modelSupports1MContext, normalizeClaudeModelId, strip1MContextSuffix} from '../types';
+import {readClaudeModelMapping} from '../../../utils/claudeModelMapping';
+import {ProviderModelIcon} from '../../shared/ProviderModelIcon';
+import {Switch} from '../../shared/Switch';
 
 const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
 const CHEVRON_ICON_STYLE: React.CSSProperties = { fontSize: '10px', marginLeft: '2px' };
@@ -150,7 +150,9 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
     if (mappingKey) {
       const mappedName = resolveMappedModelName(mappingKey, modelMapping);
       if (mappedName) {
-        return append1MContextSuffix(mappedName, model.id, show1MContext);
+        // Strip [1m] suffix from mapped name for clean display
+        const cleanName = strip1MContextSuffix(mappedName);
+        return append1MContextSuffix(cleanName, model.id, show1MContext);
       }
     }
 
@@ -159,7 +161,9 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
     const hasCustomLabel = defaultModel && model.label && model.label !== defaultModel.label;
 
     if (hasCustomLabel) {
-      return append1MContextSuffix(model.label ?? '', model.id, show1MContext);
+      // Strip [1m] suffix from custom label for clean display
+      const cleanLabel = strip1MContextSuffix(model.label ?? '');
+      return append1MContextSuffix(cleanLabel, model.id, show1MContext);
     }
 
     if (labelKey) {
@@ -171,7 +175,7 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
 
   const append1MContextSuffix = (label: string, modelId: string, show1MContext: boolean): string => {
     // Only show 1M context suffix for Claude provider
-    if (currentProvider === 'claude' && show1MContext && modelSupports1MContext(modelId) && longContextEnabled) {
+      if (currentProvider === 'claude' && show1MContext && modelSupports1MContext(modelId, models) && longContextEnabled) {
       return `${label} (${t('models.longContext.shortLabel')})`;
     }
     return label;
@@ -287,8 +291,8 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
                 <span style={LONG_CONTEXT_LABEL_STYLE}>{t('models.longContext.shortLabel')}</span>
                 <Switch
                   size="small"
-                  checked={modelSupports1MContext(value) ? longContextEnabled : false}
-                  disabled={!modelSupports1MContext(value)}
+                  checked={modelSupports1MContext(value, models) ? longContextEnabled : false}
+                  disabled={!modelSupports1MContext(value, models)}
                   onChange={onLongContextChange}
                 />
               </div>

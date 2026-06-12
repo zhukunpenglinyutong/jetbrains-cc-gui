@@ -143,8 +143,10 @@ export const SaveIcon = createIcon(
 
 export const EditIcon = createIcon(
   <>
-    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
-    <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+    <path d="M14 2v6h6" />
+    <path d="M8 19l-1-4 8.5-8.5a1.8 1.8 0 012.5 0 1.8 1.8 0 010 2.5L9.5 17.5z" />
+    <path d="M7 15l4 1" />
   </>
 );
 
@@ -363,8 +365,17 @@ export const UsersIcon = createIcon(
 
 export const RobotIcon = createIcon(
   <>
-    <path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z" />
-    <path d="M9 14h.01M15 14h.01M9 18h6" />
+    <line x1="12" y1="2" x2="12" y2="5" />
+    <circle cx="12" cy="2" r="1.2" fill="currentColor" stroke="none" />
+    <rect x="4" y="5" width="16" height="12" rx="3" />
+    <circle cx="9" cy="11" r="2" />
+    <circle cx="8.3" cy="10.3" r="0.6" fill="currentColor" stroke="none" />
+    <circle cx="15" cy="11" r="2" />
+    <circle cx="14.3" cy="10.3" r="0.6" fill="currentColor" stroke="none" />
+    <path d="M10 14.5q2 1.5 4 0" />
+    <path d="M8 17v2q0 1 1 1h6q1 0 1-1v-2" />
+    <line x1="4" y1="9" x2="2" y2="9" />
+    <line x1="20" y1="9" x2="22" y2="9" />
   </>
 );
 
@@ -641,9 +652,11 @@ export const ZapIcon = createIcon(<polygon points="13 2 3 14 12 14 11 22 21 10 1
 
 export const SparklesIcon = createIcon(
   <>
-    <path d="M12 2L2 7l10 5 10-5-10-5z" />
-    <path d="M2 17l10 5 10-5" />
-    <path d="M2 12l10 5 10-5" />
+    <line x1="4" y1="20" x2="14" y2="10" />
+    <path d="M13 9l2 2" />
+    <path d="M17 3l.8 2.2L20 6l-2.2.8L17 9l-.8-2.2L14 6l2.2-.8z" />
+    <path d="M20 11l.5 1.3L22 13l-1.5.7L20 15l-.5-1.3L18 13l1.5-.7z" />
+    <path d="M13 1l.4 1.1L15 2.5l-1.6.6L13 4.5l-.4-1.4L11 2.5l1.6-.4z" />
   </>
 );
 
@@ -743,15 +756,21 @@ export const ClipboardCheckIcon = createIcon(
 
 export const TaskIcon = createIcon(
   <>
-    <path d="M9 11l3 3L22 4" />
-    <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+    <rect x="5" y="2" width="14" height="20" rx="2" />
+    <path d="M9 2v2h6V2" />
+    <path d="M9 10l1.5 1.5L14 8" />
+    <line x1="9" y1="15" x2="15" y2="15" />
+    <line x1="9" y1="18" x2="13" y2="18" />
   </>
 );
 
 export const SubtaskIcon = createIcon(
   <>
-    <path d="M9 11l3 3L22 4" />
-    <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+    <rect x="5" y="2" width="14" height="20" rx="2" />
+    <path d="M9 2v2h6V2" />
+    <path d="M9 10l1.5 1.5L14 8" />
+    <line x1="9" y1="15" x2="15" y2="15" />
+    <line x1="9" y1="18" x2="13" y2="18" />
   </>
 );
 

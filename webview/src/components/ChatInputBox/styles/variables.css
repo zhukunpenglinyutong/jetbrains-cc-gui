@@ -43,6 +43,7 @@
   --error-color: var(--color-error, #f44336);
   --success-color: var(--color-success, #4caf50);
   --context-bar-bg: #2f2f2f;
+  --ring-track: rgba(255, 255, 255, 0.14);
 }
 
 /* ============================================================
@@ -71,4 +72,5 @@
   --error-color: var(--color-error, #e81123);
   --success-color: var(--color-success, #107c10);
   --context-bar-bg: #f0f0f0;
+  --ring-track: rgba(0, 0, 0, 0.1);
 }

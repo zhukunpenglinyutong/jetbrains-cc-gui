@@ -43,6 +43,8 @@ interface ContextBarProps {
   onRequestEnableFileContext?: () => void;
   /** Detailed token usage information */
   tokenDetail?: any;
+  /** Current model name for token tooltip display */
+  selectedModel?: string;
 }
 
 export const ContextBar: React.FC<ContextBarProps> = memo(({
@@ -64,6 +66,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
   autoOpenFileEnabled = false,
   onRequestEnableFileContext,
   tokenDetail,
+  selectedModel,
 }) => {
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -167,6 +170,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
               maxTokens={maxTokens}
               size={14}
               tokenDetail={tokenDetail}
+              modelName={selectedModel}
             />
           </div>
         )}

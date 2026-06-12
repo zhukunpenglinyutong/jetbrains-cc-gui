@@ -163,6 +163,8 @@ export interface CodexCustomModel {
   label: string;
   /** Model description */
   description?: string;
+    /** Base context window size in tokens; undefined = use backend default (200K) */
+    contextWindow?: number;
 }
 
 /**

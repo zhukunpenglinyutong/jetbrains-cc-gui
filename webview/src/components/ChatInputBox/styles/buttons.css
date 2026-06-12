@@ -35,36 +35,39 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  background: var(--button-primary);
+    width: 30px;
+    height: 30px;
+    background: linear-gradient(135deg, var(--button-primary, #0078d4), #005a9e);
   border: none;
-  border-radius: 6px;
+    border-radius: 50%;
   color: white;
   cursor: pointer;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(0, 120, 212, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 .submit-button:hover:not(:disabled) {
-  opacity: 0.9;
-  transform: scale(1.02);
+    transform: scale(1.08);
+    box-shadow: 0 3px 14px rgba(0, 120, 212, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .submit-button:active:not(:disabled) {
-  transform: scale(0.98);
+    transform: scale(0.95);
+    box-shadow: 0 1px 4px rgba(0, 120, 212, 0.3);
 }
 
 .submit-button:disabled {
   background: var(--button-disabled);
   cursor: not-allowed;
   opacity: 0.5;
+    box-shadow: none;
 }
 
 .submit-button svg {
-  width: 16px;
-  height: 16px;
+    width: 14px;
+    height: 14px;
   stroke: currentColor;
-  stroke-width: 1.8;
+    stroke-width: 2;
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -72,9 +75,11 @@
 
 .stop-button {
   background: var(--error-color);
+    box-shadow: 0 2px 8px rgba(217, 83, 79, 0.35);
 }
 
 .stop-button:hover {
   background: #d32f2f;
+    box-shadow: 0 3px 14px rgba(217, 83, 79, 0.5);
 }
 
