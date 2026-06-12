@@ -122,3 +122,43 @@
 .btn-small .codicon {
     font-size: 14px;
 }
+
+/* =========================================================================
+   CoDriver skin — generic buttons.
+   Scoped to [data-theme="codriver"]; dark/light themes are untouched.
+   ========================================================================= */
+[data-theme="codriver"] {
+    .btn-primary {
+        background: var(--accent-primary);
+        color: #ffffff;
+    }
+
+    .btn-primary:hover {
+        background: var(--accent-primary-hover);
+    }
+
+    .btn-primary:active {
+        background: var(--accent-primary-active);
+    }
+
+    .btn-secondary {
+        border: 1px solid var(--border-primary);
+        color: var(--text-primary);
+    }
+
+    .btn-secondary:hover {
+        background: var(--codriver-hover-overlay);
+        border-color: var(--border-hover);
+    }
+
+    .btn-small {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-primary);
+        color: var(--text-primary);
+    }
+
+    .btn-small:hover {
+        background: var(--bg-hover);
+        border-color: var(--border-hover);
+    }
+}

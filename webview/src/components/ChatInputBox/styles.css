@@ -18,3 +18,6 @@
 @import './styles/dialogs.css';
 @import './styles/enhance-prompt.css';
 @import './styles/banners.css';
+@import './styles/codriver-attachments.css';
+@import './styles/codriver-context-file-icons.css';
+@import './styles/codriver-dropdowns.css';

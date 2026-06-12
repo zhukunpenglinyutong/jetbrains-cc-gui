@@ -2,6 +2,9 @@ import React, { useRef, useState, useEffect, useCallback, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getFileIcon } from '../../utils/fileIcons';
 import { TokenIndicator } from './TokenIndicator';
+import { CoDriverIcon } from '../codriverIcons';
+import { getFileIconKind } from '../../utils/fileIconKind';
+import { useIsCoDriverTheme } from '../../hooks/useActiveThemeMode';
 import type { SelectedAgent } from './types';
 
 const HIDDEN_INPUT_STYLE: React.CSSProperties = { display: 'none' };
@@ -62,6 +65,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
   onRequestEnableFileContext,
 }) => {
   const { t } = useTranslation();
+  const isCoDriver = useIsCoDriverTheme();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const [showEnablePopover, setShowEnablePopover] = useState(false);
@@ -128,11 +132,15 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
     return path.split(/[/\\]/).pop() || path;
   };
 
+  // Stock colored file-type icon (light/dark/system) — rendered as inline SVG markup.
   const getFileIconSvg = (path: string) => {
     const fileName = getFileName(path);
     const extension = fileName.indexOf('.') !== -1 ? fileName.split('.').pop() : '';
     return getFileIcon(extension, fileName);
   };
+
+  // CoDriver monochrome code/file glyph from the bespoke icon pack.
+  const activeFileIconName = activeFile ? getFileIconKind(activeFile) : 'file';
 
   const displayText = activeFile ? (
     selectedLines ? `${getFileName(activeFile)}#${selectedLines}` : getFileName(activeFile)
@@ -146,13 +154,25 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
     <div className="context-bar">
       {/* Tool Icons Group */}
       <div className="context-tools">
-        <div
-          className="context-tool-btn"
-          onClick={handleAttachClick}
-          title="Add attachment"
-        >
-          <span className="codicon codicon-attach" />
-        </div>
+        {isCoDriver ? (
+          <button
+            type="button"
+            className="context-tool-btn"
+            onClick={handleAttachClick}
+            title={t('chat.addAttachment', { defaultValue: 'Add attachment' })}
+            aria-label={t('chat.addAttachment', { defaultValue: 'Add attachment' })}
+          >
+            <CoDriverIcon name="attachment" size={16} aria-hidden="true" />
+          </button>
+        ) : (
+          <div
+            className="context-tool-btn"
+            onClick={handleAttachClick}
+            title="Add attachment"
+          >
+            <span className="codicon codicon-attach" />
+          </div>
+        )}
 
         {/* Token Indicator */}
         {showUsage && (
@@ -165,7 +185,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
             />
           </div>
         )}
-        
+
         {/* Hidden file input */}
         <input
           ref={fileInputRef}
@@ -175,7 +195,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
           onChange={handleFileChange}
           style={HIDDEN_INPUT_STYLE}
         />
-        
+
         <div className="context-tool-divider" />
       </div>
 
@@ -186,22 +206,41 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
           data-tooltip={selectedAgent.name}
           style={CURSOR_DEFAULT_STYLE}
         >
-          <span
-            className="codicon codicon-robot"
-            style={ROBOT_ICON_STYLE}
-          />
+          {isCoDriver ? (
+            <CoDriverIcon
+              className="context-agent-icon"
+              name="agent"
+              size={15}
+              style={ROBOT_ICON_STYLE}
+              aria-hidden="true"
+            />
+          ) : (
+            <span className="codicon codicon-robot" style={ROBOT_ICON_STYLE} />
+          )}
           <span className="context-text">
             <span dir="ltr">
-              {selectedAgent.name.length > 3 
-                ? `${selectedAgent.name.slice(0, 3)}...` 
+              {selectedAgent.name.length > 3
+                ? `${selectedAgent.name.slice(0, 3)}...`
                 : selectedAgent.name}
             </span>
           </span>
-          <span 
-            className="codicon codicon-close context-close" 
-            onClick={onClearAgent}
-            title="Remove agent"
-          />
+          {isCoDriver ? (
+            <button
+              type="button"
+              className="context-close context-close-button"
+              onClick={onClearAgent}
+              title={t('chat.removeAgent', { defaultValue: 'Remove agent' })}
+              aria-label={t('chat.removeAgent', { defaultValue: 'Remove agent' })}
+            >
+              <CoDriverIcon name="x" size={12} aria-hidden="true" />
+            </button>
+          ) : (
+            <span
+              className="codicon codicon-close context-close"
+              onClick={onClearAgent}
+              title="Remove agent"
+            />
+          )}
         </div>
       )}
 
@@ -213,20 +252,42 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
           style={CURSOR_DEFAULT_STYLE}
         >
           {activeFile && (
-            <span
-              className="context-file-icon"
-              style={FILE_ICON_STYLE}
-              dangerouslySetInnerHTML={{ __html: getFileIconSvg(activeFile) }}
-            />
+            isCoDriver ? (
+              <CoDriverIcon
+                className={`context-file-icon context-file-icon-${activeFileIconName}`}
+                name={activeFileIconName}
+                size={15}
+                style={FILE_ICON_STYLE}
+                aria-hidden="true"
+              />
+            ) : (
+              <span
+                className="context-file-icon"
+                style={FILE_ICON_STYLE}
+                dangerouslySetInnerHTML={{ __html: getFileIconSvg(activeFile) }}
+              />
+            )
           )}
           <span className="context-text">
             <span dir="ltr">{displayText}</span>
           </span>
-          <span
-            className="codicon codicon-close context-close"
-            onClick={onClearFile}
-            title="Remove file context"
-          />
+          {isCoDriver ? (
+            <button
+              type="button"
+              className="context-close context-close-button"
+              onClick={onClearFile}
+              title={t('chat.removeFileContext', { defaultValue: 'Remove file context' })}
+              aria-label={t('chat.removeFileContext', { defaultValue: 'Remove file context' })}
+            >
+              <CoDriverIcon name="x" size={12} aria-hidden="true" />
+            </button>
+          ) : (
+            <span
+              className="codicon codicon-close context-close"
+              onClick={onClearFile}
+              title="Remove file context"
+            />
+          )}
         </div>
       ) : !autoOpenFileEnabled && (
         <div className="context-file-placeholder-wrapper" ref={popoverRef}>
@@ -236,7 +297,11 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
             title={t('fileContext.placeholder')}
             type="button"
           >
-            <span className="codicon codicon-file" />
+            {isCoDriver ? (
+              <CoDriverIcon name="file" size={14} aria-hidden="true" />
+            ) : (
+              <span className="codicon codicon-file" />
+            )}
             <span className="placeholder-text">{t('fileContext.placeholder')}</span>
           </button>
 
@@ -272,7 +337,11 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
             onClick={onToggleStatusPanel}
             data-tooltip={statusPanelExpanded ? t('statusPanel.collapse') : t('statusPanel.expand')}
           >
-            <span className={`codicon ${statusPanelExpanded ? 'codicon-chevron-down' : 'codicon-layers'}`} />
+            {isCoDriver ? (
+              <CoDriverIcon name={statusPanelExpanded ? 'chevronDown' : 'tool'} size={15} aria-hidden="true" />
+            ) : (
+              <span className={`codicon ${statusPanelExpanded ? 'codicon-chevron-down' : 'codicon-layers'}`} />
+            )}
           </button>
         )}
 
@@ -284,7 +353,11 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
             disabled={!hasMessages}
             data-tooltip={t('rewind.tooltip')}
           >
-            <span className="codicon codicon-discard" />
+            {isCoDriver ? (
+              <CoDriverIcon name="history" size={15} aria-hidden="true" />
+            ) : (
+              <span className="codicon codicon-discard" />
+            )}
           </button>
         )}
       </div>

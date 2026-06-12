@@ -2,6 +2,7 @@ import { useState } from 'react';
 import styles from './style.module.less';
 import { useTranslation } from 'react-i18next';
 import type { DiffThemeMode } from '../../../utils/diffTheme';
+import type { UiThemeMode } from '../../../types/uiThemeMode';
 import type { UiFontConfig, CodeFontConfig } from '../hooks/useSettingsBasicActions';
 import AppearanceTab from './AppearanceTab';
 import BehaviorTab from './BehaviorTab';
@@ -16,8 +17,8 @@ const BASIC_TABS: { key: BasicTab; icon: string; labelKey: string }[] = [
 ];
 
 interface BasicConfigSectionProps {
-  theme: 'light' | 'dark' | 'system';
-  onThemeChange: (theme: 'light' | 'dark' | 'system') => void;
+  theme: UiThemeMode;
+  onThemeChange: (theme: UiThemeMode) => void;
   fontSizeLevel: number;
   onFontSizeLevelChange: (level: number) => void;
   nodePath: string;

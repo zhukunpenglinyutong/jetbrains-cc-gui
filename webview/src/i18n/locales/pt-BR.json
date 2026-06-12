@@ -47,6 +47,9 @@
     "closePreview": "Fechar visualização",
     "loadingDropdown": "Carregando...",
     "addAttachment": "Adicionar anexo",
+    "attachments": "Anexos",
+    "removeAgent": "Remover agente",
+    "removeFileContext": "Remover contexto de arquivo",
     "stopGeneration": "Parar geração",
     "generatingResponse": "Gerando resposta",
     "elapsedTime": "Decorrido {{time}}",
@@ -130,6 +133,7 @@
         "environment": "Ambiente"
       },
       "theme": {
+        "codriver": "CoDriver",
         "label": "Tema",
         "system": "Seguir IDE",
         "systemDesc": "Seguir automaticamente o tema da IDE",

@@ -3,6 +3,7 @@ import type { Attachment, SelectedAgent, QueuedMessage } from './types.js';
 import { AttachmentList } from './AttachmentList.js';
 import { ContextBar } from './ContextBar.js';
 import { MessageQueue } from './MessageQueue.js';
+import { useIsCoDriverTheme } from '../../hooks/useActiveThemeMode';
 
 export function ChatInputBoxHeader({
   sdkStatusLoading,
@@ -61,6 +62,7 @@ export function ChatInputBoxHeader({
   autoOpenFileEnabled?: boolean;
   onRequestEnableFileContext?: () => void;
 }) {
+  const isCoDriver = useIsCoDriverTheme();
   return (
     <>
       {/* Open source banner */}
@@ -115,8 +117,8 @@ export function ChatInputBoxHeader({
         />
       )}
 
-      {/* Attachment list */}
-      {attachments.length > 0 && (
+      {/* Attachment list — stock placement (above the context bar) for light/dark/system. */}
+      {!isCoDriver && attachments.length > 0 && (
         <AttachmentList attachments={attachments} onRemove={onRemoveAttachment} />
       )}
 
@@ -140,6 +142,11 @@ export function ChatInputBoxHeader({
         autoOpenFileEnabled={autoOpenFileEnabled}
         onRequestEnableFileContext={onRequestEnableFileContext}
       />
+
+      {/* CoDriver: keep the attachment strip closest to the editable prompt, like modern chat composers. */}
+      {isCoDriver && attachments.length > 0 && (
+        <AttachmentList attachments={attachments} onRemove={onRemoveAttachment} />
+      )}
     </>
   );
 }

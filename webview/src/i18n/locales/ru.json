@@ -47,6 +47,9 @@
     "closePreview": "Закрыть предпросмотр",
     "loadingDropdown": "Загрузка...",
     "addAttachment": "Добавить вложение",
+    "attachments": "Вложения",
+    "removeAgent": "Удалить агента",
+    "removeFileContext": "Удалить файловый контекст",
     "stopGeneration": "Остановить генерацию",
     "generatingResponse": "Генерирую ответ",
     "elapsedTime": "Прошло {{time}}",
@@ -130,6 +133,7 @@
         "environment": "Окружение"
       },
       "theme": {
+        "codriver": "CoDriver",
         "label": "Тема",
         "system": "Как в IDE",
         "systemDesc": "Следует за темой IDE",

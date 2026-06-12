@@ -3,6 +3,8 @@ import type { TFunction } from 'i18next';
 import type { ClaudeContentBlock, ToolResultBlock, CompactSummaryMetadata } from '../../types';
 
 import MarkdownBlock from '../MarkdownBlock';
+import { CoDriverIcon } from '../codriverIcons';
+import { useIsCoDriverTheme } from '../../hooks/useActiveThemeMode';
 import CollapsibleTextBlock from '../CollapsibleTextBlock';
 import {
   BashToolBlock,
@@ -71,6 +73,7 @@ const CompactSummaryBlock = memo(function CompactSummaryBlock({ block, t }: Comp
       setExpanded(prev => !prev);
     }
   }, []);
+  const isCoDriver = useIsCoDriverTheme();
   const meta = block.metadata;
   const hasMeta = meta && typeof meta.messagesSummarized === 'number';
   const titleText = t(block.title);
@@ -87,9 +90,17 @@ const CompactSummaryBlock = memo(function CompactSummaryBlock({ block, t }: Comp
         onClick={toggleExpanded}
         onKeyDown={onKeyDown}
       >
-        <span className="compact-summary-icon" aria-hidden="true">●</span>
+        {isCoDriver ? (
+          <CoDriverIcon className="compact-summary-icon" name="spark" size={12} aria-hidden="true" />
+        ) : (
+          <span className="compact-summary-icon" aria-hidden="true">●</span>
+        )}
         <span className="compact-summary-title-text">{titleText}</span>
-        <span className="compact-summary-toggle" aria-hidden="true">{expanded ? '▼' : '▶'}</span>
+        {isCoDriver ? (
+          <CoDriverIcon className="compact-summary-toggle" name={expanded ? 'chevronDown' : 'chevronRight'} size={12} aria-hidden="true" />
+        ) : (
+          <span className="compact-summary-toggle" aria-hidden="true">{expanded ? '▼' : '▶'}</span>
+        )}
       </div>
       {hasMeta && (
         <div className="compact-summary-metadata">
@@ -144,6 +155,7 @@ export function ContentBlockRenderer({
   onToggleThinking,
   findToolResult,
 }: ContentBlockRendererProps): React.ReactElement | null {
+  const isCoDriver = useIsCoDriverTheme();
   if (block.type === 'text') {
     return messageType === 'user' ? (
       <CollapsibleTextBlock content={block.text ?? ''} />
@@ -229,9 +241,11 @@ export function ContentBlockRenderer({
               ? t('common.thinkingProcess')
               : t('common.thinking')}
           </span>
-          <span className="thinking-icon">
-            {isThinkingExpanded ? '▼' : '▶'}
-          </span>
+          {isCoDriver ? (
+            <CoDriverIcon className="thinking-icon" name={isThinkingExpanded ? 'chevronDown' : 'chevronRight'} size={13} aria-hidden="true" />
+          ) : (
+            <span className="thinking-icon">{isThinkingExpanded ? '▼' : '▶'}</span>
+          )}
         </div>
         <div
           className="thinking-content"

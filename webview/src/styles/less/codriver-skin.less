@@ -1,0 +1,261 @@
+/* CoDriver skin.
+   Keep this scoped to data-theme="codriver" so the existing dark/light themes remain unchanged. */
+
+[data-theme="codriver"] {
+    /* Primer / GitHub Dark inspired base */
+    --bg-primary: #0d1117;
+    --bg-chat: #0d1117;
+    --bg-secondary: #161b22;
+    --bg-tertiary: #21262d;
+    --bg-elevated: #161b22;
+    --bg-hover: #21262d;
+    --bg-active: #30363d;
+
+    --text-primary: #c9d1d9;
+    --text-secondary: #f0f6fc;
+    --text-tertiary: #8b949e;
+    --text-muted: #6e7681;
+    --text-placeholder: #6e7681;
+    --text-white: #ffffff;
+
+    --border-primary: #30363d;
+    --border-secondary: #30363d;
+    --border-hover: #8b949e;
+
+    --accent-primary: #8957e5;
+    --accent-primary-hover: #a371f7;
+    --accent-primary-active: #6e40c9;
+    --accent-secondary: #58a6ff;
+
+    --color-success: #3fb950;
+    --color-warning: #d29922;
+    --color-error: #f85149;
+    --color-danger: #da3633;
+    --color-info: #58a6ff;
+    --color-link: #58a6ff;
+
+    --color-code-bg: rgba(110, 118, 129, 0.24);
+    --color-code-block-bg: #161b22;
+    --color-code-block-border: #30363d;
+    --color-code-inline-bg: rgba(110, 118, 129, 0.24);
+
+    --color-thinking-border: #30363d;
+    --color-thinking-text: #8b949e;
+
+    --color-tool-bg: rgba(110, 118, 129, 0.12);
+    --color-tool-bg-secondary: rgba(110, 118, 129, 0.08);
+    --color-tool-icon: #58a6ff;
+    --color-tool-name: #79c0ff;
+    --color-tool-summary: #8b949e;
+    --color-tool-file-link: #7ee787;
+    --color-tool-class-link: #a371f7;
+    --color-tool-param-text: #c9d1d9;
+    --color-tool-param-key: #8b949e;
+    --color-tool-param-value: #f0f6fc;
+
+    --color-button-text: #ffffff;
+    --color-button-accent-hover-bg: rgba(137, 87, 229, 0.18);
+    --color-button-success-bg: rgba(63, 185, 80, 0.12);
+    --color-button-success-border: rgba(63, 185, 80, 0.46);
+    --color-button-success-hover-bg: rgba(63, 185, 80, 0.20);
+    --color-button-danger-hover-bg: rgba(248, 81, 73, 0.15);
+
+    --color-dialog-border: #30363d;
+    --color-dialog-button-primary: #8957e5;
+    --color-dialog-button-primary-hover: #a371f7;
+    --color-dialog-button-primary-active: #6e40c9;
+    --color-dialog-button-danger: #f85149;
+    --color-dialog-button-danger-hover: #ff7b72;
+    --color-dialog-button-danger-active: #da3633;
+
+    --text-warning: #d29922;
+    --color-warning-button: #d29922;
+    --color-warning-button-hover: #bb8009;
+
+    --color-message-error-border: #f85149;
+    --color-message-role-user: #a371f7;
+    --color-message-role-assistant: #3fb950;
+    --color-message-blockquote: #30363d;
+    --color-message-ai-indicator: #6e7681;
+    --color-message-ai-indicator-hover: #8b949e;
+    --color-message-divider: rgba(240, 246, 252, 0.06);
+
+    --color-provider-card-bg: rgba(187, 128, 9, 0.10);
+    --color-provider-card-border: rgba(210, 153, 34, 0.32);
+    --color-provider-card-accent: #d29922;
+    --color-provider-card-icon-bg: rgba(210, 153, 34, 0.14);
+    --color-provider-card-action-bg: rgba(210, 153, 34, 0.12);
+    --color-provider-card-action-border: rgba(210, 153, 34, 0.30);
+    --color-provider-card-action-hover-bg: rgba(210, 153, 34, 0.20);
+    --color-provider-card-action-hover-border: rgba(210, 153, 34, 0.45);
+    --color-provider-card-action-active-bg: rgba(210, 153, 34, 0.24);
+
+    --color-history-border: rgba(240, 246, 252, 0.08);
+    --color-history-hover: rgba(240, 246, 252, 0.06);
+
+    --color-switch-btn-bg: rgba(110, 118, 129, 0.14);
+    --color-switch-btn-border: rgba(240, 246, 252, 0.10);
+    --color-switch-btn-hover-bg: rgba(110, 118, 129, 0.22);
+
+    --color-menu-bg-hover: #21262d;
+    --color-menu-bg-active: #30363d;
+    --color-menu-delete: #ff7b72;
+
+    --color-scroll-control-bg: #161b22;
+    --color-scroll-control-border: #30363d;
+    --color-scroll-control-text: #c9d1d9;
+    --color-scroll-control-hover-bg: #21262d;
+    --color-scroll-control-hover-border: #8b949e;
+    --color-scroll-control-active-bg: #30363d;
+    --color-scroll-control-icon: #8b949e;
+
+    --color-toast-info-border: #58a6ff;
+    --color-toast-success-border: #3fb950;
+    --color-toast-warning-border: #d29922;
+    --color-toast-error-border: #f85149;
+
+    --color-notice-info-bg: rgba(88, 166, 255, 0.12);
+    --color-notice-info-border: rgba(88, 166, 255, 0.35);
+    --color-notice-info-text: #58a6ff;
+    --color-notice-warning-bg: rgba(210, 153, 34, 0.12);
+    --color-notice-warning-border: rgba(210, 153, 34, 0.38);
+    --color-notice-warning-text: #d29922;
+
+    --color-settings-error: #f85149;
+    --color-settings-link: #58a6ff;
+    --color-settings-border: #30363d;
+
+    --chart-gradient-start: #8957e5;
+    --chart-gradient-end: #58a6ff;
+    --color-chart-bar-1: #8957e5;
+    --color-chart-bar-2: #58a6ff;
+    --color-chart-bar-3: #3fb950;
+    --color-chart-bar-4: #d29922;
+    --color-chart-divider: #30363d;
+
+    --color-todo-header: #f0f6fc;
+    --color-todo-text: #c9d1d9;
+    --color-todo-status-pending: #6e7681;
+    --color-todo-status-progress: #58a6ff;
+    --color-todo-status-completed: #3fb950;
+    --color-todo-divider: #30363d;
+    --color-todo-panel-progress: #58a6ff;
+
+    --color-task-icon-bg: rgba(63, 185, 80, 0.14);
+    --color-task-icon: #3fb950;
+    --color-task-badge-text: #d29922;
+    --color-task-badge-bg: rgba(210, 153, 34, 0.12);
+
+    --scrollbar-track: #0d1117;
+    --scrollbar-thumb: #30363d;
+    --scrollbar-thumb-hover: #484f58;
+
+    --shadow-sm: 0 1px 2px rgba(1, 4, 9, 0.32);
+    --shadow-md: 0 8px 24px rgba(1, 4, 9, 0.34);
+    --shadow-lg: 0 16px 32px rgba(1, 4, 9, 0.48);
+
+    --codriver-radius-sm: 6px;
+    --codriver-radius-md: 8px;
+    --codriver-radius-lg: 12px;
+    --codriver-focus-ring: 0 0 0 2px rgba(137, 87, 229, 0.40);
+
+    /* Look-and-feel surfaces used by the per-component overrides below */
+    --codriver-shell-bg: #0d1117;
+    --codriver-panel-bg: #161b22;
+    --codriver-panel-raised-bg: #1c2128;
+    --codriver-composer-bg: #161b22;
+    --codriver-code-bg: #161b22;
+    --codriver-inline-code-bg: rgba(110, 118, 129, 0.4);
+    --codriver-inline-code-text: #e6edf3;
+    --codriver-heading: #e6edf3;
+    --codriver-hover-overlay: rgba(177, 186, 196, 0.12);
+
+    /* User message bubble: neutral elevated surface (neutral dark look),
+       not a saturated fill. The collapse overlay gradient also reads this var. */
+    --color-message-user-bg: #1c2128;
+    --color-message-user-text: #e6edf3;
+    --color-message-user-code-bg: rgba(110, 118, 129, 0.4);
+    --color-message-user-code-border: #30363d;
+}
+
+/* =========================================================================
+   CoDriver skin — shared shell, surfaces and scrollbars.
+   Component-level polish lives next to each component (header.less,
+   message.less, input.less, loading.less, buttons.less, scroll-control.less).
+   Everything stays scoped to [data-theme="codriver"] so dark/light
+   themes are never affected.
+   ========================================================================= */
+
+[data-theme="codriver"] body,
+[data-theme="codriver"] #root,
+[data-theme="codriver"] #app {
+    background: var(--codriver-shell-bg);
+    color: var(--text-primary);
+}
+
+/* Flat chat canvas — closer to the GitHub dark surface, no colored glow */
+[data-theme="codriver"] .messages-shell,
+[data-theme="codriver"] .messages-container {
+    background: var(--codriver-shell-bg);
+}
+
+/* Shared elevated surfaces */
+[data-theme="codriver"] .tool-block {
+    border-color: var(--border-primary);
+}
+
+[data-theme="codriver"] .dialog-content,
+[data-theme="codriver"] .context-menu,
+[data-theme="codriver"] .settings-page,
+[data-theme="codriver"] .settings-content {
+    background: var(--codriver-panel-bg);
+    border-color: var(--border-primary);
+    color: var(--text-primary);
+}
+
+/* Generic form controls */
+[data-theme="codriver"] textarea,
+[data-theme="codriver"] input,
+[data-theme="codriver"] select {
+    background: var(--bg-secondary);
+    border-color: var(--border-primary);
+    color: var(--text-primary);
+}
+
+[data-theme="codriver"] textarea:focus,
+[data-theme="codriver"] input:focus,
+[data-theme="codriver"] select:focus {
+    border-color: var(--accent-primary);
+    box-shadow: var(--codriver-focus-ring);
+    outline: none;
+}
+
+[data-theme="codriver"] pre,
+[data-theme="codriver"] code {
+    border-radius: var(--codriver-radius-sm);
+}
+
+/* Thin GitHub-style scrollbars */
+[data-theme="codriver"] .messages-container {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+[data-theme="codriver"] ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+[data-theme="codriver"] ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+[data-theme="codriver"] ::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+    border: 2px solid var(--codriver-shell-bg);
+    border-radius: 999px;
+}
+
+[data-theme="codriver"] ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover);
+}

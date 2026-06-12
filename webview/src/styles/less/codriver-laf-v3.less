@@ -1,0 +1,732 @@
+/* CoDriver look-and-feel.
+ *
+ * Scope every rule to data-theme="codriver". The goal is not to clone
+ * private GitHub assets, but to translate this plugin's real UI primitives
+ * into a calmer, Primer-like visual language:
+ * - nearly black canvas
+ * - quiet borders
+ * - blue for links, focus and user-authored content
+ * - yellow/amber for attention and inline code accents
+ * - green for success/context/status
+ * - very small, low-contrast icons
+ * - prominent but restrained bottom composer
+ */
+
+html[data-theme="codriver"] {
+    color-scheme: dark;
+
+    --codriver-canvas: #0d1117;
+    --codriver-canvas-subtle: #010409;
+    --codriver-surface: #161b22;
+    --codriver-surface-muted: #1b222c;
+    --codriver-surface-raised: #21262d;
+    --codriver-border: rgba(139, 148, 158, 0.24);
+    --codriver-border-muted: rgba(139, 148, 158, 0.14);
+    --codriver-border-strong: rgba(88, 166, 255, 0.62);
+    --codriver-fg-default: #c9d1d9;
+    --codriver-fg-muted: #8b949e;
+    --codriver-fg-subtle: #6e7681;
+    --codriver-link: #58a6ff;
+    --codriver-accent: #58a6ff;
+    --codriver-user: #265985;
+    --codriver-user-border: #6aa9f0;
+    --codriver-attention: #d29922;
+    --codriver-attention-muted: rgba(210, 153, 34, 0.16);
+    --codriver-success: #3fb950;
+    --codriver-success-muted: rgba(63, 185, 80, 0.12);
+    --codriver-danger: #f85149;
+    --codriver-done: #a371f7;
+    --codriver-radius-sm: 6px;
+    --codriver-radius-md: 8px;
+    --codriver-radius-lg: 12px;
+    --codriver-radius-xl: 16px;
+    --codriver-glow-blue: rgba(88, 166, 255, 0.36);
+    --codriver-glow-purple: rgba(163, 113, 247, 0.20);
+    --codriver-shadow: 0 16px 40px rgba(1, 4, 9, 0.48);
+    --codriver-inner-shadow: inset 0 1px 0 rgba(240, 246, 252, 0.04);
+
+    --bg-primary: var(--codriver-canvas);
+    --bg-chat: var(--codriver-canvas);
+    --bg-secondary: var(--codriver-surface);
+    --bg-tertiary: var(--codriver-surface-raised);
+    --bg-elevated: var(--codriver-surface);
+    --bg-hover: rgba(177, 186, 196, 0.08);
+    --bg-active: rgba(177, 186, 196, 0.13);
+
+    --text-primary: var(--codriver-fg-default);
+    --text-secondary: #f0f6fc;
+    --text-tertiary: var(--codriver-fg-muted);
+    --text-muted: var(--codriver-fg-subtle);
+    --text-placeholder: #7d8590;
+    --border-primary: var(--codriver-border-muted);
+    --border-secondary: var(--codriver-border);
+    --border-hover: rgba(139, 148, 158, 0.44);
+    --accent-primary: var(--codriver-accent);
+    --accent-primary-hover: #79c0ff;
+    --accent-primary-active: #1f6feb;
+    --accent-secondary: var(--codriver-link);
+    --color-link: var(--codriver-link);
+    --color-success: var(--codriver-success);
+    --color-warning: var(--codriver-attention);
+    --color-error: var(--codriver-danger);
+    --color-danger: var(--codriver-danger);
+    --color-info: var(--codriver-link);
+
+    --color-code-bg: rgba(210, 153, 34, 0.14);
+    --color-code-inline-bg: rgba(210, 153, 34, 0.14);
+    --color-code-block-bg: #0d1117;
+    --color-code-block-border: var(--codriver-border-muted);
+
+    --color-message-user-bg: var(--codriver-user);
+    --color-message-user-text: #f0f6fc;
+    --color-message-user-code-bg: rgba(255, 255, 255, 0.12);
+    --color-message-user-code-border: rgba(255, 255, 255, 0.18);
+    --color-message-role-user: #79c0ff;
+    --color-message-role-assistant: var(--codriver-success);
+    --color-message-divider: transparent;
+
+    --scrollbar-track: transparent;
+    --scrollbar-thumb: rgba(139, 148, 158, 0.34);
+    --scrollbar-thumb-hover: rgba(139, 148, 158, 0.56);
+
+    --shadow-sm: none;
+    --shadow-md: var(--codriver-shadow);
+    --shadow-lg: var(--codriver-shadow);
+}
+
+html[data-theme="codriver"] body {
+    background:
+        radial-gradient(circle at 50% -18%, rgba(88, 166, 255, 0.20), transparent 26rem),
+        radial-gradient(circle at 50% -10%, rgba(163, 113, 247, 0.14), transparent 32rem),
+        var(--codriver-canvas);
+    color: var(--codriver-fg-default);
+}
+
+html[data-theme="codriver"] #app {
+    margin: 12px;
+    height: calc((100vh - 24px) / var(--font-scale, 1));
+    width: calc((100vw - 24px) / var(--font-scale, 1));
+    border: 1px solid var(--codriver-border-muted);
+    border-radius: var(--codriver-radius-lg);
+    background: var(--codriver-canvas);
+    box-shadow:
+        0 0 0 1px rgba(88, 166, 255, 0.06),
+        0 0 48px rgba(88, 166, 255, 0.12),
+        0 24px 72px rgba(1, 4, 9, 0.62);
+}
+
+/* Header / top controls --------------------------------------------------- */
+html[data-theme="codriver"] .header {
+    min-height: 42px;
+    padding: 6px 8px 6px 12px;
+    background: rgba(13, 17, 23, 0.86);
+    border-bottom: 1px solid var(--codriver-border-muted);
+    box-shadow: var(--codriver-inner-shadow);
+}
+
+html[data-theme="codriver"] .header-left {
+    gap: 8px;
+}
+
+html[data-theme="codriver"] .session-title {
+    color: #dbe7f3;
+    font-size: 13px;
+    font-weight: 500;
+    padding-left: 2px;
+    letter-spacing: 0;
+}
+
+html[data-theme="codriver"] .new-chat-button,
+html[data-theme="codriver"] .back-button,
+html[data-theme="codriver"] .icon-button,
+html[data-theme="codriver"] .session-title-edit-btn,
+html[data-theme="codriver"] .session-title-save-btn,
+html[data-theme="codriver"] .session-title-cancel-btn {
+    color: var(--codriver-fg-muted);
+    background: transparent;
+    border: 1px solid transparent;
+    box-shadow: none;
+}
+
+html[data-theme="codriver"] .new-chat-button {
+    min-height: 26px;
+    padding: 3px 9px;
+    border-color: var(--codriver-border-muted);
+    border-radius: var(--codriver-radius-sm);
+    background: rgba(33, 38, 45, 0.72);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+html[data-theme="codriver"] .icon-button,
+html[data-theme="codriver"] .back-button {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--codriver-radius-sm);
+}
+
+html[data-theme="codriver"] .back-button {
+    width: auto;
+    padding: 3px 7px;
+}
+
+html[data-theme="codriver"] .new-chat-button:hover,
+html[data-theme="codriver"] .back-button:hover,
+html[data-theme="codriver"] .icon-button:hover,
+html[data-theme="codriver"] .session-title-edit-btn:hover {
+    color: #f0f6fc;
+    background: rgba(177, 186, 196, 0.08);
+    border-color: var(--codriver-border);
+}
+
+html[data-theme="codriver"] .icon-button svg,
+html[data-theme="codriver"] .icon-button .codicon {
+    width: 15px;
+    height: 15px;
+    font-size: 15px;
+}
+
+/* Main shell / message area ---------------------------------------------- */
+html[data-theme="codriver"] .messages-shell {
+    position: relative;
+    background:
+        linear-gradient(180deg, rgba(88, 166, 255, 0.045), transparent 118px),
+        var(--codriver-canvas);
+}
+
+html[data-theme="codriver"] .messages-container {
+    padding: 6px 10px 18px 28px;
+    background: transparent;
+}
+
+html[data-theme="codriver"] .message {
+    padding: 12px 12px 13px 14px;
+    border-bottom: none;
+    gap: 7px;
+}
+
+html[data-theme="codriver"] .message.assistant {
+    padding-left: 14px;
+}
+
+html[data-theme="codriver"] .message.assistant .message-content {
+    color: var(--codriver-fg-default);
+    max-width: 100%;
+}
+
+html[data-theme="codriver"] .message.user {
+    align-items: flex-end;
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+html[data-theme="codriver"] .message.user .message-content {
+    max-width: min(86%, 920px);
+    padding: 12px 14px;
+    color: #f0f6fc;
+    background:
+        linear-gradient(180deg, rgba(121, 192, 255, 0.12), rgba(38, 89, 133, 0.94)),
+        var(--codriver-user);
+    border: 1px solid rgba(121, 192, 255, 0.38);
+    border-radius: var(--codriver-radius-md);
+    box-shadow:
+        0 0 0 1px rgba(88, 166, 255, 0.08),
+        0 10px 28px rgba(1, 4, 9, 0.24);
+}
+
+html[data-theme="codriver"] .message.user .message-content a,
+html[data-theme="codriver"] .message.user .message-content code {
+    color: #fff8c5;
+}
+
+html[data-theme="codriver"] .message-header-row,
+html[data-theme="codriver"] .message-role-label,
+html[data-theme="codriver"] .message-timestamp-header,
+html[data-theme="codriver"] .message-duration {
+    color: var(--codriver-fg-subtle);
+    font-size: 11px;
+    font-weight: 400;
+}
+
+html[data-theme="codriver"] .message-duration {
+    opacity: 0.62;
+}
+
+html[data-theme="codriver"] .message:hover .message-duration {
+    opacity: 0.92;
+}
+
+html[data-theme="codriver"] .message-copy-btn,
+html[data-theme="codriver"] .message-copy-btn-inline,
+html[data-theme="codriver"] .copy-code-btn {
+    color: var(--codriver-fg-subtle);
+    background: rgba(22, 27, 34, 0.82);
+    border: 1px solid transparent;
+    border-radius: var(--codriver-radius-sm);
+    box-shadow: none;
+}
+
+html[data-theme="codriver"] .message-copy-btn:hover,
+html[data-theme="codriver"] .message-copy-btn-inline:hover,
+html[data-theme="codriver"] .copy-code-btn:hover {
+    color: #f0f6fc;
+    background: rgba(177, 186, 196, 0.10);
+    border-color: var(--codriver-border);
+}
+
+/* Markdown / prose -------------------------------------------------------- */
+html[data-theme="codriver"] .message-content h1,
+html[data-theme="codriver"] .message-content h2,
+html[data-theme="codriver"] .message-content h3,
+html[data-theme="codriver"] .message-content h4,
+html[data-theme="codriver"] .message-content h5,
+html[data-theme="codriver"] .message-content h6 {
+    color: #f0f6fc;
+    font-weight: 650;
+    line-height: 1.25;
+    margin: 14px 0 8px;
+}
+
+html[data-theme="codriver"] .message-content h1 { font-size: 20px; }
+html[data-theme="codriver"] .message-content h2 { font-size: 18px; }
+html[data-theme="codriver"] .message-content h3 { font-size: 16px; }
+html[data-theme="codriver"] .message-content h4,
+html[data-theme="codriver"] .message-content h5,
+html[data-theme="codriver"] .message-content h6 { font-size: 14px; }
+
+html[data-theme="codriver"] .message-content p,
+html[data-theme="codriver"] .message-content li {
+    color: var(--codriver-fg-default);
+    font-size: 13.5px;
+    line-height: 1.62;
+}
+
+html[data-theme="codriver"] .message-content p {
+    margin: 7px 0;
+}
+
+html[data-theme="codriver"] .message-content ul,
+html[data-theme="codriver"] .message-content ol {
+    margin: 7px 0 9px 22px;
+    padding-left: 0;
+}
+
+html[data-theme="codriver"] .message-content li::marker {
+    color: var(--codriver-fg-muted);
+}
+
+html[data-theme="codriver"] .message-content a,
+html[data-theme="codriver"] .message-content .markdown-link,
+html[data-theme="codriver"] .message-content .file-link,
+html[data-theme="codriver"] .message-content .class-link {
+    color: var(--codriver-link);
+    text-decoration: none;
+}
+
+html[data-theme="codriver"] .message-content a:hover,
+html[data-theme="codriver"] .message-content .markdown-link:hover,
+html[data-theme="codriver"] .message-content .file-link:hover,
+html[data-theme="codriver"] .message-content .class-link:hover {
+    text-decoration: underline;
+}
+
+html[data-theme="codriver"] .message-content code:not(pre code) {
+    padding: 0.12em 0.34em;
+    color: #ffd479;
+    background: rgba(210, 153, 34, 0.12);
+    border: 1px solid rgba(210, 153, 34, 0.20);
+    border-radius: 4px;
+    font-size: 0.92em;
+}
+
+html[data-theme="codriver"] .message-content strong {
+    color: #f0f6fc;
+    font-weight: 650;
+}
+
+html[data-theme="codriver"] .message-content blockquote {
+    color: var(--codriver-fg-muted);
+    border-left: 2px solid var(--codriver-border);
+    padding-left: 12px;
+    margin: 10px 0;
+}
+
+/* Code block renderer: real structure is .code-block-wrapper + .copy-code-btn + pre/code. */
+html[data-theme="codriver"] .code-block-wrapper {
+    position: relative;
+    margin: 12px 0 16px;
+    overflow: hidden;
+    background: #0d1117;
+    border: 1px solid var(--codriver-border-muted);
+    border-radius: var(--codriver-radius-md);
+    box-shadow: var(--codriver-inner-shadow);
+}
+
+html[data-theme="codriver"] .code-block-wrapper::before {
+    content: '';
+    display: block;
+    height: 30px;
+    background:
+        linear-gradient(180deg, rgba(240, 246, 252, 0.035), transparent),
+        #0d1117;
+    border-bottom: 1px solid var(--codriver-border-muted);
+}
+
+html[data-theme="codriver"] .code-block-wrapper::after {
+    content: '›';
+    position: absolute;
+    top: 5px;
+    left: 12px;
+    color: var(--codriver-fg-muted);
+    font-size: 18px;
+    line-height: 20px;
+    transform: rotate(90deg);
+}
+
+html[data-theme="codriver"] .code-block-wrapper pre {
+    margin: 0;
+    padding: 12px 14px 14px;
+    background: #0d1117 !important;
+    border: none;
+    overflow-x: auto;
+}
+
+html[data-theme="codriver"] .code-block-wrapper pre code {
+    color: #c9d1d9;
+    background: transparent;
+    font-size: 13px;
+    line-height: 1.55;
+    tab-size: 4;
+}
+
+html[data-theme="codriver"] .code-block-wrapper .copy-code-btn,
+html[data-theme="codriver"] .copy-code-btn {
+    top: 4px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    color: var(--codriver-fg-muted);
+    opacity: 0.82;
+}
+
+/* Status, compact information and diagnostics ---------------------------- */
+html[data-theme="codriver"] .streaming-connect-status,
+html[data-theme="codriver"] .compact-summary-block,
+html[data-theme="codriver"] .compact-notification-block,
+html[data-theme="codriver"] .task-notification-block,
+html[data-theme="codriver"] .provider-not-configured-card,
+html[data-theme="codriver"] .error-diagnostic-card,
+html[data-theme="codriver"] .thinking-block {
+    background: rgba(22, 27, 34, 0.62);
+    border: 1px solid var(--codriver-border-muted);
+    border-radius: var(--codriver-radius-md);
+    box-shadow: var(--codriver-inner-shadow);
+}
+
+html[data-theme="codriver"] .thinking-block,
+html[data-theme="codriver"] .compact-summary-block,
+html[data-theme="codriver"] .compact-notification-block {
+    color: var(--codriver-fg-muted);
+}
+
+html[data-theme="codriver"] .thinking-header,
+html[data-theme="codriver"] .compact-summary-title {
+    color: var(--codriver-fg-muted);
+    background: transparent;
+}
+
+html[data-theme="codriver"] .thinking-header:hover,
+html[data-theme="codriver"] .compact-summary-title:hover {
+    color: #f0f6fc;
+    background: rgba(177, 186, 196, 0.06);
+}
+
+html[data-theme="codriver"] .task-notification-completed,
+html[data-theme="codriver"] .task-notification-success,
+html[data-theme="codriver"] .task-notification-green,
+html[data-theme="codriver"] .compact-summary-icon {
+    color: var(--codriver-success);
+}
+
+html[data-theme="codriver"] .error-diagnostic-recommended-badge {
+    background: var(--codriver-attention-muted);
+    color: #ffd479;
+    border: 1px solid rgba(210, 153, 34, 0.24);
+}
+
+/* Tool blocks: keep additional plugin capabilities, but translate them into a calm activity style. */
+html[data-theme="codriver"] .tool-block,
+html[data-theme="codriver"] .tool-use-block,
+html[data-theme="codriver"] .tool-result-block,
+html[data-theme="codriver"] .read-tool-block,
+html[data-theme="codriver"] .edit-tool-block,
+html[data-theme="codriver"] .bash-tool-block,
+html[data-theme="codriver"] .generic-tool-block,
+html[data-theme="codriver"] .task-execution-block,
+html[data-theme="codriver"] .tool-group-block,
+html[data-theme="codriver"] .read-tool-group-block,
+html[data-theme="codriver"] .edit-tool-group-block,
+html[data-theme="codriver"] .bash-tool-group-block,
+html[data-theme="codriver"] .search-tool-group-block {
+    background: rgba(22, 27, 34, 0.56);
+    border: 1px solid var(--codriver-border-muted);
+    border-radius: var(--codriver-radius-md);
+    box-shadow: none;
+}
+
+html[data-theme="codriver"] .tool-header,
+html[data-theme="codriver"] .tool-block-header,
+html[data-theme="codriver"] .tool-title,
+html[data-theme="codriver"] .tool-name {
+    color: #dbe7f3;
+    font-weight: 500;
+}
+
+html[data-theme="codriver"] .tool-icon,
+html[data-theme="codriver"] .tool-block-icon,
+html[data-theme="codriver"] .codicon-symbol-method,
+html[data-theme="codriver"] .codicon-file-code {
+    color: var(--codriver-link);
+}
+
+html[data-theme="codriver"] .tool-summary,
+html[data-theme="codriver"] .tool-param,
+html[data-theme="codriver"] .tool-description {
+    color: var(--codriver-fg-muted);
+}
+
+html[data-theme="codriver"] .tool-file-link,
+html[data-theme="codriver"] .tool-class-link {
+    color: var(--codriver-link);
+}
+
+/* Anchor rail: a subtle timeline that fits the CoDriver skin. */
+html[data-theme="codriver"] .messages-anchor-rail {
+    left: 10px;
+    width: 12px;
+    opacity: 0.78;
+}
+
+html[data-theme="codriver"] .messages-anchor-track {
+    width: 1px;
+    background: linear-gradient(180deg, transparent, rgba(88, 166, 255, 0.26), transparent);
+}
+
+html[data-theme="codriver"] .messages-anchor-dot {
+    width: 6px;
+    height: 6px;
+    margin-left: -2px;
+    background: rgba(88, 166, 255, 0.44);
+    border: 1px solid rgba(121, 192, 255, 0.54);
+    box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.05);
+}
+
+html[data-theme="codriver"] .messages-anchor-dot:hover,
+html[data-theme="codriver"] .messages-anchor-dot.is-active {
+    background: #79c0ff;
+    border-color: #a5d6ff;
+    box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.16);
+}
+
+html[data-theme="codriver"] .anchor-tooltip {
+    color: var(--codriver-fg-default);
+    background: #161b22;
+    border: 1px solid var(--codriver-border);
+    border-radius: var(--codriver-radius-md);
+    box-shadow: var(--codriver-shadow);
+}
+
+/* Bottom composer --------------------------------------------------------- */
+html[data-theme="codriver"] .input-area {
+    padding: 10px 20px 12px 32px;
+    background:
+        linear-gradient(180deg, rgba(13, 17, 23, 0), rgba(13, 17, 23, 0.92) 28%),
+        var(--codriver-canvas);
+    border-top: 1px solid transparent;
+}
+
+html[data-theme="codriver"] .input-container {
+    position: relative;
+    gap: 9px;
+    padding: 12px 14px 10px;
+    background: #30343a;
+    border: 1px solid rgba(121, 192, 255, 0.44);
+    border-radius: var(--codriver-radius-lg);
+    box-shadow:
+        0 0 0 1px rgba(88, 166, 255, 0.10),
+        0 0 22px rgba(88, 166, 255, 0.16),
+        0 14px 38px rgba(1, 4, 9, 0.42);
+}
+
+html[data-theme="codriver"] .input-container::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    z-index: -1;
+    border-radius: inherit;
+    background: linear-gradient(90deg, rgba(88, 166, 255, 0.22), rgba(121, 192, 255, 0.52), rgba(163, 113, 247, 0.20));
+    opacity: 0.76;
+}
+
+html[data-theme="codriver"] .input-container:focus-within {
+    border-color: #79c0ff;
+    box-shadow:
+        0 0 0 1px rgba(121, 192, 255, 0.52),
+        0 0 28px rgba(88, 166, 255, 0.22),
+        0 18px 46px rgba(1, 4, 9, 0.46);
+}
+
+html[data-theme="codriver"] #messageInput {
+    color: #f0f6fc;
+    font-size: 13.5px;
+    line-height: 1.45;
+}
+
+html[data-theme="codriver"] #messageInput::placeholder {
+    color: rgba(240, 246, 252, 0.48);
+}
+
+html[data-theme="codriver"] .input-footer {
+    padding-top: 3px;
+}
+
+html[data-theme="codriver"] .input-tools-left,
+html[data-theme="codriver"] .input-actions {
+    gap: 6px;
+}
+
+html[data-theme="codriver"] .tool-button-placeholder,
+html[data-theme="codriver"] .action-button,
+html[data-theme="codriver"] .send-button,
+html[data-theme="codriver"] .stop-button {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    color: rgba(240, 246, 252, 0.70);
+    border: 1px solid transparent;
+    background: transparent;
+    box-shadow: none;
+}
+
+html[data-theme="codriver"] .tool-button-placeholder:hover,
+html[data-theme="codriver"] .action-button:hover {
+    color: #f0f6fc;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="codriver"] .send-button {
+    background: rgba(240, 246, 252, 0.10);
+    color: rgba(240, 246, 252, 0.64);
+}
+
+html[data-theme="codriver"] .send-button:not(:disabled) {
+    background: #f0f6fc;
+    color: #0d1117;
+}
+
+html[data-theme="codriver"] .send-button:not(:disabled):hover {
+    background: #ffffff;
+}
+
+html[data-theme="codriver"] .send-button:disabled {
+    background: rgba(240, 246, 252, 0.08);
+    color: rgba(240, 246, 252, 0.26);
+}
+
+html[data-theme="codriver"] .stop-button {
+    color: #ff7b72;
+    background: rgba(248, 81, 73, 0.10);
+    border-color: rgba(248, 81, 73, 0.28);
+}
+
+html[data-theme="codriver"] .attachment-chip,
+html[data-theme="codriver"] .file-chip,
+html[data-theme="codriver"] .context-chip,
+html[data-theme="codriver"] .message-attachment-chip {
+    color: #dbe7f3;
+    background: rgba(88, 166, 255, 0.10);
+    border: 1px solid rgba(88, 166, 255, 0.26);
+    border-radius: 999px;
+    box-shadow: none;
+}
+
+html[data-theme="codriver"] .message-attachment-chip-icon,
+html[data-theme="codriver"] .message-attachment-chip-ext {
+    color: var(--codriver-link);
+}
+
+/* Waiting / streaming ----------------------------------------------------- */
+html[data-theme="codriver"] .waiting-indicator {
+    margin: 10px 0 12px 8px;
+    padding: 7px 11px;
+    gap: 9px;
+    color: var(--codriver-fg-muted);
+    background: rgba(22, 27, 34, 0.72);
+    border: 1px solid var(--codriver-border-muted);
+    border-radius: 999px;
+    box-shadow: none;
+}
+
+html[data-theme="codriver"] .waiting-spinner::before {
+    border: 2px solid rgba(139, 148, 158, 0.22);
+    border-top-color: #8b949e;
+    animation: waiting-spin 0.8s linear infinite;
+}
+
+html[data-theme="codriver"] .waiting-spinner::after {
+    display: none;
+}
+
+html[data-theme="codriver"] .waiting-text {
+    color: var(--codriver-fg-muted);
+    font-size: 12.5px;
+    letter-spacing: 0;
+}
+
+html[data-theme="codriver"] .waiting-seconds {
+    color: var(--codriver-fg-subtle);
+}
+
+/* Search, menus, scrollbars ---------------------------------------------- */
+html[data-theme="codriver"] .conversation-search,
+html[data-theme="codriver"] .context-menu,
+html[data-theme="codriver"] .menu,
+html[data-theme="codriver"] .dropdown-menu {
+    background: #161b22;
+    border: 1px solid var(--codriver-border);
+    border-radius: var(--codriver-radius-md);
+    box-shadow: var(--codriver-shadow);
+}
+
+html[data-theme="codriver"] *::-webkit-scrollbar {
+    width: 8px !important;
+    height: 8px !important;
+}
+
+html[data-theme="codriver"] *::-webkit-scrollbar-thumb {
+    border: 2px solid transparent !important;
+    border-radius: 999px !important;
+    background-color: rgba(139, 148, 158, 0.34) !important;
+}
+
+html[data-theme="codriver"] *::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(139, 148, 158, 0.56) !important;
+}
+
+@media (max-width: 768px) {
+    html[data-theme="codriver"] #app {
+        margin: 0;
+        width: calc(100vw / var(--font-scale, 1));
+        height: calc(100vh / var(--font-scale, 1));
+        border-radius: 0;
+    }
+
+    html[data-theme="codriver"] .messages-container {
+        padding-left: 18px;
+    }
+
+    html[data-theme="codriver"] .input-area {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+}

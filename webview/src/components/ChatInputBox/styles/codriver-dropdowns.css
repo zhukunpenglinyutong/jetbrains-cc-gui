@@ -1,0 +1,176 @@
+/* CoDriver skin dropdowns & popups.
+ *
+ * Covers slash-command and @file-mention completion popups (.completion-dropdown)
+ * and the model / mode / provider selectors (.selector-dropdown).
+ *
+ * These components are driven by --dropdown-* / --button-* / --input-* variables
+ * that the project only defines for the dark and light themes. In the CoDriver
+ * theme they are therefore undefined (e.g. hover/selected highlights disappear).
+ * Here we define the full palette for the CoDriver skin and add a little
+ * structural polish. Everything is scoped to html[data-theme="codriver"].
+ */
+
+html[data-theme="codriver"] {
+  /* Used by portal surfaces rendered outside .chat-input-box as well */
+  --dropdown-bg: #161b22;
+  --dropdown-border: #30363d;
+}
+
+html[data-theme="codriver"] .chat-input-box {
+  /* CoDriver composer surface: a calm medium-grey panel (not a black well).
+     Blue stays reserved for focus / hover / link accents only. */
+  --codriver-composer-panel: #44474e;
+  --codriver-composer-panel-hover: #474a51;
+  --codriver-composer-panel-focus: #484b52;
+
+  --input-bg: var(--codriver-composer-panel);
+  --input-border: rgba(240, 246, 252, 0.14);
+  --input-focus-border: #58a6ff;
+  --input-placeholder: #8b949e;
+
+  --dropdown-bg: #161b22;
+  --dropdown-border: #30363d;
+  --dropdown-hover: rgba(177, 186, 196, 0.12);
+  --dropdown-selected: rgba(56, 139, 253, 0.24);
+
+  --button-bg: transparent;
+  --button-hover: rgba(177, 186, 196, 0.12);
+  --button-primary: #58a6ff;
+  --button-disabled: #484f58;
+
+  /* Mirror the dark theme's intent: muted secondary text inside the composer */
+  --text-primary: #c9d1d9;
+  --text-secondary: #8b949e;
+  --text-muted: #6e7681;
+
+  --progress-bg: rgba(110, 118, 129, 0.20);
+  --progress-fill: #58a6ff;
+
+  --attachment-bg: #161b22;
+  --attachment-border: #30363d;
+
+  --error-color: #ff7b72;
+  --success-color: #3fb950;
+
+  --context-bar-bg: transparent;
+}
+
+/* Composer surface: one continuous medium-grey panel.
+   Only the background tone changes per state; the blue border/glow accent on
+   hover/focus keeps coming from the shared layout styles (layout.css). */
+html[data-theme="codriver"] .chat-input-box {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), rgba(0, 0, 0, 0.035)),
+    var(--codriver-composer-panel);
+  box-shadow:
+    0 1px 0 rgba(240, 246, 252, 0.06) inset,
+    0 12px 32px rgba(1, 4, 9, 0.30);
+}
+
+html[data-theme="codriver"] .chat-input-box:hover {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.024), rgba(0, 0, 0, 0.025)),
+    var(--codriver-composer-panel-hover);
+}
+
+html[data-theme="codriver"] .chat-input-box:focus-within,
+html[data-theme="codriver"] .chat-input-box.is-resizing {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.026), rgba(0, 0, 0, 0.020)),
+    var(--codriver-composer-panel-focus);
+}
+
+/* Inner rows stay transparent so the whole composer reads as a single panel
+   instead of stacked dark bands (the toolbar normally has its own dark wash). */
+html[data-theme="codriver"] .context-bar,
+html[data-theme="codriver"] .input-editable-wrapper,
+html[data-theme="codriver"] .button-area {
+  background: transparent;
+}
+
+/* Active-file / context chips: subdued grey controls, not dark badges. */
+html[data-theme="codriver"] .context-item {
+  background: rgba(13, 17, 23, 0.22);
+  border-color: rgba(240, 246, 252, 0.12);
+  color: #e6edf3;
+}
+
+html[data-theme="codriver"] .context-item:hover {
+  background: rgba(13, 17, 23, 0.30);
+  border-color: rgba(88, 166, 255, 0.34);
+}
+
+/* Popup surfaces: GitHub elevation + radius */
+html[data-theme="codriver"] .completion-dropdown,
+html[data-theme="codriver"] .selector-dropdown {
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(1, 4, 9, 0.5);
+}
+
+/* Hover / active rows */
+html[data-theme="codriver"] .dropdown-item.active,
+html[data-theme="codriver"] .dropdown-item:hover,
+html[data-theme="codriver"] .selector-option:hover {
+  background: var(--dropdown-hover);
+}
+
+/* Selected row: GitHub blue tint + left accent, like the command palette */
+html[data-theme="codriver"] .dropdown-item.selected,
+html[data-theme="codriver"] .selector-option.selected {
+  background: var(--dropdown-selected);
+  box-shadow: inset 2px 0 0 #58a6ff;
+}
+
+/* Row icons */
+html[data-theme="codriver"] .dropdown-item-icon {
+  color: #8b949e;
+}
+
+html[data-theme="codriver"] .dropdown-item-icon.codicon-terminal,
+html[data-theme="codriver"] .dropdown-item-icon.codicon-file-code {
+  color: #d29922;
+}
+
+html[data-theme="codriver"] .dropdown-item-icon.codicon-folder {
+  color: #58a6ff;
+}
+
+html[data-theme="codriver"] .dropdown-item-label {
+  color: #c9d1d9;
+}
+
+html[data-theme="codriver"] .dropdown-item-description {
+  color: #6e7681;
+}
+
+/* Section header + separator are unstyled in every theme — give them a quiet GitHub look */
+html[data-theme="codriver"] .dropdown-section-header {
+  padding: 6px 12px 4px;
+  color: #6e7681;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+html[data-theme="codriver"] .dropdown-separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--dropdown-border);
+}
+
+/* Selector check-mark + states */
+html[data-theme="codriver"] .selector-option .check-mark {
+  color: #3fb950;
+}
+
+html[data-theme="codriver"] .selector-option .model-description,
+html[data-theme="codriver"] .selector-option .mode-description {
+  color: #8b949e;
+}
+
+/* Empty / loading states */
+html[data-theme="codriver"] .dropdown-empty,
+html[data-theme="codriver"] .dropdown-loading {
+  color: #6e7681;
+}

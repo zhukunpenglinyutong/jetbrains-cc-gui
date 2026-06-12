@@ -1,0 +1,152 @@
+/* CoDriver icon pack and icon-tone adapter.
+   Scope all rules to the CoDriver skin so the regular dark/light themes stay untouched. */
+
+html[data-theme="codriver"] {
+    --codriver-icon-default: #8b949e;
+    --codriver-icon-muted: #6e7681;
+    --codriver-icon-subtle: rgba(139, 148, 158, 0.72);
+    --codriver-icon-link: #58a6ff;
+    --codriver-icon-success: #3fb950;
+    --codriver-icon-attention: #d29922;
+    --codriver-icon-danger: #ff7b72;
+    --codriver-icon-danger-muted: #d47772;
+    --codriver-icon-ai: #a371f7;
+}
+
+html[data-theme="codriver"] .codriver-icon {
+    display: inline-block;
+    flex: 0 0 auto;
+    color: currentColor;
+    vertical-align: -0.15em;
+}
+
+html[data-theme="codriver"] .codriver-icon-spinner {
+    animation: codriver-icon-spin 0.9s linear infinite;
+    transform-origin: center;
+}
+
+@keyframes codriver-icon-spin {
+    to { transform: rotate(360deg); }
+}
+
+html[data-theme="codriver"] .codicon {
+    color: var(--codriver-icon-default);
+    opacity: 0.88;
+}
+
+html[data-theme="codriver"] .icon-button,
+html[data-theme="codriver"] .back-button,
+html[data-theme="codriver"] .message-copy-btn,
+html[data-theme="codriver"] .message-copy-btn-inline,
+html[data-theme="codriver"] .copy-code-btn,
+html[data-theme="codriver"] .enhance-prompt-button,
+html[data-theme="codriver"] .tool-button-placeholder,
+html[data-theme="codriver"] .config-selector-button,
+html[data-theme="codriver"] .selector-trigger {
+    color: var(--codriver-icon-default);
+}
+
+html[data-theme="codriver"] .icon-button:hover,
+html[data-theme="codriver"] .back-button:hover,
+html[data-theme="codriver"] .message-copy-btn:hover,
+html[data-theme="codriver"] .message-copy-btn-inline:hover,
+html[data-theme="codriver"] .copy-code-btn:hover,
+html[data-theme="codriver"] .enhance-prompt-button:hover,
+html[data-theme="codriver"] .tool-button-placeholder:hover,
+html[data-theme="codriver"] .config-selector-button:hover,
+html[data-theme="codriver"] .selector-trigger:hover {
+    color: var(--codriver-icon-link);
+}
+
+html[data-theme="codriver"] .submit-button:not(:disabled),
+html[data-theme="codriver"] .send-button:not(:disabled) {
+    color: #ffffff;
+}
+
+html[data-theme="codriver"] .submit-button:disabled,
+html[data-theme="codriver"] .send-button:disabled {
+    color: var(--codriver-icon-muted);
+}
+
+html[data-theme="codriver"] .stop-button,
+html[data-theme="codriver"] .stop-button .codicon,
+html[data-theme="codriver"] .codriver-icon-stop {
+    color: var(--codriver-icon-danger-muted);
+}
+
+html[data-theme="codriver"] .codicon-error,
+html[data-theme="codriver"] .codicon-warning,
+html[data-theme="codriver"] .codicon-debug-stop,
+html[data-theme="codriver"] .codicon-trash,
+html[data-theme="codriver"] .codicon-close,
+html[data-theme="codriver"] .codicon-chrome-close,
+html[data-theme="codriver"] .color-danger,
+html[data-theme="codriver"] .danger,
+html[data-theme="codriver"] .error .codicon {
+    color: var(--codriver-icon-danger-muted) !important;
+}
+
+html[data-theme="codriver"] .codicon-pass,
+html[data-theme="codriver"] .codicon-check,
+html[data-theme="codriver"] .codicon-check-all,
+html[data-theme="codriver"] .codicon-verified,
+html[data-theme="codriver"] .task-notification-success .codicon,
+html[data-theme="codriver"] .codriver-icon-check {
+    color: var(--codriver-icon-success) !important;
+}
+
+html[data-theme="codriver"] .codicon-info,
+html[data-theme="codriver"] .codicon-link,
+html[data-theme="codriver"] .codicon-file-symlink-file,
+html[data-theme="codriver"] .codicon-file-symlink-directory,
+html[data-theme="codriver"] a .codicon,
+html[data-theme="codriver"] .codriver-icon-link,
+html[data-theme="codriver"] .codriver-icon-search,
+html[data-theme="codriver"] .codriver-icon-reload {
+    color: var(--codriver-icon-link) !important;
+}
+
+html[data-theme="codriver"] .codicon-sparkle,
+html[data-theme="codriver"] .codicon-symbol-color,
+html[data-theme="codriver"] .codriver-icon-spark,
+html[data-theme="codriver"] .codriver-icon-agent {
+    color: var(--codriver-icon-ai) !important;
+}
+
+html[data-theme="codriver"] .codicon-terminal,
+html[data-theme="codriver"] .codicon-code,
+html[data-theme="codriver"] .codicon-file-code,
+html[data-theme="codriver"] .codicon-json,
+html[data-theme="codriver"] .codriver-icon-code,
+html[data-theme="codriver"] .codriver-icon-terminal {
+    color: var(--codriver-icon-attention) !important;
+}
+
+html[data-theme="codriver"] .message-copy-btn .codriver-icon,
+html[data-theme="codriver"] .message-copy-btn-inline .codriver-icon,
+html[data-theme="codriver"] .copy-code-btn .codriver-icon {
+    color: inherit;
+}
+
+html[data-theme="codriver"] .compact-summary-icon.codriver-icon,
+html[data-theme="codriver"] .thinking-icon.codriver-icon {
+    color: var(--codriver-icon-ai);
+}
+
+html[data-theme="codriver"] .waiting-spinner-icon {
+    display: inline-block;
+    color: var(--codriver-icon-default);
+}
+
+/* The CoDriver skin uses the animated SVG spinner (.codriver-icon-spinner),
+   so drop the legacy pseudo-element rings to avoid two overlapping spinners. */
+html[data-theme="codriver"] .waiting-spinner::before,
+html[data-theme="codriver"] .waiting-spinner::after {
+    display: none;
+}
+
+html[data-theme="codriver"] .task-notification-icon,
+html[data-theme="codriver"] .compact-summary-icon:not(.codriver-icon) {
+    filter: saturate(0.65) brightness(0.95);
+    opacity: 0.82;
+}

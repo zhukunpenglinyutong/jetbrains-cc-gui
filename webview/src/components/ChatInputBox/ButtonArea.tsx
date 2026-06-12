@@ -6,6 +6,8 @@ import { CLAUDE_MODELS, CODEX_MODELS } from './types';
 import { STORAGE_KEYS, validateCodexCustomModels } from '../../types/provider';
 import type { CodexCustomModel } from '../../types/provider';
 import { readClaudeModelMapping } from '../../utils/claudeModelMapping';
+import { CoDriverIcon } from '../codriverIcons';
+import { useIsCoDriverTheme } from '../../hooks/useActiveThemeMode';
 
 /**
  * Get custom Codex model list from localStorage
@@ -96,6 +98,7 @@ export const ButtonArea = ({
   onLongContextChange,
 }: ButtonAreaProps) => {
   const { t } = useTranslation();
+  const isCoDriver = useIsCoDriverTheme();
   // const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Track changes to custom models in localStorage
@@ -289,7 +292,11 @@ export const ButtonArea = ({
           disabled={disabled || !hasInputContent || isLoading || isEnhancing}
           data-tooltip={`${t('promptEnhancer.tooltip')} (${t('promptEnhancer.shortcut')})`}
         >
-          <span className={`codicon ${isEnhancing ? 'codicon-loading codicon-modifier-spin' : 'codicon-sparkle'}`} />
+          {isCoDriver ? (
+            <CoDriverIcon className={isEnhancing ? 'codriver-icon-spin' : undefined} name={isEnhancing ? 'spinner' : 'spark'} size={16} aria-hidden="true" />
+          ) : (
+            <span className={`codicon ${isEnhancing ? 'codicon-loading codicon-modifier-spin' : 'codicon-sparkle'}`} />
+          )}
         </button>
 
         {/* Send/Stop button */}
@@ -299,7 +306,11 @@ export const ButtonArea = ({
             onClick={handleStopClick}
             title={t('chat.stopGeneration')}
           >
-            <span className="codicon codicon-debug-stop" />
+            {isCoDriver ? (
+              <CoDriverIcon name="stop" size={16} aria-hidden="true" />
+            ) : (
+              <span className="codicon codicon-debug-stop" />
+            )}
           </button>
         ) : (
           <button
@@ -308,7 +319,11 @@ export const ButtonArea = ({
             disabled={disabled || !hasInputContent}
             title={t('chat.sendMessageEnter')}
           >
-            <span className="codicon codicon-send" />
+            {isCoDriver ? (
+              <CoDriverIcon name="send" size={16} aria-hidden="true" />
+            ) : (
+              <span className="codicon codicon-send" />
+            )}
           </button>
         )}
       </div>
