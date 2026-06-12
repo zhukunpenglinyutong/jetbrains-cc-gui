@@ -228,6 +228,17 @@ export function CoDriverIcon({
     .filter(Boolean)
     .join(' ');
 
+  // Respect an explicit `aria-hidden` if the caller set one; otherwise expose
+  // the icon only when it carries its own accessible name, and hide it as
+  // decorative in every other case.
+  const hasExplicitAriaHidden = Object.prototype.hasOwnProperty.call(svgProps, 'aria-hidden');
+  const hasAccessibleName = Boolean(svgProps['aria-label'] || svgProps['aria-labelledby']);
+  const ariaHidden = hasExplicitAriaHidden
+    ? svgProps['aria-hidden']
+    : hasAccessibleName
+      ? undefined
+      : true;
+
   return (
     <svg
       {...svgProps}
@@ -240,7 +251,7 @@ export function CoDriverIcon({
       strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
-      aria-hidden={svgProps['aria-label'] ? undefined : true}
+      aria-hidden={ariaHidden}
       focusable="false"
     >
       {renderIcon(name)}

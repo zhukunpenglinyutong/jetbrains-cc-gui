@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { Attachment, AttachmentListProps } from './types';
 import { isImageAttachment } from './types';
 import { CoDriverIcon } from '../codriverIcons';
+import { getFileIconKind } from '../../utils/fileIconKind';
 
 /**
  * AttachmentList - Attachment list component
@@ -44,38 +45,17 @@ export const AttachmentList = ({
     setPreviewImage(null);
   }, []);
 
-
-  /**
-   * Get file extension
-   */
-  const getExtension = (fileName: string): string => {
-    const parts = fileName.split('.');
-    return parts.length > 1 ? parts[parts.length - 1].toUpperCase() : '';
-  };
-
-  /**
-   * Map attachments to the local CoDriver icon vocabulary.
-   */
-  const getAttachmentFileIconName = (attachment: Attachment): 'code' | 'file' => {
-    const extension = getExtension(attachment.fileName).toLowerCase();
-    const codeExtensions = new Set([
-      'bat', 'c', 'cmd', 'cpp', 'cs', 'css', 'go', 'gradle', 'groovy', 'h', 'hpp',
-      'html', 'java', 'js', 'json', 'jsx', 'kt', 'kts', 'less', 'md', 'properties',
-      'py', 'rs', 'scss', 'sh', 'sql', 'ts', 'tsx', 'xml', 'yaml', 'yml',
-    ]);
-    return codeExtensions.has(extension) ? 'code' : 'file';
-  };
-
   if (attachments.length === 0) {
     return null;
   }
 
   return (
     <>
-      <div className="attachment-list" role="list" aria-label="Attachments">
+      <div className="attachment-list" role="list" aria-label={t('chat.attachments', { defaultValue: 'Attachments' })}>
         {attachments.map((attachment) => {
           const imageAttachment = isImageAttachment(attachment);
           const fallbackName = attachment.fileName;
+          const iconName = getFileIconKind(attachment.fileName);
 
           return (
             <div
@@ -94,8 +74,8 @@ export const AttachmentList = ({
                   />
                 ) : (
                   <CoDriverIcon
-                    className={`attachment-file-icon attachment-file-icon-${getAttachmentFileIconName(attachment)}`}
-                    name={getAttachmentFileIconName(attachment)}
+                    className={`attachment-file-icon attachment-file-icon-${iconName}`}
+                    name={iconName}
                     size={17}
                     aria-hidden="true"
                   />

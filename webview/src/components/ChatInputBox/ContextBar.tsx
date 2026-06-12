@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect, useCallback, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TokenIndicator } from './TokenIndicator';
 import { CoDriverIcon } from '../codriverIcons';
+import { getFileIconKind } from '../../utils/fileIconKind';
 import type { SelectedAgent } from './types';
 
 const HIDDEN_INPUT_STYLE: React.CSSProperties = { display: 'none' };
@@ -128,18 +129,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
     return path.split(/[/\\]/).pop() || path;
   };
 
-  const getContextFileIconName = (path: string): 'code' | 'file' => {
-    const fileName = getFileName(path);
-    const extension = fileName.indexOf('.') !== -1
-      ? (fileName.split('.').pop() || '').toLowerCase()
-      : '';
-    const codeExtensions = new Set([
-      'bat', 'c', 'cmd', 'cpp', 'cs', 'css', 'go', 'gradle', 'groovy', 'h', 'hpp',
-      'html', 'java', 'js', 'json', 'jsx', 'kt', 'kts', 'less', 'md', 'properties',
-      'py', 'rs', 'scss', 'sh', 'sql', 'ts', 'tsx', 'xml', 'yaml', 'yml',
-    ]);
-    return codeExtensions.has(extension) ? 'code' : 'file';
-  };
+  const activeFileIconName = activeFile ? getFileIconKind(activeFile) : 'file';
 
   const displayText = activeFile ? (
     selectedLines ? `${getFileName(activeFile)}#${selectedLines}` : getFileName(activeFile)
@@ -156,7 +146,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
         <div
           className="context-tool-btn"
           onClick={handleAttachClick}
-          title="Add attachment"
+          title={t('chat.addAttachment', { defaultValue: 'Add attachment' })}
         >
           <CoDriverIcon name="attachment" size={16} aria-hidden="true" />
         </div>
@@ -207,15 +197,15 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
                 : selectedAgent.name}
             </span>
           </span>
-          <span
+          <button
+            type="button"
             className="context-close context-close-button"
             onClick={onClearAgent}
-            title="Remove agent"
-            role="button"
-            tabIndex={0}
+            title={t('chat.removeAgent', { defaultValue: 'Remove agent' })}
+            aria-label={t('chat.removeAgent', { defaultValue: 'Remove agent' })}
           >
             <CoDriverIcon name="x" size={12} aria-hidden="true" />
-          </span>
+          </button>
         </div>
       )}
 
@@ -228,8 +218,8 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
         >
           {activeFile && (
             <CoDriverIcon
-              className={`context-file-icon context-file-icon-${getContextFileIconName(activeFile)}`}
-              name={getContextFileIconName(activeFile)}
+              className={`context-file-icon context-file-icon-${activeFileIconName}`}
+              name={activeFileIconName}
               size={15}
               style={FILE_ICON_STYLE}
               aria-hidden="true"
@@ -238,15 +228,15 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
           <span className="context-text">
             <span dir="ltr">{displayText}</span>
           </span>
-          <span
+          <button
+            type="button"
             className="context-close context-close-button"
             onClick={onClearFile}
-            title="Remove file context"
-            role="button"
-            tabIndex={0}
+            title={t('chat.removeFileContext', { defaultValue: 'Remove file context' })}
+            aria-label={t('chat.removeFileContext', { defaultValue: 'Remove file context' })}
           >
             <CoDriverIcon name="x" size={12} aria-hidden="true" />
-          </span>
+          </button>
         </div>
       ) : !autoOpenFileEnabled && (
         <div className="context-file-placeholder-wrapper" ref={popoverRef}>
