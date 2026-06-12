@@ -305,21 +305,48 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 com.intellij.openapi.actionSystem.ActionManager.getInstance()
                         .getAction("ClaudeCodeGUI.CreateFromTemplateAction");
 
+        // Set colored icons on custom actions
+        if (renameTabAction != null) {
+            renameTabAction.getTemplatePresentation().setIcon(TabMenuIcons.rename());
+        }
+        if (detachTabAction != null) {
+            detachTabAction.getTemplatePresentation().setIcon(TabMenuIcons.detach());
+        }
+        if (saveAsTemplateAction != null) {
+            saveAsTemplateAction.getTemplatePresentation().setIcon(TabMenuIcons.saveTemplate());
+        }
+        if (createFromTemplateAction != null) {
+            createFromTemplateAction.getTemplatePresentation().setIcon(TabMenuIcons.createFromTemplate());
+        }
+
+        // Build gear actions with labeled group separators
         com.intellij.openapi.actionSystem.DefaultActionGroup gearActions =
                 new com.intellij.openapi.actionSystem.DefaultActionGroup();
+
+        // Group: 编辑 (Edit)
+        boolean hasEditActions = (renameTabAction != null) || (detachTabAction != null);
+        if (hasEditActions) {
+            gearActions.addSeparator("编辑");
+        }
         if (renameTabAction != null) {
             gearActions.add(renameTabAction);
         }
         if (detachTabAction != null) {
             gearActions.add(detachTabAction);
         }
+
+        // Group: 模板 (Template)
+        boolean hasTemplateActions = (saveAsTemplateAction != null) || (createFromTemplateAction != null);
+        if (hasTemplateActions) {
+            gearActions.addSeparator("模板");
+        }
         if (saveAsTemplateAction != null) {
-            gearActions.addSeparator();
             gearActions.add(saveAsTemplateAction);
         }
         if (createFromTemplateAction != null) {
             gearActions.add(createFromTemplateAction);
         }
+
         toolWindow.setAdditionalGearActions(gearActions);
 
         registerProjectCloseListener(project);

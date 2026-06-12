@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Tab Context Menu - Style Mockups</title>
+<style>
+:root {
+  --bg-primary: #1e1e1e;
+  --bg-secondary: #252526;
+  --bg-tertiary: #2d2d2d;
+  --bg-hover: #094771;
+  --bg-hover-soft: #37373d;
+  --text-primary: #cccccc;
+  --text-secondary: #999999;
+  --text-tertiary: #6a6a6a;
+  --text-muted: #5a5a5a;
+  --border-primary: #3c3c3c;
+  --border-secondary: #4a4a4a;
+  --accent-blue: #3794ff;
+  --accent-violet: #a989ff;
+  --accent-green: #89d185;
+  --accent-amber: #e7b85a;
+  --accent-red: #f14c4c;
+  --accent-cyan: #4ec9b0;
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
+  --mono-font: 'JetBrains Mono', Consolas, monospace;
+  --menu-shadow: 0 8px 30px rgba(0,0,0,0.45);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: 13px;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 50px;
+}
+
+/* ===== 通用结构 ===== */
+.mockup-section {
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.mockup-header {
+  padding: 14px 20px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-primary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mockup-header h3 { font-size: 14px; font-weight: 600; }
+.badge {
+  font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 500;
+}
+.badge-current { background: var(--accent-blue); color: #fff; }
+.badge-rec { background: var(--accent-green); color: #1a1a1a; }
+.badge-modern { background: var(--accent-violet); color: #fff; }
+.badge-compact { background: var(--accent-amber); color: #1a1a1a; }
+
+.mockup-desc {
+  padding: 10px 20px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-primary);
+  font-size: 12px; color: var(--text-secondary); line-height: 1.6;
+}
+
+.mockup-body {
+  padding: 28px;
+  background: var(--bg-primary);
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+
+.mockup-scene {
+  flex: 1;
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+/* ===== Tab Bar 模拟 ===== */
+.tab-bar {
+  display: flex;
+  align-items: center;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-primary);
+  height: 34px;
+  width: 100%;
+  max-width: 420px;
+}
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  height: 100%;
+  font-size: 12px;
+  color: var(--text-secondary);
+  border-right: 1px solid var(--border-primary);
+  cursor: default;
+}
+.tab.active {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+.tab.active::after {
+  content: '';
+  display: block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent-green);
+}
+.tab .tab-close {
+  width: 14px; height: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px;
+  border-radius: 2px;
+  opacity: 0.5;
+}
+
+/* ===== Context Menu 通用 ===== */
+.ctx-menu {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-secondary);
+  box-shadow: var(--menu-shadow);
+  padding: 4px 0;
+  width: 240px;
+  position: relative;
+  margin-top: 0;
+  margin-left: 40px;
+}
+.ctx-menu::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 80px;
+  width: 8px; height: 8px;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-secondary);
+  border-top: 1px solid var(--border-secondary);
+  transform: rotate(45deg);
+}
+
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 14px;
+  font-size: 12.5px;
+  color: var(--text-primary);
+  cursor: default;
+  position: relative;
+  transition: background 0.08s;
+}
+.ctx-item:hover {
+  background: var(--bg-hover);
+}
+.ctx-item.disabled {
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.ctx-item .ctx-icon {
+  width: 16px; height: 16px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+.ctx-item .ctx-icon svg {
+  width: 14px; height: 14px;
+  fill: none; stroke: currentColor;
+  stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+}
+.ctx-item:hover .ctx-icon { color: var(--text-primary); }
+.ctx-item .ctx-label { flex: 1; }
+.ctx-item .ctx-shortcut {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: 16px;
+  font-family: var(--mono-font);
+}
+.ctx-item .ctx-arrow {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-left: 8px;
+}
+.ctx-sep {
+  height: 1px;
+  background: var(--border-primary);
+  margin: 4px 8px;
+}
+
+/* ============================================================
+   风格1: 当前样式 - IntelliJ 默认
+   ============================================================ */
+.style1 .ctx-menu {
+  border-radius: var(--radius-sm);
+}
+.style1 .ctx-item {
+  padding: 4px 14px;
+}
+
+/* ============================================================
+   风格2: 分组标题 + 图标着色
+   ============================================================ */
+.style2 .ctx-menu {
+  border-radius: var(--radius-md);
+  padding: 6px 0;
+}
+.style2 .ctx-group-label {
+  padding: 8px 14px 3px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+.style2 .ctx-group-label:first-child {
+  padding-top: 4px;
+}
+.style2 .ctx-item {
+  padding: 5px 14px;
+  border-radius: 0;
+}
+.style2 .ctx-item .ctx-icon.red { color: var(--accent-red); }
+.style2 .ctx-item .ctx-icon.blue { color: var(--accent-blue); }
+.style2 .ctx-item .ctx-icon.green { color: var(--accent-green); }
+.style2 .ctx-item .ctx-icon.violet { color: var(--accent-violet); }
+.style2 .ctx-item .ctx-icon.amber { color: var(--accent-amber); }
+
+/* ============================================================
+   风格3: 现代圆角卡片 + 悬浮效果
+   ============================================================ */
+.style3 .ctx-menu {
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(45,45,45,0.95);
+  backdrop-filter: blur(16px);
+  padding: 6px 0;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+}
+.style3 .ctx-menu::before {
+  background: rgba(45,45,45,0.95);
+  border-color: rgba(255,255,255,0.06);
+}
+.style3 .ctx-item {
+  margin: 0 6px;
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+}
+.style3 .ctx-item:hover {
+  background: rgba(255,255,255,0.08);
+}
+.style3 .ctx-sep {
+  margin: 4px 14px;
+  background: rgba(255,255,255,0.06);
+}
+.style3 .ctx-item .ctx-icon {
+  width: 18px; height: 18px;
+}
+.style3 .ctx-item .ctx-icon svg {
+  width: 15px; height: 15px;
+}
+
+/* ============================================================
+   风格4: 紧凑双列网格
+   ============================================================ */
+.style4 .ctx-menu {
+  border-radius: var(--radius-lg);
+  padding: 10px;
+  width: 280px;
+}
+.style4 .ctx-menu::before { display: none; }
+.style4 .ctx-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+.style4 .ctx-grid-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: default;
+  transition: background 0.1s;
+}
+.style4 .ctx-grid-item:hover {
+  background: var(--bg-hover);
+}
+.style4 .ctx-grid-item .ctx-icon {
+  width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+.style4 .ctx-grid-item .ctx-icon svg {
+  width: 15px; height: 15px;
+  fill: none; stroke: currentColor;
+  stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+}
+.style4 .ctx-grid-item:hover .ctx-icon { color: var(--text-primary); }
+.style4 .ctx-grid-item.danger { color: var(--accent-red); }
+.style4 .ctx-grid-item.danger .ctx-icon { color: var(--accent-red); }
+.style4 .ctx-grid-item.danger:hover { background: rgba(241,76,76,0.12); }
+.style4 .ctx-grid-sep {
+  grid-column: 1 / -1;
+  height: 1px;
+  background: var(--border-primary);
+  margin: 4px 0;
+}
+.style4 .ctx-grid-label {
+  grid-column: 1 / -1;
+  padding: 2px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+/* ============================================================
+   风格5: macOS 风格
+   ============================================================ */
+.style5 .ctx-menu {
+  border-radius: var(--radius-lg);
+  border: none;
+  background: rgba(40,40,40,0.88);
+  backdrop-filter: blur(24px);
+  padding: 4px 0;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.45), 0 0 0 0.5px rgba(255,255,255,0.08);
+}
+.style5 .ctx-menu::before {
+  background: rgba(40,40,40,0.88);
+  border: none;
+}
+.style5 .ctx-item {
+  padding: 4px 16px;
+  font-size: 13px;
+}
+.style5 .ctx-item:hover {
+  background: var(--accent-blue);
+  border-radius: var(--radius-sm);
+  margin: 0 4px;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+.style5 .ctx-item:hover .ctx-icon,
+.style5 .ctx-item:hover .ctx-shortcut,
+.style5 .ctx-item:hover .ctx-arrow {
+  color: #fff;
+}
+.style5 .ctx-sep {
+  margin: 3px 12px;
+  background: rgba(255,255,255,0.08);
+}
+
+/* ============================================================
+   风格6: 带描述文字的扩展菜单
+   ============================================================ */
+.style6 .ctx-menu {
+  border-radius: var(--radius-md);
+  padding: 6px 0;
+  width: 270px;
+}
+.style6 .ctx-item {
+  padding: 6px 14px;
+}
+.style6 .ctx-item-desc {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+}
+.style6 .ctx-item-desc .desc-text {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+.style6 .ctx-item:hover .ctx-item-desc .desc-text {
+  color: var(--text-secondary);
+}
+
+/* ===== 信息标注 ===== */
+.note {
+  margin-top: 14px;
+  padding: 10px 16px;
+  background: var(--bg-secondary);
+  border-left: 3px solid var(--accent-blue);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+.note strong { color: var(--text-primary); }
+
+/* ===== 对比表 ===== */
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.compare-table th {
+  text-align: left;
+  padding: 8px 14px;
+  color: var(--text-secondary);
+  border-bottom: 2px solid var(--border-secondary);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.compare-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-primary);
+}
+.compare-table tr:hover td {
+  background: var(--bg-hover-soft);
+}
+.star { color: var(--accent-amber); }
+.dim { color: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<!-- ============================================================ -->
+<!-- 风格1: 当前 IntelliJ 默认样式 -->
+<!-- ============================================================ -->
+<div class="mockup-section style1">
+  <div class="mockup-header">
+    <h3>风格 1: IntelliJ 默认下拉菜单</h3>
+    <span class="badge badge-current">当前样式</span>
+  </div>
+  <div class="mockup-desc">
+    这是当前插件右键标签页的菜单样式。IntelliJ 平台默认的扁平列表，灰色文字、无分组标题、图标仅部分显示。
+  </div>
+  <div class="mockup-body">
+    <div class="mockup-scene">
+      <div class="tab-bar">
+        <div class="tab active">AI1 <span class="tab-close">✕</span></div>
+        <div class="tab">AI2 <span class="tab-close">✕</span></div>
+      </div>
+      <div class="ctx-menu">
+        <div class="ctx-item">
+          <span class="ctx-icon">✕</span>
+          <span class="ctx-label">关闭所有标签页</span>
+          <span class="ctx-shortcut">⇧ ⌘ F4</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-icon">✕</span>
+          <span class="ctx-label">关闭其他标签页</span>
+        </div>
+        <div class="ctx-sep"></div>
+        <div class="ctx-item">
+          <span class="ctx-icon">→</span>
+          <span class="ctx-label">选择下一个标签页</span>
+          <span class="ctx-shortcut">Alt →</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-icon">←</span>
+          <span class="ctx-label">选择上一个标签页</span>
+          <span class="ctx-shortcut">Alt ←</span>
+        </div>
+        <div class="ctx-sep"></div>
+        <div class="ctx-item">
+          <span class="ctx-icon"><svg viewBox="0 0 16 16"><path d="M11.5 1.5l3 3L5 14H2v-3z"/><path d="M10 3l3 3"/></svg></span>
+          <span class="ctx-label">重命名标签页</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-icon"><svg viewBox="0 0 16 16"><path d="M13.5 5.5l-7 7L3 9"/></svg></span>
+          <span class="ctx-label">保存为模板</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-icon"><svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg></span>
+          <span class="ctx-label">从模板创建</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-icon"><svg viewBox="0 0 16 16"><path d="M4 12h4M4 8h8M4 4h8"/></svg></span>
+          <span class="ctx-label">分离标签页</span>
+        </div>
+        <div class="ctx-sep"></div>
+        <div class="ctx-item">
+          <span class="ctx-label">视图模式</span>
+          <span class="ctx-arrow">▸</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-label">移至</span>
+          <span class="ctx-arrow">▸</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-label">调整大小</span>
+          <span class="ctx-arrow">▸</span>
+        </div>
+        <div class="ctx-sep"></div>
+        <div class="ctx-item">
+          <span class="ctx-label">从边栏中移除</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-label">隐藏</span>
+          <span class="ctx-shortcut">⇧ Esc</span>
+        </div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:240px;">
+      <div class="note">
+        <strong>当前问题：</strong><br>
+        • 扁平列表，所有操作平铺，缺乏视觉层次<br>
+        • "关闭"和"编辑"和"视图"类操作混在一起<br>
+        • 部分菜单项没有图标（视图模式、移至等）<br>
+        • 没有颜色区分，模板操作不够醒目<br>
+        • 整体视觉感偏"系统默认"，缺乏产品特色
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- 风格2: 分组标题 + 图标着色 -->
+<!-- ============================================================ -->
+<div class="mockup-section style2">
+  <div class="mockup-header">
+    <h3>风格 2: 分组标题 + 彩色图标</h3>
+    <span class="badge badge-rec">推荐</span>
+  </div>
+  <div class="mockup-desc">
+    按功能分组（管理 / 导航 / 编辑 / 视图），每组有标题标签，图标按类别着色。信息层次更清晰，用户可以快速定位目标操作。
+  </div>
+  <div class="mockup-body">
+    <div class="mockup-scene">
+      <div class="tab-bar">
+        <div class="tab active">AI1 <span class="tab-close">✕</span></div>
+        <div class="tab">AI2 <span class="tab-close">✕</span></div>
+      </div>
+      <div class="ctx-menu">
+        <div class="ctx-group-label">管理</div>
+        <div class="ctx-item">
+          <span class="ctx-icon red"><svg viewBox="0 0 16 16"><rect x="3" y="3" width="10" height="10" rx="1"/><path d="M6 6l4 4M10 6l-4 4"/></svg></span>
+          <span class="ctx-label">关闭所有标签页</span>
+          <span class="ctx-shortcut">⇧⌘F4</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-icon red"><svg viewBox="0 0 16 16"><rect x="5" y="5" width="6" height="6" rx="1"/><path d="M5 5L3 3M11 11l2 2"/><rect x="3" y="3" width="10" height="10" rx="1" stroke-dasharray="2 2" opacity="0.3"/></svg></span>
+          <span class="ctx-label">关闭其他标签页</span>
+        </div>
+
+        <div class="ctx-group-label">导航</div>
+        <div class="ctx-item">
+          <span class="ctx-icon blue"><svg viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></svg></span>
+          <span class="ctx-label">下一个标签页</span>
+          <span class="ctx-shortcut">Alt→</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-icon blue"><svg viewBox="0 0 16 16"><path d="M10 4l-4 4 4 4"/></svg></span>
+          <span class="ctx-label">上一个标签页</span>
+          <span class="ctx-shortcut">Alt←</span>
+        </div>
+
+        <div class="ctx-group-label">编辑</div>
+        <div class="ctx-item">
+          <span class="ctx-icon green"><svg viewBox="0 0 16 16"><path d="M11.5 1.5l3 3L5 14H2v-3z"/><path d="M10 3l3 3"/></svg></span>
+          <span class="ctx-label">重命名标签页</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-icon violet"><svg viewBox="0 0 16 16"><path d="M2 12h12M5 12V4l-3 3M5 4l3 3"/></svg></span>
+          <span class="ctx-label">分离标签页</span>
+        </div>
+
+        <div class="ctx-sep"></div>
+
+        <div class="ctx-group-label">模板</div>
+        <div class="ctx-item">
+          <span class="ctx-icon amber"><svg viewBox="0 0 16 16"><path d="M3 2h8l3 3v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M5 9h6M5 12h4"/></svg></span>
+          <span class="ctx-label">保存为模板</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-icon amber"><svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/><path d="M3 2h8l3 3v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" opacity="0.3"/></svg></span>
+          <span class="ctx-label">从模板创建</span>
+        </div>
+
+        <div class="ctx-group-label">视图</div>
+        <div class="ctx-item">
+          <span class="ctx-icon"><svg viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M8 2v12M2 8h12" opacity="0.4"/></svg></span>
+          <span class="ctx-label">视图模式</span>
+          <span class="ctx-arrow">▸</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-icon"><svg viewBox="0 0 16 16"><path d="M4 14h4M4 10h8M4 6h8M4 2h8" opacity="0.4"/></svg></span>
+          <span class="ctx-label">移至</span>
+          <span class="ctx-arrow">▸</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-icon"><svg viewBox="0 0 16 16"><path d="M4 14V6M8 14V4M12 14V8" opacity="0.4"/></svg></span>
+          <span class="ctx-label">调整大小</span>
+          <span class="ctx-arrow">▸</span>
+        </div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:240px;">
+      <div class="note">
+        <strong>改进点：</strong><br>
+        ✅ 分组标题（管理/导航/编辑/模板/视图）快速定位<br>
+        ✅ 图标按类别着色 — 红色=危险操作、蓝色=导航、绿色=编辑、紫色=分离、琥珀色=模板<br>
+        ✅ 每个菜单项都有图标，视觉一致性更好<br>
+        ✅ "关闭"用红色图标暗示破坏性操作<br>
+        ✅ 保持 IntelliJ 平台菜单基本结构，改动最小
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- 风格3: 现代圆角卡片 -->
+<!-- ============================================================ -->
+<div class="mockup-section style3">
+  <div class="mockup-header">
+    <h3>风格 3: 现代圆角卡片 + 毛玻璃</h3>
+    <span class="badge badge-modern">现代</span>
+  </div>
+  <div class="mockup-desc">
+    更大的圆角、半透明毛玻璃背景、加宽的间距。菜单项有独立的 hover 圆角区域，视觉上更现代精致。
+  </div>
+  <div class="mockup-body">
+    <div class="mockup-scene">
+      <div class="tab-bar">
+        <div class="tab active">AI1 <span class="tab-close">✕</span></div>
+        <div class="tab">AI2 <span class="tab-close">✕</span></div>
+      </div>
+      <div class="ctx-menu">
+        <div class="ctx-item">
+          <span class="ctx-icon" style="color:var(--accent-red)"><svg viewBox="0 0 16 16"><rect x="3" y="3" width="10" height="10" rx="1"/><path d="M6 6l4 4M10 6l-4 4"/></svg></span>
+          <span class="ctx-label">关闭所有标签页</span>
+          <span class="ctx-shortcut">⇧⌘F4</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-icon" style="color:var(--accent-red)"><svg viewBox="0 0 16 16"><rect x="5" y="5" width="6" height="6" rx="1"/><path d="M5 5L3 3M11 11l2 2"/></svg></span>
+          <span class="ctx-label">关闭其他标签页</span>
+        </div>
+        <div class="ctx-sep"></div>
+        <div class="ctx-item">
+          <span class="ctx-icon" style="color:var(--accent-blue)"><svg viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></svg></span>
+          <span class="ctx-label">下一个标签页</span>
+          <span class="ctx-shortcut">Alt→</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-icon" style="color:var(--accent-blue)"><svg viewBox="0 0 16 16"><path d="M10 4l-4 4 4 4"/></svg></span>
+          <span class="ctx-label">上一个标签页</span>
+          <span class="ctx-shortcut">Alt←</span>
+        </div>
+        <div class="ctx-sep"></div>
+        <div class="ctx-item">
+          <span class="ctx-icon"><svg viewBox="0 0 16 16"><path d="M11.5 1.5l3 3L5 14H2v-3z"/><path d="M10 3l3 3"/></svg></span>
+          <span class="ctx-label">重命名标签页</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-icon"><svg viewBox="0 0 16 16"><path d="M2 12h12M5 12V4l-3 3M5 4l3 3"/></svg></span>
+          <span class="ctx-label">分离标签页</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-icon" style="color:var(--accent-amber)"><svg viewBox="0 0 16 16"><path d="M3 2h8l3 3v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M5 9h6M5 12h4"/></svg></span>
+          <span class="ctx-label">保存为模板</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-icon" style="color:var(--accent-amber)"><svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg></span>
+          <span class="ctx-label">从模板创建</span>
+        </div>
+        <div class="ctx-sep"></div>
+        <div class="ctx-item">
+          <span class="ctx-icon"><svg viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M8 2v12M2 8h12" opacity="0.4"/></svg></span>
+          <span class="ctx-label">视图模式</span>
+          <span class="ctx-arrow">▸</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-icon"><svg viewBox="0 0 16 16"><path d="M4 14h4M4 10h8M4 6h8M4 2h8" opacity="0.4"/></svg></span>
+          <span class="ctx-label">移至</span>
+          <span class="ctx-arrow">▸</span>
+        </div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:240px;">
+      <div class="note">
+        <strong>设计特点：</strong><br>
+        • 10px 大圆角，毛玻璃半透明背景<br>
+        • 每个 item 有独立的 hover 圆角区域（非整行高亮）<br>
+        • 更宽松的间距，降低视觉密度<br>
+        • 适合作为 JetBrains 新 UI (New UI) 的搭配风格<br>
+        ⚠️ 注意：需要自定义 JPopupMenu 的渲染，不是平台默认
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- 风格4: 紧凑双列网格 -->
+<!-- ============================================================ -->
+<div class="mockup-section style4">
+  <div class="mockup-header">
+    <h3>风格 4: 紧凑双列网格</h3>
+    <span class="badge badge-compact">紧凑</span>
+  </div>
+  <div class="mockup-desc">
+    将常用操作以网格形式展示，每行两列。适合触屏或大鼠标目标场景，视觉上更像"命令面板"而非传统菜单。
+  </div>
+  <div class="mockup-body">
+    <div class="mockup-scene">
+      <div class="tab-bar">
+        <div class="tab active">AI1 <span class="tab-close">✕</span></div>
+        <div class="tab">AI2 <span class="tab-close">✕</span></div>
+      </div>
+      <div class="ctx-menu">
+        <div class="ctx-grid">
+          <div class="ctx-grid-label">标签页</div>
+          <div class="ctx-grid-item">
+            <span class="ctx-icon"><svg viewBox="0 0 16 16"><path d="M11.5 1.5l3 3L5 14H2v-3z"/><path d="M10 3l3 3"/></svg></span>
+            重命名
+          </div>
+          <div class="ctx-grid-item">
+            <span class="ctx-icon"><svg viewBox="0 0 16 16"><path d="M2 12h12M5 12V4l-3 3M5 4l3 3"/></svg></span>
+            分离
+          </div>
+          <div class="ctx-grid-item">
+            <span class="ctx-icon"><svg viewBox="0 0 16 16"><path d="M3 2h8l3 3v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M5 9h6M5 12h4"/></svg></span>
+            保存模板
+          </div>
+          <div class="ctx-grid-item">
+            <span class="ctx-icon"><svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg></span>
+            用模板创建
+          </div>
+
+          <div class="ctx-grid-sep"></div>
+          <div class="ctx-grid-label">导航</div>
+          <div class="ctx-grid-item">
+            <span class="ctx-icon"><svg viewBox="0 0 16 16"><path d="M10 4l-4 4 4 4"/></svg></span>
+            上一个
+          </div>
+          <div class="ctx-grid-item">
+            <span class="ctx-icon"><svg viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></svg></span>
+            下一个
+          </div>
+
+          <div class="ctx-grid-sep"></div>
+          <div class="ctx-grid-label">关闭</div>
+          <div class="ctx-grid-item danger">
+            <span class="ctx-icon"><svg viewBox="0 0 16 16"><rect x="3" y="3" width="10" height="10" rx="1"/><path d="M6 6l4 4M10 6l-4 4"/></svg></span>
+            关闭全部
+          </div>
+          <div class="ctx-grid-item danger">
+            <span class="ctx-icon"><svg viewBox="0 0 16 16"><rect x="5" y="5" width="6" height="6" rx="1"/><path d="M5 5L3 3M11 11l2 2"/></svg></span>
+            关闭其他
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:240px;">
+      <div class="note">
+        <strong>设计特点：</strong><br>
+        • 双列网格布局，空间利用率高<br>
+        • 每个操作有更大的点击区域<br>
+        • 操作名称更简短（"重命名"而非"重命名标签页"）<br>
+        • 关闭操作放在底部，用红色标识危险<br>
+        ⚠️ 注意：这种布局需要自定义 JPanel 而非 JPopupMenu
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- 风格5: macOS 风格高亮菜单 -->
+<!-- ============================================================ -->
+<div class="mockup-section style5">
+  <div class="mockup-header">
+    <h3>风格 5: macOS 风格蓝色高亮</h3>
+    <span class="badge badge-modern">跨平台</span>
+  </div>
+  <div class="mockup-desc">
+    模仿 macOS 原生上下文菜单风格。Hover 时整行变为蓝色背景 + 白色文字，毛玻璃背景，无边框。
+  </div>
+  <div class="mockup-body">
+    <div class="mockup-scene">
+      <div class="tab-bar">
+        <div class="tab active">AI1 <span class="tab-close">✕</span></div>
+        <div class="tab">AI2 <span class="tab-close">✕</span></div>
+      </div>
+      <div class="ctx-menu">
+        <div class="ctx-item">
+          <span class="ctx-icon"><svg viewBox="0 0 16 16"><rect x="3" y="3" width="10" height="10" rx="1"/><path d="M6 6l4 4M10 6l-4 4"/></svg></span>
+          <span class="ctx-label">关闭所有标签页</span>
+          <span class="ctx-shortcut">⇧⌘F4</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-icon"><svg viewBox="0 0 16 16"><rect x="5" y="5" width="6" height="6" rx="1"/><path d="M5 5L3 3M11 11l2 2"/></svg></span>
+          <span class="ctx-label">关闭其他标签页</span>
+        </div>
+        <div class="ctx-sep"></div>
+        <div class="ctx-item" style="background:var(--accent-blue);border-radius:3px;margin:0 4px;padding-left:12px;">
+          <span class="ctx-icon" style="color:#fff"><svg viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></svg></span>
+          <span class="ctx-label" style="color:#fff">下一个标签页</span>
+          <span class="ctx-shortcut" style="color:rgba(255,255,255,0.7)">Alt→</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-icon"><svg viewBox="0 0 16 16"><path d="M10 4l-4 4 4 4"/></svg></span>
+          <span class="ctx-label">上一个标签页</span>
+          <span class="ctx-shortcut">Alt←</span>
+        </div>
+        <div class="ctx-sep"></div>
+        <div class="ctx-item">
+          <span class="ctx-icon"><svg viewBox="0 0 16 16"><path d="M11.5 1.5l3 3L5 14H2v-3z"/><path d="M10 3l3 3"/></svg></span>
+          <span class="ctx-label">重命名标签页</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-icon"><svg viewBox="0 0 16 16"><path d="M2 12h12M5 12V4l-3 3M5 4l3 3"/></svg></span>
+          <span class="ctx-label">分离标签页</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-icon"><svg viewBox="0 0 16 16"><path d="M3 2h8l3 3v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M5 9h6M5 12h4"/></svg></span>
+          <span class="ctx-label">保存为模板</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-icon"><svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg></span>
+          <span class="ctx-label">从模板创建</span>
+        </div>
+        <div class="ctx-sep"></div>
+        <div class="ctx-item">
+          <span class="ctx-label">视图模式</span>
+          <span class="ctx-arrow">▸</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-label">移至</span>
+          <span class="ctx-arrow">▸</span>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-label">调整大小</span>
+          <span class="ctx-arrow">▸</span>
+        </div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:240px;">
+      <div class="note">
+        <strong>设计特点：</strong><br>
+        • Hover 时整行蓝色高亮 + 白色文字（macOS 风格）<br>
+        • 半透明毛玻璃背景，无可见边框<br>
+        • 间距更紧凑，更符合 macOS 用户习惯<br>
+        • 快捷键和箭头在高亮时自动变白<br>
+        ⚠️ 这种风格在 Windows/Linux 上可能需要额外适配
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- 风格6: 带描述的扩展菜单 -->
+<!-- ============================================================ -->
+<div class="mockup-section style6">
+  <div class="mockup-header">
+    <h3>风格 6: 带描述文字的扩展菜单</h3>
+    <span class="badge badge-rec">推荐</span>
+  </div>
+  <div class="mockup-desc">
+    每个菜单项附加一行灰色描述文字，解释功能含义。适合功能较多、用户可能不熟悉的场景，降低学习成本。
+  </div>
+  <div class="mockup-body">
+    <div class="mockup-scene">
+      <div class="tab-bar">
+        <div class="tab active">AI1 <span class="tab-close">✕</span></div>
+        <div class="tab">AI2 <span class="tab-close">✕</span></div>
+      </div>
+      <div class="ctx-menu" style="width:270px;">
+        <div class="ctx-item">
+          <span class="ctx-icon"><svg viewBox="0 0 16 16"><path d="M11.5 1.5l3 3L5 14H2v-3z"/><path d="M10 3l3 3"/></svg></span>
+          <div class="ctx-item-desc">
+            <span class="ctx-label">重命名标签页</span>
+            <span class="desc-text">自定义当前标签页的显示名称</span>
+          </div>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-icon"><svg viewBox="0 0 16 16"><path d="M2 12h12M5 12V4l-3 3M5 4l3 3"/></svg></span>
+          <div class="ctx-item-desc">
+            <span class="ctx-label">分离标签页</span>
+            <span class="desc-text">将标签页移至独立的浮动窗口</span>
+          </div>
+        </div>
+
+        <div class="ctx-sep"></div>
+
+        <div class="ctx-item">
+          <span class="ctx-icon" style="color:var(--accent-amber)"><svg viewBox="0 0 16 16"><path d="M3 2h8l3 3v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M5 9h6M5 12h4"/></svg></span>
+          <div class="ctx-item-desc">
+            <span class="ctx-label">保存为模板</span>
+            <span class="desc-text">将当前会话配置保存为可复用模板</span>
+          </div>
+        </div>
+        <div class="ctx-item">
+          <span class="ctx-icon" style="color:var(--accent-amber)"><svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg></span>
+          <div class="ctx-item-desc">
+            <span class="ctx-label">从模板创建</span>
+            <span class="desc-text">基于已保存的模板新建标签页</span>
+          </div>
+        </div>
+
+        <div class="ctx-sep"></div>
+
+        <div class="ctx-item">
+          <span class="ctx-icon"><svg viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></svg></span>
+          <div class="ctx-item-desc">
+            <span class="ctx-label">切换标签页</span>
+            <span class="desc-text">在已打开的标签页之间快速切换</span>
+          </div>
+          <span class="ctx-shortcut">Alt→</span>
+        </div>
+
+        <div class="ctx-sep"></div>
+
+        <div class="ctx-item">
+          <span class="ctx-icon" style="color:var(--accent-red)"><svg viewBox="0 0 16 16"><rect x="3" y="3" width="10" height="10" rx="1"/><path d="M6 6l4 4M10 6l-4 4"/></svg></span>
+          <div class="ctx-item-desc">
+            <span class="ctx-label">关闭标签页</span>
+            <span class="desc-text">关闭当前或所有已打开的标签页</span>
+          </div>
+          <span class="ctx-arrow">▸</span>
+        </div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:240px;">
+      <div class="note">
+        <strong>设计特点：</strong><br>
+        ✅ 每项附带描述文字，功能含义一目了然<br>
+        ✅ 对"模板"等新功能特别有效，降低用户困惑<br>
+        ✅ 模板操作用琥珀色高亮，突出插件特色功能<br>
+        ✅ 菜单项数量减少，相关操作合并为子菜单<br>
+        ⚠️ 缺点：菜单高度增加，占用更多屏幕空间
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- 综合对比 -->
+<!-- ============================================================ -->
+<div style="padding:24px; background:var(--bg-secondary); border-radius:var(--radius-lg); border:1px solid var(--border-primary);">
+  <h3 style="font-size:15px; margin-bottom:16px;">📊 右键菜单风格对比</h3>
+  <table class="compare-table">
+    <thead>
+      <tr>
+        <th>风格</th>
+        <th>信息密度</th>
+        <th>分组清晰度</th>
+        <th>功能可发现性</th>
+        <th>实现难度</th>
+        <th>IDE 一致性</th>
+        <th>推荐</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>① 默认菜单</td>
+        <td>★★★★</td>
+        <td>★★</td>
+        <td>★★</td>
+        <td class="dim">— 已实现</td>
+        <td>★★★★★</td>
+        <td>★★</td>
+      </tr>
+      <tr style="background:rgba(55,148,255,0.04);">
+        <td style="color:var(--accent-green);">② 分组+着色 ⭐</td>
+        <td>★★★★</td>
+        <td style="color:var(--accent-green);">★★★★★</td>
+        <td>★★★★</td>
+        <td>★★★★</td>
+        <td>★★★★</td>
+        <td style="color:var(--accent-green);">★★★★★</td>
+      </tr>
+      <tr>
+        <td>③ 圆角毛玻璃</td>
+        <td>★★★</td>
+        <td>★★★</td>
+        <td>★★★</td>
+        <td>★★</td>
+        <td>★★★</td>
+        <td>★★★★</td>
+      </tr>
+      <tr>
+        <td>④ 双列网格</td>
+        <td>★★★★★</td>
+        <td>★★★★</td>
+        <td>★★★★</td>
+        <td>★</td>
+        <td>★★</td>
+        <td>★★★</td>
+      </tr>
+      <tr>
+        <td>⑤ macOS 风格</td>
+        <td>★★★★</td>
+        <td>★★★</td>
+        <td>★★★</td>
+        <td>★★★</td>
+        <td>★★（Mac高）</td>
+        <td>★★★</td>
+      </tr>
+      <tr>
+        <td style="color:var(--accent-blue);">⑥ 带描述文字 ⭐</td>
+        <td>★★★</td>
+        <td>★★★★</td>
+        <td style="color:var(--accent-blue);">★★★★★</td>
+        <td>★★★</td>
+        <td>★★★★</td>
+        <td style="color:var(--accent-blue);">★★★★</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="note" style="margin-top:16px;">
+    <strong>💡 建议方案：</strong>采用 <strong>风格②（分组标题+彩色图标）</strong> 作为基础实现。它在保持 IntelliJ 平台菜单结构的同时，通过分组标题和图标着色显著提升信息层次。实现难度适中，可完全通过 <code>ActionGroup</code> 的 <code>separator</code> + 自定义 <code>presentation</code> 完成。风格⑥的描述文字可作为后续增强。
+  </div>
+</div>
+
+</body>
+</html>
