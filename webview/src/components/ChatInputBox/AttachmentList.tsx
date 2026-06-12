@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Attachment, AttachmentListProps } from './types';
 import { isImageAttachment } from './types';
+import { CopilotIcon } from '../copilotIcons';
 
 /**
  * AttachmentList - Attachment list component
@@ -68,38 +69,47 @@ export const AttachmentList = ({
 
   return (
     <>
-      <div className="attachment-list">
-        {attachments.map((attachment) => (
-          <div
-            key={attachment.id}
-            className="attachment-item"
-            onClick={() => handleClick(attachment)}
-            title={attachment.fileName}
-          >
-            {isImageAttachment(attachment) ? (
-              <img
-                className="attachment-thumbnail"
-                src={`data:${attachment.mediaType};base64,${attachment.data}`}
-                alt={attachment.fileName}
-              />
-            ) : (
-              <div className="attachment-file">
-                <span className={`attachment-file-icon codicon ${getFileIcon(attachment.mediaType)}`} />
-                <span className="attachment-file-name">
-                  {getExtension(attachment.fileName) || attachment.fileName.slice(0, 6)}
-                </span>
-              </div>
-            )}
+      <div className="attachment-list" role="list" aria-label="Attachments">
+        {attachments.map((attachment) => {
+          const imageAttachment = isImageAttachment(attachment);
+          const extension = getExtension(attachment.fileName);
+          const fallbackName = extension || attachment.fileName.slice(0, 6);
 
-            <button
-              className="attachment-remove"
-              onClick={(e) => handleRemove(e, attachment.id)}
-              title={t('chat.removeAttachment')}
+          return (
+            <div
+              key={attachment.id}
+              className={`attachment-item ${imageAttachment ? 'attachment-item-image' : 'attachment-item-file'}`}
+              onClick={() => handleClick(attachment)}
+              title={attachment.fileName}
+              role="listitem"
             >
-              ×
-            </button>
-          </div>
-        ))}
+              <span className="attachment-preview-frame">
+                {imageAttachment ? (
+                  <img
+                    className="attachment-thumbnail"
+                    src={`data:${attachment.mediaType};base64,${attachment.data}`}
+                    alt={attachment.fileName}
+                  />
+                ) : (
+                  <span className={`attachment-file-icon codicon ${getFileIcon(attachment.mediaType)}`} />
+                )}
+              </span>
+
+              <span className="attachment-label">
+                {imageAttachment ? attachment.fileName : fallbackName}
+              </span>
+
+              <button
+                className="attachment-remove"
+                onClick={(e) => handleRemove(e, attachment.id)}
+                title={t('chat.removeAttachment')}
+                aria-label={t('chat.removeAttachment')}
+              >
+                <CopilotIcon name="x" size={12} />
+              </button>
+            </div>
+          );
+        })}
       </div>
 
       {/* Image preview dialog */}

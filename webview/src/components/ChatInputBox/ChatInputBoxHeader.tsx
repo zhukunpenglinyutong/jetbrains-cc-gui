@@ -115,11 +115,6 @@ export function ChatInputBoxHeader({
         />
       )}
 
-      {/* Attachment list */}
-      {attachments.length > 0 && (
-        <AttachmentList attachments={attachments} onRemove={onRemoveAttachment} />
-      )}
-
       {/* Context bar (Top Control Bar) */}
       <ContextBar
         activeFile={activeFile}
@@ -140,6 +135,11 @@ export function ChatInputBoxHeader({
         autoOpenFileEnabled={autoOpenFileEnabled}
         onRequestEnableFileContext={onRequestEnableFileContext}
       />
+
+      {/* Attachment strip - keep it closest to the editable prompt, like GitHub Copilot. */}
+      {attachments.length > 0 && (
+        <AttachmentList attachments={attachments} onRemove={onRemoveAttachment} />
+      )}
     </>
   );
 }
