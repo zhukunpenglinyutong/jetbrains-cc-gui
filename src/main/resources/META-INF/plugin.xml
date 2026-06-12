@@ -143,7 +143,7 @@
         <!-- Save As Template Action -->
         <action id="ClaudeCodeGUI.SaveAsTemplateAction"
                 class="com.github.claudecodegui.action.SaveAsTemplateAction"
-                icon="AllIcons.Actions.Menu_saveall"/>
+                icon="AllIcons.Actions.Saveall"/>
 
         <!-- Create From Template Action -->
         <action id="ClaudeCodeGUI.CreateFromTemplateAction"
