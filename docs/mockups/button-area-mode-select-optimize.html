@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>按钮区域权限选择优化效果图</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      padding: 40px;
+      line-height: 1.6;
+    }
+
+    h1 { font-size: 24px; margin-bottom: 8px; color: #fff; }
+    h2 { font-size: 18px; margin: 40px 0 16px; color: #ccc; border-bottom: 1px solid #333; padding-bottom: 8px; }
+    .subtitle { color: #888; font-size: 13px; margin-bottom: 32px; }
+
+    .section-label {
+      display: inline-block;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 3px 10px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    .label-old { background: rgba(217,83,79,0.1); color: #d9534f; }
+    .label-new { background: rgba(76,195,138,0.1); color: #4cc38a; }
+
+    /* ========== Mock Frame ========== */
+    .mock-frame {
+      max-width: 680px;
+      margin-bottom: 40px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid #2e2e4a;
+      background: #1e1e38;
+    }
+
+    /* ========== Context Bar ========== */
+    .context-bar {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      background: #2f2f2f;
+      min-height: 32px;
+    }
+    .context-tools {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .context-tool-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 5px;
+      cursor: pointer;
+      color: #888888;
+      background: transparent;
+      border: none;
+      padding: 0;
+      outline: none;
+    }
+    .context-tool-btn:hover {
+      background: rgba(255,255,255,0.1);
+      color: #cccccc;
+    }
+    .context-tool-btn svg {
+      width: 16px; height: 16px;
+      stroke: currentColor; stroke-width: 1.8;
+      fill: none; stroke-linecap: round; stroke-linejoin: round;
+    }
+    .context-tool-divider {
+      width: 1px; height: 16px;
+      background: #3e3e42;
+      margin: 0 4px;
+    }
+    .context-tools-right {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-left: auto;
+    }
+
+    /* ========== Token Ring ========== */
+    .token-ring {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      cursor: pointer;
+      border-radius: 6px;
+    }
+    .token-ring svg { transform: rotate(-90deg); width: 100%; height: 100%; }
+    .token-ring .ring-bg { fill: none; stroke-width: 2.5; stroke-linecap: round; }
+    .token-ring .ring-fill { fill: none; stroke-width: 2.5; stroke-linecap: round; }
+    .token-ring .ring-pct {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Consolas', monospace;
+      font-size: 8px; font-weight: 800; line-height: 1;
+    }
+    .token-ring.level-ok .ring-bg { stroke: rgba(76,195,138,0.15); }
+    .token-ring.level-ok .ring-fill { stroke: #4cc38a; }
+    .token-ring.level-ok .ring-pct { color: #4cc38a; }
+
+    /* ========== Input Area ========== */
+    .input-area { padding: 8px 12px; }
+    .input-textarea {
+      width: 100%;
+      min-height: 60px;
+      background: transparent;
+      border: none;
+      color: #ccc;
+      font-size: 13px;
+      font-family: inherit;
+      resize: none;
+      outline: none;
+    }
+    .input-textarea::placeholder { color: #555; }
+
+    /* ========== OLD Button Area ========== */
+    .button-area {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 8px;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      background: linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+    }
+    .button-area-left {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      flex: 1;
+      min-width: 0;
+      overflow: visible;
+    }
+    .button-area-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .button-divider {
+      width: 1px;
+      height: 16px;
+      background: rgba(255,255,255,0.06);
+    }
+
+    /* ========== OLD Selector Button ========== */
+    .selector-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      color: #888888;
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: color 0.15s ease, background-color 0.15s ease;
+      white-space: nowrap;
+      height: 28px;
+      position: relative;
+    }
+    .selector-button:hover {
+      background: rgba(255,255,255,0.05);
+      color: #cccccc;
+    }
+    .selector-button svg {
+      width: 14px; height: 14px;
+      stroke: currentColor; stroke-width: 1.8;
+      fill: none; stroke-linecap: round; stroke-linejoin: round;
+    }
+
+    /* OLD: mode-active-highlight with bottom underline (looks like a border) */
+    .selector-button.mode-active-highlight {
+      color: #cccccc;
+      background: rgba(255,255,255,0.04);
+    }
+    .selector-button.mode-active-highlight::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 60%;
+      height: 2px;
+      background: #0078d4;
+      border-radius: 1px;
+    }
+    .selector-button.mode-active-highlight:hover {
+      background: rgba(255,255,255,0.06);
+      color: #cccccc;
+    }
+
+    /* Selector separator dot */
+    .selector-separator {
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.15);
+      margin: 0 2px;
+      flex-shrink: 0;
+    }
+
+    /* ========== NEW: Mode button WITHOUT individual border/bg ========== */
+    .selector-button.mode-clean {
+      color: #888;
+      background: transparent;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    .selector-button.mode-clean::after {
+      display: none;
+    }
+    .selector-button.mode-clean:hover {
+      background: rgba(255,255,255,0.06);
+      color: #ccc;
+    }
+    /* Active state: only show bottom indicator, no bg */
+    .selector-button.mode-clean-active {
+      color: #ccc;
+      background: transparent;
+      padding: 4px 8px;
+    }
+    .selector-button.mode-clean-active::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 50%;
+      height: 2px;
+      background: #0078d4;
+      border-radius: 1px;
+    }
+    .selector-button.mode-clean-active:hover {
+      background: rgba(255,255,255,0.06);
+      color: #ccc;
+    }
+
+    /* ========== NEW: Grouped pill style ========== */
+    .mode-pill-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 0;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 6px;
+      padding: 0 2px;
+      height: 28px;
+    }
+    .mode-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      color: #666;
+      font-size: 11px;
+      font-family: inherit;
+      cursor: pointer;
+      background: transparent;
+      border: none;
+      height: 22px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      position: relative;
+    }
+    .mode-pill svg {
+      width: 12px; height: 12px;
+      stroke: currentColor; stroke-width: 1.8;
+      fill: none; stroke-linecap: round; stroke-linejoin: round;
+    }
+    .mode-pill:hover {
+      color: #ccc;
+      background: rgba(255,255,255,0.06);
+    }
+    .mode-pill.active {
+      color: #e0e0e0;
+      background: rgba(0,120,212,0.12);
+    }
+    .mode-pill.active:hover {
+      background: rgba(0,120,212,0.18);
+    }
+
+    /* ========== Send Button ========== */
+    .submit-button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px; height: 30px;
+      background: linear-gradient(135deg, #0078d4, #005a9e);
+      border: none;
+      border-radius: 50%;
+      color: white;
+      cursor: pointer;
+    }
+    .submit-button svg {
+      width: 14px; height: 14px;
+      stroke: currentColor; stroke-width: 2;
+      fill: none; stroke-linecap: round; stroke-linejoin: round;
+    }
+    .enhance-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px; height: 28px;
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      color: #888;
+      cursor: pointer;
+    }
+    .enhance-btn:hover { background: rgba(255,255,255,0.06); color: #ccc; }
+    .enhance-btn svg {
+      width: 16px; height: 16px;
+      stroke: currentColor; stroke-width: 1.8;
+      fill: none; stroke-linecap: round; stroke-linejoin: round;
+    }
+
+    /* ========== Annotation ========== */
+    .annotation {
+      margin-top: 12px;
+      padding: 10px 14px;
+      background: rgba(79,195,247,0.06);
+      border: 1px solid rgba(79,195,247,0.15);
+      border-radius: 8px;
+      font-size: 12px;
+      color: #aaa;
+      line-height: 1.7;
+    }
+    .annotation strong { color: #4fc3f7; }
+    .annotation .tag {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+    .tag-add { background: rgba(76,195,138,0.15); color: #4cc38a; }
+    .tag-change { background: rgba(231,184,90,0.15); color: #e7b85a; }
+    .tag-remove { background: rgba(217,83,79,0.15); color: #d9534f; }
+
+    /* ========== Light Theme ========== */
+    .theme-light { border-color: #d0d0d0; }
+    .theme-light .context-bar { background: #f0f0f0; }
+    .theme-light .context-tool-btn { color: #666; }
+    .theme-light .context-tool-btn:hover { background: rgba(0,0,0,0.05); color: #333; }
+    .theme-light .context-tool-divider { background: #d0d0d0; }
+    .theme-light .input-textarea { color: #333; }
+    .theme-light .input-textarea::placeholder { color: #aaa; }
+    .theme-light .button-area { border-top-color: rgba(0,0,0,0.06); background: linear-gradient(135deg, rgba(0,0,0,0.01), rgba(0,0,0,0.005)); }
+    .theme-light .selector-button { color: #666; }
+    .theme-light .selector-button:hover { background: rgba(0,0,0,0.04); color: #333; }
+    .theme-light .selector-button.mode-active-highlight { color: #333; background: rgba(0,0,0,0.03); }
+    .theme-light .selector-button.mode-active-highlight:hover { background: rgba(0,0,0,0.05); }
+    .theme-light .selector-separator { background: rgba(0,0,0,0.12); }
+    .theme-light .mode-pill-group { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.08); }
+    .theme-light .mode-pill { color: #888; }
+    .theme-light .mode-pill:hover { color: #333; background: rgba(0,0,0,0.04); }
+    .theme-light .mode-pill.active { color: #333; background: rgba(0,120,212,0.08); }
+    .theme-light .button-divider { background: rgba(0,0,0,0.06); }
+    .theme-light .enhance-btn { color: #888; }
+    .theme-light .enhance-btn:hover { background: rgba(0,0,0,0.04); color: #333; }
+  </style>
+</head>
+<body>
+  <h1>🎯 按钮区域权限选择优化效果图</h1>
+  <p class="subtitle">输入区底部 ButtonArea 中的权限/模式选择按钮样式优化</p>
+
+  <!-- ==================== 方案 A: 去掉独立背景 ==================== -->
+  <h2>1. 方案 A — 去掉独立背景和 underline，融入按钮群</h2>
+
+  <span class="section-label label-old">旧版 - 有独立背景 + 底部 underline</span>
+  <div class="mock-frame">
+    <div class="context-bar">
+      <div class="context-tools">
+        <button class="context-tool-btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+        <div class="token-ring level-ok">
+          <svg viewBox="0 0 28 28"><circle class="ring-bg" cx="14" cy="14" r="11"/><circle class="ring-fill" cx="14" cy="14" r="11" stroke-dasharray="69.12" stroke-dashoffset="44.93"/></svg>
+          <span class="ring-pct">35</span>
+        </div>
+        <div class="context-tool-divider"></div>
+      </div>
+      <div class="context-tools-right">
+        <button class="context-tool-btn"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg></button>
+      </div>
+    </div>
+    <div class="input-area"><textarea class="input-textarea" placeholder="输入消息..."></textarea></div>
+    <div class="button-area">
+      <div class="button-area-left">
+        <!-- Config gear -->
+        <button class="selector-button" title="Configure">
+          <svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+        <span class="selector-separator"></span>
+        <!-- Provider -->
+        <button class="selector-button" title="Claude">
+          <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </button>
+        <span class="selector-separator"></span>
+        <!-- OLD: Mode button with bg + underline -->
+        <button class="selector-button mode-active-highlight" title="Agent mode">
+          <svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>
+          <span>Agent</span>
+          <svg viewBox="0 0 24 24" style="width:10px;height:10px;margin-left:2px;"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <span class="selector-separator"></span>
+        <!-- Model -->
+        <button class="selector-button" title="Model">
+          <span>Sonnet 4.6</span>
+          <svg viewBox="0 0 24 24" style="width:10px;height:10px;margin-left:2px;"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <span class="selector-separator"></span>
+        <!-- Reasoning -->
+        <button class="selector-button" title="Reasoning">
+          <svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+          <span>High</span>
+        </button>
+      </div>
+      <div class="button-area-right">
+        <div class="button-divider"></div>
+        <button class="enhance-btn"><svg viewBox="0 0 24 24"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg></button>
+        <button class="submit-button"><svg viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.5.5 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg></button>
+      </div>
+    </div>
+  </div>
+
+  <span class="section-label label-new">方案 A - 去掉背景和 underline，融入按钮群</span>
+  <div class="mock-frame">
+    <div class="context-bar">
+      <div class="context-tools">
+        <button class="context-tool-btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+        <div class="token-ring level-ok">
+          <svg viewBox="0 0 28 28"><circle class="ring-bg" cx="14" cy="14" r="11"/><circle class="ring-fill" cx="14" cy="14" r="11" stroke-dasharray="69.12" stroke-dashoffset="44.93"/></svg>
+          <span class="ring-pct">35</span>
+        </div>
+        <div class="context-tool-divider"></div>
+      </div>
+      <div class="context-tools-right">
+        <button class="context-tool-btn"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg></button>
+      </div>
+    </div>
+    <div class="input-area"><textarea class="input-textarea" placeholder="输入消息..."></textarea></div>
+    <div class="button-area">
+      <div class="button-area-left">
+        <button class="selector-button" title="Configure">
+          <svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+        <span class="selector-separator"></span>
+        <button class="selector-button" title="Claude">
+          <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </button>
+        <span class="selector-separator"></span>
+        <!-- NEW: Mode button - clean, no bg, no underline -->
+        <button class="selector-button mode-clean-active" title="Agent mode">
+          <svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>
+          <span>Agent</span>
+          <svg viewBox="0 0 24 24" style="width:10px;height:10px;margin-left:2px;"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <span class="selector-separator"></span>
+        <button class="selector-button" title="Model">
+          <span>Sonnet 4.6</span>
+          <svg viewBox="0 0 24 24" style="width:10px;height:10px;margin-left:2px;"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <span class="selector-separator"></span>
+        <button class="selector-button" title="Reasoning">
+          <svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+          <span>High</span>
+        </button>
+      </div>
+      <div class="button-area-right">
+        <div class="button-divider"></div>
+        <button class="enhance-btn"><svg viewBox="0 0 24 24"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg></button>
+        <button class="submit-button"><svg viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.5.5 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 方案 B: Pill Group ==================== -->
+  <h2>2. 方案 B — 胶囊分组（Mode 选项合并为一组）</h2>
+
+  <span class="section-label label-new">方案 B - Pill 胶囊分组</span>
+  <div class="mock-frame">
+    <div class="context-bar">
+      <div class="context-tools">
+        <button class="context-tool-btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+        <div class="token-ring level-ok">
+          <svg viewBox="0 0 28 28"><circle class="ring-bg" cx="14" cy="14" r="11"/><circle class="ring-fill" cx="14" cy="14" r="11" stroke-dasharray="69.12" stroke-dashoffset="44.93"/></svg>
+          <span class="ring-pct">35</span>
+        </div>
+        <div class="context-tool-divider"></div>
+      </div>
+      <div class="context-tools-right">
+        <button class="context-tool-btn"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg></button>
+      </div>
+    </div>
+    <div class="input-area"><textarea class="input-textarea" placeholder="输入消息..."></textarea></div>
+    <div class="button-area">
+      <div class="button-area-left">
+        <button class="selector-button" title="Configure">
+          <svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+        <span class="selector-separator"></span>
+        <button class="selector-button" title="Claude">
+          <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </button>
+        <span class="selector-separator"></span>
+        <!-- NEW B: Pill group -->
+        <div class="mode-pill-group">
+          <button class="mode-pill" title="Default">
+            <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span>Chat</span>
+          </button>
+          <button class="mode-pill" title="Plan">
+            <svg viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14,2 14,8 20,8"/></svg>
+            <span>Plan</span>
+          </button>
+          <button class="mode-pill active" title="Agent">
+            <svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>
+            <span>Agent</span>
+          </button>
+          <button class="mode-pill" title="Auto">
+            <svg viewBox="0 0 24 24"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/></svg>
+            <span>Auto</span>
+          </button>
+        </div>
+        <span class="selector-separator"></span>
+        <button class="selector-button" title="Model">
+          <span>Sonnet 4.6</span>
+          <svg viewBox="0 0 24 24" style="width:10px;height:10px;margin-left:2px;"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <span class="selector-separator"></span>
+        <button class="selector-button" title="Reasoning">
+          <svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+          <span>High</span>
+        </button>
+      </div>
+      <div class="button-area-right">
+        <div class="button-divider"></div>
+        <button class="enhance-btn"><svg viewBox="0 0 24 24"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg></button>
+        <button class="submit-button"><svg viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.5.5 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 亮色主题 ==================== -->
+  <h2>3. 亮色主题对比</h2>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 40px;">
+    <div>
+      <div style="font-size: 11px; color: #888; margin-bottom: 8px;">旧版 (亮色)</div>
+      <div class="mock-frame theme-light">
+        <div class="button-area">
+          <div class="button-area-left">
+            <button class="selector-button"><svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+            <span class="selector-separator"></span>
+            <button class="selector-button mode-active-highlight"><svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg><span>Agent</span></button>
+            <span class="selector-separator"></span>
+            <button class="selector-button"><span>Sonnet 4.6</span></button>
+          </div>
+          <div class="button-area-right">
+            <div class="button-divider"></div>
+            <button class="submit-button"><svg viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.5.5 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div style="font-size: 11px; color: #888; margin-bottom: 8px;">方案 A (亮色)</div>
+      <div class="mock-frame theme-light">
+        <div class="button-area">
+          <div class="button-area-left">
+            <button class="selector-button"><svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+            <span class="selector-separator"></span>
+            <button class="selector-button mode-clean-active"><svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg><span>Agent</span></button>
+            <span class="selector-separator"></span>
+            <button class="selector-button"><span>Sonnet 4.6</span></button>
+          </div>
+          <div class="button-area-right">
+            <div class="button-divider"></div>
+            <button class="submit-button"><svg viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.5.5 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 设计说明 ==================== -->
+  <h2>4. 设计说明</h2>
+
+  <div class="annotation">
+    <strong>问题：</strong><br/>
+    权限/模式选择按钮（Agent、Plan、Auto）使用 <code>.mode-active-highlight</code> 类，带有独立的 <code>background: rgba(255,255,255,0.04)</code> 和底部 <code>::after</code> 蓝色 underline，视觉上看起来像独立的外边框/选中态，与旁边其他 selector-button（纯透明背景）风格不统一。<br/>
+    <br/>
+    <strong>方案 A — 去掉独立背景和 underline <span class="tag tag-add">推荐</span></strong><br/>
+    - <span class="tag tag-remove">移除</span> <code>mode-active-highlight</code> 的 <code>background</code> 属性<br/>
+    - <span class="tag tag-remove">移除</span> <code>::after</code> 伪元素的蓝色 underline<br/>
+    - Mode 按钮与其他 selector 按钮视觉完全一致，仅靠文字颜色区分<br/>
+    - hover 时用相同的 <code>rgba(255,255,255,0.06)</code> 背景反馈<br/>
+    - 改动量最小，不影响其他组件<br/>
+    <br/>
+    <strong>方案 B — Pill 胶囊分组</strong><br/>
+    - <span class="tag tag-add">新增</span> 将所有模式选项（Chat/Plan/Agent/Auto）合并为一个胶囊组<br/>
+    - 选中项用 <code>rgba(0,120,212,0.12)</code> 背景高亮<br/>
+    - 一目了然地看到所有可选模式<br/>
+    - 适合宽度足够的场景，窄屏需要回退方案 A<br/>
+    <br/>
+    <strong>改动文件：</strong><br/>
+    - <code>selectors.css</code>：修改 <code>.mode-active-highlight</code> 和 <code>::after</code><br/>
+    - 或 <code>ModeSelect.tsx</code>：改用新的 pill group 组件
+  </div>
+</body>
+</html>

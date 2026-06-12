@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方案四：优雅沉浸 - CC GUI 动效预览</title>
+<style>
+/* ══════════════════════════════════════════════════════════════
+   方案四：优雅沉浸 (Elegant Immersive)
+   核心理念：空间层次、视差效果、深度感、高级感
+   缓动曲线：cubic-bezier(0.22, 1, 0.36, 1) — 平滑自然
+   时长范围：250ms ~ 700ms
+   特色元素：分层阴影、视差位移、柔和缩放、毛玻璃
+   ══════════════════════════════════════════════════════════════ */
+
+:root {
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #222240;
+    --bg-tertiary: #2a2a4a;
+    --bg-elevated: #30305a;
+    --bg-hover: #35356a;
+    --text-primary: #c8c8e0;
+    --text-secondary: #ddddef;
+    --text-tertiary: #8888aa;
+    --border-primary: #333355;
+    --border-secondary: #3a3a60;
+
+    /* 优雅色调 */
+    --elegant-indigo: #6366f1;
+    --elegant-violet: #8b5cf6;
+    --elegant-rose: #f43f5e;
+    --elegant-emerald: #10b981;
+    --elegant-amber: #f59e0b;
+    --elegant-sky: #0ea5e9;
+
+    /* 阴影层级 */
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.15);
+    --shadow-2: 0 4px 8px rgba(0, 0, 0, 0.2);
+    --shadow-3: 0 8px 24px rgba(0, 0, 0, 0.3);
+    --shadow-4: 0 16px 48px rgba(0, 0, 0, 0.4);
+
+    /* 动效参数 */
+    --ease-elegant: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+    --duration-fast: 250ms;
+    --duration-normal: 400ms;
+    --duration-slow: 700ms;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg-primary); color: var(--text-primary); line-height: 1.5;
+}
+
+/* 微妙的渐变背景 */
+body::before {
+    content: ''; position: fixed; inset: 0; z-index: -1;
+    background:
+        radial-gradient(ellipse at 20% 0%, rgba(99, 102, 241, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 100%, rgba(139, 92, 246, 0.05) 0%, transparent 50%);
+}
+
+.page { max-width: 1200px; margin: 0 auto; padding: 40px 24px; }
+.page-title {
+    font-size: 32px; font-weight: 300; color: #fff;
+    margin-bottom: 8px; letter-spacing: -0.3px;
+}
+.page-title span { font-weight: 600; background: linear-gradient(135deg, var(--elegant-indigo), var(--elegant-violet)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.page-subtitle { font-size: 14px; color: var(--text-tertiary); margin-bottom: 40px; max-width: 600px; line-height: 1.7; }
+.scheme-badge {
+    display: inline-block; padding: 4px 14px; border-radius: 20px;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1));
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    color: var(--elegant-indigo); font-size: 12px; font-weight: 500; margin-bottom: 16px;
+}
+
+.section { margin-bottom: 56px; }
+.section-title {
+    font-size: 15px; font-weight: 600; color: var(--text-secondary);
+    margin-bottom: 8px; display: flex; align-items: center; gap: 8px;
+    letter-spacing: 0.3px;
+}
+.section-desc { font-size: 13px; color: var(--text-tertiary); margin-bottom: 24px; line-height: 1.6; }
+.showcase { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.showcase-col { display: flex; flex-direction: column; gap: 14px; }
+
+/* ══════════════════════════════════════════════════════════════
+   1. 按钮动效 — 分层阴影提升
+   ══════════════════════════════════════════════════════════════ */
+.btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 18px; border: none; border-radius: 8px;
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    transition: all var(--duration-normal) var(--ease-elegant);
+    position: relative; letter-spacing: 0.2px;
+}
+
+.btn-primary {
+    background: var(--elegant-indigo); color: #fff;
+    box-shadow: var(--shadow-1), 0 0 0 0 rgba(99, 102, 241, 0);
+}
+.btn-primary:hover {
+    background: #7577f5;
+    box-shadow: var(--shadow-2), 0 0 20px rgba(99, 102, 241, 0.2);
+    transform: translateY(-2px);
+}
+.btn-primary:active {
+    transform: translateY(0);
+    box-shadow: var(--shadow-1);
+    transition-duration: 100ms;
+}
+
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.05); color: var(--text-secondary);
+    border: 1px solid var(--border-secondary);
+    backdrop-filter: blur(8px);
+}
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.15);
+    box-shadow: var(--shadow-2);
+    transform: translateY(-1px);
+}
+.btn-secondary:active { transform: translateY(0); box-shadow: var(--shadow-1); }
+
+.btn-success {
+    background: rgba(16, 185, 129, 0.12); color: var(--elegant-emerald);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+}
+.btn-success:hover {
+    background: rgba(16, 185, 129, 0.2);
+    border-color: rgba(16, 185, 129, 0.4);
+    box-shadow: var(--shadow-2), 0 0 16px rgba(16, 185, 129, 0.15);
+    transform: translateY(-1px);
+}
+
+.btn-danger {
+    background: rgba(244, 63, 94, 0.1); color: var(--elegant-rose);
+    border: 1px solid rgba(244, 63, 94, 0.2);
+}
+.btn-danger:hover {
+    background: rgba(244, 63, 94, 0.18);
+    border-color: rgba(244, 63, 94, 0.4);
+    box-shadow: var(--shadow-2), 0 0 16px rgba(244, 63, 94, 0.15);
+    transform: translateY(-1px);
+}
+
+.btn-small { padding: 6px 14px; font-size: 12px; border-radius: 6px; }
+
+/* 加载态 — 优雅旋转 */
+.spinner-elegant {
+    width: 16px; height: 16px; border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-top-color: #fff;
+    animation: spin-elegant 0.9s var(--ease-smooth) infinite;
+}
+@keyframes spin-elegant { to { transform: rotate(360deg); } }
+
+/* ══════════════════════════════════════════════════════════════
+   2. 卡片动效 — 视差浮起
+   ══════════════════════════════════════════════════════════════ */
+.card {
+    background: var(--bg-secondary); border: 1px solid var(--border-secondary);
+    border-radius: 12px; padding: 20px; cursor: pointer;
+    transition: all var(--duration-normal) var(--ease-elegant);
+    position: relative; min-width: 260px;
+    box-shadow: var(--shadow-1);
+}
+.card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-3), 0 0 24px rgba(99, 102, 241, 0.06);
+    border-color: rgba(99, 102, 241, 0.25);
+}
+.card:active {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-2);
+    transition-duration: 100ms;
+}
+
+/* 视差层：图标位移比卡片多 */
+.card-header {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
+    transition: transform var(--duration-normal) var(--ease-elegant);
+}
+.card:hover .card-header { transform: translateY(-1px); }
+.card-icon {
+    width: 36px; height: 36px; border-radius: 10px; display: flex;
+    align-items: center; justify-content: center; font-size: 18px;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.1));
+    color: var(--elegant-indigo);
+    transition: all var(--duration-normal) var(--ease-elegant);
+}
+.card:hover .card-icon {
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+}
+.card-title { font-size: 14px; font-weight: 600; color: var(--text-secondary); }
+.card-desc { font-size: 13px; color: var(--text-tertiary); line-height: 1.6; }
+.card-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; margin-top: 12px; }
+.card-status-dot { width: 6px; height: 6px; border-radius: 50%; }
+.card-status-dot.running {
+    background: var(--elegant-emerald);
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+.card-status-dot.stopped { background: var(--text-tertiary); }
+
+/* ══════════════════════════════════════════════════════════════
+   3. 对话框 — 毛玻璃层次
+   ══════════════════════════════════════════════════════════════ */
+.dialog-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000; opacity: 0; pointer-events: none;
+    transition: opacity var(--duration-normal);
+    backdrop-filter: blur(8px) saturate(1.4);
+}
+.dialog-overlay.active { opacity: 1; pointer-events: auto; }
+
+.dialog-box {
+    background: var(--bg-secondary); border: 1px solid var(--border-secondary);
+    border-radius: 16px; min-width: 440px;
+    box-shadow: var(--shadow-4), 0 0 40px rgba(99, 102, 241, 0.08);
+    transform: translateY(24px) scale(0.96);
+    opacity: 0;
+    transition: all var(--duration-slow) var(--ease-elegant);
+    overflow: hidden;
+}
+.dialog-overlay.active .dialog-box {
+    transform: translateY(0) scale(1); opacity: 1;
+}
+
+.dialog-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-primary);
+    background: linear-gradient(180deg, rgba(99, 102, 241, 0.04), transparent);
+}
+.dialog-title { font-size: 16px; font-weight: 600; color: var(--text-secondary); letter-spacing: -0.2px; }
+.dialog-body { padding: 24px; font-size: 14px; color: var(--text-primary); line-height: 1.7; }
+.dialog-footer {
+    padding: 16px 24px; border-top: 1px solid var(--border-primary);
+    display: flex; justify-content: flex-end; gap: 10px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   4. Toast — 沉浸浮出
+   ══════════════════════════════════════════════════════════════ */
+.toast-container-demo {
+    position: relative; height: 320px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border-primary);
+    border-radius: 12px; overflow: hidden; min-width: 420px;
+    display: flex; align-items: flex-start; justify-content: flex-end;
+    padding: 20px;
+}
+.toast {
+    background: rgba(34, 34, 64, 0.9); border: 1px solid var(--border-secondary);
+    border-radius: 10px; padding: 14px 18px; min-width: 300px;
+    box-shadow: var(--shadow-3);
+    animation: toast-immersive-in var(--duration-slow) var(--ease-elegant) both;
+    backdrop-filter: blur(12px);
+}
+.toast.hiding { animation: toast-immersive-out var(--duration-normal) ease-in both; }
+
+@keyframes toast-immersive-in {
+    0% { opacity: 0; transform: translateY(16px) scale(0.95); filter: blur(4px); }
+    100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+@keyframes toast-immersive-out {
+    from { opacity: 1; transform: translateY(0) scale(1); }
+    to { opacity: 0; transform: translateY(-8px) scale(0.96); }
+}
+
+.toast-info { border-left: 3px solid var(--elegant-indigo); }
+.toast-success { border-left: 3px solid var(--elegant-emerald); }
+.toast-warning { border-left: 3px solid var(--elegant-amber); }
+.toast-error { border-left: 3px solid var(--elegant-rose); }
+.toast-content { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.toast-msg { font-size: 13px; color: var(--text-secondary); flex: 1; }
+.toast-close {
+    background: none; border: none; color: var(--text-tertiary);
+    cursor: pointer; padding: 4px; font-size: 14px; border-radius: 4px;
+    transition: all var(--duration-fast);
+}
+.toast-close:hover { color: var(--text-secondary); background: rgba(255,255,255,0.05); }
+
+/* ══════════════════════════════════════════════════════════════
+   5. 消息动效 — 层次浮现
+   ══════════════════════════════════════════════════════════════ */
+.msg-list { display: flex; flex-direction: column; gap: 4px; min-width: 520px; }
+.msg {
+    padding: 10px 24px;
+    animation: msg-immersive var(--duration-slow) var(--ease-elegant) both;
+}
+.msg.user { display: flex; justify-content: flex-end; }
+.msg-bubble {
+    max-width: 78%; padding: 12px 16px; border-radius: 16px;
+    font-size: 14px; line-height: 1.7; letter-spacing: 0.1px;
+}
+.msg.user .msg-bubble {
+    background: linear-gradient(135deg, var(--elegant-indigo), #7c3aed);
+    color: #fff; border-bottom-right-radius: 6px;
+    box-shadow: var(--shadow-2), 0 0 20px rgba(99, 102, 241, 0.15);
+}
+.msg.assistant .msg-bubble { background: transparent; color: var(--text-primary); }
+
+@keyframes msg-immersive {
+    0% { opacity: 0; transform: translateY(12px); filter: blur(2px); }
+    100% { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+
+.streaming-cursor {
+    display: inline-block; width: 2px; height: 17px;
+    background: var(--elegant-indigo); margin-left: 2px; vertical-align: text-bottom;
+    border-radius: 1px;
+    box-shadow: 0 0 8px rgba(99, 102, 241, 0.5);
+    animation: cursor-breathe 1.5s var(--ease-smooth) infinite;
+}
+@keyframes cursor-breathe {
+    0%, 100% { opacity: 1; height: 17px; }
+    50% { opacity: 0.4; height: 14px; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   6. 生成等待 — 呼吸光晕
+   ══════════════════════════════════════════════════════════════ */
+.gen-strip {
+    display: inline-flex; align-items: center; gap: 12px;
+    padding: 10px 20px;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(139, 92, 246, 0.06));
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: 12px; font-size: 13px; color: var(--elegant-indigo);
+    animation: gen-immersive var(--duration-slow) var(--ease-elegant) both;
+    position: relative; overflow: hidden;
+}
+/* 呼吸光晕 */
+.gen-strip::before {
+    content: ''; position: absolute; inset: -50%;
+    background: radial-gradient(ellipse at center, rgba(99, 102, 241, 0.06), transparent 70%);
+    animation: breathe-halo 3s ease-in-out infinite;
+    pointer-events: none;
+}
+@keyframes breathe-halo {
+    0%, 100% { opacity: 0.5; transform: scale(0.95); }
+    50% { opacity: 1; transform: scale(1.05); }
+}
+
+@keyframes gen-immersive {
+    0% { opacity: 0; transform: translateY(12px) scale(0.97); filter: blur(3px); }
+    100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+
+.wave { display: flex; gap: 3px; align-items: center; height: 18px; position: relative; z-index: 1; }
+.wave span {
+    display: block; width: 3px; border-radius: 2px;
+    background: var(--elegant-indigo);
+    animation: wave-breathe 1.6s var(--ease-smooth) infinite;
+}
+.wave span:nth-child(1) { height: 6px; animation-delay: 0s; }
+.wave span:nth-child(2) { height: 12px; animation-delay: 0.1s; }
+.wave span:nth-child(3) { height: 4px; animation-delay: 0.2s; }
+.wave span:nth-child(4) { height: 10px; animation-delay: 0.3s; }
+.wave span:nth-child(5) { height: 7px; animation-delay: 0.4s; }
+
+@keyframes wave-breathe {
+    0%, 100% { transform: scaleY(0.35); opacity: 0.5; }
+    50% { transform: scaleY(1.1); opacity: 1; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   7. 输入框 — 浮动聚焦
+   ══════════════════════════════════════════════════════════════ */
+.input-box {
+    background: var(--bg-secondary); border: 1px solid var(--border-secondary);
+    border-radius: 12px; overflow: hidden; min-width: 520px;
+    transition: all var(--duration-normal) var(--ease-elegant);
+    box-shadow: var(--shadow-1);
+}
+.input-box:focus-within {
+    border-color: rgba(99, 102, 241, 0.4);
+    box-shadow: var(--shadow-2), 0 0 24px rgba(99, 102, 241, 0.08);
+}
+.input-area { display: flex; align-items: flex-end; gap: 8px; padding: 12px 16px; }
+.input-textarea {
+    flex: 1; background: none; border: none; outline: none;
+    color: var(--text-primary); font-size: 14px; resize: none;
+    font-family: inherit; line-height: 1.6;
+}
+.input-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 16px;
+    border-top: 1px solid transparent;
+    transition: border-color var(--duration-normal);
+}
+.input-box:focus-within .input-toolbar { border-top-color: var(--border-primary); }
+
+/* ══════════════════════════════════════════════════════════════
+   8. 选项卡 — 渐变切换
+   ══════════════════════════════════════════════════════════════ */
+.tabs {
+    display: flex; gap: 0; background: var(--bg-secondary);
+    border-radius: 10px; padding: 4px; border: 1px solid var(--border-primary);
+    min-width: 400px; position: relative;
+}
+.tab {
+    flex: 1; padding: 8px 18px; border: none; background: none;
+    color: var(--text-tertiary); font-size: 13px; font-weight: 500;
+    cursor: pointer; border-radius: 7px; position: relative; z-index: 1;
+    transition: color var(--duration-fast);
+}
+.tab:hover { color: var(--text-primary); }
+.tab.active {
+    color: #fff;
+    background: linear-gradient(135deg, var(--elegant-indigo), var(--elegant-violet));
+    box-shadow: var(--shadow-2), 0 0 12px rgba(99, 102, 241, 0.2);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   9. 开关 — 柔和过渡
+   ══════════════════════════════════════════════════════════════ */
+.toggle {
+    position: relative; width: 40px; height: 22px; border-radius: 11px;
+    background: var(--border-secondary); cursor: pointer;
+    transition: all var(--duration-normal) var(--ease-elegant);
+}
+.toggle.on {
+    background: linear-gradient(135deg, var(--elegant-indigo), var(--elegant-violet));
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.3);
+}
+.toggle-knob {
+    position: absolute; top: 2px; left: 2px; width: 18px; height: 18px;
+    border-radius: 50%; background: #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    transition: all var(--duration-normal) var(--ease-elegant);
+}
+.toggle.on .toggle-knob { transform: translateX(18px); }
+
+/* ══════════════════════════════════════════════════════════════
+   10. 下拉选择器 — 毛玻璃
+   ══════════════════════════════════════════════════════════════ */
+.select { position: relative; min-width: 200px; }
+.select-trigger {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 8px 14px; background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary); border-radius: 8px;
+    color: var(--text-primary); font-size: 13px; cursor: pointer;
+    transition: all var(--duration-fast) var(--ease-elegant);
+}
+.select-trigger:hover { border-color: rgba(99, 102, 241, 0.3); }
+.select-trigger.open { border-color: var(--elegant-indigo); box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1); }
+.select-arrow { transition: transform var(--duration-normal) var(--ease-elegant); font-size: 12px; }
+.select-trigger.open .select-arrow { transform: rotate(180deg); }
+
+.select-dropdown {
+    position: absolute; top: calc(100% + 8px); left: 0; right: 0;
+    background: rgba(34, 34, 64, 0.95);
+    border: 1px solid var(--border-secondary);
+    border-radius: 10px; box-shadow: var(--shadow-3);
+    z-index: 100; overflow: hidden; backdrop-filter: blur(12px);
+    transform: translateY(-8px) scale(0.98); opacity: 0; pointer-events: none;
+    transition: all var(--duration-normal) var(--ease-elegant);
+}
+.select-dropdown.open { transform: translateY(0) scale(1); opacity: 1; pointer-events: auto; }
+.select-option {
+    padding: 9px 14px; font-size: 13px; cursor: pointer;
+    transition: all var(--duration-fast);
+}
+.select-option:hover { background: rgba(99, 102, 241, 0.08); }
+.select-option.selected { color: var(--elegant-indigo); }
+
+/* ══════════════════════════════════════════════════════════════
+   11. 进度条 — 渐变柔光
+   ══════════════════════════════════════════════════════════════ */
+.progress-bar {
+    height: 5px; background: var(--border-primary); border-radius: 3px;
+    overflow: hidden; min-width: 220px;
+}
+.progress-fill {
+    height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, var(--elegant-indigo), var(--elegant-violet), var(--elegant-indigo));
+    background-size: 200% 100%;
+    animation: gradient-flow 3s linear infinite;
+    transition: width 1.5s var(--ease-elegant);
+    box-shadow: 0 0 10px rgba(99, 102, 241, 0.3);
+}
+@keyframes gradient-flow {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 200% 50%; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   12. 时间线 — 柔和脉冲
+   ══════════════════════════════════════════════════════════════ */
+.timeline {
+    display: flex; flex-direction: column; gap: 0; padding-left: 24px;
+    border-left: 2px solid var(--border-primary);
+}
+.timeline-item { position: relative; padding: 10px 0 10px 18px; }
+.timeline-dot {
+    position: absolute; left: -28px; top: 14px;
+    width: 8px; height: 8px; border-radius: 50%; background: var(--text-tertiary);
+    transition: all var(--duration-normal);
+}
+.timeline-dot.pending {
+    background: var(--elegant-indigo);
+    box-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
+    animation: dot-soft-pulse 2.5s ease-in-out infinite;
+}
+.timeline-dot.done {
+    background: var(--elegant-emerald);
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.3);
+}
+.timeline-dot.err {
+    background: var(--elegant-rose);
+    box-shadow: 0 0 6px rgba(244, 63, 94, 0.3);
+}
+
+@keyframes dot-soft-pulse {
+    0%, 100% { box-shadow: 0 0 6px rgba(99, 102, 241, 0.3); transform: scale(1); }
+    50% { box-shadow: 0 0 16px rgba(99, 102, 241, 0.5); transform: scale(1.15); }
+}
+
+/* 标注框 */
+.annotation {
+    display: inline-block; margin-top: 8px; padding: 8px 12px;
+    background: rgba(99, 102, 241, 0.06); border-left: 2px solid var(--elegant-indigo);
+    border-radius: 0 6px 6px 0; font-size: 12px; color: var(--elegant-indigo);
+    max-width: 500px; line-height: 1.6;
+}
+
+.control-btn {
+    padding: 9px 18px; background: var(--elegant-indigo); color: #fff;
+    border: none; border-radius: 8px; font-size: 13px; cursor: pointer;
+    margin-right: 10px; margin-bottom: 10px;
+    transition: all var(--duration-fast) var(--ease-elegant);
+    letter-spacing: 0.2px;
+}
+.control-btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-2), 0 0 16px rgba(99, 102, 241, 0.2); }
+.control-btn:active { transform: translateY(0); }
+</style>
+</head>
+<body>
+<div class="page">
+    <div class="scheme-badge">✦ 方案四 · Elegant Immersive</div>
+    <h1 class="page-title"><span>优雅沉浸</span></h1>
+    <p class="page-subtitle">
+        以空间层次和视差效果为核心，通过分层阴影、毛玻璃、柔和缩放营造深度感。
+        每个元素都有"浮在空间中"的感觉，适合暗色主题的 AI 对话场景。
+        动效平滑自然，不急不躁，如呼吸般优雅。
+    </p>
+
+    <!-- 1. 按钮 -->
+    <div class="section">
+        <h2 class="section-title">Buttons · 按钮</h2>
+        <p class="section-desc">分层阴影提升：hover 时 translateY(-2px) + 阴影扩展到 shadow-2。active 时快速回到 shadow-1。渐变色彩替代纯色。</p>
+        <div class="showcase">
+            <div class="showcase-col">
+                <button class="btn btn-primary">开始对话</button>
+                <button class="btn btn-secondary">配置面板</button>
+                <button class="btn btn-success">✓ 确认提交</button>
+                <button class="btn btn-danger">✕ 撤销操作</button>
+                <button class="btn btn-primary btn-small">小号按钮</button>
+                <button class="btn btn-primary"><span class="spinner-elegant"></span>处理中</button>
+            </div>
+            <div class="annotation">
+                <strong>设计要点：</strong><br>
+                • 4 层阴影体系（shadow-1 ~ shadow-4）营造深度<br>
+                • hover 提升 2px，active 回落，过渡 400ms<br>
+                • 次要按钮使用毛玻璃效果（backdrop-filter）<br>
+                • 圆角 8px 比标准 4px 更柔和
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. 卡片 -->
+    <div class="section">
+        <h2 class="section-title">Cards · 卡片</h2>
+        <p class="section-desc">视差浮起：卡片提升 4px，内部图标额外提升 2px + scale(1.05)，形成层次差。</p>
+        <div class="showcase">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">⚡</div>
+                    <div><div class="card-title">MCP Server</div><div class="card-status"><span class="card-status-dot running"></span>运行中</div></div>
+                </div>
+                <div class="card-desc">文件系统工具服务器，提供读写文件和搜索能力</div>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon" style="background: linear-gradient(135deg, rgba(139,92,246,0.15), rgba(99,102,241,0.1)); color: var(--elegant-violet);">🔮</div>
+                    <div><div class="card-title">Code Analysis</div><div class="card-status"><span class="card-status-dot running"></span>运行中</div></div>
+                </div>
+                <div class="card-desc">代码分析工具，支持静态检查和重构建议</div>
+            </div>
+            <div class="annotation">
+                <strong>设计要点：</strong><br>
+                • 视差效果：卡片 +4px，图标 +2px<br>
+                • 图标额外 scale(1.05) 放大<br>
+                • 分层阴影从 shadow-1 → shadow-3<br>
+                • 圆角 12px 营造柔和感
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. 对话框 -->
+    <div class="section">
+        <h2 class="section-title">Dialog · 对话框</h2>
+        <p class="section-desc">毛玻璃遮罩 + 从下方 24px 浮起 + scale(0.96→1)。700ms 优雅缓动。圆角 16px。</p>
+        <div class="showcase">
+            <button class="btn btn-primary" onclick="openDialog()">打开对话框</button>
+            <div class="annotation">点击查看沉浸式对话框效果</div>
+        </div>
+    </div>
+
+    <!-- 4. Toast -->
+    <div class="section">
+        <h2 class="section-title">Toast · 通知</h2>
+        <p class="section-desc">毛玻璃卡片从下方浮出（translateY(16px) + blur(4px)→0），退场时向上消散。</p>
+        <div class="showcase">
+            <button class="control-btn" onclick="showToast('info')">信息通知</button>
+            <button class="control-btn" onclick="showToast('success')">成功通知</button>
+            <button class="control-btn" onclick="showToast('warning')">警告通知</button>
+            <button class="control-btn" onclick="showToast('error')">错误通知</button>
+        </div>
+        <div class="toast-container-demo" id="toastContainer"></div>
+    </div>
+
+    <!-- 5. 消息 -->
+    <div class="section">
+        <h2 class="section-title">Messages · 消息</h2>
+        <p class="section-desc">消息从模糊中浮现（blur(2px)→0），用户气泡使用渐变背景 + 发光阴影。</p>
+        <div class="showcase">
+            <div class="msg-list" id="msgList">
+                <div class="msg user"><div class="msg-bubble">帮我设计一个 RESTful API 接口</div></div>
+                <div class="msg assistant"><div class="msg-bubble">我来为你设计接口方案...首先定义资源和端点<span class="streaming-cursor"></span></div></div>
+            </div>
+            <button class="control-btn" onclick="addMessage()">添加消息</button>
+        </div>
+    </div>
+
+    <!-- 6. 生成等待 -->
+    <div class="section">
+        <h2 class="section-title">Generating · 生成等待</h2>
+        <p class="section-desc">呼吸光晕背景 + 柔和波形，整体从模糊→清晰。700ms 入场。</p>
+        <div class="showcase">
+            <div class="gen-strip">
+                <div class="wave"><span></span><span></span><span></span><span></span><span></span></div>
+                <span style="font-weight: 500; letter-spacing: 0.3px;">正在生成</span>
+                <span style="opacity: 0.5; font-size: 12px;">15s</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 7. 输入框 -->
+    <div class="section">
+        <h2 class="section-title">Input · 输入框</h2>
+        <p class="section-desc">聚焦时边框变色 + 阴影扩展到 shadow-2 + 外层光晕，圆角 12px。</p>
+        <div class="input-box">
+            <div class="input-area">
+                <textarea class="input-textarea" rows="1" placeholder="描述你的需求..."></textarea>
+                <button class="btn btn-primary btn-small">发送</button>
+            </div>
+            <div class="input-toolbar">
+                <div style="display: flex; gap: 8px;"><span style="font-size: 16px; cursor: pointer; opacity: 0.6;">📎</span><span style="font-size: 16px; cursor: pointer; opacity: 0.6;">🌍</span></div>
+                <span style="font-size: 12px; color: var(--text-tertiary);">Enter 发送 · Shift+Enter 换行</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 8-12 -->
+    <div class="section">
+        <h2 class="section-title">Tabs · Toggle · Select · Progress · Timeline</h2>
+        <div class="showcase" style="flex-direction: column; gap: 24px;">
+            <div class="tabs" id="tabs">
+                <button class="tab active" onclick="switchTab(this)">Todo</button>
+                <button class="tab" onclick="switchTab(this)">文件变更</button>
+                <button class="tab" onclick="switchTab(this)">子代理</button>
+            </div>
+            <div style="display: flex; gap: 28px; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div class="toggle on" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+                    <span style="font-size: 13px;">自动保存</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div class="toggle" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+                    <span style="font-size: 13px;">流式输出</span>
+                </div>
+            </div>
+            <div class="select" id="select1">
+                <div class="select-trigger" onclick="toggleSelect('select1')">
+                    <span>claude-sonnet-4-20250514</span>
+                    <span class="select-arrow">▼</span>
+                </div>
+                <div class="select-dropdown">
+                    <div class="select-option selected">claude-sonnet-4-20250514</div>
+                    <div class="select-option">claude-opus-4-20250514</div>
+                    <div class="select-option">claude-haiku-4-20250514</div>
+                </div>
+            </div>
+            <div class="showcase" style="gap: 40px;">
+                <div class="showcase-col" style="min-width: 320px;">
+                    <div class="progress-bar"><div class="progress-fill" id="progress1" style="width: 0%;"></div></div>
+                    <button class="control-btn" onclick="animateProgress()">播放进度</button>
+                </div>
+                <div class="timeline">
+                    <div class="timeline-item">
+                        <div class="timeline-dot done"></div>
+                        <div style="font-size: 13px; color: var(--text-secondary);">分析需求</div>
+                        <div style="font-size: 12px; color: var(--text-tertiary);">已完成</div>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-dot done"></div>
+                        <div style="font-size: 13px; color: var(--text-secondary);">设计接口</div>
+                        <div style="font-size: 12px; color: var(--text-tertiary);">3 个端点</div>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-dot pending"></div>
+                        <div style="font-size: 13px; color: var(--text-secondary);">编写文档...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 参数汇总 -->
+    <div class="section" style="margin-top: 56px; padding: 28px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-primary); border-radius: 12px;">
+        <h2 class="section-title">✦ 方案四 · 设计参数</h2>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead><tr style="border-bottom: 1px solid var(--border-secondary);"><th style="padding: 10px 14px; text-align: left; color: var(--text-tertiary);">参数</th><th style="padding: 10px 14px; text-align: left; color: var(--text-tertiary);">值</th><th style="padding: 10px 14px; text-align: left; color: var(--text-tertiary);">用途</th></tr></thead>
+            <tbody>
+                <tr style="border-bottom: 1px solid var(--border-primary);"><td style="padding: 10px 14px; color: var(--elegant-indigo); font-family: monospace;">--ease-elegant</td><td style="padding: 10px 14px; font-family: monospace;">cubic-bezier(0.22, 1, 0.36, 1)</td><td style="padding: 10px 14px;">核心缓动</td></tr>
+                <tr style="border-bottom: 1px solid var(--border-primary);"><td style="padding: 10px 14px; color: var(--elegant-indigo); font-family: monospace;">--ease-smooth</td><td style="padding: 10px 14px; font-family: monospace;">cubic-bezier(0.4, 0, 0.2, 1)</td><td style="padding: 10px 14px;">循环动画</td></tr>
+                <tr style="border-bottom: 1px solid var(--border-primary);"><td style="padding: 10px 14px; color: var(--elegant-indigo); font-family: monospace;">--duration-fast</td><td style="padding: 10px 14px;">250ms</td><td style="padding: 10px 14px;">快速反馈</td></tr>
+                <tr style="border-bottom: 1px solid var(--border-primary);"><td style="padding: 10px 14px; color: var(--elegant-indigo); font-family: monospace;">--duration-normal</td><td style="padding: 10px 14px;">400ms</td><td style="padding: 10px 14px;">通用过渡</td></tr>
+                <tr style="border-bottom: 1px solid var(--border-primary);"><td style="padding: 10px 14px; color: var(--elegant-indigo); font-family: monospace;">--duration-slow</td><td style="padding: 10px 14px;">700ms</td><td style="padding: 10px 14px;">入场、模糊→清晰</td></tr>
+                <tr><td style="padding: 10px 14px; color: var(--elegant-indigo); font-family: monospace;">shadow layers</td><td style="padding: 10px 14px;">4 层阴影体系</td><td style="padding: 10px 14px;">营造空间深度</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="dialog-overlay" id="dialogOverlay" onclick="closeDialog(event)">
+    <div class="dialog-box" onclick="event.stopPropagation()">
+        <div class="dialog-header"><h3 class="dialog-title">确认操作</h3></div>
+        <div class="dialog-body">确定要删除这个 MCP 服务器配置吗？此操作无法撤销，所有关联的工具将不可用。</div>
+        <div class="dialog-footer">
+            <button class="btn btn-secondary" onclick="closeDialog()">取消</button>
+            <button class="btn" style="background: linear-gradient(135deg, var(--elegant-rose), #e11d48); color: #fff;" onclick="closeDialog()">确认删除</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function openDialog() { document.getElementById('dialogOverlay').classList.add('active'); }
+function closeDialog(e) { if (e && e.target !== e.currentTarget) return; document.getElementById('dialogOverlay').classList.remove('active'); }
+function showToast(type) {
+    const container = document.getElementById('toastContainer');
+    const msgs = { info: '模型切换完成', success: '配置已保存', warning: 'Token 用量接近上限', error: '连接失败，请检查网络' };
+    const toast = document.createElement('div'); toast.className = `toast toast-${type}`;
+    toast.innerHTML = `<div class="toast-content"><span class="toast-msg">${msgs[type]}</span><button class="toast-close" onclick="hideToast(this)">✕</button></div>`;
+    container.appendChild(toast);
+    setTimeout(() => { toast.classList.add('hiding'); setTimeout(() => toast.remove(), 400); }, 3500);
+}
+function hideToast(btn) { const toast = btn.closest('.toast'); toast.classList.add('hiding'); setTimeout(() => toast.remove(), 400); }
+let msgIndex = 0;
+const userMsgs = ['设计一个用户管理的 API', '加上分页和排序', '生成 OpenAPI 文档'];
+const aiMsgs = ['正在设计 RESTful 接口方案...', '添加分页参数 ?page=1&size=20...', '生成 OpenAPI 3.0 规范文档...'];
+function addMessage() {
+    const list = document.getElementById('msgList'); const isUser = msgIndex % 2 === 0;
+    const msgs = isUser ? userMsgs : aiMsgs; const msg = document.createElement('div');
+    msg.className = `msg ${isUser ? 'user' : 'assistant'}`;
+    const content = msgs[Math.floor(msgIndex / 2) % msgs.length];
+    const cursor = !isUser ? '<span class="streaming-cursor"></span>' : '';
+    msg.innerHTML = `<div class="msg-bubble">${content}${cursor}</div>`;
+    list.appendChild(msg); msgIndex++;
+}
+function switchTab(el) { document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); el.classList.add('active'); }
+function toggleSelect(id) {
+    const select = document.getElementById(id); const trigger = select.querySelector('.select-trigger');
+    const dropdown = select.querySelector('.select-dropdown');
+    trigger.classList.toggle('open'); dropdown.classList.toggle('open');
+    select.querySelectorAll('.select-option').forEach(opt => {
+        opt.onclick = () => { select.querySelector('.select-trigger span').textContent = opt.textContent;
+            select.querySelectorAll('.select-option').forEach(o => o.classList.remove('selected'));
+            opt.classList.add('selected'); trigger.classList.remove('open'); dropdown.classList.remove('open'); };
+    });
+}
+function animateProgress() { const bar = document.getElementById('progress1'); bar.style.width = '0%'; setTimeout(() => { bar.style.width = '72%'; }, 50); }
+</script>
+</body>
+</html>

@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChatInputBox 完整布局优化 - 方案C 融合玻璃式</title>
+<style>
+  :root {
+    --bg-primary: #1e1e1e;
+    --bg-secondary: #252526;
+    --bg-input: #2d2d2d;
+    --bg-context: #1a1a1e;
+    --chip: #32343a;
+    --border: #464950;
+    --hover: #3a3d44;
+    --input-border: #5a5d66;
+    --text-primary: #e0e0e0;
+    --text-secondary: #999;
+    --button-primary: #0078d4;
+    --accent: #0078d4;
+    --orange: #f5a623;
+    --green: #4cc38a;
+    --error: #d9534f;
+    --purple: #a989ff;
+    --dropdown-bg: #2d2d2d;
+    --dropdown-border: #464950;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    background: #121214;
+    color: var(--text-primary);
+    padding: 48px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 56px;
+    min-height: 100vh;
+  }
+
+  /* ===== Section ===== */
+  .section {
+    width: 100%;
+    max-width: 700px;
+  }
+
+  .section-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+  }
+  .section-badge.before { background: rgba(255,255,255,0.06); color: #888; }
+  .section-badge.after  { background: rgba(0,120,212,0.12); color: var(--accent); }
+
+  /* ============================================================
+     ChatInputBox Container
+     ============================================================ */
+  .chat-box {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.25), 0 1px 4px rgba(0,0,0,0.15);
+  }
+
+  /* ===== Context Bar (Top) ===== */
+  .ctx-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: var(--bg-context);
+    min-height: 32px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+
+  .ctx-tools {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .ctx-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 5px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    padding: 0;
+    transition: all 0.15s ease;
+  }
+
+  .ctx-btn:hover {
+    background: var(--hover);
+    color: var(--text-primary);
+  }
+
+  .ctx-btn svg {
+    width: 15px;
+    height: 15px;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .ctx-divider {
+    width: 1px;
+    height: 14px;
+    background: var(--input-border);
+    margin: 0 3px;
+    opacity: 0.5;
+  }
+
+  /* Token ring indicator */
+  .ctx-token {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-left: 2px;
+  }
+
+  .ctx-token svg {
+    width: 14px;
+    height: 14px;
+    stroke: var(--green);
+    stroke-width: 2;
+    fill: none;
+    stroke-linecap: round;
+    stroke-dasharray: 36;
+    stroke-dashoffset: 8;
+  }
+
+  .ctx-token-label { font-size: 11px; }
+
+  /* Agent chip */
+  .ctx-chip {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    background: rgba(0,120,212,0.12);
+    border: 1px solid rgba(0,120,212,0.3);
+    border-radius: 6px;
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  .ctx-chip svg {
+    width: 12px;
+    height: 12px;
+    stroke: currentColor;
+    stroke-width: 2;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .ctx-chip-x {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    cursor: pointer;
+    margin-left: 2px;
+    transition: background 0.15s;
+  }
+
+  .ctx-chip-x:hover { background: rgba(255,255,255,0.1); }
+
+  .ctx-chip-x svg {
+    width: 10px;
+    height: 10px;
+    stroke: currentColor;
+    stroke-width: 2;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* File chip */
+  .ctx-file {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    background: var(--dropdown-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--text-primary);
+  }
+
+  .ctx-file svg {
+    width: 12px;
+    height: 12px;
+    stroke: var(--text-secondary);
+    stroke-width: 1.8;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .ctx-file-x {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.15s;
+    margin-left: 2px;
+  }
+
+  .ctx-file-x:hover { opacity: 1; }
+  .ctx-file-x svg {
+    width: 10px;
+    height: 10px;
+    stroke: currentColor;
+    stroke-width: 2;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .ctx-right {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: auto;
+  }
+
+  /* ===== Input Area ===== */
+  .input-area {
+    padding: 14px 16px;
+    min-height: 48px;
+    display: flex;
+    align-items: flex-start;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .input-placeholder { color: #666; }
+
+  /* ============================================================
+     BEFORE: 底部工具栏 (当前版本)
+     ============================================================ */
+  .toolbar-before {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 4px;
+    background: rgba(0,0,0,0.1);
+  }
+  .toolbar-before .left { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; }
+  .toolbar-before .right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+  .old-btn {
+    display: flex; align-items: center; gap: 5px;
+    padding: 5px 10px; background: var(--chip); border: 1px solid var(--border);
+    border-radius: 5px; color: var(--text-secondary); font-size: 12px; cursor: pointer;
+  }
+  .old-btn:hover { background: var(--hover); border-color: var(--input-border); color: var(--text-primary); }
+  .old-btn svg { width: 14px; height: 14px; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+  .old-btn.cpad { padding: 5px 8px; gap: 0; }
+
+  .old-send {
+    display: flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; background: var(--button-primary);
+    border: none; border-radius: 6px; color: white; cursor: pointer;
+  }
+  .old-send svg { width: 16px; height: 16px; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+  .old-enh {
+    display: flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; background: rgba(245,166,35,0.12);
+    border: 1px solid rgba(245,166,35,0.25); border-radius: 6px; color: var(--orange); cursor: pointer;
+  }
+  .old-enh svg { width: 16px; height: 16px; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+  .old-sep { width: 1px; height: 16px; background: var(--border); opacity: 0.5; }
+
+  /* ============================================================
+     AFTER: 方案C 融合玻璃式
+     ============================================================ */
+  .toolbar-after {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 6px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+    backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .toolbar-after .left {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 18px;
+    padding: 2px 3px;
+  }
+
+  .toolbar-after .right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* Glass button - 融合容器内 */
+  .g-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 28px;
+    padding: 0 10px;
+    background: transparent;
+    border: none;
+    border-radius: 14px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+    gap: 5px;
+    white-space: nowrap;
+  }
+
+  .g-btn:hover {
+    background: rgba(255,255,255,0.08);
+    color: var(--text-primary);
+  }
+
+  .g-btn:active { transform: scale(0.97); }
+
+  .g-btn svg {
+    width: 14px; height: 14px;
+    stroke: currentColor; stroke-width: 1.8; fill: none;
+    stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0;
+  }
+
+  .g-btn.icon-only { width: 28px; padding: 0; border-radius: 50%; }
+
+  .g-btn.active-mode {
+    background: rgba(0, 120, 212, 0.14);
+    color: var(--accent);
+  }
+  .g-btn.active-mode:hover {
+    background: rgba(0, 120, 212, 0.22);
+  }
+
+  .g-sep {
+    width: 1px; height: 16px;
+    background: rgba(255,255,255,0.06);
+    margin: 0 2px;
+    flex-shrink: 0;
+  }
+
+  /* 右侧增强按钮 */
+  .g-enhance {
+    width: 30px; height: 30px; padding: 0;
+    border-radius: 50%;
+    background: rgba(245,166,35,0.08);
+    border: 1px solid rgba(245,166,35,0.18);
+    color: var(--orange);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  .g-enhance:hover {
+    background: rgba(245,166,35,0.16);
+    border-color: rgba(245,166,35,0.3);
+    transform: scale(1.08);
+  }
+  .g-enhance:active { transform: scale(0.95); }
+
+  .g-enhance svg {
+    width: 15px; height: 15px;
+    stroke: var(--orange); stroke-width: 1.8; fill: none;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+
+  /* 右侧发送按钮 */
+  .g-send {
+    width: 30px; height: 30px; padding: 0;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #0078d4, #005a9e);
+    box-shadow: 0 2px 8px rgba(0,120,212,0.35), inset 0 1px 0 rgba(255,255,255,0.15);
+    border: none;
+    color: white;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  .g-send:hover {
+    transform: scale(1.08);
+    box-shadow: 0 3px 14px rgba(0,120,212,0.5), inset 0 1px 0 rgba(255,255,255,0.2);
+  }
+  .g-send:active { transform: scale(0.95); }
+
+  .g-send svg {
+    width: 14px; height: 14px;
+    stroke: white; stroke-width: 2; fill: none;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+
+  /* Tooltip */
+  .tip { position: relative; }
+  .tip:hover::after {
+    content: attr(data-tip);
+    position: absolute; bottom: calc(100% + 8px); left: 50%;
+    transform: translateX(-50%);
+    background: rgba(30,30,30,0.95);
+    color: var(--text-primary); font-size: 11px;
+    padding: 5px 9px; border-radius: 5px; white-space: nowrap;
+    pointer-events: none; z-index: 100;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .tip:hover::before {
+    content: ''; position: absolute; bottom: calc(100% + 2px);
+    left: 50%; transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: rgba(255,255,255,0.08);
+    z-index: 100;
+  }
+
+  /* ===== Annotation label ===== */
+  .ann {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .ann-blue { background: rgba(0,120,212,0.12); color: var(--accent); }
+  .ann-orange { background: rgba(245,166,35,0.12); color: var(--orange); }
+  .ann-green { background: rgba(76,195,138,0.12); color: var(--green); }
+  .ann-purple { background: rgba(169,137,255,0.12); color: var(--purple); }
+
+  /* ===== Description card ===== */
+  .desc {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 10px;
+    padding: 18px 22px;
+    margin-top: 16px;
+  }
+
+  .desc h3 {
+    font-size: 13px; color: var(--text-primary); margin-bottom: 10px; font-weight: 600;
+  }
+
+  .desc ul { list-style: none; padding: 0; }
+
+  .desc li {
+    font-size: 12px; color: var(--text-secondary); padding: 3px 0; line-height: 1.7;
+  }
+  .desc li::before {
+    content: ''; display: inline-block; width: 5px; height: 5px;
+    border-radius: 50%; margin-right: 8px; vertical-align: middle;
+  }
+  .desc.blue li::before { background: var(--accent); }
+  .desc.green li::before { background: var(--green); }
+
+  .hl { color: var(--accent); font-weight: 500; }
+  .hl-g { color: var(--green); font-weight: 500; }
+  .hl-o { color: var(--orange); font-weight: 500; }
+
+  /* ===== Compare grid ===== */
+  .compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 16px;
+  }
+
+  /* ===== Responsive demo bar ===== */
+  .resp-demo {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  .resp-frame {
+    flex: 1;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+  }
+
+  .resp-frame-label {
+    font-size: 10px; color: #666; text-align: center; padding: 4px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+
+  .resp-input {
+    padding: 10px 14px; font-size: 12px; color: var(--text-secondary);
+    min-height: 36px;
+  }
+
+  /* ===== Animations ===== */
+  @keyframes twinkle {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(0.92); }
+  }
+  .g-enhance:hover svg { animation: twinkle 0.6s ease-in-out; }
+
+  @keyframes glow-pulse {
+    0%, 100% { box-shadow: 0 2px 8px rgba(0,120,212,0.35), inset 0 1px 0 rgba(255,255,255,0.15); }
+    50% { box-shadow: 0 2px 16px rgba(0,120,212,0.5), inset 0 1px 0 rgba(255,255,255,0.2); }
+  }
+  .g-send:hover { animation: glow-pulse 1.5s ease-in-out infinite; }
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     BEFORE: 当前版本
+     ============================================================ -->
+<div class="section">
+  <div class="section-badge before">当前版本 BEFORE</div>
+
+  <div class="chat-box">
+    <!-- Context Bar -->
+    <div class="ctx-bar">
+      <div class="ctx-tools">
+        <button class="ctx-btn" title="Add attachment">
+          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <div class="ctx-token">
+          <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5"/></svg>
+          <span class="ctx-token-label">2k</span>
+        </div>
+        <div class="ctx-divider"></div>
+      </div>
+      <!-- Agent chip -->
+      <div class="ctx-chip">
+        <svg viewBox="0 0 24 24"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01"/></svg>
+        <span>build</span>
+        <span class="ctx-chip-x">
+          <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </span>
+      </div>
+      <!-- File chip -->
+      <div class="ctx-file">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <span>Main.java#12-30</span>
+        <span class="ctx-file-x">
+          <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </span>
+      </div>
+      <div class="ctx-right">
+        <button class="ctx-btn" title="Collapse panel">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M14 9l-2 2 2 2"/></svg>
+        </button>
+        <button class="ctx-btn" title="Rewind">
+          <svg viewBox="0 0 24 24"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 105.64-11.36L1 10"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Input -->
+    <div class="input-area">
+      <span class="input-placeholder">在这里输入消息... (Claude Code GUI)</span>
+    </div>
+
+    <!-- Toolbar Before -->
+    <div class="toolbar-before">
+      <div class="left">
+        <button class="old-btn" title="Config">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        </button>
+        <button class="old-btn cpad" title="Claude">
+          <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        </button>
+        <button class="old-btn" title="Agent Mode">
+          <svg viewBox="0 0 24 24"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01M9 18h6"/></svg>
+          <span>Agent</span>
+          <svg viewBox="0 0 24 24" width="10" height="10"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <button class="old-btn" title="Sonnet">
+          <span>Sonnet</span>
+          <svg viewBox="0 0 24 24" width="10" height="10"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <button class="old-btn" title="Reasoning">
+          <span>High</span>
+          <svg viewBox="0 0 24 24" width="10" height="10"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+      </div>
+      <div class="right">
+        <div class="old-sep"></div>
+        <button class="old-enh" title="Enhance">
+          <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        </button>
+        <button class="old-send" title="Send">
+          <svg viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="desc">
+    <h3>当前问题</h3>
+    <ul>
+      <li>所有底部按钮都是 <span class="hl">实心背景 + 边框</span>，视觉层次扁平</li>
+      <li>Config / Provider / Mode / Model / Reasoning 看起来 <span class="hl">一模一样</span>，无法快速区分功能区</li>
+      <li>发送按钮 32x32 <span class="hl">方形圆角</span>，与增强按钮视觉权重相同，缺少主次</li>
+      <li>ContextBar 按钮风格与底部工具栏 <span class="hl">不统一</span></li>
+    </ul>
+  </div>
+</div>
+
+
+<!-- ============================================================
+     AFTER: 方案C 融合玻璃式 (完整布局)
+     ============================================================ -->
+<div class="section">
+  <div class="section-badge after">优化方案 AFTER · 方案C 融合玻璃式</div>
+
+  <div class="chat-box">
+    <!-- Context Bar - 统一风格 -->
+    <div class="ctx-bar">
+      <div class="ctx-tools">
+        <button class="ctx-btn tip" data-tip="Add attachment">
+          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <div class="ctx-token">
+          <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5"/></svg>
+          <span class="ctx-token-label">2k</span>
+        </div>
+        <div class="ctx-divider"></div>
+      </div>
+      <div class="ctx-chip">
+        <svg viewBox="0 0 24 24"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01"/></svg>
+        <span>build</span>
+        <span class="ctx-chip-x">
+          <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </span>
+      </div>
+      <div class="ctx-file">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <span>Main.java#12-30</span>
+        <span class="ctx-file-x">
+          <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </span>
+      </div>
+      <div class="ctx-right">
+        <button class="ctx-btn tip" data-tip="Collapse panel">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M14 9l-2 2 2 2"/></svg>
+        </button>
+        <button class="ctx-btn tip" data-tip="Rewind">
+          <svg viewBox="0 0 24 24"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 105.64-11.36L1 10"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Input -->
+    <div class="input-area">
+      <span class="input-placeholder">在这里输入消息... (Claude Code GUI)</span>
+    </div>
+
+    <!-- Toolbar After - 融合玻璃式 -->
+    <div class="toolbar-after">
+      <div class="left">
+        <!-- Config -->
+        <button class="g-btn icon-only tip" data-tip="Settings">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        </button>
+        <!-- Provider -->
+        <button class="g-btn icon-only tip" data-tip="Provider: Claude">
+          <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        </button>
+        <div class="g-sep"></div>
+        <!-- Mode: Chat / Task / Agent (active) / Auto -->
+        <button class="g-btn tip" data-tip="Chat">
+          <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
+        </button>
+        <button class="g-btn tip" data-tip="Task">
+          <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+        </button>
+        <button class="g-btn active-mode tip" data-tip="Agent">
+          <svg viewBox="0 0 24 24"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01M9 18h6"/></svg>
+        </button>
+        <button class="g-btn tip" data-tip="Auto">
+          <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        </button>
+        <div class="g-sep"></div>
+        <!-- Model -->
+        <button class="g-btn tip" data-tip="Model">
+          <span>Sonnet</span>
+          <svg viewBox="0 0 24 24" width="10" height="10"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <!-- Reasoning -->
+        <button class="g-btn tip" data-tip="Reasoning">
+          <span>High</span>
+          <svg viewBox="0 0 24 24" width="10" height="10"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+      </div>
+      <div class="right">
+        <button class="g-enhance tip" data-tip="Enhance (Ctrl+Shift+E)">
+          <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        </button>
+        <button class="g-send tip" data-tip="Send (Enter)">
+          <svg viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="desc blue">
+    <h3>方案C 设计详解</h3>
+    <ul>
+      <li><span class="hl">底部左侧工具栏整体容器化</span>：所有功能按钮包裹在一个 <code style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px;font-size:11px;">background: rgba(0,0,0,0.2); border-radius: 18px</code> 的深色圆角胶囊容器中</li>
+      <li><span class="hl">容器内去边框 + 透明背景</span>：按钮 hover 时才显示 <code style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px;font-size:11px;">rgba(255,255,255,0.08)</code> 半透明反馈</li>
+      <li><span class="hl">细线分隔</span>：Config | Provider 和 Mode | Model 之间用 1px <code style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px;font-size:11px;">rgba(255,255,255,0.06)</code> 分隔线划分功能区</li>
+      <li><span class="hl-g">模式图标组</span>：Chat / Task / Agent / Auto 四个图标平铺在容器内，当前选中的 Agent 以 <code style="background:rgba(0,120,212,0.1);padding:1px 5px;border-radius:4px;font-size:11px;">蓝色半透明背景</code> 高亮</li>
+      <li><span class="hl-o">增强按钮</span>：30x30 圆形，橙色主题，hover 时缩放 + 闪烁动画</li>
+      <li><span class="hl">发送按钮</span>：30x30 圆形渐变 + 内阴影 + 外发光阴影，视觉焦点最突出</li>
+      <li><span class="hl-g">Tooltip</span>：hover 时显示功能名称，替代文字标签，保持紧凑</li>
+    </ul>
+  </div>
+</div>
+
+
+<!-- ============================================================
+     布局对比: 宽窄适配
+     ============================================================ -->
+<div class="section">
+  <div class="section-badge after">响应式适配 RESPONSIVE</div>
+
+  <div class="resp-demo">
+    <!-- 宽屏 -->
+    <div class="resp-frame" style="width: 100%;">
+      <div class="resp-frame-label">宽屏 (完整显示)</div>
+      <div class="input-area" style="padding: 8px 12px; min-height: 32px; font-size: 11px;">输入消息...</div>
+      <div class="toolbar-after">
+        <div class="left">
+          <button class="g-btn icon-only" style="height:26px;"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg></button>
+          <button class="g-btn icon-only" style="height:26px;"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></button>
+          <div class="g-sep"></div>
+          <button class="g-btn" style="height:26px;font-size:11px;"><svg viewBox="0 0 24 24" style="width:13px;height:13px;"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg></button>
+          <button class="g-btn" style="height:26px;font-size:11px;"><svg viewBox="0 0 24 24" style="width:13px;height:13px;"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></button>
+          <button class="g-btn active-mode" style="height:26px;font-size:11px;"><svg viewBox="0 0 24 24" style="width:13px;height:13px;"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01M9 18h6"/></svg></button>
+          <button class="g-btn" style="height:26px;font-size:11px;"><svg viewBox="0 0 24 24" style="width:13px;height:13px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></button>
+          <div class="g-sep"></div>
+          <button class="g-btn" style="height:26px;font-size:11px;"><span>Sonnet</span><svg viewBox="0 0 24 24" width="9" height="9"><path d="M6 9l6 6 6-6"/></svg></button>
+          <button class="g-btn" style="height:26px;font-size:11px;"><span>High</span><svg viewBox="0 0 24 24" width="9" height="9"><path d="M6 9l6 6 6-6"/></svg></button>
+        </div>
+        <div class="right" style="gap:4px;">
+          <button class="g-enhance" style="width:26px;height:26px;"><svg viewBox="0 0 24 24" style="width:13px;height:13px;"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></button>
+          <button class="g-send" style="width:26px;height:26px;"><svg viewBox="0 0 24 24" style="width:12px;height:12px;"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="resp-demo" style="margin-top: 12px;">
+    <!-- 窄屏 -->
+    <div class="resp-frame" style="max-width: 380px;">
+      <div class="resp-frame-label">窄屏 (文字隐藏，仅图标)</div>
+      <div class="input-area" style="padding: 8px 12px; min-height: 32px; font-size: 11px;">输入消息...</div>
+      <div class="toolbar-after" style="padding: 4px 5px;">
+        <div class="left" style="padding: 1px 2px;">
+          <button class="g-btn icon-only" style="height:24px;width:24px;"><svg viewBox="0 0 24 24" style="width:12px;height:12px;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg></button>
+          <button class="g-btn icon-only" style="height:24px;width:24px;"><svg viewBox="0 0 24 24" style="width:12px;height:12px;"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></button>
+          <div class="g-sep" style="height:12px;"></div>
+          <button class="g-btn icon-only" style="height:24px;width:24px;"><svg viewBox="0 0 24 24" style="width:12px;height:12px;"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg></button>
+          <button class="g-btn icon-only" style="height:24px;width:24px;"><svg viewBox="0 0 24 24" style="width:12px;height:12px;"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></button>
+          <button class="g-btn icon-only active-mode" style="height:24px;width:24px;"><svg viewBox="0 0 24 24" style="width:12px;height:12px;"><path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/><path d="M9 14h.01M15 14h.01M9 18h6"/></svg></button>
+          <button class="g-btn icon-only" style="height:24px;width:24px;"><svg viewBox="0 0 24 24" style="width:12px;height:12px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></button>
+          <div class="g-sep" style="height:12px;"></div>
+          <button class="g-btn icon-only" style="height:24px;width:24px;"><svg viewBox="0 0 24 24" style="width:12px;height:12px;"><path d="M6 9l6 6 6-6"/></svg></button>
+          <button class="g-btn icon-only" style="height:24px;width:24px;"><svg viewBox="0 0 24 24" style="width:12px;height:12px;"><path d="M6 9l6 6 6-6"/></svg></button>
+        </div>
+        <div class="right" style="gap:4px;">
+          <button class="g-enhance" style="width:24px;height:24px;border:none;"><svg viewBox="0 0 24 24" style="width:12px;height:12px;"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></button>
+          <button class="g-send" style="width:24px;height:24px;"><svg viewBox="0 0 24 24" style="width:11px;height:11px;"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="desc green" style="margin-top: 16px;">
+    <h3>响应式策略</h3>
+    <ul>
+      <li><span class="hl-g">宽屏 (>520px)</span>：显示图标 + 文字标签（Sonnet、High），完整功能区</li>
+      <li><span class="hl-g">窄屏 (<380px)</span>：自动切换为纯图标模式，文字隐藏，所有按钮退化为 icon-only</li>
+      <li><span class="hl-g">容器化优势</span>：左侧整体胶囊容器在缩小时自动压缩内部间距，不会导致布局断裂</li>
+      <li><span class="hl-g">Mode 组平滑退化</span>：四模式图标从带间距变为紧凑排列，无需额外 media query</li>
+    </ul>
+  </div>
+</div>
+
+
+<!-- ============================================================
+     设计规范
+     ============================================================ -->
+<div class="section">
+  <div class="section-badge after">设计规范 DESIGN TOKENS</div>
+
+  <div class="compare-grid">
+    <div class="desc" style="margin-top:0;">
+      <h3>左侧胶囊容器</h3>
+      <ul>
+        <li>background: <code style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px;font-size:10px;">rgba(0,0,0,0.2)</code></li>
+        <li>border-radius: <code style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px;font-size:10px;">18px</code></li>
+        <li>padding: <code style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px;font-size:10px;">2px 3px</code></li>
+        <li>内按钮 hover: <code style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px;font-size:10px;">rgba(255,255,255,0.08)</code></li>
+        <li>模式高亮: <code style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px;font-size:10px;">rgba(0,120,212,0.14)</code></li>
+      </ul>
+    </div>
+    <div class="desc" style="margin-top:0;">
+      <h3>右侧操作按钮</h3>
+      <ul>
+        <li>发送按钮: 30x30, 圆形, <code style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px;font-size:10px;">linear-gradient(#0078d4, #005a9e)</code></li>
+        <li>增强按钮: 30x30, 圆形, <code style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px;font-size:10px;">rgba(245,166,35,0.08)</code></li>
+        <li>外发光: <code style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px;font-size:10px;">box-shadow: 0 2px 8px rgba(0,120,212,0.35)</code></li>
+        <li>hover 缩放: <code style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px;font-size:10px;">transform: scale(1.08)</code></li>
+        <li>动画曲线: <code style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px;font-size:10px;">cubic-bezier(0.4, 0, 0.2, 1)</code></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

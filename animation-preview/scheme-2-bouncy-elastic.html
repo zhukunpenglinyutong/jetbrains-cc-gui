@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方案二：活力弹性 - CC GUI 动效预览</title>
+<style>
+/* ══════════════════════════════════════════════════════════════
+   方案二：活力弹性 (Bouncy Elastic)
+   核心理念：弹性、活力、有反馈感
+   缓动曲线：cubic-bezier(0.34, 1.56, 0.64, 1) — 过冲回弹
+   时长范围：200ms ~ 500ms
+   ══════════════════════════════════════════════════════════════ */
+
+:root {
+    --bg-primary: #1e1e1e;
+    --bg-secondary: #252526;
+    --bg-tertiary: #2b2d31;
+    --bg-elevated: #2d2d2d;
+    --bg-hover: #35373c;
+    --text-primary: #cccccc;
+    --text-secondary: #e0e0e0;
+    --text-tertiary: #858585;
+    --border-primary: #333;
+    --border-secondary: #3e3e42;
+    --accent: #007fd4;
+    --accent-hover: #026ec1;
+    --success: #4caf50;
+    --warning: #ff9800;
+    --error: #f44336;
+    --violet: #a989ff;
+    --amber: #e7b85a;
+
+    /* 动效参数 */
+    --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    --ease-overshoot: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    --duration-snappy: 200ms;
+    --duration-normal: 350ms;
+    --duration-bouncy: 500ms;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg-primary); color: var(--text-primary); line-height: 1.5;
+}
+
+.page { max-width: 1200px; margin: 0 auto; padding: 40px 24px; }
+.page-title { font-size: 28px; font-weight: 700; color: #fff; margin-bottom: 8px; letter-spacing: -0.5px; }
+.page-subtitle { font-size: 14px; color: var(--text-tertiary); margin-bottom: 40px; max-width: 600px; line-height: 1.6; }
+.scheme-badge {
+    display: inline-block; padding: 4px 12px; border-radius: 4px;
+    background: rgba(231, 184, 90, 0.15); border: 1px solid rgba(231, 184, 90, 0.3);
+    color: var(--amber); font-size: 12px; font-weight: 500; margin-bottom: 16px;
+}
+
+.section { margin-bottom: 48px; }
+.section-title { font-size: 16px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+.section-desc { font-size: 13px; color: var(--text-tertiary); margin-bottom: 20px; }
+.showcase { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.showcase-col { display: flex; flex-direction: column; gap: 12px; }
+
+/* ══════════════════════════════════════════════════════════════
+   1. 按钮动效 — 弹性回弹
+   ══════════════════════════════════════════════════════════════ */
+.btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border: none; border-radius: 6px;
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    transition: all var(--duration-snappy) var(--ease-bounce);
+    position: relative;
+}
+
+/* 弹性按压效果 */
+.btn:active {
+    transform: scale(0.92);
+    transition-duration: 100ms;
+}
+.btn:hover {
+    transform: scale(1.04);
+}
+
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover {
+    background: var(--accent-hover);
+    box-shadow: 0 4px 16px rgba(0, 127, 212, 0.35);
+}
+.btn-primary:active { background: #005fa0; box-shadow: none; }
+
+.btn-secondary {
+    background: transparent; color: var(--text-primary);
+    border: 1px solid var(--border-secondary);
+}
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.btn-success {
+    background: rgba(76, 175, 80, 0.15); color: var(--success);
+    border: 1px solid rgba(76, 175, 80, 0.4);
+}
+.btn-success:hover {
+    background: rgba(76, 175, 80, 0.25);
+    border-color: rgba(76, 175, 80, 0.6);
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.25);
+}
+
+.btn-danger {
+    background: rgba(244, 67, 54, 0.12); color: var(--error);
+    border: 1px solid rgba(244, 67, 54, 0.35);
+}
+.btn-danger:hover {
+    background: rgba(244, 67, 54, 0.22);
+    box-shadow: 0 4px 12px rgba(244, 67, 54, 0.25);
+}
+
+.btn-small { padding: 5px 12px; font-size: 12px; }
+
+/* 带涟漪的按钮 */
+.btn-ripple {
+    overflow: hidden; position: relative;
+}
+.btn-ripple .ripple-circle {
+    position: absolute; border-radius: 50%; background: rgba(255,255,255,0.3);
+    transform: scale(0); animation: ripple-expand 600ms ease-out forwards;
+    pointer-events: none;
+}
+@keyframes ripple-expand {
+    to { transform: scale(2.5); opacity: 0; }
+}
+
+/* 加载动画 — 弹跳点 */
+.btn-loading-dots {
+    display: flex; gap: 4px; align-items: center;
+}
+.btn-loading-dots span {
+    display: block; width: 5px; height: 5px; border-radius: 50%;
+    background: currentColor; animation: dot-bounce 0.6s var(--ease-bounce) infinite;
+}
+.btn-loading-dots span:nth-child(2) { animation-delay: 0.1s; }
+.btn-loading-dots span:nth-child(3) { animation-delay: 0.2s; }
+
+@keyframes dot-bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   2. 卡片动效 — 弹性缩放
+   ══════════════════════════════════════════════════════════════ */
+.card {
+    background: var(--bg-secondary); border: 1px solid var(--border-secondary);
+    border-radius: 8px; padding: 16px; cursor: pointer;
+    transition: all var(--duration-normal) var(--ease-spring);
+    min-width: 260px;
+}
+.card:hover {
+    transform: scale(1.03) translateY(-2px);
+    border-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.card:active {
+    transform: scale(0.98);
+    transition-duration: 150ms;
+}
+
+.card-header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+}
+.card-icon {
+    width: 32px; height: 32px; border-radius: 8px; display: flex;
+    align-items: center; justify-content: center; font-size: 16px;
+    background: rgba(0, 127, 212, 0.15); color: var(--accent);
+    transition: transform var(--duration-normal) var(--ease-bounce);
+}
+.card:hover .card-icon { transform: rotate(-8deg) scale(1.1); }
+.card-title { font-size: 14px; font-weight: 600; color: var(--text-secondary); }
+.card-desc { font-size: 13px; color: var(--text-tertiary); line-height: 1.5; }
+.card-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; margin-top: 10px; }
+.card-status-dot { width: 6px; height: 6px; border-radius: 50%; }
+.card-status-dot.running { background: var(--success); }
+.card-status-dot.stopped { background: var(--text-tertiary); }
+
+/* MCP 卡片 — 弹性边框 */
+.card-mcp {
+    position: relative;
+    border: 2px solid var(--border-secondary);
+}
+.card-mcp:hover {
+    border-color: var(--accent);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   3. 对话框动效 — 弹性弹入
+   ══════════════════════════════════════════════════════════════ */
+.dialog-overlay {
+    position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000; opacity: 0; pointer-events: none;
+    transition: opacity var(--duration-snappy) ease;
+    backdrop-filter: blur(3px);
+}
+.dialog-overlay.active { opacity: 1; pointer-events: auto; }
+
+.dialog-box {
+    background: var(--bg-secondary); border: 1px solid var(--border-secondary);
+    border-radius: 12px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+    min-width: 420px;
+    transform: scale(0.85) translateY(20px);
+    opacity: 0;
+    transition: all var(--duration-bouncy) var(--ease-overshoot);
+}
+.dialog-overlay.active .dialog-box {
+    transform: scale(1) translateY(0); opacity: 1;
+}
+
+.dialog-header {
+    padding: 16px 20px; border-bottom: 1px solid var(--border-secondary);
+}
+.dialog-title { font-size: 15px; font-weight: 600; color: var(--text-secondary); }
+.dialog-body { padding: 20px; font-size: 13px; color: var(--text-primary); line-height: 1.6; }
+.dialog-footer {
+    padding: 12px 20px; border-top: 1px solid var(--border-secondary);
+    display: flex; justify-content: flex-end; gap: 8px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   4. Toast — 弹性滑入
+   ══════════════════════════════════════════════════════════════ */
+.toast-container-demo {
+    position: relative; height: 300px; background: rgba(0,0,0,0.2);
+    border-radius: 8px; overflow: hidden; min-width: 400px;
+    display: flex; align-items: flex-start; justify-content: flex-end;
+    padding: 16px;
+}
+.toast {
+    background: var(--bg-elevated); border: 1px solid var(--border-secondary);
+    border-radius: 8px; padding: 12px 16px; min-width: 280px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+    animation: toast-bounce-in var(--duration-bouncy) var(--ease-overshoot) both;
+}
+.toast.hiding {
+    animation: toast-bounce-out var(--duration-snappy) ease-in both;
+}
+@keyframes toast-bounce-in {
+    0% { opacity: 0; transform: translateX(40px) scale(0.9); }
+    70% { transform: translateX(-4px) scale(1.02); }
+    100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes toast-bounce-out {
+    from { opacity: 1; transform: translateX(0) scale(1); }
+    to { opacity: 0; transform: translateX(60px) scale(0.8); }
+}
+
+.toast-info { border-left: 3px solid var(--accent); }
+.toast-success { border-left: 3px solid var(--success); }
+.toast-warning { border-left: 3px solid var(--warning); }
+.toast-error { border-left: 3px solid var(--error); }
+.toast-content { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.toast-msg { font-size: 13px; color: var(--text-secondary); flex: 1; }
+.toast-close {
+    background: none; border: none; color: var(--text-tertiary);
+    cursor: pointer; padding: 4px; font-size: 14px;
+    transition: color 150ms, transform 150ms;
+}
+.toast-close:hover { color: var(--text-secondary); transform: scale(1.2); }
+
+/* ══════════════════════════════════════════════════════════════
+   5. 消息动效 — 弹性入场
+   ══════════════════════════════════════════════════════════════ */
+.msg-list { display: flex; flex-direction: column; gap: 2px; min-width: 500px; }
+.msg { padding: 8px 20px; animation: msg-bounce-in var(--duration-bouncy) var(--ease-spring) both; }
+.msg.user { display: flex; justify-content: flex-end; }
+.msg-bubble {
+    max-width: 80%; padding: 10px 14px; border-radius: 14px;
+    font-size: 13px; line-height: 1.6;
+}
+.msg.user .msg-bubble { background: #005fb8; color: #fff; border-bottom-right-radius: 4px; }
+.msg.assistant .msg-bubble { background: transparent; color: var(--text-primary); }
+
+@keyframes msg-bounce-in {
+    0% { opacity: 0; transform: translateY(16px) scale(0.95); }
+    60% { transform: translateY(-3px) scale(1.01); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.streaming-cursor {
+    display: inline-block; width: 2px; height: 16px;
+    background: var(--accent); margin-left: 2px; vertical-align: text-bottom;
+    animation: cursor-bounce 1.2s var(--ease-bounce) infinite;
+}
+@keyframes cursor-bounce {
+    0%, 100% { opacity: 1; height: 16px; }
+    50% { opacity: 0.3; height: 12px; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   6. 生成等待动效 — 跳动波形
+   ══════════════════════════════════════════════════════════════ */
+.gen-strip {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 8px 16px;
+    background: rgba(0, 127, 212, 0.08);
+    border: 1px solid rgba(0, 127, 212, 0.2);
+    border-radius: 10px; font-size: 13px; color: var(--accent);
+    animation: gen-bounce-in var(--duration-bouncy) var(--ease-overshoot) both;
+}
+@keyframes gen-bounce-in {
+    0% { opacity: 0; transform: translateY(12px) scale(0.9); }
+    60% { transform: translateY(-3px) scale(1.03); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.wave { display: flex; gap: 3px; align-items: center; height: 20px; }
+.wave span {
+    display: block; width: 4px; border-radius: 2px; background: currentColor;
+    animation: wave-bounce 1s var(--ease-bounce) infinite;
+}
+.wave span:nth-child(1) { height: 6px; animation-delay: 0s; }
+.wave span:nth-child(2) { height: 12px; animation-delay: 0.08s; }
+.wave span:nth-child(3) { height: 8px; animation-delay: 0.16s; }
+.wave span:nth-child(4) { height: 14px; animation-delay: 0.24s; }
+.wave span:nth-child(5) { height: 10px; animation-delay: 0.32s; }
+
+@keyframes wave-bounce {
+    0%, 100% { transform: scaleY(0.3); }
+    50% { transform: scaleY(1.4); }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   7. 输入框动效 — 弹性聚焦
+   ══════════════════════════════════════════════════════════════ */
+.input-box {
+    background: var(--bg-secondary); border: 2px solid var(--border-secondary);
+    border-radius: 10px; overflow: hidden; min-width: 500px;
+    transition: border-color var(--duration-snappy) var(--ease-bounce),
+                box-shadow var(--duration-normal) var(--ease-bounce);
+}
+.input-box:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(0, 127, 212, 0.2), 0 4px 16px rgba(0, 127, 212, 0.1);
+}
+.input-area {
+    display: flex; align-items: flex-end; gap: 8px; padding: 10px 14px;
+}
+.input-textarea {
+    flex: 1; background: none; border: none; outline: none;
+    color: var(--text-primary); font-size: 13px; resize: none;
+    font-family: inherit; line-height: 1.5; min-height: 22px;
+}
+.input-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 14px; border-top: 1px solid transparent;
+    transition: border-color var(--duration-snappy);
+}
+.input-box:focus-within .input-toolbar { border-top-color: var(--border-primary); }
+
+/* ══════════════════════════════════════════════════════════════
+   8. 选项卡 — 弹性切换
+   ══════════════════════════════════════════════════════════════ */
+.tabs {
+    display: flex; gap: 0; background: var(--bg-secondary);
+    border-radius: 8px; padding: 3px; border: 1px solid var(--border-primary);
+    min-width: 400px;
+}
+.tab {
+    flex: 1; padding: 7px 16px; border: none; background: none;
+    color: var(--text-tertiary); font-size: 13px; font-weight: 500;
+    cursor: pointer; border-radius: 6px;
+    transition: all var(--duration-snappy) var(--ease-bounce);
+}
+.tab:hover { color: var(--text-primary); }
+.tab.active {
+    background: var(--bg-hover); color: var(--text-secondary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    transform: scale(1.02);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   9. 开关 — 弹性滑动
+   ══════════════════════════════════════════════════════════════ */
+.toggle {
+    position: relative; width: 40px; height: 22px; border-radius: 11px;
+    background: var(--border-secondary); cursor: pointer;
+    transition: background var(--duration-snappy) var(--ease-bounce);
+}
+.toggle.on { background: var(--accent); }
+.toggle-knob {
+    position: absolute; top: 3px; left: 3px; width: 16px; height: 16px;
+    border-radius: 50%; background: #fff;
+    transition: transform var(--duration-normal) var(--ease-overshoot);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+.toggle.on .toggle-knob { transform: translateX(18px); }
+
+/* ══════════════════════════════════════════════════════════════
+   10. 下拉选择器 — 弹性展开
+   ══════════════════════════════════════════════════════════════ */
+.select { position: relative; min-width: 180px; }
+.select-trigger {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 7px 12px; background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary); border-radius: 6px;
+    color: var(--text-primary); font-size: 13px; cursor: pointer;
+    transition: all var(--duration-snappy) var(--ease-bounce);
+}
+.select-trigger:hover { border-color: var(--text-tertiary); transform: scale(1.01); }
+.select-trigger.open { border-color: var(--accent); }
+.select-arrow { transition: transform var(--duration-normal) var(--ease-overshoot); font-size: 12px; }
+.select-trigger.open .select-arrow { transform: rotate(180deg); }
+
+.select-dropdown {
+    position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+    background: var(--bg-elevated); border: 1px solid var(--border-secondary);
+    border-radius: 8px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+    z-index: 100; overflow: hidden;
+    transform: scale(0.95) translateY(-8px); opacity: 0; pointer-events: none;
+    transform-origin: top center;
+    transition: all var(--duration-normal) var(--ease-overshoot);
+}
+.select-dropdown.open { transform: scale(1) translateY(0); opacity: 1; pointer-events: auto; }
+.select-option {
+    padding: 8px 12px; font-size: 13px; cursor: pointer;
+    transition: all 150ms;
+}
+.select-option:hover { background: var(--bg-hover); transform: translateX(4px); }
+.select-option.selected { color: var(--accent); }
+
+/* ══════════════════════════════════════════════════════════════
+   11. 进度条 — 弹性填充
+   ══════════════════════════════════════════════════════════════ */
+.progress-bar {
+    height: 6px; background: var(--border-primary); border-radius: 3px;
+    overflow: hidden; min-width: 200px;
+}
+.progress-fill {
+    height: 100%; background: linear-gradient(90deg, var(--accent), #4a90e2);
+    border-radius: 3px;
+    transition: width 1.2s var(--ease-bounce);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   12. 时间线 — 跳动脉冲
+   ══════════════════════════════════════════════════════════════ */
+.timeline {
+    display: flex; flex-direction: column; gap: 0; padding-left: 20px;
+    border-left: 2px solid var(--border-primary);
+}
+.timeline-item { position: relative; padding: 8px 0 8px 16px; }
+.timeline-dot {
+    position: absolute; left: -26px; top: 11px;
+    width: 9px; height: 9px; border-radius: 50%; background: var(--text-tertiary);
+    transition: all var(--duration-normal) var(--ease-bounce);
+}
+.timeline-dot.pending {
+    background: var(--warning);
+    animation: dot-jump 1.5s var(--ease-bounce) infinite;
+}
+.timeline-dot.done { background: var(--success); }
+.timeline-dot.err { background: var(--error); }
+
+@keyframes dot-jump {
+    0%, 100% { transform: translateY(0) scale(1); }
+    30% { transform: translateY(-4px) scale(1.2); }
+    50% { transform: translateY(0) scale(0.9); }
+    70% { transform: translateY(-2px) scale(1.05); }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   额外：弹性抖动效果（用于错误提示）
+   ══════════════════════════════════════════════════════════════ */
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-3px); }
+    20%, 40%, 60%, 80% { transform: translateX(3px); }
+}
+.shake { animation: shake 0.5s ease; }
+
+/* ══════════════════════════════════════════════════════════════
+   额外：打勾弹性动画
+   ══════════════════════════════════════════════════════════════ */
+@keyframes check-bounce {
+    0% { transform: scale(0); }
+    50% { transform: scale(1.3); }
+    70% { transform: scale(0.9); }
+    100% { transform: scale(1); }
+}
+
+/* 标注框 */
+.annotation {
+    display: inline-block; margin-top: 8px; padding: 6px 10px;
+    background: rgba(231, 184, 90, 0.08); border-left: 2px solid var(--amber);
+    border-radius: 0 4px 4px 0; font-size: 12px; color: var(--amber);
+    max-width: 500px; line-height: 1.5;
+}
+
+.control-btn {
+    padding: 8px 16px; background: var(--accent); color: #fff;
+    border: none; border-radius: 6px; font-size: 13px; cursor: pointer;
+    margin-right: 8px; margin-bottom: 8px;
+    transition: all var(--duration-snappy) var(--ease-bounce);
+}
+.control-btn:hover { transform: scale(1.05); }
+.control-btn:active { transform: scale(0.95); }
+</style>
+</head>
+<body>
+<div class="page">
+    <div class="scheme-badge">方案二 · Bouncy Elastic</div>
+    <h1 class="page-title">活力弹性</h1>
+    <p class="page-subtitle">
+        所有动效以弹性、活力为核心，使用过冲回弹曲线让 UI 元素"弹"进视野。
+        每次交互都有明确的物理反馈，适合追求趣味性和操作手感的场景。
+    </p>
+
+    <!-- 1. 按钮动效 -->
+    <div class="section">
+        <h2 class="section-title">🔘 按钮动效</h2>
+        <p class="section-desc">hover 时 scale(1.04) 放大，active 时 scale(0.92) 缩小 — 明显的弹性按压感。支持涟漪水波效果。</p>
+        <div class="showcase">
+            <div class="showcase-col">
+                <button class="btn btn-primary btn-ripple" onclick="addRipple(event)">主要按钮</button>
+                <button class="btn btn-secondary btn-ripple" onclick="addRipple(event)">次要按钮</button>
+                <button class="btn btn-success btn-ripple" onclick="addRipple(event)">✓ 成功操作</button>
+                <button class="btn btn-danger btn-ripple" onclick="addRipple(event)">✕ 危险操作</button>
+                <button class="btn btn-primary btn-small">小号按钮</button>
+                <button class="btn btn-primary" style="pointer-events: auto;">
+                    <div class="btn-loading-dots"><span></span><span></span><span></span></div>
+                    处理中...
+                </button>
+            </div>
+            <div class="annotation">
+                <strong>设计要点：</strong><br>
+                • 放大/缩小使用弹性曲线，视觉上像"橡皮"<br>
+                • 涟漪效果使用真实的圆形 DOM 扩散<br>
+                • 加载态使用 3 个弹跳圆点，有明确的节奏感<br>
+                • 按压时过渡缩短到 100ms，释放后恢复
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. 卡片动效 -->
+    <div class="section">
+        <h2 class="section-title">🃏 卡片动效</h2>
+        <p class="section-desc">hover 时整体 scale(1.03) + 上浮 2px，图标旋转 -8° + scale(1.1)，active 时回缩 scale(0.98)。</p>
+        <div class="showcase">
+            <div class="card card-mcp" onclick="addRipple(event)">
+                <div class="card-header">
+                    <div class="card-icon">⚡</div>
+                    <div>
+                        <div class="card-title">MCP Server</div>
+                        <div class="card-status"><span class="card-status-dot running"></span>运行中</div>
+                    </div>
+                </div>
+                <div class="card-desc">文件系统工具服务器，提供读写文件和搜索能力</div>
+            </div>
+            <div class="card card-mcp" onclick="addRipple(event)">
+                <div class="card-header">
+                    <div class="card-icon" style="background: rgba(169,137,255,0.15); color: var(--violet);">🔍</div>
+                    <div>
+                        <div class="card-title">Web Search</div>
+                        <div class="card-status"><span class="card-status-dot running"></span>运行中</div>
+                    </div>
+                </div>
+                <div class="card-desc">网络搜索工具，支持实时查询和信息聚合</div>
+            </div>
+            <div class="annotation">
+                <strong>设计要点：</strong><br>
+                • 整体缩放 + 图标微旋转，营造"活泼"感<br>
+                • 边框从 2px 直接变色，弹性过渡<br>
+                • 按压时快速缩到 0.98，像按在软垫上
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. 对话框动效 -->
+    <div class="section">
+        <h2 class="section-title">💬 对话框动效</h2>
+        <p class="section-desc">从 scale(0.85) + translateY(20px) 弹性放大到正常大小，有过冲效果。500ms。</p>
+        <div class="showcase">
+            <button class="btn btn-primary" onclick="openDialog()">打开对话框</button>
+            <div class="annotation">点击查看弹性对话框效果</div>
+        </div>
+    </div>
+
+    <!-- 4. Toast 动效 -->
+    <div class="section">
+        <h2 class="section-title">🔔 Toast 通知动效</h2>
+        <p class="section-desc">从右侧弹性滑入，有明显的过冲回弹（translateX(40px) → -4px → 0）。</p>
+        <div class="showcase">
+            <button class="control-btn" onclick="showToast('info')">信息通知</button>
+            <button class="control-btn" onclick="showToast('success')">成功通知</button>
+            <button class="control-btn" onclick="showToast('warning')">警告通知</button>
+            <button class="control-btn" onclick="showToast('error')">错误通知</button>
+        </div>
+        <div class="toast-container-demo" id="toastContainer"></div>
+    </div>
+
+    <!-- 5. 消息列表 -->
+    <div class="section">
+        <h2 class="section-title">📝 消息列表动效</h2>
+        <p class="section-desc">新消息从下方弹入，有明显的过冲位移（-3px → 0）。</p>
+        <div class="showcase">
+            <div class="msg-list" id="msgList">
+                <div class="msg user"><div class="msg-bubble">帮我优化这段代码的查询性能</div></div>
+                <div class="msg assistant"><div class="msg-bubble">我来分析一下当前的查询逻辑...<span class="streaming-cursor"></span></div></div>
+            </div>
+            <button class="control-btn" onclick="addMessage()">添加消息</button>
+        </div>
+    </div>
+
+    <!-- 6. 生成等待 -->
+    <div class="section">
+        <h2 class="section-title">⏳ 生成等待动效</h2>
+        <p class="section-desc">波形条有更大幅度的弹跳（scaleY 0.3→1.4），整体弹入有过冲。</p>
+        <div class="showcase">
+            <div class="gen-strip">
+                <div class="wave"><span></span><span></span><span></span><span></span><span></span></div>
+                <span style="font-weight: 600;">正在生成</span>
+                <span style="opacity: 0.5; font-size: 12px;">8s</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 7. 输入框 -->
+    <div class="section">
+        <h2 class="section-title">⌨️ 输入框动效</h2>
+        <p class="section-desc">聚焦时边框弹跳变粗（1px→2px），外发光有明显的弹性效果。</p>
+        <div class="input-box">
+            <div class="input-area">
+                <textarea class="input-textarea" rows="1" placeholder="输入消息..."></textarea>
+                <button class="btn btn-primary btn-small">发送</button>
+            </div>
+            <div class="input-toolbar">
+                <div style="display: flex; gap: 8px;">
+                    <span style="font-size: 16px; cursor: pointer; opacity: 0.6;">📎</span>
+                    <span style="font-size: 16px; cursor: pointer; opacity: 0.6;">🌍</span>
+                </div>
+                <span style="font-size: 12px; color: var(--text-tertiary);">按 Enter 发送</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 8-12: 选项卡、开关、下拉、进度条、时间线 -->
+    <div class="section">
+        <h2 class="section-title">📑 选项卡 · 🔘 开关 · 📋 下拉</h2>
+        <p class="section-desc">所有交互元素都带弹性反馈：选项卡缩放切换，开关滑块过冲滑动，下拉菜单弹性展开。</p>
+        <div class="showcase" style="flex-direction: column; gap: 20px;">
+            <div class="tabs" id="tabs">
+                <button class="tab active" onclick="switchTab(this)">Todo</button>
+                <button class="tab" onclick="switchTab(this)">文件变更</button>
+                <button class="tab" onclick="switchTab(this)">子代理</button>
+            </div>
+            <div style="display: flex; gap: 24px; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div class="toggle on" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+                    <span style="font-size: 13px;">自动保存</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div class="toggle" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+                    <span style="font-size: 13px;">流式输出</span>
+                </div>
+            </div>
+            <div class="select" id="select1">
+                <div class="select-trigger" onclick="toggleSelect('select1')">
+                    <span>claude-sonnet-4-20250514</span>
+                    <span class="select-arrow">▼</span>
+                </div>
+                <div class="select-dropdown">
+                    <div class="select-option selected">claude-sonnet-4-20250514</div>
+                    <div class="select-option">claude-opus-4-20250514</div>
+                    <div class="select-option">claude-haiku-4-20250514</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2 class="section-title">📊 进度条 · 🔗 时间线</h2>
+        <div class="showcase" style="gap: 32px;">
+            <div class="showcase-col" style="min-width: 300px;">
+                <div class="progress-bar"><div class="progress-fill" id="progress1" style="width: 0%;"></div></div>
+                <button class="control-btn" onclick="animateProgress()">播放进度</button>
+            </div>
+            <div class="timeline">
+                <div class="timeline-item">
+                    <div class="timeline-dot done"></div>
+                    <div style="font-size: 13px; color: var(--text-secondary);">搜索文件 src/App.tsx</div>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-dot done"></div>
+                    <div style="font-size: 13px; color: var(--text-secondary);">读取文件内容</div>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-dot pending"></div>
+                    <div style="font-size: 13px; color: var(--text-secondary);">编辑代码...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 设计参数汇总 -->
+    <div class="section" style="margin-top: 48px; padding: 24px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <h2 class="section-title">📐 方案二 · 设计参数汇总</h2>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead>
+                <tr style="border-bottom: 1px solid var(--border-secondary);">
+                    <th style="padding: 8px 12px; text-align: left; color: var(--text-tertiary);">参数</th>
+                    <th style="padding: 8px 12px; text-align: left; color: var(--text-tertiary);">值</th>
+                    <th style="padding: 8px 12px; text-align: left; color: var(--text-tertiary);">用途</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr style="border-bottom: 1px solid var(--border-primary);">
+                    <td style="padding: 8px 12px; color: var(--amber); font-family: monospace;">--ease-bounce</td>
+                    <td style="padding: 8px 12px; font-family: monospace;">cubic-bezier(0.34, 1.56, 0.64, 1)</td>
+                    <td style="padding: 8px 12px;">按钮、卡片弹性</td>
+                </tr>
+                <tr style="border-bottom: 1px solid var(--border-primary);">
+                    <td style="padding: 8px 12px; color: var(--amber); font-family: monospace;">--ease-spring</td>
+                    <td style="padding: 8px 12px; font-family: monospace;">cubic-bezier(0.175, 0.885, 0.32, 1.275)</td>
+                    <td style="padding: 8px 12px;">入场弹性</td>
+                </tr>
+                <tr style="border-bottom: 1px solid var(--border-primary);">
+                    <td style="padding: 8px 12px; color: var(--amber); font-family: monospace;">--ease-overshoot</td>
+                    <td style="padding: 8px 12px; font-family: monospace;">cubic-bezier(0.68, -0.55, 0.265, 1.55)</td>
+                    <td style="padding: 8px 12px;">对话框、下拉弹性</td>
+                </tr>
+                <tr style="border-bottom: 1px solid var(--border-primary);">
+                    <td style="padding: 8px 12px; color: var(--amber); font-family: monospace;">--duration-snappy</td>
+                    <td style="padding: 8px 12px;">200ms</td>
+                    <td style="padding: 8px 12px;">快速反馈</td>
+                </tr>
+                <tr style="border-bottom: 1px solid var(--border-primary);">
+                    <td style="padding: 8px 12px; color: var(--amber); font-family: monospace;">--duration-normal</td>
+                    <td style="padding: 8px 12px;">350ms</td>
+                    <td style="padding: 8px 12px;">通用过渡</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 12px; color: var(--amber); font-family: monospace;">--duration-bouncy</td>
+                    <td style="padding: 8px 12px;">500ms</td>
+                    <td style="padding: 8px 12px;">弹性入场</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 对话框 -->
+<div class="dialog-overlay" id="dialogOverlay" onclick="closeDialog(event)">
+    <div class="dialog-box" onclick="event.stopPropagation()">
+        <div class="dialog-header"><h3 class="dialog-title">确认操作</h3></div>
+        <div class="dialog-body">确定要删除这个 MCP 服务器配置吗？此操作无法撤销。</div>
+        <div class="dialog-footer">
+            <button class="btn btn-secondary" onclick="closeDialog()">取消</button>
+            <button class="btn" style="background: var(--error); color: #fff;" onclick="closeDialog()">删除</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function addRipple(e) {
+    const btn = e.currentTarget;
+    const rect = btn.getBoundingClientRect();
+    const ripple = document.createElement('span');
+    ripple.className = 'ripple-circle';
+    const size = Math.max(rect.width, rect.height) * 2;
+    ripple.style.width = ripple.style.height = size + 'px';
+    ripple.style.left = (e.clientX - rect.left - size/2) + 'px';
+    ripple.style.top = (e.clientY - rect.top - size/2) + 'px';
+    btn.appendChild(ripple);
+    setTimeout(() => ripple.remove(), 600);
+}
+
+function openDialog() { document.getElementById('dialogOverlay').classList.add('active'); }
+function closeDialog(e) {
+    if (e && e.target !== e.currentTarget) return;
+    document.getElementById('dialogOverlay').classList.remove('active');
+}
+
+function showToast(type) {
+    const container = document.getElementById('toastContainer');
+    const msgs = { info: '模型切换成功', success: '配置已保存', warning: 'Token 用量接近上限', error: '连接失败，请重试' };
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `<div class="toast-content"><span class="toast-msg">${msgs[type]}</span><button class="toast-close" onclick="hideToast(this)">✕</button></div>`;
+    container.appendChild(toast);
+    setTimeout(() => { toast.classList.add('hiding'); setTimeout(() => toast.remove(), 200); }, 3000);
+}
+function hideToast(btn) {
+    const toast = btn.closest('.toast');
+    toast.classList.add('hiding'); setTimeout(() => toast.remove(), 200);
+}
+
+let msgIndex = 0;
+const userMsgs = ['这个查询为什么这么慢？', '可以加索引吗？', '帮我做个性能测试'];
+const aiMsgs = ['让我看看查询执行计划...', '可以考虑添加复合索引...', '我来编写性能测试脚本...'];
+function addMessage() {
+    const list = document.getElementById('msgList');
+    const isUser = msgIndex % 2 === 0;
+    const msgs = isUser ? userMsgs : aiMsgs;
+    const msg = document.createElement('div');
+    msg.className = `msg ${isUser ? 'user' : 'assistant'}`;
+    const content = msgs[Math.floor(msgIndex / 2) % msgs.length];
+    const cursor = !isUser ? '<span class="streaming-cursor"></span>' : '';
+    msg.innerHTML = `<div class="msg-bubble">${content}${cursor}</div>`;
+    list.appendChild(msg); msgIndex++;
+}
+
+function switchTab(el) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+}
+
+function toggleSelect(id) {
+    const select = document.getElementById(id);
+    const trigger = select.querySelector('.select-trigger');
+    const dropdown = select.querySelector('.select-dropdown');
+    trigger.classList.toggle('open');
+    dropdown.classList.toggle('open');
+    select.querySelectorAll('.select-option').forEach(opt => {
+        opt.onclick = () => {
+            select.querySelector('.select-trigger span').textContent = opt.textContent;
+            select.querySelectorAll('.select-option').forEach(o => o.classList.remove('selected'));
+            opt.classList.add('selected');
+            trigger.classList.remove('open'); dropdown.classList.remove('open');
+        };
+    });
+}
+
+function animateProgress() {
+    const bar = document.getElementById('progress1');
+    bar.style.width = '0%';
+    setTimeout(() => { bar.style.width = '72%'; }, 50);
+}
+</script>
+</body>
+</html>

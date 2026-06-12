@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Token 统计指示器优化效果图 v2</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      padding: 40px;
+      line-height: 1.6;
+    }
+
+    h1 { font-size: 24px; margin-bottom: 8px; color: #fff; }
+    h2 { font-size: 18px; margin: 40px 0 16px; color: #ccc; border-bottom: 1px solid #333; padding-bottom: 8px; }
+    .subtitle { color: #888; font-size: 13px; margin-bottom: 32px; }
+
+    .section-label {
+      display: inline-block;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 3px 10px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    .label-old { background: rgba(217,83,79,0.1); color: #d9534f; }
+    .label-new { background: rgba(76,195,138,0.1); color: #4cc38a; }
+
+    /* ========== Mock Frame ========== */
+    .mock-frame {
+      max-width: 680px;
+      margin-bottom: 40px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid #2e2e4a;
+      background: #1e1e38;
+    }
+
+    /* ========== Context Bar ========== */
+    .context-bar {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      background: #2f2f2f;
+      min-height: 32px;
+    }
+
+    .context-tools {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .context-tool-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 5px;
+      cursor: pointer;
+      color: #888888;
+      transition: background-color 0.15s ease, color 0.15s ease;
+      background: transparent;
+      border: none;
+      padding: 0;
+      margin: 0;
+      outline: none;
+    }
+    .context-tool-btn:hover {
+      background: rgba(255,255,255,0.1);
+      color: #cccccc;
+    }
+    .context-tool-btn svg {
+      width: 16px; height: 16px;
+      stroke: currentColor; stroke-width: 1.8;
+      fill: none; stroke-linecap: round; stroke-linejoin: round;
+    }
+
+    .context-tool-divider {
+      width: 1px; height: 16px;
+      background: #3e3e42;
+      margin: 0 4px;
+    }
+
+    .context-tools-right {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-left: auto;
+    }
+
+    /* ========== OLD Token Indicator ========== */
+    .token-indicator-old {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      height: 24px;
+      min-width: 52px;
+      padding: 0 7px 0 6px;
+      border: 1px solid color-mix(in srgb, #4fc3f7 45%, #3e3e42);
+      border-radius: 5px;
+      background: linear-gradient(
+        90deg,
+        color-mix(in srgb, #4fc3f7 18%, transparent),
+        color-mix(in srgb, #4cc38a 10%, transparent)
+      );
+      color: #cccccc;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: default;
+      outline: none;
+    }
+    .token-indicator-old .ring-wrap {
+      display: inline-block;
+      width: 14px; height: 14px;
+      flex: 0 0 auto;
+    }
+    .token-indicator-old .ring-svg { transform: rotate(-90deg); }
+    .token-indicator-old .ring-bg { fill: none; stroke: rgba(255,255,255,0.15); stroke-width: 1.5; }
+    .token-indicator-old .ring-fill { fill: none; stroke: #4fc3f7; stroke-width: 1.5; stroke-linecap: round; }
+    .token-indicator-old .label { font-size: 12px; font-weight: 700; }
+
+    /* ========== NEW Token Indicator: Pure Ring ========== */
+    .token-ring {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      cursor: pointer;
+      outline: none;
+      border-radius: 6px;
+      transition: background-color 0.15s ease;
+    }
+    .token-ring:hover {
+      background: rgba(255,255,255,0.08);
+    }
+
+    .token-ring svg {
+      transform: rotate(-90deg);
+      width: 100%;
+      height: 100%;
+    }
+
+    .token-ring .ring-bg {
+      fill: none;
+      stroke-width: 2.5;
+      stroke-linecap: round;
+    }
+    .token-ring .ring-fill {
+      fill: none;
+      stroke-width: 2.5;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.4s ease, stroke 0.3s ease;
+    }
+
+    /* Center percentage text */
+    .token-ring .ring-pct {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      font-size: 8px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    /* ===== Color levels ===== */
+    /* Normal: < 50% */
+    .token-ring.level-ok .ring-bg { stroke: rgba(76,195,138,0.15); }
+    .token-ring.level-ok .ring-fill { stroke: #4cc38a; }
+    .token-ring.level-ok .ring-pct { color: #4cc38a; }
+    .token-ring.level-ok:hover { background: rgba(76,195,138,0.1); }
+
+    /* Warning: 50% ~ 80% */
+    .token-ring.level-warn .ring-bg { stroke: rgba(231,184,90,0.15); }
+    .token-ring.level-warn .ring-fill { stroke: #e7b85a; }
+    .token-ring.level-warn .ring-pct { color: #e7b85a; }
+    .token-ring.level-warn:hover { background: rgba(231,184,90,0.1); }
+
+    /* High: > 80% */
+    .token-ring.level-high .ring-bg { stroke: rgba(217,83,79,0.15); }
+    .token-ring.level-high .ring-fill { stroke: #d9534f; }
+    .token-ring.level-high .ring-pct { color: #d9534f; }
+    .token-ring.level-high:hover { background: rgba(217,83,79,0.1); }
+
+    /* ========== Input Area ========== */
+    .input-area {
+      padding: 8px 12px;
+    }
+    .input-textarea {
+      width: 100%;
+      min-height: 60px;
+      background: transparent;
+      border: none;
+      color: #ccc;
+      font-size: 13px;
+      font-family: inherit;
+      resize: none;
+      outline: none;
+    }
+    .input-textarea::placeholder { color: #555; }
+
+    /* ========== Button Area ========== */
+    .button-area {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 12px 10px;
+    }
+    .button-area-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid #3e3e42;
+      color: #aaa;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-chip:hover {
+      background: rgba(255,255,255,0.08);
+      color: #ccc;
+    }
+    .btn-chip svg {
+      width: 12px; height: 12px;
+      stroke: currentColor; fill: none;
+      stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+    }
+    .btn-send {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px; height: 32px;
+      border-radius: 6px;
+      background: #007fd4;
+      border: none;
+      color: white;
+      cursor: pointer;
+    }
+    .btn-send svg {
+      width: 16px; height: 16px;
+      stroke: currentColor; fill: none;
+      stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+    }
+
+    /* ========== Tooltip Styles ========== */
+    .tooltip-card {
+      position: absolute;
+      bottom: calc(100% + 10px);
+      left: -8px;
+      width: 340px;
+      background: #252526;
+      border: 1px solid #454545;
+      border-radius: 10px;
+      box-shadow: 0 16px 44px rgba(0,0,0,0.36);
+      padding: 0;
+      font-size: 12px;
+      white-space: normal;
+      z-index: 100;
+    }
+    .tooltip-card::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 18px;
+      border: 7px solid transparent;
+      border-top-color: #454545;
+    }
+
+    .tooltip-header {
+      display: grid;
+      grid-template-columns: 32px 1fr;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 14px 12px;
+      border-bottom: 1px solid rgba(69,69,69,0.6);
+    }
+    .tooltip-header-icon {
+      width: 32px; height: 32px;
+      display: grid; place-items: center;
+      border-radius: 8px;
+      background: rgba(79,195,247,0.1);
+      border: 1px solid rgba(79,195,247,0.2);
+    }
+    .tooltip-header-icon svg {
+      width: 16px; height: 16px;
+      stroke: #4fc3f7; fill: none;
+      stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+    }
+    .tooltip-title { color: #e0e0e0; font-size: 13px; font-weight: 700; line-height: 1.3; }
+    .tooltip-subtitle { margin-top: 2px; color: #888; font-size: 11px; line-height: 1.4; }
+
+    .tooltip-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      padding: 12px 14px 0;
+    }
+    .tooltip-metric {
+      min-height: 54px;
+      padding: 9px;
+      border: 1px solid rgba(69,69,69,0.5);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.03);
+    }
+    .tooltip-metric-label {
+      display: flex; align-items: center; gap: 5px;
+      color: #888; font-size: 11px; font-weight: 500; line-height: 1.2; margin-bottom: 4px;
+    }
+    .tooltip-metric-label svg {
+      width: 12px; height: 12px;
+      stroke: currentColor; fill: none;
+      stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+    }
+    .tooltip-metric-label.ic-input { color: #4fc3f7; }
+    .tooltip-metric-label.ic-output { color: #a989ff; }
+    .tooltip-metric-label.ic-cache-r { color: #4cc38a; }
+    .tooltip-metric-label.ic-cache-w { color: #e7b85a; }
+    .tooltip-metric-value {
+      color: #e0e0e0;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 16px; font-weight: 700; line-height: 1.25;
+    }
+    .tooltip-metric-sub {
+      margin-left: 4px; color: #888;
+      font-family: inherit; font-size: 10px; font-weight: 500;
+    }
+
+    .tooltip-total {
+      margin: 10px 14px 14px;
+      padding: 10px;
+      border: 1px solid rgba(69,69,69,0.5);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.03);
+    }
+    .tooltip-total-top {
+      display: flex; justify-content: space-between;
+      color: #ccc; font-size: 12px; font-weight: 650; margin-bottom: 6px;
+    }
+    .tooltip-progress {
+      height: 6px; overflow: hidden; border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+    }
+    .tooltip-progress-fill {
+      height: 100%; border-radius: inherit;
+    }
+    .tooltip-progress-fill.level-ok { background: linear-gradient(90deg, #4cc38a, #66d9a0); }
+    .tooltip-progress-fill.level-warn { background: linear-gradient(90deg, #e7b85a, #f0c96e); }
+    .tooltip-progress-fill.level-high { background: linear-gradient(90deg, #d9534f, #e8706c); }
+
+    /* ========== Light Theme ========== */
+    .theme-light { border-color: #d0d0d0; }
+    .theme-light .context-bar { background: #f0f0f0; }
+    .theme-light .context-tool-btn { color: #666; }
+    .theme-light .context-tool-btn:hover { background: rgba(0,0,0,0.05); color: #333; }
+    .theme-light .context-tool-divider { background: #d0d0d0; }
+    .theme-light .token-indicator-old {
+      border-color: color-mix(in srgb, #0078d4 45%, #d0d0d0);
+      background: linear-gradient(90deg,
+        color-mix(in srgb, #0078d4 12%, transparent),
+        color-mix(in srgb, #107c10 8%, transparent)
+      );
+      color: #333;
+    }
+    .theme-light .token-indicator-old .ring-bg { stroke: rgba(0,0,0,0.08); }
+    .theme-light .token-indicator-old .ring-fill { stroke: #0078d4; }
+
+    .theme-light .token-ring:hover { background: rgba(0,0,0,0.05); }
+    .theme-light .token-ring.level-ok .ring-bg { stroke: rgba(16,124,16,0.12); }
+    .theme-light .token-ring.level-ok .ring-fill { stroke: #107c10; }
+    .theme-light .token-ring.level-ok .ring-pct { color: #107c10; }
+    .theme-light .token-ring.level-warn .ring-bg { stroke: rgba(160,110,10,0.12); }
+    .theme-light .token-ring.level-warn .ring-fill { stroke: #a06e0a; }
+    .theme-light .token-ring.level-warn .ring-pct { color: #a06e0a; }
+    .theme-light .token-ring.level-high .ring-bg { stroke: rgba(200,40,40,0.12); }
+    .theme-light .token-ring.level-high .ring-fill { stroke: #c82828; }
+    .theme-light .token-ring.level-high .ring-pct { color: #c82828; }
+
+    .theme-light .input-textarea { color: #333; }
+    .theme-light .input-textarea::placeholder { color: #aaa; }
+    .theme-light .btn-chip { background: rgba(0,0,0,0.03); border-color: #d0d0d0; color: #666; }
+    .theme-light .btn-chip:hover { background: rgba(0,0,0,0.06); color: #333; }
+
+    .theme-light .tooltip-card {
+      background: #fff;
+      border-color: #d0d0d0;
+    }
+    .theme-light .tooltip-card::after { border-top-color: #d0d0d0; }
+    .theme-light .tooltip-title { color: #333; }
+    .theme-light .tooltip-subtitle { color: #888; }
+    .theme-light .tooltip-metric { border-color: rgba(208,208,208,0.8); background: rgba(0,0,0,0.02); }
+    .theme-light .tooltip-metric-label { color: #888; }
+    .theme-light .tooltip-metric-value { color: #333; }
+    .theme-light .tooltip-total { border-color: rgba(208,208,208,0.8); background: rgba(0,0,0,0.02); }
+    .theme-light .tooltip-total-top { color: #555; }
+    .theme-light .tooltip-progress { background: rgba(0,0,0,0.06); }
+    .theme-light .tooltip-header-icon { background: rgba(0,120,212,0.08); border-color: rgba(0,120,212,0.15); }
+    .theme-light .tooltip-header-icon svg { stroke: #0078d4; }
+
+    /* ========== Annotation ========== */
+    .annotation {
+      margin-top: 12px;
+      padding: 10px 14px;
+      background: rgba(79,195,247,0.06);
+      border: 1px solid rgba(79,195,247,0.15);
+      border-radius: 8px;
+      font-size: 12px;
+      color: #aaa;
+      line-height: 1.7;
+    }
+    .annotation strong { color: #4fc3f7; }
+    .annotation .tag {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+    .tag-add { background: rgba(76,195,138,0.15); color: #4cc38a; }
+    .tag-change { background: rgba(231,184,90,0.15); color: #e7b85a; }
+  </style>
+</head>
+<body>
+  <h1>🎯 Token 统计指示器优化效果图 v2</h1>
+  <p class="subtitle">输入区 ContextBar — 纯圆环 + 百分比 + 颜色分级</p>
+
+  <!-- ==================== 旧版对比 ==================== -->
+  <h2>1. 旧版 vs 新版（暗色主题）</h2>
+
+  <span class="section-label label-old">旧版 - 当前效果</span>
+  <div class="mock-frame">
+    <div class="context-bar">
+      <div class="context-tools">
+        <button class="context-tool-btn" title="Add attachment">
+          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <div class="token-indicator-old">
+          <div class="ring-wrap">
+            <svg class="ring-svg" width="14" height="14" viewBox="0 0 14 14">
+              <circle class="ring-bg" cx="7" cy="7" r="5.5"/>
+              <circle class="ring-fill" cx="7" cy="7" r="5.5"
+                stroke-dasharray="34.56" stroke-dashoffset="17.28"/>
+            </svg>
+          </div>
+          <span class="label">50%</span>
+        </div>
+        <div class="context-tool-divider"></div>
+      </div>
+      <div class="context-tools-right">
+        <button class="context-tool-btn" title="Toggle panel">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+        </button>
+        <button class="context-tool-btn" title="Rewind">
+          <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="input-area">
+      <textarea class="input-textarea" placeholder="输入消息..."></textarea>
+    </div>
+    <div class="button-area">
+      <div class="button-area-left">
+        <span class="btn-chip">
+          <svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+          Sonnet 4.6
+        </span>
+        <span class="btn-chip">
+          <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg>
+          Plan
+        </span>
+      </div>
+      <button class="btn-send">
+        <svg viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.5.5 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <span class="section-label label-new">新版 - 纯圆环 + 百分比</span>
+  <div class="mock-frame">
+    <div class="context-bar">
+      <div class="context-tools">
+        <button class="context-tool-btn" title="Add attachment">
+          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <!-- NEW: Pure ring with 35% -->
+        <div class="token-ring level-ok">
+          <svg viewBox="0 0 28 28">
+            <circle class="ring-bg" cx="14" cy="14" r="11"/>
+            <circle class="ring-fill" cx="14" cy="14" r="11"
+              stroke-dasharray="69.12" stroke-dashoffset="44.93"/>
+          </svg>
+          <span class="ring-pct">35</span>
+        </div>
+        <div class="context-tool-divider"></div>
+      </div>
+      <div class="context-tools-right">
+        <button class="context-tool-btn" title="Toggle panel">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+        </button>
+        <button class="context-tool-btn" title="Rewind">
+          <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="input-area">
+      <textarea class="input-textarea" placeholder="输入消息..."></textarea>
+    </div>
+    <div class="button-area">
+      <div class="button-area-left">
+        <span class="btn-chip">
+          <svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+          Sonnet 4.6
+        </span>
+        <span class="btn-chip">
+          <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg>
+          Plan
+        </span>
+      </div>
+      <button class="btn-send">
+        <svg viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.5.5 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ==================== 三色状态 ==================== -->
+  <h2>2. 颜色状态变化</h2>
+
+  <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 40px;">
+    <!-- OK -->
+    <div>
+      <div style="font-size: 11px; color: #4cc38a; margin-bottom: 8px; font-weight: 600;">✅ 正常 (&lt; 50%)</div>
+      <div class="mock-frame" style="max-width: 300px; margin: 0;">
+        <div class="context-bar">
+          <div class="context-tools">
+            <button class="context-tool-btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+            <div class="token-ring level-ok">
+              <svg viewBox="0 0 28 28">
+                <circle class="ring-bg" cx="14" cy="14" r="11"/>
+                <circle class="ring-fill" cx="14" cy="14" r="11"
+                  stroke-dasharray="69.12" stroke-dashoffset="48.38"/>
+              </svg>
+              <span class="ring-pct">30</span>
+            </div>
+            <div class="context-tool-divider"></div>
+          </div>
+          <div style="font-size:11px;color:#888;margin-left:8px;">70k / 200k</div>
+        </div>
+      </div>
+    </div>
+    <!-- OK 2 -->
+    <div>
+      <div style="font-size: 11px; color: #4cc38a; margin-bottom: 8px; font-weight: 600;">✅ 正常 (45%)</div>
+      <div class="mock-frame" style="max-width: 300px; margin: 0;">
+        <div class="context-bar">
+          <div class="context-tools">
+            <button class="context-tool-btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+            <div class="token-ring level-ok">
+              <svg viewBox="0 0 28 28">
+                <circle class="ring-bg" cx="14" cy="14" r="11"/>
+                <circle class="ring-fill" cx="14" cy="14" r="11"
+                  stroke-dasharray="69.12" stroke-dashoffset="38.02"/>
+              </svg>
+              <span class="ring-pct">45</span>
+            </div>
+            <div class="context-tool-divider"></div>
+          </div>
+          <div style="font-size:11px;color:#888;margin-left:8px;">90k / 200k</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 40px;">
+    <!-- Warn -->
+    <div>
+      <div style="font-size: 11px; color: #e7b85a; margin-bottom: 8px; font-weight: 600;">⚠️ 警告 (50% ~ 80%)</div>
+      <div class="mock-frame" style="max-width: 300px; margin: 0;">
+        <div class="context-bar">
+          <div class="context-tools">
+            <button class="context-tool-btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+            <div class="token-ring level-warn">
+              <svg viewBox="0 0 28 28">
+                <circle class="ring-bg" cx="14" cy="14" r="11"/>
+                <circle class="ring-fill" cx="14" cy="14" r="11"
+                  stroke-dasharray="69.12" stroke-dashoffset="24.19"/>
+              </svg>
+              <span class="ring-pct">65</span>
+            </div>
+            <div class="context-tool-divider"></div>
+          </div>
+          <div style="font-size:11px;color:#888;margin-left:8px;">130k / 200k</div>
+        </div>
+      </div>
+    </div>
+    <!-- Warn 2 -->
+    <div>
+      <div style="font-size: 11px; color: #e7b85a; margin-bottom: 8px; font-weight: 600;">⚠️ 警告 (78%)</div>
+      <div class="mock-frame" style="max-width: 300px; margin: 0;">
+        <div class="context-bar">
+          <div class="context-tools">
+            <button class="context-tool-btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+            <div class="token-ring level-warn">
+              <svg viewBox="0 0 28 28">
+                <circle class="ring-bg" cx="14" cy="14" r="11"/>
+                <circle class="ring-fill" cx="14" cy="14" r="11"
+                  stroke-dasharray="69.12" stroke-dashoffset="15.21"/>
+              </svg>
+              <span class="ring-pct">78</span>
+            </div>
+            <div class="context-tool-divider"></div>
+          </div>
+          <div style="font-size:11px;color:#888;margin-left:8px;">156k / 200k</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 40px;">
+    <!-- High -->
+    <div>
+      <div style="font-size: 11px; color: #d9534f; margin-bottom: 8px; font-weight: 600;">🔴 高用量 (&gt; 80%)</div>
+      <div class="mock-frame" style="max-width: 300px; margin: 0;">
+        <div class="context-bar">
+          <div class="context-tools">
+            <button class="context-tool-btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+            <div class="token-ring level-high">
+              <svg viewBox="0 0 28 28">
+                <circle class="ring-bg" cx="14" cy="14" r="11"/>
+                <circle class="ring-fill" cx="14" cy="14" r="11"
+                  stroke-dasharray="69.12" stroke-dashoffset="10.37"/>
+              </svg>
+              <span class="ring-pct">85</span>
+            </div>
+            <div class="context-tool-divider"></div>
+          </div>
+          <div style="font-size:11px;color:#888;margin-left:8px;">170k / 200k</div>
+        </div>
+      </div>
+    </div>
+    <!-- High 2 -->
+    <div>
+      <div style="font-size: 11px; color: #d9534f; margin-bottom: 8px; font-weight: 600;">🔴 接近满 (95%)</div>
+      <div class="mock-frame" style="max-width: 300px; margin: 0;">
+        <div class="context-bar">
+          <div class="context-tools">
+            <button class="context-tool-btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+            <div class="token-ring level-high">
+              <svg viewBox="0 0 28 28">
+                <circle class="ring-bg" cx="14" cy="14" r="11"/>
+                <circle class="ring-fill" cx="14" cy="14" r="11"
+                  stroke-dasharray="69.12" stroke-dashoffset="3.46"/>
+              </svg>
+              <span class="ring-pct">95</span>
+            </div>
+            <div class="context-tool-divider"></div>
+          </div>
+          <div style="font-size:11px;color:#888;margin-left:8px;">190k / 200k</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 尺寸对比 ==================== -->
+  <h2>3. 尺寸与工具栏协调</h2>
+  <p style="font-size:13px; color:#888; margin-bottom:16px;">与 ContextBar 中其他按钮（24×24）保持一致的视觉大小</p>
+
+  <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 40px; padding: 12px; background: #252540; border-radius: 10px; border: 1px solid #2e2e4a; max-width: 500px;">
+    <button class="context-tool-btn" title="Upload" style="flex-shrink:0;">
+      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+    <!-- Ring 24px -->
+    <div class="token-ring level-ok" style="width:24px;height:24px;flex-shrink:0;">
+      <svg viewBox="0 0 24 24">
+        <circle class="ring-bg" cx="12" cy="12" r="9"/>
+        <circle class="ring-fill" cx="12" cy="12" r="9"
+          stroke-dasharray="56.55" stroke-dashoffset="36.76"/>
+      </svg>
+      <span class="ring-pct" style="font-size:7px;">35</span>
+    </div>
+    <div class="context-tool-divider" style="flex-shrink:0;"></div>
+    <button class="context-tool-btn" title="Panel" style="flex-shrink:0;">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+    </button>
+    <button class="context-tool-btn" title="Rewind" style="flex-shrink:0;">
+      <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+    </button>
+    <span style="color:#666;font-size:11px;margin-left:8px;">← 24px 统一尺寸</span>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 40px; padding: 12px; background: #252540; border-radius: 10px; border: 1px solid #2e2e4a; max-width: 500px;">
+    <button class="context-tool-btn" title="Upload" style="flex-shrink:0;">
+      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+    <!-- Ring 28px -->
+    <div class="token-ring level-warn" style="width:28px;height:28px;flex-shrink:0;">
+      <svg viewBox="0 0 28 28">
+        <circle class="ring-bg" cx="14" cy="14" r="11"/>
+        <circle class="ring-fill" cx="14" cy="14" r="11"
+          stroke-dasharray="69.12" stroke-dashoffset="24.19"/>
+      </svg>
+      <span class="ring-pct">65</span>
+    </div>
+    <div class="context-tool-divider" style="flex-shrink:0;"></div>
+    <button class="context-tool-btn" title="Panel" style="flex-shrink:0;">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+    </button>
+    <button class="context-tool-btn" title="Rewind" style="flex-shrink:0;">
+      <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+    </button>
+    <span style="color:#666;font-size:11px;margin-left:8px;">← 28px 略大（更易读）</span>
+  </div>
+
+  <!-- ==================== 悬浮 Tooltip ==================== -->
+  <h2>4. 悬浮 Tooltip 详情（保持现有）</h2>
+  <p style="font-size:13px; color:#888; margin-bottom:16px;">圆环入口样式更新，Tooltip 内部保持不变</p>
+
+  <div style="position: relative; display: inline-block; margin-bottom: 40px;">
+    <!-- Ring trigger -->
+    <div class="token-ring level-ok" style="width:28px;height:28px;">
+      <svg viewBox="0 0 28 28">
+        <circle class="ring-bg" cx="14" cy="14" r="11"/>
+        <circle class="ring-fill" cx="14" cy="14" r="11"
+          stroke-dasharray="69.12" stroke-dashoffset="44.93"/>
+      </svg>
+      <span class="ring-pct">35</span>
+    </div>
+    <!-- Tooltip -->
+    <div class="tooltip-card" style="display:block;">
+      <div class="tooltip-header">
+        <div class="tooltip-header-icon">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        </div>
+        <div>
+          <div class="tooltip-title">上下文使用统计</div>
+          <div class="tooltip-subtitle">35.0% · 70k / 200k 上下文</div>
+        </div>
+      </div>
+      <div class="tooltip-grid">
+        <div class="tooltip-metric">
+          <div class="tooltip-metric-label ic-input">
+            <svg viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M19 12H5"/></svg>
+            输入 Token
+          </div>
+          <div class="tooltip-metric-value">45,230</div>
+        </div>
+        <div class="tooltip-metric">
+          <div class="tooltip-metric-label ic-output">
+            <svg viewBox="0 0 24 24"><path d="M12 19V5"/><path d="M5 12h14"/></svg>
+            输出 Token
+          </div>
+          <div class="tooltip-metric-value">24,770</div>
+        </div>
+        <div class="tooltip-metric">
+          <div class="tooltip-metric-label ic-cache-r">
+            <svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg>
+            缓存读取
+            <span class="tooltip-metric-sub">命中率 72.3%</span>
+          </div>
+          <div class="tooltip-metric-value">128,450</div>
+        </div>
+        <div class="tooltip-metric">
+          <div class="tooltip-metric-label ic-cache-w">
+            <svg viewBox="0 0 24 24"><path d="M21 8v14H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
+            缓存写入
+          </div>
+          <div class="tooltip-metric-value">18,320</div>
+        </div>
+      </div>
+      <div class="tooltip-total">
+        <div class="tooltip-total-top">
+          <span>总计: 70,000 / 200,000</span>
+          <span>35.0%</span>
+        </div>
+        <div class="tooltip-progress">
+          <div class="tooltip-progress-fill level-ok" style="width: 35%"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 亮色主题 ==================== -->
+  <h2>5. 亮色主题</h2>
+
+  <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 40px;">
+    <div>
+      <div style="font-size: 11px; color: #4cc38a; margin-bottom: 8px; font-weight: 600;">✅ 正常</div>
+      <div class="mock-frame theme-light" style="max-width: 300px; margin: 0;">
+        <div class="context-bar">
+          <div class="context-tools">
+            <button class="context-tool-btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+            <div class="token-ring level-ok">
+              <svg viewBox="0 0 28 28">
+                <circle class="ring-bg" cx="14" cy="14" r="11"/>
+                <circle class="ring-fill" cx="14" cy="14" r="11"
+                  stroke-dasharray="69.12" stroke-dashoffset="44.93"/>
+              </svg>
+              <span class="ring-pct">35</span>
+            </div>
+            <div class="context-tool-divider"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div style="font-size: 11px; color: #e7b85a; margin-bottom: 8px; font-weight: 600;">⚠️ 警告</div>
+      <div class="mock-frame theme-light" style="max-width: 300px; margin: 0;">
+        <div class="context-bar">
+          <div class="context-tools">
+            <button class="context-tool-btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+            <div class="token-ring level-warn">
+              <svg viewBox="0 0 28 28">
+                <circle class="ring-bg" cx="14" cy="14" r="11"/>
+                <circle class="ring-fill" cx="14" cy="14" r="11"
+                  stroke-dasharray="69.12" stroke-dashoffset="24.19"/>
+              </svg>
+              <span class="ring-pct">65</span>
+            </div>
+            <div class="context-tool-divider"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div style="font-size: 11px; color: #d9534f; margin-bottom: 8px; font-weight: 600;">🔴 高用量</div>
+      <div class="mock-frame theme-light" style="max-width: 300px; margin: 0;">
+        <div class="context-bar">
+          <div class="context-tools">
+            <button class="context-tool-btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+            <div class="token-ring level-high">
+              <svg viewBox="0 0 28 28">
+                <circle class="ring-bg" cx="14" cy="14" r="11"/>
+                <circle class="ring-fill" cx="14" cy="14" r="11"
+                  stroke-dasharray="69.12" stroke-dashoffset="6.91"/>
+              </svg>
+              <span class="ring-pct">90</span>
+            </div>
+            <div class="context-tool-divider"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 设计说明 ==================== -->
+  <h2>6. 设计说明</h2>
+
+  <div class="annotation">
+    <strong>改动范围：</strong><br/>
+    - <span class="tag tag-remove">移除</span> 外层容器 (border + background + "50%" 文字标签)<br/>
+    - <span class="tag tag-remove">移除</span> 虚线高亮环<br/>
+    - <span class="tag tag-add">新增</span> 纯 SVG 圆环，内嵌百分比数字<br/>
+    - <span class="tag tag-add">新增</span> 三色分级：<strong style="color:#4cc38a">绿色</strong> (&lt;50%) → <strong style="color:#e7b85a">黄色</strong> (50-80%) → <strong style="color:#d9534f">红色</strong> (&gt;80%)<br/>
+    - <span class="tag tag-add">新增</span> hover 时浅色背景反馈<br/>
+    - <span class="tag tag-change">保持</span> Tooltip 详情面板不变<br/>
+    - <span class="tag tag-change">保持</span> 暗色/亮色双主题适配<br/>
+    <br/>
+    <strong>尺寸建议：</strong><br/>
+    - 24px：与工具按钮完全一致，紧凑<br/>
+    - 28px：稍大更易读百分比，视觉略有区分（推荐）<br/>
+    <br/>
+    <strong>颜色过渡：</strong> 从绿色→黄色→红色的变化，让用户一眼感知上下文用量状态，无需 hover 查看详情。
+  </div>
+</body>
+</html>

@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>底部按钮分段控制器样式重绘</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      padding: 40px;
+      line-height: 1.6;
+    }
+
+    h1 { font-size: 24px; margin-bottom: 8px; color: #fff; }
+    h2 { font-size: 18px; margin: 40px 0 16px; color: #ccc; border-bottom: 1px solid #333; padding-bottom: 8px; }
+    .subtitle { color: #888; font-size: 13px; margin-bottom: 32px; }
+
+    .section-label {
+      display: inline-block;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 3px 10px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    .label-num { background: rgba(79,195,247,0.1); color: #4fc3f7; }
+    .label-rec { background: rgba(76,195,138,0.1); color: #4cc38a; }
+
+    /* ========== Mock Frame ========== */
+    .mock-frame {
+      max-width: 720px;
+      margin-bottom: 40px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid #2e2e4a;
+      background: #1e1e38;
+    }
+
+    .context-bar {
+      display: flex; flex-wrap: nowrap; align-items: center; gap: 8px;
+      padding: 6px 12px; background: #2f2f2f; min-height: 32px;
+    }
+    .context-tools { display: flex; align-items: center; gap: 4px; }
+    .context-tool-btn {
+      display: flex; align-items: center; justify-content: center;
+      width: 24px; height: 24px; border-radius: 5px;
+      cursor: pointer; color: #888; background: transparent; border: none; padding: 0; outline: none;
+    }
+    .context-tool-btn:hover { background: rgba(255,255,255,0.1); color: #ccc; }
+    .context-tool-btn svg { width:16px;height:16px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round; }
+    .context-tool-divider { width:1px;height:16px;background:#3e3e42;margin:0 4px; }
+    .context-tools-right { display:flex;align-items:center;gap:4px;margin-left:auto; }
+    .token-ring { position:relative;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;cursor:pointer; }
+    .token-ring svg { transform:rotate(-90deg);width:100%;height:100%; }
+    .token-ring .ring-bg { fill:none;stroke-width:2.5;stroke-linecap:round; }
+    .token-ring .ring-fill { fill:none;stroke-width:2.5;stroke-linecap:round; }
+    .token-ring .ring-pct { position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Consolas',monospace;font-size:8px;font-weight:800;line-height:1; }
+    .token-ring.level-ok .ring-bg { stroke:rgba(76,195,138,0.15); }
+    .token-ring.level-ok .ring-fill { stroke:#4cc38a; }
+    .token-ring.level-ok .ring-pct { color:#4cc38a; }
+
+    .input-area { padding: 8px 12px; }
+    .input-textarea {
+      width:100%;min-height:60px;background:transparent;border:none;color:#ccc;font-size:13px;font-family:inherit;resize:none;outline:none;
+    }
+    .input-textarea::placeholder { color:#555; }
+
+    /* ========== Button Area Common ========== */
+    .button-area {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 4px 8px;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      background: linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+    }
+    .button-area-left { display:flex;align-items:center;gap:0;flex:1;min-width:0;overflow:visible; }
+    .button-area-right { display:flex;align-items:center;gap:6px;flex-shrink:0; }
+    .button-divider { width:1px;height:16px;background:rgba(255,255,255,0.06); }
+    .sel-sep { width:3px;height:3px;border-radius:50%;background:rgba(255,255,255,0.15);margin:0 2px;flex-shrink:0; }
+
+    /* ========== Segmented Group ========== */
+    .seg-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 0;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 7px;
+      padding: 2px;
+      height: 26px;
+      flex-shrink: 0;
+    }
+    .seg-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 0 8px;
+      border: none;
+      border-radius: 5px;
+      background: transparent;
+      color: #666;
+      font-size: 11px;
+      font-family: inherit;
+      cursor: pointer;
+      height: 20px;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+      flex-shrink: 0;
+    }
+    .seg-btn:hover { color: #bbb; background: rgba(255,255,255,0.04); }
+    .seg-btn.active {
+      color: #e0e0e0;
+      background: rgba(0,120,212,0.15);
+    }
+    .seg-btn svg {
+      width: 12px; height: 12px;
+      stroke: currentColor; stroke-width: 1.8;
+      fill: none; stroke-linecap: round; stroke-linejoin: round;
+    }
+    .seg-btn .chev {
+      width: 9px; height: 9px;
+      margin-left: 1px;
+    }
+
+    /* ========== Single Icon Button (gear, provider) ========== */
+    .icon-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      background: transparent;
+      border: none;
+      border-radius: 5px;
+      color: #888;
+      cursor: pointer;
+      width: 26px;
+      height: 26px;
+      flex-shrink: 0;
+      transition: all 0.15s ease;
+    }
+    .icon-btn:hover { background: rgba(255,255,255,0.06); color: #ccc; }
+    .icon-btn svg {
+      width: 14px; height: 14px;
+      stroke: currentColor; stroke-width: 1.8;
+      fill: none; stroke-linecap: round; stroke-linejoin: round;
+    }
+
+    /* Provider icon btn */
+    .icon-btn.provider-btn { color: #a78bfa; }
+    .icon-btn.provider-btn:hover { background: rgba(167,139,250,0.1); }
+
+    /* ========== Submit / Enhance ========== */
+    .submit-button {
+      display:flex;align-items:center;justify-content:center;
+      width:30px;height:30px;
+      background:linear-gradient(135deg,#0078d4,#005a9e);
+      border:none;border-radius:50%;color:white;cursor:pointer;
+    }
+    .submit-button svg { width:14px;height:14px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round; }
+    .enhance-btn {
+      display:flex;align-items:center;justify-content:center;
+      width:28px;height:28px;background:transparent;border:none;border-radius:5px;color:#888;cursor:pointer;
+    }
+    .enhance-btn:hover { background:rgba(255,255,255,0.06);color:#ccc; }
+    .enhance-btn svg { width:16px;height:16px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round; }
+
+    /* ========== Annotation ========== */
+    .annotation {
+      margin-top: 12px;
+      padding: 12px 16px;
+      background: rgba(79,195,247,0.06);
+      border: 1px solid rgba(79,195,247,0.15);
+      border-radius: 8px;
+      font-size: 12px;
+      color: #aaa;
+      line-height: 1.8;
+    }
+    .annotation strong { color: #4fc3f7; }
+    .annotation code {
+      padding: 1px 5px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 3px;
+      font-size: 11px;
+      color: #ccc;
+    }
+    .tag {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+    .tag-add { background: rgba(76,195,138,0.15); color: #4cc38a; }
+    .tag-change { background: rgba(231,184,90,0.15); color: #e7b85a; }
+    .tag-remove { background: rgba(217,83,79,0.15); color: #d9534f; }
+
+    /* ========== Light Theme ========== */
+    .theme-light { border-color:#d0d0d0; }
+    .theme-light .context-bar { background:#f0f0f0; }
+    .theme-light .context-tool-btn { color:#666; }
+    .theme-light .context-tool-btn:hover { background:rgba(0,0,0,0.05);color:#333; }
+    .theme-light .context-tool-divider { background:#d0d0d0; }
+    .theme-light .input-textarea { color:#333; }
+    .theme-light .input-textarea::placeholder { color:#aaa; }
+    .theme-light .button-area { border-top-color:rgba(0,0,0,0.06);background:linear-gradient(135deg,rgba(0,0,0,0.01),rgba(0,0,0,0.005)); }
+    .theme-light .sel-sep { background:rgba(0,0,0,0.12); }
+    .theme-light .button-divider { background:rgba(0,0,0,0.06); }
+    .theme-light .seg-group { background:rgba(0,0,0,0.03);border-color:rgba(0,0,0,0.08); }
+    .theme-light .seg-btn { color:#888; }
+    .theme-light .seg-btn:hover { color:#333;background:rgba(0,0,0,0.04); }
+    .theme-light .seg-btn.active { color:#333;background:rgba(0,120,212,0.08); }
+    .theme-light .icon-btn { color:#666; }
+    .theme-light .icon-btn:hover { background:rgba(0,0,0,0.04);color:#333; }
+    .theme-light .icon-btn.provider-btn { color:#7c3aed; }
+    .theme-light .icon-btn.provider-btn:hover { background:rgba(124,58,237,0.06); }
+    .theme-light .enhance-btn { color:#888; }
+    .theme-light .enhance-btn:hover { background:rgba(0,0,0,0.04);color:#333; }
+
+    /* ========== Breakpoint demo ========== */
+    .breakpoint-row {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+    }
+    .breakpoint-card {
+      flex: 1;
+      min-width: 280px;
+    }
+    .breakpoint-card .mock-frame { max-width: 100%; }
+    .breakpoint-label {
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎨 底部按钮分段控制器样式重绘</h1>
+  <p class="subtitle">每个按钮的 Segmented Control / Icon Button 重绘方案</p>
+
+  <!-- ==================== 完整效果 ==================== -->
+  <h2>1. 完整效果 — 暗色主题</h2>
+
+  <div class="mock-frame">
+    <div class="context-bar">
+      <div class="context-tools">
+        <button class="context-tool-btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+        <div class="token-ring level-ok"><svg viewBox="0 0 28 28"><circle class="ring-bg" cx="14" cy="14" r="11"/><circle class="ring-fill" cx="14" cy="14" r="11" stroke-dasharray="69.12" stroke-dashoffset="44.93"/></svg><span class="ring-pct">35</span></div>
+        <div class="context-tool-divider"></div>
+      </div>
+      <div class="context-tools-right"><button class="context-tool-btn"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg></button></div>
+    </div>
+    <div class="input-area"><textarea class="input-textarea" placeholder="输入消息..."></textarea></div>
+    <div class="button-area">
+      <div class="button-area-left">
+
+        <!-- ① Settings 按钮 — 单独圆形图标 -->
+        <button class="icon-btn" title="设置">
+          <svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+        <span class="sel-sep"></span>
+
+        <!-- ② Provider 按钮 — 单独圆形图标 + 紫色 -->
+        <button class="icon-btn provider-btn" title="Claude">
+          <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </button>
+        <span class="sel-sep"></span>
+
+        <!-- ③ Mode 分段控件 -->
+        <div class="seg-group">
+          <button class="seg-btn" title="Default 模式">
+            <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Chat
+          </button>
+          <button class="seg-btn" title="Plan 模式">
+            <svg viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14,2 14,8 20,8"/></svg>
+            Plan
+          </button>
+          <button class="seg-btn active" title="Agent 模式">
+            <svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>
+            Agent
+          </button>
+          <button class="seg-btn" title="Auto 模式">
+            <svg viewBox="0 0 24 24"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/></svg>
+            Auto
+          </button>
+        </div>
+        <span class="sel-sep"></span>
+
+        <!-- ④ Model 分段控件（带下拉） -->
+        <div class="seg-group">
+          <button class="seg-btn" title="Opus" style="gap:2px;">
+            <svg viewBox="0 0 24 24" style="width:11px;height:11px;"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+            Opus
+          </button>
+          <button class="seg-btn active" title="Sonnet 4.6">
+            <svg viewBox="0 0 24 24" style="width:11px;height:11px;"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+            Sonnet
+          </button>
+          <button class="seg-btn" title="Haiku">
+            <svg viewBox="0 0 24 24" style="width:11px;height:11px;"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+            Haiku
+          </button>
+          <button class="seg-btn" title="展开更多模型" style="padding:0 4px;">
+            <svg class="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+        </div>
+        <span class="sel-sep"></span>
+
+        <!-- ⑤ Reasoning 分段控件 -->
+        <div class="seg-group">
+          <button class="seg-btn" title="Low">
+            <svg viewBox="0 0 24 24" style="width:11px;height:11px;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            Low
+          </button>
+          <button class="seg-btn" title="Medium">Mid</button>
+          <button class="seg-btn active" title="High">High</button>
+          <button class="seg-btn" title="Max">Max</button>
+        </div>
+
+      </div>
+      <div class="button-area-right">
+        <div class="button-divider"></div>
+        <button class="enhance-btn" title="增强 Prompt"><svg viewBox="0 0 24 24"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg></button>
+        <button class="submit-button"><svg viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.5.5 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 亮色主题 ==================== -->
+  <h2>2. 亮色主题</h2>
+
+  <div class="mock-frame theme-light">
+    <div class="context-bar">
+      <div class="context-tools">
+        <button class="context-tool-btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+        <div class="token-ring level-ok"><svg viewBox="0 0 28 28"><circle class="ring-bg" cx="14" cy="14" r="11"/><circle class="ring-fill" cx="14" cy="14" r="11" stroke-dasharray="69.12" stroke-dashoffset="44.93"/></svg><span class="ring-pct">35</span></div>
+        <div class="context-tool-divider"></div>
+      </div>
+      <div class="context-tools-right"><button class="context-tool-btn"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg></button></div>
+    </div>
+    <div class="input-area"><textarea class="input-textarea" placeholder="输入消息..."></textarea></div>
+    <div class="button-area">
+      <div class="button-area-left">
+        <button class="icon-btn" title="设置"><svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        <span class="sel-sep"></span>
+        <button class="icon-btn provider-btn" title="Claude"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
+        <span class="sel-sep"></span>
+        <div class="seg-group">
+          <button class="seg-btn"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Chat</button>
+          <button class="seg-btn"><svg viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14,2 14,8 20,8"/></svg>Plan</button>
+          <button class="seg-btn active"><svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>Agent</button>
+          <button class="seg-btn"><svg viewBox="0 0 24 24"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/></svg>Auto</button>
+        </div>
+        <span class="sel-sep"></span>
+        <div class="seg-group">
+          <button class="seg-btn"><svg viewBox="0 0 24 24" style="width:11px;height:11px;"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>Opus</button>
+          <button class="seg-btn active"><svg viewBox="0 0 24 24" style="width:11px;height:11px;"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>Sonnet</button>
+          <button class="seg-btn"><svg viewBox="0 0 24 24" style="width:11px;height:11px;"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>Haiku</button>
+          <button class="seg-btn" style="padding:0 4px;"><svg class="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+        </div>
+        <span class="sel-sep"></span>
+        <div class="seg-group">
+          <button class="seg-btn"><svg viewBox="0 0 24 24" style="width:11px;height:11px;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>Low</button>
+          <button class="seg-btn">Mid</button>
+          <button class="seg-btn active">High</button>
+          <button class="seg-btn">Max</button>
+        </div>
+      </div>
+      <div class="button-area-right">
+        <div class="button-divider"></div>
+        <button class="enhance-btn"><svg viewBox="0 0 24 24"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg></button>
+        <button class="submit-button"><svg viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.5.5 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 响应式断点 ==================== -->
+  <h2>3. 响应式断点 — 窄屏适配</h2>
+
+  <div class="breakpoint-row">
+    <!-- 宽屏 -->
+    <div class="breakpoint-card">
+      <div class="breakpoint-label">≥ 600px — 完整显示</div>
+      <div class="mock-frame">
+        <div class="button-area">
+          <div class="button-area-left">
+            <button class="icon-btn"><svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+            <span class="sel-sep"></span>
+            <button class="icon-btn provider-btn"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
+            <span class="sel-sep"></span>
+            <div class="seg-group">
+              <button class="seg-btn"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Chat</button>
+              <button class="seg-btn"><svg viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14,2 14,8 20,8"/></svg>Plan</button>
+              <button class="seg-btn active"><svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>Agent</button>
+              <button class="seg-btn"><svg viewBox="0 0 24 24"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/></svg>Auto</button>
+            </div>
+            <span class="sel-sep"></span>
+            <div class="seg-group">
+              <button class="seg-btn active">Sonnet</button>
+              <button class="seg-btn" style="padding:0 4px;"><svg class="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+            </div>
+            <span class="sel-sep"></span>
+            <div class="seg-group">
+              <button class="seg-btn active">High</button>
+              <button class="seg-btn">Max</button>
+            </div>
+          </div>
+          <div class="button-area-right">
+            <div class="button-divider"></div>
+            <button class="submit-button"><svg viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.5.5 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="breakpoint-row">
+    <!-- 窄屏 -->
+    <div class="breakpoint-card">
+      <div class="breakpoint-label">≤ 480px — Mode 隐藏文字 / Model 仅图标</div>
+      <div class="mock-frame">
+        <div class="button-area">
+          <div class="button-area-left">
+            <button class="icon-btn"><svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+            <span class="sel-sep"></span>
+            <button class="icon-btn provider-btn"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
+            <span class="sel-sep"></span>
+            <!-- Mode: icons only -->
+            <div class="seg-group">
+              <button class="seg-btn" style="padding:0 5px;"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
+              <button class="seg-btn" style="padding:0 5px;"><svg viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14,2 14,8 20,8"/></svg></button>
+              <button class="seg-btn active" style="padding:0 5px;"><svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg></button>
+              <button class="seg-btn" style="padding:0 5px;"><svg viewBox="0 0 24 24"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/></svg></button>
+            </div>
+            <span class="sel-sep"></span>
+            <!-- Model: icon only -->
+            <div class="seg-group">
+              <button class="seg-btn active" style="padding:0 5px;"><svg viewBox="0 0 24 24" style="width:11px;height:11px;"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg></button>
+              <button class="seg-btn" style="padding:0 4px;"><svg class="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+            </div>
+            <span class="sel-sep"></span>
+            <!-- Reasoning: icon only -->
+            <div class="seg-group">
+              <button class="seg-btn active" style="padding:0 5px;"><svg viewBox="0 0 24 24" style="width:11px;height:11px;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg></button>
+              <button class="seg-btn" style="padding:0 4px;"><svg class="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+            </div>
+          </div>
+          <div class="button-area-right">
+            <div class="button-divider"></div>
+            <button class="submit-button"><svg viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.5.5 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 每个按钮拆解 ==================== -->
+  <h2>4. 每个按钮组件拆解</h2>
+
+  <div class="annotation" style="margin-bottom:24px;">
+    <strong>按钮分类：</strong><br/>
+    • <strong>Settings ⚙️</strong> — 独立图标按钮 (26×26)，无文字，单操作<br/>
+    • <strong>Provider 🟣</strong> — 独立图标按钮 (26×26)，紫色高亮，切换引擎<br/>
+    • <strong>Mode 📋</strong> — 分段控件 (Chat / Plan / Agent / Auto)，图标+文字<br/>
+    • <strong>Model 🤖</strong> — 分段控件 (Opus / Sonnet / Haiku / ▼)，带下拉<br/>
+    • <strong>Reasoning 🧠</strong> — 分段控件 (Low / Mid / High / Max)，纯文字<br/>
+    • <strong>Enhance ✨</strong> — 独立图标按钮 (28×28)，无文字<br/>
+    • <strong>Send 📨</strong> — 独立圆形按钮 (30×30)，蓝色渐变
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:720px;">
+
+    <!-- Settings -->
+    <div>
+      <div class="breakpoint-label">Settings — 独立圆形图标</div>
+      <div style="padding:16px;background:#252540;border-radius:10px;border:1px solid #2e2e4a;display:flex;align-items:center;gap:12px;">
+        <button class="icon-btn"><svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        <span style="font-size:11px;color:#888;">26×26 · 无边框 · hover: rgba(255,255,255,0.06)</span>
+      </div>
+    </div>
+
+    <!-- Provider -->
+    <div>
+      <div class="breakpoint-label">Provider — 独立圆形图标（紫色）</div>
+      <div style="padding:16px;background:#252540;border-radius:10px;border:1px solid #2e2e4a;display:flex;align-items:center;gap:12px;">
+        <button class="icon-btn provider-btn"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
+        <span style="font-size:11px;color:#888;">26×26 · color: #a78bfa · hover: rgba(167,139,250,0.1)</span>
+      </div>
+    </div>
+
+    <!-- Mode -->
+    <div style="grid-column:1/-1;">
+      <div class="breakpoint-label">Mode — 4 段分段控件</div>
+      <div style="padding:16px;background:#252540;border-radius:10px;border:1px solid #2e2e4a;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div class="seg-group">
+          <button class="seg-btn">
+            <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Chat
+          </button>
+          <button class="seg-btn">
+            <svg viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14,2 14,8 20,8"/></svg>
+            Plan
+          </button>
+          <button class="seg-btn active">
+            <svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>
+            Agent
+          </button>
+          <button class="seg-btn">
+            <svg viewBox="0 0 24 24"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/></svg>
+            Auto
+          </button>
+        </div>
+        <span style="font-size:11px;color:#888;">bg: rgba(255,255,255,0.04) · border: 1px solid rgba(255,255,255,0.08) · radius: 7px · active: rgba(0,120,212,0.15)</span>
+      </div>
+    </div>
+
+    <!-- Model -->
+    <div style="grid-column:1/-1;">
+      <div class="breakpoint-label">Model — 3 段 + 下拉按钮</div>
+      <div style="padding:16px;background:#252540;border-radius:10px;border:1px solid #2e2e4a;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div class="seg-group">
+          <button class="seg-btn" style="gap:3px;">
+            <svg viewBox="0 0 24 24" style="width:11px;height:11px;"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+            Opus 4.8
+          </button>
+          <button class="seg-btn active" style="gap:3px;">
+            <svg viewBox="0 0 24 24" style="width:11px;height:11px;"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+            Sonnet 4.6
+          </button>
+          <button class="seg-btn" style="gap:3px;">
+            <svg viewBox="0 0 24 24" style="width:11px;height:11px;"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+            Haiku 4.5
+          </button>
+          <button class="seg-btn" title="更多模型" style="padding:0 5px;">
+            <svg class="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+        </div>
+        <span style="font-size:11px;color:#888;">宽度随文字自适应 · 末尾 ▼ 按钮展开完整下拉列表</span>
+      </div>
+    </div>
+
+    <!-- Reasoning -->
+    <div style="grid-column:1/-1;">
+      <div class="breakpoint-label">Reasoning — 4 段纯文字</div>
+      <div style="padding:16px;background:#252540;border-radius:10px;border:1px solid #2e2e4a;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div class="seg-group">
+          <button class="seg-btn">
+            <svg viewBox="0 0 24 24" style="width:11px;height:11px;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            Low
+          </button>
+          <button class="seg-btn">Mid</button>
+          <button class="seg-btn active">High</button>
+          <button class="seg-btn">Max</button>
+        </div>
+        <span style="font-size:11px;color:#888;">纯文字 · 首项带 reasoning icon · 仅 High/Max 适用于当前模型</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 设计说明 ==================== -->
+  <h2>5. 设计说明</h2>
+
+  <div class="annotation">
+    <strong>统一设计语言：</strong><br/>
+    • 所有分段控件共享同一套 CSS：<code>.seg-group</code>（容器）+ <code>.seg-btn</code>（按钮）+ <code>.seg-btn.active</code>（选中）<br/>
+    • 图标按钮共享：<code>.icon-btn</code>（通用）+ <code>.provider-btn</code>（紫色变体）<br/>
+    • 圆角统一：分段控件外层 7px，内层 5px<br/>
+    • 间距统一：分段组之间用 3px 圆点分隔符 <code>.sel-sep</code><br/>
+    <br/>
+    <strong>响应式策略：</strong><br/>
+    • <strong>≥ 600px</strong>：所有文字完整显示<br/>
+    • <strong>400-600px</strong>：Mode/Model 隐藏文字，仅显示图标<br/>
+    • <strong>≤ 400px</strong>：Model/Reasoning 也折叠为单图标 + ▼ 下拉<br/>
+    <br/>
+    <strong>CSS 变量：</strong><br/>
+    • 选中背景：<code>rgba(0,120,212,0.15)</code>（暗色）/ <code>rgba(0,120,212,0.08)</code>（亮色）<br/>
+    • 容器边框：<code>rgba(255,255,255,0.08)</code>（暗色）/ <code>rgba(0,0,0,0.08)</code>（亮色）<br/>
+    • 未选中文字：<code>#666</code> / 选中文字：<code>#e0e0e0</code><br/>
+    <br/>
+    <strong>改动文件：</strong><br/>
+    • <code>selectors.css</code>：删除 <code>.mode-active-highlight::after</code>，新增 <code>.seg-group</code> / <code>.seg-btn</code> / <code>.icon-btn</code><br/>
+    • <code>ModeSelect.tsx</code>：改用分段控件渲染<br/>
+    • <code>ModelSelect.tsx</code>：改用分段控件渲染<br/>
+    • <code>ReasoningSelect.tsx</code>：改用分段控件渲染<br/>
+    • <code>ConfigSelect.tsx</code> / <code>ProviderSelect.tsx</code>：改用 <code>.icon-btn</code>
+  </div>
+</body>
+</html>

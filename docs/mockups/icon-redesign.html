@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>图标 & 按钮优化效果图</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'JetBrains Mono', monospace;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      padding: 40px;
+      line-height: 1.6;
+    }
+
+    h1 { font-size: 24px; margin-bottom: 8px; color: #fff; }
+    h2 { font-size: 18px; margin: 40px 0 16px; color: #ccc; border-bottom: 1px solid #333; padding-bottom: 8px; }
+    .subtitle { color: #888; font-size: 13px; margin-bottom: 32px; }
+
+    /* ========== Comparison Layout ========== */
+    .comparison {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+
+    .panel {
+      background: #252540;
+      border-radius: 12px;
+      padding: 24px;
+      border: 1px solid #333;
+    }
+
+    .panel-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 16px;
+      font-weight: 600;
+    }
+
+    .panel-old .panel-title { color: #d9534f; }
+    .panel-new .panel-title { color: #4cc38a; }
+
+    .icon-row {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .icon-row:last-child { border-bottom: none; }
+
+    .icon-cell {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      min-width: 80px;
+    }
+
+    .icon-label { font-size: 11px; color: #888; text-align: center; }
+
+    .icon-box {
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .icon-box.active {
+      background: rgba(0, 120, 212, 0.12);
+      border-color: rgba(0, 120, 212, 0.3);
+    }
+
+    svg.icon-svg {
+      stroke: currentColor;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    /* ==========================================================
+       CHAT INPUT MOCK
+       ========================================================== */
+    .chat-input-mock {
+      background: #1e1e38;
+      border: 1px solid #2e2e4a;
+      border-radius: 16px;
+      overflow: hidden;
+      max-width: 780px;
+      margin-bottom: 40px;
+    }
+
+    .chat-textarea {
+      padding: 16px 20px 12px;
+      min-height: 72px;
+      color: #aaa;
+      font-size: 14px;
+    }
+    .chat-textarea .placeholder { color: #555; font-style: italic; }
+
+    /* ---- OLD toolbar (capsule) ---- */
+    .toolbar-old {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px;
+      background: linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+    }
+
+    .toolbar-left-old {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      background: rgba(0,0,0,0.2);
+      border-radius: 18px;
+      padding: 2px 3px;
+    }
+
+    .toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .toolbar-divider {
+      width: 1px;
+      height: 16px;
+      background: rgba(255,255,255,0.06);
+    }
+
+    /* old capsule button */
+    .capsule-btn {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 10px;
+      background: transparent;
+      border: none;
+      border-radius: 14px;
+      color: #999;
+      font-size: 12px;
+      cursor: pointer;
+      height: 28px;
+    }
+    .capsule-btn.active-mode { background: rgba(0,120,212,0.14); color: #0078d4; }
+
+    /* ---- NEW toolbar (flat segmented) ---- */
+    .toolbar-new {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 8px;
+      border-top: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .toolbar-left-new {
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+
+    /* New flat selector button */
+    .flat-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      background: transparent;
+      border: none;
+      color: #888;
+      font-size: 12px;
+      cursor: pointer;
+      height: 28px;
+      position: relative;
+      transition: color 0.15s, background-color 0.15s;
+      border-radius: 4px;
+    }
+    .flat-btn:hover {
+      color: #ccc;
+      background: rgba(255,255,255,0.05);
+    }
+    .flat-btn::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%) scaleX(0);
+      width: 60%;
+      height: 2px;
+      background: #0078d4;
+      border-radius: 1px;
+      transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .flat-btn.active::after {
+      transform: translateX(-50%) scaleX(1);
+    }
+    .flat-btn.active {
+      color: #e0e0e0;
+      background: rgba(255,255,255,0.04);
+    }
+    .flat-btn svg { flex-shrink: 0; }
+
+    /* separator dot */
+    .flat-sep {
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.15);
+      margin: 0 2px;
+      flex-shrink: 0;
+    }
+
+    /* enhance & send */
+    .enhance-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      background: rgba(245, 166, 35, 0.08);
+      border: 1px solid rgba(245, 166, 35, 0.18);
+      border-radius: 50%;
+      color: #f5a623;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .enhance-btn:hover { background: rgba(245,166,35,0.16); transform: scale(1.08); }
+
+    .send-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      background: linear-gradient(135deg, #0078d4, #005a9e);
+      border: none;
+      border-radius: 50%;
+      color: white;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 2px 8px rgba(0,120,212,0.35);
+    }
+    .send-btn:hover { transform: scale(1.08); box-shadow: 0 3px 14px rgba(0,120,212,0.5); }
+
+    /* ==========================================================
+       STATUS PANEL MOCK
+       ========================================================== */
+    .status-panel-mock {
+      background: #22223a;
+      border: 1px solid #2e2e4a;
+      border-radius: 8px;
+      overflow: hidden;
+      max-width: 780px;
+      margin-bottom: 32px;
+    }
+
+    .status-tabs {
+      display: flex;
+      align-items: center;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid #2e2e4a;
+      border-radius: 6px;
+      padding: 3px 6px;
+      gap: 0;
+      margin: 8px 10px;
+    }
+
+    .status-tab {
+      flex: 1 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #777;
+      cursor: pointer;
+      border-radius: 4px;
+      background: transparent;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .status-tab:not(:last-child) {
+      border-right: 1px solid #2e2e4a;
+      border-radius: 4px 0 0 4px;
+      margin-right: -1px;
+    }
+    .status-tab:last-child { border-radius: 0 4px 4px 0; }
+    .status-tab:hover { color: #bbb; background: rgba(255,255,255,0.03); }
+    .status-tab.active { color: #e0e0e0; background: rgba(255,255,255,0.06); }
+    .status-tab svg { flex-shrink: 0; opacity: 0.7; }
+    .status-tab.active svg { opacity: 1; }
+
+    .tab-badge {
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 8px;
+      background: rgba(0,120,212,0.12);
+      color: #5ab0f5;
+      font-weight: 600;
+    }
+
+    .tab-stats {
+      display: flex;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', 'Consolas', monospace;
+    }
+    .tab-stats .add { color: #89d185; }
+    .tab-stats .del { color: #ff6b6b; }
+
+    .status-content { padding: 4px 10px 10px; }
+
+    /* ---- Todo Item ---- */
+    .todo-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 12px;
+      background: #1e1e38;
+      border: 1px solid #2e2e4a;
+      border-radius: 8px;
+      margin-bottom: 6px;
+      font-size: 13px;
+      transition: all 0.15s;
+    }
+    .todo-item:hover { border-color: #3a3a5a; background: #242445; }
+    .todo-item:last-child { margin-bottom: 0; }
+
+    .todo-icon {
+      flex-shrink: 0;
+      width: 22px;
+      height: 22px;
+      display: grid;
+      place-items: center;
+      border-radius: 6px;
+      margin-top: 1px;
+      font-size: 12px;
+    }
+    .todo-icon.pending { border: 1.5px solid #444; background: transparent; color: #777; }
+    .todo-icon.in-progress {
+      background: rgba(78,161,255,0.12);
+      border: 1.5px solid rgba(78,161,255,0.3);
+      color: #4ea1ff;
+      position: relative;
+    }
+    .todo-icon.done {
+      background: #4cc38a;
+      border: 1.5px solid #4cc38a;
+      color: white;
+    }
+
+    .todo-body { flex: 1; min-width: 0; }
+    .todo-text { word-break: break-word; }
+    .todo-text.done-text { color: #666; text-decoration: line-through; text-decoration-color: #444; }
+
+    .todo-tag {
+      display: inline-flex;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      margin-top: 6px;
+    }
+    .todo-tag.pending { background: rgba(255,255,255,0.05); color: #777; }
+    .todo-tag.in-progress { background: rgba(78,161,255,0.12); color: #4ea1ff; }
+    .todo-tag.done-tag { background: rgba(76,195,138,0.12); color: #4cc38a; }
+
+    /* ---- Subagent Item ---- */
+    .subagent-item {
+      display: flex;
+      align-items: flex-start;
+      padding: 12px 14px;
+      background: #1e1e38;
+      border: 1px solid #2e2e4a;
+      border-radius: 8px;
+      margin-bottom: 6px;
+      gap: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .subagent-item:hover { border-color: #3a3a5a; background: #242445; }
+    .subagent-item:last-child { margin-bottom: 0; }
+
+    .sa-icon {
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      position: relative;
+    }
+    .sa-icon.running {
+      background: rgba(78,161,255,0.12);
+      border: 1px solid rgba(78,161,255,0.3);
+      color: #4ea1ff;
+    }
+    .sa-icon.running::after {
+      content: '';
+      position: absolute;
+      inset: -3px;
+      border-radius: 11px;
+      border: 2px solid transparent;
+      border-top-color: #4ea1ff;
+      border-right-color: #4ea1ff;
+      animation: spin 1.2s linear infinite;
+    }
+    .sa-icon.completed {
+      background: rgba(76,195,138,0.12);
+      border: 1px solid rgba(76,195,138,0.3);
+      color: #4cc38a;
+    }
+    .sa-icon.error {
+      background: rgba(240,113,120,0.12);
+      border: 1px solid rgba(240,113,120,0.3);
+      color: #f07178;
+    }
+
+    .sa-body { flex: 1; min-width: 0; }
+    .sa-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .sa-type { font-size: 13px; font-weight: 600; color: #e0e0e0; }
+
+    .sa-badge {
+      display: inline-flex;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+    .sa-badge.running { background: rgba(78,161,255,0.12); color: #4ea1ff; }
+    .sa-badge.completed { background: rgba(76,195,138,0.12); color: #4cc38a; }
+    .sa-badge.error { background: rgba(240,113,120,0.12); color: #f07178; }
+
+    .sa-desc {
+      font-size: 12px;
+      color: #bbb;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sa-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 8px;
+      font-size: 11px;
+      color: #777;
+    }
+    .sa-stat { display: flex; align-items: center; gap: 4px; }
+
+    .sa-chevron {
+      flex-shrink: 0;
+      color: #666;
+      margin-top: 8px;
+    }
+
+    /* ---- File Change Item ---- */
+    .file-changes-bar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 8px 10px;
+      border-bottom: 1px solid #2e2e4a;
+      background: rgba(255,255,255,0.02);
+    }
+
+    .bar-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: 30px;
+      padding: 0 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid #2e2e4a;
+      background: #252540;
+      color: #999;
+      transition: all 0.15s;
+    }
+    .bar-btn.discard { color: #f5c06b; }
+    .bar-btn.discard:hover { border-color: rgba(245,192,107,0.5); background: rgba(245,192,107,0.08); }
+    .bar-btn.keep { color: #4cc38a; border-color: rgba(76,195,138,0.3); }
+    .bar-btn.keep:hover { background: rgba(76,195,138,0.08); border-color: rgba(76,195,138,0.4); }
+
+    .file-item {
+      display: flex;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 4px;
+      gap: 8px;
+      font-size: 12px;
+      transition: background 0.15s;
+    }
+    .file-item:hover { background: rgba(255,255,255,0.04); }
+
+    .file-status {
+      flex-shrink: 0;
+      width: 16px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .file-status.added { color: #89d185; }
+    .file-status.modified { color: #6bb3f0; }
+
+    .file-icon-placeholder {
+      width: 16px;
+      height: 16px;
+      border-radius: 2px;
+      background: rgba(78,161,255,0.15);
+      flex-shrink: 0;
+    }
+    .file-icon-placeholder.ts { background: rgba(78,161,255,0.15); }
+    .file-icon-placeholder.css { background: rgba(78,161,255,0.1); }
+    .file-icon-placeholder.java { background: rgba(255,152,0,0.15); }
+
+    .file-name {
+      flex: 1;
+      min-width: 0;
+      color: #e0e0e0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .file-name:hover { text-decoration: underline; }
+
+    .file-stats {
+      flex-shrink: 0;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      display: flex;
+      gap: 4px;
+    }
+
+    .file-actions {
+      display: flex;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .file-action-btn {
+      width: 26px;
+      height: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: 1px solid transparent;
+      color: #777;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .file-action-btn:hover { color: #e0e0e0; background: rgba(255,255,255,0.06); }
+    .file-action-btn.undo:hover { color: #ff6b6b; background: rgba(255,107,107,0.1); }
+
+    /* ---- Empty State ---- */
+    .empty-state {
+      padding: 20px;
+      text-align: center;
+      color: #555;
+      font-size: 13px;
+    }
+
+    /* ========== Large Preview ========== */
+    .large-preview {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+      margin-bottom: 40px;
+    }
+
+    .preview-card {
+      background: #252540;
+      border: 1px solid #333;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      min-width: 130px;
+    }
+
+    .preview-card .icon-large {
+      width: 56px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 10px;
+      border-radius: 12px;
+    }
+
+    .preview-card .name { font-size: 12px; color: #ccc; font-weight: 600; margin-bottom: 3px; }
+    .preview-card .desc { font-size: 10px; color: #888; }
+
+    /* ========== Spinner ========== */
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ========== Section label ========== */
+    .section-label {
+      display: inline-block;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 3px 10px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    .label-old { background: rgba(217,83,79,0.1); color: #d9534f; }
+    .label-new { background: rgba(76,195,138,0.1); color: #4cc38a; }
+  </style>
+</head>
+<body>
+
+<h1>🎨 图标 & 按钮优化效果图 v2</h1>
+<p class="subtitle">输入区选择器重设计 + 三 Tab 状态面板完整展示 · 2026-06-11</p>
+
+<!-- ==========================================================
+     1. 图标对比
+     ========================================================== -->
+<h2>1. 图标新旧对比</h2>
+
+<div class="comparison">
+  <div class="panel panel-old">
+    <div class="panel-title">❌ 当前图标</div>
+    <div class="icon-row">
+      <div class="icon-cell">
+        <div class="icon-box">
+          <svg class="icon-svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="1.8">
+            <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+          </svg>
+        </div>
+        <div class="icon-label">Task</div>
+      </div>
+      <div class="icon-cell">
+        <div class="icon-box">
+          <svg class="icon-svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="1.8">
+            <path d="M12 8V4M7 8h10a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4v-5a4 4 0 014-4z"/>
+            <path d="M9 14h.01M15 14h.01M9 18h6"/>
+          </svg>
+        </div>
+        <div class="icon-label">Subagent</div>
+      </div>
+      <div class="icon-cell">
+        <div class="icon-box">
+          <svg class="icon-svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="1.8">
+            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+        </div>
+        <div class="icon-label">Edit</div>
+      </div>
+      <div class="icon-cell">
+        <div class="icon-box">
+          <svg class="icon-svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="1.8">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+            <path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <div class="icon-label">Enhance</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel panel-new">
+    <div class="panel-title">✅ 优化后图标</div>
+    <div class="icon-row">
+      <div class="icon-cell">
+        <div class="icon-box active">
+          <!-- NEW Task: clipboard + check + lines -->
+          <svg class="icon-svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="1.8">
+            <rect x="5" y="2" width="14" height="20" rx="2"/>
+            <path d="M9 2v2h6V2"/>
+            <path d="M9 10l1.5 1.5L14 8"/>
+            <line x1="9" y1="15" x2="15" y2="15"/>
+            <line x1="9" y1="18" x2="13" y2="18"/>
+          </svg>
+        </div>
+        <div class="icon-label">Task</div>
+      </div>
+      <div class="icon-cell">
+        <div class="icon-box active">
+          <!-- NEW Robot: antenna + rounded head + highlight eyes + smile -->
+          <svg class="icon-svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="1.8">
+            <line x1="12" y1="2" x2="12" y2="5"/>
+            <circle cx="12" cy="2" r="1.2" fill="currentColor" stroke="none"/>
+            <rect x="4" y="5" width="16" height="12" rx="3"/>
+            <circle cx="9" cy="11" r="2"/>
+            <circle cx="8.3" cy="10.3" r="0.6" fill="currentColor" stroke="none"/>
+            <circle cx="15" cy="11" r="2"/>
+            <circle cx="14.3" cy="10.3" r="0.6" fill="currentColor" stroke="none"/>
+            <path d="M10 14.5q2 1.5 4 0"/>
+            <path d="M8 17v2q0 1 1 1h6q1 0 1-1v-2"/>
+            <line x1="4" y1="9" x2="2" y2="9"/>
+            <line x1="20" y1="9" x2="22" y2="9"/>
+          </svg>
+        </div>
+        <div class="icon-label">Subagent</div>
+      </div>
+      <div class="icon-cell">
+        <div class="icon-box active">
+          <!-- NEW Edit: document + embedded pen -->
+          <svg class="icon-svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="1.8">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+            <path d="M14 2v6h6"/>
+            <path d="M8 19l-1-4 8.5-8.5a1.8 1.8 0 012.5 0 1.8 1.8 0 010 2.5L9.5 17.5z"/>
+            <path d="M7 15l4 1"/>
+          </svg>
+        </div>
+        <div class="icon-label">Edit</div>
+      </div>
+      <div class="icon-cell">
+        <div class="icon-box active" style="background:rgba(245,166,35,0.08);border-color:rgba(245,166,35,0.2);">
+          <!-- NEW Sparkles: magic wand + stars -->
+          <svg class="icon-svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="1.8">
+            <line x1="4" y1="20" x2="14" y2="10"/>
+            <path d="M13 9l2 2"/>
+            <path d="M17 3l.8 2.2L20 6l-2.2.8L17 9l-.8-2.2L14 6l2.2-.8z"/>
+            <path d="M20 11l.5 1.3L22 13l-1.5.7L20 15l-.5-1.3L18 13l1.5-.7z"/>
+            <path d="M13 1l.4 1.1L15 2.5l-1.6.6L13 4.5l-.4-1.4L11 2.5l1.6-.4z"/>
+          </svg>
+        </div>
+        <div class="icon-label">Enhance</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==========================================================
+     2. 输入框工具栏：旧 vs 新
+     ========================================================== -->
+<h2>2. 输入框工具栏 · 按钮样式对比</h2>
+
+<!-- OLD -->
+<div class="section-label label-old">❌ 当前样式 — 胶囊/药丸 (Capsule)</div>
+<div class="chat-input-mock">
+  <div class="chat-textarea"><span class="placeholder">在这里输入消息...</span></div>
+  <div class="toolbar-old">
+    <div class="toolbar-left-old">
+      <button class="capsule-btn active-mode">
+        <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" stroke-width="1.8"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
+        <span>Default</span>
+        <svg class="icon-svg" width="12" height="12" viewBox="0 0 24 24" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <button class="capsule-btn">
+        <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" stroke-width="1.8" style="color:#a989ff;"><circle cx="12" cy="12" r="9"/><path d="M12 3a15 15 0 010 18"/><line x1="3" y1="12" x2="21" y2="12"/></svg>
+        <span>Sonnet 4</span>
+        <svg class="icon-svg" width="12" height="12" viewBox="0 0 24 24" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <button class="capsule-btn">
+        <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" stroke-width="1.8" style="color:#f5a623;"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+        <span>Auto</span>
+        <svg class="icon-svg" width="12" height="12" viewBox="0 0 24 24" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+    </div>
+    <div class="toolbar-right">
+      <div class="toolbar-divider"></div>
+      <button class="enhance-btn">
+        <svg class="icon-svg" width="15" height="15" viewBox="0 0 24 24" stroke-width="1.8"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      </button>
+      <button class="send-btn">
+        <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4z"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- NEW -->
+<div class="section-label label-new">✅ 新样式 — 平底标签 (Flat Tab)</div>
+<div class="chat-input-mock">
+  <div class="chat-textarea"><span class="placeholder">在这里输入消息...</span></div>
+  <div class="toolbar-new">
+    <div class="toolbar-left-new">
+      <button class="flat-btn active">
+        <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" stroke-width="1.8" style="color:#0078d4;">
+          <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
+        </svg>
+        <span>Default</span>
+      </button>
+      <div class="flat-sep"></div>
+      <button class="flat-btn">
+        <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" stroke-width="1.8" style="color:#a989ff;">
+          <circle cx="12" cy="12" r="9"/><path d="M12 3a15 15 0 010 18"/><line x1="3" y1="12" x2="21" y2="12"/>
+        </svg>
+        <span>Sonnet 4</span>
+      </button>
+      <div class="flat-sep"></div>
+      <button class="flat-btn">
+        <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" stroke-width="1.8" style="color:#f5a623;">
+          <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+        </svg>
+        <span>Auto</span>
+      </button>
+    </div>
+    <div class="toolbar-right">
+      <div class="toolbar-divider"></div>
+      <button class="enhance-btn">
+        <svg class="icon-svg" width="15" height="15" viewBox="0 0 24 24" stroke-width="1.8">
+          <line x1="4" y1="20" x2="14" y2="10"/><path d="M13 9l2 2"/>
+          <path d="M17 3l.8 2.2L20 6l-2.2.8L17 9l-.8-2.2L14 6l2.2-.8z"/>
+          <path d="M20 11l.5 1.3L22 13l-1.5.7L20 15l-.5-1.3L18 13l1.5-.7z"/>
+          <path d="M13 1l.4 1.1L15 2.5l-1.6.6L13 4.5l-.4-1.4L11 2.5l1.6-.4z"/>
+        </svg>
+      </button>
+      <button class="send-btn">
+        <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4z"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ==========================================================
+     3. 状态面板 — 三个 Tab 完整展示
+     ========================================================== -->
+<h2>3. 状态面板 · 三 Tab 完整展示</h2>
+
+<!-- ===== Tab 1: Tasks ===== -->
+<h3 style="color:#5ab0f5; font-size:14px; margin:24px 0 12px;">📋 Tab 1 — 任务 (Tasks)</h3>
+<div class="status-panel-mock">
+  <div class="status-tabs">
+    <div class="status-tab active">
+      <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" stroke-width="1.8" style="color:#5ab0f5;">
+        <rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 2v2h6V2"/>
+        <path d="M9 10l1.5 1.5L14 8"/><line x1="9" y1="15" x2="15" y2="15"/><line x1="9" y1="18" x2="13" y2="18"/>
+      </svg>
+      <span>任务</span>
+      <span class="tab-badge">2/5</span>
+    </div>
+    <div class="status-tab">
+      <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" stroke-width="1.8">
+        <line x1="12" y1="2" x2="12" y2="5"/><circle cx="12" cy="2" r="1" fill="currentColor" stroke="none"/>
+        <rect x="4" y="5" width="16" height="12" rx="3"/><circle cx="9" cy="11" r="2"/><circle cx="15" cy="11" r="2"/>
+        <path d="M10 14.5q2 1.5 4 0"/><line x1="4" y1="9" x2="2" y2="9"/><line x1="20" y1="9" x2="22" y2="9"/>
+      </svg>
+      <span>子代理</span>
+      <span class="tab-badge">1/3</span>
+    </div>
+    <div class="status-tab">
+      <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" stroke-width="1.8">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/>
+        <path d="M8 19l-1-4 8.5-8.5a1.8 1.8 0 012.5 0 1.8 1.8 0 010 2.5L9.5 17.5z"/><path d="M7 15l4 1"/>
+      </svg>
+      <span>编辑</span>
+      <span class="tab-stats"><span class="add">+142</span><span class="del">-38</span></span>
+    </div>
+  </div>
+  <div class="status-content">
+    <!-- Todo: completed -->
+    <div class="todo-item">
+      <div class="todo-icon done">
+        <svg class="icon-svg" width="12" height="12" viewBox="0 0 24 24" stroke-width="2.5" style="stroke:#fff;fill:none;">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+      <div class="todo-body">
+        <div class="todo-text done-text">实现用户认证模块</div>
+        <div class="todo-tag done-tag">已完成</div>
+      </div>
+    </div>
+    <!-- Todo: in-progress -->
+    <div class="todo-item">
+      <div class="todo-icon in-progress" style="animation:pulse 2s ease-in-out infinite;">
+        <svg class="icon-svg" width="12" height="12" viewBox="0 0 24 24" stroke-width="2" style="animation:pulse 2s ease-in-out infinite;">
+          <path d="M21 12a9 9 0 11-6.219-8.56"/>
+        </svg>
+      </div>
+      <div class="todo-body">
+        <div class="todo-text">优化数据库查询性能</div>
+        <div class="todo-tag in-progress">进行中</div>
+      </div>
+    </div>
+    <!-- Todo: pending -->
+    <div class="todo-item">
+      <div class="todo-icon pending">
+        <svg class="icon-svg" width="12" height="12" viewBox="0 0 24 24" stroke-width="2">
+          <circle cx="12" cy="12" r="9"/>
+        </svg>
+      </div>
+      <div class="todo-body">
+        <div class="todo-text">添加单元测试覆盖</div>
+        <div class="todo-tag pending">待办</div>
+      </div>
+    </div>
+    <!-- Todo: completed #2 -->
+    <div class="todo-item">
+      <div class="todo-icon done">
+        <svg class="icon-svg" width="12" height="12" viewBox="0 0 24 24" stroke-width="2.5" style="stroke:#fff;fill:none;">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+      <div class="todo-body">
+        <div class="todo-text done-text">设计 REST API 接口</div>
+        <div class="todo-tag done-tag">已完成</div>
+      </div>
+    </div>
+    <!-- Todo: pending #2 -->
+    <div class="todo-item">
+      <div class="todo-icon pending">
+        <svg class="icon-svg" width="12" height="12" viewBox="0 0 24 24" stroke-width="2">
+          <circle cx="12" cy="12" r="9"/>
+        </svg>
+      </div>
+      <div class="todo-body">
+        <div class="todo-text">编写部署文档</div>
+        <div class="todo-tag pending">待办</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Tab 2: Subagents ===== -->
+<h3 style="color:#a989ff; font-size:14px; margin:24px 0 12px;">🤖 Tab 2 — 子代理 (Subagents)</h3>
+<div class="status-panel-mock">
+  <div class="status-tabs">
+    <div class="status-tab">
+      <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" stroke-width="1.8">
+        <rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 2v2h6V2"/>
+        <path d="M9 10l1.5 1.5L14 8"/><line x1="9" y1="15" x2="15" y2="15"/>
+      </svg>
+      <span>任务</span>
+      <span class="tab-badge">2/5</span>
+    </div>
+    <div class="status-tab active">
+      <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" stroke-width="1.8" style="color:#a989ff;">
+        <line x1="12" y1="2" x2="12" y2="5"/><circle cx="12" cy="2" r="1" fill="currentColor" stroke="none"/>
+        <rect x="4" y="5" width="16" height="12" rx="3"/><circle cx="9" cy="11" r="2"/><circle cx="15" cy="11" r="2"/>
+        <path d="M10 14.5q2 1.5 4 0"/><line x1="4" y1="9" x2="2" y2="9"/><line x1="20" y1="9" x2="22" y2="9"/>
+      </svg>
+      <span>子代理</span>
+      <span class="tab-badge">1/3</span>
+    </div>
+    <div class="status-tab">
+      <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" stroke-width="1.8">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/>
+        <path d="M8 19l-1-4 8.5-8.5a1.8 1.8 0 012.5 0 1.8 1.8 0 010 2.5L9.5 17.5z"/><path d="M7 15l4 1"/>
+      </svg>
+      <span>编辑</span>
+      <span class="tab-stats"><span class="add">+142</span><span class="del">-38</span></span>
+    </div>
+  </div>
+  <div class="status-content">
+    <!-- Subagent: running -->
+    <div class="subagent-item">
+      <div class="sa-icon running">
+        <!-- NEW Robot icon -->
+        <svg class="icon-svg" width="16" height="16" viewBox="0 0 24 24" stroke-width="1.8">
+          <line x1="12" y1="2" x2="12" y2="5"/><circle cx="12" cy="2" r="1" fill="currentColor" stroke="none"/>
+          <rect x="4" y="5" width="16" height="12" rx="3"/><circle cx="9" cy="11" r="2"/><circle cx="15" cy="11" r="2"/>
+          <path d="M10 14.5q2 1.5 4 0"/>
+        </svg>
+      </div>
+      <div class="sa-body">
+        <div class="sa-header">
+          <span class="sa-type">Explore</span>
+          <span class="sa-badge running">运行中</span>
+        </div>
+        <div class="sa-desc">搜索项目中所有使用 Redux 的组件并分析 state 管理模式</div>
+        <div class="sa-stats">
+          <span class="sa-stat">
+            <svg class="icon-svg" width="12" height="12" viewBox="0 0 24 24" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            45s
+          </span>
+          <span class="sa-stat">
+            <svg class="icon-svg" width="12" height="12" viewBox="0 0 24 24" stroke-width="1.8"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+            8 次调用
+          </span>
+          <span class="sa-stat">12.4k tokens</span>
+        </div>
+      </div>
+      <div class="sa-chevron">
+        <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" stroke-width="1.8"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+    </div>
+    <!-- Subagent: completed -->
+    <div class="subagent-item">
+      <div class="sa-icon completed">
+        <svg class="icon-svg" width="16" height="16" viewBox="0 0 24 24" stroke-width="1.8">
+          <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+          <polyline points="22 4 12 14.01 9 11.01"/>
+        </svg>
+      </div>
+      <div class="sa-body">
+        <div class="sa-header">
+          <span class="sa-type">Plan</span>
+          <span class="sa-badge completed">已完成</span>
+        </div>
+        <div class="sa-desc">设计用户权限模块的数据库 Schema</div>
+        <div class="sa-stats">
+          <span class="sa-stat">
+            <svg class="icon-svg" width="12" height="12" viewBox="0 0 24 24" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            1m 23s
+          </span>
+          <span class="sa-stat">
+            <svg class="icon-svg" width="12" height="12" viewBox="0 0 24 24" stroke-width="1.8"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+            15 次调用
+          </span>
+          <span class="sa-stat">28.7k tokens</span>
+        </div>
+      </div>
+      <div class="sa-chevron">
+        <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" stroke-width="1.8"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+    </div>
+    <!-- Subagent: error -->
+    <div class="subagent-item">
+      <div class="sa-icon error">
+        <svg class="icon-svg" width="16" height="16" viewBox="0 0 24 24" stroke-width="1.8">
+          <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+        </svg>
+      </div>
+      <div class="sa-body">
+        <div class="sa-header">
+          <span class="sa-type">general-purpose</span>
+          <span class="sa-badge error">错误</span>
+        </div>
+        <div class="sa-desc">执行自动化测试套件并生成报告</div>
+        <div class="sa-stats">
+          <span class="sa-stat">
+            <svg class="icon-svg" width="12" height="12" viewBox="0 0 24 24" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            32s
+          </span>
+          <span class="sa-stat">5.2k tokens</span>
+        </div>
+      </div>
+      <div class="sa-chevron">
+        <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" stroke-width="1.8"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Tab 3: File Changes ===== -->
+<h3 style="color:#4cc38a; font-size:14px; margin:24px 0 12px;">📝 Tab 3 — 编辑 (File Changes)</h3>
+<div class="status-panel-mock">
+  <div class="status-tabs">
+    <div class="status-tab">
+      <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" stroke-width="1.8">
+        <rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 2v2h6V2"/>
+        <path d="M9 10l1.5 1.5L14 8"/><line x1="9" y1="15" x2="15" y2="15"/>
+      </svg>
+      <span>任务</span>
+      <span class="tab-badge">2/5</span>
+    </div>
+    <div class="status-tab">
+      <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" stroke-width="1.8">
+        <line x1="12" y1="2" x2="12" y2="5"/><circle cx="12" cy="2" r="1" fill="currentColor" stroke="none"/>
+        <rect x="4" y="5" width="16" height="12" rx="3"/><circle cx="9" cy="11" r="2"/><circle cx="15" cy="11" r="2"/>
+        <path d="M10 14.5q2 1.5 4 0"/>
+      </svg>
+      <span>子代理</span>
+      <span class="tab-badge">1/3</span>
+    </div>
+    <div class="status-tab active">
+      <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" stroke-width="1.8" style="color:#4cc38a;">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/>
+        <path d="M8 19l-1-4 8.5-8.5a1.8 1.8 0 012.5 0 1.8 1.8 0 010 2.5L9.5 17.5z"/><path d="M7 15l4 1"/>
+      </svg>
+      <span>编辑</span>
+      <span class="tab-stats"><span class="add">+142</span><span class="del">-38</span></span>
+    </div>
+  </div>
+  <!-- Batch actions bar -->
+  <div class="file-changes-bar">
+    <button class="bar-btn discard">
+      <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+      <span>Discard All</span>
+    </button>
+    <button class="bar-btn keep">
+      <svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" stroke-width="1.8"><polyline points="20 6 9 17 4 12"/></svg>
+      <span>Keep All</span>
+    </button>
+  </div>
+  <div class="status-content" style="padding:4px 6px 6px;">
+    <!-- File 1: Modified TS -->
+    <div class="file-item">
+      <span class="file-status modified">M</span>
+      <div class="file-icon-placeholder ts"></div>
+      <span class="file-name">ModelSelect.tsx</span>
+      <span class="file-stats">
+        <span style="color:#89d185">+48</span>
+        <span style="color:#ff6b6b">-12</span>
+      </span>
+      <div class="file-actions">
+        <button class="file-action-btn" title="View Diff">
+          <svg class="icon-svg" width="15" height="15" viewBox="0 0 24 24" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>
+        </button>
+        <button class="file-action-btn undo" title="Undo">
+          <svg class="icon-svg" width="15" height="15" viewBox="0 0 24 24" stroke-width="1.8"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+        </button>
+      </div>
+    </div>
+    <!-- File 2: New CSS -->
+    <div class="file-item">
+      <span class="file-status added">A</span>
+      <div class="file-icon-placeholder css"></div>
+      <span class="file-name">selectors.css</span>
+      <span class="file-stats">
+        <span style="color:#89d185">+86</span>
+      </span>
+      <div class="file-actions">
+        <button class="file-action-btn" title="View Diff">
+          <svg class="icon-svg" width="15" height="15" viewBox="0 0 24 24" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>
+        </button>
+        <button class="file-action-btn undo" title="Undo">
+          <svg class="icon-svg" width="15" height="15" viewBox="0 0 24 24" stroke-width="1.8"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+        </button>
+      </div>
+    </div>
+    <!-- File 3: Modified Java -->
+    <div class="file-item">
+      <span class="file-status modified">M</span>
+      <div class="file-icon-placeholder java"></div>
+      <span class="file-name">SessionState.java</span>
+      <span class="file-stats">
+        <span style="color:#89d185">+8</span>
+        <span style="color:#ff6b6b">-26</span>
+      </span>
+      <div class="file-actions">
+        <button class="file-action-btn" title="View Diff">
+          <svg class="icon-svg" width="15" height="15" viewBox="0 0 24 24" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>
+        </button>
+        <button class="file-action-btn undo" title="Undo">
+          <svg class="icon-svg" width="15" height="15" viewBox="0 0 24 24" stroke-width="1.8"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ==========================================================
+     4. 设计说明
+     ========================================================== -->
+<h2>4. 变更总结</h2>
+
+<div style="background:#252540; border:1px solid #333; border-radius:12px; padding:20px; max-width:780px;">
+  <table style="width:100%; border-collapse:collapse; font-size:13px;">
+    <thead>
+      <tr style="border-bottom:1px solid #444;">
+        <th style="text-align:left; padding:8px; color:#aaa;">项目</th>
+        <th style="text-align:left; padding:8px; color:#aaa;">旧设计</th>
+        <th style="text-align:left; padding:8px; color:#aaa;">新设计</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+        <td style="padding:8px; color:#5ab0f5;">选择器按钮</td>
+        <td style="padding:8px; color:#999;">圆角胶囊药丸样式，深色背景圆角容器包裹</td>
+        <td style="padding:8px; color:#4cc38a;">平底 Tab 样式，圆点分隔符，底部蓝色下划线指示激活态</td>
+      </tr>
+      <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+        <td style="padding:8px; color:#a989ff;">RobotIcon</td>
+        <td style="padding:8px; color:#999;">扁平方框 + 圆点嘴巴，缺乏辨识度</td>
+        <td style="padding:8px; color:#4cc38a;">圆角头部 + 天线圆球 + 高光眼 + 微笑 + 侧面耳朵线</td>
+      </tr>
+      <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+        <td style="padding:8px; color:#4cc38a;">TaskIcon</td>
+        <td style="padding:8px; color:#999;">简单勾选框</td>
+        <td style="padding:8px; color:#4cc38a;">剪贴板 + 勾选 + 列表行</td>
+      </tr>
+      <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+        <td style="padding:8px; color:#f5a623;">EditIcon</td>
+        <td style="padding:8px; color:#999;">单独笔和框分离</td>
+        <td style="padding:8px; color:#4cc38a;">文档内嵌编辑笔尖</td>
+      </tr>
+      <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+        <td style="padding:8px; color:#f5a623;">SparklesIcon</td>
+        <td style="padding:8px; color:#999;">三层叠放菱形</td>
+        <td style="padding:8px; color:#4cc38a;">魔法棒 + 闪烁四角星</td>
+      </tr>
+      <tr>
+        <td style="padding:8px; color:#5ab0f5;">SendIcon</td>
+        <td style="padding:8px; color:#999;">经典纸飞机</td>
+        <td style="padding:8px; color:#4cc38a;">保持不变</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+</body>
+</html>

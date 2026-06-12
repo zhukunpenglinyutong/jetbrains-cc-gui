@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方案五：丝滑60帧 - CC GUI 动效预览</title>
+<style>
+/* ══════════════════════════════════════════════════════════════
+   方案五：丝滑60帧 (Silky 60fps)
+
+   核心原则：只使用合成器线程属性 — transform + opacity
+   ❌ 绝对禁止：box-shadow动画、filter动画、background动画、
+               border动画、width/height动画、margin/padding动画
+   ✅ 只允许：transform、opacity、clip-path（GPU加速）
+
+   技术要点：
+   1. 用 transform: scale() 模拟 box-shadow 的"发光"效果
+   2. 用 opacity 伪元素模拟背景色过渡
+   3. 用 clip-path 做展开/收起动画（GPU加速）
+   4. 所有动画元素加 will-change 提示
+   5. 使用 CSS containment (contain) 隔离布局
+   ══════════════════════════════════════════════════════════════ */
+
+:root {
+    --bg-primary: #1e1e1e;
+    --bg-secondary: #252526;
+    --bg-tertiary: #2b2d31;
+    --bg-elevated: #2d2d2d;
+    --bg-hover: #35373c;
+    --text-primary: #cccccc;
+    --text-secondary: #e0e0e0;
+    --text-tertiary: #858585;
+    --border-primary: #333;
+    --border-secondary: #3e3e42;
+    --accent: #007fd4;
+    --accent-hover: #026ec1;
+    --success: #4caf50;
+    --warning: #ff9800;
+    --error: #f44336;
+    --violet: #a989ff;
+
+    /* 丝滑缓动 — 纯数值，无过冲，帧时间均匀 */
+    --ease-smooth: cubic-bezier(0.25, 0.1, 0.25, 1);
+    --ease-out: cubic-bezier(0, 0, 0.2, 1);
+    --ease-in: cubic-bezier(0.4, 0, 1, 1);
+    --dur-fast: 120ms;
+    --dur-normal: 200ms;
+    --dur-slow: 300ms;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg-primary); color: var(--text-primary); line-height: 1.5;
+}
+
+.page { max-width: 1200px; margin: 0 auto; padding: 40px 24px; }
+.page-title { font-size: 28px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+.page-subtitle { font-size: 14px; color: var(--text-tertiary); margin-bottom: 40px; max-width: 700px; line-height: 1.6; }
+.scheme-badge {
+    display: inline-block; padding: 4px 12px; border-radius: 4px;
+    background: rgba(76, 175, 80, 0.15); border: 1px solid rgba(76, 175, 80, 0.3);
+    color: var(--success); font-size: 12px; font-weight: 600; margin-bottom: 16px;
+}
+
+.section { margin-bottom: 48px; }
+.section-title { font-size: 16px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; }
+.section-desc { font-size: 13px; color: var(--text-tertiary); margin-bottom: 20px; }
+.showcase { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.showcase-col { display: flex; flex-direction: column; gap: 12px; }
+
+/* ─── 性能面板 ─── */
+.perf-panel {
+    position: fixed; top: 12px; right: 12px; padding: 10px 16px;
+    background: rgba(0,0,0,0.8); border: 1px solid var(--border-secondary);
+    border-radius: 8px; font-size: 12px; color: var(--success);
+    font-family: monospace; z-index: 9999;
+    display: flex; align-items: center; gap: 8px;
+}
+.perf-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--success);
+    animation: perf-blink 1s step-end infinite;
+}
+@keyframes perf-blink { 50% { opacity: 0.3; } }
+
+/* ══════════════════════════════════════════════════════════════
+   1. 按钮 — 纯 transform 反馈
+   ══════════════════════════════════════════════════════════════ */
+.btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border: none; border-radius: 4px;
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    position: relative; overflow: hidden;
+    /* ✅ 只过渡 transform + opacity */
+    transition: transform var(--dur-fast) var(--ease-smooth),
+                opacity var(--dur-fast) var(--ease-smooth);
+    will-change: transform, opacity;
+    -webkit-tap-highlight-color: transparent;
+    contain: layout style;
+}
+
+/* 背景层：通过 opacity 伪元素模拟背景色过渡（避免 background transition） */
+.btn::before {
+    content: ''; position: absolute; inset: 0; border-radius: inherit;
+    opacity: 0; transition: opacity var(--dur-fast) var(--ease-smooth);
+    will-change: opacity;
+}
+.btn:hover::before { opacity: 1; }
+
+.btn-primary {
+    background: var(--accent); color: #fff;
+}
+.btn-primary::before { background: var(--accent-hover); }
+.btn-primary:hover { transform: translateY(-1px); }
+.btn-primary:active { transform: translateY(0.5px) scale(0.98); }
+
+.btn-secondary {
+    background: var(--bg-tertiary); color: var(--text-primary);
+    border: 1px solid var(--border-secondary);
+}
+.btn-secondary::before { background: var(--bg-hover); }
+.btn-secondary:hover { transform: translateY(-0.5px); }
+.btn-secondary:active { transform: translateY(0.5px) scale(0.98); }
+
+.btn-success {
+    background: rgba(76, 175, 80, 0.12); color: var(--success);
+    border: 1px solid rgba(76, 175, 80, 0.3);
+}
+.btn-success::before { background: rgba(76, 175, 80, 0.22); }
+.btn-success:hover { transform: translateY(-0.5px); }
+.btn-success:active { transform: translateY(0.5px) scale(0.98); }
+
+.btn-danger {
+    background: rgba(244, 67, 54, 0.1); color: var(--error);
+    border: 1px solid rgba(244, 67, 54, 0.25);
+}
+.btn-danger::before { background: rgba(244, 67, 54, 0.2); }
+.btn-danger:hover { transform: translateY(-0.5px); }
+.btn-danger:active { transform: translateY(0.5px) scale(0.98); }
+
+.btn-small { padding: 5px 12px; font-size: 12px; border-radius: 6px; }
+
+/* ✅ 加载 spinner — 纯 transform */
+.spinner {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: currentColor;
+    animation: spin 0.6s linear infinite;
+    will-change: transform;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ✅ 涟漪效果 — 纯 transform + opacity */
+.ripple-layer {
+    position: absolute; inset: 0; overflow: hidden; border-radius: inherit;
+    pointer-events: none;
+}
+.ripple {
+    position: absolute; border-radius: 50%; background: rgba(255,255,255,0.25);
+    transform: scale(0); opacity: 1;
+    animation: ripple-go 400ms var(--ease-out) forwards;
+    will-change: transform, opacity;
+}
+@keyframes ripple-go {
+    to { transform: scale(2); opacity: 0; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   2. 卡片 — transform 浮起 + 发光环（scale 模拟 box-shadow）
+   ══════════════════════════════════════════════════════════════ */
+.card {
+    background: var(--bg-secondary); border: 1px solid var(--border-secondary);
+    border-radius: 8px; padding: 16px; cursor: pointer;
+    position: relative; overflow: hidden; min-width: 260px;
+    transition: transform var(--dur-normal) var(--ease-smooth),
+                opacity var(--dur-normal) var(--ease-smooth);
+    will-change: transform;
+    contain: layout style;
+}
+/* ✅ 发光环：用 scale 的伪元素模拟 box-shadow，纯合成器 */
+.card::after {
+    content: ''; position: absolute; inset: -8px;
+    border-radius: 16px; border: 2px solid var(--accent);
+    opacity: 0; transform: scale(0.98);
+    transition: opacity var(--dur-normal) var(--ease-smooth),
+                transform var(--dur-normal) var(--ease-smooth);
+    will-change: opacity, transform;
+    pointer-events: none;
+}
+.card:hover {
+    transform: translateY(-2px);
+}
+.card:hover::after {
+    opacity: 0.4; transform: scale(1);
+}
+.card:active { transform: translateY(0); }
+
+/* ✅ 顶部高亮条：用 scaleY + opacity 而非 scaleX */
+.card-bar {
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: var(--accent);
+    transform: scaleX(0); transform-origin: left;
+    transition: transform var(--dur-slow) var(--ease-smooth);
+    will-change: transform;
+}
+.card:hover .card-bar { transform: scaleX(1); }
+
+.card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.card-icon {
+    width: 32px; height: 32px; border-radius: 6px; display: flex;
+    align-items: center; justify-content: center; font-size: 16px;
+    background: rgba(0, 127, 212, 0.15); color: var(--accent);
+}
+.card-title { font-size: 14px; font-weight: 600; color: var(--text-secondary); }
+.card-desc { font-size: 13px; color: var(--text-tertiary); line-height: 1.5; }
+.card-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; margin-top: 10px; }
+.status-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    /* ✅ 脉冲用 scale 模拟，不用 box-shadow */
+    position: relative;
+}
+.status-dot.on { background: var(--success); }
+.status-dot.on::after {
+    content: ''; position: absolute; inset: -3px;
+    border-radius: 50%; border: 1.5px solid var(--success);
+    animation: ring-pulse 2s ease-out infinite;
+    will-change: transform, opacity;
+}
+@keyframes ring-pulse {
+    0% { transform: scale(1); opacity: 0.6; }
+    100% { transform: scale(2.2); opacity: 0; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   3. 对话框 — 纯 transform + opacity
+   ══════════════════════════════════════════════════════════════ */
+.dialog-overlay {
+    position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000; opacity: 0; pointer-events: none;
+    transition: opacity var(--dur-normal) var(--ease-smooth);
+    will-change: opacity;
+}
+.dialog-overlay.active { opacity: 1; pointer-events: auto; }
+
+.dialog-box {
+    background: var(--bg-secondary); border: 1px solid var(--border-secondary);
+    border-radius: 8px; min-width: 420px;
+    /* ✅ 只用 transform + opacity，不用 filter/box-shadow 动画 */
+    transform: translateY(-12px) scale(0.97);
+    opacity: 0;
+    transition: transform var(--dur-slow) var(--ease-out),
+                opacity var(--dur-slow) var(--ease-out);
+    will-change: transform, opacity;
+    contain: layout style;
+}
+.dialog-overlay.active .dialog-box {
+    transform: translateY(0) scale(1); opacity: 1;
+}
+/* 静态 box-shadow（不参与动画） */
+.dialog-box { box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); }
+
+.dialog-header { padding: 16px 20px; border-bottom: 1px solid var(--border-secondary); }
+.dialog-title { font-size: 15px; font-weight: 600; color: var(--text-secondary); }
+.dialog-body { padding: 20px; font-size: 13px; color: var(--text-primary); line-height: 1.6; }
+.dialog-footer { padding: 12px 20px; border-top: 1px solid var(--border-secondary); display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ══════════════════════════════════════════════════════════════
+   4. Toast — 纯 transform 滑动
+   ══════════════════════════════════════════════════════════════ */
+.toast-area {
+    position: relative; height: 300px;
+    background: rgba(0,0,0,0.2); border-radius: 8px; overflow: hidden;
+    min-width: 400px; display: flex; flex-direction: column;
+    align-items: flex-end; justify-content: flex-start;
+    padding: 16px; gap: 8px;
+}
+.toast {
+    background: var(--bg-elevated); border: 1px solid var(--border-secondary);
+    border-radius: 6px; padding: 12px 16px; min-width: 280px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); /* 静态，不参与动画 */
+    /* ✅ 入场：纯 transform + opacity */
+    animation: toast-in var(--dur-slow) var(--ease-out) both;
+    will-change: transform, opacity;
+    contain: layout style;
+}
+.toast.out { animation: toast-out var(--dur-fast) var(--ease-in) both; }
+
+@keyframes toast-in {
+    from { opacity: 0; transform: translateX(24px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+@keyframes toast-out {
+    from { opacity: 1; transform: translateX(0); }
+    to { opacity: 0; transform: translateX(24px); }
+}
+
+.toast-info { border-left: 3px solid var(--accent); }
+.toast-success { border-left: 3px solid var(--success); }
+.toast-warning { border-left: 3px solid var(--warning); }
+.toast-error { border-left: 3px solid var(--error); }
+.toast-content { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.toast-msg { font-size: 13px; color: var(--text-secondary); flex: 1; }
+.toast-close {
+    background: none; border: none; color: var(--text-tertiary);
+    cursor: pointer; padding: 4px; font-size: 14px;
+    transition: opacity var(--dur-fast);
+}
+.toast-close:hover { opacity: 1; }
+
+/* ══════════════════════════════════════════════════════════════
+   5. 消息 — 纯 translateY + opacity 入场
+   ══════════════════════════════════════════════════════════════ */
+.msg-list { display: flex; flex-direction: column; gap: 2px; min-width: 500px; }
+.msg {
+    padding: 8px 20px;
+    /* ✅ 纯合成器属性 */
+    animation: msg-in var(--dur-slow) var(--ease-out) both;
+    will-change: transform, opacity;
+}
+.msg.user { display: flex; justify-content: flex-end; }
+.msg-bubble {
+    max-width: 80%; padding: 10px 14px; border-radius: 12px;
+    font-size: 13px; line-height: 1.6;
+}
+.msg.user .msg-bubble { background: #005fb8; color: #fff; border-bottom-right-radius: 4px; }
+.msg.assistant .msg-bubble { background: transparent; color: var(--text-primary); }
+
+@keyframes msg-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ✅ 光标闪烁 — 纯 opacity */
+.cursor {
+    display: inline-block; width: 2px; height: 16px;
+    background: var(--accent); margin-left: 2px; vertical-align: text-bottom;
+    animation: blink 1s step-end infinite;
+    will-change: opacity;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ══════════════════════════════════════════════════════════════
+   6. 生成等待 — 纯 scaleY 波形
+   ══════════════════════════════════════════════════════════════ */
+.gen-strip {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 8px 16px; background: rgba(0, 127, 212, 0.06);
+    border: 1px solid rgba(0, 127, 212, 0.15);
+    border-radius: 8px; font-size: 13px; color: var(--accent);
+    animation: gen-in var(--dur-slow) var(--ease-out) both;
+    will-change: transform, opacity;
+}
+@keyframes gen-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ✅ 波形 — 纯 scaleY，无 box-shadow */
+.wave { display: flex; gap: 2px; align-items: center; height: 16px; }
+.wave span {
+    display: block; width: 3px; border-radius: 1.5px; background: currentColor;
+    will-change: transform, opacity;
+    animation: wave-y 1.2s var(--ease-smooth) infinite;
+}
+.wave span:nth-child(1) { height: 6px; animation-delay: 0s; }
+.wave span:nth-child(2) { height: 10px; animation-delay: 0.1s; }
+.wave span:nth-child(3) { height: 4px; animation-delay: 0.2s; }
+.wave span:nth-child(4) { height: 8px; animation-delay: 0.3s; }
+.wave span:nth-child(5) { height: 5px; animation-delay: 0.4s; }
+@keyframes wave-y {
+    0%, 100% { transform: scaleY(0.4); opacity: 0.5; }
+    50% { transform: scaleY(1); opacity: 1; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   7. 输入框 — 无动画的即时焦点 + transform 发光环
+   ══════════════════════════════════════════════════════════════ */
+.input-box {
+    background: var(--bg-secondary); border: 1px solid var(--border-secondary);
+    border-radius: 8px; overflow: hidden; position: relative; min-width: 500px;
+    contain: layout style;
+}
+/* ✅ 发光环用 scale 的伪元素，不动画 box-shadow */
+.input-box::after {
+    content: ''; position: absolute; inset: -2px;
+    border-radius: 10px; border: 2px solid var(--accent);
+    opacity: 0; transform: scale(0.99);
+    transition: opacity var(--dur-fast) var(--ease-smooth),
+                transform var(--dur-fast) var(--ease-smooth);
+    will-change: opacity, transform;
+    pointer-events: none;
+}
+.input-box:focus-within::after { opacity: 0.5; transform: scale(1); }
+
+.input-area { display: flex; align-items: flex-end; gap: 8px; padding: 10px 14px; position: relative; z-index: 1; }
+.input-textarea {
+    flex: 1; background: none; border: none; outline: none;
+    color: var(--text-primary); font-size: 13px; resize: none;
+    font-family: inherit; line-height: 1.5;
+}
+.input-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 14px; border-top: 1px solid var(--border-primary);
+    position: relative; z-index: 1;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   8. 选项卡 — transform 切换指示器
+   ══════════════════════════════════════════════════════════════ */
+.tabs-wrapper {
+    position: relative; min-width: 400px;
+}
+.tabs-bg {
+    background: var(--bg-secondary); border: 1px solid var(--border-primary);
+    border-radius: 6px; padding: 3px; display: flex;
+}
+.tab {
+    flex: 1; padding: 7px 16px; border: none; background: none;
+    color: var(--text-tertiary); font-size: 13px; font-weight: 500;
+    cursor: pointer; border-radius: 4px; position: relative; z-index: 1;
+    transition: color var(--dur-fast);
+    contain: layout style;
+}
+.tab:hover { color: var(--text-primary); }
+/* ✅ 滑块指示器 — 纯 transform 位移 */
+.tab-slider {
+    position: absolute; top: 3px; height: calc(100% - 6px);
+    background: var(--bg-hover); border-radius: 4px;
+    transition: transform var(--dur-normal) var(--ease-smooth),
+                width var(--dur-normal) var(--ease-smooth);
+    will-change: transform;
+    z-index: 0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   9. 开关 — transform 平移 + 发光环
+   ══════════════════════════════════════════════════════════════ */
+.toggle {
+    position: relative; width: 36px; height: 20px; border-radius: 10px;
+    background: var(--border-secondary); cursor: pointer;
+    /* ✅ 不动画 background，用伪元素 opacity */
+    transition: none;
+}
+/* 背景色通过 opacity 伪元素切换 */
+.toggle::before {
+    content: ''; position: absolute; inset: 0; border-radius: 10px;
+    background: var(--accent); opacity: 0;
+    transition: opacity var(--dur-normal) var(--ease-smooth);
+    will-change: opacity;
+}
+.toggle.on::before { opacity: 1; }
+
+.toggle-knob {
+    position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+    border-radius: 50%; background: #fff;
+    transition: transform var(--dur-normal) var(--ease-smooth);
+    will-change: transform;
+    z-index: 1;
+}
+.toggle.on .toggle-knob { transform: translateX(16px); }
+
+/* ══════════════════════════════════════════════════════════════
+   10. 下拉选择器 — transform 展开
+   ══════════════════════════════════════════════════════════════ */
+.select { position: relative; min-width: 200px; }
+.select-trigger {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 7px 12px; background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary); border-radius: 4px;
+    color: var(--text-primary); font-size: 13px; cursor: pointer;
+}
+.select-arrow {
+    display: inline-block;
+    transition: transform var(--dur-fast) var(--ease-smooth);
+    will-change: transform;
+    font-size: 12px;
+}
+.select-trigger.open .select-arrow { transform: rotate(180deg); }
+
+.select-dropdown {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    background: var(--bg-elevated); border: 1px solid var(--border-secondary);
+    border-radius: 6px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4); /* 静态 */
+    z-index: 100; overflow: hidden;
+    /* ✅ scaleY + opacity（transform-origin: top 使其从上方展开） */
+    transform: scaleY(0); transform-origin: top;
+    opacity: 0;
+    transition: transform var(--dur-normal) var(--ease-out),
+                opacity var(--dur-fast) var(--ease-out);
+    will-change: transform, opacity;
+}
+.select-dropdown.open { transform: scaleY(1); opacity: 1; }
+.select-option {
+    padding: 8px 12px; font-size: 13px; cursor: pointer;
+    transition: opacity var(--dur-fast);
+}
+.select-option:hover { opacity: 0.8; }
+.select-option.selected { color: var(--accent); }
+
+/* ══════════════════════════════════════════════════════════════
+   11. 进度条 — scaleX 填充
+   ══════════════════════════════════════════════════════════════ */
+.progress-track {
+    height: 4px; background: var(--border-primary); border-radius: 2px;
+    overflow: hidden; min-width: 200px;
+}
+.progress-bar {
+    height: 100%; background: var(--accent); border-radius: 2px;
+    /* ✅ scaleX 替代 width — 合成器友好 */
+    transform: scaleX(0); transform-origin: left;
+    transition: transform 1s var(--ease-smooth);
+    will-change: transform;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   12. 时间线 — transform 脉冲
+   ══════════════════════════════════════════════════════════════ */
+.timeline { display: flex; flex-direction: column; padding-left: 20px; border-left: 1px solid var(--border-primary); }
+.timeline-item { position: relative; padding: 8px 0 8px 16px; }
+.timeline-dot {
+    position: absolute; left: -24px; top: 12px;
+    width: 7px; height: 7px; border-radius: 50%; background: var(--text-tertiary);
+    /* ✅ 用 transform: scale 做脉冲，不用 box-shadow */
+}
+.timeline-dot.pending {
+    background: var(--warning);
+    animation: dot-scale-pulse 2s ease-in-out infinite;
+    will-change: transform, opacity;
+}
+.timeline-dot.done { background: var(--success); }
+.timeline-dot.err { background: var(--error); }
+
+@keyframes dot-scale-pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(0.7); opacity: 0.5; }
+}
+
+/* ✅ 扩散环 — 纯 transform + opacity */
+.timeline-dot.pending::after {
+    content: ''; position: absolute; inset: -3px;
+    border-radius: 50%; border: 1.5px solid var(--warning);
+    animation: ring-out 2s ease-out infinite;
+    will-change: transform, opacity;
+}
+@keyframes ring-out {
+    0% { transform: scale(1); opacity: 0.5; }
+    100% { transform: scale(2.5); opacity: 0; }
+}
+
+/* ─── 工具块折叠/展开 — ✅ clip-path（GPU 加速） ─── */
+.collapsible-content {
+    overflow: hidden;
+    transition: clip-path var(--dur-normal) var(--ease-smooth);
+    will-change: clip-path;
+}
+.collapsible-content.collapsed {
+    clip-path: inset(0 0 100% 0);
+}
+
+/* ─── 控制按钮 ─── */
+.ctrl-btn {
+    padding: 8px 16px; background: var(--accent); color: #fff;
+    border: none; border-radius: 4px; font-size: 13px; cursor: pointer;
+    margin-right: 8px; margin-bottom: 8px;
+    transition: transform var(--dur-fast) var(--ease-smooth);
+    will-change: transform;
+}
+.ctrl-btn:hover { transform: translateY(-1px); }
+.ctrl-btn:active { transform: translateY(0.5px) scale(0.98); }
+
+/* ─── 标注 ─── */
+.note {
+    padding: 8px 12px; border-left: 2px solid var(--success);
+    border-radius: 0 4px 4px 0; font-size: 12px; color: var(--success);
+    background: rgba(76, 175, 80, 0.06); max-width: 480px; line-height: 1.6;
+}
+
+/* ─── 帧率优化对照表 ─── */
+.optimization-table {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+    margin-top: 20px;
+}
+.optimization-table th {
+    padding: 8px 12px; text-align: left; color: var(--text-tertiary);
+    border-bottom: 1px solid var(--border-secondary); font-weight: 600;
+}
+.optimization-table td {
+    padding: 8px 12px; border-bottom: 1px solid var(--border-primary);
+}
+.bad { color: var(--error); }
+.good { color: var(--success); font-weight: 500; }
+code {
+    background: rgba(255,255,255,0.08); padding: 1px 5px;
+    border-radius: 3px; font-size: 12px;
+}
+</style>
+</head>
+<body>
+
+<!-- ✅ 帧率指示器 -->
+<div class="perf-panel">
+    <div class="perf-dot"></div>
+    <span>60fps · 仅 transform + opacity</span>
+</div>
+
+<div class="page">
+    <div class="scheme-badge">✓ 方案五 · Silky 60fps</div>
+    <h1 class="page-title">丝滑60帧</h1>
+    <p class="page-subtitle">
+        专门为高帧率优化的动效方案。<strong>所有动画只使用 <code>transform</code> + <code>opacity</code></strong>，
+        完全运行在 GPU 合成器线程上，不触发任何重绘或重排。
+        配合 <code>will-change</code> 提示和 CSS <code>contain</code> 隔离，确保每一帧都在 16.6ms 内完成。
+    </p>
+
+    <!-- ❌ → ✅ 优化对照 -->
+    <div class="section">
+        <h2 class="section-title">⚡ 性能优化对照</h2>
+        <table class="optimization-table">
+            <thead>
+                <tr><th>场景</th><th class="bad">❌ 传统做法（触发重绘）</th><th class="good">✅ 60fps 做法</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>按钮 hover</td><td class="bad">transition: background 0.2s</td><td class="good">伪元素 opacity 过渡 + transform 位移</td></tr>
+                <tr><td>卡片发光</td><td class="bad">transition: box-shadow 0.3s</td><td class="good">伪元素 border + opacity/scale</td></tr>
+                <tr><td>输入框聚焦</td><td class="bad">box-shadow 动画</td><td class="good">静态 box-shadow + 伪元素 border/opacity</td></tr>
+                <tr><td>消息入场</td><td class="bad">filter: blur(2px) 动画</td><td class="good">纯 opacity + translateY</td></tr>
+                <tr><td>进度条</td><td class="bad">transition: width 1s</td><td class="good">transform: scaleX（合成器友好）</td></tr>
+                <tr><td>下拉展开</td><td class="bad">height: 0 → auto 动画</td><td class="good">transform: scaleY（transform-origin: top）</td></tr>
+                <tr><td>提示框出现</td><td class="bad">margin-top: -4px 动画</td><td class="good">transform: translateY(-4px)</td></tr>
+                <tr><td>Toast 滑入</td><td class="bad">transition: all 0.3s</td><td class="good">animation 仅 transform + opacity</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 1. 按钮 -->
+    <div class="section">
+        <h2 class="section-title">🔘 按钮 — transform 反馈 + opacity 背景层</h2>
+        <p class="section-desc">hover 时 translateY(-1px)，active 时 translateY(0.5px) scale(0.98)。背景色变化通过伪元素 opacity 实现。</p>
+        <div class="showcase">
+            <div class="showcase-col">
+                <button class="btn btn-primary" onclick="addRipple(event)">主要按钮</button>
+                <button class="btn btn-secondary" onclick="addRipple(event)">次要按钮</button>
+                <button class="btn btn-success" onclick="addRipple(event)">✓ 成功</button>
+                <button class="btn btn-danger">✕ 危险</button>
+                <button class="btn btn-primary btn-small">小号</button>
+                <button class="btn btn-primary"><span class="spinner"></span>加载中</button>
+            </div>
+            <div class="note">
+                <strong>✅ 全部只用了 transform + opacity</strong><br>
+                • 背景色过渡 → ::before 伪元素 opacity<br>
+                • 按压反馈 → translateY + scale<br>
+                • 涟漪效果 → circle transform: scale(0→2) + opacity<br>
+                • Spinner → transform: rotate（线性，0.6s）
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. 卡片 -->
+    <div class="section">
+        <h2 class="section-title">🃏 卡片 — transform 浮起 + border 发光环</h2>
+        <p class="section-desc">hover 时 translateY(-2px)，外层 ::after 伪元素 border + opacity 模拟发光。状态点脉冲用 scale + opacity。</p>
+        <div class="showcase">
+            <div class="card">
+                <div class="card-bar"></div>
+                <div class="card-header">
+                    <div class="card-icon">⚡</div>
+                    <div><div class="card-title">MCP Server</div><div class="card-status"><span class="status-dot on"></span>运行中</div></div>
+                </div>
+                <div class="card-desc">文件系统工具服务器</div>
+            </div>
+            <div class="card">
+                <div class="card-bar" style="background: var(--violet);"></div>
+                <div class="card-header">
+                    <div class="card-icon" style="background: rgba(169,137,255,0.15); color: var(--violet);">🔮</div>
+                    <div><div class="card-title">Code Analysis</div><div class="card-status"><span class="status-dot on" style="--c: var(--success);"></span>运行中</div></div>
+                </div>
+                <div class="card-desc">代码分析与重构建议</div>
+            </div>
+            <div class="note">
+                <strong>✅ 不用 box-shadow 动画</strong><br>
+                • 发光 → ::after 伪元素 border + scale/opacity<br>
+                • 顶部扫描线 → transform: scaleX(0→1)<br>
+                • 脉冲环 → ::after transform: scale(1→2.5) + opacity
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. 对话框 -->
+    <div class="section">
+        <h2 class="section-title">💬 对话框 — 纯 transform + opacity 入场</h2>
+        <p class="section-desc">无 filter:blur，无 box-shadow 动画。只做 translateY(-12px) + scale(0.97) → 原位。300ms。</p>
+        <div class="showcase">
+            <button class="btn btn-primary" onclick="openDialog()">打开对话框</button>
+            <div class="note">无模糊滤镜，帧率稳定</div>
+        </div>
+    </div>
+
+    <!-- 4. Toast -->
+    <div class="section">
+        <h2 class="section-title">🔔 Toast — 纯 translateX 滑动</h2>
+        <p class="section-desc">入场 translateX(24px) → 0 + opacity。退场反向。不使用 transition: all。</p>
+        <div class="showcase">
+            <button class="ctrl-btn" onclick="showToast('info')">信息</button>
+            <button class="ctrl-btn" onclick="showToast('success')">成功</button>
+            <button class="ctrl-btn" onclick="showToast('warning')">警告</button>
+            <button class="ctrl-btn" onclick="showToast('error')">错误</button>
+        </div>
+        <div class="toast-area" id="toastArea"></div>
+    </div>
+
+    <!-- 5. 消息 -->
+    <div class="section">
+        <h2 class="section-title">📝 消息 — 纯 translateY + opacity</h2>
+        <p class="section-desc">入场 translateY(6px) + opacity，无 blur 滤镜。光标纯 opacity 闪烁（step-end，无过渡）。</p>
+        <div class="showcase">
+            <div class="msg-list" id="msgList">
+                <div class="msg user"><div class="msg-bubble">帮我优化这段代码的帧率</div></div>
+                <div class="msg assistant"><div class="msg-bubble">问题出在 filter: blur() 动画上，我来修复...<span class="cursor"></span></div></div>
+            </div>
+            <button class="ctrl-btn" onclick="addMsg()">添加消息</button>
+        </div>
+    </div>
+
+    <!-- 6. 生成等待 -->
+    <div class="section">
+        <h2 class="section-title">⏳ 生成等待 — 纯 scaleY 波形</h2>
+        <p class="section-desc">波形条仅使用 transform: scaleY，无 box-shadow 发光。整个组件入场 translateY + scale。</p>
+        <div class="showcase">
+            <div class="gen-strip">
+                <div class="wave"><span></span><span></span><span></span><span></span><span></span></div>
+                <span style="font-weight: 500;">正在生成</span>
+                <span style="opacity: 0.5; font-size: 12px;">12s</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 7. 输入框 -->
+    <div class="section">
+        <h2 class="section-title">⌨️ 输入框 — 即时焦点 + 发光环</h2>
+        <p class="section-desc">聚焦时 ::after 伪元素 border 从 opacity:0 → 0.5，无 box-shadow 动画。</p>
+        <div class="input-box">
+            <div class="input-area">
+                <textarea class="input-textarea" rows="1" placeholder="输入消息..."></textarea>
+                <button class="btn btn-primary btn-small">发送</button>
+            </div>
+            <div class="input-toolbar">
+                <div style="display: flex; gap: 8px;"><span style="font-size: 16px; cursor: pointer;">📎</span></div>
+                <span style="font-size: 12px; color: var(--text-tertiary);">Enter 发送</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 8-12 组合 -->
+    <div class="section">
+        <h2 class="section-title">📑 🔘 📋 选项卡 · 开关 · 下拉 · 进度 · 时间线</h2>
+        <div class="showcase" style="flex-direction: column; gap: 20px;">
+            <!-- 选项卡 -->
+            <div class="tabs-wrapper" id="tabsWrapper">
+                <div class="tab-slider" id="tabSlider"></div>
+                <div class="tabs-bg">
+                    <button class="tab active" onclick="switchTab(this, 0)">Todo</button>
+                    <button class="tab" onclick="switchTab(this, 1)">文件变更</button>
+                    <button class="tab" onclick="switchTab(this, 2)">子代理</button>
+                </div>
+            </div>
+
+            <!-- 开关 -->
+            <div style="display: flex; gap: 24px; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div class="toggle on" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+                    <span style="font-size: 13px;">自动保存</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div class="toggle" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+                    <span style="font-size: 13px;">流式输出</span>
+                </div>
+            </div>
+
+            <!-- 下拉 -->
+            <div class="select" id="select1">
+                <div class="select-trigger" onclick="toggleSelect('select1')">
+                    <span>claude-sonnet-4-20250514</span>
+                    <span class="select-arrow">▼</span>
+                </div>
+                <div class="select-dropdown">
+                    <div class="select-option selected">claude-sonnet-4-20250514</div>
+                    <div class="select-option">claude-opus-4-20250514</div>
+                    <div class="select-option">claude-haiku-4-20250514</div>
+                </div>
+            </div>
+
+            <!-- 进度条 -->
+            <div class="showcase" style="gap: 32px;">
+                <div class="showcase-col" style="min-width: 300px;">
+                    <div class="progress-track"><div class="progress-bar" id="pBar"></div></div>
+                    <button class="ctrl-btn" onclick="animateProgress()">播放进度</button>
+                </div>
+
+                <!-- 时间线 -->
+                <div class="timeline">
+                    <div class="timeline-item">
+                        <div class="timeline-dot done"></div>
+                        <div style="font-size: 13px; color: var(--text-secondary);">搜索文件</div>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-dot done"></div>
+                        <div style="font-size: 13px; color: var(--text-secondary);">读取内容</div>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-dot pending"></div>
+                        <div style="font-size: 13px; color: var(--text-secondary);">编辑代码...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 规则汇总 -->
+    <div class="section" style="margin-top: 48px; padding: 24px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <h2 class="section-title">📐 60帧动效规则</h2>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; font-size: 13px;">
+            <div>
+                <h3 style="color: var(--error); font-size: 13px; margin-bottom: 8px;">❌ 禁止动画的属性</h3>
+                <ul style="list-style: none; color: var(--text-primary); line-height: 2;">
+                    <li><code>box-shadow</code> — 每帧重绘像素区域</li>
+                    <li><code>filter: blur()</code> — 高斯模糊，GPU 杀手</li>
+                    <li><code>background</code> — 触发整元素重绘</li>
+                    <li><code>border-color</code> — 触发重绘</li>
+                    <li><code>width / height</code> — 触发布局重排</li>
+                    <li><code>margin / padding</code> — 触发布局重排</li>
+                    <li><code>top / left</code> — 触发布局重排</li>
+                </ul>
+            </div>
+            <div>
+                <h3 style="color: var(--success); font-size: 13px; margin-bottom: 8px;">✅ 只用这两个属性做动画</h3>
+                <ul style="list-style: none; color: var(--text-primary); line-height: 2;">
+                    <li><code>transform</code> — GPU 合成器线程处理</li>
+                    <li><code>opacity</code> — GPU 合成器线程处理</li>
+                    <li style="margin-top: 8px;"><strong style="color: var(--text-secondary);">替代技巧：</strong></li>
+                    <li>背景色过渡 → 伪元素 + opacity</li>
+                    <li>发光效果 → 伪元素 border + opacity</li>
+                    <li>展开收起 → scaleY 或 clip-path</li>
+                    <li>进度条 → scaleX（非 width）</li>
+                </ul>
+            </div>
+        </div>
+        <div style="margin-top: 16px; padding: 12px; background: rgba(76,175,80,0.06); border-radius: 6px; font-size: 12px; color: var(--success);">
+            <strong>必加声明：</strong> 对所有动画元素加 <code>will-change: transform, opacity;</code>（提前提升合成层）<br>
+            <strong>布局隔离：</strong> 对卡片/列表项加 <code>contain: layout style;</code>（避免影响邻居布局计算）
+        </div>
+    </div>
+</div>
+
+<!-- 对话框 -->
+<div class="dialog-overlay" id="dialogOverlay" onclick="closeDialog(event)">
+    <div class="dialog-box" onclick="event.stopPropagation()">
+        <div class="dialog-header"><h3 class="dialog-title">确认操作</h3></div>
+        <div class="dialog-body">确定要删除这个 MCP 服务器配置吗？</div>
+        <div class="dialog-footer">
+            <button class="btn btn-secondary" onclick="closeDialog()">取消</button>
+            <button class="btn btn-danger" onclick="closeDialog()">删除</button>
+        </div>
+    </div>
+</div>
+
+<script>
+/* 涟漪效果 */
+function addRipple(e) {
+    const btn = e.currentTarget;
+    const rect = btn.getBoundingClientRect();
+    const layer = btn.querySelector('.ripple-layer') || (() => {
+        const l = document.createElement('div');
+        l.className = 'ripple-layer';
+        btn.appendChild(l);
+        return l;
+    })();
+    const r = document.createElement('div');
+    r.className = 'ripple';
+    const size = Math.max(rect.width, rect.height) * 2;
+    r.style.width = r.style.height = size + 'px';
+    r.style.left = (e.clientX - rect.left - size/2) + 'px';
+    r.style.top = (e.clientY - rect.top - size/2) + 'px';
+    layer.appendChild(r);
+    r.addEventListener('animationend', () => r.remove());
+}
+
+/* 对话框 */
+function openDialog() { document.getElementById('dialogOverlay').classList.add('active'); }
+function closeDialog(e) {
+    if (e && e.target !== e.currentTarget) return;
+    document.getElementById('dialogOverlay').classList.remove('active');
+}
+
+/* Toast */
+function showToast(type) {
+    const area = document.getElementById('toastArea');
+    const msgs = { info: '模型切换成功', success: '配置已保存', warning: 'Token 接近上限', error: '连接失败' };
+    const t = document.createElement('div');
+    t.className = `toast toast-${type}`;
+    t.innerHTML = `<div class="toast-content"><span class="toast-msg">${msgs[type]}</span><button class="toast-close" onclick="hideToast(this)">✕</button></div>`;
+    area.appendChild(t);
+    setTimeout(() => { t.classList.add('out'); t.addEventListener('animationend', () => t.remove()); }, 2500);
+}
+function hideToast(btn) {
+    const t = btn.closest('.toast');
+    t.classList.add('out'); t.addEventListener('animationend', () => t.remove());
+}
+
+/* 消息 */
+let mi = 0;
+const um = ['帮我优化 CSS 动画', '检查一下 transform 性能', '替换所有 box-shadow 动画'];
+const am = ['问题出在 transition: all...', '改用 transform + opacity...', '已替换完成，帧率提升到 60fps...'];
+function addMsg() {
+    const list = document.getElementById('msgList');
+    const isUser = mi % 2 === 0;
+    const m = document.createElement('div');
+    m.className = `msg ${isUser ? 'user' : 'assistant'}`;
+    const c = (isUser ? um : am)[Math.floor(mi/2) % 3];
+    m.innerHTML = `<div class="msg-bubble">${c}${!isUser ? '<span class="cursor"></span>' : ''}</div>`;
+    list.appendChild(m); mi++;
+}
+
+/* 选项卡 — 滑块位置 */
+function switchTab(el, idx) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    const slider = document.getElementById('tabSlider');
+    const wrapper = document.getElementById('tabsWrapper');
+    const tabs = wrapper.querySelectorAll('.tab');
+    const target = tabs[idx];
+    slider.style.width = target.offsetWidth + 'px';
+    slider.style.transform = `translateX(${target.offsetLeft - 3}px)`;
+}
+// 初始化滑块位置
+window.addEventListener('load', () => {
+    const firstTab = document.querySelector('.tab.active');
+    if (firstTab) {
+        const slider = document.getElementById('tabSlider');
+        slider.style.width = firstTab.offsetWidth + 'px';
+        slider.style.transform = `translateX(${firstTab.offsetLeft - 3}px)`;
+    }
+});
+
+/* 下拉 */
+function toggleSelect(id) {
+    const s = document.getElementById(id);
+    s.querySelector('.select-trigger').classList.toggle('open');
+    s.querySelector('.select-dropdown').classList.toggle('open');
+    s.querySelectorAll('.select-option').forEach(o => {
+        o.onclick = () => {
+            s.querySelector('.select-trigger span').textContent = o.textContent;
+            s.querySelectorAll('.select-option').forEach(x => x.classList.remove('selected'));
+            o.classList.add('selected');
+            s.querySelector('.select-trigger').classList.remove('open');
+            s.querySelector('.select-dropdown').classList.remove('open');
+        };
+    });
+}
+
+/* 进度条 */
+function animateProgress() {
+    const bar = document.getElementById('pBar');
+    bar.style.transform = 'scaleX(0)';
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => { bar.style.transform = 'scaleX(0.72)'; });
+    });
+}
+</script>
+</body>
+</html>

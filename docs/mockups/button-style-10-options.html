@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>底部按钮样式 10 种方案</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      padding: 40px;
+      line-height: 1.6;
+    }
+
+    h1 { font-size: 24px; margin-bottom: 8px; color: #fff; }
+    h2 { font-size: 18px; margin: 40px 0 16px; color: #ccc; border-bottom: 1px solid #333; padding-bottom: 8px; }
+    .subtitle { color: #888; font-size: 13px; margin-bottom: 32px; }
+
+    .section-label {
+      display: inline-block;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 3px 10px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    .label-num { background: rgba(79,195,247,0.1); color: #4fc3f7; }
+    .label-rec { background: rgba(76,195,138,0.1); color: #4cc38a; }
+
+    .style-card {
+      margin-bottom: 48px;
+      padding: 20px;
+      background: #1e1e38;
+      border: 1px solid #2e2e4a;
+      border-radius: 12px;
+    }
+    .style-card h3 {
+      font-size: 15px;
+      color: #e0e0e0;
+      margin-bottom: 4px;
+    }
+    .style-card .desc {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 16px;
+    }
+
+    /* ========== Mock Frame ========== */
+    .mock-frame {
+      max-width: 680px;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid #2e2e4a;
+      background: #1e1e38;
+    }
+
+    .context-bar {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      background: #2f2f2f;
+      min-height: 32px;
+    }
+    .context-tools { display: flex; align-items: center; gap: 4px; }
+    .context-tool-btn {
+      display: flex; align-items: center; justify-content: center;
+      width: 24px; height: 24px; border-radius: 5px;
+      cursor: pointer; color: #888; background: transparent; border: none; padding: 0; outline: none;
+    }
+    .context-tool-btn:hover { background: rgba(255,255,255,0.1); color: #ccc; }
+    .context-tool-btn svg { width:16px;height:16px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round; }
+    .context-tool-divider { width:1px;height:16px;background:#3e3e42;margin:0 4px; }
+    .context-tools-right { display:flex;align-items:center;gap:4px;margin-left:auto; }
+    .token-ring { position:relative;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;cursor:pointer; }
+    .token-ring svg { transform:rotate(-90deg);width:100%;height:100%; }
+    .token-ring .ring-bg { fill:none;stroke-width:2.5;stroke-linecap:round; }
+    .token-ring .ring-fill { fill:none;stroke-width:2.5;stroke-linecap:round; }
+    .token-ring .ring-pct { position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Consolas',monospace;font-size:8px;font-weight:800;line-height:1; }
+    .token-ring.level-ok .ring-bg { stroke:rgba(76,195,138,0.15); }
+    .token-ring.level-ok .ring-fill { stroke:#4cc38a; }
+    .token-ring.level-ok .ring-pct { color:#4cc38a; }
+
+    .input-area { padding: 8px 12px; }
+    .input-textarea {
+      width:100%;min-height:60px;background:transparent;border:none;color:#ccc;font-size:13px;font-family:inherit;resize:none;outline:none;
+    }
+    .input-textarea::placeholder { color:#555; }
+
+    /* ========== Button Area Common ========== */
+    .button-area {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 4px 8px;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      background: linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+    }
+    .button-area-left { display:flex;align-items:center;gap:0;flex:1;min-width:0;overflow:visible; }
+    .button-area-right { display:flex;align-items:center;gap:6px;flex-shrink:0; }
+    .button-divider { width:1px;height:16px;background:rgba(255,255,255,0.06); }
+    .selector-separator { width:3px;height:3px;border-radius:50%;background:rgba(255,255,255,0.15);margin:0 2px;flex-shrink:0; }
+
+    /* Config gear (same across all) */
+    .cfg-btn {
+      display:inline-flex;align-items:center;justify-content:center;
+      width:28px;height:28px;border-radius:4px;background:transparent;border:none;color:#888;cursor:pointer;padding:0;
+    }
+    .cfg-btn:hover { background:rgba(255,255,255,0.06);color:#ccc; }
+    .cfg-btn svg { width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round; }
+
+    /* Submit button */
+    .submit-button {
+      display:flex;align-items:center;justify-content:center;
+      width:30px;height:30px;
+      background:linear-gradient(135deg,#0078d4,#005a9e);
+      border:none;border-radius:50%;color:white;cursor:pointer;
+    }
+    .submit-button svg { width:14px;height:14px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round; }
+    .enhance-btn {
+      display:flex;align-items:center;justify-content:center;
+      width:28px;height:28px;background:transparent;border:none;border-radius:4px;color:#888;cursor:pointer;
+    }
+    .enhance-btn:hover { background:rgba(255,255,255,0.06);color:#ccc; }
+    .enhance-btn svg { width:16px;height:16px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round; }
+
+    /* ========== Light Theme ========== */
+    .theme-light { border-color:#d0d0d0; }
+    .theme-light .context-bar { background:#f0f0f0; }
+    .theme-light .context-tool-btn { color:#666; }
+    .theme-light .context-tool-btn:hover { background:rgba(0,0,0,0.05);color:#333; }
+    .theme-light .context-tool-divider { background:#d0d0d0; }
+    .theme-light .input-textarea { color:#333; }
+    .theme-light .input-textarea::placeholder { color:#aaa; }
+    .theme-light .button-area { border-top-color:rgba(0,0,0,0.06);background:linear-gradient(135deg,rgba(0,0,0,0.01),rgba(0,0,0,0.005)); }
+    .theme-light .cfg-btn { color:#666; }
+    .theme-light .cfg-btn:hover { background:rgba(0,0,0,0.04);color:#333; }
+    .theme-light .selector-separator { background:rgba(0,0,0,0.12); }
+    .theme-light .button-divider { background:rgba(0,0,0,0.06); }
+    .theme-light .enhance-btn { color:#888; }
+    .theme-light .enhance-btn:hover { background:rgba(0,0,0,0.04);color:#333; }
+  </style>
+</head>
+<body>
+  <h1>🎨 底部按钮样式 10 种方案</h1>
+  <p class="subtitle">输入区底部 Selector 按钮（Mode/Model/Reasoning）的视觉风格</p>
+
+  <!-- ============================================================
+       STYLE 1 — 当前 (Flat Tab + Underline)
+       ============================================================ -->
+  <div class="style-card">
+    <h3>① Flat Tab + Underline — 当前样式</h3>
+    <div class="desc">透明背景 + 选中项底部蓝色线条。最常见于 IDE 工具栏。改动量为零。</div>
+    <div class="mock-frame">
+      <div class="context-bar">
+        <div class="context-tools">
+          <button class="context-tool-btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+          <div class="token-ring level-ok"><svg viewBox="0 0 28 28"><circle class="ring-bg" cx="14" cy="14" r="11"/><circle class="ring-fill" cx="14" cy="14" r="11" stroke-dasharray="69.12" stroke-dashoffset="44.93"/></svg><span class="ring-pct">35</span></div>
+          <div class="context-tool-divider"></div>
+        </div>
+        <div class="context-tools-right"><button class="context-tool-btn"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg></button></div>
+      </div>
+      <div class="input-area"><textarea class="input-textarea" placeholder="输入消息..."></textarea></div>
+      <div class="button-area">
+        <div class="button-area-left">
+          <button class="cfg-btn"><svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:transparent;border:none;border-radius:4px;color:#888;font-size:12px;font-family:inherit;cursor:pointer;white-space:nowrap;height:28px;position:relative;">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span>Claude</span>
+          </button>
+          <span class="selector-separator"></span>
+          <!-- Current: underline active -->
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:rgba(255,255,255,0.04);border:none;border-radius:4px;color:#ccc;font-size:12px;font-family:inherit;cursor:pointer;white-space:nowrap;height:28px;position:relative;">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>
+            <span>Agent</span>
+            <svg viewBox="0 0 24 24" style="width:10px;height:10px;margin-left:2px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="m6 9 6 6 6-6"/></svg>
+            <span style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:60%;height:2px;background:#0078d4;border-radius:1px;"></span>
+          </button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:transparent;border:none;border-radius:4px;color:#888;font-size:12px;font-family:inherit;cursor:pointer;white-space:nowrap;height:28px;position:relative;">
+            <span>Sonnet 4.6</span>
+            <svg viewBox="0 0 24 24" style="width:10px;height:10px;margin-left:2px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:transparent;border:none;border-radius:4px;color:#888;font-size:12px;font-family:inherit;cursor:pointer;white-space:nowrap;height:28px;">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            <span>High</span>
+          </button>
+        </div>
+        <div class="button-area-right">
+          <div class="button-divider"></div>
+          <button class="enhance-btn"><svg viewBox="0 0 24 24"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg></button>
+          <button class="submit-button"><svg viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.5.5 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       STYLE 2 — Border Outline 方框描边
+       ============================================================ -->
+  <div class="style-card">
+    <h3>② Border Outline 方框描边</h3>
+    <div class="desc">选中项用 1px 实线边框 + 微背景。经典 macOS 风格，清晰但不抢眼。</div>
+    <div class="mock-frame">
+      <div class="input-area"><textarea class="input-textarea" placeholder="输入消息..."></textarea></div>
+      <div class="button-area">
+        <div class="button-area-left">
+          <button class="cfg-btn"><svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:transparent;border:none;border-radius:4px;color:#888;font-size:12px;font-family:inherit;cursor:pointer;height:28px;">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span>Claude</span>
+          </button>
+          <span class="selector-separator"></span>
+          <!-- Active: border outline -->
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;background:rgba(0,120,212,0.06);border:1px solid rgba(0,120,212,0.35);border-radius:4px;color:#ccc;font-size:12px;font-family:inherit;cursor:pointer;height:28px;">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>
+            <span>Agent</span>
+            <svg viewBox="0 0 24 24" style="width:10px;height:10px;margin-left:2px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:transparent;border:none;border-radius:4px;color:#888;font-size:12px;font-family:inherit;cursor:pointer;height:28px;">
+            <span>Sonnet 4.6</span>
+            <svg viewBox="0 0 24 24" style="width:10px;height:10px;margin-left:2px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:transparent;border:none;border-radius:4px;color:#888;font-size:12px;font-family:inherit;cursor:pointer;height:28px;">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            <span>High</span>
+          </button>
+        </div>
+        <div class="button-area-right">
+          <div class="button-divider"></div>
+          <button class="enhance-btn"><svg viewBox="0 0 24 24"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg></button>
+          <button class="submit-button"><svg viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.5.5 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       STYLE 3 — Pill Capsule 胶囊
+       ============================================================ -->
+  <div class="style-card">
+    <h3>③ Pill Capsule 胶囊</h3>
+    <div class="desc">border-radius: 14px 全圆角。现代感强，常见于 Notion / Linear 风格产品。</div>
+    <div class="mock-frame">
+      <div class="input-area"><textarea class="input-textarea" placeholder="输入消息..."></textarea></div>
+      <div class="button-area">
+        <div class="button-area-left">
+          <button class="cfg-btn"><svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 12px;background:transparent;border:none;border-radius:14px;color:#888;font-size:12px;font-family:inherit;cursor:pointer;height:28px;">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span>Claude</span>
+          </button>
+          <span class="selector-separator"></span>
+          <!-- Active pill -->
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 12px;background:rgba(0,120,212,0.12);border:none;border-radius:14px;color:#ccc;font-size:12px;font-family:inherit;cursor:pointer;height:28px;">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>
+            <span>Agent</span>
+            <svg viewBox="0 0 24 24" style="width:10px;height:10px;margin-left:2px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 12px;background:transparent;border:none;border-radius:14px;color:#888;font-size:12px;font-family:inherit;cursor:pointer;height:28px;">
+            <span>Sonnet 4.6</span>
+            <svg viewBox="0 0 24 24" style="width:10px;height:10px;margin-left:2px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 12px;background:transparent;border:none;border-radius:14px;color:#888;font-size:12px;font-family:inherit;cursor:pointer;height:28px;">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            <span>High</span>
+          </button>
+        </div>
+        <div class="button-area-right">
+          <div class="button-divider"></div>
+          <button class="enhance-btn"><svg viewBox="0 0 24 24"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg></button>
+          <button class="submit-button"><svg viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.5.5 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       STYLE 4 — Oval Tag 椭圆标签
+       ============================================================ -->
+  <div class="style-card">
+    <h3>④ Oval Tag 椭圆标签</h3>
+    <div class="desc">padding 横向加大 + border-radius: 100px，更紧凑的"标签"质感。常见于 GitHub 标签。</div>
+    <div class="mock-frame">
+      <div class="input-area"><textarea class="input-textarea" placeholder="输入消息..."></textarea></div>
+      <div class="button-area">
+        <div class="button-area-left">
+          <button class="cfg-btn"><svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:transparent;border:none;border-radius:100px;color:#888;font-size:11px;font-family:inherit;cursor:pointer;height:26px;">
+            <svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span>Claude</span>
+          </button>
+          <span class="selector-separator"></span>
+          <!-- Active oval tag -->
+          <button style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:rgba(0,120,212,0.1);border:1px solid rgba(0,120,212,0.25);border-radius:100px;color:#ccc;font-size:11px;font-family:inherit;cursor:pointer;height:26px;">
+            <svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>
+            <span>Agent</span>
+            <svg viewBox="0 0 24 24" style="width:9px;height:9px;margin-left:1px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:transparent;border:none;border-radius:100px;color:#888;font-size:11px;font-family:inherit;cursor:pointer;height:26px;">
+            <span>Sonnet 4.6</span>
+            <svg viewBox="0 0 24 24" style="width:9px;height:9px;margin-left:1px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:transparent;border:none;border-radius:100px;color:#888;font-size:11px;font-family:inherit;cursor:pointer;height:26px;">
+            <svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            <span>High</span>
+          </button>
+        </div>
+        <div class="button-area-right">
+          <div class="button-divider"></div>
+          <button class="enhance-btn"><svg viewBox="0 0 24 24"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg></button>
+          <button class="submit-button"><svg viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.5.5 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       STYLE 5 — Soft Shadow 柔和阴影
+       ============================================================ -->
+  <div class="style-card">
+    <h3>⑤ Soft Shadow 柔和阴影</h3>
+    <div class="desc">选中项加柔和 box-shadow，无边框。iOS/macOS 常用的选中态。</div>
+    <div class="mock-frame">
+      <div class="input-area"><textarea class="input-textarea" placeholder="输入消息..."></textarea></div>
+      <div class="button-area">
+        <div class="button-area-left">
+          <button class="cfg-btn"><svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:transparent;border:none;border-radius:6px;color:#888;font-size:12px;font-family:inherit;cursor:pointer;height:28px;">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span>Claude</span>
+          </button>
+          <span class="selector-separator"></span>
+          <!-- Active soft shadow -->
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:rgba(0,120,212,0.08);border:none;border-radius:6px;color:#ccc;font-size:12px;font-family:inherit;cursor:pointer;height:28px;box-shadow:0 1px 4px rgba(0,120,212,0.2);">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>
+            <span>Agent</span>
+            <svg viewBox="0 0 24 24" style="width:10px;height:10px;margin-left:2px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:transparent;border:none;border-radius:6px;color:#888;font-size:12px;font-family:inherit;cursor:pointer;height:28px;">
+            <span>Sonnet 4.6</span>
+            <svg viewBox="0 0 24 24" style="width:10px;height:10px;margin-left:2px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:transparent;border:none;border-radius:6px;color:#888;font-size:12px;font-family:inherit;cursor:pointer;height:28px;">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            <span>High</span>
+          </button>
+        </div>
+        <div class="button-area-right">
+          <div class="button-divider"></div>
+          <button class="enhance-btn"><svg viewBox="0 0 24 24"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg></button>
+          <button class="submit-button"><svg viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.5.5 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       STYLE 6 — Ghost Transparent 幽灵按钮
+       ============================================================ -->
+  <div class="style-card">
+    <h3>⑥ Ghost Transparent 幽灵按钮</h3>
+    <div class="desc">所有按钮完全透明，hover 才显示背景。极简风，适合工具密集型界面。</div>
+    <div class="mock-frame">
+      <div class="input-area"><textarea class="input-textarea" placeholder="输入消息..."></textarea></div>
+      <div class="button-area">
+        <div class="button-area-left">
+          <button class="cfg-btn"><svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:transparent;border:none;border-radius:4px;color:#777;font-size:12px;font-family:inherit;cursor:pointer;height:28px;">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span>Claude</span>
+          </button>
+          <span class="selector-separator"></span>
+          <!-- Active ghost: only bold text color, no bg at all -->
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:transparent;border:none;border-radius:4px;color:#e0e0e0;font-size:12px;font-family:inherit;cursor:pointer;height:28px;font-weight:600;">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>
+            <span>Agent</span>
+            <svg viewBox="0 0 24 24" style="width:10px;height:10px;margin-left:2px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:transparent;border:none;border-radius:4px;color:#777;font-size:12px;font-family:inherit;cursor:pointer;height:28px;">
+            <span>Sonnet 4.6</span>
+            <svg viewBox="0 0 24 24" style="width:10px;height:10px;margin-left:2px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:transparent;border:none;border-radius:4px;color:#777;font-size:12px;font-family:inherit;cursor:pointer;height:28px;">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            <span>High</span>
+          </button>
+        </div>
+        <div class="button-area-right">
+          <div class="button-divider"></div>
+          <button class="enhance-btn"><svg viewBox="0 0 24 24"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg></button>
+          <button class="submit-button"><svg viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.5.5 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       STYLE 7 — Inset Pressed 内陷按压
+       ============================================================ -->
+  <div class="style-card">
+    <h3>⑦ Inset Pressed 内陷按压</h3>
+    <div class="desc">选中项用 inset box-shadow 模拟按压态。物理按钮质感，常见于 VS Code 面板。</div>
+    <div class="mock-frame">
+      <div class="input-area"><textarea class="input-textarea" placeholder="输入消息..."></textarea></div>
+      <div class="button-area">
+        <div class="button-area-left">
+          <button class="cfg-btn"><svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:transparent;border:none;border-radius:4px;color:#888;font-size:12px;font-family:inherit;cursor:pointer;height:28px;">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span>Claude</span>
+          </button>
+          <span class="selector-separator"></span>
+          <!-- Active inset -->
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:rgba(255,255,255,0.03);border:none;border-radius:4px;color:#ccc;font-size:12px;font-family:inherit;cursor:pointer;height:28px;box-shadow:inset 0 1px 3px rgba(0,0,0,0.3);">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>
+            <span>Agent</span>
+            <svg viewBox="0 0 24 24" style="width:10px;height:10px;margin-left:2px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:transparent;border:none;border-radius:4px;color:#888;font-size:12px;font-family:inherit;cursor:pointer;height:28px;">
+            <span>Sonnet 4.6</span>
+            <svg viewBox="0 0 24 24" style="width:10px;height:10px;margin-left:2px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:transparent;border:none;border-radius:4px;color:#888;font-size:12px;font-family:inherit;cursor:pointer;height:28px;">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            <span>High</span>
+          </button>
+        </div>
+        <div class="button-area-right">
+          <div class="button-divider"></div>
+          <button class="enhance-btn"><svg viewBox="0 0 24 24"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg></button>
+          <button class="submit-button"><svg viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.5.5 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       STYLE 8 — Accent Dot 强调圆点
+       ============================================================ -->
+  <div class="style-card">
+    <h3>⑧ Accent Dot 强调圆点</h3>
+    <div class="desc">选中项顶部加小圆点指示器。Telegram/Slack 风格，占用空间最小。</div>
+    <div class="mock-frame">
+      <div class="input-area"><textarea class="input-textarea" placeholder="输入消息..."></textarea></div>
+      <div class="button-area">
+        <div class="button-area-left">
+          <button class="cfg-btn"><svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:transparent;border:none;border-radius:4px;color:#888;font-size:12px;font-family:inherit;cursor:pointer;height:28px;">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span>Claude</span>
+          </button>
+          <span class="selector-separator"></span>
+          <!-- Active accent dot -->
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:transparent;border:none;border-radius:4px;color:#ccc;font-size:12px;font-family:inherit;cursor:pointer;height:28px;position:relative;">
+            <span style="position:absolute;top:2px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:#0078d4;"></span>
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>
+            <span>Agent</span>
+            <svg viewBox="0 0 24 24" style="width:10px;height:10px;margin-left:2px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:transparent;border:none;border-radius:4px;color:#888;font-size:12px;font-family:inherit;cursor:pointer;height:28px;">
+            <span>Sonnet 4.6</span>
+            <svg viewBox="0 0 24 24" style="width:10px;height:10px;margin-left:2px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:transparent;border:none;border-radius:4px;color:#888;font-size:12px;font-family:inherit;cursor:pointer;height:28px;">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            <span>High</span>
+          </button>
+        </div>
+        <div class="button-area-right">
+          <div class="button-divider"></div>
+          <button class="enhance-btn"><svg viewBox="0 0 24 24"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg></button>
+          <button class="submit-button"><svg viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.5.5 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       STYLE 9 — Icon Only 圆形图标按钮
+       ============================================================ -->
+  <div class="style-card">
+    <h3>⑨ Icon Only 圆形图标按钮</h3>
+    <div class="desc">去掉文字只保留图标，hover 弹出文字。最紧凑，适合窄面板。</div>
+    <div class="mock-frame">
+      <div class="input-area"><textarea class="input-textarea" placeholder="输入消息..."></textarea></div>
+      <div class="button-area">
+        <div class="button-area-left">
+          <button class="cfg-btn"><svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;justify-content:center;padding:0;background:transparent;border:none;border-radius:50%;color:#888;cursor:pointer;width:26px;height:26px;" title="Claude">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </button>
+          <span class="selector-separator"></span>
+          <!-- Active icon-only circle -->
+          <button style="display:inline-flex;align-items:center;justify-content:center;padding:0;background:rgba(0,120,212,0.12);border:none;border-radius:50%;color:#ccc;cursor:pointer;width:26px;height:26px;" title="Agent mode">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>
+          </button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:transparent;border:none;border-radius:4px;color:#888;font-size:12px;font-family:inherit;cursor:pointer;height:28px;">
+            <span>Sonnet 4.6</span>
+            <svg viewBox="0 0 24 24" style="width:10px;height:10px;margin-left:2px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:transparent;border:none;border-radius:4px;color:#888;font-size:12px;font-family:inherit;cursor:pointer;height:28px;">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            <span>High</span>
+          </button>
+        </div>
+        <div class="button-area-right">
+          <div class="button-divider"></div>
+          <button class="enhance-btn"><svg viewBox="0 0 24 24"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg></button>
+          <button class="submit-button"><svg viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.5.5 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       STYLE 10 — Segmented Control 分段控制器
+       ============================================================ -->
+  <div class="style-card">
+    <h3>⑩ Segmented Control 分段控制器</h3>
+    <div class="desc">Mode 选项合并为一个分段控件（iOS 风格）。选中项有独立滑块背景。</div>
+    <div class="mock-frame">
+      <div class="input-area"><textarea class="input-textarea" placeholder="输入消息..."></textarea></div>
+      <div class="button-area">
+        <div class="button-area-left">
+          <button class="cfg-btn"><svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          <span class="selector-separator"></span>
+          <!-- Segmented control -->
+          <div style="display:inline-flex;align-items:center;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:2px;height:28px;gap:1px;">
+            <button style="display:inline-flex;align-items:center;justify-content:center;gap:3px;padding:2px 8px;border:none;border-radius:6px;background:transparent;color:#666;font-size:11px;font-family:inherit;cursor:pointer;height:22px;white-space:nowrap;">
+              <svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              Chat
+            </button>
+            <button style="display:inline-flex;align-items:center;justify-content:center;gap:3px;padding:2px 8px;border:none;border-radius:6px;background:transparent;color:#666;font-size:11px;font-family:inherit;cursor:pointer;height:22px;white-space:nowrap;">
+              <svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14,2 14,8 20,8"/></svg>
+              Plan
+            </button>
+            <button style="display:inline-flex;align-items:center;justify-content:center;gap:3px;padding:2px 8px;border:none;border-radius:6px;background:rgba(0,120,212,0.15);color:#ccc;font-size:11px;font-family:inherit;cursor:pointer;height:22px;white-space:nowrap;">
+              <svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>
+              Agent
+            </button>
+            <button style="display:inline-flex;align-items:center;justify-content:center;gap:3px;padding:2px 8px;border:none;border-radius:6px;background:transparent;color:#666;font-size:11px;font-family:inherit;cursor:pointer;height:22px;white-space:nowrap;">
+              <svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/></svg>
+              Auto
+            </button>
+          </div>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:transparent;border:none;border-radius:4px;color:#888;font-size:12px;font-family:inherit;cursor:pointer;height:28px;">
+            <span>Sonnet 4.6</span>
+            <svg viewBox="0 0 24 24" style="width:10px;height:10px;margin-left:2px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <span class="selector-separator"></span>
+          <button style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:transparent;border:none;border-radius:4px;color:#888;font-size:12px;font-family:inherit;cursor:pointer;height:28px;">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            <span>High</span>
+          </button>
+        </div>
+        <div class="button-area-right">
+          <div class="button-divider"></div>
+          <button class="enhance-btn"><svg viewBox="0 0 24 24"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg></button>
+          <button class="submit-button"><svg viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.5.5 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 对比总结 ==================== -->
+  <h2>📊 10 种风格对比总结</h2>
+  <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:12px;">
+      <thead>
+        <tr style="border-bottom:1px solid #333;color:#888;text-align:left;">
+          <th style="padding:8px 12px;">#</th>
+          <th style="padding:8px 12px;">风格</th>
+          <th style="padding:8px 12px;">选中态</th>
+          <th style="padding:8px 12px;">圆角</th>
+          <th style="padding:8px 12px;">占用空间</th>
+          <th style="padding:8px 12px;">适配难度</th>
+          <th style="padding:8px 12px;">适用场景</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid #2a2a3a;"><td style="padding:8px 12px;">①</td><td style="padding:8px 12px;">Flat Tab + Underline</td><td style="padding:8px 12px;">底部蓝线 + 微背景</td><td style="padding:8px 12px;">4px</td><td style="padding:8px 12px;">中</td><td style="padding:8px 12px;color:#4cc38a;">零</td><td style="padding:8px 12px;">当前样式</td></tr>
+        <tr style="border-bottom:1px solid #2a2a3a;"><td style="padding:8px 12px;">②</td><td style="padding:8px 12px;">Border Outline</td><td style="padding:8px 12px;">1px 边框 + 微背景</td><td style="padding:8px 12px;">4px</td><td style="padding:8px 12px;">中</td><td style="padding:8px 12px;color:#4cc38a;">低</td><td style="padding:8px 12px;">经典 macOS</td></tr>
+        <tr style="border-bottom:1px solid #2a2a3a;"><td style="padding:8px 12px;">③</td><td style="padding:8px 12px;">Pill Capsule 胶囊</td><td style="padding:8px 12px;">背景色填充</td><td style="padding:8px 12px;">14px</td><td style="padding:8px 12px;">中</td><td style="padding:8px 12px;color:#4cc38a;">低</td><td style="padding:8px 12px;">Notion / Linear</td></tr>
+        <tr style="border-bottom:1px solid #2a2a3a;"><td style="padding:8px 12px;">④</td><td style="padding:8px 12px;">Oval Tag 椭圆</td><td style="padding:8px 12px;">边框 + 背景</td><td style="padding:8px 12px;">100px</td><td style="padding:8px 12px;">中偏小</td><td style="padding:8px 12px;color:#4cc38a;">低</td><td style="padding:8px 12px;">GitHub 标签</td></tr>
+        <tr style="border-bottom:1px solid #2a2a3a;"><td style="padding:8px 12px;">⑤</td><td style="padding:8px 12px;">Soft Shadow 柔和阴影</td><td style="padding:8px 12px;">box-shadow</td><td style="padding:8px 12px;">6px</td><td style="padding:8px 12px;">中</td><td style="padding:8px 12px;color:#4cc38a;">低</td><td style="padding:8px 12px;">iOS / macOS</td></tr>
+        <tr style="border-bottom:1px solid #2a2a3a;"><td style="padding:8px 12px;">⑥</td><td style="padding:8px 12px;">Ghost 幽灵</td><td style="padding:8px 12px;">仅加粗文字</td><td style="padding:8px 12px;">4px</td><td style="padding:8px 12px;">最小</td><td style="padding:8px 12px;color:#4cc38a;">低</td><td style="padding:8px 12px;">工具密集型</td></tr>
+        <tr style="border-bottom:1px solid #2a2a3a;"><td style="padding:8px 12px;">⑦</td><td style="padding:8px 12px;">Inset Pressed 内陷</td><td style="padding:8px 12px;">inset shadow</td><td style="padding:8px 12px;">4px</td><td style="padding:8px 12px;">中</td><td style="padding:8px 12px;color:#4cc38a;">低</td><td style="padding:8px 12px;">VS Code</td></tr>
+        <tr style="border-bottom:1px solid #2a2a3a;"><td style="padding:8px 12px;">⑧</td><td style="padding:8px 12px;">Accent Dot 圆点</td><td style="padding:8px 12px;">顶部蓝点</td><td style="padding:8px 12px;">4px</td><td style="padding:8px 12px;">最小</td><td style="padding:8px 12px;color:#4cc38a;">低</td><td style="padding:8px 12px;">Telegram</td></tr>
+        <tr style="border-bottom:1px solid #2a2a3a;"><td style="padding:8px 12px;">⑨</td><td style="padding:8px 12px;">Icon Only 圆形</td><td style="padding:8px 12px;">圆形背景</td><td style="padding:8px 12px;">50%</td><td style="padding:8px 12px;">最小</td><td style="padding:8px 12px;color:#e7b85a;">中</td><td style="padding:8px 12px;">窄面板</td></tr>
+        <tr><td style="padding:8px 12px;">⑩</td><td style="padding:8px 12px;">Segmented 分段控件</td><td style="padding:8px 12px;">滑块背景</td><td style="padding:8px 12px;">6-8px</td><td style="padding:8px 12px;">中偏大</td><td style="padding:8px 12px;color:#e7b85a;">中</td><td style="padding:8px 12px;">iOS 风格</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="margin-top:20px;padding:12px 16px;background:rgba(76,195,138,0.06);border:1px solid rgba(76,195,138,0.15);border-radius:8px;font-size:12px;color:#aaa;line-height:1.8;">
+    <strong style="color:#4cc38a;">💡 推荐：</strong><br/>
+    • <strong>最小改动</strong> → ① Flat Tab（保持现状）或 ⑥ Ghost（去掉 underline）<br/>
+    • <strong>最佳性价比</strong> → ② Border Outline 或 ③ Pill Capsule（清晰、现代、改动小）<br/>
+    • <strong>最紧凑</strong> → ⑧ Accent Dot 或 ⑨ Icon Only（适合窄面板）<br/>
+    • <strong>最统一</strong> → ⑩ Segmented Control（Mode 选项一目了然，但宽度占用最多）
+  </div>
+</body>
+</html>

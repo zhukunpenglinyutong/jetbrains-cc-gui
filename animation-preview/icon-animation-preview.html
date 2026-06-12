@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图标动效高帧率适配预览</title>
+    <style>
+        :root {
+            /* 暗色主题变量 */
+            --bg-primary: #1e1e1e;
+            --bg-secondary: #252526;
+            --bg-tertiary: #2b2d31;
+            --text-primary: #cccccc;
+            --text-secondary: #e0e0e0;
+            --text-tertiary: #858585;
+            --accent: #4ea1ff;
+            --violet: #a989ff;
+            --amber: #e7b85a;
+            --green: #4cc38a;
+            --red: #f07178;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            padding: 40px;
+            line-height: 1.6;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 40px;
+            color: var(--accent);
+            font-size: 28px;
+        }
+
+        h2 {
+            margin: 40px 0 20px;
+            color: var(--text-secondary);
+            font-size: 20px;
+            border-bottom: 1px solid var(--bg-tertiary);
+            padding-bottom: 10px;
+        }
+
+        h3 {
+            margin: 20px 0 10px;
+            color: var(--text-tertiary);
+            font-size: 16px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .icon-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .icon-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.2s ease;
+        }
+
+        .icon-card:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--accent);
+            transform: translateY(-2px);
+        }
+
+        .icon-card svg {
+            width: 32px;
+            height: 32px;
+            margin-bottom: 8px;
+            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .icon-card:hover svg {
+            transform: scale(1.1);
+        }
+
+        .icon-card .name {
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
+        /* 动画演示区 */
+        .animation-demo {
+            display: flex;
+            gap: 40px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        .demo-box {
+            flex: 1;
+            min-width: 300px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 24px;
+        }
+
+        .demo-box h4 {
+            margin-bottom: 16px;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .animation-row {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 16px;
+        }
+
+        .animation-label {
+            width: 100px;
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
+        /* 旋转动画 */
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes spin-smooth {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .spin-old {
+            animation: spin 1s linear infinite;
+        }
+
+        .spin-new {
+            animation: spin-smooth 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+            will-change: transform;
+        }
+
+        /* 脉冲动画 */
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+        }
+
+        @keyframes pulse-smooth {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.15); opacity: 0.7; }
+        }
+
+        .pulse-old {
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .pulse-new {
+            animation: pulse-smooth 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+            will-change: transform, opacity;
+        }
+
+        /* 弹跳动画 */
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+
+        @keyframes bounce-smooth {
+            0%, 100% { transform: translateY(0); }
+            25% { transform: translateY(-8px); }
+            50% { transform: translateY(0); }
+            75% { transform: translateY(-4px); }
+        }
+
+        .bounce-old {
+            animation: bounce 1s ease-in-out infinite;
+        }
+
+        .bounce-new {
+            animation: bounce-smooth 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+            will-change: transform;
+        }
+
+        /* 淡入动画 */
+        @keyframes fade-in {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fade-in-smooth {
+            from { opacity: 0; transform: translateY(10px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .fade-old {
+            animation: fade-in 0.3s ease forwards;
+        }
+
+        .fade-new {
+            animation: fade-in-smooth 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            will-change: transform, opacity;
+        }
+
+        /* 波形动画 */
+        .wave-container {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            height: 24px;
+        }
+
+        .wave-bar {
+            width: 4px;
+            background: var(--accent);
+            border-radius: 2px;
+        }
+
+        @keyframes wave {
+            0%, 100% { height: 8px; }
+            50% { height: 20px; }
+        }
+
+        @keyframes wave-smooth {
+            0%, 100% { height: 8px; opacity: 0.6; }
+            50% { height: 24px; opacity: 1; }
+        }
+
+        .wave-old .wave-bar {
+            animation: wave 1s ease-in-out infinite;
+        }
+
+        .wave-new .wave-bar {
+            animation: wave-smooth 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+            will-change: height, opacity;
+        }
+
+        .wave-new .wave-bar:nth-child(2) { animation-delay: 0.1s; }
+        .wave-new .wave-bar:nth-child(3) { animation-delay: 0.2s; }
+        .wave-new .wave-bar:nth-child(4) { animation-delay: 0.3s; }
+        .wave-new .wave-bar:nth-child(5) { animation-delay: 0.4s; }
+
+        /* 对比示例 */
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .comparison-box {
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .comparison-box h5 {
+            margin-bottom: 12px;
+            font-size: 12px;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .icon-display {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 60px;
+        }
+
+        /* 交互按钮 */
+        .interactive-demo {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5bb3ff;
+            transform: translateY(-1px);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover {
+            background: #3a3d41;
+        }
+
+        /* 加载状态 */
+        .loading-states {
+            display: flex;
+            gap: 24px;
+            margin-top: 20px;
+        }
+
+        .loading-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .loading-item span {
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
+        /* 状态指示器 */
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .status-success {
+            background: rgba(76, 200, 138, 0.1);
+            color: var(--green);
+        }
+
+        .status-warning {
+            background: rgba(231, 184, 90, 0.1);
+            color: var(--amber);
+        }
+
+        .status-error {
+            background: rgba(240, 113, 120, 0.1);
+            color: var(--red);
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            body {
+                padding: 20px;
+            }
+
+            .icon-grid {
+                grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            }
+
+            .comparison {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>🎨 图标动效高帧率适配预览</h1>
+
+    <!-- 基础图标展示 -->
+    <div class="section">
+        <h2>📦 基础图标系统</h2>
+        <div class="icon-grid">
+            <!-- 导航图标 -->
+            <div class="icon-card">
+                <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <path d="M19 12H5M12 19l-7-7 7-7"/>
+                </svg>
+                <div class="name">Back</div>
+            </div>
+
+            <div class="icon-card">
+                <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
+                <div class="name">Forward</div>
+            </div>
+
+            <div class="icon-card">
+                <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+                <div class="name">Close</div>
+            </div>
+
+            <div class="icon-card">
+                <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                <div class="name">Check</div>
+            </div>
+
+            <div class="icon-card">
+                <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                </svg>
+                <div class="name">Send</div>
+            </div>
+
+            <div class="icon-card">
+                <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <rect x="6" y="6" width="12" height="12" rx="2"/>
+                </svg>
+                <div class="name">Stop</div>
+            </div>
+
+            <div class="icon-card">
+                <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                </svg>
+                <div class="name">Sparkles</div>
+            </div>
+
+            <div class="icon-card">
+                <svg fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+                </svg>
+                <div class="name">Settings</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 动画对比 -->
+    <div class="section">
+        <h2>🎬 动画效果对比</h2>
+
+        <div class="comparison">
+            <!-- 旋转动画对比 -->
+            <div class="comparison-box">
+                <h5>旋转动画 (Loading/Sync)</h5>
+                <div class="animation-row">
+                    <div class="animation-label">旧版 (线性)</div>
+                    <div class="icon-display">
+                        <svg class="spin-old" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" width="32" height="32">
+                            <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="animation-row">
+                    <div class="animation-label">新版 (缓动)</div>
+                    <div class="icon-display">
+                        <svg class="spin-new" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" width="32" height="32">
+                            <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 脉冲动画对比 -->
+            <div class="comparison-box">
+                <h5>脉冲动画 (Status)</h5>
+                <div class="animation-row">
+                    <div class="animation-label">旧版</div>
+                    <div class="icon-display">
+                        <svg class="pulse-old" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" width="32" height="32">
+                            <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                            <path d="M13.73 21a2 2 0 01-3.46 0"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="animation-row">
+                    <div class="animation-label">新版</div>
+                    <div class="icon-display">
+                        <svg class="pulse-new" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" width="32" height="32">
+                            <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                            <path d="M13.73 21a2 2 0 01-3.46 0"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 弹跳动画对比 -->
+            <div class="comparison-box">
+                <h5>弹跳动画 (Interactive)</h5>
+                <div class="animation-row">
+                    <div class="animation-label">旧版</div>
+                    <div class="icon-display">
+                        <svg class="bounce-old" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" width="32" height="32">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="animation-row">
+                    <div class="animation-label">新版</div>
+                    <div class="icon-display">
+                        <svg class="bounce-new" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" width="32" height="32">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 波形动画对比 -->
+            <div class="comparison-box">
+                <h5>波形动画 (Audio/Thinking)</h5>
+                <div class="animation-row">
+                    <div class="animation-label">旧版</div>
+                    <div class="wave-container wave-old">
+                        <div class="wave-bar" style="height: 8px;"></div>
+                        <div class="wave-bar" style="height: 12px;"></div>
+                        <div class="wave-bar" style="height: 6px;"></div>
+                        <div class="wave-bar" style="height: 10px;"></div>
+                        <div class="wave-bar" style="height: 7px;"></div>
+                    </div>
+                </div>
+                <div class="animation-row">
+                    <div class="animation-label">新版</div>
+                    <div class="wave-container wave-new">
+                        <div class="wave-bar" style="height: 8px;"></div>
+                        <div class="wave-bar" style="height: 12px;"></div>
+                        <div class="wave-bar" style="height: 6px;"></div>
+                        <div class="wave-bar" style="height: 10px;"></div>
+                        <div class="wave-bar" style="height: 7px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 交互演示 -->
+    <div class="section">
+        <h2>🖱️ 交互状态演示</h2>
+        <div class="interactive-demo">
+            <button class="btn btn-primary">
+                <svg style="display: inline-block; vertical-align: middle; margin-right: 6px;" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" width="16" height="16">
+                    <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                </svg>
+                发送消息
+            </button>
+            <button class="btn btn-secondary">
+                <svg style="display: inline-block; vertical-align: middle; margin-right: 6px;" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" width="16" height="16">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                </svg>
+                AI 增强
+            </button>
+            <button class="btn btn-secondary">
+                <svg style="display: inline-block; vertical-align: middle; margin-right: 6px;" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" width="16" height="16">
+                    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+                编辑
+            </button>
+        </div>
+    </div>
+
+    <!-- 加载状态 -->
+    <div class="section">
+        <h2>⏳ 加载状态演示</h2>
+        <div class="loading-states">
+            <div class="loading-item">
+                <svg class="spin-new" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" width="24" height="24">
+                    <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                </svg>
+                <span>加载中</span>
+            </div>
+            <div class="loading-item">
+                <div class="wave-container wave-new" style="height: 20px;">
+                    <div class="wave-bar" style="height: 6px;"></div>
+                    <div class="wave-bar" style="height: 10px;"></div>
+                    <div class="wave-bar" style="height: 4px;"></div>
+                    <div class="wave-bar" style="height: 8px;"></div>
+                    <div class="wave-bar" style="height: 5px;"></div>
+                </div>
+                <span>思考中</span>
+            </div>
+            <div class="loading-item">
+                <svg class="pulse-new" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" width="24" height="24">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 6v6l4 2"/>
+                </svg>
+                <span>等待中</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 状态指示器 -->
+    <div class="section">
+        <h2>📊 状态指示器</h2>
+        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            <div class="status-indicator status-success">
+                <div class="status-dot"></div>
+                成功
+            </div>
+            <div class="status-indicator status-warning">
+                <div class="status-dot"></div>
+                警告
+            </div>
+            <div class="status-indicator status-error">
+                <div class="status-dot"></div>
+                错误
+            </div>
+        </div>
+    </div>
+
+    <!-- 技术说明 -->
+    <div class="section">
+        <h2>💡 技术优化说明</h2>
+        <div style="background: var(--bg-secondary); padding: 20px; border-radius: 8px; border: 1px solid var(--bg-tertiary);">
+            <p style="margin-bottom: 12px;"><strong>高帧率适配关键点：</strong></p>
+            <ul style="margin-left: 20px; color: var(--text-tertiary);">
+                <li style="margin-bottom: 8px;">使用 <code style="color: var(--accent);">cubic-bezier(0.4, 0, 0.2, 1)</code> 缓动函数替代线性动画</li>
+                <li style="margin-bottom: 8px;">添加 <code style="color: var(--accent);">will-change</code> 提示浏览器优化动画性能</li>
+                <li style="margin-bottom: 8px;">优化动画关键帧，确保在60fps下平滑过渡</li>
+                <li style="margin-bottom: 8px;">使用 <code style="color: var(--accent);">transform</code> 和 <code style="color: var(--accent);">opacity</code> 进行动画，避免触发布局重排</li>
+                <li>为旋转、缩放等动画添加硬件加速提示</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

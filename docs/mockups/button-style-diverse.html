@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>底部按钮个性样式方案</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #1e1f22;
+      --panel: #25262b;
+      --bar: #2b2d31;
+      --surface: #2d2f34;
+      --chip: #32343a;
+      --hover: #3a3d44;
+      --border: #464950;
+      --muted: #a8adb7;
+      --text: #f0f2f5;
+      --soft: #d8dde6;
+      --accent: #4ea1ff;
+      --accent-bg: rgba(78, 161, 255, .12);
+      --accent-border: rgba(78, 161, 255, .3);
+      --green: #4cc38a;
+      --amber: #e7b85a;
+      --red: #f07178;
+      --purple: #a78bfa;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 40px;
+      line-height: 1.6;
+    }
+    h1 { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
+    h2 { font-size: 16px; font-weight: 600; color: var(--soft); margin: 40px 0 16px; display: flex; align-items: center; gap: 10px; }
+    h2::before { content: ''; width: 4px; height: 18px; background: var(--accent); border-radius: 2px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 32px; }
+
+    /* ========== Mock Frame ========== */
+    .mock-frame {
+      max-width: 720px;
+      margin-bottom: 40px;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: var(--panel);
+    }
+    .context-bar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 12px; background: var(--bar); min-height: 32px;
+    }
+    .context-tools { display: flex; align-items: center; gap: 4px; }
+    .ctx-btn {
+      display: flex; align-items: center; justify-content: center;
+      width: 24px; height: 24px; border-radius: 5px;
+      cursor: pointer; color: var(--muted); background: transparent; border: none; padding: 0;
+    }
+    .ctx-btn:hover { background: var(--hover); color: var(--text); }
+    .ctx-btn svg { width:16px;height:16px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round; }
+    .ctx-div { width:1px;height:16px;background:var(--border);margin:0 4px; }
+    .ctx-right { display:flex;align-items:center;gap:4px;margin-left:auto; }
+    .ring { position:relative;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;cursor:pointer; }
+    .ring svg { transform:rotate(-90deg);width:100%;height:100%; }
+    .ring .rbg { fill:none;stroke-width:2.5;stroke-linecap:round; }
+    .ring .rfill { fill:none;stroke-width:2.5;stroke-linecap:round; }
+    .ring .rpct { position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Consolas',monospace;font-size:8px;font-weight:800;line-height:1; }
+    .ring.ok .rbg { stroke:rgba(76,195,138,0.15); }
+    .ring.ok .rfill { stroke:var(--green); }
+    .ring.ok .rpct { color:var(--green); }
+
+    .input-area { padding: 8px 12px; }
+    .input-textarea { width:100%;min-height:60px;background:transparent;border:none;color:var(--text);font-size:13px;font-family:inherit;resize:none;outline:none; }
+    .input-textarea::placeholder { color:var(--muted); }
+
+    .btn-area {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 5px 8px;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      background: linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+    }
+    .btn-left { display:flex;align-items:center;gap:4px;flex:1;min-width:0;overflow:visible; }
+    .btn-right { display:flex;align-items:center;gap:6px;flex-shrink:0; }
+    .bdiv { width:1px;height:16px;background:rgba(255,255,255,0.06); }
+
+    .submit-btn {
+      display:flex;align-items:center;justify-content:center;
+      width:30px;height:30px;
+      background:linear-gradient(135deg,#0078d4,#005a9e);
+      border:none;border-radius:50%;color:white;cursor:pointer;
+    }
+    .submit-btn svg { width:14px;height:14px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round; }
+
+    .ann {
+      margin-top: 12px; padding: 12px 16px;
+      background: var(--accent-bg); border: 1px solid var(--accent-border);
+      border-radius: 8px; font-size: 12px; color: var(--muted); line-height: 1.8;
+    }
+    .ann strong { color: var(--accent); }
+
+    /* ========== Common Button Base ========== */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+      padding: 0 8px; border: none; cursor: pointer;
+      font-size: 11px; font-family: inherit; white-space: nowrap;
+      transition: all 0.15s ease;
+    }
+    .btn svg { width:13px;height:13px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round; flex-shrink:0; }
+
+    /* ===== STYLE A: Glass Chip 玻璃芯片 ===== */
+    .btn-glass {
+      height: 28px; border-radius: 6px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--muted);
+      backdrop-filter: blur(8px);
+    }
+    .btn-glass:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.12); color: var(--text); }
+    .btn-glass.on {
+      background: rgba(0,120,212,0.12);
+      border-color: rgba(0,120,212,0.3);
+      color: var(--accent);
+    }
+    .btn-glass.on:hover { background: rgba(0,120,212,0.18); }
+    .btn-glass svg.dot {
+      width: 6px; height: 6px; border-radius: 50%; fill: currentColor; stroke: none;
+    }
+
+    /* ===== STYLE B: Neon Glow 霓虹发光 ===== */
+    .btn-neon {
+      height: 28px; border-radius: 5px;
+      background: transparent;
+      color: var(--muted);
+      text-shadow: none;
+    }
+    .btn-neon:hover { color: var(--text); }
+    .btn-neon.on {
+      color: var(--accent);
+      text-shadow: 0 0 8px rgba(78,161,255,0.4);
+      background: rgba(78,161,255,0.06);
+    }
+    .btn-neon.on::after {
+      content: ''; position: absolute; bottom: -1px; left: 20%; right: 20%;
+      height: 2px; background: var(--accent); border-radius: 1px;
+      box-shadow: 0 0 6px var(--accent);
+    }
+    .btn-neon { position: relative; }
+
+    /* ===== STYLE C: Subtle Lift 微浮起 ===== */
+    .btn-lift {
+      height: 28px; border-radius: 5px;
+      background: rgba(255,255,255,0.03);
+      color: var(--muted);
+    }
+    .btn-lift:hover { background: rgba(255,255,255,0.06); color: var(--text); transform: translateY(-1px); }
+    .btn-lift.on {
+      background: rgba(0,120,212,0.1);
+      color: var(--accent);
+      box-shadow: 0 2px 8px rgba(0,120,212,0.15);
+    }
+
+    /* ===== STYLE D: Tag Label 标签 ===== */
+    .btn-tag {
+      height: 24px; border-radius: 4px; padding: 0 7px;
+      background: rgba(255,255,255,0.04);
+      border: 1px dashed rgba(255,255,255,0.1);
+      color: var(--muted);
+      font-size: 10px; letter-spacing: 0.3px;
+    }
+    .btn-tag:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
+    .btn-tag.on {
+      border-style: solid;
+      border-color: rgba(0,120,212,0.35);
+      background: rgba(0,120,212,0.08);
+      color: var(--accent);
+    }
+
+    /* ===== STYLE E: Dot Indicator 圆点指示 ===== */
+    .btn-dot {
+      height: 28px; border-radius: 5px;
+      background: transparent;
+      color: var(--muted);
+    }
+    .btn-dot:hover { background: rgba(255,255,255,0.04); color: var(--text); }
+    .btn-dot.on { color: var(--text); }
+    .btn-dot.on::before {
+      content: ''; display: inline-block;
+      width: 5px; height: 5px; border-radius: 50%;
+      background: var(--accent); margin-right: 4px;
+      box-shadow: 0 0 4px rgba(78,161,255,0.5);
+    }
+
+    /* ===== STYLE F: Rounded Pill 圆角药丸 ===== */
+    .btn-pill {
+      height: 26px; border-radius: 13px; padding: 0 10px;
+      background: rgba(255,255,255,0.04);
+      color: var(--muted);
+    }
+    .btn-pill:hover { background: rgba(255,255,255,0.07); color: var(--text); }
+    .btn-pill.on {
+      background: rgba(0,120,212,0.12);
+      color: var(--accent);
+    }
+
+    /* ===== STYLE G: Minimal Text 极简文字 ===== */
+    .btn-min {
+      height: 28px; border-radius: 0;
+      background: transparent;
+      color: #666;
+      border-bottom: 1.5px solid transparent;
+      padding: 0 4px;
+    }
+    .btn-min:hover { color: var(--text); }
+    .btn-min.on {
+      color: var(--text);
+      border-bottom-color: var(--accent);
+    }
+
+    /* ===== STYLE H: Outlined Badge 描边徽章 ===== */
+    .btn-badge {
+      height: 26px; border-radius: 5px; padding: 0 8px;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.1);
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .btn-badge:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
+    .btn-badge.on {
+      border-color: var(--accent-border);
+      background: var(--accent-bg);
+      color: var(--accent);
+    }
+
+    /* ===== Icon-only button ===== */
+    .btn-icon {
+      width: 26px; height: 26px; padding: 0;
+      border-radius: 5px; background: transparent;
+      border: none; color: var(--muted); cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: all 0.15s ease;
+    }
+    .btn-icon:hover { background: var(--hover); color: var(--text); }
+    .btn-icon svg { width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round; }
+    .btn-icon.purple { color: var(--purple); }
+    .btn-icon.purple:hover { background: rgba(167,139,250,0.1); }
+
+    .sep { width:3px;height:3px;border-radius:50%;background:rgba(255,255,255,0.12);flex-shrink:0; }
+
+    /* ========== Matrix Grid for style options ========== */
+    .style-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+    .style-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .style-card:hover { border-color: var(--accent); }
+    .style-card-head {
+      padding: 10px 14px;
+      background: var(--bar);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .style-card-title { font-size: 13px; font-weight: 600; color: var(--soft); }
+    .style-card-tag {
+      padding: 2px 8px; border-radius: 10px;
+      font-size: 10px; font-weight: 600;
+    }
+    .tag-a { background: rgba(76,195,138,0.12); color: var(--green); }
+    .tag-b { background: rgba(78,161,255,0.12); color: var(--accent); }
+    .tag-c { background: rgba(231,184,90,0.12); color: var(--amber); }
+    .style-card-body { padding: 16px; }
+    .style-card-demo {
+      padding: 12px;
+      background: var(--bar);
+      border-radius: 8px;
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    }
+    .style-card-desc {
+      margin-top: 10px;
+      font-size: 11px; color: var(--muted); line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎨 底部按钮个性样式方案</h1>
+  <p class="subtitle">8 种独立按钮风格，替代分段控件，适配插件底部工具栏</p>
+
+  <!-- ==================== Matrix Grid: All Styles ==================== -->
+  <h2>样式方案一览（矩阵对比）</h2>
+
+  <div class="style-grid">
+
+    <!-- A: Glass Chip -->
+    <div class="style-card">
+      <div class="style-card-head">
+        <span class="style-card-title">A — Glass Chip 玻璃芯片</span>
+        <span class="style-card-tag tag-a">推荐</span>
+      </div>
+      <div class="style-card-body">
+        <div class="style-card-demo">
+          <button class="btn btn-glass"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Claude</button>
+          <button class="btn btn-glass on"><svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>Agent</button>
+          <button class="btn btn-glass">Sonnet 4.6</button>
+          <button class="btn btn-glass">High</button>
+        </div>
+        <div class="style-card-desc">
+          半透明背景 + 1px 边框 + backdrop-filter。选中态用 accent 色调。<br/>
+          适合现代玻璃态 UI，与 VS Code 侧边栏风格一致。
+        </div>
+      </div>
+    </div>
+
+    <!-- B: Neon Glow -->
+    <div class="style-card">
+      <div class="style-card-head">
+        <span class="style-card-title">B — Neon Glow 霓虹发光</span>
+        <span class="style-card-tag tag-b">个性</span>
+      </div>
+      <div class="style-card-body">
+        <div class="style-card-demo">
+          <button class="btn btn-neon"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Claude</button>
+          <button class="btn btn-neon on"><svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>Agent</button>
+          <button class="btn btn-neon">Sonnet 4.6</button>
+          <button class="btn btn-neon">High</button>
+        </div>
+        <div class="style-card-desc">
+          纯文字 + 选中时底部发光线条 + text-shadow。<br/>
+          赛博朋克风，适合深色主题为主的插件。
+        </div>
+      </div>
+    </div>
+
+    <!-- C: Subtle Lift -->
+    <div class="style-card">
+      <div class="style-card-head">
+        <span class="style-card-title">C — Subtle Lift 微浮起</span>
+        <span class="style-card-tag tag-a">推荐</span>
+      </div>
+      <div class="style-card-body">
+        <div class="style-card-demo">
+          <button class="btn btn-lift"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Claude</button>
+          <button class="btn btn-lift on"><svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>Agent</button>
+          <button class="btn btn-lift">Sonnet 4.6</button>
+          <button class="btn btn-lift">High</button>
+        </div>
+        <div class="style-card-desc">
+          hover 时 translateY(-1px) 微浮起 + 选中态加柔和阴影。<br/>
+          物理质感，交互反馈明确，适合工具密集型界面。
+        </div>
+      </div>
+    </div>
+
+    <!-- D: Tag Label -->
+    <div class="style-card">
+      <div class="style-card-head">
+        <span class="style-card-title">D — Tag Label 标签</span>
+        <span class="style-card-tag tag-c">轻量</span>
+      </div>
+      <div class="style-card-body">
+        <div class="style-card-demo">
+          <button class="btn btn-tag"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Claude</button>
+          <button class="btn btn-tag on"><svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>Agent</button>
+          <button class="btn btn-tag">Sonnet 4.6</button>
+          <button class="btn btn-tag">High</button>
+        </div>
+        <div class="style-card-desc">
+          未选中虚线边框，选中实线 + accent 背景。<br/>
+          小巧精致，适合空间紧凑的工具栏。
+        </div>
+      </div>
+    </div>
+
+    <!-- E: Dot Indicator -->
+    <div class="style-card">
+      <div class="style-card-head">
+        <span class="style-card-title">E — Dot Indicator 圆点</span>
+        <span class="style-card-tag tag-b">个性</span>
+      </div>
+      <div class="style-card-body">
+        <div class="style-card-demo">
+          <button class="btn btn-dot"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Claude</button>
+          <button class="btn btn-dot on"><svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>Agent</button>
+          <button class="btn btn-dot">Sonnet 4.6</button>
+          <button class="btn btn-dot">High</button>
+        </div>
+        <div class="style-card-desc">
+          选中项左侧加发光圆点，无边框无背景。<br/>
+          Telegram / Slack 风格，极简但辨识度高。
+        </div>
+      </div>
+    </div>
+
+    <!-- F: Rounded Pill -->
+    <div class="style-card">
+      <div class="style-card-head">
+        <span class="style-card-title">F — Rounded Pill 药丸</span>
+        <span class="style-card-tag tag-b">个性</span>
+      </div>
+      <div class="style-card-body">
+        <div class="style-card-demo">
+          <button class="btn btn-pill"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Claude</button>
+          <button class="btn btn-pill on"><svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>Agent</button>
+          <button class="btn btn-pill">Sonnet 4.6</button>
+          <button class="btn btn-pill">High</button>
+        </div>
+        <div class="style-card-desc">
+          border-radius: 13px 全圆角药丸。<br/>
+          Notion / Linear 风格，现代感强，辨识度高。
+        </div>
+      </div>
+    </div>
+
+    <!-- G: Minimal Text -->
+    <div class="style-card">
+      <div class="style-card-head">
+        <span class="style-card-title">G — Minimal Text 极简</span>
+        <span class="style-card-tag tag-c">轻量</span>
+      </div>
+      <div class="style-card-body">
+        <div class="style-card-demo">
+          <button class="btn btn-min"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Claude</button>
+          <button class="btn btn-min on"><svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>Agent</button>
+          <button class="btn btn-min">Sonnet 4.6</button>
+          <button class="btn btn-min">High</button>
+        </div>
+        <div class="style-card-desc">
+          零背景零边框，选中仅底部 1.5px accent 线条。<br/>
+          类似浏览器 Tab 风格，最极简。
+        </div>
+      </div>
+    </div>
+
+    <!-- H: Outlined Badge -->
+    <div class="style-card">
+      <div class="style-card-head">
+        <span class="style-card-title">H — Outlined Badge 描边徽章</span>
+        <span class="style-card-tag tag-a">推荐</span>
+      </div>
+      <div class="style-card-body">
+        <div class="style-card-demo">
+          <button class="btn btn-badge"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Claude</button>
+          <button class="btn btn-badge on"><svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>Agent</button>
+          <button class="btn btn-badge">Sonnet 4.6</button>
+          <button class="btn btn-badge">High</button>
+        </div>
+        <div class="style-card-desc">
+          未选中 1px 实线边框，选中 accent 边框 + 微背景。<br/>
+          经典 macOS 风格，清晰专业，改动最小。
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ==================== Full Context Bar: Top Picks ==================== -->
+  <h2>完整工具栏效果 — 推荐方案 A / C / H</h2>
+
+  <!-- A: Glass Chip Full -->
+  <div class="mock-frame" style="margin-bottom:24px;">
+    <div class="context-bar">
+      <div class="context-tools">
+        <button class="ctx-btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+        <div class="ring ok"><svg viewBox="0 0 28 28"><circle class="rbg" cx="14" cy="14" r="11"/><circle class="rfill" cx="14" cy="14" r="11" stroke-dasharray="69.12" stroke-dashoffset="44.93"/></svg><span class="rpct">35</span></div>
+        <div class="ctx-div"></div>
+      </div>
+      <div class="ctx-right"><button class="ctx-btn"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg></button></div>
+    </div>
+    <div class="input-area"><textarea class="input-textarea" placeholder="输入消息..."></textarea></div>
+    <div class="btn-area">
+      <div class="btn-left">
+        <button class="btn-icon" title="设置"><svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        <button class="btn-icon purple" title="Provider"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
+        <div class="sep"></div>
+        <!-- A: Glass -->
+        <button class="btn btn-glass"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Chat</button>
+        <button class="btn btn-glass on"><svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>Agent</button>
+        <button class="btn btn-glass">Sonnet 4.6</button>
+        <button class="btn btn-glass">High</button>
+      </div>
+      <div class="btn-right">
+        <div class="bdiv"></div>
+        <button class="submit-btn"><svg viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.5.5 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- C: Subtle Lift Full -->
+  <div class="mock-frame" style="margin-bottom:24px;">
+    <div class="context-bar">
+      <div class="context-tools">
+        <button class="ctx-btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+        <div class="ring ok"><svg viewBox="0 0 28 28"><circle class="rbg" cx="14" cy="14" r="11"/><circle class="rfill" cx="14" cy="14" r="11" stroke-dasharray="69.12" stroke-dashoffset="44.93"/></svg><span class="rpct">35</span></div>
+        <div class="ctx-div"></div>
+      </div>
+      <div class="ctx-right"><button class="ctx-btn"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg></button></div>
+    </div>
+    <div class="input-area"><textarea class="input-textarea" placeholder="输入消息..."></textarea></div>
+    <div class="btn-area">
+      <div class="btn-left">
+        <button class="btn-icon" title="设置"><svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        <button class="btn-icon purple" title="Provider"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
+        <div class="sep"></div>
+        <!-- C: Lift -->
+        <button class="btn btn-lift"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Chat</button>
+        <button class="btn btn-lift on"><svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>Agent</button>
+        <button class="btn btn-lift">Sonnet 4.6</button>
+        <button class="btn btn-lift">High</button>
+      </div>
+      <div class="btn-right">
+        <div class="bdiv"></div>
+        <button class="submit-btn"><svg viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.5.5 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- H: Outlined Badge Full -->
+  <div class="mock-frame">
+    <div class="context-bar">
+      <div class="context-tools">
+        <button class="ctx-btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+        <div class="ring ok"><svg viewBox="0 0 28 28"><circle class="rbg" cx="14" cy="14" r="11"/><circle class="rfill" cx="14" cy="14" r="11" stroke-dasharray="69.12" stroke-dashoffset="44.93"/></svg><span class="rpct">35</span></div>
+        <div class="ctx-div"></div>
+      </div>
+      <div class="ctx-right"><button class="ctx-btn"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg></button></div>
+    </div>
+    <div class="input-area"><textarea class="input-textarea" placeholder="输入消息..."></textarea></div>
+    <div class="btn-area">
+      <div class="btn-left">
+        <button class="btn-icon" title="设置"><svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        <button class="btn-icon purple" title="Provider"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
+        <div class="sep"></div>
+        <!-- H: Badge -->
+        <button class="btn btn-badge"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Chat</button>
+        <button class="btn btn-badge on"><svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16c0 2.2 1.8 4 4 4h8c2.2 0 4-1.8 4-4"/></svg>Agent</button>
+        <button class="btn btn-badge">Sonnet 4.6</button>
+        <button class="btn btn-badge">High</button>
+      </div>
+      <div class="btn-right">
+        <div class="bdiv"></div>
+        <button class="submit-btn"><svg viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.5.5 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== Summary ==================== -->
+  <h2>📊 8 种风格对比</h2>
+  <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:12px;">
+      <thead>
+        <tr style="border-bottom:1px solid var(--border);color:var(--muted);text-align:left;">
+          <th style="padding:8px 10px;">#</th>
+          <th style="padding:8px 10px;">风格</th>
+          <th style="padding:8px 10px;">选中态</th>
+          <th style="padding:8px 10px;">视觉重量</th>
+          <th style="padding:8px 10px;">个性度</th>
+          <th style="padding:8px 10px;">适配难度</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.04);"><td style="padding:6px 10px;">A</td><td style="padding:6px 10px;">Glass Chip 玻璃芯片</td><td style="padding:6px 10px;">accent 边框 + 背景</td><td style="padding:6px 10px;">中</td><td style="padding:6px 10px;">★★★☆</td><td style="padding:6px 10px;color:var(--green);">低</td></tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.04);"><td style="padding:6px 10px;">B</td><td style="padding:6px 10px;">Neon Glow 霓虹发光</td><td style="padding:6px 10px;">底部发光线 + text-shadow</td><td style="padding:6px 10px;">轻</td><td style="padding:6px 10px;">★★★★</td><td style="padding:6px 10px;color:var(--amber);">中</td></tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.04);"><td style="padding:6px 10px;">C</td><td style="padding:6px 10px;">Subtle Lift 微浮起</td><td style="padding:6px 10px;">阴影 + translateY</td><td style="padding:6px 10px;">轻</td><td style="padding:6px 10px;">★★☆☆</td><td style="padding:6px 10px;color:var(--green);">低</td></tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.04);"><td style="padding:6px 10px;">D</td><td style="padding:6px 10px;">Tag Label 标签</td><td style="padding:6px 10px;">虚线→实线 + accent</td><td style="padding:6px 10px;">极轻</td><td style="padding:6px 10px;">★★★☆</td><td style="padding:6px 10px;color:var(--green);">低</td></tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.04);"><td style="padding:6px 10px;">E</td><td style="padding:6px 10px;">Dot Indicator 圆点</td><td style="padding:6px 10px;">左侧发光圆点</td><td style="padding:6px 10px;">极轻</td><td style="padding:6px 10px;">★★★★</td><td style="padding:6px 10px;color:var(--green);">低</td></tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.04);"><td style="padding:6px 10px;">F</td><td style="padding:6px 10px;">Rounded Pill 药丸</td><td style="padding:6px 10px;">accent 背景填充</td><td style="padding:6px 10px;">中</td><td style="padding:6px 10px;">★★★☆</td><td style="padding:6px 10px;color:var(--green);">低</td></tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.04);"><td style="padding:6px 10px;">G</td><td style="padding:6px 10px;">Minimal Text 极简</td><td style="padding:6px 10px;">底部 1.5px 线条</td><td style="padding:6px 10px;">极轻</td><td style="padding:6px 10px;">★★☆☆</td><td style="padding:6px 10px;color:var(--green);">低</td></tr>
+        <tr><td style="padding:6px 10px;">H</td><td style="padding:6px 10px;">Outlined Badge 描边</td><td style="padding:6px 10px;">accent 边框 + 微背景</td><td style="padding:6px 10px;">中</td><td style="padding:6px 10px;">★★☆☆</td><td style="padding:6px 10px;color:var(--green);">低</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="ann">
+    <strong>💡 推荐 Top 3：</strong><br/>
+    • <strong>A — Glass Chip</strong>：最适配当前深色主题，玻璃质感与 VS Code 侧边栏一致，改动小效果好<br/>
+    • <strong>C — Subtle Lift</strong>：物理交互反馈（hover 浮起 + 选中阴影），工具密集型界面首选<br/>
+    • <strong>H — Outlined Badge</strong>：经典 macOS 风格，改动最小，清晰专业<br/>
+    <br/>
+    所有方案共享：<code>.btn-icon</code>（设置/Provider 图标按钮）+ <code>.sep</code>（分隔圆点）
+  </div>
+</body>
+</html>
