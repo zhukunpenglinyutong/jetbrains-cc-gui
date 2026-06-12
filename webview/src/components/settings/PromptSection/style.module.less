@@ -55,7 +55,7 @@
   white-space: nowrap;
 
   &:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
     border-color: var(--border-hover, var(--border-secondary));
   }
 
@@ -122,7 +122,7 @@
   align-items: center;
   gap: 8px;
   padding: 16px;
-  background: var(--bg-secondary);
+  background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
   border: 1px solid var(--border-primary);
   border-radius: 8px;
   color: var(--text-tertiary);
@@ -154,7 +154,7 @@
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  background: var(--bg-secondary);
+  background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
   border: 1px solid var(--border-primary);
   border-radius: 8px;
   transition: all 0.2s;
@@ -171,7 +171,7 @@
   justify-content: center;
   width: 40px;
   height: 40px;
-  background: var(--bg-tertiary);
+  background: rgba(var(--bg-tertiary-rgb), var(--window-opacity, 1));
   border-radius: 8px;
   color: var(--text-secondary);
   font-size: 20px;
@@ -218,7 +218,7 @@
   transition: all 0.2s;
 
   &:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
   }
 }
 
@@ -227,7 +227,7 @@
   top: 100%;
   right: 0;
   margin-top: 4px;
-  background: var(--bg-secondary);
+  background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
   border: 1px solid var(--border-secondary);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
@@ -251,7 +251,7 @@
   transition: background 0.2s;
 
   &:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
   }
 
   &.danger {

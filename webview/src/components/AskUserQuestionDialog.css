@@ -2,7 +2,7 @@
 
 .ask-user-question-dialog {
   position: relative;
-  background: var(--bg-primary);
+  background: rgba(var(--bg-primary-rgb), max(var(--overlay-min-opacity, 0.85), var(--window-opacity, 1)));
   border: 1px solid var(--border-secondary);
   border-radius: 8px;
   padding: 24px;
@@ -65,7 +65,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-elevated);
+  background: rgba(var(--bg-elevated-rgb), var(--window-opacity, 1));
   border: 1px solid var(--border-secondary);
   border-radius: 4px;
   cursor: pointer;
@@ -74,7 +74,7 @@
 }
 
 .collapse-toggle-button:hover {
-  background: var(--bg-hover);
+  background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
   color: var(--color-link);
 }
 
@@ -87,7 +87,7 @@
   color: var(--text-muted);
   padding: 4px 10px;
   border-radius: 4px;
-  background: var(--bg-elevated);
+  background: rgba(var(--bg-elevated-rgb), var(--window-opacity, 1));
   border: 1px solid var(--border-secondary);
   transition: all 0.3s ease;
 }
@@ -242,7 +242,7 @@
   padding: 12px;
   border: 1px solid var(--border-secondary);
   border-radius: 6px;
-  background: var(--bg-elevated);
+  background: rgba(var(--bg-elevated-rgb), var(--window-opacity, 1));
   cursor: pointer;
   transition: all 0.2s;
   text-align: left;
@@ -250,7 +250,7 @@
 }
 
 .question-option:hover {
-  background: var(--bg-hover);
+  background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
   border-color: var(--accent-primary);
 }
 
@@ -318,7 +318,7 @@
   padding: 12px;
   border: 1px solid var(--accent-primary);
   border-radius: 6px;
-  background: var(--bg-elevated);
+  background: rgba(var(--bg-elevated-rgb), var(--window-opacity, 1));
   color: var(--text-primary);
   font-family: inherit;
   font-size: 14px;
@@ -381,13 +381,13 @@
 }
 
 .action-button.secondary {
-  background: var(--bg-elevated);
+  background: rgba(var(--bg-elevated-rgb), var(--window-opacity, 1));
   color: var(--text-primary);
   border-color: var(--border-secondary);
 }
 
 .action-button.secondary:hover {
-  background: var(--bg-hover);
+  background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
 }
 
 /* Responsive adjustments */

@@ -51,43 +51,34 @@ public class HtmlLoader {
     /**
      * Inject the IDE theme into the HTML.
      *
-     * Strategy: add inline style attributes directly on HTML tags to ensure the background
-     * color is applied on the very first render frame.
-     * 1. Modify the &lt;html&gt; tag to add style="background-color:..."
-     * 2. Modify the &lt;body&gt; tag to add style="background-color:..."
-     * 3. Inject a theme variable script into &lt;head&gt;
-     *
-     * Inline styles are parsed faster than CSS rules, ensuring the correct color appears
-     * on the first CEF render frame.
+     * Strategy: inject --bg-ide CSS variable into &lt;head&gt; for transparency compositing.
+     * html and body backgrounds are left transparent in CSS (#app opacity layer shows through).
      */
     private String injectIdeTheme(String html) {
         try {
             boolean isDark = ThemeConfigService.getIdeThemeConfig().get("isDark").getAsBoolean();
             String theme = isDark ? "dark" : "light";
-            // Use the unified color values to ensure consistency with Swing component backgrounds
-            String bgColor = ThemeConfigService.getBackgroundColorHex();
+            // IDE panel background color — used as the base layer behind the plugin theme
+            String ideBgColor = ThemeConfigService.getBackgroundColorHex();
+            if (!ideBgColor.matches("^#[0-9a-fA-F]{6}$")) {
+                boolean isDarkFallback = ThemeConfigService.getIdeThemeConfig().get("isDark").getAsBoolean();
+                ideBgColor = isDarkFallback ? "#1e1e1e" : "#ffffff";
+            }
 
-            // 1. Modify the <html> tag to add inline styles
-            html = html.replaceFirst(
-                "<html([^>]*)>",
-                "<html$1 style=\"background-color:" + bgColor + ";\">"
-            );
-
-            // 2. Modify the <body> tag to add inline styles
-            html = html.replaceFirst(
-                "<body([^>]*)>",
-                "<body$1 style=\"background-color:" + bgColor + ";\">"
-            );
-
-            // 3. Inject a theme variable script after the <head> tag
-            String scriptInjection = "\n    <script>window.__INITIAL_IDE_THEME__ = '" + theme + "';</script>";
+            String platform = PlatformUtils.getPlatformType().name().toLowerCase();
+            // 3. Inject theme variable script after the <head> tag
+            String scriptInjection = "\n    <script>"
+                + "window.__INITIAL_IDE_THEME__ = '" + theme + "';"
+                + "window.__PLATFORM__ = '" + platform + "';"
+                + "document.documentElement.style.setProperty('--bg-ide', '" + ideBgColor + "');"
+                + "</script>";
             int headIndex = html.indexOf("<head>");
             if (headIndex != -1) {
                 int insertPos = headIndex + "<head>".length();
                 html = html.substring(0, insertPos) + scriptInjection + html.substring(insertPos);
             }
 
-            LOG.info("Successfully injected IDE theme (inline styles): " + theme + ", background: " + bgColor);
+            LOG.info("Successfully injected IDE theme (CSS variable only): " + theme + ", background: " + ideBgColor);
         } catch (Exception e) {
             LOG.error("Failed to inject IDE theme: " + e.getMessage(), e);
         }

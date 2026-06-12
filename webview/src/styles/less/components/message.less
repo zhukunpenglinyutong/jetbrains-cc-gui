@@ -7,7 +7,7 @@
     overscroll-behavior-y: contain;
     overflow-anchor: none; /* 手动跟随到底时禁用锚定，避免和程序滚动抢控制权 */
     padding: 0;
-    background: var(--bg-chat);
+    background: transparent;
 }
 
 .messages-container.scroll-anchor-enabled {
@@ -72,7 +72,7 @@
 }
 
 .message.user .message-content {
-    background-color: var(--color-message-user-bg);
+    background-color: rgba(var(--color-message-user-bg-rgb), var(--window-opacity, 1));
     color: var(--color-message-user-text);
     padding: 10px 14px;
     border-radius: 12px 12px 2px 12px;
@@ -141,7 +141,7 @@
     right: 8px;
     width: 28px;
     height: 28px;
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
     border: 1px solid var(--border-primary);
     border-radius: 4px;
     cursor: pointer;
@@ -156,7 +156,7 @@
     visibility: hidden;
 
     &:hover {
-        background: var(--bg-hover);
+        background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
         color: var(--text-primary);
         border-color: var(--border-hover);
     }
@@ -171,7 +171,7 @@
         position: absolute;
         top: -30px;
         right: 0;
-        background: var(--bg-elevated);
+        background: rgba(var(--bg-elevated-rgb), var(--window-opacity, 1));
         color: var(--text-primary);
         border: 1px solid var(--border-secondary);
         box-shadow: var(--shadow-sm);
@@ -627,7 +627,7 @@
 }
 
 .markdown-content pre {
-    background-color: var(--color-code-block-bg);
+    background-color: rgba(var(--color-code-block-bg-rgb), var(--window-opacity, 1));
     border: 1px solid var(--color-code-block-border);
     border-radius: 6px;
     padding: 12px;
@@ -662,7 +662,7 @@
     right: 6px;
     width: 28px;
     height: 28px;
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
     border: 1px solid var(--border-primary);
     border-radius: 4px;
     cursor: pointer;
@@ -676,7 +676,7 @@
     opacity: 0.7;
 
     &:hover {
-        background: var(--bg-hover);
+        background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
         color: var(--text-primary);
         opacity: 1;
         border-color: var(--border-hover);
@@ -693,7 +693,7 @@
     position: absolute;
     top: -30px;
     right: 0;
-    background: var(--bg-elevated);
+    background: rgba(var(--bg-elevated-rgb), var(--window-opacity, 1));
     color: var(--text-primary);
     border: 1px solid var(--border-secondary);
     box-shadow: var(--shadow-sm);
@@ -750,7 +750,7 @@
     background-color: var(--color-code-inline-bg);
     padding: 2px 4px;
     border-radius: 3px;
-    font-size: 12.5px;
+    font-size: inherit;
     word-wrap: break-word;
     overflow-wrap: break-word;
 }
@@ -759,6 +759,15 @@
     background-color: transparent;
     padding: 0;
     color: var(--text-secondary);
+    font-family: inherit;
+    font-size: inherit;
+}
+
+/* Ensure syntax-highlighting spans inside code blocks inherit the monospace
+ * font from <pre>.  The global * { font-family: … } rule in base.less cuts
+ * the inheritance chain — every element gets the UI font.  Without this
+ * override, highlight.js <span> tokens would render in the proportional font. */
+.markdown-content pre code span {
     font-family: inherit;
 }
 
@@ -1145,7 +1154,7 @@
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: var(--bg-secondary);
+    background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
     border: 2px solid var(--border-secondary);
     cursor: pointer;
     pointer-events: auto;
@@ -1187,7 +1196,7 @@
     left: calc(100% + 8px);
     top: 50%;
     transform: translateY(-50%);
-    background: var(--bg-elevated);
+    background: rgba(var(--bg-elevated-rgb), max(var(--overlay-min-opacity), var(--window-opacity, 1)));
     color: var(--text-primary);
     border: 1px solid var(--border-secondary);
     box-shadow: var(--shadow-sm);
@@ -1220,7 +1229,7 @@
         top: 50%;
         transform: translateY(-50%);
         border: 4px solid transparent;
-        border-right-color: var(--bg-elevated);
+        border-right-color: rgba(var(--bg-elevated-rgb), max(var(--overlay-min-opacity), var(--window-opacity, 1)));
     }
 }
 

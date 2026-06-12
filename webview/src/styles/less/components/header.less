@@ -7,7 +7,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 8px 8px 8px 16px;
-    background: var(--bg-secondary);
+    background: transparent;
     border-bottom: 1px solid var(--border-primary);
     min-height: 50px;
     flex-shrink: 0;
@@ -34,7 +34,7 @@
 }
 
 .new-chat-button {
-    background: var(--bg-tertiary);
+    background: rgba(var(--bg-tertiary-rgb), var(--window-opacity, 1));
     border: 1px solid var(--border-secondary);
     color: var(--text-secondary);
     padding: 6px 12px;
@@ -51,7 +51,7 @@
 }
 
 .new-chat-button:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
     border-color: var(--accent-secondary);
 }
 
@@ -71,7 +71,7 @@
 }
 
 .back-button:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
     color: var(--text-secondary);
 }
 
@@ -92,7 +92,7 @@
 }
 
 .icon-button:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
     color: var(--text-secondary);
 }
 
@@ -170,7 +170,7 @@
     font-weight: 600;
     border: 1px solid var(--accent-primary);
     border-radius: 4px;
-    background-color: var(--bg-tertiary);
+    background-color: rgba(var(--bg-tertiary-rgb), var(--window-opacity, 1));
     color: var(--text-secondary);
     outline: none;
     transition: border-color 0.2s;

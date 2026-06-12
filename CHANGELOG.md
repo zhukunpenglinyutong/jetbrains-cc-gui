@@ -13,6 +13,8 @@ English:
 - Add SDK session to CLI session conversion: sessions created via SDK (sdk-cli / claude-vscode entrypoint) can be converted to CLI sessions, making them visible in the `/resume` list; shown as entrypoint badges in history with a "Convert to CLI" action (by @gadfly3173)
 - Add Claude Fable 5 model support with Mythos-class capabilities; add Fable 5 pricing ($10/$50 per 1M tokens) (by @zkpaiminmin)
 - Integrate Claude Code Task tracking API (TaskCreate / TaskUpdate / TaskGet / TaskList): task management tools render as collapsible agent groups with absorbed nested tool calls and persisted expand/collapse state; task list in StatusPanel supports both legacy `todowrite` and new Task API tasks (by @gadfly3173, co-authored with @zhuzhihang)
+- Add window opacity slider in Settings → Appearance: real-time transparency control (0–100%) with localStorage persistence and unified `--window-opacity` CSS variable
+- ⚠️ Behavior change: the plugin's default **UI font source changed from the IDEA editor font to the IDEA UI font** (the system Label font). After upgrading, regular chat text that previously followed your monospaced editor font will follow your IDE's UI (usually sans-serif) font instead; code and command areas now use the dedicated code font. Override either under Settings → Basic → Appearance if you preferred the old look
 
 🐛 Fixes
 - Fix full WSL2 compatibility suite: install Claude SDK into WSL filesystem; handle raw/forward-slash UNC WSL paths; propagate permission env vars across Windows→WSL boundary via WSLENV; merge (not replace) probed login-shell PATH to preserve Homebrew/pyenv/sdkman; migrate path handling to `WslPathUtil`; resolve Claude home at call time in session conversion (by @Gazoon007)
@@ -35,6 +37,8 @@ English:
 - Fix agent group absorbing wrong children after history reload: replace streaming-count-based grouping with a purely structural rule; fix `extractAccumulatedTasks` single-pass with per-message ID trust guard for parallel TaskCreate (by @zkpaiminmin)
 - Fix symlink escape in project-boundary check on native POSIX: restrict lexical WSL fallback to WSL paths only; native POSIX goes through `getCanonicalPath` (security) (by @zkpaiminmin)
 - Fix XSS via control-character-obfuscated `href` schemes (e.g. `java&#9;script:`): reject hrefs containing C0 control characters before scheme checks in the DOMPurify hook (security) (by @zkpaiminmin)
+- Fix window opacity not defaulting to 1.0 for negative values, NaN, and Infinite values
+- Fix duplicate `🔧 Improvements` header in v0.4.4 changelog entry
 
 🔧 Improvements
 - Enhance Bash output rendering with dedicated CSS classes for improved syntax distinction (by @Luna5ama)
@@ -42,6 +46,10 @@ English:
 - Split env var groups into `MODEL_ROUTING_ENV_VARS` and `REASONING_CONTROL_ENV_VARS` for explicit treatment, preventing the two sets from drifting independently (by @gadfly3173)
 - Add Docker build support (`Dockerfile` + `.dockerignore`) for reproducible plugin distribution without a local Java/Node toolchain (by @senfix)
 - Replace emoji blocked marker in StatusPanel TodoList with `codicon-circle-slash` for consistency with the codicon icon system (by @zkpaiminmin)
+- Large-area elements (message bubbles, code blocks, tool blocks, task blocks, input box) now follow `--window-opacity` for consistent transparent window appearance
+- Floating dialogs (import, warning, confirm) use `max(--overlay-min-opacity, --window-opacity)` to prevent transparency bleed-through
+- Consolidate window opacity management into `useSettingsThemeSync` hook: single source of truth for opacity state, debounced localStorage writes (500ms), robust input validation that defaults to 1.0 for all invalid values
+- Add `--overlay-min-opacity: 0.85` CSS variable and RGB variants for all large-area background colors
 
 中文：
 
@@ -56,6 +64,8 @@ English:
 - 新增 SDK 会话转换为 CLI 会话：通过 SDK 创建的会话（sdk-cli / claude-vscode 入口）可转换为 CLI 会话，出现在 `/resume` 列表；历史列表显示入口徽章和「转换为 CLI」操作（by @gadfly3173）
 - 新增 Claude Fable 5 模型支持（Mythos 级），添加 Fable 5 定价（输入 $10/1M，输出 $50/1M）（by @zkpaiminmin）
 - 集成 Claude Code Task tracking API（TaskCreate / TaskUpdate / TaskGet / TaskList）：任务管理工具渲染为可折叠 Agent 分组，内含嵌套工具调用，展开/折叠状态持久化；StatusPanel 任务列表同时支持旧版 `todowrite` 和新 Task API（by @gadfly3173，@zhuzhihang 共同开发）
+- 设置 → 外观新增窗口透明度滑块：实时透明度控制（0–100%），localStorage 持久化，统一 `--window-opacity` CSS 变量
+- ⚠️ 行为变更：插件默认 **UI 字体来源由 IDEA 编辑器字体改为 IDEA UI 字体**（即系统 Label 字体）。升级后，原本跟随等宽编辑器字体的普通聊天文本会改为跟随 IDE 的 UI 字体（通常是无衬线），代码与命令区域则改用专门的代码字体。如偏好旧观感，可在设置 → 基础 → 外观中自行覆盖
 
 🐛 修复
 - 修复 WSL2 全套兼容性问题：Claude SDK 安装到 WSL 文件系统；处理原始路径和正斜杠 UNC WSL 路径；通过 WSLENV 跨 Windows→WSL 边界传播权限环境变量；合并（而非替换）登录 Shell PATH，保留 Homebrew/pyenv/sdkman；路径处理迁移到 `WslPathUtil`；会话转换时按需解析 Claude home（by @Gazoon007）
@@ -78,6 +88,8 @@ English:
 - 修复历史回放后 Agent 分组吸收错误子节点：改为纯结构化规则；`extractAccumulatedTasks` 单遍处理加并行 TaskCreate ID 冲突守卫（by @zkpaiminmin）
 - 修复原生 POSIX 上项目边界检查未解析软链接的逃逸问题，限制词法回退仅用于 WSL（安全）（by @zkpaiminmin）
 - 修复控制字符混淆 `href` XSS（如 `java&#9;script:`），在 DOMPurify hook 的 scheme 检查前拒绝含 C0 控制字符的 href（安全）（by @zkpaiminmin）
+- 修复窗口透明度对负值、NaN 和无穷大值没有正确默认到 1.0 的问题
+- 修复 v0.4.4 更新日志条目重复的 `🔧 Improvements` 标题
 
 🔧 改进
 - 为 Bash 输出渲染引入专用 CSS 类，改善语法区分度（by @Luna5ama）
@@ -85,6 +97,10 @@ English:
 - 将环境变量拆分为 `MODEL_ROUTING_ENV_VARS` 和 `REASONING_CONTROL_ENV_VARS`，防止独立漂移（by @gadfly3173）
 - 新增 Docker 构建支持（`Dockerfile` + `.dockerignore`），无需本地工具链可复现发布包（by @senfix）
 - StatusPanel TodoList 中将 emoji 阻断标记替换为 `codicon-circle-slash`（by @zkpaiminmin）
+- 大面积元素（消息气泡、代码块、工具块、任务块、输入框）现在跟随 `--window-opacity` 变化，实现一致的透明窗口效果
+- 浮动对话框（导入、警告、确认）使用 `max(--overlay-min-opacity, --window-opacity)` 防止透明穿透
+- 将窗口透明度管理统一整合到 `useSettingsThemeSync` hook：透明度状态唯一来源，localStorage 写入防抖（500ms），健壮的输入校验，所有无效值默认回退到 1.0
+- 新增 `--overlay-min-opacity: 0.85` CSS 变量及所有大面积背景色的 RGB 变体
 
 ---
 

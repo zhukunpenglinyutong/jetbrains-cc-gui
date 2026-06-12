@@ -18,7 +18,7 @@
 
 .tabSelector {
   display: flex;
-  background: var(--bg-secondary);
+  background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
   padding: 4px;
   border-radius: 6px;
   border: 1px solid var(--border-secondary);
@@ -41,7 +41,7 @@
   justify-content: center;
 
   &:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
   }
 
   &.active {
@@ -56,14 +56,14 @@
   gap: 8px;
   padding: 8px 12px;
   margin-bottom: 12px;
-  background: var(--bg-secondary);
+  background: rgba(var(--bg-secondary-rgb), var(--window-opacity, 1));
   border: 1px solid var(--border-secondary);
   border-radius: 6px;
   cursor: pointer;
   transition: background 0.15s;
 
   &:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
   }
 }
 
@@ -99,7 +99,7 @@
   white-space: nowrap;
 
   &:hover {
-    background: var(--bg-hover);
+    background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
     color: var(--text-primary);
   }
 }

@@ -1,11 +1,42 @@
 // hooks/useSettingsThemeSync.ts
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { applyDiffTheme, getStoredDiffTheme, type DiffThemeMode } from '../../../utils/diffTheme';
+import { hexToRgb } from '../../../utils/colorUtils';
 
 // Extend window type for IDE theme injection
 declare global {
   interface Window {
     __INITIAL_IDE_THEME__?: 'light' | 'dark';
+  }
+}
+
+const OPACITY_STORAGE_KEY = 'windowOpacity';
+const OPACITY_CSS_PROP = '--window-opacity';
+const OPACITY_DEFAULT = 1.0;
+const OPACITY_DEBOUNCE_MS = 500;
+
+function readStoredOpacity(): number {
+  const raw = localStorage.getItem(OPACITY_STORAGE_KEY);
+  if (!raw) return OPACITY_DEFAULT;
+  const val = parseFloat(raw);
+  if (!Number.isFinite(val)) return OPACITY_DEFAULT;
+  if (val < 0 || val > 1) return OPACITY_DEFAULT;
+  return val;
+}
+
+function applyOpacityCSS(value: number) {
+  if (value < 1.0) {
+    document.documentElement.style.setProperty(OPACITY_CSS_PROP, value.toString());
+  } else {
+    document.documentElement.style.removeProperty(OPACITY_CSS_PROP);
+  }
+}
+
+function persistOpacity(value: number) {
+  if (value < 1.0) {
+    localStorage.setItem(OPACITY_STORAGE_KEY, value.toString());
+  } else {
+    localStorage.removeItem(OPACITY_STORAGE_KEY);
   }
 }
 
@@ -22,6 +53,8 @@ export interface UseSettingsThemeSyncReturn {
   setUserMsgColor: (color: string) => void;
   diffTheme: DiffThemeMode;
   setDiffTheme: (theme: DiffThemeMode) => void;
+  windowOpacity: number;
+  setWindowOpacity: (opacity: number) => void;
 }
 
 export function useSettingsThemeSync(): UseSettingsThemeSyncReturn {
@@ -68,6 +101,10 @@ export function useSettingsThemeSync(): UseSettingsThemeSyncReturn {
     }
     return '';
   });
+
+  // Window opacity state — debounced localStorage writes, real-time CSS
+  const [windowOpacity, setWindowOpacity] = useState<number>(readStoredOpacity);
+  const opacityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Diff theme configuration
   const [diffTheme, setDiffTheme] = useState<DiffThemeMode>(() => getStoredDiffTheme());
@@ -116,9 +153,11 @@ export function useSettingsThemeSync(): UseSettingsThemeSyncReturn {
   useEffect(() => {
     if (chatBgColor) {
       document.documentElement.style.setProperty('--bg-chat', chatBgColor);
+      document.documentElement.style.setProperty('--bg-chat-rgb', hexToRgb(chatBgColor));
       localStorage.setItem('chatBgColor', chatBgColor);
     } else {
       document.documentElement.style.removeProperty('--bg-chat');
+      document.documentElement.style.removeProperty('--bg-chat-rgb');
       localStorage.removeItem('chatBgColor');
     }
   }, [chatBgColor]);
@@ -133,6 +172,28 @@ export function useSettingsThemeSync(): UseSettingsThemeSyncReturn {
       localStorage.removeItem('userMsgColor');
     }
   }, [userMsgColor]);
+
+  // Window opacity handler — real-time CSS, debounced localStorage
+  useEffect(() => {
+    applyOpacityCSS(windowOpacity);
+
+    if (opacityTimerRef.current) {
+      clearTimeout(opacityTimerRef.current);
+    }
+    opacityTimerRef.current = setTimeout(() => {
+      persistOpacity(windowOpacity);
+      opacityTimerRef.current = null;
+    }, OPACITY_DEBOUNCE_MS);
+  }, [windowOpacity]);
+
+  // Cleanup opacity timer on unmount
+  useEffect(() => {
+    return () => {
+      if (opacityTimerRef.current) {
+        clearTimeout(opacityTimerRef.current);
+      }
+    };
+  }, []);
 
   // Diff theme handler
   useEffect(() => {
@@ -152,5 +213,7 @@ export function useSettingsThemeSync(): UseSettingsThemeSyncReturn {
     setUserMsgColor,
     diffTheme,
     setDiffTheme,
+    windowOpacity,
+    setWindowOpacity,
   };
 }

@@ -270,6 +270,11 @@
         "enabled": "Activé",
         "disabled": "Désactivé",
         "hint": "Lorsqu'elle est désactivée, créer une nouvelle session dans une conversation contenant des messages se fera directement, sans afficher la boîte de dialogue de confirmation."
+      },
+      "windowOpacity": {
+        "label": "Opacité de la fenêtre",
+        "reset": "Réinitialiser",
+        "hint": "Réduisez l'opacité pour laisser le fond de l'IDE apparaître à travers la fenêtre de chat. Plage : 0% - 100%"
       }
     },
     "providers": "Gestion des fournisseurs",

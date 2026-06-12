@@ -19,14 +19,24 @@ import org.cef.misc.BoolRef;
  * OSR (Off-Screen Rendering) mode based on the platform and IDEA version.
  *
  * OSR mode behavior:
- * - macOS: OSR disabled (uses native rendering)
- * - Windows: OSR disabled
- * - Linux/Unix: OSR enabled for IDEA 2023+, disabled for earlier versions
+ * - macOS: OSR disabled (native rendering, transparency not supported)
+ * - Windows: OSR enabled (required for transparent background support)
+ * - Linux/Unix: OSR enabled for IDEA 2023+ (supports transparency + fixes rendering stability issues), disabled for earlier versions
  */
 public final class JBCefBrowserFactory {
 
     private static final Logger LOG = Logger.getInstance(JBCefBrowserFactory.class);
     private static final int CONTROL_CHAR_MAX = 0x1F;
+
+    /**
+     * First platform baseline version (2026.1) whose JBCefApp initialization
+     * calls JCefAppConfig.isRemoteEnabled(). Older platforms work fine with
+     * JBRs that lack this API, so the mismatch check must not apply to them.
+     */
+    private static final int REMOTE_API_REQUIRED_SINCE_BASELINE = 261;
+
+    /** First JBR build line that ships JCefAppConfig.isRemoteEnabled(). */
+    public static final String REQUIRED_JBR_BUILD = "b1373";
 
     private JBCefBrowserFactory() {
         // Utility class, do not instantiate
@@ -55,12 +65,16 @@ public final class JBCefBrowserFactory {
             configureContextMenu(browser, isDevMode);
             LOG.info("JBCefBrowser created successfully using builder");
             return browser;
-        } catch (Exception e) {
+        } catch (Exception | LinkageError e) {
             LOG.warn("JBCefBrowser builder failed, falling back to default constructor (missing OSR and dev-tools config)", e);
-            JBCefBrowser browser = new JBCefBrowser();
-            configureContextMenu(browser, isDevMode);
-            configureKeyboardWorkaround(browser);
-            return browser;
+            try {
+                JBCefBrowser browser = new JBCefBrowser();
+                configureContextMenu(browser, isDevMode);
+                configureKeyboardWorkaround(browser);
+                return browser;
+            } catch (Exception | LinkageError fallbackFailure) {
+                throw newJcefUnavailableException(fallbackFailure);
+            }
         }
     }
 
@@ -86,16 +100,34 @@ public final class JBCefBrowserFactory {
             configureContextMenu(browser, isDevMode);
             LOG.info("JBCefBrowser created successfully with URL");
             return browser;
-        } catch (Exception e) {
+        } catch (Exception | LinkageError e) {
             LOG.warn("JBCefBrowser builder failed, falling back to default constructor (missing OSR and dev-tools config)", e);
-            JBCefBrowser browser = new JBCefBrowser();
-            if (url != null && !url.isEmpty()) {
-                browser.loadURL(url);
+            try {
+                JBCefBrowser browser = new JBCefBrowser();
+                if (url != null && !url.isEmpty()) {
+                    browser.loadURL(url);
+                }
+                configureContextMenu(browser, isDevMode);
+                configureKeyboardWorkaround(browser);
+                return browser;
+            } catch (Exception | LinkageError fallbackFailure) {
+                throw newJcefUnavailableException(fallbackFailure);
             }
-            configureContextMenu(browser, isDevMode);
-            configureKeyboardWorkaround(browser);
-            return browser;
         }
+    }
+
+    /**
+     * Wrap a fatal browser-creation failure into an IllegalStateException whose
+     * message mentions JCEF. A LinkageError here usually means the IDE's JBR and
+     * platform disagree on the JCEF API (e.g. Android Studio 2026.x bundling a
+     * JBR without JCefAppConfig.isRemoteEnabled()). Callers already route
+     * IllegalStateException with "JCEF" in the message to their
+     * "JCEF not supported" UI, so this turns an uncatchable EDT crash into a
+     * graceful error panel.
+     */
+    private static IllegalStateException newJcefUnavailableException(Throwable cause) {
+        LOG.error("JCEF browser creation failed completely", cause);
+        return new IllegalStateException("JCEF browser creation failed: " + cause, cause);
     }
 
     /**
@@ -105,16 +137,17 @@ public final class JBCefBrowserFactory {
      */
     private static boolean determineOsrMode() {
         if (SystemInfo.isMac) {
-            // macOS: disable OSR
+            // macOS: disable OSR (native rendering, transparency not supported)
             return false;
         } else if (SystemInfo.isLinux || SystemInfo.isUnix) {
-            // Linux/Unix: depends on IDEA version
+            // Linux/Unix: IDEA 2023+ 开启OSR，既支持透明度，又解决原生渲染稳定性问题
             int version = getIdeaMajorVersion();
-            // Enable OSR for IDEA 2023+
+            // Enable OSR for IDEA 2023+ to support transparency and fix historical rendering bugs
             return version >= 2023;
         } else if (SystemInfo.isWindows) {
-            // Windows: disable OSR
-            return false;
+            // Windows: enable OSR for transparency support
+            // OSR renders through Swing so transparent backgrounds work correctly
+            return true;
         }
         // Unknown platform, disable OSR by default
         return false;
@@ -161,9 +194,68 @@ public final class JBCefBrowserFactory {
      */
     public static boolean isJcefSupported() {
         try {
-            return com.intellij.ui.jcef.JBCefApp.isSupported();
-        } catch (Exception e) {
+            if (!com.intellij.ui.jcef.JBCefApp.isSupported()) {
+                return false;
+            }
+            // JBCefApp.isSupported() only checks that JCEF classes are present.
+            // It does not detect platform/JBR binary mismatches such as Android
+            // Studio 2026.x shipping an outdated JBR whose JCefAppConfig lacks
+            // isRemoteEnabled() - JBCefApp.getInstance() then dies with an
+            // uncatchable NoSuchMethodError during Holder class init. Detect
+            // that case up front, before anything touches JBCefApp$Holder.
+            if (isJbrMissingJcefRemoteApi()) {
+                LOG.warn("JCEF disabled: this platform requires JCefAppConfig.isRemoteEnabled() but the current"
+                        + " JBR does not provide it. Upgrade the Boot Java Runtime to a JBR with JCEF "
+                        + REQUIRED_JBR_BUILD + " or newer.");
+                return false;
+            }
+            return true;
+        } catch (Exception | LinkageError e) {
             LOG.warn("Failed to check JCEF support: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Detect the known platform/JBR mismatch where the IDE platform (2026.1+)
+     * calls {@code JCefAppConfig.isRemoteEnabled()} during JBCefApp
+     * initialization but the bundled JBR predates that API (older than
+     * {@link #REQUIRED_JBR_BUILD}), e.g. Android Studio Quail 2026.1.1.
+     * Initializing JCEF in that state throws NoSuchMethodError.
+     *
+     * @return true if the current JBR is missing the JCEF remote API required by this platform
+     */
+    public static boolean isJbrMissingJcefRemoteApi() {
+        try {
+            int baseline = ApplicationInfo.getInstance().getBuild().getBaselineVersion();
+            if (!isRemoteApiRequiredByPlatform(baseline)) {
+                return false;
+            }
+            Class<?> config = Class.forName("com.jetbrains.cef.JCefAppConfig");
+            return !hasJcefRemoteApi(config);
+        } catch (Exception | LinkageError e) {
+            // Cannot determine; do not block normal initialization.
+            LOG.warn("Failed to detect JBR JCEF remote API availability: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Whether the given platform baseline version requires the JCEF remote API
+     * ({@code JCefAppConfig.isRemoteEnabled()}) during JBCefApp initialization.
+     */
+    static boolean isRemoteApiRequiredByPlatform(int baselineVersion) {
+        return baselineVersion >= REMOTE_API_REQUIRED_SINCE_BASELINE;
+    }
+
+    /**
+     * Whether the given JCefAppConfig class exposes {@code isRemoteEnabled()}.
+     */
+    static boolean hasJcefRemoteApi(Class<?> jcefAppConfigClass) {
+        try {
+            jcefAppConfigClass.getMethod("isRemoteEnabled");
+            return true;
+        } catch (NoSuchMethodException e) {
             return false;
         }
     }

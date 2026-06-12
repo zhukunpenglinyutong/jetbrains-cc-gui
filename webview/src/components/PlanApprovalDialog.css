@@ -2,7 +2,7 @@
 
 .plan-approval-dialog {
   position: relative;
-  background: var(--bg-primary);
+  background: rgba(var(--bg-primary-rgb), max(var(--overlay-min-opacity, 0.85), var(--window-opacity, 1)));
   border: 1px solid var(--border-secondary);
   border-radius: 8px;
   padding: 24px;
@@ -91,7 +91,7 @@
   font-size: 14px;
   color: var(--text-muted);
   padding: 4px 10px;
-  background: var(--bg-elevated);
+  background: rgba(var(--bg-elevated-rgb), var(--window-opacity, 1));
   border-radius: 4px;
 }
 
@@ -126,7 +126,7 @@
   height: 28px;
   border: 1px solid var(--border-secondary);
   border-radius: 4px;
-  background: var(--bg-elevated);
+  background: rgba(var(--bg-elevated-rgb), var(--window-opacity, 1));
   color: var(--text-primary);
   cursor: pointer;
   transition: all 0.2s;
@@ -134,7 +134,7 @@
 
 .collapse-button:hover,
 .expand-button:hover {
-  background: var(--bg-hover);
+  background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
   border-color: var(--accent-primary);
 }
 
@@ -176,7 +176,7 @@
   justify-content: space-between;
   gap: 16px;
   padding: 12px 20px;
-  background: var(--bg-primary);
+  background: rgba(var(--bg-primary-rgb), var(--window-opacity, 1));
   border: 1px solid var(--border-secondary);
   border-radius: 8px;
   box-shadow: var(--shadow-md);
@@ -207,7 +207,7 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  background: var(--bg-elevated);
+  background: rgba(var(--bg-elevated-rgb), var(--window-opacity, 1));
   border-radius: 6px;
   padding: 16px;
 }
@@ -256,7 +256,7 @@
   margin: 0;
   border: 1px solid var(--border-secondary);
   border-radius: 6px;
-  background: var(--bg-elevated);
+  background: rgba(var(--bg-elevated-rgb), var(--window-opacity, 1));
   min-height: 0;
   max-height: 40vh;
 }
@@ -298,7 +298,7 @@
   padding: 12px;
   border: 1px solid var(--border-secondary);
   border-radius: 6px;
-  background: var(--bg-elevated);
+  background: rgba(var(--bg-elevated-rgb), var(--window-opacity, 1));
   cursor: pointer;
   transition: all 0.2s;
   text-align: left;
@@ -306,7 +306,7 @@
 }
 
 .mode-option:hover {
-  background: var(--bg-hover);
+  background: rgba(var(--bg-hover-rgb), var(--window-opacity, 1));
   border-color: var(--accent-primary);
 }
 
@@ -374,7 +374,7 @@
 }
 
 .hint kbd {
-  background: var(--bg-elevated);
+  background: rgba(var(--bg-elevated-rgb), var(--window-opacity, 1));
   border: 1px solid var(--border-secondary);
   border-radius: 4px;
   padding: 2px 6px;

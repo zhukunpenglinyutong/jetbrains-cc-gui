@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 
+import { isValidHexColor, hexToRgb } from '../utils/colorUtils';
+
 /**
  * Manages IDE theme initialization and synchronization.
  * Handles font scaling, background color, and theme mode detection.
@@ -55,11 +57,20 @@ export function useThemeInit() {
     const scale = fontSizeMap[fontSizeLevel] || 1.0;
     document.documentElement.style.setProperty('--font-scale', scale.toString());
 
+    // Initialize window opacity from localStorage
+    const savedOpacity = localStorage.getItem('windowOpacity');
+    if (savedOpacity) {
+      const val = parseFloat(savedOpacity);
+      if (Number.isFinite(val) && val >= 0 && val <= 1 && val < 1.0) {
+        document.documentElement.style.setProperty('--window-opacity', val.toString());
+      }
+    }
+
     // Initialize chat background color (validate hex format before applying)
-    const isValidHexColor = (c: string) => /^#[0-9a-fA-F]{6}$/.test(c);
     const savedChatBgColor = localStorage.getItem('chatBgColor');
     if (savedChatBgColor && isValidHexColor(savedChatBgColor)) {
       document.documentElement.style.setProperty('--bg-chat', savedChatBgColor);
+      document.documentElement.style.setProperty('--bg-chat-rgb', hexToRgb(savedChatBgColor));
     }
 
     // Initialize user message bubble color

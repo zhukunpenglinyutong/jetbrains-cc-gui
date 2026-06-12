@@ -4,7 +4,7 @@
 .chat-input-box {
   display: flex;
   flex-direction: column;
-  background: var(--input-bg);
+  background: transparent;
   border: 1px solid var(--input-border);
   border-radius: 8px;
   overflow: visible;

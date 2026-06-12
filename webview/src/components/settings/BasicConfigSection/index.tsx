@@ -65,6 +65,9 @@ interface BasicConfigSectionProps {
   // Diff theme configuration
   diffTheme?: DiffThemeMode;
   onDiffThemeChange?: (theme: DiffThemeMode) => void;
+  // Window opacity configuration
+  windowOpacity?: number;
+  onWindowOpacityChange?: (opacity: number) => void;
   // Diff expanded by default configuration
   diffExpandedByDefault?: boolean;
   onDiffExpandedByDefaultChange?: (enabled: boolean) => void;
@@ -145,6 +148,8 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onUserMsgColorChange={props.onUserMsgColorChange}
           diffTheme={props.diffTheme}
           onDiffThemeChange={props.onDiffThemeChange}
+          windowOpacity={props.windowOpacity}
+          onWindowOpacityChange={props.onWindowOpacityChange}
         />
       )}
 
