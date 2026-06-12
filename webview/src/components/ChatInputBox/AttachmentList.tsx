@@ -91,7 +91,7 @@ export const AttachmentList = ({
                     className="attachment-preview-frame attachment-preview-button"
                     style={ATTACHMENT_PREVIEW_BUTTON_STYLE}
                     onClick={() => handleClick(attachment)}
-                    aria-label={t('chat.previewImage', { defaultValue: 'Preview image' })}
+                    aria-label={t('chat.imagePreview')}
                   >
                     <img
                       className="attachment-thumbnail"
