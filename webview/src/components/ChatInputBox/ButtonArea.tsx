@@ -6,6 +6,7 @@ import { CLAUDE_MODELS, CODEX_MODELS } from './types';
 import { STORAGE_KEYS, validateCodexCustomModels } from '../../types/provider';
 import type { CodexCustomModel } from '../../types/provider';
 import { readClaudeModelMapping } from '../../utils/claudeModelMapping';
+import { CopilotIcon } from '../copilotIcons';
 
 /**
  * Get custom Codex model list from localStorage
@@ -277,7 +278,7 @@ export const ButtonArea = ({
           disabled={disabled || !hasInputContent || isLoading || isEnhancing}
           data-tooltip={`${t('promptEnhancer.tooltip')} (${t('promptEnhancer.shortcut')})`}
         >
-          <span className={`codicon ${isEnhancing ? 'codicon-loading codicon-modifier-spin' : 'codicon-sparkle'}`} />
+          <CopilotIcon className={isEnhancing ? 'codicon-modifier-spin' : undefined} name={isEnhancing ? 'spinner' : 'spark'} size={16} aria-hidden="true" />
         </button>
 
         {/* Send/Stop button */}
@@ -287,7 +288,7 @@ export const ButtonArea = ({
             onClick={handleStopClick}
             title={t('chat.stopGeneration')}
           >
-            <span className="codicon codicon-debug-stop" />
+            <CopilotIcon name="stop" size={16} aria-hidden="true" />
           </button>
         ) : (
           <button
@@ -296,7 +297,7 @@ export const ButtonArea = ({
             disabled={disabled || !hasInputContent}
             title={t('chat.sendMessageEnter')}
           >
-            <span className="codicon codicon-send" />
+            <CopilotIcon name="send" size={16} aria-hidden="true" />
           </button>
         )}
       </div>
