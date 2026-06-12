@@ -131,7 +131,10 @@
       "cacheRead": "캐시 읽기",
       "cacheWrite": "캐시 쓰기",
       "cacheHitRate": "{{rate}}% 히트",
-      "total": "합계 {{used}} / {{max}}"
+      "total": "합계 {{used}} / {{max}}",
+      "sessionInfo": "현재 세션 · {{model}} · {{maxTokens}} 컨텍스트 윈도우",
+      "includes": "포함: 시스템 프롬프트, 메시지, 파일 컨텍스트, 도구 결과, 캐시 읽기",
+      "source": "출처: 시스템 프롬프트 · 기록 메시지 · 현재 파일 · 도구 I/O"
     }
   },
   "settings": {

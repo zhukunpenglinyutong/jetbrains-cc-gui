@@ -131,7 +131,10 @@
       "cacheRead": "キャッシュ読み取り",
       "cacheWrite": "キャッシュ書き込み",
       "cacheHitRate": "{{rate}}% ヒット",
-      "total": "合計 {{used}} / {{max}}"
+      "total": "合計 {{used}} / {{max}}",
+      "sessionInfo": "現在のセッション · {{model}} · {{maxTokens}} コンテキストウィンドウ",
+      "includes": "含む：システムプロンプト、メッセージ、ファイルコンテキスト、ツール結果、キャッシュ読み取り",
+      "source": "出典：システムプロンプト · 履歴メッセージ · 現在のファイル · ツールI/O"
     }
   },
   "settings": {

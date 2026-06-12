@@ -143,7 +143,10 @@
       "cacheRead": "Cache Read",
       "cacheWrite": "Cache Write",
       "cacheHitRate": "{{rate}}% hit",
-      "total": "Total {{used}} / {{max}}"
+      "total": "Total {{used}} / {{max}}",
+      "sessionInfo": "Current session · {{model}} · {{maxTokens}} context window",
+      "includes": "Includes: system prompt, messages, file context, tool results, cache reads",
+      "source": "Source: System prompt · History messages · Current file · Tool I/O"
     }
   },
   "settings": {
@@ -332,7 +335,9 @@
       "title": "Custom Models",
       "description": "Custom models added here will be visible under all providers, shown at the top of the model selector",
       "dialogTitle": "Manage Custom Models",
-      "manage": "Manage Models"
+      "manage": "Manage Models",
+      "contextWindow": "Context Window",
+      "contextWindowPlaceholder": "Custom tokens"
     },
     "dependencies": "SDK Dependencies",
     "dependenciesDesc": "Manage AI SDK dependency installations and updates",
@@ -1533,7 +1538,7 @@
       "label": "1M",
       "shortLabel": "1M context",
       "tooltipEnabled": "Toggle 1M context window on/off",
-      "tooltipDisabled": "1M context not available for Haiku"
+      "tooltipDisabled": "1M context not available for this model"
     },
     "claude": {
       "sonnet46": {

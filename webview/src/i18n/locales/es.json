@@ -131,7 +131,10 @@
       "cacheRead": "Lectura de caché",
       "cacheWrite": "Escritura de caché",
       "cacheHitRate": "{{rate}}% acierto",
-      "total": "Total {{used}} / {{max}}"
+      "total": "Total {{used}} / {{max}}",
+      "sessionInfo": "Sesión actual · {{model}} · {{maxTokens}} ventana de contexto",
+      "includes": "Incluye: prompt del sistema, mensajes, contexto de archivo, resultados de herramientas, lecturas de caché",
+      "source": "Fuente: Prompt del sistema · Mensajes del historial · Archivo actual · E/S de herramientas"
     }
   },
   "settings": {

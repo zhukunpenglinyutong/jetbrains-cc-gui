@@ -134,7 +134,10 @@
       "cacheRead": "快取讀取",
       "cacheWrite": "快取寫入",
       "cacheHitRate": "{{rate}}% 命中",
-      "total": "總計 {{used}} / {{max}}"
+      "total": "總計 {{used}} / {{max}}",
+      "sessionInfo": "目前工作階段 · {{model}} · {{maxTokens}} 上下文視窗",
+      "includes": "包含：系統提示詞、訊息、檔案上下文、工具結果、快取讀取",
+      "source": "來源：系統提示詞 · 歷史訊息 · 目前檔案 · 工具輸入/輸出"
     }
   },
   "settings": {
