@@ -1,0 +1,128 @@
+/* GitHub Dark syntax highlighting palette for highlight.js.
+ *
+ * highlight.js emits .hljs-* token spans, but this project ships no token theme,
+ * so code blocks render monochrome. These rules translate the official GitHub
+ * Dark (Primer) code palette onto those spans, scoped to the Copilot skin so the
+ * regular dark/light themes are not affected.
+ *
+ * Palette source: GitHub Primer "github-dark" highlight.js theme.
+ */
+
+html[data-theme="github-copilot"] {
+    --hljs-fg: #c9d1d9;
+    --hljs-red: #ff7b72;          /* keyword, type, tag-ish */
+    --hljs-purple: #d2a8ff;       /* titles, functions, classes */
+    --hljs-blue: #79c0ff;         /* constants, numbers, attrs, variables */
+    --hljs-light-blue: #a5d6ff;   /* strings, regexp */
+    --hljs-orange: #ffa657;       /* built-ins, symbols */
+    --hljs-green: #7ee787;        /* names, selectors, quotes */
+    --hljs-gray: #8b949e;         /* comments */
+    --hljs-yellow: #f2cc60;       /* bullets */
+    --hljs-section: #1f6feb;      /* markdown sections */
+    --hljs-add-fg: #aff5b4;
+    --hljs-add-bg: rgba(46, 160, 67, 0.15);
+    --hljs-del-fg: #ffdcd7;
+    --hljs-del-bg: rgba(248, 81, 73, 0.15);
+}
+
+/* Base token text + code surface */
+html[data-theme="github-copilot"] .hljs,
+html[data-theme="github-copilot"] .markdown-content pre code.hljs {
+    color: var(--hljs-fg);
+    background: transparent;
+}
+
+/* Red — keywords, types, language variables, template tags */
+html[data-theme="github-copilot"] .hljs-doctag,
+html[data-theme="github-copilot"] .hljs-keyword,
+html[data-theme="github-copilot"] .hljs-meta .hljs-keyword,
+html[data-theme="github-copilot"] .hljs-template-tag,
+html[data-theme="github-copilot"] .hljs-template-variable,
+html[data-theme="github-copilot"] .hljs-type,
+html[data-theme="github-copilot"] .hljs-variable.language_ {
+    color: var(--hljs-red);
+}
+
+/* Purple — titles, functions, classes */
+html[data-theme="github-copilot"] .hljs-title,
+html[data-theme="github-copilot"] .hljs-title.class_,
+html[data-theme="github-copilot"] .hljs-title.class_.inherited__,
+html[data-theme="github-copilot"] .hljs-title.function_ {
+    color: var(--hljs-purple);
+}
+
+/* Blue — constants, numbers, attributes, variables, selectors */
+html[data-theme="github-copilot"] .hljs-attr,
+html[data-theme="github-copilot"] .hljs-attribute,
+html[data-theme="github-copilot"] .hljs-literal,
+html[data-theme="github-copilot"] .hljs-meta,
+html[data-theme="github-copilot"] .hljs-number,
+html[data-theme="github-copilot"] .hljs-operator,
+html[data-theme="github-copilot"] .hljs-variable,
+html[data-theme="github-copilot"] .hljs-selector-attr,
+html[data-theme="github-copilot"] .hljs-selector-class,
+html[data-theme="github-copilot"] .hljs-selector-id {
+    color: var(--hljs-blue);
+}
+
+/* Light blue — strings, regexp */
+html[data-theme="github-copilot"] .hljs-regexp,
+html[data-theme="github-copilot"] .hljs-string,
+html[data-theme="github-copilot"] .hljs-meta .hljs-string {
+    color: var(--hljs-light-blue);
+}
+
+/* Orange — built-ins, symbols */
+html[data-theme="github-copilot"] .hljs-built_in,
+html[data-theme="github-copilot"] .hljs-symbol {
+    color: var(--hljs-orange);
+}
+
+/* Gray — comments, formulas */
+html[data-theme="github-copilot"] .hljs-comment,
+html[data-theme="github-copilot"] .hljs-code,
+html[data-theme="github-copilot"] .hljs-formula {
+    color: var(--hljs-gray);
+}
+
+/* Green — names, selectors, quotes */
+html[data-theme="github-copilot"] .hljs-name,
+html[data-theme="github-copilot"] .hljs-quote,
+html[data-theme="github-copilot"] .hljs-selector-tag,
+html[data-theme="github-copilot"] .hljs-selector-pseudo {
+    color: var(--hljs-green);
+}
+
+html[data-theme="github-copilot"] .hljs-subst {
+    color: var(--hljs-fg);
+}
+
+html[data-theme="github-copilot"] .hljs-section {
+    color: var(--hljs-section);
+    font-weight: 700;
+}
+
+html[data-theme="github-copilot"] .hljs-bullet {
+    color: var(--hljs-yellow);
+}
+
+html[data-theme="github-copilot"] .hljs-emphasis {
+    color: var(--hljs-fg);
+    font-style: italic;
+}
+
+html[data-theme="github-copilot"] .hljs-strong {
+    color: var(--hljs-fg);
+    font-weight: 700;
+}
+
+/* Diff highlighting inside fenced code */
+html[data-theme="github-copilot"] .hljs-addition {
+    color: var(--hljs-add-fg);
+    background-color: var(--hljs-add-bg);
+}
+
+html[data-theme="github-copilot"] .hljs-deletion {
+    color: var(--hljs-del-fg);
+    background-color: var(--hljs-del-bg);
+}
