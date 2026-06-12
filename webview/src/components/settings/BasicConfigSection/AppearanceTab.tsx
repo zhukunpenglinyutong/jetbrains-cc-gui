@@ -3,6 +3,7 @@ import styles from './style.module.less';
 import { useTranslation } from 'react-i18next';
 import type { DiffThemeMode } from '../../../utils/diffTheme';
 import type { UiFontConfig } from '../hooks/useSettingsBasicActions';
+import type { UiThemeMode } from '../../../types/uiThemeMode';
 
 // Preset colors (module-level constants to avoid recreating on each render)
 const DARK_PRESETS = [
@@ -92,9 +93,17 @@ const SystemIcon = () => (
   </svg>
 );
 
+const CopilotIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M12 3.75C7.44 3.75 3.75 7.44 3.75 12S7.44 20.25 12 20.25 20.25 16.56 20.25 12 16.56 3.75 12 3.75Z" stroke="currentColor" strokeWidth="1.8"/>
+    <path d="M8.2 12.1c.7-1.35 1.95-2.15 3.8-2.15s3.1.8 3.8 2.15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+    <path d="M7.7 13.9c.95 1.25 2.38 1.9 4.3 1.9s3.35-.65 4.3-1.9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+  </svg>
+);
+
 export interface AppearanceTabProps {
-  theme: 'light' | 'dark' | 'system';
-  onThemeChange: (theme: 'light' | 'dark' | 'system') => void;
+  theme: UiThemeMode;
+  onThemeChange: (theme: UiThemeMode) => void;
   fontSizeLevel: number;
   onFontSizeLevelChange: (level: number) => void;
   editorFontConfig?: {
@@ -179,7 +188,7 @@ const AppearanceTab = ({
 
   const resolvedTheme = useMemo(() => {
     if (theme !== 'system') return theme;
-    return (document.documentElement.getAttribute('data-theme') as 'light' | 'dark') || 'dark';
+    return (document.documentElement.getAttribute('data-theme') as 'light' | 'dark' | 'github-copilot') || 'dark';
   }, [theme]);
 
   const defaultBgColor = resolvedTheme === 'light' ? DEFAULT_LIGHT_BG : DEFAULT_DARK_BG;
@@ -357,6 +366,16 @@ const AppearanceTab = ({
               <SystemIcon />
             </div>
             <span className={styles.themeOptionLabel}>{t('settings.basic.theme.system')}</span>
+          </div>
+
+          <div
+            className={`${styles.themeOption} ${theme === 'github-copilot' ? styles.active : ''}`}
+            onClick={() => onThemeChange('github-copilot')}
+          >
+            <div className={styles.themeIconSystem}>
+              <CopilotIcon />
+            </div>
+            <span className={styles.themeOptionLabel}>{t('settings.basic.theme.githubCopilot', 'GitHub Copilot Inspired')}</span>
           </div>
 
           <div

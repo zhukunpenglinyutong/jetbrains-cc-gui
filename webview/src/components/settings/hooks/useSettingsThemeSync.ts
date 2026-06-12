@@ -1,19 +1,25 @@
 // hooks/useSettingsThemeSync.ts
 import { useState, useEffect } from 'react';
 import { applyDiffTheme, getStoredDiffTheme, type DiffThemeMode } from '../../../utils/diffTheme';
+import {
+  isUiThemeMode,
+  resolveThemeAttribute,
+  type IdeThemeMode,
+  type UiThemeMode,
+} from '../../../types/uiThemeMode';
 
 // Extend window type for IDE theme injection
 declare global {
   interface Window {
-    __INITIAL_IDE_THEME__?: 'light' | 'dark';
+    __INITIAL_IDE_THEME__?: IdeThemeMode;
   }
 }
 
 export interface UseSettingsThemeSyncReturn {
-  themePreference: 'light' | 'dark' | 'system';
-  setThemePreference: (theme: 'light' | 'dark' | 'system') => void;
-  ideTheme: 'light' | 'dark' | null;
-  setIdeTheme: (theme: 'light' | 'dark' | null) => void;
+  themePreference: UiThemeMode;
+  setThemePreference: (theme: UiThemeMode) => void;
+  ideTheme: IdeThemeMode | null;
+  setIdeTheme: (theme: IdeThemeMode | null) => void;
   fontSizeLevel: number;
   setFontSizeLevel: (level: number) => void;
   chatBgColor: string;
@@ -25,17 +31,17 @@ export interface UseSettingsThemeSyncReturn {
 }
 
 export function useSettingsThemeSync(): UseSettingsThemeSyncReturn {
-  const [themePreference, setThemePreference] = useState<'light' | 'dark' | 'system'>(() => {
+  const [themePreference, setThemePreference] = useState<UiThemeMode>(() => {
     // Read theme preference from localStorage
     const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'system') {
+    if (isUiThemeMode(savedTheme)) {
       return savedTheme;
     }
     return 'system'; // Default: follow IDE
   });
 
   // IDE theme state (prefer Java-injected initial theme, used to handle dynamic changes)
-  const [ideTheme, setIdeTheme] = useState<'light' | 'dark' | null>(() => {
+  const [ideTheme, setIdeTheme] = useState<IdeThemeMode | null>(() => {
     // Check if Java has injected the initial theme
     const injectedTheme = window.__INITIAL_IDE_THEME__;
     if (injectedTheme === 'light' || injectedTheme === 'dark') {
@@ -74,20 +80,11 @@ export function useSettingsThemeSync(): UseSettingsThemeSyncReturn {
 
   // Theme switching handler (supports following IDE theme)
   useEffect(() => {
-    const applyTheme = (preference: 'light' | 'dark' | 'system') => {
-      if (preference === 'system') {
-        // If following IDE, need to wait for IDE theme to load
-        if (ideTheme === null) {
-          return; // Wait for ideTheme to load
-        }
-        document.documentElement.setAttribute('data-theme', ideTheme);
-      } else {
-        // Explicit light/dark selection, apply immediately
-        document.documentElement.setAttribute('data-theme', preference);
-      }
-    };
+    const resolvedTheme = resolveThemeAttribute(themePreference, ideTheme);
+    if (resolvedTheme !== null) {
+      document.documentElement.setAttribute('data-theme', resolvedTheme);
+    }
 
-    applyTheme(themePreference);
     // Save to localStorage
     localStorage.setItem('theme', themePreference);
   }, [themePreference, ideTheme]);

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { isExplicitUiThemeMode } from '../types/uiThemeMode';
 
 /**
  * Manages IDE theme initialization and synchronization.
@@ -68,8 +69,11 @@ export function useThemeInit() {
       document.documentElement.style.setProperty('--color-message-user-bg', savedUserMsgColor);
     }
 
-    // Apply the user's explicit theme choice (light/dark) first
+    // Apply the user's explicit theme choice first. System remains bound to the IDE theme.
     const savedTheme = localStorage.getItem('theme');
+    if (isExplicitUiThemeMode(savedTheme)) {
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    }
 
     // Check if there's an initial theme injected by Java
     const injectedTheme = window.__INITIAL_IDE_THEME__;
