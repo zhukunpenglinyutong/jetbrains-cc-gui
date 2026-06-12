@@ -122,4 +122,16 @@ html {
     margin-bottom: 10px;
 }
 
+/* Spin animation owned by the local CoDriver icon pack — independent of the
+   global codicon `.codicon-modifier-spin` helper so the SVG pack is self-sufficient. */
+@keyframes codriver-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.codriver-icon-spin {
+    animation: codriver-spin 1s linear infinite;
+    transform-origin: center;
+}
+
 /* vConsole 调试工具 - 初始位置由 main.tsx 设置，支持拖动 */

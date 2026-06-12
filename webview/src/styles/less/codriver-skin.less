@@ -154,21 +154,21 @@
     --shadow-md: 0 8px 24px rgba(1, 4, 9, 0.34);
     --shadow-lg: 0 16px 32px rgba(1, 4, 9, 0.48);
 
-    --copilot-radius-sm: 6px;
-    --copilot-radius-md: 8px;
-    --copilot-radius-lg: 12px;
-    --copilot-focus-ring: 0 0 0 2px rgba(137, 87, 229, 0.40);
+    --codriver-radius-sm: 6px;
+    --codriver-radius-md: 8px;
+    --codriver-radius-lg: 12px;
+    --codriver-focus-ring: 0 0 0 2px rgba(137, 87, 229, 0.40);
 
     /* Look-and-feel surfaces used by the per-component overrides below */
-    --copilot-shell-bg: #0d1117;
-    --copilot-panel-bg: #161b22;
-    --copilot-panel-raised-bg: #1c2128;
-    --copilot-composer-bg: #161b22;
-    --copilot-code-bg: #161b22;
-    --copilot-inline-code-bg: rgba(110, 118, 129, 0.4);
-    --copilot-inline-code-text: #e6edf3;
-    --copilot-heading: #e6edf3;
-    --copilot-hover-overlay: rgba(177, 186, 196, 0.12);
+    --codriver-shell-bg: #0d1117;
+    --codriver-panel-bg: #161b22;
+    --codriver-panel-raised-bg: #1c2128;
+    --codriver-composer-bg: #161b22;
+    --codriver-code-bg: #161b22;
+    --codriver-inline-code-bg: rgba(110, 118, 129, 0.4);
+    --codriver-inline-code-text: #e6edf3;
+    --codriver-heading: #e6edf3;
+    --codriver-hover-overlay: rgba(177, 186, 196, 0.12);
 
     /* User message bubble: neutral elevated surface (neutral dark look),
        not a saturated fill. The collapse overlay gradient also reads this var. */
@@ -189,14 +189,14 @@
 [data-theme="codriver"] body,
 [data-theme="codriver"] #root,
 [data-theme="codriver"] #app {
-    background: var(--copilot-shell-bg);
+    background: var(--codriver-shell-bg);
     color: var(--text-primary);
 }
 
 /* Flat chat canvas — closer to the GitHub dark surface, no colored glow */
 [data-theme="codriver"] .messages-shell,
 [data-theme="codriver"] .messages-container {
-    background: var(--copilot-shell-bg);
+    background: var(--codriver-shell-bg);
 }
 
 /* Shared elevated surfaces */
@@ -208,7 +208,7 @@
 [data-theme="codriver"] .context-menu,
 [data-theme="codriver"] .settings-page,
 [data-theme="codriver"] .settings-content {
-    background: var(--copilot-panel-bg);
+    background: var(--codriver-panel-bg);
     border-color: var(--border-primary);
     color: var(--text-primary);
 }
@@ -226,13 +226,13 @@
 [data-theme="codriver"] input:focus,
 [data-theme="codriver"] select:focus {
     border-color: var(--accent-primary);
-    box-shadow: var(--copilot-focus-ring);
+    box-shadow: var(--codriver-focus-ring);
     outline: none;
 }
 
 [data-theme="codriver"] pre,
 [data-theme="codriver"] code {
-    border-radius: var(--copilot-radius-sm);
+    border-radius: var(--codriver-radius-sm);
 }
 
 /* Thin GitHub-style scrollbars */
@@ -252,7 +252,7 @@
 
 [data-theme="codriver"] ::-webkit-scrollbar-thumb {
     background-color: var(--scrollbar-thumb);
-    border: 2px solid var(--copilot-shell-bg);
+    border: 2px solid var(--codriver-shell-bg);
     border-radius: 999px;
 }
 

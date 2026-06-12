@@ -130,6 +130,7 @@
         "environment": "वातावरण"
       },
       "theme": {
+        "codriver": "CoDriver",
         "label": "इंटरफ़ेस थीम",
         "system": "Follow IDE",
         "systemDesc": "Automatically follow IDE theme",

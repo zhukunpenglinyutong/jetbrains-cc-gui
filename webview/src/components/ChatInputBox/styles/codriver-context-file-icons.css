@@ -1,6 +1,6 @@
-/* Copilot active-file and file-attachment icon cleanup v6.
+/* CoDriver active-file and file-attachment icon cleanup.
    The goal is to remove IDE/file-type logo noise (for example the bright Java cup)
-   and render source-file chips with the local, quiet Copilot-inspired icon pack. */
+   and render source-file chips with the local, quiet CoDriver icon pack. */
 
 html[data-theme="codriver"] .context-bar {
   gap: 6px;

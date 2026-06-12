@@ -1,15 +1,15 @@
-/* GitHub Copilot inspired attachment strip.
-   Scoped to the Copilot theme and loaded from ChatInputBox/styles.css so it wins over component-local CSS. */
+/* CoDriver skin attachment strip.
+   Scoped to the CoDriver theme and loaded from ChatInputBox/styles.css so it wins over component-local CSS. */
 
 html[data-theme="codriver"] .chat-input-box {
-  --copilot-attachment-strip-bg: rgba(13, 17, 23, 0.72);
-  --copilot-attachment-chip-bg: rgba(22, 27, 34, 0.86);
-  --copilot-attachment-chip-bg-hover: rgba(33, 38, 45, 0.94);
-  --copilot-attachment-chip-border: rgba(88, 166, 255, 0.20);
-  --copilot-attachment-chip-border-hover: rgba(88, 166, 255, 0.42);
-  --copilot-attachment-thumbnail-border: rgba(240, 246, 252, 0.10);
-  --copilot-attachment-remove-bg-hover: rgba(248, 81, 73, 0.14);
-  --copilot-attachment-remove-border-hover: rgba(248, 81, 73, 0.32);
+  --codriver-attachment-strip-bg: rgba(13, 17, 23, 0.72);
+  --codriver-attachment-chip-bg: rgba(22, 27, 34, 0.86);
+  --codriver-attachment-chip-bg-hover: rgba(33, 38, 45, 0.94);
+  --codriver-attachment-chip-border: rgba(88, 166, 255, 0.20);
+  --codriver-attachment-chip-border-hover: rgba(88, 166, 255, 0.42);
+  --codriver-attachment-thumbnail-border: rgba(240, 246, 252, 0.10);
+  --codriver-attachment-remove-bg-hover: rgba(248, 81, 73, 0.14);
+  --codriver-attachment-remove-border-hover: rgba(248, 81, 73, 0.32);
 }
 
 html[data-theme="codriver"] .attachment-list {
@@ -25,7 +25,7 @@ html[data-theme="codriver"] .attachment-list {
   border-bottom: none;
   background:
     linear-gradient(90deg, rgba(88, 166, 255, 0.09), transparent 22%, transparent 78%, rgba(137, 87, 229, 0.08)),
-    var(--copilot-attachment-strip-bg);
+    var(--codriver-attachment-strip-bg);
   scrollbar-width: thin;
   scrollbar-color: rgba(139, 148, 158, 0.42) transparent;
 }
@@ -57,8 +57,8 @@ html[data-theme="codriver"] .attachment-item {
   padding: 4px 30px 4px 5px;
   border-radius: 10px;
   overflow: hidden;
-  background: var(--copilot-attachment-chip-bg);
-  border: 1px solid var(--copilot-attachment-chip-border);
+  background: var(--codriver-attachment-chip-bg);
+  border: 1px solid var(--codriver-attachment-chip-border);
   box-shadow: 0 1px 0 rgba(240, 246, 252, 0.04) inset;
   cursor: pointer;
   transition:
@@ -68,8 +68,8 @@ html[data-theme="codriver"] .attachment-item {
 }
 
 html[data-theme="codriver"] .attachment-item:hover {
-  background: var(--copilot-attachment-chip-bg-hover);
-  border-color: var(--copilot-attachment-chip-border-hover);
+  background: var(--codriver-attachment-chip-bg-hover);
+  border-color: var(--codriver-attachment-chip-border-hover);
   transform: translateY(-1px);
 }
 
@@ -87,7 +87,7 @@ html[data-theme="codriver"] .attachment-preview-frame {
   border-radius: 8px;
   overflow: hidden;
   background: #0d1117;
-  border: 1px solid var(--copilot-attachment-thumbnail-border);
+  border: 1px solid var(--codriver-attachment-thumbnail-border);
 }
 
 html[data-theme="codriver"] .attachment-thumbnail {
@@ -146,8 +146,8 @@ html[data-theme="codriver"] .attachment-remove:focus-visible {
 }
 
 html[data-theme="codriver"] .attachment-remove:hover {
-  background: var(--copilot-attachment-remove-bg-hover);
-  border-color: var(--copilot-attachment-remove-border-hover);
+  background: var(--codriver-attachment-remove-bg-hover);
+  border-color: var(--codriver-attachment-remove-border-hover);
   color: #ff7b72;
 }
 

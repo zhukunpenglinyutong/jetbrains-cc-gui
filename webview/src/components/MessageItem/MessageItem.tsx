@@ -20,6 +20,7 @@ import { ContentBlockRenderer } from './ContentBlockRenderer';
 import { formatTime } from '../../utils/helpers';
 import { copyToClipboard } from '../../utils/copyUtils';
 import { CoDriverIcon } from '../codriverIcons';
+import { useIsCoDriverTheme } from '../../hooks/useActiveThemeMode';
 import { READ_TOOL_NAMES, EDIT_TOOL_NAMES, BASH_TOOL_NAMES, SEARCH_TOOL_NAMES, AGENT_TOOL_NAMES, isToolName } from '../../utils/toolConstants';
 
 export interface MessageItemProps {
@@ -57,7 +58,18 @@ type GroupedBlock =
   | { type: 'agent_group'; agentBlock: ClaudeContentBlock; followingBlocks: ClaudeContentBlock[]; startIndex: number };
 
 /** Render the shared copy icon used by both user and assistant message copy buttons. */
-const CopyIcon = () => <CoDriverIcon name="copy" size={14} strokeWidth={1.75} />;
+const CopyIcon = () => {
+  const isCoDriver = useIsCoDriverTheme();
+  if (isCoDriver) {
+    return <CoDriverIcon name="copy" size={14} strokeWidth={1.75} />;
+  }
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M4 4l0 8a2 2 0 0 0 2 2l8 0a2 2 0 0 0 2 -2l0 -8a2 2 0 0 0 -2 -2l-8 0a2 2 0 0 0 -2 2zm2 0l8 0l0 8l-8 0l0 -8z" fill="currentColor" fillOpacity="0.9"/>
+      <path d="M2 2l0 8l-2 0l0 -8a2 2 0 0 1 2 -2l8 0l0 2l-8 0z" fill="currentColor" fillOpacity="0.6"/>
+    </svg>
+  );
+};
 
 interface CopyButtonProps {
   className?: string;

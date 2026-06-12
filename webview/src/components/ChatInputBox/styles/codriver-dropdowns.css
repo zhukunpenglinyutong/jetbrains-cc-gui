@@ -1,12 +1,12 @@
-/* GitHub Copilot inspired dropdowns & popups.
+/* CoDriver skin dropdowns & popups.
  *
  * Covers slash-command and @file-mention completion popups (.completion-dropdown)
  * and the model / mode / provider selectors (.selector-dropdown).
  *
  * These components are driven by --dropdown-* / --button-* / --input-* variables
- * that the project only defines for the dark and light themes. In the Copilot
+ * that the project only defines for the dark and light themes. In the CoDriver
  * theme they are therefore undefined (e.g. hover/selected highlights disappear).
- * Here we define the full GitHub palette for the Copilot skin and add a little
+ * Here we define the full palette for the CoDriver skin and add a little
  * structural polish. Everything is scoped to html[data-theme="codriver"].
  */
 

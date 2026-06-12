@@ -130,6 +130,7 @@
         "environment": "环境"
       },
       "theme": {
+        "codriver": "CoDriver",
         "label": "界面主题",
         "system": "跟随 IDE",
         "systemDesc": "自动跟随 IDE 主题",

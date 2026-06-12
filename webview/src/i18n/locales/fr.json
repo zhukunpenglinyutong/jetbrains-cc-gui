@@ -130,6 +130,7 @@
         "environment": "Environnement"
       },
       "theme": {
+        "codriver": "CoDriver",
         "label": "Thème de l'interface",
         "system": "Suivre l'IDE",
         "systemDesc": "Suivre automatiquement le thème de l'IDE",

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CoDriverIcon } from './codriverIcons';
+import { useIsCoDriverTheme } from '../hooks/useActiveThemeMode';
 
 interface WaitingIndicatorProps {
   size?: number;
@@ -44,6 +45,7 @@ export const WaitingIndicator = ({ size = 18, startTime }: WaitingIndicatorProps
   }, [startTime]);
 
   const dots = '.'.repeat(dotCount);
+  const isCoDriver = useIsCoDriverTheme();
 
   const spinnerStyle: React.CSSProperties = { width: size, height: size };
 
@@ -60,7 +62,9 @@ export const WaitingIndicator = ({ size = 18, startTime }: WaitingIndicatorProps
   return (
     <div className="waiting-indicator">
       <span className="waiting-spinner" style={spinnerStyle}>
-        <CoDriverIcon className="waiting-spinner-icon" name="spinner" size={size} aria-hidden="true" />
+        {isCoDriver && (
+          <CoDriverIcon className="waiting-spinner-icon codriver-icon-spin" name="spinner" size={size} aria-hidden="true" />
+        )}
       </span>
       <span className="waiting-text">
 	        {t('chat.generatingResponse')}<span className="waiting-dots">{dots}</span>

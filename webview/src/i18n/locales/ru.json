@@ -130,6 +130,7 @@
         "environment": "Окружение"
       },
       "theme": {
+        "codriver": "CoDriver",
         "label": "Тема",
         "system": "Как в IDE",
         "systemDesc": "Следует за темой IDE",

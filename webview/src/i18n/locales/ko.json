@@ -130,6 +130,7 @@
         "environment": "환경"
       },
       "theme": {
+        "codriver": "CoDriver",
         "label": "테마",
         "system": "IDE 따라가기",
         "systemDesc": "IDE 테마를 자동으로 따라갑니다",

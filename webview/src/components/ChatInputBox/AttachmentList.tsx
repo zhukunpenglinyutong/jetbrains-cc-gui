@@ -4,6 +4,7 @@ import type { Attachment, AttachmentListProps } from './types';
 import { isImageAttachment } from './types';
 import { CoDriverIcon } from '../codriverIcons';
 import { getFileIconKind } from '../../utils/fileIconKind';
+import { useIsCoDriverTheme } from '../../hooks/useActiveThemeMode';
 
 const ATTACHMENT_PREVIEW_BUTTON_STYLE: React.CSSProperties = {
   background: 'none',
@@ -17,8 +18,11 @@ const ATTACHMENT_PREVIEW_BUTTON_STYLE: React.CSSProperties = {
 };
 
 /**
- * AttachmentList - Attachment list component
- * Displays image thumbnails or file icons
+ * AttachmentList - Attachment list component.
+ *
+ * The CoDriver skin renders a wider, accessible "chip" layout using the bespoke icon pack.
+ * Light / dark / system keep the stock 52x52 thumbnail markup so the existing (non-skin)
+ * CSS keeps applying correctly — avoiding the squashed-thumbnail regression in normal themes.
  */
 export const AttachmentList = ({
   attachments,
@@ -26,11 +30,9 @@ export const AttachmentList = ({
   onPreview,
 }: AttachmentListProps) => {
   const { t } = useTranslation();
+  const isCoDriver = useIsCoDriverTheme();
   const [previewImage, setPreviewImage] = useState<Attachment | null>(null);
 
-  /**
-   * Handle attachment click
-   */
   const handleClick = useCallback((attachment: Attachment) => {
     if (isImageAttachment(attachment)) {
       if (onPreview) {
@@ -41,20 +43,28 @@ export const AttachmentList = ({
     }
   }, [onPreview]);
 
-  /**
-   * Handle attachment removal
-   */
   const handleRemove = useCallback((e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     onRemove?.(id);
   }, [onRemove]);
 
-  /**
-   * Close preview
-   */
   const closePreview = useCallback(() => {
     setPreviewImage(null);
   }, []);
+
+  // Stock (light/dark/system) icon mapping — preserved from the base plugin.
+  const getStockFileIcon = (mediaType: string): string => {
+    if (mediaType.startsWith('text/')) return 'codicon-file-text';
+    if (mediaType.includes('json')) return 'codicon-json';
+    if (mediaType.includes('javascript') || mediaType.includes('typescript')) return 'codicon-file-code';
+    if (mediaType.includes('pdf')) return 'codicon-file-pdf';
+    return 'codicon-file';
+  };
+
+  const getExtension = (fileName: string): string => {
+    const parts = fileName.split('.');
+    return parts.length > 1 ? parts[parts.length - 1].toUpperCase() : '';
+  };
 
   if (attachments.length === 0) {
     return null;
@@ -62,63 +72,96 @@ export const AttachmentList = ({
 
   return (
     <>
-      <div className="attachment-list" role="list" aria-label={t('chat.attachments', { defaultValue: 'Attachments' })}>
-        {attachments.map((attachment) => {
-          const imageAttachment = isImageAttachment(attachment);
-          const fallbackName = attachment.fileName;
-          const iconName = getFileIconKind(attachment.fileName);
+      {isCoDriver ? (
+        <div className="attachment-list" role="list" aria-label={t('chat.attachments', { defaultValue: 'Attachments' })}>
+          {attachments.map((attachment) => {
+            const imageAttachment = isImageAttachment(attachment);
+            const iconName = getFileIconKind(attachment.fileName);
 
-          return (
-            <div
-              key={attachment.id}
-              className={`attachment-item ${imageAttachment ? 'attachment-item-image' : 'attachment-item-file'}`}
-              title={attachment.fileName}
-              role="listitem"
-            >
-              {imageAttachment ? (
+            return (
+              <div
+                key={attachment.id}
+                className={`attachment-item ${imageAttachment ? 'attachment-item-image' : 'attachment-item-file'}`}
+                title={attachment.fileName}
+                role="listitem"
+              >
+                {imageAttachment ? (
+                  <button
+                    type="button"
+                    className="attachment-preview-frame attachment-preview-button"
+                    style={ATTACHMENT_PREVIEW_BUTTON_STYLE}
+                    onClick={() => handleClick(attachment)}
+                    aria-label={t('chat.previewImage', { defaultValue: 'Preview image' })}
+                  >
+                    <img
+                      className="attachment-thumbnail"
+                      src={`data:${attachment.mediaType};base64,${attachment.data}`}
+                      alt={attachment.fileName}
+                    />
+                  </button>
+                ) : (
+                  <span className="attachment-preview-frame">
+                    <CoDriverIcon
+                      className={`attachment-file-icon attachment-file-icon-${iconName}`}
+                      name={iconName}
+                      size={17}
+                      aria-hidden="true"
+                    />
+                  </span>
+                )}
+
+                <span className="attachment-label">{attachment.fileName}</span>
+
                 <button
                   type="button"
-                  className="attachment-preview-frame attachment-preview-button"
-                  style={ATTACHMENT_PREVIEW_BUTTON_STYLE}
-                  onClick={() => handleClick(attachment)}
-                  aria-label={t('chat.previewImage', { defaultValue: 'Preview image' })}
+                  className="attachment-remove"
+                  onClick={(e) => handleRemove(e, attachment.id)}
+                  title={t('chat.removeAttachment')}
+                  aria-label={t('chat.removeAttachment')}
                 >
-                  <img
-                    className="attachment-thumbnail"
-                    src={`data:${attachment.mediaType};base64,${attachment.data}`}
-                    alt={attachment.fileName}
-                  />
+                  <CoDriverIcon name="x" size={12} />
                 </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="attachment-list">
+          {attachments.map((attachment) => (
+            <div
+              key={attachment.id}
+              className="attachment-item"
+              onClick={() => handleClick(attachment)}
+              title={attachment.fileName}
+            >
+              {isImageAttachment(attachment) ? (
+                <img
+                  className="attachment-thumbnail"
+                  src={`data:${attachment.mediaType};base64,${attachment.data}`}
+                  alt={attachment.fileName}
+                />
               ) : (
-                <span className="attachment-preview-frame">
-                  <CoDriverIcon
-                    className={`attachment-file-icon attachment-file-icon-${iconName}`}
-                    name={iconName}
-                    size={17}
-                    aria-hidden="true"
-                  />
-                </span>
+                <div className="attachment-file">
+                  <span className={`attachment-file-icon codicon ${getStockFileIcon(attachment.mediaType)}`} />
+                  <span className="attachment-file-name">
+                    {getExtension(attachment.fileName) || attachment.fileName.slice(0, 6)}
+                  </span>
+                </div>
               )}
 
-              <span className="attachment-label">
-                {imageAttachment ? attachment.fileName : fallbackName}
-              </span>
-
               <button
-                type="button"
                 className="attachment-remove"
                 onClick={(e) => handleRemove(e, attachment.id)}
                 title={t('chat.removeAttachment')}
-                aria-label={t('chat.removeAttachment')}
               >
-                <CoDriverIcon name="x" size={12} />
+                ×
               </button>
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
 
-      {/* Image preview dialog */}
+      {/* Image preview dialog (shared across themes) */}
       {previewImage && (
         <div
           className="image-preview-overlay"

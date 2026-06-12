@@ -11,7 +11,7 @@
  * ------------------------------------------------------------------------- */
 html[data-theme="codriver"] {
     --cc-gui-ui-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif !important;
-    --copilot-mono-font: ui-monospace, "SFMono-Regular", "SF Mono", "Cascadia Code", "JetBrains Mono", "Liberation Mono", Menlo, Consolas, monospace;
+    --codriver-mono-font: ui-monospace, "SFMono-Regular", "SF Mono", "Cascadia Code", "JetBrains Mono", "Liberation Mono", Menlo, Consolas, monospace;
 }
 
 html[data-theme="codriver"] .markdown-content pre,
@@ -23,7 +23,7 @@ html[data-theme="codriver"] .tool-params,
 html[data-theme="codriver"] .bash-command-block,
 html[data-theme="codriver"] .error-diagnostic-command-text,
 html[data-theme="codriver"] .compact-notification-prefix {
-    font-family: var(--copilot-mono-font) !important;
+    font-family: var(--codriver-mono-font) !important;
 }
 
 /* ---------------------------------------------------------------------------
@@ -45,14 +45,14 @@ html[data-theme="codriver"] .version-tag {
  * Toasts
  * ------------------------------------------------------------------------- */
 html[data-theme="codriver"] .toast {
-    background: var(--copilot-panel-bg);
+    background: var(--codriver-panel-bg);
     border: 1px solid var(--border-primary);
     border-radius: 8px;
     box-shadow: 0 8px 24px rgba(1, 4, 9, 0.5);
 }
 
 html[data-theme="codriver"] .toast-close:hover {
-    background: var(--copilot-hover-overlay);
+    background: var(--codriver-hover-overlay);
     color: var(--text-secondary);
 }
 
@@ -67,7 +67,7 @@ html[data-theme="codriver"] .modal-overlay {
 
 html[data-theme="codriver"] .confirm-dialog,
 html[data-theme="codriver"] .modal-content {
-    background: var(--copilot-panel-bg);
+    background: var(--codriver-panel-bg);
     border: 1px solid var(--border-primary);
     border-radius: 12px;
     box-shadow: 0 16px 48px rgba(1, 4, 9, 0.6);
@@ -80,6 +80,6 @@ html[data-theme="codriver"] .confirm-dialog-footer {
 
 html[data-theme="codriver"] .confirm-dialog-button.cancel-button:hover,
 html[data-theme="codriver"] .modal-btn-cancel:hover {
-    background: var(--copilot-hover-overlay);
+    background: var(--codriver-hover-overlay);
     border-color: var(--border-hover);
 }
