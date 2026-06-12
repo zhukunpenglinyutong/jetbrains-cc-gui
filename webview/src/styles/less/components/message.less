@@ -1438,3 +1438,160 @@
     font-size: 12.5px;
     color: var(--text-secondary);
 }
+
+/* =========================================================================
+   GitHub Copilot inspired skin — messages, markdown typography & code.
+   Scoped to [data-theme="github-copilot"]; dark/light themes are untouched.
+   ========================================================================= */
+[data-theme="github-copilot"] {
+    /* Message rhythm: no hard dividers, a touch more breathing room */
+    .message {
+        border-bottom: 0;
+        padding: 14px 18px 16px;
+    }
+
+    .message.assistant {
+        padding-left: 18px;
+    }
+
+    /* Markdown typography */
+    .markdown-content {
+        font-size: 14px;
+        line-height: 1.65;
+        color: var(--text-primary);
+    }
+
+    .markdown-content h1,
+    .markdown-content h2,
+    .markdown-content h3,
+    .markdown-content h4,
+    .markdown-content h5,
+    .markdown-content h6 {
+        color: var(--copilot-heading);
+        font-weight: 600;
+        line-height: 1.3;
+    }
+
+    .markdown-content h1 {
+        font-size: 1.45em;
+        margin-top: 18px;
+    }
+
+    .markdown-content h2 {
+        font-size: 1.25em;
+        margin-top: 18px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid var(--border-primary);
+    }
+
+    .markdown-content h3 {
+        font-size: 1.1em;
+        margin-top: 16px;
+    }
+
+    .markdown-content p {
+        margin: 0 0 12px;
+    }
+
+    .markdown-content ul,
+    .markdown-content ol {
+        margin: 10px 0;
+        padding-left: 22px;
+    }
+
+    .markdown-content li {
+        margin-bottom: 5px;
+    }
+
+    .markdown-content li::marker {
+        color: var(--text-tertiary);
+    }
+
+    .markdown-content strong {
+        color: var(--copilot-heading);
+        font-weight: 600;
+    }
+
+    .markdown-content a {
+        color: var(--color-link);
+        text-decoration: none;
+    }
+
+    .markdown-content a:hover {
+        text-decoration: underline;
+    }
+
+    .markdown-content blockquote {
+        margin: 12px 0;
+        padding-left: 14px;
+        border-left: 3px solid var(--border-primary);
+        color: var(--text-tertiary);
+    }
+
+    /* Inline code */
+    .markdown-content :not(pre) > code {
+        padding: 0.15em 0.4em;
+        border-radius: 6px;
+        background: var(--copilot-inline-code-bg);
+        color: var(--copilot-inline-code-text);
+        font-size: 0.9em;
+    }
+
+    /* Fenced code blocks */
+    .markdown-content pre {
+        margin: 12px 0;
+        padding: 14px 16px;
+        border: 1px solid var(--color-code-block-border);
+        border-radius: 8px;
+        background: var(--copilot-code-bg);
+    }
+
+    .markdown-content pre code {
+        color: var(--text-primary);
+        font-size: 13px;
+        line-height: 1.5;
+    }
+
+    .code-block-wrapper pre {
+        padding-right: 44px;
+    }
+
+    /* Copy buttons on code blocks and assistant messages */
+    .copy-code-btn,
+    .message-copy-btn {
+        background: rgba(13, 17, 23, 0.7);
+        border: 1px solid var(--border-primary);
+        color: var(--text-tertiary);
+        border-radius: 6px;
+    }
+
+    .copy-code-btn:hover,
+    .message-copy-btn:hover {
+        background: var(--bg-hover);
+        border-color: var(--border-hover);
+        color: var(--text-secondary);
+    }
+
+    /* User bubble (colors come from the overridden vars above) */
+    .message.user .message-content {
+        border: 1px solid var(--border-primary);
+        border-radius: 12px 12px 4px 12px;
+    }
+
+    .message.user .markdown-content a {
+        color: var(--color-link);
+    }
+
+    /* Completed / duration footer rendered under an assistant turn */
+    .message-duration .message-duration-inner {
+        background: var(--copilot-panel-bg);
+        border: 1px solid var(--border-primary);
+        border-radius: 999px;
+        color: var(--text-tertiary);
+    }
+
+    /* Tool "completed" status dot keeps the GitHub green */
+    .tool-status-indicator.completed {
+        background: var(--color-success);
+    }
+}

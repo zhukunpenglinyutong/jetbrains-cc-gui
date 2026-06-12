@@ -227,3 +227,47 @@
         transform: scale(0.92);
     }
 }
+
+/* =========================================================================
+   GitHub Copilot inspired skin — header row (back / title / reload icons).
+   Scoped to [data-theme="github-copilot"]; dark/light themes are untouched.
+   ========================================================================= */
+[data-theme="github-copilot"] {
+    .header {
+        min-height: 44px;
+        padding: 6px 8px 6px 14px;
+        background: var(--copilot-panel-bg);
+        border-bottom: 1px solid var(--border-primary);
+    }
+
+    .new-chat-button {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-primary);
+        color: var(--text-primary);
+        font-weight: 500;
+    }
+
+    .new-chat-button:hover {
+        background: var(--bg-active);
+        border-color: var(--border-hover);
+        color: var(--text-secondary);
+    }
+
+    .back-button,
+    .icon-button,
+    .session-title-edit-btn {
+        color: var(--text-tertiary);
+        border-radius: 6px;
+    }
+
+    .back-button:hover,
+    .icon-button:hover {
+        background: var(--copilot-hover-overlay);
+        color: var(--text-secondary);
+    }
+
+    .session-title {
+        color: var(--text-secondary);
+        font-weight: 500;
+    }
+}

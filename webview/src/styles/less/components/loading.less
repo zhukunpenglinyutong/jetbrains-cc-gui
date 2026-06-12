@@ -83,3 +83,41 @@
     min-width: 2em;
     text-align: left;
 }
+
+/* =========================================================================
+   GitHub Copilot inspired skin — waiting indicator (single circular spinner).
+   Scoped to [data-theme="github-copilot"]; dark/light themes are untouched.
+   ========================================================================= */
+[data-theme="github-copilot"] {
+    .waiting-indicator {
+        align-self: flex-start;
+        gap: 10px;
+        margin: 8px 0 12px;
+        padding: 8px 18px;
+        color: var(--text-tertiary);
+    }
+
+    .waiting-spinner::before {
+        border: 2px solid var(--copilot-spinner-track);
+        border-top-color: var(--copilot-spinner-active);
+        animation: waiting-spin 0.8s linear infinite;
+    }
+
+    .waiting-spinner::after {
+        display: none;
+    }
+
+    .waiting-text {
+        font-size: 13px;
+        color: var(--text-tertiary);
+        letter-spacing: 0;
+    }
+
+    .waiting-dots {
+        min-width: 1.4em;
+    }
+
+    .waiting-seconds {
+        color: var(--text-muted);
+    }
+}

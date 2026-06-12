@@ -125,3 +125,131 @@
     background: rgba(211, 47, 47, 0.2);
     border-color: #d32f2f;
 }
+
+/* =========================================================================
+   GitHub Copilot inspired skin — bottom composer.
+   Scoped to [data-theme="github-copilot"]; dark/light themes are untouched.
+   ========================================================================= */
+[data-theme="github-copilot"] {
+    .input-area {
+        padding: 10px 12px 12px;
+        background: var(--copilot-shell-bg);
+        border-top: 1px solid var(--border-primary);
+    }
+
+    /* Large rounded composer surface */
+    .input-container {
+        gap: 8px;
+        padding: 10px 12px 8px;
+        background: var(--copilot-composer-bg);
+        border: 1px solid var(--border-primary);
+        border-radius: 12px;
+        box-shadow: none;
+    }
+
+    .input-container:focus-within {
+        border-color: var(--border-hover);
+        box-shadow: 0 0 0 1px rgba(139, 148, 158, 0.25);
+    }
+
+    #messageInput {
+        color: var(--text-secondary);
+        font-size: 13px;
+    }
+
+    #messageInput::placeholder {
+        color: var(--text-placeholder);
+    }
+
+    /* Bottom toolbar icon buttons */
+    .tool-button-placeholder {
+        color: var(--text-tertiary);
+        border-radius: 6px;
+    }
+
+    .tool-button-placeholder:hover {
+        background: var(--copilot-hover-overlay);
+        color: var(--text-secondary);
+    }
+
+    /* Provider / model / mode selectors in the composer footer */
+    .selector-button {
+        color: var(--text-tertiary);
+        background: transparent;
+        border-radius: 6px;
+    }
+
+    .selector-button:hover {
+        background: var(--copilot-hover-overlay);
+        color: var(--text-secondary);
+    }
+
+    .selector-button-text {
+        color: inherit;
+    }
+
+    .selector-dropdown {
+        background: var(--copilot-panel-bg);
+        border: 1px solid var(--border-primary);
+        border-radius: var(--copilot-radius-md);
+        box-shadow: var(--shadow-md);
+    }
+
+    .selector-option:hover {
+        background: var(--bg-hover);
+    }
+
+    .selector-divider {
+        background: var(--border-primary);
+    }
+
+    /* Attachment chips above the text input */
+    .attachment-item {
+        background: rgba(88, 166, 255, 0.10);
+        border: 1px solid rgba(88, 166, 255, 0.25);
+        border-radius: 8px;
+        color: var(--text-tertiary);
+    }
+
+    .attachment-file-name {
+        color: var(--text-secondary);
+    }
+
+    .attachment-remove {
+        color: var(--text-tertiary);
+    }
+
+    .attachment-remove:hover {
+        color: var(--text-secondary);
+    }
+
+    /* Send / stop actions */
+    .action-button {
+        border-radius: 8px;
+    }
+
+    .send-button {
+        background: var(--accent-primary);
+        color: #ffffff;
+    }
+
+    .send-button:hover {
+        background: var(--accent-primary-hover);
+    }
+
+    .send-button:disabled {
+        background: rgba(110, 118, 129, 0.25);
+        color: rgba(201, 209, 217, 0.4);
+    }
+
+    .stop-button {
+        background: rgba(248, 81, 73, 0.12);
+        border: 1px solid rgba(248, 81, 73, 0.4);
+        color: #ff7b72;
+    }
+
+    .stop-button:hover {
+        background: rgba(248, 81, 73, 0.2);
+        border-color: #ff7b72;
+    }
+}

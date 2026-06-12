@@ -164,39 +164,62 @@
     --copilot-focus-ring: 0 0 0 2px rgba(137, 87, 229, 0.40);
     --copilot-spinner-track: rgba(139, 148, 158, 0.26);
     --copilot-spinner-active: #8b949e;
+
+    /* Look-and-feel surfaces used by the per-component overrides below */
+    --copilot-shell-bg: #0d1117;
+    --copilot-panel-bg: #161b22;
+    --copilot-panel-raised-bg: #1c2128;
+    --copilot-composer-bg: #161b22;
+    --copilot-code-bg: #161b22;
+    --copilot-inline-code-bg: rgba(110, 118, 129, 0.4);
+    --copilot-inline-code-text: #e6edf3;
+    --copilot-heading: #e6edf3;
+    --copilot-hover-overlay: rgba(177, 186, 196, 0.12);
+
+    /* User message bubble: neutral elevated surface (GitHub/Copilot look),
+       not a saturated fill. The collapse overlay gradient also reads this var. */
+    --color-message-user-bg: #1c2128;
+    --color-message-user-text: #e6edf3;
+    --color-message-user-code-bg: rgba(110, 118, 129, 0.4);
+    --color-message-user-code-border: #30363d;
 }
 
-/* Skin-level component polish. These rules intentionally use the existing class names
-   so no component has to know about Primer/GitHub details. */
+/* =========================================================================
+   GitHub Copilot inspired skin — shared shell, surfaces and scrollbars.
+   Component-level polish lives next to each component (header.less,
+   message.less, input.less, loading.less, buttons.less, scroll-control.less).
+   Everything stays scoped to [data-theme="github-copilot"] so dark/light
+   themes are never affected.
+   ========================================================================= */
 
 [data-theme="github-copilot"] body,
 [data-theme="github-copilot"] #root,
 [data-theme="github-copilot"] #app {
-    background: var(--bg-primary);
+    background: var(--copilot-shell-bg);
     color: var(--text-primary);
 }
 
+/* Flat chat canvas — closer to the GitHub dark surface, no colored glow */
+[data-theme="github-copilot"] .messages-shell,
 [data-theme="github-copilot"] .messages-container {
-    background:
-        radial-gradient(circle at 50% 0%, rgba(137, 87, 229, 0.10), transparent 30rem),
-        var(--bg-chat);
+    background: var(--copilot-shell-bg);
 }
 
-[data-theme="github-copilot"] .message,
-[data-theme="github-copilot"] .message-content,
-[data-theme="github-copilot"] .tool-block,
-[data-theme="github-copilot"] .settings-page,
-[data-theme="github-copilot"] .dialog-content,
-[data-theme="github-copilot"] .context-menu {
+/* Shared elevated surfaces */
+[data-theme="github-copilot"] .tool-block {
     border-color: var(--border-primary);
 }
 
-[data-theme="github-copilot"] .input-area {
-    background:
-        linear-gradient(180deg, rgba(13, 17, 23, 0), rgba(13, 17, 23, 0.94) 22%),
-        var(--bg-primary);
+[data-theme="github-copilot"] .dialog-content,
+[data-theme="github-copilot"] .context-menu,
+[data-theme="github-copilot"] .settings-page,
+[data-theme="github-copilot"] .settings-content {
+    background: var(--copilot-panel-bg);
+    border-color: var(--border-primary);
+    color: var(--text-primary);
 }
 
+/* Generic form controls */
 [data-theme="github-copilot"] textarea,
 [data-theme="github-copilot"] input,
 [data-theme="github-copilot"] select {
@@ -213,50 +236,32 @@
     outline: none;
 }
 
-[data-theme="github-copilot"] button {
-    border-radius: var(--copilot-radius-sm);
-}
-
-[data-theme="github-copilot"] button:hover {
-    background-color: var(--bg-hover);
-}
-
 [data-theme="github-copilot"] pre,
 [data-theme="github-copilot"] code {
     border-radius: var(--copilot-radius-sm);
 }
 
-[data-theme="github-copilot"] .waiting-indicator {
-    align-self: flex-start;
-    margin: 10px 0 12px 8px;
-    padding: 8px 12px;
-    gap: 10px;
-    color: var(--text-tertiary);
-    background: rgba(22, 27, 34, 0.72);
-    border: 1px solid var(--border-primary);
+/* Thin GitHub-style scrollbars */
+[data-theme="github-copilot"] .messages-container {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+[data-theme="github-copilot"] ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+[data-theme="github-copilot"] ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+[data-theme="github-copilot"] ::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+    border: 2px solid var(--copilot-shell-bg);
     border-radius: 999px;
-    box-shadow: var(--shadow-sm);
 }
 
-[data-theme="github-copilot"] .waiting-spinner::before {
-    border: 2px solid var(--copilot-spinner-track);
-    border-top-color: var(--copilot-spinner-active);
-    animation: waiting-spin 0.8s linear infinite;
-}
-
-[data-theme="github-copilot"] .waiting-spinner::after {
-    display: none;
-}
-
-[data-theme="github-copilot"] .waiting-text {
-    color: var(--text-tertiary);
-    letter-spacing: 0;
-}
-
-[data-theme="github-copilot"] .waiting-dots {
-    min-width: 1.4em;
-}
-
-[data-theme="github-copilot"] .waiting-seconds {
-    color: var(--text-muted);
+[data-theme="github-copilot"] ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover);
 }
