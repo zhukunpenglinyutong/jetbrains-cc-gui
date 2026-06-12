@@ -150,9 +150,11 @@ export const AttachmentList = ({
               )}
 
               <button
+                type="button"
                 className="attachment-remove"
                 onClick={(e) => handleRemove(e, attachment.id)}
                 title={t('chat.removeAttachment')}
+                aria-label={t('chat.removeAttachment')}
               >
                 ×
               </button>
