@@ -37,9 +37,19 @@ import 'highlight.js/styles/github-dark.css';
 import { markedHighlight } from 'marked-highlight';
 
 const SAFE_HREF_PROTOCOL_REGEX = /^(?:https?|mailto):/i;
+const FILE_URI_SCHEME_REGEX = /^file:/i;
 const WINDOWS_DRIVE_PATH_REGEX = /^[A-Za-z]:[\\/]/;
 const URI_SCHEME_REGEX = /^[A-Za-z][A-Za-z0-9+.-]*:/;
 let hrefSanitizerHookInstalled = false;
+
+function containsControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    if (value.charCodeAt(index) < 0x20) {
+      return true;
+    }
+  }
+  return false;
+}
 
 function isAllowedHrefValue(value: string): boolean {
   const trimmed = value.trim();
@@ -47,7 +57,19 @@ function isAllowedHrefValue(value: string): boolean {
     return false;
   }
 
+  // Reject hrefs containing C0 control characters (Tab/LF/CR/etc.). They can
+  // split the scheme checks below, yet a browser strips those characters from
+  // the URL and then executes the underlying scheme (e.g. `java<Tab>script:`
+  // resolves to `javascript:`). See MarkdownBlock.test.tsx regression guard.
+  if (containsControlCharacter(trimmed)) {
+    return false;
+  }
+
   if (WINDOWS_DRIVE_PATH_REGEX.test(trimmed)) {
+    return true;
+  }
+
+  if (FILE_URI_SCHEME_REGEX.test(trimmed)) {
     return true;
   }
 
@@ -68,15 +90,22 @@ function ensureSafeHrefSanitizerHook(): void {
       return;
     }
 
-    if (!isAllowedHrefValue(data.attrValue)) {
-      data.keepAttr = false;
+    if (isAllowedHrefValue(data.attrValue)) {
+      data.forceKeepAttr = true;
+      return;
     }
+
+    data.keepAttr = false;
   });
 
   hrefSanitizerHookInstalled = true;
 }
 
 ensureSafeHrefSanitizerHook();
+
+const MARKDOWN_LINK_SANITIZE_OPTIONS = {
+  ALLOW_UNKNOWN_PROTOCOLS: true,
+} as const;
 
 const highlightLanguages: Array<[string, Parameters<typeof hljs.registerLanguage>[1]]> = [
   ['bash', bash],
@@ -456,6 +485,7 @@ function renderStreamingContent(
 
   // Sanitize the assembled HTML to prevent XSS even during streaming
   return DOMPurify.sanitize(raw, {
+    ...MARKDOWN_LINK_SANITIZE_OPTIONS,
     ALLOWED_TAGS: ['a', 'p', 'br', 'pre', 'code', 'strong', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
     ALLOWED_ATTR: ['class', 'href', 'data-linkify'],
   });
@@ -653,7 +683,10 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
       const parsed = marked.parse(cleaned);
       const sanitized = DOMPurify.sanitize(
         typeof parsed === 'string' ? parsed : String(parsed),
-        { ADD_ATTR: ['class', 'data-lang', 'data-copy-success', 'data-copy-title'] }
+        {
+          ...MARKDOWN_LINK_SANITIZE_OPTIONS,
+          ADD_ATTR: ['class', 'data-lang', 'data-copy-success', 'data-copy-title'],
+        }
       );
       const rawHtml = sanitized.trim();
 

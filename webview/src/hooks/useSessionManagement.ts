@@ -3,6 +3,7 @@ import type { TFunction } from 'i18next';
 import type { ClaudeMessage, HistoryData } from '../types';
 import { sendBridgeEvent } from '../utils/bridge';
 import { getSkipNewSessionConfirm } from '../utils/skipNewSessionConfirm';
+import { clearAllPersistedExpanded } from '../utils/expandedState';
 
 type ViewMode = 'chat' | 'history' | 'settings';
 
@@ -51,6 +52,7 @@ interface UseSessionManagementReturn {
   toggleFavoriteSession: (sessionId: string) => void;
   updateHistoryTitle: (sessionId: string, newTitle: string) => void;
   applyHistoryTitleLocal: (sessionId: string, newTitle: string) => void;
+  convertToCliSession: (sessionId: string) => void;
 }
 
 /**
@@ -96,6 +98,8 @@ export function useSessionManagement({
   const beginSessionTransition = useCallback((nextSessionId: string | null, nextTitle: string | null) => {
     window.__sessionTransitioning = true;
     window.__sessionTransitionToken = createSessionTransitionToken();
+    // Clear expand/collapse cache on session switch to avoid unbounded growth
+    clearAllPersistedExpanded();
     // Use the single cleanup entry point exposed by useWindowCallbacks.
     // This clears both React state AND internal streaming refs in one shot.
     if (typeof window.__resetTransientUiState === 'function') {
@@ -396,6 +400,28 @@ export function useSessionManagement({
     }
   }, [historyData, setHistoryData]);
 
+  // Convert SDK-created session to CLI-recognizable session.
+  // The backend sends an onConversionResult callback with success/failure;
+  // the registered handler in sessionCallbacks shows the appropriate toast
+  // and triggers a deep-search reload on failure to restore the correct state.
+  // We optimistically change the entrypoint from 'sdk-cli' to 'cli' so the badge disappears
+  // immediately.  Functional update avoids depending on historyData directly,
+  // keeping the callback reference stable across renders.
+  const convertToCliSession = useCallback((sessionId: string) => {
+    sendBridgeEvent('convert_to_cli_session', sessionId);
+
+    // Optimistically change entrypoint while the backend works.
+    setHistoryData(prev => {
+      if (!prev?.sessions) return prev;
+      return {
+        ...prev,
+        sessions: prev.sessions.map(s =>
+          s.sessionId === sessionId ? { ...s, entrypoint: 'cli' } : s
+        ),
+      };
+    });
+  }, [setHistoryData]);
+
   return {
     showNewSessionConfirm,
     showInterruptConfirm,
@@ -414,5 +440,6 @@ export function useSessionManagement({
     toggleFavoriteSession,
     updateHistoryTitle,
     applyHistoryTitleLocal,
+    convertToCliSession,
   };
 }

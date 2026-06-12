@@ -6,10 +6,11 @@
 import { existsSync } from 'fs';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
-import { setupApiKey, buildCliEnv } from '../../config/api-config.js';
+import { setupApiKey, buildCliEnv, buildWebviewControlledSettingsOverride } from '../../config/api-config.js';
 import { getClaudeDir, getRealHomeDir, selectWorkingDirectory } from '../../utils/path-utils.js';
 import { ensureClaudeSdk, hasClaudeProjectSessionFile, waitForClaudeProjectSessionFile, isNoConversationFoundError } from './message-utils.js';
 import { getActiveQueryResult, getActiveSessionIds } from './message-session-registry.js';
+import { getClaudeCliPathOverride } from '../../utils/claude-cli-path.js';
 
 export async function rewindFiles(sessionId, userMessageId, cwd = null) {
   let result = null;
@@ -47,6 +48,7 @@ export async function rewindFiles(sessionId, userMessageId, cwd = null) {
           await waitForClaudeProjectSessionFile(sessionId, workingDirectory, 2500, 100);
         }
 
+        const claudeCliOverride = getClaudeCliPathOverride();
         const options = {
           resume: sessionId,
           cwd: workingDirectory,
@@ -54,6 +56,9 @@ export async function rewindFiles(sessionId, userMessageId, cwd = null) {
           enableFileCheckpointing: true,
           maxTurns: 1,
           env: buildCliEnv(),
+          // Rewind is a maxTurns:1 file-checkpointing call — no inference output,
+          // so 1M context state is irrelevant; only neutralize effort/thinking.
+          settings: buildWebviewControlledSettingsOverride(),
           tools: { type: 'preset', preset: 'claude_code' },
           settingSources: ['user', 'project', 'local'],
           additionalDirectories: Array.from(
@@ -69,7 +74,8 @@ export async function rewindFiles(sessionId, userMessageId, cwd = null) {
             if (data && data.trim()) {
               console.log(`[SDK-STDERR] ${data.trim()}`);
             }
-          }
+          },
+          ...(claudeCliOverride && { pathToClaudeCodeExecutable: claudeCliOverride })
         };
 
         console.log('[REWIND] Resuming session with options:', JSON.stringify(options));

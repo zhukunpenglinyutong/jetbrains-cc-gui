@@ -79,6 +79,86 @@ public class ClaudeHistoryReaderRefactorTest {
         }
     }
 
+    @Test
+    public void usageAggregatorPricesOpus47AndOpus48AtCurrentTier() throws IOException {
+        Path projectsDir = Files.createTempDirectory("claude-history-opus");
+        try {
+            Path projectDir = Files.createDirectories(projectsDir.resolve("demo-project"));
+            writeSessionFile(
+                    projectDir,
+                    "session-opus-47",
+                    line(
+                            "2026-03-10T10:01:00Z",
+                            "assistant",
+                            "\"message\":{\"role\":\"assistant\",\"model\":\"claude-opus-4-7-20260101\","
+                                    + "\"usage\":{\"input_tokens\":1000,\"output_tokens\":250,"
+                                    + "\"cache_creation_input_tokens\":400,\"cache_read_input_tokens\":50}}"
+                    )
+            );
+            writeSessionFile(
+                    projectDir,
+                    "session-opus-48",
+                    line(
+                            "2026-03-10T10:02:00Z",
+                            "assistant",
+                            "\"message\":{\"role\":\"assistant\",\"model\":\"claude-opus-4-8\","
+                                    + "\"usage\":{\"input_tokens\":1000,\"output_tokens\":250,"
+                                    + "\"cache_creation_input_tokens\":400,\"cache_read_input_tokens\":50}}"
+                    )
+            );
+
+            ClaudeUsageAggregator aggregator = new ClaudeUsageAggregator(projectsDir, new ClaudeHistoryParser());
+            ProjectStatistics stats = aggregator.getProjectStatistics("all", 0);
+
+            assertEquals(2, stats.totalSessions);
+            assertEquals(3400, stats.totalUsage.totalTokens);
+            // Opus 4.5+ tier ($5/$25/$6.25/$0.50), NOT the legacy $15/$75 tier.
+            // Per session: 1000*5 + 250*25 + 400*6.25 + 50*0.50 = 13775 /1M = 0.013775
+            assertEquals(0.02755, stats.estimatedCost, 0.0000001);
+        } finally {
+            deleteDirectory(projectsDir);
+        }
+    }
+
+    @Test
+    public void usageAggregatorDedupsDuplicateMessageIdLines() throws IOException {
+        Path projectsDir = Files.createTempDirectory("claude-history-dedup");
+        try {
+            Path projectDir = Files.createDirectories(projectsDir.resolve("demo-project"));
+            String duplicatedBlock =
+                    "\"message\":{\"id\":\"msg-dup\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-6\","
+                            + "\"usage\":{\"input_tokens\":1000,\"output_tokens\":250,"
+                            + "\"cache_creation_input_tokens\":400,\"cache_read_input_tokens\":50}}";
+            writeSessionFile(
+                    projectDir,
+                    "session-dedup",
+                    // Three lines share message.id "msg-dup" (thinking/tool_use/text blocks of
+                    // one API response) with an identical duplicated usage payload -> counted once.
+                    line("2026-03-10T10:01:00Z", "assistant", duplicatedBlock),
+                    line("2026-03-10T10:01:00Z", "assistant", duplicatedBlock),
+                    line("2026-03-10T10:01:00Z", "assistant", duplicatedBlock),
+                    line(
+                            "2026-03-10T10:02:00Z",
+                            "assistant",
+                            "\"message\":{\"id\":\"msg-unique\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-6\","
+                                    + "\"usage\":{\"input_tokens\":500,\"output_tokens\":100,"
+                                    + "\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0}}"
+                    )
+            );
+
+            ClaudeUsageAggregator aggregator = new ClaudeUsageAggregator(projectsDir, new ClaudeHistoryParser());
+            ProjectStatistics stats = aggregator.getProjectStatistics("all", 0);
+
+            // Without dedup: 3*1700 + 600 = 5700. With dedup: 1700 + 600 = 2300.
+            assertEquals(2300, stats.totalUsage.totalTokens);
+            // msg-dup once: 1000*3 + 250*15 + 400*3.75 + 50*0.30 = 8265 /1M = 0.008265
+            // msg-unique: 500*3 + 100*15 = 3000 /1M = 0.003  => total 0.011265
+            assertEquals(0.011265, stats.estimatedCost, 0.0000001);
+        } finally {
+            deleteDirectory(projectsDir);
+        }
+    }
+
     private Path writeSessionFile(Path projectDir, String sessionId, String... lines) throws IOException {
         Files.createDirectories(projectDir);
         Path file = projectDir.resolve(sessionId + ".jsonl");

@@ -208,7 +208,7 @@ const BashToolGroupBlock = ({ items, deniedToolIds }: BashToolGroupBlockProps) =
                   onClick={(e) => handleItemClick(index, e)}
                 >
                   <div className="bash-timeline-row">
-                    <span className="bash-timeline-description">
+                    <span className={`bash-timeline-description ${item.description ? '' : 'bash-timeline-description-command'}`}>
                       {item.description || truncateCommand(item.command)}
                     </span>
                     <div
@@ -230,7 +230,7 @@ const BashToolGroupBlock = ({ items, deniedToolIds }: BashToolGroupBlockProps) =
                               style={ERROR_ICON_STYLE}
                             />
                           )}
-                          <span>{item.output}</span>
+                          <span className="bash-output-text">{item.output}</span>
                         </div>
                       )}
                     </div>

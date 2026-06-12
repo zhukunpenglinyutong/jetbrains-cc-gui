@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler.context;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
@@ -124,7 +125,13 @@ public class WorkspaceContextCollector {
             // 4. Determine which subproject the active file belongs to
             String projectBasePath = project.getBasePath();
             if (projectBasePath != null) {
-                workspaceData.addProperty("workspaceRoot", projectBasePath);
+                // Only translate to a WSL path when the configured node is a WSL binary,
+                // mirroring ClaudeSDKBridge#normalizeCwdForNode; a native node keeps the path as-is.
+                String nodePath = NodeDetector.getInstance().getCachedNodePath();
+                String workspaceRoot = (nodePath != null && NodeDetector.isWslPath(nodePath))
+                        ? NodeDetector.convertToWslPath(projectBasePath)
+                        : projectBasePath;
+                workspaceData.addProperty("workspaceRoot", workspaceRoot);
             }
 
         } catch (Throwable t) {
@@ -390,7 +397,7 @@ public class WorkspaceContextCollector {
             Object provider = getServiceMethod.invoke(null, project);
 
             if (provider != null) {
-                VirtualFile file = LocalFileSystem.getInstance().findFileByPath(filePath);
+                VirtualFile file = LocalFileSystem.getInstance().findFileByPath(NodeDetector.toVfsPath(filePath));
                 if (file != null) {
                     Method getPathMethod = subprojectInfoProviderClass.getMethod(
                         "getSubprojectPath", Project.class, VirtualFile.class);
@@ -429,7 +436,7 @@ public class WorkspaceContextCollector {
      */
     private static @Nullable String getModuleForFile(@NotNull Project project, @NotNull String filePath) {
         try {
-            VirtualFile file = LocalFileSystem.getInstance().findFileByPath(filePath);
+            VirtualFile file = LocalFileSystem.getInstance().findFileByPath(NodeDetector.toVfsPath(filePath));
             if (file != null) {
                 Module module = ModuleUtilCore.findModuleForFile(file, project);
                 if (module != null) {

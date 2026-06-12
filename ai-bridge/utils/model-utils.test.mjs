@@ -66,7 +66,7 @@ test('resolveModelFromSettings does NOT remap non-Anthropic model IDs', () => {
   assert.equal(resolveModelFromSettings('deepseek-v4-pro', env), 'deepseek-v4-pro');
 });
 
-// --- [1m] suffix preservation across settings mapping (regression) -------
+// --- [1m] suffix follows the webview request state ------------------------
 //
 // Bug: when a user opens the 1M context toggle in the UI, the frontend sends
 //   `claude-sonnet-4-6[1m]` to the backend. If `settings.json` contains a
@@ -74,7 +74,8 @@ test('resolveModelFromSettings does NOT remap non-Anthropic model IDs', () => {
 //   the old resolver returned `'glm-4.7'`, silently dropping the suffix.
 //   The Claude SDK then read the env var without [1m] and did NOT enable the
 //   1M context window even though the toggle was on.
-// Fix: preserve the [1m] suffix from the request modelId across the mapping.
+// Fix: make the request modelId the source of truth. Preserve/append [1m] when
+// the toggle is on, and strip stale mapping suffixes when the toggle is off.
 
 test('resolveModelFromSettings preserves [1m] suffix when mapping value lacks it', () => {
   const env = { ANTHROPIC_DEFAULT_SONNET_MODEL: 'glm-4.7' };
@@ -93,15 +94,17 @@ test('resolveModelFromSettings does not double-append [1m] when mapping already 
   );
 });
 
-test('resolveModelFromSettings drops nothing when 1M toggle is OFF', () => {
-  // No [1m] in request → no [1m] in output. Lets users disable 1M to stay
-  // compatible with proxies that don't recognize the suffix.
-  const env = { ANTHROPIC_DEFAULT_SONNET_MODEL: 'glm-4.7' };
-  assert.equal(resolveModelFromSettings('claude-sonnet-4-6', env), 'glm-4.7');
+test('resolveModelFromSettings strips stale [1m] suffix when 1M toggle is OFF', () => {
+  const env = { ANTHROPIC_DEFAULT_SONNET_MODEL: 'glm-4.7[1M]' };
+  assert.equal(
+    resolveModelFromSettings('claude-sonnet-4-6', env),
+    'glm-4.7',
+    'request did not ask for 1M, stale settings mapping suffix must not force it on'
+  );
 });
 
 test('resolveModelFromSettings preserves [1m] across ANTHROPIC_MODEL global override', () => {
-  const env = { ANTHROPIC_MODEL: 'override-model' };
+  const env = { ANTHROPIC_MODEL: 'override-model[1M]' };
   assert.equal(resolveModelFromSettings('claude-sonnet-4-6[1m]', env), 'override-model[1m]');
   assert.equal(resolveModelFromSettings('claude-sonnet-4-6', env), 'override-model');
 });

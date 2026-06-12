@@ -1,3 +1,4 @@
+// TODO: consider extracting WSL env propagation into a dedicated helper class
 package com.github.claudecodegui.bridge;
 
 import com.github.claudecodegui.settings.CodemossSettingsService;
@@ -15,6 +16,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -144,7 +146,7 @@ public class EnvironmentConfigurator {
         // The SDK needs HOME to locate the ~/.claude/commands/ directory
         String home = env.get("HOME");
         if (home == null || home.isEmpty()) {
-            home = PlatformUtils.getHomeDirectory();
+            home = NodeDetector.convertToWslPath(NodeDetector.resolveHomeForFileOps());
             if (home != null && !home.isEmpty()) {
                 env.put("HOME", home);
             }
@@ -154,31 +156,88 @@ public class EnvironmentConfigurator {
         // Environment variables may be missing when launched from macOS GUI; relying on implicit defaults causes unstable feature detection (e.g. skills tool appearing intermittently)
         String codexHome = env.get(CODEX_HOME_ENV);
         if (codexHome == null || codexHome.trim().isEmpty()) {
-            String userHome = PlatformUtils.getHomeDirectory();
+            String userHome = NodeDetector.resolveHomeForFileOps();
             if (userHome != null && !userHome.isEmpty()) {
                 env.put(CODEX_HOME_ENV, Paths.get(userHome, ".codex").toString());
             }
         }
 
-        configurePermissionEnv(env);
+        configurePermissionEnv(env, nodeExecutable);
     }
 
     /**
      * Configures permission-related environment variables.
+     *
+     * <p>Equivalent to calling {@link #configurePermissionEnv(Map, String)} with a
+     * {@code null} node executable, which disables WSL path translation. Prefer the
+     * two-arg overload from production code paths; this one exists for callers (and
+     * tests) that don't have a node path on hand.
      */
     public void configurePermissionEnv(Map<String, String> env) {
+        configurePermissionEnv(env, null);
+    }
+
+    /** Like {@link #configurePermissionEnv(Map)}, but also translates the IPC dir and sets WSLENV when node is a WSL binary. */
+    public void configurePermissionEnv(Map<String, String> env, String nodeExecutable) {
         if (env == null) {
             return;
         }
+        boolean isWsl = NodeDetector.isWslPath(nodeExecutable);
         String permissionDir = getPermissionDirectory();
         if (permissionDir != null) {
-            env.put(CLAUDE_PERMISSION_ENV, permissionDir);
+            env.put(CLAUDE_PERMISSION_ENV, isWsl ? NodeDetector.convertToWslPath(permissionDir) : permissionDir);
         }
         String sid = getSessionId();
         if (sid != null) {
             env.put(CLAUDE_SESSION_ID_ENV, sid);
         }
         env.put(CLAUDE_PERMISSION_SAFETY_NET_ENV, String.valueOf(getPermissionSafetyNetMs()));
+        propagateWslEnv(env, isWsl);
+    }
+
+    // Permission vars that must cross the Windows→WSL boundary via WSLENV.
+    private static final String[] WSL_PROPAGATED_KEYS = {
+            CLAUDE_PERMISSION_ENV,
+            CLAUDE_SESSION_ID_ENV,
+            CLAUDE_PERMISSION_SAFETY_NET_ENV
+    };
+
+    /** Appends permission-bridge keys to WSLENV so they reach the daemon inside WSL. */
+    private static void propagateWslEnv(Map<String, String> env, boolean isWsl) {
+        if (!isWsl) {
+            return;
+        }
+        String existing = env.get("WSLENV");
+        LinkedHashSet<String> entries = new LinkedHashSet<>();
+        if (existing != null && !existing.isEmpty()) {
+            for (String token : existing.split(":")) {
+                if (!token.isEmpty()) {
+                    entries.add(token);
+                }
+            }
+        }
+        for (String key : WSL_PROPAGATED_KEYS) {
+            entries.add(key);
+        }
+        env.put("WSLENV", String.join(":", entries));
+    }
+
+    /**
+     * Returns the permission IPC directory in a form the given node executable can
+     * read. When {@code nodeExecutable} is a WSL binary on Windows (per
+     * {@link NodeDetector#isWslPath}), converts the Windows-style path to its
+     * {@code /mnt/<drive>/...} or stripped UNC-WSL equivalent so that both sides
+     * of the bridge operate on the same physical directory. Otherwise returns the
+     * input unchanged.
+     */
+    static String translatePermissionDirForNode(String permissionDir, String nodeExecutable) {
+        if (permissionDir == null || permissionDir.isEmpty()) {
+            return permissionDir;
+        }
+        if (NodeDetector.isWslPath(nodeExecutable)) {
+            return NodeDetector.convertToWslPath(permissionDir);
+        }
+        return permissionDir;
     }
 
     long getPermissionSafetyNetMs() {
@@ -427,7 +486,7 @@ public class EnvironmentConfigurator {
      */
     private Set<String> parseCodexConfigEnvKeys() {
         Set<String> envKeys = new HashSet<>();
-        String home = PlatformUtils.getHomeDirectory();
+        String home = NodeDetector.resolveHomeForFileOps();
         if (home == null || home.isEmpty()) {
             return envKeys;
         }
@@ -647,7 +706,7 @@ public class EnvironmentConfigurator {
      * @return Value or null
      */
     private String parseEnvFromShellConfigs(String envName) {
-        String home = PlatformUtils.getHomeDirectory();
+        String home = NodeDetector.resolveHomeForFileOps();
         if (home == null || home.isEmpty()) {
             return null;
         }

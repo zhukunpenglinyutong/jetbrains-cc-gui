@@ -1,6 +1,6 @@
 package com.github.claudecodegui.settings;
 
-import com.github.claudecodegui.util.PlatformUtils;
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -68,7 +68,7 @@ public class McpServerManager {
 
         // 1. Try to read from ~/.claude.json (standard Claude CLI location)
         try {
-            String homeDir = PlatformUtils.getHomeDirectory();
+            String homeDir = NodeDetector.resolveHomeForFileOps();
             Path claudeJsonPath = Paths.get(homeDir, ".claude.json");
             File claudeJsonFile = claudeJsonPath.toFile();
 
@@ -223,7 +223,7 @@ public class McpServerManager {
 
         // 1. Try to update ~/.claude.json
         try {
-            String homeDir = PlatformUtils.getHomeDirectory();
+            String homeDir = NodeDetector.resolveHomeForFileOps();
             Path claudeJsonPath = Paths.get(homeDir, ".claude.json");
             File claudeJsonFile = claudeJsonPath.toFile();
 
@@ -376,7 +376,7 @@ public class McpServerManager {
 
         // 1. Try to delete from ~/.claude.json
         try {
-            String homeDir = PlatformUtils.getHomeDirectory();
+            String homeDir = NodeDetector.resolveHomeForFileOps();
             Path claudeJsonPath = Paths.get(homeDir, ".claude.json");
             File claudeJsonFile = claudeJsonPath.toFile();
 

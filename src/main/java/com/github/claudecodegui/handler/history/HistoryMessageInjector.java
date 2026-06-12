@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler.history;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.CodexMessageConverter;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.provider.codex.CodexHistoryReader;
@@ -56,7 +57,9 @@ public class HistoryMessageInjector {
             // Backward compatible: legacy payload is the raw sessionId string.
         }
 
-        String projectPath = context.getProject().getBasePath();
+        String rawPath = context.getProject().getBasePath();
+        String nodePath = NodeDetector.getInstance().getCachedNodePath();
+        String projectPath = NodeDetector.isWslPath(nodePath) ? NodeDetector.convertToWslPath(rawPath) : rawPath;
         if (projectPath == null) {
             LOG.warn("[HistoryHandler] Project base path is null");
             return;

@@ -37,6 +37,11 @@ public class MessageJsonConverterTest {
         raw.addProperty("sessionId", "session-1");
         raw.addProperty("parentUuid", "parent-1");
         raw.add("message", message);
+        JsonObject turnUsage = new JsonObject();
+        turnUsage.addProperty("input_tokens", 1200);
+        turnUsage.addProperty("cache_read_input_tokens", 36310);
+        turnUsage.addProperty("output_tokens", 456);
+        raw.add("turnUsage", turnUsage);
 
         ClaudeSession.Message sessionMessage = new ClaudeSession.Message(
                 ClaudeSession.Message.Type.ASSISTANT,
@@ -54,10 +59,15 @@ public class MessageJsonConverterTest {
         assertFalse(transportRaw.has("sessionId"));
         assertFalse(transportRaw.has("parentUuid"));
 
+        // turnUsage (whole-turn aggregate) is transported for the per-turn token display
+        assertTrue(transportRaw.has("turnUsage"));
+        assertEquals(1200, transportRaw.getAsJsonObject("turnUsage").get("input_tokens").getAsInt());
+
         JsonObject transportMessage = transportRaw.getAsJsonObject("message");
         assertTrue(transportMessage.has("content"));
         assertFalse(transportMessage.has("id"));
         assertFalse(transportMessage.has("model"));
+        // message.usage feeds the status bar only and must NOT be transported per message
         assertFalse(transportMessage.has("usage"));
     }
 

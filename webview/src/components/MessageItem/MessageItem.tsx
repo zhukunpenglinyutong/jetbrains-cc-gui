@@ -14,12 +14,13 @@ import {
   BashToolBlock,
   BashToolGroupBlock,
   SearchToolGroupBlock,
+  AgentGroupBlock,
 } from '../toolBlocks';
 import { ContentBlockRenderer } from './ContentBlockRenderer';
 import { formatTime } from '../../utils/helpers';
 import { copyToClipboard } from '../../utils/copyUtils';
 import { CoDriverIcon } from '../codriverIcons';
-import { READ_TOOL_NAMES, EDIT_TOOL_NAMES, BASH_TOOL_NAMES, SEARCH_TOOL_NAMES, isToolName } from '../../utils/toolConstants';
+import { READ_TOOL_NAMES, EDIT_TOOL_NAMES, BASH_TOOL_NAMES, SEARCH_TOOL_NAMES, AGENT_TOOL_NAMES, isToolName } from '../../utils/toolConstants';
 
 export interface MessageItemProps {
   message: ClaudeMessage;
@@ -52,7 +53,8 @@ type GroupedBlock =
   | { type: 'read_group'; blocks: ClaudeContentBlock[]; startIndex: number }
   | { type: 'edit_group'; blocks: ClaudeContentBlock[]; startIndex: number }
   | { type: 'bash_group'; blocks: ClaudeContentBlock[]; startIndex: number }
-  | { type: 'search_group'; blocks: ClaudeContentBlock[]; startIndex: number };
+  | { type: 'search_group'; blocks: ClaudeContentBlock[]; startIndex: number }
+  | { type: 'agent_group'; agentBlock: ClaudeContentBlock; followingBlocks: ClaudeContentBlock[]; startIndex: number };
 
 /** Render the shared copy icon used by both user and assistant message copy buttons. */
 const CopyIcon = () => <CoDriverIcon name="copy" size={14} strokeWidth={1.75} />;
@@ -99,11 +101,66 @@ function formatDurationMs(durationMs: number): string {
   return `${minutes}:${String(remainder).padStart(2, '0')}`;
 }
 
+interface TokenUsageInfo {
+  /** Total input-side tokens for the turn (non-cache input + cache write + cache read). */
+  inputTokens: number;
+  outputTokens: number;
+  nonCacheInputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+}
+
+/**
+ * Extract whole-turn token usage from a message's raw JSON.
+ *
+ * Reads the `turnUsage` field stamped by the backend when a turn completes
+ * (ClaudeMessageHandler.handleResult / CodexMessageHandler.handleResultMessage).
+ * It aggregates every API call in the turn, normalized to the Claude usage
+ * schema (input_tokens excludes cache; cache fields are separate).
+ *
+ * Do NOT read `raw.message.usage` or `raw.usage` here: those carry per-API-call
+ * and session-cumulative values that feed the context-usage status bar, and
+ * would understate (Claude) or overstate (Codex) what this turn consumed.
+ *
+ * Returns null when no turn usage is available (aborted turns, history replay).
+ */
+function extractTokenUsage(raw: ClaudeMessage['raw']): TokenUsageInfo | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const usageSrc = (raw as Record<string, unknown>).turnUsage;
+  if (!usageSrc || typeof usageSrc !== 'object') return null;
+  const usage = usageSrc as Record<string, unknown>;
+  const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0);
+  const nonCacheInput = num(usage.input_tokens);
+  const cacheCreation = num(usage.cache_creation_input_tokens);
+  const cacheRead = num(usage.cache_read_input_tokens);
+  const output = num(usage.output_tokens);
+  const input = nonCacheInput + cacheCreation + cacheRead;
+  if (input === 0 && output === 0) return null;
+  return {
+    inputTokens: input,
+    outputTokens: output,
+    nonCacheInputTokens: nonCacheInput,
+    cacheCreationTokens: cacheCreation,
+    cacheReadTokens: cacheRead,
+  };
+}
+
+/** Format a token count for compact display (e.g., 1234 â†’ "1.2K"). */
+function formatTokenCount(count: number): string {
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K`;
+  return String(count);
+}
+
 function isToolBlockOfType(block: ClaudeContentBlock, toolNames: Set<string>): boolean {
   return block.type === 'tool_use' && isToolName(block.name, toolNames);
 }
 
-function groupBlocks(blocks: ClaudeContentBlock[]): GroupedBlock[] {
+// Groups consecutive content blocks for rendering. Agent groups absorb the
+// tool_use blocks that follow them using a purely structural rule (see the
+// forEach below), so live streaming and history reload yield identical groups.
+// Exported for unit testing.
+export function groupBlocks(blocks: ClaudeContentBlock[]): GroupedBlock[] {
   const groupedBlocks: GroupedBlock[] = [];
   let currentReadGroup: ClaudeContentBlock[] = [];
   let readGroupStartIndex = -1;
@@ -113,6 +170,9 @@ function groupBlocks(blocks: ClaudeContentBlock[]): GroupedBlock[] {
   let bashGroupStartIndex = -1;
   let currentSearchGroup: ClaudeContentBlock[] = [];
   let searchGroupStartIndex = -1;
+  let currentAgentBlock: ClaudeContentBlock | null = null;
+  let agentFollowingText: ClaudeContentBlock[] = [];
+  let agentGroupStartIndex = -1;
 
   const flushReadGroup = () => {
     if (currentReadGroup.length > 0) {
@@ -162,8 +222,49 @@ function groupBlocks(blocks: ClaudeContentBlock[]): GroupedBlock[] {
     }
   };
 
+  const flushAgentGroup = () => {
+    if (currentAgentBlock) {
+      groupedBlocks.push({
+        type: 'agent_group',
+        agentBlock: currentAgentBlock,
+        followingBlocks: [...agentFollowingText],
+        startIndex: agentGroupStartIndex,
+      });
+      currentAgentBlock = null;
+      agentFollowingText = [];
+      agentGroupStartIndex = -1;
+    }
+  };
+
   blocks.forEach((block, idx) => {
-    if (isToolBlockOfType(block, READ_TOOL_NAMES)) {
+    // While inside an agent group, absorb subsequent tool_use blocks until a
+    // structural boundary: the next agent tool, a non-tool block (text/thinking),
+    // or the end of the message. Keeping this purely structural guarantees that
+    // live streaming and history reload produce identical groups â€” the previous
+    // streaming-only "frozen count" could not be reconstructed from a snapshot,
+    // so reloaded agent groups dropped all their absorbed children.
+    if (currentAgentBlock) {
+      if (isToolBlockOfType(block, AGENT_TOOL_NAMES)) {
+        // Next agent tool â€” close this group and open a new one below.
+        flushAgentGroup();
+      } else if (block.type === 'tool_use') {
+        // Absorb the following tool_use into the running agent group.
+        agentFollowingText.push(block);
+        return;
+      } else {
+        // Non-tool block (text/thinking/...) ends the group; process it normally.
+        flushAgentGroup();
+      }
+    }
+
+    if (isToolBlockOfType(block, AGENT_TOOL_NAMES)) {
+      flushReadGroup();
+      flushEditGroup();
+      flushBashGroup();
+      flushSearchGroup();
+      currentAgentBlock = block;
+      agentGroupStartIndex = idx;
+    } else if (isToolBlockOfType(block, READ_TOOL_NAMES)) {
       flushEditGroup();
       flushBashGroup();
       flushSearchGroup();
@@ -204,6 +305,7 @@ function groupBlocks(blocks: ClaudeContentBlock[]): GroupedBlock[] {
     }
   });
 
+  flushAgentGroup();
   flushReadGroup();
   flushEditGroup();
   flushBashGroup();
@@ -537,6 +639,23 @@ export const MessageItem = memo(function MessageItem({
         );
       }
 
+      if (grouped.type === 'agent_group') {
+        const agentToolId = grouped.agentBlock.type === 'tool_use' ? grouped.agentBlock.id : undefined;
+        return (
+          <div key={`agentgroup-${agentToolId ?? grouped.startIndex}`} className="content-block">
+            <AgentGroupBlock
+              agentBlock={grouped.agentBlock}
+              followingBlocks={grouped.followingBlocks}
+              messageIndex={messageIndex}
+              isStreaming={isMessageStreaming}
+              isLastMessage={isLast}
+              isThinking={isThinking}
+              findToolResult={findToolResult}
+            />
+          </div>
+        );
+      }
+
       const { block, originalIndex: blockIndex } = grouped;
 
       return (
@@ -597,7 +716,7 @@ export const MessageItem = memo(function MessageItem({
         />
       )}
 
-      {/* Role label for non-user/assistant messages — hidden for notification types */}
+      {/* Role label for non-user/assistant messages â€” hidden for notification types */}
       {message.type !== 'assistant' && message.type !== 'user'
         && message.type !== 'notification' && message.type !== 'task_notification' && (
         <div className="message-role-label">
@@ -609,13 +728,36 @@ export const MessageItem = memo(function MessageItem({
         {renderGroupedBlocks()}
       </div>
 
-      {/* Duration display after last assistant message */}
+      {/* Duration and token display after last assistant message */}
       {message.type === 'assistant' && !isMessageStreaming && typeof message.durationMs === 'number' && (
         <div className="message-duration">
           <span className="message-duration-inner">
             <span className="message-duration-flag codicon codicon-clock"></span>
             <span className="message-duration-cost">{t('chat.totalDuration')}</span>
             <span className="message-duration-value">{formatDurationMs(message.durationMs)}</span>
+            {(() => {
+              const tokenInfo = extractTokenUsage(message.raw);
+              if (!tokenInfo) return null;
+              return (
+                <>
+                  <span className="message-duration-separator">Â·</span>
+                  <span
+                    className="message-duration-tokens"
+                    title={t('chat.tokenUsageDetail', {
+                      input: formatTokenCount(tokenInfo.nonCacheInputTokens),
+                      cacheWrite: formatTokenCount(tokenInfo.cacheCreationTokens),
+                      cacheRead: formatTokenCount(tokenInfo.cacheReadTokens),
+                      output: formatTokenCount(tokenInfo.outputTokens),
+                    })}
+                  >
+                    {t('chat.tokenUsage', {
+                      input: formatTokenCount(tokenInfo.inputTokens),
+                      output: formatTokenCount(tokenInfo.outputTokens),
+                    })}
+                  </span>
+                </>
+              );
+            })()}
           </span>
         </div>
       )}

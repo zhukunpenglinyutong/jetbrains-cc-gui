@@ -77,3 +77,4 @@ logs/*.log
 .omx/
 
 .codex
+.opencode

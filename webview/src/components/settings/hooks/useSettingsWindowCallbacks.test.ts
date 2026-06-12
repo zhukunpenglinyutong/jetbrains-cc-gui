@@ -16,6 +16,8 @@ describe('useSettingsWindowCallbacks', () => {
     setNodeVersion: vi.fn(),
     setMinNodeVersion: vi.fn(),
     setSavingNodePath: vi.fn(),
+    setClaudeCliPath: vi.fn(),
+    setSavingClaudeCliPath: vi.fn(),
     setWorkingDirectory: vi.fn(),
     setSavingWorkingDirectory: vi.fn(),
     setCommitPrompt: vi.fn(),
@@ -26,6 +28,7 @@ describe('useSettingsWindowCallbacks', () => {
     setSavingProjectCommitPrompt: vi.fn(),
     setEditorFontConfig: vi.fn(),
     setUiFontConfig: vi.fn(),
+    setCodeFontConfig: vi.fn(),
     setIdeTheme: vi.fn(),
     setLocalStreamingEnabled: vi.fn(),
     setCodexSandboxMode: vi.fn(),
@@ -57,6 +60,7 @@ describe('useSettingsWindowCallbacks', () => {
   beforeEach(() => {
     window.sendToJava = vi.fn();
     window.applyUiFontConfig = vi.fn();
+    window.applyCodeFontConfig = vi.fn();
   });
 
   it('does not auto-request current Claude config on mount', () => {
@@ -78,6 +82,7 @@ describe('useSettingsWindowCallbacks', () => {
     expect(window.sendToJava).toHaveBeenCalledWith('get_prompt_enhancer_config:');
     expect(window.sendToJava).toHaveBeenCalledWith('get_sound_notification_config:');
     expect(window.sendToJava).toHaveBeenCalledWith('get_ui_font_config:');
+    expect(window.sendToJava).toHaveBeenCalledWith('get_code_font_config:');
   });
 
   it('registers prompt enhancer callback and updates state from backend payload', () => {
@@ -150,6 +155,27 @@ describe('useSettingsWindowCallbacks', () => {
     }));
   });
 
+  it('registers code font callback and updates code font state from backend payload', () => {
+    const deps = createDeps();
+
+    renderHook(() => useSettingsWindowCallbacks(deps));
+
+    window.onCodeFontConfigReceived?.(JSON.stringify({
+      mode: 'customFile',
+      effectiveMode: 'customFile',
+      customFontPath: '/tmp/FiraCode.ttf',
+      fontFamily: 'CC GUI Code Custom',
+      fontSize: 14,
+      lineSpacing: 1.35,
+    }));
+
+    expect((deps as any).setCodeFontConfig).toHaveBeenCalledWith(expect.objectContaining({
+      mode: 'customFile',
+      customFontPath: '/tmp/FiraCode.ttf',
+      fontFamily: 'CC GUI Code Custom',
+    }));
+  });
+
   it('applies ui font immediately when backend pushes updated config', () => {
     const deps = createDeps();
 
@@ -171,6 +197,32 @@ describe('useSettingsWindowCallbacks', () => {
     expect(window.applyUiFontConfig).toHaveBeenCalledWith(expect.objectContaining({
       mode: 'customFile',
       customFontPath: '/tmp/MapleMono.ttf',
+      fontBase64: 'AAECA',
+      fontFormat: 'truetype',
+    }));
+  });
+
+  it('applies code font immediately when backend pushes updated config', () => {
+    const deps = createDeps();
+
+    renderHook(() => useSettingsWindowCallbacks(deps));
+
+    const payload = {
+      mode: 'customFile',
+      effectiveMode: 'customFile',
+      customFontPath: '/tmp/FiraCode.ttf',
+      fontFamily: 'CC GUI Code Custom',
+      fontSize: 14,
+      lineSpacing: 1.35,
+      fontBase64: 'AAECA',
+      fontFormat: 'truetype',
+    };
+
+    window.onCodeFontConfigReceived?.(JSON.stringify(payload));
+
+    expect(window.applyCodeFontConfig).toHaveBeenCalledWith(expect.objectContaining({
+      mode: 'customFile',
+      customFontPath: '/tmp/FiraCode.ttf',
       fontBase64: 'AAECA',
       fontFormat: 'truetype',
     }));

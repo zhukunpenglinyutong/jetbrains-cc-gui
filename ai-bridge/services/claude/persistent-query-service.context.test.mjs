@@ -78,6 +78,15 @@ test('buildRequestContext preserves resolved model mapping for context usage run
       'resolved model state should honor mapped sonnet model settings',
     );
     assert.equal(requestContext.resolvedModelId, 'custom-sonnet-model');
+    assert.equal(requestContext.options.env.ANTHROPIC_MODEL, 'custom-sonnet-model');
+    assert.equal(requestContext.options.env.ANTHROPIC_DEFAULT_SONNET_MODEL, 'custom-sonnet-model');
+    assert.deepEqual(requestContext.options.settings, {
+      env: {
+        CLAUDE_CODE_EFFORT_LEVEL: '',
+        MAX_THINKING_TOKENS: '',
+        CLAUDE_CODE_DISABLE_1M_CONTEXT: '1',
+      },
+    });
     assert.equal(process.env.ANTHROPIC_MODEL, 'custom-sonnet-model');
     assert.equal(process.env.ANTHROPIC_DEFAULT_SONNET_MODEL, 'custom-sonnet-model');
     assert.equal(exactContext.options.model, 'custom-sonnet-model');
@@ -292,9 +301,11 @@ test('getContextUsagePersistent recreates runtime when existing runtime model is
   console.log = (...args) => { /* suppress */ };
 
   try {
+    const requestedModel = 'custom-context-model';
+
     await getContextUsagePersistent({
       sessionId: 'sess-unknown-model',
-      model: 'claude-opus-4-7',
+      model: requestedModel,
       cwd: process.cwd(),
     });
 
@@ -302,10 +313,10 @@ test('getContextUsagePersistent recreates runtime when existing runtime model is
 
     const runtime2 = __testing.getRuntimeForSession('sess-unknown-model');
     assert.notEqual(runtime2, runtime1, 'should replace the old runtime');
-    assert.equal(runtime2.modelId, 'claude-opus-4-7', 'new runtime should track exact requested modelId');
+    assert.equal(runtime2.modelId, requestedModel, 'new runtime should track exact requested modelId');
     assert.equal(
       factory.runtimes[1].options.model,
-      'claude-opus-4-7',
+      requestedModel,
       'recreated runtime should be created with exact model ID',
     );
   } finally {

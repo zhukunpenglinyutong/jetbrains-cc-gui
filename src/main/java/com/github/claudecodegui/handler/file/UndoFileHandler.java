@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler.file;
 
+import com.github.claudecodegui.util.WslPathUtil;
 import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
@@ -53,45 +54,17 @@ public class UndoFileHandler extends BaseMessageHandler {
         return false;
     }
 
-    /**
-     * Validate file path is within project directory using canonical path resolution.
-     * This prevents path traversal attacks including encoded characters, symlinks, etc.
-     * @param filePath The file path to validate
-     * @return true if path is valid and safe, false otherwise
-     */
     private boolean isValidFilePath(String filePath) {
-        if (filePath == null || filePath.isEmpty()) {
-            return false;
-        }
-
         String projectBasePath = context.getProject() != null ? context.getProject().getBasePath() : null;
         if (projectBasePath == null) {
             LOG.warn("[UndoFileHandler] Cannot validate path: project base path is null");
             return false;
         }
-
-        try {
-            // Use canonical path to resolve symlinks, "..", encoded chars, etc.
-            java.io.File file = new java.io.File(filePath);
-            java.io.File baseDir = new java.io.File(projectBasePath);
-
-            String canonicalFilePath = file.getCanonicalPath();
-            String canonicalBasePath = baseDir.getCanonicalPath();
-
-            // Ensure the file is within the project directory
-            boolean isValid = canonicalFilePath.startsWith(canonicalBasePath + java.io.File.separator)
-                || canonicalFilePath.equals(canonicalBasePath);
-
-            if (!isValid) {
-                LOG.warn("[UndoFileHandler] File path outside project directory: " + filePath +
-                    " (canonical: " + canonicalFilePath + ", base: " + canonicalBasePath + ")");
-            }
-
-            return isValid;
-        } catch (java.io.IOException e) {
-            LOG.warn("[UndoFileHandler] Failed to validate path: " + e.getMessage());
-            return false;
+        boolean isValid = WslPathUtil.isPathWithinDirectory(filePath, projectBasePath);
+        if (!isValid) {
+            LOG.warn("[UndoFileHandler] File path outside project directory: " + filePath);
         }
+        return isValid;
     }
 
     private void handleUndoFileChanges(String content) {
@@ -223,7 +196,7 @@ public class UndoFileHandler extends BaseMessageHandler {
     }
 
     private void deleteFile(String filePath) throws Exception {
-        VirtualFile file = LocalFileSystem.getInstance().findFileByPath(filePath);
+        VirtualFile file = LocalFileSystem.getInstance().findFileByPath(WslPathUtil.toVfsPath(filePath));
         if (file == null || !file.exists()) {
             LOG.warn("[UndoFileHandler] File not found for deletion: " + filePath);
             // File already doesn't exist, treat as success
@@ -250,7 +223,7 @@ public class UndoFileHandler extends BaseMessageHandler {
     }
 
     private void reverseEdits(String filePath, JsonArray operations) throws Exception {
-        VirtualFile file = LocalFileSystem.getInstance().findFileByPath(filePath);
+        VirtualFile file = LocalFileSystem.getInstance().findFileByPath(WslPathUtil.toVfsPath(filePath));
         if (file == null || !file.exists()) {
             throw new Exception("File not found: " + filePath);
         }

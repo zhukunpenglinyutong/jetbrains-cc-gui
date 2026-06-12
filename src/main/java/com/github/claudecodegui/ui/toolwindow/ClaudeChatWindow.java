@@ -56,6 +56,12 @@ public class ClaudeChatWindow {
     private Content parentContent;
     private String originalTabName;
     private volatile String sessionId = null;
+    // Stable PermissionService routing key, assigned once at construction.
+    // Kept separate from sessionId, which is overwritten with AI session IDs
+    // (onSessionIdReceived) and would otherwise break dispose-time cleanup and
+    // clearPermissionDecisionMemory(), both of which must reach the instance
+    // the bridges actually route permission requests to.
+    private String permissionServiceKey = null;
 
     private JBCefBrowser browser;
     private ClaudeSession session;
@@ -65,6 +71,7 @@ public class ClaudeChatWindow {
     private volatile boolean disposed = false;
     private volatile boolean initialized = false;
     private volatile boolean frontendReady = false;
+    private final PendingCodeSnippetBuffer pendingCodeSnippetBuffer = new PendingCodeSnippetBuffer();
     private volatile boolean slashCommandsFetched = false;
     private final AtomicBoolean restoredHistoryLoadStarted = new AtomicBoolean(false);
 
@@ -136,7 +143,8 @@ public class ClaudeChatWindow {
         chatWindowDelegate.loadNodePathFromSettings();
         chatWindowDelegate.syncActiveProvider();
         chatWindowDelegate.initializeHandlers();
-        this.sessionId = chatWindowDelegate.setupPermissionService();
+        this.permissionServiceKey = chatWindowDelegate.setupPermissionService();
+        this.sessionId = this.permissionServiceKey;
 
         this.sessionLifecycleManager = new SessionLifecycleManager(new SessionLifecycleManager.SessionHost() {
             @Override
@@ -183,8 +191,8 @@ public class ClaudeChatWindow {
             @Override
             public void clearPermissionDecisionMemory() {
                 try {
-                    if (sessionId != null && !sessionId.isEmpty()) {
-                        PermissionService permissionService = PermissionService.getInstance(project, sessionId);
+                    if (permissionServiceKey != null && !permissionServiceKey.isEmpty()) {
+                        PermissionService permissionService = PermissionService.getInstance(project, permissionServiceKey);
                         permissionService.clearDecisionMemory();
                     }
                 } catch (Exception e) {
@@ -426,7 +434,22 @@ public class ClaudeChatWindow {
     }
 
     public void addCodeSnippetFromExternal(String selectionInfo) {
-        addCodeSnippet(selectionInfo);
+        if (selectionInfo == null || selectionInfo.isEmpty()) {
+            return;
+        }
+        // offer() returns the snippet to emit now, or null when it was deferred
+        // until the frontend signals readiness (see flushPendingCodeSnippet).
+        String toEmit = pendingCodeSnippetBuffer.offer(selectionInfo, frontendReady);
+        if (toEmit != null) {
+            addCodeSnippet(toEmit);
+        }
+    }
+
+    private void flushPendingCodeSnippet() {
+        String snippet = pendingCodeSnippetBuffer.takePending();
+        if (snippet != null) {
+            addCodeSnippet(snippet);
+        }
     }
 
     public void updateTabStatus(ChatWindowDelegate.TabAnswerStatus status) {
@@ -551,6 +574,13 @@ public class ClaudeChatWindow {
     // ==================== Session Delegates ====================
 
     private void setupSessionCallbacks() {
+        // Re-sync the exposed sessionId with the freshly bound session so a stale
+        // AI session ID from a previous session is not exposed via getSessionId().
+        // Falling back to permissionServiceKey (never null after construction)
+        // keeps the exposed ID stable for consumers like DetachTabAction, which
+        // skips DetachedWindowManager registration on a null ID.
+        this.sessionId = resolveExposedSessionId(session.getSessionId(), this.permissionServiceKey);
+
         if (this.sessionCallbackAdapter != null) {
             this.sessionCallbackAdapter.deactivate();
         }
@@ -679,12 +709,40 @@ public class ClaudeChatWindow {
         return value != null && !value.trim().isEmpty();
     }
 
+    /**
+     * Decide what {@link #getSessionId()} exposes after session callbacks are
+     * (re-)bound: the bound session's own ID when it has one (history load),
+     * otherwise the stable permission-service key (fresh session) — never a
+     * stale ID left over from a previously bound session.
+     */
+    static String resolveExposedSessionId(String boundSessionId, String permissionServiceKey) {
+        return boundSessionId != null && !boundSessionId.trim().isEmpty()
+                ? boundSessionId
+                : permissionServiceKey;
+    }
+
     // ==================== Code Snippets ====================
 
     private void addCodeSnippet(String selectionInfo) {
         if (selectionInfo != null && !selectionInfo.isEmpty()) {
+            // Ensure the browser has focus so the frontend can focus the input field
+            if (browser != null) {
+                browser.getComponent().requestFocus();
+            }
             callJavaScript("addCodeSnippet", JsUtils.escapeJs(selectionInfo));
         }
+    }
+
+    /**
+     * Focus the chat input field in the frontend.
+     * Called when Ctrl+Alt+K activates the panel without a selection.
+     */
+    public void focusInputPane() {
+        if (disposed || browser == null) {
+            return;
+        }
+        browser.getComponent().requestFocus();
+        executeJavaScriptCode("window.focusChatInput?.()");
     }
 
     // ==================== Dispose ====================
@@ -710,13 +768,13 @@ public class ClaudeChatWindow {
         webviewWatchdog.stop();
 
         try {
-            if (this.sessionId != null && !this.sessionId.isEmpty()) {
-                PermissionService permissionService = PermissionService.getInstance(project, this.sessionId);
+            if (this.permissionServiceKey != null && !this.permissionServiceKey.isEmpty()) {
+                PermissionService permissionService = PermissionService.getInstance(project, this.permissionServiceKey);
                 permissionService.unregisterDialogShower(project);
                 permissionService.unregisterAskUserQuestionDialogShower(project);
                 permissionService.unregisterPlanApprovalDialogShower(project);
-                PermissionService.removeInstance(this.sessionId);
-                LOG.info("Removed PermissionService instance for sessionId: " + this.sessionId);
+                PermissionService.removeInstance(this.permissionServiceKey);
+                LOG.info("Removed PermissionService instance for key: " + this.permissionServiceKey);
             }
         } catch (Exception e) {
             LOG.warn("Failed to unregister dialog showers or remove session instance: " + e.getMessage());
@@ -841,6 +899,9 @@ public class ClaudeChatWindow {
             @Override
             public void setFrontendReady(boolean ready) {
                 frontendReady = ready;
+                if (ready) {
+                    flushPendingCodeSnippet();
+                }
             }
         };
     }
@@ -970,6 +1031,9 @@ public class ClaudeChatWindow {
             @Override
             public void setFrontendReady(boolean ready) {
                 frontendReady = ready;
+                if (ready) {
+                    flushPendingCodeSnippet();
+                }
             }
 
             @Override

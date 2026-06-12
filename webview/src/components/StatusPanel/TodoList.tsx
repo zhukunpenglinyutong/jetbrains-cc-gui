@@ -20,13 +20,21 @@ const TodoList = memo(({ todos }: TodoListProps) => {
         const status = todo.status ?? 'pending';
         const statusClass = statusClassMap[status] ?? '';
         const iconClass = statusIconMap[status] ?? '';
+        const hasBlockedBy = todo.blockedBy && todo.blockedBy.length > 0;
 
         return (
           <div key={todo.id ?? index} className={`status-panel-todo-item ${statusClass}`}>
             <div className={`status-panel-todo-icon ${statusClass}`}>
               <span className={`codicon ${iconClass}`} />
             </div>
-            <div className="status-panel-todo-content">{todo.content}</div>
+            <div className="status-panel-todo-content">
+              {todo.content}
+              {hasBlockedBy && (
+                <span className="status-panel-todo-blocked" title={t('statusPanel.blockedBy', { ids: todo.blockedBy!.join(', ') })}>
+                  {' '}<span className="codicon codicon-circle-slash" />{todo.blockedBy!.map((id) => `#${id}`).join(',')}
+                </span>
+              )}
+            </div>
           </div>
         );
       })}

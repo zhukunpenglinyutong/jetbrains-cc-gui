@@ -3,6 +3,8 @@
  * Contains all configuration constants and security whitelists
  */
 
+import { dirname } from 'path';
+
 // ============================================================================
 // Timeout configuration
 // ============================================================================
@@ -142,6 +144,9 @@ function enhancePath(currentPath) {
 
   const separator = process.platform === 'win32' ? ';' : ':';
   const additionalPaths = [
+    // node's own bin directory — ensures npx (and other node tools) are found even when
+    // the bridge is launched via an absolute node path that isn't on the inherited PATH
+    dirname(process.execPath),
     `${home}/.local/bin`,     // Python / uv / pip (uvx, uv, etc.)
     `${home}/.cargo/bin`,     // Rust / cargo
   ];

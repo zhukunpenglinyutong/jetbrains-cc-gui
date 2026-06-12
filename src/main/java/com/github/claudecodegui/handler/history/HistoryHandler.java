@@ -24,7 +24,8 @@ public class HistoryHandler extends BaseMessageHandler {
             "update_title",    // Update session title
             "delete_title",    // Delete orphaned custom title (B-011)
             "deep_search_history", // Deep search (clear cache and reload)
-            "load_subagent_session" // Load Claude Code sidechain Agent process log
+            "load_subagent_session", // Load Claude Code sidechain Agent process log
+            "convert_to_cli_session" // Convert sidechain session to CLI-recognizable session
     };
 
     // Session load callback interface
@@ -41,6 +42,7 @@ public class HistoryHandler extends BaseMessageHandler {
     private final HistoryMessageInjector historyMessageInjector;
     private final HistoryMetadataService historyMetadataService;
     private final SubagentHistoryService subagentHistoryService;
+    private final SessionConversionService sessionConversionService;
 
     public HistoryHandler(HandlerContext context) {
         super(context);
@@ -51,6 +53,7 @@ public class HistoryHandler extends BaseMessageHandler {
         this.historyMessageInjector = new HistoryMessageInjector(context);
         this.historyMetadataService = new HistoryMetadataService(context, nodeJsServiceCaller);
         this.subagentHistoryService = new SubagentHistoryService(context);
+        this.sessionConversionService = new SessionConversionService(context);
     }
 
     public void setSessionLoadCallback(SessionLoadCallback callback) {
@@ -106,6 +109,12 @@ public class HistoryHandler extends BaseMessageHandler {
             case "load_subagent_session":
                 LOG.debug("[HistoryHandler] 处理: load_subagent_session");
                 subagentHistoryService.handleLoadSubagentSession(content);
+                return true;
+            case "convert_to_cli_session":
+                LOG.debug("[HistoryHandler] 处理: convert_to_cli_session");
+                String conversionProjectPath = this.context.getProject() != null
+                        ? this.context.getProject().getBasePath() : null;
+                this.sessionConversionService.convertSdkSession(content, conversionProjectPath);
                 return true;
             default:
                 return false;

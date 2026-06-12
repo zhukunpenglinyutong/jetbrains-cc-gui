@@ -219,16 +219,32 @@ public class NpmPermissionHelper {
 
     /**
      * Builds an npm install command with permission fix strategies.
+     *
+     * <p>Use the {@link #buildInstallCommandWithFallback(String, String, List, int)} overload
+     * when the prefix path must be passed as a raw string (e.g. a WSL Unix path like
+     * {@code /home/user/.codemoss/...}) to avoid Windows {@link java.nio.file.Path#toString()}
+     * converting forward slashes to backslashes.
      */
     public static List<String> buildInstallCommandWithFallback(
             String npmPath, Path sdkDir, List<String> packages, int retryAttempt) {
+        return buildInstallCommandWithFallback(npmPath, sdkDir.toString(), packages, retryAttempt);
+    }
+
+    /**
+     * Builds an npm install command with permission fix strategies.
+     * Accepts the {@code --prefix} value as a plain string so callers can supply a
+     * WSL Unix-style path (e.g. {@code /home/user/.codemoss/dependencies/claude-sdk})
+     * without it being mangled by {@link java.nio.file.Path#toString()} on Windows.
+     */
+    public static List<String> buildInstallCommandWithFallback(
+            String npmPath, String prefixPath, List<String> packages, int retryAttempt) {
 
         List<String> command = new ArrayList<>();
         command.add(npmPath);
         command.add("install");
         command.add("--include=optional");
         command.add("--prefix");
-        command.add(sdkDir.toString());
+        command.add(prefixPath);
 
         // Second retry: use --force to overwrite
         if (retryAttempt > 0) {

@@ -551,3 +551,117 @@
 .history-copy-id-btn.failed:hover {
     background-color: color-mix(in srgb, var(--color-error) 15%, transparent);
 }
+
+/* Entrypoint badge styles - generic base style */
+.history-entrypoint-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border: 1px solid;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1;
+
+    .codicon {
+        font-size: 12px;
+    }
+}
+
+/* SDK-CLI badge (orange) */
+.history-entrypoint-badge.history-entrypoint-sdk-cli {
+    background-color: var(--color-entrypoint-sdk-bg);
+    border-color: var(--color-entrypoint-sdk-border);
+    color: var(--color-entrypoint-sdk-text);
+}
+
+/* VS Code badge (purple) */
+.history-entrypoint-badge.history-entrypoint-claude-vscode {
+    background-color: var(--color-entrypoint-vscode-bg);
+    border-color: var(--color-entrypoint-vscode-border);
+    color: var(--color-entrypoint-vscode-text);
+}
+
+/* Fallback for unknown entrypoints (gray) */
+.history-entrypoint-badge:not(.history-entrypoint-sdk-cli):not(.history-entrypoint-claude-vscode) {
+    background-color: var(--color-entrypoint-unknown-bg);
+    border-color: var(--color-entrypoint-unknown-border);
+    color: var(--color-entrypoint-unknown-text);
+}
+
+/* Convert to CLI button styles - generic */
+.history-convert-btn {
+    background: transparent;
+    border: 1px solid;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 10px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    line-height: 1;
+    white-space: nowrap;
+    margin-left: 4px;
+
+    .codicon {
+        font-size: 12px;
+    }
+
+    &:hover {
+        transform: translateY(-1px);
+    }
+
+    &:active {
+        transform: translateY(0) scale(0.96);
+    }
+}
+
+/* SDK-CLI convert button (blue) */
+.history-convert-btn.history-convert-sdk-cli {
+    border-color: var(--color-convert-sdk-border);
+    color: var(--color-convert-sdk-text);
+
+    &:hover {
+        background-color: var(--color-convert-sdk-hover-bg);
+        border-color: var(--color-convert-sdk-hover-border);
+    }
+
+    &:active {
+        background-color: var(--color-convert-sdk-active-bg);
+    }
+}
+
+/* VS Code convert button (purple) */
+.history-convert-btn.history-convert-claude-vscode {
+    border-color: var(--color-convert-vscode-border);
+    color: var(--color-convert-vscode-text);
+
+    &:hover {
+        background-color: var(--color-convert-vscode-hover-bg);
+        border-color: var(--color-convert-vscode-hover-border);
+    }
+
+    &:active {
+        background-color: var(--color-convert-vscode-active-bg);
+    }
+}
+
+/* Fallback convert button (gray) */
+.history-convert-btn:not(.history-convert-sdk-cli):not(.history-convert-claude-vscode) {
+    border-color: var(--color-convert-unknown-border);
+    color: var(--color-convert-unknown-text);
+
+    &:hover {
+        background-color: var(--color-convert-unknown-hover-bg);
+        border-color: var(--color-convert-unknown-hover-border);
+    }
+
+    &:active {
+        background-color: var(--color-convert-unknown-active-bg);
+    }
+}

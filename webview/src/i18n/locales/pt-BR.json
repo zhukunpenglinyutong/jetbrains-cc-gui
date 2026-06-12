@@ -91,6 +91,8 @@
     "streamingConnected": "{{provider}} conectado, entendendo sua pergunta",
     "showEarlierMessages": "Mostrar {{count}} mensagens anteriores",
     "totalDuration": "Esta resposta levou",
+    "tokenUsage": "{{input}} entrada / {{output}} saída",
+    "tokenUsageDetail": "Total do turno — entrada {{input}} · gravação de cache {{cacheWrite}} · leitura de cache {{cacheRead}} · saída {{output}}",
     "search": {
       "ariaLabel": "Pesquisar na conversa",
       "placeholder": "Pesquisar na conversa…",
@@ -158,6 +160,11 @@
         "hintText": "para obter o caminho real do executável Node.js. Deixe vazio para detecção automática.",
         "versionTooLow": "A versão do Node.js é muito baixa. O plugin requer v{{minVersion}} ou superior para funcionar corretamente"
       },
+      "claudeCliPath": {
+        "label": "Caminho do CLI do Claude (substituição)",
+        "placeholder": "ex. /usr/local/bin/claude — deixe vazio para usar o SDK integrado",
+        "hint": "Opcional. Quando definido, o plugin executa este binário em vez do @anthropic-ai/claude-agent-sdk integrado. O daemon reinicia ao salvar."
+      },
       "workingDirectory": {
         "label": "Diretório de Trabalho",
         "placeholder": "ex: projeto1 ou deixe vazio para usar a raiz do projeto",
@@ -173,16 +180,28 @@
         "level6": "Muito Grande (140%)"
       },
       "editorFont": {
-        "label": "Fonte",
-        "hint": "Aqui você altera a fonte da interface do plugin; o tamanho e o espaçamento entre linhas continuam seguindo o editor.",
-        "followOption": "Seguir editor ({{font}})",
-        "customOption": "Arquivo de fonte personalizado",
-        "customPathLabel": "Caminho do arquivo de fonte",
-        "customPathPlaceholder": "Escolha ou digite o caminho de um arquivo .ttf / .otf",
+        "label": "Fonte da UI",
+        "hint": "Aqui você altera a fonte da interface do plugin; o código pode usar uma fonte separada.",
+        "followOption": "Seguir a fonte UI do IDEA ({{font}})",
+        "customOption": "Arquivo de fonte da UI personalizado",
+        "customPathLabel": "Caminho do arquivo de fonte da UI",
+        "customPathPlaceholder": "Escolha ou digite o caminho de um arquivo .ttf / .otf para a fonte da UI",
         "browse": "Procurar",
-        "warningUnavailable": "A fonte está indisponível, usando a fonte do editor",
+        "warningUnavailable": "A fonte da UI está indisponível, usando a fonte da UI do IDEA",
+        "statusFollowEditor": "Usando atualmente a fonte da UI do IDEA: {{font}}",
+        "statusCustom": "Usando atualmente a fonte da UI personalizada: {{font}}"
+      },
+      "codeFont": {
+        "label": "Fonte de código",
+        "hint": "O código Markdown e os blocos de comando usam esta fonte.",
+        "followOption": "Seguir a fonte do editor ({{font}})",
+        "customOption": "Arquivo de fonte de código personalizado",
+        "customPathLabel": "Caminho do arquivo de fonte de código",
+        "customPathPlaceholder": "Escolha ou digite o caminho de um arquivo .ttf / .otf para a fonte de código",
+        "browse": "Procurar",
+        "warningUnavailable": "A fonte de código está indisponível, usando a fonte do editor",
         "statusFollowEditor": "Usando atualmente a fonte do editor: {{font}}",
-        "statusCustom": "Usando atualmente a fonte personalizada: {{font}}"
+        "statusCustom": "Usando atualmente a fonte de código personalizada: {{font}}"
       },
       "streaming": {
         "label": "Streaming",
@@ -904,6 +923,12 @@
     "copySessionId": "Copiar ID da sessão para CLI resume",
     "sessionIdCopied": "ID da sessão copiado",
     "copyFailed": "Falha ao copiar",
+    "convertToCliSession": "Converter para sessão reconhecida pelo CLI",
+    "convertButton": "Converter p/ CLI",
+    "convertSuccess": "Sessão convertida para ser reconhecida pelo CLI",
+    "convertFailed": "Falha na conversão",
+    "confirmConvert": "Converter para sessão CLI?",
+    "convertConfirmMessage": "Isso modificará o entrypoint da sessão para torná-la visível na lista /resume do CLI do Claude Code.",
     "timeAgo": {
       "yearsAgo": "anos atrás",
       "monthsAgo": "meses atrás",
@@ -911,6 +936,26 @@
       "hoursAgo": "horas atrás",
       "minutesAgo": "minutos atrás",
       "secondsAgo": "segundos atrás"
+    },
+    "conversionErrors": {
+      "INVALID_SESSION_ID": "ID de sessão inválido",
+      "SESSION_ACTIVE": "Não é possível converter a sessão atualmente ativa. Inicie uma nova sessão primeiro e depois converta esta",
+      "SESSION_NOT_FOUND": "Arquivo de sessão não encontrado",
+      "FILE_NOT_EXIST": "O arquivo de sessão não existe",
+      "FILE_LOCKED": "O arquivo de sessão está sendo acessado por outro processo",
+      "NOT_SDK_SESSION": "Esta sessão não foi criada pelo SDK (entrypoint não é sdk-cli)",
+      "ALREADY_CLI_SESSION": "Esta sessão já é uma sessão CLI",
+      "CONVERSION_FAILED": "Falha na conversão, tente novamente mais tarde"
+    },
+    "entrypointLabel": {
+      "sdk-cli": "Sessão SDK",
+      "claude-vscode": "VS Code",
+      "remote": "Remoto"
+    },
+    "entrypointTooltip": {
+      "sdk-cli": "Esta sessão foi criada pelo plugin via SDK e não é mostrada no CLI por padrão. Clique em 'Converter para CLI' para fazê-la aparecer na lista /resume do CLI do terminal",
+      "claude-vscode": "Esta sessão foi criada pela extensão do VS Code e não é mostrada no CLI por padrão. Clique em 'Converter para CLI' para fazê-la aparecer na lista /resume do CLI do terminal",
+      "remote": "Esta sessão foi criada por uma instância remota do Claude Code"
     }
   },
   "permission": {
@@ -1476,6 +1521,10 @@
       "opus48": {
         "label": "Opus 4.8",
         "description": "Opus 4.8 · O mais recente e capaz"
+      },
+      "fable5": {
+        "label": "Fable 5",
+        "description": "Fable 5 · O mais poderoso · classe Mythos"
       }
     },
     "longContext": {

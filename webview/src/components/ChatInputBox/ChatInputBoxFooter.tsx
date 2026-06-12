@@ -1,5 +1,5 @@
 import type { TFunction } from 'i18next';
-import type { DropdownItemData, DropdownPosition, PermissionMode, ReasoningEffort, SelectedAgent } from './types.js';
+import type { CodexFastMode, DropdownItemData, DropdownPosition, PermissionMode, ReasoningEffort, SelectedAgent } from './types.js';
 import type { TooltipState } from './hooks/useTooltip.js';
 import { ButtonArea } from './ButtonArea.js';
 import { CompletionDropdown } from './Dropdown/index.js';
@@ -25,12 +25,14 @@ export function ChatInputBoxFooter({
   permissionMode,
   currentProvider,
   reasoningEffort,
+  codexFastMode,
   onSubmit,
   onStop,
   onModeSelect,
   onModelSelect,
   onProviderSelect,
   onReasoningChange,
+  onCodexFastModeChange,
   onEnhancePrompt,
   alwaysThinkingEnabled,
   onToggleThinking,
@@ -60,12 +62,14 @@ export function ChatInputBoxFooter({
   permissionMode: PermissionMode;
   currentProvider: string;
   reasoningEffort: ReasoningEffort;
+  codexFastMode?: CodexFastMode;
   onSubmit: () => void;
   onStop?: () => void;
   onModeSelect?: (mode: PermissionMode) => void;
   onModelSelect?: (modelId: string) => void;
   onProviderSelect?: (providerId: string) => void;
   onReasoningChange?: (effort: ReasoningEffort) => void;
+  onCodexFastModeChange?: (mode: CodexFastMode) => void;
   onEnhancePrompt: () => void;
   alwaysThinkingEnabled?: boolean;
   onToggleThinking?: (enabled: boolean) => void;
@@ -107,12 +111,14 @@ export function ChatInputBoxFooter({
         permissionMode={permissionMode}
         currentProvider={currentProvider}
         reasoningEffort={reasoningEffort}
+        codexFastMode={codexFastMode}
         onSubmit={onSubmit}
         onStop={onStop}
         onModeSelect={onModeSelect}
         onModelSelect={onModelSelect}
         onProviderSelect={onProviderSelect}
         onReasoningChange={onReasoningChange}
+        onCodexFastModeChange={onCodexFastModeChange}
         onEnhancePrompt={onEnhancePrompt}
         alwaysThinkingEnabled={alwaysThinkingEnabled}
         onToggleThinking={onToggleThinking}
@@ -231,4 +237,3 @@ export function ChatInputBoxFooter({
     </>
   );
 }
-

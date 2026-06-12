@@ -4,8 +4,41 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
+import {
+  buildCliEnv,
+  buildWebviewControlledSettingsOverride,
+  isWebviewControlledEnvVar,
+} from './api-config.js';
 
-const API_CONFIG_MODULE = path.resolve('ai-bridge/config/api-config.js');
+const API_CONFIG_MODULE = pathToFileURL(path.resolve('ai-bridge/config/api-config.js')).href;
+
+function buildChildEnv(homeDir) {
+  const env = {
+    ...process.env,
+    HOME: homeDir,
+    USERPROFILE: homeDir,
+  };
+
+  for (const key of [
+    'ANTHROPIC_API_KEY',
+    'ANTHROPIC_AUTH_TOKEN',
+    'ANTHROPIC_BASE_URL',
+    'ANTHROPIC_API_URL',
+    'HTTP_PROXY',
+    'HTTPS_PROXY',
+    'NO_PROXY',
+    'http_proxy',
+    'https_proxy',
+    'no_proxy',
+    'NODE_EXTRA_CA_CERTS',
+    'NODE_TLS_REJECT_UNAUTHORIZED',
+  ]) {
+    delete env[key];
+  }
+
+  return env;
+}
 
 function runSetupApiKey(homeDir) {
   const script = `
@@ -23,10 +56,7 @@ function runSetupApiKey(homeDir) {
     ['--input-type=module', '--eval', script],
     {
       cwd: path.resolve('.'),
-      env: {
-        ...process.env,
-        HOME: homeDir,
-      },
+      env: buildChildEnv(homeDir),
       encoding: 'utf8',
     }
   );
@@ -50,10 +80,7 @@ function runInjectNetworkEnv(homeDir) {
     ['--input-type=module', '--eval', script],
     {
       cwd: path.resolve('.'),
-      env: {
-        ...process.env,
-        HOME: homeDir,
-      },
+      env: buildChildEnv(homeDir),
       encoding: 'utf8',
     }
   );
@@ -99,10 +126,7 @@ function runResyncNetworkEnv(homeDir) {
     ['--input-type=module', '--eval', script],
     {
       cwd: path.resolve('.'),
-      env: {
-        ...process.env,
-        HOME: homeDir,
-      },
+      env: buildChildEnv(homeDir),
       encoding: 'utf8',
     }
   );
@@ -125,6 +149,84 @@ function writeCodemossClaudeConfig(homeDir, current, providers = {}) {
     'utf8'
   );
 }
+
+test('isWebviewControlledEnvVar classifies model, context, and reasoning controls correctly', () => {
+  assert.equal(isWebviewControlledEnvVar('ANTHROPIC_MODEL'), true);
+  assert.equal(isWebviewControlledEnvVar('anthropic_model'), true); // case-insensitive
+  assert.equal(isWebviewControlledEnvVar('CLAUDE_CODE_EFFORT_LEVEL'), true);
+  assert.equal(isWebviewControlledEnvVar('MAX_THINKING_TOKENS'), true);
+  assert.equal(isWebviewControlledEnvVar('CLAUDE_CODE_DISABLE_1M_CONTEXT'), true);
+  assert.equal(isWebviewControlledEnvVar('HTTPS_PROXY'), false);
+  assert.equal(isWebviewControlledEnvVar('ANTHROPIC_API_KEY'), false);
+});
+
+test('buildCliEnv preserves current model env but strips stale CLI override env vars', () => {
+  const previous = {
+    ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL,
+    ANTHROPIC_DEFAULT_SONNET_MODEL: process.env.ANTHROPIC_DEFAULT_SONNET_MODEL,
+    CLAUDE_CODE_EFFORT_LEVEL: process.env.CLAUDE_CODE_EFFORT_LEVEL,
+    MAX_THINKING_TOKENS: process.env.MAX_THINKING_TOKENS,
+    CLAUDE_CODE_DISABLE_1M_CONTEXT: process.env.CLAUDE_CODE_DISABLE_1M_CONTEXT,
+    HTTPS_PROXY: process.env.HTTPS_PROXY,
+    CLAUDE_AGENT_SDK_VERSION: process.env.CLAUDE_AGENT_SDK_VERSION,
+  };
+
+  try {
+    process.env.ANTHROPIC_MODEL = 'current-webview-model';
+    process.env.ANTHROPIC_DEFAULT_SONNET_MODEL = 'current-webview-model';
+    process.env.CLAUDE_CODE_EFFORT_LEVEL = 'max';
+    process.env.MAX_THINKING_TOKENS = '64000';
+    process.env.CLAUDE_CODE_DISABLE_1M_CONTEXT = '1';
+    process.env.HTTPS_PROXY = 'http://proxy.example.com:8080';
+    process.env.CLAUDE_AGENT_SDK_VERSION = 'should-not-leak';
+
+    const env = buildCliEnv();
+
+    assert.equal(env.ANTHROPIC_MODEL, 'current-webview-model');
+    assert.equal(env.ANTHROPIC_DEFAULT_SONNET_MODEL, 'current-webview-model');
+    assert.equal(env.CLAUDE_CODE_EFFORT_LEVEL, undefined);
+    assert.equal(env.MAX_THINKING_TOKENS, undefined);
+    assert.equal(env.CLAUDE_CODE_DISABLE_1M_CONTEXT, undefined);
+    assert.equal(env.CLAUDE_AGENT_SDK_VERSION, undefined);
+    assert.equal(env.HTTPS_PROXY, 'http://proxy.example.com:8080');
+    assert.equal(env.CLAUDE_CODE_ENTRYPOINT, 'cli');
+    assert.equal(env.USER_TYPE, 'external');
+    assert.equal(env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST, '1');
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
+});
+
+test('buildWebviewControlledSettingsOverride neutralizes Claude CLI settings env precedence', () => {
+  assert.deepEqual(buildWebviewControlledSettingsOverride('claude-sonnet-4-6[1m]'), {
+    env: {
+      CLAUDE_CODE_EFFORT_LEVEL: '',
+      MAX_THINKING_TOKENS: '',
+      CLAUDE_CODE_DISABLE_1M_CONTEXT: '',
+    },
+  });
+
+  assert.deepEqual(buildWebviewControlledSettingsOverride('claude-sonnet-4-6'), {
+    env: {
+      CLAUDE_CODE_EFFORT_LEVEL: '',
+      MAX_THINKING_TOKENS: '',
+      CLAUDE_CODE_DISABLE_1M_CONTEXT: '1',
+    },
+  });
+
+  assert.deepEqual(buildWebviewControlledSettingsOverride(), {
+    env: {
+      CLAUDE_CODE_EFFORT_LEVEL: '',
+      MAX_THINKING_TOKENS: '',
+    },
+  });
+});
 
 test('setupApiKey does not fall back to Claude CLI credentials on disk', () => {
   const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-api-config-'));

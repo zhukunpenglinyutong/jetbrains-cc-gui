@@ -1,3 +1,93 @@
+##### **2026年6月11日（v0.4.5）**
+
+English:
+
+✨ Features
+- Add Codex fast mode: new "Fast" speed mode in the model selector that maps to `service_tier=fast` for supported Codex models; normal mode preserves Codex defaults (by @llanc)
+- Add Claude Code CLI path override: new "Claude CLI Path (override)" setting in Settings → Environment lets you point the plugin at a specific `claude` binary; daemon restarts automatically on save (by @senfix, co-authored with Claude)
+- Add separate Code Font setting (Settings → Basic → Appearance), independent from the UI font: Markdown code and Bash command/output use the code font; chat text follows the IDEA UI font; both accept a custom `.ttf` / `.otf` file (by @Luna5ama, closes #1240)
+- Add Codex subscription quota panel in the model selector: shows ChatGPT Plus/Pro quota status with dual-source fetching (session message + ChatGPT API), snapshot caching, and a dedicated message for API-key mode (by @Luna5ama)
+- Add Shift+Esc shortcut to hide the CCG tool window panel (intercepted at JS level via JBCefJSQuery since JCEF consumes the key natively) (by @Cyber0xFE)
+- Add Ctrl+Alt+K to always open the CCG panel regardless of editor selection; auto-focus the input field on activation (by @Cyber0xFE)
+- Add per-message token consumption indicator at the bottom of each turn showing whole-turn aggregated input/output token count (by @suzhelan, refined by @zkpaiminmin)
+- Add SDK session to CLI session conversion: sessions created via SDK (sdk-cli / claude-vscode entrypoint) can be converted to CLI sessions, making them visible in the `/resume` list; shown as entrypoint badges in history with a "Convert to CLI" action (by @gadfly3173)
+- Add Claude Fable 5 model support with Mythos-class capabilities; add Fable 5 pricing ($10/$50 per 1M tokens) (by @zkpaiminmin)
+- Integrate Claude Code Task tracking API (TaskCreate / TaskUpdate / TaskGet / TaskList): task management tools render as collapsible agent groups with absorbed nested tool calls and persisted expand/collapse state; task list in StatusPanel supports both legacy `todowrite` and new Task API tasks (by @gadfly3173, co-authored with @zhuzhihang)
+
+🐛 Fixes
+- Fix full WSL2 compatibility suite: install Claude SDK into WSL filesystem; handle raw/forward-slash UNC WSL paths; propagate permission env vars across Windows→WSL boundary via WSLENV; merge (not replace) probed login-shell PATH to preserve Homebrew/pyenv/sdkman; migrate path handling to `WslPathUtil`; resolve Claude home at call time in session conversion (by @Gazoon007)
+- Fix tool spinner stuck permanently after stream end: preserve `tool_result` messages from the pending snapshot when the rAF-batched update is cancelled; decouple recovery from the assistant-patch branch so it fires even with no streaming assistant message (by @Cyber0xFE, hardened by @zkpaiminmin)
+- Fix code snippet sent before frontend is ready: replace retry-based approach with `PendingCodeSnippetBuffer` (AtomicReference) that flushes on the frontend-ready signal, eliminating check-then-act race (by @Cyber0xFE, refactored by @zkpaiminmin)
+- Fix usage cost overstatement: deduplicate JSONL records by `message.id` (Claude Code writes each content block as its own line, inflating counts ~2×); correct Opus 4.5/4.6/4.7/4.8 pricing from legacy $15/$75 to $5/$25 per 1M tokens (by @t7r5fz7848-lab, re-applied by @zkpaiminmin)
+- Fix Bash output code font not applying: `.bash-output-text` leaf node was overridden by the global `*` selector; declare `font-family` directly on the leaf (by @zkpaiminmin)
+- Fix settings.json env vars silently overriding webview-selected reasoning effort, `MAX_THINKING_TOKENS`, and 1M context toggle: strip controlled vars from daemon and CLI child-process env; inject inline `--settings` override so the SDK respects per-turn UI selections (by @gadfly3173)
+- Fix selected reasoning effort not passed to SDK: include `reasoningEffort` in Claude send payloads; thread it through `SessionHandler` → `ClaudeSession` → `SessionSendService`; prefer requested value over session state (by @gadfly3173)
+- Fix Codex history tool UI disappearing after restart: unwrap normalized history raw payloads during session restore so tool_use, tool_result, command details, and image-only messages survive frontend transport (by @Luna5ama)
+- Fix node process submenu causing layout loop in the webview (by @gadfly3173)
+- Fix Codex fast mode overriding service tier in standard (non-fast) mode (by @llanc)
+- Fix Markdown links with spaces/special characters: decode percent-encoded and `file://` hrefs before opening in the IDE (by @moritzfl)
+- Fix per-message token display inconsistency: stamp `turnUsage` whole-turn aggregate at turn completion; frontend reads only `turnUsage` with a breakdown tooltip (by @zkpaiminmin)
+- Fix Codex quota cache not invalidating on account switch: call `invalidateCache()` on every `switchCodexProvider` path (by @zkpaiminmin)
+- Fix Codex quota showing wrong account data in API-key mode: skip OAuth quota lookup and show a dedicated API-key-mode message (by @zkpaiminmin)
+- Fix duplicate `tool_result` in stream-end snapshot recovery; align `[tool_result]` marker trimming (by @zkpaiminmin)
+- Fix command messages leaking into display on normalized history envelopes: pass `rawMessage` to `shouldFilterCommandMessage` (by @zkpaiminmin)
+- Fix Claude CLI path input blanked on validation failure: echo back the user's input instead of an empty string (by @zkpaiminmin)
+- Fix agent group absorbing wrong children after history reload: replace streaming-count-based grouping with a purely structural rule; fix `extractAccumulatedTasks` single-pass with per-message ID trust guard for parallel TaskCreate (by @zkpaiminmin)
+- Fix symlink escape in project-boundary check on native POSIX: restrict lexical WSL fallback to WSL paths only; native POSIX goes through `getCanonicalPath` (security) (by @zkpaiminmin)
+- Fix XSS via control-character-obfuscated `href` schemes (e.g. `java&#9;script:`): reject hrefs containing C0 control characters before scheme checks in the DOMPurify hook (security) (by @zkpaiminmin)
+
+🔧 Improvements
+- Enhance Bash output rendering with dedicated CSS classes for improved syntax distinction (by @Luna5ama)
+- Improve Codex quota fetching: dual-source (session message + ChatGPT API), snapshot caching with timeout, single shared `HttpClient`, unwrapped `CompletionException` for readable errors (by @Luna5ama, @zkpaiminmin)
+- Split env var groups into `MODEL_ROUTING_ENV_VARS` and `REASONING_CONTROL_ENV_VARS` for explicit treatment, preventing the two sets from drifting independently (by @gadfly3173)
+- Add Docker build support (`Dockerfile` + `.dockerignore`) for reproducible plugin distribution without a local Java/Node toolchain (by @senfix)
+- Replace emoji blocked marker in StatusPanel TodoList with `codicon-circle-slash` for consistency with the codicon icon system (by @zkpaiminmin)
+
+中文：
+
+✨ 新功能
+- 新增 Codex 快速模式：模型选择器新增「快速」速度模式，映射到 `service_tier=fast`；普通模式保持 Codex 默认行为（by @llanc）
+- 新增 Claude Code CLI 路径覆盖：设置 → 环境新增「Claude CLI Path (override)」，允许指定自定义 `claude` 可执行文件；保存后自动重启 daemon（by @senfix，与 Claude 共同开发）
+- 设置 → 基础 → 外观新增独立「代码字体」配置，与 UI 字体分离：Markdown 代码与 Bash 命令/输出使用代码字体，聊天文本跟随 IDEA UI 字体；两者均支持自定义 `.ttf` / `.otf` 文件（by @Luna5ama，关闭 #1240）
+- 新增 Codex 订阅配额面板：在模型选择器中显示 ChatGPT Plus/Pro 配额，双来源拉取（会话消息 + ChatGPT API），快照缓存，API 密钥模式专属提示（by @Luna5ama）
+- 新增 Shift+Esc 快捷键隐藏 CCG 工具窗口面板（通过 JBCefJSQuery 在 JS 层拦截，绕过 JCEF 原生键盘消费）（by @Cyber0xFE）
+- Ctrl+Alt+K 无论是否有代码选择均可打开 CCG 面板，激活时自动聚焦输入框（by @Cyber0xFE）
+- 每条消息底部新增 Token 消耗指示器，显示整轮聚合输入/输出 Token 数（by @suzhelan，@zkpaiminmin 优化）
+- 新增 SDK 会话转换为 CLI 会话：通过 SDK 创建的会话（sdk-cli / claude-vscode 入口）可转换为 CLI 会话，出现在 `/resume` 列表；历史列表显示入口徽章和「转换为 CLI」操作（by @gadfly3173）
+- 新增 Claude Fable 5 模型支持（Mythos 级），添加 Fable 5 定价（输入 $10/1M，输出 $50/1M）（by @zkpaiminmin）
+- 集成 Claude Code Task tracking API（TaskCreate / TaskUpdate / TaskGet / TaskList）：任务管理工具渲染为可折叠 Agent 分组，内含嵌套工具调用，展开/折叠状态持久化；StatusPanel 任务列表同时支持旧版 `todowrite` 和新 Task API（by @gadfly3173，@zhuzhihang 共同开发）
+
+🐛 修复
+- 修复 WSL2 全套兼容性问题：Claude SDK 安装到 WSL 文件系统；处理原始路径和正斜杠 UNC WSL 路径；通过 WSLENV 跨 Windows→WSL 边界传播权限环境变量；合并（而非替换）登录 Shell PATH，保留 Homebrew/pyenv/sdkman；路径处理迁移到 `WslPathUtil`；会话转换时按需解析 Claude home（by @Gazoon007）
+- 修复工具 spinner 在流结束后永久卡住：rAF 批量更新取消时保存待处理快照中的 `tool_result`；将恢复逻辑从 assistant-patch 分支解耦（by @Cyber0xFE，@zkpaiminmin 加固）
+- 修复代码片段在前端未就绪时被发送：用 `PendingCodeSnippetBuffer`（AtomicReference）替代重试机制，消除竞态（by @Cyber0xFE，@zkpaiminmin 重构）
+- 修复使用量统计高估：按 `message.id` 去重 JSONL 记录（每个内容块独立写行导致约 2× 膨胀）；将 Opus 4.5/4.6/4.7/4.8 定价从 $15/$75 修正为 $5/$25 /1M（by @t7r5fz7848-lab，@zkpaiminmin 重新适配）
+- 修复 Bash 输出代码字体未生效：`.bash-output-text` 叶子节点被全局 `*` 选择器覆盖，直接在叶子声明 `font-family`（by @zkpaiminmin）
+- 修复 settings.json 环境变量静默覆盖推理力度、`MAX_THINKING_TOKENS` 和 1M 上下文切换：从 daemon 和 CLI 子进程环境剥离相关变量；注入行内 `--settings` 覆盖（by @gadfly3173）
+- 修复选择的推理力度未传递给 SDK：在 Claude 发送 payload 中携带 `reasoningEffort`；通过 `SessionHandler` → `ClaudeSession` → `SessionSendService` 串联（by @gadfly3173）
+- 修复 Codex 历史工具 UI 重启后消失：恢复会话时解包归一化历史 raw payload（by @Luna5ama）
+- 修复 Node 进程子菜单导致 webview 布局死循环（by @gadfly3173）
+- 修复 Codex 快速模式在普通模式下错误覆盖 service_tier（by @llanc）
+- 修复含空格/特殊字符的 Markdown 路径链接无法打开：打开前解码 percent-encoded 和 `file://` href（by @moritzfl）
+- 修复每条消息 Token 显示语义不一致：对话轮次完成时填入 `turnUsage` 整轮聚合值，tooltip 分解全部四个值（by @zkpaiminmin）
+- 修复切换 Codex 账户时订阅配额缓存未失效（by @zkpaiminmin）
+- 修复 API 密钥模式下 Codex 配额显示错误账户数据，跳过 OAuth 配额查询（by @zkpaiminmin）
+- 修复流结束快照恢复中 `tool_result` 重复；对齐 `[tool_result]` 标记 trim 处理（by @zkpaiminmin）
+- 修复历史消息归一化封装时命令消息泄漏到显示（by @zkpaiminmin）
+- 修复 Claude CLI 路径验证失败时输入框被清空（by @zkpaiminmin）
+- 修复历史回放后 Agent 分组吸收错误子节点：改为纯结构化规则；`extractAccumulatedTasks` 单遍处理加并行 TaskCreate ID 冲突守卫（by @zkpaiminmin）
+- 修复原生 POSIX 上项目边界检查未解析软链接的逃逸问题，限制词法回退仅用于 WSL（安全）（by @zkpaiminmin）
+- 修复控制字符混淆 `href` XSS（如 `java&#9;script:`），在 DOMPurify hook 的 scheme 检查前拒绝含 C0 控制字符的 href（安全）（by @zkpaiminmin）
+
+🔧 改进
+- 为 Bash 输出渲染引入专用 CSS 类，改善语法区分度（by @Luna5ama）
+- 改进 Codex 配额拉取：双来源、带超时快照缓存、复用单个 `HttpClient`、unwrap `CompletionException`（by @Luna5ama，@zkpaiminmin）
+- 将环境变量拆分为 `MODEL_ROUTING_ENV_VARS` 和 `REASONING_CONTROL_ENV_VARS`，防止独立漂移（by @gadfly3173）
+- 新增 Docker 构建支持（`Dockerfile` + `.dockerignore`），无需本地工具链可复现发布包（by @senfix）
+- StatusPanel TodoList 中将 emoji 阻断标记替换为 `codicon-circle-slash`（by @zkpaiminmin）
+
+---
+
 ##### **2026年5月29日（v0.4.4）**
 
 English:

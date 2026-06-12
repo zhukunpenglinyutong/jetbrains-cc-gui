@@ -8,10 +8,11 @@ import {
   apply1MContextSuffix,
   strip1MContextSuffix,
 } from '../../components/ChatInputBox/types';
-import type { PermissionMode, ReasoningEffort } from '../../components/ChatInputBox/types';
+import type { CodexFastMode, PermissionMode, ReasoningEffort } from '../../components/ChatInputBox/types';
 
 const STORAGE_KEY = 'model-selection-state';
 const REASONING_VALUES = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+const CODEX_FAST_MODE_VALUES = ['normal', 'fast'] as const;
 
 const getCustomModels = (key: string): { id: string }[] => {
   try {
@@ -25,6 +26,9 @@ const getCustomModels = (key: string): { id: string }[] => {
 const isReasoningEffort = (value: unknown): value is ReasoningEffort =>
   typeof value === 'string' && (REASONING_VALUES as readonly string[]).includes(value);
 
+const isCodexFastMode = (value: unknown): value is CodexFastMode =>
+  typeof value === 'string' && (CODEX_FAST_MODE_VALUES as readonly string[]).includes(value);
+
 export interface UseModelStatePersistenceOptions {
   // Cross-slice load setters (run once on mount)
   setCurrentProvider: (value: string) => void;
@@ -35,6 +39,7 @@ export interface UseModelStatePersistenceOptions {
   setPermissionMode: (value: PermissionMode) => void;
   setLongContextEnabled: (value: boolean) => void;
   setReasoningEffort: (value: ReasoningEffort) => void;
+  setCodexFastMode: (value: CodexFastMode) => void;
   // Cross-slice save deps (re-saves on any change)
   currentProvider: string;
   selectedClaudeModel: string;
@@ -43,6 +48,7 @@ export interface UseModelStatePersistenceOptions {
   codexPermissionMode: PermissionMode;
   longContextEnabled: boolean;
   reasoningEffort: ReasoningEffort;
+  codexFastMode: CodexFastMode;
 }
 
 /**
@@ -51,7 +57,7 @@ export interface UseModelStatePersistenceOptions {
  *     to the backend (retrying until the JCEF bridge is ready).
  *  2. On change: re-save the snapshot to localStorage.
  *
- * Save uses `JSON.stringify` of the seven persisted keys; load applies
+ * Save uses `JSON.stringify` of the persisted keys; load applies
  * defensive validation (custom models lookup, permission mode allowlist,
  * reasoning effort allowlist) before invoking the slice setters.
  */
@@ -65,6 +71,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     setPermissionMode,
     setLongContextEnabled,
     setReasoningEffort,
+    setCodexFastMode,
     currentProvider,
     selectedClaudeModel,
     selectedCodexModel,
@@ -72,6 +79,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     codexPermissionMode,
     longContextEnabled,
     reasoningEffort,
+    codexFastMode,
   } = options;
 
   // Hydrate from localStorage and sync to backend (mount only).
@@ -86,6 +94,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
       let restoredClaudePermissionMode: PermissionMode = 'bypassPermissions';
       let restoredCodexPermissionMode: PermissionMode = 'default';
       let restoredLongContextEnabled = true;
+      let restoredCodexFastMode: CodexFastMode = 'normal';
 
       if (saved) {
         const state = JSON.parse(saved);
@@ -111,6 +120,10 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
 
         if (isReasoningEffort(state.reasoningEffort)) {
           setReasoningEffort(state.reasoningEffort);
+        }
+        if (isCodexFastMode(state.codexFastMode)) {
+          restoredCodexFastMode = state.codexFastMode;
+          setCodexFastMode(restoredCodexFastMode);
         }
 
         const savedClaudeCustomModels = getCustomModels('claude-custom-models');
@@ -152,6 +165,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
             : apply1MContextSuffix(restoredClaudeModel, restoredLongContextEnabled);
           sendBridgeEvent('set_model', modelToSync);
           sendBridgeEvent('set_mode', initialPermissionMode);
+          sendBridgeEvent('set_codex_fast_mode', restoredCodexFastMode);
         } else {
           syncRetryCount++;
           if (syncRetryCount < MAX_SYNC_RETRIES) {
@@ -177,6 +191,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
         codexPermissionMode,
         longContextEnabled,
         reasoningEffort,
+        codexFastMode,
       }));
     } catch {
       // Failed to save model selection state — non-fatal.
@@ -189,5 +204,6 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     codexPermissionMode,
     longContextEnabled,
     reasoningEffort,
+    codexFastMode,
   ]);
 }

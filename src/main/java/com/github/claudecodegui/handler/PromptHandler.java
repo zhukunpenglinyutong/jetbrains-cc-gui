@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
@@ -230,7 +231,7 @@ public class PromptHandler extends BaseMessageHandler {
             if (project != null && !project.isDisposed() && project.getBasePath() != null) {
                 projectInfo.addProperty("available", true);
                 projectInfo.addProperty("name", project.getName());
-                projectInfo.addProperty("path", project.getBasePath());
+                projectInfo.addProperty("path", NodeDetector.convertToWslPath(project.getBasePath()));
             } else {
                 projectInfo.addProperty("available", false);
                 projectInfo.addProperty("name", (String) null);
@@ -553,7 +554,7 @@ public class PromptHandler extends BaseMessageHandler {
                 VirtualFile initialDir = null;
                 String projectPath = context.getProject().getBasePath();
                 if (projectPath != null) {
-                    initialDir = LocalFileSystem.getInstance().findFileByPath(projectPath);
+                    initialDir = LocalFileSystem.getInstance().findFileByPath(NodeDetector.toVfsPath(projectPath));
                 }
 
                 // Show file chooser

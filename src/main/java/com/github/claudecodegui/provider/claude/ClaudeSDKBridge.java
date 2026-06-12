@@ -2,6 +2,7 @@ package com.github.claudecodegui.provider.claude;
 
 import com.google.gson.JsonObject;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.model.NodeDetectionResult;
 import com.github.claudecodegui.provider.common.BaseSDKBridge;
@@ -113,7 +114,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
      * Prewarm daemon asynchronously to reduce first-message latency.
      */
     public void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch) {
-        daemonCoordinator.prewarmDaemonAsync(cwd, runtimeSessionEpoch, null);
+        daemonCoordinator.prewarmDaemonAsync(normalizeCwdForNode(cwd), runtimeSessionEpoch, null);
     }
 
     /**
@@ -125,7 +126,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
      * @param sessionId The historical session ID to resume
      */
     public void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch, String sessionId) {
-        daemonCoordinator.prewarmDaemonAsync(cwd, runtimeSessionEpoch, sessionId);
+        daemonCoordinator.prewarmDaemonAsync(normalizeCwdForNode(cwd), runtimeSessionEpoch, sessionId);
     }
 
     public void resetPersistentRuntime(String runtimeSessionEpoch) {
@@ -402,10 +403,12 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             String reasoningEffort,
             MessageCallback callback
     ) {
+        String normalizedCwd = normalizeCwdForNode(cwd);
+
         // Try daemon mode first (avoids per-request Node.js process spawning)
         DaemonBridge db = daemonCoordinator.getDaemonBridge();
         if (db != null) {
-            return sendMessageViaDaemon(db, channelId, message, sessionId, runtimeSessionEpoch, cwd,
+            return sendMessageViaDaemon(db, channelId, message, sessionId, runtimeSessionEpoch, normalizedCwd,
                     attachments, permissionMode, model, openedFiles, agentPrompt,
                     streaming, disableThinking, reasoningEffort, callback);
         }
@@ -417,7 +420,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 message,
                 sessionId,
                 runtimeSessionEpoch,
-                cwd,
+                normalizedCwd,
                 attachments,
                 permissionMode,
                 model,
@@ -445,14 +448,21 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
      * Get MCP server connection status.
      */
     public CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd) {
-        return mcpQueryService.getMcpServerStatus(cwd);
+        return mcpQueryService.getMcpServerStatus(normalizeCwdForNode(cwd));
     }
 
     /**
      * Get MCP server tools list.
      */
     public CompletableFuture<JsonObject> getMcpServerTools(String serverId) {
-        return mcpQueryService.getMcpServerTools(serverId);
+        return mcpQueryService.getMcpServerTools(serverId, null);
+    }
+
+    /**
+     * Get MCP server tools list with working directory for project-specific config resolution.
+     */
+    public CompletableFuture<JsonObject> getMcpServerTools(String serverId, String cwd) {
+        return mcpQueryService.getMcpServerTools(serverId, normalizeCwdForNode(cwd));
     }
 
     // ============================================================================
@@ -624,5 +634,24 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 reasoningEffort,
                 callback
         );
+    }
+
+    /**
+     * Converts a Windows-style cwd to a WSL path when the active node executable is a WSL binary.
+     * On non-WSL setups this is a no-op.
+     */
+    private String normalizeCwdForNode(String cwd) {
+        if (cwd == null || cwd.isEmpty()) {
+            LOG.info("[ClaudeSDKBridge.normalizeCwdForNode] cwd is null/empty, no-op");
+            return cwd;
+        }
+        String nodePath = nodeDetector.getCachedNodePath();
+        boolean isWsl = nodePath != null && NodeDetector.isWslPath(nodePath);
+        String result = isWsl ? NodeDetector.convertToWslPath(cwd) : cwd;
+        LOG.info("[ClaudeSDKBridge.normalizeCwdForNode] cwd=" + cwd
+                + " nodePath=" + nodePath
+                + " isWsl=" + isWsl
+                + " result=" + result);
+        return result;
     }
 }

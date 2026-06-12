@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { sendBridgeEvent } from '../../utils/bridge';
 import { CODEX_MODELS } from '../../components/ChatInputBox/types';
-import type { PermissionMode, ReasoningEffort } from '../../components/ChatInputBox/types';
+import type { CodexFastMode, PermissionMode, ReasoningEffort } from '../../components/ChatInputBox/types';
 
 /**
  * Codex-specific selectable state. `reasoningEffort` lives here because the
@@ -12,10 +12,16 @@ export function useCodexProvider() {
   const [selectedCodexModel, setSelectedCodexModel] = useState(CODEX_MODELS[0].id);
   const [codexPermissionMode, setCodexPermissionMode] = useState<PermissionMode>('default');
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('high');
+  const [codexFastMode, setCodexFastMode] = useState<CodexFastMode>('normal');
 
   const handleReasoningChange = useCallback((effort: ReasoningEffort) => {
     setReasoningEffort(effort);
     sendBridgeEvent('set_reasoning_effort', effort);
+  }, []);
+
+  const handleCodexFastModeChange = useCallback((mode: CodexFastMode) => {
+    setCodexFastMode(mode);
+    sendBridgeEvent('set_codex_fast_mode', mode);
   }, []);
 
   return {
@@ -25,7 +31,10 @@ export function useCodexProvider() {
     setCodexPermissionMode,
     reasoningEffort,
     setReasoningEffort,
+    codexFastMode,
+    setCodexFastMode,
     handleReasoningChange,
+    handleCodexFastModeChange,
   };
 }
 

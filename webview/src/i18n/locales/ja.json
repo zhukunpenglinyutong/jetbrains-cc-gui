@@ -91,6 +91,8 @@
     "streamingConnected": "{{provider}}に接続しました、質問を理解しています",
     "showEarlierMessages": "以前の{{count}}件のメッセージを表示",
     "totalDuration": "今回の応答時間",
+    "tokenUsage": "入力 {{input}} / 出力 {{output}}",
+    "tokenUsageDetail": "ターン合計 — 入力 {{input}} · キャッシュ書き込み {{cacheWrite}} · キャッシュ読み取り {{cacheRead}} · 出力 {{output}}",
     "search": {
       "ariaLabel": "会話内を検索",
       "placeholder": "会話内を検索...",
@@ -158,6 +160,11 @@
         "hintText": "実際のNode.js実行可能ファイルのパスを取得します。空欄の場合は自動検出します。",
         "versionTooLow": "Node.jsのバージョンが低すぎます。プラグインを正常に動作させるにはv{{minVersion}}以上が必要です"
       },
+      "claudeCliPath": {
+        "label": "Claude CLI パス（オーバーライド）",
+        "placeholder": "例: /usr/local/bin/claude — 空欄の場合は内蔵 SDK を使用",
+        "hint": "任意。設定すると、内蔵の @anthropic-ai/claude-agent-sdk の代わりにこのバイナリを起動します。保存時にデーモンが再起動されます。"
+      },
       "workingDirectory": {
         "label": "作業ディレクトリ",
         "placeholder": "例: project1 または空欄でプロジェクトルートを使用",
@@ -173,16 +180,28 @@
         "level6": "最大 (140%)"
       },
       "editorFont": {
-        "label": "フォント",
-        "hint": "ここではプラグインUIのフォントを変更します。文字サイズと行間は引き続きエディタに従います。",
-        "followOption": "エディタに従う ({{font}})",
-        "customOption": "カスタムフォントファイル",
-        "customPathLabel": "フォントファイルのパス",
-        "customPathPlaceholder": ".ttf / .otf フォントファイルのパスを選択または入力",
+        "label": "UI フォント",
+        "hint": "ここではプラグイン UI のフォントを変更します。コード用のフォントは別に設定できます。",
+        "followOption": "IDEA UI フォントに従う ({{font}})",
+        "customOption": "カスタム UI フォントファイル",
+        "customPathLabel": "UI フォントファイルのパス",
+        "customPathPlaceholder": ".ttf / .otf UI フォントファイルのパスを選択または入力",
         "browse": "参照",
-        "warningUnavailable": "フォントを利用できないため、現在はエディタフォントを使用しています",
+        "warningUnavailable": "UI フォントを利用できないため、現在は IDEA UI フォントを使用しています",
+        "statusFollowEditor": "現在は IDEA UI フォントを使用中: {{font}}",
+        "statusCustom": "現在はカスタム UI フォントを使用中: {{font}}"
+      },
+      "codeFont": {
+        "label": "コードフォント",
+        "hint": "Markdown のコードやコマンドブロックで使用されます。",
+        "followOption": "エディタフォントに従う ({{font}})",
+        "customOption": "カスタムコードフォントファイル",
+        "customPathLabel": "コードフォントファイルのパス",
+        "customPathPlaceholder": ".ttf / .otf コードフォントファイルのパスを選択または入力",
+        "browse": "参照",
+        "warningUnavailable": "コードフォントを利用できないため、現在はエディタフォントを使用しています",
         "statusFollowEditor": "現在はエディタフォントを使用中: {{font}}",
-        "statusCustom": "現在はカスタムフォントを使用中: {{font}}"
+        "statusCustom": "現在はカスタムコードフォントを使用中: {{font}}"
       },
       "streaming": {
         "label": "Streaming",
@@ -740,6 +759,12 @@
     "copySessionId": "CLI resume用にセッションIDをコピー",
     "sessionIdCopied": "セッションIDをコピーしました",
     "copyFailed": "コピーに失敗しました",
+    "convertToCliSession": "CLI認識セッションに変換",
+    "convertButton": "CLIに変換",
+    "convertSuccess": "セッションをCLI認識可能に変換しました",
+    "convertFailed": "変換に失敗しました",
+    "confirmConvert": "CLIセッションに変換しますか？",
+    "convertConfirmMessage": "セッションのentrypointを変更し、Claude Code CLIの/resumeリストに表示されるようにします。",
     "timeAgo": {
       "yearsAgo": "年前",
       "monthsAgo": "ヶ月前",
@@ -747,6 +772,26 @@
       "hoursAgo": "時間前",
       "minutesAgo": "分前",
       "secondsAgo": "秒前"
+    },
+    "conversionErrors": {
+      "INVALID_SESSION_ID": "無効なセッションID",
+      "SESSION_ACTIVE": "現在アクティブなセッションは変換できません。先に新しいセッションを開始してから変換してください",
+      "SESSION_NOT_FOUND": "セッションファイルが見つかりません",
+      "FILE_NOT_EXIST": "セッションファイルが存在しません",
+      "FILE_LOCKED": "セッションファイルは別のプロセスによってアクセスされています",
+      "NOT_SDK_SESSION": "このセッションはSDKで作成されていません（entrypointがsdk-cliではありません）",
+      "ALREADY_CLI_SESSION": "このセッションはすでにCLIセッションです",
+      "CONVERSION_FAILED": "変換に失敗しました。後でもう一度お試しください"
+    },
+    "entrypointLabel": {
+      "sdk-cli": "SDKセッション",
+      "claude-vscode": "VS Code",
+      "remote": "リモート"
+    },
+    "entrypointTooltip": {
+      "sdk-cli": "このセッションはSDK経由でプラグインによって作成されており、CLIではデフォルトで表示されません。ターミナルCLIの/resumeリストに表示するには「CLIに変換」をクリックしてください",
+      "claude-vscode": "このセッションはVS Code拡張機能によって作成されており、CLIではデフォルトで表示されません。ターミナルCLIの/resumeリストに表示するには「CLIに変換」をクリックしてください",
+      "remote": "このセッションはリモートのClaude Codeインスタンスによって作成されました"
     }
   },
   "permission": {
@@ -1315,6 +1360,10 @@
       "opus48": {
         "label": "Opus 4.8",
         "description": "Opus 4.8 · 最新かつ最も優れたモデル"
+      },
+      "fable5": {
+        "label": "Fable 5",
+        "description": "Fable 5 · 最も強力 · Mythosクラス"
       }
     },
     "codex": {

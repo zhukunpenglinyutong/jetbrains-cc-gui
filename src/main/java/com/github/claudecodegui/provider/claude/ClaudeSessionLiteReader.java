@@ -37,6 +37,7 @@ public class ClaudeSessionLiteReader {
         public final String firstPrompt;
         public final int messageCount;
         public final long createdAt;
+        public final String entrypoint;
 
         public ClaudeLiteSessionInfo(
                 String sessionId,
@@ -46,7 +47,8 @@ public class ClaudeSessionLiteReader {
                 String customTitle,
                 String firstPrompt,
                 int messageCount,
-                long createdAt
+                long createdAt,
+                String entrypoint
         ) {
             this.sessionId = sessionId;
             this.summary = summary;
@@ -56,6 +58,7 @@ public class ClaudeSessionLiteReader {
             this.firstPrompt = firstPrompt;
             this.messageCount = messageCount;
             this.createdAt = createdAt;
+            this.entrypoint = entrypoint;
         }
     }
 
@@ -89,8 +92,8 @@ public class ClaudeSessionLiteReader {
      * Parses SessionInfo fields from a lite session read (head/tail/stat).
      * Returns null for sidechain sessions or metadata-only sessions with no extractable summary.
      *
-     * @param sessionId the session ID
-     * @param lite      the lite session file data
+     * @param sessionId   the session ID
+     * @param lite        the lite session file data
      * @return ClaudeLiteSessionInfo or null
      */
     public ClaudeLiteSessionInfo parseSessionInfoFromLite(
@@ -141,6 +144,9 @@ public class ClaudeSessionLiteReader {
             return null;
         }
 
+        // Extract entrypoint field
+        String entrypoint = this.liteReader.extractJsonStringField(lite.head, "entrypoint");
+
         // Extract first timestamp for createdAt
         String firstTimestamp = this.liteReader.extractJsonStringField(lite.head, "timestamp");
         long createdAt = 0;
@@ -163,7 +169,8 @@ public class ClaudeSessionLiteReader {
                 userTitle,
                 firstPrompt,
                 messageCount,
-                createdAt
+                createdAt,
+                entrypoint
         );
     }
 

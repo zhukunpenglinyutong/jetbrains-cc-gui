@@ -76,7 +76,8 @@ public class SessionIndexManagerConcurrencyTest {
                 System.currentTimeMillis(),
                 1024L,
                 System.currentTimeMillis(),
-                "D:/project"
+                "D:/project",
+                "cli"
         );
         entry.fileRelativePath = entry.sessionId + ".jsonl";
         projectIndex.sessions.add(entry);

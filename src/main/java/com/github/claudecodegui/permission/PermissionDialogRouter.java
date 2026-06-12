@@ -1,5 +1,6 @@
 package com.github.claudecodegui.permission;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectManager;
@@ -220,14 +221,14 @@ class PermissionDialogRouter {
         if (path == null) {
             return null;
         }
+        // Convert WSL UNC paths (//wsl.localhost/Ubuntu/home/...) to Linux form (/home/...)
+        // so that cwd values from Claude Code CLI (always Linux paths) and project base paths
+        // (UNC on WSL) compare on equal footing.
+        String wslNormalized = NodeDetector.convertToWslPath(path);
         try {
-            return Paths.get(path).toRealPath().toString().replace('\\', '/');
+            return Paths.get(wslNormalized).toAbsolutePath().normalize().toString().replace('\\', '/');
         } catch (Exception e) {
-            try {
-                return Paths.get(path).toAbsolutePath().normalize().toString().replace('\\', '/');
-            } catch (Exception ex) {
-                return path.replace('\\', '/');
-            }
+            return wslNormalized.replace('\\', '/');
         }
     }
 

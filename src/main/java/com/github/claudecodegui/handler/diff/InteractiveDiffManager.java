@@ -22,6 +22,7 @@ import com.intellij.openapi.fileEditor.FileEditorManagerListener;
 import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.fileTypes.FileTypes;
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.util.LineSeparatorUtil;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.intellij.openapi.project.Project;
@@ -106,7 +107,7 @@ public class InteractiveDiffManager {
 
         // Try to get file type from the actual file
         VirtualFile actualFile = LocalFileSystem.getInstance()
-                .refreshAndFindFileByPath(request.getFilePath().replace('\\', '/'));
+                .refreshAndFindFileByPath(NodeDetector.toVfsPath(request.getFilePath()));
 
         if (actualFile != null && actualFile.exists()) {
             try {

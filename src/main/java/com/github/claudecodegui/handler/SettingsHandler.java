@@ -26,7 +26,9 @@ public class SettingsHandler extends BaseMessageHandler {
     private final PermissionModeHandler permissionModeHandler;
     private final ModelProviderHandler modelProviderHandler;
     private final NodePathHandler nodePathHandler;
+    private final ClaudeCliPathHandler claudeCliPathHandler;
     private final ProjectConfigHandler projectConfigHandler;
+    private final CodexSubscriptionQuotaHandler codexSubscriptionQuotaHandler;
 
     private static final String[] SUPPORTED_TYPES = {
         "get_mode",
@@ -34,15 +36,22 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_model",
         "set_provider",
         "set_reasoning_effort",
+        "set_codex_fast_mode",
         "get_node_path",
         "set_node_path",
+        "get_claude_cli_path",
+        "set_claude_cli_path",
         "get_usage_statistics",
+        "get_codex_subscription_quota",
         "get_working_directory",
         "set_working_directory",
         "get_editor_font_config",
         "get_ui_font_config",
         "set_ui_font_config",
         "browse_ui_font_file",
+        "get_code_font_config",
+        "set_code_font_config",
+        "browse_code_font_file",
         "get_streaming_enabled",
         "set_streaming_enabled",
         "get_codex_sandbox_mode",
@@ -94,7 +103,9 @@ public class SettingsHandler extends BaseMessageHandler {
         this.permissionModeHandler = new PermissionModeHandler(context);
         this.modelProviderHandler = new ModelProviderHandler(context, usagePushService);
         this.nodePathHandler = new NodePathHandler(context);
+        this.claudeCliPathHandler = new ClaudeCliPathHandler(context);
         this.projectConfigHandler = new ProjectConfigHandler(context);
+        this.codexSubscriptionQuotaHandler = new CodexSubscriptionQuotaHandler(context);
         // Register theme change listener to automatically notify frontend when IDE theme changes
         registerThemeChangeListener();
     }
@@ -135,6 +146,9 @@ public class SettingsHandler extends BaseMessageHandler {
             case "set_reasoning_effort":
                 modelProviderHandler.handleSetReasoningEffort(content);
                 return true;
+            case "set_codex_fast_mode":
+                modelProviderHandler.handleSetCodexFastMode(content);
+                return true;
             // Node path
             case "get_node_path":
                 nodePathHandler.handleGetNodePath();
@@ -142,9 +156,19 @@ public class SettingsHandler extends BaseMessageHandler {
             case "set_node_path":
                 nodePathHandler.handleSetNodePath(content);
                 return true;
+            // Claude CLI path
+            case "get_claude_cli_path":
+                claudeCliPathHandler.handleGetClaudeCliPath();
+                return true;
+            case "set_claude_cli_path":
+                claudeCliPathHandler.handleSetClaudeCliPath(content);
+                return true;
             // Project configuration
             case "get_usage_statistics":
                 projectConfigHandler.handleGetUsageStatistics(content);
+                return true;
+            case "get_codex_subscription_quota":
+                codexSubscriptionQuotaHandler.handleGetCodexSubscriptionQuota();
                 return true;
             case "get_working_directory":
                 projectConfigHandler.handleGetWorkingDirectory();
@@ -163,6 +187,15 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "browse_ui_font_file":
                 projectConfigHandler.handleBrowseUiFontFile();
+                return true;
+            case "get_code_font_config":
+                projectConfigHandler.handleGetCodeFontConfig();
+                return true;
+            case "set_code_font_config":
+                projectConfigHandler.handleSetCodeFontConfig(content);
+                return true;
+            case "browse_code_font_file":
+                projectConfigHandler.handleBrowseCodeFontFile();
                 return true;
             case "get_streaming_enabled":
                 projectConfigHandler.handleGetStreamingEnabled();

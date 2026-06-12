@@ -1,9 +1,8 @@
 package com.github.claudecodegui.permission;
 
+import com.github.claudecodegui.util.WslPathUtil;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.project.Project;
-import java.io.File;
-import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
@@ -230,20 +229,7 @@ public class PermissionManager {
             return false;
         }
 
-        try {
-            String canonicalFilePath = new File(filePath).getCanonicalPath();
-            String canonicalBasePath = new File(basePath).getCanonicalPath();
-            if (!canonicalFilePath.startsWith(canonicalBasePath + File.separator)
-                && !canonicalFilePath.equals(canonicalBasePath)) {
-                // Path is outside the project directory, do not auto-approve
-                return false;
-            }
-        } catch (IOException e) {
-            // If we can't resolve the path, do not auto-approve
-            return false;
-        }
-
-        return true;
+        return WslPathUtil.isPathWithinDirectory(filePath, basePath);
     }
 
     /**

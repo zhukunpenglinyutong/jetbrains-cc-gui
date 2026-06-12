@@ -192,8 +192,12 @@ class ClaudeHistoryIndexService {
                         SessionIndexManager.SessionIndexEntry indexed = indexedById.get(sessionId);
                         if (indexed == null) {
                             newFiles.add(p);
-                        } else if (indexed.fileLastModified <= 0 || indexed.fileLastModified != mtime) {
-                            // mtime drifted (active session appended, or legacy entry without mtime) -- re-read
+                        } else if (indexed.fileLastModified <= 0 || indexed.fileLastModified != mtime
+                                || indexed.entrypoint == null) {
+                            // Re-read when the mtime drifted (active session appended, or legacy
+                            // entry without mtime) or when entrypoint was never extracted (entry
+                            // persisted by a writer predating extraction) -- restoring such an
+                            // entry verbatim would freeze the missing field forever.
                             changedFiles.add(p);
                         } else {
                             restoredIds.add(sessionId);
@@ -444,6 +448,7 @@ class ClaudeHistoryIndexService {
         session.lastTimestamp = liteInfo.lastModified;
         session.firstTimestamp = liteInfo.createdAt;
         session.fileSize = liteInfo.fileSize;
+        session.entrypoint = liteInfo.entrypoint;
         return session;
     }
 
@@ -490,6 +495,8 @@ class ClaudeHistoryIndexService {
         session.lastTimestamp = entry.lastTimestamp;
         session.firstTimestamp = entry.firstTimestamp;
         session.fileSize = entry.fileSize;
+        // "" is the persisted marker for "extracted, file has none" -- surface it as null.
+        session.entrypoint = entry.entrypoint != null && !entry.entrypoint.isEmpty() ? entry.entrypoint : null;
         return session;
     }
 
@@ -521,6 +528,9 @@ class ClaudeHistoryIndexService {
             entry.lastTimestamp = session.lastTimestamp;
             entry.firstTimestamp = session.firstTimestamp;
             entry.fileSize = session.fileSize;
+            // Normalize null to "" so the entry records "extraction ran, file has none";
+            // a null in the index means "never extracted" and forces a healing re-read.
+            entry.entrypoint = session.entrypoint != null ? session.entrypoint : "";
             // Claude: session files live flat under projectDir with the sessionId as basename.
             entry.fileRelativePath = session.sessionId != null ? session.sessionId + ".jsonl" : null;
             Long mtime = session.sessionId != null ? sessionMtimes.get(session.sessionId) : null;

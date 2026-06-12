@@ -91,6 +91,8 @@
     "streamingConnected": "{{provider}} connected, understanding your question",
     "showEarlierMessages": "Show {{count}} earlier messages",
     "totalDuration": "This reply took",
+    "tokenUsage": "{{input}} in / {{output}} out",
+    "tokenUsageDetail": "Turn total — input {{input}} · cache write {{cacheWrite}} · cache read {{cacheRead}} · output {{output}}",
     "search": {
       "ariaLabel": "Search in conversation",
       "placeholder": "Search in conversation…",
@@ -162,6 +164,11 @@
         "invalidFileName": "Path must end with node.exe on Windows, or node on macOS/Linux",
         "cannotExecute": "File exists but cannot be executed, please check file permissions"
       },
+      "claudeCliPath": {
+        "label": "Claude CLI Path (override)",
+        "placeholder": "e.g. /usr/local/bin/claude — leave empty to use the bundled SDK",
+        "hint": "Optional. When set, the plugin spawns this binary instead of the bundled @anthropic-ai/claude-agent-sdk. Daemon restarts on save."
+      },
       "workingDirectory": {
         "label": "Working Directory",
         "placeholder": "e.g. project1 or leave empty to use project root",
@@ -177,16 +184,28 @@
         "level6": "Largest (140%)"
       },
       "editorFont": {
-        "label": "Font",
-        "hint": "Font family changes apply immediately here. Font size and line spacing still follow the editor.",
-        "followOption": "Follow editor ({{font}})",
-        "customOption": "Custom font file",
-        "customPathLabel": "Font file path",
-        "customPathPlaceholder": "Choose or enter a .ttf / .otf font file path",
+        "label": "UI Font",
+        "hint": "This controls the plugin UI font only. Code can use a separate code font.",
+        "followOption": "Follow IDEA UI font ({{font}})",
+        "customOption": "Custom UI font file",
+        "customPathLabel": "UI font file path",
+        "customPathPlaceholder": "Choose or enter a .ttf / .otf UI font file path",
         "browse": "Browse",
-        "warningUnavailable": "Font unavailable, currently using editor font",
+        "warningUnavailable": "UI font unavailable, currently using IDEA UI font",
+        "statusFollowEditor": "Currently following IDEA UI font: {{font}}",
+        "statusCustom": "Currently using custom UI font: {{font}}"
+      },
+      "codeFont": {
+        "label": "Code Font",
+        "hint": "Markdown code and command blocks use this font.",
+        "followOption": "Follow editor font ({{font}})",
+        "customOption": "Custom code font file",
+        "customPathLabel": "Code font file path",
+        "customPathPlaceholder": "Choose or enter a .ttf / .otf code font file path",
+        "browse": "Browse",
+        "warningUnavailable": "Code font unavailable, currently using editor font",
         "statusFollowEditor": "Currently following editor font: {{font}}",
-        "statusCustom": "Currently using custom font: {{font}}"
+        "statusCustom": "Currently using custom code font: {{font}}"
       },
       "streaming": {
         "label": "Streaming",
@@ -913,6 +932,32 @@
     "copySessionId": "Copy session ID for CLI resume",
     "sessionIdCopied": "Session ID copied",
     "copyFailed": "Copy failed",
+    "entrypointLabel": {
+      "sdk-cli": "SDK Session",
+      "claude-vscode": "VS Code",
+      "remote": "Remote"
+    },
+    "entrypointTooltip": {
+      "sdk-cli": "This session was created by the plugin via SDK and is not shown in CLI by default. Click 'Convert to CLI' to make it appear in terminal CLI's /resume list",
+      "claude-vscode": "This session was created by VS Code extension and is not shown in CLI by default. Click 'Convert to CLI' to make it appear in terminal CLI's /resume list",
+      "remote": "This session was created by a remote Claude Code instance"
+    },
+    "convertToCliSession": "Convert to CLI-recognizable session",
+    "convertButton": "Convert to CLI",
+    "convertSuccess": "Session converted, now visible in CLI /resume",
+    "convertFailed": "Conversion failed",
+    "confirmConvert": "Convert to CLI Session?",
+    "convertConfirmMessage": "This will modify the session's entrypoint to make it visible in Claude Code CLI's /resume list.",
+    "conversionErrors": {
+      "INVALID_SESSION_ID": "Invalid session ID",
+      "SESSION_ACTIVE": "Cannot convert the currently active session. Start a new session first, then convert this one",
+      "SESSION_NOT_FOUND": "Session file not found",
+      "FILE_NOT_EXIST": "Session file does not exist",
+      "FILE_LOCKED": "Session file is being accessed by another process",
+      "NOT_SDK_SESSION": "This session is not an SDK-created session (entrypoint is not sdk-cli)",
+      "ALREADY_CLI_SESSION": "This session is already a CLI session",
+      "CONVERSION_FAILED": "Conversion failed, please try again later"
+    },
     "timeAgo": {
       "yearsAgo": "years ago",
       "monthsAgo": "months ago",
@@ -1003,6 +1048,19 @@
       "loading": "Loading providers...",
       "empty": "No providers available",
       "switched": "Switched to {{provider}}"
+    },
+    "codexQuota": {
+      "title": "Codex quota",
+      "loading": "Loading quota...",
+      "unavailable": "Quota unavailable",
+      "lastUpdated": "Updated {{value}}",
+      "fiveHour": "5h usage",
+      "weekly": "Weekly usage",
+      "windowRemainingPercent": "{{percent}}% remaining",
+      "windowRemainingPercentWithReset": "{{percent}}% remaining · Resets {{value}}",
+      "windowUsedOnly": "{{used}} used",
+      "windowUnavailable": "Unavailable",
+      "apiKeyMode": "API key mode has no subscription quota"
     },
     "nodeProcesses": {
       "title": "Node Process Manager",
@@ -1249,6 +1307,8 @@
     "runCommand": "Run Command",
     "contextEngine": "Context Engine",
     "task": "Task",
+    "agent": "Agent",
+    "agentGroupToggle": "Toggle agent group details",
     "readFile": "Read File",
     "editFile": "Edit File",
     "writeFile": "Write File",
@@ -1321,6 +1381,7 @@
     "noTodos": "No tasks running",
     "noSubagents": "No subagents running",
     "noFileChanges": "No file changes",
+    "blockedBy": "Blocked by: {{ids}}",
     "showDiff": "Show Diff",
     "expand": "Expand status panel",
     "collapse": "Collapse status panel",
@@ -1532,6 +1593,10 @@
       "opus48": {
         "label": "Opus 4.8",
         "description": "Opus 4.8 · Latest and most capable"
+      },
+      "fable5": {
+        "label": "Fable 5",
+        "description": "Fable 5 · Most powerful · Mythos-class"
       }
     },
     "codex": {
@@ -1783,6 +1848,17 @@
     "title": "What's New",
     "close": "Got it",
     "page": "{{current}} / {{total}}"
+  },
+  "codexFastMode": {
+    "title": "Select Codex speed mode",
+    "normal": {
+      "label": "Standard",
+      "description": "Codex default response speed"
+    },
+    "fast": {
+      "label": "Fast",
+      "description": "Codex fast response mode (uses additional credits)"
+    }
   },
   "error": {
     "providerNotConfigured": "Provider Not Configured",

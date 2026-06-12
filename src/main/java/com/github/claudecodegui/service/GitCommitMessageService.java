@@ -474,8 +474,8 @@ Footer 包含：
             // Simple callback handler
             StringBuilder result = new StringBuilder();
 
-            // CodexSDKBridge.sendMessage requires 10 parameters:
-            // (channelId, message, threadId, cwd, attachments, permissionMode, model, agentPrompt, reasoningEffort, callback)
+            // CodexSDKBridge.sendMessage requires 11 parameters:
+            // (channelId, message, threadId, cwd, attachments, permissionMode, model, agentPrompt, reasoningEffort, serviceTier, callback)
             bridge.sendMessage(
                 "git-commit-message",      // channelId
                 prompt,                     // message
@@ -486,6 +486,7 @@ Footer 包含：
                 model,                      // model
                 null,                       // agentPrompt (not needed)
                 null,                       // reasoningEffort (use default)
+                null,                       // serviceTier (standard)
                 new MessageCallback() {
                     @Override
                     public void onMessage(String type, String content) {

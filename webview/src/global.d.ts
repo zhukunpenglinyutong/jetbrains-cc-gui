@@ -94,6 +94,15 @@ interface Window {
   onSubagentHistoryLoaded?: (json: string) => void;
 
   /**
+   * SDK-to-CLI session conversion result callback.
+   * Called by the Java backend after attempting to convert entrypoint from "sdk-cli" to "cli".
+   * Payload: { success: boolean, infoCode?: string, errorCode?: string }.
+   * infoCode carries extra context on success (e.g. ALREADY_CLI_SESSION);
+   * errorCode identifies the failure reason for i18n lookup.
+   */
+  onConversionResult?: (json: string) => void;
+
+  /**
    * Add user message to chat (used for external Quick Fix feature)
    * Immediately shows the user's message in the chat UI before AI response
    */
@@ -174,6 +183,11 @@ interface Window {
    * Insert code snippet at cursor position - registered by ChatInputBox
    */
   insertCodeSnippetAtCursor?: (selectionInfo: string) => void;
+
+  /**
+   * Focus the chat input box - registered by ChatInputBox
+   */
+  focusChatInput?: () => void;
 
   /**
    * Clear selection info
@@ -325,6 +339,11 @@ interface Window {
   updateNodePath?: (path: string) => void;
 
   /**
+   * Update custom Claude CLI path
+   */
+  updateClaudeCliPath?: (path: string) => void;
+
+  /**
    * Update working directory configuration
    */
   updateWorkingDirectory?: (json: string) => void;
@@ -431,9 +450,19 @@ interface Window {
   applyUiFontConfig?: (config: import('./types/uiFontConfig').UiFontConfig | string) => void;
 
   /**
+   * Apply effective plugin code font configuration (called from Java backend)
+   */
+  applyCodeFontConfig?: (config: import('./types/uiFontConfig').CodeFontConfig | string) => void;
+
+  /**
    * Pending effective UI font config before applyUiFontConfig is registered
    */
   __pendingUiFontConfig?: import('./types/uiFontConfig').UiFontConfig;
+
+  /**
+   * Pending effective code font config before applyCodeFontConfig is registered
+   */
+  __pendingCodeFontConfig?: import('./types/uiFontConfig').CodeFontConfig;
 
   /**
    * Apply IDEA language configuration (called from Java backend)
@@ -485,6 +514,11 @@ interface Window {
    * Effective UI font config received callback
    */
   onUiFontConfigReceived?: (json: string) => void;
+
+  /**
+   * Effective code font config received callback
+   */
+  onCodeFontConfigReceived?: (json: string) => void;
 
   /**
    * IDE theme received callback - receives IDE theme configuration
@@ -565,6 +599,11 @@ interface Window {
    * Update Codex providers list
    */
   updateCodexProviders?: (json: string) => void;
+
+  /**
+   * Update Codex subscription quota snapshot.
+   */
+  updateCodexSubscriptionQuota?: (json: string) => void;
 
   /**
    * Update active Codex provider

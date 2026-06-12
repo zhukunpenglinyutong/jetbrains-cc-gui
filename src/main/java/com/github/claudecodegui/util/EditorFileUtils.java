@@ -226,7 +226,7 @@ public class EditorFileUtils {
                     ReadAction
                             .nonBlocking(() -> {
                                 // Only perform find operations, no refresh
-                                VirtualFile vf = LocalFileSystem.getInstance().findFileByPath(canonicalPath);
+                                VirtualFile vf = LocalFileSystem.getInstance().findFileByPath(canonicalPath.replace('\\', '/'));
                                 if (vf == null) {
                                     // Fallback to finding by File object
                                     vf = LocalFileSystem.getInstance().findFileByIoFile(file);
@@ -304,7 +304,7 @@ public class EditorFileUtils {
     public static VirtualFile refreshAndFindFileSync(File file) {
         try {
             String canonicalPath = file.getCanonicalPath();
-            VirtualFile vf = LocalFileSystem.getInstance().refreshAndFindFileByPath(canonicalPath);
+            VirtualFile vf = LocalFileSystem.getInstance().refreshAndFindFileByPath(canonicalPath.replace('\\', '/'));
             if (vf == null) {
                 vf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file);
             }

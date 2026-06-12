@@ -3,9 +3,11 @@ package com.github.claudecodegui.provider.common;
 import com.github.claudecodegui.bridge.BridgeDirectoryResolver;
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.handler.ClaudeCliPathHandler;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.*;
@@ -129,6 +131,15 @@ public class DaemonBridge {
                 // Configure environment
                 Map<String, String> env = pb.environment();
                 envConfigurator.updateProcessEnvironment(pb, nodePath);
+
+                // Pass through user-configured Claude Code CLI override (if any).
+                // Picked up by ai-bridge to set SDK option `pathToClaudeCodeExecutable`.
+                String claudeCliPath = PropertiesComponent.getInstance()
+                        .getValue(ClaudeCliPathHandler.CLAUDE_CLI_PATH_PROPERTY_KEY);
+                if (claudeCliPath != null && !claudeCliPath.trim().isEmpty()) {
+                    env.put("CLAUDE_CODE_PATH", claudeCliPath.trim());
+                    LOG.info("[DaemonBridge] Using custom Claude CLI: " + claudeCliPath.trim());
+                }
 
                 // Keep stderr separate for debugging
                 pb.redirectErrorStream(false);

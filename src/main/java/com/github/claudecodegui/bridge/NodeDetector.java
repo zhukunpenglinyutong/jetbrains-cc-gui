@@ -3,6 +3,7 @@ package com.github.claudecodegui.bridge;
 import com.github.claudecodegui.model.NodeDetectionResult;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.github.claudecodegui.util.ShellExecutor;
+import com.github.claudecodegui.util.WslPathUtil;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.BufferedReader;
@@ -557,115 +558,64 @@ public class NodeDetector {
         return "node".equals(name) || "node.exe".equals(name);
     }
 
-    /**
-     * Checks whether the given path is a WSL (Unix-style) path on a Windows host.
-     * A WSL path starts with '/' and the host OS is Windows.
-     *
-     * @param path the path to check
-     * @return true if it looks like a WSL path on Windows
-     */
+    /** Returns true if {@code path} is a Linux-style absolute path on a Windows host (i.e. starts with '/'). */
     public static boolean isWslPath(String path) {
-        return PlatformUtils.isWindows()
-                && path != null
-                && !path.isEmpty()
-                && path.charAt(0) == '/';
+        return WslPathUtil.isWslPath(path);
     }
 
-    /**
-     * Builds the base of a WSL-aware command list for running a Node.js script file.
-     * When {@code nodePath} is a WSL path, prepends {@code "wsl"} and converts
-     * {@code scriptPath} to a WSL-accessible format via {@link #convertToWslPath}.
-     * Callers may append additional arguments to the returned list.
-     *
-     * <p>Use this instead of repeating the {@code isWslPath} guard inline:
-     * <pre>
-     *     List&lt;String&gt; command = NodeDetector.buildNodeScriptCommand(node, scriptPath);
-     *     command.add("myProvider");
-     *     command.add("myAction");
-     *     ProcessBuilder pb = new ProcessBuilder(command);
-     * </pre>
-     *
-     * @param nodePath   Node.js executable path (may be a WSL Unix-style path on Windows)
-     * @param scriptPath path to the Node.js script file
-     * @return mutable command list
-     */
+    /** Converts a Linux absolute path to its Windows UNC form (e.g. {@code /home/x} → {@code \\wsl.localhost\Ubuntu\home\x}). */
+    public static String convertWslPathToWindowsUnc(String wslPath) {
+        return WslPathUtil.convertWslPathToWindowsUnc(wslPath);
+    }
+
+    /** Returns path in forward-slash form that JetBrains {@code LocalFileSystem#refreshAndFindFileByPath} can resolve on this OS. */
+    public static String toVfsPath(String path) {
+        return WslPathUtil.toVfsPath(path);
+    }
+
+    /** Checks file existence via {@code wsl -e test -f}; fallback when {@code File.exists()} is unreliable on UNC paths. */
+    public static boolean wslFileExists(String wslPath) {
+        return WslPathUtil.wslFileExists(wslPath);
+    }
+
+    /** Returns true if {@code filePath} is inside {@code basePath}, normalizing WSL Linux paths correctly on Windows. */
+    public static boolean isPathWithinDirectory(String filePath, String basePath) {
+        return WslPathUtil.isPathWithinDirectory(filePath, basePath);
+    }
+
+    /** Returns the WSL home as a Windows UNC path (e.g. {@code \\wsl.localhost\Ubuntu\home\alice}); runs {@code wslpath -w $HOME} once and caches the result. */
+    public static String resolveWslHomeUncPath() {
+        return WslPathUtil.resolveWslHomeUncPath();
+    }
+
+    /** @see WslPathUtil#resolveHomeForFileOps(String) */
+    public static String resolveHomeForFileOps(String nodePath) {
+        return WslPathUtil.resolveHomeForFileOps(nodePath);
+    }
+
+    /** Resolves home using the already-cached node path; never forks {@code wsl} for a native-Windows node. */
+    public static String resolveHomeForFileOps() {
+        return WslPathUtil.resolveHomeForFileOps(getInstance().getCachedNodePath());
+    }
+
+    /** Builds a WSL-aware {@code [wsl] node <scriptPath>} command list; prepends {@code wsl} and converts scriptPath when {@code nodePath} is a WSL path. */
     public static List<String> buildNodeScriptCommand(String nodePath, String scriptPath) {
-        List<String> command = new ArrayList<>();
-        if (isWslPath(nodePath)) {
-            command.add("wsl");
-            command.add(nodePath);
-            command.add(convertToWslPath(scriptPath));
-        } else {
-            command.add(nodePath);
-            command.add(scriptPath);
-        }
-        return command;
+        return WslPathUtil.buildNodeScriptCommand(nodePath, scriptPath);
     }
 
-    /**
-     * Builds a WSL-aware command list for running an inline Node.js script via {@code -e <script>}.
-     * When {@code nodePath} is a WSL path, prepends {@code "wsl"}. The script body is passed through
-     * as-is; callers are responsible for any path conversion within the script.
-     *
-     * <p>Use this when invoking Node with inline code rather than a script file.
-     *
-     * @param nodePath   Node.js executable path (may be a WSL Unix-style path on Windows)
-     * @param scriptBody inline JavaScript to execute
-     * @return mutable command list
-     */
+    /** Builds a WSL-aware {@code [wsl] node -e <scriptBody>} command list; prepends {@code wsl} when {@code nodePath} is a WSL path. */
     public static List<String> buildNodeInlineCommand(String nodePath, String scriptBody) {
-        List<String> command = new ArrayList<>();
-        if (isWslPath(nodePath)) {
-            command.add("wsl");
-        }
-        command.add(nodePath);
-        command.add("-e");
-        command.add(scriptBody);
-        return command;
+        return WslPathUtil.buildNodeInlineCommand(nodePath, scriptBody);
     }
 
-    /**
-     * Converts a Windows file path to a WSL-accessible path.
-     * For example: "C:\Users\foo\bar" becomes "/mnt/c/Users/foo/bar".
-     * UNC paths like "\\wsl.localhost\Ubuntu\home\..." are converted to "/home/...".
-     * If the path is already a Unix-style path, it is returned as-is.
-     *
-     * @param windowsPath the Windows path to convert
-     * @return the WSL-accessible path
-     */
+    /** Converts a Windows or UNC path to its Linux form (e.g. {@code C:\x} → {@code /mnt/c/x}, {@code \\wsl.localhost\Ubuntu\home\x} → {@code /home/x}). */
     public static String convertToWslPath(String windowsPath) {
-        if (windowsPath == null || windowsPath.isEmpty()) {
-            return windowsPath;
-        }
-        // Already a Unix path
-        if (windowsPath.charAt(0) == '/') {
-            return windowsPath;
-        }
-        // UNC WSL path: \\wsl.localhost\<distro>\<path> or \\wsl$\<distro>\<path>
-        if (windowsPath.startsWith("\\\\wsl")) {
-            // Strip the \\<host>\<distro> prefix and keep the path inside the distro.
-            // normalized: //wsl.localhost/Ubuntu/home/... or //wsl$/Ubuntu/home/...
-            String normalized = windowsPath.replace('\\', '/');
-            int distroNameStart = normalized.indexOf('/', 2);        // index of '/' before <distro>
-            if (distroNameStart > 0) {
-                int distroPathStart = normalized.indexOf('/', distroNameStart + 1); // index of '/' after <distro>
-                if (distroPathStart > 0) {
-                    return normalized.substring(distroPathStart);    // /home/...
-                }
-            }
-        }
-        // Drive letter path: C:\Users\... -> /mnt/c/Users/...
-        if (windowsPath.length() >= 2 && windowsPath.charAt(1) == ':') {
-            char drive = Character.toLowerCase(windowsPath.charAt(0));
-            String rest = windowsPath.substring(2).replace('\\', '/');
-            // Ensure separator between drive letter and remainder for inputs like "C:Users\foo"
-            if (rest.isEmpty() || rest.charAt(0) != '/') {
-                rest = "/" + rest;
-            }
-            return "/mnt/" + drive + rest;
-        }
-        // Fallback: just replace backslashes
-        return windowsPath.replace('\\', '/');
+        return WslPathUtil.convertToWslPath(windowsPath);
+    }
+
+    /** Returns {@code path} as a Linux form (via {@link #convertToWslPath}) on WSL, or with backslashes doubled for safe inline JS embedding otherwise. */
+    public static String resolveScriptPath(String nodePath, String path) {
+        return WslPathUtil.resolveScriptPath(nodePath, path);
     }
 
     /**

@@ -3,6 +3,7 @@ package com.github.claudecodegui.handler.provider;
 import com.github.claudecodegui.handler.UsagePushService;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
+import com.github.claudecodegui.session.SessionSendService;
 import com.github.claudecodegui.skill.SlashCommandRegistry;
 import com.github.claudecodegui.util.EditorFileUtils;
 import com.google.gson.Gson;
@@ -26,11 +27,13 @@ public class ModelProviderHandler {
     static {
         // Claude models with 1M context (base IDs)
         MODEL_CONTEXT_LIMITS.put("claude-sonnet-4-6", 200_000);
+        MODEL_CONTEXT_LIMITS.put("claude-fable-5", 200_000);
         MODEL_CONTEXT_LIMITS.put("claude-opus-4-8", 200_000);
         MODEL_CONTEXT_LIMITS.put("claude-opus-4-7", 200_000);
         MODEL_CONTEXT_LIMITS.put("claude-opus-4-6", 200_000);
         // Claude models with [1m] suffix - 1M context
         MODEL_CONTEXT_LIMITS.put("claude-sonnet-4-6[1m]", 1_000_000);
+        MODEL_CONTEXT_LIMITS.put("claude-fable-5[1m]", 1_000_000);
         MODEL_CONTEXT_LIMITS.put("claude-opus-4-8[1m]", 1_000_000);
         MODEL_CONTEXT_LIMITS.put("claude-opus-4-7[1m]", 1_000_000);
         MODEL_CONTEXT_LIMITS.put("claude-opus-4-6[1m]", 1_000_000);
@@ -222,6 +225,32 @@ public class ModelProviderHandler {
             }
         } catch (Exception e) {
             LOG.error("[ModelProviderHandler] Failed to set reasoning effort: " + e.getMessage(), e);
+        }
+    }
+
+    public void handleSetCodexFastMode(String content) {
+        try {
+            String mode = content;
+            if (content != null && !content.isEmpty()) {
+                try {
+                    JsonObject json = gson.fromJson(content, JsonObject.class);
+                    if (json.has("codexFastMode")) {
+                        mode = json.get("codexFastMode").getAsString();
+                    }
+                } catch (Exception e) {
+                    // content itself is the mode
+                }
+            }
+
+            String serviceTier = SessionSendService.resolveEffectiveCodexServiceTier(mode, null);
+            LOG.info("[ModelProviderHandler] Setting Codex fast mode to: " + mode
+                    + ", serviceTier=" + (serviceTier != null ? serviceTier : "standard"));
+
+            if (context.getSession() != null) {
+                context.getSession().setCodexServiceTier(serviceTier);
+            }
+        } catch (Exception e) {
+            LOG.error("[ModelProviderHandler] Failed to set Codex fast mode: " + e.getMessage(), e);
         }
     }
 

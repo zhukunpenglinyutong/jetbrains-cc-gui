@@ -93,6 +93,67 @@ export function getCliUserAgent() {
   return `claude-cli/${version} (${userType}, ${entrypoint})`;
 }
 
+// Env vars whose value the webview owns per request. Settings.json copies of
+// these must never be applied on top of the current request's selections.
+//
+// Model routing: chosen by the webview model selector and written to
+// process.env by setModelEnvironmentVariables() each turn.
+const MODEL_ROUTING_ENV_VARS = [
+  'ANTHROPIC_MODEL',
+  'ANTHROPIC_DEFAULT_OPUS_MODEL',
+  'ANTHROPIC_DEFAULT_SONNET_MODEL',
+  'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+  'ANTHROPIC_SMALL_FAST_MODEL',
+  'CLAUDE_CODE_SUBAGENT_MODEL',
+];
+
+// Reasoning / context controls: explicit SDK options in this bridge. Claude Code
+// gives env vars higher priority than SDK args, so stale settings values must be
+// neutralized — stripped from the child env (buildCliEnv) and overridden inline
+// (buildWebviewControlledSettingsOverride). The 1M flag is set per request from
+// the selected model.
+const REASONING_CONTROL_ENV_VARS = [
+  'CLAUDE_CODE_EFFORT_LEVEL',
+  'MAX_THINKING_TOKENS',
+  'CLAUDE_CODE_DISABLE_1M_CONTEXT',
+];
+
+export const WEBVIEW_CONTROLLED_ENV_VARS = Object.freeze([
+  ...MODEL_ROUTING_ENV_VARS,
+  ...REASONING_CONTROL_ENV_VARS,
+]);
+
+const WEBVIEW_CONTROLLED_ENV_VAR_SET = new Set(
+  WEBVIEW_CONTROLLED_ENV_VARS.map((varName) => varName.toUpperCase())
+);
+
+// Subset stripped from the SDK child env: the reasoning/context controls must
+// reach the CLI only via SDK options + the inline settings override, never
+// inherited from process.env.
+const CLI_ENV_OVERRIDE_VAR_SET = new Set(
+  REASONING_CONTROL_ENV_VARS.map((varName) => varName.toUpperCase())
+);
+
+export function isWebviewControlledEnvVar(varName) {
+  return WEBVIEW_CONTROLLED_ENV_VAR_SET.has(String(varName ?? '').toUpperCase());
+}
+
+export function buildWebviewControlledSettingsOverride(modelId) {
+  const env = {
+    // Empty strings intentionally override settings.json env values while
+    // evaluating as "not set" in Claude Code's env-precedence checks.
+    CLAUDE_CODE_EFFORT_LEVEL: '',
+    MAX_THINKING_TOKENS: '',
+  };
+
+  const normalizedModel = typeof modelId === 'string' ? modelId.trim() : '';
+  if (normalizedModel) {
+    env.CLAUDE_CODE_DISABLE_1M_CONTEXT = /\[1m\]$/i.test(normalizedModel) ? '' : '1';
+  }
+
+  return { env };
+}
+
 /**
  * Build a clean env object for SDK child processes that identifies as CLI.
  *
@@ -103,12 +164,19 @@ export function getCliUserAgent() {
  * @returns {Object} Environment variables object for options.env
  */
 export function buildCliEnv() {
-  const env = {
-    ...process.env,
-    CLAUDE_CODE_ENTRYPOINT: 'cli',
-    USER_TYPE: 'external',
-  };
-  delete env.CLAUDE_AGENT_SDK_VERSION;
+  const env = {};
+  const skipKeys = new Set([...CLI_ENV_OVERRIDE_VAR_SET, 'CLAUDE_AGENT_SDK_VERSION']);
+  for (const [key, value] of Object.entries(process.env)) {
+    if (!skipKeys.has(key.toUpperCase())) {
+      env[key] = value;
+    }
+  }
+  env.CLAUDE_CODE_ENTRYPOINT = 'cli';
+  env.USER_TYPE = 'external';
+  // Claude Code applies settings.json env with overwrite semantics. This flag
+  // makes the CLI strip settings-sourced provider/model vars so the host's
+  // request-scoped routing wins.
+  env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST = '1';
   return env;
 }
 

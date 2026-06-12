@@ -1,8 +1,8 @@
 /**
- * Effective UI font configuration resolved by the Java backend.
+ * Effective font configuration resolved by the Java backend.
  * Shared across global.d.ts, main.tsx, and settings hooks.
  */
-export interface UiFontConfig {
+export interface ResolvedFontConfig {
   mode: 'followEditor' | 'customFile';
   effectiveMode: 'followEditor' | 'customFile';
   customFontPath?: string;
@@ -17,3 +17,7 @@ export interface UiFontConfig {
   warningCode?: 'fontUnavailable';
   warning?: string;
 }
+
+export interface UiFontConfig extends ResolvedFontConfig {}
+
+export interface CodeFontConfig extends ResolvedFontConfig {}

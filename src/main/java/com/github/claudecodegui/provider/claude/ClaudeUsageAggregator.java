@@ -15,8 +15,10 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -36,6 +38,7 @@ class ClaudeUsageAggregator {
     private static final Pricing TIERED_SONNET_PRICING = new Pricing(3.0, 15.0, 3.75, 0.30, 6.0, 22.5, 7.5, 0.60);
     private static final Pricing LEGACY_OPUS_PRICING = new Pricing(15.0, 75.0, 18.75, 1.50);
     private static final Pricing OPUS_4_5_PRICING = new Pricing(5.0, 25.0, 6.25, 0.50);
+    private static final Pricing FABLE_5_PRICING = new Pricing(10.0, 50.0, 12.5, 1.0);
     private static final Pricing HAIKU_4_5_PRICING = new Pricing(1.0, 5.0, 1.25, 0.10);
 
     private static final Map<String, Pricing> MODEL_PRICING = Map.ofEntries(
@@ -44,6 +47,9 @@ class ClaudeUsageAggregator {
             Map.entry("claude-opus-4-20250514", LEGACY_OPUS_PRICING),
             Map.entry("claude-opus-4-5", OPUS_4_5_PRICING),
             Map.entry("claude-opus-4-6", OPUS_4_5_PRICING),
+            Map.entry("claude-opus-4-7", OPUS_4_5_PRICING),
+            Map.entry("claude-opus-4-8", OPUS_4_5_PRICING),
+            Map.entry("claude-fable-5", FABLE_5_PRICING),
             Map.entry("claude-sonnet-4", TIERED_SONNET_PRICING),
             Map.entry("claude-sonnet-4-20250514", TIERED_SONNET_PRICING),
             Map.entry("claude-sonnet-4-5", TIERED_SONNET_PRICING),
@@ -52,7 +58,10 @@ class ClaudeUsageAggregator {
             Map.entry("claude-haiku-4-5", HAIKU_4_5_PRICING)
     );
     private static final List<String> MODEL_PREFIXES = List.of(
+            "claude-fable-5",
             "claude-opus-4-20250514",
+            "claude-opus-4-8",
+            "claude-opus-4-7",
             "claude-opus-4-6",
             "claude-opus-4-5",
             "claude-opus-4-1",
@@ -173,6 +182,11 @@ class ClaudeUsageAggregator {
         String summary = null;
 
         try (BufferedReader reader = Files.newBufferedReader(filePath, StandardCharsets.UTF_8)) {
+            // Claude Code persists each content block (thinking, tool_use, text) of one
+            // assistant API response as its own JSONL line, all sharing the same message.id
+            // and a duplicated usage payload. Summing per line inflates tokens/cost by the
+            // average blocks-per-response (~2x), so count each message.id only once per file.
+            Set<String> seenMessageIds = new HashSet<>();
             String line;
             while ((line = reader.readLine()) != null) {
                 if (line.trim().isEmpty()) {
@@ -198,6 +212,11 @@ class ClaudeUsageAggregator {
                     JsonObject usageJson = readObject(message, "usage");
                     ClaudeHistoryReader.UsageData delta = readUsage(usageJson);
                     if (delta.totalTokens == 0) {
+                        continue;
+                    }
+
+                    String messageId = readString(message, "id");
+                    if (messageId != null && !seenMessageIds.add(messageId)) {
                         continue;
                     }
 

@@ -1,0 +1,22 @@
+.git
+.github
+.idea
+.agents
+
+# Build outputs — must be regenerated inside the container.
+build/
+out/
+**/dist/
+**/node_modules/
+
+# Host-only / IDE files.
+local.properties
+*.iml
+.gradle/
+
+# Docs/media not needed for the build.
+docs/
+*.md
+
+# Misc
+.DS_Store

@@ -1,7 +1,7 @@
 // hooks/useSettingsBasicActions.ts
 import { useState, useEffect, useCallback } from 'react';
-export type { UiFontConfig } from '../../../types/uiFontConfig';
-import type { UiFontConfig } from '../../../types/uiFontConfig';
+export type { UiFontConfig, CodeFontConfig } from '../../../types/uiFontConfig';
+import type { UiFontConfig, CodeFontConfig } from '../../../types/uiFontConfig';
 import type { CommitAiConfig, CommitAiProvider } from '../../../types/aiFeatureConfig';
 import { DEFAULT_COMMIT_AI_CONFIG } from '../../../types/aiFeatureConfig';
 import type { PromptEnhancerConfig, PromptEnhancerProvider } from '../../../types/promptEnhancer';
@@ -41,6 +41,8 @@ export interface UseSettingsBasicActionsReturn {
   nodeVersion: string | null;
   minNodeVersion: number;
   savingNodePath: boolean;
+  claudeCliPath: string;
+  savingClaudeCliPath: boolean;
   workingDirectory: string;
   savingWorkingDirectory: boolean;
   editorFontConfig:
@@ -51,6 +53,7 @@ export interface UseSettingsBasicActionsReturn {
       }
     | undefined;
   uiFontConfig: UiFontConfig | undefined;
+  codeFontConfig: CodeFontConfig | undefined;
   /** Streaming enabled state (prefers prop over local state) */
   streamingEnabled: boolean;
   localStreamingEnabled: boolean;
@@ -84,10 +87,14 @@ export interface UseSettingsBasicActionsReturn {
   // Handler functions (public API for components)
   // =========================================================================
   handleSaveNodePath: () => void;
+  handleSaveClaudeCliPath: () => void;
   handleSaveWorkingDirectory: () => void;
   handleUiFontSelectionChange: (selection: string) => void;
   handleSaveUiFontCustomPath: (path: string) => void;
   handleBrowseUiFontFile: () => void;
+  handleCodeFontSelectionChange: (selection: string) => void;
+  handleSaveCodeFontCustomPath: (path: string) => void;
+  handleBrowseCodeFontFile: () => void;
   handleStreamingEnabledChange: (enabled: boolean) => void;
   handleCodexSandboxModeChange: (mode: 'workspace-write' | 'danger-full-access') => void;
   handleSendShortcutChange: (shortcut: 'enter' | 'cmdEnter') => void;
@@ -122,6 +129,8 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setNodeVersion: (version: string | null) => void;
   /** @internal */ setMinNodeVersion: (version: number) => void;
   /** @internal */ setSavingNodePath: (saving: boolean) => void;
+  /** @internal */ setClaudeCliPath: (path: string) => void;
+  /** @internal */ setSavingClaudeCliPath: (saving: boolean) => void;
   /** @internal */ setWorkingDirectory: (dir: string) => void;
   /** @internal */ setSavingWorkingDirectory: (saving: boolean) => void;
   /** @internal */ setEditorFontConfig: (
@@ -134,6 +143,7 @@ export interface UseSettingsBasicActionsReturn {
       | undefined
   ) => void;
   /** @internal */ setUiFontConfig: (config: UiFontConfig | undefined) => void;
+  /** @internal */ setCodeFontConfig: (config: CodeFontConfig | undefined) => void;
   /** @internal */ setLocalStreamingEnabled: (enabled: boolean) => void;
   /** @internal */ setCodexSandboxMode: (mode: 'workspace-write' | 'danger-full-access') => void;
   /** @internal */ setLocalSendShortcut: (shortcut: 'enter' | 'cmdEnter') => void;
@@ -173,6 +183,10 @@ export function useSettingsBasicActions({
   const [minNodeVersion, setMinNodeVersion] = useState(18);
   const [savingNodePath, setSavingNodePath] = useState(false);
 
+  // Custom Claude CLI path (overrides bundled SDK when set)
+  const [claudeCliPath, setClaudeCliPath] = useState('');
+  const [savingClaudeCliPath, setSavingClaudeCliPath] = useState(false);
+
   // Working directory configuration
   const [workingDirectory, setWorkingDirectory] = useState('');
   const [savingWorkingDirectory, setSavingWorkingDirectory] = useState(false);
@@ -187,6 +201,7 @@ export function useSettingsBasicActions({
     | undefined
   >();
   const [uiFontConfig, setUiFontConfig] = useState<UiFontConfig | undefined>();
+  const [codeFontConfig, setCodeFontConfig] = useState<CodeFontConfig | undefined>();
 
   // Streaming configuration - prefer props, fallback to local state
   const [localStreamingEnabled, setLocalStreamingEnabled] = useState<boolean>(false);
@@ -293,6 +308,12 @@ export function useSettingsBasicActions({
     sendToJava(`set_node_path:${JSON.stringify(payload)}`);
   }, [nodePath]);
 
+  const handleSaveClaudeCliPath = useCallback(() => {
+    setSavingClaudeCliPath(true);
+    const payload = { path: (claudeCliPath || '').trim() };
+    sendToJava(`set_claude_cli_path:${JSON.stringify(payload)}`);
+  }, [claudeCliPath]);
+
   const handleSaveWorkingDirectory = useCallback(() => {
     setSavingWorkingDirectory(true);
     const payload = { customWorkingDir: (workingDirectory || '').trim() };
@@ -322,6 +343,31 @@ export function useSettingsBasicActions({
 
   const handleBrowseUiFontFile = useCallback(() => {
     sendToJava('browse_ui_font_file:');
+  }, []);
+
+  const handleCodeFontSelectionChange = useCallback((selection: string) => {
+    if (selection === 'followEditor') {
+      sendToJava(`set_code_font_config:${JSON.stringify({ mode: 'followEditor' })}`);
+      return;
+    }
+
+    if (selection === 'customFile' && codeFontConfig?.customFontPath) {
+      sendToJava(`set_code_font_config:${JSON.stringify({
+        mode: 'customFile',
+        customFontPath: codeFontConfig.customFontPath,
+      })}`);
+    }
+  }, [codeFontConfig?.customFontPath]);
+
+  const handleSaveCodeFontCustomPath = useCallback((path: string) => {
+    sendToJava(`set_code_font_config:${JSON.stringify({
+      mode: 'customFile',
+      customFontPath: path,
+    })}`);
+  }, []);
+
+  const handleBrowseCodeFontFile = useCallback(() => {
+    sendToJava('browse_code_font_file:');
   }, []);
 
   // Streaming toggle change handler
@@ -570,6 +616,10 @@ export function useSettingsBasicActions({
     setMinNodeVersion,
     savingNodePath,
     setSavingNodePath,
+    claudeCliPath,
+    setClaudeCliPath,
+    savingClaudeCliPath,
+    setSavingClaudeCliPath,
     workingDirectory,
     setWorkingDirectory,
     savingWorkingDirectory,
@@ -578,6 +628,8 @@ export function useSettingsBasicActions({
     setEditorFontConfig,
     uiFontConfig,
     setUiFontConfig,
+    codeFontConfig,
+    setCodeFontConfig,
     localStreamingEnabled,
     setLocalStreamingEnabled,
     streamingEnabled,
@@ -608,10 +660,14 @@ export function useSettingsBasicActions({
     skipNewSessionConfirm,
     setSkipNewSessionConfirm,
     handleSaveNodePath,
+    handleSaveClaudeCliPath,
     handleSaveWorkingDirectory,
     handleUiFontSelectionChange,
     handleSaveUiFontCustomPath,
     handleBrowseUiFontFile,
+    handleCodeFontSelectionChange,
+    handleSaveCodeFontCustomPath,
+    handleBrowseCodeFontFile,
     handleStreamingEnabledChange,
     handleCodexSandboxModeChange,
     handleSendShortcutChange,

@@ -1289,4 +1289,128 @@ describe('useWindowCallbacks integration', () => {
       expect(opts.streamingContentRef.current).toBe('StaleContent');
     });
   });
+
+  // ===== onStreamEnd preserves completed tool_result on rAF cancel (PR #1211) =====
+
+  describe('onStreamEnd preserves pending tool_result (PR #1211)', () => {
+    beforeEach(() => {
+      delete (window as unknown as Record<string, unknown>).__pendingUpdateJson;
+      window.__streamEndProcessedTurnId = undefined;
+    });
+
+    /** Drive onStreamEnd with a backend snapshot, then return its flush updater. */
+    const runStreamEndAndGetUpdater = (
+      opts: UseWindowCallbacksOptions,
+      pendingSnapshot: unknown[],
+    ): ((prev: ClaudeMessage[]) => ClaudeMessage[]) => {
+      window.__pendingUpdateJson = JSON.stringify(pendingSnapshot);
+      act(() => {
+        window.onStreamEnd!('10');
+      });
+      delete (window as unknown as Record<string, unknown>).__pendingUpdateJson;
+      return (opts.setMessages as any).mock.calls[0][0];
+    };
+
+    it('re-appends a tool_result dropped from the cancelled rAF snapshot', () => {
+      const opts = createOptions({
+        isStreamingRef: { current: true },
+        streamingTurnIdRef: { current: 7 },
+        streamingMessageIndexRef: { current: 0 },
+      });
+      renderHook(() => useWindowCallbacks(opts));
+
+      const updater = runStreamEndAndGetUpdater(opts, [
+        { type: 'assistant', content: 'running', raw: { message: { content: [{ type: 'tool_use', id: 'tool-1', name: 'Bash' }] } } },
+        { type: 'user', content: '[tool_result]', raw: { content: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'build ok' }] } },
+      ]);
+
+      // Live state lost the tool_result when the rAF was cancelled.
+      const prev: ClaudeMessage[] = [
+        {
+          type: 'assistant',
+          content: 'running',
+          timestamp: '2026-05-25T10:00:00.000Z',
+          raw: { message: { content: [{ type: 'tool_use', id: 'tool-1', name: 'Bash' }] } } as any,
+        },
+      ];
+      const next = updater(prev);
+
+      expect(next).not.toBe(prev);
+      expect(next).toHaveLength(2);
+      expect(next[1]).toMatchObject({ type: 'user', content: '[tool_result]' });
+      expect((next[1].raw as any).content[0]).toMatchObject({ type: 'tool_result', tool_use_id: 'tool-1' });
+    });
+
+    it('re-appends tool_result even when no streaming assistant exists to finalize (idx < 0)', () => {
+      // Regression guard: the merge must NOT be gated on the assistant-patch branch.
+      const opts = createOptions({
+        isStreamingRef: { current: true },
+        streamingTurnIdRef: { current: 8 },
+        streamingMessageIndexRef: { current: -1 },
+      });
+      renderHook(() => useWindowCallbacks(opts));
+
+      const updater = runStreamEndAndGetUpdater(opts, [
+        { type: 'user', content: '[tool_result]', raw: { content: [{ type: 'tool_result', tool_use_id: 'tool-9', content: 'done' }] } },
+      ]);
+
+      const prev: ClaudeMessage[] = [
+        {
+          type: 'assistant',
+          content: 'done',
+          timestamp: '2026-05-25T10:00:00.000Z',
+          raw: { message: { content: [{ type: 'tool_use', id: 'tool-9', name: 'Bash' }] } } as any,
+        },
+      ];
+      const next = updater(prev);
+
+      expect(next).not.toBe(prev);               // immutability preserved even on this path
+      expect(next).toHaveLength(2);
+      expect((next[1].raw as any).content[0].tool_use_id).toBe('tool-9');
+    });
+
+    it('does not duplicate a tool_result already present in the live state', () => {
+      const opts = createOptions({
+        isStreamingRef: { current: true },
+        streamingTurnIdRef: { current: 9 },
+        streamingMessageIndexRef: { current: 0 },
+      });
+      renderHook(() => useWindowCallbacks(opts));
+
+      const updater = runStreamEndAndGetUpdater(opts, [
+        { type: 'user', content: '[tool_result]', raw: { content: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'ok' }] } },
+      ]);
+
+      const prev: ClaudeMessage[] = [
+        { type: 'assistant', content: 'x', timestamp: '2026-05-25T10:00:00.000Z', raw: { message: { content: [{ type: 'tool_use', id: 'tool-1' }] } } as any },
+        { type: 'user', content: '[tool_result]', timestamp: '2026-05-25T10:00:01.000Z', raw: { content: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'ok' }] } as any },
+      ];
+      const next = updater(prev);
+
+      expect(next.filter((m) => m.content === '[tool_result]')).toHaveLength(1);
+    });
+
+    it('stamps the recovered tool_result with an ISO timestamp, not String(Date.now())', () => {
+      const opts = createOptions({
+        isStreamingRef: { current: true },
+        streamingTurnIdRef: { current: 11 },
+        streamingMessageIndexRef: { current: 0 },
+      });
+      renderHook(() => useWindowCallbacks(opts));
+
+      const updater = runStreamEndAndGetUpdater(opts, [
+        { type: 'user', content: '[tool_result]', raw: { content: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'ok' }] } },
+      ]);
+
+      const prev: ClaudeMessage[] = [
+        { type: 'assistant', content: 'x', timestamp: '2026-05-25T10:00:00.000Z', raw: { message: { content: [{ type: 'tool_use', id: 'tool-1' }] } } as any },
+      ];
+      const next = updater(prev);
+
+      const recovered = next.find((m) => m.content === '[tool_result]');
+      expect(recovered).toBeDefined();
+      expect(recovered!.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+      expect(Number.isNaN(Date.parse(recovered!.timestamp as string))).toBe(false);
+    });
+  });
 });

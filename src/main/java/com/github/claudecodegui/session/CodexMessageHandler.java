@@ -259,7 +259,12 @@ public class CodexMessageHandler implements MessageCallback {
             }
 
             com.google.gson.JsonObject usage = msgJson.getAsJsonObject("usage");
-            boolean updated = attachUsageToLastAssistant(usage);
+            // The result message carries the turn.completed usage, which covers exactly
+            // one turn but counts cached tokens inside input_tokens (OpenAI convention).
+            // Normalize to the Claude usage schema (input excludes cache) and stamp it
+            // as turnUsage for the per-turn token display in the webview.
+            com.google.gson.JsonObject turnUsage = buildTurnUsage(usage);
+            boolean updated = attachUsageToLastAssistant(usage, turnUsage);
             if (updated) {
                 callbackHandler.notifyMessageUpdate(state.getMessages());
                 LOG.info("Codex usage applied from result message");
@@ -269,6 +274,26 @@ public class CodexMessageHandler implements MessageCallback {
         } catch (Exception e) {
             LOG.debug("Failed to parse Codex result message: " + e.getMessage());
         }
+    }
+
+    /**
+     * Build a whole-turn usage object in the Claude usage schema from a Codex usage
+     * object whose input_tokens include cached tokens.
+     *
+     * @param usage usage in ai-bridge Claude-compatible format (input includes cache)
+     * @return turn usage with input_tokens excluding cache, cache fields separate
+     * @since 1.0.0
+     */
+    private static com.google.gson.JsonObject buildTurnUsage(com.google.gson.JsonObject usage) {
+        int input = usage.has("input_tokens") ? usage.get("input_tokens").getAsInt() : 0;
+        int output = usage.has("output_tokens") ? usage.get("output_tokens").getAsInt() : 0;
+        int cacheRead = usage.has("cache_read_input_tokens") ? usage.get("cache_read_input_tokens").getAsInt() : 0;
+        com.google.gson.JsonObject turnUsage = new com.google.gson.JsonObject();
+        turnUsage.addProperty("input_tokens", Math.max(0, input - cacheRead));
+        turnUsage.addProperty("cache_creation_input_tokens", 0);
+        turnUsage.addProperty("cache_read_input_tokens", cacheRead);
+        turnUsage.addProperty("output_tokens", output);
+        return turnUsage;
     }
 
     /**
@@ -310,7 +335,11 @@ public class CodexMessageHandler implements MessageCallback {
             usage.addProperty("cache_read_input_tokens", cachedInputTokens);
             usage.addProperty("cache_creation_input_tokens", 0);
 
-            boolean updated = attachUsageToLastAssistant(usage);
+            // token_count carries total_token_usage (session-cumulative), which feeds the
+            // context-usage status bar via the top-level usage field. It is NOT turn-scoped,
+            // so never stamp it as turnUsage — the turn aggregate comes from the result
+            // message (turn.completed) in handleResultMessage.
+            boolean updated = attachUsageToLastAssistant(usage, null);
             if (updated) {
                 callbackHandler.notifyMessageUpdate(state.getMessages());
                 LOG.debug("Codex token_count applied: input=" + inputTokens + ", output=" + outputTokens + ", cached=" + cachedInputTokens);
@@ -323,18 +352,24 @@ public class CodexMessageHandler implements MessageCallback {
     }
 
     /**
-     * Attach usage data to the last assistant message's raw field for frontend display.
+     * Attach usage data to the last assistant message's raw field.
+     * The top-level usage field feeds the context-usage status bar; the optional
+     * turnUsage field feeds the per-turn token display in the webview.
      *
-     * @param usage usage
+     * @param usage usage for the status bar (top-level usage field)
+     * @param turnUsage whole-turn usage in Claude schema, or null to skip
      * @return boolean
      * @since 1.0.0
      */
-    private boolean attachUsageToLastAssistant(com.google.gson.JsonObject usage) {
+    private boolean attachUsageToLastAssistant(com.google.gson.JsonObject usage, com.google.gson.JsonObject turnUsage) {
         java.util.List<Message> messages = state.getMessagesReference();
         for (int i = messages.size() - 1; i >= 0; i--) {
             Message msg = messages.get(i);
             if (msg.type == Message.Type.ASSISTANT && msg.raw != null) {
                 msg.raw.add("usage", usage);
+                if (turnUsage != null) {
+                    msg.raw.add("turnUsage", turnUsage);
+                }
                 return true;
             }
         }

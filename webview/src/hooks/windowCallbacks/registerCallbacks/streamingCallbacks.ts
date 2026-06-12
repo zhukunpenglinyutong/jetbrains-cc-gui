@@ -366,8 +366,14 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     // The backend's final flush contains the authoritative message state (complete raw blocks).
     // If onStreamEnd cancels the rAF without processing this snapshot, the final message may
     // show incomplete content (e.g., last delta missing) or duplicated content in raw blocks.
+    //
+    // FIX: Also preserve tool_result user messages from the pending snapshot.
+    // Previously only the assistant message was extracted; tool_result user messages were
+    // silently dropped when the pending rAF was cancelled.  This caused tool cards to
+    // remain stuck in "pending" state (spinner) even though the tool had completed.
     let backendSnapshotContent: string | undefined;
     let backendSnapshotRaw: ClaudeRawMessage | string | undefined = undefined;
+    const pendingToolResultMsgs: Array<{ content: string; raw: Record<string, unknown> }> = [];
     if (typeof window.__pendingUpdateJson === 'string' && window.__pendingUpdateJson.length > 0) {
       try {
         const parsed = JSON.parse(window.__pendingUpdateJson) as Array<Record<string, unknown>>;
@@ -383,6 +389,17 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
               }
             }
             break;
+          }
+        }
+        // Collect tool_result user messages from the pending snapshot so that
+        // completed tool calls are not lost when the rAF is cancelled below.
+        for (let i = 0; i < parsed.length; i++) {
+          const msg = parsed[i];
+          if (msg?.type === 'user' && typeof msg.content === 'string' && msg.content.trim() === '[tool_result]') {
+            const raw = msg.raw as Record<string, unknown> | undefined;
+            if (raw != null && typeof raw === 'object') {
+              pendingToolResultMsgs.push({ content: '[tool_result]', raw });
+            }
           }
         }
       } catch (error) {
@@ -512,6 +529,61 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
           __turnId: endedStreamingTurnId, // Keep __turnId for merge guard
           ...(durationMs != null ? { durationMs } : {}),
         };
+      }
+
+      // FIX: Merge tool_result user messages that were in the pending snapshot
+      // but would otherwise be lost when the rAF is cancelled.  Without this,
+      // tool cards remain stuck in "pending" spinner state.
+      //
+      // Runs INDEPENDENTLY of the assistant-patch branch above: a completed
+      // tool_result can land in the pending snapshot even when there is no active
+      // streaming assistant message to finalize (endedStreamingMessageIndex < 0,
+      // e.g. backend-streaming-render paths or a message list mutated between the
+      // last delta and stream end).  Coupling it to the assistant branch would
+      // silently drop those completed results in exactly the stuck-spinner case
+      // this fix targets.
+      if (pendingToolResultMsgs.length > 0) {
+        // Preserve immutability: lazily clone prev once before the first push so
+        // the updater never mutates the previous state array in place (the
+        // assistant branch above may have left newMessages === prev).
+        if (newMessages === prev) {
+          newMessages = [...prev];
+        }
+        // Build a set of existing tool_use_ids from the current message list
+        // to avoid adding duplicate tool_result messages.
+        const existingToolResultIds = new Set<string>();
+        for (const m of newMessages) {
+          const raw = m?.raw as Record<string, unknown> | undefined;
+          if (!raw || typeof raw !== 'object') continue;
+          const msg = raw.message as Record<string, unknown> | undefined;
+          const content = (raw.content ?? msg?.content) as Array<Record<string, unknown>> | undefined;
+          if (!Array.isArray(content)) continue;
+          for (const block of content) {
+            if (block?.type === 'tool_result' && typeof block.tool_use_id === 'string') {
+              existingToolResultIds.add(block.tool_use_id);
+            }
+          }
+        }
+        // Append only tool_result messages that aren't already present
+        for (const trMsg of pendingToolResultMsgs) {
+          const raw = trMsg.raw;
+          const msg = raw.message as Record<string, unknown> | undefined;
+          const content = (raw.content ?? msg?.content) as Array<Record<string, unknown>> | undefined;
+          if (!Array.isArray(content)) continue;
+          const hasNewToolResult = content.some(
+            (block) => block?.type === 'tool_result' && typeof block.tool_use_id === 'string' && !existingToolResultIds.has(block.tool_use_id),
+          );
+          if (hasNewToolResult) {
+            newMessages.push({ ...trMsg, type: 'user' as const, timestamp: new Date().toISOString() });
+            // Register the freshly-pushed ids so a duplicate tool_result carrying the same
+            // tool_use_id later in this snapshot isn't appended a second time.
+            for (const block of content) {
+              if (block?.type === 'tool_result' && typeof block.tool_use_id === 'string') {
+                existingToolResultIds.add(block.tool_use_id);
+              }
+            }
+          }
+        }
       }
 
       return newMessages;

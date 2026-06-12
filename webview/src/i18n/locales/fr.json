@@ -91,6 +91,8 @@
     "streamingConnected": "{{provider}} connecté, en train de comprendre votre question",
     "showEarlierMessages": "Afficher {{count}} messages précédents",
     "totalDuration": "Cette réponse a pris",
+    "tokenUsage": "{{input}} entrée / {{output}} sortie",
+    "tokenUsageDetail": "Total du tour — entrée {{input}} · écriture cache {{cacheWrite}} · lecture cache {{cacheRead}} · sortie {{output}}",
     "search": {
       "ariaLabel": "Rechercher dans la conversation",
       "placeholder": "Rechercher dans la conversation…",
@@ -158,6 +160,11 @@
         "hintText": "pour obtenir le chemin de l'exécutable Node.js réel. Laisser vide pour la détection automatique.",
         "versionTooLow": "La version de Node.js est trop ancienne. Le plugin nécessite v{{minVersion}} ou supérieur pour fonctionner correctement"
       },
+      "claudeCliPath": {
+        "label": "Chemin du CLI Claude (remplacement)",
+        "placeholder": "ex. /usr/local/bin/claude — laissez vide pour utiliser le SDK intégré",
+        "hint": "Facultatif. Lorsqu'il est défini, le plugin lance ce binaire au lieu du @anthropic-ai/claude-agent-sdk intégré. Le démon redémarre lors de l'enregistrement."
+      },
       "workingDirectory": {
         "label": "Working Directory",
         "placeholder": "e.g. project1 or leave empty to use project root",
@@ -173,16 +180,28 @@
         "level6": "Maximale (140%)"
       },
       "editorFont": {
-        "label": "Police",
-        "hint": "Ici vous changez la police de l'interface du plugin ; la taille et l'interligne suivent toujours l'éditeur.",
-        "followOption": "Suivre l'éditeur ({{font}})",
-        "customOption": "Fichier de police personnalisé",
-        "customPathLabel": "Chemin du fichier de police",
-        "customPathPlaceholder": "Choisissez ou saisissez le chemin d'un fichier .ttf / .otf",
+        "label": "Police UI",
+        "hint": "Ici vous changez la police de l'interface du plugin ; le code peut utiliser une police séparée.",
+        "followOption": "Suivre la police UI d'IDEA ({{font}})",
+        "customOption": "Fichier de police UI personnalisé",
+        "customPathLabel": "Chemin du fichier de police UI",
+        "customPathPlaceholder": "Choisissez ou saisissez le chemin d'un fichier .ttf / .otf pour la police UI",
         "browse": "Parcourir",
-        "warningUnavailable": "La police est indisponible, la police de l'éditeur est utilisée",
-        "statusFollowEditor": "Police actuelle de l'éditeur : {{font}}",
-        "statusCustom": "Police personnalisée actuellement utilisée : {{font}}"
+        "warningUnavailable": "La police UI est indisponible, la police UI d'IDEA est utilisée",
+        "statusFollowEditor": "Police UI d'IDEA actuellement utilisée : {{font}}",
+        "statusCustom": "Police UI personnalisée actuellement utilisée : {{font}}"
+      },
+      "codeFont": {
+        "label": "Police de code",
+        "hint": "Le code Markdown et les blocs de commande utilisent cette police.",
+        "followOption": "Suivre la police de l'éditeur ({{font}})",
+        "customOption": "Fichier de police de code personnalisé",
+        "customPathLabel": "Chemin du fichier de police de code",
+        "customPathPlaceholder": "Choisissez ou saisissez le chemin d'un fichier .ttf / .otf pour la police de code",
+        "browse": "Parcourir",
+        "warningUnavailable": "La police de code est indisponible, la police de l'éditeur est utilisée",
+        "statusFollowEditor": "Police de l'éditeur actuellement utilisée : {{font}}",
+        "statusCustom": "Police de code personnalisée actuellement utilisée : {{font}}"
       },
       "streaming": {
         "label": "Streaming",
@@ -735,6 +754,12 @@
     "copySessionId": "Copier l'ID de session pour CLI resume",
     "sessionIdCopied": "ID de session copié",
     "copyFailed": "Échec de la copie",
+    "convertToCliSession": "Convertir en session reconnue par le CLI",
+    "convertButton": "Convertir en CLI",
+    "convertSuccess": "Session convertie pour être reconnue par le CLI",
+    "convertFailed": "Échec de la conversion",
+    "confirmConvert": "Convertir en session CLI ?",
+    "convertConfirmMessage": "Cela modifiera l'entrypoint de la session pour la rendre visible dans la liste /resume du CLI de Claude Code.",
     "timeAgo": {
       "yearsAgo": "il y a des années",
       "monthsAgo": "il y a des mois",
@@ -742,6 +767,26 @@
       "hoursAgo": "il y a des heures",
       "minutesAgo": "il y a des minutes",
       "secondsAgo": "il y a des secondes"
+    },
+    "conversionErrors": {
+      "INVALID_SESSION_ID": "ID de session invalide",
+      "SESSION_ACTIVE": "Impossible de convertir la session actuellement active. Démarrez d'abord une nouvelle session, puis convertissez celle-ci",
+      "SESSION_NOT_FOUND": "Fichier de session introuvable",
+      "FILE_NOT_EXIST": "Le fichier de session n'existe pas",
+      "FILE_LOCKED": "Le fichier de session est utilisé par un autre processus",
+      "NOT_SDK_SESSION": "Cette session n'a pas été créée par le SDK (entrypoint n'est pas sdk-cli)",
+      "ALREADY_CLI_SESSION": "Cette session est déjà une session CLI",
+      "CONVERSION_FAILED": "Échec de la conversion, veuillez réessayer plus tard"
+    },
+    "entrypointLabel": {
+      "sdk-cli": "Session SDK",
+      "claude-vscode": "VS Code",
+      "remote": "Distant"
+    },
+    "entrypointTooltip": {
+      "sdk-cli": "Cette session a été créée par le plugin via SDK et n'est pas affichée dans CLI par défaut. Cliquez sur 'Convertir en CLI' pour qu'elle apparaisse dans la liste /resume du CLI du terminal",
+      "claude-vscode": "Cette session a été créée par l'extension VS Code et n'est pas affichée dans CLI par défaut. Cliquez sur 'Convertir en CLI' pour qu'elle apparaisse dans la liste /resume du CLI du terminal",
+      "remote": "Cette session a été créée par une instance distante de Claude Code"
     }
   },
   "permission": {
@@ -1304,6 +1349,10 @@
       "opus48": {
         "label": "Opus 4.8",
         "description": "Opus 4.8 · Le plus récent et le plus performant"
+      },
+      "fable5": {
+        "label": "Fable 5",
+        "description": "Fable 5 · Le plus puissant · classe Mythos"
       }
     },
     "longContext": {

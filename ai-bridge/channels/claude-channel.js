@@ -96,7 +96,8 @@ export async function handleClaudeCommand(command, args, stdinData) {
 
     case 'getMcpServerTools': {
       const serverId = stdinData?.serverId || args[0] || null;
-      await claudeGetMcpServerTools(serverId);
+      const cwd = stdinData?.cwd || args[1] || null;
+      await claudeGetMcpServerTools(serverId, cwd);
       break;
     }
 

@@ -1,7 +1,7 @@
 package com.github.claudecodegui.handler.provider;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.HandlerContext;
-
 import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -39,7 +39,7 @@ public class ProviderImportExportSupport {
      */
     public void handlePreviewCcSwitchImport() {
         ApplicationManager.getApplication().invokeLater(() -> {
-            String userHome = PlatformUtils.getHomeDirectory();
+            String userHome = NodeDetector.resolveHomeForFileOps();
             String osName = System.getProperty("os.name").toLowerCase();
 
             File ccSwitchDir = new File(userHome, ".cc-switch");
@@ -49,11 +49,12 @@ public class ProviderImportExportSupport {
             LOG.info("[ProviderHandler] User home: " + userHome);
             LOG.info("[ProviderHandler] cc-switch dir: " + ccSwitchDir.getAbsolutePath());
             LOG.info("[ProviderHandler] Database file path: " + dbFile.getAbsolutePath());
-            LOG.info("[ProviderHandler] Database file exists: " + dbFile.exists());
+            boolean dbExists = fileExists(dbFile);
+            LOG.info("[ProviderHandler] Database file exists: " + dbExists);
 
-            if (!dbFile.exists()) {
+            if (!dbExists) {
                 String errorMsg = com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("provider.ccswitch.notFound", dbFile.getAbsolutePath());
-                LOG.error("[ProviderHandler] " + errorMsg);
+                LOG.warn("[ProviderHandler] " + errorMsg);
                 sendErrorToFrontend(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("provider.ccswitch.notFoundTitle"), errorMsg);
                 return;
             }
@@ -115,12 +116,12 @@ public class ProviderImportExportSupport {
                 });
 
                 // Set default path to .cc-switch under user home directory
-                String userHome = PlatformUtils.getHomeDirectory();
+                String userHome = NodeDetector.resolveHomeForFileOps();
                 File defaultDir = new File(userHome, ".cc-switch");
                 VirtualFile defaultVirtualFile = null;
                 if (defaultDir.exists()) {
                     defaultVirtualFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
-                                                 .findFileByPath(defaultDir.getAbsolutePath());
+                                                 .findFileByPath(defaultDir.getAbsolutePath().replace('\\', '/'));
                 }
 
                 LOG.info("[ProviderHandler] Opening file chooser, default dir: " +
@@ -146,11 +147,12 @@ public class ProviderImportExportSupport {
                 File dbFile = new File(dbPath);
 
                 LOG.info("[ProviderHandler] User selected database file path: " + dbFile.getAbsolutePath());
-                LOG.info("[ProviderHandler] Database file exists: " + dbFile.exists());
+                boolean selectedExists = fileExists(dbFile);
+                LOG.info("[ProviderHandler] Database file exists: " + selectedExists);
 
-                if (!dbFile.exists()) {
+                if (!selectedExists) {
                     String errorMsg = com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("provider.ccswitch.notFound", dbFile.getAbsolutePath());
-                    LOG.error("[ProviderHandler] " + errorMsg);
+                    LOG.warn("[ProviderHandler] " + errorMsg);
                     sendErrorToFrontend(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("provider.ccswitch.notFoundTitle"), errorMsg);
                     return;
                 }
@@ -239,6 +241,24 @@ public class ProviderImportExportSupport {
                 sendErrorToFrontend(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("provider.ccswitch.saveFailedTitle"), e.getMessage());
             }
         });
+    }
+
+    /**
+     * Returns true if {@code file} exists, falling back to a {@code wsl -e test -f} check on Windows
+     * when Java's {@code File.exists()} returns false for a WSL UNC path (the UNC service can be slow
+     * to respond, causing spurious false negatives).
+     */
+    private boolean fileExists(File file) {
+        if (file.exists()) {
+            return true;
+        }
+        if (PlatformUtils.isWindows()) {
+            String wslPath = NodeDetector.convertToWslPath(file.getAbsolutePath());
+            if (wslPath != null && !wslPath.isEmpty() && wslPath.charAt(0) == '/') {
+                return NodeDetector.wslFileExists(wslPath);
+            }
+        }
+        return false;
     }
 
     /**

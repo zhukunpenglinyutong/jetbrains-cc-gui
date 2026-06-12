@@ -8,7 +8,7 @@ import type {
 import type { GetToolResultRawFn } from '../contexts/SubagentContext';
 import type { RewindableMessage } from '../components/RewindSelectDialog';
 import { formatTime } from '../utils/helpers';
-import { extractTodosFromToolUse } from '../utils/todoToolNormalization';
+import { extractTodosFromToolUse, extractAccumulatedTasks } from '../utils/todoToolNormalization';
 import {
   finalizeSubagentsForSettledTurn,
   finalizeTodosForSettledTurn,
@@ -138,8 +138,15 @@ export function useChatComputations({
       }
       if (latestTodos) break;
     }
-    return finalizeTodosForSettledTurn(latestTodos ?? [], streamingActive);
-  }, [latestTurnMessages, getContentBlocks, streamingActive]);
+    if (latestTodos) {
+      return finalizeTodosForSettledTurn(latestTodos, streamingActive);
+    }
+    const accumulated = extractAccumulatedTasks(messages, getContentBlocks);
+    if (accumulated.length > 0) {
+      return accumulated;
+    }
+    return [];
+  }, [latestTurnMessages, messages, getContentBlocks, streamingActive]);
 
   const canRewindFromMessageIndex = useCallback(
     (userMessageIndex: number) => {

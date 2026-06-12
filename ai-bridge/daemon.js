@@ -23,6 +23,8 @@
  * - Persistent session state across requests
  */
 
+import { execFileSync } from 'node:child_process';
+import path from 'node:path';
 import { createInterface } from 'readline';
 import { handleClaudeCommand } from './channels/claude-channel.js';
 import { handleCodexCommand } from './channels/codex-channel.js';
@@ -36,7 +38,7 @@ import {
   resetRuntimePersistent,
   getContextUsagePersistent
 } from './services/claude/persistent-query-service.js';
-import { injectNetworkEnvVars } from './config/api-config.js';
+import { injectNetworkEnvVars, isWebviewControlledEnvVar } from './config/api-config.js';
 import { cleanupStaleTempImages } from './services/claude/attachment-service.js';
 
 // =============================================================================
@@ -78,6 +80,104 @@ const _originalStdoutWrite = process.stdout.write.bind(process.stdout);
 const _originalStderrWrite = process.stderr.write.bind(process.stderr);
 const _originalConsoleLog = console.log.bind(console);
 const _originalConsoleError = console.error.bind(console);
+
+// =============================================================================
+// GUI Login Environment Fix (must run before any subprocess spawns)
+// =============================================================================
+//
+// GUI-launched IDEs (JetBrains via WSL on Windows, Dock-launched on macOS)
+// don't source the user's shell init files, so the daemon inherits a minimal
+// system PATH. Probe the user's login shell once at startup and apply a
+// whitelist of runtime env vars so every subprocess this daemon spawns —
+// Claude's Bash tool, Codex, MCP servers, any future tool — automatically
+// sees the user's full environment without per-tool Java-side patches.
+
+if (process.platform !== 'win32' && !process.env.__AI_BRIDGE_ENV_PROBED) {
+  // PATH is critical; runtime homes let tools resolve config/data dirs correctly
+  const VARS_TO_INHERIT = new Set([
+    'PATH',
+    'NVM_DIR',
+    'PYENV_ROOT',
+    'RUSTUP_HOME', 'CARGO_HOME',
+    'GOPATH', 'GOROOT',
+    'JAVA_HOME',
+    'SDKMAN_DIR', 'RBENV_ROOT',
+  ]);
+
+  const loginShell = process.env.SHELL || '/bin/bash';
+  const shellBase = path.basename(loginShell);
+  // fish reads config.fish by default; all other POSIX shells need -l for login profile
+  const loginFlag = shellBase === 'fish' ? '-c' : '-lc';
+
+  const tryProbeEnv = (shell, flag) => {
+    try {
+      return execFileSync(shell, [flag, 'env -0'], {
+        timeout: 3000,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+    } catch {
+      return null;
+    }
+  };
+
+  let raw = tryProbeEnv(loginShell, loginFlag);
+  let probeSource = raw ? loginShell : null;
+
+  if (!raw && loginShell !== '/bin/bash') {
+    raw = tryProbeEnv('/bin/bash', '-lc');
+    if (raw) probeSource = '/bin/bash';
+  }
+
+  let applied = 0;
+  if (raw) {
+    for (const entry of raw.split('\0')) {
+      const eqIdx = entry.indexOf('=');
+      if (eqIdx < 1) continue;
+      const key = entry.slice(0, eqIdx);
+      if (!VARS_TO_INHERIT.has(key)) continue;
+      const val = entry.slice(eqIdx + 1);
+      if (key === 'PATH') {
+        // Merge rather than replace: the Java launcher already enriched PATH (Homebrew,
+        // nvm, ...), so adopting a login-shell PATH wholesale would drop those entries
+        // whenever the shell returns a minimal one. Union (current first, append only
+        // unseen entries) keeps every launcher path while still picking up dirs the
+        // launcher missed (pyenv/rustup/sdkman). This also fixes Apple-Silicon Homebrew
+        // PATHs, which the old "$HOME must appear" guard wrongly rejected.
+        const current = process.env.PATH || '';
+        const seen = new Set(current.split(path.delimiter).filter(Boolean));
+        const additions = val.split(path.delimiter).filter((p) => p && !seen.has(p));
+        if (additions.length > 0) {
+          process.env.PATH = current
+            ? `${current}${path.delimiter}${additions.join(path.delimiter)}`
+            : val;
+          applied++;
+        }
+        continue;
+      }
+      if (val !== process.env[key]) {
+        process.env[key] = val;
+        applied++;
+      }
+    }
+  }
+
+  process.env.__AI_BRIDGE_ENV_PROBED = '1';
+  _originalStderrWrite(
+    `[daemon] env probe: shell=${probeSource ?? 'none'} vars-applied=${applied}\n`,
+    'utf8',
+  );
+}
+
+// One-shot diagnostic: confirms WSLENV-propagated vars actually reached the daemon.
+// If CLAUDE_PERMISSION_DIR shows up as `unset` here while Java logs claim to have
+// set it, WSLENV is not being honored and the permission bridge will hang.
+_originalStderrWrite(
+  `[daemon] bridge env: CLAUDE_PERMISSION_DIR=${process.env.CLAUDE_PERMISSION_DIR ?? 'unset'}`
+  + ` CLAUDE_SESSION_ID=${process.env.CLAUDE_SESSION_ID ?? 'unset'}`
+  + ` WSLENV=${process.env.WSLENV ?? 'unset'}\n`,
+  'utf8',
+);
 
 /**
  * Write a raw NDJSON line to stdout (bypasses interception).
@@ -303,6 +403,12 @@ async function processRequest(request) {
     // set here — they only return timestamps and memory usage.
     if (params.env && typeof params.env === 'object') {
       for (const [key, value] of Object.entries(params.env)) {
+        // Request env can include settings.json values. Do not let stale
+        // environment controls override the webview's per-turn model, context,
+        // or reasoning selections.
+        if (isWebviewControlledEnvVar(key)) {
+          continue;
+        }
         if (value !== undefined && value !== null) {
           // Save original value (undefined means key didn't exist)
           savedEnv[key] = process.env[key];

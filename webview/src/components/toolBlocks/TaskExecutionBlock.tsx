@@ -7,7 +7,7 @@ import { useSubagentHistoryGetter, useSessionId, useGetToolResultRaw, type GetTo
 import SubagentProcessDetails from '../StatusPanel/SubagentProcessDetails';
 
 const MONO_FONT_STYLE: React.CSSProperties = {
-  fontFamily: "var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace)",
+  fontFamily: "var(--cc-gui-code-font-family, var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace))",
 };
 const NORMAL_WEIGHT_STYLE: React.CSSProperties = { fontWeight: 'normal' };
 

@@ -126,6 +126,55 @@ public class SessionMessageOrchestratorTest {
     }
 
     @Test
+    public void loadFromServerPreservesNormalizedCodexToolBlocks() {
+        SessionState state = new SessionState();
+        state.setProvider("codex");
+        state.setSessionId("session-codex-tools");
+        state.setCwd("/workspace");
+
+        JsonObject toolUse = new JsonObject();
+        toolUse.addProperty("type", "tool_use");
+        toolUse.addProperty("id", "call-1");
+        toolUse.addProperty("name", "glob");
+        JsonObject input = new JsonObject();
+        input.addProperty("command", "rg TODO");
+        toolUse.add("input", input);
+
+        JsonArray rawContent = new JsonArray();
+        rawContent.add(toolUse);
+        JsonObject normalizedRaw = new JsonObject();
+        normalizedRaw.add("content", rawContent);
+        normalizedRaw.addProperty("role", "assistant");
+
+        JsonObject envelope = new JsonObject();
+        envelope.addProperty("type", "assistant");
+        envelope.addProperty("content", "Tool: glob");
+        envelope.add("raw", normalizedRaw);
+
+        RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+        historyAccess.providerHistory = List.of(envelope);
+        SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                state,
+                new MessageParser(),
+                new SessionCallbackFacade(null),
+                historyAccess,
+                (usedTokens, maxTokens) -> {
+                },
+                0,
+                0
+        );
+
+        orchestrator.loadFromServer().join();
+
+        assertEquals(1, state.getMessages().size());
+        ClaudeSession.Message restored = state.getMessages().get(0);
+        assertEquals("Tool: glob", restored.content);
+        assertFalse(restored.raw.has("raw"));
+        assertEquals("tool_use", restored.raw.getAsJsonArray("content")
+                .get(0).getAsJsonObject().get("type").getAsString());
+    }
+
+    @Test
     public void syncUserMessageUuidsShortCircuitsForCodexProvider() {
         SessionState state = new SessionState();
         state.setProvider("codex");

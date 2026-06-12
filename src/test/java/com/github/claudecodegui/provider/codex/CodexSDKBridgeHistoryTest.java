@@ -2,8 +2,10 @@ package com.github.claudecodegui.provider.codex;
 
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.session.MessageParser;
+import com.github.claudecodegui.util.MessageJsonConverter;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -70,6 +72,56 @@ public class CodexSDKBridgeHistoryTest {
             assertNotNull(restored);
             assertEquals(ClaudeSession.Message.Type.USER, restored.type);
             assertEquals("[tool_result]", restored.content);
+            assertEquals("tool_result", restored.raw.getAsJsonArray("content").get(0).getAsJsonObject().get("type").getAsString());
+        } finally {
+            deleteDirectory(sessionsDir);
+        }
+    }
+
+    @Test
+    public void autoRestoreTransportPreservesToolUseAndResultBlocks() throws IOException {
+        Path sessionsDir = Files.createTempDirectory("codex-sdk-bridge-auto-restore-transport");
+        try {
+            writeSessionFile(
+                    sessionsDir,
+                    "session-auto-restore-transport",
+                    line("2026-03-10T10:00:00Z", "response_item",
+                            "{\"type\":\"function_call\",\"call_id\":\"call-search-1\",\"name\":\"shell_command\",\"arguments\":\"{\\\"command\\\":\\\"rg TODO src\\\"}\"}"),
+                    line("2026-03-10T10:00:01Z", "response_item",
+                            "{\"type\":\"function_call_output\",\"call_id\":\"call-search-1\",\"output\":\"src/Main.java:10: TODO\"}")
+            );
+
+            CodexSDKBridge bridge = new CodexSDKBridge(sessionsDir);
+            List<JsonObject> historyMessages =
+                    bridge.getSessionMessages("session-auto-restore-transport", sessionsDir.toString());
+            MessageParser parser = new MessageParser();
+            List<ClaudeSession.Message> restoredMessages = historyMessages.stream()
+                    .map(parser::parseServerMessage)
+                    .toList();
+
+            JsonArray transported = JsonParser.parseString(
+                    MessageJsonConverter.convertMessagesToJson(restoredMessages)
+            ).getAsJsonArray();
+
+            JsonObject transportedToolUse = transported.get(0)
+                    .getAsJsonObject()
+                    .getAsJsonObject("raw")
+                    .getAsJsonArray("content")
+                    .get(0)
+                    .getAsJsonObject();
+            assertEquals("tool_use", transportedToolUse.get("type").getAsString());
+            assertEquals("glob", transportedToolUse.get("name").getAsString());
+            assertEquals("rg TODO src", transportedToolUse.getAsJsonObject("input").get("command").getAsString());
+
+            JsonObject transportedToolResult = transported.get(1)
+                    .getAsJsonObject()
+                    .getAsJsonObject("raw")
+                    .getAsJsonArray("content")
+                    .get(0)
+                    .getAsJsonObject();
+            assertEquals("tool_result", transportedToolResult.get("type").getAsString());
+            assertEquals("call-search-1", transportedToolResult.get("tool_use_id").getAsString());
+            assertEquals("src/Main.java:10: TODO", transportedToolResult.get("content").getAsString());
         } finally {
             deleteDirectory(sessionsDir);
         }

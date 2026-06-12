@@ -246,8 +246,13 @@ export function useGlobalCallbacks({
       }
     };
 
+    window.focusChatInput = () => {
+      focusInput();
+    };
+
     return () => {
       delete window.insertCodeSnippetAtCursor;
+      delete window.focusChatInput;
     };
-  }, [editableRef, getTextContent, renderFileTags, adjustHeight, onInput, setHasContent]);
+  }, [editableRef, getTextContent, renderFileTags, adjustHeight, onInput, setHasContent, focusInput]);
 }

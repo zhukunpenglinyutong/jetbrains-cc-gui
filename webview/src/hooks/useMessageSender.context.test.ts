@@ -11,6 +11,7 @@ describe('useMessageSender - /context command', () => {
     currentProvider: 'claude',
     selectedModel: 'claude-opus-4-7',
     permissionMode: 'default',
+    reasoningEffort: 'high',
     selectedAgent: null,
     sdkStatusLoaded: true,
     currentSdkInstalled: true,
@@ -33,6 +34,14 @@ describe('useMessageSender - /context command', () => {
     closeContextUsageDialog: vi.fn().mockReturnValue(true),
     ...overrides,
   });
+
+  const getBridgePayload = (eventName: string) => {
+    const calls = (window.sendToJava as any).mock.calls.map((call: [string]) => call[0]);
+    const prefix = `${eventName}:`;
+    const sendCall = calls.find((call: string) => call.startsWith(prefix));
+    expect(sendCall).toBeTruthy();
+    return JSON.parse(sendCall!.substring(prefix.length));
+  };
 
   beforeEach(() => {
     window.sendToJava = vi.fn();
@@ -138,5 +147,96 @@ describe('useMessageSender - /context command', () => {
       expect.any(String),
       'error',
     );
+  });
+
+  it('includes explicit Claude high reasoning effort in plain message payload', () => {
+    const opts = createOptions({
+      currentProvider: 'claude',
+      selectedModel: 'claude-opus-4-7',
+      reasoningEffort: 'high',
+    });
+
+    const { result } = renderHook(() => useMessageSender(opts));
+
+    act(() => {
+      result.current.handleSubmit('hello');
+    });
+
+    const payload = getBridgePayload('send_message');
+    expect(payload.reasoningEffort).toBe('high');
+  });
+
+  it('includes explicit Claude high reasoning effort in attachment message payload', () => {
+    const opts = createOptions({
+      currentProvider: 'claude',
+      selectedModel: 'claude-opus-4-7',
+      reasoningEffort: 'high',
+    });
+
+    const { result } = renderHook(() => useMessageSender(opts));
+
+    act(() => {
+      result.current.handleSubmit('hello', [{
+        id: 'att-1',
+        fileName: 'note.txt',
+        mediaType: 'text/plain',
+        data: 'aGVsbG8=',
+      }]);
+    });
+
+    const payload = getBridgePayload('send_message_with_attachments');
+    expect(payload.reasoningEffort).toBe('high');
+  });
+
+  it('omits reasoning effort for Claude models without adaptive thinking support', () => {
+    const opts = createOptions({
+      currentProvider: 'claude',
+      selectedModel: 'claude-haiku-4-5',
+      reasoningEffort: 'low',
+    });
+
+    const { result } = renderHook(() => useMessageSender(opts));
+
+    act(() => {
+      result.current.handleSubmit('hello');
+    });
+
+    const payload = getBridgePayload('send_message');
+    expect(payload).not.toHaveProperty('reasoningEffort');
+  });
+
+  it('includes explicit non-default Claude reasoning effort in plain message payload', () => {
+    const opts = createOptions({
+      reasoningEffort: 'low',
+    });
+
+    const { result } = renderHook(() => useMessageSender(opts));
+
+    act(() => {
+      result.current.handleSubmit('hello');
+    });
+
+    const payload = getBridgePayload('send_message');
+    expect(payload.reasoningEffort).toBe('low');
+  });
+
+  it('includes explicit non-default Claude reasoning effort in attachment message payload', () => {
+    const opts = createOptions({
+      reasoningEffort: 'low',
+    });
+
+    const { result } = renderHook(() => useMessageSender(opts));
+
+    act(() => {
+      result.current.handleSubmit('hello', [{
+        id: 'att-1',
+        fileName: 'note.txt',
+        mediaType: 'text/plain',
+        data: 'aGVsbG8=',
+      }]);
+    });
+
+    const payload = getBridgePayload('send_message_with_attachments');
+    expect(payload.reasoningEffort).toBe('low');
   });
 });

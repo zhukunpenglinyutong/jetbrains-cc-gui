@@ -11,6 +11,7 @@ import com.google.gson.JsonObject;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import javax.swing.UIManager;
 import java.util.List;
 
 /**
@@ -24,7 +25,8 @@ public class FontConfigService {
     public static final String UI_FONT_MODE_CUSTOM_FILE = "customFile";
     public static final String UI_FONT_WARNING_CUSTOM_UNAVAILABLE = "fontUnavailable";
 
-    private static final String UI_FONT_CUSTOM_FAMILY = "CC GUI Custom";
+    private static final String UI_FONT_CUSTOM_FAMILY = "CC GUI UI Custom";
+    private static final String CODE_FONT_CUSTOM_FAMILY = "CC GUI Code Custom";
 
     /**
      * Get the IDEA editor font configuration.
@@ -85,78 +87,71 @@ public class FontConfigService {
     }
 
     /**
+     * Get the IDEA UI font configuration.
+     *
+     * @return a JsonObject containing the UI font configuration
+     */
+    public static JsonObject getUiSourceFontConfig() {
+        JsonObject config = new JsonObject();
+
+        try {
+            // Read the UI font statically (no Swing component construction) so this stays
+            // safe to call off the EDT. UIManager.getFont returning null is virtually
+            // impossible in a running IDE; the ternaries below fall back to a sane default
+            // if it ever does.
+            java.awt.Font uiFont = UIManager.getFont("Label.font");
+
+            String fontName = uiFont != null ? uiFont.getFamily() : "Dialog";
+            int fontSize = uiFont != null ? uiFont.getSize() : 13;
+
+            config.addProperty("fontFamily", fontName);
+            config.addProperty("fontSize", fontSize);
+            config.addProperty("lineSpacing", 1.0f);
+            config.add("fallbackFonts", new JsonArray());
+
+            LOG.info("[FontConfig] Retrieved IDEA UI font config: fontFamily=" + fontName
+                    + ", fontSize=" + fontSize);
+        } catch (Exception e) {
+            config.addProperty("fontFamily", "Inter");
+            config.addProperty("fontSize", 13);
+            config.addProperty("lineSpacing", 1.0f);
+            config.add("fallbackFonts", new JsonArray());
+            LOG.warn("[FontConfig] Failed to get UI font config, using defaults: " + e.getMessage());
+        }
+
+        return config;
+    }
+
+    /**
      * Resolve the effective UI font config using persisted user preference and current editor typography.
      *
      * @param persistedConfig persisted UI font configuration
-     * @param editorFontConfig raw IDEA editor typography
+     * @param uiFontConfig raw IDEA UI typography
      * @return effective UI font payload for frontend application
      */
-    public static JsonObject resolveUiFontConfig(JsonObject persistedConfig, JsonObject editorFontConfig) {
-        JsonObject normalizedEditorConfig = normalizeEditorFontConfig(editorFontConfig);
-        JsonObject normalizedPersistedConfig = normalizePersistedUiFontConfig(persistedConfig);
+    public static JsonObject resolveUiFontConfig(JsonObject persistedConfig, JsonObject uiFontConfig) {
+        return resolveFontConfig(
+                persistedConfig,
+                uiFontConfig,
+                UI_FONT_CUSTOM_FAMILY,
+                "IDEA UI font"
+        );
+    }
 
-        String requestedMode = normalizedPersistedConfig.get("mode").getAsString();
-        String editorFontFamily = normalizedEditorConfig.get("fontFamily").getAsString();
-
-        JsonObject resolvedConfig = new JsonObject();
-        resolvedConfig.addProperty("mode", requestedMode);
-        if (normalizedPersistedConfig.has("customFontPath")) {
-            resolvedConfig.addProperty("customFontPath", normalizedPersistedConfig.get("customFontPath").getAsString());
-        }
-        resolvedConfig.addProperty("fontSize", normalizedEditorConfig.get("fontSize").getAsInt());
-        resolvedConfig.addProperty("lineSpacing", normalizedEditorConfig.get("lineSpacing").getAsFloat());
-        resolvedConfig.add("fallbackFonts", normalizedEditorConfig.getAsJsonArray("fallbackFonts"));
-
-        String effectiveMode = UI_FONT_MODE_FOLLOW_EDITOR;
-        String resolvedFontFamily = editorFontFamily;
-        String resolvedDisplayName = editorFontFamily;
-        String fontUrl = null;
-        String fontFormat = null;
-        String warning = null;
-        String warningCode = null;
-
-        if (UI_FONT_MODE_CUSTOM_FILE.equals(requestedMode)) {
-            String customFontPath = normalizedPersistedConfig.has("customFontPath")
-                    ? normalizedPersistedConfig.get("customFontPath").getAsString()
-                    : null;
-            ValidationResult validation = validateCustomUiFontFile(customFontPath);
-            if (validation.valid()) {
-                try {
-                    UiFontResourceService.FontResource resource =
-                            UiFontResourceService.registerFontFile(new File(customFontPath));
-                    resolvedFontFamily = UI_FONT_CUSTOM_FAMILY;
-                    resolvedDisplayName = validation.familyName() != null
-                            ? validation.familyName()
-                            : extractFileName(customFontPath);
-                    fontUrl = resource.url();
-                    fontFormat = resource.fontFormat();
-                    effectiveMode = UI_FONT_MODE_CUSTOM_FILE;
-                } catch (Exception e) {
-                    warning = "Font unavailable, currently using editor font";
-                    warningCode = UI_FONT_WARNING_CUSTOM_UNAVAILABLE;
-                    LOG.warn("[FontConfig] Failed to read custom font " + customFontPath + ": " + e.getMessage(), e);
-                }
-            } else {
-                warning = "Font unavailable, currently using editor font";
-                warningCode = UI_FONT_WARNING_CUSTOM_UNAVAILABLE;
-            }
-        }
-
-        resolvedConfig.addProperty("effectiveMode", effectiveMode);
-        resolvedConfig.addProperty("fontFamily", resolvedFontFamily);
-        resolvedConfig.addProperty("displayName", resolvedDisplayName);
-        if (fontUrl != null) {
-            resolvedConfig.addProperty("fontUrl", fontUrl);
-            resolvedConfig.addProperty("fontFormat", fontFormat);
-        }
-        if (warning != null) {
-            resolvedConfig.addProperty("warning", warning);
-        }
-        if (warningCode != null) {
-            resolvedConfig.addProperty("warningCode", warningCode);
-        }
-
-        return resolvedConfig;
+    /**
+     * Resolve the effective code font config using persisted user preference and current editor typography.
+     *
+     * @param persistedConfig persisted code font configuration
+     * @param editorFontConfig raw IDEA editor typography
+     * @return effective code font payload for frontend application
+     */
+    public static JsonObject resolveCodeFontConfig(JsonObject persistedConfig, JsonObject editorFontConfig) {
+        return resolveFontConfig(
+                persistedConfig,
+                editorFontConfig,
+                CODE_FONT_CUSTOM_FAMILY,
+                "editor font"
+        );
     }
 
     /**
@@ -168,10 +163,26 @@ public class FontConfigService {
     public static JsonObject getResolvedUiFontConfig(CodemossSettingsService settingsService) {
         try {
             JsonObject persistedConfig = settingsService.getUiFontConfig();
-            return resolveUiFontConfig(persistedConfig, getEditorFontConfig());
+            return resolveUiFontConfig(persistedConfig, getUiSourceFontConfig());
         } catch (Exception e) {
             LOG.error("[FontConfig] Failed to resolve UI font config: " + e.getMessage(), e);
-            return resolveUiFontConfig(null, getEditorFontConfig());
+            return resolveUiFontConfig(null, getUiSourceFontConfig());
+        }
+    }
+
+    /**
+     * Resolve the effective code font config and serialize it for the frontend.
+     *
+     * @param settingsService settings facade
+     * @return effective code font payload
+     */
+    public static JsonObject getResolvedCodeFontConfig(CodemossSettingsService settingsService) {
+        try {
+            JsonObject persistedConfig = settingsService.getCodeFontConfig();
+            return resolveCodeFontConfig(persistedConfig, getEditorFontConfig());
+        } catch (Exception e) {
+            LOG.error("[FontConfig] Failed to resolve code font config: " + e.getMessage(), e);
+            return resolveCodeFontConfig(null, getEditorFontConfig());
         }
     }
 
@@ -183,6 +194,16 @@ public class FontConfigService {
      */
     public static String getResolvedUiFontConfigJson(CodemossSettingsService settingsService) {
         return getResolvedUiFontConfig(settingsService).toString();
+    }
+
+    /**
+     * Resolve the effective code font config and serialize it for JavaScript injection.
+     *
+     * @param settingsService settings facade
+     * @return serialized effective code font payload
+     */
+    public static String getResolvedCodeFontConfigJson(CodemossSettingsService settingsService) {
+        return getResolvedCodeFontConfig(settingsService).toString();
     }
 
     /**
@@ -319,11 +340,83 @@ public class FontConfigService {
         return 1.2f;
     }
 
-    private static JsonObject normalizeEditorFontConfig(JsonObject config) {
-        return config != null ? config.deepCopy() : getEditorFontConfig();
+    private static JsonObject resolveFontConfig(
+            JsonObject persistedConfig,
+            JsonObject sourceFontConfig,
+            String customFamily,
+            String unavailableSourceLabel
+    ) {
+        // Defensive only: both callers (resolveUiFontConfig / resolveCodeFontConfig) always pass a
+        // non-null source, so this editor-font fallback is never hit in practice. It is kept as a
+        // last-resort default rather than the UI source to avoid an NPE if a future caller passes null.
+        JsonObject normalizedSourceConfig = sourceFontConfig != null ? sourceFontConfig.deepCopy() : getEditorFontConfig();
+        JsonObject normalizedPersistedConfig = normalizePersistedFontConfig(persistedConfig);
+
+        String requestedMode = normalizedPersistedConfig.get("mode").getAsString();
+        String sourceFontFamily = normalizedSourceConfig.get("fontFamily").getAsString();
+
+        JsonObject resolvedConfig = new JsonObject();
+        resolvedConfig.addProperty("mode", requestedMode);
+        if (normalizedPersistedConfig.has("customFontPath")) {
+            resolvedConfig.addProperty("customFontPath", normalizedPersistedConfig.get("customFontPath").getAsString());
+        }
+        resolvedConfig.addProperty("fontSize", normalizedSourceConfig.get("fontSize").getAsInt());
+        resolvedConfig.addProperty("lineSpacing", normalizedSourceConfig.get("lineSpacing").getAsFloat());
+        resolvedConfig.add("fallbackFonts", normalizedSourceConfig.getAsJsonArray("fallbackFonts"));
+
+        String effectiveMode = UI_FONT_MODE_FOLLOW_EDITOR;
+        String resolvedFontFamily = sourceFontFamily;
+        String resolvedDisplayName = sourceFontFamily;
+        String fontUrl = null;
+        String fontFormat = null;
+        String warning = null;
+        String warningCode = null;
+
+        if (UI_FONT_MODE_CUSTOM_FILE.equals(requestedMode)) {
+            String customFontPath = normalizedPersistedConfig.has("customFontPath")
+                    ? normalizedPersistedConfig.get("customFontPath").getAsString()
+                    : null;
+            ValidationResult validation = validateCustomUiFontFile(customFontPath);
+            if (validation.valid()) {
+                try {
+                    UiFontResourceService.FontResource resource =
+                            UiFontResourceService.registerFontFile(new File(customFontPath));
+                    resolvedFontFamily = customFamily;
+                    resolvedDisplayName = validation.familyName() != null
+                            ? validation.familyName()
+                            : extractFileName(customFontPath);
+                    fontUrl = resource.url();
+                    fontFormat = resource.fontFormat();
+                    effectiveMode = UI_FONT_MODE_CUSTOM_FILE;
+                } catch (Exception e) {
+                    warning = "Font unavailable, currently using " + unavailableSourceLabel;
+                    warningCode = UI_FONT_WARNING_CUSTOM_UNAVAILABLE;
+                    LOG.warn("[FontConfig] Failed to read custom font " + customFontPath + ": " + e.getMessage(), e);
+                }
+            } else {
+                warning = "Font unavailable, currently using " + unavailableSourceLabel;
+                warningCode = UI_FONT_WARNING_CUSTOM_UNAVAILABLE;
+            }
+        }
+
+        resolvedConfig.addProperty("effectiveMode", effectiveMode);
+        resolvedConfig.addProperty("fontFamily", resolvedFontFamily);
+        resolvedConfig.addProperty("displayName", resolvedDisplayName);
+        if (fontUrl != null) {
+            resolvedConfig.addProperty("fontUrl", fontUrl);
+            resolvedConfig.addProperty("fontFormat", fontFormat);
+        }
+        if (warning != null) {
+            resolvedConfig.addProperty("warning", warning);
+        }
+        if (warningCode != null) {
+            resolvedConfig.addProperty("warningCode", warningCode);
+        }
+
+        return resolvedConfig;
     }
 
-    private static JsonObject normalizePersistedUiFontConfig(JsonObject persistedConfig) {
+    private static JsonObject normalizePersistedFontConfig(JsonObject persistedConfig) {
         JsonObject normalized = new JsonObject();
         String mode = persistedConfig != null
                 && persistedConfig.has("mode")

@@ -36,13 +36,13 @@ export function mapModelIdToSdkName(modelId) {
  *
  * Priority: ANTHROPIC_MODEL (global override) > ANTHROPIC_DEFAULT_*_MODEL > original modelId
  *
- * IMPORTANT: The `[1m]` suffix on the input modelId is preserved across the mapping.
+ * IMPORTANT: The `[1m]` suffix is controlled by the input modelId from the
+ * webview, not by stale settings.env mappings.
  * The 1M context window is selected by the Claude Code SDK based on whether the
  * model name ends with `[1m]` (it reads `process.env.ANTHROPIC_DEFAULT_*_MODEL`).
- * Stripping the suffix during settings resolution silently disables the 1M toggle
- * for any provider whose mapping value doesn't already carry `[1m]` (most third-party
- * presets like zhipu/kimi/qwen/minimax/xiaomi). If the mapped value already ends in
- * `[1m]`, it's kept as-is so we don't double-append.
+ * If the request enables 1M, preserve or append the suffix on the mapped model.
+ * If the request disables 1M, strip any suffix from the mapped value so an old
+ * settings.json env value cannot force the 1M context window back on.
  *
  * @param {string} modelId - Internal model ID from frontend (e.g. 'claude-sonnet-4-6' or 'claude-sonnet-4-6[1m]')
  * @param {object} userEnv - The env object from settings.json (settings.env)
@@ -53,11 +53,11 @@ export function resolveModelFromSettings(modelId, userEnv) {
 
   const lowerModel = modelId.toLowerCase();
   const requestHas1M = /\[1m\]$/i.test(modelId);
-  // Preserve the [1m] suffix from the original modelId across settings mapping.
-  // If the mapped value already carries [1m], don't double-append it.
+  // The request owns 1M state. Settings mappings may provide the provider's base
+  // model ID, but they must not force the context-window suffix.
   const applySuffix = (mapped) => {
-    if (!requestHas1M) return mapped;
-    return /\[1m\]$/i.test(mapped) ? mapped : `${mapped}[1m]`;
+    const base = String(mapped).trim().replace(/\[1m\]$/i, '');
+    return requestHas1M ? `${base}[1m]` : base;
   };
 
   // ANTHROPIC_MODEL is a global override that applies to all model types

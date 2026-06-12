@@ -63,10 +63,26 @@ public class DependencyManager {
 
     /**
      * Returns the root dependencies directory path (~/.codemoss/dependencies/).
+     *
+     * <p>When the active Node.js executable is a WSL path (Unix-style on Windows), the
+     * directory is rooted inside the WSL filesystem so that both the Windows JVM and the
+     * WSL node process (which resolves {@code os.homedir()} to the Linux home) refer to the
+     * same physical location.  The WSL home is obtained as a Windows UNC path via
+     * {@link NodeDetector#resolveWslHomeUncPath()} so that {@link java.nio.file.Files}
+     * operations work from the Windows side.  Falls back to the Windows home directory if
+     * the UNC lookup fails.
      */
     public Path getDependenciesDir() {
-        String home = PlatformUtils.getHomeDirectory();
-        return Paths.get(home, ".codemoss", DEPS_DIR_NAME);
+        String nodePath = nodeDetector.findNodeExecutable();
+        if (NodeDetector.isWslPath(nodePath)) {
+            String wslHomeUnc = NodeDetector.resolveWslHomeUncPath();
+            if (wslHomeUnc != null && !wslHomeUnc.isEmpty()) {
+                return Paths.get(wslHomeUnc, ".codemoss", DEPS_DIR_NAME);
+            }
+            LOG.warn("[DependencyManager] WSL node detected but could not resolve WSL home UNC path; "
+                    + "falling back to Windows home. SDK may not be found by the WSL node process.");
+        }
+        return Paths.get(PlatformUtils.getHomeDirectory(), ".codemoss", DEPS_DIR_NAME);
     }
 
     /**
@@ -387,14 +403,18 @@ public class DependencyManager {
 
                 log.accept("Running npm install...");
                 boolean isWsl = NodeDetector.isWslPath(nodePath);
-                Path prefixDir = isWsl
-                        ? Paths.get(NodeDetector.convertToWslPath(normalizedSdkDir.toString()))
-                        : normalizedSdkDir;
-                List<String> command = NpmPermissionHelper.buildInstallCommandWithFallback(
-                        npmPath, prefixDir, packages, attempt
-                );
+                List<String> command;
                 if (isWsl) {
+                    // Pass the WSL Unix path as a raw String — wrapping it in Paths.get() on
+                    // Windows would convert forward slashes to backslashes (e.g. /home/foo →
+                    // \home\foo), which WSL npm cannot resolve as a Linux absolute path.
+                    String wslPrefix = NodeDetector.convertToWslPath(normalizedSdkDir.toString());
+                    command = NpmPermissionHelper.buildInstallCommandWithFallback(
+                            npmPath, wslPrefix, packages, attempt);
                     command.add(0, "wsl");
+                } else {
+                    command = NpmPermissionHelper.buildInstallCommandWithFallback(
+                            npmPath, normalizedSdkDir, packages, attempt);
                 }
                 log.accept("Command: " + String.join(" ", command));
 

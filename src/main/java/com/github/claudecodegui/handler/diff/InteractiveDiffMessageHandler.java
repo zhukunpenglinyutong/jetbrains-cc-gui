@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler.diff;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.google.gson.Gson;
@@ -74,7 +75,7 @@ public class InteractiveDiffMessageHandler implements DiffActionHandler {
             LOG.info("Showing interactive diff for file: " + filePath);
 
             if (!isNewFile) {
-                File file = new File(filePath);
+                File file = new File(NodeDetector.toVfsPath(filePath));
                 if (!file.exists()) {
                     LOG.warn("File does not exist: " + filePath);
                     browserBridge.showErrorToast(ClaudeCodeGuiBundle.message("diff.fileNotFoundDetail", filePath));
@@ -96,7 +97,7 @@ public class InteractiveDiffMessageHandler implements DiffActionHandler {
         try {
             String originalContent = "";
             if (!isNewFile) {
-                VirtualFile vFile = LocalFileSystem.getInstance().refreshAndFindFileByPath(filePath.replace('\\', '/'));
+                VirtualFile vFile = LocalFileSystem.getInstance().refreshAndFindFileByPath(NodeDetector.toVfsPath(filePath));
                 if (vFile != null) {
                     vFile.refresh(false, false);
                     Charset charset = vFile.getCharset() != null ? vFile.getCharset() : StandardCharsets.UTF_8;

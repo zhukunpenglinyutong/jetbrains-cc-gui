@@ -94,6 +94,7 @@ class ClaudeHistoryParser {
             session.messageCount = messages.size();
             session.lastTimestamp = lastTimestamp;
             session.firstTimestamp = firstTimestamp;
+            session.entrypoint = sniffEntrypoint(messages);
 
             return session;
         } catch (Exception e) {
@@ -109,6 +110,20 @@ class ClaudeHistoryParser {
         }
 
         LOG.warn("[ClaudeHistoryReader] Skipping unreadable session during scan: " + path + " (" + e.getMessage() + ")");
+    }
+
+    /**
+     * Sniff the session entrypoint from the earliest message that carries one.
+     * Mirrors the lite-read pipeline so fallback full scans persist the same
+     * entrypoint into the index instead of leaving it null forever.
+     */
+    private static String sniffEntrypoint(List<ClaudeHistoryReader.ConversationMessage> messages) {
+        for (ClaudeHistoryReader.ConversationMessage msg : messages) {
+            if (msg.entrypoint != null && !msg.entrypoint.isEmpty()) {
+                return msg.entrypoint;
+            }
+        }
+        return null;
     }
 
     /**

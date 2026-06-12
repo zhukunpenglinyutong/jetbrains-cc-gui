@@ -1,8 +1,8 @@
 package com.github.claudecodegui.skill;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.settings.CodexSettingsManager;
-import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -150,7 +150,7 @@ public class CodexSkillService {
         }
 
         // User-level directories
-        String userHome = PlatformUtils.getHomeDirectory();
+        String userHome = NodeDetector.resolveHomeForFileOps();
 
         // ~/.agents/skills/ (Codex community skills)
         String agentsDir = Paths.get(userHome, ".agents", "skills").toString();
@@ -438,7 +438,7 @@ public class CodexSkillService {
 
         String targetDir;
         if ("user".equals(scope)) {
-            targetDir = Paths.get(PlatformUtils.getHomeDirectory(), ".agents", "skills").toString();
+            targetDir = Paths.get(NodeDetector.resolveHomeForFileOps(), ".agents", "skills").toString();
         } else {
             if (cwd == null || cwd.isEmpty()) {
                 result.addProperty("success", false);
@@ -570,7 +570,7 @@ public class CodexSkillService {
             }
             String baseDir;
             if ("user".equals(scope)) {
-                baseDir = Paths.get(PlatformUtils.getHomeDirectory(), ".agents", "skills").toString();
+                baseDir = Paths.get(NodeDetector.resolveHomeForFileOps(), ".agents", "skills").toString();
             } else {
                 if (cwd == null || cwd.isEmpty()) {
                     result.addProperty("success", false);
@@ -591,7 +591,7 @@ public class CodexSkillService {
         // Security: verify the skill directory is inside a legitimate skills directory
         // Collect all valid skills base directories
         List<Path> validBaseDirs = new ArrayList<>();
-        String userHome = PlatformUtils.getHomeDirectory();
+        String userHome = NodeDetector.resolveHomeForFileOps();
         validBaseDirs.add(Paths.get(userHome, ".agents", "skills"));
         validBaseDirs.add(Paths.get(userHome, ".codex", "skills"));
         validBaseDirs.add(Paths.get(userHome, ".codex", "skills", ".system"));

@@ -91,6 +91,8 @@
     "streamingConnected": "{{provider}} 已成功連接，正在理解問題",
     "showEarlierMessages": "顯示之前的 {{count}} 則訊息",
     "totalDuration": "本次耗時",
+    "tokenUsage": "輸入 {{input}} / 輸出 {{output}}",
+    "tokenUsageDetail": "本輪合計 — 輸入 {{input}} · 快取寫入 {{cacheWrite}} · 快取讀取 {{cacheRead}} · 輸出 {{output}}",
     "search": {
       "ariaLabel": "在對話中搜尋",
       "placeholder": "在對話中搜尋...",
@@ -158,6 +160,11 @@
         "hintText": "獲取實際的 Node.js 可執行檔案路徑。為空時外掛會自動嘗試檢測 Node.js。",
         "versionTooLow": "Node.js 版本過低，外掛需要 v{{minVersion}} 或更高版本才能正常運行"
       },
+      "claudeCliPath": {
+        "label": "Claude CLI 路徑（覆寫）",
+        "placeholder": "例如 /usr/local/bin/claude — 留空則使用內建 SDK",
+        "hint": "可選。設定後，外掛程式將啟動此二進位檔案，而非內建的 @anthropic-ai/claude-agent-sdk。儲存時會重新啟動守護程序。"
+      },
       "workingDirectory": {
         "label": "Working Directory",
         "placeholder": "e.g. project1 or leave empty to use project root",
@@ -173,16 +180,28 @@
         "level6": "最大（140%）"
       },
       "editorFont": {
-        "label": "字體",
-        "hint": "這裡修改的是外掛介面字體；字級和行高仍跟隨編輯器。",
-        "followOption": "跟隨編輯器（{{font}}）",
-        "customOption": "自訂字體檔案",
-        "customPathLabel": "字體檔案路徑",
-        "customPathPlaceholder": "選擇或輸入 .ttf / .otf 字體檔案路徑",
+        "label": "UI 字體",
+        "hint": "這裡修改的是外掛介面字體。程式碼可以使用獨立的程式碼字體。",
+        "followOption": "跟隨 IDEA UI 字體（{{font}}）",
+        "customOption": "自訂 UI 字體檔案",
+        "customPathLabel": "UI 字體檔案路徑",
+        "customPathPlaceholder": "選擇或輸入 .ttf / .otf UI 字體檔案路徑",
         "browse": "瀏覽",
-        "warningUnavailable": "字體不可用，目前已回退到編輯器字體",
+        "warningUnavailable": "UI 字體不可用，目前已回退到 IDEA UI 字體",
+        "statusFollowEditor": "目前跟隨 IDEA UI 字體：{{font}}",
+        "statusCustom": "目前使用自訂 UI 字體：{{font}}"
+      },
+      "codeFont": {
+        "label": "程式碼字體",
+        "hint": "Markdown 程式碼和命令區塊會使用這個字體。",
+        "followOption": "跟隨編輯器字體（{{font}}）",
+        "customOption": "自訂程式碼字體檔案",
+        "customPathLabel": "程式碼字體檔案路徑",
+        "customPathPlaceholder": "選擇或輸入 .ttf / .otf 程式碼字體檔案路徑",
+        "browse": "瀏覽",
+        "warningUnavailable": "程式碼字體不可用，目前已回退到編輯器字體",
         "statusFollowEditor": "目前跟隨編輯器字體：{{font}}",
-        "statusCustom": "目前使用自訂字體：{{font}}"
+        "statusCustom": "目前使用自訂程式碼字體：{{font}}"
       },
       "streaming": {
         "label": "Streaming",
@@ -740,6 +759,12 @@
     "copySessionId": "複製會話ID用於CLI恢復",
     "sessionIdCopied": "會話ID已複製",
     "copyFailed": "複製失敗",
+    "convertToCliSession": "轉換為 CLI 可辨識會話",
+    "convertButton": "轉為CLI",
+    "convertSuccess": "會話已轉換為 CLI 可辨識",
+    "convertFailed": "轉換失敗",
+    "confirmConvert": "轉換為 CLI 會話？",
+    "convertConfirmMessage": "此操作將修改會話的 entrypoint，使其在 Claude Code CLI 的 /resume 列表中顯示。",
     "timeAgo": {
       "yearsAgo": "年前",
       "monthsAgo": "個月前",
@@ -747,6 +772,26 @@
       "hoursAgo": "小時前",
       "minutesAgo": "分鐘前",
       "secondsAgo": "秒前"
+    },
+    "conversionErrors": {
+      "INVALID_SESSION_ID": "無效的會話 ID",
+      "SESSION_ACTIVE": "無法轉換當前活躍的會話，請先開啟新會話後再轉換",
+      "SESSION_NOT_FOUND": "未找到會話檔案",
+      "FILE_NOT_EXIST": "會話檔案不存在",
+      "FILE_LOCKED": "會話檔案正在被其他程序訪問",
+      "NOT_SDK_SESSION": "此會話不是 SDK 創建的會話（entrypoint 不是 sdk-cli）",
+      "ALREADY_CLI_SESSION": "此會話已經是 CLI 會話",
+      "CONVERSION_FAILED": "轉換失敗，請稍後重試"
+    },
+    "entrypointLabel": {
+      "sdk-cli": "SDK會話",
+      "claude-vscode": "VS Code",
+      "remote": "遠程"
+    },
+    "entrypointTooltip": {
+      "sdk-cli": "此會話由插件通過 SDK 創建，CLI 默認不顯示。點擊「轉為CLI」可使其出現在終端 CLI 的 /resume 列表中",
+      "claude-vscode": "此會話由 VS Code 插件創建，CLI 默認不顯示。點擊「轉為CLI」可使其出現在終端 CLI 的 /resume 列表中",
+      "remote": "此會話由遠程 Claude Code 實例創建"
     }
   },
   "permission": {
@@ -1309,6 +1354,10 @@
       "opus48": {
         "label": "Opus 4.8",
         "description": "Opus 4.8 · 最新最強大的模型"
+      },
+      "fable5": {
+        "label": "Fable 5",
+        "description": "Fable 5 · 最強大 · Mythos 級"
       }
     },
     "longContext": {
@@ -1528,6 +1577,17 @@
     "title": "版本更新",
     "close": "知道了",
     "page": "{{current}} / {{total}}"
+  },
+  "codexFastMode": {
+    "title": "選擇 Codex 速度模式",
+    "normal": {
+      "label": "標準",
+      "description": "Codex 的預設回應速度"
+    },
+    "fast": {
+      "label": "Fast",
+      "description": "Codex 快速回應模式（會產生額外消耗）"
+    }
   },
   "error": {
     "providerNotConfigured": "供應商未設定",

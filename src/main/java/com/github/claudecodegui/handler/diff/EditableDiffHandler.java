@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler.diff;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.util.ContentRebuildUtil;
@@ -64,7 +65,7 @@ public class EditableDiffHandler implements DiffActionHandler {
 
             boolean isNewFile = "A".equals(status);
             if (!isNewFile) {
-                File file = new File(filePath);
+                File file = new File(NodeDetector.toVfsPath(filePath));
                 if (!file.exists()) {
                     LOG.warn("File does not exist: " + filePath);
                     browserBridge.showErrorToast(ClaudeCodeGuiBundle.message("diff.fileNotFoundDetail", filePath));
@@ -84,7 +85,7 @@ public class EditableDiffHandler implements DiffActionHandler {
             String currentContent = "";
             Charset charset = StandardCharsets.UTF_8;
 
-            VirtualFile vFile = LocalFileSystem.getInstance().refreshAndFindFileByPath(filePath.replace('\\', '/'));
+            VirtualFile vFile = LocalFileSystem.getInstance().refreshAndFindFileByPath(NodeDetector.toVfsPath(filePath));
             if (vFile != null) {
                 vFile.refresh(false, false);
                 charset = vFile.getCharset() != null ? vFile.getCharset() : StandardCharsets.UTF_8;

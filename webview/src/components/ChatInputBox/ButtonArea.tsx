@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ButtonAreaProps, ModelInfo, PermissionMode, ReasoningEffort } from './types';
-import { ConfigSelect, ModelSelect, ModeSelect, ProviderSelect, ReasoningSelect } from './selectors';
+import type { ButtonAreaProps, CodexFastMode, ModelInfo, PermissionMode, ReasoningEffort } from './types';
+import { CodexFastModeSelect, ConfigSelect, ModelSelect, ModeSelect, ProviderSelect, ReasoningSelect } from './selectors';
 import { CLAUDE_MODELS, CODEX_MODELS } from './types';
 import { STORAGE_KEYS, validateCodexCustomModels } from '../../types/provider';
 import type { CodexCustomModel } from '../../types/provider';
@@ -76,12 +76,14 @@ export const ButtonArea = ({
   permissionMode = 'bypassPermissions',
   currentProvider = 'claude',
   reasoningEffort = 'high',
+  codexFastMode = 'normal',
   onSubmit,
   onStop,
   onModeSelect,
   onModelSelect,
   onProviderSelect,
   onReasoningChange,
+  onCodexFastModeChange,
   onEnhancePrompt,
   alwaysThinkingEnabled = false,
   onToggleThinking,
@@ -236,6 +238,13 @@ export const ButtonArea = ({
   }, [onReasoningChange]);
 
   /**
+   * Handle Codex speed mode selection
+   */
+  const handleCodexFastModeChange = useCallback((mode: CodexFastMode) => {
+    onCodexFastModeChange?.(mode);
+  }, [onCodexFastModeChange]);
+
+  /**
    * Handle enhance prompt button click
    */
   const handleEnhanceClick = useCallback((e: React.MouseEvent) => {
@@ -265,6 +274,9 @@ export const ButtonArea = ({
         <ModeSelect value={permissionMode} onChange={handleModeSelect} provider={currentProvider} />
         <ModelSelect value={selectedModel} onChange={handleModelSelect} models={availableModels} currentProvider={currentProvider} onAddModel={onAddModel} longContextEnabled={longContextEnabled} onLongContextChange={onLongContextChange} />
         <ReasoningSelect value={reasoningEffort} onChange={handleReasoningChange} selectedModel={selectedModel} currentProvider={currentProvider} />
+        {currentProvider === 'codex' && (
+          <CodexFastModeSelect value={codexFastMode} onChange={handleCodexFastModeChange} />
+        )}
       </div>
 
       {/* Right side: tool buttons */}

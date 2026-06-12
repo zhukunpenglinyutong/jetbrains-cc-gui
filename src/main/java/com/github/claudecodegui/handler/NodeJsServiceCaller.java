@@ -43,9 +43,7 @@ public class NodeJsServiceCaller {
 
         String bridgePath = context.getClaudeSDKBridge().getSdkTestDir().getAbsolutePath();
         String nodePath = context.getClaudeSDKBridge().getNodeExecutable();
-        String scriptBridgePath = NodeDetector.isWslPath(nodePath)
-                ? NodeDetector.convertToWslPath(bridgePath)
-                : bridgePath.replace("\\", "\\\\");
+        String scriptBridgePath = NodeDetector.resolveScriptPath(nodePath, bridgePath);
 
         String nodeScript = String.format(
             "const { %s } = require('%s/services/favorites-service.cjs'); " +
@@ -71,9 +69,7 @@ public class NodeJsServiceCaller {
 
         String bridgePath = context.getClaudeSDKBridge().getSdkTestDir().getAbsolutePath();
         String nodePath = context.getClaudeSDKBridge().getNodeExecutable();
-        String scriptBridgePath = NodeDetector.isWslPath(nodePath)
-                ? NodeDetector.convertToWslPath(bridgePath)
-                : bridgePath.replace("\\", "\\\\");
+        String scriptBridgePath = NodeDetector.resolveScriptPath(nodePath, bridgePath);
 
         String nodeScript = String.format(
             "const { %s } = require('%s/services/session-titles-service.cjs'); " +
@@ -98,9 +94,7 @@ public class NodeJsServiceCaller {
 
         String bridgePath = context.getClaudeSDKBridge().getSdkTestDir().getAbsolutePath();
         String nodePath = context.getClaudeSDKBridge().getNodeExecutable();
-        String scriptBridgePath = NodeDetector.isWslPath(nodePath)
-                ? NodeDetector.convertToWslPath(bridgePath)
-                : bridgePath.replace("\\", "\\\\");
+        String scriptBridgePath = NodeDetector.resolveScriptPath(nodePath, bridgePath);
 
         String nodeScript = String.format(
             "const { %s } = require('%s/services/session-titles-service.cjs'); " +
@@ -125,9 +119,7 @@ public class NodeJsServiceCaller {
     public String callNodeJsDeleteTitle(String sessionId) throws Exception {
         String bridgePath = context.getClaudeSDKBridge().getSdkTestDir().getAbsolutePath();
         String nodePath = context.getClaudeSDKBridge().getNodeExecutable();
-        String scriptBridgePath = NodeDetector.isWslPath(nodePath)
-                ? NodeDetector.convertToWslPath(bridgePath)
-                : bridgePath.replace("\\", "\\\\");
+        String scriptBridgePath = NodeDetector.resolveScriptPath(nodePath, bridgePath);
 
         String nodeScript = String.format(
             "const { deleteTitle } = require('%s/services/session-titles-service.cjs'); " +

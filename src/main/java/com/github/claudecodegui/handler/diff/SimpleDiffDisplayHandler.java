@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler.diff;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.util.ContentRebuildUtil;
@@ -132,7 +133,7 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
                 try {
                     String afterContent = currentContent;
                     if (afterContent == null) {
-                        File file = new File(filePath);
+                        File file = new File(NodeDetector.toVfsPath(filePath));
                         if (file.exists()) {
                             VirtualFile virtualFile = EditorFileUtils.refreshAndFindFileSync(file);
                             if (virtualFile != null) {
@@ -193,7 +194,7 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
 
             ApplicationManager.getApplication().invokeLater(() -> {
                 try {
-                    VirtualFile file = LocalFileSystem.getInstance().refreshAndFindFileByPath(filePath.replace('\\', '/'));
+                    VirtualFile file = LocalFileSystem.getInstance().refreshAndFindFileByPath(NodeDetector.toVfsPath(filePath));
                     if (file != null && file.isDirectory()) {
                         LOG.warn("Cannot show preview diff for directory: " + filePath);
                         return;
@@ -280,7 +281,7 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
 
             ApplicationManager.getApplication().invokeLater(() -> {
                 try {
-                    VirtualFile file = LocalFileSystem.getInstance().refreshAndFindFileByPath(filePath.replace('\\', '/'));
+                    VirtualFile file = LocalFileSystem.getInstance().refreshAndFindFileByPath(NodeDetector.toVfsPath(filePath));
                     if (file != null && file.isDirectory()) {
                         LOG.warn("Cannot show diff for directory: " + filePath);
                         return;

@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler.file;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.util.EditorFileUtils;
@@ -149,6 +150,21 @@ class OpenFileHandler {
 
         String resolvedPath = actualPath;
         if (PlatformUtils.isWindows()) {
+            // WSL must be tried before the MSYS conversion below: under MSYS
+            // /home/<user> means %USERPROFILE%, under WSL it's a real Linux dir
+            // accessible only via \\wsl.localhost\<distro>\home\<user>.
+            // Falling through to MSYS would silently rewrite the path to the
+            // Windows home, which usually has no such file → "file does not exist".
+            String wslUncPath = NodeDetector.convertWslPathToWindowsUnc(actualPath);
+            if (wslUncPath != null) {
+                File wslFile = normalizeExistingFile(new File(wslUncPath));
+                if (wslFile != null) {
+                    LOG.info("Resolved WSL path to UNC: " + wslUncPath);
+                    warnIfOutsideProjectRoot(wslFile);
+                    return new FileResolutionResult(wslFile, null);
+                }
+            }
+
             String convertedPath = PathUtils.convertMsysToWindowsPath(actualPath);
             if (!convertedPath.equals(actualPath)) {
                 LOG.info("Detected MSYS2 path, converted to Windows path: " + convertedPath);
@@ -581,12 +597,12 @@ class OpenFileHandler {
                 return null;
             }
 
-            Path projectRoot = new File(basePath).getCanonicalFile().toPath();
+            Path projectRoot = new File(NodeDetector.toVfsPath(basePath)).getCanonicalFile().toPath();
             Path baseDirectory = projectRoot;
             if (context.getSession() != null) {
                 String sessionCwd = context.getSession().getCwd();
                 if (sessionCwd != null && !sessionCwd.isBlank()) {
-                    Path sessionPath = new File(sessionCwd).getCanonicalFile().toPath();
+                    Path sessionPath = new File(NodeDetector.toVfsPath(sessionCwd)).getCanonicalFile().toPath();
                     if (sessionPath.startsWith(projectRoot)) {
                         baseDirectory = sessionPath;
                     }
@@ -634,17 +650,17 @@ class OpenFileHandler {
         String basePath = project != null ? project.getBasePath() : null;
 
         try {
-            Path resolvedPath = new File(absolutePath).getCanonicalFile().toPath();
+            String vfsAbsolute = NodeDetector.toVfsPath(absolutePath);
+            Path resolvedPath = new File(vfsAbsolute).getCanonicalFile().toPath();
             if (basePath != null && !basePath.isBlank()) {
-                Path projectRoot = new File(basePath).getCanonicalFile().toPath();
+                String vfsBase = NodeDetector.toVfsPath(basePath);
+                Path projectRoot = new File(vfsBase).getCanonicalFile().toPath();
                 if (resolvedPath.startsWith(projectRoot)) {
                     Path relativePath = projectRoot.relativize(resolvedPath);
                     String displayPath = relativePath.toString().replace('\\', '/');
                     return displayPath.isBlank() ? "." : displayPath;
                 }
             }
-            // Outside project root (or no project context) — surface the
-            // absolute path. See Javadoc.
             return resolvedPath.toString().replace('\\', '/');
         } catch (Exception e) {
             LOG.debug("Failed to relativize tooltip path: " + e.getMessage());

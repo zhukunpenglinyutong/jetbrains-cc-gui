@@ -217,5 +217,19 @@
             <keyboard-shortcut keymap="Mac OS X" first-keystroke="shift ENTER"/>
             <keyboard-shortcut keymap="macOS" first-keystroke="shift ENTER"/>
         </action>
+
+        <!--
+          Hide CC GUI Panel. A standalone action with NO default keyboard shortcut: users may bind one
+          in Settings | Keymap to hide the tool window while focus is in the IDE (e.g. the editor).
+          NOTE: The Shift+Esc shortcut that hides the panel while focus is INSIDE the webview is
+          implemented separately in WebviewInitializer via a JS keydown listener
+          (document.addEventListener -> JBCefJSQuery -> ToolWindow.hide()); it does NOT go through this
+          action. Shift+Esc is intentionally not registered here to avoid clashing with the IDE's
+          built-in HideActiveWindow shortcut.
+        -->
+        <action id="ClaudeCodeGUI.HidePanelAction"
+                class="com.github.claudecodegui.action.HidePanelAction"
+                text="Hide CC GUI Panel"
+                description="Hide the CC GUI tool window panel"/>
     </actions>
 </idea-plugin>

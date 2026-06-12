@@ -19,11 +19,14 @@ interface NodeProcessSelectProps {
   onToast?: (message: string) => void;
 }
 
+const DROPDOWN_SIDE_OVERLAP_PX = 30;
+const VIEWPORT_EDGE_MARGIN_PX = 8;
+
 const DROPDOWN_STYLE_EMBEDDED: React.CSSProperties = {
   position: 'absolute',
   bottom: 0,
   left: '100%',
-  marginLeft: '-30px',
+  marginLeft: -DROPDOWN_SIDE_OVERLAP_PX,
   zIndex: 10001,
   minWidth: '260px',
   width: 'max-content',
@@ -33,6 +36,27 @@ const DROPDOWN_STYLE_EMBEDDED: React.CSSProperties = {
   overflowX: 'hidden',
   padding: '6px 0',
 };
+
+export interface NodeProcessDropdownPositionInput {
+  anchorRect: { left: number; right: number };
+  dropdownWidth: number;
+  viewportWidth: number;
+  overlapPx?: number;
+  edgeMarginPx?: number;
+}
+
+export function shouldFlipNodeProcessDropdownLeft({
+  anchorRect,
+  dropdownWidth,
+  viewportWidth,
+  overlapPx = DROPDOWN_SIDE_OVERLAP_PX,
+  edgeMarginPx = VIEWPORT_EDGE_MARGIN_PX,
+}: NodeProcessDropdownPositionInput): boolean {
+  const rightStart = anchorRect.right - overlapPx;
+  const rightAvailable = viewportWidth - edgeMarginPx - rightStart;
+  const leftAvailable = anchorRect.left + overlapPx - edgeMarginPx;
+  return dropdownWidth > rightAvailable && leftAvailable > rightAvailable;
+}
 
 const GROUP_HEADER_STYLE: React.CSSProperties = {
   display: 'flex',
@@ -220,19 +244,24 @@ export const NodeProcessSelect = ({ embedded = false, onClose, onToast }: NodePr
   const refreshTimerRef = useRef<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Detect when the dropdown would overflow the viewport on the right side and
-  // flip it to render on the left of the parent menu item instead. Runs after
-  // every snapshot update because the dropdown height/width can change.
+  // Decide the submenu side from the parent menu item, not from the current
+  // rendered dropdown position. Measuring the rendered position can oscillate
+  // right -> left -> right in narrow tool windows.
   useLayoutEffect(() => {
     if (!embedded) return;
     const node = dropdownRef.current;
     if (!node) return;
+    const anchor = node.parentElement;
+    if (!anchor) return;
+    const anchorRect = anchor.getBoundingClientRect();
     const rect = node.getBoundingClientRect();
-    const overflowsRight = rect.right > window.innerWidth - 8;
-    if (overflowsRight !== flipToLeft) {
-      setFlipToLeft(overflowsRight);
-    }
-  }, [embedded, snapshot, flipToLeft]);
+    const nextFlipToLeft = shouldFlipNodeProcessDropdownLeft({
+      anchorRect,
+      dropdownWidth: rect.width,
+      viewportWidth: window.innerWidth,
+    });
+    setFlipToLeft((prev) => (prev === nextFlipToLeft ? prev : nextFlipToLeft));
+  }, [embedded, snapshot]);
 
   const requestRefresh = useCallback(() => {
     setLoading(true);
@@ -496,7 +525,7 @@ export const NodeProcessSelect = ({ embedded = false, onClose, onToast }: NodePr
         left: 'auto',
         right: '100%',
         marginLeft: 0,
-        marginRight: '-30px',
+        marginRight: -DROPDOWN_SIDE_OVERLAP_PX,
       }
     : DROPDOWN_STYLE_EMBEDDED;
 

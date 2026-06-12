@@ -107,6 +107,51 @@ public class ClaudeHistoryIndexServiceTest {
     }
 
     @Test
+    public void incrementalScan_nullEntrypointEntry_isHealedByReRead() throws IOException {
+        Path projectDir = tmp.newFolder("claude-index-heal").toPath();
+
+        // File carries an entrypoint, but the index entry predates extraction (entrypoint=null).
+        Path file = writeSessionWithEntrypoint(projectDir, UUID_1, "Hello A", "2026-04-21T10:00:00Z", "sdk-cli");
+        long mtime = Files.getLastModifiedTime(file).toMillis();
+
+        SessionIndexManager.ProjectIndex existing = new SessionIndexManager.ProjectIndex();
+        existing.lastDirScanTime = System.currentTimeMillis();
+        existing.fileCount = 1;
+        SessionIndexManager.SessionIndexEntry stale = entry(UUID_1, "Hello A", 1, mtime, mtime, UUID_1 + ".jsonl");
+        stale.entrypoint = null;
+        existing.sessions.add(stale);
+
+        ClaudeHistoryIndexService service = newService(projectDir);
+        ClaudeHistoryIndexService.ScanResult result = service.incrementalScanLite(projectDir, existing);
+
+        assertEquals(1, result.sessions().size());
+        assertEquals("matching mtime must not shield a never-extracted entry from re-read",
+                "sdk-cli", result.sessions().get(0).entrypoint);
+    }
+
+    @Test
+    public void incrementalScan_emptyEntrypointMarker_isRestoredWithoutReRead() throws IOException {
+        Path projectDir = tmp.newFolder("claude-index-marker").toPath();
+
+        Path file = writeSession(projectDir, UUID_1, "Hello A", "2026-04-21T10:00:00Z");
+        long mtime = Files.getLastModifiedTime(file).toMillis();
+
+        // "" records that extraction ran and the file has no entrypoint: restore, don't re-read.
+        SessionIndexManager.ProjectIndex existing = new SessionIndexManager.ProjectIndex();
+        existing.lastDirScanTime = System.currentTimeMillis();
+        existing.fileCount = 1;
+        existing.sessions.add(entry(UUID_1, "RESTORED TITLE", 1, mtime, mtime, UUID_1 + ".jsonl"));
+
+        ClaudeHistoryIndexService service = newService(projectDir);
+        ClaudeHistoryIndexService.ScanResult result = service.incrementalScanLite(projectDir, existing);
+
+        assertEquals(1, result.sessions().size());
+        // Restored from the index (title untouched by the file), with "" surfaced as null.
+        assertEquals("RESTORED TITLE", result.sessions().get(0).title);
+        assertNull(result.sessions().get(0).entrypoint);
+    }
+
+    @Test
     public void incrementalScan_skipsNonUuidJsonlFiles() throws IOException {
         Path projectDir = tmp.newFolder("claude-index-skip").toPath();
 
@@ -167,11 +212,24 @@ public class ClaudeHistoryIndexServiceTest {
         return file;
     }
 
+    private Path writeSessionWithEntrypoint(
+            Path projectDir, String sessionId, String firstUserText, String timestamp, String entrypoint
+    ) throws IOException {
+        Path file = projectDir.resolve(sessionId + ".jsonl");
+        String line = "{\"type\":\"user\",\"entrypoint\":\"" + entrypoint
+                + "\",\"message\":{\"role\":\"user\",\"content\":\""
+                + firstUserText.replace("\"", "\\\"")
+                + "\"},\"timestamp\":\"" + timestamp + "\"}\n";
+        Files.writeString(file, line);
+        return file;
+    }
+
     /**
      * Builds a SessionIndexEntry with explicit separation between the business
      * timestamps (lastTimestamp/firstTimestamp) and the indexed file mtime. This lets
      * tests construct scenarios where the indexed mtime has drifted without confusing
-     * the two concepts.
+     * the two concepts. Entrypoint defaults to "" (the modern "extracted, file has
+     * none" marker); tests for the null-healing path override it explicitly.
      */
     private SessionIndexManager.SessionIndexEntry entry(
             String sessionId,
@@ -189,6 +247,7 @@ public class ClaudeHistoryIndexServiceTest {
         e.firstTimestamp = lastTimestamp;
         e.fileLastModified = indexedFileMtime;
         e.fileRelativePath = fileRelativePath;
+        e.entrypoint = "";
         return e;
     }
 }

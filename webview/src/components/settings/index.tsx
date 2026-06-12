@@ -116,6 +116,10 @@ const SettingsView = ({
     setMinNodeVersion,
     savingNodePath,
     setSavingNodePath,
+    claudeCliPath,
+    setClaudeCliPath,
+    savingClaudeCliPath,
+    setSavingClaudeCliPath,
     workingDirectory,
     setWorkingDirectory,
     savingWorkingDirectory,
@@ -124,6 +128,8 @@ const SettingsView = ({
     setEditorFontConfig,
     uiFontConfig,
     setUiFontConfig,
+    codeFontConfig,
+    setCodeFontConfig,
     setLocalStreamingEnabled,
     streamingEnabled,
     codexSandboxMode,
@@ -152,10 +158,14 @@ const SettingsView = ({
     skipNewSessionConfirm,
     setSkipNewSessionConfirm,
     handleSaveNodePath,
+    handleSaveClaudeCliPath,
     handleSaveWorkingDirectory,
     handleUiFontSelectionChange,
     handleSaveUiFontCustomPath,
     handleBrowseUiFontFile,
+    handleCodeFontSelectionChange,
+    handleSaveCodeFontCustomPath,
+    handleBrowseCodeFontFile,
     handleStreamingEnabledChange,
     handleCodexSandboxModeChange,
     handleSendShortcutChange,
@@ -293,6 +303,8 @@ const SettingsView = ({
     setNodeVersion,
     setMinNodeVersion,
     setSavingNodePath,
+    setClaudeCliPath,
+    setSavingClaudeCliPath,
     setWorkingDirectory,
     setSavingWorkingDirectory,
     setCommitPrompt,
@@ -303,6 +315,7 @@ const SettingsView = ({
     setSavingProjectCommitPrompt,
     setEditorFontConfig,
     setUiFontConfig,
+    setCodeFontConfig,
     setIdeTheme,
     setLocalStreamingEnabled,
     setCodexSandboxMode,
@@ -453,15 +466,23 @@ const SettingsView = ({
               savingNodePath={savingNodePath}
               nodeVersion={nodeVersion}
               minNodeVersion={minNodeVersion}
+              claudeCliPath={claudeCliPath}
+              onClaudeCliPathChange={setClaudeCliPath}
+              onSaveClaudeCliPath={handleSaveClaudeCliPath}
+              savingClaudeCliPath={savingClaudeCliPath}
               workingDirectory={workingDirectory}
               onWorkingDirectoryChange={setWorkingDirectory}
               onSaveWorkingDirectory={handleSaveWorkingDirectory}
               savingWorkingDirectory={savingWorkingDirectory}
               editorFontConfig={editorFontConfig}
               uiFontConfig={uiFontConfig}
+              codeFontConfig={codeFontConfig}
               onUiFontSelectionChange={handleUiFontSelectionChange}
               onSaveUiFontCustomPath={handleSaveUiFontCustomPath}
               onBrowseUiFontFile={handleBrowseUiFontFile}
+              onCodeFontSelectionChange={handleCodeFontSelectionChange}
+              onSaveCodeFontCustomPath={handleSaveCodeFontCustomPath}
+              onBrowseCodeFontFile={handleBrowseCodeFontFile}
               streamingEnabled={streamingEnabled}
               onStreamingEnabledChange={handleStreamingEnabledChange}
               sendShortcut={sendShortcut}

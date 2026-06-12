@@ -2,8 +2,11 @@ import { useCallback, type RefObject } from 'react';
 import type { TFunction } from 'i18next';
 import { sendBridgeEvent } from '../utils/bridge';
 import type { ClaudeContentBlock, ClaudeMessage } from '../types';
-import { apply1MContextSuffix } from '../components/ChatInputBox/types';
-import type { Attachment, ChatInputBoxHandle, PermissionMode, SelectedAgent } from '../components/ChatInputBox/types';
+import {
+  EFFORT_SUPPORTED_CLAUDE_MODELS,
+  apply1MContextSuffix,
+} from '../components/ChatInputBox/types';
+import type { Attachment, ChatInputBoxHandle, PermissionMode, ReasoningEffort, SelectedAgent, CodexFastMode } from '../components/ChatInputBox/types';
 import type { ViewMode } from './useModelProviderState';
 
 /**
@@ -24,12 +27,21 @@ function createContextUsageRequestId(): string {
   return `context-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function shouldSendReasoningEffort(provider: string, model: string): boolean {
+  if (provider !== 'claude') {
+    return true;
+  }
+  return EFFORT_SUPPORTED_CLAUDE_MODELS.has(model);
+}
+
 export interface UseMessageSenderOptions {
   t: TFunction;
   addToast: (message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
   currentProvider: string;
   selectedModel: string;
   permissionMode: PermissionMode;
+  reasoningEffort: ReasoningEffort;
+  codexFastMode: CodexFastMode;
   selectedAgent: SelectedAgent | null;
   sdkStatusLoaded: boolean;
   currentSdkInstalled: boolean;
@@ -61,6 +73,8 @@ export function useMessageSender({
   currentProvider,
   selectedModel,
   permissionMode,
+  reasoningEffort,
+  codexFastMode,
   selectedAgent,
   sdkStatusLoaded,
   currentSdkInstalled,
@@ -249,6 +263,10 @@ export function useMessageSender({
       effectiveMode: effectivePermissionMode,
     });
 
+    const reasoningEffortPayload = shouldSendReasoningEffort(currentProvider, selectedModel)
+      ? { reasoningEffort }
+      : {};
+
     if (hasAttachments) {
       try {
         const payload = JSON.stringify({
@@ -261,6 +279,8 @@ export function useMessageSender({
           agent: agentInfo,
           fileTags: fileTagsInfo,
           permissionMode: effectivePermissionMode,
+          ...reasoningEffortPayload,
+          codexFastMode,
         });
         sendBridgeEvent('send_message_with_attachments', payload);
       } catch (error) {
@@ -270,6 +290,8 @@ export function useMessageSender({
           agent: agentInfo,
           fileTags: fileTagsInfo,
           permissionMode: effectivePermissionMode,
+          ...reasoningEffortPayload,
+          codexFastMode,
         });
         sendBridgeEvent('send_message', fallbackPayload);
       }
@@ -279,10 +301,12 @@ export function useMessageSender({
         agent: agentInfo,
         fileTags: fileTagsInfo,
         permissionMode: effectivePermissionMode,
+        ...reasoningEffortPayload,
+        codexFastMode,
       });
       sendBridgeEvent('send_message', payload);
     }
-  }, [currentProvider]);
+  }, [codexFastMode, currentProvider, selectedModel, reasoningEffort]);
 
   /**
    * Execute message sending (from queue or directly)

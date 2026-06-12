@@ -461,7 +461,7 @@
 .error-diagnostic-command-text {
     flex: 1;
     padding: 8px 12px;
-    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+    font-family: var(--cc-gui-code-font-family, var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace));
     font-size: 12px;
     color: var(--text-primary);
     word-break: break-all;
@@ -633,7 +633,7 @@
     padding: 12px;
     overflow-x: auto;
     margin: 10px 0;
-    font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);
+    font-family: var(--cc-gui-code-font-family, var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace));
     font-size: var(--idea-editor-font-size, 12.5px);
     line-height: var(--idea-editor-line-spacing, 1.5);
     max-width: 100%; /* 防止超出容器 */
@@ -746,11 +746,11 @@
 }
 
 .markdown-content code {
-    font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);
+    font-family: var(--cc-gui-code-font-family, var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace));
     background-color: var(--color-code-inline-bg);
     padding: 2px 4px;
     border-radius: 3px;
-    font-size: 12.5px;
+    font-size: inherit;
     word-wrap: break-word;
     overflow-wrap: break-word;
 }
@@ -759,6 +759,16 @@
     background-color: transparent;
     padding: 0;
     color: var(--text-secondary);
+    font-family: inherit;
+    font-size: inherit;
+}
+
+/* Ensure syntax-highlighting spans inside code blocks inherit the monospace
+ * font from <pre>.  The global * { font-family: … } rule in base.less cuts
+ * the inheritance chain — every element gets the UI font.  Without this
+ * override, highlight.js <span> tokens would render in the proportional font. */
+.markdown-content pre code span {
+    font-family: inherit;
 }
 
 /* User message code blocks - ensure they fit within bubble */
@@ -1040,7 +1050,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     flex: 1;
-    font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);
+    font-family: var(--cc-gui-code-font-family, var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace));
     font-size: 12px;
 }
 
@@ -1287,6 +1297,14 @@
     }
 
     .message-duration-value {
+        font-family: var(--cc-gui-code-font-family, var(--idea-editor-font-family, monospace));
+    }
+
+    .message-duration-separator {
+        opacity: 0.5;
+    }
+
+    .message-duration-tokens {
         font-family: var(--idea-editor-font-family, monospace);
     }
 }
@@ -1365,7 +1383,7 @@
 
 .compact-notification-prefix {
     color: var(--text-tertiary);
-    font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);
+    font-family: var(--cc-gui-code-font-family, var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace));
     flex-shrink: 0;
 }
 

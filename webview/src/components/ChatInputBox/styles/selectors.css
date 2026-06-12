@@ -50,6 +50,14 @@
   color: #e09520;
 }
 
+.selector-button.codex-fast-active {
+  color: #cc8400;
+}
+
+.selector-button.codex-fast-active:hover {
+  color: #e09520;
+}
+
 .selector-button .codicon {
   font-size: 14px;
 }

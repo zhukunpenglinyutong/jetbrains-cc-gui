@@ -123,12 +123,15 @@ class ClaudeMcpQueryService {
         });
     }
 
-    CompletableFuture<JsonObject> getMcpServerTools(String serverId) {
+    CompletableFuture<JsonObject> getMcpServerTools(String serverId, String cwd) {
         return CompletableFuture.supplyAsync(() -> {
-            log.info("[McpTools] Starting getMcpServerTools, serverId=" + serverId);
+            log.info("[McpTools] Starting getMcpServerTools, serverId=" + serverId + ", cwd=" + cwd);
 
             JsonObject stdinInput = new JsonObject();
             stdinInput.addProperty("serverId", serverId != null ? serverId : "");
+            if (cwd != null && !cwd.isEmpty()) {
+                stdinInput.addProperty("cwd", cwd);
+            }
 
             MarkerResult result = executeMarkerQuery(
                     MCP_TOOLS_CHANNEL_ID,

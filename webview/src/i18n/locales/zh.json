@@ -91,6 +91,8 @@
     "streamingConnected": "{{provider}} 已成功连接，正在理解问题",
     "showEarlierMessages": "显示之前的 {{count}} 条消息",
     "totalDuration": "本次耗时",
+    "tokenUsage": "输入 {{input}} / 输出 {{output}}",
+    "tokenUsageDetail": "本轮合计 — 输入 {{input}} · 缓存写入 {{cacheWrite}} · 缓存读取 {{cacheRead}} · 输出 {{output}}",
     "search": {
       "ariaLabel": "在对话中搜索",
       "placeholder": "在对话中搜索…",
@@ -162,6 +164,11 @@
         "invalidFileName": "Windows 下路径必须以 node.exe 结尾，macOS/Linux 下必须以 node 结尾",
         "cannotExecute": "文件存在但无法执行，请检查文件权限"
       },
+      "claudeCliPath": {
+        "label": "Claude CLI 路径（覆盖）",
+        "placeholder": "例如 /usr/local/bin/claude — 留空则使用内置 SDK",
+        "hint": "可选。设置后，插件将启动此二进制文件，而非内置的 @anthropic-ai/claude-agent-sdk。保存时会重启守护进程。"
+      },
       "workingDirectory": {
         "label": "工作目录",
         "placeholder": "例如 project1 或留空使用项目根目录",
@@ -177,16 +184,28 @@
         "level6": "最大（140%）"
       },
       "editorFont": {
-        "label": "字体",
-        "hint": "这里修改的是插件界面字体；字号和行高仍跟随编辑器。",
-        "followOption": "跟随编辑器（{{font}}）",
-        "customOption": "自定义字体文件",
-        "customPathLabel": "字体文件路径",
-        "customPathPlaceholder": "选择或输入 .ttf / .otf 字体文件路径",
+        "label": "UI 字体",
+        "hint": "这里修改的是插件界面字体。代码可以使用单独的代码字体。",
+        "followOption": "跟随 IDEA UI 字体（{{font}}）",
+        "customOption": "自定义 UI 字体文件",
+        "customPathLabel": "UI 字体文件路径",
+        "customPathPlaceholder": "选择或输入 .ttf / .otf UI 字体文件路径",
         "browse": "浏览",
-        "warningUnavailable": "字体不可用，当前已回退到编辑器字体",
+        "warningUnavailable": "UI 字体不可用，当前已回退到 IDEA UI 字体",
+        "statusFollowEditor": "当前跟随 IDEA UI 字体：{{font}}",
+        "statusCustom": "当前使用自定义 UI 字体：{{font}}"
+      },
+      "codeFont": {
+        "label": "代码字体",
+        "hint": "Markdown 代码和命令块会使用这个字体。",
+        "followOption": "跟随编辑器字体（{{font}}）",
+        "customOption": "自定义代码字体文件",
+        "customPathLabel": "代码字体文件路径",
+        "customPathPlaceholder": "选择或输入 .ttf / .otf 代码字体文件路径",
+        "browse": "浏览",
+        "warningUnavailable": "代码字体不可用，当前已回退到编辑器字体",
         "statusFollowEditor": "当前跟随编辑器字体：{{font}}",
-        "statusCustom": "当前使用自定义字体：{{font}}"
+        "statusCustom": "当前使用自定义代码字体：{{font}}"
       },
       "streaming": {
         "label": "流式传输",
@@ -918,6 +937,32 @@
     "copySessionId": "复制会话ID用于CLI恢复",
     "sessionIdCopied": "会话ID已复制",
     "copyFailed": "复制失败",
+    "entrypointLabel": {
+      "sdk-cli": "SDK会话",
+      "claude-vscode": "VS Code",
+      "remote": "远程"
+    },
+    "entrypointTooltip": {
+      "sdk-cli": "此会话由插件通过 SDK 创建，CLI 默认不显示。点击「转为CLI」可使其出现在终端 CLI 的 /resume 列表中",
+      "claude-vscode": "此会话由 VS Code 插件创建，CLI 默认不显示。点击「转为CLI」可使其出现在终端 CLI 的 /resume 列表中",
+      "remote": "此会话由远程 Claude Code 实例创建"
+    },
+    "convertToCliSession": "转换为 CLI 可识别会话",
+    "convertButton": "转为CLI",
+    "convertSuccess": "会话已转换，现在可在 CLI 的 /resume 中显示",
+    "convertFailed": "转换失败",
+    "confirmConvert": "转换为 CLI 会话？",
+    "convertConfirmMessage": "此操作将修改会话的 entrypoint，使其在 Claude Code CLI 的 /resume 列表中显示。",
+    "conversionErrors": {
+      "INVALID_SESSION_ID": "无效的会话 ID",
+      "SESSION_ACTIVE": "无法转换当前活跃的会话，请先开启新会话后再转换",
+      "SESSION_NOT_FOUND": "未找到会话文件",
+      "FILE_NOT_EXIST": "会话文件不存在",
+      "FILE_LOCKED": "会话文件正在被其他进程访问",
+      "NOT_SDK_SESSION": "此会话不是 SDK 创建的会话（entrypoint 不是 sdk-cli）",
+      "ALREADY_CLI_SESSION": "此会话已经是 CLI 会话",
+      "CONVERSION_FAILED": "转换失败，请稍后重试"
+    },
     "timeAgo": {
       "yearsAgo": "年前",
       "monthsAgo": "个月前",
@@ -1008,6 +1053,19 @@
       "loading": "正在加载供应商...",
       "empty": "暂无可用供应商",
       "switched": "已切换到 {{provider}}"
+    },
+    "codexQuota": {
+      "title": "Codex 配额",
+      "loading": "正在加载配额...",
+      "unavailable": "配额不可用",
+      "lastUpdated": "更新于 {{value}}",
+      "fiveHour": "5 小时用量",
+      "weekly": "每周用量",
+      "windowRemainingPercent": "剩余 {{percent}}%",
+      "windowRemainingPercentWithReset": "剩余 {{percent}}% · 重置于 {{value}}",
+      "windowUsedOnly": "已用 {{used}}",
+      "windowUnavailable": "不可用",
+      "apiKeyMode": "API key 模式无订阅配额"
     },
     "nodeProcesses": {
       "title": "Node 进程管理",
@@ -1254,6 +1312,8 @@
     "runCommand": "运行命令",
     "contextEngine": "上下文引擎",
     "task": "任务",
+    "agent": "智能体",
+    "agentGroupToggle": "展开/收起智能体详情",
     "promptLabel": "提示词 (Prompt)",
     "readFile": "读取文件",
     "editFile": "编辑文件",
@@ -1326,6 +1386,7 @@
     "noTodos": "暂无任务运行",
     "noSubagents": "暂无子代理运行",
     "noFileChanges": "暂无文件改动",
+    "blockedBy": "被阻塞: {{ids}}",
     "showDiff": "查看差异",
     "expand": "展开状态面板",
     "collapse": "收起状态面板",
@@ -1537,6 +1598,10 @@
       "opus48": {
         "label": "Opus 4.8",
         "description": "Opus 4.8 · 最新最强大的模型"
+      },
+      "fable5": {
+        "label": "Fable 5",
+        "description": "Fable 5 · 最强大 · Mythos 级"
       }
     },
     "codex": {
@@ -1788,6 +1853,17 @@
     "title": "版本更新",
     "close": "知道了",
     "page": "{{current}} / {{total}}"
+  },
+  "codexFastMode": {
+    "title": "选择 Codex 速度模式",
+    "normal": {
+      "label": "标准",
+      "description": "Codex的默认响应速度"
+    },
+    "fast": {
+      "label": "Fast",
+      "description": "Codex快速响应模式（会产生额外消耗）"
+    }
   },
   "error": {
     "providerNotConfigured": "供应商未配置",

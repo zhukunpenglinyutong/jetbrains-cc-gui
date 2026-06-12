@@ -8,6 +8,10 @@ export interface EnvironmentTabProps {
   savingNodePath: boolean;
   nodeVersion?: string | null;
   minNodeVersion?: number;
+  claudeCliPath?: string;
+  onClaudeCliPathChange?: (path: string) => void;
+  onSaveClaudeCliPath?: () => void;
+  savingClaudeCliPath?: boolean;
   workingDirectory?: string;
   onWorkingDirectoryChange?: (dir: string) => void;
   onSaveWorkingDirectory?: () => void;
@@ -21,6 +25,10 @@ const EnvironmentTab = ({
   savingNodePath,
   nodeVersion,
   minNodeVersion = 18,
+  claudeCliPath = '',
+  onClaudeCliPathChange = () => {},
+  onSaveClaudeCliPath = () => {},
+  savingClaudeCliPath = false,
   workingDirectory = '',
   onWorkingDirectoryChange = () => {},
   onSaveWorkingDirectory = () => {},
@@ -87,6 +95,39 @@ const EnvironmentTab = ({
           <span>
             {t('settings.basic.nodePath.hint')} <code>{t('settings.basic.nodePath.hintCommand')}</code> {t('settings.basic.nodePath.hintText')}
           </span>
+        </small>
+      </div>
+
+      {/* Custom Claude CLI path */}
+      <div className={styles.nodePathSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-rocket" />
+          <span className={styles.fieldLabel}>{t('settings.basic.claudeCliPath.label')}</span>
+        </div>
+        <div className={styles.nodePathInputWrapper}>
+          <input
+            type="text"
+            className={styles.nodePathInput}
+            placeholder={t('settings.basic.claudeCliPath.placeholder')}
+            value={claudeCliPath}
+            onChange={(e) => onClaudeCliPathChange(e.target.value)}
+          />
+          <button
+            className={styles.saveBtn}
+            onClick={onSaveClaudeCliPath}
+            disabled={savingClaudeCliPath}
+          >
+            {savingClaudeCliPath && (
+              <span
+                className="codicon codicon-loading codicon-modifier-spin"
+              />
+            )}
+            {t('common.save')}
+          </button>
+        </div>
+        <small className={styles.formHint}>
+          <span className="codicon codicon-info" />
+          <span>{t('settings.basic.claudeCliPath.hint')}</span>
         </small>
       </div>
 

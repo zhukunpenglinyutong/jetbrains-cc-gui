@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfigSelect } from './ConfigSelect';
 import { SPECIAL_PROVIDER_IDS } from '../../../types/provider';
 
@@ -26,6 +26,7 @@ vi.mock('react-i18next', () => ({
       'config.runtimeProvider.empty': 'No providers',
       'config.runtimeProvider.loading': 'Loading providers',
       'config.runtimeProvider.switched': 'Provider switched to Proxy A',
+      'config.nodeProcesses.title': 'Node processes',
       'settings.provider.localProviderName': 'Use local settings.json',
       'settings.provider.cliLoginProviderName': 'Use CLI login',
       'settings.codexProvider.dialog.cliLoginProviderName': 'Use local Codex config',
@@ -33,13 +34,41 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
+function rect(left: number, right: number, width = right - left): DOMRect {
+  return {
+    x: left,
+    y: 0,
+    left,
+    right,
+    top: 0,
+    bottom: 200,
+    width,
+    height: 200,
+    toJSON: () => ({}),
+  } as DOMRect;
+}
+
 describe('ConfigSelect runtime provider submenu', () => {
+  let getBoundingClientRectSpy: ReturnType<typeof vi.spyOn> | undefined;
+  let originalInnerWidth: number;
+
   beforeEach(() => {
+    originalInnerWidth = window.innerWidth;
     window.sendToJava = vi.fn();
     window.updateProviders = undefined;
     window.updateCodexProviders = undefined;
     window.updateActiveProvider = undefined;
     window.updateActiveCodexProvider = undefined;
+  });
+
+  afterEach(() => {
+    getBoundingClientRectSpy?.mockRestore();
+    getBoundingClientRectSpy = undefined;
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      writable: true,
+      value: originalInnerWidth,
+    });
   });
 
   it('switches Claude runtime providers from the configure menu', async () => {
@@ -117,6 +146,39 @@ describe('ConfigSelect runtime provider submenu', () => {
 
     await waitFor(() => {
       expect(within(submenu).getByText('Provider B').closest('.selector-option')?.className).toContain('selected');
+    });
+  });
+
+  it('opens the node process submenu in a narrow panel without entering a layout update loop', async () => {
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      writable: true,
+      value: 410,
+    });
+    getBoundingClientRectSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function getMockRect(this: HTMLElement) {
+        if (this.classList.contains('node-process-dropdown')) {
+          return this.style.right === '100%'
+            ? rect(10, 360, 350)
+            : rect(390, 740, 350);
+        }
+        if (this.classList.contains('selector-option') && this.textContent?.includes('Node processes')) {
+          return rect(190, 390, 200);
+        }
+        return rect(0, 0, 0);
+      });
+
+    const { container } = render(<ConfigSelect currentProvider="claude" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Configure/i }));
+    fireEvent.mouseEnter(screen.getByText('Node processes').closest('.selector-option')!);
+
+    const dropdown = container.querySelector<HTMLElement>('.node-process-dropdown');
+    expect(dropdown).not.toBeNull();
+
+    await waitFor(() => {
+      expect(dropdown?.style.right).toBe('100%');
     });
   });
 });

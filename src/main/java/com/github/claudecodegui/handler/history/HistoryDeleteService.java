@@ -1,12 +1,12 @@
 package com.github.claudecodegui.handler.history;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.NodeJsServiceCaller;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.cache.SessionIndexCache;
 import com.github.claudecodegui.cache.SessionIndexManager;
 import com.github.claudecodegui.util.PathUtils;
-import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -179,7 +179,9 @@ class HistoryDeleteService {
             return new DeleteResult(deleteCodexSession(sessionId), 0);
         }
 
-        String projectPath = context.getProject().getBasePath();
+        String rawPath = context.getProject().getBasePath();
+        String nodePath = NodeDetector.getInstance().getCachedNodePath();
+        String projectPath = NodeDetector.isWslPath(nodePath) ? NodeDetector.convertToWslPath(rawPath) : rawPath;
         if (projectPath == null) {
             LOG.warn("[HistoryHandler] Project base path is null, cannot delete Claude session");
             return new DeleteResult(false, 0);
@@ -190,7 +192,7 @@ class HistoryDeleteService {
     }
 
     private boolean deleteCodexSession(String sessionId) throws java.io.IOException {
-        String homeDir = PlatformUtils.getHomeDirectory();
+        String homeDir = NodeDetector.resolveHomeForFileOps();
         Path sessionDir = Paths.get(homeDir, ".codex", "sessions");
 
         if (!Files.exists(sessionDir)) {
@@ -235,7 +237,7 @@ class HistoryDeleteService {
      * @return int[2]: [mainDeleted(0/1), agentFilesDeleted]
      */
     private int[] deleteClaudeSession(String sessionId, String projectPath) throws java.io.IOException {
-        String homeDir = PlatformUtils.getHomeDirectory();
+        String homeDir = NodeDetector.resolveHomeForFileOps();
         Path claudeDir = Paths.get(homeDir, ".claude");
         Path projectsDir = claudeDir.resolve("projects");
         String sanitizedPath = PathUtils.sanitizePath(projectPath);
@@ -299,7 +301,9 @@ class HistoryDeleteService {
 
     private void cleanupCache(String currentProvider) {
         try {
-            String projectPath = context.getProject().getBasePath();
+            String rawPath2 = context.getProject().getBasePath();
+            String nodePath2 = NodeDetector.getInstance().getCachedNodePath();
+            String projectPath = NodeDetector.isWslPath(nodePath2) ? NodeDetector.convertToWslPath(rawPath2) : rawPath2;
             if ("codex".equals(currentProvider)) {
                 SessionIndexCache.getInstance().clearAllCodexCache();
                 SessionIndexManager.getInstance().clearAllCodexIndex();

@@ -17,9 +17,10 @@ import {
   loadCodexSdk,
   isCodexSdkAvailable,
 } from '../utils/sdk-loader.js';
-import { setupApiKey, buildCliEnv } from '../config/api-config.js';
+import { setupApiKey, buildCliEnv, buildWebviewControlledSettingsOverride } from '../config/api-config.js';
 import { mapModelIdToSdkName } from '../utils/model-utils.js';
 import { getRealHomeDir } from '../utils/path-utils.js';
+import { getClaudeCliPathOverride } from '../utils/claude-cli-path.js';
 import { buildCodexCliEnvironment } from './codex/codex-utils.js';
 
 let claudeSdk = null;
@@ -312,14 +313,17 @@ async function enhancePromptWithClaude(originalPrompt, systemPrompt, model, cont
   const fullPrompt = buildFullPrompt(originalPrompt, context);
   console.log(`[PromptEnhancer] Full prompt length: ${fullPrompt.length}`);
 
+  const claudeCliOverride = getClaudeCliPathOverride();
   const options = {
     cwd: workingDirectory,
     permissionMode: 'bypassPermissions',
     model: sdkModelName,
     maxTurns: 1,
     env: buildCliEnv(),
+    settings: buildWebviewControlledSettingsOverride(model),
     systemPrompt,
     settingSources: ['user', 'project', 'local'],
+    ...(claudeCliOverride && { pathToClaudeCodeExecutable: claudeCliOverride }),
   };
 
   console.log('[PromptEnhancer] Calling Claude Agent SDK...');

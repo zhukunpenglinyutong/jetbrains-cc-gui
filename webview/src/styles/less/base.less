@@ -9,7 +9,9 @@
     /* 编辑器原始字体 */
     --cc-gui-editor-font-family: 'JetBrains Mono', 'Consolas', monospace;
     /* 当前插件实际使用的 UI 字体 */
-    --cc-gui-ui-font-family: 'JetBrains Mono', 'Consolas', monospace;
+    --cc-gui-ui-font-family: 'Inter', system-ui, sans-serif;
+    /* 当前插件实际使用的代码字体 */
+    --cc-gui-code-font-family: 'JetBrains Mono', 'Consolas', monospace;
     /* 兼容旧样式里对 --idea-editor-font-family 的引用 */
     --idea-editor-font-family: 'JetBrains Mono', 'Consolas', monospace;
     --idea-editor-font-size: 14px;
@@ -17,7 +19,7 @@
 }
 
 body {
-    font-family: var(--cc-gui-ui-font-family, 'JetBrains Mono', 'Consolas', monospace);
+    font-family: var(--cc-gui-ui-font-family, 'Inter', system-ui, sans-serif);
     background: var(--bg-chat);
     color: var(--text-primary);
     height: 100vh;
@@ -72,9 +74,13 @@ html {
     background: transparent !important;
 }
 
-/* 全局字体覆盖 - 让整个插件都使用当前生效的 UI 字体 */
+/* 全局字体覆盖 - 让整个插件都使用当前生效的 UI 字体。
+ * 注意：该通配选择器会直接命中每一个元素，从而截断 font-family 的继承链——
+ * 任何“父容器设字体、子元素靠继承”的写法都会失效（子元素会拿到这里的 UI 字体）。
+ * 因此代码/等宽区域必须把 font-family 直接声明在承载文本的元素自身上
+ * （参考 .bash-command-block / .bash-output-text），不能依赖从父容器继承。 */
 * {
-    font-family: var(--cc-gui-ui-font-family, 'JetBrains Mono', 'Consolas', monospace) !important;
+    font-family: var(--cc-gui-ui-font-family, 'Inter', system-ui, sans-serif);
 }
 
 /* 保护字体图标 - 确保 codicon 图标正常显示 */

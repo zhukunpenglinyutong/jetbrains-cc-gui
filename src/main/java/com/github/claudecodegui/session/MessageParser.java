@@ -17,6 +17,7 @@ public class MessageParser {
      */
     public ClaudeSession.Message parseServerMessage(JsonObject msg) {
         String type = msg.has("type") ? msg.get("type").getAsString() : null;
+        JsonObject rawMessage = resolveRawMessage(msg);
 
         // Filter out isMeta messages
         if (msg.has("isMeta") && msg.get("isMeta").getAsBoolean()) {
@@ -24,8 +25,11 @@ public class MessageParser {
         }
 
         // Filter out command messages - only for user messages
-        // Assistant messages may contain these tags in code examples
-        if (shouldFilterCommandMessage(msg, type)) {
+        // Assistant messages may contain these tags in code examples.
+        // Use rawMessage (not msg) so a normalized history envelope, whose "message"
+        // lives under "raw", is inspected the same way as a live SDK message; for live
+        // messages resolveRawMessage returns msg unchanged, so this is a no-op there.
+        if (shouldFilterCommandMessage(rawMessage, type)) {
             return null;
         }
 
@@ -33,21 +37,34 @@ public class MessageParser {
             String content = extractMessageContent(msg);
             // Check if it contains a tool_result
             if (content == null || content.trim().isEmpty()) {
-                if (hasToolResult(msg)) {
-                    return new ClaudeSession.Message(ClaudeSession.Message.Type.USER, "[tool_result]", msg);
+                if (hasToolResult(rawMessage)) {
+                    return new ClaudeSession.Message(ClaudeSession.Message.Type.USER, "[tool_result]", rawMessage);
                 }
-                if (hasImageContent(msg)) {
-                    return new ClaudeSession.Message(ClaudeSession.Message.Type.USER, "", msg);
+                if (hasImageContent(rawMessage)) {
+                    return new ClaudeSession.Message(ClaudeSession.Message.Type.USER, "", rawMessage);
                 }
                 return null;
             }
-            return new ClaudeSession.Message(ClaudeSession.Message.Type.USER, content, msg);
+            return new ClaudeSession.Message(ClaudeSession.Message.Type.USER, content, rawMessage);
         } else if ("assistant".equals(type)) {
             String content = extractMessageContent(msg);
-            return new ClaudeSession.Message(ClaudeSession.Message.Type.ASSISTANT, content, msg);
+            return new ClaudeSession.Message(ClaudeSession.Message.Type.ASSISTANT, content, rawMessage);
         }
 
         return null;
+    }
+
+    /**
+     * Provider history adapters may return an already-normalized frontend envelope whose
+     * structured SDK payload lives in {@code raw}. Keep only that payload in session state;
+     * otherwise MessageJsonConverter sees the envelope's display-only content and drops
+     * nested tool_use/tool_result blocks during auto-restore.
+     */
+    private JsonObject resolveRawMessage(JsonObject msg) {
+        if (msg.has("raw") && msg.get("raw").isJsonObject()) {
+            return msg.getAsJsonObject("raw");
+        }
+        return msg;
     }
 
     /**
@@ -119,16 +136,24 @@ public class MessageParser {
     }
 
     private boolean hasContentBlockType(JsonObject msg, String blockType) {
-        if (!msg.has("message") || !msg.get("message").isJsonObject()) {
+        if (msg.has("content") && containsContentBlockType(msg.get("content"), blockType)) {
+            return true;
+        }
+        if (msg.has("message") && msg.get("message").isJsonObject()) {
+            JsonObject message = msg.getAsJsonObject("message");
+            if (message.has("content") && containsContentBlockType(message.get("content"), blockType)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean containsContentBlockType(JsonElement contentElement, String blockType) {
+        if (contentElement == null || !contentElement.isJsonArray()) {
             return false;
         }
 
-        JsonObject message = msg.getAsJsonObject("message");
-        if (!message.has("content") || !message.get("content").isJsonArray()) {
-            return false;
-        }
-
-        JsonArray contentArray = message.getAsJsonArray("content");
+        JsonArray contentArray = contentElement.getAsJsonArray();
         for (int i = 0; i < contentArray.size(); i++) {
             JsonElement element = contentArray.get(i);
             if (element.isJsonObject()) {

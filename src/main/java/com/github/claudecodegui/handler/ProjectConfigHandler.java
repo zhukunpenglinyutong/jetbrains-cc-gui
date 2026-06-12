@@ -525,6 +525,32 @@ public class ProjectConfigHandler {
         }
     }
 
+    public void handleGetCodeFontConfig() {
+        dispatchCodeFontConfigUpdate();
+    }
+
+    public void handleSetCodeFontConfig(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            String mode = readString(json, "mode", FontConfigService.UI_FONT_MODE_FOLLOW_EDITOR);
+            String customFontPath = readString(json, "customFontPath", null);
+
+            if (FontConfigService.UI_FONT_MODE_CUSTOM_FILE.equals(mode)) {
+                FontConfigService.ValidationResult validation = FontConfigService.validateCustomUiFontFile(customFontPath);
+                if (!validation.valid()) {
+                    showError("Invalid font file: " + validation.errorMessage());
+                    return;
+                }
+            }
+
+            settingsService.setCodeFontConfig(mode, customFontPath);
+            dispatchCodeFontConfigUpdate();
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set code font config: " + e.getMessage(), e);
+            showError("Failed to save code font config: " + e.getMessage());
+        }
+    }
+
     public void handleBrowseUiFontFile() {
         ApplicationManager.getApplication().invokeLater(() -> {
             try {
@@ -543,6 +569,24 @@ public class ProjectConfigHandler {
         });
     }
 
+    public void handleBrowseCodeFontFile() {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            try {
+                FileChooserDescriptor descriptor = new FileChooserDescriptor(true, false, false, false, false, false)
+                    .withFileFilter(file -> {
+                        String ext = file.getExtension();
+                        return ext != null && (ext.equalsIgnoreCase("ttf") || ext.equalsIgnoreCase("otf"));
+                    })
+                    .withTitle("Select Font File")
+                    .withDescription("Select a TTF or OTF font file");
+
+                FileChooser.chooseFile(descriptor, context.getProject(), resolveCurrentCustomCodeFontFile(), this::saveSelectedCodeFont);
+            } catch (Exception e) {
+                LOG.error("[ProjectConfigHandler] Failed to open code font file chooser: " + e.getMessage(), e);
+            }
+        });
+    }
+
     private VirtualFile resolveCurrentCustomFontFile() {
         try {
             JsonObject persistedUiFont = settingsService.getUiFontConfig();
@@ -551,6 +595,18 @@ public class ProjectConfigHandler {
             }
         } catch (Exception e) {
             LOG.warn("[ProjectConfigHandler] Failed to resolve current custom font path: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private VirtualFile resolveCurrentCustomCodeFontFile() {
+        try {
+            JsonObject persistedCodeFont = settingsService.getCodeFontConfig();
+            if (persistedCodeFont.has("customFontPath") && !persistedCodeFont.get("customFontPath").isJsonNull()) {
+                return LocalFileSystem.getInstance().findFileByPath(persistedCodeFont.get("customFontPath").getAsString());
+            }
+        } catch (Exception e) {
+            LOG.warn("[ProjectConfigHandler] Failed to resolve current custom code font path: " + e.getMessage());
         }
         return null;
     }
@@ -570,6 +626,24 @@ public class ProjectConfigHandler {
         } catch (Exception e) {
             LOG.error("[ProjectConfigHandler] Failed to save selected font file: " + e.getMessage(), e);
             context.callJavaScript("window.showError", context.escapeJs("Failed to save font config: " + e.getMessage()));
+        }
+    }
+
+    private void saveSelectedCodeFont(VirtualFile file) {
+        if (file == null) { return; }
+        String path = file.getPath();
+        FontConfigService.ValidationResult validation = FontConfigService.validateCustomUiFontFile(path);
+        if (!validation.valid()) {
+            context.callJavaScript("window.showError", context.escapeJs("Invalid font file: " + validation.errorMessage()));
+            return;
+        }
+        try {
+            settingsService.setCodeFontConfig(FontConfigService.UI_FONT_MODE_CUSTOM_FILE, path);
+            dispatchCodeFontConfigUpdate();
+            context.callJavaScript("window.showSuccessI18n", context.escapeJs("toast.saveSuccess"));
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to save selected code font file: " + e.getMessage(), e);
+            context.callJavaScript("window.showError", context.escapeJs("Failed to save code font config: " + e.getMessage()));
         }
     }
 
@@ -639,6 +713,18 @@ public class ProjectConfigHandler {
             });
         } catch (Exception e) {
             LOG.error("[ProjectConfigHandler] Failed to dispatch UI font config: " + e.getMessage(), e);
+        }
+    }
+
+    private void dispatchCodeFontConfigUpdate() {
+        try {
+            String codeFontConfigJson = FontConfigService.getResolvedCodeFontConfigJson(settingsService);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                context.callJavaScript("window.onCodeFontConfigReceived", context.escapeJs(codeFontConfigJson));
+                context.callJavaScript("window.applyCodeFontConfig", context.escapeJs(codeFontConfigJson));
+            });
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to dispatch code font config: " + e.getMessage(), e);
         }
     }
 

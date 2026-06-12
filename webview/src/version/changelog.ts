@@ -13,6 +13,70 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
+    version: '0.4.5',
+    date: '2026-06-11',
+    content: {
+      en: `✨ Features
+- Add **Codex fast mode**: new "Fast" speed mode in the model selector that maps to \`service_tier=fast\` for supported Codex models (by @llanc)
+- Add **Claude Code CLI path override**: new setting in Settings → Environment to point the plugin at a specific \`claude\` binary (by @senfix)
+- Add separate **Code Font** setting (Settings → Basic → Appearance), independent from the UI font: code blocks and Bash output use the code font; chat text follows the IDEA UI font (by @Luna5ama, closes #1240)
+- Add **Codex subscription quota panel** in the model selector showing ChatGPT Plus/Pro quota status with dual-source fetching and snapshot caching (by @Luna5ama)
+- Add **Shift+Esc** shortcut to hide the CCG tool window panel (by @Cyber0xFE)
+- **Ctrl+Alt+K** now always opens the CCG panel regardless of editor selection; auto-focuses the input field (by @Cyber0xFE)
+- Add **per-message token indicator** at the bottom of each turn showing whole-turn aggregated token count (by @suzhelan, @zkpaiminmin)
+- Add **SDK → CLI session conversion**: SDK-created sessions can be converted to CLI sessions to appear in \`/resume\` list; shown as entrypoint badges in history (by @gadfly3173)
+- Add **Claude Fable 5** model support with Mythos-class capabilities ($10/$50 per 1M tokens) (by @zkpaiminmin)
+- Integrate **Claude Code Task tracking API** (TaskCreate/TaskUpdate/TaskGet/TaskList): agent/task invocations render as collapsible groups with nested tool calls and persisted expand/collapse state (by @gadfly3173, @zhuzhihang)
+
+🐛 Fixes
+- Fix full **WSL2 compatibility**: SDK installed into WSL filesystem, permission env vars propagated via WSLENV, login-shell PATH merged not replaced, path handling migrated to \`WslPathUtil\` (by @Gazoon007)
+- Fix **tool spinner stuck** after stream end: preserve \`tool_result\` from pending snapshot; decouple recovery from assistant-patch branch (by @Cyber0xFE, @zkpaiminmin)
+- Fix **usage cost overstatement**: deduplicate JSONL records by \`message.id\` (~2× inflation fix); correct Opus 4.5/4.6/4.7/4.8 pricing to $5/$25 per 1M tokens (by @t7r5fz7848-lab, @zkpaiminmin)
+- Fix **settings.json env vars** silently overriding reasoning effort, \`MAX_THINKING_TOKENS\`, and 1M context toggle; inject inline \`--settings\` override (by @gadfly3173)
+- Fix **selected reasoning effort** not passed to SDK; thread it through the full send pipeline (by @gadfly3173)
+- Fix **Codex history tool UI** disappearing after restart: unwrap normalized history raw payloads during session restore (by @Luna5ama)
+- Fix Markdown links with **spaces/special characters**: decode percent-encoded and \`file://\` hrefs before opening (by @moritzfl)
+- Fix **XSS via control-character-obfuscated hrefs** (e.g. \`java&#9;script:\`): reject hrefs with C0 control chars in DOMPurify hook (security) (by @zkpaiminmin)
+- Fix **symlink escape** in project-boundary check on native POSIX; route through \`getCanonicalPath\` (security) (by @zkpaiminmin)
+- Fix Codex fast mode, quota cache invalidation on account switch, API-key mode quota display, and other Codex edge cases (by @llanc, @zkpaiminmin)
+- Fix agent group children absorption after history reload; harden \`extractAccumulatedTasks\` for parallel TaskCreate (by @zkpaiminmin)
+
+🔧 Improvements
+- Enhance Bash output rendering with dedicated CSS classes (by @Luna5ama)
+- Add Docker build support (\`Dockerfile\` + \`.dockerignore\`) for reproducible plugin distribution (by @senfix)
+- Split env var groups into \`MODEL_ROUTING_ENV_VARS\` and \`REASONING_CONTROL_ENV_VARS\` to prevent drift (by @gadfly3173)`,
+      zh: `✨ 新功能
+- 新增 **Codex 快速模式**：模型选择器新增「快速」速度模式，映射到 \`service_tier=fast\`（by @llanc）
+- 新增 **Claude Code CLI 路径覆盖**：设置 → 环境中可指定自定义 \`claude\` 可执行文件路径（by @senfix）
+- 设置 → 基础 → 外观新增独立**代码字体**配置：代码块与 Bash 输出使用代码字体，聊天文本跟随 IDEA UI 字体（by @Luna5ama，关闭 #1240）
+- 新增 **Codex 订阅配额面板**：在模型选择器中显示 ChatGPT Plus/Pro 配额，双来源拉取，快照缓存（by @Luna5ama）
+- 新增 **Shift+Esc** 快捷键隐藏 CCG 工具窗口面板（by @Cyber0xFE）
+- **Ctrl+Alt+K** 无论是否有代码选择均可打开 CCG 面板，激活时自动聚焦输入框（by @Cyber0xFE）
+- 每条消息底部新增**逐轮 Token 消耗指示器**（by @suzhelan，@zkpaiminmin）
+- 新增 **SDK 会话转换为 CLI 会话**：SDK 创建的会话可转换以出现在 \`/resume\` 列表，历史列表显示入口徽章（by @gadfly3173）
+- 新增 **Claude Fable 5** 模型（Mythos 级，输入 $10/1M，输出 $50/1M）（by @zkpaiminmin）
+- 集成 **Claude Code Task tracking API**：Agent/任务调用渲染为可折叠分组，展开/折叠状态持久化（by @gadfly3173，@zhuzhihang）
+
+🐛 修复
+- 修复 **WSL2 全套兼容性**：SDK 安装到 WSL 文件系统，权限变量经 WSLENV 跨边界传播，登录 Shell PATH 合并不替换，路径处理迁移至 \`WslPathUtil\`（by @Gazoon007）
+- 修复**工具 spinner 永久卡住**：流结束时保存待处理快照中的 \`tool_result\`，恢复逻辑从 assistant-patch 解耦（by @Cyber0xFE，@zkpaiminmin）
+- 修复**使用量高估**：按 \`message.id\` 去重（约 2× 膨胀）；Opus 4.5/4.6/4.7/4.8 定价修正为 $5/$25 /1M（by @t7r5fz7848-lab，@zkpaiminmin）
+- 修复 **settings.json 环境变量**静默覆盖推理力度、\`MAX_THINKING_TOKENS\` 和 1M 上下文切换（by @gadfly3173）
+- 修复**选择的推理力度**未传递给 SDK（by @gadfly3173）
+- 修复 **Codex 历史工具 UI** 重启后消失（by @Luna5ama）
+- 修复含**空格/特殊字符**的 Markdown 路径链接无法打开（by @moritzfl）
+- 修复**控制字符混淆 href XSS**（如 \`java&#9;script:\`），在 DOMPurify hook 拒绝含 C0 字符的 href（安全）（by @zkpaiminmin）
+- 修复原生 POSIX 上项目边界检查**软链接逃逸**，走 \`getCanonicalPath\`（安全）（by @zkpaiminmin）
+- 修复 Codex 快速模式、切换账户时配额缓存未失效、API 密钥模式配额显示等多处问题（by @llanc，@zkpaiminmin）
+- 修复历史回放后 Agent 分组吸收错误子节点；加固 \`extractAccumulatedTasks\` 对并行 TaskCreate 的处理（by @zkpaiminmin）
+
+🔧 改进
+- 为 Bash 输出渲染引入专用 CSS 类（by @Luna5ama）
+- 新增 Docker 构建支持（\`Dockerfile\` + \`.dockerignore\`）（by @senfix）
+- 将环境变量拆分为 \`MODEL_ROUTING_ENV_VARS\` 和 \`REASONING_CONTROL_ENV_VARS\`，防止独立漂移（by @gadfly3173）`,
+    },
+  },
+  {
     version: '0.4.4',
     date: '2026-05-29',
     content: {

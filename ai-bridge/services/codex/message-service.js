@@ -46,6 +46,7 @@ import { createInitialEventState, processCodexEventStream } from './codex-event-
  * @param {string} baseUrl - API base URL (optional, for custom endpoints)
  * @param {string} apiKey - API key (optional, for custom auth)
  * @param {string} reasoningEffort - Reasoning effort level (optional)
+ * @param {string} serviceTier - Codex service tier; "fast" matches Codex CLI /fast (optional)
  * @param {Array} attachments - Image attachments in local_image format (optional)
  */
 export async function sendMessage(
@@ -57,6 +58,7 @@ export async function sendMessage(
   baseUrl = null,
   apiKey = null,
   reasoningEffort = 'medium',
+  serviceTier = null,
   attachments = []
 ) {
   let streamStarted = false;
@@ -78,6 +80,7 @@ export async function sendMessage(
       permissionMode: normalizedPermissionMode,
       model,
       reasoningEffort,
+      serviceTier,
       hasBaseUrl: !!baseUrl,
       hasApiKey: !!apiKey,
       attachmentsCount: attachments?.length || 0
@@ -99,6 +102,16 @@ export async function sendMessage(
     }
     if (apiKey) {
       codexOptions.apiKey = apiKey;
+    }
+    if (serviceTier && serviceTier.trim() !== '') {
+      const sdkServiceTier = serviceTier.trim();
+      codexOptions.config = {
+        features: {
+          fast_mode: true
+        },
+        service_tier: sdkServiceTier
+      };
+      logDebug('Codex', 'Service tier:', sdkServiceTier, 'with fast_mode feature enabled');
     }
 
     // Pass a sanitized env to the SDK to avoid inherited CODEX_* pollution

@@ -4,7 +4,7 @@ import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.model.FileSortItem;
-import com.github.claudecodegui.util.PlatformUtils;
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
@@ -226,7 +226,7 @@ public class FileHandler extends BaseMessageHandler {
             }
         }
 
-        String userHome = PlatformUtils.getHomeDirectory();
+        String userHome = NodeDetector.resolveHomeForFileOps();
         if (userHome != null && !userHome.isEmpty()) {
             LOG.debug("[FileHandler] Using user.home as base path: " + userHome);
             return userHome;

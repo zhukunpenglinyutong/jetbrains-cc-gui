@@ -80,6 +80,7 @@ export const HistoryActions = memo(({
         onClick={onDeepSearch}
         disabled={isDeepSearching}
         title={t('history.deepSearchTooltip')}
+        aria-label={t('history.deepSearchTooltip')}
       >
         <span className={`codicon ${isDeepSearching ? 'codicon-sync codicon-modifier-spin' : 'codicon-refresh'}`}></span>
       </button>

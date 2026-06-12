@@ -276,6 +276,51 @@ public class CodexMessageHandlerTest {
     }
 
     @Test
+    public void resultMessageStampsNormalizedTurnUsageOnLastAssistant() {
+        SessionState state = new SessionState();
+
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("assistant", "{\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"done\"}]}}");
+        // ai-bridge Claude-compatible usage: input_tokens INCLUDE cached tokens (OpenAI convention)
+        handler.onMessage("result", "{\"type\":\"result\",\"subtype\":\"usage\",\"usage\":{"
+                + "\"input_tokens\":37000,\"output_tokens\":353,"
+                + "\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":36310}}");
+
+        Message message = state.getMessages().get(0);
+        // Status-bar channel keeps the cache-inclusive usage untouched
+        assertEquals(37000, message.raw.getAsJsonObject("usage").get("input_tokens").getAsInt());
+        // turnUsage is normalized to the Claude schema: input excludes cache
+        var turnUsage = message.raw.getAsJsonObject("turnUsage");
+        assertEquals(690, turnUsage.get("input_tokens").getAsInt());
+        assertEquals(36310, turnUsage.get("cache_read_input_tokens").getAsInt());
+        assertEquals(0, turnUsage.get("cache_creation_input_tokens").getAsInt());
+        assertEquals(353, turnUsage.get("output_tokens").getAsInt());
+    }
+
+    @Test
+    public void tokenCountEventAttachesStatusBarUsageButNeverTurnUsage() {
+        SessionState state = new SessionState();
+
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("assistant", "{\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"done\"}]}}");
+        // token_count carries session-cumulative totals, not turn totals
+        handler.onMessage("event_msg", "{\"payload\":{\"type\":\"token_count\",\"info\":{"
+                + "\"total_token_usage\":{\"input_tokens\":500000,\"output_tokens\":9000,\"cached_input_tokens\":480000}}}}");
+
+        Message message = state.getMessages().get(0);
+        assertEquals(500000, message.raw.getAsJsonObject("usage").get("input_tokens").getAsInt());
+        assertFalse(message.raw.has("turnUsage"));
+    }
+
+    @Test
     public void messageEndDoesNotDuplicateStreamEndAfterNormalCompletion() {
         SessionState state = new SessionState();
         state.setBusy(true);

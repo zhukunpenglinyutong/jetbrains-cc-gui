@@ -594,9 +594,15 @@ public class ClaudeMessageHandler implements MessageCallback {
         try {
             JsonObject resultJson = gson.fromJson(content, JsonObject.class);
             LOG.debug("Result message received");
-            // Fallback: only update usage from result if no usage was received via [USAGE] tag or assistant message
             if (resultJson.has("usage") && resultJson.get("usage").isJsonObject()
                     && currentAssistantMessage != null && currentAssistantMessage.raw != null) {
+                // SDKResultMessage.usage aggregates every API call of the turn. Stamp it as the
+                // top-level turnUsage field for the per-turn token display in the webview.
+                // Distinct from message.usage below, which tracks per-call context occupancy
+                // for the status bar and must keep its semantics.
+                currentAssistantMessage.raw.add("turnUsage", resultJson.getAsJsonObject("usage").deepCopy());
+
+                // Fallback: only update usage from result if no usage was received via [USAGE] tag or assistant message
                 JsonObject msg = currentAssistantMessage.raw.has("message")
                         && currentAssistantMessage.raw.get("message").isJsonObject()
                         ? currentAssistantMessage.raw.getAsJsonObject("message") : null;

@@ -74,9 +74,10 @@ describe('ModelSelect', () => {
     expect(screen.getByRole('button').textContent).toContain('glm-4.7');
   });
 
-  it('Claude 内置模型列表应默认使用不带 [1m] 的 Opus 4.6 ID', () => {
-    expect(CLAUDE_MODELS.map((model) => model.id)).toContain('claude-opus-4-6');
-    expect(CLAUDE_MODELS.map((model) => model.id)).not.toContain('claude-opus-4-6[1m]');
+  it('Claude 内置模型列表应移除已下线的 Opus 4.6，且不使用 [1m] 后缀 ID', () => {
+    const ids = CLAUDE_MODELS.map((model) => model.id);
+    expect(ids).not.toContain('claude-opus-4-6');
+    expect(ids.some((id) => id.endsWith('[1m]'))).toBe(false);
   });
 
   it('Codex 内置模型列表应与目标设计一致', () => {

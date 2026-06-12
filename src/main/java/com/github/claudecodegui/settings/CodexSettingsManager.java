@@ -1,6 +1,6 @@
 package com.github.claudecodegui.settings;
 
-import com.github.claudecodegui.util.PlatformUtils;
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -36,7 +36,7 @@ public class CodexSettingsManager {
 
     public CodexSettingsManager(Gson gson) {
         this.gson = gson;
-        String userHome = PlatformUtils.getHomeDirectory();
+        String userHome = NodeDetector.resolveHomeForFileOps();
         this.codexDir = Paths.get(userHome, ".codex");
     }
 

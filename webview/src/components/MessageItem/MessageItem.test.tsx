@@ -29,14 +29,22 @@ vi.mock('./ProviderNotConfiguredCard', () => ({
   isProviderNotConfiguredError: () => false,
 }));
 
-const t = ((key: string) => {
+const t = ((key: string, opts?: Record<string, string>) => {
   const translations: Record<string, string> = {
     'markdown.copyMessage': '复制消息',
     'markdown.copySuccess': '已复制',
     'chat.streamingConnected': '已连接',
     'chat.totalDuration': '本次耗时',
+    'chat.tokenUsage': '输入 {{input}} / 输出 {{output}}',
+    'chat.tokenUsageDetail': '本轮合计 — 输入 {{input}} · 缓存写入 {{cacheWrite}} · 缓存读取 {{cacheRead}} · 输出 {{output}}',
   };
-  return translations[key] ?? key;
+  let result = translations[key] ?? key;
+  if (opts) {
+    for (const [k, v] of Object.entries(opts)) {
+      result = result.replace(`{{${k}}}`, v);
+    }
+  }
+  return result;
 }) as any;
 
 const getMessageText = (message: ClaudeMessage) => message.content ?? '';
@@ -151,5 +159,128 @@ describe('MessageItem copy button visibility', () => {
 
     expect(screen.getByTestId('bash-tool-group-block')).toBeTruthy();
     expect(screen.queryAllByTestId('content-block-tool_use')).toHaveLength(0);
+  });
+});
+
+describe('MessageItem token usage display', () => {
+  it('shows whole-turn token usage alongside duration when turnUsage is present', () => {
+    const message: ClaudeMessage = {
+      type: 'assistant',
+      content: 'Hello',
+      durationMs: 16000,
+      raw: {
+        message: {
+          content: [{ type: 'text', text: 'Hello' }],
+        },
+        turnUsage: {
+          input_tokens: 1200,
+          output_tokens: 456,
+        },
+      } as any,
+    };
+
+    renderMessageItem(message);
+
+    expect(screen.getByText('0:16')).toBeTruthy();
+    expect(screen.getByText('输入 1.2K / 输出 456')).toBeTruthy();
+  });
+
+  it('counts cache tokens in the input total and details them in the tooltip', () => {
+    const message: ClaudeMessage = {
+      type: 'assistant',
+      content: 'Hello',
+      durationMs: 10000,
+      raw: {
+        message: {
+          content: [{ type: 'text', text: 'Hello' }],
+        },
+        turnUsage: {
+          input_tokens: 37,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 36310,
+          output_tokens: 353,
+        },
+      } as any,
+    };
+
+    renderMessageItem(message);
+
+    // Input shows the full input side (37 + 0 + 36310 = 36347 → "36.3K"),
+    // so heavy cache reads are never hidden from the user.
+    const tokens = screen.getByText('输入 36.3K / 输出 353');
+    expect(tokens).toBeTruthy();
+    expect(tokens.getAttribute('title')).toBe(
+      '本轮合计 — 输入 37 · 缓存写入 0 · 缓存读取 36.3K · 输出 353'
+    );
+  });
+
+  it('ignores per-call usage fields (message.usage / top-level usage)', () => {
+    // Regression guard: message.usage is the per-call context-occupancy value
+    // for the status bar and top-level usage is the session-cumulative Codex
+    // value — rendering either would misstate what the turn consumed.
+    const message: ClaudeMessage = {
+      type: 'assistant',
+      content: 'Hello',
+      durationMs: 5000,
+      raw: {
+        content: [{ type: 'text', text: 'Hello' }],
+        usage: {
+          input_tokens: 500000,
+          output_tokens: 9000,
+        },
+        message: {
+          content: [{ type: 'text', text: 'Hello' }],
+          usage: {
+            input_tokens: 37,
+            output_tokens: 353,
+          },
+        },
+      } as any,
+    };
+
+    renderMessageItem(message);
+
+    expect(screen.getByText('0:05')).toBeTruthy();
+    expect(screen.queryByText(/输入/)).toBeNull();
+  });
+
+  it('does not show token usage when no turnUsage is present', () => {
+    const message: ClaudeMessage = {
+      type: 'assistant',
+      content: 'Hello',
+      durationMs: 3000,
+      raw: {
+        message: {
+          content: [{ type: 'text', text: 'Hello' }],
+        },
+      } as any,
+    };
+
+    renderMessageItem(message);
+
+    expect(screen.getByText('0:03')).toBeTruthy();
+    expect(screen.queryByText(/输入/)).toBeNull();
+  });
+
+  it('does not show token usage when tokens are all zero', () => {
+    const message: ClaudeMessage = {
+      type: 'assistant',
+      content: 'Hello',
+      durationMs: 3000,
+      raw: {
+        message: {
+          content: [{ type: 'text', text: 'Hello' }],
+        },
+        turnUsage: {
+          input_tokens: 0,
+          output_tokens: 0,
+        },
+      } as any,
+    };
+
+    renderMessageItem(message);
+
+    expect(screen.getByText('0:03')).toBeTruthy();
+    expect(screen.queryByText(/输入/)).toBeNull();
   });
 });

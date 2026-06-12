@@ -38,10 +38,20 @@ describe('AppearanceTab ui font selector', () => {
           fontSize: 14,
           lineSpacing: 1.35,
         },
+        codeFontConfig: {
+          mode: 'followEditor',
+          effectiveMode: 'followEditor',
+          fontFamily: 'Monaco',
+          fontSize: 14,
+          lineSpacing: 1.35,
+        },
         onUiFontSelectionChange: vi.fn(),
         onUiFontCustomPathChange: vi.fn(),
         onSaveUiFontCustomPath: vi.fn(),
         onBrowseUiFontFile: vi.fn(),
+        onCodeFontSelectionChange: vi.fn(),
+        onSaveCodeFontCustomPath: vi.fn(),
+        onBrowseCodeFontFile: vi.fn(),
       } as any)}
     />
   );
@@ -123,10 +133,20 @@ describe('AppearanceTab ui font selector', () => {
         lineSpacing: 1.35,
         warning: 'font unavailable, currently using editor font',
       },
+      codeFontConfig: {
+        mode: 'followEditor',
+        effectiveMode: 'followEditor',
+        fontFamily: 'Monaco',
+        fontSize: 14,
+        lineSpacing: 1.35,
+      },
       onUiFontSelectionChange: vi.fn(),
       onUiFontCustomPathChange: vi.fn(),
       onSaveUiFontCustomPath: vi.fn(),
       onBrowseUiFontFile: vi.fn(),
+      onCodeFontSelectionChange: vi.fn(),
+      onSaveCodeFontCustomPath: vi.fn(),
+      onBrowseCodeFontFile: vi.fn(),
     } as any;
 
     render(<AppearanceTab {...props} />);
@@ -138,6 +158,7 @@ describe('AppearanceTab ui font selector', () => {
     expect(options).toHaveLength(2);
     expect(screen.getByRole('option', { name: /settings.basic.editorFont.followOption/i })).toBeTruthy();
     expect(screen.getByRole('option', { name: /settings.basic.editorFont.customOption/i })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: /settings.basic.codeFont.label/i })).toBeTruthy();
     expect(screen.getByDisplayValue('/tmp/MapleMono.ttf')).toBeTruthy();
     expect(screen.getByText(/font unavailable/i)).toBeTruthy();
   });
@@ -165,10 +186,20 @@ describe('AppearanceTab ui font selector', () => {
             fontSize: 14,
             lineSpacing: 1.35,
           },
+          codeFontConfig: {
+            mode: 'followEditor',
+            effectiveMode: 'followEditor',
+            fontFamily: 'Monaco',
+            fontSize: 14,
+            lineSpacing: 1.35,
+          },
           onUiFontSelectionChange,
           onUiFontCustomPathChange: vi.fn(),
           onSaveUiFontCustomPath: vi.fn(),
           onBrowseUiFontFile: vi.fn(),
+          onCodeFontSelectionChange: vi.fn(),
+          onSaveCodeFontCustomPath: vi.fn(),
+          onBrowseCodeFontFile: vi.fn(),
         } as any)}
       />
     );

@@ -1,8 +1,8 @@
 package com.github.claudecodegui.util;
 
-import com.github.claudecodegui.session.ClaudeSession;
-import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.handler.SettingsHandler;
+import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.session.ClaudeSession;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -199,6 +199,12 @@ public class MessageJsonConverter {
         copyFieldIfPresent(raw, transport, "summarizeMetadata");
         // Origin field for distinguishing human input from synthetic messages
         copyFieldIfPresent(raw, transport, "origin");
+        // Whole-turn aggregated usage stamped by ClaudeMessageHandler.handleResult /
+        // CodexMessageHandler.handleResultMessage, for the per-turn token display.
+        // Deliberately NOT copying the top-level usage or message.usage fields:
+        // those carry per-call / session-cumulative values for the status bar and
+        // would be misleading if rendered per message.
+        copyFieldIfPresent(raw, transport, "turnUsage");
 
         if (raw.has("content")) {
             transport.add("content", raw.get("content").deepCopy());

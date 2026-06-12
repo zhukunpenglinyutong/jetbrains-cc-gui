@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler.diff;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.util.EditorFileUtils;
 import com.google.gson.Gson;
@@ -61,7 +62,7 @@ public class RefreshFileHandler implements DiffActionHandler {
 
     private void refreshFile(String filePath) {
         try {
-            File file = new File(filePath);
+            File file = new File(NodeDetector.toVfsPath(filePath));
 
             try {
                 TimeUnit.MILLISECONDS.sleep(300);

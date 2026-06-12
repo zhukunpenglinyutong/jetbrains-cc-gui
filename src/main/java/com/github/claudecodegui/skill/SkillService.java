@@ -1,6 +1,6 @@
 package com.github.claudecodegui.skill;
 
-import com.github.claudecodegui.util.PlatformUtils;
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -58,7 +58,7 @@ public class SkillService {
      * Gets the global active skills directory (~/.claude/skills).
      */
     public static String getGlobalSkillsDir() {
-        String homeDir = PlatformUtils.getHomeDirectory();
+        String homeDir = NodeDetector.resolveHomeForFileOps();
         return Paths.get(homeDir, ".claude", "skills").toString();
     }
 
@@ -78,7 +78,7 @@ public class SkillService {
      * Gets the management directory root path (~/.codemoss/skills).
      */
     private static String getManagementRootDir() {
-        String homeDir = PlatformUtils.getHomeDirectory();
+        String homeDir = NodeDetector.resolveHomeForFileOps();
         return Paths.get(homeDir, CONFIG_DIR_NAME, SKILLS_DIR_NAME).toString();
     }
 

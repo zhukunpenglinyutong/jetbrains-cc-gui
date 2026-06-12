@@ -1,5 +1,6 @@
 package com.github.claudecodegui.settings;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.intellij.openapi.diagnostic.Logger;
 
@@ -28,7 +29,7 @@ public class ConfigPathManager {
      * Get the configuration file path (~/.codemoss/config.json).
      */
     public String getConfigPath() {
-        String homeDir = PlatformUtils.getHomeDirectory();
+        String homeDir = NodeDetector.resolveHomeForFileOps();
         return Paths.get(homeDir, CONFIG_DIR_NAME, CONFIG_FILE_NAME).toString();
     }
 
@@ -36,7 +37,7 @@ public class ConfigPathManager {
      * Get the backup file path.
      */
     public String getBackupPath() {
-        String homeDir = PlatformUtils.getHomeDirectory();
+        String homeDir = NodeDetector.resolveHomeForFileOps();
         return Paths.get(homeDir, CONFIG_DIR_NAME, BACKUP_FILE_NAME).toString();
     }
 
@@ -44,7 +45,7 @@ public class ConfigPathManager {
      * Get the configuration directory as a Path object.
      */
     public Path getConfigDir() {
-        String homeDir = PlatformUtils.getHomeDirectory();
+        String homeDir = NodeDetector.resolveHomeForFileOps();
         return Paths.get(homeDir, CONFIG_DIR_NAME);
     }
 
@@ -73,7 +74,7 @@ public class ConfigPathManager {
      * Get the Claude settings.json path.
      */
     public Path getClaudeSettingsPath() {
-        String homeDir = PlatformUtils.getHomeDirectory();
+        String homeDir = NodeDetector.resolveHomeForFileOps();
         return Paths.get(homeDir, CLAUDE_DIR_NAME, CLAUDE_SETTINGS_FILE_NAME);
     }
 

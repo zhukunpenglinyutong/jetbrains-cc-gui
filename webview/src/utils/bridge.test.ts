@@ -13,6 +13,22 @@ describe('bridge navigation helpers', () => {
     window.sendToJava = vi.fn();
   });
 
+  it('decodes percent-encoded navigation paths for openFile', () => {
+    openFile('/Users/demo/my%20file.ts');
+    openFile('/Users/demo/%C3%BCber.txt');
+    openFile('file:///Users/demo/my%20file.ts');
+
+    expect(window.sendToJava).toHaveBeenNthCalledWith(1, 'open_file:/Users/demo/my file.ts');
+    expect(window.sendToJava).toHaveBeenNthCalledWith(2, 'open_file:/Users/demo/über.txt');
+    expect(window.sendToJava).toHaveBeenNthCalledWith(3, 'open_file:/Users/demo/my file.ts');
+  });
+
+  it('parses line numbers from normalized navigation paths', () => {
+    openFile('/Users/demo/my%20file.ts:42');
+
+    expect(window.sendToJava).toHaveBeenCalledWith('open_file:/Users/demo/my file.ts:42');
+  });
+
   it('allows relative navigation paths for openFile', () => {
     openFile('../shared/utils.ts');
     expect(window.sendToJava).toHaveBeenCalledWith('open_file:../shared/utils.ts');

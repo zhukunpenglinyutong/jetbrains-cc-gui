@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
@@ -417,7 +418,7 @@ public class AgentHandler extends BaseMessageHandler {
                 VirtualFile initialDir = null;
                 String projectPath = context.getProject().getBasePath();
                 if (projectPath != null) {
-                    initialDir = LocalFileSystem.getInstance().findFileByPath(projectPath);
+                    initialDir = LocalFileSystem.getInstance().findFileByPath(NodeDetector.toVfsPath(projectPath));
                 }
 
                 // Show file chooser

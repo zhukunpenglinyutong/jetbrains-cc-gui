@@ -1,5 +1,6 @@
 package com.github.claudecodegui.session;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.service.RunConfigMonitorService;
 import com.github.claudecodegui.terminal.TerminalMonitorService;
 import com.google.gson.JsonArray;
@@ -419,7 +420,7 @@ public class SessionContextService {
 
     private String readFileContent(String filePath) {
         try {
-            File file = new File(filePath);
+            File file = new File(NodeDetector.toVfsPath(filePath));
             if (!file.exists() || !file.isFile() || !file.canRead()) {
                 LOG.warn("[Codex Context] File not accessible: " + filePath);
                 return null;

@@ -7,4 +7,4 @@ export { default as EditToolGroupBlock } from './EditToolGroupBlock';
 export { default as BashToolBlock } from './BashToolBlock';
 export { default as BashToolGroupBlock } from './BashToolGroupBlock';
 export { default as SearchToolGroupBlock } from './SearchToolGroupBlock';
-
+export { default as AgentGroupBlock } from './AgentGroupBlock';

@@ -1,7 +1,7 @@
 package com.github.claudecodegui.provider.codex;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.settings.CodemossSettingsService;
-import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
@@ -22,17 +22,18 @@ public class CodexHistoryReader {
 
     private static final Logger LOG = Logger.getInstance(CodexHistoryReader.class);
 
-    private static final String HOME_DIR = PlatformUtils.getHomeDirectory();
-    private static final Path CODEX_SESSIONS_DIR = Paths.get(HOME_DIR, ".codex", "sessions");
-
     private final Gson gson;
     private final CodexHistoryParser parser;
     private final CodexHistoryIndexService indexService;
     private final CodexUsageAggregator usageAggregator;
     private final CodexHistorySessionService sessionService;
 
+    private static Path defaultSessionsDir() {
+        return Paths.get(NodeDetector.resolveHomeForFileOps(), ".codex", "sessions");
+    }
+
     public CodexHistoryReader() {
-        this(CODEX_SESSIONS_DIR, new Gson());
+        this(defaultSessionsDir(), new Gson());
     }
 
     CodexHistoryReader(Path sessionsDir, Gson gson) {

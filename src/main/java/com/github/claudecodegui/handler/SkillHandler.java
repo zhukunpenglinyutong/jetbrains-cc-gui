@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
@@ -140,7 +141,7 @@ public class SkillHandler extends BaseMessageHandler {
                 VirtualFile initialDir = null;
                 String projectPath = context.getProject().getBasePath();
                 if (projectPath != null) {
-                    initialDir = LocalFileSystem.getInstance().findFileByPath(projectPath);
+                    initialDir = LocalFileSystem.getInstance().findFileByPath(NodeDetector.toVfsPath(projectPath));
                 }
 
                 VirtualFile[] selectedFiles = FileChooser.chooseFiles(descriptor, context.getProject(), initialDir);
@@ -314,7 +315,7 @@ public class SkillHandler extends BaseMessageHandler {
     private boolean isInsideSkillsDirectory(String path) {
         try {
             Path normalized = Paths.get(path).toAbsolutePath().normalize();
-            String userHome = com.github.claudecodegui.util.PlatformUtils.getHomeDirectory();
+            String userHome = NodeDetector.resolveHomeForFileOps();
             String projectBase = context.getProject().getBasePath();
 
             // Claude skills directories
@@ -381,7 +382,7 @@ public class SkillHandler extends BaseMessageHandler {
             ReadAction
                 .nonBlocking(() -> {
                     // Find the file in a background thread (this is a slow operation)
-                    return LocalFileSystem.getInstance().findFileByPath(fileToOpen);
+                    return LocalFileSystem.getInstance().findFileByPath(NodeDetector.toVfsPath(fileToOpen));
                 })
                 .finishOnUiThread(com.intellij.openapi.application.ModalityState.defaultModalityState(), virtualFile -> {
                     // Open the file on the UI thread

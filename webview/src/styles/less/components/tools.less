@@ -151,7 +151,7 @@
     border: 1px solid var(--border-primary);
     border-radius: 6px;
     padding: 10px 12px;
-    font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);
+    font-family: var(--cc-gui-code-font-family, var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace));
     font-size: 13px;
     color: var(--text-primary);
     white-space: pre-wrap;
@@ -160,11 +160,24 @@
 
 .bash-output-block {
     margin-top: 8px;
-    font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);
+    font-family: var(--cc-gui-code-font-family, var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace));
     font-size: 12px;
     white-space: pre-wrap;
     display: flex;
     gap: 6px;
+    min-width: 0;
+}
+
+.bash-output-text {
+    min-width: 0;
+    white-space: inherit;
+    word-break: inherit;
+    overflow-wrap: inherit;
+    /* Declare the code font directly on this leaf text node. The global
+       `* { font-family }` in base.less directly matches this <span> and would
+       otherwise win over the code font merely inherited from .bash-output-block
+       (a directly-matched rule always beats an inherited value). */
+    font-family: var(--cc-gui-code-font-family, var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace));
 }
 
 .bash-output-block.normal {
@@ -377,6 +390,10 @@
     text-overflow: ellipsis;
 }
 
+.bash-timeline-description-command {
+    font-family: var(--cc-gui-code-font-family, var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace));
+}
+
 /* 展开的详情 */
 .bash-timeline-detail {
     margin-top: 8px;
@@ -394,6 +411,11 @@
     font-size: 11px;
     max-height: 150px;
     overflow-y: auto;
+}
+
+.bash-timeline-detail .bash-output-text {
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
 /* 亮色模式适配 */

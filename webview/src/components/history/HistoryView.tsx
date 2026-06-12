@@ -61,12 +61,14 @@ const EMPTY_HINT_STYLE: React.CSSProperties = {
 interface HistoryViewProps {
   historyData: HistoryData | null;
   currentProvider?: string; // Current provider (claude or codex)
+  currentSessionId?: string | null; // Active session ID; its row must not offer conversion
   onLoadSession: (sessionId: string, provider?: string) => void;
   onDeleteSession: (sessionId: string) => void; // Delete session callback
   onDeleteSessions: (sessionIds: string[]) => void; // Batch delete sessions callback
   onExportSession: (sessionId: string, title: string) => void; // Export session callback
   onToggleFavorite: (sessionId: string) => void; // Toggle favorite callback
   onUpdateTitle: (sessionId: string, newTitle: string) => void; // Update title callback
+  onConvertToCliSession: (sessionId: string) => void; // Convert sidechain session to CLI session callback
 }
 
 const getComparableTimestamp = (timestamp: string | undefined) => {
@@ -103,16 +105,18 @@ const deduplicateHistorySessions = (sessions: HistorySessionSummary[]) => {
       isFavorited: preferred.isFavorited || fallback.isFavorited,
       favoritedAt: Math.max(preferred.favoritedAt || 0, fallback.favoritedAt || 0) || undefined,
       provider: preferred.provider || fallback.provider,
+      entrypoint: preferred.entrypoint || fallback.entrypoint,
     });
   }
 
   return Array.from(deduplicated.values());
 };
 
-const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSession, onDeleteSessions, onExportSession, onToggleFavorite, onUpdateTitle }: HistoryViewProps) => {
+const HistoryView = ({ historyData, currentProvider, currentSessionId, onLoadSession, onDeleteSession, onDeleteSessions, onExportSession, onToggleFavorite, onUpdateTitle, onConvertToCliSession }: HistoryViewProps) => {
   const { t } = useTranslation();
   const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight || 600);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null); // Session ID pending deletion
+  const [convertingSessionId, setConvertingSessionId] = useState<string | null>(null); // Session ID pending conversion
   const [inputValue, setInputValue] = useState(''); // Immediate value of search input
   const [searchQuery, setSearchQuery] = useState(''); // Actual search keyword (debounced)
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null); // Session ID being edited
@@ -155,8 +159,8 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
     return () => clearTimeout(timer);
   }, [inputValue]);
 
-  // When historyData updates, stop deep search state and clean up timeout timer
-  // Uses functional update to avoid isDeepSearching dependency while cleaning up the corresponding timeout
+  // When history data content updates, stop deep search state and clean up timeout timer.
+  // Depend on stable content fields so an existing history list refresh also clears the spinner.
   useEffect(() => {
     if (historyData) {
       setIsDeepSearching(prev => {
@@ -167,7 +171,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
         return false;
       });
     }
-  }, [historyData]);
+  }, [historyData?.success, historyData?.total, historyData?.sessions]);
 
   // Sort and filter sessions: favorited on top (by favorite time descending), unfavorited below (original order)
   const sessions = useMemo(() => {
@@ -191,14 +195,12 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
     return [...favorited, ...unfavorited];
   }, [historyData?.sessions, searchQuery]);
 
-  const infoBar = useMemo(() => {
-    if (!historyData) {
-      return '';
-    }
-    const sessionCount = sessions.length;
-    const messageCount = historyData.total ?? 0;
-    return t('history.totalSessions', { count: sessionCount, total: messageCount });
-  }, [historyData, sessions.length, t]);
+  const infoBar = !historyData
+    ? ''
+    : t('history.totalSessions', {
+        count: sessions.length,
+        total: historyData.total ?? 0,
+      });
 
   const selectedCount = selectedSessionIds.size;
   const allVisibleSelected = sessions.length > 0 && sessions.every(session => selectedSessionIds.has(session.sessionId));
@@ -352,6 +354,21 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
     });
   }, [currentProvider]);
 
+  const handleConvertRequest = useCallback((sessionId: string) => {
+    setConvertingSessionId(sessionId);
+  }, []);
+
+  const confirmConvert = useCallback(() => {
+    if (convertingSessionId) {
+      onConvertToCliSession(convertingSessionId);
+      setConvertingSessionId(null);
+    }
+  }, [convertingSessionId, onConvertToCliSession]);
+
+  const cancelConvert = useCallback(() => {
+    setConvertingSessionId(null);
+  }, []);
+
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value);
   }, []);
@@ -426,6 +443,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
       isSelectionMode={isSelectionMode}
       isCopied={copiedSessionId === session.sessionId}
       isCopyFailed={copyFailedSessionId === session.sessionId}
+      isActiveSession={currentSessionId === session.sessionId}
       editingTitle={editingSessionId === session.sessionId ? editingTitle : ''}
       searchQuery={searchQuery}
       t={t}
@@ -439,6 +457,7 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
       onDelete={handleDeleteRequest}
       onFavorite={handleFavoriteRequest}
       onCopySessionId={handleCopySessionId}
+      onConvertToCliSession={handleConvertRequest}
     />
   );
 
@@ -504,6 +523,24 @@ const HistoryView = ({ historyData, currentProvider, onLoadSession, onDeleteSess
               </button>
               <button className="modal-btn modal-btn-danger" onClick={confirmDelete}>
                 {t('common.delete')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Convert to CLI confirmation dialog */}
+      {convertingSessionId && (
+        <div className="modal-overlay" onClick={cancelConvert} role="presentation">
+          <div className="modal-content" onClick={stopPropagationHandler} role="dialog" aria-modal="true" aria-labelledby="convert-session-title">
+            <h3 id="convert-session-title">{t('history.confirmConvert')}</h3>
+            <p>{t('history.convertConfirmMessage')}</p>
+            <div className="modal-actions">
+              <button className="modal-btn modal-btn-cancel" onClick={cancelConvert}>
+                {t('common.cancel')}
+              </button>
+              <button className="modal-btn modal-btn-primary" onClick={confirmConvert}>
+                {t('history.convertButton')}
               </button>
             </div>
           </div>

@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 
 public class MessageParserTest {
@@ -33,5 +34,67 @@ public class MessageParserTest {
         assertEquals(ClaudeSession.Message.Type.USER, parsed.type);
         assertEquals("", parsed.content);
         assertEquals(raw, parsed.raw);
+    }
+
+    @Test
+    public void parseServerMessageUnwrapsNormalizedToolUseRawPayload() {
+        MessageParser parser = new MessageParser();
+
+        JsonObject toolUse = new JsonObject();
+        toolUse.addProperty("type", "tool_use");
+        toolUse.addProperty("id", "call-1");
+        toolUse.addProperty("name", "glob");
+        JsonObject input = new JsonObject();
+        input.addProperty("command", "rg TODO");
+        toolUse.add("input", input);
+
+        JsonArray content = new JsonArray();
+        content.add(toolUse);
+
+        JsonObject normalizedRaw = new JsonObject();
+        normalizedRaw.add("content", content);
+        normalizedRaw.addProperty("role", "assistant");
+
+        JsonObject envelope = new JsonObject();
+        envelope.addProperty("type", "assistant");
+        envelope.addProperty("content", "Tool: glob");
+        envelope.add("raw", normalizedRaw);
+
+        ClaudeSession.Message parsed = parser.parseServerMessage(envelope);
+
+        assertNotNull(parsed);
+        assertEquals(ClaudeSession.Message.Type.ASSISTANT, parsed.type);
+        assertEquals("Tool: glob", parsed.content);
+        assertEquals(normalizedRaw, parsed.raw);
+        assertFalse(parsed.raw.has("raw"));
+        assertEquals("tool_use", parsed.raw.getAsJsonArray("content").get(0).getAsJsonObject().get("type").getAsString());
+    }
+
+    @Test
+    public void parseServerMessageKeepsNormalizedImageOnlyMessage() {
+        MessageParser parser = new MessageParser();
+
+        JsonObject imageBlock = new JsonObject();
+        imageBlock.addProperty("type", "image");
+        imageBlock.addProperty("src", "data:image/png;base64,abc123");
+
+        JsonArray content = new JsonArray();
+        content.add(imageBlock);
+
+        JsonObject normalizedRaw = new JsonObject();
+        normalizedRaw.add("content", content);
+        normalizedRaw.addProperty("role", "user");
+
+        JsonObject envelope = new JsonObject();
+        envelope.addProperty("type", "user");
+        envelope.addProperty("content", "");
+        envelope.add("raw", normalizedRaw);
+
+        ClaudeSession.Message parsed = parser.parseServerMessage(envelope);
+
+        assertNotNull(parsed);
+        assertEquals(ClaudeSession.Message.Type.USER, parsed.type);
+        assertEquals("", parsed.content);
+        assertEquals(normalizedRaw, parsed.raw);
     }
 }
