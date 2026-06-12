@@ -1,0 +1,822 @@
+from pathlib import Path
+
+ROOT = Path.cwd()
+APP_LESS = ROOT / 'webview' / 'src' / 'styles' / 'app.less'
+V3_LESS = ROOT / 'webview' / 'src' / 'styles' / 'less' / 'copilot-laf-v3.less'
+DOC = ROOT / 'docs' / 'copilot-laf-v3-element-map.md'
+
+IMPORT_LINE = '@import "less/copilot-laf-v3.less";'
+
+COPILOT_LAF_V3 = r'''/* GitHub Copilot inspired look-and-feel v3.
+ *
+ * Scope every rule to data-theme="github-copilot". The goal is not to clone
+ * private GitHub assets, but to translate this plugin's real UI primitives
+ * into the calmer GitHub Copilot / Primer visual language:
+ * - nearly black canvas
+ * - quiet borders
+ * - blue for links, focus and user-authored content
+ * - yellow/amber for attention and inline code accents
+ * - green for success/context/status
+ * - very small, low-contrast icons
+ * - prominent but restrained bottom composer
+ */
+
+html[data-theme="github-copilot"] {
+    color-scheme: dark;
+
+    --copilot-canvas: #0d1117;
+    --copilot-canvas-subtle: #010409;
+    --copilot-surface: #161b22;
+    --copilot-surface-muted: #1b222c;
+    --copilot-surface-raised: #21262d;
+    --copilot-border: rgba(139, 148, 158, 0.24);
+    --copilot-border-muted: rgba(139, 148, 158, 0.14);
+    --copilot-border-strong: rgba(88, 166, 255, 0.62);
+    --copilot-fg-default: #c9d1d9;
+    --copilot-fg-muted: #8b949e;
+    --copilot-fg-subtle: #6e7681;
+    --copilot-link: #58a6ff;
+    --copilot-accent: #58a6ff;
+    --copilot-user: #265985;
+    --copilot-user-border: #6aa9f0;
+    --copilot-attention: #d29922;
+    --copilot-attention-muted: rgba(210, 153, 34, 0.16);
+    --copilot-success: #3fb950;
+    --copilot-success-muted: rgba(63, 185, 80, 0.12);
+    --copilot-danger: #f85149;
+    --copilot-done: #a371f7;
+    --copilot-radius-sm: 6px;
+    --copilot-radius-md: 8px;
+    --copilot-radius-lg: 12px;
+    --copilot-radius-xl: 16px;
+    --copilot-glow-blue: rgba(88, 166, 255, 0.36);
+    --copilot-glow-purple: rgba(163, 113, 247, 0.20);
+    --copilot-shadow: 0 16px 40px rgba(1, 4, 9, 0.48);
+    --copilot-inner-shadow: inset 0 1px 0 rgba(240, 246, 252, 0.04);
+
+    --bg-primary: var(--copilot-canvas);
+    --bg-chat: var(--copilot-canvas);
+    --bg-secondary: var(--copilot-surface);
+    --bg-tertiary: var(--copilot-surface-raised);
+    --bg-elevated: var(--copilot-surface);
+    --bg-hover: rgba(177, 186, 196, 0.08);
+    --bg-active: rgba(177, 186, 196, 0.13);
+
+    --text-primary: var(--copilot-fg-default);
+    --text-secondary: #f0f6fc;
+    --text-tertiary: var(--copilot-fg-muted);
+    --text-muted: var(--copilot-fg-subtle);
+    --text-placeholder: #7d8590;
+    --border-primary: var(--copilot-border-muted);
+    --border-secondary: var(--copilot-border);
+    --border-hover: rgba(139, 148, 158, 0.44);
+    --accent-primary: var(--copilot-accent);
+    --accent-primary-hover: #79c0ff;
+    --accent-primary-active: #1f6feb;
+    --accent-secondary: var(--copilot-link);
+    --color-link: var(--copilot-link);
+    --color-success: var(--copilot-success);
+    --color-warning: var(--copilot-attention);
+    --color-error: var(--copilot-danger);
+    --color-danger: var(--copilot-danger);
+    --color-info: var(--copilot-link);
+
+    --color-code-bg: rgba(210, 153, 34, 0.14);
+    --color-code-inline-bg: rgba(210, 153, 34, 0.14);
+    --color-code-block-bg: #0d1117;
+    --color-code-block-border: var(--copilot-border-muted);
+
+    --color-message-user-bg: var(--copilot-user);
+    --color-message-user-text: #f0f6fc;
+    --color-message-user-code-bg: rgba(255, 255, 255, 0.12);
+    --color-message-user-code-border: rgba(255, 255, 255, 0.18);
+    --color-message-role-user: #79c0ff;
+    --color-message-role-assistant: var(--copilot-success);
+    --color-message-divider: transparent;
+
+    --scrollbar-track: transparent;
+    --scrollbar-thumb: rgba(139, 148, 158, 0.34);
+    --scrollbar-thumb-hover: rgba(139, 148, 158, 0.56);
+
+    --shadow-sm: none;
+    --shadow-md: var(--copilot-shadow);
+    --shadow-lg: var(--copilot-shadow);
+}
+
+html[data-theme="github-copilot"] body {
+    background:
+        radial-gradient(circle at 50% -18%, rgba(88, 166, 255, 0.20), transparent 26rem),
+        radial-gradient(circle at 50% -10%, rgba(163, 113, 247, 0.14), transparent 32rem),
+        var(--copilot-canvas);
+    color: var(--copilot-fg-default);
+}
+
+html[data-theme="github-copilot"] #app {
+    margin: 12px;
+    height: calc((100vh - 24px) / var(--font-scale, 1));
+    width: calc((100vw - 24px) / var(--font-scale, 1));
+    border: 1px solid var(--copilot-border-muted);
+    border-radius: var(--copilot-radius-lg);
+    background: var(--copilot-canvas);
+    box-shadow:
+        0 0 0 1px rgba(88, 166, 255, 0.06),
+        0 0 48px rgba(88, 166, 255, 0.12),
+        0 24px 72px rgba(1, 4, 9, 0.62);
+}
+
+/* Header / top controls --------------------------------------------------- */
+html[data-theme="github-copilot"] .header {
+    min-height: 42px;
+    padding: 6px 8px 6px 12px;
+    background: rgba(13, 17, 23, 0.86);
+    border-bottom: 1px solid var(--copilot-border-muted);
+    box-shadow: var(--copilot-inner-shadow);
+}
+
+html[data-theme="github-copilot"] .header-left {
+    gap: 8px;
+}
+
+html[data-theme="github-copilot"] .session-title {
+    color: #dbe7f3;
+    font-size: 13px;
+    font-weight: 500;
+    padding-left: 2px;
+    letter-spacing: 0;
+}
+
+html[data-theme="github-copilot"] .new-chat-button,
+html[data-theme="github-copilot"] .back-button,
+html[data-theme="github-copilot"] .icon-button,
+html[data-theme="github-copilot"] .session-title-edit-btn,
+html[data-theme="github-copilot"] .session-title-save-btn,
+html[data-theme="github-copilot"] .session-title-cancel-btn {
+    color: var(--copilot-fg-muted);
+    background: transparent;
+    border: 1px solid transparent;
+    box-shadow: none;
+}
+
+html[data-theme="github-copilot"] .new-chat-button {
+    min-height: 26px;
+    padding: 3px 9px;
+    border-color: var(--copilot-border-muted);
+    border-radius: var(--copilot-radius-sm);
+    background: rgba(33, 38, 45, 0.72);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+html[data-theme="github-copilot"] .icon-button,
+html[data-theme="github-copilot"] .back-button {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--copilot-radius-sm);
+}
+
+html[data-theme="github-copilot"] .back-button {
+    width: auto;
+    padding: 3px 7px;
+}
+
+html[data-theme="github-copilot"] .new-chat-button:hover,
+html[data-theme="github-copilot"] .back-button:hover,
+html[data-theme="github-copilot"] .icon-button:hover,
+html[data-theme="github-copilot"] .session-title-edit-btn:hover {
+    color: #f0f6fc;
+    background: rgba(177, 186, 196, 0.08);
+    border-color: var(--copilot-border);
+}
+
+html[data-theme="github-copilot"] .icon-button svg,
+html[data-theme="github-copilot"] .icon-button .codicon {
+    width: 15px;
+    height: 15px;
+    font-size: 15px;
+}
+
+/* Main shell / message area ---------------------------------------------- */
+html[data-theme="github-copilot"] .messages-shell {
+    position: relative;
+    background:
+        linear-gradient(180deg, rgba(88, 166, 255, 0.045), transparent 118px),
+        var(--copilot-canvas);
+}
+
+html[data-theme="github-copilot"] .messages-container {
+    padding: 6px 10px 18px 28px;
+    background: transparent;
+}
+
+html[data-theme="github-copilot"] .message {
+    padding: 12px 12px 13px 14px;
+    border-bottom: none;
+    gap: 7px;
+}
+
+html[data-theme="github-copilot"] .message.assistant {
+    padding-left: 14px;
+}
+
+html[data-theme="github-copilot"] .message.assistant .message-content {
+    color: var(--copilot-fg-default);
+    max-width: 100%;
+}
+
+html[data-theme="github-copilot"] .message.user {
+    align-items: flex-end;
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+html[data-theme="github-copilot"] .message.user .message-content {
+    max-width: min(86%, 920px);
+    padding: 12px 14px;
+    color: #f0f6fc;
+    background:
+        linear-gradient(180deg, rgba(121, 192, 255, 0.12), rgba(38, 89, 133, 0.94)),
+        var(--copilot-user);
+    border: 1px solid rgba(121, 192, 255, 0.38);
+    border-radius: var(--copilot-radius-md);
+    box-shadow:
+        0 0 0 1px rgba(88, 166, 255, 0.08),
+        0 10px 28px rgba(1, 4, 9, 0.24);
+}
+
+html[data-theme="github-copilot"] .message.user .message-content a,
+html[data-theme="github-copilot"] .message.user .message-content code {
+    color: #fff8c5;
+}
+
+html[data-theme="github-copilot"] .message-header-row,
+html[data-theme="github-copilot"] .message-role-label,
+html[data-theme="github-copilot"] .message-timestamp-header,
+html[data-theme="github-copilot"] .message-duration {
+    color: var(--copilot-fg-subtle);
+    font-size: 11px;
+    font-weight: 400;
+}
+
+html[data-theme="github-copilot"] .message-duration {
+    opacity: 0.62;
+}
+
+html[data-theme="github-copilot"] .message:hover .message-duration {
+    opacity: 0.92;
+}
+
+html[data-theme="github-copilot"] .message-copy-btn,
+html[data-theme="github-copilot"] .message-copy-btn-inline,
+html[data-theme="github-copilot"] .copy-code-btn {
+    color: var(--copilot-fg-subtle);
+    background: rgba(22, 27, 34, 0.82);
+    border: 1px solid transparent;
+    border-radius: var(--copilot-radius-sm);
+    box-shadow: none;
+}
+
+html[data-theme="github-copilot"] .message-copy-btn:hover,
+html[data-theme="github-copilot"] .message-copy-btn-inline:hover,
+html[data-theme="github-copilot"] .copy-code-btn:hover {
+    color: #f0f6fc;
+    background: rgba(177, 186, 196, 0.10);
+    border-color: var(--copilot-border);
+}
+
+/* Markdown / prose -------------------------------------------------------- */
+html[data-theme="github-copilot"] .message-content h1,
+html[data-theme="github-copilot"] .message-content h2,
+html[data-theme="github-copilot"] .message-content h3,
+html[data-theme="github-copilot"] .message-content h4,
+html[data-theme="github-copilot"] .message-content h5,
+html[data-theme="github-copilot"] .message-content h6 {
+    color: #f0f6fc;
+    font-weight: 650;
+    line-height: 1.25;
+    margin: 14px 0 8px;
+}
+
+html[data-theme="github-copilot"] .message-content h1 { font-size: 20px; }
+html[data-theme="github-copilot"] .message-content h2 { font-size: 18px; }
+html[data-theme="github-copilot"] .message-content h3 { font-size: 16px; }
+html[data-theme="github-copilot"] .message-content h4,
+html[data-theme="github-copilot"] .message-content h5,
+html[data-theme="github-copilot"] .message-content h6 { font-size: 14px; }
+
+html[data-theme="github-copilot"] .message-content p,
+html[data-theme="github-copilot"] .message-content li {
+    color: var(--copilot-fg-default);
+    font-size: 13.5px;
+    line-height: 1.62;
+}
+
+html[data-theme="github-copilot"] .message-content p {
+    margin: 7px 0;
+}
+
+html[data-theme="github-copilot"] .message-content ul,
+html[data-theme="github-copilot"] .message-content ol {
+    margin: 7px 0 9px 22px;
+    padding-left: 0;
+}
+
+html[data-theme="github-copilot"] .message-content li::marker {
+    color: var(--copilot-fg-muted);
+}
+
+html[data-theme="github-copilot"] .message-content a,
+html[data-theme="github-copilot"] .message-content .markdown-link,
+html[data-theme="github-copilot"] .message-content .file-link,
+html[data-theme="github-copilot"] .message-content .class-link {
+    color: var(--copilot-link);
+    text-decoration: none;
+}
+
+html[data-theme="github-copilot"] .message-content a:hover,
+html[data-theme="github-copilot"] .message-content .markdown-link:hover,
+html[data-theme="github-copilot"] .message-content .file-link:hover,
+html[data-theme="github-copilot"] .message-content .class-link:hover {
+    text-decoration: underline;
+}
+
+html[data-theme="github-copilot"] .message-content code:not(pre code) {
+    padding: 0.12em 0.34em;
+    color: #ffd479;
+    background: rgba(210, 153, 34, 0.12);
+    border: 1px solid rgba(210, 153, 34, 0.20);
+    border-radius: 4px;
+    font-size: 0.92em;
+}
+
+html[data-theme="github-copilot"] .message-content strong {
+    color: #f0f6fc;
+    font-weight: 650;
+}
+
+html[data-theme="github-copilot"] .message-content blockquote {
+    color: var(--copilot-fg-muted);
+    border-left: 2px solid var(--copilot-border);
+    padding-left: 12px;
+    margin: 10px 0;
+}
+
+/* Code block renderer: real structure is .code-block-wrapper + .copy-code-btn + pre/code. */
+html[data-theme="github-copilot"] .code-block-wrapper {
+    position: relative;
+    margin: 12px 0 16px;
+    overflow: hidden;
+    background: #0d1117;
+    border: 1px solid var(--copilot-border-muted);
+    border-radius: var(--copilot-radius-md);
+    box-shadow: var(--copilot-inner-shadow);
+}
+
+html[data-theme="github-copilot"] .code-block-wrapper::before {
+    content: '';
+    display: block;
+    height: 30px;
+    background:
+        linear-gradient(180deg, rgba(240, 246, 252, 0.035), transparent),
+        #0d1117;
+    border-bottom: 1px solid var(--copilot-border-muted);
+}
+
+html[data-theme="github-copilot"] .code-block-wrapper::after {
+    content: '›';
+    position: absolute;
+    top: 5px;
+    left: 12px;
+    color: var(--copilot-fg-muted);
+    font-size: 18px;
+    line-height: 20px;
+    transform: rotate(90deg);
+}
+
+html[data-theme="github-copilot"] .code-block-wrapper pre {
+    margin: 0;
+    padding: 12px 14px 14px;
+    background: #0d1117 !important;
+    border: none;
+    overflow-x: auto;
+}
+
+html[data-theme="github-copilot"] .code-block-wrapper pre code {
+    color: #c9d1d9;
+    background: transparent;
+    font-size: 13px;
+    line-height: 1.55;
+    tab-size: 4;
+}
+
+html[data-theme="github-copilot"] .code-block-wrapper .copy-code-btn,
+html[data-theme="github-copilot"] .copy-code-btn {
+    top: 4px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    color: var(--copilot-fg-muted);
+    opacity: 0.82;
+}
+
+/* Status, compact information and diagnostics ---------------------------- */
+html[data-theme="github-copilot"] .streaming-connect-status,
+html[data-theme="github-copilot"] .compact-summary-block,
+html[data-theme="github-copilot"] .compact-notification-block,
+html[data-theme="github-copilot"] .task-notification-block,
+html[data-theme="github-copilot"] .provider-not-configured-card,
+html[data-theme="github-copilot"] .error-diagnostic-card,
+html[data-theme="github-copilot"] .thinking-block {
+    background: rgba(22, 27, 34, 0.62);
+    border: 1px solid var(--copilot-border-muted);
+    border-radius: var(--copilot-radius-md);
+    box-shadow: var(--copilot-inner-shadow);
+}
+
+html[data-theme="github-copilot"] .thinking-block,
+html[data-theme="github-copilot"] .compact-summary-block,
+html[data-theme="github-copilot"] .compact-notification-block {
+    color: var(--copilot-fg-muted);
+}
+
+html[data-theme="github-copilot"] .thinking-header,
+html[data-theme="github-copilot"] .compact-summary-title {
+    color: var(--copilot-fg-muted);
+    background: transparent;
+}
+
+html[data-theme="github-copilot"] .thinking-header:hover,
+html[data-theme="github-copilot"] .compact-summary-title:hover {
+    color: #f0f6fc;
+    background: rgba(177, 186, 196, 0.06);
+}
+
+html[data-theme="github-copilot"] .task-notification-completed,
+html[data-theme="github-copilot"] .task-notification-success,
+html[data-theme="github-copilot"] .task-notification-green,
+html[data-theme="github-copilot"] .compact-summary-icon {
+    color: var(--copilot-success);
+}
+
+html[data-theme="github-copilot"] .error-diagnostic-recommended-badge {
+    background: var(--copilot-attention-muted);
+    color: #ffd479;
+    border: 1px solid rgba(210, 153, 34, 0.24);
+}
+
+/* Tool blocks: keep additional plugin capabilities, but translate them into a calm activity style. */
+html[data-theme="github-copilot"] .tool-block,
+html[data-theme="github-copilot"] .tool-use-block,
+html[data-theme="github-copilot"] .tool-result-block,
+html[data-theme="github-copilot"] .read-tool-block,
+html[data-theme="github-copilot"] .edit-tool-block,
+html[data-theme="github-copilot"] .bash-tool-block,
+html[data-theme="github-copilot"] .generic-tool-block,
+html[data-theme="github-copilot"] .task-execution-block,
+html[data-theme="github-copilot"] .tool-group-block,
+html[data-theme="github-copilot"] .read-tool-group-block,
+html[data-theme="github-copilot"] .edit-tool-group-block,
+html[data-theme="github-copilot"] .bash-tool-group-block,
+html[data-theme="github-copilot"] .search-tool-group-block {
+    background: rgba(22, 27, 34, 0.56);
+    border: 1px solid var(--copilot-border-muted);
+    border-radius: var(--copilot-radius-md);
+    box-shadow: none;
+}
+
+html[data-theme="github-copilot"] .tool-header,
+html[data-theme="github-copilot"] .tool-block-header,
+html[data-theme="github-copilot"] .tool-title,
+html[data-theme="github-copilot"] .tool-name {
+    color: #dbe7f3;
+    font-weight: 500;
+}
+
+html[data-theme="github-copilot"] .tool-icon,
+html[data-theme="github-copilot"] .tool-block-icon,
+html[data-theme="github-copilot"] .codicon-symbol-method,
+html[data-theme="github-copilot"] .codicon-file-code {
+    color: var(--copilot-link);
+}
+
+html[data-theme="github-copilot"] .tool-summary,
+html[data-theme="github-copilot"] .tool-param,
+html[data-theme="github-copilot"] .tool-description {
+    color: var(--copilot-fg-muted);
+}
+
+html[data-theme="github-copilot"] .tool-file-link,
+html[data-theme="github-copilot"] .tool-class-link {
+    color: var(--copilot-link);
+}
+
+/* Anchor rail: not in GitHub Copilot, but fits as a subtle Copilot-style timeline. */
+html[data-theme="github-copilot"] .messages-anchor-rail {
+    left: 10px;
+    width: 12px;
+    opacity: 0.78;
+}
+
+html[data-theme="github-copilot"] .messages-anchor-track {
+    width: 1px;
+    background: linear-gradient(180deg, transparent, rgba(88, 166, 255, 0.26), transparent);
+}
+
+html[data-theme="github-copilot"] .messages-anchor-dot {
+    width: 6px;
+    height: 6px;
+    margin-left: -2px;
+    background: rgba(88, 166, 255, 0.44);
+    border: 1px solid rgba(121, 192, 255, 0.54);
+    box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.05);
+}
+
+html[data-theme="github-copilot"] .messages-anchor-dot:hover,
+html[data-theme="github-copilot"] .messages-anchor-dot.is-active {
+    background: #79c0ff;
+    border-color: #a5d6ff;
+    box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.16);
+}
+
+html[data-theme="github-copilot"] .anchor-tooltip {
+    color: var(--copilot-fg-default);
+    background: #161b22;
+    border: 1px solid var(--copilot-border);
+    border-radius: var(--copilot-radius-md);
+    box-shadow: var(--copilot-shadow);
+}
+
+/* Bottom composer --------------------------------------------------------- */
+html[data-theme="github-copilot"] .input-area {
+    padding: 10px 20px 12px 32px;
+    background:
+        linear-gradient(180deg, rgba(13, 17, 23, 0), rgba(13, 17, 23, 0.92) 28%),
+        var(--copilot-canvas);
+    border-top: 1px solid transparent;
+}
+
+html[data-theme="github-copilot"] .input-container {
+    position: relative;
+    gap: 9px;
+    padding: 12px 14px 10px;
+    background: #30343a;
+    border: 1px solid rgba(121, 192, 255, 0.44);
+    border-radius: var(--copilot-radius-lg);
+    box-shadow:
+        0 0 0 1px rgba(88, 166, 255, 0.10),
+        0 0 22px rgba(88, 166, 255, 0.16),
+        0 14px 38px rgba(1, 4, 9, 0.42);
+}
+
+html[data-theme="github-copilot"] .input-container::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    z-index: -1;
+    border-radius: inherit;
+    background: linear-gradient(90deg, rgba(88, 166, 255, 0.22), rgba(121, 192, 255, 0.52), rgba(163, 113, 247, 0.20));
+    opacity: 0.76;
+}
+
+html[data-theme="github-copilot"] .input-container:focus-within {
+    border-color: #79c0ff;
+    box-shadow:
+        0 0 0 1px rgba(121, 192, 255, 0.52),
+        0 0 28px rgba(88, 166, 255, 0.22),
+        0 18px 46px rgba(1, 4, 9, 0.46);
+}
+
+html[data-theme="github-copilot"] #messageInput {
+    color: #f0f6fc;
+    font-size: 13.5px;
+    line-height: 1.45;
+}
+
+html[data-theme="github-copilot"] #messageInput::placeholder {
+    color: rgba(240, 246, 252, 0.48);
+}
+
+html[data-theme="github-copilot"] .input-footer {
+    padding-top: 3px;
+}
+
+html[data-theme="github-copilot"] .input-tools-left,
+html[data-theme="github-copilot"] .input-actions {
+    gap: 6px;
+}
+
+html[data-theme="github-copilot"] .tool-button-placeholder,
+html[data-theme="github-copilot"] .action-button,
+html[data-theme="github-copilot"] .send-button,
+html[data-theme="github-copilot"] .stop-button {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    color: rgba(240, 246, 252, 0.70);
+    border: 1px solid transparent;
+    background: transparent;
+    box-shadow: none;
+}
+
+html[data-theme="github-copilot"] .tool-button-placeholder:hover,
+html[data-theme="github-copilot"] .action-button:hover {
+    color: #f0f6fc;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="github-copilot"] .send-button {
+    background: rgba(240, 246, 252, 0.10);
+    color: rgba(240, 246, 252, 0.64);
+}
+
+html[data-theme="github-copilot"] .send-button:not(:disabled) {
+    background: #f0f6fc;
+    color: #0d1117;
+}
+
+html[data-theme="github-copilot"] .send-button:not(:disabled):hover {
+    background: #ffffff;
+}
+
+html[data-theme="github-copilot"] .send-button:disabled {
+    background: rgba(240, 246, 252, 0.08);
+    color: rgba(240, 246, 252, 0.26);
+}
+
+html[data-theme="github-copilot"] .stop-button {
+    color: #ff7b72;
+    background: rgba(248, 81, 73, 0.10);
+    border-color: rgba(248, 81, 73, 0.28);
+}
+
+html[data-theme="github-copilot"] .attachment-chip,
+html[data-theme="github-copilot"] .file-chip,
+html[data-theme="github-copilot"] .context-chip,
+html[data-theme="github-copilot"] .message-attachment-chip {
+    color: #dbe7f3;
+    background: rgba(88, 166, 255, 0.10);
+    border: 1px solid rgba(88, 166, 255, 0.26);
+    border-radius: 999px;
+    box-shadow: none;
+}
+
+html[data-theme="github-copilot"] .message-attachment-chip-icon,
+html[data-theme="github-copilot"] .message-attachment-chip-ext {
+    color: var(--copilot-link);
+}
+
+/* Waiting / streaming ----------------------------------------------------- */
+html[data-theme="github-copilot"] .waiting-indicator {
+    margin: 10px 0 12px 8px;
+    padding: 7px 11px;
+    gap: 9px;
+    color: var(--copilot-fg-muted);
+    background: rgba(22, 27, 34, 0.72);
+    border: 1px solid var(--copilot-border-muted);
+    border-radius: 999px;
+    box-shadow: none;
+}
+
+html[data-theme="github-copilot"] .waiting-spinner::before {
+    border: 2px solid rgba(139, 148, 158, 0.22);
+    border-top-color: #8b949e;
+    animation: waiting-spin 0.8s linear infinite;
+}
+
+html[data-theme="github-copilot"] .waiting-spinner::after {
+    display: none;
+}
+
+html[data-theme="github-copilot"] .waiting-text {
+    color: var(--copilot-fg-muted);
+    font-size: 12.5px;
+    letter-spacing: 0;
+}
+
+html[data-theme="github-copilot"] .waiting-seconds {
+    color: var(--copilot-fg-subtle);
+}
+
+/* Search, menus, scrollbars ---------------------------------------------- */
+html[data-theme="github-copilot"] .conversation-search,
+html[data-theme="github-copilot"] .context-menu,
+html[data-theme="github-copilot"] .menu,
+html[data-theme="github-copilot"] .dropdown-menu {
+    background: #161b22;
+    border: 1px solid var(--copilot-border);
+    border-radius: var(--copilot-radius-md);
+    box-shadow: var(--copilot-shadow);
+}
+
+html[data-theme="github-copilot"] *::-webkit-scrollbar {
+    width: 8px !important;
+    height: 8px !important;
+}
+
+html[data-theme="github-copilot"] *::-webkit-scrollbar-thumb {
+    border: 2px solid transparent !important;
+    border-radius: 999px !important;
+    background-color: rgba(139, 148, 158, 0.34) !important;
+}
+
+html[data-theme="github-copilot"] *::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(139, 148, 158, 0.56) !important;
+}
+
+@media (max-width: 768px) {
+    html[data-theme="github-copilot"] #app {
+        margin: 0;
+        width: calc(100vw / var(--font-scale, 1));
+        height: calc(100vh / var(--font-scale, 1));
+        border-radius: 0;
+    }
+
+    html[data-theme="github-copilot"] .messages-container {
+        padding-left: 18px;
+    }
+
+    html[data-theme="github-copilot"] .input-area {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+}
+'''
+
+DOC_TEXT = r'''# Copilot LAF v3 element map
+
+This patch intentionally maps only real elements from this fork and keeps all
+rules scoped to `html[data-theme="github-copilot"]`.
+
+## Design language
+
+- Base canvas: nearly black GitHub dark canvas.
+- Main action/focus/link: blue.
+- User authored content: blue bubble / blue composer focus ring.
+- Attention and inline code: yellow/amber.
+- Success/context/status: green.
+- Done/AI accent: restrained purple only where useful.
+- Icons: small, low contrast, visible on hover.
+- Borders: thin and quiet, no heavy card shadows.
+
+## Real element mapping
+
+| Fork element | Mapping |
+| --- | --- |
+| `#app` | Rounded Copilot chat surface with subtle blue/purple glow. |
+| `.header` | Thin top bar, quiet buttons, small icons. |
+| `.messages-container` | Transparent canvas with room for the anchor rail. |
+| `.message.user .message-content` | Blue sent-message bubble. |
+| `.message.assistant .message-content` | Plain text on canvas, no heavy card. |
+| `.code-block-wrapper + .copy-code-btn + pre/code` | GitHub-like code block with a quiet top strip. |
+| `.message-duration` | Kept, but visually muted. |
+| `.waiting-indicator` | Small pill with single circular spinner. |
+| `.input-container` | Prominent bottom composer with blue gradient/focus border. |
+| `.messages-anchor-rail` | Preserved as Copilot-style timeline, because it is useful even if GitHub Copilot does not have it. |
+| Tool blocks | Calm activity cards, not loud diagnostics. |
+| Thinking/compact/task blocks | Low-contrast disclosure/status surfaces. |
+
+## Visibility policy
+
+Do not remove additional information in this pass. Extra fork-specific details
+are made visually quiet instead. If we later decide to hide fields, that should
+be done in React with feature flags, not by brittle CSS `display: none` rules.
+'''
+
+
+def ensure_app_import() -> None:
+    if not APP_LESS.exists():
+        raise FileNotFoundError(f'Missing {APP_LESS}')
+    content = APP_LESS.read_text(encoding='utf-8')
+    if IMPORT_LINE in content:
+        return
+
+    copilot_import = '@import "less/copilot-skin.less";'
+    if copilot_import in content:
+        content = content.replace(copilot_import, copilot_import + '\n' + IMPORT_LINE, 1)
+    else:
+        variables_import = '@import "less/variables.less";'
+        if variables_import in content:
+            content = content.replace(variables_import, variables_import + '\n' + IMPORT_LINE, 1)
+        else:
+            content = content.rstrip() + '\n' + IMPORT_LINE + '\n'
+    APP_LESS.write_text(content, encoding='utf-8')
+
+
+def write_files() -> None:
+    V3_LESS.parent.mkdir(parents=True, exist_ok=True)
+    V3_LESS.write_text(COPILOT_LAF_V3, encoding='utf-8')
+    DOC.parent.mkdir(parents=True, exist_ok=True)
+    DOC.write_text(DOC_TEXT, encoding='utf-8')
+
+
+def main() -> None:
+    ensure_app_import()
+    write_files()
+    print('Applied Copilot LAF v3:')
+    print(f'  - {V3_LESS.relative_to(ROOT)}')
+    print(f'  - {DOC.relative_to(ROOT)}')
+    print(f'  - ensured import in {APP_LESS.relative_to(ROOT)}')
+    print('Run: cd webview && npm run test && npm run build')
+
+
+if __name__ == '__main__':
+    main()
