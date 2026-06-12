@@ -72,6 +72,14 @@
     100% { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
+/* The SVG spinner icon is used only by the CoDriver skin; the default
+   light/dark themes keep their pseudo-element ring spinner. Hide the SVG by
+   default so it never overlaps the ring as a static glyph — the CoDriver skin
+   opts back in (see codriver-icon-pack.less). */
+.waiting-spinner-icon {
+    display: none;
+}
+
 .waiting-text {
     font-size: 14px;
     color: var(--vscode-descriptionForeground, #858585);
@@ -95,16 +103,6 @@
         margin: 8px 0 12px;
         padding: 8px 18px;
         color: var(--text-tertiary);
-    }
-
-    .waiting-spinner::before {
-        border: 2px solid var(--copilot-spinner-track);
-        border-top-color: var(--copilot-spinner-active);
-        animation: waiting-spin 0.8s linear infinite;
-    }
-
-    .waiting-spinner::after {
-        display: none;
     }
 
     .waiting-text {

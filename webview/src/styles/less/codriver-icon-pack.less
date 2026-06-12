@@ -134,11 +134,12 @@ html[data-theme="codriver"] .thinking-icon.codriver-icon {
 }
 
 html[data-theme="codriver"] .waiting-spinner-icon {
+    display: inline-block;
     color: var(--codriver-icon-default);
 }
 
-/* The SVG spinner icon now provides the animation, so drop the legacy
-   pseudo-element rings to avoid two overlapping spinners. */
+/* The CoDriver skin uses the animated SVG spinner (.codriver-icon-spinner),
+   so drop the legacy pseudo-element rings to avoid two overlapping spinners. */
 html[data-theme="codriver"] .waiting-spinner::before,
 html[data-theme="codriver"] .waiting-spinner::after {
     display: none;
