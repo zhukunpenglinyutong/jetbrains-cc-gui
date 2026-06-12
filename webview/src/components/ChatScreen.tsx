@@ -200,9 +200,27 @@ export const ChatScreen = ({
     setSearchOpen(false);
   }, [setSearchOpen]);
 
+  // Mirror MessageAnchorRail's own render guard (it renders the
+  // `.messages-anchor-rail` element only when more than one visible user
+  // message exists, counting from `anchorCollapsedCount`). We expose this as an
+  // explicit class on the shell so the layout no longer depends on a CSS
+  // `:has(...)` parent selector, which older JCEF/Chromium builds handle poorly.
+  const hasAnchorRail = useMemo(() => {
+    let userMessageCount = 0;
+    for (let i = anchorCollapsedCount; i < mergedMessages.length; i += 1) {
+      if (mergedMessages[i].type === 'user') {
+        userMessageCount += 1;
+        if (userMessageCount > 1) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }, [mergedMessages, anchorCollapsedCount]);
+
   return (
     <>
-      <div className="messages-shell">
+      <div className={`messages-shell${hasAnchorRail ? ' has-anchor-rail' : ''}`}>
         <MessageAnchorRail
           messages={mergedMessages}
           collapsedCount={anchorCollapsedCount}
