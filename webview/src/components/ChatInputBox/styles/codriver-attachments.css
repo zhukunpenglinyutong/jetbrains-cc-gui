@@ -2,10 +2,10 @@
    Scoped to the CoDriver theme and loaded from ChatInputBox/styles.css so it wins over component-local CSS. */
 
 html[data-theme="codriver"] .chat-input-box {
-  --codriver-attachment-strip-bg: rgba(13, 17, 23, 0.72);
-  --codriver-attachment-chip-bg: rgba(22, 27, 34, 0.86);
-  --codriver-attachment-chip-bg-hover: rgba(33, 38, 45, 0.94);
-  --codriver-attachment-chip-border: rgba(88, 166, 255, 0.20);
+  --codriver-attachment-strip-bg: rgba(13, 17, 23, 0.18);
+  --codriver-attachment-chip-bg: rgba(13, 17, 23, 0.22);
+  --codriver-attachment-chip-bg-hover: rgba(13, 17, 23, 0.30);
+  --codriver-attachment-chip-border: rgba(240, 246, 252, 0.12);
   --codriver-attachment-chip-border-hover: rgba(88, 166, 255, 0.42);
   --codriver-attachment-thumbnail-border: rgba(240, 246, 252, 0.10);
   --codriver-attachment-remove-bg-hover: rgba(248, 81, 73, 0.14);
@@ -86,7 +86,7 @@ html[data-theme="codriver"] .attachment-preview-frame {
   height: 40px;
   border-radius: 8px;
   overflow: hidden;
-  background: #0d1117;
+  background: rgba(13, 17, 23, 0.35);
   border: 1px solid var(--codriver-attachment-thumbnail-border);
 }
 

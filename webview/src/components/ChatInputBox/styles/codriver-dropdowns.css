@@ -17,10 +17,16 @@ html[data-theme="codriver"] {
 }
 
 html[data-theme="codriver"] .chat-input-box {
-  --input-bg: #0d1117;
-  --input-border: #30363d;
+  /* CoDriver composer surface: a calm medium-grey panel (not a black well).
+     Blue stays reserved for focus / hover / link accents only. */
+  --codriver-composer-panel: #44474e;
+  --codriver-composer-panel-hover: #474a51;
+  --codriver-composer-panel-focus: #484b52;
+
+  --input-bg: var(--codriver-composer-panel);
+  --input-border: rgba(240, 246, 252, 0.14);
   --input-focus-border: #58a6ff;
-  --input-placeholder: #6e7681;
+  --input-placeholder: #8b949e;
 
   --dropdown-bg: #161b22;
   --dropdown-border: #30363d;
@@ -47,6 +53,51 @@ html[data-theme="codriver"] .chat-input-box {
   --success-color: #3fb950;
 
   --context-bar-bg: transparent;
+}
+
+/* Composer surface: one continuous medium-grey panel.
+   Only the background tone changes per state; the blue border/glow accent on
+   hover/focus keeps coming from the shared layout styles (layout.css). */
+html[data-theme="codriver"] .chat-input-box {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), rgba(0, 0, 0, 0.035)),
+    var(--codriver-composer-panel);
+  box-shadow:
+    0 1px 0 rgba(240, 246, 252, 0.06) inset,
+    0 12px 32px rgba(1, 4, 9, 0.30);
+}
+
+html[data-theme="codriver"] .chat-input-box:hover {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.024), rgba(0, 0, 0, 0.025)),
+    var(--codriver-composer-panel-hover);
+}
+
+html[data-theme="codriver"] .chat-input-box:focus-within,
+html[data-theme="codriver"] .chat-input-box.is-resizing {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.026), rgba(0, 0, 0, 0.020)),
+    var(--codriver-composer-panel-focus);
+}
+
+/* Inner rows stay transparent so the whole composer reads as a single panel
+   instead of stacked dark bands (the toolbar normally has its own dark wash). */
+html[data-theme="codriver"] .context-bar,
+html[data-theme="codriver"] .input-editable-wrapper,
+html[data-theme="codriver"] .button-area {
+  background: transparent;
+}
+
+/* Active-file / context chips: subdued grey controls, not dark badges. */
+html[data-theme="codriver"] .context-item {
+  background: rgba(13, 17, 23, 0.22);
+  border-color: rgba(240, 246, 252, 0.12);
+  color: #e6edf3;
+}
+
+html[data-theme="codriver"] .context-item:hover {
+  background: rgba(13, 17, 23, 0.30);
+  border-color: rgba(88, 166, 255, 0.34);
 }
 
 /* Popup surfaces: GitHub elevation + radius */
