@@ -1,6 +1,6 @@
 export type DiffThemeMode = 'follow' | 'editor' | 'light' | 'soft-dark';
 
-type ResolvedDiffTheme = 'light' | 'dark' | 'soft-dark';
+type ResolvedDiffTheme = 'light' | 'dark' | 'soft-dark' | 'github';
 
 const DIFF_THEME_KEYS = [
   '--diff-surface',
@@ -28,7 +28,12 @@ const resolveDiffTheme = (
   diffTheme: DiffThemeMode,
   ideTheme: 'light' | 'dark' | null,
 ): ResolvedDiffTheme => {
-  const currentUiTheme = (document.documentElement.getAttribute('data-theme') as 'light' | 'dark') || 'dark';
+  const uiThemeAttr = document.documentElement.getAttribute('data-theme');
+  const currentUiTheme: ResolvedDiffTheme = uiThemeAttr === 'light'
+    ? 'light'
+    : uiThemeAttr === 'github-copilot'
+      ? 'github'
+      : 'dark';
   if (diffTheme === 'follow') {
     return currentUiTheme;
   }
@@ -60,6 +65,21 @@ export const applyDiffTheme = (
     root.style.setProperty('--diff-deleted-bg', '#fdecea');
     root.style.setProperty('--diff-deleted-glyph-bg', '#f9d7d4');
     root.style.setProperty('--diff-deleted-accent', '#c62828');
+    return;
+  }
+
+  if (resolvedDiffTheme === 'github') {
+    root.style.setProperty('--diff-surface', '#0d1117');
+    root.style.setProperty('--diff-gutter-bg', '#161b22');
+    root.style.setProperty('--diff-gutter-border', '#30363d');
+    root.style.setProperty('--diff-text', '#c9d1d9');
+    root.style.setProperty('--diff-muted-text', '#6e7681');
+    root.style.setProperty('--diff-added-bg', 'rgba(46, 160, 67, 0.15)');
+    root.style.setProperty('--diff-added-glyph-bg', 'rgba(46, 160, 67, 0.30)');
+    root.style.setProperty('--diff-added-accent', '#3fb950');
+    root.style.setProperty('--diff-deleted-bg', 'rgba(248, 81, 73, 0.15)');
+    root.style.setProperty('--diff-deleted-glyph-bg', 'rgba(248, 81, 73, 0.30)');
+    root.style.setProperty('--diff-deleted-accent', '#f85149');
     return;
   }
 

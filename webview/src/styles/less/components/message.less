@@ -1594,4 +1594,66 @@
     .tool-status-indicator.completed {
         background: var(--color-success);
     }
+
+    /* GitHub-style tables */
+    .markdown-content table {
+        border: 1px solid var(--border-primary);
+        border-radius: 6px;
+        border-spacing: 0;
+        overflow: hidden;
+    }
+
+    .markdown-content th,
+    .markdown-content td {
+        border: 1px solid var(--border-primary);
+        padding: 6px 13px;
+    }
+
+    .markdown-content thead th,
+    .markdown-content th {
+        background: var(--bg-secondary);
+        color: var(--copilot-heading);
+        font-weight: 600;
+    }
+
+    /* Zebra striping like GitHub-rendered markdown */
+    .markdown-content tbody tr:nth-child(2n) {
+        background: rgba(110, 118, 129, 0.08);
+    }
+
+    /* GFM task lists */
+    .markdown-content li.task-list-item {
+        list-style: none;
+    }
+
+    .markdown-content ul:has(> li.task-list-item) {
+        padding-left: 6px;
+    }
+
+    .markdown-content li.task-list-item input[type="checkbox"] {
+        width: 13px;
+        height: 13px;
+        margin: 0 6px 0 -18px;
+        vertical-align: middle;
+        accent-color: var(--accent-secondary);
+    }
+
+    /* Horizontal rule + keyboard hints */
+    .markdown-content hr {
+        height: 1px;
+        margin: 16px 0;
+        border: 0;
+        background: var(--border-primary);
+    }
+
+    .markdown-content kbd {
+        padding: 2px 5px;
+        border: 1px solid var(--border-primary);
+        border-bottom-width: 2px;
+        border-radius: 5px;
+        background: var(--bg-tertiary);
+        color: var(--text-secondary);
+        font-size: 0.85em;
+        line-height: 1;
+    }
 }
