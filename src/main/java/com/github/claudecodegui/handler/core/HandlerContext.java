@@ -1,8 +1,8 @@
 package com.github.claudecodegui.handler.core;
 
-import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
@@ -29,6 +29,7 @@ public class HandlerContext {
     private volatile String currentModel = DEFAULT_MODEL;
     private volatile String currentProvider = DEFAULT_PROVIDER;
     private volatile boolean disposed = false;
+    private volatile Integer currentModelContextWindow;
 
     /**
      * JavaScript callback interface.
@@ -104,6 +105,14 @@ public class HandlerContext {
 
     public void setCurrentProvider(String currentProvider) {
         this.currentProvider = currentProvider;
+    }
+
+    public Integer getCurrentModelContextWindow() {
+        return currentModelContextWindow;
+    }
+
+    public void setCurrentModelContextWindow(Integer currentModelContextWindow) {
+        this.currentModelContextWindow = currentModelContextWindow;
     }
 
     public void setDisposed(boolean disposed) {

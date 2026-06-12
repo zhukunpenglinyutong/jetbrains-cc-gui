@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler.provider;
 
+import com.github.claudecodegui.common.CommonConstants;
 import com.github.claudecodegui.handler.UsagePushService;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
@@ -22,6 +23,12 @@ import java.util.concurrent.CompletableFuture;
 public class ModelProviderHandler {
 
     private static final Logger LOG = Logger.getInstance(ModelProviderHandler.class);
+
+    private static final Map<String, String> MODEL_VARIANT_ENV_MAP = Map.of(
+            "opus", CommonConstants.ENV_ANTHROPIC_OPUS_MODEL,
+            "haiku", CommonConstants.ENV_ANTHROPIC_HAIKU_MODEL,
+            "sonnet", CommonConstants.ENV_ANTHROPIC_SONNET_MODEL
+    );
 
     static final Map<String, Integer> MODEL_CONTEXT_LIMITS = new HashMap<>();
     static {
@@ -67,30 +74,21 @@ public class ModelProviderHandler {
 
     public void handleSetModel(String content) {
         try {
-            String model = parseModel(content);
+            String model;
+            Integer contextWindowOverride = null;
 
-            LOG.info("[ModelProviderHandler] Setting model to: " + model);
-            context.setCurrentModel(model);
-
-            if (context.getSession() != null) {
-                context.getSession().setModel(model);
-                LOG.info("[ModelProviderHandler] Updated session model to canonical ID: " + model);
+            String trimmed = content.trim();
+            if (trimmed.startsWith("{")) {
+                JsonObject json = gson.fromJson(trimmed, JsonObject.class);
+                model = json.has("model") ? json.get("model").getAsString() : "";
+                if (json.has("contextWindow") && !json.get("contextWindow").isJsonNull()) {
+                    contextWindowOverride = json.get("contextWindow").getAsInt();
+                }
+            } else {
+                model = content;
             }
 
-            com.github.claudecodegui.notifications.ClaudeNotifier.setModel(context.getProject(), model);
-
-            String resolvedModelForUsage = resolveConfiguredClaudeModelFromSettings(model);
-            int newMaxTokens = getModelContextLimit(resolvedModelForUsage);
-            LOG.info("[ModelProviderHandler] Model context limit: " + newMaxTokens
-                    + " tokens for selected model: " + model
-                    + ", resolved model: " + resolvedModelForUsage);
-
-            final String confirmedModel = model;
-            final String confirmedProvider = context.getCurrentProvider();
-            ApplicationManager.getApplication().invokeLater(() -> {
-                context.callJavaScript("window.onModelConfirmed", context.escapeJs(confirmedModel), context.escapeJs(confirmedProvider));
-                usagePushService.pushUsageUpdateAfterModelChange(newMaxTokens);
-            });
+            applyModelChange(model, contextWindowOverride, false);
         } catch (Exception e) {
             LOG.error("[ModelProviderHandler] Failed to set model: " + e.getMessage(), e);
         }
@@ -98,26 +96,98 @@ public class ModelProviderHandler {
 
     public void handleSetSessionModel(String content) {
         try {
-            String model = parseModel(content);
+            String model;
+            Integer contextWindowOverride = null;
 
-            LOG.info("[ModelProviderHandler] Setting session model to: " + model);
-            if (context.getSession() != null) {
-                context.getSession().setModel(model);
+            String trimmed = content.trim();
+            if (trimmed.startsWith("{")) {
+                JsonObject json = gson.fromJson(trimmed, JsonObject.class);
+                model = json.has("model") ? json.get("model").getAsString() : "";
+                if (json.has("contextWindow") && !json.get("contextWindow").isJsonNull()) {
+                    contextWindowOverride = json.get("contextWindow").getAsInt();
+                }
+            } else {
+                model = content;
             }
 
-            com.github.claudecodegui.notifications.ClaudeNotifier.setModel(context.getProject(), model);
-
-            String resolvedModelForUsage = resolveConfiguredClaudeModelFromSettings(model);
-            int newMaxTokens = getModelContextLimit(resolvedModelForUsage);
-            final String confirmedModel = model;
-            final String confirmedProvider = context.getSession() != null ? context.getSession().getProvider() : context.getCurrentProvider();
-            ApplicationManager.getApplication().invokeLater(() -> {
-                context.callJavaScript("window.onModelConfirmed", context.escapeJs(confirmedModel), context.escapeJs(confirmedProvider));
-                usagePushService.pushUsageUpdateAfterModelChange(newMaxTokens);
-            });
+            applyModelChange(model, contextWindowOverride, true);
         } catch (Exception e) {
             LOG.error("[ModelProviderHandler] Failed to set session model: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Common model change logic for both set_model and set_session_model.
+     *
+     * <p>[1m] suffix handling:
+     * <ul>
+     *   <li>Claude models (non-Haiku): append [1m] when contextWindow >= 1M (CLI and SDK recognize it)</li>
+     *   <li>Non-Claude models: do NOT append [1m] (CLI may not recognize it → model name mismatch error)</li>
+     *   <li>Haiku: never append [1m] (does not support 1M context)</li>
+     * </ul>
+     *
+     * @param model               clean model ID (without [1m] suffix)
+     * @param contextWindowOverride desired context window from frontend (null = use backend default)
+     * @param isSessionOnly       true for set_session_model (don't update HandlerContext.currentModel)
+     */
+    private void applyModelChange(String model, Integer contextWindowOverride, boolean isSessionOnly) {
+        LOG.info("[ModelProviderHandler] Setting model to: " + model
+                + (contextWindowOverride != null ? " (contextWindow=" + contextWindowOverride + ")" : ""));
+
+        if (!isSessionOnly) {
+            context.setCurrentModel(model);
+        }
+
+        // [1m] suffix: only for Claude models (CLI and SDK both recognize it)
+        String storedModel = model;
+        if (contextWindowOverride != null && contextWindowOverride >= 1_000_000
+                && isClaudeModel(model)) {
+            storedModel = model.replaceFirst("(?i)\\[1m\\]$", "") + "[1m]";
+        }
+
+        if (context.getSession() != null) {
+            context.getSession().setModel(storedModel);
+            LOG.info("[ModelProviderHandler] Updated session model to: " + storedModel);
+        }
+
+        com.github.claudecodegui.notifications.ClaudeNotifier.setModel(context.getProject(), model);
+
+        // Store contextWindow override for later use by message handlers
+        context.setCurrentModelContextWindow(contextWindowOverride);
+        if (context.getSession() != null) {
+            context.getSession().getState().setContextWindowOverride(contextWindowOverride);
+        }
+
+        // Calculate effective max tokens (capped at model's actual limit)
+        String resolvedModelForUsage = resolveConfiguredClaudeModelFromSettings(model);
+        int modelMaxLimit = getModelContextLimit(resolvedModelForUsage);
+        int newMaxTokens = (contextWindowOverride != null && contextWindowOverride > 0)
+                ? Math.min(contextWindowOverride, modelMaxLimit)
+                : modelMaxLimit;
+        LOG.info("[ModelProviderHandler] Model context limit: " + newMaxTokens
+                + " tokens for selected model: " + model
+                + ", resolved model: " + resolvedModelForUsage);
+
+        final String confirmedModel = model;
+        final String confirmedProvider = isSessionOnly
+                ? (context.getSession() != null ? context.getSession().getProvider() : context.getCurrentProvider())
+                : context.getCurrentProvider();
+        ApplicationManager.getApplication().invokeLater(() -> {
+            context.callJavaScript("window.onModelConfirmed", context.escapeJs(confirmedModel), context.escapeJs(confirmedProvider));
+            usagePushService.pushUsageUpdateAfterModelChange(newMaxTokens);
+        });
+    }
+
+    /**
+     * Check if a model is a Claude-family model (starts with claude- or claude_).
+     * Used to decide whether to append the [1m] suffix.
+     */
+    private static boolean isClaudeModel(String model) {
+        if (model == null) {
+            return false;
+        }
+        String lower = model.toLowerCase();
+        return lower.startsWith("claude-") || lower.startsWith("claude_");
     }
 
     public void handleSetProvider(String content) {
@@ -179,14 +249,14 @@ public class ModelProviderHandler {
      * without spinning up a HandlerContext or ClaudeSDKBridge.
      */
     static boolean shouldShutdownClaudeDaemonOnProviderSwitch(String previousProvider, String newProvider) {
-        if (!"claude".equals(previousProvider)) {
+        if (!CommonConstants.PROVIDER_CLAUDE.equals(previousProvider)) {
             return false;
         }
         // Empty/null newProvider means "not set yet" (initialization, race), NOT
         // "user moved away from Claude". Treating it as a leave-claude transition
         // would cause spurious daemon restarts (~5–10s) when set_provider arrives
         // before the tab has fully booted.
-        if (newProvider == null || newProvider.isEmpty() || "claude".equals(newProvider)) {
+        if (newProvider == null || newProvider.isEmpty() || CommonConstants.PROVIDER_CLAUDE.equals(newProvider)) {
             return false;
         }
         return true;
@@ -259,7 +329,7 @@ public class ModelProviderHandler {
             String json = SlashCommandRegistry.toJson(commands);
 
             final String codexJson;
-            if ("codex".equalsIgnoreCase(provider)) {
+            if (CommonConstants.PROVIDER_CODEX.equalsIgnoreCase(provider)) {
                 var codexSkills = SlashCommandRegistry.getCodexSkills(finalCwd);
                 codexJson = SlashCommandRegistry.toJson(codexSkills);
                 LOG.info("[ModelProviderHandler] Codex skills refreshed: " + codexSkills.size() + " skills");
@@ -332,7 +402,7 @@ public class ModelProviderHandler {
             return baseModel;
         }
 
-        String mainModel = readConfiguredEnvValue(env, "ANTHROPIC_MODEL");
+        String mainModel = readConfiguredEnvValue(env, CommonConstants.ENV_ANTHROPIC_MODEL);
         if (mainModel != null) {
             return mainModel;
         }
@@ -343,17 +413,11 @@ public class ModelProviderHandler {
             return baseModel;
         }
 
-        if (lowerBaseModel.contains("opus")) {
-            String mappedOpus = readConfiguredEnvValue(env, "ANTHROPIC_DEFAULT_OPUS_MODEL");
-            return mappedOpus != null ? mappedOpus : baseModel;
-        }
-        if (lowerBaseModel.contains("haiku")) {
-            String mappedHaiku = readConfiguredEnvValue(env, "ANTHROPIC_DEFAULT_HAIKU_MODEL");
-            return mappedHaiku != null ? mappedHaiku : baseModel;
-        }
-        if (lowerBaseModel.contains("sonnet")) {
-            String mappedSonnet = readConfiguredEnvValue(env, "ANTHROPIC_DEFAULT_SONNET_MODEL");
-            return mappedSonnet != null ? mappedSonnet : baseModel;
+        for (Map.Entry<String, String> entry : MODEL_VARIANT_ENV_MAP.entrySet()) {
+            if (lowerBaseModel.contains(entry.getKey())) {
+                String mapped = readConfiguredEnvValue(env, entry.getValue());
+                return mapped != null ? mapped : baseModel;
+            }
         }
 
         return baseModel;

@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler;
 
+import com.github.claudecodegui.common.CommonConstants;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.dependency.DependencyManager;
 import com.github.claudecodegui.dependency.SdkDefinition;
@@ -503,21 +504,21 @@ public class SessionHandler extends BaseMessageHandler {
         ClaudeSession currentSession = context.getSession();
         String provider = currentSession != null ? currentSession.getProvider() : context.getCurrentProvider();
 
-        if ("codex".equals(provider)) {
+        if (CommonConstants.PROVIDER_CODEX.equals(provider)) {
             return true;
         }
 
-        if (!"claude".equals(provider)) {
+        if (!CommonConstants.PROVIDER_CLAUDE.equals(provider)) {
             return false;
         }
         if (SessionState.isValidClaudeInvocationMode(requestedInvocationMode)) {
-            return "cli".equals(requestedInvocationMode.trim());
+            return CommonConstants.INVOCATION_MODE_CLI.equals(requestedInvocationMode.trim());
         }
-        if (currentSession != null && "cli".equals(currentSession.getClaudeInvocationMode())) {
+        if (currentSession != null && CommonConstants.INVOCATION_MODE_CLI.equals(currentSession.getClaudeInvocationMode())) {
             return true;
         }
         try {
-            return "cli".equals(new com.github.claudecodegui.settings.CodemossSettingsService().getClaudeInvocationMode());
+            return CommonConstants.INVOCATION_MODE_CLI.equals(new com.github.claudecodegui.settings.CodemossSettingsService().getClaudeInvocationMode());
         } catch (Exception e) {
             LOG.debug("[SessionHandler] Failed to resolve Claude invocation mode: " + e.getMessage());
             return false;
@@ -529,10 +530,10 @@ public class SessionHandler extends BaseMessageHandler {
         String provider = currentSession != null ? currentSession.getProvider() : context.getCurrentProvider();
 
         if (provider == null || provider.isBlank()) {
-            provider = "claude";
+            provider = CommonConstants.PROVIDER_CLAUDE;
         }
 
-        if ("claude".equals(provider) && isCliModeActive(requestedInvocationMode)) {
+        if (CommonConstants.PROVIDER_CLAUDE.equals(provider) && isCliModeActive(requestedInvocationMode)) {
             return null;
         }
 

@@ -3,9 +3,7 @@ package com.github.claudecodegui.handler.provider;
 import com.google.gson.JsonObject;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Regression tests for Claude model resolution in {@link ModelProviderHandler}.
@@ -90,6 +88,18 @@ public class ModelProviderHandlerTest {
         assertEquals(500_000, ModelProviderHandler.getModelContextLimit("custom-model[500k]"));
         assertEquals(2_000_000, ModelProviderHandler.getModelContextLimit("custom-model[2m]"));
         assertEquals(100_000, ModelProviderHandler.getModelContextLimit("custom-model[100K]"));
+    }
+
+    @Test
+    public void shouldDefaultTo200KForUnknownModels() {
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("unknown-model"));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("qwen3-max"));
+    }
+
+    @Test
+    public void shouldParseContextWindowFromSuffixForUnknownModels() {
+        assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("deepseek-v4-pro[1m]"));
+        assertEquals(128_000, ModelProviderHandler.getModelContextLimit("custom-model[128k]"));
     }
 
     // ============================================================================

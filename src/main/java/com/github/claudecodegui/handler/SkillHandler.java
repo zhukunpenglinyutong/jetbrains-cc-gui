@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler;
 
+import com.github.claudecodegui.common.CommonConstants;
 import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
@@ -77,7 +78,7 @@ public class SkillHandler extends BaseMessageHandler {
      * Get all skills (dispatches to Claude or Codex service based on provider).
      */
     private void handleGetAllSkills() {
-        boolean isCodex = "codex".equalsIgnoreCase(context.getCurrentProvider());
+        boolean isCodex = CommonConstants.PROVIDER_CODEX.equalsIgnoreCase(context.getCurrentProvider());
         try {
             String workspaceRoot = context.getProject().getBasePath();
 
@@ -110,7 +111,7 @@ public class SkillHandler extends BaseMessageHandler {
         try {
             JsonObject json = GSON.fromJson(content, JsonObject.class);
             String scope = json.has("scope") ? json.get("scope").getAsString() : "global";
-            boolean isCodex = "codex".equalsIgnoreCase(context.getCurrentProvider());
+            boolean isCodex = CommonConstants.PROVIDER_CODEX.equalsIgnoreCase(context.getCurrentProvider());
 
             ApplicationManager.getApplication().invokeLater(() -> {
                 FileChooserDescriptor descriptor;
@@ -192,7 +193,7 @@ public class SkillHandler extends BaseMessageHandler {
             String scope = json.has("scope") ? json.get("scope").getAsString() : "global";
             boolean enabled = json.has("enabled") ? json.get("enabled").getAsBoolean() : true;
             String workspaceRoot = context.getProject().getBasePath();
-            boolean isCodex = "codex".equalsIgnoreCase(context.getCurrentProvider());
+            boolean isCodex = CommonConstants.PROVIDER_CODEX.equalsIgnoreCase(context.getCurrentProvider());
 
             CompletableFuture.runAsync(() -> {
                 try {
@@ -246,7 +247,7 @@ public class SkillHandler extends BaseMessageHandler {
             String scope = json.has("scope") ? json.get("scope").getAsString() : "global";
             boolean currentEnabled = json.has("enabled") ? json.get("enabled").getAsBoolean() : true;
             String workspaceRoot = context.getProject().getBasePath();
-            boolean isCodex = "codex".equalsIgnoreCase(context.getCurrentProvider());
+            boolean isCodex = CommonConstants.PROVIDER_CODEX.equalsIgnoreCase(context.getCurrentProvider());
 
             CompletableFuture.runAsync(() -> {
                 try {
