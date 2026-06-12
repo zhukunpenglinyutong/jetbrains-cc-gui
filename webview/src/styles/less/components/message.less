@@ -750,7 +750,7 @@
     background-color: var(--color-code-inline-bg);
     padding: 2px 4px;
     border-radius: 3px;
-    font-size: 12.5px;
+    font-size: inherit;
     word-wrap: break-word;
     overflow-wrap: break-word;
 }
@@ -759,6 +759,15 @@
     background-color: transparent;
     padding: 0;
     color: var(--text-secondary);
+    font-family: inherit;
+    font-size: inherit;
+}
+
+/* Ensure syntax-highlighting spans inside code blocks inherit the monospace
+ * font from <pre>.  The global * { font-family: … } rule in base.less cuts
+ * the inheritance chain — every element gets the UI font.  Without this
+ * override, highlight.js <span> tokens would render in the proportional font. */
+.markdown-content pre code span {
     font-family: inherit;
 }
 

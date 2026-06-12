@@ -421,6 +421,12 @@ public class WebviewInitializer {
         } catch (Exception e) {
             LOG.error("Failed to create UI components: " + e.getMessage(), e);
             showErrorPanel();
+        } catch (LinkageError e) {
+            // Platform/JBR binary mismatch (e.g. Android Studio 2026.x whose
+            // bundled JBR lacks JCefAppConfig.isRemoteEnabled()) throws Error,
+            // not Exception - it must not crash the EDT with a blank panel.
+            LOG.error("JCEF binary incompatibility: " + e.getMessage(), e);
+            showJcefNotSupportedPanel();
         }
     }
 
@@ -482,11 +488,20 @@ public class WebviewInitializer {
     }
 
     private void showJcefNotSupportedPanel() {
-        JPanel panel = ErrorPanelBuilder.buildCenteredPanel(
-            "⚠️",
-            ClaudeCodeGuiBundle.message("toolwindow.jcefNotInstalled"),
-            ClaudeCodeGuiBundle.message("toolwindow.jcefNotInstalledSolution")
-        );
+        String title;
+        String solution;
+        if (JBCefBrowserFactory.isJbrMissingJcefRemoteApi()) {
+            // Known Android Studio 2026.x case: JCEF is present but the
+            // bundled JBR is too old for the platform's JCEF API. Show a
+            // targeted "upgrade your Boot JBR" guide instead of the generic
+            // "JCEF not installed" message.
+            title = ClaudeCodeGuiBundle.message("toolwindow.jcefOutdatedJbr");
+            solution = ClaudeCodeGuiBundle.message("toolwindow.jcefOutdatedJbrSolution");
+        } else {
+            title = ClaudeCodeGuiBundle.message("toolwindow.jcefNotInstalled");
+            solution = ClaudeCodeGuiBundle.message("toolwindow.jcefNotInstalledSolution");
+        }
+        JPanel panel = ErrorPanelBuilder.buildCenteredPanel("⚠️", title, solution);
         replaceMainContent(panel);
     }
 

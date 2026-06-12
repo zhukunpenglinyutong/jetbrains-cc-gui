@@ -1,5 +1,6 @@
 package com.github.claudecodegui.permission;
 
+import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.google.gson.*;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
@@ -122,11 +123,32 @@ public class ToolInterceptor {
             );
 
             // Show permission dialog
-            PermissionDialog dialog = new PermissionDialog(this.project, request);
-            dialog.setDecisionCallback(decision -> {
-                future.complete(decision.allow);
-            });
-            dialog.show();
+            try {
+                PermissionDialog dialog = new PermissionDialog(this.project, request);
+                dialog.setDecisionCallback(decision -> {
+                    future.complete(decision.allow);
+                });
+                dialog.show();
+            } catch (Exception | LinkageError e) {
+                // JCEF may be unavailable (e.g. outdated JBR in Android Studio
+                // 2026.x). Fall back to a native dialog so the tool call gets a
+                // decision instead of leaving the future pending forever.
+                LOG.error("JCEF permission dialog failed, falling back to native dialog", e);
+                boolean allowed = false;
+                try {
+                    int result = JOptionPane.showConfirmDialog(
+                        null,
+                        ClaudeCodeGuiBundle.message("permission.dialogTitle") + ": " + toolName + "\n\n" + inputs,
+                        ClaudeCodeGuiBundle.message("permission.dialogTitle"),
+                        JOptionPane.YES_NO_OPTION,
+                        JOptionPane.QUESTION_MESSAGE
+                    );
+                    allowed = result == JOptionPane.YES_OPTION;
+                } catch (Exception fallbackError) {
+                    LOG.error("Fallback permission dialog failed, denying by default", fallbackError);
+                }
+                future.complete(allowed);
+            }
         });
 
         return future;
