@@ -5,6 +5,9 @@ export type RawTodoItem = {
   title?: unknown;
   text?: unknown;
   status?: unknown;
+  subject?: unknown;
+  description?: unknown;
+  blockedBy?: unknown;
 };
 
 export function normalizeTodoStatus(status: unknown): 'pending' | 'in_progress' | 'completed' {

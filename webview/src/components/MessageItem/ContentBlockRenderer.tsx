@@ -10,7 +10,7 @@ import {
   GenericToolBlock,
   TaskExecutionBlock,
 } from '../toolBlocks';
-import { EDIT_TOOL_NAMES, BASH_TOOL_NAMES, isToolName, isTransientInternalToolName, normalizeToolName } from '../../utils/toolConstants';
+import { EDIT_TOOL_NAMES, BASH_TOOL_NAMES, TASK_MANAGE_TOOL_NAMES, AGENT_TOOL_NAMES, isToolName, isTransientInternalToolName, normalizeToolName } from '../../utils/toolConstants';
 import { TASK_STATUS_COLORS } from '../../utils/messageUtils';
 
 const IMAGE_BLOCK_STYLE: React.CSSProperties = { cursor: 'pointer' };
@@ -249,7 +249,7 @@ export function ContentBlockRenderer({
   if (block.type === 'tool_use') {
     const toolName = normalizeToolName(block.name ?? '');
 
-    if (toolName === 'todowrite' || toolName === 'update_plan') {
+    if (toolName === 'todowrite' || toolName === 'update_plan' || TASK_MANAGE_TOOL_NAMES.has(toolName)) {
       return null;
     }
 
@@ -257,7 +257,7 @@ export function ContentBlockRenderer({
       return null;
     }
 
-    if (toolName === 'task' || toolName === 'agent' || toolName === 'spawn_agent') {
+    if (AGENT_TOOL_NAMES.has(toolName)) {
       return (
         <TaskExecutionBlock
           name={block.name}

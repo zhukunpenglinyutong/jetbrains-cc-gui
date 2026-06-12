@@ -1317,6 +1317,8 @@
     "runCommand": "运行命令",
     "contextEngine": "上下文引擎",
     "task": "任务",
+    "agent": "智能体",
+    "agentGroupToggle": "展开/收起智能体详情",
     "promptLabel": "提示词 (Prompt)",
     "readFile": "读取文件",
     "editFile": "编辑文件",
@@ -1389,6 +1391,7 @@
     "noTodos": "暂无任务运行",
     "noSubagents": "暂无子代理运行",
     "noFileChanges": "暂无文件改动",
+    "blockedBy": "被阻塞: {{ids}}",
     "showDiff": "查看差异",
     "expand": "展开状态面板",
     "collapse": "收起状态面板",
@@ -1600,6 +1603,10 @@
       "opus48": {
         "label": "Opus 4.8",
         "description": "Opus 4.8 · 最新最强大的模型"
+      },
+      "fable5": {
+        "label": "Fable 5",
+        "description": "Fable 5 · 最强大 · Mythos 级"
       }
     },
     "codex": {

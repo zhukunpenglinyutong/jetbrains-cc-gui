@@ -3,6 +3,7 @@ import type { TFunction } from 'i18next';
 import type { ClaudeMessage, HistoryData } from '../types';
 import { sendBridgeEvent } from '../utils/bridge';
 import { getSkipNewSessionConfirm } from '../utils/skipNewSessionConfirm';
+import { clearAllPersistedExpanded } from '../utils/expandedState';
 
 type ViewMode = 'chat' | 'history' | 'settings';
 
@@ -97,6 +98,8 @@ export function useSessionManagement({
   const beginSessionTransition = useCallback((nextSessionId: string | null, nextTitle: string | null) => {
     window.__sessionTransitioning = true;
     window.__sessionTransitionToken = createSessionTransitionToken();
+    // Clear expand/collapse cache on session switch to avoid unbounded growth
+    clearAllPersistedExpanded();
     // Use the single cleanup entry point exposed by useWindowCallbacks.
     // This clears both React state AND internal streaming refs in one shot.
     if (typeof window.__resetTransientUiState === 'function') {

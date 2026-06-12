@@ -1380,6 +1380,10 @@
       "opus48": {
         "label": "Opus 4.8",
         "description": "Opus 4.8 · Новейшая и самая мощная"
+      },
+      "fable5": {
+        "label": "Fable 5",
+        "description": "Fable 5 · Самая мощная · класс Mythos"
       }
     },
     "longContext": {

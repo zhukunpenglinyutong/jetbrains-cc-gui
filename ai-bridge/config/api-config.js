@@ -196,39 +196,48 @@ export function configureCliIdentity() {
 }
 
 // ============================================================================
-// Network Environment Variables
+// Startup Environment Variables
 // ============================================================================
 
 /**
- * Network-related environment variable names that should be injected from
- * settings.json into process.env early at startup.
+ * Environment variable names that should be injected from settings.json into
+ * process.env early at startup.
  *
- * IDEs launched via desktop launcher don't inherit shell proxy configuration,
- * so we need to explicitly read and set them from settings.json.
+ * IDEs launched from a desktop launcher (macOS Dock, Windows Start Menu,
+ * Linux app launcher) do NOT inherit the user's shell environment. Variables
+ * configured in settings.json therefore never reach process.env, causing
+ * Bedrock auth and proxy/TLS settings to silently fail. Reading them here
+ * ensures every subprocess the daemon spawns (the claude binary, MCP servers,
+ * Bash tool, etc.) sees the correct env.
  *
  * For corporate SSL-inspection proxies, prefer NODE_EXTRA_CA_CERTS (path to
  * a PEM bundle) over NODE_TLS_REJECT_UNAUTHORIZED=0 — the former adds custom
  * CAs while keeping verification intact; the latter disables ALL verification.
  */
-const NETWORK_ENV_VARS = [
+const STARTUP_ENV_VARS = [
+  // Proxy and TLS
   'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY',
   'http_proxy', 'https_proxy', 'no_proxy',
   'NODE_EXTRA_CA_CERTS',
   'NODE_TLS_REJECT_UNAUTHORIZED',
+  // AWS credentials — required for Bedrock auth when the IDE is desktop-launched
+  'AWS_PROFILE', 'AWS_DEFAULT_PROFILE',
+  'AWS_REGION', 'AWS_DEFAULT_REGION',
+  'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN',
 ];
 
 const LOCAL_SETTINGS_PROVIDER_ID = '__local_settings_json__';
 const CLI_LOGIN_PROVIDER_ID = '__cli_login__';
 const CODEX_CLI_LOGIN_PROVIDER_ID = '__codex_cli_login__';
-const injectedNetworkEnvVars = new Map();
+const injectedStartupEnvVars = new Map();
 
-function clearInjectedNetworkEnvVars() {
-  for (const [varName, injectedValue] of injectedNetworkEnvVars.entries()) {
+function clearInjectedStartupEnvVars() {
+  for (const [varName, injectedValue] of injectedStartupEnvVars.entries()) {
     if (process.env[varName] === injectedValue) {
       delete process.env[varName];
     }
   }
-  injectedNetworkEnvVars.clear();
+  injectedStartupEnvVars.clear();
 }
 
 function clearRuntimeAuthEnv() {
@@ -311,17 +320,18 @@ function canReadClaudeSettings(runtimeState) {
   return runtimeState.access !== 'inactive';
 }
 
-function canUseLocalProxySettings(runtimeState) {
+function canUseLocalSettingsEnv(runtimeState) {
   return runtimeState.access === 'local' || runtimeState.access === 'cli_login';
 }
 
 /**
- * Inject network-related environment variables from settings.json into process.env.
+ * Inject environment variables from settings.json into process.env.
  *
- * This includes proxy settings AND TLS configuration. It must be called as early
- * as possible in every Node.js entry point — before any HTTPS connection is made
- * (including SDK preloading) — so that authorized Local settings / CLI Login
- * modes can use corporate proxies and custom CA setups safely.
+ * This covers proxy/TLS configuration and AWS credentials for Bedrock. It must
+ * be called as early as possible in every Node.js entry point — before any
+ * HTTPS connection is made (including SDK preloading) — so that authorized
+ * Local settings / CLI Login modes can use corporate proxies, custom CA
+ * setups, and Bedrock credentials safely.
  *
  * Users behind corporate SSL-inspection proxies should prefer setting:
  *   { "env": { "NODE_EXTRA_CA_CERTS": "/path/to/ca-bundle.pem" } }
@@ -331,17 +341,17 @@ function canUseLocalProxySettings(runtimeState) {
  *
  * @param {Object} [settings] - Parsed settings object. If omitted, loads from disk.
  */
-export function injectNetworkEnvVars(settings) {
+export function injectStartupEnvVars(settings) {
   const runtimeState = getClaudeRuntimeState();
-  clearInjectedNetworkEnvVars();
+  clearInjectedStartupEnvVars();
 
-  if (!canUseLocalProxySettings(runtimeState)) {
-    debugLog('[DEBUG] Skipping local proxy/TLS env sync for provider mode:', runtimeState.access);
+  if (!canUseLocalSettingsEnv(runtimeState)) {
+    debugLog('[DEBUG] Skipping settings.json env sync for provider mode:', runtimeState.access);
     return;
   }
 
   const resolvedSettings = settings || readClaudeSettingsFromDisk();
-  for (const varName of NETWORK_ENV_VARS) {
+  for (const varName of STARTUP_ENV_VARS) {
     const value = resolvedSettings?.env?.[varName];
     if (value === undefined || value === null || process.env[varName]) {
       continue;
@@ -359,7 +369,7 @@ export function injectNetworkEnvVars(settings) {
 
     const stringValue = String(value);
     process.env[varName] = stringValue;
-    injectedNetworkEnvVars.set(varName, stringValue);
+    injectedStartupEnvVars.set(varName, stringValue);
     debugLog(`[DEBUG] Set ${varName} from settings.json`);
 
     if (varName === 'NODE_TLS_REJECT_UNAUTHORIZED' && String(value) === '0') {
@@ -409,7 +419,7 @@ export function loadClaudeSettings() {
 export function setupApiKey() {
   const runtimeState = getClaudeRuntimeState();
   const settings = loadClaudeSettings();
-  injectNetworkEnvVars(settings);
+  injectStartupEnvVars(settings);
   clearRuntimeAuthEnv();
 
   let apiKey;

@@ -1365,6 +1365,10 @@
       "opus48": {
         "label": "Opus 4.8",
         "description": "Opus 4.8 · 最新かつ最も優れたモデル"
+      },
+      "fable5": {
+        "label": "Fable 5",
+        "description": "Fable 5 · 最も強力 · Mythosクラス"
       }
     },
     "codex": {

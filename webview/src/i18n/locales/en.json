@@ -1312,6 +1312,8 @@
     "runCommand": "Run Command",
     "contextEngine": "Context Engine",
     "task": "Task",
+    "agent": "Agent",
+    "agentGroupToggle": "Toggle agent group details",
     "readFile": "Read File",
     "editFile": "Edit File",
     "writeFile": "Write File",
@@ -1384,6 +1386,7 @@
     "noTodos": "No tasks running",
     "noSubagents": "No subagents running",
     "noFileChanges": "No file changes",
+    "blockedBy": "Blocked by: {{ids}}",
     "showDiff": "Show Diff",
     "expand": "Expand status panel",
     "collapse": "Collapse status panel",
@@ -1595,6 +1598,10 @@
       "opus48": {
         "label": "Opus 4.8",
         "description": "Opus 4.8 · Latest and most capable"
+      },
+      "fable5": {
+        "label": "Fable 5",
+        "description": "Fable 5 · Most powerful · Mythos-class"
       }
     },
     "codex": {

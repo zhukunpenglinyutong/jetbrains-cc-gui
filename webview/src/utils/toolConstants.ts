@@ -15,6 +15,12 @@ export const BASH_TOOL_NAMES = new Set(['bash', 'run_terminal_cmd', 'exec_comman
 // Search/grep/glob tools
 export const SEARCH_TOOL_NAMES = new Set(['grep', 'glob', 'search', 'find', 'search_files']);
 
+// Agent/subagent spawning tools
+export const AGENT_TOOL_NAMES = new Set(['task', 'agent', 'spawn_agent']);
+
+// Task management tools (new structured Task API)
+export const TASK_MANAGE_TOOL_NAMES = new Set(['taskcreate', 'taskupdate', 'taskget', 'tasklist']);
+
 // Internal orchestration tools that may be useful during streaming but should
 // not remain as residual tool cards after the final answer is complete.
 export const TRANSIENT_INTERNAL_TOOL_NAMES = new Set([

@@ -314,11 +314,6 @@ export function normalizeClaudeModelId(modelId: string | undefined | null): stri
  */
 export const CLAUDE_MODELS: ModelInfo[] = [
   {
-    id: 'claude-sonnet-4-6',
-    label: 'Sonnet 4.6',
-    description: 'Sonnet 4.6 · Use the default model',
-  },
-  {
     id: 'claude-opus-4-8',
     label: 'Opus 4.8',
     description: 'Opus 4.8 · Latest and most capable',
@@ -329,9 +324,14 @@ export const CLAUDE_MODELS: ModelInfo[] = [
     description: 'Opus 4.7 · Previous flagship model',
   },
   {
-    id: 'claude-opus-4-6',
-    label: 'Opus 4.6',
-    description: 'Opus 4.6 for long sessions',
+    id: 'claude-fable-5',
+    label: 'Fable 5',
+    description: 'Fable 5 · Most powerful · Mythos-class',
+  },
+  {
+    id: 'claude-sonnet-4-6',
+    label: 'Sonnet 4.6',
+    description: 'Sonnet 4.6 · Use the default model',
   },
   {
     id: 'claude-haiku-4-5',
@@ -421,6 +421,7 @@ export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
  * Based on: https://code.claude.com/docs/en/model-config#adjust-effort-level
  */
 export const EFFORT_SUPPORTED_CLAUDE_MODELS = new Set([
+  'claude-fable-5',
   'claude-opus-4-8',
   'claude-opus-4-7',
   'claude-opus-4-6',
@@ -430,9 +431,9 @@ export const EFFORT_SUPPORTED_CLAUDE_MODELS = new Set([
 
 /**
  * Claude models that additionally support the 'xhigh' effort level.
- * Opus 4.7 is currently the only Claude Code model with xhigh support.
  */
 export const XHIGH_EFFORT_CLAUDE_MODELS = new Set([
+  'claude-fable-5',
   'claude-opus-4-8',
   'claude-opus-4-7',
 ]);
@@ -441,6 +442,7 @@ export const XHIGH_EFFORT_CLAUDE_MODELS = new Set([
  * Claude models that support the 'max' effort level.
  */
 export const MAX_EFFORT_CLAUDE_MODELS = new Set([
+  'claude-fable-5',
   'claude-opus-4-8',
   'claude-opus-4-7',
   'claude-opus-4-6',

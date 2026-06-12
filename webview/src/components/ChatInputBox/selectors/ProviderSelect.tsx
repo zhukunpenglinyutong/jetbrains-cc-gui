@@ -332,7 +332,10 @@ export const ProviderSelect = ({ value, onChange, compact = false }: ProviderSel
                   <span className="codicon codicon-check check-mark" />
                 )}
                 {provider.id === 'codex' && (
-                  <span className="codicon codicon-chevron-right" style={CHEVRON_ICON_STYLE} />
+                  <span
+                    className="codicon codicon-chevron-right"
+                    style={{ fontSize: '10px', marginLeft: provider.id === value ? '2px' : 'auto' }}
+                  />
                 )}
                 {provider.id === 'codex' && activeSubmenu === 'codexQuota' && (
                   renderCodexQuotaSubmenu()

@@ -38,19 +38,19 @@ import {
   resetRuntimePersistent,
   getContextUsagePersistent
 } from './services/claude/persistent-query-service.js';
-import { injectNetworkEnvVars, isWebviewControlledEnvVar } from './config/api-config.js';
+import { injectStartupEnvVars, isWebviewControlledEnvVar } from './config/api-config.js';
 import { cleanupStaleTempImages } from './services/claude/attachment-service.js';
 
 // =============================================================================
-// Network Environment Setup (must run before any HTTPS connection)
+// Startup Environment Setup (must run before any HTTPS connection)
 // =============================================================================
 
-// Sync proxy and TLS settings from ~/.claude/settings.json BEFORE SDK
-// preloading or any other network activity, but only for explicitly
+// Sync proxy/TLS settings and AWS credentials from ~/.claude/settings.json
+// BEFORE SDK preloading or any other network activity, but only for explicitly
 // authorized Local settings.json / CLI Login modes. Without this, users behind
 // corporate SSL-inspection proxies in those modes will get certificate
-// verification errors.
-injectNetworkEnvVars();
+// verification errors, and Bedrock auth fails for desktop-launched IDEs.
+injectStartupEnvVars();
 
 // =============================================================================
 // Constants
