@@ -411,6 +411,15 @@ public class CodemossSettingsService {
         providerManager.applyActiveProviderToClaudeSettings();
     }
 
+    /**
+     * Startup-time repair pass: only fills in provider-managed fields that are
+     * missing from {@code ~/.claude/settings.json}, never overwrites existing
+     * values. See {@link ProviderManager#repairActiveProviderToClaudeSettings()}.
+     */
+    public boolean repairActiveProviderToClaudeSettings() throws IOException {
+        return providerManager.repairActiveProviderToClaudeSettings();
+    }
+
     // ==================== Working Directory Management ====================
 
     public String getCustomWorkingDirectory(String projectPath) throws IOException {

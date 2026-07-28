@@ -483,6 +483,38 @@ public class ProviderManager {
     }
 
     /**
+     * Startup-time "fill in the blanks" sync: repair only the provider-managed
+     * fields that are missing from {@code ~/.claude/settings.json}, never
+     * overwriting values the user already has there.
+     *
+     * <p>Used by {@code ChatWindowDelegate.syncActiveProvider()} on every chat
+     * window open, as opposed to {@link #applyActiveProviderToClaudeSettings()}
+     * which is reserved for explicit user actions (switch / edit provider).
+     *
+     * <p>Returns false (no-op) for local settings / CLI login providers — those
+     * modes do not own the global config, so we must not touch it.
+     */
+    public boolean repairActiveProviderToClaudeSettings() throws IOException {
+        JsonObject config = configReader.apply(null);
+
+        if (config.has("claude") &&
+                config.getAsJsonObject("claude").has("current")) {
+            String currentId = config.getAsJsonObject("claude").get("current").getAsString();
+            if (LOCAL_SETTINGS_PROVIDER_ID.equals(currentId) || CLI_LOGIN_PROVIDER_ID.equals(currentId)) {
+                LOG.info("[ProviderManager] " + currentId + " provider active, skipping repair");
+                return false;
+            }
+        }
+
+        JsonObject activeProvider = getActiveClaudeProvider();
+        if (activeProvider == null) {
+            LOG.info("[ProviderManager] No active provider to repair in .claude/settings.json");
+            return false;
+        }
+        return claudeSettingsManager.repairMissingProviderFields(activeProvider);
+    }
+
+    /**
      * Parse provider configurations from cc-switch.db.
      * Uses a Node.js script to read the database (cross-platform compatible, avoids JDBC classloader issues).
      *

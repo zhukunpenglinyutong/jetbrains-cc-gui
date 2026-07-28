@@ -90,6 +90,36 @@ public class ProviderManagerTest {
     }
 
     /**
+     * Local Settings provider must skip startup repair so we don't overwrite
+     * the user's hand-managed {@code ~/.claude/settings.json}.
+     */
+    @Test
+    public void repairActiveProviderSkipsLocalSettingsMode() throws Exception {
+        AtomicReference<JsonObject> configRef = new AtomicReference<>(
+                createConfigWithCurrent(ProviderManager.LOCAL_SETTINGS_PROVIDER_ID));
+        ProviderManager manager = createProviderManager(configRef);
+
+        boolean changed = manager.repairActiveProviderToClaudeSettings();
+
+        assertFalse("Local settings provider must skip repair", changed);
+    }
+
+    /**
+     * CLI Login provider must skip startup repair — the SDK owns auth via
+     * native OAuth, so the plugin must not touch settings.json.
+     */
+    @Test
+    public void repairActiveProviderSkipsCliLoginMode() throws Exception {
+        AtomicReference<JsonObject> configRef = new AtomicReference<>(
+                createConfigWithCurrent(ProviderManager.CLI_LOGIN_PROVIDER_ID));
+        ProviderManager manager = createProviderManager(configRef);
+
+        boolean changed = manager.repairActiveProviderToClaudeSettings();
+
+        assertFalse("CLI login provider must skip repair", changed);
+    }
+
+    /**
      * Build a ProviderManager backed only by in-memory config to avoid depending on the real filesystem in tests.
      */
     private ProviderManager createProviderManager(AtomicReference<JsonObject> configRef) {

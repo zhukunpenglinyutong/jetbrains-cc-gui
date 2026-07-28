@@ -465,4 +465,94 @@ public class ClaudeSettingsManager {
         claudeSettings.add("plugins", plugins);
         writeClaudeSettings(claudeSettings);
     }
+
+    /**
+     * Repair missing provider-managed fields in Claude settings.json.
+     *
+     * <p>This is a startup-time "fill in the blanks" pass: it only ADDS fields
+     * that are missing from {@code ~/.claude/settings.json}, and never
+     * overwrites an existing value. As a result, any manual edits the user
+     * made to managed fields (e.g. {@code model}, env vars) are preserved.
+     *
+     * <p>Used by {@code ChatWindowDelegate.syncActiveProvider()} instead of
+     * {@link #applyProviderToClaudeSettings(JsonObject)} (which is a full
+     * overwrite and is still used for explicit user actions like switching or
+     * editing providers).
+     *
+     * @param provider the active provider configuration
+     * @return true if any field was added or any missing env key was added; false if no changes
+     * @throws IOException if reading or writing settings.json fails
+     */
+    public boolean repairMissingProviderFields(JsonObject provider) throws IOException {
+        if (provider == null) {
+            throw new IllegalArgumentException("Provider cannot be null");
+        }
+        if (!provider.has("settingsConfig") || provider.get("settingsConfig").isJsonNull()) {
+            throw new IllegalArgumentException("Provider is missing settingsConfig");
+        }
+
+        JsonObject settingsConfig = provider.getAsJsonObject("settingsConfig");
+        JsonObject claudeSettings = readClaudeSettings().deepCopy();
+        boolean changed = false;
+
+        // 1. Repair top-level provider-managed fields.
+        for (String key : settingsConfig.keySet()) {
+            JsonElement value = settingsConfig.get(key);
+            if (value == null || value.isJsonNull()) {
+                continue;
+            }
+            if (PROTECTED_SYSTEM_FIELDS.contains(key)) {
+                continue;
+            }
+            if (!PROVIDER_MANAGED_FIELDS.contains(key)) {
+                continue;
+            }
+            if (claudeSettings.has(key)) {
+                LOG.debug("[ClaudeSettingsManager] Preserving existing field: " + key);
+                continue;
+            }
+            claudeSettings.add(key, value);
+            LOG.info("[ClaudeSettingsManager] Repaired missing field: " + key);
+            changed = true;
+        }
+
+        // 2. For the special "env" object, also fill in individual env keys that
+        //    are missing. We never touch keys that already exist in the global env.
+        if (settingsConfig.has("env") && settingsConfig.get("env").isJsonObject()
+                && claudeSettings.has("env") && claudeSettings.get("env").isJsonObject()) {
+            JsonObject providerEnv = settingsConfig.getAsJsonObject("env");
+            JsonObject globalEnv = claudeSettings.getAsJsonObject("env");
+            for (String envKey : providerEnv.keySet()) {
+                if (globalEnv.has(envKey)) {
+                    continue; // never overwrite an existing env key
+                }
+                JsonElement envValue = providerEnv.get(envKey);
+                if (envValue == null || envValue.isJsonNull()) {
+                    continue;
+                }
+                globalEnv.add(envKey, envValue);
+                LOG.info("[ClaudeSettingsManager] Repaired missing env key: " + envKey);
+                changed = true;
+            }
+        }
+
+        // 3. Only set codemossProviderId when there is no existing one (e.g. first
+        //    install) — switching providers must keep using the explicit switch path.
+        if (provider.has("id") && !provider.get("id").isJsonNull()) {
+            String providerId = provider.get("id").getAsString();
+            if (!claudeSettings.has("codemossProviderId")
+                    || claudeSettings.get("codemossProviderId").isJsonNull()) {
+                claudeSettings.addProperty("codemossProviderId", providerId);
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            writeClaudeSettings(claudeSettings);
+            LOG.info("[ClaudeSettingsManager] Repaired settings.json with missing provider fields");
+        } else {
+            LOG.info("[ClaudeSettingsManager] No missing provider fields to repair");
+        }
+        return changed;
+    }
 }
