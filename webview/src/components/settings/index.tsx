@@ -702,7 +702,7 @@ const SettingsView = ({
           {currentTab === 'community' && (
             <CommunitySection addToast={addToast} />
           )}
-          )}
+        </div>
       </div>
 
       {/* All dialogs (alert, confirm, provider, agent, prompt, codex) */}
