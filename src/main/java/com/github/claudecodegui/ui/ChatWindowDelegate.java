@@ -26,6 +26,7 @@ import com.github.claudecodegui.handler.PromptHandler;
 import com.github.claudecodegui.handler.provider.CustomModelPricingHandler;
 import com.github.claudecodegui.handler.provider.ModelProviderHandler;
 import com.github.claudecodegui.handler.provider.ProviderHandler;
+import com.github.claudecodegui.handler.provider.gemini.GeminiPlanUsageHandler;
 import com.github.claudecodegui.handler.provider.claude.ClaudePlanUsageHandler;
 import com.github.claudecodegui.handler.RewindHandler;
 import com.github.claudecodegui.handler.SessionHandler;
@@ -358,6 +359,7 @@ public class ChatWindowDelegate {
         host.setMessageDispatcher(messageDispatcher);
 
         messageDispatcher.registerHandler(new ProviderHandler(handlerContext));
+        messageDispatcher.registerHandler(new GeminiPlanUsageHandler(handlerContext));
         messageDispatcher.registerHandler(new ClaudePlanUsageHandler(handlerContext));
         messageDispatcher.registerHandler(new CustomModelPricingHandler(handlerContext, settingsService));
         messageDispatcher.registerHandler(new McpServerHandler(handlerContext));

@@ -6,7 +6,7 @@ First-class provider id **`gemini`** in jetbrains-cc-gui, backed by **Antigravit
 
 ## Minimum agy version
 
-**1.1.11** — read-only slash commands answer structurally in print mode (see `status:"ERROR"` and `command_result` below). Older agy still works for chat turns.
+**1.1.11** — required for the plan-usage probe (read-only slash commands in print mode, see below). Older agy still works for chat turns.
 
 ## Transport
 
@@ -57,6 +57,20 @@ Headless has no Ask UI. Default: soft-deny. Plugin modes map via `mapPermissionM
 ## Auth
 
 User runs `agy` once in a terminal (Google Sign-In). Binary resolution: `AGY_PATH` / `GEMINI_CLI_PATH`, then common install paths, then `PATH`.
+
+## Plan usage (agy ≥ 1.1.11)
+
+`GeminiPlanUsageService` runs a one-shot probe:
+
+```
+agy -p "/usage" --output-format json
+```
+
+agy answers read-only slash commands structurally **without an agent turn** — zero tokens, zero quota spend, no conversation left behind (`conversation_id` empty, `num_turns` 0). Payload: `command.data.groups[].buckets[]` with `window` (`5h`|`weekly`), `remaining_fraction`, `reset_time`. Java normalizes to the shared plan-usage shape (`capacity_pct` + `windows[]` + `families{gemini,third_party}`).
+
+Detection of too-old agy: no `command` object in a `SUCCESS` payload means the text ran as a model prompt (pre-1.1.11 behavior) → report unavailable with an upgrade hint, never burn quota.
+
+Cache TTL 90 s (webview polls every 120 s); spawn timeout 15 s in a temp cwd (never inherit plugin cwd as `workspaceDirs`).
 
 ## status:"ERROR" vs exit code (agy ≥ 1.1.11)
 
