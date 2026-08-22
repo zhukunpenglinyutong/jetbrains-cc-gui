@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'fs';
-import { resolve, dirname } from 'path';
+import { resolve, dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { homedir } from 'os';
 import {
   selectWorkingDirectory,
   isBridgeDirectory,
+  isUnsafeWorkingDirectory,
   normalizePathForComparison,
   getClaudeProjectKey,
   getClaudeProjectSessionFilePath,
@@ -77,6 +78,24 @@ test('selectWorkingDirectory returns a valid requested cwd unchanged', () => {
   withoutProjectEnv(() => {
     const home = homedir();
     assert.ok(samePath(selectWorkingDirectory(home), resolve(home)));
+  });
+});
+
+test('isUnsafeWorkingDirectory rejects plugin and gemini homes', () => {
+  assert.equal(
+    isUnsafeWorkingDirectory('/Users/x/Library/Application Support/JetBrains/IntelliJIdea2026.2/plugins/idea-claude-code-gui/ai-bridge'),
+    true,
+  );
+  assert.equal(isUnsafeWorkingDirectory('/Users/x/.gemini'), true);
+  assert.equal(isUnsafeWorkingDirectory('/Users/x/.gemini/antigravity-cli'), true);
+  assert.equal(isUnsafeWorkingDirectory('/path/to/normal/project'), false);
+});
+
+test('selectWorkingDirectory skips ~/.gemini candidate', () => {
+  withoutProjectEnv(() => {
+    const home = homedir();
+    const result = selectWorkingDirectory(join(home, '.gemini'));
+    assert.ok(!samePath(result, join(home, '.gemini')), `expected non-gemini cwd, got ${result}`);
   });
 });
 

@@ -240,6 +240,40 @@ export function isBridgeDirectory(pathValue) {
 }
 
 /**
+ * Paths that must never become agy workspaceDirs / process cwd.
+ * Plugin install trees, ai-bridge, and ~/.gemini were observed as wrong
+ * workspace roots and inflate tool context with unrelated trees.
+ * @param {string} pathValue
+ * @returns {boolean}
+ */
+export function isUnsafeWorkingDirectory(pathValue) {
+  if (!pathValue || typeof pathValue !== 'string') return true;
+  const trimmed = pathValue.trim();
+  if (!trimmed || trimmed === 'undefined' || trimmed === 'null') return true;
+
+  if (isBridgeDirectory(trimmed)) return true;
+
+  const n = normalizePathForComparison(trimmed);
+  if (!n) return true;
+
+  // JetBrains plugin / config trees (embedded ai-bridge).
+  if (n.includes('/application support/jetbrains/')) return true;
+  if (n.includes('/plugins/idea-claude-code-gui')) return true;
+  if (n.includes('/.local/share/jetbrains/')) return true;
+
+  // Standalone or nested ai-bridge directory.
+  if (n.endsWith('/ai-bridge') || n.includes('/ai-bridge/')) return true;
+
+  // Antigravity CLI home — wrong workspaceDirs=[~/.gemini] in production logs.
+  if (n.endsWith('/.gemini') || n.includes('/.gemini/')) return true;
+  if (n.endsWith('/.gemini/antigravity-cli') || n.includes('/.gemini/antigravity-cli/')) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Intelligently select the working directory.
  * @param {string} requestedCwd - The requested working directory
  * @returns {string} The selected working directory
@@ -270,8 +304,9 @@ export function selectWorkingDirectory(requestedCwd) {
     // so an empty requestedCwd + missing IDEA_PROJECT_PATH would otherwise land
     // here and make the SDK persist sessions under
     // ~/.claude/projects/<sanitized-bridge-dir>/, hiding every project's history.
-    if (isBridgeDirectory(normalized)) {
-      console.log('[DEBUG] Skipping ai-bridge directory candidate:', normalized);
+    // Also reject JetBrains plugin trees and ~/.gemini (agy workspaceDirs bugs).
+    if (isUnsafeWorkingDirectory(normalized)) {
+      console.log('[DEBUG] Skipping unsafe working-directory candidate:', normalized);
       continue;
     }
 
@@ -293,11 +328,11 @@ export function selectWorkingDirectory(requestedCwd) {
   }
 
   console.log('[DEBUG] selectWorkingDirectory fallback triggered');
-  // Guard: reject the bridge dir even from IDEA_PROJECT_PATH (e.g. when the user
+  // Guard: reject unsafe dirs even from IDEA_PROJECT_PATH (e.g. when the user
   // is developing the bridge itself). The home dir is always a safe fallback.
   const fallback = envProjectPath || getRealHomeDir();
-  if (isBridgeDirectory(fallback)) {
-    console.log('[DEBUG] Fallback env path is bridge dir, using home dir instead');
+  if (isUnsafeWorkingDirectory(fallback)) {
+    console.log('[DEBUG] Fallback env path is unsafe, using home dir instead');
     return getRealHomeDir();
   }
   return fallback;

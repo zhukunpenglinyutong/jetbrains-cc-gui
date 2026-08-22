@@ -178,6 +178,11 @@ public final class CliStatusDetector {
             return dirs;
         }
         switch (tool) {
+            case AGY:
+                dirs.add(join(home, ".gemini", "antigravity-cli", "bin"));
+                dirs.add(join(home, ".antigravity", "bin"));
+                dirs.add(join(home, ".local", "bin"));
+                break;
             case GROK:
                 dirs.add(join(home, ".grok", "bin"));
                 dirs.add(join(home, ".local", "bin"));
@@ -237,6 +242,7 @@ public final class CliStatusDetector {
 
     private static String[] envKeysFor(CliToolId tool) {
         return switch (tool) {
+            case AGY -> new String[]{"AGY_BIN", "AGY_PATH", "AGY_CLI_PATH", "GEMINI_CLI_PATH", "ANTIGRAVITY_BIN"};
             case GROK -> new String[]{"GROK_BIN", "GROK_PATH", "GROK_CLI_PATH"};
             case KIMI -> new String[]{"KIMI_BIN", "KIMI_PATH", "KIMI_CLI_PATH", "KIMI_CODE_BIN"};
             case OPENCODE -> new String[]{"OPENCODE_BIN", "OPENCODE_PATH", "OPENCODE_CLI_PATH"};
@@ -434,6 +440,8 @@ public final class CliStatusDetector {
         String current = env.getOrDefault(pathKey, env.getOrDefault("PATH", ""));
         String sep = PlatformUtils.isWindows() ? ";" : ":";
         List<String> extras = new ArrayList<>(List.of(
+                join(home, ".gemini", "antigravity-cli", "bin"),
+                join(home, ".antigravity", "bin"),
                 join(home, ".kimi-code", "bin"),
                 join(home, ".kimi", "bin"),
                 join(home, ".opencode", "bin"),

@@ -383,6 +383,84 @@ public class PathUtils {
         return false;
     }
 
+    /**
+     * Paths that must never be used as the agent working directory / agy
+     * {@code workspaceDirs}. Observed failures used plugin install dirs, the
+     * embedded ai-bridge tree, or {@code ~/.gemini} when cwd fell through.
+     *
+     * @param path candidate working directory
+     * @return true when the path is empty or clearly not a user project root
+     */
+    public static boolean isUnsafeWorkingDirectory(String path) {
+        if (path == null || path.trim().isEmpty()) {
+            return true;
+        }
+        String normalized = normalizeToUnix(path.trim()).toLowerCase();
+        if (normalized.isEmpty() || "undefined".equals(normalized) || "null".equals(normalized)) {
+            return true;
+        }
+        // JetBrains plugin install / config trees (embedded ai-bridge lives here).
+        if (normalized.contains("/application support/jetbrains/")) {
+            return true;
+        }
+        if (normalized.contains("/plugins/idea-claude-code-gui")) {
+            return true;
+        }
+        if (normalized.contains("/.local/share/jetbrains/")) {
+            return true;
+        }
+        // Standalone ai-bridge checkout used as process.cwd() by the daemon.
+        if (normalized.endsWith("/ai-bridge") || normalized.contains("/ai-bridge/")) {
+            return true;
+        }
+        // Antigravity CLI default home — was seen as workspaceDirs=[~/.gemini].
+        if (normalized.endsWith("/.gemini") || normalized.contains("/.gemini/")) {
+            return true;
+        }
+        if (normalized.endsWith("/.gemini/antigravity-cli")
+                || normalized.contains("/.gemini/antigravity-cli/")) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Prefer {@code requested} when it is a safe existing directory; otherwise
+     * fall back to {@code projectBasePath} when that is safe. Returns the first
+     * usable path, or {@code null} when neither is acceptable.
+     *
+     * <p>Unlike {@link #guardWorkingDirectory(String, String)} (which clamps a
+     * daemon cwd inside the project), this selects an acceptable location at all:
+     * agy uses process cwd as {@code workspaceDirs}, so spawning from a plugin /
+     * ai-bridge / {@code ~/.gemini} tree must fall through, not clamp.
+     */
+    public static String selectSafeWorkingDirectory(String requested, String projectBasePath) {
+        String primary = firstSafeExistingDirectory(requested);
+        if (primary != null) {
+            return primary;
+        }
+        String fallback = firstSafeExistingDirectory(projectBasePath);
+        if (fallback != null) {
+            return fallback;
+        }
+        return null;
+    }
+
+    private static String firstSafeExistingDirectory(String path) {
+        if (path == null || path.trim().isEmpty() || isUnsafeWorkingDirectory(path)) {
+            return null;
+        }
+        String normalized = normalizeAbsolute(path.trim());
+        if (normalized == null || normalized.isEmpty() || isUnsafeWorkingDirectory(normalized)) {
+            return null;
+        }
+        File dir = new File(normalized);
+        if (!dir.isDirectory()) {
+            return null;
+        }
+        return normalized;
+    }
+
     // ==================== Path Validation ====================
 
     /**

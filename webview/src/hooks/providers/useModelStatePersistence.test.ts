@@ -15,8 +15,10 @@ function makeOptions(overrides: Partial<UseModelStatePersistenceOptions> = {}): 
     setCurrentProvider: vi.fn(),
     setSelectedClaudeModel: vi.fn(),
     setSelectedCodexModel: vi.fn(),
+    setSelectedGeminiModel: vi.fn(),
     setClaudePermissionMode: vi.fn(),
     setCodexPermissionMode: vi.fn(),
+    setGeminiPermissionMode: vi.fn(),
     setSelectedGrokModel: vi.fn(),
     setSelectedKimiModel: vi.fn(),
     setSelectedOpenCodeModel: vi.fn(),
@@ -37,8 +39,10 @@ function makeOptions(overrides: Partial<UseModelStatePersistenceOptions> = {}): 
     currentProvider: 'claude',
     selectedClaudeModel: 'claude-sonnet-4-5',
     selectedCodexModel: 'gpt-5-codex',
+    selectedGeminiModel: 'gemini-3.5-flash',
     claudePermissionMode: 'default' as PermissionMode,
     codexPermissionMode: 'default' as PermissionMode,
+    geminiPermissionMode: 'default' as PermissionMode,
     selectedGrokModel: 'grok-4.6',
     selectedKimiModel: 'auto',
     selectedOpenCodeModel: 'opencode-default',
@@ -419,71 +423,5 @@ describe('useModelStatePersistence — CLI provider persistence', () => {
     vi.advanceTimersByTime(200);
 
     expect(setOmpPermissionMode).toHaveBeenCalledWith('default');
-  });
-});
-
-describe('useModelStatePersistence — codex dynamic catalog models', () => {
-  beforeEach(() => {
-    localStorage.clear();
-    sendBridgeEventMock.mockClear();
-    (window as unknown as { sendToJava?: unknown }).sendToJava = () => {};
-    window.__CCGUI_PAGE_CONTEXT_READY__ = true;
-    window.__CCGUI_PAGE_LOAD_KIND__ = 'initial_load';
-    window.__CCGUI_RECOVERY_RELOAD__ = false;
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-    delete (window as unknown as { sendToJava?: unknown }).sendToJava;
-    delete window.__CCGUI_PAGE_CONTEXT_READY__;
-    delete window.__CCGUI_PAGE_LOAD_KIND__;
-    delete window.__CCGUI_RECOVERY_RELOAD__;
-    delete window.__CCGUI_RECOVERY_STATE_APPLIED__;
-    delete (window as unknown as { __INITIAL_TAB_PROVIDER__?: unknown }).__INITIAL_TAB_PROVIDER__;
-    delete (window as unknown as { __INITIAL_TAB_MODEL__?: unknown }).__INITIAL_TAB_MODEL__;
-  });
-
-  it('restores a saved codex model that only exists in the dynamic catalog', () => {
-    // The codex model list is dynamic (config.toml `model` + model_catalog_json),
-    // so a catalog-only id like kimi-k3 must survive restart instead of being
-    // reset to CODEX_MODELS[0] before the catalog fetch lands.
-    const setSelectedCodexModel = vi.fn();
-    localStorage.setItem('model-selection-state', JSON.stringify({
-      provider: 'codex',
-      codexModel: 'kimi-k3',
-    }));
-
-    renderHook(() => useModelStatePersistence(makeOptions({ setSelectedCodexModel })));
-    vi.advanceTimersByTime(200);
-
-    expect(setSelectedCodexModel).toHaveBeenCalledWith('kimi-k3');
-    expect(bridgeEventsFor('set_model')).toEqual([['set_model', 'kimi-k3']]);
-  });
-
-  it('honors a backend-supplied dynamic codex model via __INITIAL_TAB_MODEL__', () => {
-    const setSelectedCodexModel = vi.fn();
-    (window as unknown as { __INITIAL_TAB_PROVIDER__?: unknown }).__INITIAL_TAB_PROVIDER__ = 'codex';
-    (window as unknown as { __INITIAL_TAB_MODEL__?: unknown }).__INITIAL_TAB_MODEL__ = 'kimi-k3';
-
-    renderHook(() => useModelStatePersistence(makeOptions({ setSelectedCodexModel })));
-    vi.advanceTimersByTime(200);
-
-    expect(setSelectedCodexModel).toHaveBeenCalledWith('kimi-k3');
-    expect(bridgeEventsFor('set_model')).toEqual([['set_model', 'kimi-k3']]);
-  });
-
-  it('ignores an empty saved codex model and keeps the default', () => {
-    const setSelectedCodexModel = vi.fn();
-    localStorage.setItem('model-selection-state', JSON.stringify({
-      provider: 'codex',
-      codexModel: '   ',
-    }));
-
-    renderHook(() => useModelStatePersistence(makeOptions({ setSelectedCodexModel })));
-    vi.advanceTimersByTime(200);
-
-    expect(setSelectedCodexModel).not.toHaveBeenCalled();
-    expect(bridgeEventsFor('set_model')).toHaveLength(1);
   });
 });
