@@ -79,6 +79,7 @@ function renderUseGlobalCallbacks(editable: HTMLDivElement) {
     setHasContent,
     adjustHeight,
     renderFileTags,
+    renderQuoteTags,
     onInput,
   };
 }

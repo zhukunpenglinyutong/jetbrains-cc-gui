@@ -6,6 +6,7 @@ import com.github.claudecodegui.settings.CodexSettingsManager;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.provider.gemini.GeminiSDKBridge;
 import com.github.claudecodegui.provider.grok.GrokSDKBridge;
 import com.github.claudecodegui.provider.common.MarkerCliBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
@@ -36,6 +37,7 @@ public class SessionSendService {
     private final ClaudeSDKBridge claudeSDKBridge;
     private final CodexSDKBridge codexSDKBridge;
     private final GrokSDKBridge grokSDKBridge;
+    private final GeminiSDKBridge geminiSDKBridge;
     private final Map<String, MarkerCliBridge> cliBridges;
     private final SessionContextService contextService;
 
@@ -52,7 +54,7 @@ public class SessionSendService {
             SessionContextService contextService
     ) {
         this(project, state, callbackFacade, messageParser, messageMerger, gson,
-                claudeSDKBridge, codexSDKBridge, cliBridges, contextService, null);
+                claudeSDKBridge, codexSDKBridge, cliBridges, contextService, null, null);
     }
 
     public SessionSendService(
@@ -66,7 +68,8 @@ public class SessionSendService {
             CodexSDKBridge codexSDKBridge,
             Map<String, MarkerCliBridge> cliBridges,
             SessionContextService contextService,
-            GrokSDKBridge grokSDKBridge
+            GrokSDKBridge grokSDKBridge,
+            GeminiSDKBridge geminiSDKBridge
     ) {
         this.project = project;
         this.state = state;
@@ -79,6 +82,7 @@ public class SessionSendService {
         this.grokSDKBridge = grokSDKBridge;
         this.cliBridges = cliBridges != null ? cliBridges : Collections.emptyMap();
         this.contextService = contextService;
+        this.geminiSDKBridge = geminiSDKBridge;
     }
 
     public void prepareContextCollector(EditorContextCollector contextCollector) {
@@ -165,6 +169,19 @@ public class SessionSendService {
 
         if ("grok".equals(currentProvider) && grokSDKBridge != null) {
             return sendToGrok(
+                    channelId,
+                    input,
+                    attachments,
+                    openedFilesJson,
+                    agentPrompt,
+                    fileTagPaths,
+                    effectivePermissionMode,
+                    normalizedRequestedEffort
+            );
+        }
+
+        if ("gemini".equals(currentProvider) && geminiSDKBridge != null) {
+            return sendToGemini(
                     channelId,
                     input,
                     attachments,
@@ -398,6 +415,63 @@ public class SessionSendService {
         ).thenApply(result -> null);
     }
 
+    private CompletableFuture<Void> sendToGemini(
+            String channelId,
+            String input,
+            List<ClaudeSession.Attachment> attachments,
+            JsonObject openedFilesJson,
+            String agentPrompt,
+            List<String> fileTagPaths,
+            String effectivePermissionMode,
+            String requestedReasoningEffort
+    ) {
+        if (geminiSDKBridge == null) {
+            LOG.error("[Lifecycle] sendToGemini called but GeminiSDKBridge is null");
+            callbackFacade.notifyStateChange(false, false, "Gemini bridge not available");
+            return CompletableFuture.completedFuture(null);
+        }
+        GeminiMessageHandler handler = new GeminiMessageHandler(state, callbackFacade.getCallbackHandler(), project);
+        Boolean streaming = readStreamingEnabled();
+        final String runtimeSessionEpoch = state.getRuntimeSessionEpoch();
+        final String currentModel = state.getModel();
+        String effort = requestedReasoningEffort;
+        if (effort == null) {
+            effort = state.getReasoningEffort();
+        }
+        String projectBase = project != null ? project.getBasePath() : null;
+        String guardedCwd = com.github.claudecodegui.util.PathUtils.selectSafeWorkingDirectory(
+                state.getCwd(), projectBase);
+        if (guardedCwd == null) {
+            guardedCwd = state.getCwd();
+        } else if (state.getCwd() == null || !guardedCwd.equals(state.getCwd())) {
+            LOG.warn("[Lifecycle] sendToGemini cwd guard: " + state.getCwd() + " -> " + guardedCwd);
+            state.setCwd(guardedCwd);
+        }
+        LOG.info("[Lifecycle] sendToGemini model=" + currentModel
+                + ", sessionId=" + (state.getSessionId() != null ? state.getSessionId() : "(new)")
+                + ", cwd=" + guardedCwd);
+
+        String contextAppend = contextService.buildCodexContextAppend(openedFilesJson, fileTagPaths);
+        String finalInput = (input != null ? input : "") + contextAppend;
+
+        return geminiSDKBridge.sendMessage(
+                channelId,
+                finalInput,
+                state.getSessionId(),
+                runtimeSessionEpoch,
+                guardedCwd,
+                attachments,
+                effectivePermissionMode,
+                currentModel,
+                openedFilesJson,
+                agentPrompt,
+                streaming,
+                false,
+                effort,
+                handler
+        ).thenApply(result -> null);
+    }
+
     private CompletableFuture<Void> sendToCliProvider(
             String provider,
             String channelId,
@@ -437,9 +511,18 @@ public class SessionSendService {
                 : "default";
         int attachmentCount = attachments != null ? attachments.size() : 0;
 
+        String projectBase = project != null ? project.getBasePath() : null;
+        String guardedCwd = com.github.claudecodegui.util.PathUtils.guardWorkingDirectory(
+                state.getCwd(), projectBase);
+        if (guardedCwd == null) {
+            guardedCwd = state.getCwd();
+        } else if (state.getCwd() == null || !guardedCwd.equals(state.getCwd())) {
+            state.setCwd(guardedCwd);
+        }
+
         LOG.info("[Lifecycle] sendToCli provider=" + provider
                 + " sessionId=" + (state.getSessionId() != null ? state.getSessionId() : "(new)")
-                + ", cwd=" + state.getCwd()
+                + ", cwd=" + guardedCwd
                 + ", modelRaw=" + state.getModel()
                 + ", modelCli=" + (modelForCli != null ? modelForCli : "(config-default)")
                 + ", effort=" + effort
@@ -450,7 +533,7 @@ public class SessionSendService {
                 channelId,
                 finalInput,
                 state.getSessionId(),
-                state.getCwd(),
+                guardedCwd,
                 modelForCli != null ? modelForCli : "",
                 effort,
                 attachments,

@@ -163,7 +163,7 @@ const App = () => {
     activeProviderConfig, claudeSettingsAlwaysThinkingEnabled,
     reasoningEffort, codexFastMode, dshPreset, streamingEnabledSetting, sendShortcut, autoOpenFileEnabled,
     longContextEnabled,
-    usagePercentage, usageUsedTokens, usageMaxTokens,
+    usagePercentage, usageUsedTokens, usageMaxTokens, geminiFamilies, geminiModels,
     setPermissionMode, setCurrentProvider,
     setClaudePermissionMode, setCodexPermissionMode,
     setSelectedClaudeModel, setSelectedCodexModel,
@@ -657,6 +657,8 @@ const App = () => {
               usagePercentage={usagePercentage}
               usageUsedTokens={usageUsedTokens}
               usageMaxTokens={usageMaxTokens}
+              geminiFamilies={geminiFamilies}
+              geminiModels={geminiModels}
               onModeSelect={handleModeSelect}
               onModelSelect={handleModelSelect}
               onAgentSelect={handleAgentSelect}

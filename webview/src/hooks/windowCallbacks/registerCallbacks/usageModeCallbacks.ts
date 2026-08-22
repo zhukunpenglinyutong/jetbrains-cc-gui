@@ -14,6 +14,7 @@ import {
   isValidPermissionMode,
   normalizeClaudeModelId,
   strip1MContextSuffix,
+  toGeminiFamilyId,
 } from '../../../components/ChatInputBox/types';
 import { drainPendingSettings, startInitialSettingsRequest } from '../settingsBootstrap';
 import { clampPermissionDialogTimeoutSeconds } from '../../../utils/permissionDialogTimeout';
@@ -27,8 +28,10 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
     setCurrentProvider,
     setClaudePermissionMode,
     setCodexPermissionMode,
+    setGeminiPermissionMode,
     setSelectedClaudeModel,
     setSelectedCodexModel,
+    setSelectedGeminiModel,
     setLongContextEnabled,
     setReasoningEffort,
     setCodexFastMode,
@@ -90,6 +93,8 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
       setPermissionMode((prev) => (prev === nextMode ? prev : nextMode));
       if (activeProvider === 'codex') {
         setCodexPermissionMode((prev) => (prev === nextMode ? prev : nextMode));
+      } else if (activeProvider === 'gemini') {
+        setGeminiPermissionMode?.((prev) => (prev === nextMode ? prev : nextMode));
       } else {
         setClaudePermissionMode((prev) => (prev === nextMode ? prev : nextMode));
       }
@@ -99,12 +104,20 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
   window.onModeChanged = (mode) => updateMode(mode as PermissionMode);
   window.onModeReceived = (mode) => updateMode(mode as PermissionMode);
 
+  const applyGeminiModelFromBackend = (modelId: string) => {
+    // Backend stores full agy slugs (...-high / ...-thinking). UI selection is family base only.
+    const family = toGeminiFamilyId(modelId) || modelId;
+    setSelectedGeminiModel?.(family);
+  };
+
   window.onModelChanged = (modelId) => {
     const provider = currentProviderRef.current;
     if (provider === 'claude') {
       setSelectedClaudeModel(normalizeClaudeModelId(modelId));
     } else if (provider === 'codex') {
       setSelectedCodexModel(modelId);
+    } else if (provider === 'gemini') {
+      applyGeminiModelFromBackend(modelId);
     }
   };
 
@@ -113,6 +126,8 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
       setSelectedClaudeModel(normalizeClaudeModelId(modelId));
     } else if (provider === 'codex') {
       setSelectedCodexModel(modelId);
+    } else if (provider === 'gemini') {
+      applyGeminiModelFromBackend(modelId);
     }
   };
 
