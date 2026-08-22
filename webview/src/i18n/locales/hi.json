@@ -349,7 +349,16 @@
     "providerTab": {
       "claude": "Claude Code",
       "codex": "Codex",
-      "cli": "CLI"
+      "cli": "CLI",
+      "grok": "Grok"
+    },
+    "grok": {
+      "title": "Grok JSON कॉन्फ़िगरेशन",
+      "desc": "JSON प्रारूप में Grok सेटिंग्स कॉन्फ़िगर करें।",
+      "editorHint": "अपना कॉन्फ़िगरेशन नीचे संपादित करें।",
+      "save": "कॉन्फ़िगरेशन सहेजें",
+      "saving": "सहेजा जा रहा है...",
+      "invalidJson": "अमान्य JSON प्रारूप"
     },
     "pluginModels": {
       "title": "कस्टम मॉडल",
