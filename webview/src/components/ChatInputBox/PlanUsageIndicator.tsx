@@ -110,8 +110,11 @@ export const PlanUsageIndicator: React.FC<PlanUsageIndicatorProps> = memo(({
         }),
       );
     }
+    if (snapshot?.level) {
+      lines.push(snapshot.level.toUpperCase());
+    }
     return lines.join('\n');
-  }, [present, snapshot?.message, tp, fullReset, display, windows, worstColor, color, t]);
+  }, [present, snapshot?.message, snapshot?.level, tp, fullReset, display, windows, worstColor, color, t]);
 
   if (status === 'idle') return null;
 
