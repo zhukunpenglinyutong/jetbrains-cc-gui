@@ -3,6 +3,8 @@ import {
   CLAUDE_MODELS,
   CODEX_MODELS,
   GROK_MODELS,
+  OMP_MODELS,
+  OMP_ROLE_MODELS,
 } from './types';
 import { buildCodexModelList } from './codexModelList';
 import {
@@ -20,6 +22,11 @@ export interface ResolveProviderModelsInput {
    * for Codex (see buildCodexModelList).
    */
   cliCatalogHasEntries?: boolean;
+  /**
+   * Dynamic OMP model roles (useOmpRoles). Absent/empty → static
+   * smol/slow/plan role entries. Only consumed for provider 'omp'.
+   */
+  cliRoles?: ModelInfo[];
   claudeCustomModels?: ModelInfo[];
   codexCustomModels?: ModelInfo[];
   claudeMapping?: ClaudeModelMapping | null;
@@ -37,6 +44,7 @@ export function resolveProviderModels({
   provider,
   cliModels,
   cliCatalogHasEntries = false,
+  cliRoles,
   claudeCustomModels = [],
   codexCustomModels = [],
   claudeMapping = null,
@@ -58,6 +66,21 @@ export function resolveProviderModels({
   if (provider === 'kimi' || provider === 'opencode' || provider === 'pi' || provider === 'dsh') {
     // Runtime catalog from the CLI/host (static fallback list when offline).
     return cliModels;
+  }
+
+  if (provider === 'omp') {
+    // Built-ins first: 'auto' plus the role entries (dynamic from listModels,
+    // static smol/slow/plan until loaded), then the dynamic catalog appended.
+    // Dedupe by id — the role selector entries win on collision, and the
+    // static-fallback 'auto' must not duplicate the OMP_MODELS one.
+    const roles = cliRoles && cliRoles.length > 0 ? cliRoles : OMP_ROLE_MODELS;
+    const merged = [...OMP_MODELS, ...roles, ...cliModels];
+    const seenIds = new Set<string>();
+    return merged.filter((m) => {
+      if (seenIds.has(m.id)) return false;
+      seenIds.add(m.id);
+      return true;
+    });
   }
 
   // Claude (default)

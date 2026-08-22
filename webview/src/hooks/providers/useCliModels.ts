@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { sendBridgeEvent } from '../../utils/bridge';
 import type { ModelInfo } from '../../components/ChatInputBox/types';
-import { CODEX_MODELS, DSH_MODELS, GROK_MODELS, KIMI_MODELS, OPENCODE_MODELS, PI_MODELS } from '../../components/ChatInputBox/types';
+import { CODEX_MODELS, DSH_MODELS, GROK_MODELS, KIMI_MODELS, OMP_MODELS, OMP_ROLE_MODELS, OPENCODE_MODELS, PI_MODELS } from '../../components/ChatInputBox/types';
 import { isCliOnlyProvider } from './cliProviders';
 import { subscribeActiveCodexProvider } from '../../utils/runtimeProviderCapabilities';
 
@@ -19,11 +19,33 @@ const modelsCache: CliModelsByProvider = {};
 const defaultModelCache: Record<string, string> = {};
 const catalogHasEntriesCache: Record<string, boolean> = {};
 
+/**
+ * Dynamic model roles from the listModels payload (`roles: [{id,label,description}]`,
+ * description = resolved model selector). Empty until a payload with roles
+ * arrives; omp consumers fall back to the static smol/slow/plan entries.
+ */
+const rolesCache: Record<string, ModelInfo[]> = {};
+const rolesListeners = new Set<() => void>();
+/** Stable empty snapshot — useSyncExternalStore requires cached references. */
+const NO_ROLES: ModelInfo[] = [];
+
+function notifyRolesListeners() {
+  for (const listener of rolesListeners) listener();
+}
+
+function subscribeRoles(listener: () => void): () => void {
+  rolesListeners.add(listener);
+  return () => {
+    rolesListeners.delete(listener);
+  };
+}
+
 /** Test-only: clear module caches between cases. */
 export function __resetCliModelsCacheForTests() {
   for (const key of Object.keys(modelsCache)) delete modelsCache[key];
   for (const key of Object.keys(defaultModelCache)) delete defaultModelCache[key];
   for (const key of Object.keys(catalogHasEntriesCache)) delete catalogHasEntriesCache[key];
+  for (const key of Object.keys(rolesCache)) delete rolesCache[key];
 }
 
 function fallbackModels(providerId: string): ModelInfo[] {
@@ -31,6 +53,7 @@ function fallbackModels(providerId: string): ModelInfo[] {
   if (providerId === 'kimi') return KIMI_MODELS;
   if (providerId === 'opencode') return OPENCODE_MODELS;
   if (providerId === 'pi') return PI_MODELS;
+  if (providerId === 'omp') return OMP_MODELS;
   if (providerId === 'dsh') return DSH_MODELS;
   if (providerId === 'codex') return CODEX_MODELS;
   return [];
@@ -113,8 +136,8 @@ export function useCliModels(currentProvider: string) {
   }, [clearPendingLoad]);
 
   useEffect(() => {
-    const handler = (dataOrStr: string | { provider?: string; models?: unknown; success?: boolean; error?: string; defaultModel?: unknown }) => {
-      let payload: { provider?: string; models?: unknown; success?: boolean; error?: string; defaultModel?: unknown } | null = null;
+    const handler = (dataOrStr: string | { provider?: string; models?: unknown; roles?: unknown; success?: boolean; error?: string; defaultModel?: unknown }) => {
+      let payload: { provider?: string; models?: unknown; roles?: unknown; success?: boolean; error?: string; defaultModel?: unknown } | null = null;
       if (typeof dataOrStr === 'string') {
         try {
           payload = JSON.parse(dataOrStr);
@@ -130,6 +153,10 @@ export function useCliModels(currentProvider: string) {
       const resolvedModels = models.length > 0 ? models : fallbackModels(provider);
       modelsCache[provider] = resolvedModels;
       catalogHasEntriesCache[provider] = models.length > 0;
+      // Dynamic model roles (omp listModels ≥ roles support). Missing/invalid
+      // roles → [] so consumers keep their static fallback.
+      rolesCache[provider] = normalizeModels(payload.roles);
+      notifyRolesListeners();
       setModelsByProvider((prev) => ({
         ...prev,
         [provider]: resolvedModels,
@@ -242,3 +269,15 @@ export function useCliModels(currentProvider: string) {
 }
 
 export type UseCliModelsReturn = ReturnType<typeof useCliModels>;
+
+/**
+ * Dynamic OMP model roles discovered via the listModels payload (roles arrive
+ * through `window.setCliModels` regardless of which provider is active, so
+ * this subscribes directly to the module-level roles cache).
+ * Falls back to the static smol/slow/plan role entries until a payload with
+ * roles arrives (CLI missing, old omp without roles support, fetch failure).
+ */
+export function useOmpRoles(): ModelInfo[] {
+  const roles = useSyncExternalStore(subscribeRoles, () => rolesCache.omp ?? NO_ROLES);
+  return roles.length > 0 ? roles : OMP_ROLE_MODELS;
+}

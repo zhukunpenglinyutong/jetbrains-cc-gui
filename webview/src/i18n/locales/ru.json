@@ -237,7 +237,8 @@
           "grok": "Grok CLI",
           "kimi": "Kimi CLI",
           "opencode": "OpenCode",
-          "pi": "PI CLI"
+          "pi": "PI CLI",
+          "omp": "OMP CLI"
         },
         "currentProviderAuto": "Currently using automatic selection: {{provider}}",
         "currentProviderManual": "Currently using manually selected provider: {{provider}}",
@@ -869,6 +870,10 @@
         "pi": {
           "name": "PI CLI",
           "description": "Минималистичный терминальный агент для кодирования с поддержкой нескольких провайдеров"
+        },
+        "omp": {
+          "name": "OMP CLI",
+          "description": "Терминальный агент для кодирования Oh My Pi с поддержкой нескольких провайдеров"
         }
       },
       "installDialog": {
@@ -1664,6 +1669,28 @@
       "description": "Режим без вмешательства. Codex выполняет правки и команды немедленно."
     }
   },
+  "ompModes": {
+    "default": {
+      "label": "По умолчанию",
+      "tooltip": "Использовать выбранную модель (или OMP auto)",
+      "description": "Использует модель, выбранную в выпадающем списке, или модель OMP CLI по умолчанию при значении Auto."
+    },
+    "smol": {
+      "label": "Smol",
+      "tooltip": "Быстрая роль модели (omp --model smol)",
+      "description": "Запускает этот диалог с моделью, настроенной для роли smol в omp. Переопределяет выбор в списке моделей."
+    },
+    "slow": {
+      "label": "Slow",
+      "tooltip": "Роль модели для рассуждений (omp --model slow)",
+      "description": "Запускает этот диалог с моделью, настроенной для роли slow в omp. Переопределяет выбор в списке моделей."
+    },
+    "plan": {
+      "label": "Plan",
+      "tooltip": "Роль модели для планирования (omp --model plan)",
+      "description": "Запускает этот диалог с моделью, настроенной для роли plan в omp. Переопределяет выбор в списке моделей."
+    }
+  },
   "providers": {
     "claude": {
       "label": "Claude Code"
@@ -1679,6 +1706,9 @@
     },
     "pi": {
       "label": "PI CLI"
+    },
+    "omp": {
+      "label": "OMP CLI"
     }
   },
   "promptEnhancer": {

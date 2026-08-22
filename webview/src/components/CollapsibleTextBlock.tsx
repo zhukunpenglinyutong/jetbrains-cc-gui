@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import DOMPurify from 'dompurify';
 import { openFile } from '../utils/bridge';
+import { looksLikePathSegment } from '../utils/pathSegment';
 
 interface CollapsibleTextBlockProps {
   content: string;
@@ -25,23 +26,13 @@ function escapeHtml(text: string): string {
 }
 
 /**
- * Convert @path references into compact clickable `<a>` links at display time.
- *
- * Before: "@C:\Users\Bob\proj\src\app.ts#L10-20"
- * After:  "<a href=... data-linkify=file>@app.ts#L10-20</a>"
- *
- * The href preserves the full absolute path (with :line format for navigation).
- * Protocol layer text sent to the AI is unchanged — this transformation is
- * display-only.
- */
-/**
  * Extract a file path starting after `@` at position `start` in `text`.
  * Returns `[fullMatch, filePath, lineStart?, lineEnd?]` or null.
  *
  * Scans forward character-by-character, allowing spaces inside the path
  * when the next word segment looks like a path continuation (contains
- * a path separator: `\` or `/`).  A trailing `#L10-20` line marker is
- * parsed into separate line-start / line-end groups.
+ * a path separator or a file extension).  A trailing `#L10-20` line marker
+ * is parsed into separate line-start / line-end groups.
  */
 function extractAtFilePath(
   text: string,
@@ -66,7 +57,7 @@ function extractAtFilePath(
         peekRemainder[0] !== '\n' &&
         peekRemainder[0] !== '\r' &&
         peekRemainder[0] !== '@' &&
-        /[\\/]/.test(peekRemainder.split(/\s/)[0])
+        looksLikePathSegment(peekRemainder.split(/\s/)[0])
       ) {
         endPos++; // space is inside the path
         continue;
@@ -97,7 +88,18 @@ function extractAtFilePath(
   return { rawPath, lineStart, lineEnd };
 }
 
-/** @visibleForTesting */
+/**
+ * Convert @path references into compact clickable `<a>` links at display time.
+ *
+ * Before: "@C:\Users\Bob\proj\src\app.ts#L10-20"
+ * After:  "<a href=... data-linkify=file>@app.ts#L10-20</a>"
+ *
+ * The href preserves the full absolute path (with :line format for navigation).
+ * Protocol layer text sent to the AI is unchanged — this transformation is
+ * display-only.
+ *
+ * @visibleForTesting
+ */
 export function convertAtFileRefsToLinks(text: string): string {
   if (!text || !text.includes('@')) {
     return escapeHtml(text);

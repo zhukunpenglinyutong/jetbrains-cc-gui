@@ -87,6 +87,70 @@ public class NodeProcessRegistryHelpersTest {
         assertNull(NodeProcessRegistry.detectProviderFromCmd(null));
     }
 
+    // Grok/Gemini are the providers added by the persistent GrokSDKBridge /
+    // Gemini runtime work. Mislabeling their live channel-manager daemon as an
+    // orphan is exactly the "Kill all orphans tears down a live ACP turn"
+    // hazard, so their classification branches must stay pinned.
+
+    @Test
+    public void detectProviderClassifiesGrokChannelManager() {
+        // channel-manager fingerprint is the clearer signal than shared daemon.js
+        assertEquals("grok",
+                NodeProcessRegistry.detectProviderFromCmd("node /path/channel-manager.js grok send"));
+    }
+
+    @Test
+    public void detectProviderClassifiesBareGrokCommand() {
+        // grok appears without channel-manager (e.g. grok-agent stdio) — still grok
+        assertEquals("grok",
+                NodeProcessRegistry.detectProviderFromCmd("node /path/grok-agent.js --stdio"));
+    }
+
+    @Test
+    public void detectProviderClassifiesGeminiChannelManager() {
+        assertEquals("gemini",
+                NodeProcessRegistry.detectProviderFromCmd("node /path/channel-manager.js gemini send"));
+    }
+
+    @Test
+    public void detectProviderClassifiesBareGeminiCommand() {
+        assertEquals("gemini",
+                NodeProcessRegistry.detectProviderFromCmd("node /path/gemini-agent.js --stdio"));
+    }
+
+    @Test
+    public void detectProviderChannelManagerGrokBeatsDaemonJsAmbiguity() {
+        // A grok channel-manager invocation may also contain daemon.js in its
+        // argv; the channel-manager+grok check must win over the daemon.js→claude
+        // fallback, otherwise the live Grok daemon is mislabeled "claude".
+        assertEquals("grok",
+                NodeProcessRegistry.detectProviderFromCmd("node /path/daemon.js channel-manager grok"));
+    }
+
+    @Test
+    public void detectProviderIgnoresCoincidentalGrokSubstring() {
+        // "grokky" contains "grok" but is not the provider — word-boundary
+        // matching must not mislabel a process that merely lives under such a path.
+        assertNull(
+                NodeProcessRegistry.detectProviderFromCmd("node /home/grokky/tools/channel-manager.js kimi send"));
+        assertNull(
+                NodeProcessRegistry.detectProviderFromCmd("node /home/grokky/some-agent.js --stdio"));
+    }
+
+    @Test
+    public void detectProviderIgnoresCoincidentalGeminiSubstring() {
+        // "mygemini" has no word boundary around "gemini" — must not match.
+        assertNull(
+                NodeProcessRegistry.detectProviderFromCmd("node /home/mygemini/channel-manager.js kimi send"));
+    }
+
+    @Test
+    public void detectProviderMatchesGrokHomeStylePaths() {
+        // Hyphen/dot separators are word boundaries, so real grok paths still match.
+        assertEquals("grok",
+                NodeProcessRegistry.detectProviderFromCmd("node /home/u/.antig-grok/grok-agent.js --stdio"));
+    }
+
     // ============================================================================
     // Ownership check — prevents IDEA from claiming PyCharm's daemons as orphans
     // (and vice-versa) when both run CC GUI side-by-side.

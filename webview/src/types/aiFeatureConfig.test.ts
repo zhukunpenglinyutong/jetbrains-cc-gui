@@ -59,6 +59,7 @@ describe('pickAutoAiFeatureProvider', () => {
       kimi: true,
       opencode: true,
       pi: true,
+      omp: true,
     })).toBe('codex');
     expect(pickAutoAiFeatureProvider({
       claude: true,
@@ -67,6 +68,7 @@ describe('pickAutoAiFeatureProvider', () => {
       kimi: false,
       opencode: false,
       pi: false,
+      omp: false,
     })).toBe('claude');
     expect(pickAutoAiFeatureProvider({
       claude: false,
@@ -75,6 +77,7 @@ describe('pickAutoAiFeatureProvider', () => {
       kimi: true,
       opencode: false,
       pi: false,
+      omp: false,
     })).toBe('grok');
   });
 
@@ -86,6 +89,7 @@ describe('pickAutoAiFeatureProvider', () => {
       kimi: false,
       opencode: false,
       pi: false,
+      omp: false,
     }, 'grok')).toBe('grok');
     expect(pickAutoAiFeatureProvider({
       claude: true,
@@ -94,6 +98,7 @@ describe('pickAutoAiFeatureProvider', () => {
       kimi: false,
       opencode: false,
       pi: false,
+      omp: false,
     }, 'grok')).toBe('codex');
     expect(pickAutoAiFeatureProvider({
       claude: true,
@@ -102,6 +107,7 @@ describe('pickAutoAiFeatureProvider', () => {
       kimi: false,
       opencode: false,
       pi: false,
+      omp: false,
     }, 'unknown-cli')).toBe('codex');
   });
 });

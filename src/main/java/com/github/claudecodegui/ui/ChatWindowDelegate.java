@@ -26,6 +26,7 @@ import com.github.claudecodegui.handler.PromptHandler;
 import com.github.claudecodegui.handler.provider.CustomModelPricingHandler;
 import com.github.claudecodegui.handler.provider.ModelProviderHandler;
 import com.github.claudecodegui.handler.provider.ProviderHandler;
+import com.github.claudecodegui.handler.provider.claude.ClaudePlanUsageHandler;
 import com.github.claudecodegui.handler.RewindHandler;
 import com.github.claudecodegui.handler.SessionHandler;
 import com.github.claudecodegui.handler.SettingsHandler;
@@ -83,6 +84,9 @@ public class ChatWindowDelegate {
         Project getProject();
         ClaudeSDKBridge getClaudeSDKBridge();
         CodexSDKBridge getCodexSDKBridge();
+        default com.github.claudecodegui.provider.grok.GrokSDKBridge getGrokSDKBridge() {
+            return null;
+        }
         Map<String, MarkerCliBridge> getCliBridges();
         ClaudeSession getSession();
         CodemossSettingsService getSettingsService();
@@ -188,23 +192,33 @@ public class ChatWindowDelegate {
                 claudeSDKBridge.verifyAndCacheNodePath(path);
                 LOG.info("Using manually configured Node.js path: " + path);
             } else {
-                LOG.info("No saved Node.js path found, attempting auto-detection...");
-                com.github.claudecodegui.model.NodeDetectionResult detected =
-                    claudeSDKBridge.detectNodeWithDetails();
+                // Auto-detection spawns shell processes which block the calling thread for several
+                // seconds per attempt. Running this on the EDT freezes the entire IDE. Offload to
+                // a pooled thread; the bridges fall back to invoking "node" by name until the
+                // detection completes and updates them.
+                LOG.info("No saved Node.js path found, scheduling auto-detection on background thread...");
+                ApplicationManager.getApplication().executeOnPooledThread(() -> {
+                    try {
+                        com.github.claudecodegui.model.NodeDetectionResult detected =
+                            claudeSDKBridge.detectNodeWithDetails();
 
-                if (detected != null && detected.isFound() && detected.getNodePath() != null) {
-                    String detectedPath = detected.getNodePath();
-                    String detectedVersion = detected.getNodeVersion();
+                        if (detected != null && detected.isFound() && detected.getNodePath() != null) {
+                            String detectedPath = detected.getNodePath();
+                            String detectedVersion = detected.getNodeVersion();
 
-                    props.setValue(NODE_PATH_PROPERTY_KEY, detectedPath);
-                    applyNodePathToBridges(detectedPath);
-                    claudeSDKBridge.verifyAndCacheNodePath(detectedPath);
+                            props.setValue(NODE_PATH_PROPERTY_KEY, detectedPath);
+                            applyNodePathToBridges(detectedPath);
+                            claudeSDKBridge.verifyAndCacheNodePath(detectedPath);
 
-                    LOG.info("Auto-detected Node.js: " + detectedPath + " (" + detectedVersion + ")");
-                } else {
-                    LOG.warn("Failed to auto-detect Node.js path. Error: " +
-                        (detected != null ? detected.getErrorMessage() : "Unknown error"));
-                }
+                            LOG.info("Auto-detected Node.js: " + detectedPath + " (" + detectedVersion + ")");
+                        } else {
+                            LOG.warn("Failed to auto-detect Node.js path. Error: " +
+                                (detected != null ? detected.getErrorMessage() : "Unknown error"));
+                        }
+                    } catch (Exception e) {
+                        LOG.error("Failed to auto-detect Node.js path: " + e.getMessage(), e);
+                    }
+                });
             }
         } catch (Exception e) {
             LOG.error("Failed to load Node.js path: " + e.getMessage(), e);
@@ -319,6 +333,7 @@ public class ChatWindowDelegate {
                 project,
                 claudeSDKBridge,
                 codexSDKBridge,
+                host.getGrokSDKBridge(),
                 settingsService,
                 jsCallback,
                 host::isActiveContent,
@@ -338,6 +353,7 @@ public class ChatWindowDelegate {
         host.setMessageDispatcher(messageDispatcher);
 
         messageDispatcher.registerHandler(new ProviderHandler(handlerContext));
+        messageDispatcher.registerHandler(new ClaudePlanUsageHandler(handlerContext));
         messageDispatcher.registerHandler(new CustomModelPricingHandler(handlerContext, settingsService));
         messageDispatcher.registerHandler(new McpServerHandler(handlerContext));
         messageDispatcher.registerHandler(new McpMarketplaceHandler(handlerContext));

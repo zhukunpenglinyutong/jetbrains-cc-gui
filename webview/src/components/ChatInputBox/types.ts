@@ -176,9 +176,23 @@ export interface SelectedAgent {
 // ============================================================
 
 /**
- * Permission mode for conversations
+ * Permission mode for conversations.
+ *
+ * The union literals are the static modes known to the Java backend
+ * (SessionState.VALID_PERMISSION_MODES). The `(string & {})` tail keeps
+ * literal autocomplete while allowing dynamic OMP model-role ids (e.g.
+ * 'designer') discovered at runtime via the listModels payload — those are
+ * NEVER sent as `set_mode` (use isValidPermissionMode to gate that); the
+ * role travels via `set_model` instead.
  */
-export type PermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions';
+export type PermissionMode =
+  | 'default'
+  | 'acceptEdits'
+  | 'plan'
+  | 'bypassPermissions'
+  | 'smol'
+  | 'slow'
+  | (string & {});
 
 /**
  * Mode information
@@ -223,6 +237,20 @@ export const AVAILABLE_MODES: ModeInfo[] = [
     icon: 'codicon-zap',
     tooltip: 'Bypass all permission checks',
     description: 'Fully automated, bypasses all permission checks [use with caution]',
+  },
+  {
+    id: 'smol',
+    label: 'Smol Mode',
+    icon: 'codicon-zap',
+    tooltip: 'Fast model role (OMP only)',
+    description: 'Runs with the model configured for omp\'s smol role',
+  },
+  {
+    id: 'slow',
+    label: 'Slow Mode',
+    icon: 'codicon-lightbulb',
+    tooltip: 'Reasoning model role (OMP only)',
+    description: 'Runs with the model configured for omp\'s slow role',
   },
 ];
 
@@ -472,6 +500,40 @@ export const PI_MODELS: ModelInfo[] = [
   },
 ];
 
+/** OMP default: omit `--model` so CLI resolves its own default. */
+export const OMP_DEFAULT_MODEL_ID = 'auto';
+
+export const OMP_MODELS: ModelInfo[] = [
+  {
+    id: OMP_DEFAULT_MODEL_ID,
+    label: 'OMP Auto',
+    description: 'Use OMP CLI default model',
+  },
+];
+
+/**
+ * OMP model roles — `omp --model <role>` resolves role names natively.
+ * These always appear in the omp model dropdown; the mode selector is a
+ * shortcut that sets the model to the same role id.
+ */
+export const OMP_ROLE_MODELS: ModelInfo[] = [
+  {
+    id: 'smol',
+    label: 'Smol (role)',
+    description: 'Fast model role — resolved by OMP CLI (--model smol)',
+  },
+  {
+    id: 'slow',
+    label: 'Slow (role)',
+    description: 'Reasoning model role — resolved by OMP CLI (--model slow)',
+  },
+  {
+    id: 'plan',
+    label: 'Plan (role)',
+    description: 'Planning model role — resolved by OMP CLI (--model plan)',
+  },
+];
+
 /**
  * DSH default: skip `session.selectModel` so the host serves whatever the DSH
  * Web UI configured. The runtime catalog (`provider/model` ids) is fetched
@@ -486,6 +548,40 @@ export const DSH_MODELS: ModelInfo[] = [
     description: 'Use the model configured in the DSH Web UI',
   },
 ];
+
+/** No DSH agent preset: use the default headless composition. */
+export const DSH_PRESET_NONE = '';
+
+export interface DshPresetOption {
+  id: string;
+  label?: string;
+  labelKey?: string;
+  descriptionKey?: string;
+}
+
+export const DSH_PRESETS: DshPresetOption[] = [
+  { id: DSH_PRESET_NONE, labelKey: 'dshPresets.none.label', descriptionKey: 'dshPresets.none.description' },
+  { id: 'standard', labelKey: 'dshPresets.standard.label', descriptionKey: 'dshPresets.standard.description' },
+  { id: 'code', labelKey: 'dshPresets.code.label', descriptionKey: 'dshPresets.code.description' },
+  { id: 'minimal', labelKey: 'dshPresets.minimal.label', descriptionKey: 'dshPresets.minimal.description' },
+  { id: 'cordis', labelKey: 'dshPresets.cordis.label', descriptionKey: 'dshPresets.cordis.description' },
+];
+
+export const getUserDshPresetOptions = (): DshPresetOption[] => {
+  const injected = window.__INITIAL_DSH_PRESETS__;
+  if (!Array.isArray(injected)) return [];
+  const curated = new Set(DSH_PRESETS.map((preset) => preset.id));
+  return injected
+    .filter((id): id is string => typeof id === 'string' && id.trim() !== '' && !curated.has(id))
+    .map((id) => ({ id, label: id, descriptionKey: 'dshPresets.user.description' }));
+};
+
+export type DshPreset = string;
+
+export const isValidDshPreset = (value: unknown): value is DshPreset =>
+  typeof value === 'string'
+  && (DSH_PRESETS.some((preset) => preset.id === value)
+    || getUserDshPresetOptions().some((preset) => preset.id === value));
 
 /**
  * Available models (backward compatibility)
@@ -514,6 +610,7 @@ export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
   { id: 'kimi', label: 'Kimi CLI', icon: 'codicon-terminal', enabled: true, beta: true },
   { id: 'opencode', label: 'OpenCode', icon: 'codicon-terminal', enabled: true, beta: true },
   { id: 'pi', label: 'PI CLI', icon: 'codicon-terminal', enabled: true, beta: true },
+  { id: 'omp', label: 'OMP CLI', icon: 'codicon-terminal', enabled: true, beta: true },
   { id: 'dsh', label: 'DeepSeek Harness', icon: 'codicon-terminal', enabled: true, beta: true },
 ];
 
@@ -726,8 +823,12 @@ export interface ChatInputBoxProps {
   onReasoningChange?: (effort: ReasoningEffort) => void;
   /** Codex speed mode */
   codexFastMode?: CodexFastMode;
+  /** DSH agent preset */
+  dshPreset?: string;
   /** Switch Codex speed mode callback */
   onCodexFastModeChange?: (mode: CodexFastMode) => void;
+  /** Switch DSH agent preset callback */
+  onDshPresetChange?: (preset: string) => void;
   /** Toggle thinking mode */
   onToggleThinking?: (enabled: boolean) => void;
   /** Whether streaming is enabled */
@@ -811,6 +912,8 @@ export interface ButtonAreaProps {
   reasoningEffort?: ReasoningEffort;
   /** Codex speed mode */
   codexFastMode?: CodexFastMode;
+  /** DSH agent preset */
+  dshPreset?: string;
 
   // Event callbacks
   onSubmit?: () => void;
@@ -822,6 +925,8 @@ export interface ButtonAreaProps {
   onReasoningChange?: (effort: ReasoningEffort) => void;
   /** Switch Codex speed mode callback */
   onCodexFastModeChange?: (mode: CodexFastMode) => void;
+  /** Switch DSH agent preset callback */
+  onDshPresetChange?: (preset: string) => void;
   /** Enhance prompt callback */
   onEnhancePrompt?: () => void;
   /** Whether always thinking enabled */

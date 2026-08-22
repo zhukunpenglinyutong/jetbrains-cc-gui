@@ -43,17 +43,19 @@ public class CodemossSettingsServicePromptEnhancerConfigTest {
         assertEquals("auto", config.get("resolutionSource").getAsString());
         assertTrue(config.getAsJsonObject("availability").get("claude").getAsBoolean());
         assertTrue(config.getAsJsonObject("availability").get("codex").getAsBoolean());
-        assertEquals("claude-sonnet-4-6", config.getAsJsonObject("models").get("claude").getAsString());
+        assertEquals("claude-sonnet-5", config.getAsJsonObject("models").get("claude").getAsString());
         assertEquals("gpt-5.5", config.getAsJsonObject("models").get("codex").getAsString());
         // Same CLI set as the main chat selector
         assertEquals("grok", config.getAsJsonObject("models").get("grok").getAsString());
         assertEquals("auto", config.getAsJsonObject("models").get("kimi").getAsString());
         assertEquals("opencode-default", config.getAsJsonObject("models").get("opencode").getAsString());
         assertEquals("auto", config.getAsJsonObject("models").get("pi").getAsString());
+        assertEquals("auto", config.getAsJsonObject("models").get("omp").getAsString());
         assertTrue(config.getAsJsonObject("availability").has("grok"));
         assertTrue(config.getAsJsonObject("availability").has("kimi"));
         assertTrue(config.getAsJsonObject("availability").has("opencode"));
         assertTrue(config.getAsJsonObject("availability").has("pi"));
+        assertTrue(config.getAsJsonObject("availability").has("omp"));
     }
 
     @Test
@@ -140,7 +142,7 @@ public class CodemossSettingsServicePromptEnhancerConfigTest {
 
         CodemossSettingsService service = new CodemossSettingsService();
         JsonObject models = new JsonObject();
-        models.addProperty("claude", "claude-sonnet-4-6");
+        models.addProperty("claude", "claude-sonnet-5");
         models.addProperty("codex", "gpt-5.5");
         models.addProperty("grok", "grok");
 

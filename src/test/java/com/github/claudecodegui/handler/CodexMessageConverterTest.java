@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -28,6 +29,52 @@ public class CodexMessageConverterTest {
         assertEquals("tool_result", toolResult.get("type").getAsString());
         assertEquals("call-1", toolResult.get("tool_use_id").getAsString());
         assertEquals("command executed successfully", toolResult.get("content").getAsString());
+        assertFalse(toolResult.get("is_error").getAsBoolean());
+    }
+
+    @Test
+    public void toolResultUsesExplicitErrorStatus() {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("call_id", "call-error-status");
+        payload.addProperty("status", "error");
+        payload.addProperty("output", "request finished");
+
+        JsonObject result = CodexMessageConverter.convertFunctionCallOutputToToolResult(payload, null);
+
+        assertTrue(extractFirstToolResult(result).get("is_error").getAsBoolean());
+    }
+
+    @Test
+    public void customToolResultUsesKnownErrorPrefix() {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("call_id", "call-parse-error");
+        payload.addProperty("output", "failed to parse function arguments: missing field message");
+
+        JsonObject result = CodexMessageConverter.convertCustomToolCallOutputToToolResult(payload, null);
+
+        assertTrue(extractFirstToolResult(result).get("is_error").getAsBoolean());
+    }
+
+    @Test
+    public void benignToolOutputContainingErrorWordsIsNotMarkedAsError() {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("call_id", "call-benign");
+        payload.addProperty("output", "Validation completed; error count: 0; permission denied checks: 0");
+
+        JsonObject result = CodexMessageConverter.convertFunctionCallOutputToToolResult(payload, null);
+
+        assertFalse(extractFirstToolResult(result).get("is_error").getAsBoolean());
+    }
+
+    @Test
+    public void benignToolOutputStartingWithErrorWordIsNotMarkedAsError() {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("call_id", "call-benign-prefix");
+        payload.addProperty("output", "Error handling is implemented and tests passed");
+
+        JsonObject result = CodexMessageConverter.convertFunctionCallOutputToToolResult(payload, null);
+
+        assertFalse(extractFirstToolResult(result).get("is_error").getAsBoolean());
     }
 
     @Test

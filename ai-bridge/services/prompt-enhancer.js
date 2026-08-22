@@ -40,20 +40,22 @@ let codexSdk = null;
 //   [ENHANCED_ERROR]<msg>          — final failure
 
 /** Mirrors chat AVAILABLE_PROVIDERS / webview AiFeatureProvider. */
-const AI_FEATURE_PROVIDERS = ['claude', 'codex', 'grok', 'kimi', 'opencode', 'pi'];
-const CLI_ONLY_PROVIDERS = new Set(['grok', 'kimi', 'opencode', 'pi']);
+const AI_FEATURE_PROVIDERS = ['claude', 'codex', 'grok', 'kimi', 'opencode', 'pi', 'omp'];
+const CLI_ONLY_PROVIDERS = new Set(['grok', 'kimi', 'opencode', 'pi', 'omp']);
 
 const DEFAULT_PROMPT_ENHANCER_CONFIG = {
   provider: null,
   effectiveProvider: 'claude',
   resolutionSource: 'auto',
   models: {
-    claude: 'claude-sonnet-4-6',
+    // claude-sonnet-4-6/4-7 are retired - defaults must stay on live models (#1678, #1693).
+    claude: 'claude-sonnet-5',
     codex: 'gpt-5.5',
     grok: 'grok',
     kimi: 'auto',
     opencode: 'opencode-default',
     pi: 'auto',
+    omp: 'auto',
   },
   availability: {
     claude: false,
@@ -62,6 +64,7 @@ const DEFAULT_PROMPT_ENHANCER_CONFIG = {
     kimi: false,
     opencode: false,
     pi: false,
+    omp: false,
   },
 };
 

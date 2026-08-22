@@ -20,6 +20,7 @@ export const DEFAULT_PROMPT_ENHANCER_CONFIG: PromptEnhancerConfig = {
     kimi: false,
     opencode: false,
     pi: false,
+    omp: false,
   },
 };
 

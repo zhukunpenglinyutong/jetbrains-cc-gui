@@ -197,6 +197,10 @@ public final class CliStatusDetector {
                 dirs.add(join(home, ".pi", "bin"));
                 dirs.add(join(home, ".local", "bin"));
                 break;
+            case OMP:
+                dirs.add(join(home, ".omp", "bin"));
+                dirs.add(join(home, ".local", "bin"));
+                break;
             case DSH:
                 // Hermes (the DSH-native installer) keeps node + dsh together.
                 dirs.add(join(home, ".hermes", "node", "bin"));
@@ -237,6 +241,7 @@ public final class CliStatusDetector {
             case KIMI -> new String[]{"KIMI_BIN", "KIMI_PATH", "KIMI_CLI_PATH", "KIMI_CODE_BIN"};
             case OPENCODE -> new String[]{"OPENCODE_BIN", "OPENCODE_PATH", "OPENCODE_CLI_PATH"};
             case PI -> new String[]{"PI_BIN", "PI_PATH", "PI_CLI_PATH"};
+            case OMP -> new String[]{"OMP_BIN", "OMP_PATH", "OMP_CLI_PATH"};
             case DSH -> new String[]{"DSH_BIN", "DSH_PATH", "DSH_CLI_PATH"};
         };
     }
@@ -434,6 +439,7 @@ public final class CliStatusDetector {
                 join(home, ".opencode", "bin"),
                 join(home, ".grok", "bin"),
                 join(home, ".pi", "bin"),
+                join(home, ".omp", "bin"),
                 join(home, ".local", "bin"),
                 join(home, ".cargo", "bin"),
                 "/opt/homebrew/bin",

@@ -10,7 +10,7 @@ import {
 } from './cli-ask.js';
 
 test('CLI_ASK_PROVIDERS lists headless CLI providers', () => {
-  assert.deepEqual(CLI_ASK_PROVIDERS, ['grok', 'kimi', 'opencode', 'pi']);
+  assert.deepEqual(CLI_ASK_PROVIDERS, ['grok', 'kimi', 'opencode', 'pi', 'omp']);
 });
 
 test('isCliAskProvider accepts only supported CLI ids', () => {
@@ -18,6 +18,7 @@ test('isCliAskProvider accepts only supported CLI ids', () => {
   assert.equal(isCliAskProvider('kimi'), true);
   assert.equal(isCliAskProvider('opencode'), true);
   assert.equal(isCliAskProvider('pi'), true);
+  assert.equal(isCliAskProvider('omp'), true);
   assert.equal(isCliAskProvider('claude'), false);
   assert.equal(isCliAskProvider('codex'), false);
   assert.equal(isCliAskProvider(null), false);

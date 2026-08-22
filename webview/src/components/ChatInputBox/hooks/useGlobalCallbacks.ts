@@ -63,15 +63,29 @@ export function useGlobalCallbacks({
       ) {
         // Cursor inside input box, insert at cursor position
         const range = selection.getRangeAt(0);
-        range.deleteContents();
-        const textNode = document.createTextNode(pathToInsert);
-        range.insertNode(textNode);
+        // File paths arrive from IDE actions (project tree / right-click), not
+        // from typing. A stale non-collapsed selection must not be replaced by
+        // deleteContents() - that wiped the existing content (#1700). Only a
+        // collapsed caret is a real insertion point; otherwise append at end.
+        if (!range.collapsed) {
+          const textNode = document.createTextNode(pathToInsert);
+          editableRef.current.appendChild(textNode);
+          const appendRange = document.createRange();
+          appendRange.setStartAfter(textNode);
+          appendRange.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(appendRange);
+        } else {
+          range.deleteContents();
+          const textNode = document.createTextNode(pathToInsert);
+          range.insertNode(textNode);
 
-        // Move cursor after inserted text
-        range.setStartAfter(textNode);
-        range.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(range);
+          // Move cursor after inserted text
+          range.setStartAfter(textNode);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
       } else {
         // Cursor not inside input box, append to end
         // Use appendChild instead of innerText to avoid breaking existing file tags
@@ -203,6 +217,15 @@ export function useGlobalCallbacks({
       }
 
       const range = selection.getRangeAt(0);
+      // External snippets come from IDE actions (editor selection), never from
+      // typing inside the input. A stale NON-collapsed selection (user last
+      // selected text in the box, then went back to the editor) must not be
+      // replaced by deleteContents() - that wiped the existing content (#1700).
+      // Only a collapsed caret is a real insertion point; otherwise fall back
+      // to appending at the end.
+      if (!range.collapsed) {
+        return false;
+      }
       range.deleteContents();
       const fragment = createTextFragment(`${selectionInfo} `);
       const lastChild = fragment.lastChild;
@@ -279,13 +302,27 @@ export function useGlobalCallbacks({
 
         if (insertAtCaret) {
           const range = selection.getRangeAt(0);
-          range.deleteContents();
-          const tokenNode = document.createTextNode(token);
-          range.insertNode(tokenNode);
-          range.setStartAfter(tokenNode);
-          range.collapse(true);
-          selection.removeAllRanges();
-          selection.addRange(range);
+          // Quote chips arrive from external actions, not from typing. A stale
+          // non-collapsed selection must not be replaced by deleteContents() -
+          // that wiped the existing content (#1700). Fall back to appending.
+          if (!range.collapsed) {
+            editableRef.current.focus();
+            const tokenNode = document.createTextNode(token);
+            editableRef.current.appendChild(tokenNode);
+            const appendRange = document.createRange();
+            appendRange.setStartAfter(tokenNode);
+            appendRange.collapse(true);
+            selection?.removeAllRanges();
+            selection?.addRange(appendRange);
+          } else {
+            range.deleteContents();
+            const tokenNode = document.createTextNode(token);
+            range.insertNode(tokenNode);
+            range.setStartAfter(tokenNode);
+            range.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(range);
+          }
         } else {
           editableRef.current.focus();
           const tokenNode = document.createTextNode(token);

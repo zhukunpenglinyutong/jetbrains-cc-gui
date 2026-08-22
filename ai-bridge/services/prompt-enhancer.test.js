@@ -17,7 +17,7 @@ test('resolvePromptEnhancerRuntimeConfig prefers Codex when auto mode has both p
       effectiveProvider: 'codex',
       resolutionSource: 'auto',
       models: {
-        claude: 'claude-sonnet-4-6',
+        claude: 'claude-sonnet-5',
         codex: 'gpt-5.5',
         grok: 'grok',
       },
@@ -40,7 +40,7 @@ test('resolvePromptEnhancerRuntimeConfig accepts Grok when effectiveProvider is 
       effectiveProvider: 'grok',
       resolutionSource: 'manual',
       models: {
-        claude: 'claude-sonnet-4-6',
+        claude: 'claude-sonnet-5',
         codex: 'gpt-5.5',
         grok: 'grok',
       },
@@ -56,19 +56,20 @@ test('resolvePromptEnhancerRuntimeConfig accepts Grok when effectiveProvider is 
   assert.equal(resolved.model, 'grok');
 });
 
-test('resolvePromptEnhancerRuntimeConfig accepts Kimi / OpenCode / PI CLI providers', () => {
-  for (const provider of ['kimi', 'opencode', 'pi']) {
+test('resolvePromptEnhancerRuntimeConfig accepts Kimi / OpenCode / PI / OMP CLI providers', () => {
+  for (const provider of ['kimi', 'opencode', 'pi', 'omp']) {
     const resolved = resolvePromptEnhancerRuntimeConfig({
       promptEnhancerConfig: {
         provider,
         effectiveProvider: provider,
         resolutionSource: 'manual',
         models: {
-          claude: 'claude-sonnet-4-6',
+          claude: 'claude-sonnet-5',
           codex: 'gpt-5.5',
           kimi: 'kimi-k2',
           opencode: 'opencode/gpt',
           pi: 'pi-fast',
+          omp: 'omp-fast',
         },
         availability: {
           claude: true,
@@ -76,6 +77,7 @@ test('resolvePromptEnhancerRuntimeConfig accepts Kimi / OpenCode / PI CLI provid
           kimi: true,
           opencode: true,
           pi: true,
+          omp: true,
         },
       },
     });
@@ -135,12 +137,12 @@ test('resolveAutoChatModel ignores chat model when provider differs', () => {
   assert.equal(
     resolveAutoChatModel({
       provider: 'claude',
-      configuredModel: 'claude-sonnet-4-6',
+      configuredModel: 'claude-sonnet-5',
       resolutionSource: 'auto',
       chatProvider: 'opencode',
       chatModel: 'opencode/deepseek-v4-flash-free',
     }),
-    'claude-sonnet-4-6'
+    'claude-sonnet-5'
   );
 });
 
@@ -151,7 +153,7 @@ test('resolvePromptEnhancerRuntimeConfig auto follows chat model for OpenCode', 
       effectiveProvider: 'opencode',
       resolutionSource: 'auto',
       models: {
-        claude: 'claude-sonnet-4-6',
+        claude: 'claude-sonnet-5',
         codex: 'gpt-5.5',
         opencode: 'opencode-default',
       },

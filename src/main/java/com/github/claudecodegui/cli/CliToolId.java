@@ -8,6 +8,7 @@ public enum CliToolId {
     KIMI("kimi", "Kimi CLI", "kimi"),
     OPENCODE("opencode", "OpenCode", "opencode"),
     PI("pi", "PI CLI", "pi"),
+    OMP("omp", "OMP CLI", "omp"),
     DSH("dsh", "DeepSeek Harness", "dsh");
 
     private final String id;

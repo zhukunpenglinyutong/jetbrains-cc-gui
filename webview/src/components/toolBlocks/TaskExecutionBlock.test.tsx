@@ -420,4 +420,40 @@ describe('TaskExecutionBlock polling', () => {
     );
     expect(container.querySelector('.tool-status-indicator')?.className).toContain('pending');
   });
+
+  it('uses task identity without rendering Codex spawn_agent message content', () => {
+    mockUseSessionProvider.mockReturnValue('codex');
+    const opaqueMessage = 'gAAAAABopaque-transport-content';
+
+    const { container } = render(
+      <TaskExecutionBlock
+        name="spawn_agent"
+        toolId="call-safe"
+        input={{ task_name: '/root/reviewer', message: opaqueMessage, prompt: opaqueMessage } as any}
+      />,
+    );
+
+    expect(container.querySelector('.task-header')?.textContent).toContain('reviewer');
+    fireEvent.click(container.querySelector('.task-header') as HTMLElement);
+    expect(container.textContent).not.toContain(opaqueMessage);
+  });
+
+  it('loads full details when only a lightweight status snapshot exists', () => {
+    mockUseSessionProvider.mockReturnValue('codex');
+    mockHistories = { 'call-status': { success: true, status: 'running' } };
+
+    const { container } = render(
+      <TaskExecutionBlock
+        name="spawn_agent"
+        toolId="call-status"
+        input={{ task_name: '/root/reviewer', message: 'opaque' } as any}
+      />,
+    );
+
+    fireEvent.click(container.querySelector('.task-header') as HTMLElement);
+    expect(mockSendBridgeEvent).toHaveBeenCalledWith(
+      'load_subagent_session',
+      expect.stringContaining('"toolUseId":"call-status"'),
+    );
+  });
 });

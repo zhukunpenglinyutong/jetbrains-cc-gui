@@ -43,7 +43,7 @@ public class CodemossSettingsServiceCommitAiConfigTest {
         assertEquals("auto", config.get("resolutionSource").getAsString());
         assertTrue(config.getAsJsonObject("availability").get("claude").getAsBoolean());
         assertTrue(config.getAsJsonObject("availability").get("codex").getAsBoolean());
-        assertEquals("claude-sonnet-4-6", config.getAsJsonObject("models").get("claude").getAsString());
+        assertEquals("claude-sonnet-5", config.getAsJsonObject("models").get("claude").getAsString());
         assertEquals("gpt-5.5", config.getAsJsonObject("models").get("codex").getAsString());
     }
 
@@ -134,6 +134,33 @@ public class CodemossSettingsServiceCommitAiConfigTest {
     }
 
     @Test
+    public void shouldMigratePersistedRetiredClaudeModelOnRead() throws Exception {
+        // A config saved while the default was the (now retired) claude-sonnet-4-6
+        // would pin Commit AI to a dead model forever - every generation then fails
+        // with an empty response (#1693). Reading must self-heal the stored id.
+        Path tempHome = Files.createTempDirectory("commit-ai-retired-home");
+        useTemporaryHomeDirectory(tempHome);
+        writeConfig(tempHome, "claude-a", "");
+
+        // Persist the retired id directly into the stored config, as an older
+        // plugin version would have written it.
+        JsonObject config = new JsonObject();
+        JsonObject commitAi = new JsonObject();
+        JsonObject models = new JsonObject();
+        models.addProperty("claude", "claude-sonnet-4-6");
+        commitAi.add("models", models);
+        config.add("commitAi", commitAi);
+        JsonObject root = readConfigJson(tempHome);
+        root.add("commitAi", config.get("commitAi"));
+        writeConfigJson(tempHome, root);
+
+        CodemossSettingsService service = new CodemossSettingsService();
+        JsonObject resolved = invokeGetCommitAiConfig(service);
+
+        assertEquals("claude-sonnet-5", resolved.getAsJsonObject("models").get("claude").getAsString());
+    }
+
+    @Test
     public void shouldNotMutatePromptEnhancerConfigWhenSavingCommitAiConfig() throws Exception {
         Path tempHome = Files.createTempDirectory("commit-ai-isolated-home");
         useTemporaryHomeDirectory(tempHome);
@@ -142,7 +169,7 @@ public class CodemossSettingsServiceCommitAiConfigTest {
         installSdk(tempHome, "codex-sdk", "@openai/codex-sdk", "0.117.0");
 
         CodemossSettingsService service = new CodemossSettingsService();
-        invokeSetPromptEnhancerConfig(service, "claude", "claude-opus-4-6", "gpt-5.4");
+        invokeSetPromptEnhancerConfig(service, "claude", "claude-opus-4-8", "gpt-5.4");
 
         invokeSetCommitAiConfig(service, "codex", "claude-opus-4-8", "gpt-5.5");
 
@@ -150,7 +177,7 @@ public class CodemossSettingsServiceCommitAiConfigTest {
         JsonObject commitAiConfig = invokeGetCommitAiConfig(service);
 
         assertEquals("claude", promptEnhancerConfig.get("provider").getAsString());
-        assertEquals("claude-opus-4-6", promptEnhancerConfig.getAsJsonObject("models").get("claude").getAsString());
+        assertEquals("claude-opus-4-8", promptEnhancerConfig.getAsJsonObject("models").get("claude").getAsString());
         assertEquals("gpt-5.4", promptEnhancerConfig.getAsJsonObject("models").get("codex").getAsString());
 
         assertEquals("codex", commitAiConfig.get("provider").getAsString());
@@ -264,6 +291,20 @@ public class CodemossSettingsServiceCommitAiConfigTest {
         Files.writeString(
                 tempHome.resolve(".codemoss").resolve("config.json"),
                 config.toString()
+        );
+    }
+
+    /** Read the stored config JSON for direct manipulation (e.g. injecting retired models). */
+    private JsonObject readConfigJson(Path tempHome) throws Exception {
+        String raw = Files.readString(tempHome.resolve(".codemoss").resolve("config.json"));
+        return com.google.gson.JsonParser.parseString(raw).getAsJsonObject();
+    }
+
+    /** Write a complete config JSON back to disk. */
+    private void writeConfigJson(Path tempHome, JsonObject root) throws Exception {
+        Files.writeString(
+                tempHome.resolve(".codemoss").resolve("config.json"),
+                root.toString()
         );
     }
 

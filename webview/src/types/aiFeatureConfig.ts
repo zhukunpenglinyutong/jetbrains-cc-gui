@@ -9,6 +9,7 @@ export const AI_FEATURE_PROVIDERS = [
   'kimi',
   'opencode',
   'pi',
+  'omp',
 ] as const;
 
 export type AiFeatureProvider = (typeof AI_FEATURE_PROVIDERS)[number];
@@ -22,6 +23,7 @@ export const DEFAULT_AI_FEATURE_MODELS: Record<AiFeatureProvider, string> = {
   kimi: 'auto',
   opencode: 'opencode-default',
   pi: 'auto',
+  omp: 'auto',
 };
 
 export type AiFeatureModels = Record<AiFeatureProvider, string>;
@@ -61,6 +63,7 @@ function emptyAvailability(value = false): AiFeatureAvailability {
     kimi: value,
     opencode: value,
     pi: value,
+    omp: value,
   };
 }
 

@@ -127,6 +127,7 @@ public class EnvironmentConfigurator {
                     userHome + "/.opencode/bin",
                     userHome + "/.grok/bin",
                     userHome + "/.pi/bin",
+                    userHome + "/.omp/bin",
                     userHome + "/.claude/bin",
                     // DeepSeek Harness (Hermes installer keeps node + dsh together)
                     userHome + "/.hermes/node/bin",

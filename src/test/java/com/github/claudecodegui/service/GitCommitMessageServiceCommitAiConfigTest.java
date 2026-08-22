@@ -61,7 +61,7 @@ public class GitCommitMessageServiceCommitAiConfigTest {
     @Test
     public void shouldRouteToResolvedGrokCliProvider() {
         TestableGitCommitMessageService service = new TestableGitCommitMessageService(
-                buildConfigWithModels("grok", "claude-sonnet-4-6", "gpt-5.5", "grok-4", null, null, null));
+                buildConfigWithModels("grok", "claude-sonnet-4-6", "gpt-5.5", "grok-4", null, null, null, null));
         ResultCapture callback = new ResultCapture();
 
         service.generateCommitMessage(Collections.<Change>emptyList(), callback);
@@ -76,13 +76,26 @@ public class GitCommitMessageServiceCommitAiConfigTest {
     @Test
     public void shouldRouteToResolvedKimiCliProvider() {
         TestableGitCommitMessageService service = new TestableGitCommitMessageService(
-                buildConfigWithModels("kimi", "claude-sonnet-4-6", "gpt-5.5", null, "kimi-k2", null, null));
+                buildConfigWithModels("kimi", "claude-sonnet-4-6", "gpt-5.5", null, "kimi-k2", null, null, null));
         ResultCapture callback = new ResultCapture();
 
         service.generateCommitMessage(Collections.<Change>emptyList(), callback);
 
         assertEquals("kimi", service.lastCliProvider);
         assertEquals("kimi-k2", service.lastCliModel);
+        assertEquals("fix: use cli routing", callback.success);
+    }
+
+    @Test
+    public void shouldRouteToResolvedOmpCliProvider() {
+        TestableGitCommitMessageService service = new TestableGitCommitMessageService(
+                buildConfigWithModels("omp", "claude-sonnet-4-6", "gpt-5.5", null, null, null, null, "auto"));
+        ResultCapture callback = new ResultCapture();
+
+        service.generateCommitMessage(Collections.<Change>emptyList(), callback);
+
+        assertEquals("omp", service.lastCliProvider);
+        assertEquals("auto", service.lastCliModel);
         assertEquals("fix: use cli routing", callback.success);
     }
 
@@ -145,7 +158,7 @@ public class GitCommitMessageServiceCommitAiConfigTest {
     }
 
     private JsonObject buildConfig(String effectiveProvider, String claudeModel, String codexModel) {
-        return buildConfigWithModels(effectiveProvider, claudeModel, codexModel, null, null, null, null);
+        return buildConfigWithModels(effectiveProvider, claudeModel, codexModel, null, null, null, null, null);
     }
 
     private JsonObject buildConfigWithModels(
@@ -155,7 +168,8 @@ public class GitCommitMessageServiceCommitAiConfigTest {
             String grokModel,
             String kimiModel,
             String opencodeModel,
-            String piModel
+            String piModel,
+            String ompModel
     ) {
         JsonObject config = new JsonObject();
         config.add("provider", JsonNull.INSTANCE);
@@ -173,6 +187,7 @@ public class GitCommitMessageServiceCommitAiConfigTest {
         if (kimiModel != null) models.addProperty("kimi", kimiModel);
         if (opencodeModel != null) models.addProperty("opencode", opencodeModel);
         if (piModel != null) models.addProperty("pi", piModel);
+        if (ompModel != null) models.addProperty("omp", ompModel);
         config.add("models", models);
 
         JsonObject availability = new JsonObject();
@@ -182,6 +197,7 @@ public class GitCommitMessageServiceCommitAiConfigTest {
         availability.addProperty("kimi", true);
         availability.addProperty("opencode", true);
         availability.addProperty("pi", true);
+        availability.addProperty("omp", true);
         config.add("availability", availability);
         return config;
     }

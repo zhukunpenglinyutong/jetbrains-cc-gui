@@ -143,4 +143,45 @@ describe('useGlobalCallbacks', () => {
 
     expect(getTextContent()).toBe('draft question\n@/path/to/file ');
   });
+
+  it('does not wipe existing content when a stale non-collapsed selection exists (#1700)', () => {
+    const editable = createEditable();
+    editable.appendChild(document.createTextNode('existing draft'));
+    const { getTextContent } = renderUseGlobalCallbacks(editable);
+
+    // Simulate the real repro: user selected text inside the box earlier, then went
+    // back to the IDE editor and triggered "Add selection to CC GUI". The webview's
+    // stale select-all range is still non-collapsed and still anchored in editable.
+    editable.blur();
+    const selectAll = document.createRange();
+    selectAll.selectNodeContents(editable);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(selectAll);
+
+    window.insertCodeSnippetAtCursor?.('@src/file.ts#L10-20');
+    vi.runAllTimers();
+
+    // The snippet is appended at the end; the pre-existing draft must survive.
+    expect(getTextContent()).toBe('existing draft\n@src/file.ts#L10-20 ');
+  });
+
+  it('handleFilePathFromJava does not wipe content on stale non-collapsed selection (#1700)', () => {
+    const editable = createEditable();
+    editable.appendChild(document.createTextNode('existing draft'));
+    const { getTextContent } = renderUseGlobalCallbacks(editable);
+
+    editable.blur();
+    const selectAll = document.createRange();
+    selectAll.selectNodeContents(editable);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(selectAll);
+
+    window.handleFilePathFromJava?.('/abs/path/Helper.ts');
+    vi.runAllTimers();
+
+    expect(getTextContent()).toContain('existing draft');
+    expect(getTextContent()).toContain('@/abs/path/Helper.ts ');
+  });
 });

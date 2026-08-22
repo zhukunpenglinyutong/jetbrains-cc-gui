@@ -394,6 +394,134 @@ public class HistoryMessageInjectorTest {
     }
 
     @Test
+    public void convertCodexMessagesReplaysNestedUpdatePlan() {
+        JsonArray messages = new JsonArray();
+        messages.add(customToolCall(
+                "2026-07-23T02:00:00.000Z",
+                "plan-1",
+                "exec",
+                "const r = await tools.update_plan({"
+                    + "explanation:\"Implement and verify\","
+                    + "plan:["
+                    + "{step:\"Inspect current behavior\",status:\"completed\"},"
+                    + "{step:'Implement parser',status:'in_progress'},"
+                    + "{step:`Run tests`,status:\"pending\"}"
+                    + "]}); text(r);"
+        ));
+        messages.add(customToolCallOutput("2026-07-23T02:00:01.000Z", "plan-1", "{}"));
+
+        List<JsonObject> result = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(messages);
+
+        assertEquals(2, result.size());
+        JsonObject toolUse = getOnlyRawContentBlock(result.get(0));
+        assertEquals("tool_use", toolUse.get("type").getAsString());
+        assertEquals("todowrite", toolUse.get("name").getAsString());
+        assertEquals("codex_plan_plan-1", toolUse.get("id").getAsString());
+        JsonArray todos = toolUse.getAsJsonObject("input").getAsJsonArray("todos");
+        assertEquals(3, todos.size());
+        assertEquals("Inspect current behavior", todos.get(0).getAsJsonObject().get("content").getAsString());
+        assertEquals("completed", todos.get(0).getAsJsonObject().get("status").getAsString());
+        assertEquals("Implement parser", todos.get(1).getAsJsonObject().get("content").getAsString());
+        assertEquals("in_progress", todos.get(1).getAsJsonObject().get("status").getAsString());
+        JsonObject toolResult = getOnlyRawContentBlock(result.get(1));
+        assertEquals("codex_plan_plan-1", toolResult.get("tool_use_id").getAsString());
+        assertFalse(toolResult.get("is_error").getAsBoolean());
+    }
+
+    @Test
+    public void convertCodexMessagesReplaysOnlyTopLevelPlanItems() {
+        JsonArray messages = new JsonArray();
+        messages.add(customToolCall(
+                "2026-07-23T02:00:00.000Z",
+                "plan-literal",
+                "exec",
+                "await tools.update_plan({plan:["
+                    + "{step:'Keep this item',status:'pending',metadata:{content:'Not a task'}}"
+                    + "]});"
+        ));
+
+        List<JsonObject> result = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(messages);
+
+        assertEquals(1, result.size());
+        JsonArray todos = getOnlyRawContentBlock(result.get(0))
+                .getAsJsonObject("input").getAsJsonArray("todos");
+        assertEquals(1, todos.size());
+        assertEquals("Keep this item", todos.get(0).getAsJsonObject().get("content").getAsString());
+    }
+
+    @Test
+    public void convertCodexMessagesRejectsDynamicUpdatePlanExpressions() {
+        JsonArray messages = new JsonArray();
+        messages.add(customToolCall(
+                "2026-07-23T02:00:00.000Z",
+                "plan-dynamic",
+                "exec",
+                "await tools.update_plan({plan:[{step:buildStep(),status:'pending'}]});"
+        ));
+
+        List<JsonObject> result = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(messages);
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void convertCodexMessagesDoesNotFallBackFromDynamicLatestPlan() {
+        JsonArray messages = new JsonArray();
+        messages.add(customToolCall(
+                "2026-07-23T02:00:00.000Z",
+                "plan-latest-dynamic",
+                "exec",
+                "await tools.update_plan({plan:[{step:'Old',status:'pending'}]});"
+                    + "await tools.update_plan({plan:[{step:buildStep(),status:'pending'}]});"
+        ));
+        messages.add(customToolCall(
+                "2026-07-23T02:00:01.000Z",
+                "plan-other-object",
+                "exec",
+                "await other.tools.update_plan({plan:[{step:'Injected',status:'pending'}]});"
+        ));
+
+        List<JsonObject> result = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(messages);
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void convertCodexMessagesIgnoresUpdatePlanTextInStringsAndComments() {
+        JsonArray messages = new JsonArray();
+        messages.add(customToolCall(
+                "2026-07-23T02:00:00.000Z",
+                "plan-docs",
+                "exec",
+                "const example = \"tools.update_plan({plan:[{step:'Fake'}]})\";"
+                    + "// tools.update_plan({plan:[{step:'Fake'}]})\n"
+                    + "/* tools.update_plan({plan:[{step:'Fake'}]}) */"
+        ));
+
+        List<JsonObject> result = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(messages);
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void convertCodexMessagesPreservesEmptyUpdatePlanSnapshot() {
+        JsonArray messages = new JsonArray();
+        messages.add(customToolCall(
+                "2026-07-23T02:00:00.000Z",
+                "plan-empty",
+                "exec",
+                "await tools.update_plan({ /* clear */ plan: [], });"
+        ));
+
+        List<JsonObject> result = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(messages);
+
+        assertEquals(1, result.size());
+        JsonObject toolUse = getOnlyRawContentBlock(result.get(0));
+        assertEquals("todowrite", toolUse.get("name").getAsString());
+        assertTrue(toolUse.getAsJsonObject("input").getAsJsonArray("todos").isEmpty());
+    }
+
+    @Test
     public void convertCodexMessagesSkipsWaitAndNonShellExecProtocolCards() {
         JsonArray messages = new JsonArray();
         messages.add(customToolCall(

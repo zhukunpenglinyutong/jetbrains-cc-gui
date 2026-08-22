@@ -101,10 +101,100 @@ describe('extractSubagentsFromMessages', () => {
     expect(subagents).toHaveLength(1);
     expect(subagents[0]).toMatchObject({
       id: 'call-spawn',
+      type: 'audit_ui',
       agentPath: 'audit_ui',
       isAsync: true,
       status: 'running',
     });
+    expect(subagents[0].description).toBe('');
+    expect(subagents[0].prompt).toBeUndefined();
+  });
+
+  it('does not expose Codex spawn_agent message content in StatusPanel fields', () => {
+    const opaqueMessage = 'gAAAAABopaque-transport-content';
+    const message: ClaudeMessage = {
+      type: 'assistant',
+      content: '',
+      raw: {
+        message: {
+          content: [{
+            type: 'tool_use',
+            id: 'call-safe-spawn',
+            name: 'spawn_agent',
+            input: { task_name: '/root/reviewer', message: opaqueMessage },
+          }],
+        },
+      },
+    };
+
+    const [subagent] = extractSubagentsFromMessages(
+      [message], getContentBlocks, findToolResult([message]), getToolResultRaw([message]),
+    );
+
+    expect(subagent).toMatchObject({ type: 'reviewer', description: '', agentPath: '/root/reviewer' });
+    expect(subagent.prompt).toBeUndefined();
+    expect(JSON.stringify(subagent)).not.toContain(opaqueMessage);
+  });
+
+  it('filters only empty spawn_agent argument parsing noise', () => {
+    const messages: ClaudeMessage[] = [{
+      type: 'assistant',
+      content: '',
+      raw: {
+        message: {
+          content: [{ type: 'tool_use', id: 'call-invalid-spawn', name: 'spawn_agent', input: {} }],
+        },
+      },
+    }, {
+      type: 'user',
+      content: '',
+      raw: {
+        content: [{
+          type: 'tool_result',
+          tool_use_id: 'call-invalid-spawn',
+          content: 'failed to parse function arguments: EOF while parsing a value',
+        }],
+      },
+    }];
+
+    expect(extractSubagentsFromMessages(
+      messages, getContentBlocks, findToolResult(messages), getToolResultRaw(messages),
+    )).toEqual([]);
+  });
+
+  it('retains a valid spawn_agent request that fails at runtime', () => {
+    const messages: ClaudeMessage[] = [{
+      type: 'assistant',
+      content: '',
+      raw: {
+        message: {
+          content: [{
+            type: 'tool_use',
+            id: 'call-valid-failure',
+            name: 'spawn_agent',
+            input: { task_name: 'reviewer', message: 'opaque' },
+          }],
+        },
+      },
+    }, {
+      type: 'user',
+      content: '',
+      raw: {
+        content: [{
+          type: 'tool_result',
+          tool_use_id: 'call-valid-failure',
+          content: 'permission denied while starting agent',
+          is_error: true,
+        }],
+      },
+    }];
+
+    const subagents = extractSubagentsFromMessages(
+      messages, getContentBlocks, findToolResult(messages), getToolResultRaw(messages),
+    );
+
+    expect(subagents).toHaveLength(1);
+    expect(subagents[0]).toMatchObject({ type: 'reviewer', status: 'error' });
   });
 
   it('attaches completed Agent result metadata including stable agent id', () => {
@@ -266,8 +356,25 @@ describe('extractSubagentsFromMessages', () => {
     })[0].status).toBe('completed');
   });
 
-  it('does not overwrite a task_notification error with sidechain completion', () => {
-    const messages = [assistantWithAsyncAgent('tu_spawn')];
+  it('flips to error only on an authoritatively observed sidechain failure', () => {
+    const messages = [assistantWithAsyncAgent('tu_spawn'), launchAckResult('tu_spawn')];
+    const extracted = extractSubagentsFromMessages(
+      messages, getContentBlocks, findToolResult(messages), getToolResultRaw(messages), {},
+    );
+
+    // Transient resolution/read failures (success === false) must keep the
+    // agent running so polling can correct them.
+    expect(applySubagentHistoryCompletion(extracted, {
+      tu_spawn: { success: false, status: 'error', error: 'Read timed out' },
+    })[0].status).toBe('running');
+
+    // The backend read the sidechain and saw the turn abort: terminal error.
+    expect(applySubagentHistoryCompletion(extracted, {
+      tu_spawn: { success: true, status: 'error', error: 'Codex subagent turn was aborted' },
+    })[0].status).toBe('error');
+  });
+
+  it('does not overwrite a task_notification error with sidechain completion', () => {const messages = [assistantWithAsyncAgent('tu_spawn')];
     const taskEvents = {
       tu_spawn: { toolUseId: 'tu_spawn', status: 'failed' as const },
     };

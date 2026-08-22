@@ -153,7 +153,8 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
             String reasoningEffort,
             MessageCallback callback
     ) {
-        return sendMessage(channelId, message, sessionId, cwd, model, reasoningEffort, null, null, callback);
+        return sendMessage(channelId, message, sessionId, cwd, model, reasoningEffort,
+                null, null, null, callback);
     }
 
     /**
@@ -173,7 +174,8 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
             List<ClaudeSession.Attachment> attachments,
             MessageCallback callback
     ) {
-        return sendMessage(channelId, message, sessionId, cwd, model, reasoningEffort, attachments, null, callback);
+        return sendMessage(channelId, message, sessionId, cwd, model, reasoningEffort,
+                attachments, null, null, callback);
     }
 
     /**
@@ -192,6 +194,7 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
             String reasoningEffort,
             List<ClaudeSession.Attachment> attachments,
             String permissionMode,
+            String dshPreset,
             MessageCallback callback
     ) {
         JsonObject stdinInput = new JsonObject();
@@ -204,6 +207,9 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
         // fall back to an implicit default that ignores the UI mode selection.
         String mode = permissionMode != null && !permissionMode.isBlank() ? permissionMode.trim() : "default";
         stdinInput.addProperty("permissionMode", mode);
+        if (dshPreset != null) {
+            stdinInput.addProperty("preset", dshPreset);
+        }
         if (attachments != null && !attachments.isEmpty()) {
             stdinInput.add("attachments", buildAttachmentArray(attachments));
         }

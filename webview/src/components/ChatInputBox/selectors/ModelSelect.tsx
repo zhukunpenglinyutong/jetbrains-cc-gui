@@ -200,6 +200,15 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
   };
 
   const getModelLabel = (model: ModelInfo, show1MContext = false): string => {
+    // The Anthropic slot maps below (MODEL_ID_TO_MAPPING_KEY, DEFAULT_MODEL_MAP,
+    // MODEL_LABEL_KEYS) are keyed by claude-* ids. Third-party catalogs (agy, CLI
+    // providers) expose models whose ids collide with those slots (e.g.
+    // claude-sonnet-4-6). For any non-claude provider, render the catalog label
+    // verbatim — never let the Claude model mapping override catalog labels.
+    if (currentProvider !== 'claude') {
+      return append1MContextSuffix(model.label ?? '', model.id, show1MContext);
+    }
+
     const mappingKey = MODEL_ID_TO_MAPPING_KEY[model.id];
     if (mappingKey) {
       const mappedName = resolveMappedModelName(mappingKey, modelMapping);
@@ -337,7 +346,7 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
       >
         <ProviderModelIcon
           providerId={currentProvider}
-          modelId={resolveModelIdForIcon(currentModel.id, modelMapping, MODEL_ID_TO_MAPPING_KEY)}
+          modelId={resolveModelIdForIcon(currentModel.id, currentProvider === 'claude' ? modelMapping : {}, MODEL_ID_TO_MAPPING_KEY)}
           size={12}
           colored
         />
@@ -416,7 +425,7 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
                     >
                       <ProviderModelIcon
                         providerId={currentProvider}
-                        modelId={resolveModelIdForIcon(model.id, modelMapping, MODEL_ID_TO_MAPPING_KEY)}
+                        modelId={resolveModelIdForIcon(model.id, currentProvider === 'claude' ? modelMapping : {}, MODEL_ID_TO_MAPPING_KEY)}
                         size={16}
                         colored
                       />

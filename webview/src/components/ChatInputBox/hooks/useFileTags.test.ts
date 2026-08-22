@@ -241,4 +241,42 @@ describe('useFileTags', () => {
 
     expect(editable.querySelectorAll('.file-tag').length).toBe(1);
   });
+
+  it('renders absolute paths with spaces in the filename (not in path mapping)', () => {
+    const editable = createEditable();
+    editable.textContent = '@D:\\workspace\\docs\\chapter6\\第六章 框架开发实践.md ';
+    mockSelection();
+
+    const { result } = setupHook(editable);
+
+    // No pathMappingRef entry: falls back to absolute-path pattern matching.
+    // The space before "框架开发实践.md" must not truncate the path.
+    result.current.renderFileTags();
+
+    expect(editable.querySelectorAll('.file-tag').length).toBe(1);
+    expect(result.current.extractFileTags()).toEqual([
+      {
+        displayPath: 'D:\\workspace\\docs\\chapter6\\第六章 框架开发实践.md',
+        absolutePath: 'D:\\workspace\\docs\\chapter6\\第六章 框架开发实践.md',
+      },
+    ]);
+  });
+
+  it('renders absolute paths with spaces and a line marker (not in path mapping)', () => {
+    const editable = createEditable();
+    editable.textContent = '@D:\\docs\\第六章 框架开发实践.md#L10-20 ';
+    mockSelection();
+
+    const { result } = setupHook(editable);
+
+    result.current.renderFileTags();
+
+    expect(editable.querySelectorAll('.file-tag').length).toBe(1);
+    expect(result.current.extractFileTags()).toEqual([
+      {
+        displayPath: 'D:\\docs\\第六章 框架开发实践.md#L10-20',
+        absolutePath: 'D:\\docs\\第六章 框架开发实践.md#L10-20',
+      },
+    ]);
+  });
 });

@@ -1,9 +1,11 @@
 package com.github.claudecodegui.handler.history;
 
+import com.github.claudecodegui.handler.CodexMessageConverter;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -14,8 +16,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Restores the nested shell commands persisted inside Codex Responses API
- * {@code exec} wrappers.
+ * Restores nested shell commands and plan updates persisted inside Codex
+ * Responses API {@code exec} wrappers.
  *
  * <p>The live bridge receives command-execution events and renders them as
  * normal Bash tool cards. A cold history load instead sees the outer
@@ -26,6 +28,11 @@ import java.util.regex.Pattern;
 final class CodexExecHistoryReplay {
 
     private static final int MAX_REPLAYED_SHELL_COMMANDS = 100;
+    private static final int MAX_REPLAYED_PLAN_ITEMS = 100;
+    private static final String UPDATE_PLAN_TOKEN = "tools.update_plan";
+    private static final Pattern JAVASCRIPT_NUMBER_PATTERN = Pattern.compile(
+        "-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?"
+    );
     private static final Pattern OUTPUT_MARKER_PATTERN = Pattern.compile(
         "(?m)^---(\\d+)---[\\t ]*\\r?$"
     );
@@ -82,6 +89,64 @@ final class CodexExecHistoryReplay {
             }
         }
         return commands;
+    }
+
+    static JsonObject extractUpdatePlanInput(JsonObject payload) {
+        String script = getStringProperty(payload, "input");
+        if (script == null) {
+            script = getStringProperty(payload, "arguments");
+        }
+        if (script == null || script.isBlank()) {
+            return null;
+        }
+
+        JsonObject latestPlan = null;
+        int searchStart = 0;
+        while (searchStart < script.length()) {
+            int callStart = findJavaScriptToken(script, UPDATE_PLAN_TOKEN, searchStart);
+            if (callStart < 0) {
+                break;
+            }
+            int invocationStart = skipTrivia(
+                script,
+                callStart + UPDATE_PLAN_TOKEN.length(),
+                script.length()
+            );
+            if (invocationStart < script.length() && script.charAt(invocationStart) == '(') {
+                latestPlan = parseUpdatePlanCall(script, callStart);
+            }
+            searchStart = callStart + UPDATE_PLAN_TOKEN.length();
+        }
+        return latestPlan;
+    }
+
+    static JsonObject createPlanToolUseMessage(
+            String callId,
+            JsonObject planInput,
+            String timestamp
+    ) {
+        JsonObject functionCall = new JsonObject();
+        functionCall.addProperty("name", "update_plan");
+        functionCall.addProperty("call_id", planToolUseId(callId));
+        functionCall.addProperty("arguments", planInput.toString());
+        return CodexMessageConverter.convertFunctionCallToToolUse(functionCall, timestamp);
+    }
+
+    static JsonObject createPlanToolResultMessage(
+            String callId,
+            Output output,
+            String fallbackTimestamp
+    ) {
+        boolean failed = isFailedOutputPayload(output.payload)
+            || FAILED_OUTPUT_PATTERN.matcher(output.payload.toString()).find();
+        JsonObject functionOutput = new JsonObject();
+        functionOutput.addProperty("call_id", planToolUseId(callId));
+        functionOutput.addProperty("output", failed ? "Plan update failed" : "Plan updated");
+        if (failed) {
+            functionOutput.addProperty("status", "error");
+        }
+        String timestamp = output.timestamp != null ? output.timestamp : fallbackTimestamp;
+        return CodexMessageConverter.convertFunctionCallOutputToToolResult(functionOutput, timestamp);
     }
 
     static JsonObject createToolUseMessage(
@@ -203,6 +268,266 @@ final class CodexExecHistoryReplay {
             cursor++;
         }
         return spans;
+    }
+
+    private static JsonObject parseUpdatePlanCall(String script, int callStart) {
+        int cursor = skipTrivia(script, callStart + UPDATE_PLAN_TOKEN.length(), script.length());
+        if (cursor >= script.length() || script.charAt(cursor) != '(') {
+            return null;
+        }
+        cursor = skipTrivia(script, cursor + 1, script.length());
+        if (cursor >= script.length() || script.charAt(cursor) != '{') {
+            return null;
+        }
+
+        int objectEnd = findMatchingObjectEnd(script, cursor);
+        if (objectEnd < 0) {
+            return null;
+        }
+
+        String normalizedLiteral = normalizeJavaScriptLiteralToJson(
+            script.substring(cursor, objectEnd + 1)
+        );
+        if (normalizedLiteral == null) {
+            return null;
+        }
+
+        JsonObject inputObject;
+        try {
+            JsonElement parsed = JsonParser.parseString(normalizedLiteral);
+            if (!parsed.isJsonObject()) {
+                return null;
+            }
+            inputObject = parsed.getAsJsonObject();
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+        if (!inputObject.has("plan") || !inputObject.get("plan").isJsonArray()) {
+            return null;
+        }
+
+        JsonArray plan = new JsonArray();
+        for (JsonElement planItem : inputObject.getAsJsonArray("plan")) {
+            if (!planItem.isJsonObject()) {
+                continue;
+            }
+            JsonObject itemObject = planItem.getAsJsonObject();
+            String content = firstNonBlankString(itemObject, "content", "step", "title", "text");
+            if (content == null) {
+                continue;
+            }
+
+            JsonObject item = new JsonObject();
+            item.addProperty("step", content);
+            item.addProperty("status", normalizePlanStatus(itemObject.get("status")));
+            plan.add(item);
+            if (plan.size() >= MAX_REPLAYED_PLAN_ITEMS) {
+                break;
+            }
+        }
+
+        JsonObject input = new JsonObject();
+        if (inputObject.has("explanation") && inputObject.get("explanation").isJsonPrimitive()
+                && inputObject.getAsJsonPrimitive("explanation").isString()) {
+            input.add("explanation", inputObject.get("explanation"));
+        }
+        input.add("plan", plan);
+        return input;
+    }
+
+    private static String normalizeJavaScriptLiteralToJson(String literal) {
+        StringBuilder normalized = new StringBuilder(literal.length());
+        int cursor = 0;
+        while (cursor < literal.length()) {
+            char current = literal.charAt(cursor);
+            if (Character.isWhitespace(current)) {
+                normalized.append(current);
+                cursor++;
+                continue;
+            }
+            if (current == '/' && cursor + 1 < literal.length()) {
+                char next = literal.charAt(cursor + 1);
+                if (next == '/') {
+                    cursor = skipLineComment(literal, cursor + 2);
+                    continue;
+                }
+                if (next == '*') {
+                    cursor = skipBlockComment(literal, cursor + 2);
+                    continue;
+                }
+                return null;
+            }
+            if (isQuote(current)) {
+                int stringStart = cursor;
+                ParsedString parsed = readJavaScriptString(literal, cursor);
+                if (parsed.nextIndex <= stringStart + 1
+                        || literal.charAt(parsed.nextIndex - 1) != current
+                        || (current == '`' && containsTemplateInterpolation(
+                            literal,
+                            stringStart,
+                            parsed.nextIndex
+                        ))) {
+                    return null;
+                }
+                normalized.append(new JsonPrimitive(parsed.value));
+                cursor = parsed.nextIndex;
+                continue;
+            }
+            if (isJavaScriptIdentifierStart(current)) {
+                int identifierEnd = cursor + 1;
+                while (identifierEnd < literal.length()
+                        && isJavaScriptIdentifierPart(literal.charAt(identifierEnd))) {
+                    identifierEnd++;
+                }
+                String identifier = literal.substring(cursor, identifierEnd);
+                int nextToken = skipTrivia(literal, identifierEnd, literal.length());
+                if (nextToken < literal.length() && literal.charAt(nextToken) == ':') {
+                    normalized.append(new JsonPrimitive(identifier));
+                } else if ("true".equals(identifier)
+                        || "false".equals(identifier)
+                        || "null".equals(identifier)) {
+                    normalized.append(identifier);
+                } else if ("undefined".equals(identifier)) {
+                    normalized.append("null");
+                } else {
+                    return null;
+                }
+                cursor = identifierEnd;
+                continue;
+            }
+
+            Matcher numberMatcher = JAVASCRIPT_NUMBER_PATTERN.matcher(literal);
+            numberMatcher.region(cursor, literal.length());
+            if (numberMatcher.lookingAt()) {
+                normalized.append(numberMatcher.group());
+                cursor = numberMatcher.end();
+                continue;
+            }
+            if (current == ',') {
+                int nextToken = skipTrivia(literal, cursor + 1, literal.length());
+                if (nextToken < literal.length()
+                        && (literal.charAt(nextToken) == '}' || literal.charAt(nextToken) == ']')) {
+                    cursor++;
+                    continue;
+                }
+            }
+            if (current != '{' && current != '}' && current != '[' && current != ']'
+                    && current != ':' && current != ',') {
+                return null;
+            }
+            normalized.append(current);
+            cursor++;
+        }
+        return normalized.toString();
+    }
+
+    private static boolean containsTemplateInterpolation(String source, int start, int end) {
+        for (int cursor = start + 1; cursor + 1 < end; cursor++) {
+            char current = source.charAt(cursor);
+            if (current == '\\') {
+                cursor++;
+            } else if (current == '$' && source.charAt(cursor + 1) == '{') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static int findMatchingObjectEnd(String script, int objectStart) {
+        int depth = 0;
+        int cursor = objectStart;
+        while (cursor < script.length()) {
+            char current = script.charAt(cursor);
+            if (isQuote(current)) {
+                cursor = skipJavaScriptString(script, cursor);
+                continue;
+            }
+            if (current == '/' && cursor + 1 < script.length()) {
+                char next = script.charAt(cursor + 1);
+                if (next == '/') {
+                    cursor = skipLineComment(script, cursor + 2);
+                    continue;
+                }
+                if (next == '*') {
+                    cursor = skipBlockComment(script, cursor + 2);
+                    continue;
+                }
+            }
+            if (current == '{') {
+                depth++;
+            } else if (current == '}') {
+                depth--;
+                if (depth == 0) {
+                    return cursor;
+                }
+            }
+            cursor++;
+        }
+        return -1;
+    }
+
+    private static int findJavaScriptToken(String script, String token, int start) {
+        int cursor = Math.max(0, start);
+        while (cursor < script.length()) {
+            char current = script.charAt(cursor);
+            if (isQuote(current)) {
+                cursor = skipJavaScriptString(script, cursor);
+                continue;
+            }
+            if (current == '/' && cursor + 1 < script.length()) {
+                char next = script.charAt(cursor + 1);
+                if (next == '/') {
+                    cursor = skipLineComment(script, cursor + 2);
+                    continue;
+                }
+                if (next == '*') {
+                    cursor = skipBlockComment(script, cursor + 2);
+                    continue;
+                }
+            }
+            if (script.startsWith(token, cursor)) {
+                char before = cursor > 0 ? script.charAt(cursor - 1) : '\0';
+                int afterIndex = cursor + token.length();
+                char after = afterIndex < script.length() ? script.charAt(afterIndex) : '\0';
+                if (!isJavaScriptIdentifierPart(before)
+                        && before != '.'
+                        && !isJavaScriptIdentifierPart(after)) {
+                    return cursor;
+                }
+            }
+            cursor++;
+        }
+        return -1;
+    }
+
+    private static String firstNonBlankString(JsonObject values, String... keys) {
+        for (String key : keys) {
+            JsonElement value = values.get(key);
+            if (value != null && value.isJsonPrimitive()
+                    && value.getAsJsonPrimitive().isString()
+                    && !value.getAsString().isBlank()) {
+                String text = value.getAsString();
+                return text.trim();
+            }
+        }
+        return null;
+    }
+
+    private static String normalizePlanStatus(JsonElement status) {
+        if (status == null || !status.isJsonPrimitive() || !status.getAsJsonPrimitive().isString()) {
+            return "pending";
+        }
+        String normalized = status.getAsString().trim().toLowerCase(Locale.ROOT);
+        if ("completed".equals(normalized) || "done".equals(normalized)) {
+            return "completed";
+        }
+        if ("in_progress".equals(normalized)
+                || "in-progress".equals(normalized)
+                || "active".equals(normalized)
+                || "running".equals(normalized)) {
+            return "in_progress";
+        }
+        return "pending";
     }
 
     private static Map<String, String> parseJavaScriptObjectProperties(
@@ -413,6 +738,30 @@ final class CodexExecHistoryReplay {
         return end >= 0 ? end + 2 : script.length();
     }
 
+    private static int skipTrivia(String script, int start, int limit) {
+        int cursor = start;
+        while (cursor < limit) {
+            char current = script.charAt(cursor);
+            if (Character.isWhitespace(current)) {
+                cursor++;
+                continue;
+            }
+            if (current == '/' && cursor + 1 < limit) {
+                char next = script.charAt(cursor + 1);
+                if (next == '/') {
+                    cursor = Math.min(skipLineComment(script, cursor + 2), limit);
+                    continue;
+                }
+                if (next == '*') {
+                    cursor = Math.min(skipBlockComment(script, cursor + 2), limit);
+                    continue;
+                }
+            }
+            break;
+        }
+        return cursor;
+    }
+
     private static int skipWhitespaceAndCommas(String script, int start, int limit) {
         int cursor = start;
         while (cursor < limit) {
@@ -601,6 +950,11 @@ final class CodexExecHistoryReplay {
     private static String shellToolUseId(String callId, int commandIndex) {
         String stableCallId = callId == null || callId.isBlank() ? "unknown" : callId;
         return "codex_exec_" + stableCallId + "_" + commandIndex;
+    }
+
+    private static String planToolUseId(String callId) {
+        String stableCallId = callId == null || callId.isBlank() ? "unknown" : callId;
+        return "codex_plan_" + stableCallId;
     }
 
     private static String smartShellToolName(String command) {

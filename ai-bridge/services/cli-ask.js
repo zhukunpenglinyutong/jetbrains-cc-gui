@@ -21,6 +21,7 @@ import {
   resolveKimiCliPath,
   resolveOpenCodeCliPath,
   resolvePiCliPath,
+  resolveOmpCliPath,
   enrichPathWithBinDirs,
   commonCliBinDirs,
 } from '../utils/cli-path.js';
@@ -30,13 +31,14 @@ import { getRealHomeDir } from '../utils/path-utils.js';
 import { runAcpTurn } from './grok/grok-acp-client.js';
 import { buildGrokEnv, resolveEffectiveGrokAuth } from './grok/grok-utils.js';
 
-export const CLI_ASK_PROVIDERS = ['grok', 'kimi', 'opencode', 'pi'];
+export const CLI_ASK_PROVIDERS = ['grok', 'kimi', 'opencode', 'pi', 'omp'];
 
 const DEFAULT_MODELS = {
   grok: 'grok',
   kimi: 'auto',
   opencode: 'opencode-default',
   pi: 'auto',
+  omp: 'auto',
 };
 
 function isDefaultModelToken(model) {
@@ -55,6 +57,8 @@ function isDefaultModelToken(model) {
     || lower === 'opencode default'
     || lower === 'pi-default'
     || lower === 'pi default'
+    || lower === 'omp-default'
+    || lower === 'omp default'
   );
 }
 
@@ -423,11 +427,44 @@ async function askPi(prompt, { model, cwd, onDelta } = {}) {
   });
 }
 
+async function askOmp(prompt, { model, cwd, onDelta } = {}) {
+  const bin = resolveOmpCliPath();
+  const args = ['--print', '--mode', 'json'];
+  const modelFlag = resolveModelFlag(model);
+  if (modelFlag) args.push('--model', modelFlag);
+  args.push(safePromptArg(prompt));
+
+  return collectFromStreamingCli({
+    bin,
+    args,
+    cwd: buildWorkCwd(cwd),
+    label: 'OMP',
+    onDelta,
+    onLine: (line) => {
+      if (!line || !line.trim()) return '';
+      let event;
+      try {
+        event = JSON.parse(line);
+      } catch {
+        return '';
+      }
+      if (!event || typeof event !== 'object') return '';
+      if (event.type !== 'message_update') return '';
+      const update = event.assistantMessageEvent;
+      if (!update || typeof update !== 'object') return '';
+      if (update.type === 'text_delta' && typeof update.delta === 'string' && update.delta) {
+        return update.delta;
+      }
+      return '';
+    },
+  });
+}
+
 /**
  * One-shot text generation for a CLI provider.
  *
  * @param {object} options
- * @param {'grok'|'kimi'|'opencode'|'pi'} options.provider
+ * @param {'grok'|'kimi'|'opencode'|'pi'|'omp'} options.provider
  * @param {string} options.prompt
  * @param {string} [options.model]
  * @param {string} [options.cwd]
@@ -460,6 +497,8 @@ export async function askCliProvider({
       return askOpenCode(prompt, opts);
     case 'pi':
       return askPi(prompt, opts);
+    case 'omp':
+      return askOmp(prompt, opts);
     default:
       throw new Error(`Unsupported CLI ask provider: ${provider}`);
   }

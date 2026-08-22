@@ -25,4 +25,17 @@ describe('ProviderModelIcon', () => {
     expect(paths[0]?.getAttribute('d')).toContain('165.29');
     expect(paths[1]?.getAttribute('d')).toContain('517.36');
   });
+
+  it('renders the official OMP mark for the omp CLI provider', () => {
+    const { container } = render(
+      <ProviderModelIcon providerId="omp" size={16} colored />,
+    );
+
+    expect(container.querySelector('[aria-label="OMP"]')).toBeTruthy();
+    expect(container.querySelector('title')?.textContent).toBe('OMP');
+    // Official path data from https://omp.sh/favicon.svg
+    const paths = container.querySelectorAll('path');
+    expect(paths.length).toBe(1);
+    expect(paths[0]?.getAttribute('d')).toContain('M14 16h36v8H40v32h-8V24h-6v22h-8V24h-4z');
+  });
 });

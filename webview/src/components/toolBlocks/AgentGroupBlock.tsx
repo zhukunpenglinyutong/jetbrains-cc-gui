@@ -6,6 +6,7 @@ import { sendBridgeEvent } from '../../utils/bridge';
 import { getPersistedExpanded, setPersistedExpanded } from '../../utils/expandedState';
 import {
   extractResultText,
+  hasSubagentTranscript,
   isAsyncAgentInput,
   parseAgentToolMeta,
   parseSpawnAgentMeta,
@@ -93,18 +94,24 @@ const AgentGroupBlock = memo(function AgentGroupBlock({
   const taskEvent = useTaskEvent(toolId);
   const taskFailed = taskEvent?.status === 'failed' || taskEvent?.status === 'stopped';
 
-  const agentType = getAgentType(agentBlock);
-  const summary = getAgentSummary(agentBlock);
   const agentToolMeta = parseAgentToolMeta(getToolResultRaw, toolId);
   const spawnMeta = toolName === 'spawn_agent'
     ? parseSpawnAgentMeta(input ?? {}, result)
     : {};
+  const agentType = toolName === 'spawn_agent'
+    ? spawnMeta.identityLabel ?? ''
+    : getAgentType(agentBlock);
+  const summary = toolName === 'spawn_agent'
+    ? spawnMeta.description?.slice(0, MAX_SUMMARY_LENGTH) ?? ''
+    : getAgentSummary(agentBlock);
   const agentId = spawnMeta.agentId
     ?? agentToolMeta.agentId
     ?? (input?.agent_id as string | undefined)
     ?? (input?.agentId as string | undefined);
   const agentPath = spawnMeta.agentPath;
   const history = (toolId ? histories[toolId] : undefined) ?? (agentId ? histories[agentId] : undefined);
+  const resolvedAgentId = history?.agentId ?? agentId;
+  const resolvedAgentPath = history?.agentPath ?? agentPath;
   const historyFailed = history?.status === 'error';
   // A settled main turn is only the launch boundary for a background Agent. Use
   // the live task_notification or a terminal sidechain end_turn as completion.
@@ -124,16 +131,16 @@ const AgentGroupBlock = memo(function AgentGroupBlock({
   const pollingTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!expanded || !currentSessionId || !toolId || history) return;
+    if (!expanded || !currentSessionId || !toolId || hasSubagentTranscript(history)) return;
     sendBridgeEvent('load_subagent_session', JSON.stringify({
       sessionId: currentSessionId,
       provider: currentProvider,
-      agentId,
-      agentPath,
+      agentId: resolvedAgentId,
+      agentPath: resolvedAgentPath,
       description: typeof summary === 'string' ? summary : undefined,
       toolUseId: toolId,
     }));
-  }, [agentId, agentPath, currentProvider, currentSessionId, summary, expanded, history, toolId]);
+  }, [currentProvider, currentSessionId, summary, expanded, history, resolvedAgentId, resolvedAgentPath, toolId]);
 
   useEffect(() => {
     // Clear existing timer when dependencies change or conditions no longer met
@@ -151,8 +158,8 @@ const AgentGroupBlock = memo(function AgentGroupBlock({
         sendBridgeEvent('load_subagent_session', JSON.stringify({
           sessionId: currentSessionId,
           provider: currentProvider,
-          agentId,
-          agentPath,
+          agentId: resolvedAgentId,
+          agentPath: resolvedAgentPath,
           description: typeof summary === 'string' ? summary : undefined,
           toolUseId: toolId,
         }));
@@ -165,7 +172,7 @@ const AgentGroupBlock = memo(function AgentGroupBlock({
         pollingTimerRef.current = null;
       }
     };
-  }, [agentId, agentPath, currentProvider, currentSessionId, summary, expanded, isCompleted, isError, toolId]);
+  }, [currentProvider, currentSessionId, summary, expanded, isCompleted, isError, resolvedAgentId, resolvedAgentPath, toolId]);
 
   return (
     <div className="task-container agent-group-container">
@@ -207,12 +214,12 @@ const AgentGroupBlock = memo(function AgentGroupBlock({
       {expanded && (
         <div className="task-details agent-group-content">
           <SubagentProcessDetails
-            agentId={(isAsync ? taskEvent?.agentId : undefined) ?? agentId}
+            agentId={(isAsync ? taskEvent?.agentId : undefined) ?? resolvedAgentId}
             totalDurationMs={(isAsync ? taskEvent?.totalDurationMs : undefined) ?? agentToolMeta.totalDurationMs}
             totalTokens={(isAsync ? taskEvent?.totalTokens : undefined) ?? agentToolMeta.totalTokens}
             totalToolUseCount={(isAsync ? taskEvent?.totalToolUseCount : undefined) ?? agentToolMeta.totalToolUseCount}
             resultText={(isAsync ? taskEvent?.summary : undefined) ?? extractResultText(result)}
-            prompt={typeof input?.prompt === 'string' ? input.prompt : undefined}
+            prompt={toolName !== 'spawn_agent' && typeof input?.prompt === 'string' ? input.prompt : undefined}
             history={history}
             canLoad={Boolean(currentSessionId)}
           />

@@ -8,9 +8,11 @@ import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -25,6 +27,7 @@ class GrokDaemonCoordinator {
     private final NodeDetector nodeDetector;
     private final Supplier<BridgeDirectoryResolver> directoryResolverSupplier;
     private final EnvironmentConfigurator envConfigurator;
+    private final Consumer<Map<String, String>> customEnvConfigurator;
 
     private volatile DaemonBridge daemonBridge;
     private final Object daemonLock = new Object();
@@ -36,12 +39,14 @@ class GrokDaemonCoordinator {
             Logger log,
             NodeDetector nodeDetector,
             Supplier<BridgeDirectoryResolver> directoryResolverSupplier,
-            EnvironmentConfigurator envConfigurator
+            EnvironmentConfigurator envConfigurator,
+            Consumer<Map<String, String>> customEnvConfigurator
     ) {
         this.log = log;
         this.nodeDetector = nodeDetector;
         this.directoryResolverSupplier = directoryResolverSupplier;
         this.envConfigurator = envConfigurator;
+        this.customEnvConfigurator = customEnvConfigurator;
     }
 
     void addDaemonEventListener(DaemonBridge.DaemonEventListener listener) {
@@ -86,7 +91,8 @@ class GrokDaemonCoordinator {
                 DaemonBridge newBridge = new DaemonBridge(
                         nodeDetector,
                         directoryResolverSupplier.get(),
-                        envConfigurator
+                        envConfigurator,
+                        customEnvConfigurator
                 );
                 if (newBridge.start()) {
                     daemonBridge = newBridge;

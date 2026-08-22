@@ -2,7 +2,13 @@ import { useMemo } from 'react';
 import type { ClaudeMessage, ClaudeRawMessage, ClaudeContentBlock, ToolResultBlock, SubagentHistoryResponse, SubagentInfo, SubagentStatus, TaskEvent, TaskEventMap } from '../types';
 import { normalizeToolInput } from '../utils/toolInputNormalization';
 import { normalizeToolName } from '../utils/toolConstants';
-import { extractResultText, isAsyncAgentInput, parseSpawnAgentMeta, readToolUseStatus } from '../utils/subagentResult';
+import {
+  extractResultText,
+  isAsyncAgentInput,
+  isSpawnAgentArgumentFailureNoise,
+  parseSpawnAgentMeta,
+  readToolUseStatus,
+} from '../utils/subagentResult';
 import { useTaskEvents } from '../contexts/SubagentContext';
 
 type GetToolResultRawFn = (toolUseId: string) => ClaudeRawMessage | null;
@@ -109,18 +115,15 @@ export function extractSubagentsFromMessages(
       if (toolName !== 'task' && toolName !== 'agent' && toolName !== 'spawn_agent') return;
 
       const rawInput = block.input as Record<string, unknown> | undefined;
-      const input = rawInput ? normalizeToolInput(block.name, rawInput) as Record<string, unknown> : undefined;
+      if (!rawInput) return;
+      const input = normalizeToolInput(block.name, rawInput) as Record<string, unknown> | undefined;
       if (!input) return;
 
-      // Defensive: ensure all string values are actually strings
       const id = String(block.id ?? `task-${messageIndex}-${subagents.length}`);
-      const subagentType = String((input.subagent_type as string) ?? (input.subagentType as string) ?? 'Unknown');
-      const description = String((input.description as string) ?? '');
-      const prompt = String((input.prompt as string) ?? '');
-
-      // Check tool result to determine status
       const toolUseId = block.id ?? '';
       const result = findToolResult(toolUseId, messageIndex);
+      if (toolName === 'spawn_agent' && isSpawnAgentArgumentFailureNoise(rawInput, result)) return;
+
       const taskEvent = taskEvents[toolUseId];
       // isAsync is read via the shared isAsyncAgentInput helper so the
       // StatusPanel list and the inline Agent cards stay in lockstep. The
@@ -132,7 +135,18 @@ export function extractSubagentsFromMessages(
       const isAsync = isAsyncAgentInput(input, toolName, result, toolUseStatus);
       const status = determineStatus(result, isAsync, taskEvent);
       const resultMetadata = extractResultMetadata(result, getToolResultRaw, toolUseId, taskEvent);
-      const spawnMeta = toolName === 'spawn_agent' ? parseSpawnAgentMeta(input, result) : {};
+      const spawnMeta = toolName === 'spawn_agent' ? parseSpawnAgentMeta(rawInput, result) : {};
+      // Codex message may be opaque transport data. Only expose explicit,
+      // human-readable spawn metadata in the StatusPanel.
+      const subagentType = toolName === 'spawn_agent'
+        ? spawnMeta.identityLabel ?? 'spawn_agent'
+        : String((input.subagent_type as string) ?? (input.subagentType as string) ?? 'Unknown');
+      const description = toolName === 'spawn_agent'
+        ? spawnMeta.description ?? ''
+        : String((input.description as string) ?? '');
+      const prompt = toolName === 'spawn_agent'
+        ? undefined
+        : String((input.prompt as string) ?? '');
 
       subagents.push({
         id,
@@ -160,7 +174,12 @@ export function applySubagentHistoryCompletion(
     if (!subagent.isAsync || subagent.status !== 'running') return subagent;
     const history = subagentHistories[subagent.id]
       ?? (subagent.agentId ? subagentHistories[subagent.agentId] : undefined);
-    if (history?.status === 'error') return { ...subagent, status: 'error' as const };
+    // Only an authoritatively-observed failure (the backend read the sidechain
+    // and saw the turn abort) may flip the agent to error. Resolution/read
+    // failures come back with success === false and must keep polling.
+    if (history?.status === 'error' && history.success === true) {
+      return { ...subagent, status: 'error' as const };
+    }
     return history?.completed ? { ...subagent, status: 'completed' as const } : subagent;
   });
 }

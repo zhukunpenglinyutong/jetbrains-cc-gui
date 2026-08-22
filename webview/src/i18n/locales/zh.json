@@ -166,6 +166,7 @@
       },
       "tabs": {
         "basic": "基础",
+        "actions": "动作",
         "bubble": "气泡",
         "local": "自定义",
         "petdex": "Petdex"
@@ -176,6 +177,7 @@
       "disabled": "已禁用",
       "preview": "宠物预览",
       "currentPet": "当前宠物",
+      "currentPetHint": "从本地已安装的宠物中选择。",
       "petSearchPlaceholder": "搜索别名、原始名称或 ID",
       "noMatchingLocalPets": "没有匹配的已安装宠物",
       "alias": "本地别名",
@@ -184,9 +186,70 @@
       "saveAlias": "保存别名",
       "clearAlias": "清除别名",
       "size": "大小",
+      "sizeHint": "作用于当前窗口中的宠物。",
       "opacity": "透明度",
+      "opacityHint": "降低不活动时对编辑器的遮挡。",
       "showStatusIndicator": "显示状态点",
+      "showStatusIndicatorHint": "在悬浮宠物旁显示当前任务状态。",
+      "confirmBeforeDelete": "删除前二次确认",
+      "confirmBeforeDeleteHint": "移除本地宠物前需要确认。",
+      "displayAndOperations": "宠物显示与操作",
+      "refreshAssets": "刷新资源",
+      "delete": "删除",
+      "deleteConfirmTitle": "删除本地 Pet？",
+      "deleteConfirm": "确定要从本地 Pet 存储中删除 {{name}} 吗？此操作不可撤销。",
+      "deleteSuccess": "Pet 已删除",
       "resetPosition": "重置位置",
+      "actionsTitle": "状态动作",
+      "actionsDescription": "为每种任务状态选择一个或多个图集动作。",
+      "actionsHint": "状态开始时会从已选动作中随机选择一个。动作映射仅对 8×9 动画 Pet 生效，静态图片使用完整图片。",
+      "actionStateLabel": "任务状态",
+      "actionMappingTitle": "动作映射",
+      "actionSelectedCount": "已选 {{count}} 项",
+      "actionStateDescriptions": {
+        "idle": "为等待下一个任务选择动画。",
+        "success": "为任务完成时选择动画。",
+        "thinking": "为模型推理期间选择动画。",
+        "running": "为工具或任务运行时选择动画。",
+        "error": "为任务需要注意时选择动画。"
+      },
+      "actionDescriptions": {
+        "idle": "默认静止帧",
+        "running-right": "连续向右移动",
+        "running-left": "连续向左移动",
+        "waving": "短循环问候",
+        "jumping": "完成或提醒",
+        "failed": "异常状态动画",
+        "waiting": "短暂停留",
+        "running": "执行中的循环帧",
+        "review": "审阅动作"
+      },
+      "actionPreview": "动作预览",
+      "actionPreviewHint": "选择要检查的图集动作。",
+      "previewAction": "预览动作",
+      "previewFrame": "帧进度",
+      "playPreview": "播放预览",
+      "pausePreview": "暂停预览",
+      "actionPreviewSpriteHint": "当前显示所选 spritesheet 动作的对应帧。",
+      "actionPreviewStaticHint": "静态图片不包含动作帧，预览将显示完整图片。",
+      "visualStates": {
+        "idle": "空闲",
+        "success": "成功",
+        "thinking": "思考",
+        "running": "执行中",
+        "error": "错误"
+      },
+      "actions": {
+        "idle": "空闲",
+        "running-right": "向右移动",
+        "running-left": "向左移动",
+        "waving": "挥手",
+        "jumping": "跳跃",
+        "failed": "失败",
+        "waiting": "等待",
+        "running": "工作中",
+        "review": "检查"
+      },
       "refreshLocalPets": "刷新本地宠物",
       "openPetDirectory": "打开宠物目录",
       "localPetOperationFailed": "本地宠物操作失败，请检查 ~/.codex/pets 的访问权限。",
@@ -206,19 +269,25 @@
       "hatchName": "宠物名称",
       "hatchStyle": "视觉风格",
       "hatchPrompt": "宠物描述",
+      "referenceImage": "参考图片",
+      "petDirectory": "宠物目录",
+      "petDirectoryHint": "本地宠物与生成结果统一管理。",
+      "hatchCommandHint": "命令会发送到当前 Codex 输入框执行。",
       "noReference": "未选择参考图片",
       "chooseReference": "选择参考图片",
       "clearReference": "清除参考图片",
       "prepareCreatePet": "准备创建命令",
       "prepareRepairPet": "准备修复命令",
       "hatchCommandPrepared": "命令已添加到当前 Codex 输入框，请检查后再发送。",
+      "hatchReplaceDraftConfirmTitle": "替换当前聊天草稿？",
       "hatchReplaceDraftConfirm": "是否用此 hatch-pet 命令替换当前聊天草稿？",
+      "hatchReplaceDraftAction": "替换草稿",
       "hatchCommandFailed": "无法准备 hatch-pet 命令。",
       "hatchSkillNotReady": "hatch-pet Skill 未正确安装。",
       "hatchInputRequired": "请输入名称或描述，或者选择一张参考图片。",
       "hatchRequiresCodex": "准备 hatch-pet 命令前，请先切换到 Codex 页签。",
       "bubbleTitle": "宠物气泡",
-      "bubbleDescription": "为实时 Codex 任务显示简短的状态气泡。气泡仅使用模板，不会包含聊天内容。",
+      "bubbleDescription": "为实时 Claude Code 和 Codex 任务显示简短的状态气泡。气泡仅使用模板，不会包含聊天内容。",
       "bubbleDuration": "气泡持续时间（秒）",
       "bubbleSize": "气泡大小",
       "bubbleShowForBackgroundTabs": "显示后台页签的气泡",
@@ -291,6 +360,8 @@
       "httpError": "Petdex 返回 HTTP {{status}}，请稍后重试。",
       "unknownError": "操作失败（{{code}}），请查看 idea.log 获取详细信息。",
       "uninstall": "卸载",
+      "uninstallConfirmTitle": "卸载 Pet？",
+      "uninstallConfirm": "确定要卸载 {{name}} 并删除其托管的本地文件吗？",
       "processing": "处理中",
       "installedExternally": "本地安装",
       "installSuccess": "宠物已安装并选中",
@@ -408,7 +479,8 @@
           "grok": "Grok CLI",
           "kimi": "Kimi CLI",
           "opencode": "OpenCode",
-          "pi": "PI CLI"
+          "pi": "PI CLI",
+          "omp": "OMP CLI"
         },
         "currentProviderAuto": "当前使用自动选择：{{provider}}",
         "currentProviderManual": "当前使用手动选择的 provider：{{provider}}",
@@ -579,6 +651,10 @@
         "pi": {
           "name": "PI CLI",
           "description": "极简终端编码代理，支持多提供商模型"
+        },
+        "omp": {
+          "name": "OMP CLI",
+          "description": "支持多提供商模型的 Oh My Pi 终端编码代理"
         },
         "dsh": {
           "name": "DeepSeek Harness",
@@ -2039,6 +2115,28 @@
       "description": "完全免审批，写文件和执行命令立即生效，仅受沙箱限制。"
     }
   },
+  "ompModes": {
+    "default": {
+      "label": "默认",
+      "tooltip": "使用所选模型（或 OMP auto）",
+      "description": "使用模型下拉框中选择的模型；设为 Auto 时使用 OMP CLI 默认模型。"
+    },
+    "smol": {
+      "label": "Smol",
+      "tooltip": "快速模型角色 (omp --model smol)",
+      "description": "使用为 omp 的 smol 角色配置的模型运行此对话。覆盖模型下拉框的选择。"
+    },
+    "slow": {
+      "label": "Slow",
+      "tooltip": "推理模型角色 (omp --model slow)",
+      "description": "使用为 omp 的 slow 角色配置的模型运行此对话。覆盖模型下拉框的选择。"
+    },
+    "plan": {
+      "label": "Plan",
+      "tooltip": "规划模型角色 (omp --model plan)",
+      "description": "使用为 omp 的 plan 角色配置的模型运行此对话。覆盖模型下拉框的选择。"
+    }
+  },
   "providers": {
     "claude": {
       "label": "Claude Code"
@@ -2060,6 +2158,9 @@
     },
     "pi": {
       "label": "PI CLI"
+    },
+    "omp": {
+      "label": "OMP CLI"
     },
     "beta": {
       "badge": "Beta",
@@ -2244,6 +2345,15 @@
       "label": "Fast",
       "description": "Codex快速响应模式（会产生额外消耗）"
     }
+  },
+  "dshPresets": {
+    "title": "选择 DeepSeek Harness Agent 预设",
+    "none": { "label": "默认", "description": "dsh 默认 headless 组合（完整工具集）" },
+    "standard": { "label": "标准模式", "description": "功能完整的标准编码工具集" },
+    "code": { "label": "PTC 模式", "description": "标准能力加 Code Mode" },
+    "minimal": { "label": "极简模式", "description": "仅提供 bash 与 str_replace_editor" },
+    "cordis": { "label": "创造模式", "description": "标准能力加组合编排能力" },
+    "user": { "description": "安装在 DSH 主目录中的自定义预设" }
   },
   "error": {
     "providerNotConfigured": "供应商未配置",

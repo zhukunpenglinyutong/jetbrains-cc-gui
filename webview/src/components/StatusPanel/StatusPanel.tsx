@@ -205,7 +205,7 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
   const renderPopoverContent = () => {
     switch (openPopover) {
       case 'todo':
-        return <TodoList todos={todos} />;
+        return <TodoList todos={todos} isStreaming={isStreaming} />;
       case 'subagent':
         return <SubagentList subagents={subagents} histories={subagentHistories} currentSessionId={currentSessionId} currentProvider={currentProvider} isStreaming={isStreaming} />;
       case 'files':
@@ -234,7 +234,9 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
           onClick={() => handleTabClick('todo')}
         >
           <span className="codicon codicon-checklist" />
-          <span className="tab-label">{t('statusPanel.tasksTab')}</span>
+          <span className="tab-label">
+            {t(currentProvider === 'codex' ? 'statusPanel.todoTab' : 'statusPanel.tasksTab')}
+          </span>
           {hasTodos && (
             <span className="tab-progress">
               {completedCount}/{totalCount}

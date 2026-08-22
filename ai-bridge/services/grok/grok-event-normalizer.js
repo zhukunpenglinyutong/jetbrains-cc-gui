@@ -165,21 +165,15 @@ export class GrokEventNormalizer {
 
     switch (kind) {
       case 'agent_message_chunk': {
-        const text = extractText(update.content);
-        if (text) {
-          this.assistantText += text;
-          this.#emit(`[CONTENT_DELTA] ${JSON.stringify(text)}`);
-        }
+        const text = extractText(update.content) || extractText(update.delta) || update.text || '';
+        this.#emitChunk(text, 'content');
         break;
       }
       case 'agent_thought_chunk':
       case 'agent_thinking_chunk':
       case 'thought_chunk': {
-        const text = extractText(update.content) || update.text || '';
-        if (text) {
-          this.thinkingText += text;
-          this.#emit(`[THINKING_DELTA] ${JSON.stringify(text)}`);
-        }
+        const text = extractText(update.content) || extractText(update.delta) || update.text || '';
+        this.#emitChunk(text, 'thinking');
         break;
       }
       case 'tool_call':
@@ -201,13 +195,48 @@ export class GrokEventNormalizer {
         break;
       default: {
         // Try generic text fields
-        const text = extractText(update.content) || update.text;
+        const text = extractText(update.content) || extractText(update.delta) || update.text;
         if (text && kind.includes('message')) {
-          this.assistantText += text;
-          this.#emit(`[CONTENT_DELTA] ${JSON.stringify(text)}`);
+          this.#emitChunk(text, 'content');
         }
         break;
       }
+    }
+  }
+
+  /**
+   * Grok CLI often re-sends the full accumulated text so far (snapshot) instead
+   * of just the new part. Derive the true delta against the accumulated text
+   * for {@code target} ("content" | "thinking") and emit it as a
+   * CONTENT_DELTA / THINKING_DELTA line — once, deduplicated.
+   */
+  #emitChunk(text, target) {
+    if (!text) return;
+    const isThinking = target === 'thinking';
+    const acc = isThinking ? this.thinkingText : this.assistantText;
+    let delta;
+    let total;
+    if (text.startsWith(acc)) {
+      // Snapshot: text contains everything emitted so far plus the new part.
+      delta = text.slice(acc.length);
+      total = text;
+    } else if (acc.startsWith(text)) {
+      // Stale replay of an earlier snapshot — nothing new.
+      delta = '';
+      total = acc;
+    } else {
+      // Genuine delta.
+      delta = text;
+      total = acc + text;
+    }
+    if (isThinking) {
+      this.thinkingText = total;
+    } else {
+      this.assistantText = total;
+    }
+    if (delta) {
+      const tag = isThinking ? '[THINKING_DELTA]' : '[CONTENT_DELTA]';
+      this.#emit(`${tag} ${JSON.stringify(delta)}`);
     }
   }
 
@@ -523,9 +552,15 @@ export class GrokEventNormalizer {
 function extractText(content) {
   if (content == null) return '';
   if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content.map(extractText).join('');
+  }
   if (typeof content === 'object') {
     if (typeof content.text === 'string') return content.text;
-    if (typeof content.content === 'string') return content.content;
+    if (typeof content.content === 'string' || typeof content.content === 'object') {
+      return extractText(content.content);
+    }
+    if (typeof content.delta === 'string') return content.delta;
   }
   return '';
 }

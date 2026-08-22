@@ -166,6 +166,7 @@
       },
       "tabs": {
         "basic": "Basic",
+        "actions": "Actions",
         "bubble": "Bubbles",
         "local": "Custom",
         "petdex": "Petdex"
@@ -176,6 +177,7 @@
       "disabled": "Disabled",
       "preview": "Pet preview",
       "currentPet": "Current pet",
+      "currentPetHint": "Choose from locally installed pets.",
       "petSearchPlaceholder": "Search alias, original name, or ID",
       "noMatchingLocalPets": "No matching installed pets",
       "alias": "Local alias",
@@ -184,9 +186,70 @@
       "saveAlias": "Save alias",
       "clearAlias": "Clear alias",
       "size": "Size",
+      "sizeHint": "Applied to the pet in the current window.",
       "opacity": "Opacity",
+      "opacityHint": "Reduce obstruction over the editor while inactive.",
       "showStatusIndicator": "Show status dot",
+      "showStatusIndicatorHint": "Show the current task state next to the floating pet.",
+      "confirmBeforeDelete": "Confirm before deleting a pet",
+      "confirmBeforeDeleteHint": "Require confirmation before removing a local pet.",
+      "displayAndOperations": "Pet display and operations",
+      "refreshAssets": "Refresh assets",
+      "delete": "Delete",
+      "deleteConfirmTitle": "Delete local pet?",
+      "deleteConfirm": "Delete {{name}} from local pet storage? This cannot be undone.",
+      "deleteSuccess": "Pet deleted",
       "resetPosition": "Reset position",
+      "actionsTitle": "Status actions",
+      "actionsDescription": "Choose one or more sprite actions for each task status.",
+      "actionsHint": "One selected action is chosen at random when a status begins. Action mappings apply to animated 8x9 pets; static images use the full image.",
+      "actionStateLabel": "Task status",
+      "actionMappingTitle": "Action mapping",
+      "actionSelectedCount": "{{count}} selected",
+      "actionStateDescriptions": {
+        "idle": "Choose an animation while waiting for the next task.",
+        "success": "Choose an animation when a task completes.",
+        "thinking": "Choose an animation while the model is reasoning.",
+        "running": "Choose an animation while a tool or task is running.",
+        "error": "Choose an animation when a task needs attention."
+      },
+      "actionDescriptions": {
+        "idle": "Default resting frame",
+        "running-right": "Continuous rightward motion",
+        "running-left": "Continuous leftward motion",
+        "waving": "Short greeting loop",
+        "jumping": "Completion or reminder",
+        "failed": "Exceptional state animation",
+        "waiting": "Brief pause",
+        "running": "Loop while running",
+        "review": "Review animation"
+      },
+      "actionPreview": "Action preview",
+      "actionPreviewHint": "Choose a sprite action to inspect.",
+      "previewAction": "Preview action",
+      "previewFrame": "Frame",
+      "playPreview": "Play preview",
+      "pausePreview": "Pause preview",
+      "actionPreviewSpriteHint": "Shows the selected spritesheet action frame.",
+      "actionPreviewStaticHint": "Static images have no action frames; the full image is shown.",
+      "visualStates": {
+        "idle": "Idle",
+        "success": "Success",
+        "thinking": "Thinking",
+        "running": "Running",
+        "error": "Error"
+      },
+      "actions": {
+        "idle": "Idle",
+        "running-right": "Running right",
+        "running-left": "Running left",
+        "waving": "Waving",
+        "jumping": "Jumping",
+        "failed": "Failed",
+        "waiting": "Waiting",
+        "running": "Working",
+        "review": "Review"
+      },
       "refreshLocalPets": "Refresh local pets",
       "openPetDirectory": "Open pet directory",
       "localPetOperationFailed": "The local pet operation failed. Check ~/.codex/pets permissions.",
@@ -206,19 +269,25 @@
       "hatchName": "Pet name",
       "hatchStyle": "Visual style",
       "hatchPrompt": "Pet description",
+      "referenceImage": "Reference image",
+      "petDirectory": "Pet directory",
+      "petDirectoryHint": "Local pets and generated assets are managed together.",
+      "hatchCommandHint": "The command is sent to the active Codex input for execution.",
       "noReference": "No reference image selected",
       "chooseReference": "Choose reference",
       "clearReference": "Clear reference",
       "prepareCreatePet": "Prepare create command",
       "prepareRepairPet": "Prepare repair command",
       "hatchCommandPrepared": "Command added to the active Codex input. Review it before sending.",
+      "hatchReplaceDraftConfirmTitle": "Replace current chat draft?",
       "hatchReplaceDraftConfirm": "Replace the current chat draft with this hatch-pet command?",
+      "hatchReplaceDraftAction": "Replace draft",
       "hatchCommandFailed": "The hatch-pet command could not be prepared.",
       "hatchSkillNotReady": "The hatch-pet Skill is not installed correctly.",
       "hatchInputRequired": "Enter a name or description, or choose a reference image.",
       "hatchRequiresCodex": "Switch to a Codex tab before preparing a hatch-pet command.",
       "bubbleTitle": "Pet bubbles",
-      "bubbleDescription": "Show short status bubbles for live Codex tasks. Bubble text uses templates only and never includes chat content.",
+      "bubbleDescription": "Show short status bubbles for live Claude Code and Codex tasks. Bubble text uses templates only and never includes chat content.",
       "bubbleDuration": "Bubble duration (seconds)",
       "bubbleSize": "Bubble size",
       "bubbleShowForBackgroundTabs": "Show bubbles from background tabs",
@@ -291,6 +360,8 @@
       "httpError": "Petdex returned HTTP {{status}}. Please try again later.",
       "unknownError": "Operation failed ({{code}}). Check idea.log for details.",
       "uninstall": "Uninstall",
+      "uninstallConfirmTitle": "Uninstall Pet?",
+      "uninstallConfirm": "Uninstall {{name}} and remove its managed local files?",
       "processing": "Processing",
       "installedExternally": "Installed locally",
       "installSuccess": "Pet installed and selected",
@@ -408,7 +479,8 @@
           "grok": "Grok CLI",
           "kimi": "Kimi CLI",
           "opencode": "OpenCode",
-          "pi": "PI CLI"
+          "pi": "PI CLI",
+          "omp": "OMP CLI"
         },
         "currentProviderAuto": "Currently using automatic selection: {{provider}}",
         "currentProviderManual": "Currently using manually selected provider: {{provider}}",
@@ -579,6 +651,10 @@
         "pi": {
           "name": "PI CLI",
           "description": "Minimal terminal coding agent with multi-provider model support"
+        },
+        "omp": {
+          "name": "OMP CLI",
+          "description": "Oh My Pi terminal coding agent with multi-provider model support"
         },
         "dsh": {
           "name": "DeepSeek Harness",
@@ -2034,6 +2110,28 @@
       "description": "Hands-off mode. Codex executes edits and shell commands immediately."
     }
   },
+  "ompModes": {
+    "default": {
+      "label": "Default",
+      "tooltip": "Use the selected model (or OMP auto)",
+      "description": "Uses the model chosen in the model dropdown, or the OMP CLI default when set to Auto."
+    },
+    "smol": {
+      "label": "Smol",
+      "tooltip": "Fast model role (omp --model smol)",
+      "description": "Runs this conversation with the model configured for omp's smol role. Overrides the model dropdown."
+    },
+    "slow": {
+      "label": "Slow",
+      "tooltip": "Reasoning model role (omp --model slow)",
+      "description": "Runs this conversation with the model configured for omp's slow role. Overrides the model dropdown."
+    },
+    "plan": {
+      "label": "Plan",
+      "tooltip": "Planning model role (omp --model plan)",
+      "description": "Runs this conversation with the model configured for omp's plan role. Overrides the model dropdown."
+    }
+  },
   "providers": {
     "claude": {
       "label": "Claude Code"
@@ -2055,6 +2153,9 @@
     },
     "pi": {
       "label": "PI CLI"
+    },
+    "omp": {
+      "label": "OMP CLI"
     },
     "beta": {
       "badge": "Beta",
@@ -2239,6 +2340,15 @@
       "label": "Fast",
       "description": "Codex fast response mode (uses additional credits)"
     }
+  },
+  "dshPresets": {
+    "title": "Select DeepSeek Harness agent preset",
+    "none": { "label": "Default", "description": "dsh default headless composition (full toolset)" },
+    "standard": { "label": "Standard", "description": "Full coding agent with the standard toolset" },
+    "code": { "label": "PTC", "description": "Standard capabilities with Code Mode" },
+    "minimal": { "label": "Minimal", "description": "Bash and str_replace_editor only" },
+    "cordis": { "label": "Creator", "description": "Standard capabilities plus composition authoring" },
+    "user": { "description": "Custom preset installed under the DSH home" }
   },
   "error": {
     "providerNotConfigured": "Provider Not Configured",

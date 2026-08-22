@@ -34,6 +34,7 @@ export async function handleDshCommand(command, args, stdinData) {
           model: stdinData.model || '',
           reasoningEffort: stdinData.reasoningEffort || '',
           attachments: stdinData.attachments || [],
+          preset: stdinData.preset || '',
         });
       } else {
         await dshSendMessage({
@@ -43,6 +44,7 @@ export async function handleDshCommand(command, args, stdinData) {
           model: args[3],
           reasoningEffort: args[4],
           attachments: [],
+          preset: '',
         });
       }
       break;

@@ -21,16 +21,19 @@ function makeOptions(overrides: Partial<UseModelStatePersistenceOptions> = {}): 
     setSelectedKimiModel: vi.fn(),
     setSelectedOpenCodeModel: vi.fn(),
     setSelectedPiModel: vi.fn(),
+    setSelectedOmpModel: vi.fn(),
     setSelectedDshModel: vi.fn(),
     setGrokPermissionMode: vi.fn(),
     setKimiPermissionMode: vi.fn(),
     setOpenCodePermissionMode: vi.fn(),
     setPiPermissionMode: vi.fn(),
+    setOmpPermissionMode: vi.fn(),
     setDshPermissionMode: vi.fn(),
     setPermissionMode: vi.fn(),
     setLongContextEnabled: vi.fn(),
     setReasoningEffort: vi.fn(),
     setCodexFastMode: vi.fn(),
+    setDshPreset: vi.fn(),
     currentProvider: 'claude',
     selectedClaudeModel: 'claude-sonnet-4-5',
     selectedCodexModel: 'gpt-5-codex',
@@ -40,15 +43,18 @@ function makeOptions(overrides: Partial<UseModelStatePersistenceOptions> = {}): 
     selectedKimiModel: 'auto',
     selectedOpenCodeModel: 'opencode-default',
     selectedPiModel: 'auto',
+    selectedOmpModel: 'auto',
     selectedDshModel: 'auto',
     grokPermissionMode: 'default' as PermissionMode,
     kimiPermissionMode: 'default' as PermissionMode,
     openCodePermissionMode: 'default' as PermissionMode,
     piPermissionMode: 'default' as PermissionMode,
+    ompPermissionMode: 'default' as PermissionMode,
     dshPermissionMode: 'default' as PermissionMode,
     longContextEnabled: false,
     reasoningEffort: 'medium',
     codexFastMode: 'normal',
+    dshPreset: '',
     ...overrides,
   };
 }
@@ -328,6 +334,91 @@ describe('useModelStatePersistence — CLI provider persistence', () => {
     expect(saved.provider).toBe('opencode');
     expect(saved.openCodeModel).toBe('openai/gpt-5');
     expect(saved.openCodePermissionMode).toBe('acceptEdits');
+  });
+
+  it('restores a saved omp model and permission selection', () => {
+    const setSelectedOmpModel = vi.fn();
+    const setOmpPermissionMode = vi.fn();
+    localStorage.setItem('model-selection-state', JSON.stringify({
+      provider: 'omp',
+      ompModel: 'openai/gpt-5',
+      ompPermissionMode: 'acceptEdits',
+    }));
+
+    renderHook(() => useModelStatePersistence(makeOptions({ setSelectedOmpModel, setOmpPermissionMode })));
+    vi.advanceTimersByTime(200);
+
+    expect(setSelectedOmpModel).toHaveBeenCalledWith('openai/gpt-5');
+    expect(setOmpPermissionMode).toHaveBeenCalledWith('acceptEdits');
+    expect(bridgeEventsFor('set_provider')).toEqual([['set_provider', 'omp']]);
+    expect(bridgeEventsFor('set_model')).toEqual([['set_model', 'openai/gpt-5']]);
+  });
+
+  it('reconciles a stale omp pair saved before mode⇔model unification (role mode + auto model)', () => {
+    const setSelectedOmpModel = vi.fn();
+    const setOmpPermissionMode = vi.fn();
+    localStorage.setItem('model-selection-state', JSON.stringify({
+      provider: 'omp',
+      ompModel: 'auto',
+      ompPermissionMode: 'smol',
+    }));
+
+    renderHook(() => useModelStatePersistence(makeOptions({ setSelectedOmpModel, setOmpPermissionMode })));
+    vi.advanceTimersByTime(200);
+
+    // Role mode wins: the model is forced to the role id and synced to Java.
+    expect(setSelectedOmpModel).toHaveBeenLastCalledWith('smol');
+    expect(setOmpPermissionMode).toHaveBeenCalledWith('smol');
+    expect(bridgeEventsFor('set_model')).toEqual([['set_model', 'smol']]);
+  });
+
+  it('falls back to omp defaults when the snapshot has no omp keys', () => {
+    const setSelectedOmpModel = vi.fn();
+    const setOmpPermissionMode = vi.fn();
+    localStorage.setItem('model-selection-state', JSON.stringify({
+      provider: 'claude',
+      claudeModel: 'claude-sonnet-4-5',
+    }));
+
+    renderHook(() => useModelStatePersistence(makeOptions({ setSelectedOmpModel, setOmpPermissionMode })));
+    vi.advanceTimersByTime(200);
+
+    expect(setSelectedOmpModel).not.toHaveBeenCalled();
+    expect(setOmpPermissionMode).toHaveBeenCalledWith('default');
+  });
+
+  it('restores a dynamic omp role mode (designer) that is outside the static whitelist', () => {
+    const setSelectedOmpModel = vi.fn();
+    const setOmpPermissionMode = vi.fn();
+    const setPermissionMode = vi.fn();
+    localStorage.setItem('model-selection-state', JSON.stringify({
+      provider: 'omp',
+      ompModel: 'designer',
+      ompPermissionMode: 'designer',
+    }));
+
+    renderHook(() => useModelStatePersistence(makeOptions({ setSelectedOmpModel, setOmpPermissionMode, setPermissionMode })));
+    vi.advanceTimersByTime(200);
+
+    expect(setSelectedOmpModel).toHaveBeenCalledWith('designer');
+    expect(setOmpPermissionMode).toHaveBeenCalledWith('designer');
+    expect(setPermissionMode).toHaveBeenCalledWith('designer');
+    expect(bridgeEventsFor('set_provider')).toEqual([['set_provider', 'omp']]);
+    expect(bridgeEventsFor('set_model')).toEqual([['set_model', 'designer']]);
+  });
+
+  it('drops a malformed omp permission mode from the snapshot', () => {
+    const setOmpPermissionMode = vi.fn();
+    localStorage.setItem('model-selection-state', JSON.stringify({
+      provider: 'omp',
+      ompModel: 'designer',
+      ompPermissionMode: '!!not-a-role',
+    }));
+
+    renderHook(() => useModelStatePersistence(makeOptions({ setOmpPermissionMode })));
+    vi.advanceTimersByTime(200);
+
+    expect(setOmpPermissionMode).toHaveBeenCalledWith('default');
   });
 });
 

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { ToolResultBlock } from '../types';
 import {
-  isAsyncAgentInput,
   extractResultText,
+  hasSubagentTranscript,
+  isAsyncAgentInput,
+  isSpawnAgentArgumentFailureNoise,
   parseAgentToolMeta,
   parseSpawnAgentMeta,
   readToolUseStatus,
@@ -98,6 +100,7 @@ describe('parseSpawnAgentMeta', () => {
       reasoning_effort: 'high',
     })).toEqual({
       agentPath: 'audit_ui',
+      identityLabel: 'audit_ui',
       model: 'gpt-5.6-terra',
       reasoningEffort: 'high',
     });
@@ -111,6 +114,47 @@ describe('parseSpawnAgentMeta', () => {
       agentId: 'agent-123',
       description: 'Review the bridge',
     });
+  });
+
+  it('prefers nickname and otherwise uses the final task path segment for display identity', () => {
+    expect(parseSpawnAgentMeta({ task_name: '/root/reviewer' })).toMatchObject({
+      agentPath: '/root/reviewer',
+      identityLabel: 'reviewer',
+    });
+    expect(parseSpawnAgentMeta({ task_name: '/root/reviewer', nickname: 'Hilbert' })).toMatchObject({
+      identityLabel: 'Hilbert',
+      nickname: 'Hilbert',
+    });
+  });
+});
+
+describe('isSpawnAgentArgumentFailureNoise', () => {
+  it('identifies empty historical calls with explicit argument parsing failures', () => {
+    expect(isSpawnAgentArgumentFailureNoise({}, {
+      type: 'tool_result',
+      content: 'failed to parse function arguments: EOF while parsing a value',
+    })).toBe(true);
+  });
+
+  it('keeps valid launches and unrelated runtime errors visible', () => {
+    const parseFailure = {
+      type: 'tool_result' as const,
+      content: 'failed to parse function arguments: missing field task_name',
+      is_error: true,
+    };
+    expect(isSpawnAgentArgumentFailureNoise({ task_name: 'reviewer' }, parseFailure)).toBe(false);
+    expect(isSpawnAgentArgumentFailureNoise({}, {
+      type: 'tool_result',
+      content: 'permission denied while starting agent',
+      is_error: true,
+    })).toBe(false);
+  });
+});
+
+describe('hasSubagentTranscript', () => {
+  it('distinguishes lightweight status from a loaded transcript', () => {
+    expect(hasSubagentTranscript({})).toBe(false);
+    expect(hasSubagentTranscript({ messages: [] })).toBe(true);
   });
 });
 

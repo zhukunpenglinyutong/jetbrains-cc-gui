@@ -26,6 +26,13 @@ function mockClientForRequest() {
     get killed() {
       return killed;
     },
+    // Mirror Node's ChildProcess: exitCode is null while the process is still
+    // running and a number once it has exited. grok-acp-client gates kill() on
+    // `exitCode === null` (real liveness), not on `killed` (which only signals
+    // that kill() was *called*), so the mock must expose exitCode too.
+    get exitCode() {
+      return killed ? 0 : null;
+    },
     kill() {
       killed = true;
     },

@@ -27,7 +27,8 @@ import java.util.Map;
 
 /**
  * Reads Grok CLI session history from
- * {@code ~/.grok/sessions/<url-encoded-cwd>/<sessionId>/{summary.json,chat_history.jsonl}}.
+ * {@code $GROK_HOME/sessions/<url-encoded-cwd>/<sessionId>/{summary.json,chat_history.jsonl}}
+ * (default home {@code ~/.grok}; often {@code ~/.antig-grok} when {@code GROK_HOME} is set).
  */
 public class GrokHistoryReader {
 
@@ -36,24 +37,38 @@ public class GrokHistoryReader {
     private static final int MAX_TOOL_RESULT_CHARS = 20_000;
 
     private final Gson gson;
-    private final Path sessionsRoot;
+    /** Ordered session roots (primary GROK_HOME first, then fallbacks). */
+    private final List<Path> sessionsRoots;
 
     public GrokHistoryReader() {
-        this(defaultSessionsRoot(), new Gson());
+        this(defaultSessionsRoots(), new Gson());
     }
 
     GrokHistoryReader(Path sessionsRoot, Gson gson) {
-        this.sessionsRoot = sessionsRoot;
+        this(sessionsRoot != null ? List.of(sessionsRoot) : List.of(), gson);
+    }
+
+    GrokHistoryReader(List<Path> sessionsRoots, Gson gson) {
+        this.sessionsRoots = sessionsRoots != null ? List.copyOf(sessionsRoots) : List.of();
         this.gson = gson;
     }
 
-    private static Path defaultSessionsRoot() {
-        String home = NodeDetector.resolveHomeForFileOps();
-        String grokHome = System.getenv("GROK_HOME");
-        if (grokHome != null && !grokHome.trim().isEmpty()) {
-            return Paths.get(grokHome.trim(), "sessions");
+    private static List<Path> defaultSessionsRoots() {
+        List<Path> roots = new ArrayList<>();
+        for (Path home : GrokLocalAuthResolver.resolveGrokHomeCandidates()) {
+            if (home != null) {
+                roots.add(home.resolve("sessions"));
+            }
         }
-        return Paths.get(home, ".grok", "sessions");
+        // Last-resort default if PlatformUtils home resolution failed above.
+        if (roots.isEmpty()) {
+            String home = NodeDetector.resolveHomeForFileOps();
+            if (home != null && !home.isEmpty()) {
+                roots.add(Paths.get(home, ".grok", "sessions"));
+            }
+        }
+        LOG.info("[GrokHistoryReader] Session roots: " + roots);
+        return roots;
     }
 
     public static class SessionInfo {
@@ -113,34 +128,44 @@ public class GrokHistoryReader {
 
     public List<SessionInfo> listAllSessions() throws IOException {
         List<SessionInfo> sessions = new ArrayList<>();
-        if (!Files.isDirectory(sessionsRoot)) {
-            LOG.info("[GrokHistoryReader] Sessions root missing: " + sessionsRoot);
-            return sessions;
-        }
-
-        try (DirectoryStream<Path> cwdDirs = Files.newDirectoryStream(sessionsRoot)) {
-            for (Path cwdDir : cwdDirs) {
-                if (!Files.isDirectory(cwdDir)) {
-                    continue;
-                }
-                String name = cwdDir.getFileName().toString();
-                if (name.startsWith(".") || name.endsWith(".sqlite") || name.endsWith(".db")) {
-                    continue;
-                }
-                String cwd = decodeCwdDirName(name);
-                try (DirectoryStream<Path> sessionDirs = Files.newDirectoryStream(cwdDir)) {
-                    for (Path sessionDir : sessionDirs) {
-                        if (!Files.isDirectory(sessionDir)) {
-                            continue;
-                        }
-                        SessionInfo info = readSessionSummary(sessionDir, cwd);
-                        if (info != null) {
-                            sessions.add(info);
+        // Prefer the first root that owns a given sessionId when the same id
+        // appears in multiple homes (should be rare).
+        Map<String, SessionInfo> byId = new HashMap<>();
+        boolean anyRoot = false;
+        for (Path sessionsRoot : sessionsRoots) {
+            if (!Files.isDirectory(sessionsRoot)) {
+                LOG.info("[GrokHistoryReader] Sessions root missing: " + sessionsRoot);
+                continue;
+            }
+            anyRoot = true;
+            try (DirectoryStream<Path> cwdDirs = Files.newDirectoryStream(sessionsRoot)) {
+                for (Path cwdDir : cwdDirs) {
+                    if (!Files.isDirectory(cwdDir)) {
+                        continue;
+                    }
+                    String name = cwdDir.getFileName().toString();
+                    if (name.startsWith(".") || name.endsWith(".sqlite") || name.endsWith(".db")) {
+                        continue;
+                    }
+                    String cwd = decodeCwdDirName(name);
+                    try (DirectoryStream<Path> sessionDirs = Files.newDirectoryStream(cwdDir)) {
+                        for (Path sessionDir : sessionDirs) {
+                            if (!Files.isDirectory(sessionDir)) {
+                                continue;
+                            }
+                            SessionInfo info = readSessionSummary(sessionDir, cwd);
+                            if (info != null && info.sessionId != null) {
+                                byId.putIfAbsent(info.sessionId, info);
+                            }
                         }
                     }
                 }
             }
         }
+        if (!anyRoot) {
+            LOG.info("[GrokHistoryReader] No sessions roots available: " + sessionsRoots);
+        }
+        sessions.addAll(byId.values());
         sessions.sort(Comparator.comparingLong((SessionInfo s) -> s.lastTimestamp).reversed());
         return sessions;
     }
@@ -290,35 +315,42 @@ public class GrokHistoryReader {
             return null;
         }
         if (cwd != null && !cwd.trim().isEmpty()) {
-            Path direct = sessionsRoot.resolve(encodeCwd(cwd)).resolve(id);
-            if (Files.isDirectory(direct)) {
-                return direct;
-            }
-            // macOS may canonicalize /var → /private/var etc.
-            Path canon = sessionsRoot.resolve(encodeCwd(canonicalizePath(cwd))).resolve(id);
-            if (Files.isDirectory(canon)) {
-                return canon;
+            String encoded = encodeCwd(cwd);
+            String encodedCanon = encodeCwd(canonicalizePath(cwd));
+            for (Path sessionsRoot : sessionsRoots) {
+                Path direct = sessionsRoot.resolve(encoded).resolve(id);
+                if (Files.isDirectory(direct)) {
+                    return direct;
+                }
+                // macOS may canonicalize /var → /private/var etc.
+                Path canon = sessionsRoot.resolve(encodedCanon).resolve(id);
+                if (Files.isDirectory(canon)) {
+                    return canon;
+                }
             }
         }
         return findSessionDirById(id);
     }
 
     private Path findSessionDirById(String sessionId) {
-        if (!Files.isDirectory(sessionsRoot)) {
-            return null;
-        }
-        try (DirectoryStream<Path> cwdDirs = Files.newDirectoryStream(sessionsRoot)) {
-            for (Path cwdDir : cwdDirs) {
-                if (!Files.isDirectory(cwdDir)) {
-                    continue;
-                }
-                Path candidate = cwdDir.resolve(sessionId);
-                if (Files.isDirectory(candidate)) {
-                    return candidate;
-                }
+        for (Path sessionsRoot : sessionsRoots) {
+            if (!Files.isDirectory(sessionsRoot)) {
+                continue;
             }
-        } catch (IOException e) {
-            LOG.warn("[GrokHistoryReader] Scan for session id failed: " + e.getMessage());
+            try (DirectoryStream<Path> cwdDirs = Files.newDirectoryStream(sessionsRoot)) {
+                for (Path cwdDir : cwdDirs) {
+                    if (!Files.isDirectory(cwdDir)) {
+                        continue;
+                    }
+                    Path candidate = cwdDir.resolve(sessionId);
+                    if (Files.isDirectory(candidate)) {
+                        return candidate;
+                    }
+                }
+            } catch (IOException e) {
+                LOG.warn("[GrokHistoryReader] Scan for session id failed under "
+                        + sessionsRoot + ": " + e.getMessage());
+            }
         }
         return null;
     }

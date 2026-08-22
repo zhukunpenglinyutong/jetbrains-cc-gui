@@ -3,7 +3,7 @@ import { petBridge } from './petBridge';
 import { resolveCodexPetState } from './petState';
 
 const STATE_HEARTBEAT_MS = 1_000;
-const ERROR_RESET_MS = 140 * 8 * 5;
+const ERROR_DISPLAY_MS = 5_600;
 
 interface CodexPetStatusBridgeProps {
   active: boolean;
@@ -113,7 +113,7 @@ export function CodexPetStatusBridge({
       showBubble('task_error');
       reportState('error');
       terminalState.current = 'error';
-      scheduleIdle(ERROR_RESET_MS);
+      scheduleIdle(ERROR_DISPLAY_MS);
       wasBusy.current = false;
       liveTurnActive.current = false;
     } else if (wasBusy.current && !busy) {

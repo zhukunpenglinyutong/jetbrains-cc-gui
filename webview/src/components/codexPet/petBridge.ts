@@ -4,6 +4,18 @@ export type CatalogColumnCount = 3 | 4 | 5 | 6;
 export type CatalogPageSize = 12 | 24 | 36 | 48;
 export type CodexPetBubbleSize = 'small' | 'medium' | 'large' | 'xlarge';
 export type CodexPetScope = 'project' | 'global';
+export type CodexPetVisualState = 'idle' | 'success' | 'thinking' | 'running' | 'error';
+export type CodexPetAction =
+  | 'idle'
+  | 'running-right'
+  | 'running-left'
+  | 'waving'
+  | 'jumping'
+  | 'failed'
+  | 'waiting'
+  | 'running'
+  | 'review';
+export type CodexPetActionMappings = Record<CodexPetVisualState, CodexPetAction[]>;
 export type CodexPetBubbleEvent =
   | 'task_started'
   | 'thinking'
@@ -33,6 +45,8 @@ export interface CodexPetConfig {
   catalogPageSize: CatalogPageSize;
   catalogSort: CatalogSort;
   showStatusIndicator: boolean;
+  confirmBeforeDelete: boolean;
+  actionMappings: CodexPetActionMappings;
   bubbleEnabled: boolean;
   bubbleDurationSeconds: number;
   bubbleSize: CodexPetBubbleSize;
@@ -81,7 +95,7 @@ export interface PetdexCatalogPet {
 }
 
 export interface CodexPetOperation {
-  operation: 'configure' | 'install' | 'uninstall' | 'alias' | 'open-directory' | 'skill-command';
+  operation: 'configure' | 'install' | 'uninstall' | 'delete' | 'alias' | 'open-directory' | 'skill-command';
   success: boolean;
   slug?: string;
   petId?: string;
@@ -133,6 +147,31 @@ export const BUBBLE_EVENTS: CodexPetBubbleEvent[] = [
   'task_error',
   'idle',
 ];
+export const PET_VISUAL_STATES: CodexPetVisualState[] = [
+  'idle',
+  'success',
+  'thinking',
+  'running',
+  'error',
+];
+export const PET_ACTIONS: CodexPetAction[] = [
+  'idle',
+  'running-right',
+  'running-left',
+  'waving',
+  'jumping',
+  'failed',
+  'waiting',
+  'running',
+  'review',
+];
+export const DEFAULT_ACTION_MAPPINGS: CodexPetActionMappings = {
+  idle: ['idle'],
+  success: ['jumping'],
+  thinking: ['review'],
+  running: ['running'],
+  error: ['failed'],
+};
 export const DEFAULT_BUBBLE_TEMPLATES: Record<CodexPetBubbleEvent, string[]> = {
   task_started: ['Task started: {tabTitle}'],
   thinking: ['Thinking...', 'Working through it'],
@@ -229,6 +268,10 @@ function parseConfig(json: string): CodexPetConfig | null {
     showStatusIndicator: typeof value.showStatusIndicator === 'boolean'
       ? value.showStatusIndicator
       : false,
+    confirmBeforeDelete: typeof value.confirmBeforeDelete === 'boolean'
+      ? value.confirmBeforeDelete
+      : true,
+    actionMappings: parseActionMappings(value.actionMappings),
     bubbleEnabled: typeof value.bubbleEnabled === 'boolean' ? value.bubbleEnabled : true,
     bubbleDurationSeconds: typeof value.bubbleDurationSeconds === 'number'
       ? value.bubbleDurationSeconds
@@ -240,6 +283,30 @@ function parseConfig(json: string): CodexPetConfig | null {
     bubbleTemplates: parseBubbleTemplates(value.bubbleTemplates),
     scope: parseScope(value.scope),
   };
+}
+
+function parseActionMappings(value: unknown): CodexPetActionMappings {
+  const source = value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  return PET_VISUAL_STATES.reduce((result, state) => {
+    const configured = source[state];
+    const candidates = typeof configured === 'string'
+      ? [configured]
+      : Array.isArray(configured) ? configured : [];
+    const actions = candidates.reduce<CodexPetAction[]>((parsed, candidate) => {
+      if (typeof candidate !== 'string' || !PET_ACTIONS.includes(candidate as CodexPetAction)) {
+        return parsed;
+      }
+      const action = candidate as CodexPetAction;
+      if (!parsed.includes(action)) {
+        parsed.push(action);
+      }
+      return parsed;
+    }, []);
+    result[state] = actions.length > 0 ? actions : [...DEFAULT_ACTION_MAPPINGS[state]];
+    return result;
+  }, {} as CodexPetActionMappings);
 }
 
 function parseScope(value: unknown): CodexPetScope {
@@ -357,7 +424,7 @@ function parseCatalog(json: string): PetdexCatalogPayload {
 function parseOperation(json: string): CodexPetOperation | null {
   const value = parseJsonObject(json);
   if (!value || typeof value.operation !== 'string' || typeof value.success !== 'boolean') return null;
-  if (!['configure', 'install', 'uninstall', 'alias', 'open-directory', 'skill-command']
+  if (!['configure', 'install', 'uninstall', 'delete', 'alias', 'open-directory', 'skill-command']
     .includes(value.operation)) return null;
   return {
     operation: value.operation as CodexPetOperation['operation'],
@@ -522,6 +589,7 @@ export const petBridge = {
   },
   install: (slug: string) => sendToJava('install_petdex_pet', { slug }),
   uninstall: (slug: string) => sendToJava('uninstall_petdex_pet', { slug }),
+  deleteLocalPet: (petId: string) => sendToJava('delete_codex_pet', { petId }),
   setAlias: (slug: string, alias: string) => sendToJava('set_petdex_pet_alias', { slug, alias }),
   resetPosition: () => sendToJava('reset_codex_pet_position'),
   openWebsite: () => sendToJava('open_petdex_website'),
@@ -544,6 +612,7 @@ export const petBridge = {
 
 export {
   parseBubbleTemplates,
+  parseActionMappings,
   parseCatalog,
   parseConfig,
   parseLocalPets,

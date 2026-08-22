@@ -237,7 +237,8 @@
           "grok": "Grok CLI",
           "kimi": "Kimi CLI",
           "opencode": "OpenCode",
-          "pi": "PI CLI"
+          "pi": "PI CLI",
+          "omp": "OMP CLI"
         },
         "currentProviderAuto": "目前使用自動選擇：{{provider}}",
         "currentProviderManual": "目前使用手動選擇的 provider：{{provider}}",
@@ -862,6 +863,10 @@
         "pi": {
           "name": "PI CLI",
           "description": "極簡終端編碼代理，支援多提供商模型"
+        },
+        "omp": {
+          "name": "OMP CLI",
+          "description": "支援多提供商模型的 Oh My Pi 終端編碼代理"
         },
         "dsh": {
           "name": "DeepSeek Harness",
@@ -1663,6 +1668,28 @@
       "description": "Hands-off mode. Codex executes edits and shell commands immediately."
     }
   },
+  "ompModes": {
+    "default": {
+      "label": "預設",
+      "tooltip": "使用所選模型（或 OMP auto）",
+      "description": "使用模型下拉選單中選擇的模型；設為 Auto 時使用 OMP CLI 預設模型。"
+    },
+    "smol": {
+      "label": "Smol",
+      "tooltip": "快速模型角色 (omp --model smol)",
+      "description": "使用為 omp 的 smol 角色設定的模型執行此對話。覆寫模型下拉選單的選擇。"
+    },
+    "slow": {
+      "label": "Slow",
+      "tooltip": "推理模型角色 (omp --model slow)",
+      "description": "使用為 omp 的 slow 角色設定的模型執行此對話。覆寫模型下拉選單的選擇。"
+    },
+    "plan": {
+      "label": "Plan",
+      "tooltip": "規劃模型角色 (omp --model plan)",
+      "description": "使用為 omp 的 plan 角色設定的模型執行此對話。覆寫模型下拉選單的選擇。"
+    }
+  },
   "providers": {
     "claude": {
       "label": "Claude Code"
@@ -1684,6 +1711,9 @@
     },
     "pi": {
       "label": "PI CLI"
+    },
+    "omp": {
+      "label": "OMP CLI"
     },
     "beta": {
       "badge": "Beta",
@@ -1830,6 +1860,15 @@
       "label": "Fast",
       "description": "Codex 快速回應模式（會產生額外消耗）"
     }
+  },
+  "dshPresets": {
+    "title": "選擇 DeepSeek Harness Agent 預設",
+    "none": { "label": "預設", "description": "dsh 預設 headless 組合（完整工具集）" },
+    "standard": { "label": "標準模式", "description": "功能完整的標準編碼工具集" },
+    "code": { "label": "PTC 模式", "description": "標準能力加 Code Mode" },
+    "minimal": { "label": "極簡模式", "description": "僅提供 bash 與 str_replace_editor" },
+    "cordis": { "label": "創造模式", "description": "標準能力加組合編排能力" },
+    "user": { "description": "安裝在 DSH 主目錄中的自訂預設" }
   },
   "error": {
     "providerNotConfigured": "供應商未設定",

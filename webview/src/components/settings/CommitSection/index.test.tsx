@@ -20,6 +20,7 @@ vi.mock('../../../hooks/providers/useCliModels', () => ({
     cliModelsLoading: false,
     cliModelsError: null,
   }),
+  useOmpRoles: () => [],
 }));
 
 describe('CommitSection', () => {
@@ -36,6 +37,7 @@ describe('CommitSection', () => {
         kimi: false,
         opencode: false,
         pi: false,
+        omp: false,
       },
     };
 

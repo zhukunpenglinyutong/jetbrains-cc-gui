@@ -34,7 +34,26 @@ describe('deriveTodosForTurn', () => {
     ];
 
     const latestTurn = sliceLatestConversationTurn(messages);
-    expect(deriveTodosForTurn(latestTurn, getContentBlocks, true)).toEqual([]);
+    expect(deriveTodosForTurn(latestTurn, getContentBlocks, true, 'codex')).toEqual([]);
+  });
+
+  it('does not revive an earlier Codex plan after a later turn settles', () => {
+    const messages = [
+      user('previous request'),
+      assistant([
+        toolUse('plan-1', 'update_plan', {
+          plan: [
+            { step: 'Inspect existing UI', status: 'in_progress' },
+            { step: 'Implement page', status: 'pending' },
+            { step: 'Verify integration', status: 'pending' },
+          ],
+        }),
+      ]),
+      user('follow-up request without a plan'),
+      assistant([]),
+    ];
+
+    expect(deriveTodosForTurn(messages, getContentBlocks, false, 'codex')).toEqual([]);
   });
 
   it('shows the latest plan created in the current turn', () => {
@@ -54,7 +73,7 @@ describe('deriveTodosForTurn', () => {
     ];
 
     const latestTurn = sliceLatestConversationTurn(messages);
-    expect(deriveTodosForTurn(latestTurn, getContentBlocks, true)).toEqual([
+    expect(deriveTodosForTurn(latestTurn, getContentBlocks, true, 'codex')).toEqual([
       { content: 'First', status: 'in_progress' },
       { content: 'Second', status: 'pending' },
       { content: 'Third', status: 'pending' },
@@ -80,7 +99,7 @@ describe('deriveTodosForTurn', () => {
     ];
 
     const latestTurn = sliceLatestConversationTurn(messages);
-    expect(deriveTodosForTurn(latestTurn, getContentBlocks, true)).toEqual([]);
+    expect(deriveTodosForTurn(latestTurn, getContentBlocks, true, 'claude')).toEqual([]);
   });
 
   it('keeps earlier todos when the full transcript is scoped (settled history replay)', () => {
@@ -98,9 +117,66 @@ describe('deriveTodosForTurn', () => {
       user('Only answer OK'),
     ];
 
-    expect(deriveTodosForTurn(messages, getContentBlocks, false)).toEqual([
+    expect(deriveTodosForTurn(messages, getContentBlocks, false, 'claude')).toEqual([
       { content: 'Kept step', status: 'completed' },
       { content: 'In-flight step', status: 'completed' },
+    ]);
+  });
+
+  it('preserves Codex in-progress plan state after streaming settles', () => {
+    const messages = [
+      user('implement the fix'),
+      assistant([toolUse('plan-1', 'update_plan', {
+        plan: [
+          { step: 'Inspect', status: 'completed' },
+          { step: 'Implement', status: 'in_progress' },
+        ],
+      })]),
+    ];
+
+    expect(deriveTodosForTurn(messages, getContentBlocks, false, 'codex')).toEqual([
+      { content: 'Inspect', status: 'completed' },
+      { content: 'Implement', status: 'in_progress' },
+    ]);
+  });
+
+  it.each([
+    ['update_plan', { plan: [] }],
+    ['TodoWrite', { todos: [] }],
+  ])('treats a Codex empty %s snapshot as clearing the previous plan', (name, input) => {
+    const messages = [
+      user('implement the fix'),
+      assistant([toolUse('plan-1', 'update_plan', {
+        plan: [{ step: 'Old step', status: 'in_progress' }],
+      })]),
+      assistant([toolUse('plan-2', name, input)]),
+    ];
+
+    expect(deriveTodosForTurn(messages, getContentBlocks, false, 'codex')).toEqual([]);
+  });
+
+  it('lets Claude structured tasks survive an empty TodoWrite snapshot', () => {
+    const messages = [
+      user('implement the fix'),
+      assistant([toolUse('legacy-todos', 'TodoWrite', {
+        todos: [{ content: 'Legacy task', status: 'in_progress' }],
+      })]),
+      assistant([toolUse('task-create-1', 'TaskCreate', { subject: 'Review implementation' })]),
+      {
+        type: 'user',
+        raw: {
+          content: [{
+            type: 'tool_result',
+            tool_use_id: 'task-create-1',
+            content: 'Task #1 created successfully',
+          }],
+        },
+      } as ClaudeMessage,
+      assistant([toolUse('empty-todos', 'TodoWrite', { todos: [] })]),
+    ];
+
+    expect(deriveTodosForTurn(messages, getContentBlocks, false, 'claude')).toEqual([
+      { id: '1', content: 'Review implementation', status: 'pending' },
     ]);
   });
 });

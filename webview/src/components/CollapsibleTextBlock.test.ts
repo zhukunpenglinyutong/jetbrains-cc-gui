@@ -87,6 +87,25 @@ describe('convertAtFileRefsToLinks', () => {
     expect(result).toContain('中查看');
   });
 
+  it('preserves spaces inside CJK filenames', () => {
+    const result = convertAtFileRefsToLinks(
+      '@D:\\workspace\\hello-agents\\docs\\chapter6\\第六章 框架开发实践.md'
+    );
+    // 空格后的 "框架开发实践.md" 以 .md 结尾，属于路径片段，不应截断
+    expect(result).toContain(
+      '<a class="file-link" data-linkify="file" href="D:\\workspace\\hello-agents\\docs\\chapter6\\第六章%20框架开发实践.md" title="D:\\workspace\\hello-agents\\docs\\chapter6\\第六章 框架开发实践.md">@第六章 框架开发实践.md</a>'
+    );
+  });
+
+  it('preserves spaces inside CJK filenames with line number', () => {
+    const result = convertAtFileRefsToLinks(
+      '@D:\\workspace\\hello-agents\\docs\\chapter6\\第六章 框架开发实践.md#L10-20'
+    );
+    expect(result).toContain(
+      '<a class="file-link" data-linkify="file" href="D:\\workspace\\hello-agents\\docs\\chapter6\\第六章%20框架开发实践.md:10-20" title="D:\\workspace\\hello-agents\\docs\\chapter6\\第六章 框架开发实践.md">@第六章 框架开发实践.md#L10-20</a>'
+    );
+  });
+
   // ── 路径含 # 但不匹配行号 ─────────────────────────
 
   it('does not split on # inside path when not #L format (C# files)', () => {

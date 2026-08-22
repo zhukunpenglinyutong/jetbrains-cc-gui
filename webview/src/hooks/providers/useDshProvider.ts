@@ -1,4 +1,5 @@
-import { DSH_DEFAULT_MODEL_ID } from '../../components/ChatInputBox/types';
+import { useState } from 'react';
+import { DSH_DEFAULT_MODEL_ID, DSH_PRESET_NONE } from '../../components/ChatInputBox/types';
 import { useCliProviderState } from './useCliProviderState';
 
 /**
@@ -8,11 +9,14 @@ import { useCliProviderState } from './useCliProviderState';
  */
 export function useDshProvider() {
   const state = useCliProviderState(DSH_DEFAULT_MODEL_ID);
+  const [dshPreset, setDshPreset] = useState(DSH_PRESET_NONE);
   return {
     selectedDshModel: state.selectedModel,
     setSelectedDshModel: state.setSelectedModel,
     dshPermissionMode: state.permissionMode,
     setDshPermissionMode: state.setPermissionMode,
+    dshPreset,
+    setDshPreset,
   };
 }
 

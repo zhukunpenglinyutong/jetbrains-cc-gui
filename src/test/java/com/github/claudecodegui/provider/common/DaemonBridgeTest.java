@@ -484,7 +484,8 @@ public class DaemonBridgeTest {
                     return replacementProcess;
                 },
                 hooks,
-                5);
+                5,
+                null);
 
         assertTrue(bridge.start());
         assertTrue(heartbeatCheckReached.await(2, TimeUnit.SECONDS));

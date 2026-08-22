@@ -1510,7 +1510,7 @@ describe('useWindowCallbacks integration', () => {
   });
 
   it('onSubagentHistoryLoaded skips updates only when history payload is truly unchanged', () => {
-    const opts = createOptions();
+    const opts = createOptions({ currentSessionIdRef: { current: 'session-1' } });
     renderHook(() => useWindowCallbacks(opts));
 
     const firstPayload = {

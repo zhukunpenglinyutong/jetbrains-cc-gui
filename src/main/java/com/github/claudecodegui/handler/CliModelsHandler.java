@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -42,6 +43,10 @@ public class CliModelsHandler extends BaseMessageHandler {
             "get_cli_models",
     };
 
+    private static final Set<String> SUPPORTED_PROVIDERS = Set.of(
+            "opencode", "kimi", "pi", "omp", "codex", "grok", "dsh"
+    );
+
     private final Gson gson = new Gson();
     private final NodeDetector nodeDetector = NodeDetector.getInstance();
     private final EnvironmentConfigurator envConfigurator = new EnvironmentConfigurator();
@@ -61,7 +66,7 @@ public class CliModelsHandler extends BaseMessageHandler {
             return false;
         }
         String provider = content != null ? content.trim().toLowerCase(Locale.ROOT) : "";
-        if (!"opencode".equals(provider) && !"kimi".equals(provider) && !"pi".equals(provider) && !"codex".equals(provider) && !"grok".equals(provider) && !"dsh".equals(provider)) {
+        if (!SUPPORTED_PROVIDERS.contains(provider)) {
             pushError(provider, "Unsupported CLI provider for model list: " + provider);
             return true;
         }

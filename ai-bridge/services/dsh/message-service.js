@@ -332,6 +332,7 @@ function settlePendingBridges(pendingBridges) {
  * @param {string} [options.model] "<provider>/<model>" or empty for host default
  * @param {string} [options.reasoningEffort]
  * @param {Array} [options.attachments] base64 {fileName, mediaType, data}
+ * @param {string} [options.preset] DSH agent preset id ('' = default composition)
  */
 export async function sendMessage(options = {}) {
   const {
@@ -341,9 +342,12 @@ export async function sendMessage(options = {}) {
     model = '',
     reasoningEffort = '',
     attachments = [],
+    preset = '',
   } = options;
 
   const settings = runtimeSettingsFromEnv();
+  // Scope the preset to this turn; do not mutate process.env across tabs.
+  settings.dshPreset = preset;
   const workCwd = cwd && cwd !== 'undefined' && cwd !== 'null' ? cwd : process.cwd();
 
   const session = await ensureSession(settings, workCwd, incomingSessionId);

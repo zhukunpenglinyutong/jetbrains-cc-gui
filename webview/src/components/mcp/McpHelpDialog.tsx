@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { openBrowser } from '../../utils/bridge';
 
 interface McpHelpDialogProps {
   onClose: () => void;
@@ -82,6 +83,11 @@ export function McpHelpDialog({ onClose }: McpHelpDialogProps) {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="help-link"
+                  onClick={(e) => {
+                    // JCEF won't route target=_blank to the system browser — go through the bridge.
+                    e.preventDefault();
+                    openBrowser('https://modelcontextprotocol.io');
+                  }}
                 >
                   modelcontextprotocol.io
                   <span className="codicon codicon-link-external"></span>

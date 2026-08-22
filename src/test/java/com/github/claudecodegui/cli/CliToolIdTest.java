@@ -14,6 +14,8 @@ public class CliToolIdTest {
         assertEquals(CliToolId.KIMI, CliToolId.fromId("KIMI"));
         assertEquals(CliToolId.OPENCODE, CliToolId.fromId(" opencode "));
         assertEquals(CliToolId.PI, CliToolId.fromId("pi"));
+        assertEquals(CliToolId.OMP, CliToolId.fromId("omp"));
+        assertEquals(CliToolId.OMP, CliToolId.fromId(" OMP "));
     }
 
     @Test
@@ -29,6 +31,8 @@ public class CliToolIdTest {
         assertEquals("kimi", CliToolId.KIMI.getBinaryName());
         assertEquals("opencode", CliToolId.OPENCODE.getBinaryName());
         assertEquals("pi", CliToolId.PI.getBinaryName());
+        assertEquals("omp", CliToolId.OMP.getBinaryName());
+        assertEquals("OMP CLI", CliToolId.OMP.getDisplayName());
         for (CliToolId tool : CliToolId.values()) {
             assertNotNull(tool.getDisplayName());
         }

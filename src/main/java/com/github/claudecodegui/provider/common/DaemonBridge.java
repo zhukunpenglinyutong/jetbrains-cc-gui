@@ -21,6 +21,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 /**
  * Manages a long-running Node.js daemon process for AI SDK communication.
@@ -57,6 +58,7 @@ public class DaemonBridge {
     private final DaemonProcessLauncher processLauncher;
     private final DaemonLifecycleHooks lifecycleHooks;
     private final long heartbeatIntervalMs;
+    private final Consumer<Map<String, String>> customEnvConfigurator;
     // Daemon process state. Every asynchronous callback is scoped to one context.
     private volatile DaemonGenerationContext daemonContext;
     private final AtomicLong daemonGenerationCounter = new AtomicLong(0);
@@ -82,7 +84,16 @@ public class DaemonBridge {
             BridgeDirectoryResolver directoryResolver,
             EnvironmentConfigurator envConfigurator
     ) {
-        this(nodeDetector, directoryResolver, envConfigurator, TimeSource.system());
+        this(nodeDetector, directoryResolver, envConfigurator, (Consumer<Map<String, String>>) null);
+    }
+
+    public DaemonBridge(
+            NodeDetector nodeDetector,
+            BridgeDirectoryResolver directoryResolver,
+            EnvironmentConfigurator envConfigurator,
+            Consumer<Map<String, String>> customEnvConfigurator
+    ) {
+        this(nodeDetector, directoryResolver, envConfigurator, TimeSource.system(), null, null, HEARTBEAT_INTERVAL_MS, customEnvConfigurator);
     }
 
     DaemonBridge(
@@ -109,7 +120,8 @@ public class DaemonBridge {
                 timeSource,
                 processLauncher,
                 lifecycleHooks,
-                HEARTBEAT_INTERVAL_MS);
+                HEARTBEAT_INTERVAL_MS,
+                null);
     }
 
     DaemonBridge(
@@ -119,7 +131,8 @@ public class DaemonBridge {
             TimeSource timeSource,
             DaemonProcessLauncher processLauncher,
             DaemonLifecycleHooks lifecycleHooks,
-            long heartbeatIntervalMs
+            long heartbeatIntervalMs,
+            Consumer<Map<String, String>> customEnvConfigurator
     ) {
         this.nodeDetector = nodeDetector;
         this.directoryResolver = directoryResolver;
@@ -130,6 +143,7 @@ public class DaemonBridge {
         this.lifecycleHooks = lifecycleHooks != null
                 ? lifecycleHooks : DaemonLifecycleHooks.NO_OP;
         this.heartbeatIntervalMs = heartbeatIntervalMs;
+        this.customEnvConfigurator = customEnvConfigurator;
     }
 
     // =========================================================================
@@ -342,6 +356,9 @@ public class DaemonBridge {
         ProcessBuilder processBuilder = new ProcessBuilder(daemonCmd);
         processBuilder.directory(bridgeDir);
         envConfigurator.updateProcessEnvironment(processBuilder, nodePath);
+        if (customEnvConfigurator != null) {
+            customEnvConfigurator.accept(processBuilder.environment());
+        }
 
         Map<String, String> environment = processBuilder.environment();
         String claudeCliPath = PropertiesComponent.getInstance()

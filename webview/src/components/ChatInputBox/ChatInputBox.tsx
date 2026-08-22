@@ -100,6 +100,8 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       onReasoningChange,
       codexFastMode = 'normal',
       onCodexFastModeChange,
+      dshPreset,
+      onDshPresetChange,
       activeFile,
       selectedLines,
       onClearContext,
@@ -775,6 +777,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
           currentProvider={currentProvider}
           reasoningEffort={reasoningEffort}
           codexFastMode={codexFastMode}
+          dshPreset={dshPreset}
           onSubmit={handleSubmit}
           onStop={onStop}
           onModeSelect={handleModeSelect}
@@ -782,6 +785,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
           onProviderSelect={onProviderSelect}
           onReasoningChange={onReasoningChange}
           onCodexFastModeChange={onCodexFastModeChange}
+          onDshPresetChange={onDshPresetChange}
           onEnhancePrompt={handleEnhancePrompt}
           alwaysThinkingEnabled={alwaysThinkingEnabled}
           onToggleThinking={onToggleThinking}

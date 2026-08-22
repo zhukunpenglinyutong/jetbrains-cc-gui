@@ -237,6 +237,9 @@ class HistoryDeleteService {
         if ("pi".equals(currentProvider)) {
             return new DeleteResult(deletePiSession(sessionId), 0);
         }
+        if ("omp".equals(currentProvider)) {
+            return new DeleteResult(deleteOmpSession(sessionId), 0);
+        }
         if ("opencode".equals(currentProvider)) {
             return new DeleteResult(deleteOpenCodeSession(sessionId), 0);
         }
@@ -278,6 +281,17 @@ class HistoryDeleteService {
                 new com.github.claudecodegui.provider.pi.PiHistoryReader();
         boolean deleted = reader.deleteSession(sessionId, projectPath);
         LOG.info("[HistoryHandler] Delete PI session " + sessionId + ": " + (deleted ? "ok" : "not found"));
+        return deleted;
+    }
+
+    private boolean deleteOmpSession(String sessionId) throws java.io.IOException {
+        String rawPath = context.resolveEffectiveWorkingDirectory();
+        String nodePath = NodeDetector.getInstance().getCachedNodePath();
+        String projectPath = NodeDetector.isWslPath(nodePath) ? NodeDetector.convertToWslPath(rawPath) : rawPath;
+        com.github.claudecodegui.provider.omp.OmpHistoryReader reader =
+                new com.github.claudecodegui.provider.omp.OmpHistoryReader();
+        boolean deleted = reader.deleteSession(sessionId, projectPath);
+        LOG.info("[HistoryHandler] Delete OMP session " + sessionId + ": " + (deleted ? "ok" : "not found"));
         return deleted;
     }
 

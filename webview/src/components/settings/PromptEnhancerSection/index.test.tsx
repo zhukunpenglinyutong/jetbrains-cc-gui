@@ -20,6 +20,7 @@ vi.mock('../../../hooks/providers/useCliModels', () => ({
     cliModelsLoading: false,
     cliModelsError: null,
   }),
+  useOmpRoles: () => [],
 }));
 
 describe('PromptEnhancerSection', () => {
@@ -36,6 +37,7 @@ describe('PromptEnhancerSection', () => {
         kimi: false,
         opencode: false,
         pi: false,
+        omp: false,
       },
     };
 
@@ -79,6 +81,7 @@ describe('PromptEnhancerSection', () => {
             kimi: false,
             opencode: false,
             pi: false,
+            omp: false,
           },
         }}
         onPromptEnhancerProviderChange={vi.fn()}

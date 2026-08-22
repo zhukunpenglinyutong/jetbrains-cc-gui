@@ -1,6 +1,8 @@
 package com.github.claudecodegui.pet;
 
 import com.google.gson.JsonObject;
+import com.intellij.util.xmlb.XmlSerializer;
+import org.jdom.Element;
 import org.junit.Test;
 
 import java.awt.Rectangle;
@@ -172,6 +174,101 @@ public class CodexPetFloatingServiceTest {
     }
 
     @Test
+    public void preservesDefaultAnimationMappingsForExistingPetConfigurations() {
+        CodexPetFloatingService.PetState state = CodexPetFloatingService.sanitizeState(
+                new CodexPetFloatingService.PetState());
+
+        assertEquals(List.of("idle"), state.actionMappings.get("idle"));
+        assertEquals(List.of("jumping"), state.actionMappings.get("success"));
+        assertEquals(List.of("review"), state.actionMappings.get("thinking"));
+        assertEquals(List.of("running"), state.actionMappings.get("running"));
+        assertEquals(List.of("failed"), state.actionMappings.get("error"));
+    }
+
+    @Test
+    public void fallsBackOnlyInvalidAnimationMappings() {
+        Map<String, List<String>> configured = new HashMap<>();
+        configured.put("idle", List.of("waving", "waving", "unknown", "review"));
+        configured.put("success", List.of("unknown"));
+        configured.put("thinking", List.of("waiting"));
+        configured.put("running", null);
+        configured.put("error", List.of("running-left"));
+
+        Map<String, List<String>> sanitized = CodexPetFloatingService.sanitizeActionMappings(configured);
+
+        assertEquals(List.of("waving", "review"), sanitized.get("idle"));
+        assertEquals(List.of("jumping"), sanitized.get("success"));
+        assertEquals(List.of("waiting"), sanitized.get("thinking"));
+        assertEquals(List.of("running"), sanitized.get("running"));
+        assertEquals(List.of("running-left"), sanitized.get("error"));
+    }
+
+    @Test
+    public void migratesLegacyAnimationStringsAndPersistsArrays() throws Exception {
+        CodexPetFloatingService service = createService();
+        JsonObject mappings = new JsonObject();
+        mappings.addProperty("idle", "waving");
+        mappings.add("success", new com.google.gson.JsonArray());
+        JsonObject config = new JsonObject();
+        config.add("actionMappings", mappings);
+
+        service.applyConfig(config);
+
+        Method method = CodexPetFloatingService.class.getDeclaredMethod(
+                "actionMappingsToJson", Map.class);
+        method.setAccessible(true);
+        JsonObject persisted = (JsonObject) method.invoke(
+                null, service.getState().actionMappings);
+        assertTrue(persisted.get("idle").isJsonArray());
+        assertEquals("waving", persisted.getAsJsonArray("idle").get(0).getAsString());
+        assertEquals("jumping", persisted.getAsJsonArray("success").get(0).getAsString());
+    }
+
+    @Test
+    public void migratesLegacyProjectStateAnimationStrings() {
+        LegacyPetState legacy = new LegacyPetState();
+        legacy.actionMappings.put("idle", "waving");
+        Element serialized = XmlSerializer.serialize(legacy);
+
+        CodexPetFloatingService.PetState loaded = XmlSerializer.deserialize(
+                serialized, CodexPetFloatingService.PetState.class);
+        CodexPetFloatingService.PetState sanitized = CodexPetFloatingService.sanitizeState(loaded);
+
+        assertEquals(List.of("waving"), sanitized.actionMappings.get("idle"));
+    }
+
+    @Test
+    public void persistsMultiActionProjectStateMappings() {
+        CodexPetFloatingService.PetState state = new CodexPetFloatingService.PetState();
+        state.actionMappings.put("idle", List.of("waving", "review"));
+
+        Element serialized = XmlSerializer.serialize(state);
+        CodexPetFloatingService.PetState loaded = XmlSerializer.deserialize(
+                serialized, CodexPetFloatingService.PetState.class);
+        CodexPetFloatingService.PetState sanitized = CodexPetFloatingService.sanitizeState(loaded);
+
+        assertEquals(List.of("waving", "review"), sanitized.actionMappings.get("idle"));
+    }
+
+    @Test
+    public void selectsAndCachesOneConfiguredAnimationActionPerState() throws Exception {
+        CodexPetFloatingService service = createService();
+        CodexPetFloatingService.PetState state = new CodexPetFloatingService.PetState();
+        state.actionMappings.put("idle", List.of("waving", "review"));
+        service.loadState(state);
+
+        Object visualState = visualState("IDLE");
+        Method method = CodexPetFloatingService.class.getDeclaredMethod(
+                "animationActionFor", visualState.getClass());
+        method.setAccessible(true);
+        String first = ((Enum<?>) method.invoke(service, visualState)).name();
+        String second = ((Enum<?>) method.invoke(service, visualState)).name();
+
+        assertTrue(List.of("WAVING", "REVIEW").contains(first));
+        assertEquals(first, second);
+    }
+
+    @Test
     public void activeSourceStateOverridesBackgroundError() throws Exception {
         Map<String, Object> states = new HashMap<>();
         Map<String, Boolean> activeSources = new HashMap<>();
@@ -273,5 +370,9 @@ public class CodexPetFloatingServiceTest {
                 "aggregateVisualState", Map.class, Map.class);
         method.setAccessible(true);
         return ((Enum<?>) method.invoke(null, states, activeSources)).name();
+    }
+
+    public static final class LegacyPetState {
+        public Map<String, String> actionMappings = new HashMap<>();
     }
 }

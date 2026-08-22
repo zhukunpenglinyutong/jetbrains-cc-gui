@@ -7,6 +7,8 @@ import {
   resolveCliSpawn,
   selectWindowsWhereMatch,
   resolveWindowsSpawnableBin,
+  resolveOmpCliPath,
+  commonCliBinDirs,
 } from './cli-path.js';
 
 test('isWindowsCmdShim detects .cmd/.bat only on win32-style paths', () => {
@@ -107,6 +109,41 @@ test('resolveWindowsSpawnableBin handles paths with spaces', () => {
   const exists = (p) => p === `${base}.cmd`;
   const resolved = resolveWindowsSpawnableBin(base, exists, true);
   assert.equal(resolved, `${base}.cmd`);
+});
+
+test('resolveOmpCliPath honors OMP_BIN env override', () => {
+  const saved = {
+    OMP_BIN: process.env.OMP_BIN,
+    OMP_PATH: process.env.OMP_PATH,
+    OMP_CLI_PATH: process.env.OMP_CLI_PATH,
+  };
+  try {
+    process.env.OMP_BIN = '/tmp/custom-omp/bin/omp';
+    delete process.env.OMP_PATH;
+    delete process.env.OMP_CLI_PATH;
+    assert.equal(resolveOmpCliPath(), '/tmp/custom-omp/bin/omp');
+
+    process.env.OMP_BIN = '';
+    process.env.OMP_PATH = '/tmp/alt-omp/bin/omp';
+    assert.equal(resolveOmpCliPath(), '/tmp/alt-omp/bin/omp');
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
+});
+
+test('commonCliBinDirs includes the OMP bin dir after the PI entry', () => {
+  const dirs = commonCliBinDirs('/home/tester');
+  const piIndex = dirs.indexOf('/home/tester/.pi/bin');
+  const ompIndex = dirs.indexOf('/home/tester/.omp/bin');
+  assert.ok(piIndex !== -1, 'expected .pi/bin entry');
+  assert.ok(ompIndex !== -1, 'expected .omp/bin entry');
+  assert.equal(ompIndex, piIndex + 1);
 });
 
 test('quoteCmdArg wraps and escapes cmd metacharacters', () => {

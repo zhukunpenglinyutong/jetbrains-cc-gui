@@ -1,4 +1,4 @@
-import type { ToolResultBlock } from '../types';
+import type { SubagentHistoryResponse, ToolResultBlock } from '../types';
 import type { GetToolResultRawFn } from '../contexts/SubagentContext';
 
 /**
@@ -97,9 +97,15 @@ export interface SpawnAgentMeta {
   agentId?: string;
   agentPath?: string;
   description?: string;
+  identityLabel?: string;
   nickname?: string;
   model?: string;
   reasoningEffort?: string;
+}
+
+function getAgentPathName(agentPath: string | undefined): string | undefined {
+  if (!agentPath) return undefined;
+  return agentPath.split(/[\\/]+/).filter(Boolean).at(-1);
 }
 
 /** Parse Codex spawn_agent launch metadata without conflating task_name with an agent UUID. */
@@ -140,8 +146,14 @@ export function parseSpawnAgentMeta(
       input.task_name,
       input.taskName,
     );
-  const description = getString(parsed?.description, input.description);
+  const inputMessage = getString(input.message);
+  const inputDescription = getString(input.description);
+  const description = getString(
+    parsed?.description,
+    inputDescription !== inputMessage ? inputDescription : undefined,
+  );
   const nickname = getString(parsed?.nickname, parsed?.name, input.nickname);
+  const identityLabel = nickname ?? getAgentPathName(agentPath);
   const model = getString(parsed?.model, input.model) ?? modelMatch?.[1];
   const reasoningEffort = getString(
       parsed?.reasoning_effort,
@@ -153,10 +165,38 @@ export function parseSpawnAgentMeta(
     ...(agentId && { agentId }),
     ...(agentPath && { agentPath }),
     ...(description && { description }),
+    ...(identityLabel && { identityLabel }),
     ...(nickname && { nickname }),
     ...(model && { model }),
     ...(reasoningEffort && { reasoningEffort }),
   };
+}
+
+/** True only when a full sidechain transcript has been loaded. */
+export function hasSubagentTranscript(history?: Pick<SubagentHistoryResponse, 'messages'>): boolean {
+  return Array.isArray(history?.messages);
+}
+
+/**
+ * Identify historical Codex noise created by an invalid spawn_agent call.
+ *
+ * The check intentionally requires both missing task identity and an explicit
+ * argument parse/validation failure. Valid launches that later fail remain
+ * visible in the StatusPanel.
+ */
+export function isSpawnAgentArgumentFailureNoise(
+  input: Record<string, unknown>,
+  result?: ToolResultBlock | null,
+): boolean {
+  const hasTaskIdentity = [input.task_name, input.taskName, input.agent_path, input.agentPath]
+    .some((value) => typeof value === 'string' && value.trim().length > 0);
+  if (hasTaskIdentity) return false;
+
+  const resultText = extractResultText(result)?.trim();
+  if (!resultText) return false;
+
+  return /failed to parse function arguments|invalid function arguments|invalid arguments for (?:tool )?spawn_agent/i.test(resultText)
+    || /missing (?:required )?(?:field|property)[^\n]*(?:task_name|taskName)/i.test(resultText);
 }
 
 /**

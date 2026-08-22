@@ -237,7 +237,8 @@
           "grok": "Grok CLI",
           "kimi": "Kimi CLI",
           "opencode": "OpenCode",
-          "pi": "PI CLI"
+          "pi": "PI CLI",
+          "omp": "OMP CLI"
         },
         "currentProviderAuto": "Currently using automatic selection: {{provider}}",
         "currentProviderManual": "Currently using manually selected provider: {{provider}}",
@@ -862,6 +863,10 @@
         "pi": {
           "name": "PI CLI",
           "description": "マルチプロバイダーのモデルに対応したミニマルなターミナルコーディングエージェント"
+        },
+        "omp": {
+          "name": "OMP CLI",
+          "description": "マルチプロバイダーのモデルに対応した Oh My Pi ターミナルコーディングエージェント"
         }
       },
       "installDialog": {
@@ -1643,6 +1648,28 @@
       "description": "Hands-off mode. Codex executes edits and shell commands immediately."
     }
   },
+  "ompModes": {
+    "default": {
+      "label": "デフォルト",
+      "tooltip": "選択したモデルを使用（または OMP auto）",
+      "description": "モデルドロップダウンで選択したモデルを使用します。Auto の場合は OMP CLI のデフォルトを使用します。"
+    },
+    "smol": {
+      "label": "Smol",
+      "tooltip": "高速モデルロール (omp --model smol)",
+      "description": "omp の smol ロールに設定されたモデルでこの会話を実行します。モデルドロップダウンを上書きします。"
+    },
+    "slow": {
+      "label": "Slow",
+      "tooltip": "推論モデルロール (omp --model slow)",
+      "description": "omp の slow ロールに設定されたモデルでこの会話を実行します。モデルドロップダウンを上書きします。"
+    },
+    "plan": {
+      "label": "Plan",
+      "tooltip": "プランニングモデルロール (omp --model plan)",
+      "description": "omp の plan ロールに設定されたモデルでこの会話を実行します。モデルドロップダウンを上書きします。"
+    }
+  },
   "providers": {
     "claude": {
       "label": "Claude Code"
@@ -1658,6 +1685,9 @@
     },
     "pi": {
       "label": "PI CLI"
+    },
+    "omp": {
+      "label": "OMP CLI"
     }
   },
   "promptEnhancer": {

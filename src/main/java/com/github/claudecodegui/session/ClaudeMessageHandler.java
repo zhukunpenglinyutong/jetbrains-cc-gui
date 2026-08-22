@@ -7,6 +7,7 @@ import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.provider.common.SDKResult;
+import com.github.claudecodegui.provider.claude.ClaudePlanUsageService;
 import com.github.claudecodegui.util.TokenUsageUtils;
 import com.github.claudecodegui.util.UsageCostCalculator;
 import com.google.gson.Gson;
@@ -163,6 +164,9 @@ public class ClaudeMessageHandler implements MessageCallback {
                 break;
             case "system":
                 handleSystemMessage(content);
+                break;
+            case "rate_limit_event":
+                handleRateLimit(content);
                 break;
             case "node_log":
                 // Forward Node.js logs to frontend console
@@ -750,6 +754,30 @@ public class ClaudeMessageHandler implements MessageCallback {
             }
         } catch (Exception e) {
             LOG.warn("Failed to parse system message: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Handle a {@code rate_limit_event} from the SDK stream (real Anthropic subscription).
+     * Extracts {@code rate_limit_info} and caches it so the plan-usage poll
+     * ({@code get_claude_plan_usage}) can surface utilization + reset in the ContextBar.
+     * Only fires on real Anthropic (OAuth subscription) backends.
+     */
+    private void handleRateLimit(String content) {
+        if (content == null || !content.startsWith("{")) {
+            return;
+        }
+        try {
+            JsonObject msg = gson.fromJson(content, JsonObject.class);
+            if (msg == null
+                    || !msg.has("rate_limit_info")
+                    || !msg.get("rate_limit_info").isJsonObject()) {
+                return;
+            }
+            ClaudePlanUsageService.cacheRateLimitInfo(msg.getAsJsonObject("rate_limit_info"));
+            LOG.debug("Cached Claude rate_limit_event");
+        } catch (Exception e) {
+            LOG.warn("Failed to parse rate_limit_event: " + e.getMessage());
         }
     }
 

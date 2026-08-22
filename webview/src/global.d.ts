@@ -142,6 +142,9 @@ interface Window {
    */
   onSubagentHistoryLoaded?: (json: string) => void;
 
+  /** Batched lightweight Codex subagent lifecycle status callback. */
+  onSubagentStatusesLoaded?: (json: string) => void;
+
   /**
    * task_* SDK system event callback (async subagent lifecycle).
    * Payload: { subtype: 'task_started'|'task_progress'|'task_notification',
@@ -1088,6 +1091,9 @@ interface Window {
    */
   __INITIAL_TAB_MODEL__?: string;
 
+  /** User-installed DSH agent preset ids discovered from the DSH home. */
+  __INITIAL_DSH_PRESETS__?: string[];
+
   /** Runtime page generation established by Java before exposing the bridge. */
   __CCG_PAGE_GENERATION__?: number;
 
@@ -1157,6 +1163,8 @@ interface Window {
           success?: boolean;
           provider?: string;
           models?: Array<{ id?: string; label?: string; description?: string }>;
+          /** Dynamic model roles (omp); description = resolved model selector. */
+          roles?: Array<{ id?: string; label?: string; description?: string }>;
           error?: string;
           defaultModel?: string;
         }

@@ -6,16 +6,19 @@ import {
   DEFAULT_CLAUDE_MODEL_ID,
   GROK_DEFAULT_MODEL_ID,
   KIMI_DEFAULT_MODEL_ID,
+  OMP_DEFAULT_MODEL_ID,
   OPENCODE_DEFAULT_MODEL_ID,
   PI_DEFAULT_MODEL_ID,
   DSH_DEFAULT_MODEL_ID,
+  DSH_PRESET_NONE,
+  isValidDshPreset,
   isValidPermissionMode,
   normalizeClaudeModelId,
   apply1MContextSuffix,
   strip1MContextSuffix,
 } from '../../components/ChatInputBox/types';
 import type { CodexFastMode, PermissionMode, ReasoningEffort } from '../../components/ChatInputBox/types';
-import { isCliOnlyProvider, normalizeCliPermissionMode } from './cliProviders';
+import { isCliOnlyProvider, normalizeCliPermissionMode, OMP_ROLE_MODEL_IDS } from './cliProviders';
 
 const STORAGE_KEY = 'model-selection-state';
 const REASONING_VALUES = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
@@ -36,6 +39,15 @@ const isReasoningEffort = (value: unknown): value is ReasoningEffort =>
 const isCodexFastMode = (value: unknown): value is CodexFastMode =>
   typeof value === 'string' && (CODEX_FAST_MODE_VALUES as readonly string[]).includes(value);
 
+/**
+ * OMP modes are dynamic model roles (designer, vision, …) beyond the static
+ * VALID_PERMISSION_MODE_IDS whitelist, so restore accepts any well-formed
+ * role id rather than only the static set.
+ */
+const OMP_MODE_ID_PATTERN = /^[a-zA-Z][\w-]{0,31}$/;
+const isRestorableOmpMode = (value: unknown): value is PermissionMode =>
+  typeof value === 'string' && OMP_MODE_ID_PATTERN.test(value);
+
 export interface UseModelStatePersistenceOptions {
   // Cross-slice load setters (run once on mount)
   setCurrentProvider: (value: string) => void;
@@ -47,16 +59,19 @@ export interface UseModelStatePersistenceOptions {
   setSelectedKimiModel: (value: string) => void;
   setSelectedOpenCodeModel: (value: string) => void;
   setSelectedPiModel: (value: string) => void;
+  setSelectedOmpModel: (value: string) => void;
   setSelectedDshModel: (value: string) => void;
   setGrokPermissionMode: (value: PermissionMode) => void;
   setKimiPermissionMode: (value: PermissionMode) => void;
   setOpenCodePermissionMode: (value: PermissionMode) => void;
   setPiPermissionMode: (value: PermissionMode) => void;
+  setOmpPermissionMode: (value: PermissionMode) => void;
   setDshPermissionMode: (value: PermissionMode) => void;
   setPermissionMode: (value: PermissionMode) => void;
   setLongContextEnabled: (value: boolean) => void;
   setReasoningEffort: (value: ReasoningEffort) => void;
   setCodexFastMode: (value: CodexFastMode) => void;
+  setDshPreset: (value: string) => void;
   // Cross-slice save deps (re-saves on any change)
   currentProvider: string;
   selectedClaudeModel: string;
@@ -67,15 +82,18 @@ export interface UseModelStatePersistenceOptions {
   selectedKimiModel: string;
   selectedOpenCodeModel: string;
   selectedPiModel: string;
+  selectedOmpModel: string;
   selectedDshModel: string;
   grokPermissionMode: PermissionMode;
   kimiPermissionMode: PermissionMode;
   openCodePermissionMode: PermissionMode;
   piPermissionMode: PermissionMode;
+  ompPermissionMode: PermissionMode;
   dshPermissionMode: PermissionMode;
   longContextEnabled: boolean;
   reasoningEffort: ReasoningEffort;
   codexFastMode: CodexFastMode;
+  dshPreset: string;
 }
 
 /**
@@ -99,16 +117,19 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     setSelectedKimiModel,
     setSelectedOpenCodeModel,
     setSelectedPiModel,
+    setSelectedOmpModel,
     setSelectedDshModel,
     setGrokPermissionMode,
     setKimiPermissionMode,
     setOpenCodePermissionMode,
     setPiPermissionMode,
+    setOmpPermissionMode,
     setDshPermissionMode,
     setPermissionMode,
     setLongContextEnabled,
     setReasoningEffort,
     setCodexFastMode,
+    setDshPreset,
     currentProvider,
     selectedClaudeModel,
     selectedCodexModel,
@@ -118,15 +139,18 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     selectedKimiModel,
     selectedOpenCodeModel,
     selectedPiModel,
+    selectedOmpModel,
     selectedDshModel,
     grokPermissionMode,
     kimiPermissionMode,
     openCodePermissionMode,
     piPermissionMode,
+    ompPermissionMode,
     dshPermissionMode,
     longContextEnabled,
     reasoningEffort,
     codexFastMode,
+    dshPreset,
   } = options;
 
   // Hydrate from localStorage and sync to backend (mount only).
@@ -161,14 +185,17 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
       let restoredKimiModel = KIMI_DEFAULT_MODEL_ID;
       let restoredOpenCodeModel = OPENCODE_DEFAULT_MODEL_ID;
       let restoredPiModel = PI_DEFAULT_MODEL_ID;
+      let restoredOmpModel = OMP_DEFAULT_MODEL_ID;
       let restoredDshModel = DSH_DEFAULT_MODEL_ID;
       let restoredGrokPermissionMode: PermissionMode = 'default';
       let restoredKimiPermissionMode: PermissionMode = 'default';
       let restoredOpenCodePermissionMode: PermissionMode = 'default';
       let restoredPiPermissionMode: PermissionMode = 'default';
+      let restoredOmpPermissionMode: PermissionMode = 'default';
       let restoredDshPermissionMode: PermissionMode = 'default';
       let restoredLongContextEnabled = true;
       let restoredCodexFastMode: CodexFastMode = 'normal';
+      let restoredDshPreset = DSH_PRESET_NONE;
 
       // Model validation helpers — close over the restored* lets so both
       // branches (saved localStorage / fresh backend-only) share the same logic
@@ -218,6 +245,10 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
         restoredPiModel = id;
         setSelectedPiModel(id);
       });
+      const applyOmpModel = makeCliModelApplier((id) => {
+        restoredOmpModel = id;
+        setSelectedOmpModel(id);
+      });
       const applyDshModel = makeCliModelApplier((id) => {
         restoredDshModel = id;
         setSelectedDshModel(id);
@@ -244,16 +275,19 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
             : state.codexPermissionMode;
         }
         if (isValidPermissionMode(state.grokPermissionMode)) {
-          restoredGrokPermissionMode = normalizeCliPermissionMode(state.grokPermissionMode);
+          restoredGrokPermissionMode = normalizeCliPermissionMode(state.grokPermissionMode, 'grok');
         }
         if (isValidPermissionMode(state.kimiPermissionMode)) {
-          restoredKimiPermissionMode = normalizeCliPermissionMode(state.kimiPermissionMode);
+          restoredKimiPermissionMode = normalizeCliPermissionMode(state.kimiPermissionMode, 'kimi');
         }
         if (isValidPermissionMode(state.openCodePermissionMode)) {
-          restoredOpenCodePermissionMode = normalizeCliPermissionMode(state.openCodePermissionMode);
+          restoredOpenCodePermissionMode = normalizeCliPermissionMode(state.openCodePermissionMode, 'opencode');
         }
         if (isValidPermissionMode(state.piPermissionMode)) {
-          restoredPiPermissionMode = normalizeCliPermissionMode(state.piPermissionMode);
+          restoredPiPermissionMode = normalizeCliPermissionMode(state.piPermissionMode, 'pi');
+        }
+        if (isRestorableOmpMode(state.ompPermissionMode)) {
+          restoredOmpPermissionMode = normalizeCliPermissionMode(state.ompPermissionMode, 'omp');
         }
         if (isValidPermissionMode(state.dshPermissionMode)) {
           restoredDshPermissionMode = normalizeCliPermissionMode(state.dshPermissionMode);
@@ -270,6 +304,10 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
         if (isCodexFastMode(state.codexFastMode)) {
           restoredCodexFastMode = state.codexFastMode;
           setCodexFastMode(restoredCodexFastMode);
+        }
+        if (isValidDshPreset(state.dshPreset)) {
+          restoredDshPreset = state.dshPreset;
+          setDshPreset(restoredDshPreset);
         }
 
         const claudeModelCandidate = hasBackendModel && restoredProvider === 'claude'
@@ -302,6 +340,10 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           : state.piModel;
         applyPiModel(piModelCandidate);
 
+        const ompModelCandidate = hasBackendModel && restoredProvider === 'omp'
+          ? initialTabModel
+          : state.ompModel;
+        applyOmpModel(ompModelCandidate);
         const dshModelCandidate = hasBackendModel && restoredProvider === 'dsh'
           ? initialTabModel
           : state.dshModel;
@@ -318,8 +360,22 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           else if (initialTabProvider === 'kimi') applyKimiModel(initialTabModel);
           else if (initialTabProvider === 'opencode') applyOpenCodeModel(initialTabModel);
           else if (initialTabProvider === 'pi') applyPiModel(initialTabModel);
+          else if (initialTabProvider === 'omp') applyOmpModel(initialTabModel);
           else if (initialTabProvider === 'dsh') applyDshModel(initialTabModel);
         }
+      }
+
+      // Reconcile omp mode⇔model pairs saved by builds before the two were
+      // unified: a role id on either side wins and is mirrored onto the other,
+      // so a stale { model: 'auto', mode: 'smol' } restores as model 'smol'.
+      // Static roles only — snapshots from those builds predate dynamic roles.
+      if (OMP_ROLE_MODEL_IDS.has(restoredOmpModel)) {
+        restoredOmpPermissionMode = restoredOmpModel;
+      } else if (
+        OMP_ROLE_MODEL_IDS.has(restoredOmpPermissionMode)
+        && restoredOmpModel === OMP_DEFAULT_MODEL_ID
+      ) {
+        applyOmpModel(restoredOmpPermissionMode);
       }
 
       const initialPermissionMode: PermissionMode = restoredProvider === 'codex'
@@ -332,15 +388,18 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
               ? restoredOpenCodePermissionMode
               : restoredProvider === 'pi'
                 ? restoredPiPermissionMode
-                : restoredProvider === 'dsh'
-                  ? restoredDshPermissionMode
-                : restoredClaudePermissionMode;
+                : restoredProvider === 'omp'
+                  ? restoredOmpPermissionMode
+                  : restoredProvider === 'dsh'
+                    ? restoredDshPermissionMode
+                    : restoredClaudePermissionMode;
       setClaudePermissionMode(restoredClaudePermissionMode);
       setCodexPermissionMode(restoredCodexPermissionMode);
       setGrokPermissionMode(restoredGrokPermissionMode);
       setKimiPermissionMode(restoredKimiPermissionMode);
       setOpenCodePermissionMode(restoredOpenCodePermissionMode);
       setPiPermissionMode(restoredPiPermissionMode);
+      setOmpPermissionMode(restoredOmpPermissionMode);
       setDshPermissionMode(restoredDshPermissionMode);
       setPermissionMode(initialPermissionMode);
 
@@ -366,9 +425,11 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
                   ? restoredOpenCodeModel
                   : restoredProvider === 'pi'
                     ? restoredPiModel
-                    : restoredProvider === 'dsh'
-                      ? restoredDshModel
-                    : apply1MContextSuffix(restoredClaudeModel, restoredLongContextEnabled);
+                    : restoredProvider === 'omp'
+                      ? restoredOmpModel
+                      : restoredProvider === 'dsh'
+                        ? restoredDshModel
+                        : apply1MContextSuffix(restoredClaudeModel, restoredLongContextEnabled);
           sendBridgeEvent('set_model', modelToSync);
           // Do NOT push the permission mode to Java on boot. Java is the source
           // of truth for the mode (persisted app-level in PropertiesComponent,
@@ -379,6 +440,9 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           // The mode is only sent to Java on an explicit user switch
           // (handleModeSelect → set_mode).
           sendBridgeEvent('set_codex_fast_mode', restoredCodexFastMode);
+          if (restoredProvider === 'dsh') {
+            sendBridgeEvent('set_dsh_preset', restoredDshPreset);
+          }
         } else {
           syncRetryCount++;
           if (syncRetryCount < MAX_SYNC_RETRIES) {
@@ -427,15 +491,18 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           kimiModel: selectedKimiModel,
           openCodeModel: selectedOpenCodeModel,
           piModel: selectedPiModel,
+          ompModel: selectedOmpModel,
           dshModel: selectedDshModel,
           grokPermissionMode,
           kimiPermissionMode,
           openCodePermissionMode,
           piPermissionMode,
+          ompPermissionMode,
           dshPermissionMode,
           longContextEnabled,
           reasoningEffort,
           codexFastMode,
+          dshPreset,
         }));
       } catch {
         // Failed to save model selection state — non-fatal.
@@ -458,14 +525,17 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     selectedKimiModel,
     selectedOpenCodeModel,
     selectedPiModel,
+    selectedOmpModel,
     selectedDshModel,
     grokPermissionMode,
     kimiPermissionMode,
     openCodePermissionMode,
     piPermissionMode,
+    ompPermissionMode,
     dshPermissionMode,
     longContextEnabled,
     reasoningEffort,
     codexFastMode,
+    dshPreset,
   ]);
 }

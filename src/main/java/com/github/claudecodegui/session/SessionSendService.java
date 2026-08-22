@@ -6,6 +6,7 @@ import com.github.claudecodegui.settings.CodexSettingsManager;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.provider.grok.GrokSDKBridge;
 import com.github.claudecodegui.provider.common.MarkerCliBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.google.gson.Gson;
@@ -34,6 +35,7 @@ public class SessionSendService {
     private final Gson gson;
     private final ClaudeSDKBridge claudeSDKBridge;
     private final CodexSDKBridge codexSDKBridge;
+    private final GrokSDKBridge grokSDKBridge;
     private final Map<String, MarkerCliBridge> cliBridges;
     private final SessionContextService contextService;
 
@@ -49,6 +51,23 @@ public class SessionSendService {
             Map<String, MarkerCliBridge> cliBridges,
             SessionContextService contextService
     ) {
+        this(project, state, callbackFacade, messageParser, messageMerger, gson,
+                claudeSDKBridge, codexSDKBridge, cliBridges, contextService, null);
+    }
+
+    public SessionSendService(
+            Project project,
+            SessionState state,
+            SessionCallbackFacade callbackFacade,
+            MessageParser messageParser,
+            MessageMerger messageMerger,
+            Gson gson,
+            ClaudeSDKBridge claudeSDKBridge,
+            CodexSDKBridge codexSDKBridge,
+            Map<String, MarkerCliBridge> cliBridges,
+            SessionContextService contextService,
+            GrokSDKBridge grokSDKBridge
+    ) {
         this.project = project;
         this.state = state;
         this.callbackFacade = callbackFacade;
@@ -57,6 +76,7 @@ public class SessionSendService {
         this.gson = gson;
         this.claudeSDKBridge = claudeSDKBridge;
         this.codexSDKBridge = codexSDKBridge;
+        this.grokSDKBridge = grokSDKBridge;
         this.cliBridges = cliBridges != null ? cliBridges : Collections.emptyMap();
         this.contextService = contextService;
     }
@@ -96,7 +116,8 @@ public class SessionSendService {
             List<String> fileTagPaths,
             String requestedPermissionMode,
             String requestedReasoningEffort,
-            String requestedCodexFastMode
+            String requestedCodexFastMode,
+            String requestedDshPreset
     ) {
         String agentPrompt = externalAgentPrompt;
         if (agentPrompt == null) {
@@ -142,7 +163,23 @@ public class SessionSendService {
             );
         }
 
-        if (cliBridges.containsKey(currentProvider)) {
+        if ("grok".equals(currentProvider) && grokSDKBridge != null) {
+            return sendToGrok(
+                    channelId,
+                    input,
+                    attachments,
+                    openedFilesJson,
+                    agentPrompt,
+                    fileTagPaths,
+                    effectivePermissionMode,
+                    normalizedRequestedEffort
+            );
+        }
+
+        if (cliBridges.containsKey(currentProvider) && !"grok".equals(currentProvider)) {
+            if ("dsh".equals(currentProvider) && requestedDshPreset != null) {
+                state.setDshPreset(requestedDshPreset);
+            }
             return sendToCliProvider(
                     currentProvider,
                     channelId,
@@ -199,8 +236,14 @@ public class SessionSendService {
             resolvedMode = "default";
         }
 
-        // Codex + headless CLI providers have no plan mode equivalent.
-        if (("codex".equals(provider) || SessionProviderRouter.isCliProvider(provider)) && "plan".equals(resolvedMode)) {
+        // Codex and Grok run as full SDK bridges (not MarkerCli providers, so they
+        // are absent from CLI_PROVIDER_IDS), but like the headless CLI providers
+        // they have no plan-mode equivalent — so plan still downgrades to default.
+        // EXCEPT omp, where "plan" is a model role (`omp --model plan`), not Claude
+        // plan mode.
+        if (("codex".equals(provider) || "grok".equals(provider)
+                || (SessionProviderRouter.isCliProvider(provider) && !"omp".equals(provider)))
+                && "plan".equals(resolvedMode)) {
             return "default";
         }
         return resolvedMode;
@@ -303,6 +346,58 @@ public class SessionSendService {
         ).thenApply(result -> null);
     }
 
+    private CompletableFuture<Void> sendToGrok(
+            String channelId,
+            String input,
+            List<ClaudeSession.Attachment> attachments,
+            JsonObject openedFilesJson,
+            String agentPrompt,
+            List<String> fileTagPaths,
+            String effectivePermissionMode,
+            String requestedReasoningEffort
+    ) {
+        if (grokSDKBridge == null) {
+            LOG.error("[Lifecycle] sendToGrok called but GrokSDKBridge is null");
+            callbackFacade.notifyStateChange(false, false, "Grok bridge not available");
+            return CompletableFuture.completedFuture(null);
+        }
+        GrokMessageHandler handler = new GrokMessageHandler(state, callbackFacade.getCallbackHandler());
+        Boolean streaming = readStreamingEnabled();
+        final String runtimeSessionEpoch = state.getRuntimeSessionEpoch();
+        final String currentModel = state.getModel();
+        String projectBase = project != null ? project.getBasePath() : null;
+        String guardedCwd = com.github.claudecodegui.util.PathUtils.guardWorkingDirectory(
+                state.getCwd(), projectBase);
+        if (guardedCwd == null) {
+            guardedCwd = state.getCwd();
+        } else if (state.getCwd() == null || !guardedCwd.equals(state.getCwd())) {
+            LOG.warn("[Lifecycle] sendToGrok cwd guard: " + state.getCwd() + " -> " + guardedCwd);
+            state.setCwd(guardedCwd);
+        }
+        LOG.info("[Lifecycle] sendToGrok sessionId=" + (state.getSessionId() != null ? state.getSessionId() : "(new)")
+                + ", epoch=" + runtimeSessionEpoch
+                + ", cwd=" + guardedCwd
+                + ", model=" + currentModel
+                + ", fileTags=" + (fileTagPaths != null ? fileTagPaths.size() : 0));
+
+        return grokSDKBridge.sendMessage(
+                channelId,
+                input,
+                state.getSessionId(),
+                runtimeSessionEpoch,
+                guardedCwd,
+                attachments,
+                effectivePermissionMode,
+                currentModel,
+                openedFilesJson,
+                agentPrompt,
+                streaming,
+                false,
+                requestedReasoningEffort != null ? requestedReasoningEffort : state.getReasoningEffort(),
+                handler
+        ).thenApply(result -> null);
+    }
+
     private CompletableFuture<Void> sendToCliProvider(
             String provider,
             String channelId,
@@ -360,6 +455,7 @@ public class SessionSendService {
                 effort,
                 attachments,
                 effectiveMode,
+                "dsh".equals(provider) ? state.getDshPreset() : null,
                 handler
         ).thenApply(result -> null);
     }

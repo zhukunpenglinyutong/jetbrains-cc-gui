@@ -354,7 +354,7 @@ export class GrokAcpClient {
     }
     this.pending.clear();
 
-    if (killProcess && this.proc && !this.proc.killed) {
+    if (killProcess && this.proc && this.proc.exitCode === null) {
       try {
         this.proc.kill('SIGTERM');
       } catch {
@@ -364,7 +364,7 @@ export class GrokAcpClient {
       const proc = this.proc;
       setTimeout(() => {
         try {
-          if (proc && !proc.killed) proc.kill('SIGKILL');
+          if (proc && proc.exitCode === null) proc.kill('SIGKILL');
         } catch {
           // ignore
         }
@@ -407,7 +407,7 @@ export class GrokAcpClient {
     } catch {
       // ignore
     }
-    if (this.proc && !this.proc.killed) {
+    if (this.proc && this.proc.exitCode === null) {
       try {
         this.proc.kill('SIGTERM');
       } catch {
@@ -415,7 +415,7 @@ export class GrokAcpClient {
       }
       // Force kill if still alive after a short grace period
       await new Promise((r) => setTimeout(r, 300));
-      if (this.proc && !this.proc.killed) {
+      if (this.proc && this.proc.exitCode === null) {
         try {
           this.proc.kill('SIGKILL');
         } catch {

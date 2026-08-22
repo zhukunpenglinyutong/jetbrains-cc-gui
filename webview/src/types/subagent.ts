@@ -52,6 +52,25 @@ export interface SubagentHistoryResponse {
   messages?: unknown[];
 }
 
+/** Lightweight Codex sidechain status returned without loading its transcript. */
+export interface SubagentStatusSnapshot {
+  success: boolean;
+  completed?: boolean;
+  toolUseId?: string;
+  agentId?: string;
+  agentPath?: string;
+  status?: SubagentStatus;
+  error?: string;
+}
+
+/** Batched response for restoring Codex subagent lifecycle state. */
+export interface SubagentStatusesResponse {
+  sessionId?: string;
+  provider?: string;
+  requestId?: string;
+  statuses?: SubagentStatusSnapshot[];
+}
+
 /**
  * Subagent information extracted from Task tool calls
  */

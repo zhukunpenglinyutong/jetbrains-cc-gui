@@ -27,6 +27,8 @@ const translations: Record<string, string> = {
   'settings.cli.tools.opencode.description': 'OpenCode desc',
   'settings.cli.tools.pi.name': 'PI CLI',
   'settings.cli.tools.pi.description': 'PI desc',
+  'settings.cli.tools.omp.name': 'OMP CLI',
+  'settings.cli.tools.omp.description': 'OMP desc',
   'settings.cli.tools.dsh.name': 'DeepSeek Harness',
   'settings.cli.tools.dsh.description': 'DSH desc',
   'settings.cli.installDialog.title': 'Install {{name}}',
@@ -116,6 +118,14 @@ describe('CliSection', () => {
           binaryName: 'pi',
           installed: false,
         },
+        omp: {
+          id: 'omp',
+          name: 'OMP CLI',
+          binaryName: 'omp',
+          installed: true,
+          version: '17.2.14',
+          path: '/home/test/.bun/bin/omp',
+        },
         dsh: {
           id: 'dsh',
           name: 'DeepSeek Harness',
@@ -131,6 +141,7 @@ describe('CliSection', () => {
     expect(screen.getByText('Kimi CLI')).toBeTruthy();
     expect(screen.getByText('OpenCode')).toBeTruthy();
     expect(screen.getByText('PI CLI')).toBeTruthy();
+    expect(screen.getByText('OMP CLI')).toBeTruthy();
     expect(screen.getByText('DeepSeek Harness')).toBeTruthy();
     expect(screen.getByText('v1.2.3')).toBeTruthy();
     expect(screen.getByText('/Users/test/.grok/bin/grok')).toBeTruthy();
@@ -151,6 +162,7 @@ describe('CliSection', () => {
         kimi: { id: 'kimi', name: 'Kimi CLI', binaryName: 'kimi', installed: false },
         opencode: { id: 'opencode', name: 'OpenCode', binaryName: 'opencode', installed: false },
         pi: { id: 'pi', name: 'PI CLI', binaryName: 'pi', installed: false },
+        omp: { id: 'omp', name: 'OMP CLI', binaryName: 'omp', installed: false },
       }));
     });
 
@@ -162,5 +174,21 @@ describe('CliSection', () => {
     // Never triggers install via Java bridge
     const calls = (window.sendToJava as ReturnType<typeof vi.fn>).mock.calls.map((c) => String(c[0]));
     expect(calls.every((c) => !c.includes('install'))).toBe(true);
+  });
+
+  it('opens the install dialog docs link in the system browser via the bridge', async () => {
+    render(<CliSection />);
+
+    await act(async () => {
+      window.updateCliStatus?.(JSON.stringify({
+        grok: { id: 'grok', name: 'Grok CLI', binaryName: 'grok', installed: false },
+      }));
+    });
+
+    fireEvent.click(screen.getAllByText('Install guide')[0]);
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Docs'));
+    expect(window.sendToJava).toHaveBeenCalledWith('open_browser:https://x.ai/cli');
   });
 });

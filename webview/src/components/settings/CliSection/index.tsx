@@ -146,9 +146,10 @@ interface InstallDialogProps {
   tool: CliToolDefinition | null;
   onClose: () => void;
   onCopy: (text: string) => void;
+  onOpenDocs: (url: string) => void;
 }
 
-const InstallDialog = ({ tool, onClose, onCopy }: InstallDialogProps) => {
+const InstallDialog = ({ tool, onClose, onCopy, onOpenDocs }: InstallDialogProps) => {
   const { t } = useTranslation();
 
   useEffect(() => {
@@ -255,6 +256,11 @@ const InstallDialog = ({ tool, onClose, onCopy }: InstallDialogProps) => {
             href={tool.docsUrl}
             target="_blank"
             rel="noreferrer noopener"
+            onClick={(e) => {
+              // JCEF won't route target=_blank to the system browser — go through the bridge.
+              e.preventDefault();
+              onOpenDocs(tool.docsUrl);
+            }}
           >
             <span className="codicon codicon-link-external" aria-hidden="true" />
             {t('settings.cli.installDialog.openDocs')}
@@ -439,6 +445,7 @@ const CliSection = ({ addToast }: CliSectionProps) => {
         tool={installTool}
         onClose={() => setInstallTool(null)}
         onCopy={handleCopy}
+        onOpenDocs={openDocs}
       />
     </div>
   );

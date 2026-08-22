@@ -17,6 +17,7 @@ const PROVIDER_TO_SDK: Record<string, string> = {
   kimi: 'kimi-cli',
   opencode: 'opencode-cli',
   pi: 'pi-cli',
+  omp: 'omp-cli',
 };
 
 type SdkStatus = Record<string, {

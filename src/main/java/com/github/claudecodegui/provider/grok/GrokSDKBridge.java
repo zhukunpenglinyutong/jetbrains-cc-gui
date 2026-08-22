@@ -52,7 +52,8 @@ public class GrokSDKBridge extends BaseSDKBridge {
                 LOG,
                 nodeDetector,
                 this::getDirectoryResolver,
-                envConfigurator
+                envConfigurator,
+                env -> configureProviderEnv(env, "{}")
         );
         this.daemonRequestExecutor = new GrokDaemonRequestExecutor(LOG, this);
     }
@@ -71,6 +72,19 @@ public class GrokSDKBridge extends BaseSDKBridge {
         env.put("GROK_USE_STDIN", "true");
         env.put("GROK_NO_AUTO_UPDATE", "1");
         env.put("CI", "1");
+
+        try {
+            JsonObject grokEnv = settingsService.getGrokEnv();
+            if (grokEnv != null && grokEnv.size() > 0) {
+                for (String key : grokEnv.keySet()) {
+                    if (grokEnv.get(key) != null && !grokEnv.get(key).isJsonNull()) {
+                        env.put(key, grokEnv.get(key).getAsString());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            LOG.warn("[Grok] Failed to apply custom grok environment: " + e.getMessage());
+        }
 
         GrokLocalAuthResolver.ResolvedAuth resolved = resolveEffectiveAuth();
         String authMethod = resolved.authMethod;
@@ -1047,7 +1061,8 @@ public class GrokSDKBridge extends BaseSDKBridge {
     }
 
     /**
-     * Session messages from Grok CLI on-disk history ({@code ~/.grok/sessions}).
+     * Session messages from Grok CLI on-disk history
+     * ({@code $GROK_HOME/sessions}, default {@code ~/.grok/sessions}).
      */
     public List<JsonObject> getSessionMessages(String sessionId, String cwd) {
         try {

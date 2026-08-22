@@ -6,6 +6,7 @@ import com.github.claudecodegui.util.PathUtils;
 import com.github.claudecodegui.util.JsUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
@@ -33,17 +34,23 @@ class SubagentHistoryService {
 
     private static final Logger LOG = Logger.getInstance(SubagentHistoryService.class);
     private static final Pattern SAFE_ID = Pattern.compile("[A-Za-z0-9_-]+");
+    private static final Pattern SAFE_REQUEST_ID = Pattern.compile("[A-Za-z0-9_:-]{1,256}");
     private static final Gson GSON = new Gson();
     private static final int MAX_JSONL_LINES = 50_000;
 
     private final HandlerContext context;
     private final CodexSubagentHistoryLoader codexLoader;
     private final Set<String> inFlightCodexRequests = ConcurrentHashMap.newKeySet();
+    private final Set<String> inFlightCodexStatusSessions = ConcurrentHashMap.newKeySet();
 
     SubagentHistoryService(HandlerContext context) {
+        this(context, new CodexSubagentHistoryLoader(
+                Path.of(NodeDetector.resolveHomeForFileOps(), ".codex", "sessions")));
+    }
+
+    SubagentHistoryService(HandlerContext context, CodexSubagentHistoryLoader codexLoader) {
         this.context = context;
-        Path codexSessionsDir = Path.of(NodeDetector.resolveHomeForFileOps(), ".codex", "sessions");
-        this.codexLoader = new CodexSubagentHistoryLoader(codexSessionsDir);
+        this.codexLoader = codexLoader;
     }
 
     void handleLoadSubagentSession(String content) {
@@ -106,6 +113,107 @@ class SubagentHistoryService {
         sendResponse(response);
     }
 
+    void handleLoadSubagentStatuses(String content) {
+        JsonObject response = new JsonObject();
+        response.add("statuses", new JsonArray());
+
+        String sessionId = null;
+        String provider = null;
+        String requestId = null;
+        List<CodexSubagentHistoryLoader.StatusRequest> agents;
+        try {
+            JsonObject request = parseRequest(content);
+            sessionId = getString(request, "sessionId");
+            provider = getString(request, "provider");
+            requestId = getString(request, "requestId");
+            response.addProperty("sessionId", sessionId);
+            response.addProperty("provider", provider);
+            response.addProperty("requestId", requestId);
+
+            validateId("sessionId", sessionId);
+            validateRequestId(requestId);
+            if (!"codex".equals(provider)) {
+                throw new IllegalArgumentException("Invalid provider");
+            }
+            if (!request.has("agents") || !request.get("agents").isJsonArray()) {
+                throw new IllegalArgumentException("Invalid agents");
+            }
+            JsonArray agentArray = request.getAsJsonArray("agents");
+            if (agentArray.size() > CodexSubagentHistoryLoader.MAX_STATUS_REQUESTS) {
+                throw new IllegalArgumentException("Too many agents");
+            }
+            agents = parseStatusRequests(agentArray);
+        } catch (Exception e) {
+            response.addProperty("success", false);
+            response.addProperty("error", e.getMessage() != null ? e.getMessage() : "Invalid request");
+            sendStatusesResponse(response);
+            return;
+        }
+
+        String responseSessionId = sessionId;
+        if (!inFlightCodexStatusSessions.add(responseSessionId)) {
+            response.addProperty("success", false);
+            response.addProperty("error", "Codex subagent status request already in progress");
+            sendStatusesResponse(response);
+            return;
+        }
+        CompletableFuture.runAsync(() -> {
+            try {
+                List<CodexSubagentHistoryLoader.StatusResult> results =
+                        codexLoader.loadStatuses(responseSessionId, agents);
+                JsonArray statuses = new JsonArray();
+                for (CodexSubagentHistoryLoader.StatusResult result : results) {
+                    statuses.add(toJson(result));
+                }
+                response.addProperty("success", true);
+                response.add("statuses", statuses);
+            } catch (Exception e) {
+                LOG.warn("[SubagentHistory] Failed to load Codex subagent statuses: " + e.getMessage());
+                response.addProperty("success", false);
+                response.addProperty("error", e.getMessage() != null ? e.getMessage() : "Unknown error");
+            } finally {
+                inFlightCodexStatusSessions.remove(responseSessionId);
+            }
+            sendStatusesResponse(response);
+        }, AppExecutorUtil.getAppExecutorService());
+    }
+
+    private static List<CodexSubagentHistoryLoader.StatusRequest> parseStatusRequests(JsonArray agents) {
+        List<CodexSubagentHistoryLoader.StatusRequest> requests = new java.util.ArrayList<>(agents.size());
+        for (JsonElement element : agents) {
+            if (!element.isJsonObject()) {
+                throw new IllegalArgumentException("Invalid agent request");
+            }
+            JsonObject agent = element.getAsJsonObject();
+            requests.add(new CodexSubagentHistoryLoader.StatusRequest(
+                    getString(agent, "toolUseId"),
+                    getString(agent, "agentPath"),
+                    getString(agent, "agentId")
+            ));
+        }
+        return requests;
+    }
+
+    private static JsonObject toJson(CodexSubagentHistoryLoader.StatusResult result) {
+        JsonObject status = new JsonObject();
+        if (result.toolUseId() != null) {
+            status.addProperty("toolUseId", result.toolUseId());
+        }
+        if (result.agentPath() != null) {
+            status.addProperty("agentPath", result.agentPath());
+        }
+        if (result.agentId() != null) {
+            status.addProperty("agentId", result.agentId());
+        }
+        status.addProperty("success", result.success());
+        status.addProperty("completed", result.completed());
+        status.addProperty("status", result.status());
+        if (result.error() != null) {
+            status.addProperty("error", result.error());
+        }
+        return status;
+    }
+
     private void loadCodexSubagentAsync(
             String sessionId,
             String toolUseId,
@@ -163,6 +271,12 @@ class SubagentHistoryService {
     private static void validateId(String name, String value) {
         if (value == null || value.isEmpty() || !SAFE_ID.matcher(value).matches()) {
             throw new IllegalArgumentException("Invalid " + name);
+        }
+    }
+
+    private static void validateRequestId(String value) {
+        if (value == null || !SAFE_REQUEST_ID.matcher(value).matches()) {
+            throw new IllegalArgumentException("Invalid requestId");
         }
     }
 
@@ -298,5 +412,12 @@ class SubagentHistoryService {
                     String.valueOf(i == chunks.size() - 1)
             );
         }
+    }
+
+    private void sendStatusesResponse(JsonObject response) {
+        if (context.getProject() == null || context.getProject().isDisposed()) {
+            return;
+        }
+        context.callJavaScript("onSubagentStatusesLoaded", JsUtils.escapeJs(GSON.toJson(response)));
     }
 }

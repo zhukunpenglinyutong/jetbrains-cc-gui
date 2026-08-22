@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="472" viewBox="0 0 960 472" font-family="-apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+  <!-- Overview of the chat input area: the plan-usage bar lives in the
+       ContextBar's right tool cluster (next to the status-panel toggle and
+       rewind button), above the message textarea. Faithful to the plugin's
+       dark theme; the highlighted bar is the same element as in the
+       states/windows mockups. Text positions computed from measured widths. -->
+
+  <!-- callout: what this PR adds -->
+  <text x="613" y="64" font-size="22" font-weight="600" fill="#e8e8e8" text-anchor="middle">Claude plan usage — this PR</text>
+
+  <!-- input card -->
+  <rect x="12" y="88" width="936" height="356" rx="12" fill="#1e1e1e" stroke="#2a2a2e"/>
+  <!-- callout arrow (after the card so the panel does not paint over it) -->
+  <line x1="613" y1="72" x2="613" y2="102" stroke="#9d9d9d" stroke-width="1.5"/>
+  <polygon points="613,117 607,105 619,105" fill="#9d9d9d"/>
+
+  <!-- ============ ContextBar row ============ -->
+  <!-- attach (codicon-attach, paperclip) -->
+  <path d="M 59 156 V 139 A 5 5 0 0 1 69 139 V 153 A 10 10 0 0 1 49 153 V 130 A 15 15 0 0 1 79 130"
+        fill="none" stroke="#c8c8c8" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- token indicator ring (~40% used) -->
+  <circle cx="112" cy="140" r="11" fill="none" stroke="#3e3e42" stroke-width="3.5"/>
+  <circle cx="112" cy="140" r="11" fill="none" stroke="#3ba55d" stroke-width="3.5"
+          stroke-dasharray="27.6 69.1" transform="rotate(-90 112 140)"/>
+  <!-- divider -->
+  <line x1="142" y1="126" x2="142" y2="154" stroke="#3e3e42" stroke-width="2"/>
+  <!-- selected-agent chip -->
+  <rect x="158" y="124" width="96" height="32" rx="6" fill="#26262a" stroke="#3e3e42"/>
+  <rect x="168" y="133" width="14" height="10" rx="2" fill="none" stroke="#c8c8c8" stroke-width="2"/>
+  <circle cx="172.5" cy="138" r="1.3" fill="#c8c8c8"/>
+  <circle cx="177.5" cy="138" r="1.3" fill="#c8c8c8"/>
+  <line x1="175" y1="133" x2="175" y2="130" stroke="#c8c8c8" stroke-width="2"/>
+  <circle cx="175" cy="128.5" r="1.5" fill="#c8c8c8"/>
+  <text x="188" y="140" font-size="20" fill="#c8c8c8" dominant-baseline="central">fix</text>
+
+  <!-- right tool cluster: [plan usage] [status panel] [rewind] -->
+  <!-- rewind (codicon-discard, undo arrow) -->
+  <path d="M 902 138 A 8 8 0 1 0 894 132" fill="none" stroke="#c8c8c8" stroke-width="2.5" stroke-linecap="round"/>
+  <polygon points="894,132 902,128 902,136" fill="#c8c8c8"/>
+  <!-- status-panel toggle (codicon-layers) -->
+  <polygon points="838,128 852,135 838,142 824,135" fill="none" stroke="#c8c8c8" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M 824 141 L 838 148 L 852 141" fill="none" stroke="#c8c8c8" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M 824 147 L 838 154 L 852 147" fill="none" stroke="#c8c8c8" stroke-width="2" stroke-linejoin="round"/>
+
+  <!-- the plan-usage indicator itself (green state, 34% / 5h) -->
+  <g>
+    <rect x="436" y="136" width="72" height="8" rx="4" fill="#3e3e42"/>
+    <rect x="436" y="136" width="25" height="8" rx="4" fill="#3ba55d"/>
+    <text x="518" y="146" font-size="24" font-weight="600" fill="#3ba55d">34%</text>
+    <rect x="582" y="125" width="48" height="30" rx="6" fill="none" stroke="#3e3e42"/>
+    <text x="606" y="141" font-size="22" fill="#c8c8c8" text-anchor="middle" dominant-baseline="central">5h</text>
+    <text x="642" y="146" font-size="22" fill="#888888">23 Aug 03:00</text>
+    <circle cx="788" cy="140" r="7" fill="#3ba55d"/>
+  </g>
+  <!-- highlight around the indicator -->
+  <rect x="422" y="118" width="382" height="44" rx="10" fill="none" stroke="#9d9d9d"
+        stroke-width="1.5" stroke-dasharray="7 5" opacity="0.9"/>
+
+  <!-- ============ message textarea (placeholder) ============ -->
+  <text x="36" y="216" font-size="24" fill="#6f6f78">@reference files, #invoke agents, !insert prompts, Enter to send</text>
+
+  <!-- ============ ButtonArea row ============ -->
+  <rect x="36" y="372" width="100" height="36" rx="8" fill="#26262a" stroke="#3e3e42"/>
+  <text x="86" y="390" font-size="20" fill="#c8c8c8" text-anchor="middle" dominant-baseline="central">Claude ▾</text>
+  <rect x="148" y="372" width="104" height="36" rx="8" fill="#26262a" stroke="#3e3e42"/>
+  <text x="200" y="390" font-size="20" fill="#c8c8c8" text-anchor="middle" dominant-baseline="central">default ▾</text>
+  <rect x="264" y="372" width="126" height="36" rx="8" fill="#26262a" stroke="#3e3e42"/>
+  <text x="327" y="390" font-size="20" fill="#c8c8c8" text-anchor="middle" dominant-baseline="central">opus-4-6 ▾</text>
+  <rect x="402" y="372" width="80" height="36" rx="8" fill="#26262a" stroke="#3e3e42"/>
+  <text x="442" y="390" font-size="20" fill="#c8c8c8" text-anchor="middle" dominant-baseline="central">high ▾</text>
+
+  <line x1="758" y1="380" x2="758" y2="400" stroke="#3e3e42" stroke-width="2"/>
+  <!-- enhance prompt (codicon-sparkle) -->
+  <path d="M 786 380 L 789 389 L 798 392 L 789 395 L 786 404 L 783 395 L 774 392 L 783 389 Z" fill="#c8c8c8"/>
+  <!-- send (codicon-send in a primary button) -->
+  <rect x="828" y="374" width="56" height="36" rx="8" fill="#007fd4"/>
+  <polygon points="846,385 880,392 846,399 853,392" fill="#ffffff"/>
+</svg>

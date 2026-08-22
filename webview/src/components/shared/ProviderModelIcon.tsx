@@ -119,6 +119,22 @@ const PiIcon = (size: number): ReactElement => (
   </svg>
 );
 
+/** Official OMP mark (https://omp.sh/favicon.svg), mono via currentColor. */
+const OmpIcon = (size: number): ReactElement => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 64 64"
+    width={size}
+    height={size}
+    aria-label="OMP"
+    role="img"
+    style={{ flex: 'none', display: 'block' }}
+  >
+    <title>OMP</title>
+    <path fill="currentColor" d="M14 16h36v8H40v32h-8V24h-6v22h-8V24h-4z" />
+  </svg>
+);
+
 /**
  * Icon renderers for each vendor.
  * Returns [coloredVersion, avatarVersion] JSX elements.
@@ -149,6 +165,7 @@ const VENDOR_ICON_MAP: Record<
   // Official geometric mark from pi.dev; mono via currentColor (no lobehub icon).
   pi: (size, _colored) =>
     PiIcon(size),
+  omp: (size, _colored) => OmpIcon(size),
   moonshot: (size, _colored) =>
     <MoonshotMono size={size} />,
   zhipu: (size, colored) =>

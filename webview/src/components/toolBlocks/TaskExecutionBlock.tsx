@@ -5,6 +5,7 @@ import { normalizeToolName } from '../../utils/toolConstants';
 import { sendBridgeEvent } from '../../utils/bridge';
 import {
   extractResultText,
+  hasSubagentTranscript,
   isAsyncAgentInput,
   parseAgentToolMeta,
   parseSpawnAgentMeta,
@@ -73,9 +74,13 @@ const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, resul
   const agentToolMeta = !isSpawnAgent && input ? parseAgentToolMeta(getToolResultRaw, toolId) : {};
   const agentId = spawnMeta.agentId ?? agentToolMeta.agentId;
   const agentPath = spawnMeta.agentPath;
-  const identityLabel = spawnMeta.nickname || (typeof subagentType === 'string' && subagentType ? subagentType : undefined);
+  const identityLabel = spawnMeta.identityLabel
+    ?? (typeof subagentType === 'string' && subagentType ? subagentType : undefined);
   const modelSummary = [spawnMeta.model, spawnMeta.reasoningEffort].filter(Boolean).join(' ');
   const shortAgentId = shortenAgentId(agentId);
+  const historyDescription = isSpawnAgent
+    ? spawnMeta.description
+    : typeof description === 'string' ? description : undefined;
 
   // A background (run_in_background) Agent only gets a launch acknowledgment
   // tool_result; its real terminal status arrives later via a task_notification
@@ -98,6 +103,8 @@ const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, resul
   // assistant/end_turn. A settled main turn alone proves only that the launch
   // turn ended; the background sidechain may still be running.
   const history = (toolId ? histories[toolId] : undefined) ?? (agentId ? histories[agentId] : undefined);
+  const resolvedAgentId = history?.agentId ?? agentId;
+  const resolvedAgentPath = history?.agentPath ?? agentPath;
   const historyFailed = history?.status === 'error';
   const isCompleted = isAsync
     ? (taskEvent ? !taskFailed : history?.completed === true)
@@ -109,23 +116,23 @@ const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, resul
   // For background agents the task_notification carries the authoritative usage
   // and summary (the launch ack has none); prefer it over toolUseResult. Sync
   // agents keep reading toolUseResult as before.
-  const detailAgentId = (isAsync ? taskEvent?.agentId : undefined) ?? agentId;
+  const detailAgentId = (isAsync ? taskEvent?.agentId : undefined) ?? resolvedAgentId;
   const detailDurationMs = (isAsync ? taskEvent?.totalDurationMs : undefined) ?? agentToolMeta.totalDurationMs;
   const detailTokens = (isAsync ? taskEvent?.totalTokens : undefined) ?? agentToolMeta.totalTokens;
   const detailToolUseCount = (isAsync ? taskEvent?.totalToolUseCount : undefined) ?? agentToolMeta.totalToolUseCount;
   const detailResultText = (isAsync ? taskEvent?.summary : undefined) ?? extractResultText(result);
 
   useEffect(() => {
-    if (!input || !expanded || !isAgentTool || !currentSessionId || !toolId || history) return;
+    if (!input || !expanded || !isAgentTool || !currentSessionId || !toolId || hasSubagentTranscript(history)) return;
     sendBridgeEvent('load_subagent_session', JSON.stringify({
       sessionId: currentSessionId,
       provider: currentProvider,
-      agentId,
-      agentPath,
-      description: typeof description === 'string' ? description : undefined,
+      agentId: resolvedAgentId,
+      agentPath: resolvedAgentPath,
+      description: historyDescription,
       toolUseId: toolId,
     }));
-  }, [input, agentId, agentPath, currentProvider, currentSessionId, description, expanded, history, isAgentTool, toolId]);
+  }, [input, currentProvider, currentSessionId, expanded, history, historyDescription, isAgentTool, resolvedAgentId, resolvedAgentPath, toolId]);
 
   // Poll while an expanded async Agent is unresolved, including after a main
   // turn settles. This lets a reloaded session observe the sidechain's terminal
@@ -145,14 +152,14 @@ const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, resul
       sendBridgeEvent('load_subagent_session', JSON.stringify({
         sessionId: currentSessionId,
         provider: currentProvider,
-        agentId,
-        agentPath,
-        description: typeof description === 'string' ? description : undefined,
+        agentId: resolvedAgentId,
+        agentPath: resolvedAgentPath,
+        description: historyDescription,
         toolUseId: toolId,
       }));
     }, 2_000);
     return () => window.clearInterval(timer);
-  }, [input, agentId, agentPath, currentProvider, currentSessionId, description, shouldPollHistory, toolId]);
+  }, [input, currentProvider, currentSessionId, historyDescription, resolvedAgentId, resolvedAgentPath, shouldPollHistory, toolId]);
 
   if (!input) {
     return null;
@@ -232,13 +239,13 @@ const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, resul
                 totalTokens={detailTokens}
                 totalToolUseCount={detailToolUseCount}
                 resultText={detailResultText}
-                prompt={typeof prompt === 'string' ? prompt : undefined}
+                prompt={!isSpawnAgent && typeof prompt === 'string' ? prompt : undefined}
                 history={history}
                 canLoad={Boolean(currentSessionId)}
               />
             )}
 
-            {typeof prompt === 'string' && (
+            {!isSpawnAgent && typeof prompt === 'string' && (
               <div className="task-field">
                 <div className="task-field-label">
                   <span className="codicon codicon-comment" />
@@ -248,7 +255,9 @@ const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, resul
               </div>
             )}
 
-            {Object.entries(rest).map(([key, value]) => (
+            {Object.entries(rest)
+              .filter(([key]) => !isSpawnAgent || !['message', 'items', 'task_name', 'taskName'].includes(key))
+              .map(([key, value]) => (
               <div key={key} className="task-field">
                 <div className="task-field-label">{key}</div>
                 <div className="task-field-content">
@@ -257,7 +266,7 @@ const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, resul
                     : String(value)}
                 </div>
               </div>
-            ))}
+              ))}
           </div>
         </div>
       )}

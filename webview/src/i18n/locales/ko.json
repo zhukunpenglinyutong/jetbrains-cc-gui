@@ -237,7 +237,8 @@
           "grok": "Grok CLI",
           "kimi": "Kimi CLI",
           "opencode": "OpenCode",
-          "pi": "PI CLI"
+          "pi": "PI CLI",
+          "omp": "OMP CLI"
         },
         "currentProviderAuto": "Currently using automatic selection: {{provider}}",
         "currentProviderManual": "Currently using manually selected provider: {{provider}}",
@@ -951,6 +952,10 @@
         "pi": {
           "name": "PI CLI",
           "description": "멀티 프로바이더 모델을 지원하는 미니멀 터미널 코딩 에이전트"
+        },
+        "omp": {
+          "name": "OMP CLI",
+          "description": "멀티 프로바이더 모델을 지원하는 Oh My Pi 터미널 코딩 에이전트"
         }
       },
       "installDialog": {
@@ -1733,6 +1738,28 @@
       "description": "자율 모드. Codex가 편집과 셸 명령을 즉시 실행합니다."
     }
   },
+  "ompModes": {
+    "default": {
+      "label": "기본",
+      "tooltip": "선택한 모델 사용 (또는 OMP auto)",
+      "description": "모델 드롭다운에서 선택한 모델을 사용하며, Auto로 설정된 경우 OMP CLI 기본값을 사용합니다."
+    },
+    "smol": {
+      "label": "Smol",
+      "tooltip": "빠른 모델 역할 (omp --model smol)",
+      "description": "omp의 smol 역할에 구성된 모델로 이 대화를 실행합니다. 모델 드롭다운을 재정의합니다."
+    },
+    "slow": {
+      "label": "Slow",
+      "tooltip": "추론 모델 역할 (omp --model slow)",
+      "description": "omp의 slow 역할에 구성된 모델로 이 대화를 실행합니다. 모델 드롭다운을 재정의합니다."
+    },
+    "plan": {
+      "label": "Plan",
+      "tooltip": "계획 모델 역할 (omp --model plan)",
+      "description": "omp의 plan 역할에 구성된 모델로 이 대화를 실행합니다. 모델 드롭다운을 재정의합니다."
+    }
+  },
   "providers": {
     "claude": {
       "label": "Claude Code"
@@ -1754,6 +1781,9 @@
     },
     "pi": {
       "label": "PI CLI"
+    },
+    "omp": {
+      "label": "OMP CLI"
     }
   },
   "promptEnhancer": {

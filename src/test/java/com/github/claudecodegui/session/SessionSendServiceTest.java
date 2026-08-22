@@ -4,6 +4,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class SessionSendServiceTest {
 
@@ -48,6 +49,42 @@ public class SessionSendServiceTest {
                 "default",
                 SessionSendService.resolveEffectivePermissionMode("opencode", null, "plan")
         );
+        assertEquals(
+                "default",
+                SessionSendService.resolveEffectivePermissionMode("pi", "plan", null)
+        );
+    }
+
+    @Test
+    public void resolveEffectivePermissionModeKeepsPlanForOmpModelRole() {
+        // omp's "plan" is a model role (`omp --model plan`), NOT Claude plan mode,
+        // so it must survive resolution while other CLI providers are coerced.
+        assertEquals(
+                "plan",
+                SessionSendService.resolveEffectivePermissionMode("omp", "plan", "default")
+        );
+        assertEquals(
+                "plan",
+                SessionSendService.resolveEffectivePermissionMode("omp", null, "plan")
+        );
+        // smol/slow roles pass through untouched as well.
+        assertEquals(
+                "smol",
+                SessionSendService.resolveEffectivePermissionMode("omp", "smol", "default")
+        );
+        assertEquals(
+                "slow",
+                SessionSendService.resolveEffectivePermissionMode("omp", null, "slow")
+        );
+    }
+
+    @Test
+    public void permissionModeWhitelistAcceptsOmpModelRoles() {
+        assertTrue(SessionState.isValidPermissionMode("smol"));
+        assertTrue(SessionState.isValidPermissionMode("slow"));
+        assertTrue(SessionState.isValidPermissionMode("plan"));
+        assertEquals("smol", SessionSendService.normalizeRequestedPermissionMode("smol"));
+        assertEquals("slow", SessionSendService.normalizeRequestedPermissionMode(" slow "));
     }
 
     @Test

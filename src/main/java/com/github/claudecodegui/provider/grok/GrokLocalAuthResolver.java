@@ -4,6 +4,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.util.EnvironmentUtil;
 
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.util.PlatformUtils;
@@ -13,7 +14,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -77,12 +81,69 @@ public final class GrokLocalAuthResolver {
         }
     }
 
+    /**
+     * Resolve Grok CLI home directory.
+     *
+     * <p>Order:
+     * <ol>
+     *   <li>{@code System.getenv("GROK_HOME")} (process env — rare for GUI apps)</li>
+     *   <li>IDE login-shell map via {@link EnvironmentUtil#getEnvironmentMap()}
+     *       (picks up {@code export GROK_HOME=...} from {@code ~/.zshrc})</li>
+     *   <li>{@code ~/.grok} default</li>
+     * </ol>
+     *
+     * <p>Daemon / {@code grok agent} processes inherit shell env through
+     * {@link com.github.claudecodegui.bridge.EnvironmentConfigurator}, so they
+     * often write sessions under a custom {@code GROK_HOME} (e.g. {@code ~/.antig-grok}).
+     * History readers must use the same resolution or tab restore finds nothing.
+     */
     public static Path resolveGrokHome() {
-        String env = System.getenv("GROK_HOME");
-        if (env != null && !env.trim().isEmpty()) {
-            return Paths.get(env.trim());
+        String env = firstNonBlank(
+                System.getenv("GROK_HOME"),
+                environmentMapValue("GROK_HOME")
+        );
+        if (env != null) {
+            return Paths.get(env);
         }
         return Paths.get(PlatformUtils.getHomeDirectory(), ".grok");
+    }
+
+    /**
+     * Candidate Grok homes for on-disk history lookup. Primary home first, then
+     * the default {@code ~/.grok} when {@code GROK_HOME} points elsewhere so older
+     * sessions remain visible after a home migration.
+     */
+    public static List<Path> resolveGrokHomeCandidates() {
+        LinkedHashSet<Path> homes = new LinkedHashSet<>();
+        homes.add(resolveGrokHome());
+        Path defaultHome = Paths.get(PlatformUtils.getHomeDirectory(), ".grok");
+        homes.add(defaultHome);
+        return new ArrayList<>(homes);
+    }
+
+    private static String environmentMapValue(String key) {
+        try {
+            Map<String, String> map = EnvironmentUtil.getEnvironmentMap();
+            if (map == null) {
+                return null;
+            }
+            return map.get(key);
+        } catch (Exception e) {
+            LOG.debug("[Grok] EnvironmentUtil lookup failed for " + key + ": " + e.getMessage());
+            return null;
+        }
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (value != null && !value.trim().isEmpty()) {
+                return value.trim();
+            }
+        }
+        return null;
     }
 
     public static boolean hasOAuthToken() {

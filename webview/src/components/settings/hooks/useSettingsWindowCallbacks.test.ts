@@ -125,6 +125,7 @@ describe('useSettingsWindowCallbacks', () => {
         kimi: 'auto',
         opencode: 'opencode-default',
         pi: 'auto',
+        omp: 'auto',
       },
       availability: {
         claude: true,
@@ -133,6 +134,7 @@ describe('useSettingsWindowCallbacks', () => {
         kimi: false,
         opencode: false,
         pi: false,
+        omp: false,
       },
     };
 
@@ -157,6 +159,7 @@ describe('useSettingsWindowCallbacks', () => {
         kimi: 'auto',
         opencode: 'opencode-default',
         pi: 'auto',
+        omp: 'auto',
       },
       availability: {
         claude: true,
@@ -165,6 +168,7 @@ describe('useSettingsWindowCallbacks', () => {
         kimi: false,
         opencode: false,
         pi: false,
+        omp: false,
       },
     };
 

@@ -6,6 +6,10 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.intellij.openapi.diagnostic.Logger;
+import org.tomlj.Toml;
+import org.tomlj.TomlArray;
+import org.tomlj.TomlParseResult;
+import org.tomlj.TomlTable;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -16,10 +20,15 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -28,8 +37,12 @@ import java.util.regex.Pattern;
  */
 public class CodexSettingsManager {
     private static final Logger LOG = Logger.getInstance(CodexSettingsManager.class);
-    private static final String MCP_SERVERS_KEY = "mcp_servers";
     private static final String MODEL_ALIASES_KEY = "model_aliases";
+    private static final String MODEL_PROVIDERS_KEY = "model_providers";
+    private static final String CLI_AUTH_BACKUP_FILE_NAME = "auth.json.cli_backup";
+    private static final String PROVIDER_CONFIG_BASELINE_FILE_NAME = "config.toml.provider_backup";
+    private static final Set<String> GLOBAL_CONFIG_KEYS = Set.of("mcp_servers", "skills");
+    private static final Object CONFIG_FILE_LOCK = new Object();
 
     // Pattern to validate TOML bare keys (letters, digits, hyphens, underscores)
     private static final Pattern TOML_KEY_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]+$");
@@ -72,6 +85,12 @@ public class CodexSettingsManager {
      * Returns null if file doesn't exist
      */
     public Map<String, Object> readConfigToml() throws IOException {
+        synchronized (CONFIG_FILE_LOCK) {
+            return readConfigTomlUnlocked();
+        }
+    }
+
+    private Map<String, Object> readConfigTomlUnlocked() throws IOException {
         Path configPath = getConfigTomlPath();
         if (!Files.exists(configPath)) {
             LOG.info("[CodexSettingsManager] config.toml not found at: " + configPath);
@@ -91,27 +110,83 @@ public class CodexSettingsManager {
      * Write config.toml from a map structure
      */
     public void writeConfigToml(Map<String, Object> config) throws IOException {
-        Path configPath = getConfigTomlPath();
+        synchronized (CONFIG_FILE_LOCK) {
+            writeConfigTomlUnlocked(config);
+        }
+    }
 
-        String tomlContent = generateToml(config);
-        writeStringAtomically(configPath, tomlContent);
+    private void writeConfigTomlUnlocked(Map<String, Object> config) throws IOException {
+        Path configPath = getConfigTomlPath();
+        writeStringAtomically(configPath, generateToml(config));
         LOG.info("[CodexSettingsManager] Wrote config.toml to: " + configPath);
     }
 
-    /**
-     * Write config.toml from raw string content
-     */
-    public void writeConfigTomlRaw(String content) throws IOException {
-        Path configPath = getConfigTomlPath();
+    @FunctionalInterface
+    public interface ConfigEditor {
+        boolean edit(Map<String, Object> config) throws IOException;
+    }
 
-        writeStringAtomically(configPath, content);
-        LOG.info("[CodexSettingsManager] Wrote raw config.toml to: " + configPath);
+    @FunctionalInterface
+    public interface IoAction {
+        void run() throws IOException;
+    }
+
+    @FunctionalInterface
+    public interface ConfigAccessGuard {
+        boolean isAllowed() throws IOException;
+    }
+
+    /**
+     * Runs one config.toml read-modify-write operation under the shared Codex config lock.
+     */
+    public void updateConfigToml(ConfigEditor editor) throws IOException {
+        updateConfigToml(() -> true, editor);
+    }
+
+    /**
+     * Runs a guarded config.toml update. The guard is rechecked while holding the
+     * same lock used by provider transitions, preventing access-mode changes
+     * between authorization and the write.
+     */
+    public void updateConfigToml(ConfigAccessGuard guard, ConfigEditor editor) throws IOException {
+        synchronized (CONFIG_FILE_LOCK) {
+            if (!guard.isAllowed()) {
+                throw new IOException("Codex config management is not authorized");
+            }
+            Map<String, Object> config = readConfigTomlUnlocked();
+            if (config == null) {
+                config = new LinkedHashMap<>();
+            }
+            if (editor.edit(config)) {
+                writeConfigTomlUnlocked(config);
+            }
+        }
+    }
+
+    /** Runs a guarded file operation under the provider/config transition lock. */
+    public void runWithConfigAccess(ConfigAccessGuard guard, IoAction action) throws IOException {
+        synchronized (CONFIG_FILE_LOCK) {
+            if (!guard.isAllowed()) {
+                throw new IOException("Codex config management is not authorized");
+            }
+            action.run();
+        }
+    }
+
+    boolean isConfigLockHeldByCurrentThread() {
+        return Thread.holdsLock(CONFIG_FILE_LOCK);
     }
 
     /**
      * Read auth.json
      */
     public JsonObject readAuthJson() throws IOException {
+        synchronized (CONFIG_FILE_LOCK) {
+            return readAuthJsonUnlocked();
+        }
+    }
+
+    private JsonObject readAuthJsonUnlocked() throws IOException {
         Path authPath = getAuthJsonPath();
         if (!Files.exists(authPath)) {
             LOG.info("[CodexSettingsManager] auth.json not found at: " + authPath);
@@ -130,78 +205,415 @@ public class CodexSettingsManager {
      * Write auth.json
      */
     public void writeAuthJson(JsonObject auth) throws IOException {
-        Path authPath = getAuthJsonPath();
+        synchronized (CONFIG_FILE_LOCK) {
+            writeAuthJsonUnlocked(auth);
+        }
+    }
 
+    private void writeAuthJsonUnlocked(JsonObject auth) throws IOException {
+        Path authPath = getAuthJsonPath();
         writeStringAtomically(authPath, gson.toJson(auth));
         LOG.info("[CodexSettingsManager] Wrote auth.json to: " + authPath);
     }
 
     /**
-     * Apply provider configuration to ~/.codex files
-     *
-     * @param provider The provider configuration containing config and auth data
+     * Atomically transitions the provider-owned config/auth values and commits provider state last.
+     * Global MCP and Skill configuration is never owned by a provider fragment.
      */
-    public void applyProviderToCodexSettings(JsonObject provider) throws IOException {
+    public void transitionProvider(
+            JsonObject previousProvider,
+            JsonObject nextProvider,
+            boolean useCliLogin,
+            IoAction commitProviderState) throws IOException {
+        Map<String, Object> previousFragment = parseProviderFragment(previousProvider, false);
+        Map<String, Object> nextFragment = parseProviderFragment(nextProvider, true);
+        JsonObject nextAuth = parseProviderAuth(nextProvider);
+
+        synchronized (CONFIG_FILE_LOCK) {
+            Map<String, Object> nextConfig = readConfigTomlUnlocked();
+            if (nextConfig == null) {
+                nextConfig = new LinkedHashMap<>();
+            }
+
+            Path configPath = getConfigTomlPath();
+            Path authPath = getAuthJsonPath();
+            Path cliAuthBackupPath = codexDir.resolve(CLI_AUTH_BACKUP_FILE_NAME);
+            Path configBaselinePath = codexDir.resolve(PROVIDER_CONFIG_BASELINE_FILE_NAME);
+            Map<String, Object> configBaseline = prepareProviderConfigBaseline(
+                    previousProvider != null,
+                    configBaselinePath);
+
+            if (previousProvider != null) {
+                restoreProviderOwnedValues(nextConfig, configBaseline, previousFragment, true);
+            }
+            if (nextProvider != null) {
+                configBaseline = new LinkedHashMap<>();
+                captureMissingProviderBaselines(configBaseline, nextConfig, nextFragment, true);
+                mergeProviderValues(nextConfig, nextFragment, true);
+            }
+
+            FileSnapshot configSnapshot = FileSnapshot.capture(configPath);
+            FileSnapshot authSnapshot = FileSnapshot.capture(authPath);
+            FileSnapshot cliAuthBackupSnapshot = FileSnapshot.capture(cliAuthBackupPath);
+            FileSnapshot configBaselineSnapshot = FileSnapshot.capture(configBaselinePath);
+
+            try {
+                if (nextProvider != null) {
+                    writeStringAtomically(configBaselinePath, generateToml(configBaseline));
+                }
+                writeConfigTomlUnlocked(nextConfig);
+                if (nextProvider != null) {
+                    if (previousProvider == null) {
+                        backupLocalAuthUnlocked(cliAuthBackupPath);
+                    }
+                    if (nextAuth != null) {
+                        writeAuthJsonUnlocked(nextAuth);
+                    } else {
+                        Files.deleteIfExists(authPath);
+                    }
+                } else if (previousProvider != null) {
+                    restoreLocalAuthUnlocked(cliAuthBackupPath);
+                }
+                if (nextProvider == null) {
+                    Files.deleteIfExists(configBaselinePath);
+                }
+                commitProviderState.run();
+            } catch (Exception e) {
+                IOException failure = toIOException("Failed to activate Codex provider", e);
+                restoreSnapshot(configPath, configSnapshot, failure);
+                restoreSnapshot(authPath, authSnapshot, failure);
+                restoreSnapshot(cliAuthBackupPath, cliAuthBackupSnapshot, failure);
+                restoreSnapshot(configBaselinePath, configBaselineSnapshot, failure);
+                throw failure;
+            }
+        }
+
+        String providerId = nextProvider != null && nextProvider.has("id")
+                ? nextProvider.get("id").getAsString()
+                : useCliLogin ? "cli-login" : "none";
+        LOG.info("[CodexSettingsManager] Activated Codex provider: " + providerId);
+    }
+
+    /**
+     * Verifies legacy managed-provider state before granting config management access.
+     */
+    public boolean isProviderApplied(JsonObject provider) throws IOException {
         if (provider == null) {
-            LOG.warn("[CodexSettingsManager] Cannot apply null provider");
-            return;
+            return false;
         }
-
-        // Check if provider has configToml (raw string format)
-        if (provider.has("configToml") && provider.get("configToml").isJsonPrimitive()) {
-            String configTomlContent = provider.get("configToml").getAsString();
-            String mergedConfigTomlContent = preserveExistingMcpServers(configTomlContent);
-            writeConfigTomlRaw(mergedConfigTomlContent);
+        Map<String, Object> fragment = parseProviderFragment(provider, true);
+        JsonObject providerAuth = parseProviderAuth(provider);
+        synchronized (CONFIG_FILE_LOCK) {
+            Map<String, Object> currentConfig = readConfigTomlUnlocked();
+            if (currentConfig == null || !containsProviderValues(currentConfig, fragment, true)) {
+                return false;
+            }
+            if (providerAuth == null) {
+                return readAuthJsonUnlocked() == null;
+            }
+            JsonObject currentAuth = readAuthJsonUnlocked();
+            return providerAuth.equals(currentAuth);
         }
+    }
 
-        // Check if provider has authJson (raw string format)
-        if (provider.has("authJson") && provider.get("authJson").isJsonPrimitive()) {
-            String authJsonContent = provider.get("authJson").getAsString();
-            if (authJsonContent != null && !authJsonContent.trim().isEmpty()) {
-                try {
-                    JsonObject authObj = JsonParser.parseString(authJsonContent).getAsJsonObject();
-                    writeAuthJson(authObj);
-                } catch (Exception e) {
-                    LOG.warn("[CodexSettingsManager] Failed to parse authJson: " + e.getMessage());
+    private Map<String, Object> parseProviderFragment(JsonObject provider, boolean rejectGlobalKeys) throws IOException {
+        if (provider == null || !provider.has("configToml") || !provider.get("configToml").isJsonPrimitive()) {
+            return new LinkedHashMap<>();
+        }
+        Map<String, Object> fragment = parseToml(provider.get("configToml").getAsString());
+        if (rejectGlobalKeys) {
+            for (String globalKey : GLOBAL_CONFIG_KEYS) {
+                if (fragment.containsKey(globalKey)) {
+                    throw new IOException("Provider config.toml must not declare global '" + globalKey + "' configuration");
                 }
             }
         }
-
-        String providerId = provider.has("id") ? provider.get("id").getAsString() : "unknown";
-        LOG.info("[CodexSettingsManager] Applied provider to ~/.codex: " + providerId);
+        return fragment;
     }
 
-    private String preserveExistingMcpServers(String providerConfigToml) throws IOException {
-        Map<String, Object> existingConfig = readConfigToml();
-        if (existingConfig == null) {
-            return providerConfigToml;
+    private JsonObject parseProviderAuth(JsonObject provider) throws IOException {
+        if (provider == null || !provider.has("authJson") || !provider.get("authJson").isJsonPrimitive()) {
+            return null;
         }
-
-        Object existingMcpServersObj = existingConfig.get(MCP_SERVERS_KEY);
-        if (!(existingMcpServersObj instanceof Map)) {
-            return providerConfigToml;
+        String authJson = provider.get("authJson").getAsString();
+        if (authJson == null || authJson.trim().isEmpty()) {
+            return null;
         }
-
-        @SuppressWarnings("unchecked")
-        Map<String, Object> existingMcpServers = (Map<String, Object>) existingMcpServersObj;
-        if (existingMcpServers.isEmpty()) {
-            return providerConfigToml;
+        try {
+            return JsonParser.parseString(authJson).getAsJsonObject();
+        } catch (Exception e) {
+            throw new IOException("Provider authJson must be a valid JSON object", e);
         }
+    }
 
-        Map<String, Object> providerConfig = parseToml(providerConfigToml == null ? "" : providerConfigToml);
-        Object providerMcpServersObj = providerConfig.get(MCP_SERVERS_KEY);
-        if (providerMcpServersObj instanceof Map) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> providerMcpServers = (Map<String, Object>) providerMcpServersObj;
-            for (Map.Entry<String, Object> entry : existingMcpServers.entrySet()) {
-                providerMcpServers.putIfAbsent(entry.getKey(), entry.getValue());
+    private Map<String, Object> prepareProviderConfigBaseline(
+            boolean hasPreviousProvider,
+            Path baselinePath) throws IOException {
+        if (hasPreviousProvider && Files.exists(baselinePath)) {
+            return parseToml(Files.readString(baselinePath, StandardCharsets.UTF_8));
+        }
+        return new LinkedHashMap<>();
+    }
+
+    @SuppressWarnings("unchecked")
+    private void restoreProviderOwnedValues(
+            Map<String, Object> target,
+            Map<String, Object> baseline,
+            Map<String, Object> owned,
+            boolean topLevel) {
+        for (Map.Entry<String, Object> entry : owned.entrySet()) {
+            String key = entry.getKey();
+            if (topLevel && GLOBAL_CONFIG_KEYS.contains(key)) {
+                continue;
             }
-        } else {
-            providerConfig.put(MCP_SERVERS_KEY, existingMcpServers);
-        }
 
-        LOG.info("[CodexSettingsManager] Preserved existing Codex MCP servers while applying provider");
-        return generateToml(providerConfig);
+            Object ownedValue = entry.getValue();
+            Object baselineValue = baseline.get(key);
+            boolean baselineContainsKey = baseline.containsKey(key);
+            if (topLevel && MODEL_PROVIDERS_KEY.equals(key) && ownedValue instanceof Map) {
+                if (baselineContainsKey && !(baselineValue instanceof Map)) {
+                    target.put(key, deepCopyValue(baselineValue));
+                } else {
+                    restoreModelProviderEntries(
+                            target,
+                            baselineValue instanceof Map ? (Map<String, Object>) baselineValue : Map.of(),
+                            (Map<String, Object>) ownedValue,
+                            key);
+                }
+            } else if (ownedValue instanceof Map) {
+                if (baselineContainsKey && !(baselineValue instanceof Map)) {
+                    target.put(key, deepCopyValue(baselineValue));
+                    continue;
+                }
+                Map<String, Object> targetMap = target.get(key) instanceof Map
+                        ? (Map<String, Object>) target.get(key)
+                        : new LinkedHashMap<>();
+                restoreProviderOwnedValues(
+                        targetMap,
+                        baselineValue instanceof Map ? (Map<String, Object>) baselineValue : Map.of(),
+                        (Map<String, Object>) ownedValue,
+                        false);
+                if (targetMap.isEmpty() && !baselineContainsKey) {
+                    target.remove(key);
+                } else {
+                    target.put(key, targetMap);
+                }
+            } else if (baselineContainsKey) {
+                target.put(key, deepCopyValue(baselineValue));
+            } else {
+                target.remove(key);
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void restoreModelProviderEntries(
+            Map<String, Object> target,
+            Map<String, Object> baselineProviders,
+            Map<String, Object> ownedProviders,
+            String key) {
+        Map<String, Object> targetProviders = target.get(key) instanceof Map
+                ? (Map<String, Object>) target.get(key)
+                : new LinkedHashMap<>();
+        for (String providerId : ownedProviders.keySet()) {
+            if (baselineProviders.containsKey(providerId)) {
+                targetProviders.put(providerId, deepCopyValue(baselineProviders.get(providerId)));
+            } else {
+                targetProviders.remove(providerId);
+            }
+        }
+        if (targetProviders.isEmpty() && baselineProviders.isEmpty()) {
+            target.remove(key);
+        } else {
+            target.put(key, targetProviders);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void captureMissingProviderBaselines(
+            Map<String, Object> baseline,
+            Map<String, Object> current,
+            Map<String, Object> owned,
+            boolean topLevel) {
+        for (Map.Entry<String, Object> entry : owned.entrySet()) {
+            String key = entry.getKey();
+            if (topLevel && GLOBAL_CONFIG_KEYS.contains(key)) {
+                continue;
+            }
+
+            Object ownedValue = entry.getValue();
+            Object currentValue = current.get(key);
+            if (topLevel && MODEL_PROVIDERS_KEY.equals(key) && ownedValue instanceof Map) {
+                if (baseline.containsKey(key) && !(baseline.get(key) instanceof Map)) {
+                    continue;
+                }
+                Map<String, Object> baselineProviders = baseline.get(key) instanceof Map
+                        ? (Map<String, Object>) baseline.get(key)
+                        : new LinkedHashMap<>();
+                Map<String, Object> currentProviders = currentValue instanceof Map
+                        ? (Map<String, Object>) currentValue
+                        : Map.of();
+                for (String providerId : ((Map<String, Object>) ownedValue).keySet()) {
+                    if (!baselineProviders.containsKey(providerId) && currentProviders.containsKey(providerId)) {
+                        baselineProviders.put(providerId, deepCopyValue(currentProviders.get(providerId)));
+                    }
+                }
+                if (!baselineProviders.isEmpty()) {
+                    baseline.put(key, baselineProviders);
+                }
+            } else if (ownedValue instanceof Map && baseline.get(key) instanceof Map) {
+                captureMissingProviderBaselines(
+                        (Map<String, Object>) baseline.get(key),
+                        currentValue instanceof Map ? (Map<String, Object>) currentValue : Map.of(),
+                        (Map<String, Object>) ownedValue,
+                        false);
+            } else if (ownedValue instanceof Map && !baseline.containsKey(key) && currentValue instanceof Map) {
+                Map<String, Object> nestedBaseline = new LinkedHashMap<>();
+                captureMissingProviderBaselines(
+                        nestedBaseline,
+                        (Map<String, Object>) currentValue,
+                        (Map<String, Object>) ownedValue,
+                        false);
+                if (!nestedBaseline.isEmpty()) {
+                    baseline.put(key, nestedBaseline);
+                }
+            } else if (!baseline.containsKey(key) && current.containsKey(key)) {
+                baseline.put(key, deepCopyValue(currentValue));
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void mergeProviderValues(
+            Map<String, Object> target,
+            Map<String, Object> fragment,
+            boolean topLevel) {
+        for (Map.Entry<String, Object> entry : fragment.entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
+            if (value instanceof Map && !(topLevel && MODEL_PROVIDERS_KEY.equals(key))) {
+                Object currentValue = target.get(key);
+                Map<String, Object> targetMap;
+                if (currentValue instanceof Map) {
+                    targetMap = (Map<String, Object>) currentValue;
+                } else {
+                    targetMap = new LinkedHashMap<>();
+                    target.put(key, targetMap);
+                }
+                mergeProviderValues(targetMap, (Map<String, Object>) value, false);
+            } else if (value instanceof Map) {
+                Map<String, Object> providers = target.get(key) instanceof Map
+                        ? (Map<String, Object>) target.get(key)
+                        : new LinkedHashMap<>();
+                for (Map.Entry<String, Object> providerEntry : ((Map<String, Object>) value).entrySet()) {
+                    providers.put(providerEntry.getKey(), deepCopyValue(providerEntry.getValue()));
+                }
+                target.put(key, providers);
+            } else {
+                target.put(key, deepCopyValue(value));
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean containsProviderValues(
+            Map<String, Object> current,
+            Map<String, Object> expected,
+            boolean topLevel) {
+        for (Map.Entry<String, Object> entry : expected.entrySet()) {
+            boolean globalConfig = topLevel && GLOBAL_CONFIG_KEYS.contains(entry.getKey());
+            if (globalConfig || !current.containsKey(entry.getKey())) {
+                if (!globalConfig) {
+                    return false;
+                }
+                continue;
+            }
+            Object currentValue = current.get(entry.getKey());
+            Object expectedValue = entry.getValue();
+            if (topLevel && MODEL_PROVIDERS_KEY.equals(entry.getKey())
+                    && currentValue instanceof Map && expectedValue instanceof Map) {
+                Map<String, Object> currentProviders = (Map<String, Object>) currentValue;
+                for (Map.Entry<String, Object> providerEntry
+                        : ((Map<String, Object>) expectedValue).entrySet()) {
+                    if (!providerEntry.getValue().equals(currentProviders.get(providerEntry.getKey()))) {
+                        return false;
+                    }
+                }
+            } else if (currentValue instanceof Map && expectedValue instanceof Map) {
+                if (!containsProviderValues(
+                        (Map<String, Object>) currentValue,
+                        (Map<String, Object>) expectedValue,
+                        false)) {
+                    return false;
+                }
+            } else if (!expectedValue.equals(currentValue)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object deepCopyValue(Object value) {
+        if (value instanceof Map) {
+            Map<String, Object> copy = new LinkedHashMap<>();
+            ((Map<String, Object>) value).forEach((key, nestedValue) -> copy.put(key, deepCopyValue(nestedValue)));
+            return copy;
+        }
+        if (value instanceof List) {
+            List<Object> copy = new ArrayList<>();
+            for (Object item : (List<Object>) value) {
+                copy.add(deepCopyValue(item));
+            }
+            return copy;
+        }
+        return value;
+    }
+
+    private void backupLocalAuthUnlocked(Path backupPath) throws IOException {
+        Path authPath = getAuthJsonPath();
+        if (Files.exists(authPath)) {
+            writeStringAtomically(backupPath, Files.readString(authPath, StandardCharsets.UTF_8));
+            LOG.info("[CodexSettingsManager] Backed up local Codex credentials");
+        } else {
+            Files.deleteIfExists(backupPath);
+        }
+    }
+
+    private void restoreLocalAuthUnlocked(Path backupPath) throws IOException {
+        if (Files.exists(backupPath)) {
+            writeStringAtomically(getAuthJsonPath(), Files.readString(backupPath, StandardCharsets.UTF_8));
+            Files.deleteIfExists(backupPath);
+            return;
+        }
+        Files.deleteIfExists(getAuthJsonPath());
+    }
+
+    private void restoreSnapshot(Path path, FileSnapshot snapshot, IOException failure) {
+        try {
+            if (snapshot.exists()) {
+                writeStringAtomically(path, new String(snapshot.content(), StandardCharsets.UTF_8));
+            } else {
+                Files.deleteIfExists(path);
+            }
+        } catch (Exception restoreError) {
+            failure.addSuppressed(restoreError);
+        }
+    }
+
+    private IOException toIOException(String message, Exception cause) {
+        if (cause instanceof IOException) {
+            return (IOException) cause;
+        }
+        return new IOException(message + ": " + cause.getMessage(), cause);
+    }
+
+    private record FileSnapshot(boolean exists, byte[] content) {
+        private static FileSnapshot capture(Path path) throws IOException {
+            return Files.exists(path)
+                    ? new FileSnapshot(true, Files.readAllBytes(path))
+                    : new FileSnapshot(false, new byte[0]);
+        }
     }
 
     /**
@@ -261,6 +673,10 @@ public class CodexSettingsManager {
             JsonObject auth = readAuthJson();
             if (auth == null) {
                 return false;
+            }
+            if (auth.has("OPENAI_API_KEY") && auth.get("OPENAI_API_KEY").isJsonPrimitive()
+                    && !auth.get("OPENAI_API_KEY").getAsString().isBlank()) {
+                return true;
             }
             // Check for chatgpt auth mode with tokens
             if (auth.has("auth_mode") && "chatgpt".equals(auth.get("auth_mode").getAsString())) {
@@ -340,52 +756,6 @@ public class CodexSettingsManager {
     }
 
     /**
-     * Apply Codex CLI login mode to ~/.codex/ settings.
-     * Clears config.toml (to use official defaults) while preserving auth.json (OAuth tokens).
-     * Backs up existing config.toml before clearing.
-     *
-     * @throws IOException if backup or write fails
-     */
-    public void applyCodexCliLoginToSettings() throws IOException {
-        Path configTomlPath = getConfigTomlPath();
-        Path backupPath = codexDir.resolve("config.toml.cli_backup");
-
-        // Backup existing config.toml if it exists and has content
-        if (Files.exists(configTomlPath)) {
-            String content = Files.readString(configTomlPath, StandardCharsets.UTF_8);
-            if (content != null && !content.trim().isEmpty()) {
-                Files.copy(configTomlPath, backupPath, StandardCopyOption.REPLACE_EXISTING);
-                LOG.info("[CodexSettingsManager] Backed up config.toml to: " + backupPath);
-            }
-        }
-
-        // Clear config.toml — empty file means Codex SDK uses official defaults
-        writeConfigTomlRaw("");
-
-        // auth.json is left untouched — it already contains the OAuth tokens from 'codex login'
-        LOG.info("[CodexSettingsManager] Applied Codex CLI login mode (config.toml cleared, auth.json preserved)");
-    }
-
-    /**
-     * Remove Codex CLI login mode by restoring the backed-up config.toml.
-     * Called when switching away from CLI login mode.
-     *
-     * @throws IOException if restore fails
-     */
-    public void removeCodexCliLoginFromSettings() throws IOException {
-        Path backupPath = codexDir.resolve("config.toml.cli_backup");
-
-        if (Files.exists(backupPath)) {
-            Path configTomlPath = getConfigTomlPath();
-            Files.copy(backupPath, configTomlPath, StandardCopyOption.REPLACE_EXISTING);
-            Files.deleteIfExists(backupPath);
-            LOG.info("[CodexSettingsManager] Restored config.toml from CLI login backup");
-        } else {
-            LOG.info("[CodexSettingsManager] No CLI login backup found, nothing to restore");
-        }
-    }
-
-    /**
      * Get current Codex configuration (combined from config.toml and auth.json)
      */
     public JsonObject getCurrentCodexConfig() throws IOException {
@@ -437,327 +807,44 @@ public class CodexSettingsManager {
     // ==================== TOML Parsing Utilities ====================
 
     /**
-     * Simple TOML parser (handles basic key=value and [section] syntax)
+     * Parses TOML 1.0 into mutable maps/lists used by the existing settings managers.
      */
-    private Map<String, Object> parseToml(String content) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        Map<String, Object> currentSection = result;
-
-        String[] lines = content.split("\n");
-        for (String line : lines) {
-            line = line.trim();
-
-            // Skip empty lines and comments
-            if (line.isEmpty() || line.startsWith("#")) {
-                continue;
-            }
-
-            // Array of tables header [[section.subsection]]
-            if (line.startsWith("[[") && line.endsWith("]]")) {
-                String sectionName = line.substring(2, line.length() - 2).trim();
-
-                // Navigate to parent, then append a new map to the List at the leaf key
-                String[] parts = sectionName.split("\\.");
-                Map<String, Object> nav = result;
-                boolean navFailed = false;
-                for (int i = 0; i < parts.length - 1; i++) {
-                    if (!nav.containsKey(parts[i])) {
-                        nav.put(parts[i], new LinkedHashMap<String, Object>());
-                    }
-                    Object next = nav.get(parts[i]);
-                    if (next instanceof Map) {
-                        @SuppressWarnings("unchecked")
-                        Map<String, Object> nextMap = (Map<String, Object>) next;
-                        nav = nextMap;
-                    } else {
-                        // Type conflict: intermediate node is not a Map
-                        LOG.warn("[CodexSettingsManager] Type conflict at key '" + parts[i] + "' in [[" + sectionName + "]], skipping");
-                        navFailed = true;
-                        break;
-                    }
+    private Map<String, Object> parseToml(String content) throws IOException {
+        TomlParseResult parsed = Toml.parse(content == null ? "" : content);
+        if (parsed.hasErrors()) {
+            StringBuilder errors = new StringBuilder();
+            parsed.errors().forEach(error -> {
+                if (errors.length() > 0) {
+                    errors.append("; ");
                 }
-
-                if (navFailed) {
-                    // Use a throwaway map so subsequent key=value lines don't corrupt other sections
-                    currentSection = new LinkedHashMap<>();
-                    continue;
-                }
-                currentSection = nav;
-
-                // At the leaf key, create or get a List<Map> and append a new entry
-                String leafKey = parts[parts.length - 1];
-                if (!nav.containsKey(leafKey)) {
-                    nav.put(leafKey, new ArrayList<Map<String, Object>>());
-                }
-                Object leafVal = nav.get(leafKey);
-                if (leafVal instanceof List) {
-                    @SuppressWarnings("unchecked")
-                    List<Map<String, Object>> tableList = (List<Map<String, Object>>) leafVal;
-                    Map<String, Object> newEntry = new LinkedHashMap<>();
-                    tableList.add(newEntry);
-                    currentSection = newEntry;
-                } else {
-                    LOG.warn("[CodexSettingsManager] Type conflict at leaf key '" + leafKey + "' in [[" + sectionName + "]], expected List");
-                    currentSection = new LinkedHashMap<>();
-                }
-                continue;
-            }
-
-            // Section header [section] or [section.subsection]
-            if (line.startsWith("[") && line.endsWith("]")) {
-                String sectionName = line.substring(1, line.length() - 1).trim();
-
-                // Navigate/create nested sections
-                String[] parts = sectionName.split("\\.");
-                Map<String, Object> nav = result;
-                boolean navFailed = false;
-                for (String part : parts) {
-                    if (!nav.containsKey(part)) {
-                        nav.put(part, new LinkedHashMap<String, Object>());
-                    }
-                    Object next = nav.get(part);
-                    if (next instanceof Map) {
-                        @SuppressWarnings("unchecked")
-                        Map<String, Object> nextMap = (Map<String, Object>) next;
-                        nav = nextMap;
-                    } else {
-                        // Type conflict: node is not a Map (could be a List or simple value)
-                        LOG.warn("[CodexSettingsManager] Type conflict at key '" + part + "' in [" + sectionName + "], skipping");
-                        navFailed = true;
-                        break;
-                    }
-                }
-
-                currentSection = navFailed ? new LinkedHashMap<>() : nav;
-                continue;
-            }
-
-            // Key = value
-            int eqIndex = line.indexOf('=');
-            if (eqIndex > 0) {
-                String key = line.substring(0, eqIndex).trim();
-                key = normalizeTomlKey(key);
-                String valueStr = line.substring(eqIndex + 1).trim();
-                Object value = parseTomlValue(valueStr);
-                currentSection.put(key, value);
-            }
+                errors.append(error);
+            });
+            throw new IOException("Invalid TOML: " + errors);
         }
+        return convertTomlTable(parsed);
+    }
 
+    private Map<String, Object> convertTomlTable(TomlTable table) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : table.entrySet()) {
+            result.put(entry.getKey(), convertTomlValue(entry.getValue()));
+        }
         return result;
     }
 
-    /**
-     * Parse a TOML value string
-     */
-    private Object parseTomlValue(String valueStr) {
-        if (valueStr.isEmpty()) {
-            return "";
+    private Object convertTomlValue(Object value) {
+        if (value instanceof TomlTable) {
+            return convertTomlTable((TomlTable) value);
         }
-
-        // Boolean
-        if (valueStr.equals("true")) {
-            return true;
-        }
-        if (valueStr.equals("false")) {
-            return false;
-        }
-
-        // Array: [value1, value2, ...]
-        if (valueStr.startsWith("[") && valueStr.endsWith("]")) {
-            return parseTomlArray(valueStr);
-        }
-
-        // Inline table: { key = "value", ... }
-        if (valueStr.startsWith("{") && valueStr.endsWith("}")) {
-            return parseTomlInlineTable(valueStr);
-        }
-
-        // String (quoted)
-        if (valueStr.length() >= 2 && valueStr.startsWith("\"") && valueStr.endsWith("\"")) {
-            return unescapeTomlString(valueStr.substring(1, valueStr.length() - 1));
-        }
-        if (valueStr.length() >= 2 && valueStr.startsWith("'") && valueStr.endsWith("'")) {
-            return valueStr.substring(1, valueStr.length() - 1);
-        }
-
-        // Number
-        try {
-            if (valueStr.contains(".")) {
-                return Double.parseDouble(valueStr);
-            } else {
-                return Long.parseLong(valueStr);
+        if (value instanceof TomlArray) {
+            TomlArray array = (TomlArray) value;
+            List<Object> result = new ArrayList<>();
+            for (int i = 0; i < array.size(); i++) {
+                result.add(convertTomlValue(array.get(i)));
             }
-        } catch (NumberFormatException ignored) {
-        }
-
-        // Default: treat as unquoted string
-        return valueStr;
-    }
-
-    /**
-     * Parse a TOML array: [value1, value2, ...]
-     */
-    private List<Object> parseTomlArray(String arrayStr) {
-        List<Object> result = new ArrayList<>();
-        String content = arrayStr.substring(1, arrayStr.length() - 1).trim();
-
-        if (content.isEmpty()) {
             return result;
         }
-
-        // Split by comma, respecting quotes and nested structures
-        List<String> elements = splitTomlElements(content, ',');
-        for (String element : elements) {
-            element = element.trim();
-            if (!element.isEmpty()) {
-                result.add(parseTomlValue(element));
-            }
-        }
-        return result;
-    }
-
-    /**
-     * Parse a TOML inline table: { key = "value", ... }
-     */
-    private Map<String, Object> parseTomlInlineTable(String tableStr) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        String content = tableStr.substring(1, tableStr.length() - 1).trim();
-
-        if (content.isEmpty()) {
-            return result;
-        }
-
-        // Split by comma, respecting quotes and nested structures
-        List<String> pairs = splitTomlElements(content, ',');
-        for (String pair : pairs) {
-            pair = pair.trim();
-            int eqIndex = pair.indexOf('=');
-            if (eqIndex > 0) {
-                String key = pair.substring(0, eqIndex).trim();
-                String valueStr = pair.substring(eqIndex + 1).trim();
-                result.put(normalizeTomlKey(key), parseTomlValue(valueStr));
-            }
-        }
-        return result;
-    }
-
-    private String normalizeTomlKey(String key) {
-        String trimmed = key == null ? "" : key.trim();
-        if (trimmed.length() >= 2 && trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
-            return unescapeTomlString(trimmed.substring(1, trimmed.length() - 1));
-        }
-        if (trimmed.length() >= 2 && trimmed.startsWith("'") && trimmed.endsWith("'")) {
-            return trimmed.substring(1, trimmed.length() - 1);
-        }
-        return trimmed;
-    }
-
-    /**
-     * Split TOML elements by delimiter, respecting quotes and nested structures
-     */
-    private List<String> splitTomlElements(String content, char delimiter) {
-        List<String> result = new ArrayList<>();
-        StringBuilder current = new StringBuilder();
-        int depth = 0;
-        boolean inDoubleQuote = false;
-        boolean inSingleQuote = false;
-        boolean escaped = false;
-
-        for (int i = 0; i < content.length(); i++) {
-            char c = content.charAt(i);
-
-            if (escaped) {
-                current.append(c);
-                escaped = false;
-                continue;
-            }
-
-            if (c == '\\') {
-                current.append(c);
-                escaped = true;
-                continue;
-            }
-
-            if (c == '"' && !inSingleQuote) {
-                inDoubleQuote = !inDoubleQuote;
-                current.append(c);
-                continue;
-            }
-
-            if (c == '\'' && !inDoubleQuote) {
-                inSingleQuote = !inSingleQuote;
-                current.append(c);
-                continue;
-            }
-
-            if (!inDoubleQuote && !inSingleQuote) {
-                if (c == '[' || c == '{') {
-                    depth++;
-                } else if (c == ']' || c == '}') {
-                    depth--;
-                } else if (c == delimiter && depth == 0) {
-                    result.add(current.toString());
-                    current = new StringBuilder();
-                    continue;
-                }
-            }
-
-            current.append(c);
-        }
-
-        if (current.length() > 0) {
-            result.add(current.toString());
-        }
-
-        return result;
-    }
-
-    /**
-     * Unescape TOML string (handle \n, \t, \\, \", etc.)
-     */
-    private String unescapeTomlString(String str) {
-        StringBuilder result = new StringBuilder();
-        boolean escaped = false;
-
-        for (int i = 0; i < str.length(); i++) {
-            char c = str.charAt(i);
-            if (escaped) {
-                switch (c) {
-                    case 'n':
-                        result.append('\n');
-                        break;
-                    case 't':
-                        result.append('\t');
-                        break;
-                    case 'r':
-                        result.append('\r');
-                        break;
-                    case '\\':
-                        result.append('\\');
-                        break;
-                    case '"':
-                        result.append('"');
-                        break;
-                    case '\'':
-                        result.append('\'');
-                        break;
-                    default:
-                        result.append('\\').append(c);
-                        break;
-                }
-                escaped = false;
-            } else if (c == '\\') {
-                escaped = true;
-            } else {
-                result.append(c);
-            }
-        }
-
-        if (escaped) {
-            result.append('\\');
-        }
-
-        return result.toString();
+        return value;
     }
 
     /**
@@ -777,27 +864,19 @@ public class CodexSettingsManager {
         // Then write Map sections
         for (Map.Entry<String, Object> entry : config.entrySet()) {
             if (entry.getValue() instanceof Map) {
-                if (!isValidTomlKey(entry.getKey())) {
-                    LOG.warn("[CodexSettingsManager] Skipping invalid TOML section key: " + entry.getKey());
-                    continue;
-                }
                 @SuppressWarnings("unchecked")
                 Map<String, Object> section = (Map<String, Object>) entry.getValue();
-                writeTomlSection(sb, entry.getKey(), section);
+                writeTomlSection(sb, toTomlKey(entry.getKey()), section);
             }
         }
 
         // Finally, write top-level array of tables ([[key]])
         for (Map.Entry<String, Object> entry : config.entrySet()) {
             if (isArrayOfTables(entry.getValue())) {
-                if (!isValidTomlKey(entry.getKey())) {
-                    LOG.warn("[CodexSettingsManager] Skipping invalid TOML array key: " + entry.getKey());
-                    continue;
-                }
                 @SuppressWarnings("unchecked")
                 List<Map<String, Object>> tableList = (List<Map<String, Object>>) entry.getValue();
                 for (Map<String, Object> tableEntry : tableList) {
-                    sb.append("\n[[").append(entry.getKey()).append("]]\n");
+                    sb.append("\n[[").append(toTomlKey(entry.getKey())).append("]]\n");
                     for (Map.Entry<String, Object> kv : tableEntry.entrySet()) {
                         sb.append(toTomlKey(kv.getKey())).append(" = ")
                                 .append(toTomlValue(kv.getValue())).append("\n");
@@ -814,20 +893,16 @@ public class CodexSettingsManager {
      * Handles nested Map sections and List&lt;Map&gt; array of tables.
      */
     private void writeTomlSection(StringBuilder sb, String sectionPath, Map<String, Object> section) {
-        // A "simple value" is anything that is NOT a nested Map, NOT an array of tables (List<Map>),
-        // and NOT an empty list (which would be an empty array of tables with no TOML representation).
+        // A simple value is anything that is not a nested table or array of tables.
         boolean hasSimpleValues = section.values().stream()
-                                          .anyMatch(v -> !(v instanceof Map) && !isArrayOfTables(v)
-                                                                 && !(v instanceof List && ((List<?>) v).isEmpty()));
+                                          .anyMatch(v -> !(v instanceof Map) && !isArrayOfTables(v));
 
         // Write section header and simple values
         if (hasSimpleValues) {
             sb.append("[").append(sectionPath).append("]\n");
             for (Map.Entry<String, Object> entry : section.entrySet()) {
                 Object val = entry.getValue();
-                // Skip Maps, array of tables, and empty lists
-                if (val instanceof Map || isArrayOfTables(val)
-                            || (val instanceof List && ((List<?>) val).isEmpty())) {
+                if (val instanceof Map || isArrayOfTables(val)) {
                     continue;
                 }
                 sb.append(toTomlKey(entry.getKey())).append(" = ").append(toTomlValue(val)).append("\n");
@@ -837,33 +912,19 @@ public class CodexSettingsManager {
         // Write nested sections (Map values)
         for (Map.Entry<String, Object> entry : section.entrySet()) {
             if (entry.getValue() instanceof Map) {
-                if (!isValidTomlKey(entry.getKey())) {
-                    LOG.warn("[CodexSettingsManager] Skipping invalid TOML section key: " + entry.getKey());
-                    continue;
-                }
                 @SuppressWarnings("unchecked")
                 Map<String, Object> nestedSection = (Map<String, Object>) entry.getValue();
-                writeTomlSection(sb, sectionPath + "." + entry.getKey(), nestedSection);
+                writeTomlSection(sb, sectionPath + "." + toTomlKey(entry.getKey()), nestedSection);
             }
         }
 
         // Write array of tables (List<Map> values) as [[section.key]]
-        // Note: empty lists (isArrayOfTables returns false) are intentionally skipped
-        // because empty array of tables have no valid TOML representation.
         for (Map.Entry<String, Object> entry : section.entrySet()) {
             Object entryVal = entry.getValue();
-            // Skip empty lists - they cannot be represented as array of tables in TOML
-            if (entryVal instanceof List && ((List<?>) entryVal).isEmpty()) {
-                continue;
-            }
             if (isArrayOfTables(entryVal)) {
-                if (!isValidTomlKey(entry.getKey())) {
-                    LOG.warn("[CodexSettingsManager] Skipping invalid TOML array key: " + entry.getKey());
-                    continue;
-                }
                 @SuppressWarnings("unchecked")
                 List<Map<String, Object>> tableList = (List<Map<String, Object>>) entry.getValue();
-                String arrayPath = sectionPath + "." + entry.getKey();
+                String arrayPath = sectionPath + "." + toTomlKey(entry.getKey());
                 for (Map<String, Object> tableEntry : tableList) {
                     sb.append("\n[[").append(arrayPath).append("]]\n");
                     for (Map.Entry<String, Object> kv : tableEntry.entrySet()) {
@@ -917,7 +978,20 @@ public class CodexSettingsManager {
         if (value instanceof Boolean) {
             return value.toString();
         }
+        if (value instanceof Double) {
+            double number = (Double) value;
+            if (Double.isNaN(number)) {
+                return "nan";
+            }
+            if (Double.isInfinite(number)) {
+                return number > 0 ? "inf" : "-inf";
+            }
+        }
         if (value instanceof Number) {
+            return value.toString();
+        }
+        if (value instanceof OffsetDateTime || value instanceof LocalDateTime
+                || value instanceof LocalDate || value instanceof LocalTime) {
             return value.toString();
         }
         // List -> TOML array
@@ -941,7 +1015,7 @@ public class CodexSettingsManager {
             for (Map.Entry<String, Object> entry : map.entrySet()) {
                 if (!first) { sb.append(", "); }
                 first = false;
-                sb.append("\"").append(escapeTomlString(entry.getKey())).append("\" = ");
+                sb.append(toTomlKey(entry.getKey())).append(" = ");
                 sb.append(toTomlValue(entry.getValue()));
             }
             sb.append(" }");
@@ -956,11 +1030,50 @@ public class CodexSettingsManager {
      * Escape special characters in TOML string
      */
     private String escapeTomlString(String str) {
-        return str.replace("\\", "\\\\")
-                       .replace("\"", "\\\"")
-                       .replace("\n", "\\n")
-                       .replace("\t", "\\t")
-                       .replace("\r", "\\r");
+        StringBuilder escaped = new StringBuilder(str.length());
+        for (int i = 0; i < str.length(); i++) {
+            char value = str.charAt(i);
+            switch (value) {
+                case '\b':
+                    escaped.append("\\b");
+                    break;
+                case '\t':
+                    escaped.append("\\t");
+                    break;
+                case '\n':
+                    escaped.append("\\n");
+                    break;
+                case '\f':
+                    escaped.append("\\f");
+                    break;
+                case '\r':
+                    escaped.append("\\r");
+                    break;
+                case '"':
+                    escaped.append("\\\"");
+                    break;
+                case '\\':
+                    escaped.append("\\\\");
+                    break;
+                default:
+                    if (value <= 0x1F || value == 0x7F) {
+                        escaped.append("\\u");
+                        appendHex4(escaped, value);
+                    } else {
+                        escaped.append(value);
+                    }
+                    break;
+            }
+        }
+        return escaped.toString();
+    }
+
+    private void appendHex4(StringBuilder target, char value) {
+        String hexDigits = "0123456789ABCDEF";
+        target.append(hexDigits.charAt((value >> 12) & 0xF));
+        target.append(hexDigits.charAt((value >> 8) & 0xF));
+        target.append(hexDigits.charAt((value >> 4) & 0xF));
+        target.append(hexDigits.charAt(value & 0xF));
     }
 
 

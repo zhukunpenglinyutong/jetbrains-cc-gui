@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="456" viewBox="0 0 960 456" font-family="-apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+  <!-- Claude plan usage indicator — multi-window switching (5h / 7d from rate_limit_event)
+       and the worst-window dot. Same snapshot in both cards; tooltip bubble
+       mirrors the component's real tooltip lines. x-positions computed from
+       measured text widths. -->
+
+  <!-- ============ tooltip bubble (hovering the indicator) ============ -->
+  <g>
+    <rect x="48" y="24" width="400" height="120" rx="8" fill="#2d2d30" stroke="#3e3e42"/>
+    <path d="M 206 143 L 218 162 L 230 143 Z" fill="#2d2d30"/>
+    <rect x="207" y="142" width="20" height="3" fill="#2d2d30"/>
+    <text x="68" y="56" font-size="20" fill="#d8d8d8">5h 92% &#183; Resets 23 Aug 03:00</text>
+    <text x="68" y="84" font-size="20" fill="#d8d8d8">5h 92% &#183; 7d 21%</text>
+    <text x="68" y="112" font-size="20" fill="#a8a8a8">Click period label to switch window</text>
+    </g>
+
+  <!-- ============ card A: 5h selected (red) ============ -->
+  <g>
+    <rect x="12" y="200" width="936" height="92" rx="10" fill="#1e1e1e" stroke="#2a2a2e"/>
+    <rect x="36" y="242" width="72" height="8" rx="4" fill="#3e3e42"/>
+    <rect x="36" y="242" width="66" height="8" rx="4" fill="#e34850"/>
+    <text x="118" y="252" font-size="24" font-weight="600" fill="#e34850">92%</text>
+    <!-- window chip — highlighted as the clickable switcher -->
+    <rect x="194" y="231" width="48" height="30" rx="6" fill="#26262a" stroke="#4d4d55"/>
+    <text x="218" y="247" font-size="22" fill="#e0e0e0" text-anchor="middle" dominant-baseline="central">5h</text>
+    <text x="252" y="252" font-size="22" fill="#888888">23 Aug 03:00</text>
+    <circle cx="416" cy="246" r="7" fill="#e34850"/>
+    <text x="460" y="240" font-size="23" font-weight="600" fill="#e8e8e8">5h window selected</text>
+    <text x="460" y="268" font-size="19" fill="#909090">Chip = switcher: click to cycle 5h / 7d.</text>
+  </g>
+
+  <!-- ============ card B: same snapshot, 7d selected ============ -->
+  <g>
+    <rect x="12" y="330" width="936" height="92" rx="10" fill="#1e1e1e" stroke="#2a2a2e"/>
+    <rect x="36" y="372" width="72" height="8" rx="4" fill="#3e3e42"/>
+    <rect x="36" y="372" width="15" height="8" rx="4" fill="#3ba55d"/>
+    <text x="118" y="382" font-size="24" font-weight="600" fill="#3ba55d">21%</text>
+    <rect x="194" y="361" width="48" height="30" rx="6" fill="none" stroke="#3e3e42"/>
+    <text x="218" y="377" font-size="22" fill="#c8c8c8" text-anchor="middle" dominant-baseline="central">7d</text>
+    <text x="252" y="382" font-size="22" fill="#888888">1 Sep 00:00</text>
+    <!-- worst-window dot stays RED even though the selected window is green -->
+    <circle cx="416" cy="376" r="7" fill="#e34850"/>
+    <text x="460" y="370" font-size="23" font-weight="600" fill="#e8e8e8">7d selected — bar green, dot red</text>
+    <text x="460" y="398" font-size="19" fill="#909090">Dot tracks the worst window — 5h is over pace.</text>
+  </g>
+</svg>

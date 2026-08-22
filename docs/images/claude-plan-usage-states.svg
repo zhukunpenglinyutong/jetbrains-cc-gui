@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="352" viewBox="0 0 960 352" font-family="-apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+  <!-- Claude plan usage indicator — the three pace states, faithful to the
+       plugin's dark theme (#1e1e1e panel, bar 36x4 scaled 2x, colors from
+       context-bar.css: green #3ba55d, yellow #d4a017, red #e34850).
+       Element x-positions computed from measured text widths (system font). -->
+
+  <!-- ============ state 1: green = on pace ============ -->
+  <g>
+    <rect x="12" y="24" width="936" height="92" rx="10" fill="#1e1e1e" stroke="#2a2a2e"/>
+    <!-- bar -->
+    <rect x="36" y="66" width="72" height="8" rx="4" fill="#3e3e42"/>
+    <rect x="36" y="66" width="25" height="8" rx="4" fill="#3ba55d"/>
+    <text x="118" y="76" font-size="24" font-weight="600" fill="#3ba55d">34%</text>
+    <!-- window chip -->
+    <rect x="194" y="55" width="48" height="30" rx="6" fill="none" stroke="#3e3e42"/>
+    <text x="218" y="71" font-size="22" fill="#c8c8c8" text-anchor="middle" dominant-baseline="central">5h</text>
+    <!-- short reset (no trailing period — matches formatShortReset) -->
+    <text x="252" y="76" font-size="22" fill="#888888">23 Aug 03:00</text>
+    <!-- worst-window dot -->
+    <circle cx="416" cy="70" r="7" fill="#3ba55d"/>
+    <!-- label -->
+    <text x="460" y="62" font-size="23" font-weight="600" fill="#e8e8e8">On pace</text>
+    <text x="460" y="90" font-size="19" fill="#909090">Usage below the time budget — lasts to reset.</text>
+  </g>
+
+  <!-- ============ state 2: yellow = near the budget line ============ -->
+  <g>
+    <rect x="12" y="130" width="936" height="92" rx="10" fill="#1e1e1e" stroke="#2a2a2e"/>
+    <rect x="36" y="172" width="72" height="8" rx="4" fill="#3e3e42"/>
+    <rect x="36" y="172" width="56" height="8" rx="4" fill="#d4a017"/>
+    <text x="118" y="182" font-size="24" font-weight="600" fill="#d4a017">78%</text>
+    <rect x="194" y="161" width="48" height="30" rx="6" fill="none" stroke="#3e3e42"/>
+    <text x="218" y="177" font-size="22" fill="#c8c8c8" text-anchor="middle" dominant-baseline="central">7d</text>
+    <text x="252" y="182" font-size="22" fill="#888888">1 Sep 00:00</text>
+    <circle cx="416" cy="176" r="7" fill="#d4a017"/>
+    <text x="460" y="168" font-size="23" font-weight="600" fill="#e8e8e8">Near the budget line</text>
+    <text x="460" y="196" font-size="19" fill="#909090">Within 5 pp of the time budget — borderline.</text>
+  </g>
+
+  <!-- ============ state 3: red = over pace ============ -->
+  <g>
+    <rect x="12" y="236" width="936" height="92" rx="10" fill="#1e1e1e" stroke="#2a2a2e"/>
+    <rect x="36" y="278" width="72" height="8" rx="4" fill="#3e3e42"/>
+    <rect x="36" y="278" width="69" height="8" rx="4" fill="#e34850"/>
+    <text x="118" y="288" font-size="24" font-weight="600" fill="#e34850">96%</text>
+    <rect x="194" y="267" width="48" height="30" rx="6" fill="none" stroke="#3e3e42"/>
+    <text x="218" y="283" font-size="22" fill="#c8c8c8" text-anchor="middle" dominant-baseline="central">5h</text>
+    <text x="252" y="288" font-size="22" fill="#888888">23 Aug 21:30</text>
+    <circle cx="416" cy="282" r="7" fill="#e34850"/>
+    <text x="460" y="274" font-size="23" font-weight="600" fill="#e8e8e8">Over pace</text>
+    <text x="460" y="302" font-size="19" fill="#909090">Past the time budget — limits hit before reset.</text>
+  </g>
+</svg>

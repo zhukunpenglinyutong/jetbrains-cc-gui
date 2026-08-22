@@ -237,7 +237,8 @@
           "grok": "Grok CLI",
           "kimi": "Kimi CLI",
           "opencode": "OpenCode",
-          "pi": "PI CLI"
+          "pi": "PI CLI",
+          "omp": "OMP CLI"
         },
         "currentProviderAuto": "Currently using automatic selection: {{provider}}",
         "currentProviderManual": "Currently using manually selected provider: {{provider}}",
@@ -857,6 +858,10 @@
         "pi": {
           "name": "PI CLI",
           "description": "मल्टी-प्रोवाइडर मॉडल सपोर्ट वाला मिनिमल टर्मिनल कोडिंग एजेंट"
+        },
+        "omp": {
+          "name": "OMP CLI",
+          "description": "मल्टी-प्रोवाइडर मॉडल सपोर्ट वाला Oh My Pi टर्मिनल कोडिंग एजेंट"
         }
       },
       "installDialog": {
@@ -1637,6 +1642,28 @@
       "description": "Hands-off mode. Codex executes edits and shell commands immediately."
     }
   },
+  "ompModes": {
+    "default": {
+      "label": "डिफ़ॉल्ट",
+      "tooltip": "चयनित मॉडल का उपयोग करें (या OMP auto)",
+      "description": "मॉडल ड्रॉपडाउन में चुने गए मॉडल का उपयोग करता है, या Auto पर सेट होने पर OMP CLI डिफ़ॉल्ट का उपयोग करता है।"
+    },
+    "smol": {
+      "label": "Smol",
+      "tooltip": "तेज़ मॉडल रोल (omp --model smol)",
+      "description": "इस वार्तालाप को omp की smol भूमिका के लिए कॉन्फ़िगर किए गए मॉडल के साथ चलाता है। मॉडल ड्रॉपडाउन को ओवरराइड करता है।"
+    },
+    "slow": {
+      "label": "Slow",
+      "tooltip": "रीज़निंग मॉडल रोल (omp --model slow)",
+      "description": "इस वार्तालाप को omp की slow भूमिका के लिए कॉन्फ़िगर किए गए मॉडल के साथ चलाता है। मॉडल ड्रॉपडाउन को ओवरराइड करता है।"
+    },
+    "plan": {
+      "label": "Plan",
+      "tooltip": "प्लानिंग मॉडल रोल (omp --model plan)",
+      "description": "इस वार्तालाप को omp की plan भूमिका के लिए कॉन्फ़िगर किए गए मॉडल के साथ चलाता है। मॉडल ड्रॉपडाउन को ओवरराइड करता है।"
+    }
+  },
   "providers": {
     "claude": {
       "label": "Claude Code"
@@ -1652,6 +1679,9 @@
     },
     "pi": {
       "label": "PI CLI"
+    },
+    "omp": {
+      "label": "OMP CLI"
     }
   },
   "promptEnhancer": {

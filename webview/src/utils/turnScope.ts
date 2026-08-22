@@ -52,8 +52,42 @@ export function computeStatusScopeMessages(
   return latestTurnMessages.length > 0 && latestTurnHasToolUse ? latestTurnMessages : messages;
 }
 
-export function finalizeTodosForSettledTurn(todos: TodoItem[], isStreaming: boolean): TodoItem[] {
-  if (isStreaming) return todos;
+function findConversationTurnStartAt(messages: ClaudeMessage[], messageIndex: number): number {
+  for (let i = Math.min(messageIndex, messages.length - 1); i >= 0; i -= 1) {
+    const message = messages[i];
+    if (message.type !== 'user' || isToolResultOnlyUserMessage(message)) continue;
+    return i;
+  }
+  return -1;
+}
+
+/**
+ * Keep the most recent user turn that contains at least one extracted subagent.
+ * Invalid Codex spawn calls are filtered before this helper runs, so a later
+ * noise-only turn cannot hide the previous turn's valid agents.
+ */
+export function selectLatestSubagentTurn(
+  messages: ClaudeMessage[],
+  subagents: SubagentInfo[],
+): SubagentInfo[] {
+  if (subagents.length === 0) return [];
+
+  let latestTurnStart = Number.NEGATIVE_INFINITY;
+  const turnStarts = subagents.map((subagent) => {
+    const turnStart = findConversationTurnStartAt(messages, subagent.messageIndex);
+    latestTurnStart = Math.max(latestTurnStart, turnStart);
+    return turnStart;
+  });
+
+  return subagents.filter((_, index) => turnStarts[index] === latestTurnStart);
+}
+
+export function finalizeTodosForSettledTurn(
+  todos: TodoItem[],
+  isStreaming: boolean,
+  currentProvider: string,
+): TodoItem[] {
+  if (isStreaming || currentProvider === 'codex') return todos;
   return todos.map((todo) => (
     todo.status === 'in_progress'
       ? { ...todo, status: 'completed' }

@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { __resetCliModelsCacheForTests, useCliModels } from './useCliModels';
-import { CODEX_MODELS, KIMI_MODELS } from '../../components/ChatInputBox/types';
+import { __resetCliModelsCacheForTests, useCliModels, useOmpRoles } from './useCliModels';
+import { CODEX_MODELS, KIMI_MODELS, OMP_ROLE_MODELS } from '../../components/ChatInputBox/types';
 import { installRuntimeProviderDispatchers } from '../../utils/runtimeProviderCapabilities';
 
 const sendBridgeEventMock = vi.hoisted(() => vi.fn());
@@ -177,5 +177,75 @@ describe('useCliModels', () => {
     expect(second.result.current.cliCatalogHasEntries).toBe(true);
     expect(second.result.current.cliDefaultModel).toBe('openai/gpt-5');
     expect(second.result.current.cliModelsLoading).toBe(false);
+  });
+});
+
+describe('useOmpRoles', () => {
+  beforeEach(() => {
+    sendBridgeEventMock.mockClear();
+    __resetCliModelsCacheForTests();
+    installRuntimeProviderDispatchers();
+  });
+
+  afterEach(() => {
+    delete window.setCliModels;
+    __resetCliModelsCacheForTests();
+    vi.useRealTimers();
+  });
+
+  it('falls back to the static smol/slow/plan roles before any payload arrives', () => {
+    const { result } = renderHook(() => {
+      useCliModels('omp');
+      return useOmpRoles();
+    });
+    expect(result.current).toEqual(OMP_ROLE_MODELS);
+  });
+
+  it('populates omp roles from the setCliModels payload', () => {
+    const { result } = renderHook(() => {
+      useCliModels('omp');
+      return useOmpRoles();
+    });
+    emitCliModels({
+      success: true,
+      provider: 'omp',
+      models: [{ id: 'openai/gpt-5', label: 'gpt-5' }],
+      roles: [
+        { id: 'smol', label: 'Smol', description: 'openai/gpt-5-mini' },
+        { id: 'designer', label: 'Designer', description: 'opencode-go/deepseek-v4-flash' },
+      ],
+    });
+    expect(result.current).toEqual([
+      { id: 'smol', label: 'Smol', description: 'openai/gpt-5-mini' },
+      { id: 'designer', label: 'Designer', description: 'opencode-go/deepseek-v4-flash' },
+    ]);
+  });
+
+  it('keeps the static fallback when the payload carries no usable roles', () => {
+    const { result } = renderHook(() => {
+      useCliModels('omp');
+      return useOmpRoles();
+    });
+    emitCliModels({
+      success: true,
+      provider: 'omp',
+      models: [{ id: 'openai/gpt-5', label: 'gpt-5' }],
+      roles: 'not-an-array',
+    });
+    expect(result.current).toEqual(OMP_ROLE_MODELS);
+  });
+
+  it('ignores roles payloads for other providers', () => {
+    const { result } = renderHook(() => {
+      useCliModels('kimi');
+      return useOmpRoles();
+    });
+    emitCliModels({
+      success: true,
+      provider: 'kimi',
+      models: [{ id: 'kimi-k3', label: 'kimi-k3' }],
+      roles: [{ id: 'designer', label: 'Designer' }],
+    });
+    expect(result.current).toEqual(OMP_ROLE_MODELS);
   });
 });

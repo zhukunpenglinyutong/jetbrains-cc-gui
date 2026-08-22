@@ -91,7 +91,6 @@ public class CodexProviderOperations {
             if (activeProvider != null &&
                         activeProvider.has("id") &&
                         id.equals(activeProvider.get("id").getAsString())) {
-                context.getSettingsService().applyActiveProviderToCodexSettings();
                 syncedActiveProvider = true;
             }
 
@@ -186,7 +185,6 @@ public class CodexProviderOperations {
             }
 
             context.getSettingsService().switchCodexProvider(id);
-            context.getSettingsService().applyActiveProviderToCodexSettings();
             invalidateCodexQuotaCache();
 
             ApplicationManager.getApplication().invokeLater(() -> {
@@ -229,9 +227,6 @@ public class CodexProviderOperations {
 
             if (wasCliLoginActive) {
                 context.getSettingsService().switchCodexProvider(fallbackProviderId);
-                if (fallbackProviderId != null && !fallbackProviderId.isBlank()) {
-                    context.getSettingsService().applyActiveProviderToCodexSettings();
-                }
             }
 
             ApplicationManager.getApplication().invokeLater(() -> {
@@ -256,11 +251,7 @@ public class CodexProviderOperations {
      */
     private void handleSwitchToCodexCliLogin() {
         try {
-            context.getSettingsService().setCodexLocalConfigAuthorized(true);
-
-            // Update config.json to set CLI login as current
-            context.getSettingsService().switchCodexProvider(
-                    com.github.claudecodegui.settings.CodexProviderManager.CODEX_CLI_LOGIN_PROVIDER_ID);
+            context.getSettingsService().switchToCodexCliLogin();
             invalidateCodexQuotaCache();
 
             LOG.info("[ProviderHandler] Authorized local Codex config provider");

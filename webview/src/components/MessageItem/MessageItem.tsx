@@ -51,6 +51,7 @@ function getProviderDisplayName(providerId?: string): string {
   if (providerId === 'opencode') return 'OpenCode';
   if (providerId === 'kimi') return 'Kimi';
   if (providerId === 'pi') return 'Pi';
+  if (providerId === 'omp') return 'OMP';
   if (providerId === 'dsh') return 'DSH';
   if (providerId) return providerId.charAt(0).toUpperCase() + providerId.slice(1);
   return 'Claude';

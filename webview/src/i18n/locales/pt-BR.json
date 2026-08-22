@@ -237,7 +237,8 @@
           "grok": "Grok CLI",
           "kimi": "Kimi CLI",
           "opencode": "OpenCode",
-          "pi": "PI CLI"
+          "pi": "PI CLI",
+          "omp": "OMP CLI"
         },
         "currentProviderAuto": "Currently using automatic selection: {{provider}}",
         "currentProviderManual": "Currently using manually selected provider: {{provider}}",
@@ -1004,6 +1005,10 @@
         "pi": {
           "name": "PI CLI",
           "description": "Agente de codificação de terminal minimalista com suporte a múltiplos provedores"
+        },
+        "omp": {
+          "name": "OMP CLI",
+          "description": "Agente de codificação de terminal Oh My Pi com suporte a múltiplos provedores"
         }
       },
       "installDialog": {
@@ -1788,6 +1793,28 @@
       "description": "Modo autônomo. O Codex executa edições e comandos shell imediatamente."
     }
   },
+  "ompModes": {
+    "default": {
+      "label": "Padrão",
+      "tooltip": "Usa o modelo selecionado (ou OMP auto)",
+      "description": "Usa o modelo escolhido no menu suspenso de modelos, ou o padrão do OMP CLI quando definido como Auto."
+    },
+    "smol": {
+      "label": "Smol",
+      "tooltip": "Função de modelo rápido (omp --model smol)",
+      "description": "Executa esta conversa com o modelo configurado para a função smol do omp. Substitui o menu suspenso de modelos."
+    },
+    "slow": {
+      "label": "Slow",
+      "tooltip": "Função de modelo de raciocínio (omp --model slow)",
+      "description": "Executa esta conversa com o modelo configurado para a função slow do omp. Substitui o menu suspenso de modelos."
+    },
+    "plan": {
+      "label": "Plan",
+      "tooltip": "Função de modelo de planejamento (omp --model plan)",
+      "description": "Executa esta conversa com o modelo configurado para a função plan do omp. Substitui o menu suspenso de modelos."
+    }
+  },
   "providers": {
     "claude": {
       "label": "Claude Code"
@@ -1803,6 +1830,9 @@
     },
     "pi": {
       "label": "PI CLI"
+    },
+    "omp": {
+      "label": "OMP CLI"
     }
   },
   "promptEnhancer": {

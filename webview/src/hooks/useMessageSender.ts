@@ -43,6 +43,7 @@ export interface UseMessageSenderOptions {
   permissionMode: PermissionMode;
   reasoningEffort: ReasoningEffort;
   codexFastMode: CodexFastMode;
+  dshPreset?: string;
   selectedAgent: SelectedAgent | null;
   sdkStatusLoading: boolean;
   currentSdkInstalled: boolean;
@@ -76,6 +77,7 @@ export function useMessageSender({
   permissionMode,
   reasoningEffort,
   codexFastMode,
+  dshPreset,
   selectedAgent,
   sdkStatusLoading,
   currentSdkInstalled,
@@ -281,6 +283,7 @@ export function useMessageSender({
           fileTags: fileTagsInfo,
           permissionMode: effectivePermissionMode,
           ...reasoningEffortPayload,
+          ...(currentProvider === 'dsh' ? { dshPreset: dshPreset || '' } : {}),
           codexFastMode,
         });
         sendBridgeEvent('send_message_with_attachments', payload);
@@ -292,6 +295,7 @@ export function useMessageSender({
           fileTags: fileTagsInfo,
           permissionMode: effectivePermissionMode,
           ...reasoningEffortPayload,
+          ...(currentProvider === 'dsh' ? { dshPreset: dshPreset || '' } : {}),
           codexFastMode,
         });
         sendBridgeEvent('send_message', fallbackPayload);
@@ -303,11 +307,12 @@ export function useMessageSender({
         fileTags: fileTagsInfo,
         permissionMode: effectivePermissionMode,
         ...reasoningEffortPayload,
+        ...(currentProvider === 'dsh' ? { dshPreset: dshPreset || '' } : {}),
         codexFastMode,
       });
       sendBridgeEvent('send_message', payload);
     }
-  }, [codexFastMode, currentProvider, selectedModel, reasoningEffort]);
+  }, [codexFastMode, currentProvider, dshPreset, selectedModel, reasoningEffort]);
 
   /**
    * Execute message sending (from queue or directly)
@@ -402,6 +407,7 @@ export function useMessageSender({
     sdkStatusLoading,
     currentSdkInstalled,
     currentProvider,
+    dshPreset,
     permissionMode,
     selectedAgent,
     buildUserContentBlocks,

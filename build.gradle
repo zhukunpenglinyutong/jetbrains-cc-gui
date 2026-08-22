@@ -42,7 +42,7 @@ tasks.named('checkstyleTest') {
 }
 
 group = 'com.github.idea-claude-code-gui'
-version = '0.5.3'
+version = '0.5.4-fix1'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -88,6 +88,7 @@ repositories {
 
 dependencies {
     implementation 'com.google.code.gson:gson:2.10.1'
+    implementation 'org.tomlj:tomlj:1.1.1'
     implementation 'javazoom:jlayer:1.0.1'
     implementation 'org.snakeyaml:snakeyaml-engine:3.0.1'
     implementation 'com.twelvemonkeys.imageio:imageio-webp:3.12.0'

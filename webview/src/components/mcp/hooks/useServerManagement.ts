@@ -123,16 +123,16 @@ export function useServerManagement({
       return next;
     });
 
-    // Show toast notification
-    onToast(
-      enabled
-        ? `${t('mcp.enabled')} ${server.name || server.id}`
-        : `${t('mcp.disabled')} ${server.name || server.id}`,
-      'success'
-    );
-
-    loadServers();
-    loadServerStatus();
+    if (!isCodexMode) {
+      onToast(
+        enabled
+          ? `${t('mcp.enabled')} ${server.name || server.id}`
+          : `${t('mcp.disabled')} ${server.name || server.id}`,
+        'success'
+      );
+      loadServers();
+      loadServerStatus();
+    }
   }, [isCodexMode, messagePrefix, cacheKeys, setServerTools, onToast, t, loadServers, loadServerStatus]);
 
   return {

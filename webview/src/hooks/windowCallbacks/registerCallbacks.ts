@@ -12,8 +12,13 @@
 
 import type { MutableRefObject } from 'react';
 import type { UseWindowCallbacksOptions } from '../useWindowCallbacks';
+import type {
+  SubagentHistoryResponse,
+  SubagentStatusesResponse,
+} from '../../types';
 import { parseTaskNotification } from '../../utils/taskEventParser';
 import { deepEqual } from '../../utils/deepEqual';
+import { isLatestCodexStatusRequest } from '../../utils/codexStatusRequestTracker';
 import {
   setupSlashCommandsCallback,
   resetSlashCommandsState,
@@ -33,11 +38,11 @@ import { registerSessionAndSdkCallbacks } from './registerCallbacks/sessionCallb
 import { registerUsageModeCallbacks } from './registerCallbacks/usageModeCallbacks';
 import { registerPermissionCallbacks } from './registerCallbacks/permissionCallbacks';
 import { registerAgentAndSelectionCallbacks } from './registerCallbacks/agentCallbacks';
-
-function areSubagentMessagesEquivalent(previousMessages: unknown[] | undefined, nextMessages: unknown[] | undefined): boolean {
-  if (previousMessages === nextMessages) return true;
-  return deepEqual(previousMessages, nextMessages);
-}
+import {
+  isCurrentSubagentResponse,
+  mergeSubagentHistory,
+  toSubagentHistoryResponse,
+} from './subagentHistoryMerge';
 
 const pendingSubagentHistoryChunks = new Map<string, string[]>();
 const MAX_PENDING_SUBAGENT_HISTORY_TRANSFERS = 16;
@@ -106,30 +111,61 @@ export function registerWindowCallbacks(
   window.onSubagentHistoryLoaded = (json: string) => {
     try {
       if (!options.setSubagentHistories) return;
-      const result = JSON.parse(json);
+      const result = JSON.parse(json) as SubagentHistoryResponse;
+      if (!isCurrentSubagentResponse(
+        result,
+        options.currentSessionIdRef.current,
+        options.currentProviderRef.current,
+      )) return;
       const key = result.toolUseId || result.agentId;
       if (!key) return;
       options.setSubagentHistories((prev) => {
         const existing = prev[key];
+        const merged = mergeSubagentHistory(existing, result);
         // Skip state update when the payload is structurally identical.
         // This prevents cascading re-renders and scroll jumps caused by
         // periodic subagent polling (every 2 s) returning unchanged data.
-        if (existing && existing.success === result.success
-          && existing.completed === result.completed
-          && existing.status === result.status
-          && existing.error === result.error
-          && existing.sessionId === result.sessionId
-          && existing.provider === result.provider
-          && existing.toolUseId === result.toolUseId
-          && existing.agentId === result.agentId
-          && existing.agentPath === result.agentPath
-          && areSubagentMessagesEquivalent(existing.messages, result.messages)) {
+        if (existing && deepEqual(existing, merged)) {
           return prev;
         }
-        return { ...prev, [key]: result };
+        return { ...prev, [key]: merged };
       });
     } catch {
       // Ignore malformed callback payloads; the request can be retried by reopening the Agent row.
+    }
+  };
+
+  window.onSubagentStatusesLoaded = (json: string) => {
+    try {
+      if (!options.setSubagentHistories) return;
+      const result = JSON.parse(json) as SubagentStatusesResponse;
+      if (!isCurrentSubagentResponse(
+        result,
+        options.currentSessionIdRef.current,
+        options.currentProviderRef.current,
+      ) || !Array.isArray(result.statuses)) return;
+      // Drop late/out-of-order poll responses: only the answer to the latest
+      // request the frontend sent may be merged.
+      if (!isLatestCodexStatusRequest(result.requestId)) return;
+
+      options.setSubagentHistories((prev) => {
+        let next = prev;
+        for (const snapshot of result.statuses ?? []) {
+          const key = snapshot.toolUseId || snapshot.agentId;
+          if (!key) continue;
+          const existing = next[key];
+          const merged = mergeSubagentHistory(
+            existing,
+            toSubagentHistoryResponse(snapshot, result),
+          );
+          if (existing && deepEqual(existing, merged)) continue;
+          if (next === prev) next = { ...prev };
+          next[key] = merged;
+        }
+        return next;
+      });
+    } catch {
+      // Ignore malformed status batches; the next bounded poll will retry.
     }
   };
 

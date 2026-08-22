@@ -351,6 +351,7 @@ export function commonCliBinDirs(home = homedir()) {
     join(home, '.local', 'share', 'opencode', 'bin'),
     join(home, '.grok', 'bin'),
     join(home, '.pi', 'bin'),
+    join(home, '.omp', 'bin'),
     join(home, '.claude', 'bin'),
     join(home, '.local', 'bin'),
     join(home, '.cargo', 'bin'),
@@ -400,6 +401,17 @@ export function resolvePiCliPath() {
     envKeys: ['PI_BIN', 'PI_PATH', 'PI_CLI_PATH'],
     homeCandidates: [
       '{home}/.pi/bin/{bin}',
+      '{home}/.local/bin/{bin}',
+    ],
+  });
+}
+
+export function resolveOmpCliPath() {
+  return resolveCliPath({
+    binaryName: 'omp',
+    envKeys: ['OMP_BIN', 'OMP_PATH', 'OMP_CLI_PATH'],
+    homeCandidates: [
+      '{home}/.omp/bin/{bin}',
       '{home}/.local/bin/{bin}',
     ],
   });

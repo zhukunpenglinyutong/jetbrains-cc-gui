@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { resolveProviderModels } from './resolveProviderModels';
-import { CODEX_MODELS, GROK_MODELS, CLAUDE_MODELS } from './types';
+import { CODEX_MODELS, GROK_MODELS, CLAUDE_MODELS, OMP_MODELS } from './types';
 
 describe('resolveProviderModels', () => {
   it('uses dynamic Grok catalog when catalogHasEntries is true', () => {
@@ -78,6 +78,75 @@ describe('resolveProviderModels', () => {
         cliCatalogHasEntries: true,
       }),
     ).toEqual(models);
+  });
+
+  it('prepends OMP Auto + role entries for OMP and appends the catalog', () => {
+    const catalog = [{ id: 'github-copilot/claude-fable-5', label: 'Claude Fable 5' }];
+    const result = resolveProviderModels({
+      provider: 'omp',
+      cliModels: catalog,
+      cliCatalogHasEntries: true,
+    });
+    expect(result.map((m) => m.id)).toEqual([
+      'auto',
+      'smol',
+      'slow',
+      'plan',
+      'github-copilot/claude-fable-5',
+    ]);
+  });
+
+  it('does not duplicate OMP Auto when cliModels is the static OMP_MODELS fallback', () => {
+    const result = resolveProviderModels({
+      provider: 'omp',
+      cliModels: OMP_MODELS,
+      cliCatalogHasEntries: false,
+    });
+    expect(result.map((m) => m.id)).toEqual(['auto', 'smol', 'slow', 'plan']);
+    expect(result.filter((m) => m.id === 'auto')).toHaveLength(1);
+  });
+
+  it('uses dynamic cliRoles for OMP, inserted between auto and the catalog', () => {
+    const roles = [
+      { id: 'smol', label: 'Smol', description: 'openai/gpt-5-mini' },
+      { id: 'designer', label: 'Designer', description: 'opencode-go/deepseek-v4-flash' },
+    ];
+    const catalog = [{ id: 'github-copilot/claude-fable-5', label: 'Claude Fable 5' }];
+    const result = resolveProviderModels({
+      provider: 'omp',
+      cliModels: catalog,
+      cliCatalogHasEntries: true,
+      cliRoles: roles,
+    });
+    expect(result.map((m) => m.id)).toEqual([
+      'auto',
+      'smol',
+      'designer',
+      'github-copilot/claude-fable-5',
+    ]);
+    expect(result.find((m) => m.id === 'designer')).toEqual(roles[1]);
+  });
+
+  it('dedupes catalog entries that collide with a dynamic role id (role wins)', () => {
+    const roles = [{ id: 'designer', label: 'Designer', description: 'opencode-go/deepseek-v4-flash' }];
+    const catalog = [{ id: 'designer', label: 'Stale catalog entry' }];
+    const result = resolveProviderModels({
+      provider: 'omp',
+      cliModels: catalog,
+      cliCatalogHasEntries: true,
+      cliRoles: roles,
+    });
+    expect(result.filter((m) => m.id === 'designer')).toEqual(roles);
+  });
+
+  it('falls back to the static smol/slow/plan roles when cliRoles is empty', () => {
+    const result = resolveProviderModels({
+      provider: 'omp',
+      cliModels: [],
+      cliCatalogHasEntries: false,
+      cliRoles: [],
+    });
+    expect(result.map((m) => m.id)).toEqual(['auto', 'smol', 'slow', 'plan']);
   });
 
   it('puts Claude customs first and keeps built-ins', () => {

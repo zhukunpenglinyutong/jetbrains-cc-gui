@@ -440,14 +440,29 @@ public class HistoryMessageInjector {
                 if (CodexExecHistoryReplay.isExecCall(payload)) {
                     String callId = getStringProperty(payload, "call_id");
                     String timestamp = getStringProperty(msg, "timestamp");
+                    CodexExecHistoryReplay.Output output =
+                        callId != null ? outputsByCallId.get(callId) : null;
+                    JsonObject planInput = CodexExecHistoryReplay.extractUpdatePlanInput(payload);
+                    if (planInput != null) {
+                        accumulator.acceptConverted(
+                            CodexExecHistoryReplay.createPlanToolUseMessage(callId, planInput, timestamp)
+                        );
+                        if (output != null) {
+                            accumulator.acceptConverted(
+                                CodexExecHistoryReplay.createPlanToolResultMessage(
+                                    callId,
+                                    output,
+                                    timestamp
+                                )
+                            );
+                        }
+                    }
                     List<CodexExecHistoryReplay.Command> commands =
                         CodexExecHistoryReplay.extractCommands(payload);
                     if (!commands.isEmpty()) {
                         accumulator.acceptConverted(
                             CodexExecHistoryReplay.createToolUseMessage(callId, commands, timestamp)
                         );
-                        CodexExecHistoryReplay.Output output =
-                            callId != null ? outputsByCallId.get(callId) : null;
                         if (output != null) {
                             accumulator.acceptConverted(
                                 CodexExecHistoryReplay.createToolResultMessage(
