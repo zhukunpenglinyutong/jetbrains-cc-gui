@@ -3,10 +3,12 @@
    ============================================================ */
 .completion-dropdown {
   position: fixed;
-  background: var(--dropdown-bg);
+  background: color-mix(in srgb, var(--dropdown-bg, #252526) 50%, transparent);
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
   border: 1px solid var(--dropdown-border);
-  border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
   z-index: 1001;
   max-height: 300px;
   overflow-y: auto;

@@ -166,7 +166,6 @@
       },
       "tabs": {
         "basic": "Basic",
-        "actions": "Actions",
         "bubble": "Bubbles",
         "local": "Custom",
         "petdex": "Petdex"
@@ -177,7 +176,6 @@
       "disabled": "Disabled",
       "preview": "Pet preview",
       "currentPet": "Current pet",
-      "currentPetHint": "Choose from locally installed pets.",
       "petSearchPlaceholder": "Search alias, original name, or ID",
       "noMatchingLocalPets": "No matching installed pets",
       "alias": "Local alias",
@@ -186,70 +184,9 @@
       "saveAlias": "Save alias",
       "clearAlias": "Clear alias",
       "size": "Size",
-      "sizeHint": "Applied to the pet in the current window.",
       "opacity": "Opacity",
-      "opacityHint": "Reduce obstruction over the editor while inactive.",
       "showStatusIndicator": "Show status dot",
-      "showStatusIndicatorHint": "Show the current task state next to the floating pet.",
-      "confirmBeforeDelete": "Confirm before deleting a pet",
-      "confirmBeforeDeleteHint": "Require confirmation before removing a local pet.",
-      "displayAndOperations": "Pet display and operations",
-      "refreshAssets": "Refresh assets",
-      "delete": "Delete",
-      "deleteConfirmTitle": "Delete local pet?",
-      "deleteConfirm": "Delete {{name}} from local pet storage? This cannot be undone.",
-      "deleteSuccess": "Pet deleted",
       "resetPosition": "Reset position",
-      "actionsTitle": "Status actions",
-      "actionsDescription": "Choose one or more sprite actions for each task status.",
-      "actionsHint": "One selected action is chosen at random when a status begins. Action mappings apply to animated 8x9 pets; static images use the full image.",
-      "actionStateLabel": "Task status",
-      "actionMappingTitle": "Action mapping",
-      "actionSelectedCount": "{{count}} selected",
-      "actionStateDescriptions": {
-        "idle": "Choose an animation while waiting for the next task.",
-        "success": "Choose an animation when a task completes.",
-        "thinking": "Choose an animation while the model is reasoning.",
-        "running": "Choose an animation while a tool or task is running.",
-        "error": "Choose an animation when a task needs attention."
-      },
-      "actionDescriptions": {
-        "idle": "Default resting frame",
-        "running-right": "Continuous rightward motion",
-        "running-left": "Continuous leftward motion",
-        "waving": "Short greeting loop",
-        "jumping": "Completion or reminder",
-        "failed": "Exceptional state animation",
-        "waiting": "Brief pause",
-        "running": "Loop while running",
-        "review": "Review animation"
-      },
-      "actionPreview": "Action preview",
-      "actionPreviewHint": "Choose a sprite action to inspect.",
-      "previewAction": "Preview action",
-      "previewFrame": "Frame",
-      "playPreview": "Play preview",
-      "pausePreview": "Pause preview",
-      "actionPreviewSpriteHint": "Shows the selected spritesheet action frame.",
-      "actionPreviewStaticHint": "Static images have no action frames; the full image is shown.",
-      "visualStates": {
-        "idle": "Idle",
-        "success": "Success",
-        "thinking": "Thinking",
-        "running": "Running",
-        "error": "Error"
-      },
-      "actions": {
-        "idle": "Idle",
-        "running-right": "Running right",
-        "running-left": "Running left",
-        "waving": "Waving",
-        "jumping": "Jumping",
-        "failed": "Failed",
-        "waiting": "Waiting",
-        "running": "Working",
-        "review": "Review"
-      },
       "refreshLocalPets": "Refresh local pets",
       "openPetDirectory": "Open pet directory",
       "localPetOperationFailed": "The local pet operation failed. Check ~/.codex/pets permissions.",
@@ -269,25 +206,19 @@
       "hatchName": "Pet name",
       "hatchStyle": "Visual style",
       "hatchPrompt": "Pet description",
-      "referenceImage": "Reference image",
-      "petDirectory": "Pet directory",
-      "petDirectoryHint": "Local pets and generated assets are managed together.",
-      "hatchCommandHint": "The command is sent to the active Codex input for execution.",
       "noReference": "No reference image selected",
       "chooseReference": "Choose reference",
       "clearReference": "Clear reference",
       "prepareCreatePet": "Prepare create command",
       "prepareRepairPet": "Prepare repair command",
       "hatchCommandPrepared": "Command added to the active Codex input. Review it before sending.",
-      "hatchReplaceDraftConfirmTitle": "Replace current chat draft?",
       "hatchReplaceDraftConfirm": "Replace the current chat draft with this hatch-pet command?",
-      "hatchReplaceDraftAction": "Replace draft",
       "hatchCommandFailed": "The hatch-pet command could not be prepared.",
       "hatchSkillNotReady": "The hatch-pet Skill is not installed correctly.",
       "hatchInputRequired": "Enter a name or description, or choose a reference image.",
       "hatchRequiresCodex": "Switch to a Codex tab before preparing a hatch-pet command.",
       "bubbleTitle": "Pet bubbles",
-      "bubbleDescription": "Show short status bubbles for live Claude Code and Codex tasks. Bubble text uses templates only and never includes chat content.",
+      "bubbleDescription": "Show short status bubbles for live Codex tasks. Bubble text uses templates only and never includes chat content.",
       "bubbleDuration": "Bubble duration (seconds)",
       "bubbleSize": "Bubble size",
       "bubbleShowForBackgroundTabs": "Show bubbles from background tabs",
@@ -360,8 +291,6 @@
       "httpError": "Petdex returned HTTP {{status}}. Please try again later.",
       "unknownError": "Operation failed ({{code}}). Check idea.log for details.",
       "uninstall": "Uninstall",
-      "uninstallConfirmTitle": "Uninstall Pet?",
-      "uninstallConfirm": "Uninstall {{name}} and remove its managed local files?",
       "processing": "Processing",
       "installedExternally": "Installed locally",
       "installSuccess": "Pet installed and selected",
@@ -385,6 +314,38 @@
         "lightDesc": "Fresh and bright, suitable for daytime use",
         "dark": "Dark",
         "darkDesc": "Eye-friendly, suitable for nighttime use"
+      },
+      "uiStyle": {
+        "label": "UI Theme Style",
+        "default": "Classic IDE",
+        "defaultDesc": "Classic compact IDE style",
+        "lightGlass": "Frosted Glass",
+        "lightGlassDesc": "Translucent frosted glass dock with crystal glow",
+        "antigravity": "Floating Capsule",
+        "antigravityDesc": "Streamlined capsule dock and rounded controls",
+        "codebuddy": "Clean Card",
+        "codebuddyDesc": "Crisp white cards with structured stream layout",
+        "idea": "Midnight Navy",
+        "ideaDesc": "Deep blue-gray with immersive IDE polish",
+        "vscode": "Studio Blue",
+        "vscodeDesc": "Editor cobalt blue with compact panel layout",
+        "qq": "Sky Bubble",
+        "qqDesc": "Light sky-blue bubbles with breezy chat feel",
+        "wechat": "Sage Green",
+        "wechatDesc": "Gentle green bubbles with minimal chat flow",
+        "notion": "Paper Minimal",
+        "notionDesc": "Paper-gray surfaces, hairlines and focused type",
+        "arcGlass": "Crystal Glass",
+        "arcGlassDesc": "Capsule floating controls and local translucency",
+        "warp": "Terminal Dark",
+        "warpDesc": "Deep terminal colors with high-signal states",
+        "vercel": "Obsidian Blue",
+        "vercelDesc": "Deep blue-black surfaces with modern product hierarchy",
+        "claudeWarm": "Warm Terracotta",
+        "claudeWarmDesc": "Cream neutrals with collaborative terracotta accents",
+        "solarized": "Solarized Soft",
+        "solarizedDesc": "Classic low-contrast reading palette",
+        "custom": "Custom Theme"
       },
       "language": {
         "label": "Language",
@@ -479,8 +440,7 @@
           "grok": "Grok CLI",
           "kimi": "Kimi CLI",
           "opencode": "OpenCode",
-          "pi": "PI CLI",
-          "omp": "OMP CLI"
+          "pi": "PI CLI"
         },
         "currentProviderAuto": "Currently using automatic selection: {{provider}}",
         "currentProviderManual": "Currently using manually selected provider: {{provider}}",
@@ -574,6 +534,41 @@
         "softDark": "Soft Dark",
         "softDarkDesc": "Keep code contrast without the harsh black background"
       },
+      "customTheme": {
+        "label": "Custom Theme",
+        "namePlaceholder": "Enter theme name...",
+        "presetTemplates": "Curated Templates",
+        "presets": {
+          "nebulaGlow": "Nebula Glow",
+          "frostedGlass": "Frosted Glass",
+          "deepOcean": "Deep Ocean",
+          "sunsetAmber": "Sunset Amber",
+          "forestEmerald": "Forest Emerald",
+          "porcelainLight": "Porcelain Light"
+        },
+        "presetApplied": "Loaded template: {{name}}",
+        "bgPrimary": "Primary background",
+        "bgSecondary": "Secondary background",
+        "bgTertiary": "Tertiary background",
+        "bgElevated": "Elevated surface",
+        "bgHover": "Hover background",
+        "textPrimary": "Primary text",
+        "textSecondary": "Secondary text",
+        "borderPrimary": "Primary border",
+        "borderSecondary": "Secondary border",
+        "accentPrimary": "Accent",
+        "accentHover": "Accent hover",
+        "userBubble": "User bubble",
+        "userText": "Bubble text",
+        "radius": "Radius Scale",
+        "glass": "Glass Strength",
+        "import": "Import JSON",
+        "export": "Copy Config",
+        "reset": "Reset Default",
+        "imported": "Theme imported and applied",
+        "exported": "Theme configuration copied",
+        "invalid": "Invalid JSON; the current theme was kept"
+      },
       "soundNotification": {
         "label": "Task completion alert sound",
         "enabled": "Enabled",
@@ -652,13 +647,13 @@
           "name": "PI CLI",
           "description": "Minimal terminal coding agent with multi-provider model support"
         },
-        "omp": {
-          "name": "OMP CLI",
-          "description": "Oh My Pi terminal coding agent with multi-provider model support"
-        },
         "dsh": {
           "name": "DeepSeek Harness",
-          "description": "DeepSeek terminal agent harness (persistent dsh web host)"
+          "description": "DeepSeek official coding agent (dsh) with tools, subagents and workflows"
+        },
+        "antigravity": {
+          "name": "Antigravity CLI",
+          "description": "Google Antigravity official terminal AI coding assistant"
         }
       },
       "installDialog": {
@@ -1772,7 +1767,16 @@
     "bashGroupFailed": "failed",
     "promptLabel": "Prompt",
     "updatePlan": "Update Plan",
-    "applyPatch": "Apply Patch"
+    "applyPatch": "Apply Patch",
+    "applyHunk": "Apply Hunk",
+    "revertHunk": "Revert Hunk",
+    "hunkApplied": "Applied",
+    "hunkReverted": "Reverted",
+    "hunkPending": "Pending",
+    "applyAllHunks": "Apply All",
+    "revertAllHunks": "Revert All",
+    "interactiveMergeInIdea": "Interactive Merge in IDEA",
+    "hunkTitle": "Hunk #{{index}}"
   },
   "todo": {
     "inProgress": "In Progress {{completed}}/{{total}} tasks",
@@ -2110,28 +2114,6 @@
       "description": "Hands-off mode. Codex executes edits and shell commands immediately."
     }
   },
-  "ompModes": {
-    "default": {
-      "label": "Default",
-      "tooltip": "Use the selected model (or OMP auto)",
-      "description": "Uses the model chosen in the model dropdown, or the OMP CLI default when set to Auto."
-    },
-    "smol": {
-      "label": "Smol",
-      "tooltip": "Fast model role (omp --model smol)",
-      "description": "Runs this conversation with the model configured for omp's smol role. Overrides the model dropdown."
-    },
-    "slow": {
-      "label": "Slow",
-      "tooltip": "Reasoning model role (omp --model slow)",
-      "description": "Runs this conversation with the model configured for omp's slow role. Overrides the model dropdown."
-    },
-    "plan": {
-      "label": "Plan",
-      "tooltip": "Planning model role (omp --model plan)",
-      "description": "Runs this conversation with the model configured for omp's plan role. Overrides the model dropdown."
-    }
-  },
   "providers": {
     "claude": {
       "label": "Claude Code"
@@ -2154,8 +2136,11 @@
     "pi": {
       "label": "PI CLI"
     },
-    "omp": {
-      "label": "OMP CLI"
+    "dsh": {
+      "label": "DeepSeek Harness"
+    },
+    "antigravity": {
+      "label": "Antigravity CLI"
     },
     "beta": {
       "badge": "Beta",
@@ -2343,12 +2328,33 @@
   },
   "dshPresets": {
     "title": "Select DeepSeek Harness agent preset",
-    "none": { "label": "Default", "description": "dsh default headless composition (full toolset)" },
-    "standard": { "label": "Standard", "description": "Full coding agent with the standard toolset" },
-    "code": { "label": "PTC", "description": "Standard capabilities with Code Mode" },
-    "minimal": { "label": "Minimal", "description": "Bash and str_replace_editor only" },
-    "cordis": { "label": "Creator", "description": "Standard capabilities plus composition authoring" },
-    "user": { "description": "Custom preset installed under the DSH home" }
+    "none": {
+      "label": "Default",
+      "description": "dsh default headless composition (full toolset)"
+    },
+    "standard": {
+      "label": "Standard",
+      "description": "Full coding agent: file editing, shell, web search, skills, plans, goals, subagents and workflows"
+    },
+    "code": {
+      "label": "PTC",
+      "description": "Standard capabilities with Code Mode: batch multi-step tool calls in one TypeScript program"
+    },
+    "minimal": {
+      "label": "Minimal",
+      "description": "Bare two-tool agent: persistent bash and str_replace_editor only"
+    },
+    "cordis": {
+      "label": "Creator",
+      "description": "Standard capabilities plus composition authoring and skill guidance for creating custom presets"
+    },
+    "routerStandard": {
+      "label": "Router Standard",
+      "description": "Task-aware reasoning-mode router (user-installed preset): spec (plan-first) for fixes, react (doer) for builds"
+    },
+    "user": {
+      "description": "Custom preset from ~/.dsh/.agent-presets"
+    }
   },
   "error": {
     "providerNotConfigured": "Provider Not Configured",

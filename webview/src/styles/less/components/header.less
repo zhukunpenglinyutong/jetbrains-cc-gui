@@ -1,29 +1,59 @@
 /* 导入公共 mixins */
 @import '../mixins.less';
 
-/* New Header Styles */
+/* Header Styles */
 .header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 8px 8px 8px 16px;
+    padding: 8px 16px;
     background: var(--color-chat-bars-bg, var(--bg-secondary));
+    color: var(--color-chat-bars-text, var(--text-primary));
     border-bottom: 1px solid var(--color-chat-bars-border, var(--border-primary));
-    min-height: 50px;
+    min-height: 46px;
     flex-shrink: 0;
+    z-index: 50;
+}
+
+/* JetBrains IDEA Header */
+[data-ui-theme="idea"] .header {
+    border-bottom: 1px solid var(--border-secondary);
+    box-shadow: none;
+}
+
+/* Visual Studio Code Header */
+[data-ui-theme="vscode"] .header {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-secondary);
+    box-shadow: none;
+}
+
+/* QQ Header */
+[data-ui-theme="qq"] .header {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-secondary);
+    box-shadow: none;
+}
+
+/* WeChat Header */
+[data-ui-theme="wechat"] .header {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-primary);
+    box-shadow: none;
 }
 
 .header-left {
     display: flex;
     align-items: center;
     flex: 1;
-    min-width: 0; /* Allow flex items to shrink below their minimum content size */
+    min-width: 0;
     overflow: hidden;
-    .flex-gap-horizontal(12px);
+    gap: 8px;
 
     > * {
-        color: var(--color-chat-bars-text, var(--text-secondary));
-        font-weight: 500;
+        color: var(--text-primary);
+        font-weight: 600;
+        font-size: 14px;
     }
 }
 

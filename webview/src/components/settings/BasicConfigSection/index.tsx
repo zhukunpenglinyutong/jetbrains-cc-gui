@@ -15,9 +15,13 @@ const BASIC_TABS: { key: BasicTab; icon: string; labelKey: string }[] = [
   { key: 'environment', icon: 'codicon-terminal', labelKey: 'settings.basic.tabs.environment' },
 ];
 
+import type { UiThemeStyle } from '../../../utils/uiTheme';
+
 interface BasicConfigSectionProps {
   theme: 'light' | 'dark' | 'system';
   onThemeChange: (theme: 'light' | 'dark' | 'system') => void;
+  uiThemeStyle?: UiThemeStyle;
+  onUiThemeStyleChange?: (style: UiThemeStyle) => void;
   fontSizeLevel: number;
   onFontSizeLevelChange: (level: number) => void;
   nodePath: string;
@@ -141,6 +145,8 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
         <AppearanceTab
           theme={props.theme}
           onThemeChange={props.onThemeChange}
+          uiThemeStyle={props.uiThemeStyle}
+          onUiThemeStyleChange={props.onUiThemeStyleChange}
           fontSizeLevel={props.fontSizeLevel}
           onFontSizeLevelChange={props.onFontSizeLevelChange}
           editorFontConfig={props.editorFontConfig}

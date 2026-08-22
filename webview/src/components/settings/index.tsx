@@ -90,10 +90,12 @@ const SettingsView = ({
     dismissToast,
   } = useSettingsPageState({ initialTab, isCodexMode, disabledTabs });
 
-  // Theme sync: theme preference, IDE theme, font size, chat colors
+  // Theme sync: theme preference, IDE theme, font size, chat colors, UI theme style
   const {
     themePreference,
     setThemePreference,
+    uiThemeStyle,
+    setUiThemeStyle,
     setIdeTheme,
     fontSizeLevel,
     setFontSizeLevel,
@@ -505,6 +507,8 @@ const SettingsView = ({
             <BasicConfigSection
               theme={themePreference}
               onThemeChange={setThemePreference}
+              uiThemeStyle={uiThemeStyle}
+              onUiThemeStyleChange={setUiThemeStyle}
               fontSizeLevel={fontSizeLevel}
               onFontSizeLevelChange={setFontSizeLevel}
               nodePath={nodePath}

@@ -1,38 +1,25 @@
-/* StatusPanel Styles */
+/* StatusPanel Styles - Multi-Theme Segmented Control */
 .status-panel {
   position: relative;
-  margin: 0 20px 8px 20px;
+  margin: 0 16px 8px 16px;
 }
 
-/* Tab Header - Always visible */
+/* Base / Default Tab Header */
 .status-panel-tabs {
   display: flex;
   align-items: center;
-  background: var(--color-chat-bars-bg, var(--bg-secondary));
-  border: 1px solid var(--color-chat-bars-border, var(--border-primary));
+  background: var(--bg-secondary, #252526);
+  border: 1px solid var(--border-primary, #333333);
   border-radius: 6px;
-  padding: 5px 8px;
-  gap: 0;
+  padding: 4px 6px;
+  gap: 4px;
   overflow-x: auto;
   overflow-y: hidden;
   font-size: 80%;
 
   /* Custom scrollbar */
   &::-webkit-scrollbar {
-    height: 4px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: var(--scrollbar-thumb);
-    border-radius: 2px;
-
-    &:hover {
-      background: var(--scrollbar-thumb-hover);
-    }
+    display: none;
   }
 }
 
@@ -41,36 +28,26 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 4px 8px;
+  gap: 6px;
+  padding: 4px 10px;
   font-weight: 500;
-  color: var(--color-chat-bars-muted-text, var(--text-muted));
+  color: var(--text-tertiary, #858585);
   cursor: pointer;
   user-select: none;
   border-radius: 4px;
   background: transparent;
-  transition: color 0.15s ease, background-color 0.15s ease;
+  transition: all 0.15s ease;
   white-space: nowrap;
 
-  /* 分割线 - 除了最后一个 tab */
-  &:not(:last-child) {
-    border-right: 1px solid var(--color-chat-bars-border, var(--border-primary));
-    border-radius: 4px 0 0 4px;
-    margin-right: -1px;
-  }
-
-  &:last-child {
-    border-radius: 0 4px 4px 0;
-  }
-
   &:hover {
-    color: var(--color-chat-bars-text, var(--text-primary));
-    background: var(--color-chat-bars-hover-bg, var(--bg-hover));
+    color: var(--text-primary, #ffffff);
+    background: var(--bg-hover, #35373c);
   }
 
   &.active {
-    color: var(--color-chat-bars-text, var(--text-primary));
-    background: var(--color-chat-bars-active-bg, var(--bg-tertiary));
+    color: var(--text-primary, #ffffff);
+    background: var(--bg-tertiary, #2b2d31);
+    font-weight: 600;
   }
 
   .codicon {
@@ -110,6 +87,199 @@
 
     .stat-deletions {
       color: #ff6b6b;
+    }
+  }
+}
+
+/* CodeBuddy Underline Tabs */
+[data-ui-theme="codebuddy"] {
+  .status-panel {
+    margin: 0 0 8px 0;
+  }
+
+  .status-panel-tabs {
+    background: var(--bg-secondary, #ffffff);
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border-primary, #e5e6eb);
+    border-radius: 0;
+    padding: 0 12px;
+    gap: 16px;
+  }
+
+  .status-panel-tab {
+    flex: 0 0 auto;
+    border-radius: 0;
+    padding: 8px 4px;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+
+    &:hover {
+      background: transparent;
+      color: var(--text-primary, #18191c);
+    }
+
+    &.active {
+      color: var(--accent-primary, #0052d9);
+      background: transparent;
+      border-bottom: 2px solid var(--accent-primary, #0052d9);
+    }
+  }
+}
+
+/* Google Antigravity Segmented Pill */
+[data-ui-theme="antigravity"] {
+  .status-panel-tabs {
+    background: var(--bg-tertiary, #f1f3f4);
+    border: 1px solid var(--border-primary, #e1e4e8);
+    border-radius: 18px;
+    padding: 3px;
+    gap: 2px;
+  }
+
+  .status-panel-tab {
+    border-radius: 15px;
+    padding: 5px 12px;
+
+    &:hover {
+      background: transparent;
+      color: var(--text-primary, #1f1f1f);
+    }
+
+    &.active {
+      background: var(--bg-elevated, #ffffff);
+      color: var(--text-primary, #1f1f1f);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+  }
+}
+
+/* JetBrains IDEA Flat Tabs */
+[data-ui-theme="idea"] {
+  .status-panel {
+    margin: 0 0 8px 0;
+  }
+
+  .status-panel-tabs {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-radius: 4px;
+    padding: 3px;
+    gap: 2px;
+    box-shadow: none;
+  }
+
+  .status-panel-tab {
+    border-radius: 3px;
+    padding: 5px 12px;
+
+    &:hover {
+      background: transparent;
+      color: var(--text-primary);
+    }
+
+    &.active {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      box-shadow: none;
+    }
+  }
+}
+
+/* Visual Studio Code Underline Tabs */
+[data-ui-theme="vscode"] {
+  .status-panel {
+    margin: 0 0 8px 0;
+  }
+
+  .status-panel-tabs {
+    background: var(--bg-secondary);
+    border: none;
+    border-bottom: 1px solid var(--border-primary);
+    border-radius: 0;
+    padding: 0 12px;
+    gap: 16px;
+  }
+
+  .status-panel-tab {
+    flex: 0 0 auto;
+    border-radius: 0;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    padding: 8px 4px;
+
+    &:hover {
+      background: transparent;
+      color: var(--text-primary);
+    }
+
+    &.active {
+      background: transparent;
+      color: var(--accent-primary);
+      border-bottom-color: var(--accent-primary);
+    }
+  }
+}
+
+/* QQ Rounded Tabs */
+[data-ui-theme="qq"] {
+  .status-panel {
+    margin: 0 0 8px 0;
+  }
+
+  .status-panel-tabs {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary);
+    border-radius: 10px;
+    padding: 3px;
+    gap: 3px;
+  }
+
+  .status-panel-tab {
+    border-radius: 7px;
+    padding: 5px 12px;
+
+    &:hover {
+      background: transparent;
+      color: var(--text-primary);
+    }
+
+    &.active {
+      background: var(--bg-elevated);
+      color: var(--accent-primary);
+      box-shadow: none;
+    }
+  }
+}
+
+/* WeChat Soft Tabs */
+[data-ui-theme="wechat"] {
+  .status-panel {
+    margin: 0 0 8px 0;
+  }
+
+  .status-panel-tabs {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-radius: 14px;
+    padding: 3px;
+    gap: 3px;
+  }
+
+  .status-panel-tab {
+    border-radius: 11px;
+    padding: 5px 12px;
+
+    &:hover {
+      background: transparent;
+      color: var(--text-primary);
+    }
+
+    &.active {
+      background: var(--bg-elevated);
+      color: var(--accent-primary);
+      box-shadow: none;
     }
   }
 }
@@ -669,9 +839,6 @@
 
   &.status-in-progress .codicon {
     color: var(--color-todo-panel-progress);
-  }
-
-  &.status-in-progress.is-streaming .codicon {
     animation: status-spin 1s linear infinite;
   }
 

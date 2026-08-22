@@ -4,6 +4,12 @@ import {
   CHAT_BAR_COLOR_STORAGE_KEY,
   isValidHexColor,
 } from '../utils/chatBarTheme';
+import { applyUiThemeStyle, getSavedUiThemeStyle } from '../utils/uiTheme';
+import {
+  applyCustomUiTheme,
+  clearCustomUiThemeProperties,
+  loadCustomUiTheme,
+} from '../utils/customUiTheme';
 
 /**
  * Manages IDE theme initialization and synchronization.
@@ -60,21 +66,30 @@ export function useThemeInit() {
     const scale = fontSizeMap[fontSizeLevel] || 1.0;
     document.documentElement.style.setProperty('--font-scale', scale.toString());
 
-    // Initialize chat background color (validate hex format before applying)
-    const savedChatBgColor = localStorage.getItem('chatBgColor');
-    if (savedChatBgColor && isValidHexColor(savedChatBgColor)) {
-      document.documentElement.style.setProperty('--bg-chat', savedChatBgColor);
-    }
+    // Initialize UI theme style
+    const savedUiThemeStyle = getSavedUiThemeStyle();
+    applyUiThemeStyle(savedUiThemeStyle);
+    if (savedUiThemeStyle === 'custom') {
+      applyCustomUiTheme(loadCustomUiTheme());
+      applyChatBarThemeColor('');
+    } else {
+      clearCustomUiThemeProperties();
+      // Initialize chat background color (validate hex format before applying)
+      const savedChatBgColor = localStorage.getItem('chatBgColor');
+      if (savedChatBgColor && isValidHexColor(savedChatBgColor)) {
+        document.documentElement.style.setProperty('--bg-chat', savedChatBgColor);
+      }
 
-    // Initialize user message bubble color
-    const savedUserMsgColor = localStorage.getItem('userMsgColor');
-    if (savedUserMsgColor && isValidHexColor(savedUserMsgColor)) {
-      document.documentElement.style.setProperty('--color-message-user-bg', savedUserMsgColor);
-    }
+      // Initialize user message bubble color
+      const savedUserMsgColor = localStorage.getItem('userMsgColor');
+      if (savedUserMsgColor && isValidHexColor(savedUserMsgColor)) {
+        document.documentElement.style.setProperty('--color-message-user-bg', savedUserMsgColor);
+      }
 
-    // Initialize the shared chat header and status bar theme color
-    const savedChatBarColor = localStorage.getItem(CHAT_BAR_COLOR_STORAGE_KEY) || '';
-    applyChatBarThemeColor(savedChatBarColor);
+      // Initialize the shared chat header and status bar theme color
+      const savedChatBarColor = localStorage.getItem(CHAT_BAR_COLOR_STORAGE_KEY) || '';
+      applyChatBarThemeColor(savedChatBarColor);
+    }
 
     // Apply the user's explicit theme choice (light/dark) first
     const savedTheme = localStorage.getItem('theme');
@@ -118,7 +133,10 @@ export function useThemeInit() {
 
     // If user selected "Follow IDE" mode
     if (savedTheme === null || savedTheme === 'system') {
-      document.documentElement.setAttribute('data-theme', ideTheme);
+      const savedUiThemeStyle = getSavedUiThemeStyle();
+      if (savedUiThemeStyle !== 'custom') {
+        document.documentElement.setAttribute('data-theme', ideTheme);
+      }
     }
   }, [ideTheme]);
 

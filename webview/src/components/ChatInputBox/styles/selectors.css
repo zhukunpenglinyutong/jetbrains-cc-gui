@@ -1,35 +1,75 @@
 /* ============================================================
-   Selector Styles
+   Selector Styles - Multi-Theme Selectors
    ============================================================ */
 .selector-button {
   display: flex;
   align-items: center;
-  gap: 3px;
-  padding: 4px 6px;
-  background: var(--button-bg);
-  border: none;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--bg-tertiary, #2b2d31);
+  border: 1px solid transparent;
   border-radius: 4px;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 11.5px;
   font-family: inherit;
+  font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: all 0.15s ease;
+  user-select: none;
 }
 
 .selector-button:hover {
-  background: var(--button-hover);
+  background: var(--bg-hover);
   color: var(--text-primary);
+}
+
+/* Google Antigravity Pill */
+[data-ui-theme="antigravity"] .selector-button {
+  border-radius: 14px;
+  background: var(--bg-tertiary);
+}
+
+/* Tencent CodeBuddy Square Pill */
+[data-ui-theme="codebuddy"] .selector-button {
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+}
+
+/* JetBrains IDEA Compact Pill */
+[data-ui-theme="idea"] .selector-button {
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-secondary);
+}
+
+/* Visual Studio Code Square Pill */
+[data-ui-theme="vscode"] .selector-button {
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+}
+
+/* QQ Social Pill */
+[data-ui-theme="qq"] .selector-button {
+  border-radius: 13px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-secondary);
+}
+
+/* WeChat Minimal Pill */
+[data-ui-theme="wechat"] .selector-button {
+  border-radius: 9px;
+  background: var(--bg-tertiary);
 }
 
 /* Compact provider icon button */
 .selector-button.provider-compact {
-  padding: 4px 5px;
+  padding: 4px 6px;
   gap: 0;
-  border-radius: 4px;
+  border-radius: inherit;
 }
 
 .selector-button.provider-compact:hover {
-  background: var(--button-hover);
+  background: var(--bg-hover);
 }
 
 .runtime-provider-text {
@@ -43,40 +83,43 @@
 
 /* Auto mode (bypassPermissions) - subtle orange indicator */
 .selector-button.mode-auto-active {
-  color: #cc8400;
+  color: #e65100;
+  background: rgba(230, 81, 0, 0.1);
+  border-color: rgba(230, 81, 0, 0.25);
 }
 
 .selector-button.mode-auto-active:hover {
-  color: #e09520;
+  color: #bf360c;
+  background: rgba(230, 81, 0, 0.18);
 }
 
 .selector-button.codex-fast-active {
-  color: #cc8400;
+  color: #e65100;
+  background: rgba(255, 152, 0, 0.12);
+  border-color: rgba(255, 152, 0, 0.3);
 }
 
 .selector-button.codex-fast-active:hover {
-  color: #e09520;
+  color: #bf360c;
+  background: rgba(255, 152, 0, 0.22);
 }
 
 .selector-button .codicon {
-  font-size: 14px;
+  font-size: 13.5px;
 }
 
 /* Responsive text hiding for selector buttons */
 .selector-button-text {
-  white-space: nowrap;
+  max-width: 150px;
+  opacity: 1;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
-  transition: max-width 0.2s ease, opacity 0.2s ease, margin 0.2s ease;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: middle;
 }
 
-/*
- * Proximity compact mode (all CLI providers).
- * Applied by useToolbarSelectorCompact when left selectors would get within 10px
- * of the send cluster. `data-measuring` forces expanded layout during measure so
- * we can compare full label widths without a collapse/expand loop.
- */
+/* Compact mode: icon-only pill */
 .button-area--compact:not([data-measuring]) .selector-button-text {
   max-width: 0;
   opacity: 0;
@@ -85,9 +128,10 @@
 }
 
 .button-area--compact:not([data-measuring]) .selector-button {
-  gap: 2px;
+  gap: 0;
   padding: 4px 6px;
   min-width: 28px;
+  justify-content: center;
 }
 
 .button-area--compact:not([data-measuring]) .selector-button > .codicon-chevron-up,
@@ -96,34 +140,40 @@
 }
 
 .selector-dropdown {
-  background: var(--dropdown-bg);
-  border: 1px solid var(--dropdown-border);
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  min-width: 140px;
-  padding: 4px 0;
+  background: color-mix(in srgb, var(--bg-elevated, #252526) 48%, transparent);
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  border: 1px solid var(--border-primary, #e5e6eb);
+  border-radius: 10px;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28);
+  min-width: 150px;
+  padding: 4px;
   white-space: nowrap;
   font-family: inherit;
+  z-index: 10000;
 }
 
 .selector-option {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
   cursor: pointer;
   color: var(--text-primary);
   font-size: 12px;
   font-family: inherit;
-  transition: background 0.1s;
+  transition: background 0.12s;
 }
 
 .selector-option:hover {
-  background: var(--dropdown-hover);
+  background: var(--bg-hover, #eaebef);
 }
 
 .selector-option.selected {
-  background: var(--dropdown-selected);
+  background: var(--bg-tertiary, #f2f3f5);
+  color: var(--accent-primary, #0052d9);
+  font-weight: 500;
 }
 
 .selector-option .codicon {

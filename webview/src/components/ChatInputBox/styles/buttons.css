@@ -29,7 +29,7 @@
 }
 
 /* ============================================================
-   Send/Stop Button
+   Send/Stop Button - Multi-Theme Button
    ============================================================ */
 .submit-button {
   display: flex;
@@ -37,20 +37,59 @@
   justify-content: center;
   width: 28px;
   height: 28px;
-  background: var(--button-primary);
+  background: var(--accent-primary);
   border: none;
   border-radius: 4px;
-  color: white;
+  color: #ffffff;
   cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
+  transition: all 0.15s ease;
+}
+
+/* Google Antigravity Circular Button */
+[data-ui-theme="antigravity"] .submit-button {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+/* Tencent CodeBuddy Square Button */
+[data-ui-theme="codebuddy"] .submit-button {
+  border-radius: 6px;
+}
+
+/* JetBrains IDEA Flat Button */
+[data-ui-theme="idea"] .submit-button {
+  border-radius: 4px;
+  color: #ffffff;
+}
+
+/* Visual Studio Code Square Button */
+[data-ui-theme="vscode"] .submit-button {
+  border-radius: 4px;
+  color: #ffffff;
+}
+
+/* QQ Social Button */
+[data-ui-theme="qq"] .submit-button {
+  border-radius: 14px;
+  color: #ffffff;
+}
+
+/* WeChat Green Button */
+[data-ui-theme="wechat"] .submit-button {
+  border-radius: 8px;
+  color: #073b20;
 }
 
 .submit-button:hover:not(:disabled) {
-  opacity: 0.85;
+  background: var(--accent-primary-hover);
+  opacity: 0.9;
 }
 
 .submit-button:disabled {
-  background: var(--button-disabled);
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
   cursor: not-allowed;
   opacity: 0.5;
 }
@@ -60,10 +99,10 @@
 }
 
 .stop-button {
-  background: var(--error-color);
+  background: var(--color-error, #e81123);
+  color: #ffffff;
 }
 
 .stop-button:hover {
-  background: #d32f2f;
+  background: #c50f1f;
 }
-
