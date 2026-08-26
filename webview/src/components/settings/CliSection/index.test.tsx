@@ -189,6 +189,6 @@ describe('CliSection', () => {
     expect(await screen.findByRole('dialog')).toBeTruthy();
 
     fireEvent.click(screen.getByText('Docs'));
-    expect(window.sendToJava).toHaveBeenCalledWith('open_browser:https://x.ai/cli');
+    expect(window.sendToJava).toHaveBeenCalledWith('open_browser_external:https://x.ai/cli');
   });
 });

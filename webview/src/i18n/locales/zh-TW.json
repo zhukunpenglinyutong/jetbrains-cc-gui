@@ -238,7 +238,8 @@
           "kimi": "Kimi CLI",
           "opencode": "OpenCode",
           "pi": "PI CLI",
-          "omp": "OMP CLI"
+          "omp": "OMP CLI",
+          "minimax": "MiniMax Code"
         },
         "currentProviderAuto": "目前使用自動選擇：{{provider}}",
         "currentProviderManual": "目前使用手動選擇的 provider：{{provider}}",
@@ -848,6 +849,10 @@
       "copied": "Copied to clipboard",
       "copyFailed": "Failed to copy",
       "tools": {
+        "minimax": {
+          "name": "MiniMax Code",
+          "description": "MiniMax 終端編碼智能體。需 Node.js 22.19+ / 24+（不支援 23）；命令：minimax / mcode"
+        },
         "grok": {
           "name": "Grok CLI",
           "description": "xAI Grok 終端編碼助手"
@@ -1715,6 +1720,9 @@
     },
     "kimi": {
       "label": "Kimi CLI"
+    },
+    "minimax": {
+      "label": "MiniMax Code"
     },
     "gemini": {
       "label": "Gemini Cli"

@@ -624,6 +624,38 @@ class OpenFileHandler {
     }
 
     /**
+     * Open a URL in the system default browser, bypassing the IDE's embedded
+     * JCEF preview. Used for external docs whose SPA pages render blank inside
+     * JCEF (e.g. npm package pages behind Cloudflare). The platform's
+     * BrowserUtil follows the IDE setting (which may pick the embedded
+     * preview), so shell out to the OS "open URL" command instead.
+     */
+    void handleOpenBrowserExternal(String url) {
+        if (url == null || url.isBlank()) {
+            return;
+        }
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            try {
+                String[] command = PlatformUtils.isWindows()
+                        ? new String[]{"rundll32", "url.dll,FileProtocolHandler", url}
+                        : PlatformUtils.isMac()
+                        ? new String[]{"open", url}
+                        : new String[]{"xdg-open", url};
+                new ProcessBuilder(command).start();
+            } catch (Exception e) {
+                LOG.error("Cannot open external browser: " + e.getMessage(), e);
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    try {
+                        BrowserUtil.browse(url);
+                    } catch (Exception fallbackError) {
+                        LOG.error("Fallback browse failed: " + fallbackError.getMessage(), fallbackError);
+                    }
+                });
+            }
+        });
+    }
+
+    /**
      * Build a fallback display path when the file cannot be found on disk.
      * For absolute paths, relativize against project root if possible.
      * For relative paths, prepend the session cwd (relative to project root)

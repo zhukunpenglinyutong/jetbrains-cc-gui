@@ -7,6 +7,7 @@ import {
   GROK_DEFAULT_MODEL_ID,
   KIMI_DEFAULT_MODEL_ID,
   OMP_DEFAULT_MODEL_ID,
+  MINIMAX_DEFAULT_MODEL_ID,
   OPENCODE_DEFAULT_MODEL_ID,
   PI_DEFAULT_MODEL_ID,
   DSH_DEFAULT_MODEL_ID,
@@ -57,12 +58,14 @@ export interface UseModelStatePersistenceOptions {
   setCodexPermissionMode: (value: PermissionMode) => void;
   setSelectedGrokModel: (value: string) => void;
   setSelectedKimiModel: (value: string) => void;
+  setSelectedMiniMaxModel: (value: string) => void;
   setSelectedOpenCodeModel: (value: string) => void;
   setSelectedPiModel: (value: string) => void;
   setSelectedOmpModel: (value: string) => void;
   setSelectedDshModel: (value: string) => void;
   setGrokPermissionMode: (value: PermissionMode) => void;
   setKimiPermissionMode: (value: PermissionMode) => void;
+  setMiniMaxPermissionMode: (value: PermissionMode) => void;
   setOpenCodePermissionMode: (value: PermissionMode) => void;
   setPiPermissionMode: (value: PermissionMode) => void;
   setOmpPermissionMode: (value: PermissionMode) => void;
@@ -80,12 +83,14 @@ export interface UseModelStatePersistenceOptions {
   codexPermissionMode: PermissionMode;
   selectedGrokModel: string;
   selectedKimiModel: string;
+  selectedMiniMaxModel: string;
   selectedOpenCodeModel: string;
   selectedPiModel: string;
   selectedOmpModel: string;
   selectedDshModel: string;
   grokPermissionMode: PermissionMode;
   kimiPermissionMode: PermissionMode;
+  miniMaxPermissionMode: PermissionMode;
   openCodePermissionMode: PermissionMode;
   piPermissionMode: PermissionMode;
   ompPermissionMode: PermissionMode;
@@ -115,12 +120,14 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     setCodexPermissionMode,
     setSelectedGrokModel,
     setSelectedKimiModel,
+    setSelectedMiniMaxModel,
     setSelectedOpenCodeModel,
     setSelectedPiModel,
     setSelectedOmpModel,
     setSelectedDshModel,
     setGrokPermissionMode,
     setKimiPermissionMode,
+    setMiniMaxPermissionMode,
     setOpenCodePermissionMode,
     setPiPermissionMode,
     setOmpPermissionMode,
@@ -137,12 +144,14 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     codexPermissionMode,
     selectedGrokModel,
     selectedKimiModel,
+    selectedMiniMaxModel,
     selectedOpenCodeModel,
     selectedPiModel,
     selectedOmpModel,
     selectedDshModel,
     grokPermissionMode,
     kimiPermissionMode,
+    miniMaxPermissionMode,
     openCodePermissionMode,
     piPermissionMode,
     ompPermissionMode,
@@ -183,12 +192,14 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
       let restoredCodexPermissionMode: PermissionMode = 'default';
       let restoredGrokModel = GROK_DEFAULT_MODEL_ID;
       let restoredKimiModel = KIMI_DEFAULT_MODEL_ID;
+      let restoredMiniMaxModel = MINIMAX_DEFAULT_MODEL_ID;
       let restoredOpenCodeModel = OPENCODE_DEFAULT_MODEL_ID;
       let restoredPiModel = PI_DEFAULT_MODEL_ID;
       let restoredOmpModel = OMP_DEFAULT_MODEL_ID;
       let restoredDshModel = DSH_DEFAULT_MODEL_ID;
       let restoredGrokPermissionMode: PermissionMode = 'default';
       let restoredKimiPermissionMode: PermissionMode = 'default';
+      let restoredMiniMaxPermissionMode: PermissionMode = 'default';
       let restoredOpenCodePermissionMode: PermissionMode = 'default';
       let restoredPiPermissionMode: PermissionMode = 'default';
       let restoredOmpPermissionMode: PermissionMode = 'default';
@@ -237,6 +248,10 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
         restoredKimiModel = id;
         setSelectedKimiModel(id);
       });
+      const applyMiniMaxModel = makeCliModelApplier((id) => {
+        restoredMiniMaxModel = id;
+        setSelectedMiniMaxModel(id);
+      });
       const applyOpenCodeModel = makeCliModelApplier((id) => {
         restoredOpenCodeModel = id;
         setSelectedOpenCodeModel(id);
@@ -279,6 +294,9 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
         }
         if (isValidPermissionMode(state.kimiPermissionMode)) {
           restoredKimiPermissionMode = normalizeCliPermissionMode(state.kimiPermissionMode, 'kimi');
+        }
+        if (isValidPermissionMode(state.miniMaxPermissionMode)) {
+          restoredMiniMaxPermissionMode = normalizeCliPermissionMode(state.miniMaxPermissionMode);
         }
         if (isValidPermissionMode(state.openCodePermissionMode)) {
           restoredOpenCodePermissionMode = normalizeCliPermissionMode(state.openCodePermissionMode, 'opencode');
@@ -330,6 +348,11 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           : state.kimiModel;
         applyKimiModel(kimiModelCandidate);
 
+        const miniMaxModelCandidate = hasBackendModel && restoredProvider === 'minimax'
+          ? initialTabModel
+          : state.miniMaxModel;
+        applyMiniMaxModel(miniMaxModelCandidate);
+
         const openCodeModelCandidate = hasBackendModel && restoredProvider === 'opencode'
           ? initialTabModel
           : state.openCodeModel;
@@ -358,6 +381,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           else if (initialTabProvider === 'codex') applyCodexModel(initialTabModel);
           else if (initialTabProvider === 'grok') applyGrokModel(initialTabModel);
           else if (initialTabProvider === 'kimi') applyKimiModel(initialTabModel);
+          else if (initialTabProvider === 'minimax') applyMiniMaxModel(initialTabModel);
           else if (initialTabProvider === 'opencode') applyOpenCodeModel(initialTabModel);
           else if (initialTabProvider === 'pi') applyPiModel(initialTabModel);
           else if (initialTabProvider === 'omp') applyOmpModel(initialTabModel);
@@ -384,7 +408,9 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           ? restoredGrokPermissionMode
           : restoredProvider === 'kimi'
             ? restoredKimiPermissionMode
-            : restoredProvider === 'opencode'
+            : restoredProvider === 'minimax'
+              ? restoredMiniMaxPermissionMode
+              : restoredProvider === 'opencode'
               ? restoredOpenCodePermissionMode
               : restoredProvider === 'pi'
                 ? restoredPiPermissionMode
@@ -397,6 +423,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
       setCodexPermissionMode(restoredCodexPermissionMode);
       setGrokPermissionMode(restoredGrokPermissionMode);
       setKimiPermissionMode(restoredKimiPermissionMode);
+      setMiniMaxPermissionMode(restoredMiniMaxPermissionMode);
       setOpenCodePermissionMode(restoredOpenCodePermissionMode);
       setPiPermissionMode(restoredPiPermissionMode);
       setOmpPermissionMode(restoredOmpPermissionMode);
@@ -421,7 +448,9 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
               ? restoredGrokModel
               : restoredProvider === 'kimi'
                 ? restoredKimiModel
-                : restoredProvider === 'opencode'
+                : restoredProvider === 'minimax'
+                  ? restoredMiniMaxModel
+                  : restoredProvider === 'opencode'
                   ? restoredOpenCodeModel
                   : restoredProvider === 'pi'
                     ? restoredPiModel
@@ -489,12 +518,14 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           codexPermissionMode,
           grokModel: selectedGrokModel,
           kimiModel: selectedKimiModel,
+          miniMaxModel: selectedMiniMaxModel,
           openCodeModel: selectedOpenCodeModel,
           piModel: selectedPiModel,
           ompModel: selectedOmpModel,
           dshModel: selectedDshModel,
           grokPermissionMode,
           kimiPermissionMode,
+          miniMaxPermissionMode,
           openCodePermissionMode,
           piPermissionMode,
           ompPermissionMode,
@@ -523,12 +554,14 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     codexPermissionMode,
     selectedGrokModel,
     selectedKimiModel,
+    selectedMiniMaxModel,
     selectedOpenCodeModel,
     selectedPiModel,
     selectedOmpModel,
     selectedDshModel,
     grokPermissionMode,
     kimiPermissionMode,
+    miniMaxPermissionMode,
     openCodePermissionMode,
     piPermissionMode,
     ompPermissionMode,

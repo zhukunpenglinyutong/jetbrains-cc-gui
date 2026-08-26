@@ -159,7 +159,8 @@ export const ButtonArea = ({
 
   // When a dynamic model catalog arrives, ensure selection is a real entry.
   useEffect(() => {
-    const isDynamicProvider = currentProvider === 'kimi' || currentProvider === 'opencode'
+    const isDynamicProvider = currentProvider === 'kimi' || currentProvider === 'minimax'
+      || currentProvider === 'opencode'
       || currentProvider === 'pi' || currentProvider === 'codex'
       || currentProvider === 'grok' || currentProvider === 'omp'
       || currentProvider === 'dsh';

@@ -14,6 +14,7 @@ import { useClaudeProvider } from './providers/useClaudeProvider';
 import { useCodexProvider } from './providers/useCodexProvider';
 import { useGrokProvider } from './providers/useGrokProvider';
 import { useKimiProvider } from './providers/useKimiProvider';
+import { useMiniMaxProvider } from './providers/useMiniMaxProvider';
 import { useOpenCodeProvider } from './providers/useOpenCodeProvider';
 import { usePiProvider } from './providers/usePiProvider';
 import { useOmpProvider } from './providers/useOmpProvider';
@@ -61,6 +62,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
   const codex = useCodexProvider();
   const grok = useGrokProvider();
   const kimi = useKimiProvider();
+  const miniMax = useMiniMaxProvider();
   const openCode = useOpenCodeProvider();
   const pi = usePiProvider();
   const omp = useOmpProvider();
@@ -92,6 +94,10 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     kimiPermissionMode, setKimiPermissionMode,
   } = kimi;
   const {
+    selectedMiniMaxModel, setSelectedMiniMaxModel,
+    miniMaxPermissionMode, setMiniMaxPermissionMode,
+  } = miniMax;
+  const {
     selectedOpenCodeModel, setSelectedOpenCodeModel,
     openCodePermissionMode, setOpenCodePermissionMode,
   } = openCode;
@@ -118,12 +124,14 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     setCodexPermissionMode,
     setSelectedGrokModel,
     setSelectedKimiModel,
+    setSelectedMiniMaxModel,
     setSelectedOpenCodeModel,
     setSelectedPiModel,
     setSelectedOmpModel,
     setSelectedDshModel,
     setGrokPermissionMode,
     setKimiPermissionMode,
+    setMiniMaxPermissionMode,
     setOpenCodePermissionMode,
     setPiPermissionMode,
     setOmpPermissionMode,
@@ -140,12 +148,14 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     codexPermissionMode,
     selectedGrokModel,
     selectedKimiModel,
+    selectedMiniMaxModel,
     selectedOpenCodeModel,
     selectedPiModel,
     selectedOmpModel,
     selectedDshModel,
     grokPermissionMode,
     kimiPermissionMode,
+    miniMaxPermissionMode,
     openCodePermissionMode,
     piPermissionMode,
     ompPermissionMode,
@@ -163,7 +173,9 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
       ? selectedGrokModel
       : currentProvider === 'kimi'
         ? selectedKimiModel
-        : currentProvider === 'opencode'
+        : currentProvider === 'minimax'
+          ? selectedMiniMaxModel
+          : currentProvider === 'opencode'
           ? selectedOpenCodeModel
           : currentProvider === 'pi'
             ? selectedPiModel
@@ -202,6 +214,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
       setPermissionMode(cliMode);
       if (currentProvider === 'grok') setGrokPermissionMode(cliMode);
       if (currentProvider === 'kimi') setKimiPermissionMode(cliMode);
+      if (currentProvider === 'minimax') setMiniMaxPermissionMode(cliMode);
       if (currentProvider === 'opencode') setOpenCodePermissionMode(cliMode);
       if (currentProvider === 'pi') setPiPermissionMode(cliMode);
       if (currentProvider === 'omp') {
@@ -231,6 +244,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     setClaudePermissionMode,
     setGrokPermissionMode,
     setKimiPermissionMode,
+    setMiniMaxPermissionMode,
     setOpenCodePermissionMode,
     setPiPermissionMode,
     setOmpPermissionMode,
@@ -252,6 +266,9 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
       sendBridgeEvent('set_model', modelId);
     } else if (currentProvider === 'kimi') {
       setSelectedKimiModel(modelId);
+      sendBridgeEvent('set_model', modelId);
+    } else if (currentProvider === 'minimax') {
+      setSelectedMiniMaxModel(modelId);
       sendBridgeEvent('set_model', modelId);
     } else if (currentProvider === 'opencode') {
       setSelectedOpenCodeModel(modelId);
@@ -284,6 +301,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     setSelectedCodexModel,
     setSelectedGrokModel,
     setSelectedKimiModel,
+    setSelectedMiniMaxModel,
     setSelectedOpenCodeModel,
     setSelectedPiModel,
     setSelectedOmpModel,
@@ -302,6 +320,8 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
       modeToSet = normalizeCliPermissionMode(grokPermissionMode, providerId);
     } else if (providerId === 'kimi') {
       modeToSet = normalizeCliPermissionMode(kimiPermissionMode, providerId);
+    } else if (providerId === 'minimax') {
+      modeToSet = normalizeCliPermissionMode(miniMaxPermissionMode, providerId);
     } else if (providerId === 'opencode') {
       modeToSet = normalizeCliPermissionMode(openCodePermissionMode, providerId);
     } else if (providerId === 'pi') {
@@ -322,6 +342,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     if (providerId === 'codex') newModel = selectedCodexModel;
     else if (providerId === 'grok') newModel = selectedGrokModel;
     else if (providerId === 'kimi') newModel = selectedKimiModel;
+    else if (providerId === 'minimax') newModel = selectedMiniMaxModel;
     else if (providerId === 'opencode') newModel = selectedOpenCodeModel;
     else if (providerId === 'pi') newModel = selectedPiModel;
     else if (providerId === 'omp') newModel = selectedOmpModel;
@@ -332,6 +353,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     codexPermissionMode,
     grokPermissionMode,
     kimiPermissionMode,
+    miniMaxPermissionMode,
     openCodePermissionMode,
     piPermissionMode,
     ompPermissionMode,
@@ -340,6 +362,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     selectedClaudeModel,
     selectedGrokModel,
     selectedKimiModel,
+    selectedMiniMaxModel,
     selectedOpenCodeModel,
     selectedPiModel,
     selectedOmpModel,
@@ -406,6 +429,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     ...codex,
     ...grok,
     ...kimi,
+    ...miniMax,
     ...openCode,
     ...pi,
     ...omp,

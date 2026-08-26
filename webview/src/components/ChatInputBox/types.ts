@@ -583,6 +583,32 @@ export const isValidDshPreset = (value: unknown): value is DshPreset =>
   && (DSH_PRESETS.some((preset) => preset.id === value)
     || getUserDshPresetOptions().some((preset) => preset.id === value));
 
+/** MiniMax Code default: omit `--model` so the CLI resolves its own default. */
+export const MINIMAX_DEFAULT_MODEL_ID = 'auto';
+
+export const MINIMAX_MODELS: ModelInfo[] = [
+  {
+    id: MINIMAX_DEFAULT_MODEL_ID,
+    label: 'MiniMax Auto',
+    description: 'Use MiniMax Code default model',
+  },
+  {
+    id: 'minimax/MiniMax-M2.7',
+    label: 'MiniMax M2.7',
+    description: 'MiniMax coding model (thinking forced on)',
+  },
+  {
+    id: 'minimax/MiniMax-M2.7-highspeed',
+    label: 'MiniMax M2.7 Highspeed',
+    description: 'MiniMax low-latency coding model',
+  },
+  {
+    id: 'minimax/MiniMax-M3',
+    label: 'MiniMax M3',
+    description: 'MiniMax multimodal coding model',
+  },
+];
+
 /**
  * Available models (backward compatibility)
  */
@@ -612,6 +638,7 @@ export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
   { id: 'pi', label: 'PI CLI', icon: 'codicon-terminal', enabled: true, beta: true },
   { id: 'omp', label: 'OMP CLI', icon: 'codicon-terminal', enabled: true, beta: true },
   { id: 'dsh', label: 'DeepSeek Harness', icon: 'codicon-terminal', enabled: true, beta: true },
+  { id: 'minimax', label: 'MiniMax Code', icon: 'codicon-terminal', enabled: true, beta: true },
 ];
 
 /**
