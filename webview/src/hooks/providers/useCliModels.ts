@@ -77,6 +77,10 @@ function fallbackModels(providerId: string): ModelInfo[] {
  */
 function supportsDynamicModels(providerId: string): boolean {
   if (providerId === 'codex') return true;
+  // Gemini: no backend handler for the model catalog yet (arrives with the
+  // catalog story, 1.3). Suppress the request so selecting the provider does
+  // not fire a get_cli_models call the backend always rejects.
+  if (providerId === 'gemini') return false;
   return isCliOnlyProvider(providerId);
 }
 

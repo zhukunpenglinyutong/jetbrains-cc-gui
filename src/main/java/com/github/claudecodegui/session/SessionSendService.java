@@ -1,5 +1,6 @@
 package com.github.claudecodegui.session;
 
+import com.github.claudecodegui.cli.CliToolId;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.settings.CodexSettingsManager;
@@ -191,6 +192,24 @@ public class SessionSendService {
                     normalizedRequestedEffort,
                     effectivePermissionMode
             );
+        }
+
+        // Registered CLI tool whose bridge has not landed yet (gemini pre-1.2):
+        // fail loudly via the channel error path instead of silently routing
+        // the turn to the Claude SDK. Grok keeps its historic fallthrough when
+        // its bridge is missing.
+        CliToolId cliTool = !"grok".equals(currentProvider)
+                ? CliToolId.fromId(currentProvider)
+                : null;
+        if (cliTool != null && !cliBridges.containsKey(currentProvider)) {
+            LOG.warning("[Lifecycle] provider=" + currentProvider
+                    + " has no CLI bridge; rejecting send instead of falling through to claude");
+            MessageCallback handler = createCliMessageHandler(currentProvider);
+            handler.onError(ClaudeCodeGuiBundle.message(
+                    "error.cliProviderNotImplemented",
+                    cliTool.getDisplayName()
+            ));
+            return CompletableFuture.completedFuture(null);
         }
 
         return sendToClaude(channelId, input, attachments, openedFilesJson, agentPrompt,
