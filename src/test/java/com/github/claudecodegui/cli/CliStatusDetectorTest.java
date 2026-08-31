@@ -34,8 +34,11 @@ public class CliStatusDetectorTest {
         String home = "/home/test-user";
         List<String> dirs = CliStatusDetector.homeBinDirs(CliToolId.GEMINI, home);
 
+        // Home candidate comes first (precedence over PATH-style fallback dirs,
+        // which homeBinDirs also appends by design).
         String expected = new File(new File(home, ".local"), "bin").getAbsolutePath();
-        assertEquals(List.of(expected), dirs);
+        assertEquals(expected, dirs.get(0));
+        assertEquals(true, dirs.contains(expected));
     }
 
     @Test

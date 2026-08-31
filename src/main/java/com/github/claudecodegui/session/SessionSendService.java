@@ -202,7 +202,7 @@ public class SessionSendService {
                 ? CliToolId.fromId(currentProvider)
                 : null;
         if (cliTool != null && !cliBridges.containsKey(currentProvider)) {
-            LOG.warning("[Lifecycle] provider=" + currentProvider
+            LOG.warn("[Lifecycle] provider=" + currentProvider
                     + " has no CLI bridge; rejecting send instead of falling through to claude");
             MessageCallback handler = createCliMessageHandler(currentProvider);
             handler.onError(ClaudeCodeGuiBundle.message(
