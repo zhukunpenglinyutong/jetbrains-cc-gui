@@ -98,8 +98,9 @@ export const CLI_TOOL_DEFINITIONS: CliToolDefinition[] = [
     nameKey: 'settings.cli.tools.gemini.name',
     descriptionKey: 'settings.cli.tools.gemini.description',
     binaryName: 'agy',
-    docsUrl: 'https://antigravity.google/docs',
-    installCommand: 'curl -fsSL https://antigravity.google/install.sh | bash',
+    docsUrl: 'https://antigravity.google/docs/cli/install/',
+    installCommand: 'curl -fsSL https://antigravity.google/cli/install.sh | bash',
+    installCommandWindows: 'irm https://antigravity.google/cli/install.ps1 | iex',
   },
   {
     id: 'minimax',
