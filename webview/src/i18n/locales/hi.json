@@ -875,7 +875,7 @@
           "description": "मल्टी-प्रोवाइडर मॉडल सपोर्ट वाला Oh My Pi टर्मिनल कोडिंग एजेंट"
         },
         "gemini": {
-          "name": "Gemini CLI",
+          "name": "Antigravity CLI",
           "description": "गूगल एंटीग्रेविटी टर्मिनल कोडिंग एजेंट (agy)"
         }
       },
@@ -1711,7 +1711,7 @@
       "label": "MiniMax Code"
     },
     "gemini": {
-      "label": "Gemini CLI"
+      "label": "Antigravity CLI"
     },
     "opencode": {
       "label": "OpenCode"

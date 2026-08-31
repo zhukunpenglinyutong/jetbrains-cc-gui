@@ -880,7 +880,7 @@
           "description": "マルチプロバイダーのモデルに対応した Oh My Pi ターミナルコーディングエージェント"
         },
         "gemini": {
-          "name": "Gemini CLI",
+          "name": "Antigravity CLI",
           "description": "Google Antigravity ターミナルコーディングエージェント (agy)"
         }
       },
@@ -1717,7 +1717,7 @@
       "label": "MiniMax Code"
     },
     "gemini": {
-      "label": "Gemini CLI"
+      "label": "Antigravity CLI"
     },
     "opencode": {
       "label": "OpenCode"

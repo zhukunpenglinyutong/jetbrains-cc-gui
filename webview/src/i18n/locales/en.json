@@ -666,7 +666,7 @@
           "description": "DeepSeek terminal agent CLI (dsh)"
         },
         "gemini": {
-          "name": "Gemini CLI",
+          "name": "Antigravity CLI",
           "description": "Google Antigravity terminal coding agent (agy)"
         }
       },
@@ -2203,7 +2203,7 @@
       "label": "MiniMax Code"
     },
     "gemini": {
-      "label": "Gemini CLI"
+      "label": "Antigravity CLI"
     },
     "opencode": {
       "label": "OpenCode"

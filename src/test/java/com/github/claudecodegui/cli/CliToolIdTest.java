@@ -40,7 +40,7 @@ public class CliToolIdTest {
         assertEquals("minimax", CliToolId.MINIMAX.getBinaryName());
         assertEquals("mcode", CliToolId.MINIMAX.getAltBinaryName());
         assertEquals("agy", CliToolId.GEMINI.getBinaryName());
-        assertEquals("Gemini CLI", CliToolId.GEMINI.getDisplayName());
+        assertEquals("Antigravity CLI", CliToolId.GEMINI.getDisplayName());
         for (CliToolId tool : CliToolId.values()) {
             assertNotNull(tool.getDisplayName());
         }

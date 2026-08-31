@@ -887,7 +887,7 @@
           "description": "Терминальный агент для кодирования Oh My Pi с поддержкой нескольких провайдеров"
         },
         "gemini": {
-          "name": "Gemini CLI",
+          "name": "Antigravity CLI",
           "description": "Терминальный агент кодирования Google Antigravity (agy)"
         }
       },
@@ -1738,7 +1738,7 @@
       "label": "MiniMax Code"
     },
     "gemini": {
-      "label": "Gemini CLI"
+      "label": "Antigravity CLI"
     },
     "opencode": {
       "label": "OpenCode"

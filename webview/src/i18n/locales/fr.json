@@ -875,7 +875,7 @@
           "description": "Agent de codage terminal Oh My Pi avec prise en charge multi-fournisseurs"
         },
         "gemini": {
-          "name": "Gemini CLI",
+          "name": "Antigravity CLI",
           "description": "Agent de codage en terminal Google Antigravity (agy)"
         }
       },
@@ -1712,7 +1712,7 @@
       "label": "MiniMax Code"
     },
     "gemini": {
-      "label": "Gemini CLI"
+      "label": "Antigravity CLI"
     },
     "opencode": {
       "label": "OpenCode"

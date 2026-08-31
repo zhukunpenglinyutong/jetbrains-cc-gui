@@ -666,7 +666,7 @@
           "description": "DeepSeek 终端智能体 CLI（dsh）"
         },
         "gemini": {
-          "name": "Gemini CLI",
+          "name": "Antigravity CLI",
           "description": "Google Antigravity 终端代码智能体 (agy)"
         }
       },
@@ -2209,7 +2209,7 @@
       "label": "MiniMax Code"
     },
     "gemini": {
-      "label": "Gemini CLI"
+      "label": "Antigravity CLI"
     },
     "opencode": {
       "label": "OpenCode"
