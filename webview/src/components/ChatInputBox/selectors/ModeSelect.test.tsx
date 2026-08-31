@@ -122,6 +122,14 @@ describe('ModeSelect', () => {
     expect(screen.getByRole('button').className).toContain('mode-full-auto-active');
   });
 
+  it('hides plan/smol/slow for the other CLI providers', () => {
+    // omp is excluded: it has its own role-based mode list (smol/slow/plan).
+    for (const provider of ['codex', 'grok', 'kimi', 'opencode', 'pi', 'dsh', 'gemini']) {
+      expect(openAndGetOptionIds(provider)).toEqual(['default', 'acceptEdits', 'bypassPermissions']);
+      cleanup();
+    }
+  });
+
   it('hides smol/slow for the claude provider while keeping native auto and Full Auto distinct', () => {
     expect(openAndGetOptionIds('claude')).toEqual(['default', 'plan', 'acceptEdits', 'auto', 'bypassPermissions']);
   });

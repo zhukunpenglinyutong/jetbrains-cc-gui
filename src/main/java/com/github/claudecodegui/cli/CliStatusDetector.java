@@ -190,7 +190,8 @@ public final class CliStatusDetector {
         return new ArrayList<>(candidates);
     }
 
-    private static List<String> homeBinDirs(CliToolId tool, String home) {
+    // Package-private for CliStatusDetectorTest (same seam as selectWindowsWhereMatch).
+    static List<String> homeBinDirs(CliToolId tool, String home) {
         List<String> dirs = new ArrayList<>();
         if (home == null || home.isBlank()) {
             return dirs;
@@ -337,7 +338,7 @@ public final class CliStatusDetector {
         return b.compareTo(a);
     }
 
-    private static String[] envKeysFor(CliToolId tool) {
+    static String[] envKeysFor(CliToolId tool) {
         return switch (tool) {
             case GROK -> new String[]{"GROK_BIN", "GROK_PATH", "GROK_CLI_PATH"};
             case KIMI -> new String[]{"KIMI_BIN", "KIMI_PATH", "KIMI_CLI_PATH", "KIMI_CODE_BIN"};
