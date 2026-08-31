@@ -1073,6 +1073,9 @@ export function isAutoApproveMode(permissionMode) {
 export function buildPromptBlocks({ message, agentPrompt, openedFiles, attachments }) {
   const blocks = [];
   let text = message || '';
+  if (!String(text).trim() && Array.isArray(attachments) && attachments.length > 0) {
+    text = GROK_IMAGE_ONLY_FALLBACK_TEXT;
+  }
 
   if (agentPrompt && String(agentPrompt).trim()) {
     text =

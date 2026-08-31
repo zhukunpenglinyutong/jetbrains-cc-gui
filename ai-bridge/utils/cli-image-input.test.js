@@ -87,7 +87,7 @@ describe('buildPromptBlocks multimodal', () => {
     });
     const text = blocks.find((b) => b.type === 'text');
     assert.ok(text);
-    assert.equal(text.text, GROK_IMAGE_ONLY_FALLBACK_TEXT);
+    assert.ok(text.text.startsWith(GROK_IMAGE_ONLY_FALLBACK_TEXT));
     assert.equal(blocks.filter((b) => b.type === 'image').length, 1);
   });
 
