@@ -534,6 +534,3 @@ test('verifyAgyBinary fails on lookalike binary missing distinctive flags in --h
   assert.equal(result.reason, 'lookalike');
   assert.match(result.error, /GEMINI_BIN/);
 });
-
-
-

@@ -601,13 +601,22 @@ export function resolveGeminiCliPath() {
     envKeys: ['GEMINI_BIN', 'GEMINI_PATH', 'GEMINI_CLI_PATH'],
     homeCandidates: [
       '{home}/.local/bin/{bin}',
-      '{home}/.local/bin/{name}',
     ],
   });
 }
 
 export const AGY_MIN_VERSION = '1.1.11';
 export const AGY_REQUIRED_HELP_FLAGS = ['--conversation', '--effort', '--sandbox', 'models'];
+
+/**
+ * Match a required flag/subcommand as a whole word in help text. A bare
+ * substring check would let near-misses pass ('models' inside
+ * '--show-models', '--conversation' inside '--conversation-mode').
+ */
+function helpTextContainsFlag(helpText, flag) {
+  const escaped = String(flag).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^\\w-])${escaped}(?=$|[^\\w-])`).test(helpText);
+}
 
 export function parseSemver(str) {
   const trimmed = String(str ?? '').trim();
@@ -633,7 +642,36 @@ export function compareSemver(v1, v2) {
   if (s1.patch !== s2.patch) return s1.patch - s2.patch;
   if (s1.prerelease && !s2.prerelease) return -1;
   if (!s1.prerelease && s2.prerelease) return 1;
-  if (s1.prerelease && s2.prerelease) return s1.prerelease.localeCompare(s2.prerelease);
+  if (s1.prerelease && s2.prerelease) return comparePrerelease(s1.prerelease, s2.prerelease);
+  return 0;
+}
+
+/**
+ * Compare dot-separated prerelease identifiers per semver.org: numeric
+ * identifiers compare numerically (alpha.10 > alpha.9), numeric sorts below
+ * alphanumeric, and a shorter identifier list sorts below a longer prefix
+ * match (alpha < alpha.1).
+ */
+function comparePrerelease(a, b) {
+  const partsA = a.split('.');
+  const partsB = b.split('.');
+  for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+    const x = partsA[i];
+    const y = partsB[i];
+    if (x === undefined) return -1;
+    if (y === undefined) return 1;
+    const xNumeric = /^[0-9]+$/.test(x);
+    const yNumeric = /^[0-9]+$/.test(y);
+    if (xNumeric && yNumeric) {
+      const delta = parseInt(x, 10) - parseInt(y, 10);
+      if (delta !== 0) return delta;
+    } else if (xNumeric !== yNumeric) {
+      return xNumeric ? -1 : 1;
+    } else {
+      const cmp = x.localeCompare(y);
+      if (cmp !== 0) return cmp < 0 ? -1 : 1;
+    }
+  }
   return 0;
 }
 
@@ -657,6 +695,9 @@ export function compareSemver(v1, v2) {
 export function verifyAgyBinary(bin, options = {}) {
   const resolvedBin = bin || resolveGeminiCliPath();
   const opts = options || {};
+  // spawnSync treats a falsy timeout as "no timeout" - clamp non-positive
+  // values to the default so a hung CLI cannot block the probe forever.
+  const probeTimeout = typeof opts.timeout === 'number' && opts.timeout > 0 ? opts.timeout : 5000;
   if (!resolvedBin) {
     return {
       ok: false,
@@ -674,7 +715,7 @@ export function verifyAgyBinary(bin, options = {}) {
       ['--version'],
       {
         env: opts.env || process.env,
-        timeout: opts.timeout ?? 5000,
+        timeout: probeTimeout,
         encoding: 'utf8',
       },
       opts.forceWindows,
@@ -707,25 +748,38 @@ export function verifyAgyBinary(bin, options = {}) {
     };
   }
 
-  if (versionProc.status !== 0) {
+  if (versionProc.status !== 0 || versionProc.signal) {
+    // The binary ran but crashed/was killed - an environment or runtime
+    // failure, not proof of a lookalike. Report it as its own cause.
+    const stderrTail = decodeCliOutput(versionProc.stderr).trim().slice(0, 200);
+    const crashDetail = versionProc.signal
+      ? `terminated by signal ${versionProc.signal}`
+      : `exited with code ${versionProc.status}`;
     return {
       ok: false,
       available: false,
       path: resolvedBin,
-      reason: 'lookalike',
-      error: `Binary "${resolvedBin}" exited with code ${versionProc.status} on --version probe. If using a custom installation, set GEMINI_BIN (or GEMINI_PATH / GEMINI_CLI_PATH) to the Antigravity 'agy' binary path.`,
+      reason: 'spawn_failed',
+      error: `Binary "${resolvedBin}" ${crashDetail} on --version probe${stderrTail ? `: ${stderrTail}` : ''}. If using a custom installation, set GEMINI_BIN (or GEMINI_PATH / GEMINI_CLI_PATH) to the Antigravity 'agy' binary path.`,
     };
   }
 
+  // Accept a clean semver on any single output line - future versions may
+  // print an update notice alongside the version without being lookalikes.
   const rawVersionOutput = decodeCliOutput(versionProc.stdout).trim();
-  const parsedVersion = parseSemver(rawVersionOutput);
+  const semverLine = rawVersionOutput
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .find((line) => parseSemver(line) !== null) || null;
+  const parsedVersion = semverLine ? parseSemver(semverLine) : null;
   if (!parsedVersion) {
     return {
       ok: false,
       available: false,
       path: resolvedBin,
       reason: 'lookalike',
-      error: `Binary "${resolvedBin}" does not appear to be the Antigravity CLI (unexpected version output: "${rawVersionOutput}"). Set GEMINI_BIN (or GEMINI_PATH / GEMINI_CLI_PATH) to the Antigravity 'agy' binary path.`,
+      error: `Binary "${resolvedBin}" does not appear to be the Antigravity CLI (unexpected version output: "${rawVersionOutput.slice(0, 120)}"). Set GEMINI_BIN (or GEMINI_PATH / GEMINI_CLI_PATH) to the Antigravity 'agy' binary path.`,
     };
   }
 
@@ -748,7 +802,7 @@ export function verifyAgyBinary(bin, options = {}) {
       ['--help'],
       {
         env: opts.env || process.env,
-        timeout: opts.timeout ?? 5000,
+        timeout: probeTimeout,
         encoding: 'utf8',
       },
       opts.forceWindows,
@@ -765,19 +819,45 @@ export function verifyAgyBinary(bin, options = {}) {
     };
   }
 
-  if (helpProc.error || (helpProc.status !== 0 && helpProc.status !== null) || helpProc.signal) {
+  if (helpProc.error) {
+    const isEnoent = helpProc.error.code === 'ENOENT';
+    const isTimeout = helpProc.error.code === 'ETIMEDOUT' || helpProc.error.signal === 'SIGTERM';
+    return {
+      ok: false,
+      available: false,
+      path: resolvedBin,
+      reason: isEnoent ? 'not_found' : (isTimeout ? 'timeout' : 'spawn_failed'),
+      error: isEnoent
+        ? `Antigravity CLI not found at ${resolvedBin}. Install it or set GEMINI_BIN (or GEMINI_PATH / GEMINI_CLI_PATH).`
+        : (isTimeout
+          ? `Probe timed out while executing Antigravity CLI (${resolvedBin}) with --help.`
+          : `Failed to run --help on CLI (${resolvedBin}): ${helpProc.error.message}`),
+    };
+  }
+
+  if (helpProc.signal || helpProc.status === null) {
+    return {
+      ok: false,
+      available: false,
+      path: resolvedBin,
+      reason: 'spawn_failed',
+      error: `Binary "${resolvedBin}" terminated by signal ${helpProc.signal || 'unknown'} on --help probe.`,
+    };
+  }
+
+  if (helpProc.status !== 0) {
     return {
       ok: false,
       available: false,
       path: resolvedBin,
       reason: 'lookalike',
-      error: `Binary "${resolvedBin}" failed --help check. Set GEMINI_BIN (or GEMINI_PATH / GEMINI_CLI_PATH) to the Antigravity 'agy' binary path.`,
+      error: `Binary "${resolvedBin}" exited with code ${helpProc.status} on --help probe. Set GEMINI_BIN (or GEMINI_PATH / GEMINI_CLI_PATH) to the Antigravity 'agy' binary path.`,
     };
   }
 
   const helpText = `${decodeCliOutput(helpProc.stdout)}\n${decodeCliOutput(helpProc.stderr)}`;
   for (const requiredFlag of AGY_REQUIRED_HELP_FLAGS) {
-    if (!helpText.includes(requiredFlag)) {
+    if (!helpTextContainsFlag(helpText, requiredFlag)) {
       return {
         ok: false,
         available: false,
@@ -795,4 +875,3 @@ export function verifyAgyBinary(bin, options = {}) {
     path: resolvedBin,
   };
 }
-
