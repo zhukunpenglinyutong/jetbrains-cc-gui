@@ -873,6 +873,10 @@
         "omp": {
           "name": "OMP CLI",
           "description": "Agente de codificación de terminal Oh My Pi con soporte multi-proveedor"
+        },
+        "gemini": {
+          "name": "Gemini CLI",
+          "description": "Agente de codificación de terminal Google Antigravity (agy)"
         }
       },
       "installDialog": {
@@ -1714,7 +1718,7 @@
       "label": "MiniMax Code"
     },
     "gemini": {
-      "label": "Gemini Cli"
+      "label": "Gemini CLI"
     },
     "opencode": {
       "label": "OpenCode"

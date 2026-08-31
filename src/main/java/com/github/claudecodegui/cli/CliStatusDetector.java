@@ -235,6 +235,7 @@ public final class CliStatusDetector {
             case MINIMAX:
                 dirs.add(join(home, ".minimax", "bin"));
                 dirs.add(join(home, ".minimax-code"));
+            case GEMINI:
                 dirs.add(join(home, ".local", "bin"));
                 break;
             default:
@@ -345,6 +346,7 @@ public final class CliStatusDetector {
             case OMP -> new String[]{"OMP_BIN", "OMP_PATH", "OMP_CLI_PATH"};
             case DSH -> new String[]{"DSH_BIN", "DSH_PATH", "DSH_CLI_PATH"};
             case MINIMAX -> new String[]{"MINIMAX_BIN", "MINIMAX_PATH", "MINIMAX_CLI_PATH", "MCODE_BIN"};
+            case GEMINI -> new String[]{"GEMINI_BIN", "GEMINI_PATH", "GEMINI_CLI_PATH"};
         };
     }
 

@@ -16,7 +16,7 @@
 import { existsSync, readdirSync } from 'fs';
 import { homedir } from 'os';
 import { join, isAbsolute, win32 as pathWin32 } from 'path';
-import { execFileSync, execSync } from 'child_process';
+import { execFileSync, execSync, spawnSync } from 'child_process';
 
 /** Extensions that can be launched on Windows (`.cmd`/`.bat` via cmd.exe). */
 const WINDOWS_SPAWNABLE_EXT = /\.(cmd|bat|exe)$/i;
@@ -594,3 +594,205 @@ export function resolveMiniMaxCliPath() {
   // result (it may be a real path) and only fall back to `minimax` at the very end.
   return mcode !== 'mcode' ? mcode : minimax;
 }
+
+export function resolveGeminiCliPath() {
+  return resolveCliPath({
+    binaryName: 'agy',
+    envKeys: ['GEMINI_BIN', 'GEMINI_PATH', 'GEMINI_CLI_PATH'],
+    homeCandidates: [
+      '{home}/.local/bin/{bin}',
+      '{home}/.local/bin/{name}',
+    ],
+  });
+}
+
+export const AGY_MIN_VERSION = '1.1.11';
+export const AGY_REQUIRED_HELP_FLAGS = ['--conversation', '--effort', '--sandbox', 'models'];
+
+export function parseSemver(str) {
+  const trimmed = String(str ?? '').trim();
+  const match = trimmed.match(/^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+([0-9A-Za-z.-]+))?$/);
+  if (!match) return null;
+  return {
+    major: parseInt(match[1], 10),
+    minor: parseInt(match[2], 10),
+    patch: parseInt(match[3], 10),
+    prerelease: match[4] || null,
+    build: match[5] || null,
+    raw: trimmed,
+  };
+}
+
+export function compareSemver(v1, v2) {
+  const s1 = typeof v1 === 'string' ? parseSemver(v1) : v1;
+  const s2 = typeof v2 === 'string' ? parseSemver(v2) : v2;
+  if (!s1 || !s2) return 0;
+  if (!Number.isFinite(s1?.major) || !Number.isFinite(s2?.major)) return 0;
+  if (s1.major !== s2.major) return s1.major - s2.major;
+  if (s1.minor !== s2.minor) return s1.minor - s2.minor;
+  if (s1.patch !== s2.patch) return s1.patch - s2.patch;
+  if (s1.prerelease && !s2.prerelease) return -1;
+  if (!s1.prerelease && s2.prerelease) return 1;
+  if (s1.prerelease && s2.prerelease) return s1.prerelease.localeCompare(s2.prerelease);
+  return 0;
+}
+
+/**
+ * Validate that a resolved binary is the genuine Antigravity CLI (agy)
+ * and meets the minimum version requirement (>= 1.1.11).
+ *
+ * Probe (zero-cost, no tokens):
+ * 1. `<bin> --version` -> exits 0 and prints clean semver (no banner)
+ * 2. Version >= 1.1.11 floor
+ * 3. `<bin> --help` -> contains `--conversation`, `--effort`, `--sandbox`, `models`
+ *
+ * @param {string} [bin]
+ * @param {object} [options]
+ * @param {NodeJS.ProcessEnv} [options.env]
+ * @param {number} [options.timeout=5000]
+ * @param {boolean} [options.forceWindows]
+ * @param {Function} [options.spawnSyncFn] - test injection hook
+ * @returns {{ ok: boolean, available: boolean, version?: string, path?: string, error?: string, reason?: string }}
+ */
+export function verifyAgyBinary(bin, options = {}) {
+  const resolvedBin = bin || resolveGeminiCliPath();
+  const opts = options || {};
+  if (!resolvedBin) {
+    return {
+      ok: false,
+      available: false,
+      reason: 'not_found',
+      error: 'Antigravity CLI (agy) binary not found. Install it or set GEMINI_BIN (or GEMINI_PATH / GEMINI_CLI_PATH) to the binary path.',
+    };
+  }
+
+  // 1. Probe version: <bin> --version
+  let versionProc;
+  try {
+    const spawnInfo = resolveCliSpawn(
+      resolvedBin,
+      ['--version'],
+      {
+        env: opts.env || process.env,
+        timeout: opts.timeout ?? 5000,
+        encoding: 'utf8',
+      },
+      opts.forceWindows,
+    );
+    const spawnSyncFn = opts.spawnSyncFn || spawnSync;
+    versionProc = spawnSyncFn(spawnInfo.file, spawnInfo.args, spawnInfo.options);
+  } catch (err) {
+    return {
+      ok: false,
+      available: false,
+      path: resolvedBin,
+      reason: 'spawn_failed',
+      error: `Failed to spawn CLI (${resolvedBin}): ${err?.message || err}`,
+    };
+  }
+
+  if (versionProc.error) {
+    const isEnoent = versionProc.error.code === 'ENOENT';
+    const isTimeout = versionProc.error.code === 'ETIMEDOUT' || versionProc.error.signal === 'SIGTERM';
+    return {
+      ok: false,
+      available: false,
+      path: resolvedBin,
+      reason: isEnoent ? 'not_found' : (isTimeout ? 'timeout' : 'spawn_failed'),
+      error: isEnoent
+        ? `Antigravity CLI not found at ${resolvedBin}. Install it or set GEMINI_BIN (or GEMINI_PATH / GEMINI_CLI_PATH).`
+        : (isTimeout
+          ? `Probe timed out while executing Antigravity CLI (${resolvedBin}) with --version.`
+          : `Failed to probe CLI (${resolvedBin}): ${versionProc.error.message}`),
+    };
+  }
+
+  if (versionProc.status !== 0) {
+    return {
+      ok: false,
+      available: false,
+      path: resolvedBin,
+      reason: 'lookalike',
+      error: `Binary "${resolvedBin}" exited with code ${versionProc.status} on --version probe. If using a custom installation, set GEMINI_BIN (or GEMINI_PATH / GEMINI_CLI_PATH) to the Antigravity 'agy' binary path.`,
+    };
+  }
+
+  const rawVersionOutput = decodeCliOutput(versionProc.stdout).trim();
+  const parsedVersion = parseSemver(rawVersionOutput);
+  if (!parsedVersion) {
+    return {
+      ok: false,
+      available: false,
+      path: resolvedBin,
+      reason: 'lookalike',
+      error: `Binary "${resolvedBin}" does not appear to be the Antigravity CLI (unexpected version output: "${rawVersionOutput}"). Set GEMINI_BIN (or GEMINI_PATH / GEMINI_CLI_PATH) to the Antigravity 'agy' binary path.`,
+    };
+  }
+
+  if (compareSemver(parsedVersion, AGY_MIN_VERSION) < 0) {
+    return {
+      ok: false,
+      available: false,
+      version: parsedVersion.raw,
+      path: resolvedBin,
+      reason: 'unsupported_version',
+      error: `Antigravity CLI version ${parsedVersion.raw} is below the minimum required version ${AGY_MIN_VERSION}. Please update with 'agy update' or visit https://antigravity.google/docs`,
+    };
+  }
+
+  // 2. Probe help: <bin> --help
+  let helpProc;
+  try {
+    const spawnInfo = resolveCliSpawn(
+      resolvedBin,
+      ['--help'],
+      {
+        env: opts.env || process.env,
+        timeout: opts.timeout ?? 5000,
+        encoding: 'utf8',
+      },
+      opts.forceWindows,
+    );
+    const spawnSyncFn = opts.spawnSyncFn || spawnSync;
+    helpProc = spawnSyncFn(spawnInfo.file, spawnInfo.args, spawnInfo.options);
+  } catch (err) {
+    return {
+      ok: false,
+      available: false,
+      path: resolvedBin,
+      reason: 'spawn_failed',
+      error: `Failed to run --help on CLI (${resolvedBin}): ${err?.message || err}`,
+    };
+  }
+
+  if (helpProc.error || (helpProc.status !== 0 && helpProc.status !== null) || helpProc.signal) {
+    return {
+      ok: false,
+      available: false,
+      path: resolvedBin,
+      reason: 'lookalike',
+      error: `Binary "${resolvedBin}" failed --help check. Set GEMINI_BIN (or GEMINI_PATH / GEMINI_CLI_PATH) to the Antigravity 'agy' binary path.`,
+    };
+  }
+
+  const helpText = `${decodeCliOutput(helpProc.stdout)}\n${decodeCliOutput(helpProc.stderr)}`;
+  for (const requiredFlag of AGY_REQUIRED_HELP_FLAGS) {
+    if (!helpText.includes(requiredFlag)) {
+      return {
+        ok: false,
+        available: false,
+        path: resolvedBin,
+        reason: 'lookalike',
+        error: `Binary "${resolvedBin}" is missing required flag/subcommand "${requiredFlag}". It does not appear to be the Antigravity CLI. Set GEMINI_BIN (or GEMINI_PATH / GEMINI_CLI_PATH) to the Antigravity 'agy' binary path.`,
+      };
+    }
+  }
+
+  return {
+    ok: true,
+    available: true,
+    version: parsedVersion.raw,
+    path: resolvedBin,
+  };
+}
+

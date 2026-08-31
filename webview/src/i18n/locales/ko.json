@@ -967,6 +967,10 @@
         "omp": {
           "name": "OMP CLI",
           "description": "멀티 프로바이더 모델을 지원하는 Oh My Pi 터미널 코딩 에이전트"
+        },
+        "gemini": {
+          "name": "Gemini CLI",
+          "description": "Google Antigravity 터미널 코딩 에이전트 (agy)"
         }
       },
       "installDialog": {
@@ -1809,7 +1813,7 @@
       "label": "MiniMax Code"
     },
     "gemini": {
-      "label": "Gemini Cli"
+      "label": "Gemini CLI"
     },
     "opencode": {
       "label": "OpenCode"

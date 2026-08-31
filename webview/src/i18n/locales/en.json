@@ -664,6 +664,10 @@
         "dsh": {
           "name": "DeepSeek Harness",
           "description": "DeepSeek terminal agent CLI (dsh)"
+        },
+        "gemini": {
+          "name": "Gemini CLI",
+          "description": "Google Antigravity terminal coding agent (agy)"
         }
       },
       "installDialog": {
@@ -2199,7 +2203,7 @@
       "label": "MiniMax Code"
     },
     "gemini": {
-      "label": "Gemini Cli"
+      "label": "Gemini CLI"
     },
     "opencode": {
       "label": "OpenCode"

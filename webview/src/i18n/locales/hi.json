@@ -873,6 +873,10 @@
         "omp": {
           "name": "OMP CLI",
           "description": "मल्टी-प्रोवाइडर मॉडल सपोर्ट वाला Oh My Pi टर्मिनल कोडिंग एजेंट"
+        },
+        "gemini": {
+          "name": "Gemini CLI",
+          "description": "गूगल एंटीग्रेविटी टर्मिनल कोडिंग एजेंट (agy)"
         }
       },
       "installDialog": {
@@ -1707,7 +1711,7 @@
       "label": "MiniMax Code"
     },
     "gemini": {
-      "label": "Gemini Cli"
+      "label": "Gemini CLI"
     },
     "opencode": {
       "label": "OpenCode"

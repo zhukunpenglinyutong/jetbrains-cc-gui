@@ -60,8 +60,9 @@ describe('getStreamEndHandlingMode', () => {
     expect(getStreamEndHandlingMode('codex', false, 7)).toBe('full');
   });
 
-  it('uses minimal finalize for Codex when stream start was lost', () => {
+  it('uses minimal finalize for Codex and CLI providers when stream start was lost', () => {
     expect(getStreamEndHandlingMode('codex', false, 0)).toBe('minimal');
+    expect(getStreamEndHandlingMode('gemini', false, 0)).toBe('minimal');
   });
 
   it('skips finalize for non-Codex providers when no stream is active', () => {

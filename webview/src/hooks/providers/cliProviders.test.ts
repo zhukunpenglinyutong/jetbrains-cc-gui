@@ -14,7 +14,7 @@ describe('normalizeCliPermissionMode', () => {
   });
 
   it('keeps coercing unsupported plan/auto modes to default for the other CLI providers', () => {
-    for (const provider of ['pi', 'grok', 'kimi', 'opencode']) {
+    for (const provider of ['pi', 'grok', 'kimi', 'opencode', 'dsh', 'gemini', 'minimax']) {
       expect(normalizeCliPermissionMode('plan', provider)).toBe('default');
       expect(normalizeCliPermissionMode('auto', provider)).toBe('default');
       expect(normalizeCliPermissionMode('autoEdit', provider)).toBe('acceptEdits');
@@ -31,6 +31,7 @@ describe('normalizeCliPermissionMode', () => {
     expect(normalizeCliPermissionMode('acceptEdits', 'pi')).toBe('acceptEdits');
     expect(normalizeCliPermissionMode('autoEdit', 'pi')).toBe('acceptEdits');
     expect(normalizeCliPermissionMode('bypassPermissions', 'grok')).toBe('bypassPermissions');
+    expect(normalizeCliPermissionMode('acceptEdits', 'gemini')).toBe('acceptEdits');
   });
 });
 
@@ -57,6 +58,7 @@ describe('isCliOnlyProvider', () => {
   it('recognizes omp as a CLI-only provider', () => {
     expect(isCliOnlyProvider('omp')).toBe(true);
     expect(isCliOnlyProvider('pi')).toBe(true);
+    expect(isCliOnlyProvider('gemini')).toBe(true);
     expect(isCliOnlyProvider('claude')).toBe(false);
     expect(isCliOnlyProvider(undefined)).toBe(false);
   });

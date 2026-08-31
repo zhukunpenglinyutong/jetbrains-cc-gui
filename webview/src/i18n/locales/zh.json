@@ -664,6 +664,10 @@
         "dsh": {
           "name": "DeepSeek Harness",
           "description": "DeepSeek 终端智能体 CLI（dsh）"
+        },
+        "gemini": {
+          "name": "Gemini CLI",
+          "description": "Google Antigravity 终端代码智能体 (agy)"
         }
       },
       "installDialog": {
@@ -2205,7 +2209,7 @@
       "label": "MiniMax Code"
     },
     "gemini": {
-      "label": "Gemini Cli"
+      "label": "Gemini CLI"
     },
     "opencode": {
       "label": "OpenCode"

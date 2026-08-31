@@ -96,6 +96,10 @@ export const ModeSelect = ({
       // Headless CLI providers do not expose Claude/Codex native automatic reviewers.
       return AVAILABLE_MODES.filter((mode) => mode.id !== 'auto' && mode.id !== 'plan' && mode.id !== 'smol' && mode.id !== 'slow');
     }
+    if (provider === 'gemini') {
+      // Codex + headless CLI: plan/smol/slow modes are not exposed (always-approve / auto).
+      return AVAILABLE_MODES.filter((mode) => mode.id !== 'plan' && mode.id !== 'smol' && mode.id !== 'slow');
+    }
     // smol/slow are OMP-only model roles; hide them everywhere else.
     return AVAILABLE_MODES.filter((mode) => mode.id !== 'smol' && mode.id !== 'slow');
   }, [provider, ompRoles, codexNativeAutoReviewAvailable]);
