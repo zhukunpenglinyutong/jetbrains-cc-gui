@@ -78,6 +78,7 @@ export interface UseModelStatePersistenceOptions {
   setPiPermissionMode: (value: PermissionMode) => void;
   setOmpPermissionMode: (value: PermissionMode) => void;
   setDshPermissionMode: (value: PermissionMode) => void;
+  setGeminiPermissionMode: (value: PermissionMode) => void;
   setPermissionMode: (value: PermissionMode) => void;
   setLongContextEnabled: (value: boolean) => void;
   setReasoningEffort: (value: ReasoningEffort) => void;
@@ -104,6 +105,7 @@ export interface UseModelStatePersistenceOptions {
   piPermissionMode: PermissionMode;
   ompPermissionMode: PermissionMode;
   dshPermissionMode: PermissionMode;
+  geminiPermissionMode: PermissionMode;
   longContextEnabled: boolean;
   reasoningEffort: ReasoningEffort;
   codexFastMode: CodexFastMode;
@@ -142,6 +144,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     setPiPermissionMode,
     setOmpPermissionMode,
     setDshPermissionMode,
+    setGeminiPermissionMode,
     setPermissionMode,
     setLongContextEnabled,
     setReasoningEffort,
@@ -167,6 +170,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     piPermissionMode,
     ompPermissionMode,
     dshPermissionMode,
+    geminiPermissionMode,
     longContextEnabled,
     reasoningEffort,
     codexFastMode,
@@ -216,6 +220,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
       let restoredPiPermissionMode: PermissionMode = 'default';
       let restoredOmpPermissionMode: PermissionMode = 'default';
       let restoredDshPermissionMode: PermissionMode = 'default';
+      let restoredGeminiPermissionMode: PermissionMode = 'default';
       let restoredLongContextEnabled = true;
       let restoredCodexFastMode: CodexFastMode = 'normal';
       let restoredDshPreset = DSH_PRESET_NONE;
@@ -337,6 +342,9 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
         if (restoredDshMode) {
           restoredDshPermissionMode = normalizeCliPermissionMode(restoredDshMode, 'dsh');
         }
+        if (isValidPermissionMode(state.geminiPermissionMode)) {
+          restoredGeminiPermissionMode = normalizeCliPermissionMode(state.geminiPermissionMode, 'gemini');
+        }
 
         if (typeof state.longContextEnabled === 'boolean') {
           restoredLongContextEnabled = state.longContextEnabled;
@@ -451,7 +459,9 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
                   ? restoredOmpPermissionMode
                   : restoredProvider === 'dsh'
                     ? restoredDshPermissionMode
-                    : restoredClaudePermissionMode;
+                    : restoredProvider === 'gemini'
+                      ? restoredGeminiPermissionMode
+                      : restoredClaudePermissionMode;
       setClaudePermissionMode(restoredClaudePermissionMode);
       setCodexPermissionMode(restoredCodexPermissionMode);
       setGrokPermissionMode(restoredGrokPermissionMode);
@@ -461,6 +471,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
       setPiPermissionMode(restoredPiPermissionMode);
       setOmpPermissionMode(restoredOmpPermissionMode);
       setDshPermissionMode(restoredDshPermissionMode);
+      setGeminiPermissionMode(restoredGeminiPermissionMode);
       setPermissionMode(initialPermissionMode);
 
       let syncRetryCount = 0;
@@ -566,6 +577,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           piPermissionMode,
           ompPermissionMode,
           dshPermissionMode,
+          geminiPermissionMode,
           longContextEnabled,
           reasoningEffort,
           codexFastMode,
@@ -602,6 +614,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     piPermissionMode,
     ompPermissionMode,
     dshPermissionMode,
+    geminiPermissionMode,
     longContextEnabled,
     reasoningEffort,
     codexFastMode,

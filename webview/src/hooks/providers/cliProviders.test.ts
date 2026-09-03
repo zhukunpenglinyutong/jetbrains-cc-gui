@@ -14,10 +14,21 @@ describe('normalizeCliPermissionMode', () => {
   });
 
   it('keeps coercing unsupported plan/auto modes to default for the other CLI providers', () => {
-    for (const provider of ['pi', 'grok', 'kimi', 'opencode', 'dsh', 'gemini', 'minimax']) {
+    // gemini is excluded: its CLI natively supports the plan posture.
+    for (const provider of ['pi', 'grok', 'kimi', 'opencode', 'dsh', 'minimax']) {
       expect(normalizeCliPermissionMode('plan', provider)).toBe('default');
       expect(normalizeCliPermissionMode('auto', provider)).toBe('default');
       expect(normalizeCliPermissionMode('autoEdit', provider)).toBe('acceptEdits');
+    }
+  });
+
+  it('keeps plan for gemini (native `agy --mode plan` posture)', () => {
+    expect(normalizeCliPermissionMode('plan', 'gemini')).toBe('plan');
+  });
+
+  it('never coerces the sandbox mode for any provider', () => {
+    for (const provider of ['gemini', 'kimi', 'opencode', 'pi', 'dsh', 'omp', undefined]) {
+      expect(normalizeCliPermissionMode('sandbox', provider)).toBe('sandbox');
     }
   });
 

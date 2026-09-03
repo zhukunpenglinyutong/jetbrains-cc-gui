@@ -122,6 +122,32 @@ public class SessionSendServiceTest {
     }
 
     @Test
+    public void resolveEffectivePermissionModeKeepsPlanForGeminiNativePlanMode() {
+        // The gemini CLI natively supports plan/read-only (`agy --mode plan`),
+        // so unlike kimi/opencode/pi/dsh its plan must survive resolution.
+        assertEquals(
+                "plan",
+                SessionSendService.resolveEffectivePermissionMode("gemini", "plan", "default")
+        );
+        assertEquals(
+                "plan",
+                SessionSendService.resolveEffectivePermissionMode("gemini", null, "plan")
+        );
+    }
+
+    @Test
+    public void resolveEffectivePermissionModeNeverCoercesSandboxForAnyProvider() {
+        // The sandbox posture has no legacy downgrade path anywhere.
+        for (String provider : new String[] {"gemini", "kimi", "opencode", "pi", "dsh", "omp", "codex", "grok", "claude"}) {
+            assertEquals(
+                    "sandbox for " + provider,
+                    "sandbox",
+                    SessionSendService.resolveEffectivePermissionMode(provider, "sandbox", "default")
+            );
+        }
+    }
+
+    @Test
     public void permissionModeWhitelistAcceptsOmpModelRoles() {
         assertTrue(SessionState.isValidPermissionMode("smol"));
         assertTrue(SessionState.isValidPermissionMode("slow"));

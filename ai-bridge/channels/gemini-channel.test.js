@@ -186,8 +186,9 @@ test('gemini send routes through channel-manager and plumbs requestedCwd end to 
         requestedCwd: requested, // pre-clamp request (does not exist)
         model: '',
         reasoningEffort: '',
-        // Keys the Java payload carries from Story 1.1/1.5 that this story's
-        // channel does not consume yet — they must be accepted, not fatal.
+        // Extra keys the provider-neutral Java payload carries: permissionMode
+        // is forwarded (asserted in its own test below), while preset stays
+        // tolerated-but-unused — never fatal.
         permissionMode: 'acceptEdits',
         preset: null,
         attachments: [],
@@ -261,4 +262,57 @@ test('gemini send forwards the picked model as --model and never --effort', () =
   // And the turn still completes — the flags ride a real, successful send.
   const payload = JSON.parse(result.stdout.split('\n').find((l) => l.startsWith('{"success"')));
   assert.equal(payload.success, true);
+});
+
+test('gemini send maps stdin permissionMode onto the CLI posture flags', () => {
+  const cases = [
+    ['plan', ['--mode', 'plan']],
+    ['acceptEdits', ['--mode', 'accept-edits']],
+    ['bypassPermissions', ['--dangerously-skip-permissions']],
+    ['sandbox', ['--sandbox']],
+    ['default', []],
+  ];
+  for (const [mode, flags] of cases) {
+    const result = spawnSync(
+      process.execPath,
+      [channelManager, 'gemini', 'send'],
+      {
+        cwd: bridgeDir,
+        input: JSON.stringify({
+          message: 'hello world',
+          sessionId: '',
+          cwd: tmpdir(),
+          model: '',
+          reasoningEffort: '',
+          permissionMode: mode,
+        }),
+        env: baseEnv({
+          GEMINI_USE_STDIN: 'true',
+          GEMINI_BIN: FAKE_CLI,
+          FIXTURE_FILE: join(fixturesDir, 'success-text-turn.jsonl'),
+          FIXTURE_EXIT: '0',
+          FAKE_ECHO_ARGV: '1',
+        }),
+        encoding: 'utf8',
+        timeout: 15_000,
+      }
+    );
+
+    assert.equal(result.status, 0, `${mode}: ${result.stderr}`);
+    const argvLine = result.stderr.split('\n').find((l) => l.startsWith('ARGV:'));
+    assert.ok(argvLine, `${mode}: the fake CLI must echo its argv: ${result.stderr.slice(0, 600)}`);
+    const argv = JSON.parse(argvLine.slice('ARGV:'.length));
+    for (const flag of flags) {
+      assert.ok(argv.includes(flag), `${mode}: missing ${flag} in ${JSON.stringify(argv)}`);
+    }
+    if (flags.length === 0) {
+      assert.ok(
+        !argv.includes('--mode') && !argv.includes('--sandbox')
+        && !argv.includes('--dangerously-skip-permissions'),
+        `${mode}: posture flags leaked: ${JSON.stringify(argv)}`
+      );
+    }
+    const payload = JSON.parse(result.stdout.split('\n').find((l) => l.startsWith('{"success"')));
+    assert.equal(payload.success, true, `${mode}: turn must complete`);
+  }
 });

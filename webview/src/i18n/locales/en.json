@@ -2136,6 +2136,12 @@
       "shortLabel": "Full Auto",
       "tooltip": "Bypass all permission checks",
       "description": "Fully automated, bypassing all permission checks [Use with caution]"
+    },
+    "sandbox": {
+      "label": "Sandbox Mode",
+      "shortLabel": "Sandbox",
+      "tooltip": "Sandboxed execution (Gemini CLI only)",
+      "description": "Runs in a sandbox with terminal restrictions enabled (Gemini CLI)"
     }
   },
   "codexModes": {

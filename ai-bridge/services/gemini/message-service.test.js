@@ -35,7 +35,7 @@
  * classifier is exercised against a synthetic best-effort stderr string.
  */
 import { spawn } from 'node:child_process';
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -94,7 +94,8 @@ await sendMessage(
   process.env.SVC_MODEL || '',
   process.env.SVC_REASONING_EFFORT || '',
   attachments,
-  process.env.SVC_REQUESTED_CWD || ''
+  process.env.SVC_REQUESTED_CWD || '',
+  process.env.SVC_PERMISSION_MODE || ''
 );
 `;
 
@@ -112,6 +113,7 @@ function runService({
   model = '',
   reasoningEffort = '',
   requestedCwd = '',
+  permissionMode = '',
   attachmentsFile = '',
   geminiBin = '',
   echoArgv = false,
@@ -137,6 +139,7 @@ function runService({
   env.SVC_MODEL = model;
   env.SVC_REASONING_EFFORT = reasoningEffort;
   env.SVC_REQUESTED_CWD = requestedCwd;
+  env.SVC_PERMISSION_MODE = permissionMode;
   env.SVC_ATTACHMENTS_FILE = attachmentsFile;
 
   return new Promise((resolve, reject) => {
@@ -273,6 +276,87 @@ test('buildGeminiArgs forwards a picked model as --model <full-slug>', async () 
   // No separate effort flag: the tier is baked into the full slug, and some
   // slugs reject --effort outright.
   assert.ok(!args.includes('--effort'), JSON.stringify(args));
+});
+
+test('buildGeminiArgs appends the permission flags for each unified mode', async () => {
+  const { buildGeminiArgs } = await import('./message-service.js');
+  const table = [
+    ['plan', ['--mode', 'plan']],
+    ['acceptEdits', ['--mode', 'accept-edits']],
+    ['bypassPermissions', ['--dangerously-skip-permissions']],
+    ['sandbox', ['--sandbox']],
+  ];
+  for (const [mode, flags] of table) {
+    const args = buildGeminiArgs({ message: 'hi', permissionMode: mode });
+    assert.deepEqual(args.slice(-flags.length), flags, `mode=${mode}: ${JSON.stringify(args)}`);
+  }
+  // default (and anything unrecognized) spawns with zero posture flags.
+  for (const mode of ['default', '', undefined, 'bogus']) {
+    const args = buildGeminiArgs({ message: 'hi', permissionMode: mode });
+    assert.ok(!args.includes('--mode'), `no --mode for ${String(mode)}: ${JSON.stringify(args)}`);
+    assert.ok(!args.includes('--sandbox'), `no --sandbox for ${String(mode)}`);
+    assert.ok(!args.includes('--dangerously-skip-permissions'), `no bypass for ${String(mode)}`);
+  }
+});
+
+test('sendMessage forwards the permission mode into the spawned CLI args (AC1)', async () => {
+  const cases = [
+    ['plan', ['--mode', 'plan']],
+    ['acceptEdits', ['--mode', 'accept-edits']],
+    ['bypassPermissions', ['--dangerously-skip-permissions']],
+    ['sandbox', ['--sandbox']],
+    ['default', []],
+  ];
+  for (const [mode, flags] of cases) {
+    const run = await runService({
+      fixture: 'success-text-turn.jsonl',
+      permissionMode: mode,
+      echoArgv: true,
+    });
+    assert.equal(run.code, 0, `mode=${mode}: ${run.stderr.slice(0, 400)}`);
+    const argvLine = run.stderr.split('\n').find((l) => l.startsWith('ARGV:'));
+    assert.ok(argvLine, `missing ARGV echo for ${mode}: ${run.stderr.slice(0, 400)}`);
+    const argv = JSON.parse(argvLine.slice('ARGV:'.length));
+    for (const flag of flags) {
+      assert.ok(argv.includes(flag), `mode=${mode}: missing ${flag} in ${JSON.stringify(argv)}`);
+    }
+    if (flags.length === 0) {
+      assert.ok(
+        !argv.includes('--mode') && !argv.includes('--sandbox')
+        && !argv.includes('--dangerously-skip-permissions'),
+        `mode=${mode}: posture flags leaked: ${JSON.stringify(argv)}`
+      );
+    }
+  }
+});
+
+test('AC6 conformance: mode -> spawn flags -> CLI-acknowledged posture', async () => {
+  // The fixtures stand in for the live CLI behavior recorded from agy 1.1.25:
+  // every posture echoes init.permission_mode "request-review" except
+  // --dangerously-skip-permissions, which the CLI acknowledges as
+  // "always-proceed". Each mode must spawn exactly its flag set against the
+  // fixture whose echo matches that live observation, and the turn must
+  // still complete — UI label and backend posture can never diverge.
+  const table = [
+    ['default', [], 'success-text-turn.jsonl', 'request-review'],
+    ['plan', ['--mode', 'plan'], 'success-text-turn.jsonl', 'request-review'],
+    ['acceptEdits', ['--mode', 'accept-edits'], 'success-text-turn.jsonl', 'request-review'],
+    ['bypassPermissions', ['--dangerously-skip-permissions'], 'bypass-always-proceed.jsonl', 'always-proceed'],
+    ['sandbox', ['--sandbox'], 'success-text-turn.jsonl', 'request-review'],
+  ];
+  for (const [mode, flags, fixture, posture] of table) {
+    const run = await runService({ fixture, permissionMode: mode, echoArgv: true });
+    assert.equal(run.code, 0, `mode=${mode}: ${run.stderr.slice(0, 400)}`);
+    const argvLine = run.stderr.split('\n').find((l) => l.startsWith('ARGV:'));
+    const argv = JSON.parse(argvLine.slice('ARGV:'.length));
+    for (const flag of flags) {
+      assert.ok(argv.includes(flag), `mode=${mode}: missing ${flag} in ${JSON.stringify(argv)}`);
+    }
+    const init = JSON.parse(readFileSync(join(FIXTURES_DIR, fixture), 'utf8').split('\n')[0]).init;
+    assert.equal(init.permission_mode, posture,
+      `mode=${mode} spawns ${JSON.stringify(flags)}; live CLI acknowledges "${posture}"`);
+    assert.equal(finalPayload(run.stdout).success, true, `mode=${mode}: turn must complete`);
+  }
 });
 
 test('buildGeminiArgs omits --model for sentinel and blank model ids', async () => {

@@ -1652,6 +1652,11 @@
       "shortLabel": "Total",
       "tooltip": "Omitir todas las comprobaciones de permisos",
       "description": "Totalmente automatizado, omitiendo todas las comprobaciones de permisos [Usar con precaución]"
+    },
+    "sandbox": {
+      "label": "Modo Sandbox",
+      "tooltip": "Ejecución en sandbox (solo Gemini CLI)",
+      "description": "Se ejecuta en un sandbox con restricciones de terminal habilitadas (Gemini CLI)"
     }
   },
   "codexModes": {

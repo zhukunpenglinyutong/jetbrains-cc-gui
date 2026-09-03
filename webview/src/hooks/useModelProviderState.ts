@@ -78,6 +78,12 @@ export function useModelProviderState({ addToast, t, onSessionResetRequest }: Us
   // conversation reset below.
   const [selectedGeminiModel, setSelectedGeminiModel] = useState(GEMINI_DEFAULT_MODEL_ID);
 
+  // Gemini mode slot: the CLI natively supports every shared posture including
+  // plan and sandbox, so the choice is persisted un-coerced. Without a slot the
+  // mode rides the shared claude one and a provider switch away and back
+  // silently swaps the user's posture for claude's.
+  const [geminiPermissionMode, setGeminiPermissionMode] = useState<PermissionMode>('default');
+
   // External-facing ref so window callbacks can read the latest provider
   // without re-binding. Mirrored in an effect (bridge callbacks fire async,
   // after commit) so render stays free of ref writes.
@@ -166,6 +172,7 @@ export function useModelProviderState({ addToast, t, onSessionResetRequest }: Us
     setPiPermissionMode,
     setOmpPermissionMode,
     setDshPermissionMode,
+    setGeminiPermissionMode,
     setPermissionMode,
     setLongContextEnabled,
     setReasoningEffort,
@@ -191,6 +198,7 @@ export function useModelProviderState({ addToast, t, onSessionResetRequest }: Us
     piPermissionMode,
     ompPermissionMode,
     dshPermissionMode,
+    geminiPermissionMode,
     longContextEnabled,
     reasoningEffort,
     codexFastMode,
@@ -259,6 +267,7 @@ export function useModelProviderState({ addToast, t, onSessionResetRequest }: Us
         setPiPermissionMode,
         setOmpPermissionMode,
         setDshPermissionMode,
+        setGeminiPermissionMode,
         setSelectedOmpModel,
       });
       return;
@@ -279,6 +288,7 @@ export function useModelProviderState({ addToast, t, onSessionResetRequest }: Us
     setOmpPermissionMode,
     setSelectedOmpModel,
     setDshPermissionMode,
+    setGeminiPermissionMode,
   ]);
 
   const handleModelSelect = useCallback((modelId: string) => {
@@ -346,6 +356,7 @@ export function useModelProviderState({ addToast, t, onSessionResetRequest }: Us
       pi: piPermissionMode,
       omp: ompPermissionMode,
       dsh: dshPermissionMode,
+      gemini: geminiPermissionMode,
     }, codexSdkMeetsMinimum);
     setPermissionMode(modeToSet);
     // Dynamic omp roles are not in Java's static mode whitelist — the
@@ -378,6 +389,7 @@ export function useModelProviderState({ addToast, t, onSessionResetRequest }: Us
     piPermissionMode,
     ompPermissionMode,
     dshPermissionMode,
+    geminiPermissionMode,
     selectedCodexModel,
     selectedClaudeModel,
     selectedGrokModel,

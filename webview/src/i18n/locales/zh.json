@@ -2141,6 +2141,12 @@
       "shortLabel": "全自动",
       "tooltip": "绕过所有权限检查",
       "description": "完全自动化，绕过所有权限检查【谨慎使用】"
+    },
+    "sandbox": {
+      "label": "沙盒模式",
+      "shortLabel": "沙盒",
+      "tooltip": "在沙盒中执行（仅 Gemini CLI）",
+      "description": "在启用终端限制的沙盒中运行（Gemini CLI）"
     }
   },
   "codexModes": {

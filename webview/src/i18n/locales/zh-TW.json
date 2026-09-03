@@ -1693,6 +1693,12 @@
       "shortLabel": "全自動",
       "tooltip": "略過所有權限檢查",
       "description": "完全自動化，略過所有權限檢查【請謹慎使用】"
+    },
+    "sandbox": {
+      "label": "沙盒模式",
+      "shortLabel": "沙盒",
+      "tooltip": "在沙盒中執行（僅 Gemini CLI）",
+      "description": "於啟用終端限制的沙盒中執行（Gemini CLI）"
     }
   },
   "codexModes": {

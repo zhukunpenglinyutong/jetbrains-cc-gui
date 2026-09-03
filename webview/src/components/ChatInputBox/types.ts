@@ -193,6 +193,7 @@ export type PermissionMode =
   | 'bypassPermissions'
   | 'smol'
   | 'slow'
+  | 'sandbox'
   | (string & {});
 
 /**
@@ -245,6 +246,13 @@ export const AVAILABLE_MODES: ModeInfo[] = [
     icon: 'codicon-zap',
     tooltip: 'Bypass all permission checks',
     description: 'Fully automated, bypasses all permission checks [use with caution]',
+  },
+  {
+    id: 'sandbox',
+    label: 'Sandbox Mode',
+    icon: 'codicon-shield',
+    tooltip: 'Sandboxed execution (Gemini CLI only)',
+    description: 'Runs in a sandbox with terminal restrictions enabled (Gemini CLI)',
   },
   {
     id: 'smol',

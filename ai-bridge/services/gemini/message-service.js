@@ -7,7 +7,7 @@
  *
  * CLI:
  *   agy -p "<text>" --output-format stream-json --print-timeout 8760h
- *       [--conversation <id>]
+ *       [--conversation <id>] [--model <slug>] [<posture flags>]
  *
  * `--print-timeout` bounds the TOTAL wait for the print-mode response (live
  * probe: `--print-timeout 1s` aborts a turn that would have finished in ~6s
@@ -41,6 +41,7 @@ import { homedir } from 'os';
 import { resolve } from 'path';
 import { resolveGeminiCliPath, enrichPathWithBinDirs, commonCliBinDirs } from '../../utils/cli-path.js';
 import { runCliStreaming } from '../../utils/cli-spawn.js';
+import { PermissionMapperFactory } from '../../utils/permission-mapper.js';
 import {
   beginStream,
   emitJsonStringMarker,
@@ -197,7 +198,7 @@ export function normalizeGeminiModelId(value) {
   return trimmed;
 }
 
-export function buildGeminiArgs({ message, sessionId, model }) {
+export function buildGeminiArgs({ message, sessionId, model, permissionMode = '' }) {
   const args = [
     '-p',
     safePromptArg(message),
@@ -214,6 +215,10 @@ export function buildGeminiArgs({ message, sessionId, model }) {
   if (modelId) {
     args.push('--model', modelId);
   }
+  // The unified permission mode becomes the CLI posture flags (--mode plan,
+  // --dangerously-skip-permissions, ...). Unknown/blank modes map to no flags
+  // — deny-by-default is what the CLI does outside a posture anyway.
+  args.push(...PermissionMapperFactory.toProvider('gemini', permissionMode).args);
   return args;
 }
 
@@ -227,6 +232,8 @@ export function buildGeminiArgs({ message, sessionId, model }) {
  *   some slugs reject a separate --effort flag
  * @param {Array} [attachments] image attachments (fileName/mediaType/data)
  * @param {string} [requestedCwd] cwd as requested BEFORE Java's clamp (see header)
+ * @param {string} [permissionMode] unified mode id; mapped onto the CLI
+ *   posture flags (--mode plan, --sandbox, ...) for THIS turn
  */
 export async function sendMessage(
   message,
@@ -235,7 +242,8 @@ export async function sendMessage(
   model = '',
   reasoningEffort = '',
   attachments = [],
-  requestedCwd = ''
+  requestedCwd = '',
+  permissionMode = ''
 ) {
   beginStream();
 
@@ -297,7 +305,7 @@ export async function sendMessage(
     promptText = reformatFileLineReferences(promptText);
 
     const bin = resolveGeminiCliPath();
-    const args = buildGeminiArgs({ message: promptText, sessionId, model });
+    const args = buildGeminiArgs({ message: promptText, sessionId, model, permissionMode });
 
     const env = { ...process.env };
     const home = process.env.HOME || process.env.USERPROFILE || homedir();

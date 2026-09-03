@@ -232,6 +232,59 @@ export class CodexPermissionMapper {
 }
 
 /**
+ * Gemini (agy) Permission Mapping
+ *
+ * agy's print mode has no interactive permission prompt: actions outside the
+ * chosen posture are simply denied, so the posture is expressed entirely
+ * through spawn flags and enforced by the CLI. Flags live-verified against
+ * agy 1.1.25. The CLI acknowledges the posture in init.permission_mode —
+ * "always-proceed" for bypass, "request-review" for every other posture
+ * (plan additionally surfaces via expanded_commands).
+ */
+export class GeminiPermissionMapper {
+  /**
+   * Convert unified permission mode to agy spawn flags
+   * @param {string} unifiedMode - 'default'|'plan'|'acceptEdits'|'bypassPermissions'|'sandbox'
+   * @returns {{args: string[]}} flags to append to the spawn args
+   */
+  static toProvider(unifiedMode) {
+    const normalized = typeof unifiedMode === 'string' ? unifiedMode.trim().toLowerCase() : '';
+    switch (normalized) {
+      case 'plan':
+        return { args: ['--mode', 'plan'] };
+      case 'acceptedits':
+        return { args: ['--mode', 'accept-edits'] };
+      case 'bypasspermissions':
+        return { args: ['--dangerously-skip-permissions'] };
+      case 'sandbox':
+        return { args: ['--sandbox'] };
+      default:
+        // Deny-by-default outside the chosen posture — no auto-approve flags.
+        return { args: [] };
+    }
+  }
+
+  /**
+   * Convert agy spawn flags back to the unified permission mode
+   * @param {string[]|{args?: string[]}} providerConfig - args array or {args} wrapper
+   * @returns {string} unified permission mode ('default' when unrecognized)
+   */
+  static fromProvider(providerConfig) {
+    const args = Array.isArray(providerConfig)
+      ? providerConfig
+      : (Array.isArray(providerConfig && providerConfig.args) ? providerConfig.args : []);
+    if (args.includes('--dangerously-skip-permissions')) return 'bypassPermissions';
+    if (args.includes('--sandbox')) return 'sandbox';
+    const modeIndex = args.indexOf('--mode');
+    if (modeIndex !== -1) {
+      if (args[modeIndex + 1] === 'plan') return 'plan';
+      if (args[modeIndex + 1] === 'accept-edits') return 'acceptEdits';
+    }
+    return 'default';
+  }
+}
+
+/**
  * Permission Mapper Factory
  *
  * Automatically selects the correct mapper based on provider type.
@@ -245,7 +298,7 @@ export class PermissionMapperFactory {
   /**
    * Get permission mapper for a specific provider
    * @param {'claude'|'codex'|'gemini'} provider
-   * @returns {ClaudePermissionMapper|CodexPermissionMapper}
+   * @returns {ClaudePermissionMapper|CodexPermissionMapper|GeminiPermissionMapper}
    */
   static getMapper(provider) {
     switch (provider) {
@@ -254,8 +307,7 @@ export class PermissionMapperFactory {
       case 'codex':
         return CodexPermissionMapper;
       case 'gemini':
-        // TODO: Implement GeminiPermissionMapper when adding Gemini support
-        throw new Error('Gemini permission mapping not yet implemented');
+        return GeminiPermissionMapper;
       default:
         throw new Error(`Unknown provider: ${provider}`);
     }

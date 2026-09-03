@@ -54,16 +54,15 @@ export async function handleGeminiCommand(command, args, stdinData) {
           // cwd as requested BEFORE Java's clamp — enables the visible
           // substitution notice (AC5). `cwd` stays the guarded workspace.
           requestedCwd,
+          permissionMode,
           // `reasoningEffort` rides along in the Java stdin payload
           // (MarkerCliBridge is provider-neutral) but is deliberately ignored:
           // the effort tier is baked into the full model slug and some slugs
           // reject a separate --effort flag, so none is ever sent.
           reasoningEffort: _ignoredReasoningEffort,
-          // `permissionMode` and `preset` ride along in the Java stdin payload
-          // (MarkerCliBridge is provider-neutral) but are deliberately ignored
-          // here: agy print mode has no equivalent flags in this story.
-          // Story 1.5 (permission modes) owns wiring them through.
-          permissionMode: _ignoredPermissionMode,
+          // `preset` rides along in the Java stdin payload (MarkerCliBridge is
+          // provider-neutral) but is deliberately ignored: gemini has no
+          // per-turn preset concept.
           preset: _ignoredPreset,
         } = stdinData;
         if (isBlankMessage(message)) {
@@ -77,7 +76,10 @@ export async function handleGeminiCommand(command, args, stdinData) {
           model || '',
           '',
           attachments || [],
-          requestedCwd || ''
+          requestedCwd || '',
+          // Applied per turn: the unified mode becomes the CLI posture flags
+          // inside the service (headless print mode has no mid-turn switch).
+          typeof permissionMode === 'string' ? permissionMode : ''
         );
       } else {
         const message = args[0];

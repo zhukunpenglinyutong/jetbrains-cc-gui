@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { OMP_ROLE_MODELS, type ModelInfo } from '../types';
+import { OMP_ROLE_MODELS, AVAILABLE_MODES, isValidPermissionMode, type ModelInfo } from '../types';
 import { ModeSelect } from './ModeSelect';
 
 const LABELS: Record<string, string> = {
@@ -124,10 +124,28 @@ describe('ModeSelect', () => {
 
   it('hides plan/smol/slow for the other CLI providers', () => {
     // omp is excluded: it has its own role-based mode list (smol/slow/plan).
-    for (const provider of ['codex', 'grok', 'kimi', 'opencode', 'pi', 'dsh', 'gemini']) {
+    // gemini is excluded too: its CLI natively exposes the plan posture.
+    for (const provider of ['codex', 'grok', 'kimi', 'minimax', 'opencode', 'pi', 'dsh']) {
       expect(openAndGetOptionIds(provider)).toEqual(['default', 'acceptEdits', 'bypassPermissions']);
       cleanup();
     }
+  });
+
+  it('shows all five gemini postures including plan and sandbox', () => {
+    expect(openAndGetOptionIds('gemini')).toEqual(['default', 'plan', 'acceptEdits', 'bypassPermissions', 'sandbox']);
+    cleanup();
+  });
+
+  it('reduces omp to default plus the dynamic roles', () => {
+    // Stable array across re-renders: a fresh [] on the post-click render
+    // would change the useMemo deps and drop the role options. Default comes
+    // first, then the roles in payload order.
+    ompRolesState.roles = [
+      { id: 'smol', label: 'Smol', description: 'fast' },
+      { id: 'slow', label: 'Slow', description: 'reasoning' },
+      { id: 'plan', label: 'Plan', description: 'planning' },
+    ];
+    expect(openAndGetOptionIds('omp')).toEqual(['default', 'smol', 'slow', 'plan']);
   });
 
   it('hides smol/slow for the claude provider while keeping native auto and Full Auto distinct', () => {
@@ -158,4 +176,18 @@ describe('ModeSelect', () => {
     expect(screen.getByTestId('mode-option-bypassPermissions')).toBeTruthy();
   });
 
+});
+
+describe('sandbox mode id', () => {
+  it('is part of the shared AVAILABLE_MODES vocabulary', () => {
+    const sandbox = AVAILABLE_MODES.find((mode) => mode.id === 'sandbox');
+    expect(sandbox).toBeDefined();
+    expect(sandbox?.icon).toBeTruthy();
+    expect(sandbox?.tooltip).toBeTruthy();
+    expect(sandbox?.description).toBeTruthy();
+  });
+
+  it('is accepted by isValidPermissionMode (set_mode gate)', () => {
+    expect(isValidPermissionMode('sandbox')).toBe(true);
+  });
 });

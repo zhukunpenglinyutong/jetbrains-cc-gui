@@ -1657,6 +1657,11 @@
       "shortLabel": "完全自動",
       "tooltip": "すべての権限チェックをバイパス",
       "description": "完全自動、すべての権限チェックをバイパス[注意して使用]"
+    },
+    "sandbox": {
+      "label": "サンドボックスモード",
+      "tooltip": "サンドボックスで実行（Gemini CLI のみ）",
+      "description": "ターミナル制限を有効にしたサンドボックスで実行します（Gemini CLI）"
     }
   },
   "codexModes": {

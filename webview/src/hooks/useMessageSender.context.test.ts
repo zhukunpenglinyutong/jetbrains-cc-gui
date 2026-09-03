@@ -252,6 +252,40 @@ describe('useMessageSender - /context command', () => {
     expect(payload).not.toHaveProperty('reasoningEffort');
   });
 
+  it('carries the gemini plan mode onto the send payload unchanged', () => {
+    const opts = createOptions({
+      currentProvider: 'gemini',
+      selectedModel: 'gemini-3.7-flash-high',
+      permissionMode: 'plan',
+    });
+
+    const { result } = renderHook(() => useMessageSender(opts));
+
+    act(() => {
+      result.current.handleSubmit('hello');
+    });
+
+    const payload = getBridgePayload('send_message');
+    expect(payload.permissionMode).toBe('plan');
+  });
+
+  it('carries the gemini sandbox mode onto the send payload unchanged', () => {
+    const opts = createOptions({
+      currentProvider: 'gemini',
+      selectedModel: 'gemini-3.7-flash-high',
+      permissionMode: 'sandbox',
+    });
+
+    const { result } = renderHook(() => useMessageSender(opts));
+
+    act(() => {
+      result.current.handleSubmit('hello');
+    });
+
+    const payload = getBridgePayload('send_message');
+    expect(payload.permissionMode).toBe('sandbox');
+  });
+
   it('includes explicit non-default Claude reasoning effort in plain message payload', () => {
     const opts = createOptions({
       reasoningEffort: 'low',

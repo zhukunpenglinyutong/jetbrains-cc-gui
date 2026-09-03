@@ -25,13 +25,19 @@ export function ompModeForModelId(modelId: string, roles: ModelInfo[]): Permissi
 }
 
 /**
- * Plan mode and provider-native auto review are not exposed for headless CLI providers,
- * so they are coerced to default. The legacy autoEdit alias is migrated to acceptEdits
- * (or default for OMP), while OMP preserves model-role ids (default / smol / slow / plan).
+ * Plan mode and provider-native auto review are not exposed for headless CLI
+ * providers, so they are coerced to default. The legacy autoEdit alias is
+ * migrated to acceptEdits (or default for OMP), while OMP preserves model-role
+ * ids (default / smol / slow / plan). Gemini is the other exception: the CLI
+ * natively supports plan/read-only (`agy --mode plan`), so its modes are
+ * preserved as-is.
  */
 export function normalizeCliPermissionMode(mode: PermissionMode, provider?: string | null): PermissionMode {
   if (provider === 'omp') {
     return mode === 'auto' || mode === 'autoEdit' ? 'default' : mode;
+  }
+  if (provider === 'gemini') {
+    return mode;
   }
   if (mode === 'autoEdit') {
     return 'acceptEdits';

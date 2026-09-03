@@ -1747,6 +1747,11 @@
       "shortLabel": "완전 자동",
       "tooltip": "모든 권한 검사 우회",
       "description": "완전 자동화, 모든 권한 검사를 우회합니다 [주의하여 사용]"
+    },
+    "sandbox": {
+      "label": "샌드박스 모드",
+      "tooltip": "샌드박스에서 실행(Gemini CLI 전용)",
+      "description": "터미널 제한이 활성화된 샌드박스에서 실행합니다(Gemini CLI)"
     }
   },
   "codexModes": {

@@ -170,4 +170,17 @@ public class GeminiCliBridgeTest {
         assertEquals("shot.png", payload.getAsJsonArray("attachments").get(0)
                 .getAsJsonObject().get("fileName").getAsString());
     }
+
+    @Test
+    public void stdinPayloadForwardsNonDefaultGeminiPermissionModesUnchanged() {
+        // The gemini postures plan and sandbox are legal for the CLI; the
+        // stdin hop is provider-neutral and must forward whichever mode
+        // SessionSendService resolved — never downgrade it here.
+        for (String mode : new String[]{"plan", "sandbox", "acceptEdits", "bypassPermissions"}) {
+            com.google.gson.JsonObject payload = MarkerCliBridge.buildCliStdinPayload(
+                    "hello", "", "/proj/base", "", "medium",
+                    java.util.Collections.emptyList(), mode, null, null);
+            assertEquals(mode, payload.get("permissionMode").getAsString());
+        }
+    }
 }

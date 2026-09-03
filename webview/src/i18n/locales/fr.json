@@ -1652,6 +1652,11 @@
       "shortLabel": "Totale",
       "tooltip": "Contourner toutes les vérifications d'autorisation",
       "description": "Entièrement automatisé, contourne toutes les vérifications d'autorisation [À utiliser avec prudence]"
+    },
+    "sandbox": {
+      "label": "Mode Sandbox",
+      "tooltip": "Exécution en sandbox (Gemini CLI uniquement)",
+      "description": "S'exécute dans un sandbox avec des restrictions de terminal activées (Gemini CLI)"
     }
   },
   "codexModes": {

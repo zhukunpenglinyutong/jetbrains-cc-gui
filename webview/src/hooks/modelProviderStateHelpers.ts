@@ -40,6 +40,7 @@ export interface ProviderPermissionModes {
   pi: PermissionMode;
   omp: PermissionMode;
   dsh: PermissionMode;
+  gemini: PermissionMode;
 }
 
 /** Model shown for the active provider; unknown ids fall back to Claude. */
@@ -80,9 +81,7 @@ export function resolveProviderPermissionMode(
     case 'pi': return normalizeCliPermissionMode(modes.pi, providerId);
     case 'omp': return normalizeCliPermissionMode(modes.omp, providerId);
     case 'dsh': return normalizeCliPermissionMode(modes.dsh, providerId);
-    // No dedicated mode slot yet — gemini keeps the shared mode, coerced to
-    // the CLI-legal set (plan is not exposed for headless CLI providers).
-    case 'gemini': return normalizeCliPermissionMode(modes.claude, providerId);
+    case 'gemini': return normalizeCliPermissionMode(modes.gemini, providerId);
     default: return modes.claude;
   }
 }
@@ -122,6 +121,7 @@ export interface CliModeSelectActions {
   setPiPermissionMode: (mode: PermissionMode) => void;
   setOmpPermissionMode: (mode: PermissionMode) => void;
   setDshPermissionMode: (mode: PermissionMode) => void;
+  setGeminiPermissionMode: (mode: PermissionMode) => void;
   setSelectedOmpModel: (modelId: string) => void;
 }
 
@@ -159,6 +159,7 @@ export function applyCliModeSelect(
       return;
     }
     case 'dsh': actions.setDshPermissionMode(cliMode); break;
+    case 'gemini': actions.setGeminiPermissionMode(cliMode); break;
   }
   sendBridgeEvent('set_mode', cliMode);
 }

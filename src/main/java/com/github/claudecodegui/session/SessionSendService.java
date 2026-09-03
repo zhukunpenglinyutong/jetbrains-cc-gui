@@ -260,14 +260,17 @@ public class SessionSendService {
 
         boolean isProviderWithoutPlanMode = "codex".equals(provider)
                 || "grok".equals(provider)
-                || (SessionProviderRouter.isCliProvider(provider) && !"omp".equals(provider));
+                || (SessionProviderRouter.isCliProvider(provider)
+                        && !"omp".equals(provider) && !"gemini".equals(provider));
         boolean isCliProviderWithoutNativeAuto = SessionProviderRouter.isCliProvider(provider);
         // Codex and Grok run as full SDK bridges (not MarkerCli providers, so they
         // are absent from CLI_PROVIDER_IDS), but like the headless CLI providers
         // they have no plan-mode equivalent — so plan still downgrades to default.
         // EXCEPT omp, where "plan" is a model role (`omp --model plan`), not Claude
-        // plan mode. Native auto review is limited to Claude/Codex; Grok retains its
-        // existing internal auto-approve alias, while the Webview still hides auto there.
+        // plan mode, and gemini, whose CLI natively supports plan/read-only
+        // (`agy --mode plan`). Native auto review is limited to Claude/Codex;
+        // Grok retains its existing internal auto-approve alias, while the
+        // Webview still hides auto there.
         if (isProviderWithoutPlanMode
                 && "plan".equals(resolvedMode)) {
             return "default";

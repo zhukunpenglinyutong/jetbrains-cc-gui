@@ -32,6 +32,7 @@ function makeOptions(overrides: Partial<UseModelStatePersistenceOptions> = {}): 
     setPiPermissionMode: vi.fn(),
     setOmpPermissionMode: vi.fn(),
     setDshPermissionMode: vi.fn(),
+    setGeminiPermissionMode: vi.fn(),
     setPermissionMode: vi.fn(),
     setLongContextEnabled: vi.fn(),
     setReasoningEffort: vi.fn(),
@@ -57,6 +58,7 @@ function makeOptions(overrides: Partial<UseModelStatePersistenceOptions> = {}): 
     piPermissionMode: 'default' as PermissionMode,
     ompPermissionMode: 'default' as PermissionMode,
     dshPermissionMode: 'default' as PermissionMode,
+    geminiPermissionMode: 'default' as PermissionMode,
     longContextEnabled: false,
     reasoningEffort: 'medium',
     codexFastMode: 'normal',
@@ -577,5 +579,85 @@ describe('useModelStatePersistence — gemini model slot (Story 1.4)', () => {
     vi.advanceTimersByTime(200);
 
     expect(bridgeEventsFor('set_model')).toEqual([['set_model', 'auto']]);
+  });
+});
+
+describe('useModelStatePersistence — gemini permission mode slot', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sendBridgeEventMock.mockClear();
+    (window as unknown as { sendToJava?: unknown }).sendToJava = () => {};
+    window.__CCGUI_PAGE_CONTEXT_READY__ = true;
+    window.__CCGUI_PAGE_LOAD_KIND__ = 'initial_load';
+    window.__CCGUI_RECOVERY_RELOAD__ = false;
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    delete (window as unknown as { sendToJava?: unknown }).sendToJava;
+    delete window.__CCGUI_PAGE_CONTEXT_READY__;
+    delete window.__CCGUI_PAGE_LOAD_KIND__;
+    delete window.__CCGUI_RECOVERY_RELOAD__;
+    delete window.__CCGUI_RECOVERY_STATE_APPLIED__;
+    delete (window as unknown as { __INITIAL_TAB_PROVIDER__?: unknown }).__INITIAL_TAB_PROVIDER__;
+    delete (window as unknown as { __INITIAL_TAB_MODEL__?: unknown }).__INITIAL_TAB_MODEL__;
+  });
+
+  it('restores a saved gemini plan mode onto the gemini slot and the active mode', () => {
+    const setGeminiPermissionMode = vi.fn();
+    const setPermissionMode = vi.fn();
+    localStorage.setItem('model-selection-state', JSON.stringify({
+      provider: 'gemini',
+      geminiPermissionMode: 'plan',
+    }));
+
+    renderHook(() => useModelStatePersistence(makeOptions({ setGeminiPermissionMode, setPermissionMode })));
+    vi.advanceTimersByTime(200);
+
+    expect(setGeminiPermissionMode).toHaveBeenCalledWith('plan');
+    expect(setPermissionMode).toHaveBeenCalledWith('plan');
+  });
+
+  it('restores the sandbox mode — no restore path may coerce or drop it', () => {
+    const setGeminiPermissionMode = vi.fn();
+    const setPermissionMode = vi.fn();
+    localStorage.setItem('model-selection-state', JSON.stringify({
+      provider: 'gemini',
+      geminiPermissionMode: 'sandbox',
+    }));
+
+    renderHook(() => useModelStatePersistence(makeOptions({ setGeminiPermissionMode, setPermissionMode })));
+    vi.advanceTimersByTime(200);
+
+    expect(setGeminiPermissionMode).toHaveBeenCalledWith('sandbox');
+    expect(setPermissionMode).toHaveBeenCalledWith('sandbox');
+  });
+
+  it('persists the gemini permission mode in the snapshot', () => {
+    renderHook(() => useModelStatePersistence(makeOptions({
+      currentProvider: 'gemini',
+      geminiPermissionMode: 'bypassPermissions',
+    })));
+
+    const saved = JSON.parse(localStorage.getItem('model-selection-state') ?? '{}');
+    expect(saved.geminiPermissionMode).toBe('bypassPermissions');
+  });
+
+  it('keeps gemini isolated from the shared claude slot on restore', () => {
+    // Snapshots saved before the gemini slot existed carry only the shared
+    // claude mode. Booting into gemini must not inherit claude's posture —
+    // the displayed mode and the mode sent with the next turn would else
+    // claim a posture the gemini turn never asked for.
+    const setPermissionMode = vi.fn();
+    localStorage.setItem('model-selection-state', JSON.stringify({
+      provider: 'gemini',
+      claudePermissionMode: 'bypassPermissions',
+    }));
+
+    renderHook(() => useModelStatePersistence(makeOptions({ setPermissionMode })));
+    vi.advanceTimersByTime(200);
+
+    expect(setPermissionMode).toHaveBeenCalledWith('default');
   });
 });

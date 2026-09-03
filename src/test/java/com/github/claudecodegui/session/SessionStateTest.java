@@ -108,4 +108,17 @@ public class SessionStateTest {
         // The initial value must never be a retired id (#1678).
         Assert.assertEquals("claude-sonnet-5", state.getModel());
     }
+
+    @Test
+    public void permissionModeWhitelistAcceptsEveryWebviewModeId() {
+        // Unknown ids are silently rejected by set_mode, so any id the webview
+        // offers (including the gemini sandbox posture) must be whitelisted here.
+        for (String mode : new String[] {
+            "default", "plan", "acceptEdits", "autoEdit", "bypassPermissions", "smol", "slow", "sandbox",
+        }) {
+            Assert.assertTrue("whitelist must accept " + mode, SessionState.isValidPermissionMode(mode));
+        }
+        Assert.assertFalse(SessionState.isValidPermissionMode(null));
+        Assert.assertFalse(SessionState.isValidPermissionMode("bogus"));
+    }
 }
