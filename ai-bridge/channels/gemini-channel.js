@@ -8,6 +8,7 @@ import {
   endStream,
 } from '../utils/marker-protocol.js';
 import { sendMessage as geminiSendMessage } from '../services/gemini/message-service.js';
+import { listModels as geminiListModels } from '../services/gemini/models-service.js';
 
 /**
  * Reject a blank send without spawning `agy -p ""` (which the CLI answers with
@@ -49,11 +50,15 @@ export async function handleGeminiCommand(command, args, stdinData) {
           sessionId,
           cwd,
           model,
-          reasoningEffort,
           attachments,
           // cwd as requested BEFORE Java's clamp — enables the visible
           // substitution notice (AC5). `cwd` stays the guarded workspace.
           requestedCwd,
+          // `reasoningEffort` rides along in the Java stdin payload
+          // (MarkerCliBridge is provider-neutral) but is deliberately ignored:
+          // the effort tier is baked into the full model slug and some slugs
+          // reject a separate --effort flag, so none is ever sent.
+          reasoningEffort: _ignoredReasoningEffort,
           // `permissionMode` and `preset` ride along in the Java stdin payload
           // (MarkerCliBridge is provider-neutral) but are deliberately ignored
           // here: agy print mode has no equivalent flags in this story.
@@ -70,7 +75,7 @@ export async function handleGeminiCommand(command, args, stdinData) {
           sessionId || '',
           cwd || '',
           model || '',
-          reasoningEffort || '',
+          '',
           attachments || [],
           requestedCwd || ''
         );
@@ -86,12 +91,7 @@ export async function handleGeminiCommand(command, args, stdinData) {
     }
 
     case 'listModels':
-      console.log(JSON.stringify({
-        success: true,
-        provider: 'gemini',
-        defaultModel: 'auto',
-        models: [],
-      }));
+      geminiListModels();
       break;
 
     default:

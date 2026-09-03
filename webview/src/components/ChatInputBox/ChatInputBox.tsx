@@ -263,6 +263,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
           onOpenCliSettings={onOpenCliSettings}
           longContextEnabled={longContextEnabled}
           onLongContextChange={onLongContextChange}
+          addToast={addToast}
           fileCompletion={fileCompletion}
           commandCompletion={commandCompletion}
           agentCompletion={agentCompletion}

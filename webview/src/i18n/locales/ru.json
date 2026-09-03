@@ -1578,6 +1578,9 @@
     }
   },
   "models": {
+    "gemini": {
+      "vanishedSelection": "Модель {{model}} больше недоступна — включена модель по умолчанию для CLI."
+    },
     "addModel": "Добавить модель",
     "searchPlaceholder": "Поиск моделей",
     "noModelsFound": "Модели не найдены",

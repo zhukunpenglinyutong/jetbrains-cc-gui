@@ -161,6 +161,26 @@ public class SessionSendServiceTest {
     }
 
     @Test
+    public void normalizeCliModelForProviderKeepsAgyCrossVendorCatalogSlugs() {
+        // The live agy catalog sells cross-vendor models — they are real picks,
+        // not leftovers, and must reach the CLI verbatim.
+        assertEquals("claude-sonnet-4-6",
+                SessionSendService.normalizeCliModelForProvider("gemini", "claude-sonnet-4-6"));
+        assertEquals("claude-opus-4-6-thinking",
+                SessionSendService.normalizeCliModelForProvider("gemini", "claude-opus-4-6-thinking"));
+        assertEquals("gpt-oss-120b-medium",
+                SessionSendService.normalizeCliModelForProvider("gemini", "gpt-oss-120b-medium"));
+        // Gemini-family slugs keep flowing, sentinel still collapses to default.
+        assertEquals("gemini-3.7-flash-high",
+                SessionSendService.normalizeCliModelForProvider("gemini", "gemini-3.7-flash-high"));
+        assertNull(SessionSendService.normalizeCliModelForProvider("gemini", "auto"));
+        // Other CLI providers keep dropping cross-vendor leftovers.
+        assertNull(SessionSendService.normalizeCliModelForProvider("kimi", "claude-sonnet-4-6"));
+        assertNull(SessionSendService.normalizeCliModelForProvider("kimi", "gpt-oss-120b-medium"));
+        assertNull(SessionSendService.normalizeCliModelForProvider("opencode", "claude-sonnet-4-6"));
+    }
+
+    @Test
     public void normalizeRequestedReasoningEffortRejectsBlankAndUnknownValues() {
         assertNull(SessionSendService.normalizeRequestedReasoningEffort(null));
         assertNull(SessionSendService.normalizeRequestedReasoningEffort(" "));
@@ -349,6 +369,10 @@ public class SessionSendServiceTest {
         String requested = Paths.get(tmpdir(), "outside-project-" + System.nanoTime()).toString();
         SessionState state = new SessionState();
         state.setCwd(requested);
+        // A fresh SessionState defaults its model to a claude slug; the gemini
+        // flow always carries an explicit model from the webview, so seed the
+        // sentinel the way a real gemini turn does.
+        state.setModel("auto");
         CapturingBridge bridge = new CapturingBridge();
         Project project = projectWithBase(projectDir.toString());
         SessionSendService service = new SessionSendService(
@@ -383,6 +407,10 @@ public class SessionSendServiceTest {
         assertEquals("hello", bridge.message);
         assertEquals("default", bridge.permissionMode);
         assertEquals("medium", bridge.reasoningEffort);
+        // The 'auto' sentinel collapses to the empty string — omitting --model
+        // lets the CLI pick its own default. Cross-vendor slugs
+        // (claude-sonnet-4-6, gpt-oss-120b-medium) pass through untouched:
+        // the agy catalog sells them for real, so no vendor-prefix strip.
         assertEquals("", bridge.model);
         assertNull(bridge.dshPreset);
     }

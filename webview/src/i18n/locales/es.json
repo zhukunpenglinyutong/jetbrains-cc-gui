@@ -1552,6 +1552,9 @@
     }
   },
   "models": {
+    "gemini": {
+      "vanishedSelection": "El modelo {{model}} ya no está disponible; se ha vuelto al modelo predeterminado de la CLI."
+    },
     "addModel": "Agregar modelo",
     "searchPlaceholder": "Buscar modelos",
     "noModelsFound": "No se encontraron modelos",

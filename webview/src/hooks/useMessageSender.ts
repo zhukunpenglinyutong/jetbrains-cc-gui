@@ -29,6 +29,11 @@ function createContextUsageRequestId(): string {
 }
 
 function shouldSendReasoningEffort(provider: string, model: string): boolean {
+  // Gemini never carries a separate effort value: the tier is baked into the
+  // full model slug and some catalog slugs reject a dedicated effort flag.
+  if (provider === 'gemini') {
+    return false;
+  }
   if (provider !== 'claude') {
     return true;
   }

@@ -26,6 +26,12 @@ const FAKE_CLI_BODY = `
 import fs from 'node:fs';
 const fixture = process.env.FIXTURE_FILE || '';
 const exitCode = Number(process.env.FIXTURE_EXIT ?? '0');
+// With FAKE_ECHO_ARGV=1 the fake reports its argv on stderr; cli-spawn
+// forwards CLI stderr to the channel's stderr, so the test can pin the exact
+// flags the dispatcher handed the CLI.
+if (process.env.FAKE_ECHO_ARGV === '1') {
+  process.stderr.write('ARGV:' + JSON.stringify(process.argv.slice(2)) + '\\n');
+}
 const payload = fixture
   ? fs.readFileSync(fixture, 'utf8').split('\\n').filter(Boolean).map((l) => l + '\\n').join('')
   : '';
@@ -64,22 +70,58 @@ function baseEnv(extra = {}) {
   return env;
 }
 
-test('gemini is dispatched by channel-manager: listModels answers with the provider id (P-8d)', () => {
+test('gemini is dispatched by channel-manager: listModels answers the live catalog (P-8d)', () => {
   const result = spawnSync(process.execPath, [channelManager, 'gemini', 'listModels'], {
     cwd: bridgeDir,
     input: '',
     encoding: 'utf8',
     timeout: 15_000,
+    env: baseEnv({
+      GEMINI_BIN: FAKE_CLI,
+      FIXTURE_FILE: join(fixturesDir, 'models-catalog.tsv'),
+      FIXTURE_EXIT: '0',
+    }),
   });
 
   assert.equal(result.status, 0, result.stderr);
   const response = JSON.parse(result.stdout.trim());
-  assert.deepEqual(response, {
-    success: true,
-    provider: 'gemini',
-    defaultModel: 'auto',
-    models: [],
+  assert.equal(response.success, true);
+  assert.equal(response.provider, 'gemini');
+  assert.equal(response.defaultModel, 'auto');
+  // The 'auto' sentinel leads; the catalog follows verbatim.
+  assert.equal(response.models[0].id, 'auto');
+  assert.equal(response.models[0].label, 'Default (CLI)');
+  assert.equal(response.models.length, 15, JSON.stringify(response.models));
+  assert.deepEqual(
+    response.models.slice(1).map((m) => m.id),
+    ['gemini-3.8-flash-high', 'gemini-3.8-flash-medium', 'gemini-3.8-flash-low',
+      'gemini-3.7-flash-high', 'gemini-3.7-flash-medium', 'gemini-3.7-flash-low',
+      'gemini-3.6-flash-high', 'gemini-3.6-flash-medium', 'gemini-3.6-flash-low',
+      'gemini-3.1-pro-high', 'gemini-3.1-pro-low',
+      'claude-sonnet-4-6', 'claude-opus-4-6-thinking', 'gpt-oss-120b-medium'],
+  );
+});
+
+test('gemini listModels answers an honest failure payload on a CLI error (AC4)', () => {
+  const result = spawnSync(process.execPath, [channelManager, 'gemini', 'listModels'], {
+    cwd: bridgeDir,
+    input: '',
+    encoding: 'utf8',
+    timeout: 15_000,
+    env: baseEnv({
+      GEMINI_BIN: FAKE_CLI,
+      FIXTURE_FILE: join(fixturesDir, 'models-catalog.tsv'),
+      FIXTURE_EXIT: '3',
+    }),
   });
+
+  assert.equal(result.status, 0, result.stderr);
+  const response = JSON.parse(result.stdout.trim());
+  assert.equal(response.success, false);
+  assert.equal(response.provider, 'gemini');
+  assert.equal(response.defaultModel, 'auto');
+  assert.deepEqual(response.models, []);
+  assert.match(response.error, /exited with code 3/);
 });
 
 test('an empty message is rejected through the marker protocol, never spawned (P-7)', () => {
@@ -180,4 +222,43 @@ test('gemini send routes through channel-manager and plumbs requestedCwd end to 
   assert.ok(notice, `substitution must be visible end to end: ${result.stdout.slice(0, 600)}`);
   assert.ok(notice.includes(requested));
   assert.match(notice, /\(directory does not exist\)\./);
+});
+
+test('gemini send forwards the picked model as --model and never --effort', () => {
+  const result = spawnSync(
+    process.execPath,
+    [channelManager, 'gemini', 'send'],
+    {
+      cwd: bridgeDir,
+      input: JSON.stringify({
+        message: 'hello world',
+        sessionId: '',
+        cwd: tmpdir(),
+        model: 'gemini-3.7-flash-medium',
+        reasoningEffort: '', // the webview never sends an effort for gemini
+      }),
+      env: baseEnv({
+        GEMINI_USE_STDIN: 'true',
+        GEMINI_BIN: FAKE_CLI,
+        FIXTURE_FILE: join(fixturesDir, 'success-text-turn.jsonl'),
+        FIXTURE_EXIT: '0',
+        FAKE_ECHO_ARGV: '1',
+      }),
+      encoding: 'utf8',
+      timeout: 15_000,
+    }
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  // The argv echo rides the CLI stderr bridge into the channel's stderr.
+  const argvLine = result.stderr.split('\n').find((l) => l.startsWith('ARGV:'));
+  assert.ok(argvLine, `the fake CLI must echo its argv: ${result.stderr.slice(0, 600)}`);
+  const argv = JSON.parse(argvLine.slice('ARGV:'.length));
+  const modelIndex = argv.indexOf('--model');
+  assert.ok(modelIndex >= 0, `--model must be forwarded: ${JSON.stringify(argv)}`);
+  assert.equal(argv[modelIndex + 1], 'gemini-3.7-flash-medium');
+  assert.ok(!argv.includes('--effort'), `--effort must never be sent: ${JSON.stringify(argv)}`);
+  // And the turn still completes — the flags ride a real, successful send.
+  const payload = JSON.parse(result.stdout.split('\n').find((l) => l.startsWith('{"success"')));
+  assert.equal(payload.success, true);
 });

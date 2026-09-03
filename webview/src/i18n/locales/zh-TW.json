@@ -1581,6 +1581,9 @@
     }
   },
   "models": {
+    "gemini": {
+      "vanishedSelection": "模型 {{model}} 已不再可用，已切換回 CLI 預設模型。"
+    },
     "addModel": "新增模型",
     "searchPlaceholder": "搜尋模型",
     "noModelsFound": "找不到模型",

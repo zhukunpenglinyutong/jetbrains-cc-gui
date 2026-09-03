@@ -91,8 +91,8 @@ await sendMessage(
   'hello world',
   process.env.SVC_SESSION_ID || '',
   process.env.SVC_CWD || '',
-  '', // model — wired in Story 1.4
-  '', // reasoningEffort — wired in Story 1.4
+  process.env.SVC_MODEL || '',
+  process.env.SVC_REASONING_EFFORT || '',
   attachments,
   process.env.SVC_REQUESTED_CWD || ''
 );
@@ -109,6 +109,8 @@ function runService({
   stderr = '',
   cwd = '',
   sessionId = '',
+  model = '',
+  reasoningEffort = '',
   requestedCwd = '',
   attachmentsFile = '',
   geminiBin = '',
@@ -132,6 +134,8 @@ function runService({
   env.SERVICE_PATH = SERVICE_PATH;
   env.SVC_CWD = cwd;
   env.SVC_SESSION_ID = sessionId;
+  env.SVC_MODEL = model;
+  env.SVC_REASONING_EFFORT = reasoningEffort;
   env.SVC_REQUESTED_CWD = requestedCwd;
   env.SVC_ATTACHMENTS_FILE = attachmentsFile;
 
@@ -242,7 +246,61 @@ test('buildGeminiArgs omits --conversation without a usable session id', async (
   for (const sessionId of ['', 'undefined', 'null', '.', 'a/b']) {
     const args = buildGeminiArgs({ message: 'hi', sessionId });
     assert.ok(!args.includes('--conversation'), `sessionId=${sessionId}`);
-    assert.ok(!args.includes('--model'), 'model flags wait for Story 1.4');
+    assert.ok(!args.includes('--model'), 'no model flag without a model id');
+  }
+});
+
+test('normalizeGeminiModelId keeps real slugs and collapses sentinels to none', async () => {
+  const { normalizeGeminiModelId } = await import('./message-service.js');
+  for (const slug of ['gemini-3.7-flash-high', 'gemini-3.1-pro-low', 'claude-sonnet-4-6',
+    'claude-opus-4-6-thinking', 'gpt-oss-120b-medium']) {
+    assert.equal(normalizeGeminiModelId(slug), slug, `slug=${slug}`);
+  }
+  // Cross-vendor slugs are REAL agy catalog entries — the service never
+  // strips them (the Java side pins the same contract for gemini).
+  for (const none of ['', '   ', 'auto', 'AUTO', 'default', '__config_default__', '(default)',
+    'undefined', 'null', '-flag-like', '--effort', 42, null, undefined]) {
+    assert.equal(normalizeGeminiModelId(none), '', `model=${String(none)}`);
+  }
+});
+
+test('buildGeminiArgs forwards a picked model as --model <full-slug>', async () => {
+  const { buildGeminiArgs } = await import('./message-service.js');
+  const args = buildGeminiArgs({ message: 'hi', sessionId: '', model: 'gemini-3.7-flash-high' });
+  const idx = args.indexOf('--model');
+  assert.notEqual(idx, -1, JSON.stringify(args));
+  assert.equal(args[idx + 1], 'gemini-3.7-flash-high');
+  // No separate effort flag: the tier is baked into the full slug, and some
+  // slugs reject --effort outright.
+  assert.ok(!args.includes('--effort'), JSON.stringify(args));
+});
+
+test('buildGeminiArgs omits --model for sentinel and blank model ids', async () => {
+  const { buildGeminiArgs } = await import('./message-service.js');
+  for (const model of ['', 'auto', 'default', '__config_default__', '(default)', '-dash-led']) {
+    const args = buildGeminiArgs({ message: 'hi', sessionId: 'abc-123', model });
+    assert.ok(!args.includes('--model'), `model=${model}: ${JSON.stringify(args)}`);
+  }
+});
+
+test('a picked model slug reaches the CLI verbatim and --effort is never sent', async () => {
+  // gemini-family slug AND a cross-vendor catalog slug (claude-*) must both
+  // survive the whole service path untouched.
+  for (const model of ['gemini-3.7-flash-medium', 'claude-sonnet-4-6']) {
+    const run = await runService({
+      fixture: 'success-text-turn.jsonl',
+      model,
+      reasoningEffort: 'high',
+      echoArgv: true,
+    });
+    const argvLine = run.stderr.split('\n').find((l) => l.startsWith('ARGV:'));
+    assert.ok(argvLine, `missing ARGV echo for ${model}: ${run.stderr.slice(0, 400)}`);
+    const argv = JSON.parse(argvLine.slice('ARGV:'.length));
+    const idx = argv.indexOf('--model');
+    assert.notEqual(idx, -1, `no --model in ${JSON.stringify(argv)}`);
+    assert.equal(argv[idx + 1], model);
+    assert.ok(!argv.includes('--effort'), `effort flag leaked for ${model}: ${JSON.stringify(argv)}`);
+    assert.equal(run.code, 0, run.stderr.slice(0, 400));
   }
 });
 

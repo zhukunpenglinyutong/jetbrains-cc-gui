@@ -1557,6 +1557,9 @@
     }
   },
   "models": {
+    "gemini": {
+      "vanishedSelection": "モデル {{model}} は利用できなくなったため、CLI のデフォルトモデルに戻しました。"
+    },
     "addModel": "モデル追加",
     "searchPlaceholder": "モデルを検索",
     "noModelsFound": "モデルが見つかりません",

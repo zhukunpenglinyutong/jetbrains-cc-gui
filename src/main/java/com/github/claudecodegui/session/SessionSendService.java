@@ -582,8 +582,14 @@ public class SessionSendService {
         }
         // Leftovers after a provider switch without model reset. OpenCode
         // legitimately supports OpenAI models, so gpt-* is only filtered for
-        // the other CLI providers.
-        if (lower.startsWith("claude-") || (lower.startsWith("gpt-") && !"opencode".equals(provider))) {
+        // the other CLI providers. Gemini (agy) is exempt too: its live
+        // catalog contains cross-vendor slugs (claude-sonnet-4-6,
+        // claude-opus-4-6-thinking, gpt-oss-120b-medium) the user can really
+        // pick — stripping them would silently run the CLI default instead of
+        // the selected model.
+        boolean isGemini = "gemini".equals(provider);
+        if ((lower.startsWith("claude-") && !isGemini)
+                || (lower.startsWith("gpt-") && !"opencode".equals(provider) && !isGemini)) {
             LOG.warn("[" + provider + "] Ignoring non-provider model leftover for CLI: " + trimmed);
             return null;
         }

@@ -4,6 +4,7 @@ import type { ModelInfo } from '../../components/ChatInputBox/types';
 import {
   CODEX_MODELS,
   DSH_MODELS,
+  GEMINI_MODELS,
   GROK_MODELS,
   KIMI_MODELS,
   MINIMAX_MODELS,
@@ -67,6 +68,9 @@ function fallbackModels(providerId: string): ModelInfo[] {
   if (providerId === 'omp') return OMP_MODELS;
   if (providerId === 'dsh') return DSH_MODELS;
   if (providerId === 'codex') return CODEX_MODELS;
+  // Gemini's only honest offline entry: the 'auto' sentinel (CLI default).
+  // Fabricating families would present an invented catalog as real.
+  if (providerId === 'gemini') return GEMINI_MODELS;
   return [];
 }
 
@@ -77,10 +81,10 @@ function fallbackModels(providerId: string): ModelInfo[] {
  */
 function supportsDynamicModels(providerId: string): boolean {
   if (providerId === 'codex') return true;
-  // Gemini: the channel placeholder answers listModels with a static empty
-  // list. Suppress the request until the model-catalog story (1.4) lands a
-  // real catalog, so selecting the provider does not wipe the picker.
-  if (providerId === 'gemini') return false;
+  // Gemini fetches its live catalog from `agy models` (zero tokens, local
+  // listing) through the same channel; the backend answers an honest failure
+  // payload when the CLI is unavailable.
+  if (providerId === 'gemini') return true;
   return isCliOnlyProvider(providerId);
 }
 

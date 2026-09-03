@@ -1551,6 +1551,9 @@
     }
   },
   "models": {
+    "gemini": {
+      "vanishedSelection": "मॉडल {{model}} अब उपलब्ध नहीं है — CLI डिफ़ॉल्ट मॉडल पर वापस लाया गया।"
+    },
     "addModel": "मॉडल जोड़ें",
     "searchPlaceholder": "मॉडल खोजें",
     "noModelsFound": "कोई मॉडल नहीं मिला",

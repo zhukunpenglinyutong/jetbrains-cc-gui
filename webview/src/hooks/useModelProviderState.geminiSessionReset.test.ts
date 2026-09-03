@@ -112,3 +112,66 @@ describe('useModelProviderState gemini conversation reset (Story 1.3)', () => {
     expect(window.sendToJava).toHaveBeenCalledWith('set_model:grok-4');
   });
 });
+
+describe('useModelProviderState gemini model wiring (Story 1.4 review)', () => {
+  const t = ((key: string) => key) as any;
+  const addToast = vi.fn();
+
+  beforeEach(() => {
+    window.sendToJava = vi.fn();
+    localStorage.clear();
+  });
+
+  function setup() {
+    const onSessionResetRequest = vi.fn();
+    const rendered = renderHook(() =>
+      useModelProviderState({ addToast, t, onSessionResetRequest })
+    );
+    return { onSessionResetRequest, ...rendered };
+  }
+
+  const selectModel = (result: ReturnType<typeof setup>['result'], modelId: string) => {
+    act(() => {
+      result.current.handleModelSelect(modelId);
+    });
+  };
+
+  it('exposes the gemini slot through selectedModel: auto by default, the picked slug after', () => {
+    const { result } = setup();
+
+    act(() => {
+      result.current.setCurrentProvider('gemini');
+    });
+    // 'auto' is a real, honest choice (omit --model) — never a borrowed
+    // claude slug and never ''.
+    expect(result.current.selectedModel).toBe('auto');
+
+    selectModel(result, 'gemini-3.7-flash-medium');
+    expect(result.current.selectedModel).toBe('gemini-3.7-flash-medium');
+  });
+
+  it('provider switch to gemini re-points set_model away from a picked claude slug', () => {
+    const { result } = setup();
+
+    selectModel(result, 'claude-sonnet-5');
+    // The claude pick carries the optional [1m] long-context suffix; only its
+    // presence matters here — the test's subject is what the SWITCH sends.
+    expect(window.sendToJava).toHaveBeenCalledWith(
+      expect.stringMatching(/^set_model:claude-sonnet-5(\[1m\])?$/)
+    );
+
+    act(() => {
+      result.current.handleProviderSelect('gemini');
+    });
+
+    expect(window.sendToJava).toHaveBeenCalledWith('set_provider:gemini');
+    // The LAST set_model must carry the gemini slot ('auto' until the user
+    // picks) — a claude slug forwarded to the agy CLI would be a
+    // wrong-vendor model.
+    expect(window.sendToJava).toHaveBeenLastCalledWith('set_model:auto');
+    const setModelCalls = (window.sendToJava as ReturnType<typeof vi.fn>).mock.calls.filter(
+      ([event]) => typeof event === 'string' && event.startsWith('set_model:')
+    );
+    expect(setModelCalls.at(-1)).toEqual(['set_model:auto']);
+  });
+});

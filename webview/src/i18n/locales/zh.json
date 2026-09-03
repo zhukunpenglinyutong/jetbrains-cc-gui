@@ -2023,6 +2023,9 @@
     }
   },
   "models": {
+    "gemini": {
+      "vanishedSelection": "模型 {{model}} 已不再可用，已切换回 CLI 默认模型。"
+    },
     "addModel": "添加模型",
     "searchPlaceholder": "搜索模型",
     "noModelsFound": "未找到模型",

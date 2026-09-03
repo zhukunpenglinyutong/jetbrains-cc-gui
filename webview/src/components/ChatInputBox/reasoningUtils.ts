@@ -10,6 +10,12 @@ import {
 } from './types';
 
 export function isReasoningVisible(currentProvider?: string, selectedModel?: string): boolean {
+  // Gemini hides the generic effort row: its tiers live inside the model
+  // entries themselves (family+effort is one slug), so a standalone effort
+  // selector would offer combinations the CLI cannot run.
+  if (currentProvider === 'gemini') {
+    return false;
+  }
   return currentProvider !== 'claude' || !selectedModel || EFFORT_SUPPORTED_CLAUDE_MODELS.has(selectedModel);
 }
 

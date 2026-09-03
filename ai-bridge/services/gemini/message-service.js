@@ -179,7 +179,25 @@ export function extractToolResultText(result) {
   }
 }
 
-export function buildGeminiArgs({ message, sessionId }) {
+/**
+ * Model ids that mean "no explicit model": the UI sentinel `auto` (omit
+ * `--model`, let the CLI pick its own default), the generic sentinels Java's
+ * normalizeCliModelForProvider also collapses, and dash-led tokens (they
+ * would parse as CLI flags). Real slugs — including the agy catalog's
+ * cross-vendor `claude-*` / `gpt-*` entries — pass through untouched.
+ * @param {unknown} value
+ * @returns {string} the slug to send, or '' for "no --model flag"
+ */
+export function normalizeGeminiModelId(value) {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.startsWith('-')) return '';
+  const sentinel = new Set(['auto', 'default', '__config_default__', '(default)', 'undefined', 'null']);
+  if (sentinel.has(trimmed.toLowerCase())) return '';
+  return trimmed;
+}
+
+export function buildGeminiArgs({ message, sessionId, model }) {
   const args = [
     '-p',
     safePromptArg(message),
@@ -192,6 +210,10 @@ export function buildGeminiArgs({ message, sessionId }) {
   if (conversationId) {
     args.push('--conversation', conversationId);
   }
+  const modelId = normalizeGeminiModelId(model);
+  if (modelId) {
+    args.push('--model', modelId);
+  }
   return args;
 }
 
@@ -199,8 +221,10 @@ export function buildGeminiArgs({ message, sessionId }) {
  * @param {string} message
  * @param {string} sessionId
  * @param {string} cwd
- * @param {string} model
- * @param {string} [reasoningEffort]
+ * @param {string} model full catalog slug (family+effort is ONE slug)
+ * @param {string} [reasoningEffort] accepted for positional compatibility,
+ *   never forwarded: the effort tier is baked into the full model slug and
+ *   some slugs reject a separate --effort flag
  * @param {Array} [attachments] image attachments (fileName/mediaType/data)
  * @param {string} [requestedCwd] cwd as requested BEFORE Java's clamp (see header)
  */
@@ -273,7 +297,7 @@ export async function sendMessage(
     promptText = reformatFileLineReferences(promptText);
 
     const bin = resolveGeminiCliPath();
-    const args = buildGeminiArgs({ message: promptText, sessionId });
+    const args = buildGeminiArgs({ message: promptText, sessionId, model });
 
     const env = { ...process.env };
     const home = process.env.HOME || process.env.USERPROFILE || homedir();

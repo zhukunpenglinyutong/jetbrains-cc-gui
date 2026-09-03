@@ -231,6 +231,27 @@ describe('useMessageSender - /context command', () => {
     expect(payload).not.toHaveProperty('reasoningEffort');
   });
 
+  it('never attaches reasoning effort to a gemini payload — the tier is in the slug', () => {
+    const opts = createOptions({
+      currentProvider: 'gemini',
+      selectedModel: 'gemini-3.7-flash-high',
+      reasoningEffort: 'high',
+    });
+
+    const { result } = renderHook(() => useMessageSender(opts));
+
+    act(() => {
+      result.current.handleSubmit('hello');
+    });
+
+    // The model does NOT ride the send_message payload (for any provider) —
+    // it travels as the separate set_model bridge event, which the
+    // useModelProviderState tests pin. Here the payload contract is only:
+    // no reasoningEffort key may leak for gemini.
+    const payload = getBridgePayload('send_message');
+    expect(payload).not.toHaveProperty('reasoningEffort');
+  });
+
   it('includes explicit non-default Claude reasoning effort in plain message payload', () => {
     const opts = createOptions({
       reasoningEffort: 'low',

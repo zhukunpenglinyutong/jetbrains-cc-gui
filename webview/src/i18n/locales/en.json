@@ -2018,6 +2018,9 @@
     }
   },
   "models": {
+    "gemini": {
+      "vanishedSelection": "Model {{model}} is no longer available — switched back to the CLI default model."
+    },
     "addModel": "Add Model",
     "searchPlaceholder": "Search models",
     "noModelsFound": "No models found",

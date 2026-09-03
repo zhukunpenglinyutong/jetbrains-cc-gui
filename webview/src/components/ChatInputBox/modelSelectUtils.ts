@@ -109,13 +109,18 @@ export function togglePinnedModelId(providerId: string, modelId: string): string
  * 2. Remaining models — either one flat section or provider-prefix groups
  *
  * `visibleLimit` caps total models across all sections (pinned count first).
+ * `groupOf` overrides the default slash-prefix grouping with a caller-supplied
+ * key per model (empty string falls into the 'other' bucket); sections are
+ * then always enabled — used by gemini, whose families come from the catalog
+ * label rather than id prefixes.
  */
 export function buildModelDropdownSections(
   models: ModelInfo[],
   pinnedIds: string[],
-  options?: { visibleLimit?: number },
+  options?: { visibleLimit?: number; groupOf?: (model: ModelInfo) => string },
 ): { sections: ModelGroup[]; hiddenCount: number } {
   const visibleLimit = options?.visibleLimit ?? MAX_VISIBLE_MODEL_OPTIONS;
+  const groupOf = options?.groupOf;
   const byId = new Map(models.map((m) => [m.id, m]));
   const pinnedSet = new Set(pinnedIds);
   const pinnedModels: ModelInfo[] = [];
@@ -125,7 +130,7 @@ export function buildModelDropdownSections(
   }
 
   const unpinned = models.filter((m) => !pinnedSet.has(m.id));
-  const useGroups = shouldGroupModels(unpinned);
+  const useGroups = groupOf ? true : shouldGroupModels(unpinned);
 
   const sections: ModelGroup[] = [];
   let remaining = visibleLimit;
@@ -149,7 +154,7 @@ export function buildModelDropdownSections(
     const order: string[] = [];
     const buckets = new Map<string, ModelInfo[]>();
     for (const model of unpinned) {
-      const key = getModelProviderGroup(model.id) || 'other';
+      const key = groupOf ? (groupOf(model) || 'other') : (getModelProviderGroup(model.id) || 'other');
       if (!buckets.has(key)) {
         buckets.set(key, []);
         order.push(key);

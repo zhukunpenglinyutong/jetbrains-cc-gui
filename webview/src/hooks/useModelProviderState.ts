@@ -3,6 +3,7 @@ import type { TFunction } from 'i18next';
 import { sendBridgeEvent } from '../utils/bridge';
 import {
   apply1MContextSuffix,
+  GEMINI_DEFAULT_MODEL_ID,
   isValidDshPreset,
   isValidPermissionMode,
 } from '../components/ChatInputBox/types';
@@ -71,11 +72,11 @@ export function useModelProviderState({ addToast, t, onSessionResetRequest }: Us
   const [currentProvider, setCurrentProvider] = useState('claude');
   const [permissionMode, setPermissionMode] = useState<PermissionMode>('default');
 
-  // Gemini model slot (full slug: family+effort is ONE slug). Story 1.3 only
-  // needs it to detect an actual model change for the CAP-4 conversation
-  // reset; the live catalog, effort tiers, and persistence of this slot are
-  // Story 1.4's scope.
-  const [selectedGeminiModel, setSelectedGeminiModel] = useState('');
+  // Gemini model slot: a full catalog slug where family+effort is ONE slug
+  // ('auto' = let the CLI pick its own default). Any different slug —
+  // including an effort-tier change — is a model change for the CAP-4
+  // conversation reset below.
+  const [selectedGeminiModel, setSelectedGeminiModel] = useState(GEMINI_DEFAULT_MODEL_ID);
 
   // External-facing ref so window callbacks can read the latest provider
   // without re-binding. Mirrored in an effect (bridge callbacks fire async,
@@ -157,6 +158,7 @@ export function useModelProviderState({ addToast, t, onSessionResetRequest }: Us
     setSelectedPiModel,
     setSelectedOmpModel,
     setSelectedDshModel,
+    setSelectedGeminiModel,
     setGrokPermissionMode,
     setKimiPermissionMode,
     setMiniMaxPermissionMode,
@@ -181,6 +183,7 @@ export function useModelProviderState({ addToast, t, onSessionResetRequest }: Us
     selectedPiModel,
     selectedOmpModel,
     selectedDshModel,
+    selectedGeminiModel,
     grokPermissionMode,
     kimiPermissionMode,
     miniMaxPermissionMode,
@@ -205,6 +208,7 @@ export function useModelProviderState({ addToast, t, onSessionResetRequest }: Us
     pi: selectedPiModel,
     omp: selectedOmpModel,
     dsh: selectedDshModel,
+    gemini: selectedGeminiModel,
   });
   const currentSdkInstalled = useMemo(
     () => isSdkInstalled(currentProvider),
@@ -360,6 +364,7 @@ export function useModelProviderState({ addToast, t, onSessionResetRequest }: Us
       pi: selectedPiModel,
       omp: selectedOmpModel,
       dsh: selectedDshModel,
+      gemini: selectedGeminiModel,
     }, longContextEnabled);
     sendBridgeEvent('set_model', newModel);
   }, [
@@ -382,6 +387,7 @@ export function useModelProviderState({ addToast, t, onSessionResetRequest }: Us
     selectedPiModel,
     selectedOmpModel,
     selectedDshModel,
+    selectedGeminiModel,
     longContextEnabled,
   ]);
 

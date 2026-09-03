@@ -26,6 +26,7 @@ export interface ProviderModelSelection {
   pi: string;
   omp: string;
   dsh: string;
+  gemini: string;
 }
 
 /** Per-provider permission-mode snapshot, keyed by provider id. */
@@ -52,6 +53,7 @@ export function selectedModelForProvider(providerId: string, models: ProviderMod
     case 'pi': return models.pi;
     case 'omp': return models.omp;
     case 'dsh': return models.dsh;
+    case 'gemini': return models.gemini;
     default: return models.claude;
   }
 }
@@ -78,6 +80,9 @@ export function resolveProviderPermissionMode(
     case 'pi': return normalizeCliPermissionMode(modes.pi, providerId);
     case 'omp': return normalizeCliPermissionMode(modes.omp, providerId);
     case 'dsh': return normalizeCliPermissionMode(modes.dsh, providerId);
+    // No dedicated mode slot yet — gemini keeps the shared mode, coerced to
+    // the CLI-legal set (plan is not exposed for headless CLI providers).
+    case 'gemini': return normalizeCliPermissionMode(modes.claude, providerId);
     default: return modes.claude;
   }
 }
@@ -100,6 +105,9 @@ export function resolveProviderModel(
     case 'pi': return models.pi;
     case 'omp': return models.omp;
     case 'dsh': return models.dsh;
+    // Gemini carries its OWN slot ('auto' until the user picks) — forwarding
+    // the claude slug would send a wrong-vendor model to the agy CLI.
+    case 'gemini': return models.gemini;
     default: return apply1MContextSuffix(models.claude, longContextEnabled);
   }
 }

@@ -24,6 +24,7 @@ function makeOptions(overrides: Partial<UseModelStatePersistenceOptions> = {}): 
     setSelectedPiModel: vi.fn(),
     setSelectedOmpModel: vi.fn(),
     setSelectedDshModel: vi.fn(),
+    setSelectedGeminiModel: vi.fn(),
     setGrokPermissionMode: vi.fn(),
     setKimiPermissionMode: vi.fn(),
     setMiniMaxPermissionMode: vi.fn(),
@@ -48,6 +49,7 @@ function makeOptions(overrides: Partial<UseModelStatePersistenceOptions> = {}): 
     selectedPiModel: 'auto',
     selectedOmpModel: 'auto',
     selectedDshModel: 'auto',
+    selectedGeminiModel: 'auto',
     grokPermissionMode: 'default' as PermissionMode,
     kimiPermissionMode: 'default' as PermissionMode,
     miniMaxPermissionMode: 'default' as PermissionMode,
@@ -501,5 +503,79 @@ describe('useModelStatePersistence — codex dynamic catalog models', () => {
 
     expect(setSelectedCodexModel).not.toHaveBeenCalled();
     expect(bridgeEventsFor('set_model')).toHaveLength(1);
+  });
+});
+
+describe('useModelStatePersistence — gemini model slot (Story 1.4)', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sendBridgeEventMock.mockClear();
+    (window as unknown as { sendToJava?: unknown }).sendToJava = () => {};
+    window.__CCGUI_PAGE_CONTEXT_READY__ = true;
+    window.__CCGUI_PAGE_LOAD_KIND__ = 'initial_load';
+    window.__CCGUI_RECOVERY_RELOAD__ = false;
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    delete (window as unknown as { sendToJava?: unknown }).sendToJava;
+    delete window.__CCGUI_PAGE_CONTEXT_READY__;
+    delete window.__CCGUI_PAGE_LOAD_KIND__;
+    delete window.__CCGUI_RECOVERY_RELOAD__;
+    delete window.__CCGUI_RECOVERY_STATE_APPLIED__;
+    delete (window as unknown as { __INITIAL_TAB_PROVIDER__?: unknown }).__INITIAL_TAB_PROVIDER__;
+    delete (window as unknown as { __INITIAL_TAB_MODEL__?: unknown }).__INITIAL_TAB_MODEL__;
+  });
+
+  it('restores a saved gemini model slug — the live catalog is dynamic, no static list may veto it', () => {
+    // Like codex: the agy catalog is fetched at runtime, so a persisted slug
+    // (including cross-vendor ones the catalog really sells) must survive the
+    // restart instead of being reset before the catalog fetch lands.
+    const setSelectedGeminiModel = vi.fn();
+    localStorage.setItem('model-selection-state', JSON.stringify({
+      provider: 'gemini',
+      geminiModel: 'gemini-3.7-flash-medium',
+    }));
+
+    renderHook(() => useModelStatePersistence(makeOptions({ setSelectedGeminiModel })));
+    vi.advanceTimersByTime(200);
+
+    expect(setSelectedGeminiModel).toHaveBeenCalledWith('gemini-3.7-flash-medium');
+    expect(bridgeEventsFor('set_provider')).toEqual([['set_provider', 'gemini']]);
+    expect(bridgeEventsFor('set_model')).toEqual([['set_model', 'gemini-3.7-flash-medium']]);
+  });
+
+  it('honors a backend-supplied gemini model via __INITIAL_TAB_PROVIDER__', () => {
+    const setSelectedGeminiModel = vi.fn();
+    (window as unknown as { __INITIAL_TAB_PROVIDER__?: unknown }).__INITIAL_TAB_PROVIDER__ = 'gemini';
+    (window as unknown as { __INITIAL_TAB_MODEL__?: unknown }).__INITIAL_TAB_MODEL__ = 'gemini-3.1-pro-low';
+
+    renderHook(() => useModelStatePersistence(makeOptions({ setSelectedGeminiModel })));
+    vi.advanceTimersByTime(200);
+
+    expect(setSelectedGeminiModel).toHaveBeenCalledWith('gemini-3.1-pro-low');
+    expect(bridgeEventsFor('set_model')).toEqual([['set_model', 'gemini-3.1-pro-low']]);
+  });
+
+  it('persists the gemini selection in the snapshot', () => {
+    renderHook(() => useModelStatePersistence(makeOptions({
+      currentProvider: 'gemini',
+      selectedGeminiModel: 'claude-sonnet-4-6',
+    })));
+
+    const saved = JSON.parse(localStorage.getItem('model-selection-state') ?? '{}');
+    expect(saved.provider).toBe('gemini');
+    // Cross-vendor slugs are real agy catalog picks — persisted verbatim.
+    expect(saved.geminiModel).toBe('claude-sonnet-4-6');
+  });
+
+  it('keeps the auto sentinel for a gemini snapshot without a picked slug', () => {
+    localStorage.setItem('model-selection-state', JSON.stringify({ provider: 'gemini' }));
+
+    renderHook(() => useModelStatePersistence(makeOptions()));
+    vi.advanceTimersByTime(200);
+
+    expect(bridgeEventsFor('set_model')).toEqual([['set_model', 'auto']]);
   });
 });
