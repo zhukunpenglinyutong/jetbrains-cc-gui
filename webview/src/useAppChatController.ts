@@ -366,7 +366,7 @@ export const useAppChatController = ({
     handleSubmit, interruptSession, messageQueue, dequeueMessage,
     handleOpenRewindSelectDialog, handleNavigateToProviderSettings, wrappedHandleProviderSelect,
     // Session management
-    createNewSession, loadHistorySession, deleteHistorySession, deleteHistorySessions,
+    createNewSession, forceCreateNewSession, loadHistorySession, deleteHistorySession, deleteHistorySessions,
     exportHistorySession, toggleFavoriteSession, updateHistoryTitle, convertToCliSession,
     showNewSessionConfirm, handleConfirmNewSession, handleCancelNewSession,
     showInterruptConfirm, handleConfirmInterrupt, handleCancelInterrupt,

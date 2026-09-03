@@ -60,6 +60,16 @@ public class SessionStateTest {
     }
 
     @Test
+    public void freshSessionHasNoConversationId() {
+        // Story 1.3 AC2/AC5: a brand-new session (new chat tab, provider
+        // switch, create_new_session) starts with NO conversation id. The send
+        // path then serializes it as "" and the gemini bridge omits the
+        // --conversation flag, so the CLI starts a fresh conversation — no
+        // residual id can ever be reused across the reset.
+        Assert.assertNull(new SessionState().getSessionId());
+    }
+
+    @Test
     public void setModelHandlesNullAndBlank() {
         SessionState state = new SessionState();
         state.setModel(null);

@@ -77,6 +77,10 @@ public class GeminiCliBridgeTest {
         assertEquals("/unsafe/requested", payload.get("requestedCwd").getAsString());
         assertEquals("hello", payload.get("message").getAsString());
         assertEquals("default", payload.get("permissionMode").getAsString());
+        // Story 1.3 AC1 (review patch): a known conversation id must round-trip
+        // into the stdin payload unchanged — the resume half of AC1 at the Java
+        // boundary (the Node side maps a non-empty sessionId to --conversation).
+        assertEquals("sess-1", payload.get("sessionId").getAsString());
     }
 
     @Test
@@ -91,6 +95,68 @@ public class GeminiCliBridgeTest {
                 "hello", "", "/proj/base", "", "medium",
                 java.util.Collections.emptyList(), "default", null, "   ");
         assertTrue(!blank.has("requestedCwd"));
+    }
+
+    /** Exposes the protected marker-line router for protocol contract tests. */
+    private static final class RoutingBridge extends GeminiCliBridge {
+        void route(String line, com.github.claudecodegui.provider.common.MessageCallback callback) {
+            processOutputLine(
+                    line,
+                    callback,
+                    new com.github.claudecodegui.provider.common.SDKResult(),
+                    new StringBuilder(),
+                    new java.util.concurrent.atomic.AtomicBoolean(false),
+                    new java.util.concurrent.atomic.AtomicReference<>(null));
+        }
+    }
+
+    @Test
+    public void sessionMarkerLineRoutesToTheSessionIdEvent() {
+        // Story 1.3 Task 1: the CLI's conversation id reaches Java through the
+        // shared marker protocol — MarkerCliBridge must translate a
+        // "[SESSION_ID] <uuid>" line into the provider-neutral "session_id"
+        // event the message handler stores on the session slot. (Node-side
+        // emission of the marker is pinned by message-service.test.js.)
+        RoutingBridge bridge = new RoutingBridge();
+        List<String> types = new java.util.ArrayList<>();
+        List<String> payloads = new java.util.ArrayList<>();
+
+        bridge.route("[SESSION_ID] d5451c2b-751a-4248-9d75-47344e4bc885",
+                new com.github.claudecodegui.provider.common.MessageCallback() {
+                    @Override
+                    public void onMessage(String type, String content) {
+                        types.add(type);
+                        payloads.add(content);
+                    }
+
+                    @Override
+                    public void onError(String error) {
+                        types.add("error:" + error);
+                    }
+
+                    @Override
+                    public void onComplete(com.github.claudecodegui.provider.common.SDKResult result) {
+                        // not expected for a session-id line
+                    }
+                });
+
+        assertEquals(1, types.size());
+        assertEquals("session_id", types.get(0));
+        assertEquals("d5451c2b-751a-4248-9d75-47344e4bc885", payloads.get(0));
+    }
+
+    @Test
+    public void stdinPayloadSendsEmptySessionIdForAFreshTab() {
+        // Story 1.3 AC2: a new chat tab starts a NEW conversation. TabHandler's
+        // create_new_tab builds a fresh ClaudeChatWindow whose SessionState has
+        // no session id at all, so the first send must serialize it as the ""
+        // sentinel — the value the Node side maps to "no --conversation flag"
+        // (the CLI never continues implicitly). A leftover conversation id here
+        // would silently resume another tab's conversation.
+        com.google.gson.JsonObject payload = MarkerCliBridge.buildCliStdinPayload(
+                "hello", null, "/proj/base", "", "medium",
+                java.util.Collections.emptyList(), "default", null, null);
+        assertEquals("", payload.get("sessionId").getAsString());
     }
 
     @Test

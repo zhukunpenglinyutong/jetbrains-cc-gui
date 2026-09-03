@@ -5,6 +5,7 @@ import {
   useThemeInit,
   useContextActions,
   useModelProviderState,
+  useLateBoundCallback,
 } from './hooks';
 import type { MessageListRevealHandle } from './components/ConversationSearch/types';
 import { ToastContainer } from './components/Toast';
@@ -49,8 +50,15 @@ const App = () => {
   useThemeInit();
   useContextActions();
 
+  // Story 1.3 (CAP-4): useModelProviderState runs BEFORE useAppChatController,
+  // so the gemini model-change conversation reset is wired through a
+  // late-bound trampoline pointed at forceCreateNewSession once that hook
+  // exists below (render-time assignment — same pattern as currentProviderRef;
+  // trampoline contract pinned by useLateBoundCallback.test.ts).
+  const geminiSessionReset = useLateBoundCallback();
+
   // ── Model/Provider state ──
-  const model = useModelProviderState({ addToast, t });
+  const model = useModelProviderState({ addToast, t, onSessionResetRequest: geminiSessionReset.call });
 
   // Dynamic omp model roles (listModels payload; static smol/slow/plan until
   // loaded) — needed by applyHistoryModel's omp mode⇔model unification.
@@ -73,12 +81,17 @@ const App = () => {
     handleUndoFile, onDiscardAll, handleKeepAll,
     handleSubmit, interruptSession, messageQueue, dequeueMessage,
     handleOpenRewindSelectDialog, handleNavigateToProviderSettings, wrappedHandleProviderSelect,
-    createNewSession, loadHistorySession, deleteHistorySession, deleteHistorySessions,
+    createNewSession, forceCreateNewSession, loadHistorySession, deleteHistorySession, deleteHistorySessions,
     exportHistorySession, toggleFavoriteSession, updateHistoryTitle, convertToCliSession,
     showNewSessionConfirm, handleConfirmNewSession, handleCancelNewSession,
     showInterruptConfirm, handleConfirmInterrupt, handleCancelInterrupt,
     handleRewindSelect, handleRewindSelectCancel, handleRewindConfirm, handleRewindCancel,
   } = useAppChatController({ model, applyHistoryModel, setPermissionDialogTimeoutSeconds });
+
+  // Story 1.3 (CAP-4): point the gemini model-change reset trampoline at the
+  // controller's forceCreateNewSession (createNewSession would prompt for
+  // confirmation; forceCreateNewSession is the no-dialog variant).
+  geminiSessionReset.set(forceCreateNewSession);
 
   const statusPanelExpanded = !userCollapsedRef.current;
 

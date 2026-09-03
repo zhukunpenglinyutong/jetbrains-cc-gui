@@ -38,6 +38,18 @@ export type ViewMode = 'chat' | 'history' | 'settings';
 export interface UseModelProviderStateOptions {
   addToast: (message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
   t: TFunction;
+  /**
+   * Fired when the active provider requires the backend conversation to be
+   * discarded before the next send (Story 1.3, CAP-4). Today only the gemini
+   * model change fires it: the CLI bakes the effort tier into the full model
+   * slug, so a resumed conversation would feed prior context into a possibly
+   * smaller-context model. The hook decides WHEN; App wires this to the
+   * shared session transition (`forceCreateNewSession`: interrupt if
+   * streaming → beginSessionTransition → create_new_session). Strictly
+   * gemini-gated — every other provider keeps its behavior of continuing the
+   * session across a model change.
+   */
+  onSessionResetRequest?: () => void;
 }
 
 /**
@@ -54,10 +66,16 @@ export interface UseModelProviderStateOptions {
  * identity that must read the current provider when fired by the JCEF bridge.
  * The ref is mirrored inside useEffect so no ref access happens during render.
  */
-export function useModelProviderState({ addToast, t }: UseModelProviderStateOptions) {
+export function useModelProviderState({ addToast, t, onSessionResetRequest }: UseModelProviderStateOptions) {
   // ── Cross-slice state owned by the orchestrator ──
   const [currentProvider, setCurrentProvider] = useState('claude');
   const [permissionMode, setPermissionMode] = useState<PermissionMode>('default');
+
+  // Gemini model slot (full slug: family+effort is ONE slug). Story 1.3 only
+  // needs it to detect an actual model change for the CAP-4 conversation
+  // reset; the live catalog, effort tiers, and persistence of this slot are
+  // Story 1.4's scope.
+  const [selectedGeminiModel, setSelectedGeminiModel] = useState('');
 
   // External-facing ref so window callbacks can read the latest provider
   // without re-binding. Mirrored in an effect (bridge callbacks fire async,
@@ -260,6 +278,25 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
   ]);
 
   const handleModelSelect = useCallback((modelId: string) => {
+    if (currentProvider === 'gemini') {
+      // CAP-4 (Story 1.3): for gemini the effort tier is baked into the full
+      // slug (family+effort = one slug), so ANY different slug — including an
+      // effort-tier change — IS a model change. Resuming would replay the
+      // prior conversation into a possibly smaller-context model (the
+      // recorded CAP-4 failure mode), so an actual change discards the
+      // backend conversation: the session reset clears the single session-id
+      // slot, the next send carries no session id, and the CLI (which never
+      // continues implicitly) starts a fresh conversation. A same-slug
+      // reaffirmation is a no-op, matching Java's isActualModelSwitch.
+      // Strictly gemini-gated: other providers keep their behavior.
+      const isModelChange = modelId !== selectedGeminiModel;
+      setSelectedGeminiModel(modelId);
+      sendBridgeEvent('set_model', modelId);
+      if (isModelChange) {
+        onSessionResetRequest?.();
+      }
+      return;
+    }
     applyModelSelect(currentProvider, modelId, longContextEnabled, ompRoles, {
       setSelectedClaudeModel,
       setSelectedCodexModel,
@@ -277,6 +314,8 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     currentProvider,
     longContextEnabled,
     ompRoles,
+    selectedGeminiModel,
+    onSessionResetRequest,
     setSelectedClaudeModel,
     setSelectedCodexModel,
     setSelectedGrokModel,
@@ -395,6 +434,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     sdkStatus,
     sdkStatusError: currentSdkStatusError,
     currentProvider, setCurrentProvider,
+    selectedGeminiModel, setSelectedGeminiModel,
     permissionMode, setPermissionMode,
     selectedModel,
     currentSdkInstalled,

@@ -32,6 +32,9 @@ public class CodexMessageHandlerTest {
         final List<String> contentDeltas = new ArrayList<>();
         final List<String> thinkingDeltas = new ArrayList<>();
         final List<Message> lastMessages = new ArrayList<>();
+        // Story 1.3: records the conversation ids notified through the session
+        // callback so the session_id hop can be asserted end to end.
+        final List<String> sessionIds = new ArrayList<>();
         // Records the relative order of stream-end vs message-update callbacks so a
         // test can assert stream-end fires BEFORE the error snapshot is pushed.
         final List<String> callOrder = new ArrayList<>();
@@ -53,6 +56,7 @@ public class CodexMessageHandlerTest {
 
         @Override
         public void onSessionIdReceived(String sessionId) {
+            sessionIds.add(sessionId);
         }
 
         @Override
@@ -135,6 +139,46 @@ public class CodexMessageHandlerTest {
 
         assertEquals(List.of("hello", " world"), callback.contentDeltas);
         assertEquals("hello world", state.getMessages().get(0).content);
+    }
+
+    @Test
+    public void sessionIdEventStoresConversationIdOnTheSessionSlotAndNotifies() {
+        // Story 1.3 Task 1: the bridge's "session_id" event (gemini: the
+        // conversation UUID emitted with [SESSION_ID]) must land on the single
+        // session-id slot — the next send reads it back and resumes the
+        // conversation via --conversation — and reach the webview through the
+        // session callback. (Duplicate suppression lives in
+        // SessionCallbackAdapter, pinned by
+        // SessionCallbackAdapterStreamEndTest.duplicateSessionIdsAreForwardedOnlyOnce.)
+        SessionState state = new SessionState();
+
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("session_id", "d5451c2b-751a-4248-9d75-47344e4bc885");
+
+        assertEquals("d5451c2b-751a-4248-9d75-47344e4bc885", state.getSessionId());
+        assertEquals(List.of("d5451c2b-751a-4248-9d75-47344e4bc885"), callback.sessionIds);
+    }
+
+    @Test
+    public void blankSessionIdEventIsIgnored() {
+        // A blank id would wipe a known conversation id off the slot and make
+        // the next send start a new conversation — never forward it.
+        SessionState state = new SessionState();
+        state.setSessionId("existing-conversation-id");
+
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("session_id", "  ");
+
+        assertEquals("existing-conversation-id", state.getSessionId());
+        assertTrue(callback.sessionIds.isEmpty());
     }
 
     @Test

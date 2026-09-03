@@ -24,6 +24,8 @@
  * success-text-turn / multi-delta-streaming / invalid-status /
  * multi-tool-turn / tool-unnamed-steps / tool-unnamed-interleaved /
  * no-result-early-exit / double-result / error-response-only.
+ * Story 1.3 added: new-conversation-after-reset (fresh conversation id B
+ * after a reset — pairs with success-text-turn's id A in the AC5 test).
  * Code review loop 3 added: success-no-deltas (SUCCESS without any
  * text_delta step) and tool-active-no-terminal (ACTIVE tool the result
  * closes without a DONE/ERROR step).
@@ -915,4 +917,73 @@ test('a resumed turn does not re-emit an unchanged session id (code review 3)', 
   });
   const sessionIds = markers(stdout, 'SESSION_ID');
   assert.equal(sessionIds.length, 1, JSON.stringify(sessionIds));
+});
+
+// -------------------------------------------------------------------------
+// Story 1.3 — multi-turn continuity & conversation lifecycle (AC1, AC5)
+// -------------------------------------------------------------------------
+
+/** The fake CLI's echoed argv (spawn arguments of the agy child). */
+function fakeChildArgv(stderr) {
+  const argvLine = stderr.split('\n').find((l) => l.startsWith('ARGV:'));
+  assert.ok(argvLine, `fake CLI must echo its argv: ${stderr.slice(0, 400)}`);
+  return JSON.parse(argvLine.slice('ARGV:'.length));
+}
+
+const CONVERSATION_A = '6f1c2a54-93b7-4c0e-8a41-7d2e5b9c1a01';
+const CONVERSATION_B = 'b4e1f7a2-3c58-4d0e-9a21-6f7b8c2d5e94';
+
+test('a follow-up in the same tab resumes the prior conversation via --conversation (AC1)', async () => {
+  const { stdout, stderr } = await runService({
+    fixture: 'success-text-turn.jsonl',
+    sessionId: CONVERSATION_A,
+    echoArgv: true,
+  });
+
+  const argv = fakeChildArgv(stderr);
+  const resumeAt = argv.indexOf('--conversation');
+  assert.notEqual(resumeAt, -1, `follow-up must pass --conversation: ${JSON.stringify(argv)}`);
+  assert.equal(argv[resumeAt + 1], CONVERSATION_A);
+  // Continuity is EXPLICIT-id only: -c/--continue resolves to the CLI's most
+  // recent conversation anywhere on disk and could jump into another
+  // project's/tab's conversation (Story 1.3 Dev Notes) — never pass it.
+  assert.equal(argv.includes('-c'), false, JSON.stringify(argv));
+  assert.equal(argv.includes('--continue'), false, JSON.stringify(argv));
+
+  // The id is announced exactly once: the pre-spawn echo; the init event
+  // carries the same id and is deduped.
+  assert.deepEqual(markers(stdout, 'SESSION_ID'), [`[SESSION_ID] ${CONVERSATION_A}`]);
+  assert.equal(finalPayload(stdout).success, true);
+});
+
+test('after a conversation reset the next turn starts a NEW conversation (AC5)', async () => {
+  // Turn 1 (fresh session): no session id in the stdin payload, so no resume
+  // flag — the CLI starts a new conversation and reports its id, which the
+  // service announces to the webview.
+  const first = await runService({ fixture: 'success-text-turn.jsonl', echoArgv: true });
+  assert.equal(
+    fakeChildArgv(first.stderr).includes('--conversation'),
+    false,
+    'a first turn must never resume',
+  );
+  assert.deepEqual(markers(first.stdout, 'SESSION_ID'), [`[SESSION_ID] ${CONVERSATION_A}`]);
+
+  // A reset (new chat tab / provider switch / gemini model change) all reduce
+  // to the same bridge-level fact by design — TEMPORAL isolation on the one
+  // provider-agnostic session-id slot: the next send arrives with an EMPTY
+  // session id. (The webview/Java side of each trigger is pinned by hook-level
+  // tests; here we pin that an empty id can never resume anything.)
+  const after = await runService({
+    fixture: 'new-conversation-after-reset.jsonl',
+    sessionId: '',
+    echoArgv: true,
+  });
+
+  const argv = fakeChildArgv(after.stderr);
+  assert.equal(argv.includes('--conversation'), false, `no residual resume: ${JSON.stringify(argv)}`);
+  assert.notEqual(CONVERSATION_B, CONVERSATION_A, 'fixture sanity: the two ids differ');
+  // The fresh conversation's id is announced exactly once, and it is the one
+  // the final payload reports back to Java's session slot.
+  assert.deepEqual(markers(after.stdout, 'SESSION_ID'), [`[SESSION_ID] ${CONVERSATION_B}`]);
+  assert.equal(finalPayload(after.stdout).sessionId, CONVERSATION_B);
 });
