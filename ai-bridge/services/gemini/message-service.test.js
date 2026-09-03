@@ -24,6 +24,9 @@
  * success-text-turn / multi-delta-streaming / invalid-status /
  * multi-tool-turn / tool-unnamed-steps / tool-unnamed-interleaved /
  * no-result-early-exit / double-result / error-response-only.
+ * Code review loop 3 added: success-no-deltas (SUCCESS without any
+ * text_delta step) and tool-active-no-terminal (ACTIVE tool the result
+ * closes without a DONE/ERROR step).
  *
  * The unauthenticated stderr shape is NOT captured live (reproducing it would
  * disturb the developer's CLI credentials, per Story 1.2 Task 1d) — the auth
@@ -858,4 +861,58 @@ test('a failed materialization logs to stderr and the turn continues without ima
   assert.equal(prompt, 'hello world', 'no image refs when nothing materialized');
   assert.equal(finalPayload(stdout).success, true, 'the turn is not blocked by the failure');
   assert.equal(markers(stdout, 'STREAM_END').length, 1);
+});
+
+// -------------------------------------------------------------------------
+// Code review loop 3 (2026-09-03) — regression pins for the review patches.
+// -------------------------------------------------------------------------
+
+test('a trailing-slash requestedCwd is not a substitution (code review 3)', async () => {
+  const safeDir = makeTempDir('gemini-cwd-slash-');
+  const { stdout } = await runService({
+    fixture: 'text-turn-error-result.jsonl',
+    cwd: safeDir,
+    requestedCwd: `${safeDir}/`,
+  });
+  const notices = markers(stdout, 'CONTENT_DELTA')
+    .map(decodeStringMarker)
+    .filter((t) => String(t).startsWith('[Notice]'));
+  assert.equal(notices.length, 0, JSON.stringify(notices));
+});
+
+test('a SUCCESS turn without streamed deltas falls back to result.response (code review 3)', async () => {
+  const { stdout } = await runService({ fixture: 'success-no-deltas.jsonl', exitCode: 0 });
+  const deltas = markers(stdout, 'CONTENT_DELTA').map(decodeStringMarker);
+  assert.ok(
+    deltas.includes('Recovered from a delta-less turn.'),
+    `result text must render when no text_delta step arrived: ${JSON.stringify(deltas)}`
+  );
+  assert.equal(markers(stdout, 'SEND_ERROR').length, 0);
+  const payload = finalPayload(stdout);
+  assert.equal(payload.success, true);
+  assert.equal(payload.sessionId, '7ab21c90-1111-4c0e-8a41-7d2e5b9c1a01');
+});
+
+test('a tool still ACTIVE when the result arrives is closed as interrupted (code review 3)', async () => {
+  const { stdout } = await runService({ fixture: 'tool-active-no-terminal.jsonl', exitCode: 0 });
+  const messages = messageMarkers(stdout);
+  const toolUse = messages.filter((m) => m.type === 'tool_use');
+  assert.equal(toolUse.length, 1);
+  const toolResults = messages.filter((m) => m.type === 'tool_result');
+  assert.equal(toolResults.length, 1, 'no dangling tool bubble at stream end');
+  assert.equal(toolResults[0].tool_use_id, toolUse[0].id);
+  assert.equal(toolResults[0].is_error, true);
+  assert.match(toolResults[0].content, /interrupted/);
+  assert.equal(finalPayload(stdout).success, true);
+});
+
+test('a resumed turn does not re-emit an unchanged session id (code review 3)', async () => {
+  // The pre-spawn echo and the init conversation_id are the SAME fact — the
+  // webview must hear it once, not twice. (Fixture init id == resumed id.)
+  const { stdout } = await runService({
+    fixture: 'text-turn-error-result.jsonl',
+    sessionId: '299cd332-7948-4a22-b015-e3dffd1bb939',
+  });
+  const sessionIds = markers(stdout, 'SESSION_ID');
+  assert.equal(sessionIds.length, 1, JSON.stringify(sessionIds));
 });

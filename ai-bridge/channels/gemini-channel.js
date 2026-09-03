@@ -19,7 +19,9 @@ function rejectEmptyMessage() {
   beginStream();
   emitSendError(text, 'gemini');
   endStream();
-  console.log(JSON.stringify({ success: false, error: text }));
+  // `details.status` lets tests and future consumers tell this rejection apart
+  // from a CLI-driven send failure with the same marker shape.
+  console.log(JSON.stringify({ success: false, error: text, details: { status: 'EMPTY_MESSAGE' } }));
 }
 
 /**

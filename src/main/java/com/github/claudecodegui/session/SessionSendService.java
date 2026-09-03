@@ -474,16 +474,25 @@ public class SessionSendService {
         // must never reach the CLI as the agent workspace. The PRE-clamp value is
         // forwarded as `requestedCwd` so the Node side can surface a visible
         // substitution notice (AC5) — the clamp itself erases that difference.
+        //
+        // Scoped to GEMINI only (review loop 3 decision): the clamp + notice are
+        // new in Story 1.2, and the sibling CLI providers neither read
+        // requestedCwd nor emit the notice — clamping them here would change
+        // their behavior silently. A family-wide clamp is a separate follow-up
+        // (one fix per PR).
         String projectBase = project != null ? project.getBasePath() : null;
-        String requestedCwd = state.getCwd();
-        String guardedCwd = resolveCliSendCwd(requestedCwd, projectBase);
-        if (projectBase == null || projectBase.isEmpty()) {
-            LOG.warn("[Lifecycle] sendToCli cwd guard (" + provider + "): no project base"
-                    + " available; passing raw cwd through: " + guardedCwd);
-        } else if (guardedCwd == null || requestedCwd == null || !guardedCwd.equals(requestedCwd)) {
-            LOG.warn("[Lifecycle] sendToCli cwd guard (" + provider + "): "
-                    + requestedCwd + " -> " + guardedCwd);
-            state.setCwd(guardedCwd);
+        boolean cwdGuardApplies = "gemini".equals(provider);
+        String requestedCwd = cwdGuardApplies ? state.getCwd() : null;
+        String guardedCwd = cwdGuardApplies ? resolveCliSendCwd(requestedCwd, projectBase) : state.getCwd();
+        if (cwdGuardApplies) {
+            if (projectBase == null || projectBase.isEmpty()) {
+                LOG.warn("[Lifecycle] sendToCli cwd guard (" + provider + "): no project base"
+                        + " available; passing raw cwd through: " + guardedCwd);
+            } else if (guardedCwd == null || requestedCwd == null || !guardedCwd.equals(requestedCwd)) {
+                LOG.warn("[Lifecycle] sendToCli cwd guard (" + provider + "): "
+                        + requestedCwd + " -> " + guardedCwd);
+                state.setCwd(guardedCwd);
+            }
         }
 
         LOG.info("[Lifecycle] sendToCli provider=" + provider

@@ -184,7 +184,12 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
      * <p>{@code permissionMode} is required for Grok ACP auto-approve
      * ({@code bypassPermissions} / full-auto). Without it the Node side
      * defaults to {@code default} and every tool/edit still pops the dialog.
+     *
+     * @deprecated delegates with {@code requestedCwd = null}, so no workspace
+     *         substitution notice can ever surface. Call the 11-arg overload
+     *         (Story 1.2) so the pre-clamp cwd reaches the channel payload.
      */
+    @Deprecated
     public CompletableFuture<SDKResult> sendMessage(
             String channelId,
             String message,
@@ -224,9 +229,10 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
             String requestedCwd,
             MessageCallback callback
     ) {
-        String stdinJson = gson.toJson(buildCliStdinPayload(
+        JsonObject stdinPayload = buildCliStdinPayload(
                 message, sessionId, cwd, model, reasoningEffort,
-                attachments, permissionMode, dshPreset, requestedCwd));
+                attachments, permissionMode, dshPreset, requestedCwd);
+        String stdinJson = gson.toJson(stdinPayload);
         List<String> command = buildBaseCommand("send");
         if (command.isEmpty()) {
             SDKResult error = new SDKResult();
@@ -237,7 +243,9 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
         }
 
         int attachmentCount = attachments != null ? attachments.size() : 0;
-        String mode = permissionMode != null && !permissionMode.isBlank() ? permissionMode.trim() : "default";
+        // Read the mode back from the payload so the log line can never drift
+        // from what was actually piped to the channel.
+        String mode = stdinPayload.get("permissionMode").getAsString();
         LOG.info("[" + getProviderName() + "] send sessionId="
                 + (sessionId != null && !sessionId.isEmpty() ? sessionId : "(new)")
                 + " model=" + (model != null && !model.isEmpty() ? model : "(default)")

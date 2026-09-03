@@ -88,9 +88,12 @@ export function createLocalizeMessage(t: TFunction): (text: string) => string {
     const workspaceSubstitutedMatch = result.match(WORKSPACE_SUBSTITUTED_RE);
     if (workspaceSubstitutedMatch) {
       const [, requestedDir, effectiveDir, reason, trailingNewlines] = workspaceSubstitutedMatch;
+      // Replacer FUNCTION, not a replacement string: the replacement embeds
+      // user-controlled directory names, and a plain string would interpret
+      // $& / $' / $` / $1 sequences inside them.
       result = result.replace(
         workspaceSubstitutedMatch[0],
-        t('aiBridge.workspaceSubstituted', {
+        () => t('aiBridge.workspaceSubstituted', {
           requested: requestedDir,
           effective: effectiveDir,
           // The regex only matches known reasons, so this lookup is total.

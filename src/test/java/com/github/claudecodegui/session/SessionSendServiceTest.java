@@ -386,4 +386,38 @@ public class SessionSendServiceTest {
         assertEquals("", bridge.model);
         assertNull(bridge.dshPreset);
     }
+
+    @Test
+    public void sendToCliProviderOutsideGeminiSkipsTheClampAndForwardedRequestedCwd() throws Exception {
+        // Review loop 3 (decision (a)): the send-path clamp + requestedCwd
+        // forwarding are gemini-only. A sibling provider keeps its pre-story
+        // behavior — raw cwd through, no requestedCwd key, no state mutation.
+        Path projectDir = Files.createTempDirectory("kimi-send-proj-");
+        projectDir.toFile().deleteOnExit();
+        String outside = Paths.get(tmpdir(), "outside-sibling-" + System.nanoTime()).toString();
+        SessionState state = new SessionState();
+        state.setCwd(outside);
+        CapturingBridge bridge = new CapturingBridge();
+        Project project = projectWithBase(projectDir.toString());
+        SessionSendService service = new SessionSendService(
+                project,
+                state,
+                new SessionCallbackFacade(project),
+                null,
+                null,
+                null,
+                null,
+                null,
+                Map.of("kimi", bridge),
+                new SessionContextService(project)
+        );
+
+        service.sendToCliProvider("kimi", "channel-1", "hello", null, null, null, null, null, null)
+                .get(5, java.util.concurrent.TimeUnit.SECONDS);
+
+        assertEquals(1, bridge.calls);
+        assertEquals(outside, bridge.cwd);
+        assertNull(bridge.requestedCwd);
+        assertEquals("the clamp must not touch sibling session state", outside, state.getCwd());
+    }
 }

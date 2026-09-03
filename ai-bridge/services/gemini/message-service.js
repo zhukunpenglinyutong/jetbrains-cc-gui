@@ -38,7 +38,7 @@
 
 import fs from 'fs';
 import { homedir } from 'os';
-import { isAbsolute, resolve } from 'path';
+import { resolve } from 'path';
 import { resolveGeminiCliPath, enrichPathWithBinDirs, commonCliBinDirs } from '../../utils/cli-path.js';
 import { runCliStreaming } from '../../utils/cli-spawn.js';
 import {
@@ -224,6 +224,7 @@ export async function sendMessage(
 
   let hadResult = false;
   let failureEmitted = false;
+  let emittedDeltaCount = 0;
   const emitFailure = (errorText, details) => {
     if (failureEmitted) return;
     failureEmitted = true;
@@ -237,10 +238,18 @@ export async function sendMessage(
   try {
     // Non-image attachments are silently dropped by the image materializer;
     // say so on stderr instead of vanishing them without a trace.
-    const nonImages = (Array.isArray(attachments) ? attachments : []).filter(
-      (att) => att && typeof att === 'object'
-        && !(typeof att.mediaType === 'string' && att.mediaType.trim().toLowerCase().startsWith('image/'))
-    );
+    const nonImages = (Array.isArray(attachments) ? attachments : []).filter((att) => {
+      // Malformed entries (strings, numbers, null) cannot be images — count them.
+      if (!att || typeof att !== 'object') return true;
+      // Mirror the materializer's hint resolution (mediaType || mimeType); an
+      // empty hint is undecided — the materializer treats it as image data, so
+      // it must not be pre-announced as ignored here.
+      const hint = typeof att.mediaType === 'string' && att.mediaType
+        ? att.mediaType
+        : (typeof att.mimeType === 'string' ? att.mimeType : '');
+      if (!hint.trim()) return false;
+      return !hint.trim().toLowerCase().startsWith('image/');
+    });
     if (nonImages.length > 0) {
       console.error(`[gemini] ignoring ${nonImages.length} non-image attachment(s): `
         + nonImages
@@ -273,10 +282,11 @@ export async function sendMessage(
     const workCwd = selectWorkingDirectory(cwd);
     const requestedRaw = normalizeSentinelPath(requestedCwd || cwd);
     // A relative requestedCwd means "relative to the workspace the turn runs
-    // in" — resolve it against that workspace before comparing or classifying,
-    // or every relative request would read as a substitution onto an
-    // unrelated absolute path.
-    const requested = requestedRaw && !isAbsolute(requestedRaw) ? resolve(workCwd, requestedRaw) : requestedRaw;
+    // in", and ANY request needs normalizing before comparing: resolve()
+    // handles both relative and absolute forms, stripping trailing separators
+    // and collapsing . / .. — so "/proj/sub/" compares equal to the resolve()d
+    // workCwd "/proj/sub" instead of reading as a substitution.
+    const requested = requestedRaw ? resolve(workCwd, requestedRaw) : '';
 
     if (requested && normalizePathForComparison(workCwd) !== normalizePathForComparison(requested)) {
       const reason = classifyWorkspaceSubstitutionReason(requested);
@@ -300,6 +310,18 @@ export async function sendMessage(
     // DONE A, ERROR B) pair in start order, not "most recent wins".
     const pendingUnnamedToolIds = [];
 
+    // A tool whose ACTIVE step never gets a terminal state (turn aborted
+    // mid-tool, stream closed early) must not leave a dangling tool bubble:
+    // close every unresolved tool_use with an error result before the stream
+    // ends.
+    const flushUnresolvedTools = () => {
+      for (const id of emittedToolUseIds) {
+        if (emittedToolResultIds.has(id)) continue;
+        emittedToolResultIds.add(id);
+        emitToolResultMessage({ toolUseId: id, content: 'interrupted', isError: true });
+      }
+    };
+
     await runCliStreaming({
       bin,
       args,
@@ -320,6 +342,7 @@ export async function sendMessage(
         emitFailure(msg, { status: 'CLI_ERROR' });
       },
       onCloseBeforeEnd: () => {
+        flushUnresolvedTools();
         // A stream that closes with no result event and no reported error
         // would otherwise be a silent dead turn (exit 0, nothing rendered).
         if (!hadResult && !failureEmitted) {
@@ -333,12 +356,20 @@ export async function sendMessage(
         try {
           event = JSON.parse(line);
         } catch {
+          console.error('[gemini] unparseable stream line:', String(line).slice(0, 500));
           return;
         }
         if (!event || typeof event !== 'object') return;
 
         if (event.event === 'init') {
-          if (typeof event.conversation_id === 'string' && event.conversation_id) {
+          // A resumed turn already emitted the id pre-spawn; re-emitting the
+          // SAME id would notify the webview twice for one fact. Only a NEW id
+          // (CLI-side rotation) is forwarded.
+          if (
+            typeof event.conversation_id === 'string'
+            && event.conversation_id
+            && event.conversation_id !== currentSessionId
+          ) {
             currentSessionId = event.conversation_id;
             emitSessionId(event.conversation_id);
           }
@@ -348,6 +379,7 @@ export async function sendMessage(
 
           if (step.step_type === 'agent_response') {
             if (typeof step.text_delta === 'string' && step.text_delta) {
+              emittedDeltaCount += 1;
               emitJsonStringMarker('[CONTENT_DELTA]', step.text_delta);
             }
             if (step.usage && typeof step.usage === 'object') {
@@ -413,12 +445,21 @@ export async function sendMessage(
           // Re-entry guard: exactly one terminal branch per turn.
           if (hadResult) return;
           hadResult = true;
+          // Tools still without a terminal state when the result arrives are
+          // never getting one — close them before the terminal markers.
+          flushUnresolvedTools();
           const res = event.result || {};
           if (res.usage && typeof res.usage === 'object') {
             emitUsage(res.usage);
           }
           const finalSessionId = res.conversation_id || currentSessionId || '';
           if (res.status === 'SUCCESS') {
+            // A turn whose text never arrived as text_delta steps must not
+            // render empty — fall back to the result's own response text.
+            const responseText = res.response == null ? '' : String(res.response);
+            if (emittedDeltaCount === 0 && responseText.trim()) {
+              emitJsonStringMarker('[CONTENT_DELTA]', responseText);
+            }
             emitStreamEndOnce();
             console.log(JSON.stringify({ success: true, sessionId: finalSessionId }));
           } else {

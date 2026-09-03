@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { createLocalizeMessage, WORKSPACE_SUBSTITUTION_REASONS } from './localizationUtils';
@@ -126,7 +126,6 @@ describe('createLocalizeMessage — ai-bridge workspace substitution notice', ()
  * A new/renamed classifier string fails here instead of rendering a raw
  * English reason (or an untranslated notice) in the chat bubble.
  */
-const LOCALES = ['en', 'zh', 'zh-TW', 'es', 'fr', 'hi', 'ja', 'ko', 'pt-BR', 'ru'] as const;
 const REASON_KEYS = [
   'workspaceReasonUnsafe',
   'workspaceReasonPluginInternal',
@@ -139,20 +138,36 @@ const REASON_KEYS = [
 // through cwd (vitest always runs from webview/).
 const WEBVIEW_ROOT = process.cwd();
 const SERVICE_SOURCE_PATH = join(WEBVIEW_ROOT, '..', 'ai-bridge', 'services', 'gemini', 'message-service.js');
-const localePath = (locale: string) => join(WEBVIEW_ROOT, 'src', 'i18n', 'locales', `${locale}.json`);
+const LOCALES_DIR = join(WEBVIEW_ROOT, 'src', 'i18n', 'locales');
+const localePath = (locale: string) => join(LOCALES_DIR, `${locale}.json`);
+// Derived from the filesystem: a locale file added later is picked up
+// automatically instead of silently missing its NFR8 assertions.
+const LOCALES = readdirSync(LOCALES_DIR)
+  .filter((f) => f.endsWith('.json'))
+  .map((f) => f.replace(/\.json$/, ''));
 
 /** The reason string literals of classifyWorkspaceSubstitutionReason. */
 function serviceReasonLiterals(): string[] {
   const source = readFileSync(SERVICE_SOURCE_PATH, 'utf8');
   const fnSource = source.match(/export function classifyWorkspaceSubstitutionReason[\s\S]*?\n}\n/)?.[0];
   expect(fnSource, 'classifier function found in message-service.js').toBeTruthy();
-  // Every reason literal mentions "directory" (all five do today); the only
-  // other string in the function body is the ENOENT errno name. Deduped: a
-  // literal may be returned from more than one branch.
-  return [...new Set([...fnSource!.matchAll(/'([^']*directory[^']*)'/g)].map((m) => m[1]))];
+  // Extract EVERY plain string literal the function can return — a reason need
+  // not contain the word "directory" (a future "network share" literal must
+  // fail this contract, not slip past a keyword filter). Deduped: a literal
+  // may be returned from more than one branch.
+  return [...new Set([...fnSource!.matchAll(/return '([^']+)'/g)].map((m) => m[1]))];
 }
 
 describe('workspace notice i18n contract (R-14)', () => {
+  it('derives the locale list from src/i18n/locales (no silent gaps)', () => {
+    // If the readdir ever comes back short (wrong cwd, moved dir), the per-
+    // locale loop below would pass vacuously — pin the discovery itself.
+    expect(LOCALES.length, `discovered: ${LOCALES.join(',')}`).toBeGreaterThanOrEqual(10);
+    for (const must of ['en', 'ru', 'zh-TW'] as const) {
+      expect(LOCALES, `must include ${must}`).toContain(must);
+    }
+  });
+
   it('pins the webview reason set to the service classifier literals', () => {
     expect(serviceReasonLiterals().sort()).toEqual([...WORKSPACE_SUBSTITUTION_REASONS].sort());
   });
